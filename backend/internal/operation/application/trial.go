@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // ErrInvalidTrial rejects malformed administrator experiment input.
@@ -77,15 +78,16 @@ type TrialInput struct {
 	TaskID              string
 	Action              string
 	OriginalFingerprint string
+	OutputRef           *mediadomain.ObjectRef `json:"output_ref,omitempty"`
 }
 
 // TrialArtifact identifies a verified immutable private result.
 type TrialArtifact struct {
-	StorageID string `json:"storage_id"`
-	Sequence  int    `json:"sequence"`
-	MIME      string `json:"mime"`
-	Size      int64  `json:"size"`
-	SHA256    string `json:"sha256"`
+	ObjectRef *mediadomain.ObjectRef `json:"object_ref,omitempty" swaggerignore:"true"`
+	Sequence  int                    `json:"sequence"`
+	MIME      string                 `json:"mime"`
+	Size      int64                  `json:"size"`
+	SHA256    string                 `json:"sha256"`
 }
 
 // TrialProgress records one execution result without storing media bytes.
@@ -127,18 +129,12 @@ type TrialMessage struct {
 	Prompt    string    `json:"prompt"`
 }
 
-// TrialWorkflowID isolates requests by organization and administrator.
-func TrialWorkflowID(actor identityapp.Principal, id uuid.UUID) string {
+// TrialID isolates requests by organization and administrator.
+func TrialID(actor identityapp.Principal, id uuid.UUID) string {
 	return "ai-trial/" + actor.OrgID.String() + "/" + actor.ID.String() + "/" + id.String()
 }
 
 // TrialObjectKey selects the original experiment result deterministically.
 func TrialObjectKey(input TrialInput, seq int) string {
-	return TrialWorkflowID(input.Actor, input.Request.RequestID) + "/result/" + strconv.Itoa(seq)
-}
-
-// TrialStorageID prevents reading a result from a changed storage target.
-func TrialStorageID(endpoint, bucket string) string {
-	h := sha256.Sum256([]byte(endpoint + "\n" + bucket))
-	return hex.EncodeToString(h[:])
+	return TrialID(input.Actor, input.Request.RequestID) + "/result/" + strconv.Itoa(seq)
 }

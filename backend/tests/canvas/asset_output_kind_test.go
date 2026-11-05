@@ -17,7 +17,7 @@ import (
 func assetKindOperation(t *testing.T, db *gorm.DB, actor identity.Principal, project uuid.UUID) (uuid.UUID, []uuid.UUID, []uuid.UUID) {
 	t.Helper()
 	op := uuid.New()
-	if err := db.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,region)VALUES(?,?,'agent_session','text.structured','test',repeat('a',64),'agent','completed','domestic')`, op, project).Error; err != nil {
+	if err := db.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,region,model_profile_version_id)VALUES(?,?,'free','text.structured','test',repeat('a',64),'agent','completed','domestic',gen_random_uuid())`, op, project).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO operation.quote_request(org_id,actor_id,request_id,fingerprint,result)VALUES(?,?,?,decode(repeat('ab',32),'hex'),jsonb_build_object('OperationID',?::text))`, actor.OrgID, actor.ID, uuid.New(), op.String()).Error; err != nil {
@@ -33,7 +33,8 @@ func assetKindOperation(t *testing.T, db *gorm.DB, actor identity.Principal, pro
 	} {
 		asset, output := uuid.New(), uuid.New()
 		key := "projects/" + project.String() + "/" + asset.String() + "/" + spec.file
-		if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,codec,moderation_status)VALUES(?,?,?,'upload','ready',?,?,?,1,repeat('a',64),?,'passed')`, asset, project, spec.kind, key, spec.file, spec.mime, spec.codec).Error; err != nil {
+		locationID := seedCanvasMetadataLocation(t, db, key)
+		if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,codec,moderation_status)VALUES(?,?,?,'upload','ready',?,?,?,?,1,repeat('a',64),?,'passed')`, asset, project, spec.kind, key, locationID, spec.file, spec.mime, spec.codec).Error; err != nil {
 			t.Fatal(err)
 		}
 		if err := db.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,media_asset_id,moderation_status)VALUES(?,?,?,?,'media',?,'passed')`, output, project, op, i, asset).Error; err != nil {
@@ -116,7 +117,7 @@ func TestAssetPublicTaskPreservesUnavailableCandidateFactsAndValidSiblings(t *te
 		t.Fatal("canonical same-project media ownership constraint was lost")
 	}
 	objects := &downloadFixtureObjects{}
-	downloads := mediaapp.NewAssetDownloads(pgmedia.NewScopedStore(db, mediawire.NewMediaScopeAccess), nil, objects)
+	downloads := mediaapp.NewAssetDownloads(pgmedia.NewScopedStore(db, mediawire.NewMediaScopeAccess), objects)
 	for _, id := range []uuid.UUID{assets[1], assets[2]} {
 		if file, err := downloads.Open(t.Context(), actor, project, id); file != nil || err == nil {
 			t.Fatal("candidate metadata granted unavailable media bytes", file, err)

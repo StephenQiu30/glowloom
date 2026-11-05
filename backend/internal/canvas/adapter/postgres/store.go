@@ -115,7 +115,7 @@ func (s *Store) Get(ctx context.Context, a identityapp.Principal, id uuid.UUID) 
 			}
 			if !writable && doc.ReadOnlyReason == "" {
 				doc.ReadOnlyReason = "scope_read_only"
-				if presentation.Status == "archived" {
+				if presentation.Status == application.ProjectPresentationStatusArchived {
 					doc.ReadOnlyReason = "project_archived"
 				}
 			}

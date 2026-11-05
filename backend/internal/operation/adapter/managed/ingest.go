@@ -3,22 +3,21 @@ package managed
 import (
 	"context"
 	"errors"
-	"io"
 	"reflect"
 	"slices"
 	"strconv"
 
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/temporal"
 	"gorm.io/gorm"
 
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
@@ -35,35 +34,28 @@ type IngestActivities struct {
 	store    IngestStore
 	scopes   mediapg.ScopeAccessFactory
 	db       *gorm.DB
-	objects  *objectstorage.Client
 	results  *application.ManagedResults
 	registry *objectstorage.Registry
-}
-
-// NewIngestActivities shares the private immutable staging store with the worker.
-func NewIngestActivities(db *gorm.DB, objects *objectstorage.Client, results *application.ManagedResults) *IngestActivities {
-	return &IngestActivities{db: db, objects: objects, results: results, store: operationpg.NewStore(db)}
 }
 
 // Ingest retries transfer and registration without access to a supplier Key.
 func (a *IngestActivities) Ingest(ctx context.Context, operationID uuid.UUID) (resultErr error) {
 	store := a.store
 	if store == nil {
-		return executionAuthorityError(application.ErrExecutionAuthorityRevoked)
+		return application.ErrExecutionAuthorityRevoked
 	}
 	defer func() {
 		if resultErr != nil {
 			if err := store.AuthorizeWorker(ctx, operationID, true); errors.Is(err, application.ErrExecutionAuthorityRevoked) {
 				resultErr = err
 			}
-			resultErr = executionAuthorityError(resultErr)
 		}
 	}()
 	loaded, err := store.LoadWorkflowOperation(ctx, operationID)
 	if err != nil {
 		return err
 	}
-	if loaded.Operation.ModelProfileVersionID == nil || loaded.Operation.PriceRuleVersionID == nil || loaded.Operation.Status != "ingesting" || loaded.Provider.Moderation != "provider" {
+	if loaded.Operation.ModelProfileVersionID == nil || loaded.Operation.PriceRuleVersionID == nil || loaded.Operation.Status != operationdomain.StatusIngesting || catalogdomain.Moderation(loaded.Provider.Moderation) != catalogdomain.ModerationProvider {
 		return application.ErrInvalidProviderCall
 	}
 	identity := application.ProviderDispatchIdentity{ProjectID: loaded.Operation.ProjectID, OperationID: operationID, ModelProfileVersionID: *loaded.Operation.ModelProfileVersionID, PriceRuleVersionID: *loaded.Operation.PriceRuleVersionID, Action: "submit", Attempt: 1, RequestKey: loaded.ProviderRequestKey}
@@ -85,16 +77,9 @@ func (a *IngestActivities) IngestOriginal(ctx context.Context, d application.Wor
 	}
 	i, err := store.OriginalDeliveryIdentity(ctx, d)
 	if err != nil {
-		return originalIngestError(err)
+		return err
 	}
-	return originalIngestError(a.ingestResult(ctx, i, &d))
-}
-
-func originalIngestError(err error) error {
-	if errors.Is(err, application.ErrWorkflowControlConflict) || errors.Is(err, application.ErrInvalidWorkflowControl) {
-		return temporal.NewNonRetryableApplicationError("original delivery request is no longer eligible", "original_delivery_conflict", err)
-	}
-	return executionAuthorityError(err)
+	return a.ingestResult(ctx, i, &d)
 }
 
 func (a *IngestActivities) ingestResult(ctx context.Context, identity application.ProviderDispatchIdentity, d *application.WorkflowControlDelivery) error {
@@ -104,7 +89,7 @@ func (a *IngestActivities) ingestResult(ctx context.Context, identity applicatio
 	if err != nil {
 		return err
 	}
-	if result == nil || result.State != "succeeded" {
+	if result == nil || result.State != application.ManagedResultSucceeded {
 		return application.ErrProviderCallConflict
 	}
 	if d != nil {
@@ -115,7 +100,7 @@ func (a *IngestActivities) ingestResult(ctx context.Context, identity applicatio
 		if err != nil {
 			return err
 		}
-		if original == nil || original.State != "succeeded" || original.Text != result.Text || original.TaskID != result.TaskID || !reflect.DeepEqual(original.Subtitle, result.Subtitle) || !slices.Equal(original.Artifacts, result.Artifacts) {
+		if original == nil || original.State != application.ManagedResultSucceeded || original.Text != result.Text || original.TaskID != result.TaskID || !reflect.DeepEqual(original.Subtitle, result.Subtitle) || !slices.Equal(original.Artifacts, result.Artifacts) {
 			return application.ErrProviderCallConflict
 		}
 	}
@@ -125,7 +110,7 @@ func (a *IngestActivities) ingestResult(ctx context.Context, identity applicatio
 		}
 		return store.IngestManagedText(ctx, identity)
 	}
-	if a.results == nil || a.registry == nil && a.objects == nil {
+	if a.results == nil || a.registry == nil {
 		return mediaapp.ErrStorageNotReady
 	}
 	repo := mediapg.NewScopedIngestRepository(a.db, a.scopes)
@@ -137,10 +122,7 @@ func (a *IngestActivities) ingestResult(ctx context.Context, identity applicatio
 			return store.(originalDeliveryStore).CheckOriginalDelivery(tx, *d)
 		})
 	}
-	service := mediaapp.NewIngestService(repo, artifactDownload{results: a.results, identity: identity}, mediaflow.FFProber{}, mediaflow.FFRenderer{}, mediaObjects{client: a.objects})
-	if a.registry != nil {
-		service = mediaapp.NewRoutedIngestService(repo, artifactDownload{results: a.results, identity: identity}, mediaflow.FFProber{}, mediaflow.FFRenderer{}, mediaobjects.NewGeneratedObjects(a.registry, mediapg.NewStorageRoutes(a.db)), mediapg.NewStorageRoutes(a.db))
-	}
+	service := mediaapp.NewRoutedIngestService(repo, artifactDownload{results: a.results, identity: identity}, mediaflow.FFProber{}, mediaflow.FFRenderer{}, mediaobjects.NewGeneratedObjects(a.registry, mediapg.NewStorageRoutes(a.db)), mediapg.NewStorageRoutes(a.db))
 	for _, artifact := range result.Artifacts {
 		output, err := service.Ingest(ctx, mediaapp.IngestInput{OperationID: operationID.String(), SeqNo: artifact.Sequence, URL: strconv.Itoa(artifact.Sequence)})
 		if err != nil {
@@ -154,10 +136,7 @@ func (a *IngestActivities) ingestResult(ctx context.Context, identity applicatio
 			return err
 		}
 	}
-	if a.registry != nil {
-		return repo.CompleteGeneratedWork(ctx, operationID, len(result.Artifacts))
-	}
-	return nil
+	return repo.CompleteGeneratedWork(ctx, operationID, len(result.Artifacts))
 }
 
 type artifactDownload struct {
@@ -175,25 +154,6 @@ func (d artifactDownload) Download(ctx context.Context, value string) (*mediaapp
 		return nil, err
 	}
 	return tempArtifact(data, artifact.MIME)
-}
-
-type mediaObjects struct{ client *objectstorage.Client }
-
-func (s mediaObjects) PutIfAbsent(ctx context.Context, key string, r io.Reader, size int64, mime, digest string) error {
-	err := s.client.PutIfAbsent(ctx, key, r, size, mime, digest)
-	if errors.Is(err, objectstorage.ErrObjectExists) {
-		return mediaapp.ErrObjectAlreadyExists
-	}
-	return err
-}
-func (s mediaObjects) Stat(ctx context.Context, key string) (mediaapp.ObjectInfo, error) {
-	info, err := s.client.Stat(ctx, key)
-	return mediaapp.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256}, err
-}
-
-// NewScopedIngestActivities supplies current media worker authority explicitly.
-func NewScopedIngestActivities(db *gorm.DB, objects *objectstorage.Client, results *application.ManagedResults, scopes mediapg.ScopeAccessFactory, store IngestStore) *IngestActivities {
-	return &IngestActivities{db: db, objects: objects, results: results, scopes: scopes, store: store}
 }
 
 // NewRoutedIngestActivities keeps originals and previews on the admitted physical route.

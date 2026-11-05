@@ -17,7 +17,7 @@ import (
 func TestDirectoryExportHTTPStrictFiltersAndMetadata(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	service := application.NewDirectoryExport(nil, nil, nil, time.Now)
+	service := application.NewRoutedDirectoryExport(nil, nil, nil, time.Now)
 	stats := application.NewDirectoryStatistics(nil, time.Now)
 	identityhttp.NewDirectoryExportHandler(service, stats).Register(router.Group("/api"))
 	identityhttp.NewInvitationHandler(nil).Register(router.Group("/api"))
@@ -55,7 +55,7 @@ func TestDirectoryExportHTTPStrictFiltersAndMetadata(t *testing.T) {
 	job := application.DirectoryExportJob{ID: uuid.New(), Status: "completed", ObjectID: &object, KeyID: "private", Snapshot: []byte("secret"), ExpiresAt: now.Add(time.Minute)}
 	store := &exportMemoryStore{jobs: map[uuid.UUID]application.DirectoryExportJob{job.ID: job}, revision: 1}
 	router = gin.New()
-	identityhttp.NewDirectoryExportHandler(application.NewDirectoryExport(store, nil, nil, func() time.Time { return now }), stats).Register(router.Group("/api"))
+	identityhttp.NewDirectoryExportHandler(application.NewRoutedDirectoryExport(store, nil, nil, func() time.Time { return now }), stats).Register(router.Group("/api"))
 	read := func() []byte {
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), "GET", "/api/platform/user-exports/"+job.ID.String(), nil))

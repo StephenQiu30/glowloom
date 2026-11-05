@@ -50,6 +50,7 @@ func bibleTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("missing nonowner", role, err)
 	}
+	businessStorageEnvironment(t, owner)
 	return runtime, owner
 }
 

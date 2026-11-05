@@ -14,11 +14,10 @@ import (
 
 	_ "golang.org/x/image/webp" // Register the accepted WebP decoder.
 
-	"go.temporal.io/sdk/activity"
-
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -33,20 +32,20 @@ type Bindings interface {
 
 // Results stores and reads verified private experiment output.
 type Results interface {
-	PutIfAbsent(context.Context, string, io.Reader, int64, string, string) error
-	Stat(context.Context, string) (objectstorage.ObjectInfo, error)
-	Get(context.Context, string) (io.ReadCloser, error)
+	CheckWrite(context.Context, mediadomain.ObjectRef) error
+	PutIfAbsent(context.Context, mediadomain.ObjectRef, io.Reader, int64, string, string) error
+	Stat(context.Context, mediadomain.ObjectRef) (objectstorage.ObjectInfo, error)
+	Get(context.Context, mediadomain.ObjectRef) (io.ReadCloser, error)
 }
 
 // Runner performs one bounded dispatch or a read-only recovery.
 type Runner struct {
-	StorageID string
-	Store     Bindings
-	Objects   Results
-	Launcher  codex.Launcher
-	WorkRoot  string
-	Keys      *credentialseal.Unsealer
-	Cloud     application.GenerationProvider
+	Store    Bindings
+	Objects  Results
+	Launcher codex.Launcher
+	WorkRoot string
+	Keys     *credentialseal.Unsealer
+	Cloud    application.GenerationProvider
 }
 
 // Run rechecks authority and never retries a generation submission.
@@ -58,32 +57,20 @@ func (r *Runner) Run(ctx context.Context, input application.TrialInput) (applica
 	if input.Request.Validate() != nil || r.Store.Authorize(ctx, input.Actor) != nil {
 		return result, nil
 	}
+	if input.Request.Kind != "chat" && input.Request.Kind != "probe" {
+		if r.Objects == nil || input.OutputRef == nil || input.OutputRef.Validate() != nil || input.OutputRef.Key != application.TrialObjectKey(input, 1) {
+			return result, nil
+		}
+		if input.Action != "recover" && r.Objects.CheckWrite(ctx, *input.OutputRef) != nil {
+			return result, nil
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, 9*time.Minute)
 	defer cancel()
-	if activity.IsActivity(ctx) {
-		done := make(chan struct{})
-		finished := make(chan struct{})
-		defer func() { close(done); <-finished }()
-		go func() {
-			defer close(finished)
-			ticker := time.NewTicker(2 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-done:
-					return
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					activity.RecordHeartbeat(ctx)
-				}
-			}
-		}()
-	}
 	if input.Action == "recover" {
-		info, e := r.Objects.Stat(ctx, application.TrialObjectKey(input, 1))
+		info, e := r.Objects.Stat(ctx, *input.OutputRef)
 		if e == nil && info.Size > 0 && len(info.SHA256) == 64 && (info.ContentType == "image/png" || info.ContentType == "image/jpeg" || info.ContentType == "image/webp" || info.ContentType == "video/mp4") {
-			return application.TrialProgress{State: "succeeded", Artifacts: []application.TrialArtifact{{Sequence: 1, MIME: info.ContentType, Size: info.Size, SHA256: info.SHA256, StorageID: r.StorageID}}}, nil
+			return application.TrialProgress{State: "succeeded", Artifacts: []application.TrialArtifact{{Sequence: 1, MIME: info.ContentType, Size: info.Size, SHA256: info.SHA256, ObjectRef: input.OutputRef}}}, nil
 		}
 		if input.Request.Kind != "video" || input.TaskID == "" {
 			return application.TrialProgress{State: "unknown", ErrorCode: "trial_result_unavailable"}, nil
@@ -134,14 +121,14 @@ func (r *Runner) Run(ctx context.Context, input application.TrialInput) (applica
 	}
 	result.ErrorCode = generated.ErrorCode
 	switch {
-	case generated.Outcome == "accepted" || generated.State == "pending" || generated.State == "running":
+	case generated.Outcome == application.ProviderOutcomeAccepted || generated.State == application.ProviderTaskPending || generated.State == application.ProviderTaskRunning:
 		result.State = "pending"
-	case generated.Outcome == "unknown" || generated.State == "unknown" || generated.State == "not_found":
+	case generated.Outcome == application.ProviderOutcomeUnknown || generated.State == application.ProviderTaskUnknown || generated.State == application.ProviderTaskNotFound:
 		result.State = "unknown"
 		if input.Action == "query" && generated.ErrorCode == "query_unreachable" {
 			result.State = "pending"
 		}
-	case generated.Outcome == "completed" || generated.State == "succeeded":
+	case generated.Outcome == application.ProviderOutcomeCompleted || generated.State == application.ProviderTaskSucceeded:
 		var data []byte
 		var mime string
 		switch {
@@ -236,8 +223,14 @@ func (r *Runner) local(ctx context.Context, input application.TrialInput) applic
 func (r *Runner) save(ctx context.Context, input application.TrialInput, data []byte, mime string) (application.TrialArtifact, error) {
 	h := sha256.Sum256(data)
 	digest := hex.EncodeToString(h[:])
-	artifact := application.TrialArtifact{Sequence: 1, StorageID: r.StorageID, MIME: mime, Size: int64(len(data)), SHA256: digest}
-	key := application.TrialObjectKey(input, 1)
+	artifact := application.TrialArtifact{Sequence: 1, ObjectRef: input.OutputRef, MIME: mime, Size: int64(len(data)), SHA256: digest}
+	if r.Objects == nil || input.OutputRef == nil || input.OutputRef.Validate() != nil || input.OutputRef.Key != application.TrialObjectKey(input, 1) || r.Store.Authorize(ctx, input.Actor) != nil {
+		return artifact, application.ErrInvalidTrial
+	}
+	key := *input.OutputRef
+	if err := r.Objects.CheckWrite(ctx, key); err != nil {
+		return artifact, err
+	}
 	if err := r.Objects.PutIfAbsent(ctx, key, bytes.NewReader(data), int64(len(data)), mime, digest); err != nil {
 		// A transfer retry may read an already committed immutable result, never generate again.
 		info, e := r.Objects.Stat(ctx, key)
@@ -250,7 +243,10 @@ func (r *Runner) save(ctx context.Context, input application.TrialInput, data []
 
 // ReadArtifact resolves only a persisted result selected by workflow identity.
 func ReadArtifact(ctx context.Context, objects Results, input application.TrialInput, artifact application.TrialArtifact) (io.ReadCloser, error) {
-	key := application.TrialObjectKey(input, artifact.Sequence)
+	if objects == nil || artifact.ObjectRef == nil || artifact.ObjectRef.Validate() != nil || artifact.ObjectRef.Key != application.TrialObjectKey(input, artifact.Sequence) {
+		return nil, application.ErrInvalidTrial
+	}
+	key := *artifact.ObjectRef
 	info, err := objects.Stat(ctx, key)
 	if err != nil {
 		return nil, err

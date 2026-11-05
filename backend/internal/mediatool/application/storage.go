@@ -11,7 +11,7 @@ import (
 )
 
 // StorageOwner isolates output identity for each durable tool attempt.
-func StorageOwner(kind string, project, job uuid.UUID, attempt int) media.StorageWorkOwner {
+func StorageOwner(kind media.StorageWorkKind, project, job uuid.UUID, attempt int) media.StorageWorkOwner {
 	return media.StorageWorkOwner{Kind: kind, OwnerID: project, WorkID: uuid.NewSHA1(job, []byte("storage-attempt/"+strconv.Itoa(attempt)))}
 }
 

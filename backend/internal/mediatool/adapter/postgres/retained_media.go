@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -49,21 +48,6 @@ func (r *RetainedMediaReader) HasMediaReferences(ctx context.Context, actor iden
 	}
 	_, present := facts.assets[asset]
 	return present, nil
-}
-
-// StorageUsageKeys returns all exact retained keys, never a partial subtotal.
-// Only storage Stat/LIST proves which of these immutable names currently exist.
-func (r *RetainedMediaReader) StorageUsageKeys(ctx context.Context, actor identityapp.Principal, project uuid.UUID) ([]string, error) {
-	facts, err := r.read(ctx, actor, project)
-	if err != nil {
-		return nil, err
-	}
-	keys := make([]string, 0, len(facts.keys))
-	for key := range facts.keys {
-		keys = append(keys, key)
-	}
-	slices.Sort(keys)
-	return keys, nil
 }
 
 const retainedMediaLimit = 50000
@@ -141,14 +125,26 @@ func (r *RetainedMediaReader) read(ctx context.Context, actor identityapp.Princi
 	// Reject excessive retained facts before reading payloads. Every subsequent
 	// query also caps each payload and streams rows through the aggregate budget,
 	// so concurrent history publication cannot bypass the allocation bound.
-	var budget struct{ Rows, Bytes, Largest int64 }
-	if err := tx.Raw(`SELECT count(*) AS rows,COALESCE(sum(size),0) AS bytes,COALESCE(max(size),0) AS largest FROM (
-	 SELECT octet_length(frozen::text) AS size FROM mediatool.export_job WHERE org_id=? AND project_id=?
-	 UNION ALL SELECT octet_length(frozen::text) FROM mediatool.transcription_job WHERE org_id=? AND project_id=?
-	 UNION ALL SELECT octet_length(frozen::text) FROM mediatool.depth_job WHERE org_id=? AND project_id=?
-	 UNION ALL SELECT octet_length(i.artifact::text) FROM mediatool.depth_result_intent i JOIN mediatool.depth_job j ON j.id=i.job_id WHERE j.org_id=? AND j.project_id=?
-	) history`, actor.OrgID, project, actor.OrgID, project, actor.OrgID, project, actor.OrgID, project).Scan(&budget).Error; err != nil {
-		return retainedMediaFacts{}, fmt.Errorf("bound retained media history: %w", err)
+	var budget retainedPayloadBudget
+	budgetQueries := []struct {
+		query *gorm.DB
+		field string
+	}{
+		{tx.Model(&jobRow{}).Where("org_id = ? AND project_id = ?", actor.OrgID, project), "frozen::text"},
+		{tx.Model(&transcriptionRow{}).Where("org_id = ? AND project_id = ?", actor.OrgID, project), "frozen::text"},
+		{tx.Model(&depthRow{}).Where("org_id = ? AND project_id = ?", actor.OrgID, project), "frozen::text"},
+		{tx.Model(&depthResultIntentRecord{}).Joins("JOIN mediatool.depth_job ON mediatool.depth_job.id = mediatool.depth_result_intent.job_id").Where("mediatool.depth_job.org_id = ? AND mediatool.depth_job.project_id = ?", actor.OrgID, project), "mediatool.depth_result_intent.artifact::text"},
+	}
+	for _, item := range budgetQueries {
+		part, err := readRetainedPayloadBudget(item.query, item.field)
+		if err != nil {
+			return retainedMediaFacts{}, fmt.Errorf("bound retained media history: %w", err)
+		}
+		budget.Rows += part.Rows
+		budget.Bytes += part.Bytes
+		if part.Largest > budget.Largest {
+			budget.Largest = part.Largest
+		}
 	}
 	if budget.Rows > retainedMediaLimit || budget.Bytes > 64<<20 || budget.Largest > 1<<20 {
 		return retainedMediaFacts{}, application.ErrUnavailable
@@ -156,7 +152,9 @@ func (r *RetainedMediaReader) read(ctx context.Context, actor identityapp.Princi
 	if err := readRetainedExports(tx, actor, project, &facts); err != nil {
 		return retainedMediaFacts{}, fmt.Errorf("read retained export media: %w", err)
 	}
-	if err := eachRetainedRow(tx, `SELECT CASE WHEN octet_length(frozen::text)<=1048576 THEN frozen ELSE NULL END AS frozen,language FROM mediatool.transcription_job WHERE org_id=? AND project_id=? ORDER BY id LIMIT ?`, []any{actor.OrgID, project, retainedMediaLimit + 1}, func(row transcriptionRow) error {
+	if err := eachRetainedRow(tx, tx.Model(&transcriptionRow{}).
+		Select("CASE WHEN octet_length(frozen::text) <= ? THEN frozen ELSE NULL END AS frozen, language", 1<<20).
+		Where("org_id = ? AND project_id = ?", actor.OrgID, project).Order("id").Limit(retainedMediaLimit+1), func(row transcriptionRow) error {
 		var frozen domain.FrozenTranscription
 		if facts.body(row.Frozen, &frozen) != nil || frozen.Language != row.Language || !domain.ValidTranscriptionLanguage(frozen.Language) || (frozen.Input.Kind != "audio" && frozen.Input.Kind != "video") || frozen.Input.ByteSize > 500<<20 || frozen.Input.DurationMS == nil || *frozen.Input.DurationMS < 1 || *frozen.Input.DurationMS > 86400000 {
 			return application.ErrUnavailable
@@ -172,7 +170,9 @@ func (r *RetainedMediaReader) read(ctx context.Context, actor identityapp.Princi
 }
 
 func readRetainedExports(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID, facts *retainedMediaFacts) error {
-	return eachRetainedRow(tx, `SELECT id,attempt,created_at,output_kind,asset_id,artifact_id,CASE WHEN octet_length(frozen::text)<=1048576 THEN frozen ELSE NULL END AS frozen FROM mediatool.export_job WHERE org_id=? AND project_id=? ORDER BY id LIMIT ?`, []any{actor.OrgID, project, retainedMediaLimit + 1}, func(row jobRow) error {
+	return eachRetainedRow(tx, tx.Model(&jobRow{}).
+		Select("id, attempt, created_at, output_kind, asset_id, artifact_id, CASE WHEN octet_length(frozen::text) <= ? THEN frozen ELSE NULL END AS frozen", 1<<20).
+		Where("org_id = ? AND project_id = ?", actor.OrgID, project).Order("id").Limit(retainedMediaLimit+1), func(row jobRow) error {
 		var frozen domain.FrozenExport
 		if facts.body(row.Frozen, &frozen) != nil || row.ID == uuid.Nil || row.Attempt < 1 || row.Attempt > 100 || row.CreatedAt.IsZero() {
 			return application.ErrUnavailable
@@ -249,10 +249,21 @@ func readRetainedExports(tx *gorm.DB, actor identityapp.Principal, project uuid.
 	})
 }
 
+type retainedPayloadBudget struct {
+	Rows, Bytes, Largest int64
+}
+
+func readRetainedPayloadBudget(query *gorm.DB, field string) (retainedPayloadBudget, error) {
+	var budget retainedPayloadBudget
+	selectExpr := fmt.Sprintf("count(*) AS rows, COALESCE(sum(octet_length(%s)), 0) AS bytes, COALESCE(max(octet_length(%s)), 0) AS largest", field, field)
+	err := query.Select(selectExpr).Scan(&budget).Error
+	return budget, err
+}
+
 // eachRetainedRow never accumulates unvalidated payloads in a result slice.
 // Callbacks consume immutable owning facts and do not query the same connection.
-func eachRetainedRow[T any](tx *gorm.DB, query string, args []any, consume func(T) error) error {
-	rows, err := tx.Raw(query, args...).Rows()
+func eachRetainedRow[T any](tx *gorm.DB, query *gorm.DB, consume func(T) error) error {
+	rows, err := query.Rows()
 	if err != nil {
 		return err
 	}

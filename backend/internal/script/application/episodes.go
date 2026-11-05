@@ -42,9 +42,9 @@ type SplitCommand struct {
 
 // EpisodeMapping makes changed and retained formal identity decisions explicit.
 type EpisodeMapping struct {
-	PreviousID    *uuid.UUID `json:"previous_episode_id,omitempty"`
-	EpisodeID     *uuid.UUID `json:"episode_id,omitempty"`
-	InheritStatus string     `json:"inherit_status"`
+	PreviousID    *uuid.UUID                  `json:"previous_episode_id,omitempty"`
+	EpisodeID     *uuid.UUID                  `json:"episode_id,omitempty"`
+	InheritStatus domain.EpisodeInheritStatus `json:"inherit_status"`
 }
 
 // SplitReceipt is the permanent whole-confirmation result.
@@ -74,12 +74,12 @@ type StructureCommand struct {
 
 // StructureReceipt keeps first save/confirm identity and revision facts stable.
 type StructureReceipt struct {
-	ScriptRevision  int64     `json:"script_revision"`
-	ProjectRevision int64     `json:"project_revision"`
-	EpisodeRevision int64     `json:"episode_revision"`
-	StructureID     uuid.UUID `json:"structure_id"`
-	VersionNo       int64     `json:"version_no"`
-	ReviewStatus    string    `json:"review_status"`
+	ScriptRevision  int64                        `json:"script_revision"`
+	ProjectRevision int64                        `json:"project_revision"`
+	EpisodeRevision int64                        `json:"episode_revision"`
+	StructureID     uuid.UUID                    `json:"structure_id"`
+	VersionNo       int64                        `json:"version_no"`
+	ReviewStatus    domain.StructureReviewStatus `json:"review_status"`
 }
 
 // EpisodeStore owns scoped split/structure transactions and immutable receipts.

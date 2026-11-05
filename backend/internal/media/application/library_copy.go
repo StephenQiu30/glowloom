@@ -56,7 +56,7 @@ func PrepareProjectLibraryCopy(binding ProjectCopyBinding, sourceLibrary uuid.UU
 		folder := &result.Folders[i]
 		folder.ID = folderMap[folder.ID]
 		folder.LibraryID = targetID
-		folder.Revision = 1
+		folder.Revision = domain.LibraryFolderInitialRevision
 		folder.CreatedAt = now
 		folder.UpdatedAt = now
 		if folder.ParentID != nil {
@@ -82,7 +82,7 @@ func PrepareProjectLibraryCopy(binding ProjectCopyBinding, sourceLibrary uuid.UU
 			item.AssetID = &target
 		}
 		item.LibraryID = targetID
-		item.Revision = 1
+		item.Revision = domain.LibraryItemInitialRevision
 		item.CreatedAt = now
 		item.UpdatedAt = now
 		if item.FolderID != nil {

@@ -41,28 +41,58 @@ type ProjectCopySourceAsset struct {
 	RetainedHistory *RetainedHistoryProof `json:"retained_history,omitempty"`
 }
 
-// RetainedHistoryProof preserves exact soft-deletion facts. Empty DeclaredBy
-// keeps historical Script document manifests byte-compatible; library marks
-// binary IDs declared by the complete owning project catalog. Reference marks
-// closed, immutable entity facts supplied by the trusted owning copy bridge.
+// RetainedHistorySource identifies the owner that declares a historical asset necessary.
+type RetainedHistorySource string
+
+// Retained history sources identify the owner requiring a deleted source snapshot.
+const (
+	RetainedHistoryLibrary        RetainedHistorySource = "library"
+	RetainedHistoryMediaReference RetainedHistorySource = "reference"
+	RetainedHistoryScriptDocument RetainedHistorySource = "script_reference"
+)
+
+// RetainedHistoryProof pins the source revision and deletion window required by retained history.
 type RetainedHistoryProof struct {
-	AssetID    uuid.UUID `json:"asset_id"`
-	Revision   int64     `json:"revision"`
-	DeletedAt  time.Time `json:"deleted_at"`
-	PurgeAfter time.Time `json:"purge_after"`
-	DeclaredBy string    `json:"declared_by,omitempty"`
+	AssetID    uuid.UUID             `json:"asset_id"`
+	Revision   int64                 `json:"revision"`
+	DeletedAt  time.Time             `json:"deleted_at"`
+	PurgeAfter time.Time             `json:"purge_after"`
+	DeclaredBy RetainedHistorySource `json:"declared_by"`
 }
 
 func validRetainedHistory(a domain.MediaAsset, p *RetainedHistoryProof) bool {
 	if !a.IsDelete {
 		return p == nil
 	}
-	if p == nil || p.DeclaredBy != "" && p.DeclaredBy != "library" && p.DeclaredBy != "reference" || p.DeclaredBy == "" && a.Kind != domain.KindDocument || p.DeclaredBy == "reference" && a.Kind != domain.KindImage && a.Kind != domain.KindAudio {
+	if p == nil {
+		return false
+	}
+	switch p.DeclaredBy {
+	case RetainedHistoryLibrary:
+	case RetainedHistoryMediaReference:
+		if a.Kind != domain.KindImage && a.Kind != domain.KindAudio {
+			return false
+		}
+	case RetainedHistoryScriptDocument:
+		if a.Kind != domain.KindDocument {
+			return false
+		}
+	default:
 		return false
 	}
 	return a.DeleteTime != nil && a.PurgeAfter != nil &&
 		p.AssetID == a.ID && p.Revision == a.Revision && p.DeletedAt.Equal(*a.DeleteTime) && p.PurgeAfter.Equal(*a.PurgeAfter)
 }
+
+// ProjectCopyObjectStatus is the lifecycle of one physical object in a copy.
+type ProjectCopyObjectStatus string
+
+// Copy object states distinguish pending, verified and removed physical receipts.
+const (
+	ProjectCopyObjectPending  ProjectCopyObjectStatus = "pending"
+	ProjectCopyObjectVerified ProjectCopyObjectStatus = "verified"
+	ProjectCopyObjectRemoved  ProjectCopyObjectStatus = "removed"
+)
 
 // ProjectCopyObject binds one exact source object to one unpublished target object.
 // Size and SHA may be absent only until bounded reading establishes a durable intent.
@@ -76,7 +106,7 @@ type ProjectCopyObject struct {
 	ByteSize        *int64
 	ContentType     string
 	SHA256          *string
-	Status          string
+	Status          ProjectCopyObjectStatus
 	SourceVerified  bool
 	WriteStarted    bool
 }
@@ -174,7 +204,7 @@ func PrepareProjectMediaCopy(binding ProjectCopyBinding, sources []ProjectCopySo
 		if a.Validate() != nil {
 			return ProjectMediaCopy{}, ErrProjectCopyMediaUnavailable
 		}
-		result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, SourceObjectKey: original.ObjectKey, SourceLocation: original.ObjectLocation, TargetObjectKey: a.ObjectKey, ByteSize: &a.ByteSize, ContentType: a.MimeType, SHA256: a.SHA256, Status: "pending"})
+		result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, SourceObjectKey: original.ObjectKey, SourceLocation: original.ObjectLocation, TargetObjectKey: a.ObjectKey, ByteSize: &a.ByteSize, ContentType: a.MimeType, SHA256: a.SHA256, Status: ProjectCopyObjectPending})
 		kinds := make(map[domain.RenditionKind]bool)
 		for j := range item.Renditions {
 			r := &item.Renditions[j]
@@ -191,7 +221,7 @@ func PrepareProjectMediaCopy(binding ProjectCopyBinding, sources []ProjectCopySo
 			r.ObjectLocation = nil
 			r.ObjectKey = strings.TrimSuffix(a.ObjectKey, path.Ext(a.ObjectKey)) + "/" + string(r.Kind) + ext
 			r.CreateTime, r.UpdateTime = now, now
-			result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, RenditionKind: string(r.Kind), SourceObjectKey: source.ObjectKey, SourceLocation: source.ObjectLocation, TargetObjectKey: r.ObjectKey, ByteSize: r.ByteSize, ContentType: mimeType, Status: "pending"})
+			result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, RenditionKind: string(r.Kind), SourceObjectKey: source.ObjectKey, SourceLocation: source.ObjectLocation, TargetObjectKey: r.ObjectKey, ByteSize: r.ByteSize, ContentType: mimeType, Status: ProjectCopyObjectPending})
 		}
 	}
 	return result, nil

@@ -3,12 +3,14 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
@@ -17,83 +19,122 @@ import (
 )
 
 func (s *SourceStore) sourceWriteRecord(tx *gorm.DB, actor identityapp.Principal, project, id uuid.UUID, lock bool) (application.SourceIntentRecord, error) {
-	var row struct {
-		ID, ActorID                                uuid.UUID
-		Revision                                   int64
-		Action, Status, Plan, IOState              string
-		IOOwnerID                                  *uuid.UUID
-		CancellationRequested, NeedsReconciliation bool
-		CreatedAt, UpdatedAt                       time.Time
-	}
-	query := `SELECT s.id,c.actor_id,s.revision,c.action,s.status,c.plan::text AS plan,s.io_state,s.io_owner_id,s.cancellation_requested,s.needs_reconciliation,c.created_at,s.updated_at FROM script.command c JOIN script.command_state s ON s.actor_id=c.actor_id AND s.request_id=c.request_id WHERE c.org_id=? AND c.project_id=? AND s.id=?`
+	var state scriptCommandStateRow
+	query := tx.Model(&scriptCommandStateRow{}).Where("id = ?", id)
 	if lock {
-		query += ` FOR UPDATE OF s`
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
-	read := tx.Raw(query, actor.OrgID, project, id).Scan(&row)
-	if read.Error != nil {
-		return application.SourceIntentRecord{}, read.Error
-	}
-	if read.RowsAffected != 1 {
+	if err := query.Take(&state).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		return application.SourceIntentRecord{}, application.ErrNotFound
+	} else if err != nil {
+		return application.SourceIntentRecord{}, err
 	}
-	r := application.SourceIntentRecord{IOState: row.IOState, OwnerID: row.IOOwnerID}
-	if err := json.Unmarshal([]byte(row.Plan), &r.Plan); err != nil {
+	var command scriptCommandRow
+	if err := tx.Where("actor_id = ? AND request_id = ? AND org_id = ? AND project_id = ?", state.ActorID, state.RequestID, actor.OrgID, project).Take(&command).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		return application.SourceIntentRecord{}, application.ErrNotFound
+	} else if err != nil {
+		return application.SourceIntentRecord{}, err
+	}
+	r := application.SourceIntentRecord{IOState: state.IOState, OwnerID: state.IOOwnerID}
+	if err := json.Unmarshal(command.Plan, &r.Plan); err != nil {
 		return r, application.ErrUnavailable
 	}
 	if err := loadPlanLocations(tx, &r.Plan); err != nil {
 		return r, err
 	}
-	if r.Plan.ActorID != row.ActorID || r.Plan.OrgID != actor.OrgID || r.Plan.Command.ProjectID != project || sourceIntentID(r.Plan) != id {
+	if r.Plan.ActorID != command.ActorID || r.Plan.OrgID != actor.OrgID || r.Plan.Command.ProjectID != project || sourceIntentID(r.Plan) != id {
 		return r, application.ErrUnavailable
 	}
-	var internal bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.import_job j JOIN script.import_attempt a ON a.job_id=j.id WHERE j.actor_id=? AND j.org_id=? AND j.project_id=? AND a.publication_key=?)`, r.Plan.ActorID, r.Plan.OrgID, project, r.Plan.Command.Key).Scan(&internal).Error; err != nil {
+	internal, err := importPublicationExists(tx, r.Plan.ActorID, r.Plan.OrgID, project, r.Plan.Command.Key)
+	if err != nil {
 		return r, err
 	}
 	if internal != s.importRecovery {
 		return r, application.ErrNotFound
 	}
-	r.View = application.SourceWriteIntent{ID: id, Revision: row.Revision, Action: row.Action, Status: row.Status, ExpectedScriptRevision: r.Plan.Command.ExpectedRevision, BaseVersionID: r.Plan.Command.BaseVersionID, ObjectCount: len(r.Plan.Objects), CancellationRequested: row.CancellationRequested, NeedsReconciliation: row.NeedsReconciliation, ActiveIO: row.IOOwnerID != nil, CanControl: row.Status == "pending", CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
-	var objects []struct {
-		LocationID                     *uuid.UUID
-		ObjectKey, SHA256, MIME        string
-		ByteSize                       int64
-		PutStarted, Confirmed, Removed bool
-	}
-	if err := tx.Raw(`SELECT i.object_location_id AS location_id,i.object_key,i.sha256,i.byte_size,i.mime,s.put_started,s.confirmed,s.removed FROM script.object_intent i JOIN script.object_state s ON s.object_key=i.object_key AND s.object_location_id IS NOT DISTINCT FROM i.object_location_id WHERE i.actor_id=? AND i.request_id=? ORDER BY i.object_key`, row.ActorID, r.Plan.Command.Key).Scan(&objects).Error; err != nil {
+	r.View = application.SourceWriteIntent{ID: id, Revision: state.Revision, Action: domain.SourceAction(command.Action), Status: state.Status, ExpectedScriptRevision: r.Plan.Command.ExpectedRevision, BaseVersionID: r.Plan.Command.BaseVersionID, ObjectCount: len(r.Plan.Objects), CancellationRequested: state.CancellationRequested, NeedsReconciliation: state.NeedsReconciliation, ActiveIO: state.IOOwnerID != nil, CanControl: state.Status == scriptCommandPending, CreatedAt: command.CreatedAt.UTC(), UpdatedAt: state.UpdatedAt.UTC()}
+	var intents []scriptObjectIntentRow
+	if err := tx.Where("actor_id = ? AND request_id = ?", command.ActorID, r.Plan.Command.Key).Order("object_key").Find(&intents).Error; err != nil {
 		return r, err
 	}
-	if len(objects) != len(r.Plan.Objects) {
+	if len(intents) != len(r.Plan.Objects) {
 		return r, application.ErrUnavailable
 	}
-	for _, object := range objects {
-		fact := domain.ObjectFact{LocationID: locationValue(object.LocationID), Key: object.ObjectKey, SHA256: object.SHA256, ByteSize: object.ByteSize, MIME: object.MIME}
+	keys := make([]string, len(intents))
+	for i := range intents {
+		keys[i] = intents[i].ObjectKey
+	}
+	var states []scriptObjectStateRow
+	if len(keys) > 0 {
+		if err := tx.Where("object_key IN ?", keys).Find(&states).Error; err != nil {
+			return r, err
+		}
+	}
+	stateByKey := make(map[string]scriptObjectStateRow, len(states))
+	for _, objectState := range states {
+		stateByKey[objectState.ObjectKey] = objectState
+	}
+	for _, object := range intents {
+		storedState, ok := stateByKey[object.ObjectKey]
+		if !ok || storedState.ObjectLocationID != object.ObjectLocationID || object.ObjectLocationID == uuid.Nil {
+			return r, application.ErrUnavailable
+		}
+		fact := domain.ObjectFact{LocationID: object.ObjectLocationID, Key: object.ObjectKey, SHA256: object.SHA256, ByteSize: object.ByteSize, MIME: object.MIME}
 		if !slices.Contains(r.Plan.Objects, fact) {
 			return r, application.ErrObjectMismatch
 		}
-		r.Objects = append(r.Objects, application.SourceObjectState{Fact: fact, PutStarted: object.PutStarted, Confirmed: object.Confirmed, Removed: object.Removed})
-		if object.Confirmed {
+		r.Objects = append(r.Objects, application.SourceObjectState{Fact: fact, PutStarted: storedState.PutStarted, Confirmed: storedState.Confirmed, Removed: storedState.Removed})
+		if storedState.Confirmed {
 			r.View.ConfirmedObjectCount++
 		}
 	}
 	return r, nil
 }
 
+func importPublicationExists(tx *gorm.DB, actor, org, project, publicationKey uuid.UUID) (bool, error) {
+	var jobs []uuid.UUID
+	if err := tx.Model(&scriptImportJobRow{}).Select("id").Where("actor_id = ? AND org_id = ? AND project_id = ?", actor, org, project).Find(&jobs).Error; err != nil {
+		return false, err
+	}
+	if len(jobs) == 0 {
+		return false, nil
+	}
+	var count int64
+	err := tx.Model(&scriptImportAttemptRow{}).Where("job_id IN ? AND publication_key = ?", jobs, publicationKey).Count(&count).Error
+	return count > 0, err
+}
+
 // ListSourceWrites lists current scoped intents so an unknown response can be recovered.
 func (s *SourceStore) ListSourceWrites(ctx context.Context, actor identityapp.Principal, project uuid.UUID, after int64, limit int) (application.SourceWritePage, error) {
 	result := application.SourceWritePage{CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID, Items: []application.SourceWriteIntent{}}
 	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
-		var ids []struct{ ID uuid.UUID }
-		if err := tx.Raw(`SELECT s.id FROM script.command c JOIN script.command_state s ON s.actor_id=c.actor_id AND s.request_id=c.request_id WHERE c.org_id=? AND c.project_id=? AND EXISTS(SELECT 1 FROM script.import_job j JOIN script.import_attempt a ON a.job_id=j.id WHERE j.actor_id=c.actor_id AND j.org_id=c.org_id AND j.project_id=c.project_id AND a.publication_key=c.request_id)=? ORDER BY c.created_at DESC,s.id DESC OFFSET ? LIMIT ?`, actor.OrgID, project, s.importRecovery, after, limit+1).Scan(&ids).Error; err != nil {
+		importAttempts := tx.Model(&scriptImportAttemptRow{}).
+			Select("script.import_attempt.publication_key").
+			Joins("JOIN script.import_job ON script.import_job.id = script.import_attempt.job_id").
+			Where("script.import_job.org_id = ? AND script.import_job.project_id = ? AND script.import_job.actor_id = script.command.actor_id", actor.OrgID, project)
+		commands := tx.Model(&scriptCommandRow{}).
+			Select("actor_id, request_id, created_at").
+			Where("org_id = ? AND project_id = ?", actor.OrgID, project)
+		if s.importRecovery {
+			commands = commands.Where("request_id IN (?)", importAttempts)
+		} else {
+			commands = commands.Where("request_id NOT IN (?)", importAttempts)
+		}
+		var commandsPage []scriptCommandRow
+		if err := commands.Order("created_at DESC, request_id DESC").Offset(int(after)).Limit(limit + 1).Find(&commandsPage).Error; err != nil {
 			return err
 		}
-		if len(ids) > limit {
-			ids = ids[:limit]
+		if len(commandsPage) > limit {
+			commandsPage = commandsPage[:limit]
 			next := after + int64(limit)
 			result.NextAfter = &next
 		}
-		for _, id := range ids {
-			r, err := s.sourceWriteRecord(tx, actor, project, id.ID, false)
+		for _, command := range commandsPage {
+			var state scriptCommandStateRow
+			if err := tx.Where("actor_id = ? AND request_id = ?", command.ActorID, command.RequestID).Take(&state).Error; err != nil {
+				return err
+			}
+			r, err := s.sourceWriteRecord(tx, actor, project, state.ID, false)
 			if err != nil {
 				return err
 			}
@@ -128,7 +169,7 @@ func (s *SourceStore) controlProof(tx *gorm.DB, actor identityapp.Principal, inp
 		return application.SourceIntentRecord{}, err
 	}
 	var count int64
-	if err := tx.Raw(`SELECT count(*) FROM script.source_control WHERE actor_id=? AND request_id=? AND org_id=? AND project_id=? AND intent_id=? AND action=? AND expected_revision=? AND request_hash=?`, actor.ID, input.Key, actor.OrgID, input.ProjectID, input.IntentID, input.Action, input.ExpectedRevision, hash).Scan(&count).Error; err != nil {
+	if err := tx.Model(&scriptSourceControlRow{}).Where("actor_id = ? AND request_id = ? AND org_id = ? AND project_id = ? AND intent_id = ? AND action = ? AND expected_revision = ? AND request_hash = ?", actor.ID, input.Key, actor.OrgID, input.ProjectID, input.IntentID, input.Action, input.ExpectedRevision, hash).Count(&count).Error; err != nil {
 		return application.SourceIntentRecord{}, err
 	}
 	if count != 1 {
@@ -155,10 +196,10 @@ func (s *SourceStore) ControlSourceWrite(ctx context.Context, actor identityapp.
 		return result, err
 	}
 	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
-		if err := commandLock(tx, actor.ID, input.Key); err != nil {
+		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "source_control_"+string(input.Action), hash, now); err != nil {
 			return err
 		}
-		if err := checkRequestScope(tx, actor, input.ProjectID, input.Key, "source_control_"+input.Action, hash); err != nil {
+		if err := checkRequestScope(tx, actor, input.ProjectID, input.Key, "source_control_"+string(input.Action), hash); err != nil {
 			return err
 		}
 		r, err := s.sourceWriteRecord(tx, actor, input.ProjectID, input.IntentID, true)
@@ -168,32 +209,49 @@ func (s *SourceStore) ControlSourceWrite(ctx context.Context, actor identityapp.
 		if err := s.requireImportRecoveryControl(tx, r); err != nil {
 			return err
 		}
-		var prior struct{ Response string }
-		read := tx.Raw(`SELECT response::text FROM script.source_control WHERE actor_id=? AND request_id=?`, actor.ID, input.Key).Scan(&prior)
-		if read.Error != nil {
+		var prior scriptSourceControlRow
+		read := tx.Where("actor_id = ? AND request_id = ?", actor.ID, input.Key).Take(&prior)
+		if read.Error == nil {
+			return json.Unmarshal(prior.Response, &result)
+		}
+		if !errors.Is(read.Error, gorm.ErrRecordNotFound) {
 			return read.Error
 		}
-		if read.RowsAffected == 1 {
-			return json.Unmarshal([]byte(prior.Response), &result)
-		}
-		if r.View.Status != "pending" || r.View.Revision != input.ExpectedRevision {
+		if r.View.Status != scriptCommandPending || r.View.Revision != input.ExpectedRevision {
 			return application.ErrConflict
 		}
-		if err := registerRequest(tx, actor, input.ProjectID, input.Key, "source_control_"+input.Action, hash, now); err != nil {
+		if err := registerRequest(tx, actor, input.ProjectID, input.Key, "source_control_"+string(input.Action), hash, now); err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`UPDATE script.command_state SET cancellation_requested=cancellation_requested OR ?,needs_reconciliation=needs_reconciliation OR ?,revision=revision+1,updated_at=? WHERE id=? AND revision=? AND status='pending'`, input.Action == "cancel", input.Action == "reconcile", now, input.IntentID, input.ExpectedRevision)); err != nil {
+		updated := tx.Model(&scriptCommandStateRow{}).
+			Where("id = ? AND revision = ? AND status = ?", input.IntentID, input.ExpectedRevision, scriptCommandPending).
+			Updates(map[string]any{
+				"cancellation_requested": r.View.CancellationRequested || input.Action == domain.SourceControlActionCancel,
+				"needs_reconciliation":   r.View.NeedsReconciliation || input.Action == domain.SourceControlActionReconcile,
+				"revision":               r.View.Revision + 1,
+				"updated_at":             now,
+			})
+		if err := exactlyOne(updated); err != nil {
 			return err
+		}
+		if (input.Action == domain.SourceControlActionCancel || r.View.CancellationRequested) && len(r.Plan.Objects) > 0 {
+			if r.Plan.StorageIntentID == uuid.Nil || s.locations == nil || s.locations(tx) == nil {
+				return application.ErrUnavailable
+			}
+			if err := s.locations(tx).Cancel(ctx, r.Plan.StorageIntentID); err != nil {
+				return err
+			}
 		}
 		result = application.SourceControlReceipt{IntentID: input.IntentID, Revision: r.View.Revision + 1, Action: input.Action, Accepted: true}
 		response, err := json.Marshal(result)
 		if err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`INSERT INTO script.source_control(actor_id,request_id,org_id,project_id,intent_id,action,expected_revision,request_hash,response,created_at) VALUES(?,?,?,?,?,?,?,?,?::jsonb,?)`, actor.ID, input.Key, actor.OrgID, input.ProjectID, input.IntentID, input.Action, input.ExpectedRevision, hash, string(response), now)); err != nil {
+		receipt := scriptSourceControlRow{ActorID: actor.ID, RequestID: input.Key, OrgID: actor.OrgID, ProjectID: input.ProjectID, IntentID: input.IntentID, Action: string(input.Action), ExpectedRevision: input.ExpectedRevision, RequestHash: hash, Response: scriptJSON(response), CreatedAt: now}
+		if err := exactlyOne(tx.Create(&receipt)); err != nil {
 			return err
 		}
-		return reviewAudit(tx, actor, input.ProjectID, input.Key, input.RequestID, "script.source_write_"+input.Action, r.Plan.Command.ExpectedRevision, r.Plan.Version.ID, nil, now)
+		return reviewAudit(tx, actor, input.ProjectID, input.Key, input.RequestID, "script.source_write_"+string(input.Action), r.Plan.Command.ExpectedRevision, r.Plan.Version.ID, nil, now)
 	})
 	return result, err
 }
@@ -205,13 +263,15 @@ func (s *SourceStore) ProveSourceStop(ctx context.Context, actor identityapp.Pri
 		if err != nil {
 			return err
 		}
-		if r.OwnerID == nil && r.IOState == "ended" {
+		if r.OwnerID == nil && r.IOState == scriptIOEnded {
 			return nil
 		}
 		if r.OwnerID == nil || *r.OwnerID != owner {
 			return application.ErrNeedsReconciliation
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.command_state SET io_owner_id=NULL,io_state='ended',revision=revision+1,updated_at=? WHERE id=? AND io_owner_id=?`, now, input.IntentID, owner))
+		updated := tx.Model(&scriptCommandStateRow{}).Where("id = ? AND io_owner_id = ?", input.IntentID, owner).
+			Updates(map[string]any{"io_owner_id": nil, "io_state": scriptIOEnded, "revision": r.View.Revision + 1, "updated_at": now})
+		return exactlyOne(updated)
 	})
 }
 
@@ -220,17 +280,23 @@ func (s *SourceStore) authorizeRemoval(tx *gorm.DB, actor identityapp.Principal,
 	if err != nil {
 		return err
 	}
-	if r.View.Status != "pending" || !r.View.CancellationRequested || r.OwnerID != nil || (r.IOState != "idle" && r.IOState != "ended") {
+	if r.View.Status != scriptCommandPending || !r.View.CancellationRequested || r.OwnerID != nil || (r.IOState != scriptIOIdle && r.IOState != scriptIOEnded) {
 		return application.ErrNeedsReconciliation
 	}
 	if err := exactSourceObject(tx, r.Plan, f); err != nil {
 		return err
 	}
-	var referenced bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.script_source WHERE original_location_id=? OR rich_location_id=? OR (original_location_id IS NULL AND original_key=?) OR (rich_location_id IS NULL AND rich_key=?)) OR EXISTS(SELECT 1 FROM script.script_version WHERE text_location_id=? OR rich_location_id=? OR (text_location_id IS NULL AND text_key=?) OR (rich_location_id IS NULL AND rich_key=?))`, f.LocationID, f.LocationID, f.Key, f.Key, f.LocationID, f.LocationID, f.Key, f.Key).Scan(&referenced).Error; err != nil {
+	if f.LocationID == uuid.Nil {
+		return application.ErrObjectMismatch
+	}
+	var sourceReferences, versionReferences int64
+	if err := tx.Table("script.script_source").Where("original_location_id = ? OR rich_location_id = ?", f.LocationID, f.LocationID).Count(&sourceReferences).Error; err != nil {
 		return err
 	}
-	if referenced {
+	if err := tx.Table("script.script_version").Where("text_location_id = ? OR rich_location_id = ?", f.LocationID, f.LocationID).Count(&versionReferences).Error; err != nil {
+		return err
+	}
+	if sourceReferences > 0 || versionReferences > 0 {
 		return application.ErrConflict
 	}
 	return nil
@@ -253,15 +319,15 @@ func (s *SourceStore) ConfirmSourceRemoval(ctx context.Context, actor identityap
 		if err != nil {
 			return err
 		}
-		if r.Plan.StorageIntentID != uuid.Nil {
-			if s.locations == nil || s.locations(tx) == nil {
-				return application.ErrUnavailable
-			}
-			if err := s.locations(tx).ConfirmRemoval(ctx, r.Plan.StorageIntentID, f); err != nil {
-				return err
-			}
+		if r.Plan.StorageIntentID == uuid.Nil || f.LocationID == uuid.Nil || s.locations == nil || s.locations(tx) == nil {
+			return application.ErrUnavailable
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.object_state SET removed=true,updated_at=? WHERE object_key=? AND object_location_id IS NOT DISTINCT FROM ?::uuid`, now, f.Key, nullableLocation(f.LocationID)))
+		if err := s.locations(tx).ConfirmRemoval(ctx, r.Plan.StorageIntentID, f); err != nil {
+			return err
+		}
+		updated := tx.Model(&scriptObjectStateRow{}).Where("object_key = ? AND object_location_id = ?", f.Key, f.LocationID).
+			Updates(map[string]any{"removed": true, "updated_at": now})
+		return exactlyOne(updated)
 	})
 }
 
@@ -272,12 +338,12 @@ func (s *SourceStore) FinishSourceControl(ctx context.Context, actor identityapp
 		if err != nil {
 			return err
 		}
-		if r.View.Status == "completed" || r.View.Status == "cancelled" {
+		if r.View.Status == scriptCommandCompleted || r.View.Status == scriptCommandCancelled {
 			return nil
 		}
-		status := "pending"
+		status := scriptCommandPending
 		if !uncertain && r.View.CancellationRequested {
-			if r.OwnerID != nil || (r.IOState != "idle" && r.IOState != "ended") {
+			if r.OwnerID != nil || (r.IOState != scriptIOIdle && r.IOState != scriptIOEnded) {
 				return application.ErrNeedsReconciliation
 			}
 			for _, object := range r.Objects {
@@ -285,7 +351,7 @@ func (s *SourceStore) FinishSourceControl(ctx context.Context, actor identityapp
 					return application.ErrNeedsReconciliation
 				}
 			}
-			status = "cancelled"
+			status = scriptCommandCancelled
 		}
 		if !uncertain && !r.View.CancellationRequested {
 			for _, object := range r.Objects {
@@ -298,7 +364,9 @@ func (s *SourceStore) FinishSourceControl(ctx context.Context, actor identityapp
 		if uncertain {
 			code = "source_write_needs_reconciliation"
 		}
-		if err := exactlyOne(tx.Exec(`UPDATE script.command_state SET status=?,needs_reconciliation=?,failure_code=?,revision=revision+1,updated_at=? WHERE id=? AND status='pending'`, status, uncertain, code, now, input.IntentID)); err != nil {
+		updated := tx.Model(&scriptCommandStateRow{}).Where("id = ? AND status = ?", input.IntentID, scriptCommandPending).
+			Updates(map[string]any{"status": status, "needs_reconciliation": uncertain, "failure_code": code, "revision": r.View.Revision + 1, "updated_at": now})
+		if err := exactlyOne(updated); err != nil {
 			return fmt.Errorf("finish source control: %w", err)
 		}
 		return nil
@@ -307,7 +375,8 @@ func (s *SourceStore) FinishSourceControl(ctx context.Context, actor identityapp
 
 // BeginSourceRemoval freezes the verified digest before any physical delete.
 func (s *SourceStore) BeginSourceRemoval(ctx context.Context, actor identityapp.Principal, input application.SourceControlCommand, f domain.ObjectFact, now time.Time) error {
-	return s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	ready := true
+	err := s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
 		if err := s.authorizeRemoval(tx, actor, input, f); err != nil {
 			return err
 		}
@@ -315,18 +384,27 @@ func (s *SourceStore) BeginSourceRemoval(ctx context.Context, actor identityapp.
 		if err != nil {
 			return err
 		}
-		if r.Plan.StorageIntentID != uuid.Nil {
-			if s.locations == nil || s.locations(tx) == nil {
-				return application.ErrUnavailable
-			}
-			if err := s.locations(tx).BeginRemoval(ctx, r.Plan.StorageIntentID, f); err != nil {
-				return err
-			}
-		} else if f.LocationID != uuid.Nil {
-			return application.ErrNeedsReconciliation
+		if r.Plan.StorageIntentID == uuid.Nil || f.LocationID == uuid.Nil || s.locations == nil || s.locations(tx) == nil {
+			return application.ErrUnavailable
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.object_state SET confirmed=true,updated_at=? WHERE object_key=? AND object_location_id IS NOT DISTINCT FROM ?::uuid AND NOT removed`, now, f.Key, nullableLocation(f.LocationID)))
+		ready, err = s.locations(tx).BeginRemoval(ctx, r.Plan.StorageIntentID, f)
+		if err != nil {
+			return err
+		}
+		if !ready {
+			return nil
+		}
+		updated := tx.Model(&scriptObjectStateRow{}).Where("object_key = ? AND object_location_id = ? AND removed = ?", f.Key, f.LocationID, false).
+			Updates(map[string]any{"confirmed": true, "updated_at": now})
+		return exactlyOne(updated)
 	})
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return application.ErrNeedsReconciliation
+	}
+	return nil
 }
 
 // NewImportRecoveryStore exposes internal publication only to the durable import worker.
@@ -339,9 +417,36 @@ func (s *SourceStore) requireImportRecoveryControl(tx *gorm.DB, r application.So
 	if !s.importRecovery {
 		return nil
 	}
-	var allowed bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.import_job j JOIN script.import_state st ON st.job_id=j.id JOIN script.import_attempt a ON a.job_id=j.id AND a.attempt=st.attempt WHERE j.actor_id=? AND j.org_id=? AND j.project_id=? AND a.publication_key=? AND st.cancellation_requested)`, r.Plan.ActorID, r.Plan.OrgID, r.Plan.Command.ProjectID, r.Plan.Command.Key).Scan(&allowed).Error; err != nil {
+	var jobs []scriptImportJobRow
+	if err := tx.Where("actor_id = ? AND org_id = ? AND project_id = ?", r.Plan.ActorID, r.Plan.OrgID, r.Plan.Command.ProjectID).Find(&jobs).Error; err != nil {
 		return err
+	}
+	jobIDs := make([]uuid.UUID, len(jobs))
+	for i := range jobs {
+		jobIDs[i] = jobs[i].ID
+	}
+	if len(jobIDs) == 0 {
+		return application.ErrConflict
+	}
+	var attempts []scriptImportAttemptRow
+	if err := tx.Where("job_id IN ? AND publication_key = ?", jobIDs, r.Plan.Command.Key).Find(&attempts).Error; err != nil {
+		return err
+	}
+	var states []scriptImportStateRow
+	if err := tx.Where("job_id IN ? AND cancellation_requested = ?", jobIDs, true).Find(&states).Error; err != nil {
+		return err
+	}
+	allowed := false
+	for _, state := range states {
+		for _, attempt := range attempts {
+			if state.JobID == attempt.JobID && state.Attempt == attempt.Attempt {
+				allowed = true
+				break
+			}
+		}
+		if allowed {
+			break
+		}
 	}
 	if !allowed {
 		return application.ErrConflict

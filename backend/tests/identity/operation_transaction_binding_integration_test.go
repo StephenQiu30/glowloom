@@ -15,7 +15,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	domain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 

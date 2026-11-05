@@ -77,7 +77,7 @@ func TestAdapterCompatibilityInstalledTextProtocols(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, 1, calls)
 					if status == 200 {
-						require.Equal(t, "completed", result.Outcome)
+						require.EqualValues(t, "completed", result.Outcome)
 						require.Equal(t, "answer", result.Text)
 					} else {
 						require.NotEqual(t, "completed", result.Outcome)
@@ -121,6 +121,6 @@ func TestAdapterUnknownNeverResubmits(t *testing.T) {
 	})})
 	unknown, err := broken.Submit(t.Context(), application.GenerationRequest{Config: config, Capability: "video.generate", Mode: "text2video", ModelID: "doubao-seedance-1-0-pro-250528", Prompt: "hello", OutputCount: 1}, "fixture-key")
 	require.NoError(t, err)
-	require.Equal(t, "unknown", unknown.Outcome)
+	require.EqualValues(t, "unknown", unknown.Outcome)
 	require.Equal(t, 1, brokenPosts)
 }

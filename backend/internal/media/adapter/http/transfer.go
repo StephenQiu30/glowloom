@@ -181,7 +181,7 @@ func (h *TransferHandler) Get(c *gin.Context) {
 	c.JSON(200, job)
 }
 
-func (h *TransferHandler) control(c *gin.Context, action string) {
+func (h *TransferHandler) control(c *gin.Context, action application.TransferAction) {
 	if h == nil || h.repo == nil {
 		writeTransferError(c, application.ErrUnavailable)
 		return
@@ -227,7 +227,7 @@ func (h *TransferHandler) control(c *gin.Context, action string) {
 // @Failure 422 {object} httpapi.Problem
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/transfers/{job_id}/cancel [post]
-func (h *TransferHandler) Cancel(c *gin.Context) { h.control(c, "cancel") }
+func (h *TransferHandler) Cancel(c *gin.Context) { h.control(c, application.TransferActionCancel) }
 
 // Retry starts only explicitly observed failures whose objects are proven cleaned.
 // @Summary 重试已清理失败行
@@ -245,7 +245,7 @@ func (h *TransferHandler) Cancel(c *gin.Context) { h.control(c, "cancel") }
 // @Failure 422 {object} httpapi.Problem
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/transfers/{job_id}/retry [post]
-func (h *TransferHandler) Retry(c *gin.Context) { h.control(c, "retry") }
+func (h *TransferHandler) Retry(c *gin.Context) { h.control(c, application.TransferActionRetry) }
 
 // Reconcile preserves target identities and the independent cancellation intent.
 // @Summary 对账素材转移未知结果
@@ -263,7 +263,9 @@ func (h *TransferHandler) Retry(c *gin.Context) { h.control(c, "retry") }
 // @Failure 422 {object} httpapi.Problem
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/transfers/{job_id}/reconcile [post]
-func (h *TransferHandler) Reconcile(c *gin.Context) { h.control(c, "reconcile") }
+func (h *TransferHandler) Reconcile(c *gin.Context) {
+	h.control(c, application.TransferActionReconcile)
+}
 
 func writeTransferError(c *gin.Context, err error) {
 	if errors.Is(err, domain.ErrTransferConflict) {

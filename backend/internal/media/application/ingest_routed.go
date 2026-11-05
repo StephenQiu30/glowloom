@@ -41,18 +41,18 @@ func (s *IngestService) ingestTarget(ctx context.Context, operation, project uui
 	if s.targets == nil {
 		return nil, ErrStorageNotReady
 	}
-	owner := StorageWorkOwner{Kind: "operation", OwnerID: project, WorkID: operation}
+	owner := StorageWorkOwner{Kind: StorageWorkKindOperation, OwnerID: project, WorkID: operation}
 	intent, err := s.targets.ReadStorageWork(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
-	if owner.Validate() != nil || intent.ID == uuid.Nil || intent.Owner != owner || strings.TrimSpace(intent.ConfigRevision) == "" || (intent.State != "open" && intent.State != "accepted") || (domain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: "validation"}).Validate() != nil {
+	if owner.Validate() != nil || intent.ID == uuid.Nil || intent.Owner != owner || strings.TrimSpace(intent.ConfigRevision) == "" || (intent.State != StorageWorkOpen && intent.State != StorageWorkAccepted) || (domain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: "validation"}).Validate() != nil {
 		return nil, ErrStorageRouteConflict
 	}
 	return &intent, nil
 }
 func validIngestLocation(target *StorageWorkIntent, location *domain.ObjectLocation, key string, size int64, mime, sha string) bool {
-	return target != nil && location != nil && location.ID != uuid.Nil && location.Ref == (domain.ObjectRef{ProfileID: target.ProfileID, Bucket: target.Bucket, Key: key}) && (location.State == "present" || location.State == "accepted") && location.ByteSize != nil && *location.ByteSize == size && location.MIMEType != nil && *location.MIMEType == mime && location.SHA256 != nil && *location.SHA256 == sha
+	return target != nil && location != nil && location.ID != uuid.Nil && location.Ref == (domain.ObjectRef{ProfileID: target.ProfileID, Bucket: target.Bucket, Key: key}) && (location.State == domain.ObjectLocationPresent || location.State == domain.ObjectLocationAccepted) && location.ByteSize != nil && *location.ByteSize == size && location.MIMEType != nil && *location.MIMEType == mime && location.SHA256 != nil && *location.SHA256 == sha
 }
 func (s *IngestService) verifyIngestObject(ctx context.Context, target *StorageWorkIntent, location *domain.ObjectLocation, key string, size int64, mime, sha string) error {
 	if s.routedObjects == nil {
@@ -75,7 +75,7 @@ func (s *IngestService) writeIngestObject(ctx context.Context, target *StorageWo
 		return nil, err
 	}
 	if s.routedObjects != nil {
-		if target == nil || target.State != "open" {
+		if target == nil || target.State != StorageWorkOpen {
 			return nil, ErrStorageRouteConflict
 		}
 		location, err := s.routedObjects.CreateOperationObject(ctx, *target, key, file)

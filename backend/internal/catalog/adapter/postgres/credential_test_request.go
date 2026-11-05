@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"time"
 
+	catalogtask "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -200,6 +203,10 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 		}
 		if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?::uuid,?,?,?::jsonb)`, eventID, topic, actor.OrgID.String(), string(payload)).Error; err != nil {
 			return fmt.Errorf("record credential test request: %w", err)
+		}
+		ref := catalogtask.Input{Kind: kind, TestID: request.TestID, ProviderID: request.ProviderID, CredentialID: request.CredentialID, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: request.RequestID}
+		if err := taskruntime.EnqueueReference(ctx, tx, catalogtask.Credential, request.TestID.String(), now, ref); err != nil {
+			return err
 		}
 		result = application.CredentialTestAccepted{Kind: kind, TestID: request.TestID, CheckID: request.TestID, EventID: eventID, ProviderID: request.ProviderID, CredentialID: request.CredentialID, Accepted: true, ModelID: modelID}
 		return saveReceipt()

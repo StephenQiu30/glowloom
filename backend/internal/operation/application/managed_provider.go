@@ -21,12 +21,28 @@ type ManagedCredential struct {
 	Ciphertext      []byte
 }
 
-// ManagedProgress is the only provider activity result that enters history.
+// ManagedProgressState classifies the current managed generation outcome.
+type ManagedProgressState string
+
+// Managed progress states are the bounded workflow contract for one managed provider call.
+const (
+	ManagedProgressWaiting      ManagedProgressState = "waiting"
+	ManagedProgressNotSubmitted ManagedProgressState = "not_submitted"
+	ManagedProgressUnknown      ManagedProgressState = "unknown"
+	ManagedProgressRejected     ManagedProgressState = "rejected"
+	ManagedProgressAccepted     ManagedProgressState = "accepted"
+	ManagedProgressSucceeded    ManagedProgressState = "succeeded"
+	ManagedProgressPending      ManagedProgressState = "pending"
+	ManagedProgressRunning      ManagedProgressState = "running"
+	ManagedProgressFailed       ManagedProgressState = "failed"
+)
+
+// ManagedProgress contains the classified outcome and durable provider progress.
 type ManagedProgress struct {
-	State       string `json:"state"`
-	TaskID      string `json:"task_id,omitempty"`
-	OutputCount int    `json:"output_count,omitempty"`
-	ErrorCode   string `json:"error_code,omitempty"`
+	State       ManagedProgressState `json:"state"`
+	TaskID      string               `json:"task_id,omitempty"`
+	OutputCount int                  `json:"output_count,omitempty"`
+	ErrorCode   string               `json:"error_code,omitempty"`
 }
 
 // ManagedStep requests one explicit submit, read-only poll, or receipt recovery.

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
@@ -50,7 +52,8 @@ func TestManagedMediaRealStorageAndProbeAreIdempotent(t *testing.T) {
 				data, err = os.ReadFile(file)
 				require.NoError(t, err)
 			}
-			results := application.NewManagedResults(staging.NewObjects(objects), f.store)
+			businessPinOperation(t, db, i)
+			results := application.NewRoutedManagedResults(staging.NewRoutedFactory(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), f.store)
 			artifact, err := results.StageArtifact(t.Context(), i, 1, data, mime)
 			require.NoError(t, err)
 			require.NoError(t, results.Save(t.Context(), application.ManagedResult{Identity: i, State: "succeeded", Artifacts: []application.ManagedArtifact{artifact}, Usage: json.RawMessage(`{"billable_requests":1,"output_count":1}`)}))
@@ -58,7 +61,8 @@ func TestManagedMediaRealStorageAndProbeAreIdempotent(t *testing.T) {
 			require.NoError(t, err)
 			_, err = f.store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{OperationID: i.OperationID, From: []domain.Status{domain.StatusSucceeded}, To: domain.StatusIngesting})
 			require.NoError(t, err)
-			activity := managed.NewScopedIngestActivities(db, objects, results, app.NewMediaWorkerScopeAccess, f.store)
+			businessPinOperation(t, db, i)
+			activity := managed.NewRoutedIngestActivities(db, businessStorageRegistry(t), results, app.NewMediaWorkerScopeAccess, f.store)
 			require.NoError(t, activity.Ingest(t.Context(), i.OperationID))
 			require.NoError(t, activity.Ingest(t.Context(), i.OperationID))
 			var rows []struct {

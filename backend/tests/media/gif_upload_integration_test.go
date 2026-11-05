@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
@@ -78,7 +77,7 @@ func TestGIFActualPrivateUploadReviewThumbnailsAndCompleteIndependentCopy(t *tes
 		t.Fatal("complete GIF owning snapshot", snapshot, err)
 	}
 	repo := mediaCopyStore(db)
-	if err := mediaapp.NewProjectCopyTransfer(repo, mediaobjects.NewProjectCopyObjects(objects), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal("GIF full private bytes transfer", err)
 	}
 	intents, err := repo.Objects(t.Context(), actor, binding, snapshot)

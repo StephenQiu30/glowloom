@@ -52,8 +52,8 @@ func documentTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	return r, o
 }
 
-func documentUploadService(db *gorm.DB, objects *objectstorage.Client) *mediaapp.UploadService {
-	return mediaapp.NewUploadService(mediaTestStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+func documentUploadService(t *testing.T, db *gorm.DB, _ *objectstorage.Client) *mediaapp.UploadService {
+	return mediaFixtureRoutedUpload(t, db, mediaTestStore(db), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 }
 
 func documentUpload(t *testing.T, db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal, project uuid.UUID, name string, data []byte) mediaapp.UploadResult {
@@ -63,7 +63,7 @@ func documentUpload(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	result, err := documentUploadService(db, objects).Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
+	result, err := fixtureProjectUpload(t.Context(), documentUploadService(t, db, objects), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("document actual reviewed upload", err)
 	}
@@ -81,14 +81,14 @@ func documentUpload(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 	return result
 }
 
-func documentRouter(db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal) *gin.Engine {
+func documentRouter(t *testing.T, db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal) *gin.Engine {
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewUploadHandler(documentUploadService(db, objects)).Register(group)
-	mediahttp.NewHandler(mediaapp.NewAssetQuery(mediaTestStore(db), objects)).Register(group)
-	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(mediaDocumentStore(db), objects)).Register(group)
+	mediahttp.NewUploadHandler(documentUploadService(t, db, objects)).Register(group)
+	mediahttp.NewHandler(mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute)).Register(group)
+	mediahttp.NewDocumentHandler(mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), mediaFixtureReadObjects(t))).Register(group)
 	return router
 }
 
@@ -123,7 +123,7 @@ func TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment(t *t
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, owner)
 	_, foreign := mediaStoreProject(t, owner)
-	router := documentRouter(db, objects, actor)
+	router := documentRouter(t, db, objects, actor)
 	for _, sample := range []struct {
 		name string
 		data []byte
@@ -184,13 +184,13 @@ func TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment(t *t
 			if wrong.Code != 404 {
 				t.Fatal("cross-project attachment", wrong.Code)
 			}
-			query := mediaapp.NewAssetQuery(mediaTestStore(db), objects)
+			query := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute)
 			if _, err := query.Reference(t.Context(), actor, project, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("document canvas reference", err)
 			}
 		})
 	}
-	query := mediaapp.NewAssetQuery(mediaTestStore(db), objects)
+	query := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute)
 	page, err := query.List(t.Context(), actor, project, "document", "", 1)
 	if err != nil || len(page.Items) != 1 || page.NextCursor == nil {
 		t.Fatal("document page1", err)
@@ -211,7 +211,7 @@ func TestDocumentSourcesPGReauthorizationFrozenCASAndActualObjectHash(t *testing
 	actor, project := mediaStoreProject(t, owner)
 	data := []byte("可靠原文")
 	result := documentUpload(t, db, objects, actor, project, "剧本.txt", data)
-	reader := mediaapp.NewDocumentSources(mediaDocumentStore(db), objects)
+	reader := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), mediaFixtureReadObjects(t))
 	frozen, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID})
 	if err != nil {
 		t.Fatal(err)
@@ -254,7 +254,7 @@ func TestDocumentHTTPLifecycleAndContainerRejectsBeforePublishing(t *testing.T) 
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, owner)
 	result := documentUpload(t, db, objects, actor, project, "当前.txt", []byte("当前项目原文"))
-	router := documentRouter(db, objects, actor)
+	router := documentRouter(t, db, objects, actor)
 	url := "/api/projects/" + project.String() + "/media/" + result.Asset.ID.String() + "/download"
 	for _, state := range []struct {
 		status string
@@ -281,7 +281,7 @@ func TestDocumentHTTPLifecycleAndContainerRejectsBeforePublishing(t *testing.T) 
 	if malformed.Code != 415 {
 		t.Fatal("malformed container HTTP boundary", malformed.Code)
 	}
-	page, err := mediaapp.NewAssetQuery(mediaTestStore(db), objects).List(t.Context(), actor, project, "document", "", 100)
+	page, err := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute).List(t.Context(), actor, project, "document", "", 100)
 	if err != nil || len(page.Items) != 1 {
 		t.Fatal("invalid document published", err)
 	}
@@ -305,7 +305,7 @@ func TestDocumentSourcesPGSharedLocksRetainFrozenFactsUntilOwningCommit(t *testi
 		t.Fatal(tx.Error)
 	}
 	defer func() { _ = tx.Rollback().Error }()
-	frozen, err := mediaapp.NewDocumentSources(mediaDocumentStore(tx), objects).Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID})
+	frozen, err := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(tx), mediaFixtureReadObjects(t)).Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID})
 	if err != nil || len(frozen) != 1 {
 		t.Fatal("owning source freeze", err)
 	}
@@ -375,15 +375,15 @@ func TestDocumentActualUploadUnknownCommitPreservesOriginalAndPermanentReplay(t 
 	defer func() { _ = file.Close() }()
 	in := mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.txt"}, File: file, LocalReviewConfirmed: true}
 	store := mediaTestStore(db)
-	service := mediaapp.NewUploadService(documentUnknownUpload{store}, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	if _, err := service.Upload(t.Context(), in); !errors.Is(err, io.ErrUnexpectedEOF) {
+	service := mediaFixtureRoutedUpload(t, db, documentUnknownUpload{store}, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
+	if _, err := fixtureProjectUpload(t.Context(), service, in); !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatal("unknown commit not propagated", err)
 	}
-	first, err := documentUploadService(db, objects).Upload(t.Context(), in)
+	first, err := fixtureProjectUpload(t.Context(), documentUploadService(t, db, objects), in)
 	if err != nil {
 		t.Fatal("durable upload original key replay", err)
 	}
-	second, err := documentUploadService(db, objects).Upload(t.Context(), in)
+	second, err := fixtureProjectUpload(t.Context(), documentUploadService(t, db, objects), in)
 	if err != nil || !reflect.DeepEqual(first, second) {
 		t.Fatal("permanent source receipt changed", err)
 	}
@@ -396,7 +396,7 @@ func TestDocumentActualUploadUnknownCommitPreservesOriginalAndPermanentReplay(t 
 		defer cancel()
 		_ = objects.Remove(ctx, asset.ObjectKey)
 	})
-	reader := mediaapp.NewDocumentSources(mediaDocumentStore(db), objects)
+	reader := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), mediaFixtureReadObjects(t))
 	frozen, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{asset.ID})
 	if err != nil {
 		t.Fatal(err)

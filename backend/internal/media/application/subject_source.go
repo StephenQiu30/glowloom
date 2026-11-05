@@ -40,20 +40,13 @@ func (f SubjectSourceFact) matchesOwner(a domain.MediaAsset) bool {
 // SubjectSourceQuery proves media without granting access to its source library.
 type SubjectSourceQuery struct {
 	reader       SubjectSourceReader
-	objects      DocumentObjectGetter
-	signer       PreviewSigner
-	objectReader ObjectReader
+	objects      ObjectReader
 	objectSigner ObjectSigner
-}
-
-// NewSubjectSourceQuery uses the existing single-profile object transport.
-func NewSubjectSourceQuery(reader SubjectSourceReader, signer PreviewSigner, objects DocumentObjectGetter) *SubjectSourceQuery {
-	return &SubjectSourceQuery{reader: reader, signer: signer, objects: objects}
 }
 
 // NewRoutedSubjectSourceQuery reads and signs the exact saved storage profile.
 func NewRoutedSubjectSourceQuery(reader SubjectSourceReader, signer ObjectSigner, objects ObjectReader) *SubjectSourceQuery {
-	return &SubjectSourceQuery{reader: reader, objectReader: objects, objectSigner: signer}
+	return &SubjectSourceQuery{reader: reader, objects: objects, objectSigner: signer}
 }
 
 func subjectEligible(file LibraryMediaFile) bool {
@@ -79,7 +72,7 @@ func (q *SubjectSourceQuery) Reference(ctx context.Context, actor identity.Princ
 		scope.Kind == domain.LibraryPersonal && (a.ProjectID != uuid.Nil || a.Personal == nil || a.Personal.OrgID != actor.OrgID || a.Personal.ActorID != actor.ID) {
 		return LibraryMediaFile{}, ErrNotFound
 	}
-	verify := &ReferenceFactQuery{objects: q.objects, objectReader: q.objectReader}
+	verify := &ReferenceFactQuery{objects: q.objects}
 	if _, _, err := verify.verify(ctx, a.ObjectLocation, a.ObjectKey, &a.ByteSize, a.SHA256, libraryOriginalLimit(a.Kind)); err != nil {
 		return LibraryMediaFile{}, errors.Join(ErrUnavailable, err)
 	}
@@ -111,7 +104,7 @@ func (q *SubjectSourceQuery) VerifyBound(ctx context.Context, expected SubjectSo
 		return LibraryMediaFile{}, err
 	}
 	a := file.Asset
-	verify := &ReferenceFactQuery{objects: q.objects, objectReader: q.objectReader}
+	verify := &ReferenceFactQuery{objects: q.objects}
 	if _, _, err := verify.verify(ctx, a.ObjectLocation, a.ObjectKey, &a.ByteSize, a.SHA256, libraryOriginalLimit(a.Kind)); err != nil {
 		return LibraryMediaFile{}, errors.Join(ErrUnavailable, err)
 	}
@@ -124,7 +117,7 @@ func (q *SubjectSourceQuery) SignBound(ctx context.Context, expected SubjectSour
 	if err != nil {
 		return AccessGrant{}, err
 	}
-	return signMediaObject(ctx, file.Asset.ObjectLocation, file.Asset.ObjectKey, q.objectSigner, q.signer, ttl)
+	return signMediaObject(ctx, file.Asset.ObjectLocation, file.Asset.ObjectKey, q.objectSigner, ttl)
 }
 
 // DownloadBound verifies all bytes before exposing a preview or export stream.
@@ -135,7 +128,7 @@ func (q *SubjectSourceQuery) DownloadBound(ctx context.Context, expected Subject
 		return nil, LibraryAssetSummary{}, err
 	}
 	a := file.Asset
-	reader, err := readMediaObject(ctx, a.ObjectLocation, a.ObjectKey, q.objectReader, q.objects)
+	reader, err := readMediaObject(ctx, a.ObjectLocation, a.ObjectKey, q.objects)
 	if err != nil || reader == nil {
 		return nil, LibraryAssetSummary{}, errors.Join(ErrUnavailable, err)
 	}

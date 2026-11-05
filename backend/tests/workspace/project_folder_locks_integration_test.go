@@ -47,7 +47,9 @@ func TestProjectFolderPGAssignmentAndRecycleHavePhysicalFence(t *testing.T) {
 	defer func() {
 		if !finished {
 			cancel()
-			<-done
+			if err := <-done; err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				t.Error("joined lock-test operation:", err)
+			}
 		}
 	}()
 	waitProjectLock(owned, t, db, blocker, blocked)
@@ -117,10 +119,14 @@ func TestProjectFolderPGAlreadyDeletedMemberRestoreIsSerialized(t *testing.T) {
 	defer func() {
 		cancel()
 		if !recycleFinished {
-			<-recycleDone
+			if err := <-recycleDone; err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				t.Error("joined lock-test operation:", err)
+			}
 		}
 		if restoreStarted && !restoreFinished {
-			<-restoreDone
+			if err := <-restoreDone; err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				t.Error("joined lock-test operation:", err)
+			}
 		}
 	}()
 	select {
@@ -172,7 +178,7 @@ func TestProjectFolderPGCoverReferenceLockSurvivesUntilCommit(t *testing.T) {
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
 	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	asset := uuid.New()
-	lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,moderation_status,sha256)VALUES(?,?,'image','upload','ready',?,'image/png',12,'passed',repeat('a',64))`, asset, project, "projects/"+project.String()+"/image/2026/10/"+asset.String()+".png")
+	lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,moderation_status,sha256,object_location_id) VALUES(?,?,'image','upload','ready',?,'image/png',12,'passed',repeat('a',64),?)`, asset, project, "projects/"+project.String()+"/image/2026/10/"+asset.String()+".png", businessFixtureLocation(t, owner, "projects/"+project.String()+"/image/2026/10/"+asset.String()+".png"))
 	owned, cancel := context.WithCancel(ctx)
 	defer cancel()
 	save := db.WithContext(owned).Begin()
@@ -196,7 +202,9 @@ func TestProjectFolderPGCoverReferenceLockSurvivesUntilCommit(t *testing.T) {
 	defer func() {
 		if !finished {
 			cancel()
-			<-done
+			if err := <-done; err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				t.Error("joined lock-test operation:", err)
+			}
 		}
 	}()
 	waitProjectLock(owned, t, db, blocker, blocked)

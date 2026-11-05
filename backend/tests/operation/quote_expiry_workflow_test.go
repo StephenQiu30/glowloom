@@ -5,27 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/mock"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
-
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
-
-func TestQuoteExpiryWorkflowRunsFlowActivity(t *testing.T) {
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	env.RegisterActivityWithOptions(func(context.Context) (operationapp.ExpiredQuotes, error) {
-		return operationapp.ExpiredQuotes{}, nil
-	}, activity.RegisterOptions{Name: "flow.ExpireQuotes"})
-	env.OnActivity("flow.ExpireQuotes", mock.Anything).Return(operationapp.ExpiredQuotes{Operations: 2, Batches: 1}, nil).Once()
-	env.ExecuteWorkflow(operationflow.QuoteExpiryWorkflow)
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("quote expiry workflow: %v", err)
-	}
-	env.AssertExpectations(t)
-}
 
 type expiryPageStore struct {
 	pages  []operationapp.ExpiredQuotes

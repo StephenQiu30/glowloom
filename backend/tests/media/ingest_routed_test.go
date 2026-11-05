@@ -65,7 +65,7 @@ func (*routedIngestFixture) StatOperationObject(_ context.Context, loc domain.Ob
 }
 func newRoutedIngestFixture() *routedIngestFixture {
 	op, project := uuid.New(), uuid.New()
-	return &routedIngestFixture{operation: media.SourceOperation{ID: op, ProjectID: project, ProviderKey: "controlled", ModelKey: "controlled", Region: "domestic", AspectRatio: "16:9", OutputKind: domain.KindImage, CreateTime: time.Now().UTC()}, target: media.StorageWorkIntent{ID: uuid.New(), Owner: media.StorageWorkOwner{Kind: "operation", OwnerID: project, WorkID: op}, ProfileID: "tos-frozen", Bucket: "controlled-fixture", ConfigRevision: "frozen-v1", State: "open"}}
+	return &routedIngestFixture{operation: media.SourceOperation{ID: op, ProjectID: project, ProviderKey: "controlled", ModelKey: "controlled", Region: "domestic", AspectRatio: "16:9", OutputKind: domain.KindImage, CreateTime: time.Now().UTC()}, target: media.StorageWorkIntent{ID: uuid.New(), Owner: media.StorageWorkOwner{Kind: "operation", OwnerID: project, WorkID: op}, ProfileID: "tos-frozen", Bucket: "controlled-fixture", ConfigRevision: "1", State: "open"}}
 }
 func TestRoutedIngestPersistsPhysicalIdentityAndReplaysWithoutNewWrites(t *testing.T) {
 	f := newRoutedIngestFixture()

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/callbacks"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -21,10 +22,11 @@ import (
 )
 
 // depthLockFixture uses only rolled-back metadata. It never creates source bytes,
-// starts inference, or contacts object storage or Temporal.
+// starts inference, or contacts object storage or a worker.
 func depthLockFixture(t *testing.T) (*depthHTTPFixture, tooldomain.DepthJob) {
 	t.Helper()
-	database := mediaStoreDB(t)
+	_ = mediatoolFixtureDB(t)
+	database := libraryOwnerDB(t)
 	// This transaction outlives test-context cancellation so Cleanup can
 	// explicitly roll it back before cancelling its bounded lifetime.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
@@ -32,6 +34,9 @@ func depthLockFixture(t *testing.T) (*depthHTTPFixture, tooldomain.DepthJob) {
 	tx := database.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		t.Fatal(tx.Error)
+	}
+	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
+		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		if err := tx.Rollback().Error; err != nil {
@@ -46,6 +51,7 @@ func depthLockFixture(t *testing.T) (*depthHTTPFixture, tooldomain.DepthJob) {
 	width, height, duration := int32(320), int32(180), int32(1000)
 	sha := strings.Repeat("a", 64)
 	a.Width, a.Height, a.DurationMS, a.SHA256 = &width, &height, &duration, &sha
+	a = mediaFixtureAssetLocation(t, tx, a)
 	if err := mediaTestStore(tx).CreateAsset(t.Context(), actor, a); err != nil {
 		t.Fatal(err)
 	}
@@ -80,16 +86,16 @@ func (m *depthLockMedia) AuthorizeProject(ctx context.Context, actor identityapp
 func depthObserveLocks(t *testing.T, f *depthHTTPFixture, events *[]string, after func(*gorm.DB) error) *toolpg.DepthStore {
 	t.Helper()
 	name := "test:depth-lock-" + uuid.NewString()
-	if err := f.db.Callback().Row().Before("gorm:row").Register(name, func(tx *gorm.DB) {
-		q := strings.ToLower(tx.Statement.SQL.String())
-		if strings.Contains(q, "from mediatool.depth_job") && strings.Contains(q, "for update") {
+	if err := f.db.Callback().Query().After("gorm:query").Register(name, func(tx *gorm.DB) {
+		q := strings.ReplaceAll(strings.ToLower(tx.Statement.SQL.String()), `"`, "")
+		if strings.Contains(q, "mediatool.depth_job") && strings.Contains(q, "for update") {
 			*events = append(*events, "job")
 		}
 	}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = f.db.Callback().Row().Remove(name) })
-	return toolpg.NewDepthStore(f.db, nil, func(tx *gorm.DB) toolapp.DepthDerivedMedia {
+	t.Cleanup(func() { _ = f.db.Callback().Query().Remove(name) })
+	return mediatoolDepthStore(f.db, nil, func(tx *gorm.DB) toolapp.DepthDerivedMedia {
 		// Keep the actual app worker scope factory; the wrapper only observes it.
 		return &depthLockMedia{DepthDerivedMedia: mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess)), events: events, after: after, tx: tx}
 	})
@@ -178,9 +184,9 @@ func TestDepthJobPGLockRevalidatesCandidateScope(t *testing.T) {
 				done = true
 				values := map[string]any{"actor_id": other.ID, "org_id": other.OrgID, "project_id": project}
 				if field == "revision" {
-					return tx.Exec(`UPDATE mediatool.depth_job SET revision=revision+1 WHERE id=?`, j.ID).Error
+					return mediatoolFixtureExec(t, tx, `UPDATE mediatool.depth_job SET revision=revision+1 WHERE id=?`, j.ID).Error
 				}
-				return tx.Exec("UPDATE mediatool.depth_job SET "+field+"=? WHERE id=?", values[field], j.ID).Error
+				return mediatoolFixtureExec(t, tx, "UPDATE mediatool.depth_job SET "+field+"=? WHERE id=?", values[field], j.ID).Error
 			})
 			_, err := store.Claim(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
 			if !errors.Is(err, toolapp.ErrConflict) {
@@ -241,10 +247,10 @@ func TestDepthJobPGLockRevalidatesCurrentControl(t *testing.T) {
 				// changing the job revision. Rechecking only the job is insufficient.
 				request := uuid.New()
 				event := uuid.NewSHA1(request, []byte("media-depth/"+replacement.ID.String()+"/"+action))
-				if err := tx.Exec(`UPDATE infra.outbox SET id=?,payload=jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(payload,'{event_id}',to_jsonb(?::text)),'{data,event_id}',to_jsonb(?::text)),'{data,request_id}',to_jsonb(?::text)),'{data,actor_id}',to_jsonb(?::text)),'{org_id}',to_jsonb(?::text)) WHERE id IN(SELECT event_id FROM mediatool.depth_command WHERE job_id=? AND event_action=?)`, event, event.String(), event.String(), request.String(), replacement.ID.String(), replacement.OrgID.String(), j.ID, action).Error; err != nil {
+				if err := mediatoolFixtureExec(t, tx, `UPDATE infra.outbox SET id=?,payload=jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(payload,'{event_id}',to_jsonb(?::text)),'{data,event_id}',to_jsonb(?::text)),'{data,request_id}',to_jsonb(?::text)),'{data,actor_id}',to_jsonb(?::text)),'{org_id}',to_jsonb(?::text)) WHERE id IN(SELECT event_id FROM mediatool.depth_command WHERE job_id=? AND event_action=?)`, event, event.String(), event.String(), request.String(), replacement.ID.String(), replacement.OrgID.String(), j.ID, action).Error; err != nil {
 					return err
 				}
-				return tx.Exec(`UPDATE mediatool.depth_command SET actor_id=?,request_id=?,event_id=? WHERE job_id=? AND event_action=?`, replacement.ID, request, event, j.ID, action).Error
+				return mediatoolFixtureExec(t, tx, `UPDATE mediatool.depth_command SET actor_id=?,request_id=?,event_id=? WHERE job_id=? AND event_action=?`, replacement.ID, request, event, j.ID, action).Error
 			})
 			switch step {
 			case "cleanup_claim", "reconcile_claim":
@@ -304,9 +310,10 @@ func TestDepthJobPGLockFinishConvergesConcurrentCancel(t *testing.T) {
 			}
 			injected, restored := false, false
 			name := "test:depth-finish-race-" + uuid.NewString()
-			if err := f.db.Callback().Row().Before("gorm:row").Register(name, func(tx *gorm.DB) {
-				q := strings.ToLower(tx.Statement.SQL.String())
-				lockWindow := strings.Contains(q, "from mediatool.depth_job") && strings.Contains(q, "for update")
+			inject := func(tx *gorm.DB) {
+				callbacks.BuildQuerySQL(tx)
+				q := strings.ReplaceAll(strings.ToLower(tx.Statement.SQL.String()), `"`, "")
+				lockWindow := strings.Contains(q, "mediatool.depth_job") && strings.Contains(q, "for update")
 				proofWindow := phase == "proof_read" && strings.Contains(q, "from mediatool.depth_command")
 				if injected || (!lockWindow && !proofWindow) || (phase == "proof_read" && !proofWindow) {
 					return
@@ -315,7 +322,11 @@ func TestDepthJobPGLockFinishConvergesConcurrentCancel(t *testing.T) {
 				if err := cancel(); err != nil {
 					t.Fatal("inject accepted concurrent cancellation", err)
 				}
-			}); err != nil {
+			}
+			if err := f.db.Callback().Query().Before("gorm:query").Register(name, inject); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.db.Callback().Row().Before("gorm:row").Register(name, inject); err != nil {
 				t.Fatal(err)
 			}
 			// All rows belong to the outer rollback fixture. Reapply the
@@ -332,6 +343,7 @@ func TestDepthJobPGLockFinishConvergesConcurrentCancel(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() {
+				_ = f.db.Callback().Query().Remove(name)
 				_ = f.db.Callback().Row().Remove(name)
 				_ = f.db.Callback().Raw().Remove(name)
 			})

@@ -28,13 +28,13 @@ func parseStandardGenerationResponse(input application.GenerationRequest, data [
 	if json.Unmarshal(data, &response) != nil {
 		return unknownResult(), false
 	}
-	result := application.GenerationResult{Outcome: "completed", State: "succeeded", Usage: safeUsage(response.Usage)}
+	result := application.GenerationResult{Outcome: application.ProviderOutcomeCompleted, State: application.ProviderTaskSucceeded, Usage: safeUsage(response.Usage)}
 	switch input.Capability {
 	case "video.generate":
 		if !validTaskID(response.ID) {
 			return unknownResult(), false
 		}
-		return application.GenerationResult{Outcome: "accepted", State: "pending", TaskID: response.ID}, true
+		return application.GenerationResult{Outcome: application.ProviderOutcomeAccepted, State: application.ProviderTaskPending, TaskID: response.ID}, true
 	case "text.generate":
 		if len(response.Choices) != 1 || response.Choices[0].Message.Content == "" || response.Choices[0].FinishReason != "stop" {
 			return unknownResult(), false

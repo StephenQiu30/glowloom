@@ -184,7 +184,7 @@ func (h *PurgeHandler) Get(c *gin.Context) {
 	c.JSON(200, job)
 }
 
-func (h *PurgeHandler) control(c *gin.Context, action string) {
+func (h *PurgeHandler) control(c *gin.Context, action application.PurgeAction) {
 	if h == nil || h.repo == nil {
 		writePurgeError(c, application.ErrUnavailable)
 		return
@@ -230,7 +230,7 @@ func (h *PurgeHandler) control(c *gin.Context, action string) {
 // @Failure 422 {object} httpapi.Problem
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/purges/{job_id}/cancel [post]
-func (h *PurgeHandler) Cancel(c *gin.Context) { h.control(c, "cancel") }
+func (h *PurgeHandler) Cancel(c *gin.Context) { h.control(c, application.PurgeActionCancel) }
 
 // Reconcile preserves original removal intents and independent cancellation purpose.
 // @Summary 对账永久清理未知结果
@@ -248,7 +248,7 @@ func (h *PurgeHandler) Cancel(c *gin.Context) { h.control(c, "cancel") }
 // @Failure 422 {object} httpapi.Problem
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/purges/{job_id}/reconcile [post]
-func (h *PurgeHandler) Reconcile(c *gin.Context) { h.control(c, "reconcile") }
+func (h *PurgeHandler) Reconcile(c *gin.Context) { h.control(c, application.PurgeActionReconcile) }
 
 func writePurgeError(c *gin.Context, err error) {
 	if errors.Is(err, domain.ErrPurgeConflict) {

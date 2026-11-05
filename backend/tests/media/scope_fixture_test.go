@@ -1,6 +1,7 @@
 package media_test
 
 import (
+	"testing"
 	"time"
 
 	"gorm.io/gorm"
@@ -37,7 +38,7 @@ func mediaLibraryStore(db *gorm.DB, project pgmedia.LibraryProjectAccessFactory,
 }
 
 func mediaPackageStore(db *gorm.DB, project pgmedia.LibraryProjectAccessFactory, guards pgmedia.LibraryWorkGuardFactory, clock func() time.Time) *pgmedia.PackageStore {
-	return pgmedia.NewScopedPackageStore(db, project, guards, clock, app.NewMediaScopeAccess)
+	return pgmedia.NewScopedPackageStore(db, project, guards, clock, app.NewMediaScopeAccess).WithObjectLocations()
 }
 
 // Request and worker consumers retain separate concrete repositories and real
@@ -49,8 +50,8 @@ type mediaTransferStores struct {
 
 func mediaTransferStore(db *gorm.DB, project pgmedia.LibraryProjectAccessFactory, guards pgmedia.LibraryWorkGuardFactory, clock func() time.Time) *mediaTransferStores {
 	return &mediaTransferStores{
-		TransferStore: pgmedia.NewScopedTransferStore(db, project, guards, clock, app.NewMediaScopeAccess),
-		Worker:        pgmedia.NewScopedTransferStore(db, app.NewMediaLibraryWorkerProjectAccess, guards, clock, app.NewMediaWorkerScopeAccess),
+		TransferStore: pgmedia.NewScopedTransferStore(db, project, guards, clock, app.NewMediaScopeAccess).WithRoutedStorage(),
+		Worker:        pgmedia.NewScopedTransferStore(db, app.NewMediaLibraryWorkerProjectAccess, guards, clock, app.NewMediaWorkerScopeAccess).WithRoutedStorage(),
 	}
 }
 
@@ -67,7 +68,7 @@ func mediaPurgeStore(db *gorm.DB, project pgmedia.LibraryProjectAccessFactory, g
 }
 
 func mediaCopyStore(db *gorm.DB) *copyMediaTransactions {
-	return &copyMediaTransactions{ProjectCopyStore: pgmedia.NewScopedProjectCopyStore(db, app.NewMediaWorkerScopeAccess), db: db}
+	return &copyMediaTransactions{ProjectCopyStore: pgmedia.NewScopedProjectCopyStore(db, app.NewMediaWorkerScopeAccess).WithRoutedStorage(), db: db}
 }
 
 func mediaDocumentStore(db *gorm.DB) *pgmedia.DocumentSourceStore {
@@ -78,14 +79,11 @@ func mediaWorkspaceRequestScope(tx *gorm.DB) workspaceapp.RequestScopeResolver {
 	return workspaceapp.NewRequestScopeAccess(pgworkspace.NewRequestScopeStore(tx, func(db *gorm.DB) workspaceapp.SessionActorAccess { return pgidentity.NewStore(db) }), time.Now)
 }
 
-func mediaStorageUsageStore(db *gorm.DB, project pgmedia.LibraryProjectAccessFactory, intents pgmedia.StorageUsageIntentFactory) *pgmedia.StorageUsageStore {
-	return pgmedia.NewScopedStorageUsageStore(db, project, intents, app.NewMediaScopeAccess)
-}
-
 func mediaCanvasStoreWithScope(db *gorm.DB, media pgcanvas.MediaReaderFactory, scopes pgmedia.ScopeAccessFactory) *pgcanvas.Store {
 	return pgcanvas.NewScopedStore(db, media, func(tx *gorm.DB) canvasapp.ProjectAccess { return app.NewCanvasProjectAccessWithScope(tx, scopes(tx)) })
 }
 
-func mediaScopedIngestActivities(db *gorm.DB, objects *objectstorage.Client, policy mediaflow.DownloadPolicy) (*mediaflow.Activities, error) {
-	return mediaflow.NewScopedActivities(db, objects, policy, app.NewMediaWorkerScopeAccess)
+func mediaScopedIngestActivities(t *testing.T, db *gorm.DB, _ *objectstorage.Client, policy mediaflow.DownloadPolicy) (*mediaflow.Activities, error) {
+	registry, _ := mediaFixtureRegistry(t)
+	return mediaflow.NewRoutedScopedActivitiesWithStaging(db, registry, policy, unavailableStagedFixture{}, app.NewMediaWorkerScopeAccess)
 }

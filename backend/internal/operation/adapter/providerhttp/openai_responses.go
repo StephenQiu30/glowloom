@@ -32,10 +32,10 @@ func submitOpenAIResponses(ctx context.Context, c *Client, input application.Gen
 	}
 	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, "/responses", payload, 8<<20)
 	if err != nil {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	var response struct {
 		Status string `json:"status"`
@@ -59,7 +59,7 @@ func submitOpenAIResponses(ctx context.Context, c *Client, input application.Gen
 		}
 		for _, part := range item.Content {
 			if part.Type == "refusal" {
-				return application.GenerationResult{Outcome: "unknown", ErrorCode: "content_rejected", Usage: safeUsage(response.Usage)}, nil
+				return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "content_rejected", Usage: safeUsage(response.Usage)}, nil
 			}
 			if item.Status != "completed" {
 				return unknownResult(), nil
@@ -72,5 +72,5 @@ func submitOpenAIResponses(ctx context.Context, c *Client, input application.Gen
 	if strings.TrimSpace(output.String()) == "" {
 		return unknownResult(), nil
 	}
-	return application.GenerationResult{Outcome: "completed", State: "succeeded", Text: output.String(), Usage: safeUsage(response.Usage)}, nil
+	return application.GenerationResult{Outcome: application.ProviderOutcomeCompleted, State: application.ProviderTaskSucceeded, Text: output.String(), Usage: safeUsage(response.Usage)}, nil
 }

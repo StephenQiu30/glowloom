@@ -26,10 +26,7 @@ func TestCanvasSubjectProjectCopyPostgresWorkerProofAndReplay(t *testing.T) {
 	if err := owner.Exec(`UPDATE workspace.project SET status='copying' WHERE id=?`, target).Error; err != nil {
 		t.Fatal(err)
 	}
-	primary := subjectFixtureMedia(t, owner, actor, "image")
-	if err := owner.Exec(`UPDATE media.media_asset SET object_key=? WHERE id=?`, "personal/"+actor.OrgID.String()+"/"+actor.ID.String()+"/image/2026/10/"+primary.AssetID.String()+".png", primary.AssetID).Error; err != nil {
-		t.Fatal(err)
-	}
+	primary := subjectFixtureMedia(t, owner, actor, uuid.Nil, "image")
 	saved, err := subject.NewService(subjectFixtureStore(runtime, &memoryMedia{facts: map[uuid.UUID]domain.MediaFact{primary.AssetID: primary}}), time.Now).Save(t.Context(), actor, uuid.Nil, uuid.New(), subject.SaveInput{Name: "复制固定主体", Primary: subject.MediaSelection{AssetID: primary.AssetID}})
 	if err != nil {
 		t.Fatal(err)

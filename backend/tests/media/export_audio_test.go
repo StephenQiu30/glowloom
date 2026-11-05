@@ -22,7 +22,6 @@ import (
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	exportff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
-	exportpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
 	exportapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	exportdomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
@@ -115,7 +114,7 @@ func frozenAudio(t *testing.T, config canvasdomain.TimelineConfig) exportdomain.
 }
 
 func TestExportAudioKindIsFrozenImmutableAndBoundToIdempotentRequest(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	actor, project := mediaStoreProject(t, db)
 	config := exportTimeline(t)
 	config.Tracks[0].Kind, config.Clips[0].Kind = "audio", "audio"
@@ -126,13 +125,14 @@ func TestExportAudioKindIsFrozenImmutableAndBoundToIdempotentRequest(t *testing.
 	sha := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	asset.DurationMS, asset.SHA256 = &duration, &sha
 	asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
+	asset = mediaFixtureAssetLocation(t, db, asset)
 	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := exportpg.NewStore(db, func(*gorm.DB) exportapp.TimelineReader { return &fixedTimeline{timeline: config} }, func(tx *gorm.DB) exportapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) exportapp.TimelineReader { return &fixedTimeline{timeline: config} }, func(tx *gorm.DB) exportapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	canvas, node, key := uuid.New(), uuid.New(), uuid.New()
 	createInput := func(kind string) exportapp.CreateInput {
 		var input exportapp.CreateInput
@@ -185,12 +185,12 @@ func TestExportAudioKindIsFrozenImmutableAndBoundToIdempotentRequest(t *testing.
 }
 
 func TestExportDefaultVideoPreservesPersistedFingerprintAndExplicitReplay(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	actor, project := mediaStoreProject(t, db)
 	config := exportTimeline(t)
 	config.Tracks[0].Kind, config.Clips[0].Kind = "subtitle", "subtitle"
 	config.Clips[0].AssetID, config.Clips[0].Text = nil, "中文"
-	store := exportpg.NewStore(db, func(*gorm.DB) exportapp.TimelineReader { return &fixedTimeline{timeline: config} }, func(tx *gorm.DB) exportapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) exportapp.TimelineReader { return &fixedTimeline{timeline: config} }, func(tx *gorm.DB) exportapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	input := exportapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}
 	key := uuid.New()
 	job, err := store.Create(t.Context(), actor, project, key, input)

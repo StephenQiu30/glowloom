@@ -6,6 +6,14 @@ import (
 	"strings"
 	"time"
 
+	maintenancetask "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/task"
+	mediatask "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/task"
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	operationtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	scripttask "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/task"
+	workspacetask "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/task"
+
 	codexwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/codexruntime"
 
 	catalogwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/catalog"
@@ -14,55 +22,34 @@ import (
 	copywire "github.com/StephenQiu30/glowloom-server/backend/internal/app/projectcopy"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
-	subjectevent "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/event"
-	subjectflow "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/workflow"
-	subjectapp "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
 
 	"go.opentelemetry.io/otel/trace"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/worker"
 	"go.uber.org/zap"
 
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	catalogevent "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/event"
-	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
 	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
-	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	maintenanceflow "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
 	maintenanceapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/application"
 	kafkaoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/kafka"
 	pgoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
 	outboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
 	redisrealtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/redis"
 	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
-	mediaevent "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/event"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediastaged "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	toolproject "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/editproject"
-	toolevent "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/event"
 	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	operationevent "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/event"
 	managedprovider "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
 	operationstaging "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/temporalconn"
-	scriptevent "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/event"
-	scriptflow "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/workflow"
-	workspaceevent "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/event"
-	workspaceflow "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/workflow"
 )
 
 func provideWorkerTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (trace.TracerProvider, func(), error) {
@@ -73,144 +60,80 @@ func provideRelayTrace(ctx context.Context, cfg config.Config, logger *zap.Logge
 	return provideNamedTrace(ctx, cfg, logger, "relay")
 }
 
-func provideSetupTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (trace.TracerProvider, func(), error) {
-	return provideNamedTrace(ctx, cfg, logger, "setup")
+func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Connection, queue string, _ *zap.Logger) (*taskruntime.Worker, func(), error) {
+	owned, cancel := context.WithCancel(ctx)
+	worker, err := buildBackendWorker(owned, cfg, dbConn, queue)
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+	stop, err := startStorageRuntime(owned, cfg, true, dbConn.DB)
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+	return worker, func() { cancel(); stop() }, nil
 }
-
-func provideCleanupScheduleInstaller(ctx context.Context, temporalConn *temporalconn.Connection, prefix string) (*maintenanceflow.ScheduleInstaller, error) {
-	if err := temporalConn.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("connect setup Temporal: %w", err)
-	}
-	return maintenanceflow.NewScheduleInstaller(temporalConn.Client.ScheduleClient(), prefix), nil
-}
-
-func provideQuoteExpiryScheduleInstaller(ctx context.Context, temporalConn *temporalconn.Connection, prefix string) (*operationflow.QuoteExpiryScheduleInstaller, error) {
-	if err := temporalConn.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("connect setup Temporal: %w", err)
-	}
-	return operationflow.NewQuoteExpiryScheduleInstaller(temporalConn.Client.ScheduleClient(), prefix), nil
-}
-
-func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Connection, temporalConn *temporalconn.Connection, queue string) (worker.Worker, error) {
-	if err := temporalConn.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("connect worker Temporal: %w", err)
-	}
-	options := worker.Options{
-		MaxConcurrentWorkflowTaskExecutionSize: 200,
-		MaxConcurrentActivityExecutionSize:     100,
-		WorkerStopTimeout:                      5 * time.Minute,
-	}
-	if queue == "agent.codex" {
-		options.MaxConcurrentActivityExecutionSize = 1
-	}
-	if queue == "media" {
-		// This queue registers Activities only; zero lets the SDK use its
-		// default workflow-task setting instead of rejecting a value of one.
-		options.MaxConcurrentWorkflowTaskExecutionSize = 0
-		options.MaxConcurrentActivityExecutionSize = 4
-	}
-	queueWorker := worker.New(temporalConn.Client, queue, options)
+func buildBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Connection, queue string) (*taskruntime.Worker, error) {
+	handlers := map[string]taskruntime.Handler{}
+	concurrency := 4
 	switch queue {
 	case "agent.codex":
-		if err := codexwire.Register(ctx, queueWorker, dbConn.DB, cfg); err != nil {
+		concurrency = 1
+		if err := codexwire.Register(ctx, handlers, dbConn.DB, cfg); err != nil {
 			return nil, err
 		}
 	case "provider":
-		if err := catalogwire.RegisterProviderActivities(ctx, queueWorker, dbConn.DB, cfg); err != nil {
+		if err := catalogwire.RegisterProvider(ctx, handlers, dbConn.DB, cfg); err != nil {
 			return nil, err
 		}
 	case "flow":
-		subjectflow.RegisterWorkflow(queueWorker)
-		if cfg.Env == "local" {
-			queueWorker.RegisterWorkflow(operationflow.TrialWorkflow)
-		}
-		toolflow.RegisterWorkflow(queueWorker)
-		toolflow.RegisterTranscriptionWorkflow(queueWorker)
-		toolflow.RegisterDepthWorkflow(queueWorker)
-		workspaceflow.RegisterProjectCopyWorkflow(queueWorker)
-		workspaceflow.RegisterProjectRetention(queueWorker, workspaceflow.NewProjectRetentionActivities(NewProjectRetention(dbConn.DB)))
-		scriptflow.RegisterImportWorkflow(queueWorker)
-		mediaflow.RegisterTransferWorkflow(queueWorker)
-		mediaflow.RegisterPurgeWorkflow(queueWorker)
 		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
-		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
-		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(operationwire.NewCatalogStore(dbConn.DB)), operationwire.NewCatalogStore(dbConn.DB)))
+		handlers = maintenancetask.Handlers(service)
+		handlers[workspacetask.Retention] = workspacetask.RetentionHandler(NewProjectRetention(dbConn.DB))
 		operationStore := operationwire.ProvideOperationStore(dbConn.DB)
 		finalizer := operationwire.NewOperationFinalizer(dbConn.DB, operationStore, pgbilling.NewStore(dbConn.DB))
-		var recovery operationflow.ProviderImageRecoverer
-		legacy, err := objectstorage.OpenLegacy(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("configure flow receipt storage: %w", err)
-		}
-		objects, err := subjectwire.OpenObjects(cfg, legacy)
+		var recovery *operationapp.ProviderStageService
+		objects, err := subjectwire.OpenObjects(cfg)
 		if err != nil {
 			return nil, err
 		}
 		context.AfterFunc(ctx, objects.Close)
 		if objects.Registry() != nil {
 			recovery = operationapp.NewRoutedProviderStageService(operationstaging.NewRoutedFactory(objects.Registry(), pgmedia.NewStorageRoutes(dbConn.DB)), operationStore)
-		} else if legacy != nil {
-			recovery = operationapp.NewProviderStageService(operationstaging.NewObjects(legacy), operationStore)
 		}
-		operationflow.Register(queueWorker, operationflow.NewActivitiesWithImageRecovery(operationStore, finalizer, operationStore, recovery))
-		operationflow.RegisterBatch(queueWorker, operationflow.NewBatchActivities(operationStore, finalizer))
-		operationflow.RegisterQuoteExpiry(queueWorker,
-			operationflow.NewQuoteExpiryActivities(operationapp.NewQuoteExpiryService(operationStore, 500)))
+		operationtask.RegisterFlow(handlers, operationStore, finalizer, recovery)
+		expiry := operationapp.NewQuoteExpiryService(operationStore, 500)
+		handlers["operation.quote_expiry"] = operationtask.QuoteExpiryHandler(expiry)
 	case "media":
-		storage, err := objectstorage.OpenFromConfig(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("configure media object storage: %w", err)
-		}
-		objects, err := subjectwire.OpenObjects(cfg, storage)
+		objects, err := subjectwire.OpenObjects(cfg)
 		if err != nil {
 			return nil, err
 		}
 		context.AfterFunc(ctx, objects.Close)
+		registry := objects.Registry()
 		var origins []string
 		for _, raw := range strings.Split(cfg.MediaResultAllowedOrigins, ",") {
 			if origin := strings.TrimSpace(raw); origin != "" {
 				origins = append(origins, origin)
 			}
 		}
-		receiptService := operationapp.NewProviderStageService(operationstaging.NewObjects(storage), operationwire.ProvideOperationStore(dbConn.DB))
-		if objects.Registry() != nil {
-			receiptService = operationapp.NewRoutedProviderStageService(operationstaging.NewRoutedFactory(objects.Registry(), pgmedia.NewStorageRoutes(dbConn.DB)), operationwire.ProvideOperationStore(dbConn.DB))
-		}
-		var activities *mediaflow.Activities
-		if objects.Registry() == nil && storage == nil {
-			activities = mediaflow.NewUnavailableActivities(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
-		} else if objects.Registry() == nil {
-			activities, err = mediaflow.NewScopedActivitiesWithStaging(dbConn.DB, storage, mediaflow.DownloadPolicy{AllowedOrigins: origins, AllowTestLoopbackTLS: cfg.MediaAllowTestLoopbackTLS}, mediastaged.NewReader(receiptService), mediawire.NewMediaWorkerScopeAccess)
-		}
-		if objects.Registry() != nil {
-			activities, err = mediaflow.NewRoutedScopedActivitiesWithStaging(dbConn.DB, objects.Registry(), mediaflow.DownloadPolicy{AllowedOrigins: origins, AllowTestLoopbackTLS: cfg.MediaAllowTestLoopbackTLS}, mediastaged.NewReader(receiptService), mediawire.NewMediaWorkerScopeAccess)
-		}
+		receiptService := operationapp.NewRoutedProviderStageService(operationstaging.NewRoutedFactory(registry, pgmedia.NewStorageRoutes(dbConn.DB)), operationwire.ProvideOperationStore(dbConn.DB))
+		activities, err := mediaflow.NewRoutedScopedActivitiesWithStaging(dbConn.DB, registry, mediaflow.DownloadPolicy{AllowedOrigins: origins, AllowTestLoopbackTLS: cfg.MediaAllowTestLoopbackTLS}, mediastaged.NewReader(receiptService), mediawire.NewMediaWorkerScopeAccess)
 		if err != nil {
 			return nil, fmt.Errorf("configure media activities: %w", err)
 		}
 
-		managedResults := operationapp.NewManagedResults(operationstaging.NewObjects(storage), operationwire.ProvideOperationStore(dbConn.DB))
-		if objects.Registry() != nil {
-			managedResults = operationapp.NewRoutedManagedResults(operationstaging.NewRoutedFactory(objects.Registry(), pgmedia.NewStorageRoutes(dbConn.DB)), operationwire.ProvideOperationStore(dbConn.DB))
-		}
-		managedIngest := managedprovider.NewScopedIngestActivities(dbConn.DB, storage, managedResults, mediawire.NewMediaWorkerScopeAccess, operationwire.ProvideOperationStore(dbConn.DB))
-		if objects.Registry() != nil {
-			managedIngest = managedprovider.NewRoutedIngestActivities(dbConn.DB, objects.Registry(), managedResults, mediawire.NewMediaWorkerScopeAccess, operationwire.ProvideOperationStore(dbConn.DB))
-		}
-		queueWorker.RegisterActivityWithOptions(managedIngest.Ingest, activity.RegisterOptions{Name: "media.IngestManaged"})
-		queueWorker.RegisterActivityWithOptions(managedIngest.IngestOriginal, activity.RegisterOptions{Name: "media.IngestOriginal"})
-		mediaflow.Register(queueWorker, activities)
+		managedResults := operationapp.NewRoutedManagedResults(operationstaging.NewRoutedFactory(registry, pgmedia.NewStorageRoutes(dbConn.DB)), operationwire.ProvideOperationStore(dbConn.DB))
+		managedIngest := managedprovider.NewRoutedIngestActivities(dbConn.DB, registry, managedResults, mediawire.NewMediaWorkerScopeAccess, operationwire.ProvideOperationStore(dbConn.DB))
+		operationtask.RegisterMedia(handlers, operationwire.ProvideOperationStore(dbConn.DB), activities, managedIngest)
 		exportRenderer, err := toolff.NewRenderer(mediaflow.FFProber{})
 		if err != nil {
 			return nil, fmt.Errorf("configure media export renderer: %w", err)
 		}
-		exports := mediawire.ProvideMediaExportStoreWithAccess(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
-		exportWorker := toolapp.NewWorker(exports, toolflow.NewObjects(storage), toolproject.NewRenderer(exportRenderer), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
-		if objects.Registry() != nil {
-			exports = mediawire.ProvideRoutedMediaExportStore(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
-			exportWorker = toolapp.NewRoutedWorker(exports, mediawire.ToolObjects(dbConn.DB, objects.Registry(), storage), toolproject.NewRenderer(exportRenderer), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
-		}
-		toolflow.RegisterActivities(queueWorker, toolflow.NewActivities(exportWorker, exports, exports))
+		exports := mediawire.ProvideRoutedMediaExportStore(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
+		exportWorker := toolapp.NewRoutedWorker(exports, mediawire.ToolObjects(dbConn.DB, registry), toolproject.NewRenderer(exportRenderer), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
+		handlers[tooltask.Export] = tooltask.ExportHandler(exportWorker, exports)
 		transcriber, err := mediawire.ProvideTranscriber(cfg)
 		if err != nil {
 			return nil, err
@@ -219,33 +142,26 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		if err != nil {
 			return nil, fmt.Errorf("configure speech audio preparation: %w", err)
 		}
-		transcriptions := mediawire.ProvideMediaTranscriptionStoreWithAccess(dbConn.DB, transcriber != nil, mediawire.NewMediaWorkerScopeAccess)
-		transcriptionWorker := toolapp.NewTranscriptionWorker(transcriptions, toolflow.NewObjects(storage), audioPreprocessor, transcriber)
-		if objects.Registry() != nil {
-			transcriptions = mediawire.ProvideRoutedMediaTranscriptionStore(dbConn.DB, transcriber != nil, mediawire.NewMediaWorkerScopeAccess)
-			transcriptionWorker = toolapp.NewRoutedTranscriptionWorker(transcriptions, mediawire.ToolObjects(dbConn.DB, objects.Registry(), storage), audioPreprocessor, transcriber)
-		}
-		toolflow.RegisterTranscriptionActivities(queueWorker, toolflow.NewTranscriptionActivities(transcriptionWorker, transcriptions))
-		depthWorker, depths, err := mediawire.ProvideMediaDepthWorkerRouted(dbConn.DB, objects.Registry(), storage, cfg)
+		transcriptions := mediawire.ProvideRoutedMediaTranscriptionStore(dbConn.DB, transcriber != nil, mediawire.NewMediaWorkerScopeAccess)
+		transcriptionWorker := toolapp.NewRoutedTranscriptionWorker(transcriptions, mediawire.ToolObjects(dbConn.DB, registry), audioPreprocessor, transcriber)
+		handlers[tooltask.Transcription] = tooltask.TranscriptionHandler(transcriptionWorker, transcriptions)
+		depthWorker, depths, err := mediawire.ProvideMediaDepthWorker(dbConn.DB, registry, cfg)
 		if err != nil {
 			return nil, err
 		}
-		toolflow.RegisterDepthActivities(queueWorker, toolflow.NewDepthActivities(depthWorker, depths))
-		copyWorker, copies := copywire.ProvideProjectCopyWorkerWithObjects(dbConn.DB, objects.Registry(), storage)
-		workspaceflow.RegisterProjectCopyActivities(queueWorker, workspaceflow.NewProjectCopyActivities(copyWorker, copies))
-		importWorker, imports := scriptwire.ProvideScriptImportWorkerWithObjects(dbConn.DB, objects.Registry(), storage)
-		scriptflow.RegisterImportActivities(queueWorker, scriptflow.NewImportActivities(importWorker, imports))
-		transferWorker, transfers := mediawire.ProvideMediaTransferWorkerWithObjects(dbConn.DB, objects.Registry(), storage)
-		mediaflow.RegisterTransferActivities(queueWorker, mediaflow.NewTransferActivities(transferWorker, transfers))
-		purgeWorker, purges := mediawire.NewMediaPurgeWorker(dbConn.DB, storage)
-		if objects.Registry() != nil {
-			purgeWorker, purges = mediawire.NewRoutedMediaPurgeWorker(dbConn.DB, objects.Registry())
-		}
-		mediaflow.RegisterPurgeActivities(queueWorker, mediaflow.NewPurgeActivities(purgeWorker, purges))
+		handlers[tooltask.Depth] = tooltask.DepthHandler(depthWorker, depths)
+		copyWorker, copies := copywire.ProvideProjectCopyWorker(dbConn.DB, registry)
+		handlers[workspacetask.Copy] = workspacetask.CopyHandler(copyWorker, copies)
+		importWorker, imports := scriptwire.ProvideScriptImportWorkerWithObjects(dbConn.DB, registry)
+		handlers[scripttask.Import] = scripttask.ImportHandler(importWorker, imports)
+		transferWorker, transfers := mediawire.ProvideMediaTransferWorker(dbConn.DB, registry)
+		handlers[mediatask.Transfer] = mediatask.TransferHandler(transferWorker, transfers)
+		purgeWorker, purges := mediawire.NewRoutedMediaPurgeWorker(dbConn.DB, registry)
+		handlers[mediatask.Purge] = mediatask.PurgeHandler(purgeWorker, purges)
 	default:
 		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)
 	}
-	return queueWorker, nil
+	return &taskruntime.Worker{Store: taskruntime.NewStore(dbConn.DB), Handlers: handlers, Concurrency: concurrency, Lease: 30 * time.Second, Poll: 250 * time.Millisecond}, nil
 }
 
 func provideKafka(ctx context.Context, cfg config.Config) (*kafkaconn.Connection, func(), error) {
@@ -260,7 +176,7 @@ func provideKafka(ctx context.Context, cfg config.Config) (*kafkaconn.Connection
 	return conn, conn.Close, nil
 }
 
-func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Connection, kafkaConn *kafkaconn.Connection, redisConn *redisconn.Connection, logger *zap.Logger, tracerProvider trace.TracerProvider) (*relayRuntime, func(), error) {
+func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Connection, kafkaConn *kafkaconn.Connection, redisConn *redisconn.Connection, _ *zap.Logger, _ trace.TracerProvider) (*relayRuntime, func(), error) {
 	if err := redisConn.Ping(ctx); err != nil {
 		return nil, nil, fmt.Errorf("connect relay Redis: %w", err)
 	}
@@ -280,111 +196,15 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 	}
 	relay := outboxapp.NewRelay(pgoutbox.NewStore(dbConn.DB), kafkaoutbox.NewPublisher(kafkaConn.Client))
 	runtime := &relayRuntime{outbox: relay, realtime: realtimeConsumer, audit: auditConsumer}
-	var temporalConn *temporalconn.Connection
-	if cfg.TemporalAddr != "" || cfg.TemporalNamespace != "" {
-		temporalConn, err = temporalconn.Open(cfg.TemporalAddr, cfg.TemporalNamespace, logger, tracerProvider)
-		if err != nil {
-			auditConsumer.Close()
-			realtimeConsumer.Close()
-			return nil, nil, fmt.Errorf("configure relay Temporal: %w", err)
-		}
-		starterHandler := operationevent.NewWorkflowStarterHandler(processed,
-			operationwire.ProvideOperationStore(dbConn.DB), operationflow.NewStarter(temporalConn.Client))
-		controlHandler := operationevent.NewWorkflowControlHandler(processed,
-			operationwire.ProvideOperationStore(dbConn.DB), operationflow.NewControl(temporalConn.Client, operationwire.ProvideOperationStore(dbConn.DB)))
-		credentialHandler := catalogevent.NewCredentialTestHandler(processed,
-			operationwire.NewCatalogStore(dbConn.DB), catalogflow.NewTestStarter(temporalConn.Client))
-		exportHandler := toolevent.NewHandler(processed, mediawire.ProvideMediaExportStoreWithAccess(dbConn.DB, mediawire.NewMediaWorkerScopeAccess), toolflow.NewStarter(temporalConn.Client))
-		transcriptionHandler := toolevent.NewTranscriptionHandler(processed, mediawire.ProvideMediaTranscriptionStoreWithAccess(dbConn.DB, false, mediawire.NewMediaWorkerScopeAccess), toolflow.NewTranscriptionStarter(temporalConn.Client))
-		depthHandler := toolevent.NewDepthHandler(processed, mediawire.ProvideMediaDepthStoreWithAccess(dbConn.DB, false, mediawire.NewMediaWorkerScopeAccess), toolflow.NewDepthStarter(temporalConn.Client))
-		copyHandler := workspaceevent.NewProjectCopyHandler(processed, copywire.ProvideProjectCopyStoreWithAccess(dbConn.DB, mediawire.NewMediaWorkerScopeAccess), workspaceflow.NewProjectCopyStarter(temporalConn.Client))
-		importHandler := scriptevent.NewImportHandler(processed, scriptwire.ProvideScriptImportStore(dbConn.DB), scriptflow.NewImportStarter(temporalConn.Client))
-		transferHandler := mediaevent.NewTransferHandler(processed, mediawire.ProvideMediaTransferWorkerStore(dbConn.DB), mediaflow.NewTransferStarter(temporalConn.Client))
-		// Existing deployments may restart before the additive Subject migration.
-		// Keep established operation recovery running until voice storage exists.
-		voiceSchemaReady := dbConn.DB.Migrator().HasTable("subject.voice_job")
-		voiceHandler := subjectevent.NewVoiceHandler(processed, subjectwire.NewVoiceJobs(dbConn.DB), subjectflow.NewStarter(temporalConn.Client))
-		purgeHandler := mediaevent.NewPurgeHandler(processed, mediawire.ProvideMediaPurgeWorkerStore(dbConn.DB), mediaflow.NewPurgeStarter(temporalConn.Client))
-		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
-			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic, scriptevent.ImportTopic, mediaevent.TransferTopic, mediaevent.PurgeTopic, subjectapp.VoiceTopic}, workflowDelivery{
-				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,
-				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler, imports: importHandler, transfers: transferHandler, purges: purgeHandler, voices: voiceHandler,
-			})
-		if err != nil {
-			temporalConn.Close()
-			auditConsumer.Close()
-			realtimeConsumer.Close()
-			return nil, nil, fmt.Errorf("configure workflow starter consumer: %w", err)
-		}
-		runtime.sweep = func(ctx context.Context) error {
-			return runStarterSweep(ctx, func(ctx context.Context, now time.Time) error {
-				if err := starterHandler.SweepOnce(ctx, now); err != nil {
-					return err
-				}
-				if err := starterHandler.SweepBatchesOnce(ctx, now); err != nil {
-					return err
-				}
-				if !voiceSchemaReady {
-					return nil
-				}
-				return voiceHandler.SweepOnce(ctx)
-			})
-		}
+	stopStorageRuntime, err := startStorageRuntime(ctx, cfg, false, dbConn.DB)
+	if err != nil {
+		auditConsumer.Close()
+		realtimeConsumer.Close()
+		return nil, nil, err
 	}
 	return runtime, func() {
-		if runtime.starter != nil {
-			runtime.starter.Close()
-			temporalConn.Close()
-		}
+		stopStorageRuntime()
 		auditConsumer.Close()
 		realtimeConsumer.Close()
 	}, nil
-}
-
-// workflowDelivery dispatches distinct durable requests on the existing owned consumer.
-type workflowDelivery struct {
-	operations     inboxapp.Handler
-	credentials    inboxapp.Handler
-	exports        inboxapp.Handler
-	transcriptions inboxapp.Handler
-	depths         inboxapp.Handler
-	copies         inboxapp.Handler
-	imports        inboxapp.Handler
-	transfers      inboxapp.Handler
-	purges         inboxapp.Handler
-	voices         inboxapp.Handler
-}
-
-func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) error {
-	if record.Topic == subjectapp.VoiceTopic {
-		if h.voices == nil {
-			return subjectapp.ErrVoiceUnavailable
-		}
-		return h.voices.Handle(ctx, record)
-	}
-	if record.Topic == mediaevent.PurgeTopic {
-		return h.purges.Handle(ctx, record)
-	}
-	if record.Topic == mediaevent.TransferTopic {
-		return h.transfers.Handle(ctx, record)
-	}
-	if record.Topic == scriptevent.ImportTopic {
-		return h.imports.Handle(ctx, record)
-	}
-	if record.Topic == workspaceevent.ProjectCopyTopic {
-		return h.copies.Handle(ctx, record)
-	}
-	if record.Topic == catalogevent.CredentialTestTopic {
-		return h.credentials.Handle(ctx, record)
-	}
-	if record.Topic == toolevent.Topic {
-		return h.exports.Handle(ctx, record)
-	}
-	if record.Topic == toolevent.TranscriptionTopic {
-		return h.transcriptions.Handle(ctx, record)
-	}
-	if record.Topic == toolevent.DepthTopic {
-		return h.depths.Handle(ctx, record)
-	}
-	return h.operations.Handle(ctx, record)
 }

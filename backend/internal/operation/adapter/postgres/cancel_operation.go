@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -123,7 +125,7 @@ func (s *Store) RequestWorkflowControl(ctx context.Context, actor identityapp.Pr
 		if err := tx.Exec(`INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at) VALUES(?::uuid,?::uuid,?,?,202,?::jsonb,now()+interval '24 hours')`, uuid.New(), actor.ID, input.RequestID, hash, string(body)).Error; err != nil {
 			return fmt.Errorf("persist workflow control receipt: %w", err)
 		}
-		return nil
+		return taskruntime.EnqueueReference(ctx, tx, "operation.control", eventID.String(), now, application.WorkflowControlDelivery{EventID: eventID, ActorID: actor.ID, OrgID: actor.OrgID, ProjectID: input.ProjectID, RequestID: requestID, TargetID: input.TargetID, TargetType: input.TargetType, Action: input.Action})
 	})
 	return result, err
 }

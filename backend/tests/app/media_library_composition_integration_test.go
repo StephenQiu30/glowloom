@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -16,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 
@@ -89,9 +92,9 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 		t.Fatal("read synthetic private storage configuration")
 	}
 	var storage struct {
-		Endpoint, Bucket string
-		AccessKey        string `json:"access_key"`
-		SecretKey        string `json:"secret_key"`
+		Endpoint, Bucket, Region string
+		AccessKey                string `json:"access_key"`
+		SecretKey                string `json:"secret_key"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -102,12 +105,15 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 	if err != nil || endpoint.Scheme != "http" || endpoint.Hostname() != "127.0.0.1" || storage.Bucket != "glowloom-receipt-test" {
 		t.Fatal("composition requires the isolated loopback test bucket")
 	}
-	fixture.objects, err = objectstorage.Open(storage.Endpoint, storage.Bucket, storage.AccessKey, storage.SecretKey, "")
+	fixture.objects, err = objectstorage.Open(storage.Endpoint, storage.Bucket, storage.AccessKey, storage.SecretKey, storage.Region)
 	if err != nil {
 		t.Fatal("open synthetic private storage")
 	}
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000"})
-	fixture.router, err = app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, fixture.runtime, fixture.objects, identityruntime.SessionDependencies{})
+	storageConfig := businessStorageConfig(t)
+	cfg.ObjectStorage = &storageConfig
+	businessStorageEnvironment(t, fixture.owner)
+	fixture.router, err = app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, fixture.runtime, businessStorageRegistry(t), identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,8 +150,8 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 	}
 	t.Cleanup(func() { _ = file.Close() })
 	store := mediapg.NewScopedStore(fixture.runtime, app.NewMediaScopeAccess)
-	uploads := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(fixture.objects), time.Now)
-	uploaded, err := uploads.Upload(t.Context(), mediaapp.UploadInput{Actor: fixture.actor, Request: mediaapp.UploadRequest{ProjectID: fixture.project, Key: uuid.New(), FileName: "组合验证.png", RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true})
+	uploads := businessFixtureUploads(t, fixture.owner, store, mediaflow.FFUploadProber{})
+	uploaded, err := businessFixtureUpload(t.Context(), t, uploads, mediaapp.UploadInput{Actor: fixture.actor, Request: mediaapp.UploadRequest{ProjectID: fixture.project, Key: uuid.New(), FileName: "组合验证.png", RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual reviewed private upload", err)
 	}
@@ -198,16 +204,27 @@ func TestMediaLibraryCompositionActualPhysicalUsageAndCorruptOwnerRefusesSubtota
 		LimitBytes  *int64 `json:"limit_bytes"`
 	}
 	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &usage) != nil || usage.UsedBytes != expected || usage.ObjectCount != 3 || usage.LimitBytes != nil {
-		t.Fatal("formal composed usage omitted real objects or invented a limit", response.Code, usage)
+		t.Fatal("formal composed usage omitted real objects or invented a limit", response.Code, usage, response.Body.String())
 	}
-	// An incomplete owning execution row must invalidate even a complete media
-	// inventory. This proves the production router installs the retained reader.
-	if err := f.owner.Exec(`INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,status,stage,progress,attempt,revision,created_at,updated_at) VALUES(?,?,?,?,'producer',?,?,1,'{"unknown_media":"not-an-empty-proof"}','cancelled','cancelled',0,1,1,now(),now())`, uuid.New(), f.project, f.actor.OrgID, f.actor.ID, uuid.New(), uuid.New()).Error; err != nil {
+	// The composite FK forbids an asset from claiming a different saved key.
+	err := f.owner.Exec(`UPDATE media.media_asset SET object_key=object_key||'.corrupt' WHERE id=?`, f.asset).Error
+	var constraint *pgconn.PgError
+	if !errors.As(err, &constraint) || constraint.Code != "23503" {
+		t.Fatal("physical identity mutation was not rejected", err)
+	}
+	// An unreadable authoritative location source must refuse a subtotal.
+	if err := f.owner.Exec(`REVOKE SELECT ON media.object_location FROM glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := f.owner.Exec(`GRANT SELECT ON media.object_location TO glowloom_app`).Error; err != nil {
+			t.Error(err)
+		}
+	})
+
 	response = mediaCompositionRequest(t, f.router, http.MethodGet, path, nil)
 	if response.Code != 503 || strings.Contains(response.Body.String(), "used_bytes") {
-		t.Fatal("incomplete installed owner returned a subtotal", response.Code)
+		t.Fatal("corrupt physical ownership returned a subtotal", response.Code)
 	}
 }
 
@@ -217,16 +234,16 @@ func TestMediaLibraryCompositionCurrentCoverAndUnreadableOwnerPreventPurge(t *te
 		t.Fatal(err)
 	}
 	page := f.library(t, "active")
-	response := mediaCompositionRequest(t, f.router, http.MethodPost, "/api/media/library/commands", mediaapp.LibraryCommand{Scope: page.Scope, ExpectedRevision: page.Revision, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: f.asset, Revision: page.Items[0].Revision}}})
+	response := mediaCompositionRequest(t, f.router, http.MethodPost, "/api/media/library/commands", mediaapp.LibraryCommand{Scope: page.Scope, ExpectedRevision: page.Revision, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: page.Items[0].ID, Revision: page.Items[0].Revision}}})
 	if response.Code != 200 {
-		t.Fatal("formal recycle command", response.Code)
+		t.Fatal("formal recycle command", response.Code, response.Body.String(), page.Revision, page.Items[0])
 	}
 	page = f.library(t, "trashed")
 	var revision int64
 	if err := f.owner.Raw(`SELECT revision FROM workspace.project WHERE id=?`, f.project).Scan(&revision).Error; err != nil {
 		t.Fatal(err)
 	}
-	input := map[string]any{"scope": page.Scope, "expected_revision": page.Revision, "expected_project_revision": revision, "permanent_delete_confirmed": true, "items": []mediaapp.LibraryItemRevision{{ID: f.asset, Revision: page.Items[0].Revision}}}
+	input := map[string]any{"scope": page.Scope, "expected_revision": page.Revision, "expected_project_revision": revision, "permanent_delete_confirmed": true, "items": []mediaapp.LibraryItemRevision{{ID: page.Items[0].ID, Revision: page.Items[0].Revision}}}
 	response = mediaCompositionRequest(t, f.router, http.MethodPost, "/api/media/library/purges", input)
 	var job struct {
 		Items []struct {
@@ -235,7 +252,7 @@ func TestMediaLibraryCompositionCurrentCoverAndUnreadableOwnerPreventPurge(t *te
 		} `json:"items"`
 	}
 	if response.Code != 202 || json.Unmarshal(response.Body.Bytes(), &job) != nil || len(job.Items) != 1 || job.Items[0].Status != "blocked" || job.Items[0].FailureCode == nil || *job.Items[0].FailureCode != "in_use" {
-		t.Fatal("installed workspace cover guard failed to block", response.Code, job)
+		t.Fatal("installed workspace cover guard failed to block", response.Code, job, response.Body.String())
 	}
 	var before int64
 	if err := f.owner.Raw(`SELECT count(*) FROM media.purge_job WHERE project_id=?`, f.project).Scan(&before).Error; err != nil {

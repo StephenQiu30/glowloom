@@ -16,28 +16,28 @@ func (s *PurgeStore) cancelPendingItem(ctx context.Context, tx *gorm.DB, row pur
 	if err != nil {
 		return false, err
 	}
-	if state.Status == "succeeded" || state.Status == "blocked" || state.Status == "cancelled" {
+	if state.Status == domain.PurgeItemStatusSucceeded || state.Status == domain.PurgeItemStatusBlocked || state.Status == domain.PurgeItemStatusCancelled {
 		return true, nil
 	}
-	var started bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.purge_object WHERE job_id=? AND item_index=? AND removal_started)`, row.ID, index).Scan(&started).Error; err != nil {
+	var startedCount int64
+	if err := tx.Model(&purgeObjectRow{}).Where("job_id = ? AND item_index = ? AND removal_started = ?", row.ID, index, true).Limit(1).Count(&startedCount).Error; err != nil {
 		return false, err
 	}
-	if started {
+	if startedCount > 0 {
 		return false, nil
 	}
 	if err := validatePurgeItem(tx, row, frozen); err != nil {
 		return false, err
 	}
 	if frozen.Asset != nil {
-		if err := libraryChanged(tx, `UPDATE media.media_asset SET is_delete=false,delete_time=NULL,purge_after=NULL,revision=revision+1,update_time=? WHERE id=? AND revision=? AND is_delete`, s.clock().UTC(), frozen.Asset.ID, frozen.Asset.Revision); err != nil {
+		if err := updateOne(tx, "media.media_asset", map[string]any{"id": frozen.Asset.ID, "revision": frozen.Asset.Revision, "is_delete": true}, map[string]any{"is_delete": false, "delete_time": nil, "purge_after": nil, "revision": frozen.Asset.Revision + 1, "update_time": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 			return false, err
 		}
 	}
-	if err := libraryChanged(tx, `UPDATE media.purge_item SET status='cancelled',failure_code='cancelled' WHERE job_id=? AND item_index=?`, row.ID, index); err != nil {
+	if err := updateOne(tx, "media.purge_item", map[string]any{"job_id": row.ID, "item_index": index}, map[string]any{"status": domain.PurgeItemStatusCancelled, "failure_code": domain.PurgeFailureCancelled}, application.ErrLibraryConflict); err != nil {
 		return false, err
 	}
-	if err := libraryChanged(tx, `UPDATE media.library SET revision=revision+1,update_time=? WHERE id=? AND revision=?`, s.clock().UTC(), library.ID, library.Revision); err != nil {
+	if err := updateOne(tx, "media.library", map[string]any{"id": library.ID, "revision": library.Revision}, map[string]any{"revision": library.Revision + 1, "update_time": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 		return false, err
 	}
 	if row.ProjectID != nil {
@@ -50,18 +50,18 @@ func (s *PurgeStore) cancelPendingItem(ctx context.Context, tx *gorm.DB, row pur
 
 // ControlPurge is permanent and currently authorized. Cancel never recreates
 // deleted bytes: any started item must finish its original cleanup instead.
-func (s *PurgeStore) ControlPurge(ctx context.Context, actor identityapp.Principal, id, key uuid.UUID, revision int64, action string) (domain.PurgeJob, error) {
+func (s *PurgeStore) ControlPurge(ctx context.Context, actor identityapp.Principal, id, key uuid.UUID, revision int64, action application.PurgeAction) (domain.PurgeJob, error) {
 	var result domain.PurgeJob
 	if s == nil || s.db == nil {
 		return result, application.ErrUnavailable
 	}
-	if id == uuid.Nil || key == uuid.Nil || revision < 1 || action != "cancel" && action != "reconcile" {
+	if id == uuid.Nil || key == uuid.Nil || revision < 1 || action != application.PurgeActionCancel && action != application.PurgeActionReconcile {
 		return result, domain.ErrInvalidLibrary
 	}
 	hash, err := purgeHash(struct {
-		ID       uuid.UUID `json:"id"`
-		Revision int64     `json:"revision"`
-		Action   string    `json:"action"`
+		ID       uuid.UUID               `json:"id"`
+		Revision int64                   `json:"revision"`
+		Action   application.PurgeAction `json:"action"`
 	}{id, revision, action})
 	if err != nil {
 		return result, err
@@ -124,18 +124,18 @@ func (s *PurgeStore) ControlPurge(ctx context.Context, actor identityapp.Princip
 		if row.Revision != revision {
 			return domain.ErrPurgeConflict
 		}
-		if row.Status == "succeeded" || row.Status == "failed" || row.Status == "partial_failed" || row.Status == "cancelled" {
+		if row.Status == domain.PurgeStatusSucceeded || row.Status == domain.PurgeStatusFailed || row.Status == domain.PurgeStatusPartialFailed || row.Status == domain.PurgeStatusCancelled {
 			return domain.ErrPurgeConflict
 		}
 		emit := true
-		if action == "reconcile" {
-			if !row.ProcessEnded || row.ExecutionUnconfirmed || row.Status != "needs_reconciliation" && row.Status != "cancel_requested" && row.Status != "running" {
+		if action == application.PurgeActionReconcile {
+			if !row.ProcessEnded || row.ExecutionUnconfirmed || row.Status != domain.PurgeStatusNeedsReconciliation && row.Status != domain.PurgeStatusCancelRequested && row.Status != domain.PurgeStatusRunning {
 				return domain.ErrPurgeConflict
 			}
-			if err := tx.Exec(`UPDATE media.purge_item SET status='queued' WHERE job_id=? AND status IN ('running','needs_reconciliation')`, id).Error; err != nil {
+			if err := tx.Model(&purgeItemRow{}).Where("job_id = ? AND status IN ?", id, []domain.PurgeItemStatus{domain.PurgeItemStatusRunning, domain.PurgeItemStatusNeedsReconciliation}).Update("status", domain.PurgeItemStatusQueued).Error; err != nil {
 				return err
 			}
-			if err := libraryChanged(tx, `UPDATE media.purge_job SET status='queued',attempt=attempt+1,revision=revision+1,needs_reconciliation=false,updated_at=? WHERE id=? AND revision=?`, s.clock().UTC(), id, revision); err != nil {
+			if err := updateOne(tx, "media.purge_job", map[string]any{"id": id, "revision": revision}, map[string]any{"status": domain.PurgeStatusQueued, "attempt": row.Attempt + 1, "revision": revision + 1, "needs_reconciliation": false, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 				return err
 			}
 		} else {
@@ -157,12 +157,12 @@ func (s *PurgeStore) ControlPurge(ctx context.Context, actor identityapp.Princip
 					}
 				}
 			}
-			status, stage := "cancel_requested", row.Stage
+			status, stage := domain.PurgeStatusCancelRequested, row.Stage
 			if !unsettled {
-				status, stage = "cancelled", "completed"
+				status, stage = domain.PurgeStatusCancelled, domain.PurgeStageCompleted
 				emit = false
 			}
-			if err := libraryChanged(tx, `UPDATE media.purge_job SET cancellation_requested=true,status=?,stage=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?`, status, stage, s.clock().UTC(), id, revision); err != nil {
+			if err := updateOne(tx, "media.purge_job", map[string]any{"id": id, "revision": revision}, map[string]any{"cancellation_requested": true, "status": status, "stage": stage, "revision": revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 				return err
 			}
 		}

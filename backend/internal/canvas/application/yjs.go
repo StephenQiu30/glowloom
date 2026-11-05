@@ -30,7 +30,9 @@ type YjsBinding struct {
 
 // YjsState is read atomically with its business projection.
 type YjsState struct {
-	RestorationNodes []NodeDTO `json:"-"`
+	// CommandDocument is the same transaction native view used for semantic validation.
+	CommandDocument  domain.Document `json:"-"`
+	RestorationNodes []NodeDTO       `json:"-"`
 	YjsBinding
 	State     []byte      `json:"state"`
 	GraphHash string      `json:"graphHash"`
@@ -58,6 +60,7 @@ type YjsRestoration struct {
 
 // YjsCandidate is a trusted runtime result, never a browser-supplied projection.
 type YjsCandidate struct {
+	CommandUpdate []byte          `json:"commandUpdate,omitempty"`
 	AppliedUpdate []byte          `json:"appliedUpdate,omitempty"`
 	Transition    *YjsRestoration `json:"transition,omitempty"`
 	YjsBinding
@@ -70,18 +73,27 @@ type YjsCandidate struct {
 	Projection  DocumentDTO `json:"projection"`
 }
 
+// YjsReceiptStatus is the durable outcome of one Yjs update.
+type YjsReceiptStatus string
+
+// Yjs receipt states distinguish accepted commands from proven non-application.
+const (
+	YjsReceiptStatusAccepted YjsReceiptStatus = "accepted"
+	YjsReceiptStatusRejected YjsReceiptStatus = "rejected"
+)
+
 // YjsReceipt is committed with the binary state, graph, and publication event.
 type YjsReceipt struct {
-	Epoch           uuid.UUID `json:"epoch"`
-	CommitSeq       Revision  `json:"commitSeq"`
-	ContentRevision Revision  `json:"contentRevision"`
-	GraphHash       string    `json:"graphHash"`
-	UpdateID        uuid.UUID `json:"updateId"`
-	PayloadHash     string    `json:"payloadHash"`
-	Effect          string    `json:"effect,omitempty"`
-	Code            string    `json:"code,omitempty"`
-	Status          string    `json:"status"`
-	Update          []byte    `json:"update,omitempty"`
+	Epoch           uuid.UUID        `json:"epoch"`
+	CommitSeq       Revision         `json:"commitSeq"`
+	ContentRevision Revision         `json:"contentRevision"`
+	GraphHash       string           `json:"graphHash"`
+	UpdateID        uuid.UUID        `json:"updateId"`
+	PayloadHash     string           `json:"payloadHash"`
+	Effect          string           `json:"effect,omitempty"`
+	Code            string           `json:"code,omitempty"`
+	Status          YjsReceiptStatus `json:"status"`
+	Update          []byte           `json:"update,omitempty"`
 }
 
 // YjsRuntime computes isolated candidates without database access.

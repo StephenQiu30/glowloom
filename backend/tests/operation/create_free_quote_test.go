@@ -3,6 +3,7 @@ package operation_test
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -222,5 +223,15 @@ func TestPrepareFreeQuoteFreezesMediaAndChecksPublishedRoles(t *testing.T) {
 				t.Fatalf("unsupported media accepted: %v", err)
 			}
 		})
+	}
+}
+
+func TestFreeQuoteInputRejectsRemovedInternalContextJSON(t *testing.T) {
+	body := `{"ModelKey":"fixture","Capability":"image.generate","Mode":"text_to_image","Prompt":"fixture","Params":{},"OutputCount":1,"ForceRegenerate":true,"agent_context":{"session_id":"11111111-1111-4111-8111-111111111111","turn_id":"22222222-2222-4222-8222-222222222222","phase":"image","policy":"image-agent-json-v1"}}`
+	decoder := json.NewDecoder(strings.NewReader(body))
+	decoder.DisallowUnknownFields()
+	var input operationapp.FreeQuoteItemInput
+	if err := decoder.Decode(&input); err == nil {
+		t.Fatal("removed internal orchestration input was accepted")
 	}
 }

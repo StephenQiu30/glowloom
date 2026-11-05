@@ -1,1 +1,1 @@
-export * from './ProposalApprovalCard';
+export * from "./ProposalApprovalCard";

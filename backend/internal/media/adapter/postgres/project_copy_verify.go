@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -16,7 +18,7 @@ func equalCopyMedia(want, got any) bool {
 	// owner-verified backfill may add transport facts without rewriting history.
 	switch expected := want.(type) {
 	case domain.MediaAsset:
-		if current, ok := got.(domain.MediaAsset); ok && expected.ObjectLocation == nil && current.ObjectLocation != nil && current.ObjectLocation.State == "accepted" && current.ObjectLocation.Ref.Key == current.ObjectKey {
+		if current, ok := got.(domain.MediaAsset); ok && expected.ObjectLocation == nil && current.ObjectLocation != nil && current.ObjectLocation.State == domain.ObjectLocationAccepted && current.ObjectLocation.Ref.Key == current.ObjectKey {
 			if expected.SHA256 == nil && current.ObjectLocation.SHA256 != nil && current.SHA256 != nil && *current.ObjectLocation.SHA256 == *current.SHA256 {
 				current.SHA256 = nil
 			}
@@ -24,7 +26,7 @@ func equalCopyMedia(want, got any) bool {
 			got = current
 		}
 	case domain.Rendition:
-		if current, ok := got.(domain.Rendition); ok && expected.ObjectLocation == nil && current.ObjectLocation != nil && current.ObjectLocation.State == "accepted" && current.ObjectLocation.Ref.Key == current.ObjectKey {
+		if current, ok := got.(domain.Rendition); ok && expected.ObjectLocation == nil && current.ObjectLocation != nil && current.ObjectLocation.State == domain.ObjectLocationAccepted && current.ObjectLocation.Ref.Key == current.ObjectKey {
 			if expected.ByteSize == nil && current.ObjectLocation.ByteSize != nil && current.ByteSize != nil && *current.ObjectLocation.ByteSize == *current.ByteSize {
 				current.ByteSize = nil
 			}
@@ -101,27 +103,30 @@ func canonicalCopyMediaTime(value any) any {
 }
 
 func verifyCopiedMedia(tx *gorm.DB, assets []application.ProjectCopySourceAsset, target uuid.UUID) error {
-	var count int
-	if err := tx.Raw(`SELECT count(*) FROM media.media_asset WHERE project_id=? AND NOT is_delete`, target).Scan(&count).Error; err != nil {
+	var count int64
+	if err := tx.Model(&assetRow{}).Where("project_id = ? AND is_delete = ?", target, false).Count(&count).Error; err != nil {
 		return err
 	}
-	if count != len(assets) {
+	if count != int64(len(assets)) {
 		return application.ErrObjectMismatch
 	}
 	for _, item := range assets {
 		var row assetRow
-		read := tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND NOT is_delete FOR SHARE`, item.Asset.ID, target).Scan(&row)
+		read := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("id = ? AND project_id = ? AND is_delete = ?", item.Asset.ID, target, false).Take(&row)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return application.ErrObjectMismatch
+		}
 		if read.Error != nil {
 			return read.Error
 		}
 		if err := row.loadLocation(tx); err != nil {
 			return err
 		}
-		if read.RowsAffected != 1 || !equalCopyMedia(item.Asset, row.domain()) {
+		if !equalCopyMedia(item.Asset, row.domain()) {
 			return application.ErrObjectMismatch
 		}
 		var rows []renditionRow
-		if err := tx.Raw(`SELECT * FROM media.rendition WHERE media_asset_id=? AND NOT is_delete FOR SHARE`, item.Asset.ID).Scan(&rows).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("media_asset_id = ? AND is_delete = ?", item.Asset.ID, false).Find(&rows).Error; err != nil {
 			return err
 		}
 		if len(rows) != len(item.Renditions) {

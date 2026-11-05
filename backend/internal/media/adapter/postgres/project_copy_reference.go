@@ -3,14 +3,17 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func (s scopeAuthority) copyReferenceAccess(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding) error {
@@ -32,14 +35,14 @@ func (s scopeAuthority) copyReferenceAccess(tx *gorm.DB, actor identityapp.Princ
 		ID     uuid.UUID
 		Status string
 	}
-	if err := tx.Raw(`SELECT id,status FROM workspace.project WHERE org_id=? AND id IN ? AND NOT is_delete ORDER BY id FOR SHARE`, actor.OrgID, ids).Scan(&rows).Error; err != nil {
+	if err := tx.Table("workspace.project").Select("id", "status").Clauses(clause.Locking{Strength: "SHARE"}).Where("org_id = ? AND id IN ? AND is_delete = ?", actor.OrgID, ids, false).Order("id").Find(&rows).Error; err != nil {
 		return err
 	}
 	if len(rows) != 2 {
 		return application.ErrNotFound
 	}
 	for _, row := range rows {
-		if row.ID == binding.TargetProjectID && row.Status != "copying" || row.ID == binding.SourceProjectID && row.Status != "active" && row.Status != "archived" {
+		if row.ID == binding.TargetProjectID && row.Status != workspacedomain.ProjectStatusCopying || row.ID == binding.SourceProjectID && row.Status != workspacedomain.ProjectStatusActive && row.Status != workspacedomain.ProjectStatusArchived {
 			return application.ErrNotFound
 		}
 	}
@@ -61,8 +64,8 @@ func (s *ProjectCopyStore) ReadCopyReference(ctx context.Context, actor identity
 	if err != nil {
 		return result, err
 	}
-	var manifest struct{ AssetMapping []byte }
-	if err := tx.Raw(`SELECT asset_mapping FROM media.project_copy_snapshot WHERE id=?`, snapshot.ID).Scan(&manifest).Error; err != nil {
+	var manifest struct{ AssetMapping jsonDocument }
+	if err := tx.Model(&projectCopySnapshotRecord{}).Select("asset_mapping").Where("id = ?", snapshot.ID).Take(&manifest).Error; err != nil {
 		return result, err
 	}
 	var mapping map[uuid.UUID]uuid.UUID
@@ -70,19 +73,19 @@ func (s *ProjectCopyStore) ReadCopyReference(ctx context.Context, actor identity
 		return result, application.ErrProjectCopyMediaUnavailable
 	}
 	var source assetRow
-	read := tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND personal_org_id IS NULL AND personal_actor_id IS NULL FOR SHARE`, fact.AssetID, binding.SourceProjectID).Scan(&source)
+	read := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"id": fact.AssetID, "project_id": binding.SourceProjectID, "personal_org_id": nil, "personal_actor_id": nil}).Take(&source)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return result, application.ErrNotFound
+	}
 	if read.Error != nil {
 		return result, read.Error
-	}
-	if read.RowsAffected != 1 {
-		return result, application.ErrNotFound
 	}
 	if err := hydrateCopySourceAsset(tx, &source); err != nil {
 		return result, err
 	}
 	result.Source.Asset = source.domain()
 	var rows []renditionRow
-	if err := tx.Raw(`SELECT * FROM media.rendition WHERE media_asset_id=? AND NOT is_delete ORDER BY kind,id LIMIT 17 FOR SHARE`, fact.AssetID).Scan(&rows).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("media_asset_id = ? AND is_delete = ?", fact.AssetID, false).Order("kind").Order("id").Limit(17).Find(&rows).Error; err != nil {
 		return result, err
 	}
 	if len(rows) > 16 {
@@ -144,13 +147,13 @@ func (s *ProjectCopyStore) ReadTransferredCopyReference(ctx context.Context, act
 		return result, err
 	}
 	tx := s.db.WithContext(ctx)
-	var registered int
-	read := tx.Raw(`SELECT 1 FROM media.project_copy_receipt r JOIN media.project_copy_snapshot s ON s.id=r.snapshot_id WHERE r.snapshot_id=? AND s.manifest_sha256=? AND r.asset_count=? AND r.rendition_count=?`, snapshot.ID, snapshot.ManifestSHA256, snapshot.Assets, snapshot.Renditions).Scan(&registered)
+	var registered projectCopyReceiptRecord
+	read := tx.Where("snapshot_id = ? AND content_sha256 IS NOT NULL AND asset_count = ? AND rendition_count = ?", snapshot.ID, snapshot.Assets, snapshot.Renditions).Take(&registered)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return result, application.ErrObjectMismatch
+	}
 	if read.Error != nil {
 		return result, read.Error
-	}
-	if read.RowsAffected != 1 {
-		return result, application.ErrObjectMismatch
 	}
 	objects, err := s.Objects(ctx, actor, binding, snapshot)
 	if err != nil {
@@ -161,7 +164,7 @@ func (s *ProjectCopyStore) ReadTransferredCopyReference(ctx context.Context, act
 		if object.TargetAssetID != result.Target.Asset.ID {
 			continue
 		}
-		if object.Status != "verified" || !object.SourceVerified || object.SHA256 == nil || object.ByteSize == nil {
+		if object.Status != application.ProjectCopyObjectVerified || !object.SourceVerified || object.SHA256 == nil || object.ByteSize == nil {
 			return result, application.ErrObjectMismatch
 		}
 		byKey[object.TargetObjectKey] = object
@@ -185,18 +188,21 @@ func (s *ProjectCopyStore) ReadTransferredCopyReference(ctx context.Context, act
 
 func verifyCopiedReference(tx *gorm.DB, target *application.LibraryMediaFile, project uuid.UUID) error {
 	var row assetRow
-	read := tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND NOT is_delete FOR SHARE`, target.Asset.ID, project).Scan(&row)
+	read := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("id = ? AND project_id = ? AND is_delete = ?", target.Asset.ID, project, false).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return application.ErrObjectMismatch
+	}
 	if read.Error != nil {
 		return read.Error
 	}
 	if err := row.loadLocation(tx); err != nil {
 		return err
 	}
-	if read.RowsAffected != 1 || !equalCopyMedia(target.Asset, row.domain()) {
+	if !equalCopyMedia(target.Asset, row.domain()) {
 		return application.ErrObjectMismatch
 	}
 	var rows []renditionRow
-	if err := tx.Raw(`SELECT * FROM media.rendition WHERE media_asset_id=? AND NOT is_delete ORDER BY kind,id FOR SHARE`, target.Asset.ID).Scan(&rows).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("media_asset_id = ? AND is_delete = ?", target.Asset.ID, false).Order("kind").Order("id").Find(&rows).Error; err != nil {
 		return err
 	}
 	if len(rows) != len(target.Renditions) {

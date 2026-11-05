@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
@@ -51,7 +52,7 @@ type WorkflowOutput struct {
 	Kind             string
 	MediaAssetID     *uuid.UUID
 	JSONPayload      json.RawMessage
-	ModerationStatus string
+	ModerationStatus mediadomain.ModerationStatus
 	ModerationReason *string
 }
 
@@ -116,4 +117,17 @@ type FinalizePreparation struct {
 	ReservationID    uuid.UUID
 	AlreadyFinalized bool
 	SettledMicros    *int64
+}
+
+// TaskEvidence is reconstructed from business records, never from process memory.
+type TaskEvidence struct {
+	DispatchCancelled                                 bool
+	QueryState                                        ProviderCallState
+	QueryFailureCode                                  string
+	CancelRequested, Admitted, Ingested, IngestFailed bool
+	SubmitState                                       ProviderCallState
+	FailureCode                                       string
+	CancelState                                       ProviderCallState
+	SubmitTaskID                                      *string
+	DispatchStartedAt                                 *time.Time
 }

@@ -17,6 +17,6 @@ import (
 func ProvideProjectFolderStore(database *gorm.DB) *pgworkspace.FolderStore {
 	return pgworkspace.NewScopedFolderStore(database, scopewire.ProvideRequestScopeAccess, ProvideProjectWorkGuard,
 		func(tx *gorm.DB) workspaceapp.FolderMediaReader {
-			return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
+			return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
 		})
 }

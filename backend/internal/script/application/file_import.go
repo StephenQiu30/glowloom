@@ -24,38 +24,38 @@ type ImportCommand struct {
 
 // ImportFile exposes a frozen original and its latest actual extraction outcome.
 type ImportFile struct {
-	Position    int                 `json:"position"`
-	AssetID     uuid.UUID           `json:"asset_id"`
-	FileName    string              `json:"file_name"`
-	Status      string              `json:"status"`
-	FailureCode string              `json:"failure_code,omitempty"`
-	Warnings    []ExtractionWarning `json:"warnings"`
-	SourceID    *uuid.UUID          `json:"source_id,omitempty"`
-	LineageID   *uuid.UUID          `json:"source_lineage_id,omitempty"`
-	Attempt     int                 `json:"attempt"`
+	Position    int                     `json:"position"`
+	AssetID     uuid.UUID               `json:"asset_id"`
+	FileName    string                  `json:"file_name"`
+	Status      domain.ImportFileStatus `json:"status"`
+	FailureCode string                  `json:"failure_code,omitempty"`
+	Warnings    []ExtractionWarning     `json:"warnings"`
+	SourceID    *uuid.UUID              `json:"source_id,omitempty"`
+	LineageID   *uuid.UUID              `json:"source_lineage_id,omitempty"`
+	Attempt     int                     `json:"attempt"`
 }
 
 // ImportJob is a safe refreshable state; an accepted cancel is not a stopped call.
 type ImportJob struct {
-	ID                      uuid.UUID    `json:"id"`
-	ProjectID               uuid.UUID    `json:"project_id"`
-	Revision                int64        `json:"revision"`
-	Attempt                 int          `json:"attempt"`
-	Status                  string       `json:"status"`
-	Stage                   string       `json:"stage"`
-	ExpectedScriptRevision  int64        `json:"expected_script_revision"`
-	LatestScriptRevision    int64        `json:"latest_script_revision"`
-	LatestVersionID         *uuid.UUID   `json:"latest_version_id,omitempty"`
-	CancellationRequested   bool         `json:"cancellation_requested"`
-	ReconciliationRequested bool         `json:"reconciliation_requested"`
-	NeedsReconciliation     bool         `json:"needs_reconciliation"`
-	ActiveIO                bool         `json:"active_io"`
-	Retryable               bool         `json:"retryable"`
-	CanControl              bool         `json:"can_control"`
-	FailureCode             string       `json:"failure_code,omitempty"`
-	Files                   []ImportFile `json:"files"`
-	CreatedAt               time.Time    `json:"created_at"`
-	UpdatedAt               time.Time    `json:"updated_at"`
+	ID                      uuid.UUID           `json:"id"`
+	ProjectID               uuid.UUID           `json:"project_id"`
+	Revision                int64               `json:"revision"`
+	Attempt                 int                 `json:"attempt"`
+	Status                  domain.ImportStatus `json:"status"`
+	Stage                   domain.ImportStage  `json:"stage"`
+	ExpectedScriptRevision  int64               `json:"expected_script_revision"`
+	LatestScriptRevision    int64               `json:"latest_script_revision"`
+	LatestVersionID         *uuid.UUID          `json:"latest_version_id,omitempty"`
+	CancellationRequested   bool                `json:"cancellation_requested"`
+	ReconciliationRequested bool                `json:"reconciliation_requested"`
+	NeedsReconciliation     bool                `json:"needs_reconciliation"`
+	ActiveIO                bool                `json:"active_io"`
+	Retryable               bool                `json:"retryable"`
+	CanControl              bool                `json:"can_control"`
+	FailureCode             string              `json:"failure_code,omitempty"`
+	Files                   []ImportFile        `json:"files"`
+	CreatedAt               time.Time           `json:"created_at"`
+	UpdatedAt               time.Time           `json:"updated_at"`
 }
 
 // ImportPage includes only the authenticated caller's scope for exact-key recovery.
@@ -70,7 +70,7 @@ type ImportPage struct {
 type ImportControl struct {
 	ProjectID, JobID, Key, RequestID uuid.UUID
 	ExpectedRevision                 int64
-	Action                           string
+	Action                           domain.ImportAction
 }
 
 // ImportWork identifies one immutable extraction/publication attempt.
@@ -82,12 +82,12 @@ type ImportWork struct {
 // ImportDelivery is verified against the permanent command and actual outbox.
 type ImportDelivery struct {
 	ImportWork
-	EventID   uuid.UUID `json:"event_id"`
-	RequestID uuid.UUID `json:"request_id"`
-	ActorID   uuid.UUID `json:"actor_id"`
-	OrgID     uuid.UUID `json:"org_id"`
-	ProjectID uuid.UUID `json:"project_id"`
-	Action    string    `json:"action"`
+	EventID   uuid.UUID           `json:"event_id"`
+	RequestID uuid.UUID           `json:"request_id"`
+	ActorID   uuid.UUID           `json:"actor_id"`
+	OrgID     uuid.UUID           `json:"org_id"`
+	ProjectID uuid.UUID           `json:"project_id"`
+	Action    domain.ImportAction `json:"action"`
 }
 
 // FrozenImportFile retains the exact owning media facts, never a client path.
@@ -99,15 +99,15 @@ type FrozenImportFile struct {
 
 // ImportFileResult is immutable per attempt, excluding private editable bodies.
 type ImportFileResult struct {
-	Position    int                 `json:"position"`
-	Status      string              `json:"status"`
-	FailureCode string              `json:"failure_code,omitempty"`
-	RichSHA256  string              `json:"rich_sha256,omitempty"`
-	ContentHash string              `json:"content_hash,omitempty"`
-	CharCount   int                 `json:"char_count"`
-	Encoding    string              `json:"encoding,omitempty"`
-	Mapping     []SourceMapping     `json:"mapping,omitempty"`
-	Warnings    []ExtractionWarning `json:"warnings"`
+	Position    int                     `json:"position"`
+	Status      domain.ImportFileStatus `json:"status"`
+	FailureCode string                  `json:"failure_code,omitempty"`
+	RichSHA256  string                  `json:"rich_sha256,omitempty"`
+	ContentHash string                  `json:"content_hash,omitempty"`
+	CharCount   int                     `json:"char_count"`
+	Encoding    string                  `json:"encoding,omitempty"`
+	Mapping     []SourceMapping         `json:"mapping,omitempty"`
+	Warnings    []ExtractionWarning     `json:"warnings"`
 }
 
 // ImportRecord carries private durable facts only within this owning module.
@@ -119,7 +119,7 @@ type ImportRecord struct {
 	BaseVersionID  *uuid.UUID
 	PublicationKey uuid.UUID
 	OwnerID        *uuid.UUID
-	IOState        string
+	IOState        domain.ImportIOState
 }
 
 // ImportStore keeps command admission and read/control contracts in owner transactions.
@@ -182,7 +182,7 @@ func (s *ImportService) Control(ctx context.Context, actor identityapp.Principal
 	if s == nil || s.store == nil || s.now == nil {
 		return ImportJob{}, ErrUnavailable
 	}
-	if in.ProjectID == uuid.Nil || in.JobID == uuid.Nil || in.Key == uuid.Nil || in.RequestID == uuid.Nil || in.ExpectedRevision < 1 || in.Action != "cancel" && in.Action != "retry" && in.Action != "reconcile" {
+	if in.ProjectID == uuid.Nil || in.JobID == uuid.Nil || in.Key == uuid.Nil || in.RequestID == uuid.Nil || in.ExpectedRevision < 1 || in.Action != domain.ImportActionCancel && in.Action != domain.ImportActionRetry && in.Action != domain.ImportActionReconcile {
 		return ImportJob{}, domain.ErrInvalidSource
 	}
 	return s.store.ControlImport(ctx, actor, in, s.now().UTC().Truncate(time.Microsecond))

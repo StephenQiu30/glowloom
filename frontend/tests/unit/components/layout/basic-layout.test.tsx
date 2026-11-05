@@ -130,6 +130,7 @@ function render(children: ReactNode) {
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
+  info: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
   pathname: "/",
@@ -140,6 +141,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), {
+    info: mocks.info,
     success: mocks.success,
     error: mocks.error,
     dismiss: vi.fn(),
@@ -460,9 +462,10 @@ it("手机顶栏使用共享账号组，主题归入账号菜单且不虚构会�
   expect(within(header).queryByText("开通会员")).toBeNull();
   expect(within(header).getByRole("button", { name: "积分余额" })).toBeTruthy();
   fireEvent.click(within(header).getByRole("button", { name: "消息中心" }));
-  expect(
-    await screen.findByRole("dialog", { name: "消息中心暂未开放" }),
-  ).toBeTruthy();
+  expect(mocks.info).toHaveBeenCalledWith("消息中心暂未开放", {
+    id: "product-feature-unavailable",
+  });
+  expect(screen.queryByRole("dialog", { name: "消息中心暂未开放" })).toBeNull();
 });
 
 it("空间读取期间保留顶栏和侧栏，只阻止正文私有内容", async () => {

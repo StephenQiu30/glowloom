@@ -87,10 +87,10 @@ type SourceRecord struct {
 	LineageID         uuid.UUID        `json:"source_lineage_id"`
 	PreviousID        *uuid.UUID       `json:"previous_source_id,omitempty"`
 	Revision          int64            `json:"source_revision"`
-	Origin            string           `json:"origin"`
-	Kind              string           `json:"source_kind"`
+	Origin            SourceOrigin     `json:"origin"`
+	Kind              SourceKind       `json:"source_kind"`
 	Title             string           `json:"title"`
-	Status            string           `json:"status"`
+	Status            SourceStatus     `json:"status"`
 	RightsActorID     uuid.UUID        `json:"rights_actor_id"`
 	RightsConfirmedAt time.Time        `json:"rights_confirmed_at"`
 	MediaAssetID      *uuid.UUID       `json:"media_asset_id,omitempty"`
@@ -137,8 +137,8 @@ type SplitSet struct {
 	VersionID  uuid.UUID         `json:"version_id"`
 	OrgID      uuid.UUID         `json:"org_id"`
 	ProjectID  uuid.UUID         `json:"project_id"`
-	Kind       string            `json:"kind"`
-	Origin     string            `json:"origin"`
+	Kind       SplitSetKind      `json:"kind"`
+	Origin     SplitSetOrigin    `json:"origin"`
 	Preface    *ScalarSpan       `json:"preface,omitempty"`
 	Boundaries []EpisodeBoundary `json:"boundaries"`
 	Warnings   []string          `json:"warnings,omitempty"`
@@ -147,21 +147,21 @@ type SplitSet struct {
 
 // Episode is the formal mutable head over immutable source and structure history.
 type Episode struct {
-	ID                   uuid.UUID  `json:"id"`
-	OrgID                uuid.UUID  `json:"org_id"`
-	ProjectID            uuid.UUID  `json:"project_id"`
-	VersionID            uuid.UUID  `json:"script_version_id"`
-	SplitSetID           uuid.UUID  `json:"split_set_id"`
-	SeqNo                int        `json:"seq_no"`
-	Title                string     `json:"title"`
-	Start                int        `json:"span_start"`
-	End                  int        `json:"span_end"`
-	Revision             int64      `json:"revision"`
-	CurrentStructureID   *uuid.UUID `json:"current_structure_id,omitempty"`
-	ConfirmedStructureID *uuid.UUID `json:"confirmed_structure_id,omitempty"`
-	PreviousEpisodeID    *uuid.UUID `json:"previous_episode_id,omitempty"`
-	InheritStatus        string     `json:"inherit_status"`
-	IsDelete             bool       `json:"is_delete"`
+	ID                   uuid.UUID            `json:"id"`
+	OrgID                uuid.UUID            `json:"org_id"`
+	ProjectID            uuid.UUID            `json:"project_id"`
+	VersionID            uuid.UUID            `json:"script_version_id"`
+	SplitSetID           uuid.UUID            `json:"split_set_id"`
+	SeqNo                int                  `json:"seq_no"`
+	Title                string               `json:"title"`
+	Start                int                  `json:"span_start"`
+	End                  int                  `json:"span_end"`
+	Revision             int64                `json:"revision"`
+	CurrentStructureID   *uuid.UUID           `json:"current_structure_id,omitempty"`
+	ConfirmedStructureID *uuid.UUID           `json:"confirmed_structure_id,omitempty"`
+	PreviousEpisodeID    *uuid.UUID           `json:"previous_episode_id,omitempty"`
+	InheritStatus        EpisodeInheritStatus `json:"inherit_status"`
+	IsDelete             bool                 `json:"is_delete"`
 }
 
 // SplitConfirmation preserves each complete boundary/identity result independently.
@@ -184,16 +184,16 @@ var ErrInvalidStructure = errors.New("invalid episode structure")
 
 // StructureItem preserves the source scene's ordered action/dialogue interleaving.
 type StructureItem struct {
-	Type               string     `json:"type"`
-	Key                uuid.UUID  `json:"line_key"`
-	Kind               string     `json:"kind,omitempty"`
-	Speaker            string     `json:"speaker_text,omitempty"`
-	CharacterID        *uuid.UUID `json:"character_id,omitempty"`
-	CharacterVersionID *uuid.UUID `json:"character_version_id,omitempty"`
-	Content            string     `json:"content"`
-	Emotion            string     `json:"emotion,omitempty"`
-	Start              int        `json:"span_start"`
-	End                int        `json:"span_end"`
+	Type               StructureItemType `json:"type"`
+	Key                uuid.UUID         `json:"line_key"`
+	Kind               DialogueKind      `json:"kind,omitempty"`
+	Speaker            string            `json:"speaker_text,omitempty"`
+	CharacterID        *uuid.UUID        `json:"character_id,omitempty"`
+	CharacterVersionID *uuid.UUID        `json:"character_version_id,omitempty"`
+	Content            string            `json:"content"`
+	Emotion            string            `json:"emotion,omitempty"`
+	Start              int               `json:"span_start"`
+	End                int               `json:"span_end"`
 }
 
 // StructureScene retains formal scene metadata and the exact item order.

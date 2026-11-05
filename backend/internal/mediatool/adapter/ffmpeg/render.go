@@ -56,7 +56,7 @@ func NewRenderer(prober mediaapp.Prober) (*Renderer, error) {
 
 // Render segments at frame boundaries so 1000 clips never become 1000 open
 // inputs. At most the 32 active tracks plus one caption pipe are opened at once.
-func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths map[uuid.UUID]string, progress func(int, string) error) (*mediaapp.Downloaded, error) {
+func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths map[uuid.UUID]string, progress func(int, domain.ExportStage) error) (*mediaapp.Downloaded, error) {
 	if r == nil || r.typeface == nil {
 		return nil, application.ErrUnavailable
 	}
@@ -106,7 +106,7 @@ func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths
 			return nil, err
 		}
 		if progress != nil {
-			if err := progress(20+i*60/len(parts), "rendering"); err != nil {
+			if err := progress(20+i*60/len(parts), domain.ExportStageRendering); err != nil {
 				return nil, err
 			}
 		}
@@ -143,7 +143,7 @@ func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths
 		}
 	}()
 	if progress != nil {
-		if err := progress(82, "encoding"); err != nil {
+		if err := progress(82, domain.ExportStageEncoding); err != nil {
 			return nil, err
 		}
 	}

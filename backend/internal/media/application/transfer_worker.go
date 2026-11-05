@@ -97,21 +97,21 @@ func (w *TransferWorker) cleanupItem(ctx context.Context, lease TransferLease, i
 		if err := w.repo.AuthorizeTransferRemoval(ctx, lease, index, object.RenditionKind); err != nil {
 			return err
 		}
-		exists, err := copyObjectExists(ctx, w.objects, w.physical, object.TargetLocation, object.TargetObjectKey)
+		exists, err := copyObjectExists(ctx, w.physical, object.TargetLocation, object.TargetObjectKey)
 		if err != nil {
 			return err
 		}
-		if !exists && object.WriteStarted && object.Status != "removed" {
+		if !exists && object.WriteStarted && object.Status != ProjectCopyObjectRemoved {
 			return &ProjectCopyTransferError{Code: "object_absence_unknown", NeedsReconciliation: true, Cause: ErrObjectMismatch}
 		}
 		if exists {
 			if err := verifyTransferredObject(ctx, w.objects, w.physical, object); err != nil {
 				return err
 			}
-			if err := removeCopyObject(ctx, w.objects, w.physical, object.TargetLocation, object.TargetObjectKey); err != nil {
+			if err := removeCopyObject(ctx, w.physical, object.TargetLocation, object.TargetObjectKey); err != nil {
 				return err
 			}
-			if exists, err := copyObjectExists(ctx, w.objects, w.physical, object.TargetLocation, object.TargetObjectKey); err != nil || exists {
+			if exists, err := copyObjectExists(ctx, w.physical, object.TargetLocation, object.TargetObjectKey); err != nil || exists {
 				return errors.Join(ErrObjectMismatch, err)
 			}
 		}
@@ -135,7 +135,7 @@ func transferFailure(err error) (string, bool) {
 		return "object_write_unknown", true
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, domain.ErrTransferCancelled) {
-		return "cancelled", false
+		return string(domain.TransferStatusCancelled), false
 	}
 	if errors.Is(err, ErrObjectMismatch) {
 		return "object_mismatch", false
@@ -153,7 +153,7 @@ func (w *TransferWorker) Execute(ctx context.Context, id TransferWorkID) (domain
 	if err != nil || lease.Done {
 		return lease.Job, err
 	}
-	run, cancel := context.WithCancel(ctx)
+	run, cancel := context.WithCancelCause(ctx)
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
 	var heartbeatErr error
@@ -170,54 +170,80 @@ func (w *TransferWorker) Execute(ctx context.Context, id TransferWorkID) (domain
 				return
 			case <-ticker.C:
 				if err := w.repo.HeartbeatTransfer(run, lease); err != nil {
-					heartbeatErr = err
-					cancel()
+					if !errors.Is(err, domain.ErrTransferCancelled) && !errors.Is(context.Cause(run), domain.ErrTransferCancelled) {
+						heartbeatErr = err
+					}
+					cancel(err)
 					return
 				}
 			}
 		}
 	}()
+	cancelling := lease.Job.CancellationRequested
+	var cleanupHeartbeatErr error
 	for index := range lease.ItemCount {
+		if ctx.Err() != nil {
+			break
+		}
 		// Published rows are immutable outcomes of the saved claim. Cancellation
 		// cleans only unpublished rows and must never revisit their objects.
-		if lease.Job.Items[index].Status == "succeeded" {
+		if lease.Job.Items[index].Status == domain.TransferItemStatusSucceeded {
 			continue
 		}
-		if err := w.repo.HeartbeatTransfer(run, lease); err != nil {
-			cancel()
+		cancelling = cancelling || errors.Is(context.Cause(run), domain.ErrTransferCancelled)
+		if !cancelling {
+			if err := w.repo.HeartbeatTransfer(run, lease); err != nil {
+				cancel(err)
+				cancelling = errors.Is(err, domain.ErrTransferCancelled)
+			}
 		}
-		done, startErr := w.repo.StartTransferItem(run, lease, index)
-		if done {
-			continue
+		var itemErr error
+		if cancelling {
+			itemErr = domain.ErrTransferCancelled
+		} else {
+			done, startErr := w.repo.StartTransferItem(run, lease, index)
+			if done {
+				continue
+			}
+			itemErr = startErr
+			if itemErr == nil {
+				itemErr = w.copyItem(run, lease, index)
+			}
 		}
-		itemErr := startErr
 		if itemErr == nil {
-			itemErr = w.copyItem(run, lease, index)
-		}
-		if itemErr == nil {
 			continue
 		}
+		cancelling = cancelling || errors.Is(itemErr, domain.ErrTransferCancelled) || errors.Is(context.Cause(run), domain.ErrTransferCancelled)
 		code, unknown := transferFailure(itemErr)
 		cleanup, end := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		if !unknown {
+		if cancelling {
+			if err := w.repo.HeartbeatTransfer(cleanup, lease); err != nil && !errors.Is(err, domain.ErrTransferCancelled) {
+				cleanupHeartbeatErr = err
+				end()
+				break
+			}
+		}
+		if !unknown || cancelling {
 			if err := w.cleanupItem(cleanup, lease, index); err != nil {
 				code, unknown = "object_cleanup_unknown", true
+			} else if cancelling {
+				code, unknown = domain.TransferFailureCancelled, false
 			}
 		}
 		markErr := w.repo.FailTransferItem(cleanup, lease, index, code, unknown)
 		end()
-		if unknown || markErr != nil || run.Err() != nil {
+		if markErr != nil || ctx.Err() != nil || !cancelling && (unknown || run.Err() != nil) {
 			break
 		}
 	}
 	close(stop)
-	cancel()
+	cancel(nil)
 	wg.Wait()
 	cleanup, end := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer end()
 	if err := w.repo.EndTransferPhysical(cleanup, lease); err != nil {
-		return domain.TransferJob{}, errors.Join(err, heartbeatErr)
+		return domain.TransferJob{}, errors.Join(err, heartbeatErr, cleanupHeartbeatErr)
 	}
 	result, err := w.repo.FinishTransfer(cleanup, lease)
-	return result, errors.Join(err, heartbeatErr)
+	return result, errors.Join(err, heartbeatErr, cleanupHeartbeatErr)
 }

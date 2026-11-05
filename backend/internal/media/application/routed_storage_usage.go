@@ -12,7 +12,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
-// StorageUsagePrefix identifies an explicitly admitted historical physical bucket.
+// StorageUsagePrefix identifies an explicitly configured readable physical bucket.
 // Inventory never derives these buckets from the current default write route.
 type StorageUsagePrefix struct{ ProfileID, Bucket, Prefix string }
 
@@ -22,8 +22,8 @@ type PhysicalStorageUsageObjects interface {
 	Stat(context.Context, domain.ObjectRef) (int64, bool, error)
 }
 
-// NewRoutedStorageUsageReader injects exact physical inventory and metadata readers.
-func NewRoutedStorageUsageReader(source StorageUsageSource, objects PhysicalStorageUsageObjects, clock func() time.Time) *StorageUsageReader {
+// NewStorageUsageReader injects exact physical inventory and metadata readers.
+func NewStorageUsageReader(source StorageUsageSource, objects PhysicalStorageUsageObjects, clock func() time.Time) *StorageUsageReader {
 	if clock == nil {
 		clock = time.Now
 	}
@@ -42,7 +42,7 @@ func (s *StorageUsageReader) physicalStorageUsage(ctx context.Context, actor ide
 	defer cancel()
 	var result StorageUsage
 	err = s.source.InspectStorageUsage(ctx, actor, scope, func(inventory StorageUsageInventory) error {
-		if inventory.LibraryID != id || len(inventory.ObjectKeys) != 0 || len(inventory.Prefixes) != 0 || len(inventory.PhysicalPrefixes) < 1 || len(inventory.PhysicalPrefixes) > 80 || len(inventory.Locations) > MaxStorageUsageObjects {
+		if inventory.LibraryID != id || len(inventory.PhysicalPrefixes) < 1 || len(inventory.PhysicalPrefixes) > MaxStorageUsagePrefixes || len(inventory.Locations) > MaxStorageUsageObjects {
 			return ErrUnavailable
 		}
 		base := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/"
@@ -132,7 +132,7 @@ func (s *StorageUsageReader) physicalStorageUsage(ctx context.Context, actor ide
 	return result, nil
 }
 
-// StorageUsageBucket is a declared readable historical bucket, not a write route.
+// StorageUsageBucket is a declared readable bucket, not a write route.
 type StorageUsageBucket struct {
 	ProfileID, Bucket string
 	// ResourceIdentity binds the configured endpoint namespace to the persisted profile.

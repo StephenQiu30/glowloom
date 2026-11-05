@@ -21,7 +21,11 @@ type sourceObjects struct {
 	puts      int
 }
 
-func (o *sourceObjects) PutIfAbsent(_ context.Context, key string, r io.Reader, _ int64, _, _ string) error {
+func (o *sourceObjects) PutObjectIfAbsent(_ context.Context, fact domain.ObjectFact, r io.Reader) error {
+	if fact.LocationID == uuid.Nil {
+		return app.ErrUnavailable
+	}
+	key := fact.LocationID.String()
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return err
@@ -36,14 +40,24 @@ func (o *sourceObjects) PutIfAbsent(_ context.Context, key string, r io.Reader, 
 	}
 	return nil
 }
-func (o *sourceObjects) Get(_ context.Context, key string) (io.ReadCloser, error) {
+func (o *sourceObjects) GetObject(_ context.Context, fact domain.ObjectFact) (io.ReadCloser, error) {
+	if fact.LocationID == uuid.Nil {
+		return nil, app.ErrUnavailable
+	}
+	key := fact.LocationID.String()
 	data, ok := o.data[key]
 	if !ok {
 		return nil, app.ErrObjectMissing
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
-func (o *sourceObjects) Remove(_ context.Context, key string) error { delete(o.data, key); return nil }
+func (o *sourceObjects) RemoveObject(_ context.Context, fact domain.ObjectFact) error {
+	if fact.LocationID == uuid.Nil {
+		return app.ErrUnavailable
+	}
+	delete(o.data, fact.LocationID.String())
+	return nil
+}
 
 type sourcePersistence struct {
 	base             app.SourceBase
@@ -63,6 +77,17 @@ func (s *sourcePersistence) FindCommand(_ context.Context, _ identityapp.Princip
 func (s *sourcePersistence) BeginWrite(_ context.Context, _ identityapp.Principal, plan app.WritePlan) (app.PendingWrite, error) {
 	s.begins++
 	if s.pending == nil {
+		locations := make(map[string]uuid.UUID, len(plan.Objects))
+		for i := range plan.Objects {
+			plan.Objects[i].LocationID = uuid.NewSHA1(plan.Command.Key, []byte(plan.Objects[i].Key))
+			locations[plan.Objects[i].Key] = plan.Objects[i].LocationID
+		}
+		for i := range plan.NewSources {
+			plan.NewSources[i].Original.LocationID = locations[plan.NewSources[i].Original.Key]
+			plan.NewSources[i].Rich.LocationID = locations[plan.NewSources[i].Rich.Key]
+		}
+		plan.Version.Text.LocationID = locations[plan.Version.Text.Key]
+		plan.Version.Rich.LocationID = locations[plan.Version.Rich.Key]
 		s.pending = &app.PendingWrite{Plan: plan}
 	}
 	return *s.pending, nil
@@ -132,7 +157,7 @@ func TestScriptUnknownObjectMismatchNeverOverwritesOrPublishes(t *testing.T) {
 	if _, err := service.Write(t.Context(), actor, input); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal(err)
 	}
-	key := store.pending.Plan.Objects[0].Key
+	key := store.pending.Plan.Objects[0].LocationID.String()
 	objects.data[key] = []byte("foreign digest")
 	objects.uncertain = false
 	if _, err := service.Write(t.Context(), actor, input); !errors.Is(err, app.ErrObjectMismatch) || store.finishes != 0 || string(objects.data[key]) != "foreign digest" {

@@ -21,8 +21,7 @@ func (s *PackageStore) HasInflightProjectLifecycleWork(ctx context.Context, acto
 	if project == uuid.Nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return false, identityapp.ErrForbidden
 	}
-	var busy bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM media.package_job WHERE org_id=? AND project_id=? AND status='needs_reconciliation')`, actor.OrgID, project).Scan(&busy).Error
+	busy, err := storageExists(s.db.WithContext(ctx).Model(&packageJobRow{}).Where("org_id = ? AND project_id = ? AND status = ?", actor.OrgID, project, application.PackageStatusNeedsReconciliation))
 	if err != nil {
 		return false, fmt.Errorf("read retained package project work: %w", err)
 	}

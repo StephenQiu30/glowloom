@@ -9,7 +9,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 // FFUploadProber exposes malformed input as a stable upload validation error.
@@ -79,9 +78,3 @@ func (FFUploadRenderer) Render(ctx context.Context, file *application.Downloaded
 	}
 	return []application.RenditionFile{result}, nil
 }
-
-// NewUploadObjects reuses the immutable private bucket adapter for local uploads.
-func NewUploadObjects(client *objectstorage.Client) application.UploadObjects {
-	return objectStore{client: client}
-}
-func (s objectStore) Remove(ctx context.Context, key string) error { return s.client.Remove(ctx, key) }

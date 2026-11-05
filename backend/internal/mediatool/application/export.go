@@ -97,7 +97,7 @@ type ControlInput struct {
 
 // Renderer produces a real, bounded MP4 or M4A from worker-owned local files.
 type Renderer interface {
-	Render(context.Context, domain.FrozenExport, map[uuid.UUID]string, func(int, string) error) (*mediaapp.Downloaded, error)
+	Render(context.Context, domain.FrozenExport, map[uuid.UUID]string, func(int, domain.ExportStage) error) (*mediaapp.Downloaded, error)
 }
 
 // WorkID fences a single durable attempt across retries and delayed activities.
@@ -115,7 +115,7 @@ type Work struct {
 	SourceAssets []mediadomain.MediaAsset `json:"-"`
 }
 
-// Delivery is a committed outbox command, verified before Temporal delivery.
+// Delivery is a committed outbox command, verified before work execution.
 type Delivery struct {
 	WorkID
 	EventID   uuid.UUID `json:"event_id"`

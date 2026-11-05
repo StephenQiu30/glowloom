@@ -1,3 +1,4 @@
+// Package workflow adapts media tool execution to its owned objects and formal media ports.
 package workflow
 
 import "context"

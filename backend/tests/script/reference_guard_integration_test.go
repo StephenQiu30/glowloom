@@ -4,27 +4,29 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 func scriptReferenceDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	t.Helper()
 	db, owner := scriptTestDB(t)
 	var name string
-	if err := owner.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" {
-		t.Fatal("reference guard requires isolated glowloom_reference database", name, err)
+	if err := owner.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" && (!strings.HasPrefix(name, "glowloom_script_") || !strings.HasSuffix(name, "_test")) {
+		t.Fatal("reference guard requires an explicitly selected isolated script test database", name, err)
 	}
 	return db, owner
 }
@@ -63,15 +65,15 @@ func scriptReferenceMutation(t *testing.T, owner *gorm.DB, actor identityapp.Pri
 	return pg.NewMediaReferenceGuard(tx, scriptFixtureProjectAccess(tx)).HasMediaReferences(t.Context(), actor, project, asset)
 }
 
-type failedReferenceObjects struct{ *scriptobjects.Storage }
+type failedReferenceObjects struct{ app.PrivateObjects }
 
-func (o failedReferenceObjects) PutIfAbsent(context.Context, string, io.Reader, int64, string, string) error {
+func (o failedReferenceObjects) PutObjectIfAbsent(context.Context, domain.ObjectFact, io.Reader) error {
 	return errors.New("synthetic original request failed before publication")
 }
 
 func scriptReferencePendingPlan(t *testing.T, db, owner *gorm.DB, actor identityapp.Principal, project uuid.UUID) (uuid.UUID, string) {
 	t.Helper()
-	objects := failedReferenceObjects{scriptobjects.NewStorage(scriptStorage(t))}
+	objects := failedReferenceObjects{scriptPrivateObjects(t, db)}
 	_, command := sourceCommand()
 	command.ProjectID = project
 	if _, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), actor, command); err == nil {
@@ -147,8 +149,7 @@ func scriptReferenceBudgetPlan(t *testing.T, actor identityapp.Principal, projec
 	return string(encoded)
 }
 
-func scriptReferenceSeedPlans(t *testing.T, tx *gorm.DB, actor identityapp.Principal, project uuid.UUID, plan string, count int) {
-	t.Helper()
+func scriptReferenceSeedPlans(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID, plan string, count int) error {
 	read := tx.Exec(`WITH requests AS (
  INSERT INTO script.request(actor_id,request_id,org_id,project_id,action,request_hash,created_at)
  SELECT ?,gen_random_uuid(),?,?,'source_create',repeat('0',64),clock_timestamp() FROM generate_series(1,?)
@@ -160,9 +161,13 @@ func scriptReferenceSeedPlans(t *testing.T, tx *gorm.DB, actor identityapp.Princ
 )
  INSERT INTO script.command_state(actor_id,request_id,id,status,updated_at)
  SELECT actor_id,request_id,gen_random_uuid(),'pending',clock_timestamp() FROM commands`, actor.ID, actor.OrgID, project, count, plan)
-	if read.Error != nil || read.RowsAffected != int64(count) {
-		t.Fatal("owned synthetic pending history", read.RowsAffected, read.Error)
+	if read.Error != nil {
+		return read.Error
 	}
+	if read.RowsAffected != int64(count) {
+		return fmt.Errorf("owned synthetic pending history rows = %d, want %d", read.RowsAffected, count)
+	}
+	return nil
 }
 
 func TestScriptMediaReferenceGuardPGBoundedPendingHistory(t *testing.T) {
@@ -172,8 +177,8 @@ func TestScriptMediaReferenceGuardPGBoundedPendingHistory(t *testing.T) {
 		padding int
 		count   int
 	}{
-		{"single_body", 1 << 20, 1},
-		{"aggregate_bytes", 512 << 10, 129},
+		{"single_body", domain.MaxWritePlanBytes, 1},
+		{"aggregate_bytes", 512 << 10, (domain.MaxWritePlanBytes*2)/(512<<10) + 1},
 		{"row_count", 0, 50001},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -182,20 +187,36 @@ func TestScriptMediaReferenceGuardPGBoundedPendingHistory(t *testing.T) {
 			// Prove the same closed metadata schema is readable below each budget.
 			baseline := scriptReferenceBudgetPlan(t, actor, project, 0)
 			found, err := scriptReferenceMutation(t, owner, actor, project, asset, func(tx *gorm.DB) {
-				scriptReferenceSeedPlans(t, tx, actor, project, baseline, 1)
+				if err := scriptReferenceSeedPlans(tx, actor, project, baseline, 1); err != nil {
+					t.Fatal(err)
+				}
 			})
 			if err != nil || found {
 				t.Fatal("valid bounded replay metadata rejected", found, err)
 			}
 			plan := scriptReferenceBudgetPlan(t, actor, project, test.padding)
-			if test.name == "row_count" && len(plan)*test.count >= 64<<20 {
+			if test.name == "row_count" && len(plan)*test.count >= domain.MaxWritePlanBytes*2 {
 				t.Fatal("row budget fixture exceeds aggregate budget first")
 			}
-			found, err = scriptReferenceMutation(t, owner, actor, project, asset, func(tx *gorm.DB) {
-				scriptReferenceSeedPlans(t, tx, actor, project, plan, test.count)
-			})
-			if !errors.Is(err, app.ErrUnavailable) || found {
-				t.Fatal("oversized pending history was reported unreferenced", found, err)
+			if test.name == "single_body" {
+				// The current schema rejects an oversized individual body before
+				// it can become pending history; keep that admission fence intact.
+				err := owner.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
+					return scriptReferenceSeedPlans(tx, actor, project, plan, test.count)
+				})
+				var databaseError *pgconn.PgError
+				if !errors.As(err, &databaseError) || databaseError.Code != "23514" || databaseError.ConstraintName != "command_plan_check" {
+					t.Fatal("oversized pending body bypassed the schema admission fence", err)
+				}
+			} else {
+				found, err = scriptReferenceMutation(t, owner, actor, project, asset, func(tx *gorm.DB) {
+					if err := scriptReferenceSeedPlans(tx, actor, project, plan, test.count); err != nil {
+						t.Fatal(err)
+					}
+				})
+				if !errors.Is(err, app.ErrUnavailable) || found {
+					t.Fatal("oversized pending history was reported unreferenced", found, err)
+				}
 			}
 			var remaining int64
 			if err := owner.Table("script.command").Where("project_id=?", project).Count(&remaining).Error; err != nil || remaining != 0 {
@@ -223,7 +244,7 @@ func TestScriptMediaReferenceGuardPGActualOriginalAndCompleteImportHistory(t *te
 	if _, err := imports.Control(t.Context(), actor, app.ImportControl{ProjectID: project, JobID: queued.ID, Action: "cancel", ExpectedRevision: queued.Revision, Key: cancelKey, RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
-	worker := scriptImportWorker(db, objects, extract.NewExtractor())
+	worker := scriptImportWorker(t, db, objects, extract.NewExtractor())
 	if err := worker.Control(t.Context(), importDelivery(t, owner, actor, cancelKey)); err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +263,7 @@ func TestScriptMediaReferenceGuardPGActualOriginalAndCompleteImportHistory(t *te
 	if err != nil || published.Status != "succeeded" || published.LatestVersionID == nil || len(published.Files) != 1 || published.Files[0].LineageID == nil {
 		t.Fatal("actual immutable source publication", published, err)
 	}
-	sources := app.NewSourceService(scriptStore(db), scriptobjects.NewStorage(objects), time.Now)
+	sources := app.NewSourceService(scriptStore(db), scriptPrivateObjects(t, db), time.Now)
 	if _, err := sources.Write(t.Context(), actor, app.SourceCommand{ProjectID: project, ExpectedRevision: published.LatestScriptRevision, BaseVersionID: published.LatestVersionID, LineageID: published.Files[0].LineageID, Action: "delete", RightsConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}

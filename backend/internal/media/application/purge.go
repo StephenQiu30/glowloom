@@ -60,8 +60,18 @@ type PurgeRepository interface {
 	CreatePurge(context.Context, identityapp.Principal, PurgeInput) (domain.PurgeJob, error)
 	GetPurge(context.Context, identityapp.Principal, uuid.UUID) (domain.PurgeJob, error)
 	ListPurges(context.Context, identityapp.Principal, domain.LibraryScope, int, int) ([]domain.PurgeJob, error)
-	ControlPurge(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, int64, string) (domain.PurgeJob, error)
+	ControlPurge(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, int64, PurgeAction) (domain.PurgeJob, error)
 }
+
+// PurgeAction is a closed command or work-queue action in the purge lifecycle.
+type PurgeAction string
+
+// Purge actions are the accepted admission, cancellation and reconciliation commands.
+const (
+	PurgeActionCreate    PurgeAction = "create"
+	PurgeActionCancel    PurgeAction = "cancel"
+	PurgeActionReconcile PurgeAction = "reconcile"
+)
 
 // PurgeWorkID is the immutable dispatcher identity of one physical attempt.
 type PurgeWorkID struct {
@@ -73,11 +83,11 @@ type PurgeWorkID struct {
 // PurgeDelivery proves a permanent command and the exact committed outbox data.
 type PurgeDelivery struct {
 	PurgeWorkID
-	EventID   uuid.UUID `json:"event_id"`
-	RequestID uuid.UUID `json:"request_id"`
-	ActorID   uuid.UUID `json:"actor_id"`
-	OrgID     uuid.UUID `json:"org_id"`
-	Action    string    `json:"action"`
+	EventID   uuid.UUID   `json:"event_id"`
+	RequestID uuid.UUID   `json:"request_id"`
+	ActorID   uuid.UUID   `json:"actor_id"`
+	OrgID     uuid.UUID   `json:"org_id"`
+	Action    PurgeAction `json:"action"`
 }
 
 // PurgeLease binds private operations to a real creator and current SQL fence.

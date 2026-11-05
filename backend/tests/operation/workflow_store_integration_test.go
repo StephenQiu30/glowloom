@@ -299,9 +299,8 @@ func TestWorkflowSubmissionChecksFrozenMediaInsideTransition(t *testing.T) {
 	assetID := uuid.New()
 	if err := database.Exec(`
 		INSERT INTO media.media_asset
-		  (id, project_id, kind, origin, status, object_key, mime_type, byte_size, moderation_status)
-		VALUES (?::uuid, ?::uuid, 'image', 'upload', 'processing', ?, 'image/png', 10, 'pending')
-	`, assetID.String(), projectID.String(), "workflow-input/"+assetID.String()).Error; err != nil {
+		  (id,project_id,kind,origin,status,object_key,mime_type,byte_size,moderation_status,object_location_id) VALUES(?::uuid,?::uuid,'image','upload','processing',?,'image/png',10,'pending',?)
+	`, assetID.String(), projectID.String(), "workflow-input/"+assetID.String(), businessFixtureLocation(t, database, "workflow-input/"+assetID.String())).Error; err != nil {
 		t.Fatalf("create frozen media: %v", err)
 	}
 	if err := database.Exec(`UPDATE operation.operation_input SET media_asset_id = ?::uuid WHERE id = ?::uuid`, assetID.String(), inputID.String()).Error; err != nil {

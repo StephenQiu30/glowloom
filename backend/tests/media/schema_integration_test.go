@@ -78,13 +78,14 @@ func assertMediaRelationships(t *testing.T, database *gorm.DB) {
 	assetA := uuid.NewString()
 	assetB := uuid.NewString()
 	insertAsset := func(id, projectID, operationID, kind, status, objectKey string, byteSize int64) error {
+		location := mediaFixtureUnownedLocation(t, database, objectKey)
 		return database.Exec(`
 			INSERT INTO media.media_asset
 			  (id, project_id, kind, origin, status, object_key, file_name, mime_type,
-			   byte_size, sha256, source_operation_id)
+			   byte_size, sha256, source_operation_id,object_location_id)
 			VALUES (?::uuid, ?::uuid, ?, 'generated', ?, ?, 'reference.mp4', 'video/mp4',
-			        ?, 'same-hash', ?::uuid)
-		`, id, projectID, kind, status, objectKey, byteSize, operationID).Error
+			        ?, 'same-hash', ?::uuid,?)
+		`, id, projectID, kind, status, objectKey, byteSize, operationID, location.ID).Error
 	}
 	if err := insertAsset(assetA, projectA, operationA, "video", "ready", "projects/"+projectA+"/video/a.mp4", 1024); err != nil {
 		t.Fatalf("insert project A media asset: %v", err)
@@ -92,11 +93,13 @@ func assertMediaRelationships(t *testing.T, database *gorm.DB) {
 	if err := insertAsset(assetB, projectB, operationB, "video", "ready", "projects/"+projectB+"/video/b.mp4", 1024); err != nil {
 		t.Fatalf("insert project B media asset: %v", err)
 	}
+	uploadKey := "projects/" + projectA + "/image/upload.png"
+	uploadLocation := mediaFixtureUnownedLocation(t, database, uploadKey)
 	if err := database.Exec(`
 		INSERT INTO media.media_asset
-		  (id, project_id, kind, origin, status, object_key, mime_type, byte_size)
-		VALUES (?::uuid, ?::uuid, 'image', 'upload', 'uploading', ?, 'image/png', 0)
-	`, uuid.NewString(), projectA, "projects/"+projectA+"/image/upload.png").Error; err != nil {
+		  (id, project_id, kind, origin, status, object_key, mime_type, byte_size,object_location_id)
+		VALUES (?::uuid, ?::uuid, 'image', 'upload', 'uploading', ?, 'image/png', 0,?)
+	`, uuid.NewString(), projectA, uploadKey, uploadLocation.ID).Error; err != nil {
 		t.Fatalf("upload without source operation was rejected: %v", err)
 	}
 	assertMediaSQLState(t, insertAsset(uuid.NewString(), uuid.NewString(), operationA, "video", "ready", "missing-project", 1), "23503")
@@ -105,7 +108,7 @@ func assertMediaRelationships(t *testing.T, database *gorm.DB) {
 	assertMediaSQLState(t, insertAsset(uuid.NewString(), projectA, operationA, "video", "unknown", "bad-status", 1), "23514")
 	assertMediaSQLState(t, insertAsset(uuid.NewString(), projectA, operationA, "video", "ready", "negative-size", -1), "23514")
 	assertMediaSQLState(t, insertAsset(uuid.NewString(), projectA, operationA, "video", "ready", "projects/"+projectA+"/video/a.mp4", 1), "23505")
-	if err := insertAsset(uuid.NewString(), projectA, operationA, "video", "ready", "same-project-same-hash", 1); err != nil {
+	if err := insertAsset(uuid.NewString(), projectA, operationA, "video", "ready", "same-project-same-hash-"+projectA, 1); err != nil {
 		t.Fatalf("same-project duplicate content must remain insertable for reuse choice: %v", err)
 	}
 	assertMediaSQLState(t, database.Exec(`UPDATE media.media_asset SET origin = 'unknown' WHERE id = ?::uuid`, assetA).Error, "23514")
@@ -115,10 +118,11 @@ func assertMediaRelationships(t *testing.T, database *gorm.DB) {
 
 	renderA := uuid.NewString()
 	insertRendition := func(id, parentID, kind string) error {
+		location := mediaFixtureUnownedLocation(t, database, "rendition/"+id)
 		return database.Exec(`
-			INSERT INTO media.rendition (id, media_asset_id, kind, object_key)
-			VALUES (?::uuid, ?::uuid, ?, ?)
-		`, id, parentID, kind, "rendition/"+id).Error
+			INSERT INTO media.rendition (id, media_asset_id, kind, object_key,object_location_id)
+			VALUES (?::uuid, ?::uuid, ?, ?,?)
+		`, id, parentID, kind, "rendition/"+id, location.ID).Error
 	}
 	if err := insertRendition(renderA, assetA, "poster"); err != nil {
 		t.Fatalf("insert parent-linked rendition: %v", err)

@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
@@ -40,7 +39,7 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 	if _, err := store.FindAsset(t.Context(), actor, project, source.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("ordinary read exposed deleted historical document", err)
 	}
-	if _, err := mediaapp.NewDocumentSources(mediaDocumentStore(database), objects).Freeze(t.Context(), actor, project, []uuid.UUID{source.ID}); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(database), mediaFixtureReadObjects(t)).Freeze(t.Context(), actor, project, []uuid.UUID{source.ID}); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("ordinary script source freeze exposed retired original", err)
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
@@ -62,7 +61,7 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 		t.Fatal("retained original was silently omitted", frozen)
 	}
 	copyStore := mediaCopyStore(database)
-	transfer := mediaapp.NewProjectCopyTransfer(copyStore, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
+	transfer := mediaapp.NewRoutedProjectCopyTransfer(copyStore, mediaFixtureCopyObjects(t, database), t.TempDir())
 	if err := transfer.Transfer(t.Context(), actor, binding, frozen); err != nil {
 		t.Fatal("actual SHA verified retained original transfer", err)
 	}
@@ -92,7 +91,7 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 	if err := objects.Remove(t.Context(), source.ObjectKey); err != nil {
 		t.Fatal("remove only this synthetic source object")
 	}
-	docs := mediaapp.NewDocumentSources(mediaDocumentStore(database), objects)
+	docs := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(database), mediaFixtureReadObjects(t))
 	facts, err := docs.Freeze(t.Context(), actor, binding.TargetProjectID, []uuid.UUID{targetID})
 	if err != nil {
 		t.Fatal(err)

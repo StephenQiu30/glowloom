@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
 	"github.com/google/uuid"
 
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
@@ -48,7 +50,7 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 	objects := projectCopyObjects(t)
 	actor, source := lifecycleActorProject(ctx, t, owner)
 	store := workspaceMediaStore(db)
-	upload := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	upload := businessFixtureUploads(t, db, store, mediaflow.FFUploadProber{})
 	samples := []struct {
 		name string
 		data []byte
@@ -69,7 +71,7 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 		if err != nil {
 			t.Fatal(err)
 		}
-		result, err := upload.Upload(ctx, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: source, Key: uuid.New(), RequestID: uuid.New(), FileName: sample.name}, File: file, LocalReviewConfirmed: true})
+		result, err := businessFixtureUpload(ctx, t, upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: source, Key: uuid.New(), RequestID: uuid.New(), FileName: sample.name}, File: file, LocalReviewConfirmed: true})
 		_ = file.Close()
 		if err != nil {
 			t.Fatal("real source document upload", err)
@@ -86,12 +88,12 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 	if err != nil || job.Manifest.Assets != 2 || job.Manifest.Renditions != 0 {
 		t.Fatal("whole project document admission", job.Manifest, err)
 	}
-	finished, err := actualCopyWorker(t, db, mediaobjects.NewProjectCopyObjects(objects)).Execute(ctx, workspaceapp.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: uuid.New()})
+	finished, err := actualCopyWorker(t, db, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db))).Execute(ctx, workspaceapp.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: uuid.New()})
 	if err != nil || finished.Status != "succeeded" {
 		t.Fatal("actual whole project copy publication", finished.Status, err)
 	}
-	reader := mediaapp.NewDocumentSources(workspaceMediaDocumentStore(db), objects)
-	query := mediaapp.NewAssetQuery(store, objects)
+	reader := mediaapp.NewRoutedDocumentSources(workspaceMediaDocumentStore(db), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))
+	query := mediaapp.NewAssetQuery(store)
 	page, err := query.List(ctx, actor, finished.TargetProjectID, "document", "", 100)
 	if err != nil || len(page.Items) != 2 {
 		t.Fatal("fresh published document listing", err)

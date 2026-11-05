@@ -2,9 +2,12 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -35,23 +38,19 @@ func (s *Store) CreateVoice(ctx context.Context, actor identity.Principal, pid u
 		}
 		// Read the original immutable request before validating a new source. A lost
 		// receipt remains recoverable even if the source has since become unavailable.
-		var old struct {
-			application.VoiceProfile
-			RequestName string
-			Deleted     bool
-		}
-		r := tx.Raw(`SELECT *,is_delete AS deleted FROM media.voice_profile WHERE project_id=? AND actor_id=? AND request_id=?`, pid, actor.ID, in.RequestID).Scan(&old)
-		if r.Error != nil {
+		var old voiceProfileRecord
+		r := tx.Where(map[string]any{"project_id": pid, "actor_id": actor.ID, "request_id": in.RequestID}).Take(&old)
+		if r.Error != nil && !errors.Is(r.Error, gorm.ErrRecordNotFound) {
 			return r.Error
 		}
-		if r.RowsAffected == 1 {
-			if old.RequestName != in.Name || old.AssetID != in.AssetID || old.Deleted || old.VoiceTags != in.VoiceTags {
+		if r.Error == nil {
+			if old.RequestName != in.Name || old.AssetID != in.AssetID || old.IsDelete || old.Gender != in.Gender || old.Age != in.Age || old.Language != in.Language || old.Style != in.Style {
 				return application.ErrVoiceConflict
 			}
-			out = old.VoiceProfile
+			out = old.profile()
 			return nil
 		}
-		q := application.NewAssetQuery(NewScopedStore(tx, s.scopes), nil)
+		q := application.NewAssetQuery(NewScopedStore(tx, s.scopes))
 		asset, err := q.Reference(ctx, actor, pid, in.AssetID)
 		if err != nil {
 			return err
@@ -59,16 +58,21 @@ func (s *Store) CreateVoice(ctx context.Context, actor identity.Principal, pid u
 		if err = application.ValidateReferenceVoice(in.Name, in.Consent, asset); err != nil {
 			return err
 		}
-		if err = tx.Exec(`INSERT INTO media.voice_profile(id,project_id,actor_id,request_id,name,request_name,asset_id,asset_revision,consent_at,gender,age,language,style) VALUES(?,?,?,?,?,?,?,?,now(),?,?,?,?) ON CONFLICT(project_id,actor_id,request_id) DO NOTHING`, uuid.New(), pid, actor.ID, in.RequestID, in.Name, in.Name, in.AssetID, asset.Revision, in.Gender, in.Age, in.Language, in.Style).Error; err != nil {
+		profile := voiceProfileRecord{ID: uuid.New(), ProjectID: pid, ActorID: actor.ID, RequestID: in.RequestID, Name: in.Name, RequestName: in.Name, AssetID: in.AssetID, AssetRevision: asset.Revision, ConsentAt: time.Now().UTC(), Revision: 1, Gender: in.Gender, Age: in.Age, Language: in.Language, Style: in.Style}
+		if err = tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "project_id"}, {Name: "actor_id"}, {Name: "request_id"}}, DoNothing: true}).Create(&profile).Error; err != nil {
 			return err
 		}
-		r = tx.Raw(`SELECT * FROM media.voice_profile WHERE project_id=? AND actor_id=? AND request_id=? AND NOT is_delete AND request_name=? AND asset_id=?`, pid, actor.ID, in.RequestID, in.Name, in.AssetID).Scan(&out)
+		r = tx.Where(map[string]any{"project_id": pid, "actor_id": actor.ID, "request_id": in.RequestID, "is_delete": false, "request_name": in.Name, "asset_id": in.AssetID}).Take(&profile)
+		if errors.Is(r.Error, gorm.ErrRecordNotFound) {
+			return application.ErrVoiceConflict
+		}
 		if r.Error != nil {
 			return r.Error
 		}
-		if r.RowsAffected != 1 || out.VoiceTags != in.VoiceTags {
+		if profile.Gender != in.Gender || profile.Age != in.Age || profile.Language != in.Language || profile.Style != in.Style {
 			return application.ErrVoiceConflict
 		}
+		out = profile.profile()
 		return nil
 	})
 	return out, err
@@ -81,14 +85,18 @@ func (s *Store) ListVoices(ctx context.Context, actor identity.Principal, pid, a
 		if err := s.voiceAuthority(tx, actor, pid, false); err != nil {
 			return err
 		}
-		query := `SELECT * FROM media.voice_profile WHERE project_id=? AND actor_id=? AND NOT is_delete AND id>? ORDER BY id LIMIT 51`
-		if err := tx.Raw(query, pid, actor.ID, after).Scan(&out.Items).Error; err != nil {
+		var rows []voiceProfileRecord
+		if err := tx.Where("project_id = ? AND actor_id = ? AND NOT is_delete AND id > ?", pid, actor.ID, after).Order("id").Limit(51).Find(&rows).Error; err != nil {
 			return err
 		}
-		if len(out.Items) > 50 {
-			cursor := out.Items[49].ID
+		if len(rows) > 50 {
+			cursor := rows[49].ID
 			out.NextCursor = &cursor
-			out.Items = out.Items[:50]
+			rows = rows[:50]
+		}
+		out.Items = make([]application.VoiceProfile, 0, len(rows))
+		for _, row := range rows {
+			out.Items = append(out.Items, row.profile())
 		}
 		return nil
 	})
@@ -105,17 +113,24 @@ func (s *Store) UpdateVoice(ctx context.Context, actor identity.Principal, pid, 
 		if err := s.voiceAuthority(tx, actor, pid, true); err != nil {
 			return err
 		}
-		r := tx.Raw(`SELECT * FROM media.voice_profile WHERE id=? AND project_id=? AND actor_id=? AND NOT is_delete FOR UPDATE`, id, pid, actor.ID).Scan(&out)
+		var row voiceProfileRecord
+		r := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(map[string]any{"id": id, "project_id": pid, "actor_id": actor.ID, "is_delete": false}).Take(&row)
+		if errors.Is(r.Error, gorm.ErrRecordNotFound) {
+			return application.ErrNotFound
+		}
 		if r.Error != nil {
 			return r.Error
 		}
-		if r.RowsAffected != 1 {
-			return application.ErrNotFound
-		}
-		if out.Revision != in.Revision {
+		if row.Revision != in.Revision {
 			return application.ErrVoiceConflict
 		}
-		return tx.Raw(`UPDATE media.voice_profile SET name=?,favorite=?,is_delete=?,revision=revision+1,updated_at=now() WHERE id=? RETURNING *`, in.Name, in.Favorite, in.Delete, id).Scan(&out).Error
+		now := time.Now().UTC()
+		if err := requireOne(tx.Model(&voiceProfileRecord{}).Where(map[string]any{"id": id, "project_id": pid, "actor_id": actor.ID, "revision": row.Revision, "is_delete": false}).Updates(map[string]any{"name": in.Name, "favorite": in.Favorite, "is_delete": in.Delete, "revision": gorm.Expr("revision + ?", 1), "updated_at": now}), application.ErrVoiceConflict); err != nil {
+			return err
+		}
+		row.Name, row.Favorite, row.IsDelete, row.Revision, row.UpdatedAt = in.Name, in.Favorite, in.Delete, row.Revision+1, now
+		out = row.profile()
+		return nil
 	})
 	return out, err
 }
@@ -128,7 +143,7 @@ func (s *Store) ListSystemVoices(ctx context.Context, actor identity.Principal, 
 			return err
 		}
 		var keys []string
-		if err := tx.Raw(`SELECT speaker FROM media.voice_favorite WHERE project_id=? AND actor_id=? AND favorite`, pid, actor.ID).Scan(&keys).Error; err != nil {
+		if err := tx.Model(&voiceFavoriteRecord{}).Where(map[string]any{"project_id": pid, "actor_id": actor.ID, "favorite": true}).Pluck("speaker", &keys).Error; err != nil {
 			return err
 		}
 		for i := range out {
@@ -158,6 +173,7 @@ func (s *Store) FavoriteSystemVoice(ctx context.Context, actor identity.Principa
 		if err := s.voiceAuthority(tx, actor, pid, true); err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO media.voice_favorite(project_id,actor_id,speaker,favorite) VALUES(?,?,?,?) ON CONFLICT(project_id,actor_id,speaker) DO UPDATE SET favorite=excluded.favorite`, pid, actor.ID, key, favorite).Error
+		record := voiceFavoriteRecord{ProjectID: pid, ActorID: actor.ID, Speaker: key, Favorite: favorite}
+		return tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "project_id"}, {Name: "actor_id"}, {Name: "speaker"}}, DoUpdates: clause.Assignments(map[string]any{"favorite": favorite})}).Create(&record).Error
 	})
 }

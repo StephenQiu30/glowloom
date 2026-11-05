@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"image"
-	_ "image/jpeg" // Register the actual image decoders used to verify legacy thumbnails.
+	_ "image/jpeg" // Register the JPEG decoder used to verify stored thumbnails.
 	_ "image/png"  // Register the canonical thumbnail decoder.
 	"io"
 
@@ -33,7 +33,7 @@ func (q *ReferenceFactQuery) verifyImageRendition(ctx context.Context, r domain.
 	if r.ByteSize != nil && (*r.ByteSize < 1 || *r.ByteSize > limit) {
 		return "", ErrUnavailable
 	}
-	reader, err := readMediaObject(ctx, r.ObjectLocation, r.ObjectKey, q.objectReader, q.objects)
+	reader, err := readMediaObject(ctx, r.ObjectLocation, r.ObjectKey, q.objects)
 	if err != nil || reader == nil {
 		return "", errors.Join(ErrUnavailable, err)
 	}
@@ -62,23 +62,17 @@ type ReferenceFactReader interface {
 
 // ReferenceFactQuery verifies independent original and image rendition bytes.
 type ReferenceFactQuery struct {
-	reader       ReferenceFactReader
-	objects      DocumentObjectGetter
-	objectReader ObjectReader
-}
-
-// NewReferenceFactQuery injects a transaction-bound owner and private object I/O.
-func NewReferenceFactQuery(reader ReferenceFactReader, objects DocumentObjectGetter) *ReferenceFactQuery {
-	return &ReferenceFactQuery{reader: reader, objects: objects}
+	reader  ReferenceFactReader
+	objects ObjectReader
 }
 
 // NewRoutedReferenceFactQuery verifies source bytes from their saved physical locations.
 func NewRoutedReferenceFactQuery(reader ReferenceFactReader, objects ObjectReader) *ReferenceFactQuery {
-	return &ReferenceFactQuery{reader: reader, objectReader: objects}
+	return &ReferenceFactQuery{reader: reader, objects: objects}
 }
 
 func (q *ReferenceFactQuery) verify(ctx context.Context, location *domain.ObjectLocation, key string, size *int64, sha *string, limit int64) (int64, string, error) {
-	reader, err := readMediaObject(ctx, location, key, q.objectReader, q.objects)
+	reader, err := readMediaObject(ctx, location, key, q.objects)
 	if err != nil || reader == nil {
 		return 0, "", errors.Join(ErrUnavailable, err)
 	}
@@ -107,7 +101,7 @@ func (q *ReferenceFactQuery) verify(ctx context.Context, location *domain.Object
 // Reference supports actual image/audio binding facts and rejects hidden library
 // items. Callers freeze the returned safe proof through their own owning write.
 func (q *ReferenceFactQuery) Reference(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, kind domain.Kind) (ReferenceFact, error) {
-	if q == nil || q.reader == nil || q.objects == nil && q.objectReader == nil {
+	if q == nil || q.reader == nil || q.objects == nil {
 		return ReferenceFact{}, ErrUnavailable
 	}
 	if project == uuid.Nil || id == uuid.Nil || kind != domain.KindImage && kind != domain.KindAudio {

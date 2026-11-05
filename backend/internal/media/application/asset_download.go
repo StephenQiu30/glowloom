@@ -31,25 +31,19 @@ type AssetOriginal struct {
 type AssetDownloads struct {
 	store   AssetReader
 	objects ObjectReader
-	legacy  DocumentObjectGetter
 }
 
-// NewAssetDownloads uses persisted routes when present. An explicitly injected
-// legacy reader serves only existing rows with no persisted location.
-func NewAssetDownloads(store AssetReader, objects ObjectReader, legacy ...DocumentObjectGetter) *AssetDownloads {
-	service := &AssetDownloads{store: store, objects: objects}
-	if len(legacy) > 0 {
-		service.legacy = legacy[0]
-	}
-	return service
+// NewAssetDownloads opens only the saved physical route for an original.
+func NewAssetDownloads(store AssetReader, objects ObjectReader) *AssetDownloads {
+	return &AssetDownloads{store: store, objects: objects}
 }
 
 func eligibleOriginal(asset domain.MediaAsset, project, id uuid.UUID) bool {
-	return asset.ID == id && asset.ProjectID == project && eligible(asset) && asset.Kind != domain.KindModel && asset.ByteSize >= 0 && asset.Revision > 0
+	return asset.ID == id && asset.ProjectID == project && eligible(asset) && asset.Kind != domain.KindModel && asset.ByteSize >= 0 && asset.Revision > 0 && asset.ObjectLocation != nil && asset.ObjectLocation.Readable(asset.ObjectKey)
 }
 
 func sameOriginal(a, b domain.MediaAsset) bool {
-	sameLocation := a.ObjectLocation == nil && b.ObjectLocation == nil || sameObjectLocation(a.ObjectLocation, b.ObjectLocation) && a.ObjectLocation.State == b.ObjectLocation.State
+	sameLocation := sameObjectLocation(a.ObjectLocation, b.ObjectLocation) && a.ObjectLocation.State == b.ObjectLocation.State
 	return a.ID == b.ID && a.ProjectID == b.ProjectID && a.Revision == b.Revision && a.Kind == b.Kind && a.ObjectKey == b.ObjectKey && a.ByteSize == b.ByteSize && a.MimeType == b.MimeType && a.FileName == b.FileName && sameLocation
 }
 
@@ -62,7 +56,7 @@ type originalStream struct {
 // second owner read fences scope/session revocation, replacement and deletion
 // before the HTTP handler emits headers or bytes.
 func (s *AssetDownloads) Open(ctx context.Context, actor identity.Principal, project, id uuid.UUID) (*AssetOriginal, error) {
-	if s == nil || s.store == nil || s.objects == nil && s.legacy == nil {
+	if s == nil || s.store == nil || s.objects == nil {
 		return nil, ErrUnavailable
 	}
 	if project == uuid.Nil || id == uuid.Nil {
@@ -79,11 +73,7 @@ func (s *AssetDownloads) Open(ctx context.Context, actor identity.Principal, pro
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	reader := s.objects
-	if asset.ObjectLocation == nil {
-		reader = nil
-	}
-	body, err := readMediaObject(ctx, asset.ObjectLocation, asset.ObjectKey, reader, s.legacy)
+	body, err := readMediaObject(ctx, asset.ObjectLocation, asset.ObjectKey, s.objects)
 	if err != nil {
 		return nil, errors.Join(ErrUnavailable, err)
 	}

@@ -43,13 +43,13 @@ type closedSubjectReader struct {
 }
 
 func (r closedSubjectReader) Close() error { r.owner.closed++; return nil }
-func (o *subjectObjects) Get(context.Context, string) (io.ReadCloser, error) {
+func (o *subjectObjects) Get(context.Context, mediadomain.ObjectRef) (io.ReadCloser, error) {
 	o.reads++
 	return closedSubjectReader{Reader: bytes.NewReader(o.data), owner: o}, nil
 }
-func (o *subjectObjects) PresignGet(context.Context, string, time.Duration) (string, error) {
+func (o *subjectObjects) PresignGet(_ context.Context, _ mediadomain.ObjectRef, ttl time.Duration) (media.AccessGrant, error) {
 	o.signed++
-	return "https://storage.invalid/synthetic-signed-input", nil
+	return media.AccessGrant{URL: "https://storage.invalid/synthetic-signed-input", ExpiresAt: time.Now().Add(ttl)}, nil
 }
 
 func sourceFixture() (identity.Principal, *subjectSourceReader, *subjectObjects, media.SubjectSourceFact) {
@@ -59,6 +59,7 @@ func sourceFixture() (identity.Principal, *subjectSourceReader, *subjectObjects,
 	sha := hex.EncodeToString(digest[:])
 	a := mediadomain.MediaAsset{ID: uuid.New(), Personal: &mediadomain.PersonalOwnership{OrgID: actor.OrgID, ActorID: actor.ID}, Kind: mediadomain.KindImage, Origin: mediadomain.OriginUpload, Status: mediadomain.StatusReady, FileName: "original.png", MimeType: "image/png", ByteSize: int64(len(data)), SHA256: &sha, ModerationStatus: mediadomain.ModerationPassed, Revision: 1, CreateTime: time.Now().UTC(), UpdateTime: time.Now().UTC()}
 	a.ObjectKey = "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/2026/10/" + a.ID.String() + ".png"
+	a.ObjectLocation = &mediadomain.ObjectLocation{ID: uuid.New(), Ref: mediadomain.ObjectRef{ProfileID: "source", Bucket: "source-bucket", Key: a.ObjectKey}, State: mediadomain.ObjectLocationAccepted}
 	return actor, &subjectSourceReader{file: media.LibraryMediaFile{Asset: a}}, &subjectObjects{data: data}, media.SubjectSourceFact{ReferenceFact: media.ReferenceFact{AssetID: a.ID, Revision: a.Revision, Kind: a.Kind, SHA256: sha, ByteSize: a.ByteSize}, Personal: &mediadomain.PersonalOwnership{OrgID: actor.OrgID, ActorID: actor.ID}}
 }
 
@@ -67,7 +68,7 @@ func TestSubjectSourceUsesOriginalPersonalBytesWithoutProjectReferenceGate(t *te
 	if reader.file.Asset.Validate() != nil || reader.file.Asset.CanReference() {
 		t.Fatal("fixture must be a valid personal file rejected by ordinary project reference rules")
 	}
-	query := media.NewSubjectSourceQuery(reader, objects, objects)
+	query := media.NewRoutedSubjectSourceQuery(reader, objects, objects)
 	scope := mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}
 	file, err := query.Reference(t.Context(), actor, scope, reader.file.Asset.ID)
 	if err != nil || file.Asset.ID != reader.file.Asset.ID || objects.reads != 1 || objects.closed != 1 {
@@ -98,7 +99,7 @@ func TestSubjectSourceUsesOriginalPersonalBytesWithoutProjectReferenceGate(t *te
 
 func TestSubjectSourceSigningAndDownloadsRejectObjectCorruption(t *testing.T) {
 	_, reader, objects, expected := sourceFixture()
-	query := media.NewSubjectSourceQuery(reader, objects, objects)
+	query := media.NewRoutedSubjectSourceQuery(reader, objects, objects)
 	download, summary, err := query.DownloadBound(t.Context(), expected)
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +146,7 @@ func TestSubjectSourceBoundRejectsChangedFrozenFactsAndSourceOwner(t *testing.T)
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, reader, objects, expected := sourceFixture()
-			query := media.NewSubjectSourceQuery(reader, objects, objects)
+			query := media.NewRoutedSubjectSourceQuery(reader, objects, objects)
 			if _, err := query.Bound(t.Context(), expected); err != nil {
 				t.Fatal("unchanged frozen source", err)
 			}
@@ -158,8 +159,9 @@ func TestSubjectSourceBoundRejectsChangedFrozenFactsAndSourceOwner(t *testing.T)
 	_, reader, objects, expected := sourceFixture()
 	reader.file.Asset.ProjectID, reader.file.Asset.Personal = uuid.New(), nil
 	reader.file.Asset.ObjectKey = "projects/" + reader.file.Asset.ProjectID.String() + "/image/2026/10/" + reader.file.Asset.ID.String() + ".png"
+	reader.file.Asset.ObjectLocation.Ref.Key = reader.file.Asset.ObjectKey
 	expected.ProjectID, expected.Personal = reader.file.Asset.ProjectID, nil
-	query := media.NewSubjectSourceQuery(reader, objects, objects)
+	query := media.NewRoutedSubjectSourceQuery(reader, objects, objects)
 	if _, err := query.Bound(t.Context(), expected); err != nil {
 		t.Fatal("unchanged project binding", err)
 	}

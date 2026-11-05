@@ -476,7 +476,10 @@ func TestM1CodexImageProtocolProcessExit(t *testing.T) {
 		t.Fatal("process exit was not awaited")
 	}
 	select {
-	case <-readDone:
+	case err := <-readDone:
+		if err != nil && !errors.Is(err, os.ErrClosed) && !errors.Is(err, io.ErrClosedPipe) {
+			t.Fatal("joined process reader:", err)
+		}
 	case <-time.After(time.Second):
 		t.Fatal("reader did not exit")
 	}

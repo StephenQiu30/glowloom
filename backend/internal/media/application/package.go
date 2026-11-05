@@ -42,7 +42,7 @@ func (r PackageImportRequest) Validate() error {
 type PackageJob struct {
 	ID              uuid.UUID           `json:"id"`
 	Scope           domain.LibraryScope `json:"scope"`
-	Status          string              `json:"status"`
+	Status          PackageStatus       `json:"status"`
 	Revision        int64               `json:"revision"`
 	ItemCount       int                 `json:"item_count"`
 	FolderCount     int                 `json:"folder_count"`

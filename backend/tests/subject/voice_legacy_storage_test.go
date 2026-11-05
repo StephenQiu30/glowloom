@@ -131,7 +131,7 @@ func TestVoiceLegacyMigrationWithoutStorageAndExplicitOptionsReadiness(t *testin
 	if err := owner.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity) VALUES('legacy-fixture','minio','http://127.0.0.1:1','http://127.0.0.1:1','fixture','fixture','path',?)`, strings.Repeat("a", 64)).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id) VALUES(1,'fixture-revision','legacy-fixture')`).Error; err != nil {
+	if err := owner.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id) VALUES(1,'1','legacy-fixture')`).Error; err != nil {
 		t.Fatal(err)
 	}
 	options, err := store.Options(t.Context(), actor)

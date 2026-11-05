@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -85,16 +86,14 @@ func (s *RoutedStorageUsageStore) InspectStorageUsage(ctx context.Context, actor
 			}
 			seen[bucket.ProfileID] = bucket.Bucket
 			var count int64
-			query := "SELECT count(*) FROM media.storage_profile WHERE id=? AND bucket=?"
-			args := []any{bucket.ProfileID, bucket.Bucket}
+			query := tx.Model(&storageProfileRecord{}).Where("id = ? AND bucket = ?", bucket.ProfileID, bucket.Bucket)
 			if bucket.ResourceIdentity != "" {
 				if !storageDigest(bucket.ResourceIdentity) {
 					return application.ErrStorageIdentityConflict
 				}
-				query += " AND resource_identity=?"
-				args = append(args, bucket.ResourceIdentity)
+				query = query.Where("resource_identity = ?", bucket.ResourceIdentity)
 			}
-			if err := tx.Raw(query, args...).Scan(&count).Error; err != nil {
+			if err := query.Count(&count).Error; err != nil {
 				return err
 			}
 			if count != 1 {
@@ -112,41 +111,123 @@ func (s *RoutedStorageUsageStore) InspectStorageUsage(ctx context.Context, actor
 }
 
 func storageUsageMediaLocations(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope) ([]domain.ObjectRef, error) {
-	condition := "a.project_id=? AND a.personal_org_id IS NULL AND a.personal_actor_id IS NULL"
-	var args []any
+	var assetFilter string
+	var assetArgs []any
 	if scope.Kind == domain.LibraryProject {
-		args = []any{*scope.ProjectID, *scope.ProjectID, *scope.ProjectID, actor.OrgID, *scope.ProjectID, actor.OrgID, *scope.ProjectID, actor.OrgID, *scope.ProjectID, actor.OrgID}
+		assetFilter = "a.project_id = ? AND a.personal_org_id IS NULL AND a.personal_actor_id IS NULL"
+		assetArgs = []any{*scope.ProjectID}
 	} else {
-		condition = "a.project_id IS NULL AND a.personal_org_id=? AND a.personal_actor_id=?"
-		args = []any{actor.OrgID, actor.ID, actor.OrgID, actor.ID, actor.OrgID, actor.ID, actor.OrgID, actor.ID}
+		assetFilter = "a.project_id IS NULL AND a.personal_org_id = ? AND a.personal_actor_id = ?"
+		assetArgs = []any{actor.OrgID, actor.ID}
 	}
-	query := `SELECT DISTINCT held.location_id,held.object_key,l.profile_id,l.bucket FROM (
- SELECT a.object_location_id AS location_id,a.object_key FROM media.media_asset a WHERE ` + condition + `
- UNION ALL SELECT r.object_location_id,r.object_key FROM media.rendition r JOIN media.media_asset a ON a.id=r.media_asset_id WHERE ` + condition
+	rows := make(map[string]storageUsageLocationCandidate)
+	assetRows := tx.Table("media.media_asset AS a").
+		Select("a.object_location_id AS location_id, a.object_key").Where(assetFilter, assetArgs...)
+	if err := appendStorageUsageCandidates(assetRows, rows); err != nil {
+		return nil, fmt.Errorf("read media assets for physical usage: %w", err)
+	}
+	renditionRows := tx.Table("media.rendition AS r").
+		Select("r.object_location_id AS location_id, r.object_key").
+		Joins("JOIN media.media_asset AS a ON a.id = r.media_asset_id").Where(assetFilter, assetArgs...)
+	if err := appendStorageUsageCandidates(renditionRows, rows); err != nil {
+		return nil, fmt.Errorf("read media renditions for physical usage: %w", err)
+	}
 	if scope.Kind == domain.LibraryProject {
-		query += ` UNION ALL SELECT o.source_location_id,o.source_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_project_id=? AND j.org_id=?
-  UNION ALL SELECT o.target_location_id,o.target_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_project_id=? AND j.org_id=?
-  UNION ALL SELECT o.source_location_id,o.source_object_key FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.source_project_id=? AND s.org_id=?
-  UNION ALL SELECT o.target_location_id,o.target_object_key FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.target_project_id=? AND s.org_id=?`
+		project := *scope.ProjectID
+		queries := []*gorm.DB{
+			tx.Table("media.transfer_object AS o").Select("o.source_location_id AS location_id, o.source_object_key AS object_key").Joins("JOIN media.transfer_job AS j ON j.id = o.job_id").Where("j.source_project_id = ? AND j.org_id = ?", project, actor.OrgID),
+			tx.Table("media.transfer_object AS o").Select("o.target_location_id AS location_id, o.target_object_key AS object_key").Joins("JOIN media.transfer_job AS j ON j.id = o.job_id").Where("j.target_project_id = ? AND j.org_id = ?", project, actor.OrgID),
+			tx.Table("media.project_copy_object AS o").Select("o.source_location_id AS location_id, o.source_object_key AS object_key").Joins("JOIN media.project_copy_snapshot AS s ON s.id = o.snapshot_id").Where("s.source_project_id = ? AND s.org_id = ?", project, actor.OrgID),
+			tx.Table("media.project_copy_object AS o").Select("o.target_location_id AS location_id, o.target_object_key AS object_key").Joins("JOIN media.project_copy_snapshot AS s ON s.id = o.snapshot_id").Where("s.target_project_id = ? AND s.org_id = ?", project, actor.OrgID),
+		}
+		for _, query := range queries {
+			if err := appendStorageUsageCandidates(query, rows); err != nil {
+				return nil, fmt.Errorf("read project work for physical usage: %w", err)
+			}
+		}
 	} else {
-		query += ` UNION ALL SELECT o.source_location_id,o.source_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_kind='personal' AND j.source_org_id=? AND j.actor_id=?
-  UNION ALL SELECT o.target_location_id,o.target_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_kind='personal' AND j.target_org_id=? AND j.actor_id=?`
-	}
-	query += `) held LEFT JOIN media.object_location l ON l.id=held.location_id AND l.object_key=held.object_key WHERE l.state IS DISTINCT FROM 'deleted' AND NOT EXISTS(SELECT 1 FROM media.purge_object p WHERE p.object_location_id=held.location_id AND p.object_key=held.object_key AND p.removed) ORDER BY held.location_id,held.object_key LIMIT 50001`
-	var rows []struct{ ProfileID, Bucket, ObjectKey string }
-	if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
-		return nil, fmt.Errorf("read media physical usage: %w", err)
+		queries := []*gorm.DB{
+			tx.Table("media.transfer_object AS o").Select("o.source_location_id AS location_id, o.source_object_key AS object_key").Joins("JOIN media.transfer_job AS j ON j.id = o.job_id").Where("j.source_kind = ? AND j.source_org_id = ? AND j.actor_id = ?", domain.LibraryPersonal, actor.OrgID, actor.ID),
+			tx.Table("media.transfer_object AS o").Select("o.target_location_id AS location_id, o.target_object_key AS object_key").Joins("JOIN media.transfer_job AS j ON j.id = o.job_id").Where("j.target_kind = ? AND j.target_org_id = ? AND j.actor_id = ?", domain.LibraryPersonal, actor.OrgID, actor.ID),
+		}
+		for _, query := range queries {
+			if err := appendStorageUsageCandidates(query, rows); err != nil {
+				return nil, fmt.Errorf("read personal work for physical usage: %w", err)
+			}
+		}
 	}
 	if len(rows) > application.MaxStorageUsageObjects {
 		return nil, application.ErrUnavailable
 	}
-	refs := make([]domain.ObjectRef, 0, len(rows))
+
+	locationIDs := make([]uuid.UUID, 0, len(rows))
 	for _, row := range rows {
-		ref := domain.ObjectRef{ProfileID: row.ProfileID, Bucket: row.Bucket, Key: row.ObjectKey}
+		if row.LocationID == nil {
+			return nil, application.ErrStorageNotReady
+		}
+		locationIDs = append(locationIDs, *row.LocationID)
+	}
+	var locations []objectLocationRow
+	if len(locationIDs) > 0 {
+		if err := tx.Where("id IN ?", locationIDs).Find(&locations).Error; err != nil {
+			return nil, fmt.Errorf("resolve physical usage locations: %w", err)
+		}
+	}
+	byID := make(map[uuid.UUID]objectLocationRow, len(locations))
+	for _, location := range locations {
+		byID[location.ID] = location
+	}
+	purged, err := readPurgedStorageLocations(tx, locationIDs)
+	if err != nil {
+		return nil, err
+	}
+	refsByObject := make(map[domain.ObjectRef]struct{}, len(rows))
+	for _, row := range rows {
+		location, ok := byID[*row.LocationID]
+		if !ok || location.ObjectKey != row.ObjectKey {
+			return nil, application.ErrStorageNotReady
+		}
+		if location.State == domain.ObjectLocationDeleted || purged[storageLocationIdentity(location.ID, row.ObjectKey)] {
+			continue
+		}
+		ref := domain.ObjectRef{ProfileID: location.ProfileID, Bucket: location.Bucket, Key: row.ObjectKey}
 		if ref.Validate() != nil {
 			return nil, application.ErrStorageNotReady
 		}
+		refsByObject[ref] = struct{}{}
+	}
+	if len(refsByObject) > application.MaxStorageUsageObjects {
+		return nil, application.ErrUnavailable
+	}
+	refs := make([]domain.ObjectRef, 0, len(refsByObject))
+	for ref := range refsByObject {
 		refs = append(refs, ref)
 	}
 	return refs, nil
+}
+
+type storageUsageLocationCandidate struct {
+	LocationID *uuid.UUID
+	ObjectKey  string
+}
+
+func appendStorageUsageCandidates(query *gorm.DB, rows map[string]storageUsageLocationCandidate) error {
+	var candidates []storageUsageLocationCandidate
+	if err := query.Order("object_key").Limit(application.MaxStorageUsageObjects + 1).Find(&candidates).Error; err != nil {
+		return err
+	}
+	if len(candidates) > application.MaxStorageUsageObjects {
+		return application.ErrUnavailable
+	}
+	for _, candidate := range candidates {
+		id := "missing"
+		if candidate.LocationID != nil {
+			id = candidate.LocationID.String()
+		}
+		rows[id+"/"+candidate.ObjectKey] = candidate
+		if len(rows) > application.MaxStorageUsageObjects {
+			return application.ErrUnavailable
+		}
+	}
+	return nil
 }

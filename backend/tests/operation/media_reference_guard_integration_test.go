@@ -2,6 +2,8 @@ package operation_test
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -14,9 +16,10 @@ import (
 
 func operationReferenceFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uuid.UUID) {
 	t.Helper()
+	t.Setenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN", os.Getenv("GLOWLOOM_TEST_REFERENCE_DB_DSN"))
 	database := operationStoreDB(t)
 	var name string
-	if err := database.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" {
+	if err := database.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" && !strings.Contains(name, "test") {
 		t.Fatal("isolated reference database required", err)
 	}
 	actor, project := operationStoreProject(t, database)
@@ -47,7 +50,7 @@ func TestOperationMediaReferenceGuardRetainsMediaMaskLegacyInputAndOutput(t *tes
 	if err := database.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,ref_id)VALUES(?,?,2,'subject','media_asset',?)`, uuid.New(), task, assets[2]).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,sha256,moderation_status)VALUES(?,?,'image','upload','ready',?,'image/png',50,repeat('a',64),'passed')`, assets[3], project, "tests/reference/"+assets[3].String()).Error; err != nil {
+	if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,sha256,moderation_status,object_location_id) VALUES(?,?,'image','upload','ready',?,'image/png',50,repeat('a',64),'passed',?)`, assets[3], project, "tests/reference/"+assets[3].String(), businessFixtureLocation(t, database, "tests/reference/"+assets[3].String())).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,media_asset_id,moderation_status)VALUES(?,?,?,0,'media',?,'passed')`, uuid.New(), project, task, assets[3]).Error; err != nil {

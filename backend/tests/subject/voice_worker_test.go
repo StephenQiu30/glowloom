@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	subjecttask "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/task"
 	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
 )
 
@@ -160,4 +162,34 @@ func TestVoiceWorkerRejectsMissingOutputRouteBeforePaidClaim(t *testing.T) {
 	if _, err := worker.Run(t.Context(), subject.VoiceWorkID{JobID: f.w.Job.ID}); !errors.Is(err, subject.ErrVoiceUnavailable) || f.sends != 0 || f.w.DispatchStartedAt != nil {
 		t.Fatal("unavailable output route consumed paid dispatch", err)
 	}
+}
+
+func TestVoiceTaskDoesNotTreatInterruptAsExecutionSuccess(t *testing.T) {
+	t.Run("before_dispatch", func(t *testing.T) {
+		f := voiceMemory()
+		worker := subject.NewVoiceWorker(f, voiceTestKeys{}, f, voiceBlockedOutput{f}, f)
+		handler := subjecttask.VoiceHandler(worker)
+		_, err := handler(t.Context(), taskruntime.Job{Failures: 2, Reference: []byte(`{"job_id":"` + f.w.Job.ID.String() + `"}`)})
+		if !errors.Is(err, subject.ErrVoiceUnavailable) || f.w.DispatchStartedAt != nil {
+			t.Fatal("third pre-dispatch interruption erased the retryable failure", err)
+		}
+	})
+	t.Run("publication", func(t *testing.T) {
+		f := voiceMemory()
+		f.publishFail = true
+		worker := subject.NewVoiceWorker(f, voiceTestKeys{}, f, f, f)
+		handler := subjecttask.VoiceHandler(worker)
+		job := taskruntime.Job{Reference: []byte(`{"job_id":"` + f.w.Job.ID.String() + `"}`)}
+		for failures := range 3 {
+			job.Failures = failures
+			if _, err := handler(t.Context(), job); err == nil {
+				t.Fatalf("publication failure %d was reported as completed", failures+1)
+			}
+		}
+		f.publishFail = false
+		job.Failures = 3
+		if _, err := handler(t.Context(), job); err != nil || f.w.Job.Status != "succeeded" || f.sends != 1 || f.publishes != 4 {
+			t.Fatal("original receipt did not recover publication", err, f.sends, f.publishes)
+		}
+	})
 }

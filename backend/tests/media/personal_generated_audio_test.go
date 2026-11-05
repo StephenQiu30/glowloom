@@ -72,7 +72,7 @@ func generatedAudioInput(t *testing.T) (mediaapp.PersonalGeneratedAudioRequest, 
 		Personal:    domain.PersonalOwnership{OrgID: uuid.New(), ActorID: uuid.New()},
 		SourceJobID: job, FileName: "智能配音1.mp3", CreatedAt: time.Date(2026, 10, 28, 1, 2, 3, 0, time.UTC),
 		SHA256: file.SHA256, ByteSize: file.Size, MIMEType: "audio/mpeg",
-		Intent:     mediaapp.StorageWorkIntent{ID: uuid.New(), Owner: mediaapp.StorageWorkOwner{Kind: "subject-voice", OwnerID: owner, WorkID: job}, ProfileID: "minio-main", Bucket: "test-media", ConfigRevision: "frozen-1", State: "open"},
+		Intent:     mediaapp.StorageWorkIntent{ID: uuid.New(), Owner: mediaapp.StorageWorkOwner{Kind: "subject-voice", OwnerID: owner, WorkID: job}, ProfileID: "minio-main", Bucket: "test-media", ConfigRevision: "1", State: "open"},
 		Provenance: mediaapp.PersonalGeneratedAudioProvenance{SchemaVersion: 1, ReceiptSHA256: strings.Repeat("a", 64), ReleaseID: uuid.New(), ModelVersionID: uuid.New(), ProviderRequestID: job, ProviderLogID: "actual-log-id", TerminalCode: 20000000},
 	}
 	return r, file

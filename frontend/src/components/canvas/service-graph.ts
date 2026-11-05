@@ -70,7 +70,7 @@ export function serviceGraph(
         width: node.width!,
         height: node.height!,
         zIndex: node.z_index ?? 0,
-        parentId: node.parent_id,
+        parentId: node.parent_id ?? undefined,
         collapsed: node.config?.collapsed,
         ...(node.node_type === "text" || editor?.document
           ? { textDocument: richText }
@@ -100,7 +100,7 @@ export function serviceGraph(
       metadata: {
         freeResize: !["image", "video"].includes(nodeType),
         prompt: node.config?.draft?.prompt ?? node.config?.generation?.prompt,
-        groupId: node.parent_id,
+        groupId: node.parent_id ?? undefined,
         content:
           node.node_type === "text" ? documentText(richText.content) : "",
         ...(node.node_type === "text" ? { richText } : {}),

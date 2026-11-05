@@ -61,9 +61,9 @@ func (h *AssetCommandHandler) Apply(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	if h.notify != nil && input.Action != "favorite" {
+	if h.notify != nil && input.Action != application.AssetCommandFavorite {
 		for _, item := range result.Results {
-			if item.Status == "succeeded" {
+			if item.Status == application.AssetCommandSucceeded {
 				h.notify(item.ID)
 			}
 		}

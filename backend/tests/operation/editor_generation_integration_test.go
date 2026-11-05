@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
@@ -30,8 +31,11 @@ func (f editorWireTransport) RoundTrip(r *http.Request) (*http.Response, error) 
 
 type editorMediaSigner struct{}
 
-func (editorMediaSigner) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
-	return "https://editor-fixture.invalid/" + key, nil
+func (editorMediaSigner) SignProjectMedia(_ context.Context, object operationapp.ProjectMediaObject, _ time.Duration) (operationapp.ProviderReference, error) {
+	if object.LocationID == nil || object.ProfileID == "" || object.Bucket == "" {
+		return operationapp.ProviderReference{}, operationapp.ErrWorkflowInputNotReady
+	}
+	return operationapp.ProviderReference{Role: object.Role, MediaKind: object.Kind, URL: "https://editor-fixture.invalid/" + object.Key}, nil
 }
 
 // This uses real stores, compiler, dispatch guard and HTTP serialization, with
@@ -71,12 +75,13 @@ func TestEditorSavedReferencesReachManagedWireOnce(t *testing.T) {
 		asset := uuid.New()
 		key := "projects/" + project.String() + "/" + asset.String() + ".png"
 		keys = append(keys, key)
-		require.NoError(t, db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,'reference.png','image/png',50,repeat('a',64),'passed')`, asset, project, key).Error)
+		require.NoError(t, db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status,object_location_id) VALUES(?,?,'image','upload','ready',?,'reference.png','image/png',50,repeat('a',64),'passed',?)`, asset, project, key, businessFixtureLocation(t, db, key)).Error)
+		require.NoError(t, db.Exec(`UPDATE media.object_location l SET sha256=a.sha256,byte_size=a.byte_size,mime_type=a.mime_type FROM media.media_asset a WHERE a.object_location_id=l.id AND a.id=?`, asset).Error)
 		draft.References = append(draft.References, promptdomain.Reference{ID: ref, BindingGeneration: 1, MediaKind: "image", Role: "reference_image", Order: index, Source: promptdomain.ReferenceSource{Kind: "media", SourceID: asset.String(), SourceVersion: "1"}})
 	}
 	saved, err := editorDraftStore(db).SaveDraft(t.Context(), actor, promptapp.DraftWrite{ProjectID: project, Key: uuid.New(), Draft: draft})
 	require.NoError(t, err)
-	store := editorOperationStore(db)
+	store := editorOperationStore(db).WithProjectMedia(func(*gorm.DB) operationapp.ProjectMediaSigner { return editorMediaSigner{} })
 	epoch := int64(0)
 	quote, err := store.CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &promptdomain.InputSource{Kind: "prompt_draft", DraftID: saved.DraftID, Revision: saved.Revision}, ExpectedSubmissionEpoch: &epoch}})
 	require.NoError(t, err)
@@ -124,10 +129,10 @@ func TestEditorSavedReferencesReachManagedWireOnce(t *testing.T) {
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(string(response)))}, nil
 	})})
 	results := operationapp.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
-	worker := managed.NewActivities(store, fixtureUnsealer{}, client, results, editorMediaSigner{}, nil)
+	worker := managed.NewActivities(store, fixtureUnsealer{}, client, results, nil)
 	progress, err := worker.Step(t.Context(), operationapp.ManagedStep{OperationID: quote.OperationID, Action: "submit"})
 	require.NoError(t, err)
-	require.Equal(t, "succeeded", progress.State)
+	require.EqualValues(t, "succeeded", progress.State)
 	replay, err := worker.Step(t.Context(), operationapp.ManagedStep{OperationID: quote.OperationID, Action: "submit"})
 	require.NoError(t, err)
 	require.Equal(t, progress, replay)
@@ -152,7 +157,7 @@ func TestOpenAIEditorUsesPublishedReleaseWhenCurrentVersionIsUnset(t *testing.T)
 	require.NoError(t, err)
 	source := promptdomain.InputSource{Kind: "prompt_draft", DraftID: saved.DraftID, Revision: saved.Revision}
 	epoch := int64(0)
-	store := editorOperationStore(db)
+	store := editorOperationStore(db).WithProjectMedia(func(*gorm.DB) operationapp.ProjectMediaSigner { return editorMediaSigner{} })
 	quote, err := store.CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &source, ExpectedSubmissionEpoch: &epoch}})
 	require.NoError(t, err)
 	require.NotEqual(t, uuid.Nil, quote.OperationID)

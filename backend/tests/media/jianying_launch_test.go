@@ -12,12 +12,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 type launchStore struct {
@@ -53,8 +56,9 @@ func (s *launchStore) PruneLaunches(context.Context, time.Time, int) (int64, err
 func launchFixture(t *testing.T) (*launchStore, *app.ExportQuery) {
 	t.Helper()
 	a := tool.Artifact{ID: uuid.New(), JobID: uuid.New(), ProjectID: uuid.New(), Format: tool.OutputJianying, ObjectKey: "private/native.zip", SHA256: strings.Repeat("a", 64)}
+	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
 	s := &launchStore{artifact: a, job: tool.ExportJob{ID: a.JobID, ProjectID: a.ProjectID, Revision: 3, OutputKind: tool.OutputJianying, Status: tool.Succeeded, ArtifactID: &a.ID, Settings: &tool.ExportSettings{FileName: "命名验收"}}}
-	q := app.NewExportQuery(s, &projectObjects{}, nil).WithLaunchOrigin("http://localhost:3000")
+	q := app.NewRoutedExportQuery(s, &routedReadObjects{grants: map[mediadomain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://fixture.invalid/native.zip", ExpiresAt: time.Now().Add(5 * time.Minute)}}}, nil, 5*time.Minute).WithLaunchOrigin("http://localhost:3000")
 	return s, q
 }
 func TestJianyingLaunchCapabilityBoundToAuthorizedArtifactAndExpiry(t *testing.T) {
@@ -132,7 +136,7 @@ func TestJianyingLaunchHTTPHasNoSessionOrIdentityFallback(t *testing.T) {
 	toolhttp.NewHandler(s, q).RegisterLaunch(r.Group("/api"))
 	for _, query := range []string{u.RawQuery, u.RawQuery + "&job_id=" + s.job.ID.String(), u.RawQuery + "&" + u.RawQuery, "token=bad", ""} {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, httptest.NewRequest("GET", "/api/media-export-launch?"+query, nil))
+		r.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), "GET", "/api/media-export-launch?"+query, nil))
 		want := 404
 		if query == u.RawQuery {
 			want = 200

@@ -9,6 +9,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 // PreviewWaveform rechecks the exact review revision and hash before exposing
@@ -26,7 +27,7 @@ func (s *Store) PreviewWaveform(ctx context.Context, actor identityapp.Principal
 		if err != nil {
 			return err
 		}
-		if row.OutputKind != "audio" || row.Revision != revision || row.SHA256 == nil || *row.SHA256 != sha || row.AssetID == nil || (row.Status != "review_required" && row.Status != "succeeded") {
+		if row.OutputKind != "audio" || row.Revision != revision || row.SHA256 == nil || *row.SHA256 != sha || row.AssetID == nil || (row.Status != domain.ReviewRequired && row.Status != domain.Succeeded) {
 			return application.ErrConflict
 		}
 		media := s.media(tx)
@@ -34,7 +35,7 @@ func (s *Store) PreviewWaveform(ctx context.Context, actor identityapp.Principal
 		if err != nil {
 			return normalize(err)
 		}
-		if asset.IsDelete || asset.Kind != mediadomain.KindAudio || asset.SHA256 == nil || *asset.SHA256 != sha || (row.Status == "succeeded") != asset.CanReference() {
+		if asset.IsDelete || asset.Kind != mediadomain.KindAudio || asset.SHA256 == nil || *asset.SHA256 != sha || (row.Status == domain.Succeeded) != asset.CanReference() {
 			return application.ErrConflict
 		}
 		renditions, err := media.Renditions(ctx, actor, project, asset.ID)

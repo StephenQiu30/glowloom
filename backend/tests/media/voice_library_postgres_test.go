@@ -20,6 +20,7 @@ func TestVoiceLibraryPostgresPersistence(t *testing.T) {
 	now := time.Now()
 	id := uuid.New()
 	asset := domain.MediaAsset{ID: id, ProjectID: pid, Kind: domain.KindAudio, Origin: domain.OriginUpload, Status: domain.StatusUploading, ObjectKey: "projects/" + pid.String() + "/audio/2026/10/" + id.String() + ".wav", FileName: "voice.wav", MimeType: "audio/wav", ByteSize: 144044, DurationMS: &duration, ModerationStatus: domain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
+	asset = mediaFixtureAssetLocation(t, db, asset)
 	if err := s.CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
@@ -112,5 +113,4 @@ func TestVoiceLibraryPostgresPersistence(t *testing.T) {
 	if err = db.Raw(`SELECT count(*) FROM media.voice_profile WHERE project_id=? AND actor_id=? AND request_id=?`, pid, actor.ID, concurrent.RequestID).Scan(&created).Error; err != nil || created != 1 {
 		t.Fatal("concurrent receipt count", created, err)
 	}
-
 }

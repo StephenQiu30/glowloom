@@ -7,42 +7,25 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
-	temporalworkflow "go.temporal.io/sdk/workflow"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
-	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	operationevent "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/event"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
-type billingWorkflowSignal struct {
-	env *testsuite.TestWorkflowEnvironment
-}
-
-func (s billingWorkflowSignal) SignalWorkflow(_ context.Context, _, _, signal string, arg interface{}) error {
-	s.env.SignalWorkflow(signal, arg)
-	return nil
-}
-
-// Exercises the real PostgreSQL store, HTTP control and event consumer, Temporal
-// workflow, managed activity, frozen credentials and actual protocol driver.
-// Transport is synthetic; this is not a live supplier acceptance test.
 func TestRecoverNeverCreatesGenerationThroughOriginalWorkflow(t *testing.T) {
 	db := operationStoreDB(t)
 	f := seedManagedFixture(t, db)
@@ -67,29 +50,26 @@ func TestRecoverNeverCreatesGenerationThroughOriginalWorkflow(t *testing.T) {
 		return adapterResponse(200, `{"id":"original-paid-task","status":"pending"}`), nil
 	})})
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
-	provider := managed.NewActivities(f.store, fixtureUnsealer{}, client, results, nil, nil)
-	flow := operationflow.NewActivities(f.store, app.NewOperationFinalizer(db, f.store, billingpg.NewStore(db)))
-	env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
-	register := func(name string, fn any) { env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name}) }
-	register("flow.LoadOperation", flow.LoadOperation)
-	register("flow.CheckConsent", flow.CheckConsent)
-	register("flow.Transition", flow.Transition)
-	register("flow.BeginProviderCall", flow.BeginProviderCall)
-	register("flow.CompleteProviderCall", flow.CompleteProviderCall)
-	register("flow.CheckManualNotExecuted", flow.CheckManualNotExecuted)
-	register("flow.LoadProviderCost", flow.LoadProviderCost)
-	register("flow.SettleOperation", flow.SettleOperation)
-	register("provider.managed", func(ctx context.Context, step application.ManagedStep) (application.ManagedProgress, error) {
+	provider := managed.NewActivities(f.store, fixtureUnsealer{}, client, results, nil)
+	handlers := map[string]taskruntime.Handler{}
+	operationflow.RegisterFlow(handlers, f.store, app.NewOperationFinalizer(db, f.store, billingpg.NewStore(db)), nil)
+	interrupted := false
+	operationflow.RegisterProvider(handlers, f.store, managedStepFunc(func(ctx context.Context, step application.ManagedStep) (application.ManagedProgress, error) {
 		result, err := provider.Step(ctx, step)
-		// The provider accepted and durable evidence was saved, but the activity
-		// response was lost. Workflow recovery must read the original receipt.
-		if step.Action == "submit" && err == nil {
-			return application.ManagedProgress{}, errors.New("fixture activity reply interrupted")
+		if step.Action == "submit" && !interrupted && err == nil {
+			interrupted = true
+			return application.ManagedProgress{}, errors.New("reply interrupted")
 		}
 		return result, err
-	})
+	}))
+	job := taskruntime.Job{BusinessID: id.String()}
+	_, err := handlers["operation.run"](t.Context(), job)
+	require.NoError(t, err)
+	_, err = handlers["operation.provider"](t.Context(), job)
+	require.Error(t, err)
+	driveOperation(t, handlers, id, 4)
 	var before dispatchBudgetSnapshot
-	env.RegisterDelayedCallback(func() {
+	{
 		var err error
 		before, err = readDispatchBudget(t.Context(), db, id)
 		require.NoError(t, err)
@@ -109,15 +89,10 @@ func TestRecoverNeverCreatesGenerationThroughOriginalWorkflow(t *testing.T) {
 		require.Equal(t, 202, request.Code, request.Body.String())
 		replay := publicOperationRequest(t, router, "POST", path, body, key)
 		require.JSONEq(t, request.Body.String(), replay.Body.String())
-		var event struct {
-			Topic, PartitionKey string
-			Payload             []byte
-		}
-		require.NoError(t, db.Raw(`SELECT topic,partition_key,payload FROM infra.outbox WHERE topic=? AND payload->'data'->>'request_id'=?`, operationevent.WorkflowControlTopic, key).Scan(&event).Error)
-		handler := operationevent.NewWorkflowControlHandler(inboxpg.NewStore(db), f.store, operationflow.NewControl(billingWorkflowSignal{env}))
-		require.NoError(t, handler.Handle(t.Context(), inbox.Record{Topic: event.Topic, Key: []byte(event.PartitionKey), Value: event.Payload}))
-	}, 3*time.Minute)
-	env.RegisterDelayedCallback(func() {
+		runControlTask(t, db, f.store, controlTaskDelivery(t, db, key))
+	}
+	driveOperation(t, handlers, id, 3)
+	{
 		require.Greater(t, gets, 1)
 		require.Equal(t, 1, posts)
 		saved, err := f.store.LoadManagedCredential(t.Context(), id)
@@ -129,11 +104,7 @@ func TestRecoverNeverCreatesGenerationThroughOriginalWorkflow(t *testing.T) {
 		_, err = provider.Step(t.Context(), application.ManagedStep{OperationID: id, Action: "query"})
 		require.ErrorIs(t, err, application.ErrWorkflowModelUnavailable)
 		require.Equal(t, previous, gets)
-		env.CancelWorkflow()
-	}, 4*time.Minute)
-	env.SetTestTimeout(20 * time.Second)
-	env.ExecuteWorkflow(operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: id.String()})
-	require.Error(t, env.GetWorkflowError())
+	}
 	require.Equal(t, 1, posts)
 	after, err := readDispatchBudget(t.Context(), db, id)
 	require.NoError(t, err)
@@ -146,7 +117,7 @@ func TestSentProviderErrorRetainsReservation(t *testing.T) {
 	for _, tc := range []struct {
 		status     int
 		body, code string
-	}{{0, "", "local_not_sent"}, {429, "{}", "legacy_rejection_history"}, {429, "{}", "provider_request_limited"}, {402, "{}", "provider_payment_required"}, {429, `{"error":{"code":"credit_balance_exhausted"}}`, "provider_insufficient_balance"}} {
+	}{{0, "", "local_not_sent"}, {429, "{}", "provider_request_limited"}, {402, "{}", "provider_payment_required"}, {429, `{"error":{"code":"credit_balance_exhausted"}}`, "provider_insufficient_balance"}} {
 		t.Run(tc.code, func(t *testing.T) {
 			db := operationStoreDB(t)
 			f := seedManagedFixture(t, db)
@@ -182,35 +153,11 @@ func TestSentProviderErrorRetainsReservation(t *testing.T) {
 				return adapterResponse(200, `{"id":"original-paid-task","status":"pending"}`), nil
 			})})
 			results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
-			provider := managed.NewActivities(f.store, fixtureUnsealer{}, client, results, nil, nil)
-			flow := operationflow.NewActivities(f.store, app.NewOperationFinalizer(db, f.store, billingpg.NewStore(db)))
-			env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
-			register := func(name string, fn any) { env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name}) }
-			register("flow.LoadOperation", flow.LoadOperation)
-			register("flow.CheckConsent", flow.CheckConsent)
-			register("flow.Transition", flow.Transition)
-			register("flow.BeginProviderCall", flow.BeginProviderCall)
-			register("flow.CompleteProviderCall", flow.CompleteProviderCall)
-			register("flow.CheckManualNotExecuted", flow.CheckManualNotExecuted)
-			register("flow.LoadProviderCost", flow.LoadProviderCost)
-			settles := 0
-			register("flow.SettleOperation", func(ctx context.Context, in operationflow.SettlementInput) error {
-				settles++
-				return flow.SettleOperation(ctx, in)
-			})
-			if tc.code == "legacy_rejection_history" {
-				env.OnGetVersion("managed-sent-rejection-v1", temporalworkflow.DefaultVersion, 1).Return(temporalworkflow.DefaultVersion).Once()
-			}
-			register("provider.managed", func(ctx context.Context, step application.ManagedStep) (application.ManagedProgress, error) {
-				progress, err := provider.Step(ctx, step)
-				if tc.code == "legacy_rejection_history" && step.Action == "submit" && progress.State == "unknown" {
-					progress.State = "rejected"
-				}
-				return progress, err
-			})
-			env.RegisterDelayedCallback(func() { env.CancelWorkflow() }, 3*time.Minute)
-			env.SetTestTimeout(10 * time.Second)
-			env.ExecuteWorkflow(operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: id.String()})
+			provider := managed.NewActivities(f.store, fixtureUnsealer{}, client, results, nil)
+			handlers := map[string]taskruntime.Handler{}
+			operationflow.RegisterFlow(handlers, f.store, app.NewOperationFinalizer(db, f.store, billingpg.NewStore(db)), nil)
+			operationflow.RegisterProvider(handlers, f.store, provider)
+			driveOperation(t, handlers, id, 10)
 			res := publicOperationRequest(t, router, "GET", fmt.Sprintf("/api/operations/%s?project_id=%s", id, pid), "", "")
 			var row struct{ Charge, Status string }
 			require.NoError(t, db.Raw(`SELECT o.status,r.status AS charge FROM operation.operation o JOIN billing.reservation r ON r.operation_id=o.id WHERE o.id=?`, id).Scan(&row).Error)
@@ -228,13 +175,7 @@ func TestSentProviderErrorRetainsReservation(t *testing.T) {
 			require.Equal(t, 1, posts)
 			require.Zero(t, gets)
 			require.Equal(t, "manual", row.Status)
-			if tc.code == "legacy_rejection_history" {
-				require.Equal(t, 1, settles)
-				env.AssertExpectations(t)
-			} else {
-				require.Contains(t, res.Body.String(), tc.code)
-				require.Zero(t, settles)
-			}
+			require.Contains(t, res.Body.String(), tc.code)
 			var count int64
 			require.NoError(t, db.Raw(`SELECT count(*) FROM operation.provider_call WHERE operation_id=? AND action='submit' AND outcome='unknown' AND cost_micros IS NULL`, id).Scan(&count).Error)
 			require.EqualValues(t, 1, count)
@@ -269,7 +210,23 @@ func TestSentProviderErrorRetainsReservation(t *testing.T) {
 			require.NoError(t, db.Exec(`UPDATE operation.operation SET source_context=?::jsonb WHERE id IN ?`, string(encoded), []uuid.UUID{single.Operation.ID, items[0].Operation.ID}).Error)
 			assertPaidAdmissionBlocked(t, db, actor, pid, batch, single, source)
 			require.Equal(t, 1, posts)
-
 		})
+	}
+}
+
+type managedStepFunc func(context.Context, application.ManagedStep) (application.ManagedProgress, error)
+
+func (f managedStepFunc) Step(ctx context.Context, s application.ManagedStep) (application.ManagedProgress, error) {
+	return f(ctx, s)
+}
+func driveOperation(t *testing.T, h map[string]taskruntime.Handler, id uuid.UUID, n int) {
+	t.Helper()
+	for range n {
+		for _, kind := range []string{"operation.run", "operation.provider", "operation.codex"} {
+			if fn := h[kind]; fn != nil {
+				_, err := fn(t.Context(), taskruntime.Job{BusinessID: id.String(), Kind: kind})
+				require.NoError(t, err)
+			}
+		}
 	}
 }

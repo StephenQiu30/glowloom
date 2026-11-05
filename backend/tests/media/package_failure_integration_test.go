@@ -12,29 +12,28 @@ import (
 
 	"github.com/google/uuid"
 
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type packageBeforeArchiveFailure struct {
-	mediaapp.PackageObjects
+	packageFixtureObjects
 	failed bool
 }
 
-func (o *packageBeforeArchiveFailure) PutIfAbsent(ctx context.Context, key string, r io.Reader, size int64, mime, digest string) error {
+func (o *packageBeforeArchiveFailure) PutPackage(ctx context.Context, object mediaapp.PackageObject, r io.Reader) error {
 	if !o.failed {
 		o.failed = true
 		return io.ErrUnexpectedEOF
 	}
-	return o.PackageObjects.PutIfAbsent(ctx, key, r, size, mime, digest)
+	return o.packageFixtureObjects.PutPackage(ctx, object, r)
 }
 
 func TestMediaPackageUnknownBeforeArchiveSameOriginalKeyRecoversAndPriorReceiptDoesNotDrift(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, project := mediaStoreProject(t, db)
-	repo, failedService := packageActualService(t, db, &packageBeforeArchiveFailure{PackageObjects: objects}, packageTestAccess)
+	repo, failedService := packageActualService(t, db, &packageBeforeArchiveFailure{packageFixtureObjects: objects}, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	in := mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
 	input := packageDownloaded(t, ownPackageZIP(t))
@@ -42,7 +41,7 @@ func TestMediaPackageUnknownBeforeArchiveSameOriginalKeyRecoversAndPriorReceiptD
 	if err != nil || first.Status != "needs_reconciliation" {
 		t.Fatal(first, err)
 	}
-	packageCleanup(t, repo, objects, actor, scope)
+	packageCleanup(t, db, repo, objects, actor, scope)
 	_, service := packageActualService(t, db, objects, packageTestAccess)
 	head, err := service.Reconcile(t.Context(), actor, first.ID, mediaapp.PackageControl{ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || head.Status != "needs_reconciliation" {
@@ -66,7 +65,7 @@ func TestMediaPackageUnknownBeforeArchiveSameOriginalKeyRecoversAndPriorReceiptD
 
 func TestMediaPackageRejectedCompleteBatchNeverWritesAnArchiveOrPartialAsset(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, project := mediaStoreProject(t, db)
 	_, service := packageActualService(t, db, objects, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
@@ -98,7 +97,7 @@ func TestMediaPackageRejectedCompleteBatchNeverWritesAnArchiveOrPartialAsset(t *
 func TestMediaPackageSchemaFrozenSQLAndTerminalCommandAreImmutable(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	owner := libraryOwnerDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, _ := mediaStoreProject(t, db)
 	repo, service := packageActualService(t, db, objects, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
@@ -107,7 +106,7 @@ func TestMediaPackageSchemaFrozenSQLAndTerminalCommandAreImmutable(t *testing.T)
 	if err != nil || job.Status != "succeeded" {
 		t.Fatal(job, err)
 	}
-	packageCleanup(t, repo, objects, actor, scope)
+	packageCleanup(t, db, repo, objects, actor, scope)
 	for _, statement := range []string{`UPDATE media.package_job SET frozen='{}'::bytea WHERE id=?`, `DELETE FROM media.package_job WHERE id=?`, `UPDATE media.package_job SET revision=revision+1 WHERE id=?`, `UPDATE media.package_object SET object_key='foreign' WHERE job_id=?`} {
 		if err := db.Exec(statement, job.ID).Error; err == nil {
 			t.Fatal("nonowner mutated frozen/terminal facts", statement)
@@ -129,7 +128,7 @@ func TestMediaPackageSchemaFrozenSQLAndTerminalCommandAreImmutable(t *testing.T)
 
 func TestMediaPackageProjectFolderEightLevelsCompleteMappingAndPersonalDepthRejectsWhole(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, project := mediaStoreProject(t, db)
 	repo, service := packageActualService(t, db, objects, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
@@ -148,7 +147,7 @@ func TestMediaPackageProjectFolderEightLevelsCompleteMappingAndPersonalDepthReje
 	if err != nil || job.Status != "succeeded" || job.FolderCount != 8 {
 		t.Fatal("complete accepted depth", job, err)
 	}
-	packageCleanup(t, repo, objects, actor, scope)
+	packageCleanup(t, db, repo, objects, actor, scope)
 	export, err := service.Export(t.Context(), actor, scope)
 	if err != nil {
 		t.Fatal(err)

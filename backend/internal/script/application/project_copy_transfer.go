@@ -164,6 +164,9 @@ func (p *ProjectCopy) Cleanup(ctx context.Context, actor identityapp.Principal, 
 		return err
 	}
 	for _, object := range objects {
+		if object.Removed {
+			continue
+		}
 		_, readErr := p.readObject(ctx, object.Target)
 		if errors.Is(readErr, ErrObjectMissing) {
 			if object.PutStarted && !object.Copied && !object.Removed {
@@ -173,9 +176,13 @@ func (p *ProjectCopy) Cleanup(ctx context.Context, actor identityapp.Principal, 
 			if readErr != nil {
 				return scriptCopyFailure("script_copy_cleanup_mismatch", readErr)
 			}
-			if err := p.store.BeginCleanupObject(ctx, actor, b, snapshot, object.Target); err != nil {
-				return err
-			}
+		}
+		// Both present and confirmed-absent private objects require an actual
+		// owner retirement permit. Only a present object needs an SDK DELETE.
+		if err := p.store.BeginCleanupObject(ctx, actor, b, snapshot, object.Target); err != nil {
+			return err
+		}
+		if readErr == nil {
 			removeErr := removePrivateObject(ctx, p.objects, object.Target)
 			if _, err := p.readObject(ctx, object.Target); !errors.Is(err, ErrObjectMissing) {
 				return scriptCopyFailure("script_copy_remove_unconfirmed", errors.Join(err, removeErr))

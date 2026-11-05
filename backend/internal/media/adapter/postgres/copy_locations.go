@@ -2,21 +2,23 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
-func transferWorkOwner(job, library uuid.UUID, index int) application.StorageWorkOwner {
-	return application.StorageWorkOwner{Kind: "transfer", OwnerID: library, WorkID: uuid.NewSHA1(job, []byte("item/"+strconv.Itoa(index)))}
+func transferWorkOwner(job, library uuid.UUID, index, attempt int) application.StorageWorkOwner {
+	return application.StorageWorkOwner{Kind: application.StorageWorkKindTransfer, OwnerID: library, WorkID: uuid.NewSHA1(job, []byte("item/"+strconv.Itoa(index)+"/attempt/"+strconv.Itoa(attempt)))}
 }
 func projectCopyWorkOwner(target, snapshot uuid.UUID) application.StorageWorkOwner {
-	return application.StorageWorkOwner{Kind: "project-copy", OwnerID: target, WorkID: snapshot}
+	return application.StorageWorkOwner{Kind: application.StorageWorkKindProjectCopy, OwnerID: target, WorkID: snapshot}
 }
 
 // bindCopyLocations reserves the complete item before its immutable manifest is
@@ -30,12 +32,12 @@ func bindCopyLocations(ctx context.Context, tx *gorm.DB, owner application.Stora
 	if err != nil {
 		return err
 	}
-	if intent.State != "open" {
+	if intent.State != application.StorageWorkOpen {
 		return application.ErrStorageRouteConflict
 	}
 	for i := range objects {
 		o := &objects[i]
-		if o.SourceLocation == nil || o.SourceLocation.ID == uuid.Nil || o.SourceLocation.Ref.Validate() != nil || o.SourceLocation.Ref.Key != o.SourceObjectKey || o.SourceLocation.State != "accepted" {
+		if o.SourceLocation == nil || o.SourceLocation.ID == uuid.Nil || o.SourceLocation.Ref.Validate() != nil || o.SourceLocation.Ref.Key != o.SourceObjectKey || o.SourceLocation.State != domain.ObjectLocationAccepted {
 			return application.ErrStorageNotReady
 		}
 		target, err := routes.ReserveWorkLocation(ctx, intent.ID, o.TargetObjectKey)
@@ -56,12 +58,12 @@ func copyTargetLocation(ctx context.Context, tx *gorm.DB, owner application.Stor
 		return intent, domain.ObjectLocation{}, err
 	}
 	var row objectLocationRow
-	r := tx.Raw(`SELECT * FROM media.object_location WHERE id=? AND owner_intent_id=? AND object_key=? AND profile_id=? AND bucket=? FOR SHARE`, *id, intent.ID, key, intent.ProfileID, intent.Bucket).Scan(&row)
-	if r.Error != nil {
-		return intent, domain.ObjectLocation{}, r.Error
-	}
-	if r.RowsAffected != 1 {
+	err = tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("id = ? AND owner_intent_id = ? AND object_key = ? AND profile_id = ? AND bucket = ?", *id, intent.ID, key, intent.ProfileID, intent.Bucket).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return intent, domain.ObjectLocation{}, application.ErrStorageRouteConflict
+	}
+	if err != nil {
+		return intent, domain.ObjectLocation{}, err
 	}
 	return intent, row.domain(), nil
 }
@@ -79,7 +81,7 @@ func confirmCopyLocation(ctx context.Context, tx *gorm.DB, owner application.Sto
 	if err != nil {
 		return err
 	}
-	if location.State == "accepted" {
+	if location.State == domain.ObjectLocationAccepted {
 		if location.ByteSize == nil || *location.ByteSize != size || location.SHA256 == nil || *location.SHA256 != sha || location.MIMEType == nil || *location.MIMEType != mime {
 			return application.ErrObjectMismatch
 		}
@@ -148,12 +150,12 @@ func beginCopyRemoval(ctx context.Context, tx *gorm.DB, owner application.Storag
 	if err != nil {
 		return err
 	}
-	if location.State == "deleted" {
+	if location.State == domain.ObjectLocationDeleted {
 		return nil
 	}
 	routes := NewStorageRoutes(tx)
 	var allowed bool
-	if intent.State == "accepted" {
+	if intent.State == application.StorageWorkAccepted {
 		allowed, err = routes.BeginPrivateCopyRemoval(ctx, intent.ID, location)
 	} else {
 		if err = routes.CancelStorageWork(ctx, intent.ID); err != nil {
@@ -184,12 +186,12 @@ func (s *StorageRoutes) ReadWorkLocationByRef(ctx context.Context, ref domain.Ob
 		return domain.ObjectLocation{}, application.ErrUnavailable
 	}
 	var row objectLocationRow
-	r := s.db.WithContext(ctx).Raw(`SELECT * FROM media.object_location WHERE profile_id=? AND bucket=? AND object_key=? AND owner_intent_id IS NOT NULL`, ref.ProfileID, ref.Bucket, ref.Key).Scan(&row)
-	if r.Error != nil {
-		return domain.ObjectLocation{}, r.Error
-	}
-	if r.RowsAffected != 1 {
+	err := s.db.WithContext(ctx).Where("profile_id = ? AND bucket = ? AND object_key = ? AND owner_intent_id IS NOT NULL", ref.ProfileID, ref.Bucket, ref.Key).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.ObjectLocation{}, application.ErrStorageRouteConflict
+	}
+	if err != nil {
+		return domain.ObjectLocation{}, err
 	}
 	return row.domain(), nil
 }

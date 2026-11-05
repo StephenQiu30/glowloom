@@ -347,15 +347,58 @@ func TestMediaTransferCrossPhysicalScopes(t *testing.T) {
 	}
 	// The inventory must also retain a private object intent in the personal
 	// physical partition when the job itself is partitioned under the team.
-	personalKey := "personal/" + personalActor.OrgID.String() + "/" + actor.ID.String() + "/image/retained.png"
-	if err := tx.Exec(`INSERT INTO media.transfer_object(job_id,item_index,source_object_key,target_object_key,content_type) VALUES(?,0,?,?,'image/png')`, back.ID, "projects/"+project.String()+"/image/retained.png", personalKey).Error; err != nil {
+	seedIdentityStorageRoute(t, tx)
+	assetID := uuid.New()
+	sourceKey := "projects/" + project.String() + "/image/2026/11/" + assetID.String() + ".png"
+	sourceLocation := seedIdentityLocation(t, tx, sourceKey)
+	if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,?,'retained.png','image/png',12,repeat('a',64),'passed')`, assetID, project, sourceKey, sourceLocation).Error; err != nil {
 		t.Fatal(err)
 	}
-	usage := pgmedia.NewScopedStorageUsageStore(tx, projectAccess, func(*gorm.DB) mediaapp.StorageUsageIntentSource { return emptyScopeUsageIntents{} }, requestAccess)
+	projectLibrary, _ := target.Identity(teamOrg, actor.ID)
+	if err := tx.Exec(`INSERT INTO media.library_item(id,library_id,asset_id,title,category,position) VALUES(?,?,?,'retained image','other',1)`, assetID, projectLibrary, assetID).Error; err != nil {
+		t.Fatal(err)
+	}
+	retained, err := store.WithRoutedStorage().CreateTransfer(t.Context(), actor, mediaapp.TransferInput{
+		Source: target, Target: source,
+		Items:                  []mediaapp.LibraryItemRevision{{ID: assetID, Revision: 1}},
+		ExpectedSourceRevision: 1, ExpectedTargetRevision: 2, ExpectedProjectRevision: 2, Key: uuid.New(),
+	})
+	if err != nil {
+		t.Fatalf("retained cross-physical media admission: %v", err)
+	}
+	if retained.SourceScopeID != scope || retained.TargetScopeID != personalActor.ScopeID {
+		t.Fatal("retained media ownership did not preserve cross-physical scopes")
+	}
+	// Admission must retain an owned physical output attempt and its exact frozen
+	// location, even though no worker has written the object yet.
+	var output struct {
+		TargetObjectKey string
+		Frozen          []byte
+	}
+	read := tx.Raw(`SELECT o.target_object_key,a.frozen FROM media.transfer_object o
+ JOIN media.transfer_output_attempt a ON (a.job_id,a.item_index,a.output_attempt)=(o.job_id,o.item_index,o.output_attempt)
+ JOIN media.storage_work_intent w ON w.id=a.work_intent_id
+ JOIN media.object_location l ON l.id=o.target_location_id AND l.owner_intent_id=w.id
+ WHERE o.job_id=? AND o.item_index=0 AND o.output_attempt=1 AND o.rendition_kind='' AND w.kind='transfer' AND w.owner_id=? AND l.object_key=o.target_object_key`, retained.ID, library).Scan(&output)
+	if read.Error != nil || read.RowsAffected != 1 {
+		t.Fatalf("retained physical output parent/owner: rows=%d %v", read.RowsAffected, read.Error)
+	}
+	var frozen mediaapp.FrozenTransferItem
+	if err := json.Unmarshal(output.Frozen, &frozen); err != nil || len(frozen.Objects) != 1 || frozen.Objects[0].TargetLocation == nil || frozen.Objects[0].TargetLocation.Ref.Key != output.TargetObjectKey {
+		t.Fatalf("retained physical output frozen location: %v", err)
+	}
+	personalKey := output.TargetObjectKey
+	if !strings.HasPrefix(personalKey, "personal/"+personalActor.OrgID.String()+"/"+actor.ID.String()+"/") {
+		t.Fatal("retained media key lost personal physical partition")
+	}
+	libraryStore := pgmedia.NewScopedLibraryStore(tx, projectAccess, time.Now, requestAccess)
+	usage := pgmedia.NewRoutedStorageUsageStore(libraryStore, []mediaapp.StorageUsageBucket{{ProfileID: "identity-fixture", Bucket: "identity-fixture"}}, func(inner *gorm.DB) mediaapp.StorageUsageLocationSource {
+		return pgmedia.NewScopedLibraryStore(inner, projectAccess, time.Now, requestAccess)
+	})
 	seen := false
 	if err := usage.InspectStorageUsage(t.Context(), personalActor, source, func(in mediaapp.StorageUsageInventory) error {
-		for _, key := range in.ObjectKeys {
-			seen = seen || key == personalKey
+		for _, ref := range in.Locations {
+			seen = seen || ref == (mediadomain.ObjectRef{ProfileID: "identity-fixture", Bucket: "identity-fixture", Key: personalKey})
 		}
 		return nil
 	}); err != nil {
@@ -430,6 +473,8 @@ func TestMediaAssetLibraryDocumentIsolation(t *testing.T) {
 	assetID := uuid.New()
 	sha := strings.Repeat("a", 64)
 	asset := mediadomain.MediaAsset{ID: assetID, ProjectID: project, Kind: mediadomain.KindImage, Origin: mediadomain.OriginUpload, Status: mediadomain.StatusUploading, ObjectKey: "projects/" + project.String() + "/image/2026/10/" + assetID.String() + ".png", FileName: "scope.png", MimeType: "image/png", ByteSize: 12, ModerationStatus: mediadomain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
+	locationID := seedIdentityLocation(t, tx, asset.ObjectKey)
+	asset.ObjectLocation = &mediadomain.ObjectLocation{ID: locationID, Ref: mediadomain.ObjectRef{ProfileID: "identity-fixture", Bucket: "identity-fixture", Key: asset.ObjectKey}, State: mediadomain.ObjectLocationAccepted}
 	if err := store.CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
@@ -533,10 +578,4 @@ func TestMediaCopyTargetUsesNarrowScope(t *testing.T) {
 	if _, err := pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now()); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatalf("missing authority: %v", err)
 	}
-}
-
-type emptyScopeUsageIntents struct{}
-
-func (emptyScopeUsageIntents) StorageUsageKeys(context.Context, identity.Principal, mediadomain.LibraryScope) ([]string, error) {
-	return nil, nil
 }

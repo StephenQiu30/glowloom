@@ -16,6 +16,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 
 const providerSHA = "3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"
@@ -32,10 +33,14 @@ func registryForResource(t *testing.T, provider, endpoint, bucket, region string
 	t.Setenv("TEST_PROVIDER_ST", "")
 	t.Setenv("TEST_PROVIDER_EXPIRY", "")
 	file := filepath.Join(t.TempDir(), "storage.yaml")
-	raw := fmt.Sprintf("object_storage:\n  schema_version: 1\n  revision: test-v1\n  profiles:\n    minio-main:\n      provider: %s\n      endpoint: %s\n      bucket: fixture-bucket\n      region: us-east-1\n      credentials:\n        source: env\n        access_key_env: TEST_PROVIDER_AK\n        secret_key_env: TEST_PROVIDER_SK\n", provider, endpoint)
+	raw := fmt.Sprintf("object_storage:\n  schema_version: 1\n  revision: 1\n  default_write_profile: minio-main\n  profiles:\n    minio-main:\n      provider: %s\n      mode: read_write\n      addressing_style: path\n      signing_endpoint: %s\n      endpoint: %s\n      bucket: fixture-bucket\n      region: us-east-1\n      credentials:\n        source: env\n        access_key_env: TEST_PROVIDER_AK\n        secret_key_env: TEST_PROVIDER_SK\n", provider, endpoint, endpoint)
 	raw = strings.Replace(raw, "bucket: fixture-bucket", "bucket: "+bucket, 1)
 	raw = strings.Replace(raw, "region: us-east-1", "region: "+region, 1)
 	raw += "        session_token_env: TEST_PROVIDER_ST\n        expires_at_env: TEST_PROVIDER_EXPIRY\n"
+	if provider != "minio" {
+		raw = strings.Replace(raw, "      addressing_style: path\n", "", 1)
+	}
+	raw += storagefixture.YAMLPolicy
 	if err := os.WriteFile(file, []byte(raw), 0600); err != nil {
 		t.Fatal(err)
 	}

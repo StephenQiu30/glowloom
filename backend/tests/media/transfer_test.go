@@ -20,7 +20,7 @@ func TestMediaTransferClosedScopesAndStableIndependentOwnership(t *testing.T) {
 	org, actor, job := uuid.New(), uuid.New(), uuid.New()
 	target := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	source := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &a.ProjectID}
-	request := mediaapp.TransferInput{Source: source, Target: target, Items: []mediaapp.LibraryItemRevision{{ID: a.ID}}, ExpectedProjectRevision: 1, Key: uuid.New()}
+	request := mediaapp.TransferInput{Source: source, Target: target, Items: []mediaapp.LibraryItemRevision{{ID: a.ID, Revision: 1}}, ExpectedProjectRevision: 1, Key: uuid.New()}
 	if err := request.Validate(); err != nil {
 		t.Fatal(err)
 	}

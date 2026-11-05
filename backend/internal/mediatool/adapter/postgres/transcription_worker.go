@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -71,7 +73,7 @@ func (s *TranscriptionStore) Claim(ctx context.Context, id application.Transcrip
 	if s == nil || s.db == nil || id.JobID == uuid.Nil || id.Attempt < 1 {
 		return work, application.ErrInvalidTranscription
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := s.lockAuthorizedTranscription(ctx, tx, id.JobID)
 		if err != nil {
 			return err
@@ -79,30 +81,30 @@ func (s *TranscriptionStore) Claim(ctx context.Context, id application.Transcrip
 		if row.Attempt != id.Attempt {
 			return application.ErrConflict
 		}
-		if row.Status == "succeeded" {
+		if row.Status == domain.TranscriptionSucceeded {
 			work.Job = row.public()
 			return nil
 		}
-		if row.InferenceState == "unknown" || row.InferenceState == "submitted" {
+		if row.InferenceState == domain.TranscriptionInferenceUnknown || row.InferenceState == domain.TranscriptionInferenceSubmitted {
 			uncertain = true
-			if row.Stage != "awaiting_reconciliation" {
-				row.Stage = "awaiting_reconciliation"
+			if row.Stage != domain.TranscriptionStageAwaitingReconciliation {
+				row.Stage = domain.TranscriptionStageAwaitingReconciliation
 				code := "inference_unknown"
 				row.FailureCode = &code
 				row.Revision++
 				row.UpdatedAt = time.Now().UTC()
 				if row.ActiveWorker == nil {
-					row.InferenceState = "unknown"
+					row.InferenceState = domain.TranscriptionInferenceUnknown
 				}
 				return updateTranscription(tx, row)
 			}
 			return nil
 		}
-		if row.Status == "cancel_requested" {
+		if row.Status == domain.TranscriptionCancelRequested {
 			cancelled = true
-			if row.ActiveWorker == nil && row.InferenceState == "none" {
-				row.Status = "cancelled"
-				row.Stage = "cancelled"
+			if row.ActiveWorker == nil && row.InferenceState == domain.TranscriptionInferenceNone {
+				row.Status = domain.TranscriptionCancelled
+				row.Stage = domain.TranscriptionStageCancelled
 				row.Revision++
 				row.UpdatedAt = time.Now().UTC()
 				if err := updateTranscription(tx, row); err != nil {
@@ -112,7 +114,7 @@ func (s *TranscriptionStore) Claim(ctx context.Context, id application.Transcrip
 			}
 			return nil
 		}
-		if row.Status != "queued" && row.Status != "running" {
+		if row.Status != domain.TranscriptionQueued && row.Status != domain.TranscriptionRunning {
 			return application.ErrConflict
 		}
 		if row.ActiveWorker != nil && (id.ExecutionID == uuid.Nil || *row.ActiveWorker != id.ExecutionID) {
@@ -125,8 +127,8 @@ func (s *TranscriptionStore) Claim(ctx context.Context, id application.Transcrip
 			return err
 		}
 		row.ActiveWorker = &id.ExecutionID
-		row.Status = "running"
-		row.Stage = "downloading"
+		row.Status = domain.TranscriptionRunning
+		row.Stage = domain.TranscriptionStageDownloading
 		row.Progress = max(row.Progress, 5)
 		row.Revision++
 		row.UpdatedAt = time.Now().UTC()
@@ -164,11 +166,11 @@ func ownTranscription(row transcriptionRow, id application.TranscriptionWorkID) 
 }
 
 // Progress is observed local work, never an inferred native inference percentage.
-func (s *TranscriptionStore) Progress(ctx context.Context, id application.TranscriptionWorkID, percentage int, stage string) error {
+func (s *TranscriptionStore) Progress(ctx context.Context, id application.TranscriptionWorkID, percentage int, stage domain.TranscriptionStage) error {
 	if s == nil || s.db == nil || percentage < 0 || percentage > 99 || len(stage) > 32 {
 		return application.ErrInvalidTranscription
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -176,10 +178,10 @@ func (s *TranscriptionStore) Progress(ctx context.Context, id application.Transc
 		if err := ownTranscription(row, id); err != nil {
 			return err
 		}
-		if row.Status == "cancel_requested" || row.Status == "cancelled" {
+		if row.Status == domain.TranscriptionCancelRequested || row.Status == domain.TranscriptionCancelled {
 			return application.ErrCancelled
 		}
-		if row.Status != "running" || row.InferenceState == "unknown" {
+		if row.Status != domain.TranscriptionRunning || row.InferenceState == domain.TranscriptionInferenceUnknown {
 			return application.ErrConflict
 		}
 		row.Progress = max(row.Progress, percentage)
@@ -195,7 +197,7 @@ func (s *TranscriptionStore) StartInference(ctx context.Context, id application.
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := s.lockAuthorizedTranscription(ctx, tx, id.JobID)
 		if err != nil {
 			return err
@@ -203,14 +205,14 @@ func (s *TranscriptionStore) StartInference(ctx context.Context, id application.
 		if err := ownTranscription(row, id); err != nil {
 			return err
 		}
-		if row.Status == "cancel_requested" {
+		if row.Status == domain.TranscriptionCancelRequested {
 			return application.ErrCancelled
 		}
-		if row.Status != "running" || row.InferenceState == "submitted" || row.InferenceState == "unknown" {
+		if row.Status != domain.TranscriptionRunning || row.InferenceState == domain.TranscriptionInferenceSubmitted || row.InferenceState == domain.TranscriptionInferenceUnknown {
 			return application.ErrConflict
 		}
-		row.InferenceState = "submitted"
-		row.Stage = "transcribing"
+		row.InferenceState = domain.TranscriptionInferenceSubmitted
+		row.Stage = domain.TranscriptionStageTranscribing
 		row.Progress = 40
 		row.Revision++
 		row.UpdatedAt = time.Now().UTC()
@@ -224,7 +226,7 @@ func (s *TranscriptionStore) EndInference(ctx context.Context, id application.Tr
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -232,10 +234,10 @@ func (s *TranscriptionStore) EndInference(ctx context.Context, id application.Tr
 		if err := ownTranscription(row, id); err != nil {
 			return err
 		}
-		if row.InferenceState != "submitted" && row.InferenceState != "terminal" {
+		if row.InferenceState != domain.TranscriptionInferenceSubmitted && row.InferenceState != domain.TranscriptionInferenceTerminal {
 			return application.ErrConflict
 		}
-		row.InferenceState = "terminal"
+		row.InferenceState = domain.TranscriptionInferenceTerminal
 		row.Revision++
 		row.UpdatedAt = time.Now().UTC()
 		return updateTranscription(tx, row)
@@ -257,13 +259,13 @@ func (s *TranscriptionStore) Complete(ctx context.Context, id application.Transc
 	}
 	digest := sha256.Sum256(raw)
 	sha := hex.EncodeToString(digest[:])
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		candidate, err := readTranscription(tx, uuid.Nil, id.JobID, false)
 		if err != nil {
 			return err
 		}
 		var authorizationErr error
-		if candidate.Status == "running" {
+		if candidate.Status == domain.TranscriptionRunning {
 			authorizationErr = s.authorize(ctx, tx, candidate.actor(), candidate.ProjectID, true)
 		}
 		row, err := lockTranscriptionBinding(tx, candidate)
@@ -273,29 +275,29 @@ func (s *TranscriptionStore) Complete(ctx context.Context, id application.Transc
 		if err := ownTranscription(row, id); err != nil {
 			return err
 		}
-		if row.Status == "succeeded" {
+		if row.Status == domain.TranscriptionSucceeded {
 			if row.ResultSHA256 == nil || *row.ResultSHA256 != sha {
 				return application.ErrConflict
 			}
 			job = row.public()
 			return nil
 		}
-		if row.InferenceState != "terminal" {
+		if row.InferenceState != domain.TranscriptionInferenceTerminal {
 			return application.ErrConflict
 		}
-		if row.Status == "cancel_requested" {
-			row.Status = "cancelled"
-			row.Stage = "cancelled"
+		if row.Status == domain.TranscriptionCancelRequested {
+			row.Status = domain.TranscriptionCancelled
+			row.Stage = domain.TranscriptionStageCancelled
 			row.Result = nil
 			row.ResultSHA256 = nil
 			row.FailureCode = nil
 		} else {
-			if row.Status != "running" {
+			if row.Status != domain.TranscriptionRunning {
 				return application.ErrConflict
 			}
 			// A cancellation or terminal replay needs no new authority. A row
 			// that became running must retry with authority acquired first.
-			if candidate.Status != "running" {
+			if candidate.Status != domain.TranscriptionRunning {
 				return application.ErrConflict
 			}
 			if authorizationErr != nil {
@@ -304,14 +306,14 @@ func (s *TranscriptionStore) Complete(ctx context.Context, id application.Transc
 			if err := s.validateSource(ctx, tx, row.actor(), row); err != nil {
 				return err
 			}
-			row.Result = raw
+			row.Result = jsonDocument(raw)
 			if err := s.acceptTranscript(ctx, tx, row); err != nil {
 				return err
 			}
-			row.Status = "succeeded"
-			row.Stage = "complete"
+			row.Status = domain.TranscriptionSucceeded
+			row.Stage = domain.TranscriptionStageComplete
 			row.Progress = 100
-			row.Result = raw
+			row.Result = jsonDocument(raw)
 			row.ResultSHA256 = &sha
 			row.FailureCode = nil
 		}
@@ -322,7 +324,7 @@ func (s *TranscriptionStore) Complete(ctx context.Context, id application.Transc
 		}
 		job = row.public()
 		action := "completed"
-		if row.Status == "cancelled" {
+		if row.Status == domain.TranscriptionCancelled {
 			action = "cancelled"
 		}
 		return transcriptionRuntimeAudit(tx, row, action)
@@ -336,7 +338,7 @@ func (s *TranscriptionStore) Finish(ctx context.Context, id application.Transcri
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -344,34 +346,34 @@ func (s *TranscriptionStore) Finish(ctx context.Context, id application.Transcri
 		if err := ownTranscription(row, id); err != nil {
 			return err
 		}
-		if row.Status == "succeeded" || row.Status == "failed" || row.Status == "cancelled" {
+		if row.Status == domain.TranscriptionSucceeded || row.Status == domain.TranscriptionFailed || row.Status == domain.TranscriptionCancelled {
 			return nil
 		}
-		if !ended && row.InferenceState == "unknown" && row.Stage == "awaiting_reconciliation" {
+		if !ended && row.InferenceState == domain.TranscriptionInferenceUnknown && row.Stage == domain.TranscriptionStageAwaitingReconciliation {
 			return nil
 		}
 		action := "failed"
 		switch {
 		case !ended:
-			row.InferenceState = "unknown"
-			row.Stage = "awaiting_reconciliation"
+			row.InferenceState = domain.TranscriptionInferenceUnknown
+			row.Stage = domain.TranscriptionStageAwaitingReconciliation
 			code = "inference_unknown"
 			row.FailureCode = &code
 			action = "uncertain"
-		case row.Status == "cancel_requested":
-			if row.InferenceState == "submitted" {
-				row.InferenceState = "terminal"
+		case row.Status == domain.TranscriptionCancelRequested:
+			if row.InferenceState == domain.TranscriptionInferenceSubmitted {
+				row.InferenceState = domain.TranscriptionInferenceTerminal
 			}
-			row.Status = "cancelled"
-			row.Stage = "cancelled"
+			row.Status = domain.TranscriptionCancelled
+			row.Stage = domain.TranscriptionStageCancelled
 			row.FailureCode = nil
 			action = "cancelled"
 		default:
-			if row.InferenceState == "submitted" {
-				row.InferenceState = "terminal"
+			if row.InferenceState == domain.TranscriptionInferenceSubmitted {
+				row.InferenceState = domain.TranscriptionInferenceTerminal
 			}
-			row.Status = "failed"
-			row.Stage = "failed"
+			row.Status = domain.TranscriptionFailed
+			row.Stage = domain.TranscriptionStageFailed
 			row.FailureCode = &code
 		}
 		row.Revision++
@@ -389,7 +391,7 @@ func (s *TranscriptionStore) Release(ctx context.Context, id application.Transcr
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -404,9 +406,9 @@ func (s *TranscriptionStore) Release(ctx context.Context, id application.Transcr
 			return application.ErrConflict
 		}
 		row.ActiveWorker = nil
-		if row.InferenceState == "submitted" {
-			row.InferenceState = "unknown"
-			row.Stage = "awaiting_reconciliation"
+		if row.InferenceState == domain.TranscriptionInferenceSubmitted {
+			row.InferenceState = domain.TranscriptionInferenceUnknown
+			row.Stage = domain.TranscriptionStageAwaitingReconciliation
 			code := "inference_unknown"
 			row.FailureCode = &code
 			row.Revision++
@@ -421,7 +423,7 @@ func (s *TranscriptionStore) FailWorkflow(ctx context.Context, id application.Tr
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -429,23 +431,23 @@ func (s *TranscriptionStore) FailWorkflow(ctx context.Context, id application.Tr
 		if row.Attempt != id.Attempt {
 			return application.ErrConflict
 		}
-		if row.Status != "queued" && row.Status != "running" && row.Status != "cancel_requested" {
+		if row.Status != domain.TranscriptionQueued && row.Status != domain.TranscriptionRunning && row.Status != domain.TranscriptionCancelRequested {
 			return nil
 		}
-		if row.InferenceState == "unknown" && row.Stage == "awaiting_reconciliation" {
+		if row.InferenceState == domain.TranscriptionInferenceUnknown && row.Stage == domain.TranscriptionStageAwaitingReconciliation {
 			return nil
 		}
-		if row.ActiveWorker != nil || row.InferenceState == "submitted" || row.InferenceState == "unknown" {
-			row.Stage = "awaiting_reconciliation"
+		if row.ActiveWorker != nil || row.InferenceState == domain.TranscriptionInferenceSubmitted || row.InferenceState == domain.TranscriptionInferenceUnknown {
+			row.Stage = domain.TranscriptionStageAwaitingReconciliation
 			code := "activity_unknown"
 			row.FailureCode = &code
 		} else {
-			if row.Status == "cancel_requested" {
-				row.Status = "cancelled"
-				row.Stage = "cancelled"
+			if row.Status == domain.TranscriptionCancelRequested {
+				row.Status = domain.TranscriptionCancelled
+				row.Stage = domain.TranscriptionStageCancelled
 			} else {
-				row.Status = "failed"
-				row.Stage = "failed"
+				row.Status = domain.TranscriptionFailed
+				row.Stage = domain.TranscriptionStageFailed
 				code := "activity_failed"
 				row.FailureCode = &code
 			}
@@ -462,7 +464,7 @@ func (s *TranscriptionStore) AuthorizeObjectWrite(ctx context.Context, id applic
 	if s == nil || s.db == nil || id.ExecutionID == uuid.Nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := s.lockAuthorizedTranscription(ctx, tx, id.JobID)
 		if err != nil {
 			return err
@@ -470,10 +472,10 @@ func (s *TranscriptionStore) AuthorizeObjectWrite(ctx context.Context, id applic
 		if err = ownTranscription(row, id); err != nil {
 			return err
 		}
-		if row.Status == "cancel_requested" || row.Status == "cancelled" {
+		if row.Status == domain.TranscriptionCancelRequested || row.Status == domain.TranscriptionCancelled {
 			return application.ErrCancelled
 		}
-		if row.Status != "running" || row.InferenceState != "terminal" {
+		if row.Status != domain.TranscriptionRunning || row.InferenceState != domain.TranscriptionInferenceTerminal {
 			return application.ErrConflict
 		}
 		return nil

@@ -8,14 +8,14 @@ import (
 	"errors"
 	"io"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
 	"gorm.io/gorm"
 
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
@@ -24,62 +24,43 @@ import (
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	project "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/editproject"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 
-// This adapter stores actual bytes and simulates one lost Put receipt. It is not S3 acceptance.
-type projectObjects struct {
-	mu          sync.Mutex
-	data        map[string][]byte
-	info        map[string]mediaapp.ObjectInfo
+// projectUnknownReceiptFactory loses one reply after the real routed provider
+// write, preserving byte readback and permanent ledger proof on task retry.
+type projectUnknownReceiptFactory struct {
+	toolapp.WorkObjectsFactory
 	loseReceipt bool
 	puts        int
 }
 
-func (o *projectObjects) Get(_ context.Context, key string) (io.ReadCloser, error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	data, ok := o.data[key]
-	if !ok {
-		return nil, toolapp.ErrObjectMissing
-	}
-	return io.NopCloser(bytes.NewReader(data)), nil
-}
-func (o *projectObjects) Stat(_ context.Context, key string) (mediaapp.ObjectInfo, error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	info, ok := o.info[key]
-	if !ok {
-		return info, toolapp.ErrObjectMissing
-	}
-	return info, nil
-}
-func (o *projectObjects) PutIfAbsent(_ context.Context, key string, r io.Reader, size int64, mime, digest string) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if _, ok := o.data[key]; ok {
-		return mediaapp.ErrObjectAlreadyExists
-	}
-	data, err := io.ReadAll(r)
+func (f *projectUnknownReceiptFactory) Open(ctx context.Context, owner mediaapp.StorageWorkOwner, inputs []mediadomain.MediaAsset) (toolapp.DepthObjects, error) {
+	o, err := f.WorkObjectsFactory.Open(ctx, owner, inputs)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	o.data[key] = data
-	o.info[key] = mediaapp.ObjectInfo{Size: size, ContentType: mime, SHA256: digest}
-	o.puts++
-	if o.loseReceipt {
-		o.loseReceipt = false
-		return errors.New("unknown object PUT result")
-	}
-	return nil
+	return &projectUnknownReceiptObjects{DepthObjects: o, factory: f}, nil
 }
-func (o *projectObjects) PresignGet(_ context.Context, _ string, _ time.Duration) (string, error) {
-	return "https://objects.test.invalid/review.zip", nil
+
+type projectUnknownReceiptObjects struct {
+	toolapp.DepthObjects
+	factory *projectUnknownReceiptFactory
+}
+
+func (o *projectUnknownReceiptObjects) PutIfAbsent(ctx context.Context, key string, r io.Reader, size int64, mime, digest string) error {
+	err := o.DepthObjects.PutIfAbsent(ctx, key, r, size, mime, digest)
+	if err == nil {
+		o.factory.puts++
+		if o.factory.loseReceipt {
+			o.factory.loseReceipt = false
+			return io.ErrUnexpectedEOF
+		}
+	}
+	return err
 }
 func projectOwnerDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -95,12 +76,13 @@ func projectOwnerDB(t *testing.T) *gorm.DB {
 	return conn.DB
 }
 func TestProjectExportDurableFrozenCanvasArtifactReviewAndUnknownPutRecovery(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	owner := projectOwnerDB(t)
 	actor, projectID := mediaStoreProject(t, owner)
 	_, foreign := mediaStoreProject(t, owner)
 	frozen, paths := projectAVFixture(t)
-	objects := &projectObjects{data: map[string][]byte{}, info: map[string]mediaapp.ObjectInfo{}, loseReceipt: true}
+	objects := &projectUnknownReceiptFactory{WorkObjectsFactory: mediatoolRoutedObjects(t, db), loseReceipt: true}
+	provider := glbTestObjects(t)
 	for _, input := range frozen.Inputs {
 		asset := imageAsset(projectID, input.AssetID)
 		asset.Kind = mediadomain.Kind(input.Kind)
@@ -116,6 +98,7 @@ func TestProjectExportDurableFrozenCanvasArtifactReviewAndUnknownPutRecovery(t *
 		asset.FileName = "source" + ext
 		asset.ObjectKey = "projects/" + projectID.String() + "/" + input.Kind + "/2026/10/" + input.AssetID.String() + ext
 		asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
+		asset = mediaFixtureAssetLocation(t, db, asset)
 		if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 			t.Fatal(err)
 		}
@@ -126,10 +109,12 @@ func TestProjectExportDurableFrozenCanvasArtifactReviewAndUnknownPutRecovery(t *
 		if err != nil {
 			t.Fatal(err)
 		}
-		objects.data[asset.ObjectKey] = data
-		objects.info[asset.ObjectKey] = mediaapp.ObjectInfo{Size: asset.ByteSize, ContentType: asset.MimeType, SHA256: input.SHA256}
+		if err := provider.Put(t.Context(), asset.ObjectKey, bytes.NewReader(data), int64(len(data)), asset.MimeType); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = provider.Remove(context.Background(), asset.ObjectKey) })
 	}
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
 	canvasService := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := canvasService.Create(t.Context(), actor, projectID, uuid.NewString(), canvasapp.CreateInput{Name: "Project export fixture"})
 	if err != nil {
@@ -140,11 +125,11 @@ func TestProjectExportDurableFrozenCanvasArtifactReviewAndUnknownPutRecovery(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+	store := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
 		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
-	workerStore := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx), nil) }))
+	workerStore := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx)) }))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
 	request := toolapp.CreateInput{OutputKind: tool.OutputFCPXML, CanvasID: doc.ID, NodeID: node.ID, Revision: saved.Revision}
 	key := uuid.New()
@@ -161,25 +146,16 @@ func TestProjectExportDurableFrozenCanvasArtifactReviewAndUnknownPutRecovery(t *
 	if _, err = store.Create(t.Context(), actor, projectID, uuid.New(), stale); !errors.Is(err, toolapp.ErrConflict) {
 		t.Fatalf("stale canvas accepted %v", err)
 	}
-	worker := toolapp.NewWorker(workerStore, objects, project.NewRenderer(nil), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	activities := toolflow.NewActivities(worker, workerStore, workerStore)
-	env.RegisterWorkflow(toolflow.ExportWorkflow)
-	env.RegisterActivityWithOptions(activities.RenderExport, activity.RegisterOptions{Name: toolflow.RenderActivity})
-	env.RegisterActivityWithOptions(activities.FailExportWorkflow, activity.RegisterOptions{Name: toolflow.FailureActivity})
-	env.ExecuteWorkflow(toolflow.ExportWorkflow, toolapp.WorkID{JobID: job.ID, Attempt: 1})
-	if !env.IsWorkflowCompleted() || env.GetWorkflowError() != nil {
-		t.Fatal(env.GetWorkflowError())
-	}
-	var output tool.ExportJob
-	if err = env.GetWorkflowResult(&output); err != nil || output.Status != tool.ReviewRequired || output.AssetID != nil || output.ArtifactID == nil || output.SHA256 == nil {
+	worker := toolapp.NewRoutedWorker(workerStore, objects, project.NewRenderer(nil), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
+	taskfixture.RunWork(t, db, tooltask.Export, map[string]any{"job_id": job.ID}, tooltask.ExportHandler(worker, workerStore))
+	output, err := store.Get(t.Context(), actor, projectID, job.ID)
+	if err != nil || output.Status != tool.ReviewRequired || output.AssetID != nil || output.ArtifactID == nil || output.SHA256 == nil {
 		t.Fatalf("artifact lifecycle %+v %v", output, err)
 	}
 	if objects.puts != 1 {
 		t.Fatalf("unknown retry rewrote output %d", objects.puts)
 	}
-	query := toolapp.NewExportQuery(store, objects, objects)
+	query := toolapp.NewRoutedExportQuery(store, mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute)
 	preview, err := query.Preview(t.Context(), actor, projectID, job.ID)
 	if err != nil || preview.Artifact == nil || preview.Artifact.ID != *output.ArtifactID || preview.SHA256 != *output.SHA256 {
 		t.Fatalf("artifact preview %+v %v", preview, err)

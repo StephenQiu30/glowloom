@@ -26,7 +26,7 @@ func sourceDocumentAsset(data []byte) domain.MediaAsset {
 	sha, codec := hex.EncodeToString(hash[:]), "txt"
 	return domain.MediaAsset{ID: id, ProjectID: project, Kind: domain.KindDocument, Origin: domain.OriginUpload,
 		Status: domain.StatusReady, ModerationStatus: domain.ModerationPassed, ObjectKey: "projects/" + project.String() + "/document/2026/10/" + id.String() + ".txt",
-		FileName: "原始剧本.txt", MimeType: domain.MIMEText, ByteSize: int64(len(data)), SHA256: &sha, Codec: &codec,
+		ObjectLocation: readLocation("minio-main", "projects/"+project.String()+"/document/2026/10/"+id.String()+".txt"), FileName: "原始剧本.txt", MimeType: domain.MIMEText, ByteSize: int64(len(data)), SHA256: &sha, Codec: &codec,
 		Revision: 1, CreateTime: now, UpdateTime: now}
 }
 
@@ -48,9 +48,9 @@ type documentSourceObjects struct {
 	key   string
 }
 
-func (o *documentSourceObjects) Get(_ context.Context, key string) (io.ReadCloser, error) {
+func (o *documentSourceObjects) Get(_ context.Context, ref domain.ObjectRef) (io.ReadCloser, error) {
 	o.calls++
-	o.key = key
+	o.key = ref.Key
 	return io.NopCloser(bytes.NewReader(o.data)), nil
 }
 
@@ -60,8 +60,9 @@ func TestDocumentSourcesFreezeIdentityOrderAndExactOriginalRead(t *testing.T) {
 	b := sourceDocumentAsset([]byte("另一文件"))
 	b.ProjectID = a.ProjectID
 	b.ObjectKey = "projects/" + a.ProjectID.String() + "/document/2026/10/" + b.ID.String() + ".txt"
+	b.ObjectLocation = readLocation("minio-main", b.ObjectKey)
 	repo, objects := &documentSourceRepo{assets: []domain.MediaAsset{b, a}}, &documentSourceObjects{data: data}
-	reader := mediaapp.NewDocumentSources(repo, objects)
+	reader := mediaapp.NewRoutedDocumentSources(repo, objects)
 	got, err := reader.Freeze(t.Context(), identityapp.Principal{}, a.ProjectID, []uuid.UUID{a.ID, b.ID})
 	if err != nil || len(got) != 2 || got[0].AssetID != a.ID || got[1].AssetID != b.ID || objects.calls != 0 {
 		t.Fatal("freeze preserves ordered facts without object I/O", got, err)
@@ -118,7 +119,7 @@ func TestDocumentSourcesRejectChangedScopeFactsAndPrivateBytes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := sourceDocumentAsset(data)
 			repo, objects := &documentSourceRepo{assets: []domain.MediaAsset{a}}, &documentSourceObjects{data: bytes.Clone(data)}
-			reader := mediaapp.NewDocumentSources(repo, objects)
+			reader := mediaapp.NewRoutedDocumentSources(repo, objects)
 			frozen, err := reader.Freeze(t.Context(), identityapp.Principal{}, a.ProjectID, []uuid.UUID{a.ID})
 			if err != nil {
 				t.Fatal(err)
@@ -134,7 +135,7 @@ func TestDocumentSourcesRejectChangedScopeFactsAndPrivateBytes(t *testing.T) {
 func TestDocumentSourcesRejectInvalidBatchAndCancelledReadBeforeObjectGet(t *testing.T) {
 	a := sourceDocumentAsset([]byte("原文"))
 	repo, objects := &documentSourceRepo{assets: []domain.MediaAsset{a}}, &documentSourceObjects{}
-	reader := mediaapp.NewDocumentSources(repo, objects)
+	reader := mediaapp.NewRoutedDocumentSources(repo, objects)
 	for _, ids := range [][]uuid.UUID{nil, {uuid.Nil}, {a.ID, a.ID}, make([]uuid.UUID, 201)} {
 		if _, err := reader.Freeze(t.Context(), identityapp.Principal{}, a.ProjectID, ids); !errors.Is(err, mediaapp.ErrInvalidQuery) {
 			t.Fatal("invalid source batch", err)

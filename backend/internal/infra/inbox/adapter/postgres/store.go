@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -100,7 +102,9 @@ func (s *Store) PruneExpired(ctx context.Context, now time.Time, batchSize int) 
 	if batchSize <= 0 {
 		return 0, ErrInvalidPruneBatchSize
 	}
-	result := s.db.WithContext(ctx).Exec(`
+	var count int64
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		result := tx.Exec(`
 		WITH expired AS (
 			SELECT id FROM infra.processed_event
 			WHERE create_time < ?
@@ -112,8 +116,11 @@ func (s *Store) PruneExpired(ctx context.Context, now time.Time, batchSize int) 
 		USING expired
 		WHERE marker.id = expired.id
 	`, now.UTC().Add(-processedEventRetention), batchSize)
-	if result.Error != nil {
-		return 0, fmt.Errorf("prune expired processed events: %w", result.Error)
-	}
-	return result.RowsAffected, nil
+		if result.Error != nil {
+			return fmt.Errorf("prune expired processed events: %w", result.Error)
+		}
+		count = result.RowsAffected
+		return nil
+	})
+	return count, err
 }

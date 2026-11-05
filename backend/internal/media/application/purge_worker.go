@@ -88,7 +88,7 @@ func (w *PurgeWorker) Execute(ctx context.Context, work PurgeWorkID) (domain.Pur
 		}
 	}()
 	for index, item := range lease.Job.Items {
-		if item.Status == "blocked" || item.Status == "succeeded" || item.Status == "cancelled" {
+		if item.Status == domain.PurgeItemStatusBlocked || item.Status == domain.PurgeItemStatusSucceeded || item.Status == domain.PurgeItemStatusCancelled {
 			continue
 		}
 		done, err := w.repo.StartPurgeItem(physical, lease, index)
@@ -114,7 +114,7 @@ func (w *PurgeWorker) Execute(ctx context.Context, work PurgeWorkID) (domain.Pur
 				code = "worker_interrupted"
 			}
 			if errors.Is(err, domain.ErrPurgeCancelled) {
-				code = "cancelled"
+				code = string(domain.PurgeStatusCancelled)
 			}
 			recordCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 			recordErr := w.repo.FailPurgeItem(recordCtx, lease, index, code)

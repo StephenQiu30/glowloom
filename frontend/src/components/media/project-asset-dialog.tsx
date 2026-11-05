@@ -156,7 +156,9 @@ export function ProjectAssetDialog({
           onPointerDown={(e) => e.stopPropagation()}
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>{dialogTitle ?? (reference ? "选择参考素材" : "参考素材")}</DialogTitle>
+            <DialogTitle>
+              {dialogTitle ?? (reference ? "选择参考素材" : "参考素材")}
+            </DialogTitle>
             <DialogDescription>
               从当前项目添加素材，或选择主体开始创作。
             </DialogDescription>

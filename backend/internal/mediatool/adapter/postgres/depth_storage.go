@@ -16,12 +16,12 @@ func (s *DepthStore) reserveDepthObject(ctx context.Context, tx *gorm.DB, row de
 		return nil, nil
 	}
 	ledger := s.storage(tx)
-	owner := application.StorageOwner("depth", row.ProjectID, row.ID, row.Attempt)
+	owner := application.StorageOwner(mediaapp.StorageWorkKindDepth, row.ProjectID, row.ID, row.Attempt)
 	intent, err := ledger.ReadStorageWork(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
-	if intent.Owner != owner || intent.State != "open" {
+	if intent.Owner != owner || intent.State != mediaapp.StorageWorkOpen {
 		return nil, mediaapp.ErrStorageIdentityConflict
 	}
 	location, err := ledger.ReserveWorkLocation(ctx, intent.ID, key)
@@ -41,12 +41,12 @@ func (s *DepthStore) verifyDepthStorage(ctx context.Context, tx *gorm.DB, row de
 		return nil
 	}
 	ledger := s.storage(tx)
-	owner := application.StorageOwner("depth", row.ProjectID, row.ID, row.Attempt)
+	owner := application.StorageOwner(mediaapp.StorageWorkKindDepth, row.ProjectID, row.ID, row.Attempt)
 	intent, err := ledger.ReadStorageWork(ctx, owner)
 	if err != nil {
 		return err
 	}
-	if intent.Owner != owner || intent.State != "open" {
+	if intent.Owner != owner || intent.State != mediaapp.StorageWorkOpen {
 		return mediaapp.ErrStorageIdentityConflict
 	}
 	objects, err := readDepthObjects(tx, row)
@@ -58,7 +58,7 @@ func (s *DepthStore) verifyDepthStorage(ctx context.Context, tx *gorm.DB, row de
 		if err != nil {
 			return err
 		}
-		if object.ObjectLocationID == nil || location.ID != *object.ObjectLocationID || location.Ref != (mediadomain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: object.ObjectKey}) || location.State != "present" || location.ByteSize == nil || *location.ByteSize != object.ByteSize || location.SHA256 == nil || *location.SHA256 != object.SHA256 || location.MIMEType == nil || *location.MIMEType != object.MIMEType {
+		if object.ObjectLocationID == nil || location.ID != *object.ObjectLocationID || location.Ref != (mediadomain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: object.ObjectKey}) || location.State != mediadomain.ObjectLocationPresent || location.ByteSize == nil || *location.ByteSize != object.ByteSize || location.SHA256 == nil || *location.SHA256 != object.SHA256 || location.MIMEType == nil || *location.MIMEType != object.MIMEType {
 			return mediaapp.ErrStorageIdentityConflict
 		}
 	}

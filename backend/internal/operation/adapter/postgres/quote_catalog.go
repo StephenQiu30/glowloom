@@ -48,7 +48,7 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 			return ErrNotFound
 		}
 		if quoted.ModelProfileVersionID == nil {
-			return nil // agent_session has no single model or price snapshot.
+			return domain.ErrInvalidOperation
 		}
 		trial, trialModel, trialPrice, err := currentTrialCatalog(tx, actor, quoted, project.AllowOverseasModels)
 		if err != nil {

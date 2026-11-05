@@ -14,165 +14,70 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"go.opentelemetry.io/otel/trace/noop"
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/worker"
-	"go.temporal.io/sdk/workflow"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
-func TestOperationWorkflowResumesAfterFlowWorkerRestartOnLocalServices(t *testing.T) {
-	dsn := os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN")
-	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
-	if dsn == "" || addr == "" || namespace == "" || os.Getenv("GLOWLOOM_TEST_AGENT_WORKER") != "1" ||
-		os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" || os.Getenv("GLOWLOOM_ENV_FILE") == "" {
-		t.Skip("set isolated PostgreSQL, local Temporal, root .env, MinIO, and a running native agent worker")
+func TestOperationTaskResumesAfterWorkerRestartOnLocalServices(t *testing.T) {
+	if os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN") == "" || os.Getenv("GLOWLOOM_OBJECT_STORAGE_CONFIG") == "" {
+		t.Skip("set isolated PostgreSQL and object-storage fixture configuration")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 150*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 120*time.Second)
 	defer cancel()
-	conn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
-	if err != nil {
-		t.Fatalf("open isolated PostgreSQL: %v", err)
-	}
-	t.Cleanup(func() { _ = conn.Close() })
-	database := conn.DB
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatalf("load native MinIO configuration: %v", err)
-	}
-	objects, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
-		cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
-	if err != nil {
-		t.Fatalf("open MinIO client: %v", err)
-	}
-	if err := objects.Ping(ctx); err != nil {
-		t.Fatalf("ping MinIO: %v", err)
-	}
+	database := operationStoreDB(t).WithContext(ctx)
+	objects := businessStorageRegistry(t)
+	require.NotNil(t, objects, "configured object-storage profile is required for this explicit fixture")
+	require.NoError(t, objects.Ping(ctx))
 	var picture bytes.Buffer
 	img := image.NewRGBA(image.Rect(0, 0, 2, 3))
 	img.Set(0, 0, color.RGBA{R: 255, A: 255})
-	if err := png.Encode(&picture, img); err != nil {
-		t.Fatal(err)
-	}
-	resultServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	require.NoError(t, png.Encode(&picture, img))
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write(picture.Bytes())
 	}))
-	t.Cleanup(resultServer.Close)
+	defer server.Close()
 	pool := x509.NewCertPool()
-	pool.AddCert(resultServer.Certificate())
-	operationID, projectID := seedLiveMockOperation(t, database, resultServer.URL, "accepted")
-
-	temporalClient, err := client.Dial(client.Options{HostPort: addr, Namespace: namespace})
-	if err != nil {
-		t.Fatalf("connect local Temporal: %v", err)
-	}
-	t.Cleanup(temporalClient.Close)
-	mediaActivities, err := mediaflow.NewScopedActivities(database, objects, mediaflow.DownloadPolicy{
-		AllowedOrigins: []string{resultServer.URL}, AllowTestLoopbackTLS: true,
-		TLSRootCAs: pool,
-	}, app.NewMediaWorkerScopeAccess)
-	if err != nil {
-		t.Fatalf("construct media activities: %v", err)
-	}
-	mediaWorker := worker.New(temporalClient, "media", worker.Options{MaxConcurrentActivityExecutionSize: 4})
-	mediaflow.Register(mediaWorker, mediaActivities)
-	if err := mediaWorker.Start(); err != nil {
-		t.Fatalf("start media worker: %v", err)
-	}
-	t.Cleanup(mediaWorker.Stop)
-	newFlowWorker := func() worker.Worker {
-		flowWorker := worker.New(temporalClient, "flow", worker.Options{})
-		store := operationStore(database)
-		finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
-		operationflow.Register(flowWorker, operationflow.NewActivities(store, finalizer))
-		return flowWorker
-	}
-	flowWorker := newFlowWorker()
-	if err := flowWorker.Start(); err != nil {
-		t.Fatalf("start flow worker: %v", err)
-	}
-	flowRunning := true
-	t.Cleanup(func() {
-		if flowRunning {
-			flowWorker.Stop()
-		}
-	})
-	run, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID: "operation/" + operationID.String(), TaskQueue: "flow",
-	}, operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: operationID.String()})
-	if err != nil {
-		t.Fatalf("start mock operation workflow: %v", err)
-	}
-	waitForOperationStatus(ctx, t, database, operationID, "submitted")
-	flowWorker.Stop()
-	flowRunning = false
-	flowWorker = newFlowWorker()
-	if err := flowWorker.Start(); err != nil {
-		t.Fatalf("restart flow worker: %v", err)
-	}
-	flowRunning = true
-	if err := run.Get(ctx, nil); err != nil {
-		t.Fatalf("resumed mock operation workflow: %v", err)
-	}
-	assertOperationHistoryReplays(ctx, t, temporalClient, namespace, run)
-	assertLiveOperationResult(ctx, t, database, objects, operationID, projectID)
-	store := operationStore(database)
-	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
-	if err := finalizer.FinalizeOperation(ctx, operationflow.SettlementInput{
-		OperationID: operationID.String(), From: domain.StatusIngesting,
-		To: domain.StatusCompleted,
-	}); err != nil {
-		t.Fatalf("replay terminal settlement: %v", err)
-	}
-	assertLiveOperationResult(ctx, t, database, objects, operationID, projectID)
-	unknownID, unknownProjectID := seedLiveMockOperation(t, database, resultServer.URL, "unknown")
-	unknownRun, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID: "operation/" + unknownID.String(), TaskQueue: "flow",
-	}, operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: unknownID.String()})
-	if err != nil {
-		t.Fatalf("start uncertain mock operation workflow: %v", err)
-	}
-	if err := unknownRun.Get(ctx, nil); err != nil {
-		t.Fatalf("reconcile uncertain mock operation: %v", err)
-	}
-	assertOperationHistoryReplays(ctx, t, temporalClient, namespace, unknownRun)
-	assertLiveOperationResult(ctx, t, database, objects, unknownID, unknownProjectID)
-	var uncertainStates []string
-	if err := database.WithContext(ctx).Raw(`
-		SELECT to_status FROM operation.operation_event
-		WHERE operation_id = ?::uuid ORDER BY create_time, id
-	`, unknownID.String()).Scan(&uncertainStates).Error; err != nil {
-		t.Fatalf("read uncertain operation timeline: %v", err)
-	}
-	if !containsWorkflowStates(uncertainStates, "unknown", "reconciling", "submitted") {
-		t.Fatalf("uncertain operation did not reconcile: %v", uncertainStates)
+	pool.AddCert(server.Certificate())
+	receipts := operationapp.NewRoutedProviderStageService(staging.NewRoutedFactory(objects, pgmedia.NewStorageRoutes(database)), operationStore(database))
+	media, err := mediaflow.NewRoutedScopedActivitiesWithStaging(database, objects, mediaflow.DownloadPolicy{AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true, TLSRootCAs: pool}, staged.NewReader(receipts), app.NewMediaWorkerScopeAccess)
+	require.NoError(t, err)
+	for _, outcome := range []string{"accepted", "unknown"} {
+		t.Run(outcome, func(t *testing.T) {
+			id, project := seedLiveMockOperation(t, database, server.URL, outcome)
+			businessPinOperation(t, database, operationapp.ProviderDispatchIdentity{OperationID: id, ProjectID: project})
+			s := operationStore(database)
+			f := app.NewOperationFinalizer(database, s, pgbilling.NewStore(database))
+			h := map[string]taskruntime.Handler{}
+			operationflow.RegisterFlow(h, s, f, nil)
+			operationflow.RegisterProvider(h, s, nil)
+			operationflow.RegisterMedia(h, s, media, nil)
+			require.NoError(t, taskruntime.Enqueue(ctx, database, "operation.run", id.String(), time.Now()))
+			stop := taskfixture.Start(t, database, h)
+			waitForOperationStatus(ctx, t, database, id, "submitted")
+			stop()
+			taskfixture.Start(t, database, h)
+			waitForOperationStatus(ctx, t, database, id, "completed")
+			assertLiveOperationResult(ctx, t, database, objects, id, project)
+			require.NoError(t, f.FinalizeOperation(ctx, operationflow.SettlementInput{OperationID: id.String(), From: domain.StatusIngesting, To: domain.StatusCompleted}))
+			assertLiveOperationResult(ctx, t, database, objects, id, project)
+		})
 	}
 }
-
-func assertOperationHistoryReplays(ctx context.Context, t *testing.T, temporalClient client.Client,
-	namespace string, run client.WorkflowRun,
-) {
-	t.Helper()
-	replayer := worker.NewWorkflowReplayer()
-	replayer.RegisterWorkflowWithOptions(operationflow.OperationWorkflow,
-		workflow.RegisterOptions{Name: "OperationWorkflow"})
-	if err := replayer.ReplayWorkflowExecution(ctx, temporalClient.WorkflowService(), nil, namespace,
-		workflow.Execution{ID: run.GetID(), RunID: run.GetRunID()}); err != nil {
-		t.Fatalf("replay completed operation history %s: %v", run.GetID(), err)
-	}
-}
-
 func seedLiveMockOperation(t *testing.T, database *gorm.DB, resultOrigin, outcome string) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 	actor, projectID := operationStoreProject(t, database)
@@ -266,7 +171,7 @@ func waitForOperationStatus(ctx context.Context, t *testing.T, database *gorm.DB
 }
 
 func assertLiveOperationResult(ctx context.Context, t *testing.T, database *gorm.DB,
-	objects *objectstorage.Client, operationID, projectID uuid.UUID,
+	objects *objectstorage.Registry, operationID, projectID uuid.UUID,
 ) {
 	t.Helper()
 	var operation struct {
@@ -280,26 +185,28 @@ func assertLiveOperationResult(ctx context.Context, t *testing.T, database *gorm
 		t.Fatalf("completed operation = %+v: %v", operation, err)
 	}
 	var output struct {
-		ObjectKey        string
-		ModerationStatus string
-		MediaStatus      string
+		ObjectKey, ProfileID, Bucket string
+		LocationID                   uuid.UUID
+		ModerationStatus             string
+		MediaStatus                  string
 	}
 	if err := database.WithContext(ctx).Raw(`
-		SELECT a.object_key, o.moderation_status, a.status AS media_status
+		SELECT a.object_key, location.id AS location_id,location.profile_id,location.bucket, o.moderation_status, a.status AS media_status
 		FROM operation.operation_output AS o
 		JOIN media.media_asset AS a ON a.id = o.media_asset_id
+ JOIN media.object_location AS location ON location.id=a.object_location_id AND location.object_key=a.object_key
 		WHERE o.operation_id = ?::uuid AND o.project_id = ?::uuid
 	`, operationID.String(), projectID.String()).Scan(&output).Error; err != nil ||
 		output.ObjectKey == "" || output.ModerationStatus != "passed" || output.MediaStatus != "ready" {
 		t.Fatalf("completed candidate = %+v: %v", output, err)
 	}
-	if _, err := objects.Stat(ctx, output.ObjectKey); err != nil {
+	if _, err := objects.Stat(ctx, objectstorage.Ref{ProfileID: output.ProfileID, Bucket: output.Bucket, Key: output.ObjectKey}); err != nil {
 		t.Fatalf("stat generated MinIO object: %v", err)
 	}
 	t.Cleanup(func() {
 		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := objects.Remove(cleanCtx, output.ObjectKey); err != nil {
+		if err := objects.Remove(cleanCtx, objectstorage.Ref{ProfileID: output.ProfileID, Bucket: output.Bucket, Key: output.ObjectKey}); err != nil {
 			t.Errorf("remove exact generated fixture object: %v", err)
 		}
 	})
@@ -319,17 +226,4 @@ func assertLiveOperationResult(ctx context.Context, t *testing.T, database *gorm
 	if settled != 1 || releases != 1 {
 		t.Fatalf("settlement replay duplicated ledger: settle=%d release=%d", settled, releases)
 	}
-}
-
-func containsWorkflowStates(states []string, required ...string) bool {
-	seen := make(map[string]bool, len(states))
-	for _, status := range states {
-		seen[status] = true
-	}
-	for _, status := range required {
-		if !seen[status] {
-			return false
-		}
-	}
-	return true
 }

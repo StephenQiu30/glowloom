@@ -132,7 +132,7 @@ func (s *LibraryPackageService) Import(ctx context.Context, actor identityapp.Pr
 		if err != nil {
 			return job, err
 		}
-		if current.Status != "needs_reconciliation" {
+		if current.Status != PackageStatusNeedsReconciliation {
 			return job, nil
 		}
 	}

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"go.temporal.io/sdk/worker"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	"go.uber.org/zap"
 
@@ -21,7 +21,7 @@ func RunWorker(ctx context.Context, cfg config.Config, logger *zap.Logger, queue
 	}
 	type readyWorker struct {
 		queue   string
-		worker  worker.Worker
+		worker  *taskruntime.Worker
 		cleanup func()
 	}
 	var ready []readyWorker
@@ -48,18 +48,8 @@ func RunWorker(ctx context.Context, cfg config.Config, logger *zap.Logger, queue
 		results := make(chan result, len(ready))
 		for _, item := range ready {
 			go func() {
-				interrupt := make(chan any)
-				finished := make(chan struct{})
-				go func() {
-					select {
-					case <-ownedCtx.Done():
-						close(interrupt)
-					case <-finished:
-					}
-				}()
 				logger.Info("worker polling", zap.String("queue", item.queue))
-				err := item.worker.Run(interrupt)
-				close(finished)
+				err := item.worker.Run(ownedCtx)
 				results <- result{queue: item.queue, err: err}
 			}()
 		}

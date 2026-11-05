@@ -1,5 +1,7 @@
 # Glowloom命名统一与数据迁移实施计划
 
+> 执行架构更正（2026-11-04）：当前使用 PostgreSQL 工作记录和 Go worker，Agent 使用独立 TypeScript/Pi Durable 服务；以[设计32](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md)与[Plan28](28-完整创作Agent与Skill多Agent实施计划.md)为准。下文旧 Temporal namespace/测试/启用时间只记录当时观察，不是当前依赖、有效命令或新实现验收。内容清理当前默认不调度，经审阅后将 infra.task_work 的 workspace.retention/periodic 行 next_run_at 设为当前时间显式启用；重启不自动启用。
+
 > 唯一来源 PRD：[10-产品总览与交付边界](../prd/10-产品总览与交付边界.md)。技术合同沿其来源设计；实施进度、优先级、估算、承诺及阻塞只见 [BACKLOG](../../BACKLOG.md)。
 > 用户于2026-10-21明确要求当前项目全部使用织光 / Glowloom命名。当前服务目录、Go模块和二进制名称已统一为glowloom-server/glowloom；本次清理其余源码、测试、SQL角色、配置示例、事件主题、会话Cookie、导出格式及文档中的旧品牌。
 
@@ -34,7 +36,7 @@
 | 容器/配置   | 前端modules卷保留符号链接和属主复制，构建缓存重新生成；旧卷保留。私有.env仅定点更新相关资源名称，凭据和无关配置保留。前端3300与精确Origin持久对齐，API8080、worker8081、relay8082及前端健康检查均200，容器healthy。                                                                                    |
 | CRUD        | 新运行时沿用现有登录，创建独立验收画布，改名、打开、归档、立即逻辑删除与恢复到原归档状态成功。原项目/主画布ID不变；回收卡片展示实际删除时间及恰好30天后的恢复截止。此前A/B文本及批量验收详见计划15。                                                                                                   |
 
-现有库只应用`project_retention_incremental.sql`专项增量，不重放schema；任务只清理到期项目图/草稿私有载荷，保留墓碑、媒体及账本。启用时无到期对象，不能把空运行写成已清理业务内容。`glowloom temporal setup --project-retention`仅安装项目清理，默认setup或重启不自动开启。
+现有库只应用`project_retention_incremental.sql`专项增量，不重放schema；任务只清理到期项目图/草稿私有载荷，保留墓碑、媒体及账本。启用时无到期对象，不能把空运行写成已清理业务内容。已移除的旧计划安装入口（仅历史记录）仅安装项目清理，默认setup或重启不自动开启。
 
 ## 验证结果与边界
 

@@ -30,7 +30,21 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      GLOWLOOM_TEST_AGENT_CONTROL_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
+      # Metadata tests use one explicit physical identity; live object gates have
+      # their own opt-in config and never contact this deliberately closed port.
+      GLOWLOOM_OBJECT_STORAGE_CONFIG: >-
+        {"schema_version":1,"revision":"1","default_write_profile":"test-main","profiles":{"test-main":{"provider":"minio","mode":"read_write","endpoint":"http://127.0.0.1:1","signing_endpoint":"http://127.0.0.1:1","bucket":"glowloom-test","region":"us-east-1","addressing_style":"path","credentials":{"source":"env","access_key_env":"GLOWLOOM_TEST_STORAGE_AK","secret_key_env":"GLOWLOOM_TEST_STORAGE_SK"}}},"upload":{"mode":"relay","signed_url_ttl":600000000000,"session_ttl":86400000000000,"multipart_threshold_bytes":33554432,"part_size_bytes":8388608,"part_concurrency":3,"staging_retention":172800000000000},"access":{"preview_ttl":300000000000,"max_signed_url_ttl":900000000000},"limits":{"max_image_bytes":20971520,"max_video_bytes":524288000,"max_audio_bytes":104857600,"max_model_bytes":67108864,"max_document_bytes":20971520}}
+      GLOWLOOM_TEST_STORAGE_AK: metadata-fixture
+      GLOWLOOM_TEST_STORAGE_SK: metadata-fixture-secret
+      GLOWLOOM_TEST_APP_SCOPE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_app_scope_test?sslmode=disable
+      GLOWLOOM_TEST_AGENT_BUSINESS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_business_test?sslmode=disable
+      GLOWLOOM_TEST_AGENT_CANVAS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_agent_canvas_test?sslmode=disable
+      GLOWLOOM_TEST_AGENT_BOUNDARY_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_boundary_test?sslmode=disable
+      GLOWLOOM_TEST_TASK_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_tasks_test?sslmode=disable
+      GLOWLOOM_TEST_MAINTENANCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_maintenance_test?sslmode=disable
+      GLOWLOOM_TEST_OPERATION_STORE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_receipt?sslmode=disable
+      GLOWLOOM_TEST_MODEL_GATEWAY_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_gateway_test?sslmode=disable
+      GLOWLOOM_AGENT_TEST_DB_DSN: postgres://glowloom_agent@127.0.0.1:5432/glowloom_boundary_test?sslmode=disable
       GLOWLOOM_TEST_SCHEMA_DB_DSN: postgres://postgres@127.0.0.1:5432/schema_probe?sslmode=disable
       GLOWLOOM_TEST_CANVAS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
       GLOWLOOM_TEST_GOVERNANCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_governance?sslmode=disable
@@ -55,7 +69,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - uses: actions/setup-node@v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.22.2"
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:
@@ -71,13 +85,79 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Initialize isolated test databases
         run: |
-          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE glowloom_agent_runtime NOLOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe' -c 'CREATE DATABASE glowloom_governance' -c 'CREATE DATABASE glowloom_catalog' -c 'CREATE DATABASE glowloom_subject_alignment_ci' -c 'CREATE DATABASE glowloom_subject_source_ci' -c 'CREATE DATABASE glowloom_subject_storage_ci' -c 'CREATE DATABASE glowloom_subject_storage_package_ci' -c 'CREATE DATABASE glowloom_subject_storage_script_ci'
+          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE glowloom_agent LOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe' -c 'CREATE DATABASE glowloom_governance' -c 'CREATE DATABASE glowloom_catalog' -c 'CREATE DATABASE glowloom_subject_alignment_ci' -c 'CREATE DATABASE glowloom_subject_source_ci' -c 'CREATE DATABASE glowloom_subject_storage_ci' -c 'CREATE DATABASE glowloom_subject_storage_package_ci' -c 'CREATE DATABASE glowloom_subject_storage_script_ci'
           psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "$GLOWLOOM_TEST_GOVERNANCE_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "$GLOWLOOM_TEST_SUBJECT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+      - name: Provision durable task and cross-language databases
+        run: |
+          for database in glowloom_app_scope_test glowloom_business_test glowloom_agent_canvas_test glowloom_boundary_test glowloom_tasks_test glowloom_maintenance_test glowloom_receipt glowloom_gateway_test; do
+            psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
+            psql "postgres://postgres@127.0.0.1:5432/$database?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+          done
+      - name: Install the production Agent used by boundary tests
+        working-directory: agent
+        run: pnpm install --frozen-lockfile
       - name: Run backend Race tests
         run: go test -race -count=1 ./...
+
+  agent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: glowloom_agent_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d glowloom_agent_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      GLOWLOOM_AGENT_TEST_DB_DSN: postgres://glowloom_agent@127.0.0.1:5432/glowloom_agent_test?sslmode=disable
+      GLOWLOOM_AGENT_RECOVERY_TEST_DB_DSN: postgres://glowloom_agent@127.0.0.1:5432/glowloom_agent_recovery_test?sslmode=disable
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.22.2"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: agent/package.json
+          cache: true
+          cache_dependency_path: agent/pnpm-lock.yaml
+      - name: Provision separate restricted-role test partitions
+        working-directory: backend
+        run: |
+          psql postgres://postgres@127.0.0.1:5432/glowloom_agent_test -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE glowloom_agent LOGIN NOSUPERUSER' -c 'CREATE DATABASE glowloom_agent_recovery_test'
+          for database in glowloom_agent_test glowloom_agent_recovery_test; do
+            for fragment in agent_storage agent_service agent_business agent_conversation; do
+              psql "postgres://postgres@127.0.0.1:5432/$database" -X -v ON_ERROR_STOP=1 -f "db/$fragment.sql"
+            done
+          done
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm build
+      - run: pnpm api:check
+      - name: Test official Storage, Harness and process-crash recovery
+        run: pnpm test
+      - name: Build the independent Agent image
+        working-directory: .
+        run: docker build --tag glowloom/agent:ci agent
 
   frontend:
     runs-on: ubuntu-24.04

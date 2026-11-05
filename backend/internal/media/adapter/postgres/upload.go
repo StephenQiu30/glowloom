@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -11,10 +12,12 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 // AuthorizeUpload checks the current actor and active project before body reading.
@@ -41,24 +44,24 @@ func (s scopeAuthority) authorizeUpload(tx *gorm.DB, actor identityapp.Principal
 	if projectID == uuid.Nil {
 		return "", ErrNotFound
 	}
-	query := `SELECT status, aspect_ratio FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete AND status IN ('active','archived')`
+	query := tx.Table("workspace.project").Select("status", "aspect_ratio").Where("id = ? AND org_id = ? AND is_delete = ? AND status IN ?", projectID, actor.OrgID, false, []string{workspacedomain.ProjectStatusActive, workspacedomain.ProjectStatusArchived})
 	if lock {
-		query += ` FOR UPDATE`
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	} else {
-		query += ` FOR SHARE`
+		query = query.Clauses(clause.Locking{Strength: "SHARE"})
 	}
 	var row struct {
 		Status      string
 		AspectRatio string
 	}
-	r := tx.Raw(query, projectID, actor.OrgID).Scan(&row)
+	r := query.Take(&row)
+	if errors.Is(r.Error, gorm.ErrRecordNotFound) {
+		return "", ErrNotFound
+	}
 	if r.Error != nil {
 		return "", fmt.Errorf("authorize upload project: %w", r.Error)
 	}
-	if r.RowsAffected != 1 {
-		return "", ErrNotFound
-	}
-	if row.Status != "active" {
+	if row.Status != workspacedomain.ProjectStatusActive {
 		return "", ErrProjectStateConflict
 	}
 	return row.AspectRatio, nil
@@ -86,19 +89,13 @@ func (s *Store) FindUpload(ctx context.Context, actor identityapp.Principal, r a
 }
 
 func replayUpload(tx *gorm.DB, actor identityapp.Principal, r application.UploadRequest) (application.UploadResult, bool, error) {
-	var row struct {
-		SHA256   string
-		FileName string
-		ByteSize int64
-		AssetID  uuid.UUID
-		Response json.RawMessage
+	var row uploadRequestRecord
+	read := tx.Where(map[string]any{"project_id": r.ProjectID, "principal_id": actor.ID, "request_key": r.Key}).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return application.UploadResult{}, false, nil
 	}
-	read := tx.Raw(`SELECT sha256,file_name,byte_size,asset_id,response FROM media.upload_request WHERE project_id=? AND principal_id=? AND request_key=?`, r.ProjectID, actor.ID, r.Key).Scan(&row)
 	if read.Error != nil {
 		return application.UploadResult{}, false, fmt.Errorf("read upload receipt: %w", read.Error)
-	}
-	if read.RowsAffected == 0 {
-		return application.UploadResult{}, false, nil
 	}
 	if row.SHA256 != r.SHA256 || row.FileName != r.FileName || row.ByteSize != r.ByteSize {
 		return application.UploadResult{}, false, application.ErrUploadConflict
@@ -108,12 +105,12 @@ func replayUpload(tx *gorm.DB, actor identityapp.Principal, r application.Upload
 		return result, false, ErrUnavailable
 	}
 	var available assetRow
-	read = tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND origin='upload' AND status='ready' AND moderation_status='passed' AND NOT is_delete AND NOT contains_real_person FOR SHARE`, row.AssetID, r.ProjectID).Scan(&available)
+	read = tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"id": row.AssetID, "project_id": r.ProjectID, "origin": domain.OriginUpload, "status": domain.StatusReady, "moderation_status": domain.ModerationPassed, "is_delete": false, "contains_real_person": false}).Take(&available)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return application.UploadResult{}, false, application.ErrUploadConflict
+	}
 	if read.Error != nil {
 		return application.UploadResult{}, false, read.Error
-	}
-	if read.RowsAffected != 1 {
-		return application.UploadResult{}, false, application.ErrUploadConflict
 	}
 	if err := available.loadLocation(tx); err != nil {
 		return application.UploadResult{}, false, err
@@ -143,11 +140,18 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 			return err
 		}
 		var existing assetRow
-		read := tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND (sha256=? OR (? AND moderation_detail->'normalization'->'source'->>'sha256'=? AND moderation_detail->'normalization'->>'method'='webm_vp8_vp9_to_mp4_h264' AND moderation_detail->'normalization'->>'version'='1')) AND origin='upload' AND status='ready' AND moderation_status='passed' AND NOT is_delete AND NOT contains_real_person AND moderation_detail->>'method'='local_workspace_owner_review' ORDER BY create_time,id LIMIT 1 FOR SHARE`, r.ProjectID, *asset.SHA256, *asset.SHA256 != r.SHA256, r.SHA256).Scan(&existing)
+		read := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("project_id = ?", r.ProjectID).
+			Where("(sha256 = ? OR (? AND moderation_detail->'normalization'->'source'->>'sha256' = ? AND moderation_detail->'normalization'->>'method' = ? AND moderation_detail->'normalization'->>'version' = ?))", *asset.SHA256, *asset.SHA256 != r.SHA256, r.SHA256, "webm_vp8_vp9_to_mp4_h264", "1").
+			Where(map[string]any{"origin": domain.OriginUpload, "status": domain.StatusReady, "moderation_status": domain.ModerationPassed, "is_delete": false, "contains_real_person": false}).
+			Where("moderation_detail->>'method' = ?", "local_workspace_owner_review").Order("create_time").Order("id").Limit(1).Take(&existing)
 		if read.Error != nil {
-			return fmt.Errorf("find identical local upload: %w", read.Error)
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				read.Error = nil
+			} else {
+				return fmt.Errorf("find identical local upload: %w", read.Error)
+			}
 		}
-		if read.RowsAffected == 1 {
+		if read.Error == nil && existing.ID != uuid.Nil {
 			if err := existing.loadLocation(tx); err != nil {
 				return err
 			}
@@ -170,16 +174,16 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 		if err != nil {
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO media.upload_request(project_id,principal_id,request_key,sha256,file_name,byte_size,asset_id,response) VALUES(?,?,?,?,?,?,?,?::jsonb)`,
-			r.ProjectID, actor.ID, r.Key, r.SHA256, r.FileName, r.ByteSize, result.Asset.ID, string(body)).Error; err != nil {
+		receipt := uploadRequestRecord{ProjectID: &r.ProjectID, PrincipalID: actor.ID, RequestKey: r.Key, SHA256: r.SHA256, FileName: r.FileName, ByteSize: r.ByteSize, AssetID: result.Asset.ID, Response: jsonDocument(body)}
+		if err := tx.Create(&receipt).Error; err != nil {
 			return fmt.Errorf("insert upload receipt: %w", err)
 		}
 		after, err := json.Marshal(map[string]any{"kind": result.Asset.Kind, "byte_size": result.Asset.ByteSize, "sha256": r.SHA256, "review_method": "local_workspace_owner_review", "reused": result.DuplicateOf != nil})
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO audit.audit_log(id,org_id,project_id,actor_id,actor_kind,action,object_type,object_id,after,request_id,create_time,update_time)
-			VALUES(?,?,?,?, 'user','media.uploaded','media_asset',?,?::jsonb,?,?,?)`, uuid.New(), actor.OrgID, r.ProjectID, actor.ID, result.Asset.ID.String(), string(after), r.RequestID.String(), asset.CreateTime, asset.CreateTime).Error
+		audit := uploadAuditRecord{ID: uuid.New(), OrgID: actor.OrgID, ProjectID: &r.ProjectID, ActorID: actor.ID, ActorKind: "user", Action: "media.uploaded", ObjectType: "media_asset", ObjectID: result.Asset.ID.String(), After: jsonDocument(after), RequestID: r.RequestID.String(), CreateTime: asset.CreateTime, UpdateTime: asset.CreateTime}
+		return tx.Create(&audit).Error
 	})
 	return result, err
 }
@@ -246,15 +250,15 @@ func (s *Store) UploadAssetExists(ctx context.Context, projectID, id uuid.UUID) 
 	}
 	var count int64
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var present int
-		read := tx.Raw(`SELECT 1 FROM workspace.project WHERE id=? FOR UPDATE`, projectID).Scan(&present)
+		var project struct{ ID uuid.UUID }
+		read := tx.Table("workspace.project").Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", projectID).Take(&project)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return ErrUnavailable
+		}
 		if read.Error != nil {
 			return read.Error
 		}
-		if read.RowsAffected != 1 {
-			return ErrUnavailable
-		}
-		return tx.Raw(`SELECT count(*) FROM media.media_asset WHERE id=? AND project_id=?`, id, projectID).Scan(&count).Error
+		return tx.Model(&assetRow{}).Where("id = ? AND project_id = ?", id, projectID).Count(&count).Error
 	})
 	return count != 0, err
 }

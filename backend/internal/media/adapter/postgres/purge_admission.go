@@ -39,7 +39,7 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 			return err
 		}
 		var err error
-		cached, err = purgeReplay(tx, actor, in.Key, hash, "create")
+		cached, err = purgeReplay(tx, actor, in.Key, hash, application.PurgeActionCreate)
 		return err
 	})
 	if err != nil {
@@ -59,7 +59,7 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 		if err != nil {
 			return err
 		}
-		replay, err := purgeReplay(tx, actor, in.Key, hash, "create")
+		replay, err := purgeReplay(tx, actor, in.Key, hash, application.PurgeActionCreate)
 		if err != nil {
 			return err
 		}
@@ -90,11 +90,11 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 		}
 		for _, wanted := range in.Items {
 			item := items[wanted.ID]
-			if item.Revision != wanted.Revision || item.State != "trashed" || item.Revision >= 2147483647 {
+			if item.Revision != wanted.Revision || item.State != domain.LibraryItemStateTrashed || item.Revision >= 2147483647 {
 				return domain.ErrPurgeConflict
 			}
-			var purged bool
-			if err := tx.Raw(`SELECT purged_at IS NOT NULL FROM media.library_item WHERE id=? AND library_id=?`, item.ID, library.ID).Scan(&purged).Error; err != nil {
+			purged, err := storageExists(tx.Model(&libraryItemRow{}).Where("id = ? AND library_id = ? AND purged_at IS NOT NULL", item.ID, library.ID))
+			if err != nil {
 				return err
 			}
 			if purged {
@@ -106,14 +106,15 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 		if now.IsZero() {
 			return application.ErrUnavailable
 		}
-		if err := libraryChanged(tx, `INSERT INTO media.purge_job(id,org_id,actor_id,library_id,scope_kind,project_id,item_count,status,stage,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'queued','frozen',?,?)`, job, actor.OrgID, actor.ID, library.ID, string(in.Scope.Kind), in.Scope.ProjectID, len(in.Items), now, now); err != nil {
+		jobRecord := purgeJobRow{ID: job, OrgID: actor.OrgID, ActorID: actor.ID, LibraryID: library.ID, ScopeKind: string(in.Scope.Kind), ProjectID: in.Scope.ProjectID, ItemCount: len(in.Items), Status: domain.PurgeStatusQueued, Stage: domain.PurgeStageFrozen, Attempt: 1, Revision: 1, ProcessEnded: true, CreatedAt: now, UpdatedAt: now}
+		if err := tx.Create(&jobRecord).Error; err != nil {
 			return err
 		}
 		accepted := 0
 		for index, wanted := range in.Items {
 			item := items[wanted.ID]
 			frozen := application.FrozenPurgeItem{ItemID: item.ID, CatalogRevision: item.Revision, Renditions: []domain.Rendition{}}
-			state := "queued"
+			state := domain.PurgeItemStatusQueued
 			var failure *string
 			if item.AssetID != nil {
 				if s.references == nil || s.references(tx) == nil {
@@ -128,13 +129,13 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 					return err
 				}
 				if used {
-					state = "blocked"
+					state = domain.PurgeItemStatusBlocked
 					code := "in_use"
 					failure = &code
 				}
 			}
 			var file *application.LibraryMediaFile
-			if state == "queued" && item.AssetID != nil {
+			if state == domain.PurgeItemStatusQueued && item.AssetID != nil {
 				actual, err := transferSourceFile(tx, actor, in.Scope, *item.AssetID)
 				if err != nil {
 					return err
@@ -146,7 +147,7 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 				if err != nil {
 					return err
 				}
-				if err := libraryChanged(tx, `UPDATE media.media_asset SET is_delete=true,delete_time=?,purge_after=?,revision=?,update_time=? WHERE id=? AND revision=? AND NOT is_delete`, deleted.DeleteTime, deleted.PurgeAfter, deleted.Revision, deleted.UpdateTime, deleted.ID, actual.Asset.Revision); err != nil {
+				if err := updateOne(tx, "media.media_asset", map[string]any{"id": deleted.ID, "revision": actual.Asset.Revision, "is_delete": false}, map[string]any{"is_delete": true, "delete_time": deleted.DeleteTime, "purge_after": deleted.PurgeAfter, "revision": deleted.Revision, "update_time": deleted.UpdateTime}, application.ErrLibraryConflict); err != nil {
 					return err
 				}
 				frozen.Asset, frozen.Renditions = &deleted, actual.Renditions
@@ -156,25 +157,28 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 			if err != nil || len(body) > 1<<20 {
 				return application.ErrUnavailable
 			}
-			if err := libraryChanged(tx, `INSERT INTO media.purge_item(job_id,item_index,item_id,asset_id,frozen,status,failure_code) VALUES(?,?,?,?,?,?,?)`, job, index, item.ID, item.AssetID, body, state, failure); err != nil {
+			purgeItem := purgeItemRow{JobID: job, ItemIndex: index, ItemID: item.ID, AssetID: item.AssetID, Frozen: body, Status: state, FailureCode: failure}
+			if err := tx.Create(&purgeItem).Error; err != nil {
 				return err
 			}
 			if file != nil {
-				if err := libraryChanged(tx, `INSERT INTO media.purge_object(job_id,item_index,object_key,object_location_id,rendition_kind,byte_size,sha256) VALUES(?,?,?,?,'',?,?)`, job, index, file.Asset.ObjectKey, locationID(file.Asset.ObjectLocation), file.Asset.ByteSize, file.Asset.SHA256); err != nil {
+				object := purgeObjectRow{JobID: job, ItemIndex: index, ObjectKey: file.Asset.ObjectKey, ObjectLocationID: locationID(file.Asset.ObjectLocation), RenditionKind: "", ByteSize: &file.Asset.ByteSize, SHA256: file.Asset.SHA256}
+				if err := tx.Create(&object).Error; err != nil {
 					return err
 				}
 				for _, rend := range file.Renditions {
-					if err := libraryChanged(tx, `INSERT INTO media.purge_object(job_id,item_index,object_key,object_location_id,rendition_kind,byte_size) VALUES(?,?,?,?,?,?)`, job, index, rend.ObjectKey, locationID(rend.ObjectLocation), string(rend.Kind), rend.ByteSize); err != nil {
+					object := purgeObjectRow{JobID: job, ItemIndex: index, ObjectKey: rend.ObjectKey, ObjectLocationID: locationID(rend.ObjectLocation), RenditionKind: string(rend.Kind), ByteSize: rend.ByteSize}
+					if err := tx.Create(&object).Error; err != nil {
 						return err
 					}
 				}
 			}
-			if state == "queued" {
+			if state == domain.PurgeItemStatusQueued {
 				accepted++
 			}
 		}
 		if accepted > 0 {
-			if err := libraryChanged(tx, `UPDATE media.library SET revision=revision+1,update_time=? WHERE id=? AND revision=?`, now, library.ID, library.Revision); err != nil {
+			if err := updateOne(tx, "media.library", map[string]any{"id": library.ID, "revision": library.Revision}, map[string]any{"revision": library.Revision + 1, "update_time": now}, application.ErrLibraryConflict); err != nil {
 				return err
 			}
 			if in.Scope.Kind == domain.LibraryProject {
@@ -182,7 +186,7 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 					return err
 				}
 			}
-		} else if err := libraryChanged(tx, `UPDATE media.purge_job SET status='failed',stage='completed' WHERE id=?`, job); err != nil {
+		} else if err := updateOne(tx, "media.purge_job", map[string]any{"id": job}, map[string]any{"status": domain.PurgeStatusFailed, "stage": domain.PurgeStageCompleted}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		row, err := s.readJob(tx, actor, job, false)
@@ -193,7 +197,7 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 		if err != nil {
 			return err
 		}
-		return recordPurgeCommand(tx, actor, in.Key, hash, "create", result, accepted > 0)
+		return recordPurgeCommand(tx, actor, in.Key, hash, application.PurgeActionCreate, result, accepted > 0)
 	})
 	return result, err
 }

@@ -88,7 +88,7 @@ func TestCodexChatKeepsThreeTurnsOnOnePrivateThread(t *testing.T) {
 		delta := ""
 		result, err := session.Turn(t.Context(), "hello", func(text string) { delta += text })
 		require.NoError(t, err)
-		require.Equal(t, "completed", result.Outcome)
+		require.EqualValues(t, "completed", result.Outcome)
 		require.Equal(t, fmt.Sprint("answer turn-", i), result.Text)
 		require.Equal(t, "answer", delta)
 		require.Nil(t, result.Usage)
@@ -105,10 +105,10 @@ func TestCodexChatUnknownNeverResends(t *testing.T) {
 			t.Cleanup(func() { require.NoError(t, session.Close()) })
 			result, err := session.Turn(t.Context(), "hello", nil)
 			require.NoError(t, err)
-			require.Equal(t, "unknown", result.Outcome)
+			require.EqualValues(t, "unknown", result.Outcome)
 			result, err = session.Turn(t.Context(), "hello", nil)
 			require.NoError(t, err)
-			require.Equal(t, "not_submitted", result.Outcome)
+			require.EqualValues(t, "not_submitted", result.Outcome)
 			require.Equal(t, 1, launcher.turns)
 		})
 	}

@@ -16,33 +16,21 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
-// ResultReader opens one server-selected original, never a user supplied URL.
-type ResultReader interface {
-	Get(context.Context, string) (io.ReadCloser, error)
-}
-
 // ExportQuery signs pending output for inspection and serves finalized downloads.
 type ExportQuery struct {
 	launchOrigin string
 	store        ExportStore
-	signer       mediaapp.PreviewSigner
-	reader       ResultReader
 	storage      *resultAccess
 }
 
-// NewExportQuery injects authorization, bounded signed URLs and private result bytes.
-func NewExportQuery(store ExportStore, signer mediaapp.PreviewSigner, reader ResultReader) *ExportQuery {
-	return &ExportQuery{store: store, signer: signer, reader: reader}
-}
-
 // NewRoutedExportQuery resolves saved physical identities and preserves SDK expiry.
-func NewRoutedExportQuery(store ExportStore, signer mediaapp.ObjectSigner, reader mediaapp.ObjectReader, legacySigner mediaapp.PreviewSigner, legacyReader ResultReader) *ExportQuery {
-	return &ExportQuery{store: store, storage: &resultAccess{signer: signer, reader: reader, legacySigner: legacySigner, legacyReader: legacyReader}}
+func NewRoutedExportQuery(store ExportStore, signer mediaapp.ObjectSigner, reader mediaapp.ObjectReader, ttl time.Duration) *ExportQuery {
+	return &ExportQuery{store: store, storage: &resultAccess{signer: signer, reader: reader, previewTTL: ttl}}
 }
 
 // Preview returns the exact output hash and revision required by owner review.
 func (q *ExportQuery) Preview(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (ExportPreview, error) {
-	if q == nil || q.store == nil || (q.signer == nil && q.storage == nil) {
+	if q == nil || q.store == nil || q.storage == nil || q.storage.signer == nil {
 		return ExportPreview{}, ErrUnavailable
 	}
 	if store, ok := q.store.(ArtifactStore); ok {
@@ -58,12 +46,7 @@ func (q *ExportQuery) Preview(ctx context.Context, actor identityapp.Principal, 
 	if err != nil {
 		return ExportPreview{}, err
 	}
-	const ttl = 10 * time.Minute
-	access := q.storage
-	if access == nil {
-		access = &resultAccess{legacySigner: q.signer, legacyReader: q.reader}
-	}
-	grant, err := access.sign(ctx, asset.ObjectKey, asset.ObjectLocation, ttl)
+	grant, err := q.storage.sign(ctx, asset.ObjectKey, asset.ObjectLocation)
 	url := grant.URL
 	if err != nil {
 		return ExportPreview{}, err
@@ -74,7 +57,7 @@ func (q *ExportQuery) Preview(ctx context.Context, actor identityapp.Principal, 
 		if err != nil {
 			return ExportPreview{}, err
 		}
-		waveGrant, err := access.sign(ctx, rendition.ObjectKey, rendition.ObjectLocation, ttl)
+		waveGrant, err := q.storage.sign(ctx, rendition.ObjectKey, rendition.ObjectLocation)
 		waveURL := waveGrant.URL
 		if err != nil || waveURL == "" {
 			return ExportPreview{}, fmt.Errorf("%w: sign audio waveform", ErrUnavailable)
@@ -86,7 +69,7 @@ func (q *ExportQuery) Preview(ctx context.Context, actor identityapp.Principal, 
 
 // Download allows an attachment only after the produced output passed manual review.
 func (q *ExportQuery) Download(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (io.ReadCloser, int64, error) {
-	if q == nil || q.store == nil || (q.reader == nil && q.storage == nil) {
+	if q == nil || q.store == nil || q.storage == nil || q.storage.reader == nil {
 		return nil, 0, ErrUnavailable
 	}
 	if store, ok := q.store.(ArtifactStore); ok {
@@ -105,11 +88,7 @@ func (q *ExportQuery) Download(ctx context.Context, actor identityapp.Principal,
 	if job.Status != domain.Succeeded || !asset.CanReference() {
 		return nil, 0, ErrConflict
 	}
-	access := q.storage
-	if access == nil {
-		access = &resultAccess{legacySigner: q.signer, legacyReader: q.reader}
-	}
-	reader, err := access.read(ctx, asset.ObjectKey, asset.ObjectLocation)
+	reader, err := q.storage.read(ctx, asset.ObjectKey, asset.ObjectLocation)
 	return reader, asset.ByteSize, err
 }
 

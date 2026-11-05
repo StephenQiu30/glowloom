@@ -12,6 +12,9 @@ import (
 // Status is a durable local export lifecycle, including explicit output review.
 type Status string
 
+// ExportStage records one durable local encoding phase.
+type ExportStage string
+
 // OutputKind selects one immutable local encoding contract.
 type OutputKind string
 
@@ -23,6 +26,21 @@ const (
 	OutputFCPXML      OutputKind = "fcpxml"
 	OutputXMEML       OutputKind = "xmeml"
 	OutputJianying    OutputKind = "jianying"
+)
+
+// Export stages identify the current rendering, publication or cancellation step.
+const (
+	ExportStageQueued      ExportStage = "queued"
+	ExportStageDownloading ExportStage = "downloading"
+	ExportStageRendering   ExportStage = "rendering"
+	ExportStageEncoding    ExportStage = "encoding"
+	ExportStagePreviews    ExportStage = "previews"
+	ExportStageVerifying   ExportStage = "verifying"
+	ExportStageReview      ExportStage = "review"
+	ExportStageCancelling  ExportStage = "cancelling"
+	ExportStageComplete    ExportStage = "complete"
+	ExportStageFailed      ExportStage = "failed"
+	ExportStageCancelled   ExportStage = "cancelled"
 )
 
 // Effective applies the creation request's documented video default.
@@ -63,7 +81,7 @@ type ExportJob struct {
 	OutputKind  OutputKind      `json:"output_kind" enums:"video,audio,media_bundle,fcpxml,xmeml,jianying"`
 	Source      Source          `json:"source"`
 	Status      Status          `json:"status"`
-	Stage       string          `json:"stage"`
+	Stage       ExportStage     `json:"stage"`
 	Progress    int             `json:"progress"`
 	Attempt     int             `json:"attempt"`
 	Revision    int64           `json:"revision"`

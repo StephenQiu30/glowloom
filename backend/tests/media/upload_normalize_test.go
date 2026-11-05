@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -124,8 +123,8 @@ func TestNormalizedUploadPreservesInputReceiptAndCanonicalReview(t *testing.T) {
 	in := uploadInput(t)
 	in.File = readUploadWebM(t, uploadWebMFixture(t, "libvpx-vp9", "0.6"))
 	in.Request.FileName = "白膜镜头.webm"
-	service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
-	result, err := service.Upload(t.Context(), in)
+	service := unitRoutedUploadService(repo, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
+	result, err := fixtureProjectUpload(t.Context(), service, in)
 	if err != nil {
 		t.Fatal(err)
 	}

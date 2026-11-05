@@ -26,7 +26,7 @@ var ErrObjectMissing = errors.New("export private object missing")
 type WorkerStore interface {
 	Claim(context.Context, WorkID) (Work, error)
 	AuthorizeObjectWrite(context.Context, WorkID) error
-	Progress(context.Context, WorkID, int, string) error
+	Progress(context.Context, WorkID, int, domain.ExportStage) error
 	Commit(context.Context, WorkID, mediadomain.MediaAsset, []mediadomain.Rendition) (domain.ExportJob, error)
 	Finish(context.Context, WorkID, bool, string) error
 	Release(context.Context, WorkID) error
@@ -73,7 +73,7 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 		return work.Job, nil
 	}
 	if w.routes != nil {
-		objects, err := w.routes.Open(ctx, StorageOwner("export", work.Job.ProjectID, id.JobID, id.Attempt), work.SourceAssets)
+		objects, err := w.routes.Open(ctx, StorageOwner(mediaapp.StorageWorkKindExport, work.Job.ProjectID, id.JobID, id.Attempt), work.SourceAssets)
 		if err != nil {
 			return domain.ExportJob{}, err
 		}
@@ -104,7 +104,7 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 			}
 		}()
 		for i, input := range work.Frozen.Inputs {
-			if err := w.store.Progress(ctx, id, 5+i*14/max(1, len(work.Frozen.Inputs)), "downloading"); err != nil {
+			if err := w.store.Progress(ctx, id, 5+i*14/max(1, len(work.Frozen.Inputs)), domain.ExportStageDownloading); err != nil {
 				return domain.ExportJob{}, err
 			}
 			file, err := w.readChecked(ctx, input.ObjectKey, input.ByteSize, input.MIMEType, input.SHA256)
@@ -118,7 +118,7 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 			}
 			paths[input.AssetID] = file.File.Name()
 		}
-		output, err = w.renderer.Render(ctx, work.Frozen, paths, func(progress int, stage string) error { return w.store.Progress(ctx, id, progress, stage) })
+		output, err = w.renderer.Render(ctx, work.Frozen, paths, func(progress int, stage domain.ExportStage) error { return w.store.Progress(ctx, id, progress, stage) })
 		if err != nil {
 			return domain.ExportJob{}, err
 		}
@@ -166,7 +166,7 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 	if kind == domain.OutputVideo && (probe.Width == nil || probe.Height == nil || int(*probe.Width) != width || int(*probe.Height) != height) || kind == domain.OutputAudio && (probe.Width != nil || probe.Height != nil || probe.FPS != nil || probe.AudioChannels == nil || *probe.AudioChannels != 2) {
 		return domain.ExportJob{}, ErrInvalidExport
 	}
-	if err := w.store.Progress(ctx, id, 85, "previews"); err != nil {
+	if err := w.store.Progress(ctx, id, 85, domain.ExportStagePreviews); err != nil {
 		return domain.ExportJob{}, err
 	}
 	rendered, err := w.previews.Render(ctx, output, probe, work.Frozen.Timeline.AspectRatio)

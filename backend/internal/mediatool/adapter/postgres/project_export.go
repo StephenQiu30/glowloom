@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path"
 	"strconv"
 	"strings"
@@ -27,6 +28,8 @@ type artifactRow struct {
 	CreatedAt                                                    time.Time
 }
 
+func (artifactRow) TableName() string { return "mediatool.export_artifact" }
+
 func (r artifactRow) public() domain.Artifact {
 	return domain.Artifact{ID: r.ID, JobID: r.JobID, ProjectID: r.ProjectID, Attempt: r.Attempt, Format: domain.OutputKind(r.Format), FormatVersion: r.FormatVersion, FileName: r.FileName, MIMEType: r.MIMEType, ByteSize: r.ByteSize, SHA256: r.SHA256, ObjectKey: r.ObjectKey, CreatedAt: r.CreatedAt}
 }
@@ -44,12 +47,14 @@ func (s *Store) readArtifact(ctx context.Context, tx *gorm.DB, row jobRow) (doma
 		return domain.Artifact{}, application.ErrConflict
 	}
 	var stored artifactRow
-	query := tx.Raw(`SELECT * FROM mediatool.export_artifact WHERE id=? AND job_id=? AND project_id=? AND attempt=?`, *row.ArtifactID, row.ID, row.ProjectID, row.Attempt).Scan(&stored)
-	if query.Error != nil {
-		return domain.Artifact{}, query.Error
+	if err := tx.Where("id = ? AND job_id = ? AND project_id = ? AND attempt = ?", *row.ArtifactID, row.ID, row.ProjectID, row.Attempt).Take(&stored).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.Artifact{}, application.ErrConflict
+		}
+		return domain.Artifact{}, err
 	}
 	a := stored.public()
-	if query.RowsAffected != 1 || !validArtifact(row, a) || a.SHA256 != *row.SHA256 {
+	if !validArtifact(row, a) || a.SHA256 != *row.SHA256 {
 		return domain.Artifact{}, application.ErrConflict
 	}
 	if stored.ObjectLocationID != nil {
@@ -60,7 +65,7 @@ func (s *Store) readArtifact(ctx context.Context, tx *gorm.DB, row jobRow) (doma
 		if err != nil {
 			return domain.Artifact{}, err
 		}
-		if location.State != "accepted" || location.Ref.Key != a.ObjectKey || location.ByteSize == nil || *location.ByteSize != a.ByteSize || location.SHA256 == nil || *location.SHA256 != a.SHA256 || location.MIMEType == nil || *location.MIMEType != a.MIMEType {
+		if location.State != mediadomain.ObjectLocationAccepted || location.Ref.Key != a.ObjectKey || location.ByteSize == nil || *location.ByteSize != a.ByteSize || location.SHA256 == nil || *location.SHA256 != a.SHA256 || location.MIMEType == nil || *location.MIMEType != a.MIMEType {
 			return domain.Artifact{}, mediaapp.ErrStorageIdentityConflict
 		}
 		a.ObjectLocation = &location
@@ -74,19 +79,19 @@ func (s *Store) acceptArtifact(ctx context.Context, tx *gorm.DB, row jobRow, a *
 		return nil
 	}
 	ledger := s.storage(tx)
-	owner := application.StorageOwner("export", row.ProjectID, row.ID, row.Attempt)
+	owner := application.StorageOwner(mediaapp.StorageWorkKindExport, row.ProjectID, row.ID, row.Attempt)
 	intent, err := ledger.ReadStorageWork(ctx, owner)
 	if err != nil {
 		return err
 	}
-	if intent.Owner != owner || intent.State != "open" {
+	if intent.Owner != owner || intent.State != mediaapp.StorageWorkOpen {
 		return mediaapp.ErrStorageIdentityConflict
 	}
 	location, err := ledger.ReserveWorkLocation(ctx, intent.ID, a.ObjectKey)
 	if err != nil {
 		return err
 	}
-	if location.ID == uuid.Nil || location.Ref != (mediadomain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: a.ObjectKey}) || location.State != "present" || location.ByteSize == nil || *location.ByteSize != a.ByteSize || location.SHA256 == nil || *location.SHA256 != a.SHA256 || location.MIMEType == nil || *location.MIMEType != a.MIMEType {
+	if location.ID == uuid.Nil || location.Ref != (mediadomain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: a.ObjectKey}) || location.State != mediadomain.ObjectLocationPresent || location.ByteSize == nil || *location.ByteSize != a.ByteSize || location.SHA256 == nil || *location.SHA256 != a.SHA256 || location.MIMEType == nil || *location.MIMEType != a.MIMEType {
 		return mediaapp.ErrStorageIdentityConflict
 	}
 	a.ObjectLocation = &location
@@ -107,10 +112,10 @@ func (s *Store) CommitArtifact(ctx context.Context, id application.WorkID, a dom
 		if row.Attempt != id.Attempt || row.ActiveWorker == nil || *row.ActiveWorker != id.ExecutionID || !validArtifact(row, a) {
 			return application.ErrConflict
 		}
-		if row.Status == "cancel_requested" || row.Status == "cancelled" {
+		if row.Status == domain.CancelRequested || row.Status == domain.Cancelled {
 			return application.ErrCancelled
 		}
-		if row.Status == "review_required" || row.Status == "succeeded" {
+		if row.Status == domain.ReviewRequired || row.Status == domain.Succeeded {
 			existing, e := s.readArtifact(ctx, tx, row)
 			if e != nil || existing.ID != a.ID || existing.SHA256 != a.SHA256 {
 				return application.ErrConflict
@@ -118,7 +123,7 @@ func (s *Store) CommitArtifact(ctx context.Context, id application.WorkID, a dom
 			job = row.public()
 			return nil
 		}
-		if row.Status != "running" {
+		if row.Status != domain.Running {
 			return application.ErrConflict
 		}
 		if err = s.validateSources(ctx, tx, row.actor(), row); err != nil {
@@ -131,21 +136,22 @@ func (s *Store) CommitArtifact(ctx context.Context, id application.WorkID, a dom
 		if a.ObjectLocation != nil {
 			locationID = &a.ObjectLocation.ID
 		}
-		if err = tx.Exec(`INSERT INTO mediatool.export_artifact(id,job_id,project_id,attempt,format,format_version,file_name,mime_type,byte_size,sha256,object_key,object_location_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, a.ID, a.JobID, a.ProjectID, a.Attempt, a.Format, a.FormatVersion, a.FileName, a.MIMEType, a.ByteSize, a.SHA256, a.ObjectKey, locationID, a.CreatedAt).Error; err != nil {
+		artifact := artifactRow{ID: a.ID, JobID: a.JobID, ProjectID: a.ProjectID, Attempt: a.Attempt, Format: string(a.Format), FormatVersion: a.FormatVersion, FileName: a.FileName, MIMEType: a.MIMEType, ByteSize: a.ByteSize, SHA256: a.SHA256, ObjectKey: a.ObjectKey, ObjectLocationID: locationID, CreatedAt: a.CreatedAt}
+		if err = tx.Create(&artifact).Error; err != nil {
 			return err
 		}
 		row.ArtifactID = &a.ID
 		row.SHA256 = &a.SHA256
-		row.Status = "review_required"
-		row.Stage = "review"
+		row.Status = domain.ReviewRequired
+		row.Stage = domain.ExportStageReview
 		row.Progress = 95
 		var frozen domain.FrozenExport
 		if err := json.Unmarshal(row.Frozen, &frozen); err != nil {
 			return err
 		}
 		if frozen.Settings != nil {
-			row.Status = "succeeded"
-			row.Stage = "complete"
+			row.Status = domain.Succeeded
+			row.Stage = domain.ExportStageComplete
 			row.Progress = 100
 		}
 		row.Revision++
@@ -174,7 +180,7 @@ func (s *Store) PreviewArtifact(ctx context.Context, actor identityapp.Principal
 		if err != nil {
 			return err
 		}
-		if row.Status != "review_required" && row.Status != "succeeded" {
+		if row.Status != domain.ReviewRequired && row.Status != domain.Succeeded {
 			return application.ErrConflict
 		}
 		if err = s.validateSources(ctx, tx, actor, row); err != nil {

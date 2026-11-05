@@ -124,7 +124,7 @@ func (s *AssetCommandStore) ApplyAssetCommand(ctx context.Context, actor identit
 		if access == nil {
 			return application.ErrNotFound
 		}
-		write := input.Action != "favorite"
+		write := input.Action != application.AssetCommandFavorite
 		if err := access.AuthorizeAssetCommand(ctx, actor, write); err != nil {
 			return err
 		}
@@ -152,7 +152,7 @@ func (s *AssetCommandStore) ApplyAssetCommand(ctx context.Context, actor identit
 		// documents precede mains so project recycling cannot erase their outcome.
 		sort.Slice(indices, func(i, j int) bool {
 			left, right := input.Items[indices[i]].ID, input.Items[indices[j]].ID
-			if input.Action == "delete" && main[left] != main[right] {
+			if input.Action == application.AssetCommandDelete && main[left] != main[right] {
 				return !main[left]
 			}
 			return left.String() < right.String()
@@ -169,20 +169,20 @@ func (s *AssetCommandStore) ApplyAssetCommand(ctx context.Context, actor identit
 				entry.Revision, entry.ProjectRevision = application.Revision(facts.Revision), facts.ProjectRevision
 				// Recycling a main entry is a workspace lifecycle action. It may
 				// delete an archived project without enabling archived content edits.
-				projectWrite := write && (input.Action != "delete" || !facts.IsMain)
+				projectWrite := write && (input.Action != application.AssetCommandDelete || !facts.IsMain)
 				err = access.AuthorizeAssetProject(ctx, actor, facts.ProjectID, projectWrite)
 			}
 			if err == nil && write && facts.Revision != int64(item.ExpectedRevision) {
 				err = &application.RevisionConflict{CurrentRevision: facts.Revision}
 			}
 			if err == nil {
-				itemKey := uuid.NewSHA1(key, []byte(input.Action+"/"+item.ID.String()))
+				itemKey := uuid.NewSHA1(key, []byte(string(input.Action)+"/"+item.ID.String()))
 				switch input.Action {
-				case "favorite":
+				case application.AssetCommandFavorite:
 					entry, err = favoriteAsset(tx, actor, facts, item, *input.Favorite)
-				case "rename":
+				case application.AssetCommandRename:
 					entry, err = access.RenameAsset(ctx, actor, facts, itemKey, item, input.Name)
-				case "delete":
+				case application.AssetCommandDelete:
 					entry, err = access.DeleteAsset(ctx, actor, facts, itemKey, item)
 				}
 			}
@@ -194,10 +194,10 @@ func (s *AssetCommandStore) ApplyAssetCommand(ctx context.Context, actor identit
 				if err := tx.RollbackTo(name).Error; err != nil {
 					return err
 				}
-				entry.Status, entry.Code = "failed", code
+				entry.Status, entry.Code = application.AssetCommandFailed, code
 				result.Failed++
 			} else {
-				entry.Status = "succeeded"
+				entry.Status = application.AssetCommandSucceeded
 				result.Succeeded++
 			}
 			entry.ID = item.ID

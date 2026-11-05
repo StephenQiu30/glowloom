@@ -28,6 +28,13 @@ var ErrProjectRestoreExpired = errors.New("project restore window expired")
 
 const projectRecoveryWindow = 30 * 24 * time.Hour
 
+// Project states determine whether ordinary reads, writes and lifecycle work are allowed.
+const (
+	ProjectStatusActive   = "active"
+	ProjectStatusArchived = "archived"
+	ProjectStatusCopying  = "copying"
+)
+
 // Project is the identity and mutable settings of one production project.
 type Project struct {
 	ID                  uuid.UUID
@@ -61,7 +68,7 @@ func (p Project) Validate() error {
 		!utf8.ValidString(p.Name) || utf8.RuneCountInString(p.Name) > 50 ||
 		(p.AspectRatio != "9:16" && p.AspectRatio != "16:9" && p.AspectRatio != "1:1") ||
 		p.Resolution != "1080p" ||
-		(p.Status != "active" && p.Status != "archived" && p.Status != "copying") ||
+		(p.Status != ProjectStatusActive && p.Status != ProjectStatusArchived && p.Status != ProjectStatusCopying) ||
 		p.Revision < 1 || p.Revision > math.MaxInt32 ||
 		(p.CoverAssetID != nil && *p.CoverAssetID == uuid.Nil) {
 		return ErrInvalidProject
@@ -88,10 +95,10 @@ func (p Project) Validate() error {
 
 // CanWrite rejects mutations before publication, during archival, or in the recycle bin.
 func (p Project) CanWrite() error {
-	if p.IsDelete || p.Status == "archived" || p.Status == "copying" {
+	if p.IsDelete || p.Status == ProjectStatusArchived || p.Status == ProjectStatusCopying {
 		return ErrProjectStateConflict
 	}
-	if p.Status != "active" {
+	if p.Status != ProjectStatusActive {
 		return ErrInvalidProject
 	}
 	return nil
@@ -100,7 +107,7 @@ func (p Project) CanWrite() error {
 // Archive makes an active project read only once all blocking operations have settled.
 // Callers must check blocking operations in the same transaction as persistence.
 func (p *Project) Archive(now time.Time, hasBlockingOperations bool) error {
-	if p.IsDelete || p.Status != "active" {
+	if p.IsDelete || p.Status != ProjectStatusActive {
 		return ErrProjectStateConflict
 	}
 	if hasBlockingOperations {
@@ -110,7 +117,7 @@ func (p *Project) Archive(now time.Time, hasBlockingOperations bool) error {
 		return ErrInvalidProject
 	}
 	archivedAt := now.UTC()
-	p.Status = "archived"
+	p.Status = ProjectStatusArchived
 	p.ArchivedAt = &archivedAt
 	p.Revision++
 	return nil
@@ -118,13 +125,13 @@ func (p *Project) Archive(now time.Time, hasBlockingOperations bool) error {
 
 // Unarchive resumes an archived project without changing its other settings.
 func (p *Project) Unarchive() error {
-	if p.IsDelete || p.Status != "archived" {
+	if p.IsDelete || p.Status != ProjectStatusArchived {
 		return ErrProjectStateConflict
 	}
 	if p.Revision < 1 || p.Revision >= math.MaxInt32 {
 		return ErrInvalidProject
 	}
-	p.Status = "active"
+	p.Status = ProjectStatusActive
 	p.ArchivedAt = nil
 	p.Revision++
 	return nil
@@ -134,7 +141,7 @@ func (p *Project) Unarchive() error {
 // The status is retained so Restore can return it to its prior lifecycle state.
 // Callers must check blocking operations in the same transaction as persistence.
 func (p *Project) Delete(now time.Time, hasBlockingOperations bool) error {
-	if p.IsDelete || (p.Status != "active" && p.Status != "archived") {
+	if p.IsDelete || (p.Status != ProjectStatusActive && p.Status != ProjectStatusArchived) {
 		return ErrProjectStateConflict
 	}
 	if hasBlockingOperations {
@@ -154,7 +161,7 @@ func (p *Project) Delete(now time.Time, hasBlockingOperations bool) error {
 
 // Restore returns a deleted project to its active or archived state before purge is due.
 func (p *Project) Restore(now time.Time) error {
-	if !p.IsDelete || (p.Status != "active" && p.Status != "archived") {
+	if !p.IsDelete || (p.Status != ProjectStatusActive && p.Status != ProjectStatusArchived) {
 		return ErrProjectStateConflict
 	}
 	if now.IsZero() || p.DeleteTime == nil || p.PurgeAfter == nil ||

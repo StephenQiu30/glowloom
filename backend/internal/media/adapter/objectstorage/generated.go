@@ -31,7 +31,7 @@ func (s *GeneratedObjects) CreateOperationObject(ctx context.Context, intent app
 		return domain.ObjectLocation{}, application.ErrUnavailable
 	}
 	ref := domain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: key}
-	if intent.ID == uuid.Nil || intent.Owner.Validate() != nil || intent.Owner.Kind != "operation" || intent.State != "open" || strings.TrimSpace(intent.ConfigRevision) == "" || ref.Validate() != nil || !strings.HasPrefix(key, "projects/"+intent.Owner.OwnerID.String()+"/") || file == nil || file.File == nil || file.Size < 1 || file.Size > 512<<20 || len(file.SHA256) != 64 {
+	if intent.ID == uuid.Nil || intent.Owner.Validate() != nil || intent.Owner.Kind != application.StorageWorkKindOperation || intent.State != application.StorageWorkOpen || strings.TrimSpace(intent.ConfigRevision) == "" || ref.Validate() != nil || !strings.HasPrefix(key, "projects/"+intent.Owner.OwnerID.String()+"/") || file == nil || file.File == nil || file.Size < 1 || file.Size > 512<<20 || len(file.SHA256) != 64 {
 		return domain.ObjectLocation{}, application.ErrInvalidIngest
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -40,7 +40,7 @@ func (s *GeneratedObjects) CreateOperationObject(ctx context.Context, intent app
 	if err != nil {
 		return domain.ObjectLocation{}, err
 	}
-	if location.ID == uuid.Nil || location.Ref != ref || (location.State != "reserved" && location.State != "present" && location.State != "unknown") {
+	if location.ID == uuid.Nil || location.Ref != ref || (location.State != domain.ObjectLocationReserved && location.State != domain.ObjectLocationPresent && location.State != domain.ObjectLocationUnknown) {
 		return location, application.ErrStorageIdentityConflict
 	}
 	if err := s.locations.BeginWorkWrite(ctx, intent.ID, location); err != nil {
@@ -49,12 +49,12 @@ func (s *GeneratedObjects) CreateOperationObject(ctx context.Context, intent app
 	body := io.NewSectionReader(file.File, 0, file.Size)
 	err = s.registry.PutIfAbsent(ctx, transportRef(ref), body, file.Size, file.MIMEType, file.SHA256)
 	if err != nil && !errors.Is(err, platform.ErrObjectExists) {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, err
 	}
 	info, err := s.registry.Stat(ctx, transportRef(ref))
 	if err != nil {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, err
 	}
 	if info.Size != file.Size || info.ContentType != file.MIMEType || info.SHA256 != file.SHA256 {
@@ -63,7 +63,7 @@ func (s *GeneratedObjects) CreateOperationObject(ctx context.Context, intent app
 	if err := s.locations.ConfirmWorkLocation(ctx, intent.ID, location, application.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256}); err != nil {
 		return location, err
 	}
-	location.State = "present"
+	location.State = domain.ObjectLocationPresent
 	location.ByteSize = &file.Size
 	location.MIMEType = &file.MIMEType
 	location.SHA256 = &file.SHA256
@@ -72,7 +72,7 @@ func (s *GeneratedObjects) CreateOperationObject(ctx context.Context, intent app
 
 // StatOperationObject verifies the persisted physical identity, never the current default.
 func (s *GeneratedObjects) StatOperationObject(ctx context.Context, location domain.ObjectLocation) (application.ObjectInfo, error) {
-	if s == nil || s.registry == nil || location.ID == uuid.Nil || location.Ref.Validate() != nil || (location.State != "present" && location.State != "accepted") {
+	if s == nil || s.registry == nil || location.ID == uuid.Nil || location.Ref.Validate() != nil || (location.State != domain.ObjectLocationPresent && location.State != domain.ObjectLocationAccepted) {
 		return application.ObjectInfo{}, application.ErrUnavailable
 	}
 	info, err := s.registry.Stat(ctx, transportRef(location.Ref))

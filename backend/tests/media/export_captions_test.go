@@ -129,7 +129,7 @@ func TestExportLongCaptionTimelinePlansWithoutDurationSizedAllocation(t *testing
 	var before, after runtime.MemStats
 	runtime.ReadMemStats(&before)
 	calls := 0
-	result, err := renderer.Render(t.Context(), exportdomain.FrozenExport{Timeline: config}, nil, func(progress int, stage string) error {
+	result, err := renderer.Render(t.Context(), exportdomain.FrozenExport{Timeline: config}, nil, func(progress int, stage exportdomain.ExportStage) error {
 		calls++
 		runtime.ReadMemStats(&after)
 		if progress != 20 || stage != "rendering" {

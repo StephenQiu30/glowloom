@@ -27,7 +27,7 @@ var (
 	ErrObjectAlreadyExists = errors.New("media object already exists")
 )
 
-// IngestInput is the stable Temporal activity payload.
+// IngestInput is the input to a generated-media ingest step.
 type IngestInput struct {
 	OperationID string                        `json:"operation_id"`
 	SeqNo       int                           `json:"seq_no"`
@@ -416,4 +416,18 @@ func (s *IngestService) authorizeObjectWrite(ctx context.Context, frozen SourceO
 		return ErrInvalidIngest
 	}
 	return nil
+}
+
+// RecordModerationInput records one final review decision for a generated
+// candidate. A failed moderation call leaves both rows pending for retry.
+type RecordModerationInput struct {
+	OperationID string                  `json:"operation_id"`
+	OutputID    string                  `json:"output_id"`
+	Status      domain.ModerationStatus `json:"status"`
+	Reason      string                  `json:"reason,omitempty"`
+}
+
+// RecordModerationOutput confirms the persisted moderation decision.
+type RecordModerationOutput struct {
+	Status domain.ModerationStatus `json:"status"`
 }

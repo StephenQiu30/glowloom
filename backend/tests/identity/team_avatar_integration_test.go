@@ -2,6 +2,7 @@ package identity_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"image"
 	"image/png"
@@ -15,12 +16,14 @@ import (
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func TestTeamAvatarBindingSurvivesUploaderDeparture(t *testing.T) {
 	tx, _, platform, now := governanceFixture(t)
+	seedIdentityStorageRoute(t, tx)
 	_, owner := verifiedTestActor(t, tx, "team-avatar-owner@example.invalid", now)
 	_, reader := verifiedTestActor(t, tx, "team-avatar-reader@example.invalid", now)
 	var org struct{ OrgID uuid.UUID }
@@ -38,7 +41,7 @@ func TestTeamAvatarBindingSurvivesUploaderDeparture(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := pgmedia.NewAvatarStore(tx, func(db *gorm.DB) media.AvatarActorAccess { return pgidentity.NewStore(db) })
-	uploads := media.NewAvatarService(repo, &avatarMemoryObjects{}, func() time.Time { return now })
+	uploads := media.NewRoutedAvatarService(repo, &avatarMemoryObjects{}, func() time.Time { return now })
 	var input bytes.Buffer
 	if err := png.Encode(&input, image.NewNRGBA(image.Rect(0, 0, 2, 3))); err != nil {
 		t.Fatal(err)
@@ -64,8 +67,8 @@ func TestTeamAvatarBindingSurvivesUploaderDeparture(t *testing.T) {
 	if err = teams.Leave(t.Context(), owner, team.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	signer := &avatarTestSigner{}
-	query := workspace.NewTeamAvatars(store, signer, func() time.Time { return now })
+	signer := &avatarTestSigner{now: now}
+	query := workspace.NewRoutedTeamAvatars(store, signer, func() time.Time { return now }, time.Minute)
 	preview, err := query.Read(t.Context(), reader, team.ID, nil, false)
 	if err != nil || preview.AssetID != asset.ID {
 		t.Fatalf("departed uploader broke team avatar: %+v %v", preview, err)
@@ -85,4 +88,9 @@ func TestTeamAvatarBindingSurvivesUploaderDeparture(t *testing.T) {
 	if !errors.Is(err, identity.ErrAvatarUnavailable) || preview.URL != "" {
 		t.Fatalf("changed avatar escaped recheck: %v", err)
 	}
+}
+
+func (s *avatarTestSigner) PresignLocationGet(ctx context.Context, profile, bucket, key string, ttl time.Duration) (workspace.TeamAvatarGrant, error) {
+	grant, err := s.PresignGet(ctx, mediadomain.ObjectRef{ProfileID: profile, Bucket: bucket, Key: key}, ttl)
+	return workspace.TeamAvatarGrant{URL: grant.URL, ExpiresAt: grant.ExpiresAt}, err
 }

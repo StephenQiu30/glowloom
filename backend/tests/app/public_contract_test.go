@@ -42,9 +42,9 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 	if err := json.Unmarshal(encoded, &schema); err != nil {
 		t.Fatal(err)
 	}
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{ObjectStorage: businessUnitStorage(t),
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t),
-	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
+	}, &gorm.DB{}, businessUnitRegistry(t), identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,9 +68,9 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 }
 
 func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{ObjectStorage: businessUnitStorage(t),
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t),
-	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
+	}, &gorm.DB{}, businessUnitRegistry(t), identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,9 +91,9 @@ func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 }
 
 func TestPublicBusinessRoutesRequireSession(t *testing.T) {
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{ObjectStorage: businessUnitStorage(t),
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t),
-	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
+	}, &gorm.DB{}, businessUnitRegistry(t), identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,9 +156,9 @@ func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 }
 
 func TestPublicRouterRemovedSwaggerRoutes(t *testing.T) {
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{ObjectStorage: businessUnitStorage(t),
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t),
-	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
+	}, &gorm.DB{}, businessUnitRegistry(t), identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestWorkspaceAPIDoesNotExposeAnonymousAccessOutsideThisHost(t *testing.T) {
 		{"external browser", "local", "127.0.0.1:8080", "https://glowloom.example"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: tc.env, HTTPAddr: tc.address, PublicOrigin: tc.origin}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
+			_, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{ObjectStorage: businessUnitStorage(t), Env: tc.env, HTTPAddr: tc.address, PublicOrigin: tc.origin}, &gorm.DB{}, businessUnitRegistry(t), identityruntime.SessionDependencies{})
 			if err == nil {
 				t.Fatal("nonlocal workspace configuration was accepted")
 			}

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ type LibraryQuery struct {
 	RootOnly       bool
 	FavoriteOnly   bool
 	RecentOnly     bool
-	State          string
+	State          domain.LibraryItemState
 	Search         string
 	Order          string
 }
@@ -45,9 +46,9 @@ type LibraryQuery struct {
 // Validate permits only the mounted source's query semantics and bounded pages.
 func (q LibraryQuery) Validate(scope domain.LibraryScope) error {
 	if !validLibraryPickerFilters(q) || scope.Validate() != nil || q.Page < 1 || q.Page > 100000 || q.PageSize < 1 || q.PageSize > 120 ||
-		!slices.Contains([]string{"", "text", "image", "video", "audio", "document", "model"}, q.Kind) ||
-		!slices.Contains([]string{"", "character", "environment", "prop", "material", "other"}, q.Category) ||
-		!slices.Contains([]string{"active", "trashed"}, q.State) ||
+		!slices.Contains([]string{"", domain.LibraryItemKindText, string(domain.KindImage), string(domain.KindVideo), string(domain.KindAudio), string(domain.KindDocument), string(domain.KindModel)}, q.Kind) ||
+		!slices.Contains([]string{"", domain.LibraryItemCategoryCharacter, domain.LibraryItemCategoryEnvironment, domain.LibraryItemCategoryProp, domain.LibraryItemCategoryMaterial, domain.LibraryItemCategoryOther}, q.Category) ||
+		!slices.Contains([]domain.LibraryItemState{domain.LibraryItemStateActive, domain.LibraryItemStateTrashed}, q.State) ||
 		!slices.Contains([]string{"updated_desc", "updated_asc", "name_asc"}, q.Order) ||
 		q.FolderID != nil && (*q.FolderID == uuid.Nil || q.RootOnly) || q.FavoriteOnly && scope.Kind != domain.LibraryPersonal ||
 		!utf8.ValidString(q.Search) || utf8.RuneCountInString(q.Search) > 512 || strings.ContainsRune(q.Search, 0) {
@@ -71,23 +72,23 @@ type LibraryAssetSummary struct {
 
 // LibraryItemSummary excludes long plain text; Detail explicitly returns it.
 type LibraryItemSummary struct {
-	ID          uuid.UUID            `json:"id"`
-	AssetID     *uuid.UUID           `json:"asset_id" extensions:"x-nullable"`
-	FolderID    *uuid.UUID           `json:"folder_id" extensions:"x-nullable"`
-	Kind        string               `json:"kind"`
-	Title       string               `json:"title"`
-	Category    string               `json:"category"`
-	Tags        []string             `json:"tags"`
-	SourceLabel string               `json:"source_label"`
-	Note        string               `json:"note"`
-	Favorite    bool                 `json:"favorite"`
-	State       string               `json:"catalog_state"`
-	TrashedAt   *time.Time           `json:"trashed_at" extensions:"x-nullable"`
-	Position    int64                `json:"position"`
-	Revision    int64                `json:"revision"`
-	CreatedAt   time.Time            `json:"created_at"`
-	UpdatedAt   time.Time            `json:"updated_at"`
-	Media       *LibraryAssetSummary `json:"media,omitempty" extensions:"x-nullable"`
+	ID          uuid.UUID               `json:"id"`
+	AssetID     *uuid.UUID              `json:"asset_id" extensions:"x-nullable"`
+	FolderID    *uuid.UUID              `json:"folder_id" extensions:"x-nullable"`
+	Kind        string                  `json:"kind"`
+	Title       string                  `json:"title"`
+	Category    string                  `json:"category"`
+	Tags        []string                `json:"tags"`
+	SourceLabel string                  `json:"source_label"`
+	Note        string                  `json:"note"`
+	Favorite    bool                    `json:"favorite"`
+	State       domain.LibraryItemState `json:"catalog_state"`
+	TrashedAt   *time.Time              `json:"trashed_at" extensions:"x-nullable"`
+	Position    int64                   `json:"position"`
+	Revision    int64                   `json:"revision"`
+	CreatedAt   time.Time               `json:"created_at"`
+	UpdatedAt   time.Time               `json:"updated_at"`
+	Media       *LibraryAssetSummary    `json:"media,omitempty" extensions:"x-nullable"`
 }
 
 // LibraryItemDetail has no file URL; previews require a current owning authorization.
@@ -132,11 +133,34 @@ type LibraryFolderInput struct {
 	Theme    string     `json:"theme"`
 }
 
+// LibraryAction is one complete catalog command understood by the application.
+type LibraryAction string
+
+// Library actions are the accepted catalog folder and item mutations.
+const (
+	LibraryActionCreateFolder LibraryAction = "create_folder"
+	LibraryActionUpdateFolder LibraryAction = "update_folder"
+	LibraryActionDeleteFolder LibraryAction = "delete_folder"
+	LibraryActionCreateText   LibraryAction = "create_text"
+	LibraryActionUpdateItem   LibraryAction = "update_item"
+	LibraryActionMoveItems    LibraryAction = "move_items"
+	LibraryActionRecycleItems LibraryAction = "recycle_items"
+	LibraryActionRestoreItems LibraryAction = "restore_items"
+	LibraryActionRemoveItems  LibraryAction = "remove_items"
+)
+
 // LibraryItemRevision binds every batch item to its displayed catalog revision.
-// Revision zero denotes a real legacy asset with no metadata row.
 type LibraryItemRevision struct {
 	ID       uuid.UUID `json:"id"`
 	Revision int64     `json:"revision"`
+}
+
+// Validate requires a positive catalog revision.
+func (r LibraryItemRevision) Validate() error {
+	if r.ID == uuid.Nil || r.Revision < domain.LibraryItemInitialRevision || r.Revision > math.MaxInt32 {
+		return domain.ErrInvalidLibrary
+	}
+	return nil
 }
 
 // LibraryCommand freezes one supported metadata action and its optimistic revisions.
@@ -144,7 +168,7 @@ type LibraryCommand struct {
 	Scope                  domain.LibraryScope   `json:"scope"`
 	Key                    uuid.UUID             `json:"-"`
 	ExpectedRevision       int64                 `json:"expected_revision"`
-	Action                 string                `json:"action"`
+	Action                 LibraryAction         `json:"action"`
 	FolderID               *uuid.UUID            `json:"folder_id,omitempty" extensions:"x-nullable"`
 	ExpectedFolderRevision int64                 `json:"expected_folder_revision,omitempty"`
 	Folder                 *LibraryFolderInput   `json:"folder,omitempty" extensions:"x-nullable"`
@@ -157,7 +181,7 @@ type LibraryCommand struct {
 
 // Validate checks command shape before any admission lock or persistence.
 func (c LibraryCommand) Validate() error {
-	if c.Scope.Validate() != nil || c.Key == uuid.Nil || c.ExpectedRevision < 0 || c.ExpectedRevision > 2147483646 ||
+	if c.Scope.Validate() != nil || c.Key == uuid.Nil || c.ExpectedRevision < domain.LibraryRevisionInitial || c.ExpectedRevision >= math.MaxInt32 || c.ExpectedFolderRevision > math.MaxInt32 || c.ExpectedItemRevision > math.MaxInt32 ||
 		c.FolderID != nil && *c.FolderID == uuid.Nil || c.ItemID != nil && *c.ItemID == uuid.Nil ||
 		c.TargetFolderID != nil && *c.TargetFolderID == uuid.Nil {
 		return domain.ErrInvalidLibrary
@@ -165,33 +189,33 @@ func (c LibraryCommand) Validate() error {
 	noItem := c.ItemID == nil && c.Metadata == nil && c.ExpectedItemRevision == 0 && len(c.Items) == 0 && c.TargetFolderID == nil
 	noFolder := c.FolderID == nil && c.Folder == nil && c.ExpectedFolderRevision == 0
 	switch c.Action {
-	case "create_folder":
+	case LibraryActionCreateFolder:
 		if !noItem || c.FolderID != nil || c.Folder == nil || c.ExpectedFolderRevision != 0 {
 			return domain.ErrInvalidLibrary
 		}
-	case "update_folder":
-		if !noItem || c.FolderID == nil || c.Folder == nil || c.ExpectedFolderRevision < 1 {
+	case LibraryActionUpdateFolder:
+		if !noItem || c.FolderID == nil || c.Folder == nil || c.ExpectedFolderRevision < domain.LibraryFolderInitialRevision {
 			return domain.ErrInvalidLibrary
 		}
-	case "delete_folder":
-		if !noItem || c.FolderID == nil || c.Folder != nil || c.ExpectedFolderRevision < 1 {
+	case LibraryActionDeleteFolder:
+		if !noItem || c.FolderID == nil || c.Folder != nil || c.ExpectedFolderRevision < domain.LibraryFolderInitialRevision {
 			return domain.ErrInvalidLibrary
 		}
-	case "create_text":
+	case LibraryActionCreateText:
 		if !noFolder || c.ItemID != nil || c.ExpectedItemRevision != 0 || c.Metadata == nil || c.Metadata.PlainText == nil || len(c.Items) != 0 || c.TargetFolderID != nil {
 			return domain.ErrInvalidLibrary
 		}
-	case "update_item":
-		if !noFolder || c.ItemID == nil || c.ExpectedItemRevision < 0 || c.Metadata == nil || len(c.Items) != 0 || c.TargetFolderID != nil {
+	case LibraryActionUpdateItem:
+		if !noFolder || c.ItemID == nil || c.ExpectedItemRevision < domain.LibraryItemInitialRevision || c.Metadata == nil || len(c.Items) != 0 || c.TargetFolderID != nil {
 			return domain.ErrInvalidLibrary
 		}
-	case "move_items", "recycle_items", "restore_items", "remove_items":
-		if !noFolder || c.ItemID != nil || c.Metadata != nil || c.ExpectedItemRevision != 0 || len(c.Items) < 1 || len(c.Items) > 200 || c.Action != "move_items" && c.TargetFolderID != nil || c.Action == "remove_items" && c.Scope.Kind != domain.LibraryProject {
+	case LibraryActionMoveItems, LibraryActionRecycleItems, LibraryActionRestoreItems, LibraryActionRemoveItems:
+		if !noFolder || c.ItemID != nil || c.Metadata != nil || c.ExpectedItemRevision != 0 || len(c.Items) < 1 || len(c.Items) > 200 || c.Action != LibraryActionMoveItems && c.TargetFolderID != nil || c.Action == LibraryActionRemoveItems && c.Scope.Kind != domain.LibraryProject {
 			return domain.ErrInvalidLibrary
 		}
 		seen := make(map[uuid.UUID]bool, len(c.Items))
 		for _, item := range c.Items {
-			if item.ID == uuid.Nil || item.Revision < 0 || seen[item.ID] {
+			if item.Validate() != nil || seen[item.ID] {
 				return domain.ErrInvalidLibrary
 			}
 			seen[item.ID] = true
@@ -205,13 +229,13 @@ func (c LibraryCommand) Validate() error {
 // LibraryItemChange is the bounded effect of a command. Long editable content
 // is fetched through Detail, so 200 valid items never inflate a receipt.
 type LibraryItemChange struct {
-	ID        uuid.UUID  `json:"id"`
-	AssetID   *uuid.UUID `json:"asset_id" extensions:"x-nullable"`
-	FolderID  *uuid.UUID `json:"folder_id" extensions:"x-nullable"`
-	Kind      string     `json:"kind"`
-	State     string     `json:"catalog_state"`
-	TrashedAt *time.Time `json:"trashed_at" extensions:"x-nullable"`
-	Revision  int64      `json:"revision"`
+	ID        uuid.UUID               `json:"id"`
+	AssetID   *uuid.UUID              `json:"asset_id" extensions:"x-nullable"`
+	FolderID  *uuid.UUID              `json:"folder_id" extensions:"x-nullable"`
+	Kind      string                  `json:"kind"`
+	State     domain.LibraryItemState `json:"catalog_state"`
+	TrashedAt *time.Time              `json:"trashed_at" extensions:"x-nullable"`
+	Revision  int64                   `json:"revision"`
 }
 
 // LibraryReceipt permanently binds the result to actor, scope and revisions.

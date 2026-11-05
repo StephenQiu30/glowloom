@@ -132,7 +132,7 @@ func validateQuoteSnapshot(batch *domain.Batch, items []QuoteItem) (uuid.UUID, e
 			op.Status != domain.StatusQuoted || op.Origin == "upload" ||
 			op.ConfirmedAt != nil || op.ReservationID != nil || op.SettledMicros != nil ||
 			op.QuoteMicros == nil ||
-			(len(item.Inputs) == 0 && op.TargetType != "agent_session") {
+			len(item.Inputs) == 0 {
 			return uuid.Nil, ErrInvalidQuoteSnapshot
 		}
 		if batch == nil && op.BatchID != nil ||

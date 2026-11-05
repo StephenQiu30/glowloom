@@ -19,6 +19,7 @@ import (
 	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -32,14 +33,14 @@ func provideBibleProjectAccess(tx *gorm.DB) bibleapp.ProjectAccess {
 	return scopewire.ProvideProjectContentAccess(tx)
 }
 
-// ProvideBibleStore assembles the bible store and its reference readers.
-func ProvideBibleStore(database *gorm.DB, storage *objectstorage.Client, validator catalogapp.ModelVersionValidator) *pgbible.Store {
+// ProvideBibleStoreWithObjects verifies referenced media through its immutable physical location.
+func ProvideBibleStoreWithObjects(database *gorm.DB, registry *objectstorage.Registry, validator catalogapp.ModelVersionValidator) *pgbible.Store {
 	return pgbible.NewStore(database, pgbible.Factories{
 		Access:  provideBibleProjectAccess,
 		Impacts: provideBibleDeletionImpacts,
 		Media: func(tx *gorm.DB) bibleapp.MediaReferences {
-			return bibleMediaReferences{query: mediaapp.NewReferenceFactQuery(
-				pgmedia.NewScopedLibraryStore(tx, mediawire.NewMediaLibraryProjectAccess, time.Now, mediawire.NewMediaScopeAccess), storage)}
+			reader := pgmedia.NewScopedLibraryStore(tx, mediawire.NewMediaLibraryProjectAccess, time.Now, mediawire.NewMediaScopeAccess)
+			return bibleMediaReferences{query: mediaapp.NewRoutedReferenceFactQuery(reader, mediaobjects.NewRoutedReadObjects(registry))}
 		},
 		Scopes: func(tx *gorm.DB) bibleapp.ScriptScopes {
 			return bibleScriptScopes{query: pgscript.NewBibleScopes(tx, scriptwire.ProvideScriptProjectAccess(tx))}

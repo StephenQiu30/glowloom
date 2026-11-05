@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
@@ -43,7 +44,7 @@ func (s *Store) Control(ctx context.Context, actor identityapp.Principal, projec
 			return nil
 		}
 		if action == "retry" {
-			if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-export-project/"+project.String()).Error; err != nil {
+			if err := lockMediatoolProject(tx, project); err != nil {
 				return err
 			}
 		}
@@ -56,28 +57,28 @@ func (s *Store) Control(ctx context.Context, actor identityapp.Principal, projec
 		}
 		emit := "cancel"
 		if action == "cancel" {
-			if row.Status != "queued" && row.Status != "running" && row.Status != "review_required" {
+			if row.Status != domain.Queued && row.Status != domain.Running && row.Status != domain.ReviewRequired {
 				return application.ErrConflict
 			}
-			if row.Status == "review_required" && row.AssetID != nil {
+			if row.Status == domain.ReviewRequired && row.AssetID != nil {
 				if err := s.media(tx).Reject(ctx, actor, project, *row.AssetID, "export_cancelled", time.Now().UTC()); err != nil {
 					return normalize(err)
 				}
 			}
-			if row.Status == "review_required" {
-				row.Status = "cancelled"
-				row.Stage = "cancelled"
+			if row.Status == domain.ReviewRequired {
+				row.Status = domain.Cancelled
+				row.Stage = domain.ExportStageCancelled
 				emit = ""
 			} else {
-				row.Status = "cancel_requested"
-				row.Stage = "cancelling"
+				row.Status = domain.CancelRequested
+				row.Stage = domain.ExportStageCancelling
 			}
 		} else {
-			if (row.Status != "failed" && row.Status != "cancelled") || row.Attempt >= 100 {
+			if (row.Status != domain.Failed && row.Status != domain.Cancelled) || row.Attempt >= 100 {
 				return application.ErrConflict
 			}
 			var active int64
-			if err := tx.Raw(`SELECT count(*) FROM mediatool.export_job WHERE project_id=? AND status IN ('queued','running','cancel_requested')`, project).Scan(&active).Error; err != nil {
+			if err := tx.Model(&jobRow{}).Where("project_id = ? AND status IN ?", project, []domain.Status{domain.Queued, domain.Running, domain.CancelRequested}).Count(&active).Error; err != nil {
 				return err
 			}
 			if active >= 2 {
@@ -86,11 +87,11 @@ func (s *Store) Control(ctx context.Context, actor identityapp.Principal, projec
 			if err := s.validateSources(ctx, tx, actor, row); err != nil {
 				return err
 			}
-			row.Status = "queued"
-			row.Stage = "queued"
+			row.Status = domain.Queued
+			row.Stage = domain.ExportStageQueued
 			row.Progress = 0
 			row.Attempt++
-			if err := pinTool(ctx, tx, s.storage, "export", project, row.ID, row.Attempt); err != nil {
+			if err := pinTool(ctx, tx, s.storage, mediaapp.StorageWorkKindExport, project, row.ID, row.Attempt); err != nil {
 				return err
 			}
 			row.ActiveWorker = nil
@@ -145,7 +146,7 @@ func (s *Store) Review(ctx context.Context, actor identityapp.Principal, id, key
 		if err != nil {
 			return err
 		}
-		if row.Revision != input.Revision || row.Status != "review_required" || (row.AssetID == nil && row.ArtifactID == nil) || row.SHA256 == nil || *row.SHA256 != input.SHA256 {
+		if row.Revision != input.Revision || row.Status != domain.ReviewRequired || (row.AssetID == nil && row.ArtifactID == nil) || row.SHA256 == nil || *row.SHA256 != input.SHA256 {
 			return application.ErrConflict
 		}
 		if row.ArtifactID != nil {
@@ -158,8 +159,8 @@ func (s *Store) Review(ctx context.Context, actor identityapp.Principal, id, key
 		} else if err := s.media(tx).Review(ctx, actor, row.ProjectID, *row.AssetID, input.SHA256, time.Now().UTC()); err != nil {
 			return normalize(err)
 		}
-		row.Status = "succeeded"
-		row.Stage = "complete"
+		row.Status = domain.Succeeded
+		row.Stage = domain.ExportStageComplete
 		row.Progress = 100
 		row.Revision++
 		row.UpdatedAt = time.Now().UTC()
@@ -187,14 +188,14 @@ func (s *Store) PreviewAsset(ctx context.Context, actor identityapp.Principal, p
 		if err != nil {
 			return err
 		}
-		if (row.Status != "review_required" && row.Status != "succeeded") || row.AssetID == nil || row.SHA256 == nil {
+		if (row.Status != domain.ReviewRequired && row.Status != domain.Succeeded) || row.AssetID == nil || row.SHA256 == nil {
 			return application.ErrConflict
 		}
 		asset, err = s.media(tx).Asset(ctx, actor, project, *row.AssetID)
 		if err != nil {
 			return normalize(err)
 		}
-		if asset.IsDelete || asset.SHA256 == nil || *asset.SHA256 != *row.SHA256 || ((row.Status == "succeeded") != asset.CanReference()) {
+		if asset.IsDelete || asset.SHA256 == nil || *asset.SHA256 != *row.SHA256 || ((row.Status == domain.Succeeded) != asset.CanReference()) {
 			return application.ErrConflict
 		}
 		job = row.public()
@@ -222,5 +223,17 @@ func (s *Store) Frozen(ctx context.Context, actor identityapp.Principal, project
 	return frozen, err
 }
 func updateJob(tx *gorm.DB, row jobRow) error {
-	return tx.Exec(`UPDATE mediatool.export_job SET status=?,stage=?,progress=?,attempt=?,revision=?,asset_id=?,artifact_id=?,sha256=?,failure_code=?,actor_id=?,actor_role=?,updated_at=?,active_worker=? WHERE id=?`, row.Status, row.Stage, row.Progress, row.Attempt, row.Revision, row.AssetID, row.ArtifactID, row.SHA256, row.FailureCode, row.ActorID, row.ActorRole, row.UpdatedAt, row.ActiveWorker, row.ID).Error
+	result := tx.Model(&jobRow{}).Where("id = ?", row.ID).Updates(map[string]any{
+		"status": row.Status, "stage": row.Stage, "progress": row.Progress, "attempt": row.Attempt,
+		"revision": row.Revision, "asset_id": row.AssetID, "artifact_id": row.ArtifactID,
+		"sha256": row.SHA256, "failure_code": row.FailureCode, "actor_id": row.ActorID,
+		"actor_role": row.ActorRole, "updated_at": row.UpdatedAt, "active_worker": row.ActiveWorker,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return application.ErrConflict
+	}
+	return nil
 }

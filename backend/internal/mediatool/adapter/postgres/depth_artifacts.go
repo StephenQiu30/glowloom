@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,20 +11,28 @@ import (
 
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	domain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+)
+
+type depthObjectAction string
+
+const (
+	depthObjectActionWrite    depthObjectAction = "write"
+	depthObjectActionVerified depthObjectAction = "verified"
+	depthObjectActionRemove   depthObjectAction = "remove"
+	depthObjectActionRemoved  depthObjectAction = "removed"
 )
 
 func loadDepthArtifact(tx *gorm.DB, r depthRow) (application.DepthArtifact, bool, error) {
 	var a application.DepthArtifact
-	var row struct {
-		AssetID                      uuid.UUID
-		OutputSHA256, ArtifactSHA256 string
-		Artifact                     []byte
+	var row depthResultIntentRecord
+	if err := tx.Where("job_id = ? AND attempt = ?", r.ID, r.Attempt).Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return a, false, nil
+		}
+		return a, false, err
 	}
-	res := tx.Raw(`SELECT asset_id,output_sha256,artifact_sha256,artifact FROM mediatool.depth_result_intent WHERE job_id=? AND attempt=?`, r.ID, r.Attempt).Scan(&row)
-	if res.Error != nil {
-		return a, false, res.Error
-	}
-	if res.RowsAffected == 0 {
+	if row.JobID == uuid.Nil {
 		return a, false, nil
 	}
 	f, err := depthFrozen(r)
@@ -40,10 +49,13 @@ func loadDepthArtifact(tx *gorm.DB, r depthRow) (application.DepthArtifact, bool
 	return a, true, nil
 }
 func readDepthObjects(tx *gorm.DB, r depthRow) ([]application.DepthObject, error) {
-	var rows []application.DepthObject
-	if err := tx.Raw(`SELECT kind,object_key,sha256,byte_size,mime_type,write_started,delete_started,status,object_location_id FROM mediatool.depth_object WHERE job_id=? AND attempt=? ORDER BY CASE kind WHEN 'original' THEN 0 WHEN 'poster' THEN 1 ELSE 2 END`, r.ID, r.Attempt).Scan(&rows).Error; err != nil {
+	var rows []depthObjectRecord
+	if err := tx.Where("job_id = ? AND attempt = ?", r.ID, r.Attempt).Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	sort.Slice(rows, func(i, j int) bool {
+		return depthObjectOrder(rows[i].Kind) < depthObjectOrder(rows[j].Kind)
+	})
 	a, found, err := loadDepthArtifact(tx, r)
 	if err != nil {
 		return nil, err
@@ -57,20 +69,34 @@ func readDepthObjects(tx *gorm.DB, r depthRow) ([]application.DepthObject, error
 	if len(rows) != len(a.Objects) {
 		return nil, application.ErrDepthOutputInvalid
 	}
-	for i, o := range rows {
+	objects := make([]application.DepthObject, len(rows))
+	for i, row := range rows {
+		o := row.object()
 		want := a.Objects[i]
 		if o.Kind != want.Kind || o.ObjectKey != want.ObjectKey || o.SHA256 != want.SHA256 || o.ByteSize != want.ByteSize || o.MIMEType != want.MIMEType {
 			return nil, application.ErrDepthOutputInvalid
 		}
+		objects[i] = o
 	}
-	return rows, nil
+	return objects, nil
 }
-func verifyDepthObjects(tx *gorm.DB, r depthRow, status string) error {
+func depthObjectOrder(kind application.DepthObjectKind) int {
+	switch kind {
+	case application.DepthObjectKindOriginal:
+		return 0
+	case application.DepthObjectKindPoster:
+		return 1
+	default:
+		return 2
+	}
+}
+
+func verifyDepthObjects(tx *gorm.DB, r depthRow, status application.DepthObjectStatus) error {
 	objects, err := readDepthObjects(tx, r)
 	if err != nil {
 		return err
 	}
-	if len(objects) != 3 && status == "verified" {
+	if len(objects) != 3 && status == application.DepthObjectStatusVerified {
 		return application.ErrConflict
 	}
 	for _, o := range objects {
@@ -91,12 +117,12 @@ func (s *DepthStore) withDepthAttempt(ctx context.Context, id application.DepthW
 				return ""
 			}
 			if cleanup {
-				if !r.CancellationRequested || (r.ProcessState != "none" && r.ProcessState != "ended") {
+				if !r.CancellationRequested || (r.ProcessState != domain.DepthProcessNone && r.ProcessState != domain.DepthProcessEnded) {
 					return ""
 				}
 				return "cleanup"
 			}
-			if r.CancellationRequested || r.Status != "running" {
+			if r.CancellationRequested || r.Status != domain.DepthRunning {
 				return ""
 			}
 			return "worker"
@@ -108,14 +134,14 @@ func (s *DepthStore) withDepthAttempt(ctx context.Context, id application.DepthW
 			return application.ErrWorkerBusy
 		}
 		if cleanup {
-			if !r.CancellationRequested || (r.ProcessState != "none" && r.ProcessState != "ended") {
+			if !r.CancellationRequested || (r.ProcessState != domain.DepthProcessNone && r.ProcessState != domain.DepthProcessEnded) {
 				return application.ErrConflict
 			}
 		} else {
-			if r.CancellationRequested || r.Status == "cancel_requested" {
+			if r.CancellationRequested || r.Status == domain.DepthCancelRequested {
 				return application.ErrCancelled
 			}
-			if r.Status != "running" {
+			if r.Status != domain.DepthRunning {
 				return application.ErrConflict
 			}
 		}
@@ -129,7 +155,7 @@ func (s *DepthStore) withDepthAttempt(ctx context.Context, id application.DepthW
 // FreezeArtifact binds every result byte and native receipt before object dispatch.
 func (s *DepthStore) FreezeArtifact(ctx context.Context, id application.DepthWorkID, a application.DepthArtifact) error {
 	return s.withDepthAttempt(ctx, id, false, func(tx *gorm.DB, r depthRow) error {
-		if r.ProcessState != "ended" {
+		if r.ProcessState != domain.DepthProcessEnded {
 			return application.ErrConflict
 		}
 		f, err := depthFrozen(r)
@@ -152,7 +178,8 @@ func (s *DepthStore) FreezeArtifact(ctx context.Context, id application.DepthWor
 			return nil
 		}
 		now := time.Now().UTC()
-		if err := tx.Exec(`INSERT INTO mediatool.depth_result_intent(job_id,attempt,asset_id,output_sha256,artifact_sha256,artifact,created_at) VALUES(?,?,?,?,?,?::jsonb,?)`, r.ID, r.Attempt, a.Asset.ID, *a.Asset.SHA256, sha, string(body), now).Error; err != nil {
+		intent := depthResultIntentRecord{JobID: r.ID, Attempt: r.Attempt, AssetID: a.Asset.ID, OutputSHA256: *a.Asset.SHA256, ArtifactSHA256: sha, Artifact: jsonDocument(body), CreatedAt: now}
+		if err := tx.Create(&intent).Error; err != nil {
 			return err
 		}
 		for _, o := range a.Objects {
@@ -160,7 +187,8 @@ func (s *DepthStore) FreezeArtifact(ctx context.Context, id application.DepthWor
 			if err != nil {
 				return err
 			}
-			if err := tx.Exec(`INSERT INTO mediatool.depth_object(job_id,attempt,kind,object_key,sha256,byte_size,mime_type,object_location_id,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`, r.ID, r.Attempt, o.Kind, o.ObjectKey, o.SHA256, o.ByteSize, o.MIMEType, locationID, now).Error; err != nil {
+			object := depthObjectRecord{JobID: r.ID, Attempt: r.Attempt, Kind: o.Kind, ObjectKey: o.ObjectKey, SHA256: o.SHA256, ByteSize: o.ByteSize, MIMEType: o.MIMEType, Status: application.DepthObjectStatusPending, ObjectLocationID: locationID, UpdatedAt: now}
+			if err := tx.Create(&object).Error; err != nil {
 				return err
 			}
 		}
@@ -197,8 +225,8 @@ func (s *DepthStore) Objects(ctx context.Context, id application.DepthWorkID) ([
 	return objects, err
 }
 
-func (s *DepthStore) changeDepthObject(ctx context.Context, id application.DepthWorkID, key string, action string) error {
-	cleanup := action == "remove" || action == "removed"
+func (s *DepthStore) changeDepthObject(ctx context.Context, id application.DepthWorkID, key string, action depthObjectAction) error {
+	cleanup := action == depthObjectActionRemove || action == depthObjectActionRemoved
 	use := func(tx *gorm.DB, r depthRow) error {
 		objects, err := readDepthObjects(tx, r)
 		if err != nil {
@@ -216,20 +244,20 @@ func (s *DepthStore) changeDepthObject(ctx context.Context, id application.Depth
 		}
 		o := *found
 		switch action {
-		case "write":
-			if o.Status != "pending" || o.WriteStarted || o.DeleteStarted {
+		case depthObjectActionWrite:
+			if o.Status != application.DepthObjectStatusPending || o.WriteStarted || o.DeleteStarted {
 				return application.ErrConflict
 			}
-			return tx.Exec(`UPDATE mediatool.depth_object SET write_started=true,updated_at=statement_timestamp() WHERE job_id=? AND attempt=? AND object_key=?`, r.ID, r.Attempt, key).Error
-		case "verified":
-			if o.Status == "verified" {
+			return updateDepthObject(tx, r, o, map[string]any{"write_started": true, "updated_at": time.Now().UTC()}, application.DepthObjectStatusPending)
+		case depthObjectActionVerified:
+			if o.Status == application.DepthObjectStatusVerified {
 				return nil
 			}
-			if o.Status != "pending" || !o.WriteStarted || o.DeleteStarted {
+			if o.Status != application.DepthObjectStatusPending || !o.WriteStarted || o.DeleteStarted {
 				return application.ErrConflict
 			}
-			return tx.Exec(`UPDATE mediatool.depth_object SET status='verified',updated_at=statement_timestamp() WHERE job_id=? AND attempt=? AND object_key=?`, r.ID, r.Attempt, key).Error
-		case "remove":
+			return updateDepthObject(tx, r, o, map[string]any{"status": application.DepthObjectStatusVerified, "updated_at": time.Now().UTC()}, application.DepthObjectStatusPending)
+		case depthObjectActionRemove:
 			a, exists, err := loadDepthArtifact(tx, r)
 			if err != nil {
 				return err
@@ -241,35 +269,36 @@ func (s *DepthStore) changeDepthObject(ctx context.Context, id application.Depth
 			if err != nil {
 				return err
 			}
-			if err := s.media(tx).AuthorizeRemoval(ctx, actor, mediaapp.DerivedRemoval{ProjectID: r.ProjectID, AssetID: a.Asset.ID, ObjectKey: o.ObjectKey, PrimarySHA256: *a.Asset.SHA256, Kind: o.Kind, ByteSize: o.ByteSize}); err != nil {
+			if err := s.media(tx).AuthorizeRemoval(ctx, actor, mediaapp.DerivedRemoval{ProjectID: r.ProjectID, AssetID: a.Asset.ID, ObjectKey: o.ObjectKey, PrimarySHA256: *a.Asset.SHA256, Kind: string(o.Kind), ByteSize: o.ByteSize}); err != nil {
 				return normalize(err)
 			}
-			if o.Status == "removed" {
+			if o.Status == application.DepthObjectStatusRemoved {
 				return nil
 			}
-			if o.Status != "verified" {
+			if o.Status != application.DepthObjectStatusVerified {
 				return application.ErrConflict
 			}
-			return tx.Exec(`UPDATE mediatool.depth_object SET delete_started=true,updated_at=statement_timestamp() WHERE job_id=? AND attempt=? AND object_key=?`, r.ID, r.Attempt, key).Error
-		case "removed":
-			if o.Status == "removed" {
+			return updateDepthObject(tx, r, o, map[string]any{"delete_started": true, "updated_at": time.Now().UTC()}, application.DepthObjectStatusVerified)
+		case depthObjectActionRemoved:
+			if o.Status == application.DepthObjectStatusRemoved {
 				return nil
 			}
-			if (o.WriteStarted && !o.DeleteStarted) || o.Status == "pending" && o.WriteStarted {
+			if (o.WriteStarted && !o.DeleteStarted) || o.Status == application.DepthObjectStatusPending && o.WriteStarted {
 				return application.ErrConflict
 			}
-			return tx.Exec(`UPDATE mediatool.depth_object SET status='removed',updated_at=statement_timestamp() WHERE job_id=? AND attempt=? AND object_key=?`, r.ID, r.Attempt, key).Error
+			result := tx.Model(&depthObjectRecord{}).Where("job_id = ? AND attempt = ? AND kind = ? AND object_key = ? AND status = ? AND write_started = ? AND delete_started = ?", r.ID, r.Attempt, o.Kind, key, o.Status, o.WriteStarted, o.DeleteStarted).Updates(map[string]any{"status": application.DepthObjectStatusRemoved, "updated_at": time.Now().UTC()})
+			return requireDepthObjectUpdate(result)
 		default:
 			return application.ErrConflict
 		}
 	}
 	var err error
-	if action == "verified" {
+	if action == depthObjectActionVerified {
 		err = s.withDepthReadAttempt(ctx, id, use)
 	} else {
 		err = s.withDepthAttempt(ctx, id, cleanup, use)
 	}
-	if action == "verified" && errors.Is(err, application.ErrCancelled) {
+	if action == depthObjectActionVerified && errors.Is(err, application.ErrCancelled) {
 		err = s.withDepthAttempt(ctx, id, true, use)
 	}
 	return err
@@ -277,20 +306,35 @@ func (s *DepthStore) changeDepthObject(ctx context.Context, id application.Depth
 
 // BeginWrite persists dispatch before the conditional private object Put.
 func (s *DepthStore) BeginWrite(ctx context.Context, id application.DepthWorkID, key string) error {
-	return s.changeDepthObject(ctx, id, key, "write")
+	return s.changeDepthObject(ctx, id, key, depthObjectActionWrite)
 }
 
 // ConfirmObject records only actual full byte readback under this attempt.
 func (s *DepthStore) ConfirmObject(ctx context.Context, id application.DepthWorkID, key string) error {
-	return s.changeDepthObject(ctx, id, key, "verified")
+	return s.changeDepthObject(ctx, id, key, depthObjectActionVerified)
 }
 
 // BeginRemove keeps deletion uncertainty separate from an unknown write.
 func (s *DepthStore) BeginRemove(ctx context.Context, id application.DepthWorkID, key string) error {
-	return s.changeDepthObject(ctx, id, key, "remove")
+	return s.changeDepthObject(ctx, id, key, depthObjectActionRemove)
 }
 
 // ConfirmRemoved records absence only after a known removal or no dispatch.
 func (s *DepthStore) ConfirmRemoved(ctx context.Context, id application.DepthWorkID, key string) error {
-	return s.changeDepthObject(ctx, id, key, "removed")
+	return s.changeDepthObject(ctx, id, key, depthObjectActionRemoved)
+}
+
+func updateDepthObject(tx *gorm.DB, row depthRow, object application.DepthObject, values map[string]any, status application.DepthObjectStatus) error {
+	result := tx.Model(&depthObjectRecord{}).Where("job_id = ? AND attempt = ? AND kind = ? AND object_key = ? AND status = ? AND write_started = ? AND delete_started = ?", row.ID, row.Attempt, object.Kind, object.ObjectKey, status, object.WriteStarted, object.DeleteStarted).Updates(values)
+	return requireDepthObjectUpdate(result)
+}
+
+func requireDepthObjectUpdate(result *gorm.DB) error {
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return application.ErrConflict
+	}
+	return nil
 }

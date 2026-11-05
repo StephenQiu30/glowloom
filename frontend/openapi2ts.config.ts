@@ -51,10 +51,14 @@ const config: GenerateServiceProps = {
       return operation.operationId;
     },
     customFileNames: (operation) => [operation.tags?.[0] ?? "identity"],
-    customType: (schema, namespace, getType) =>
-      schema?.type === "string" && schema.format === "binary"
-        ? "Blob"
-        : getType(schema, namespace),
+    customType(schema, namespace, getType) {
+      const type =
+        schema?.type === "string" && schema.format === "binary"
+          ? "Blob"
+          : getType(schema, namespace);
+      // Preserve only declared JSON nulls, independently of optional fields.
+      return schema?.nullable ? `${type} | null` : type;
+    },
     customOptionsDefaultValue(operation) {
       const binary = Object.entries(operation.responses).some(
         ([status, response]) =>

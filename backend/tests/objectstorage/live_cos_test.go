@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -15,27 +14,16 @@ import (
 )
 
 func TestLiveCOSConnectivity(t *testing.T) {
-	// Look for .env in potential relative paths
-	envPath := "../../../.env"
-	if _, err := os.Stat(envPath); err != nil {
-		envPath = "../../.env"
-	}
-	if _, err := os.Stat(envPath); err != nil {
-		t.Skip("skipping live COS test: .env not found")
-	}
-
-	os.Setenv("GLOWLOOM_ENV_FILE", envPath)
-	os.Setenv("GLOWLOOM_CANVAS_RUNTIME_URL", "http://127.0.0.1:4400")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("config.Load failed: %v", err)
 	}
 
-	if cfg.ObjectStorageProvider != "cos" || cfg.ObjectStorageAccessKey == "" {
+	if cfg.ObjectStorage == nil || cfg.ObjectStorage.Profiles[cfg.ObjectStorage.DefaultWriteProfile].Provider != "cos" {
 		t.Skip("skipping live COS test: COS provider or credentials not configured")
 	}
 
-	storage, err := objectstorage.OpenFromConfig(cfg)
+	storage, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
 	if err != nil {
 		t.Fatalf("OpenFromConfig failed: %v", err)
 	}
@@ -52,7 +40,7 @@ func TestLiveCOSConnectivity(t *testing.T) {
 	t.Log("✓ Ping succeeded!")
 
 	// 2. Put / PutIfAbsent test
-	probeKey := "probe/connectivity-test.txt"
+	probeKey := objectstorage.Ref{ProfileID: cfg.ObjectStorage.DefaultWriteProfile, Bucket: cfg.ObjectStorage.Profiles[cfg.ObjectStorage.DefaultWriteProfile].Bucket, Key: "probe/" + time.Now().UTC().Format("20060102T150405.000000000") + "/connectivity-test.txt"}
 	probeData := "glowloom-cos-live-verification-" + time.Now().UTC().Format(time.RFC3339Nano)
 	sum := sha256.Sum256([]byte(probeData))
 	probeSHA := hex.EncodeToString(sum[:])
@@ -89,7 +77,9 @@ func TestLiveCOSConnectivity(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 	body, err := io.ReadAll(rc)
-	rc.Close()
+	if err := rc.Close(); err != nil {
+		t.Fatal("close downloaded object:", err)
+	}
 	if err != nil {
 		t.Fatalf("ReadAll failed: %v", err)
 	}
@@ -104,7 +94,7 @@ func TestLiveCOSConnectivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PresignGet failed: %v", err)
 	}
-	if signedURL == "" || !strings.Contains(signedURL, cfg.ObjectStorageBucket) {
+	if signedURL.URL == "" || !strings.Contains(signedURL.URL, probeKey.Bucket) {
 		t.Fatalf("Unexpected signedURL: %s", signedURL)
 	}
 	t.Logf("✓ PresignGet succeeded: %s", signedURL)

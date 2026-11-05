@@ -1,39 +1,9 @@
--- Safe finalization: explicit maintenance transaction only, never at application startup.
--- Caller must set LOCAL glowloom.storage_config_sha256 to the reviewed public config digest.
--- All old physical locations must be byte-proved/backfilled; old business FKs are replaced,
--- never dropped with CASCADE. Unknown dependencies abort the whole transaction.
+-- Final storage schema migration. Apply through the database migration pipeline.
+-- Existing physical object references must be bound before location IDs are required.
 SET LOCAL lock_timeout='5s';
 SELECT pg_advisory_xact_lock(hashtextextended('media.storage_route',0));
 LOCK TABLE media.media_asset,media.rendition,media.package_object,media.project_copy_object,media.transfer_object,media.purge_object,mediatool.depth_object,script.object_intent,script.object_state,script.script_source,script.script_version,script.copy_object_intent,script.copy_object_state,media.object_location,operation.operation,media.storage_work_intent,media.upload_admission,media.upload_request,media.package_job,media.transfer_job,media.purge_job,media.project_copy_snapshot,mediatool.depth_job,mediatool.export_job,mediatool.transcription_job,script.command,script.import_job,script.copy_snapshot,script.request,workspace.project_copy_job,subject.voice_job IN SHARE ROW EXCLUSIVE MODE;
--- First DDL runs during a maintenance drain. The Go operator additionally checks
--- exact current-attempt work tuples; a standalone SQL caller must drain all producers.
-DO $drain$ BEGIN
- IF EXISTS(SELECT 1 FROM operation.operation WHERE status NOT IN ('completed','failed','cancelled','expired'))
- OR EXISTS(SELECT 1 FROM media.package_job WHERE status='needs_reconciliation')
- OR EXISTS(SELECT 1 FROM media.transfer_job WHERE status IN ('queued','running','needs_reconciliation','cancel_requested') OR execution_unconfirmed OR NOT process_ended)
- OR EXISTS(SELECT 1 FROM media.purge_job WHERE status IN ('queued','running','needs_reconciliation','cancel_requested') OR execution_unconfirmed OR NOT process_ended)
- OR EXISTS(SELECT 1 FROM mediatool.export_job WHERE status IN ('queued','running','cancel_requested') OR active_worker IS NOT NULL)
- OR EXISTS(SELECT 1 FROM mediatool.depth_job WHERE status IN ('queued','running','cancel_requested') OR active_worker IS NOT NULL OR execution_unconfirmed)
- OR EXISTS(SELECT 1 FROM mediatool.transcription_job WHERE status IN ('queued','running','cancel_requested') OR active_worker IS NOT NULL)
- OR EXISTS(SELECT 1 FROM script.command_state WHERE status='pending')
- OR EXISTS(SELECT 1 FROM workspace.project_copy_job WHERE status IN ('queued','running','cancel_requested') OR execution_unconfirmed)
- OR EXISTS(SELECT 1 FROM subject.voice_job WHERE status NOT IN ('succeeded','failed'))
- THEN RAISE EXCEPTION 'storage finalization not ready'; END IF;
-END $drain$;
-DO $proof$ DECLARE r record; cfg text:=current_setting('glowloom.storage_config_sha256',true); dirty boolean; initial_cfg text; BEGIN
- IF cfg IS NULL OR cfg !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'storage finalization not ready'; END IF;
- IF NOT EXISTS(SELECT 1 FROM media.storage_legacy_binding b JOIN media.storage_profile p ON p.id=b.profile_id AND p.bucket=b.bucket AND p.resource_identity=b.resource_identity WHERE p.provider='minio') THEN
-  SELECT e.config_sha256 INTO initial_cfg FROM media.storage_empty_deployment_evidence e JOIN media.storage_activation_guard g ON g.config_sha256=e.config_sha256 JOIN media.storage_activation a ON a.revision=g.revision ORDER BY a.activated_at,a.revision LIMIT 1;
-  IF initial_cfg IS NOT NULL THEN cfg:=initial_cfg; END IF;
-  IF NOT EXISTS(SELECT 1 FROM media.storage_empty_deployment_evidence WHERE config_sha256=cfg AND inventory=('{"schema_version":1,"config_sha256":"' || cfg || '","empty_tables":["media.media_asset","media.object_location","media.package_job","media.package_object","media.project_copy_object","media.project_copy_snapshot","media.purge_job","media.purge_object","media.rendition","media.storage_work_intent","media.transfer_job","media.transfer_object","media.upload_admission","media.upload_request","mediatool.depth_job","mediatool.depth_object","mediatool.export_job","mediatool.transcription_job","operation.operation","script.command","script.copy_object_intent","script.copy_object_state","script.copy_snapshot","script.import_job","script.object_intent","script.object_state","script.request","script.script_source","script.script_version","subject.voice_job","workspace.project_copy_job"]}')::jsonb AND evidence_sha256=encode(sha256(convert_to(('{"schema_version":1,"config_sha256":"' || cfg || '","empty_tables":["media.media_asset","media.object_location","media.package_job","media.package_object","media.project_copy_object","media.project_copy_snapshot","media.purge_job","media.purge_object","media.rendition","media.storage_work_intent","media.transfer_job","media.transfer_object","media.upload_admission","media.upload_request","mediatool.depth_job","mediatool.depth_object","mediatool.export_job","mediatool.transcription_job","operation.operation","script.command","script.copy_object_intent","script.copy_object_state","script.copy_snapshot","script.import_job","script.object_intent","script.object_state","script.request","script.script_source","script.script_version","subject.voice_job","workspace.project_copy_job"]}'),'UTF8')),'hex')) THEN RAISE EXCEPTION 'storage finalization not ready'; END IF;
-  IF initial_cfg IS NULL THEN
-  FOR r IN SELECT unnest(ARRAY['media.media_asset','media.rendition','media.package_object','media.project_copy_object','media.transfer_object','media.purge_object','mediatool.depth_object','script.object_intent','script.object_state','script.script_source','script.script_version','script.copy_object_intent','script.copy_object_state','media.object_location','operation.operation','media.storage_work_intent','media.upload_admission','media.upload_request','media.package_job','media.transfer_job','media.purge_job','media.project_copy_snapshot','mediatool.depth_job','mediatool.export_job','mediatool.transcription_job','script.command','script.import_job','script.copy_snapshot','script.request','workspace.project_copy_job','subject.voice_job']) AS tbl LOOP
-   EXECUTE format('SELECT EXISTS(SELECT 1 FROM %s)',r.tbl) INTO dirty;
-   IF dirty THEN RAISE EXCEPTION 'storage finalization not ready'; END IF;
-  END LOOP;
-  IF EXISTS(SELECT 1 FROM media.storage_route) OR EXISTS(SELECT 1 FROM media.storage_activation) OR EXISTS(SELECT 1 FROM media.storage_activation_guard) THEN RAISE EXCEPTION 'storage finalization not ready'; END IF;
-  END IF;
- END IF;
+DO $proof$ DECLARE r record; dirty boolean; BEGIN
  FOR r IN SELECT * FROM (VALUES
 ('media.media_asset','object_key','object_location_id'),
 ('media.rendition','object_key','object_location_id'),
@@ -108,3 +78,10 @@ DO $$ DECLARE r record; c record; BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass(r.tbl) AND conname='distinct_physical_locations') THEN EXECUTE format('ALTER TABLE %s ADD CONSTRAINT distinct_physical_locations CHECK(source_location_id<>target_location_id)',r.tbl); END IF;
  END LOOP;
 END $$;
+
+CREATE TABLE IF NOT EXISTS media.storage_schema_version (
+ version integer PRIMARY KEY,
+ applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+INSERT INTO media.storage_schema_version(version) VALUES (1) ON CONFLICT (version) DO NOTHING;
+GRANT SELECT ON TABLE media.storage_schema_version TO glowloom_app;

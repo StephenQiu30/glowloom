@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"gorm.io/gorm"
 )
 
@@ -31,7 +33,7 @@ func NewPartitionStore(db *gorm.DB) *PartitionStore {
 func (s *PartitionStore) EnsurePartitions(ctx context.Context, now time.Time) error {
 	current := now.UTC()
 	first := time.Date(current.Year(), current.Month(), 1, 0, 0, 0, 0, time.UTC)
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := tx.Exec("LOCK TABLE infra.outbox IN ACCESS EXCLUSIVE MODE").Error; err != nil {
 			return fmt.Errorf("lock outbox for partition maintenance: %w", err)
 		}
@@ -54,7 +56,9 @@ func (s *PartitionStore) PrunePublished(ctx context.Context, now time.Time, batc
 	if batchSize <= 0 {
 		return 0, ErrInvalidPruneBatchSize
 	}
-	result := s.db.WithContext(ctx).Exec(`
+	var count int64
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		result := tx.Exec(`
 		WITH expired AS (
 			SELECT id, create_time FROM infra.outbox
 			WHERE published_at < ?
@@ -66,10 +70,13 @@ func (s *PartitionStore) PrunePublished(ctx context.Context, now time.Time, batc
 		USING expired
 		WHERE event.id = expired.id AND event.create_time = expired.create_time
 	`, now.UTC().Add(-publishedEventRetention), batchSize)
-	if result.Error != nil {
-		return 0, fmt.Errorf("prune published outbox events: %w", result.Error)
-	}
-	return result.RowsAffected, nil
+		if result.Error != nil {
+			return fmt.Errorf("prune published outbox events: %w", result.Error)
+		}
+		count = result.RowsAffected
+		return nil
+	})
+	return count, err
 }
 
 // DropEmptyPastPartitions removes completed UTC month partitions only after
@@ -78,7 +85,7 @@ func (s *PartitionStore) DropEmptyPastPartitions(ctx context.Context, now time.T
 	current := now.UTC()
 	first := time.Date(current.Year(), current.Month(), 1, 0, 0, 0, 0, time.UTC)
 	dropped := 0
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := tx.Exec("LOCK TABLE infra.outbox IN ACCESS EXCLUSIVE MODE").Error; err != nil {
 			return fmt.Errorf("lock outbox for partition cleanup: %w", err)
 		}

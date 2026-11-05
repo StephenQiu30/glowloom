@@ -15,6 +15,7 @@ type SourceObjectLocations interface {
 	Begin(context.Context, uuid.UUID, domain.ObjectFact) error
 	Confirm(context.Context, uuid.UUID, domain.ObjectFact) error
 	Accept(context.Context, uuid.UUID, []domain.ObjectFact) error
-	BeginRemoval(context.Context, uuid.UUID, domain.ObjectFact) error
+	Cancel(context.Context, uuid.UUID) error
+	BeginRemoval(context.Context, uuid.UUID, domain.ObjectFact) (bool, error)
 	ConfirmRemoval(context.Context, uuid.UUID, domain.ObjectFact) error
 }

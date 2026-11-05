@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 

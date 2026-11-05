@@ -66,12 +66,7 @@ function ProjectAssets({
   async function load(index: number, controller: AbortController) {
     const result = requireDirectorProjectPage(
       await listMediaLibrary(
-        directorProjectQuery(
-          projectID,
-          kind,
-          search,
-          index,
-                ),
+        directorProjectQuery(projectID, kind, search, index),
         { signal: controller.signal },
       ),
       projectID,

@@ -11,14 +11,14 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
-// Registry owns immutable profile identities. The database, not this factory,
-// decides which profile accepts a new intent.
+// Registry owns the immutable profile identities supplied by deployment configuration.
 type Registry struct {
 	cfg       config.ObjectStorageConfig
 	transport *http.Transport
 }
 
 type backend interface {
+	ping(context.Context) error
 	put(context.Context, string, io.Reader, int64, string, string) error
 	stat(context.Context, string) (ObjectInfo, error)
 	get(context.Context, string) (io.ReadCloser, error)
@@ -37,7 +37,7 @@ func OpenProfiles(cfg config.ObjectStorageConfig) (*Registry, error) {
 	}
 	r := &Registry{cfg: cfg, transport: http.DefaultTransport.(*http.Transport).Clone()}
 	for _, p := range cfg.Profiles {
-		if p.Mode != "disabled" {
+		if p.Mode != config.StorageProfileDisabled {
 			if _, err := cfg.ResolveCredentials(p.Credentials); err != nil {
 				r.Close()
 				return nil, err
@@ -54,6 +54,35 @@ func (r *Registry) Close() {
 	}
 }
 
+// Ping verifies the configured write destination used for new object work.
+// Read-only profile failures stay scoped to reads that reference those profiles.
+func (r *Registry) Ping(ctx context.Context) error {
+	if r == nil {
+		return ErrUnavailable
+	}
+	return r.PingProfile(ctx, r.cfg.DefaultWriteProfile)
+}
+
+// PingProfile verifies one configured storage resource before it becomes the write route.
+func (r *Registry) PingProfile(ctx context.Context, profileID string) error {
+	if r == nil {
+		return ErrUnavailable
+	}
+	profile, ok := r.cfg.Profiles[profileID]
+	if !ok || profile.Mode == config.StorageProfileDisabled {
+		return ErrAccessDenied
+	}
+	ref := Ref{ProfileID: profileID, Bucket: profile.Bucket, Key: "glowloom-health-check"}
+	storageBackend, _, err := r.resolve(ref, false, false)
+	if err != nil {
+		return err
+	}
+	if err := storageBackend.ping(ctx); err != nil {
+		return storageError("health_check", profileID, err)
+	}
+	return nil
+}
+
 func (r *Registry) resolve(ref Ref, write bool, signing bool) (backend, config.StorageCredentials, error) {
 	if r == nil || !validKey(ref.Key) || len(ref.Key) > 696 || strings.ContainsAny(ref.Key, "\x00\r\n") {
 		return nil, config.StorageCredentials{}, ErrInvalidObject
@@ -62,7 +91,7 @@ func (r *Registry) resolve(ref Ref, write bool, signing bool) (backend, config.S
 	if !ok || p.Bucket != ref.Bucket {
 		return nil, config.StorageCredentials{}, ErrInvalidObject
 	}
-	if p.Mode == "disabled" || write && p.Mode != "read_write" {
+	if p.Mode == config.StorageProfileDisabled || write && p.Mode != config.StorageProfileReadWrite {
 		return nil, config.StorageCredentials{}, ErrAccessDenied
 	}
 	cred, err := r.cfg.ResolveCredentials(p.Credentials)

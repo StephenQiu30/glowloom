@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -60,16 +61,19 @@ func importReplay(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UU
 	if err := checkRequestScope(tx, actor, project, key, "file_import_"+action, hash); err != nil {
 		return application.ImportJob{}, false, err
 	}
-	var row struct{ Response string }
-	read := tx.Raw(`SELECT response::text FROM script.import_command WHERE actor_id=? AND request_id=?`, actor.ID, key).Scan(&row)
-	if read.Error != nil {
-		return application.ImportJob{}, false, read.Error
-	}
-	if read.RowsAffected == 0 {
+	var row scriptImportCommandRow
+	err := tx.Where("actor_id = ? AND request_id = ?", actor.ID, key).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return application.ImportJob{}, false, nil
 	}
+	if err != nil {
+		return application.ImportJob{}, false, err
+	}
+	if row.OrgID != actor.OrgID || row.ProjectID != project || row.Action != action || row.RequestHash != hash {
+		return application.ImportJob{}, false, application.ErrIdempotencyConflict
+	}
 	var result application.ImportJob
-	if err := json.Unmarshal([]byte(row.Response), &result); err != nil {
+	if err := json.Unmarshal(row.Response, &result); err != nil {
 		return result, false, application.ErrUnavailable
 	}
 	return result, true, nil
@@ -85,10 +89,10 @@ func (s *ImportStore) CreateImport(ctx context.Context, actor identityapp.Princi
 		return result, err
 	}
 	err = s.transaction(ctx, actor, in.ProjectID, true, func(tx *gorm.DB) error {
-		if err := commandLock(tx, actor.ID, in.Key); err != nil {
+		if err := registerCommand(tx, actor, in.ProjectID, in.Key, "file_import_create", hash, now); err != nil {
 			return err
 		}
-		prior, found, err := importReplay(tx, actor, in.ProjectID, in.Key, "create", hash)
+		prior, found, err := importReplay(tx, actor, in.ProjectID, in.Key, string(domain.ImportActionCreate), hash)
 		if err != nil {
 			return err
 		}
@@ -127,10 +131,12 @@ func (s *ImportStore) CreateImport(ctx context.Context, actor identityapp.Princi
 		if err := registerRequest(tx, actor, in.ProjectID, in.Key, "file_import_create", hash, now); err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`INSERT INTO script.import_job(id,org_id,project_id,actor_id,actor_role,request_id,request_hash,expected_script_revision,base_version_id,rights_confirmed_at,created_at) VALUES(?,?,?,?,NULL,?,?,?,?,?,?)`, id, actor.OrgID, in.ProjectID, actor.ID, in.Key, hash, in.ExpectedRevision, in.BaseVersionID, now, now)); err != nil {
+		job := scriptImportJobRow{ID: id, OrgID: actor.OrgID, ProjectID: in.ProjectID, ActorID: actor.ID, RequestID: in.Key, RequestHash: hash, ExpectedScriptRevision: in.ExpectedRevision, BaseVersionID: in.BaseVersionID, RightsConfirmedAt: now, CreatedAt: now}
+		if err := exactlyOne(tx.Create(&job)); err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`INSERT INTO script.import_state(job_id,revision,attempt,status,stage,latest_script_revision,latest_version_id,io_state,updated_at) VALUES(?,1,1,'queued','queued',?,?,'idle',?)`, id, in.ExpectedRevision, in.BaseVersionID, now)); err != nil {
+		importState := scriptImportStateRow{JobID: id, Revision: 1, Attempt: 1, Status: domain.ImportStatusQueued, Stage: domain.ImportStageQueued, LatestScriptRevision: in.ExpectedRevision, LatestVersionID: in.BaseVersionID, IOState: domain.ImportIOStateIdle, UpdatedAt: now}
+		if err := exactlyOne(tx.Create(&importState)); err != nil {
 			return err
 		}
 		positions := make([]int, len(frozen))
@@ -140,7 +146,8 @@ func (s *ImportStore) CreateImport(ctx context.Context, actor identityapp.Princi
 			}
 			positions[i] = i
 			sourceID := uuid.NewSHA1(id, []byte(fmt.Sprintf("file/%d", i)))
-			if err := exactlyOne(tx.Exec(`INSERT INTO script.import_file(job_id,position,source_id,asset_id,project_id,media_revision,sha256,byte_size,mime,file_name) VALUES(?,?,?,?,?,?,?,?,?,?)`, id, i, sourceID, file.AssetID, file.ProjectID, file.Revision, file.SHA256, file.ByteSize, file.MIME, file.FileName)); err != nil {
+			row := scriptImportFileRow{JobID: id, Position: i, SourceID: sourceID, AssetID: file.AssetID, ProjectID: file.ProjectID, MediaRevision: file.Revision, SHA256: file.SHA256, ByteSize: file.ByteSize, MIME: file.MIME, FileName: file.FileName}
+			if err := exactlyOne(tx.Create(&row)); err != nil {
 				return err
 			}
 		}
@@ -152,7 +159,7 @@ func (s *ImportStore) CreateImport(ctx context.Context, actor identityapp.Princi
 			return err
 		}
 		result = r.Job
-		return recordImportCommand(tx, actor, in.Key, in.RequestID, "create", hash, 0, result, "start", now)
+		return recordImportCommand(tx, actor, in.Key, in.RequestID, string(domain.ImportActionCreate), hash, 0, result, string(domain.ImportActionStart), now)
 	})
 	return result, err
 }
@@ -162,40 +169,46 @@ func sameOptionalUUID(a, b *uuid.UUID) bool {
 }
 
 func rejectPendingImport(tx *gorm.DB, org, project, except uuid.UUID) error {
-	var found bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.import_job j JOIN script.import_state s ON s.job_id=j.id WHERE j.org_id=? AND j.project_id=? AND j.id<>? AND (s.status IN ('queued','running','cancel_requested') OR s.needs_reconciliation OR s.io_owner_id IS NOT NULL OR s.io_state='unknown'))`, org, project, except).Scan(&found).Error; err != nil {
+	var count int64
+	activeImport := tx.Where("script.import_state.status IN ?", []domain.ImportStatus{domain.ImportStatusQueued, domain.ImportStatusRunning, domain.ImportStatusCancelRequested}).
+		Or("script.import_state.needs_reconciliation = ?", true).
+		Or("script.import_state.io_owner_id IS NOT NULL").
+		Or("script.import_state.io_state = ?", domain.ImportIOStateUnknown)
+	err := tx.Model(&scriptImportJobRow{}).
+		Joins("JOIN script.import_state ON script.import_state.job_id = script.import_job.id").
+		Where("script.import_job.org_id = ? AND script.import_job.project_id = ? AND script.import_job.id <> ?", org, project, except).
+		Where(activeImport).
+		Count(&count).Error
+	if err != nil {
 		return err
 	}
-	if found {
+	if count > 0 {
 		return application.ErrNeedsReconciliation
 	}
 	return nil
 }
 
 func insertImportAttempt(tx *gorm.DB, id uuid.UUID, attempt int, revision int64, version *uuid.UUID, positions []int, now time.Time) error {
-	data, err := json.Marshal(positions)
-	if err != nil {
-		return err
-	}
 	key := uuid.NewSHA1(id, []byte(fmt.Sprintf("publication/%d", attempt)))
-	return exactlyOne(tx.Exec(`INSERT INTO script.import_attempt(job_id,attempt,expected_script_revision,base_version_id,publication_key,positions,created_at) VALUES(?,?,?,?,?,ARRAY(SELECT jsonb_array_elements_text(?::jsonb)::integer),?)`, id, attempt, revision, version, key, string(data), now))
+	row := scriptImportAttemptRow{JobID: id, Attempt: attempt, ExpectedScriptRevision: revision, BaseVersionID: version, PublicationKey: key, Positions: intArray(positions), CreatedAt: now}
+	return exactlyOne(tx.Create(&row))
 }
 
 // ListImports provides a current scoped recovery path after unknown acceptance.
 func (s *ImportStore) ListImports(ctx context.Context, actor identityapp.Principal, project uuid.UUID, after int64, limit int) (application.ImportPage, error) {
 	page := application.ImportPage{CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID, Items: []application.ImportJob{}}
 	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
-		var ids []uuid.UUID
-		if err := tx.Raw(`SELECT id FROM script.import_job WHERE org_id=? AND project_id=? ORDER BY created_at DESC,id DESC OFFSET ? LIMIT ?`, actor.OrgID, project, after, limit+1).Scan(&ids).Error; err != nil {
+		var rows []scriptImportJobRow
+		if err := tx.Select("id").Where("org_id = ? AND project_id = ?", actor.OrgID, project).Order("created_at DESC, id DESC").Offset(int(after)).Limit(limit + 1).Find(&rows).Error; err != nil {
 			return err
 		}
-		if len(ids) > limit {
-			ids = ids[:limit]
+		if len(rows) > limit {
+			rows = rows[:limit]
 			next := after + int64(limit)
 			page.NextAfter = &next
 		}
-		for _, id := range ids {
-			r, err := readImport(tx, actor, project, id, false)
+		for _, row := range rows {
+			r, err := readImport(tx, actor, project, row.ID, false)
 			if err != nil {
 				return err
 			}
@@ -231,10 +244,10 @@ func (s *ImportStore) ControlImport(ctx context.Context, actor identityapp.Princ
 		return result, err
 	}
 	err = s.transaction(ctx, actor, in.ProjectID, true, func(tx *gorm.DB) error {
-		if err := commandLock(tx, actor.ID, in.Key); err != nil {
+		if err := registerCommand(tx, actor, in.ProjectID, in.Key, "file_import_"+string(in.Action), hash, now); err != nil {
 			return err
 		}
-		prior, found, err := importReplay(tx, actor, in.ProjectID, in.Key, in.Action, hash)
+		prior, found, err := importReplay(tx, actor, in.ProjectID, in.Key, string(in.Action), hash)
 		if err != nil {
 			return err
 		}
@@ -246,7 +259,7 @@ func (s *ImportStore) ControlImport(ctx context.Context, actor identityapp.Princ
 		if err != nil {
 			return err
 		}
-		if in.Action == "retry" && actor.ID != r.Actor.ID {
+		if in.Action == domain.ImportActionRetry && actor.ID != r.Actor.ID {
 			return identityapp.ErrForbidden
 		}
 		if r.Job.Revision != in.ExpectedRevision {
@@ -254,19 +267,19 @@ func (s *ImportStore) ControlImport(ctx context.Context, actor identityapp.Princ
 		}
 		j := r.Job
 		switch in.Action {
-		case "cancel":
-			if j.Status == "succeeded" || j.Status == "cancelled" {
+		case domain.ImportActionCancel:
+			if j.Status == domain.ImportStatusSucceeded || j.Status == domain.ImportStatusCancelled {
 				return application.ErrConflict
 			}
 			j.CancellationRequested = true
-			j.Status = "cancel_requested"
-			j.Stage = "cancelling"
-		case "reconcile":
+			j.Status = domain.ImportStatusCancelRequested
+			j.Stage = domain.ImportStageCancelling
+		case domain.ImportActionReconcile:
 			if !j.NeedsReconciliation && !j.CancellationRequested || j.ReconciliationRequested {
 				return application.ErrConflict
 			}
 			j.ReconciliationRequested = true
-		case "retry":
+		case domain.ImportActionRetry:
 			if s.sources == nil {
 				return application.ErrUnavailable
 			}
@@ -288,13 +301,13 @@ func (s *ImportStore) ControlImport(ctx context.Context, actor identityapp.Princ
 			}
 			positions := []int{}
 			for _, file := range j.Files {
-				if file.Status == "failed" {
+				if file.Status == domain.ImportFileStatusFailed {
 					positions = append(positions, file.Position)
 				}
 			}
 			j.Attempt++
-			j.Status = "queued"
-			j.Stage = "queued"
+			j.Status = domain.ImportStatusQueued
+			j.Stage = domain.ImportStageQueued
 			j.FailureCode = ""
 			j.CancellationRequested = false
 			j.ReconciliationRequested = false
@@ -309,7 +322,7 @@ func (s *ImportStore) ControlImport(ctx context.Context, actor identityapp.Princ
 		if err := updateImportState(tx, j, r.OwnerID, r.IOState); err != nil {
 			return err
 		}
-		if err := registerRequest(tx, actor, in.ProjectID, in.Key, "file_import_"+in.Action, hash, now); err != nil {
+		if err := registerRequest(tx, actor, in.ProjectID, in.Key, "file_import_"+string(in.Action), hash, now); err != nil {
 			return err
 		}
 		refreshed, err := readImport(tx, actor, in.ProjectID, in.JobID, false)
@@ -318,10 +331,10 @@ func (s *ImportStore) ControlImport(ctx context.Context, actor identityapp.Princ
 		}
 		result = refreshed.Job
 		emit := in.Action
-		if emit == "retry" {
-			emit = "start"
+		if emit == domain.ImportActionRetry {
+			emit = domain.ImportActionStart
 		}
-		return recordImportCommand(tx, actor, in.Key, in.RequestID, in.Action, hash, in.ExpectedRevision, result, emit, now)
+		return recordImportCommand(tx, actor, in.Key, in.RequestID, string(in.Action), hash, in.ExpectedRevision, result, string(emit), now)
 	})
 	return result, err
 }

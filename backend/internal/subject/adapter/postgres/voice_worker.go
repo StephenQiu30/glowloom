@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -44,7 +46,7 @@ func (s *VoiceStore) worker(ctx context.Context, tx *gorm.DB, id uuid.UUID, lock
 // Work reauthorizes both target space and the actual personal output owner.
 func (s *VoiceStore) Work(ctx context.Context, id uuid.UUID) (application.VoiceWork, error) {
 	var out application.VoiceWork
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { var err error; out, err = s.worker(ctx, tx, id, false); return err })
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error { var err error; out, err = s.worker(ctx, tx, id, false); return err })
 	return out, err
 }
 
@@ -52,7 +54,7 @@ func (s *VoiceStore) Work(ctx context.Context, id uuid.UUID) (application.VoiceW
 func (s *VoiceStore) Claim(ctx context.Context, id, execution uuid.UUID) (application.VoiceWork, bool, error) {
 	var out application.VoiceWork
 	claimed := false
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		var err error
 		out, err = s.worker(ctx, tx, id, true)
 		if err != nil {
@@ -92,7 +94,7 @@ func (s *VoiceStore) Claim(ctx context.Context, id, execution uuid.UUID) (applic
 		active += operations.Active
 		recent += operations.Recent
 		if active >= int64(limits.ConcurrencyLimit) || recent >= int64(limits.RateLimitPerMin) {
-			return application.ErrVoiceUnavailable
+			return application.ErrVoiceCapacity
 		}
 		r = tx.Exec(`UPDATE subject.voice_job SET status='dispatching',revision=revision+1,dispatch_started_at=clock_timestamp(),execution_id=?,updated_at=clock_timestamp() WHERE id=? AND status='queued' AND dispatch_started_at IS NULL`, execution, id)
 		if r.Error != nil {
@@ -111,7 +113,7 @@ func (s *VoiceStore) Claim(ctx context.Context, id, execution uuid.UUID) (applic
 // Credential checks emergency disable and the exact frozen key immediately before send.
 func (s *VoiceStore) Credential(ctx context.Context, work application.VoiceWork) (application.VoiceCredential, error) {
 	var out application.VoiceCredential
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		current, err := s.worker(ctx, tx, work.Job.ID, false)
 		if err != nil {
 			return err
@@ -128,7 +130,7 @@ func (s *VoiceStore) Credential(ctx context.Context, work application.VoiceWork)
 // RecordReceipt durably freezes terminal success before any retryable ingest.
 func (s *VoiceStore) RecordReceipt(ctx context.Context, work application.VoiceWork, receipt application.VoiceReceipt) (application.VoiceWork, error) {
 	var out application.VoiceWork
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		var err error
 		out, err = s.worker(ctx, tx, work.Job.ID, true)
 		if err != nil {
@@ -171,7 +173,7 @@ func (s *VoiceStore) RecordReceipt(ctx context.Context, work application.VoiceWo
 
 func (s *VoiceStore) mark(ctx context.Context, work application.VoiceWork, status, code string) (application.VoiceJob, error) {
 	var out application.VoiceJob
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		current, err := s.worker(ctx, tx, work.Job.ID, true)
 		if err != nil {
 			return err
@@ -213,7 +215,7 @@ func (s *VoiceStore) MarkFailed(ctx context.Context, w application.VoiceWork, co
 // CompleteWith joins real media acceptance and job success in one SQL transaction.
 func (s *VoiceStore) CompleteWith(ctx context.Context, work application.VoiceWork, receipt application.VoiceReceipt, accept func(*gorm.DB) (application.VoiceJobResult, error)) (application.VoiceJob, error) {
 	var out application.VoiceJob
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		current, err := s.worker(ctx, tx, work.Job.ID, true)
 		if err != nil {
 			return err
@@ -262,7 +264,7 @@ func (s *VoiceStore) VerifyDelivery(ctx context.Context, d application.VoiceDeli
 		return false, application.ErrInvalidVoiceJob
 	}
 	var valid bool
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		w, err := s.worker(ctx, tx, d.JobID, false)
 		if err != nil {
 			return err
@@ -296,7 +298,7 @@ func (s *VoiceStore) Recoverable(ctx context.Context, limit int) ([]application.
 		return nil, application.ErrInvalidVoiceJob
 	}
 	out := []application.VoiceDelivery{}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		var ids []uuid.UUID
 		if err := tx.Raw(`SELECT id FROM subject.voice_job WHERE status IN ('queued','ingesting') AND updated_at<? ORDER BY updated_at,id LIMIT ?`, time.Now().UTC().Add(-2*time.Minute), limit).Scan(&ids).Error; err != nil {
 			return err

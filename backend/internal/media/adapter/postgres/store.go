@@ -4,6 +4,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -61,31 +63,9 @@ func (s *Store) CreateAsset(ctx context.Context, actor identityapp.Principal, as
 		if err := s.requireProject(tx, actor, asset.ProjectID, true); err != nil {
 			return err
 		}
-		result := tx.Exec(`
-			INSERT INTO media.media_asset
-			  (id, project_id, kind, origin, status, object_key, file_name, mime_type,
-			   byte_size, sha256, width, height, duration_ms, fps, audio_channels,
-			   codec, source_operation_id, provider_key, model_key, region,
-			   moderation_status, moderation_detail, aigc_marked, contains_real_person,
-			   consent_record_id, upload_id, failure_reason, delete_time, purge_after,
-			   revision, create_time, update_time)
-			VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-			        ?::uuid, ?, ?, ?, ?, ?::jsonb, ?, ?, ?::uuid, ?, ?, ?, ?, ?, ?, ?)
-		`, asset.ID.String(), asset.ProjectID.String(), string(asset.Kind),
-			string(asset.Origin), string(asset.Status), asset.ObjectKey,
-			asset.FileName, asset.MimeType, asset.ByteSize, asset.SHA256,
-			asset.Width, asset.Height, asset.DurationMS, asset.FPS,
-			asset.AudioChannels, asset.Codec, asset.SourceOperationID,
-			asset.ProviderKey, asset.ModelKey, asset.Region,
-			string(asset.ModerationStatus), nullableJSON(asset.ModerationDetail),
-			asset.AIGCMarked, asset.ContainsRealPerson, asset.ConsentRecordID,
-			asset.UploadID, asset.FailureReason, asset.DeleteTime, asset.PurgeAfter,
-			asset.Revision, asset.CreateTime, asset.UpdateTime)
-		if result.Error != nil {
-			return fmt.Errorf("insert media asset: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return fmt.Errorf("insert media asset: wrote %d rows", result.RowsAffected)
+		record := mediaAssetRecordFromDomain(asset)
+		if err := tx.Create(&record).Error; err != nil {
+			return fmt.Errorf("insert media asset: %w", err)
 		}
 		return nil
 	})
@@ -122,26 +102,12 @@ func (s *Store) findAsset(ctx context.Context, actor identityapp.Principal, proj
 		} else if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
-		result := tx.Raw(`
-			SELECT a.id, a.project_id, a.kind, a.origin, a.status, a.object_key, a.object_location_id,
-			       a.file_name, a.mime_type, a.byte_size, a.sha256, a.width,
-			       a.height, a.duration_ms, a.fps, a.audio_channels, a.codec,
-			       a.source_operation_id, a.provider_key, a.model_key, a.region,
-			       a.moderation_status, a.moderation_detail, a.aigc_marked,
-			       a.contains_real_person, a.consent_record_id, a.upload_id,
-			       a.failure_reason, a.delete_time, a.purge_after, a.revision,
-			       a.create_time, a.update_time, a.is_delete
-			FROM media.media_asset AS a
-			JOIN workspace.project AS p ON p.id = a.project_id
-			WHERE a.id = ?::uuid AND a.project_id = ?::uuid AND p.org_id = ?::uuid
-			  AND NOT a.is_delete AND NOT p.is_delete AND p.status IN ('active','archived')
-			FOR SHARE OF a, p
-		`, assetID.String(), projectID.String(), actor.OrgID.String()).Scan(&row)
+		result := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"id": assetID, "project_id": projectID, "is_delete": false}).Take(&row)
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return ErrNotFound
+		}
 		if result.Error != nil {
 			return fmt.Errorf("read media asset: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return ErrNotFound
 		}
 		return row.loadLocation(tx)
 	})
@@ -188,20 +154,9 @@ func (s *Store) AddRendition(ctx context.Context, actor identityapp.Principal, p
 			strings.TrimSuffix(name, path.Ext(name)) != string(rendition.Kind) {
 			return domain.ErrInvalidRendition
 		}
-		result := tx.Exec(`
-			INSERT INTO media.rendition
-			  (id, media_asset_id, kind, object_key, width, height, byte_size,
-			   create_time, update_time)
-			VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?, ?)
-		`, rendition.ID.String(), rendition.MediaAssetID.String(),
-			string(rendition.Kind), rendition.ObjectKey, rendition.Width,
-			rendition.Height, rendition.ByteSize, rendition.CreateTime,
-			rendition.UpdateTime)
-		if result.Error != nil {
-			return fmt.Errorf("insert rendition: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return fmt.Errorf("insert rendition: wrote %d rows", result.RowsAffected)
+		record := mediaRenditionRecordFromDomain(rendition)
+		if err := tx.Create(&record).Error; err != nil {
+			return fmt.Errorf("insert rendition: %w", err)
 		}
 		return nil
 	})
@@ -223,15 +178,8 @@ func (s *Store) FindRenditions(ctx context.Context, actor identityapp.Principal,
 		if _, err := s.visibleAssetKey(tx, actor, projectID, assetID); err != nil {
 			return err
 		}
-		result := tx.Raw(`
-			SELECT id, media_asset_id, kind, object_key, object_location_id, width, height,
-			       byte_size, create_time, update_time, is_delete
-			FROM media.rendition
-			WHERE media_asset_id = ?::uuid AND NOT is_delete
-			ORDER BY kind, id
-		`, assetID.String()).Scan(&rows)
-		if result.Error != nil {
-			return fmt.Errorf("read renditions: %w", result.Error)
+		if err := tx.Where("media_asset_id = ? AND NOT is_delete", assetID).Order("kind").Order("id").Find(&rows).Error; err != nil {
+			return fmt.Errorf("read renditions: %w", err)
 		}
 		for i := range rows {
 			if err := rows[i].loadLocation(tx); err != nil {
@@ -265,28 +213,15 @@ func (s scopeAuthority) visibleAssetKey(tx *gorm.DB, actor identityapp.Principal
 	if err := requireNewMediaVisible(tx, library.ID, []uuid.UUID{assetID}); err != nil {
 		return "", err
 	}
-	var row struct{ ObjectKey string }
-	result := tx.Raw(`
-		SELECT a.object_key FROM media.media_asset AS a
-		JOIN workspace.project AS p ON p.id = a.project_id
-		WHERE a.id = ?::uuid AND a.project_id = ?::uuid AND p.org_id = ?::uuid
-		  AND NOT a.is_delete AND NOT p.is_delete AND p.status IN ('active','archived')
-		FOR SHARE OF a, p
-	`, assetID.String(), projectID.String(), actor.OrgID.String()).Scan(&row)
+	var row assetRow
+	result := tx.Clauses(clause.Locking{Strength: "SHARE"}).Select("object_key").Where(map[string]any{"id": assetID, "project_id": projectID, "is_delete": false}).Take(&row)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return "", ErrNotFound
+	}
 	if result.Error != nil {
 		return "", fmt.Errorf("check media asset scope: %w", result.Error)
 	}
-	if result.RowsAffected != 1 {
-		return "", ErrNotFound
-	}
 	return row.ObjectKey, nil
-}
-
-func nullableJSON(value json.RawMessage) any {
-	if len(value) == 0 {
-		return nil
-	}
-	return string(value)
 }
 
 type assetRow struct {
@@ -328,6 +263,8 @@ type assetRow struct {
 	UpdateTime         time.Time  `json:"update_time"`
 	IsDelete           bool       `json:"is_delete"`
 }
+
+func (assetRow) TableName() string { return "media.media_asset" }
 
 func (r assetRow) domain() domain.MediaAsset {
 	var personal *domain.PersonalOwnership
@@ -373,6 +310,8 @@ type renditionRow struct {
 	IsDelete         bool
 }
 
+func (renditionRow) TableName() string { return "media.rendition" }
+
 func (r renditionRow) domain() domain.Rendition {
 	return domain.Rendition{
 		ID: r.ID, MediaAssetID: r.MediaAssetID,
@@ -399,26 +338,21 @@ func (s *Store) ListReadyAssets(ctx context.Context, actor identityapp.Principal
 		if err != nil {
 			return err
 		}
-		query := `SELECT * FROM media.media_asset a WHERE project_id=? AND NOT is_delete AND status='ready' AND moderation_status='passed'
-		 AND NOT EXISTS(SELECT 1 FROM media.library_item i WHERE i.library_id=? AND i.id=a.id AND (i.catalog_state<>'active' OR i.purged_at IS NOT NULL))
-		 AND NOT EXISTS(SELECT 1 FROM media.purge_item i WHERE i.item_id=a.id AND i.status IN ('queued','running','needs_reconciliation','succeeded'))`
-		if kind == "document" {
-			query += ` AND kind='document'`
-		} else {
-			query += ` AND kind IN ('image','video','audio','model')`
-		}
-		args := []any{projectID, library.ID}
+		query := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"project_id": projectID, "is_delete": false, "status": domain.StatusReady, "moderation_status": domain.ModerationPassed})
+		hiddenLibraryItems := tx.Model(&libraryItemRow{}).Select("1").Where("library_id = ? AND id = media.media_asset.id AND (catalog_state <> ? OR purged_at IS NOT NULL)", library.ID, domain.LibraryItemStateActive)
+		query = query.Where("NOT EXISTS (?)", hiddenLibraryItems)
+		activePurgeStatuses := []domain.PurgeItemStatus{domain.PurgeItemStatusQueued, domain.PurgeItemStatusRunning, domain.PurgeItemStatusNeedsReconciliation, domain.PurgeItemStatusSucceeded}
+		purgeItems := tx.Model(&purgeItemRow{}).Select("1").Where("item_id = media.media_asset.id AND status IN ?", activePurgeStatuses)
+		query = query.Where("NOT EXISTS (?)", purgeItems)
 		if kind != "" {
-			query += ` AND kind=?`
-			args = append(args, kind)
+			query = query.Where("kind = ?", kind)
+		} else {
+			query = query.Where("kind IN ?", []domain.Kind{domain.KindImage, domain.KindVideo, domain.KindAudio, domain.KindModel})
 		}
 		if after != uuid.Nil {
-			query += ` AND id<?`
-			args = append(args, after)
+			query = query.Where("id < ?", after)
 		}
-		query += ` ORDER BY id DESC LIMIT ? FOR SHARE OF a`
-		args = append(args, limit)
-		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
+		if err := query.Order("id DESC").Limit(limit).Find(&rows).Error; err != nil {
 			return err
 		}
 		for i := range rows {

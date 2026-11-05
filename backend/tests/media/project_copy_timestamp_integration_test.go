@@ -6,7 +6,6 @@ import (
 
 	"gorm.io/gorm"
 
-	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
@@ -14,7 +13,7 @@ func TestProjectCopyMediaVerificationPreservesTimestampInstantsAcrossSessionTime
 	database := mediaStoreDB(t)
 	objects := glbTestObjects(t)
 	actor, binding, snapshot, _ := seedCopyMedia(t, database, objects)
-	transfer := mediaapp.NewProjectCopyTransfer(mediaCopyStore(database), copyobjects.NewProjectCopyObjects(objects), t.TempDir())
+	transfer := mediaapp.NewRoutedProjectCopyTransfer(mediaCopyStore(database), mediaFixtureCopyObjects(t, database), t.TempDir())
 	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal("transfer synthetic copy", err)
 	}

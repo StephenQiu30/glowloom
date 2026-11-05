@@ -26,11 +26,6 @@ type AssetReader interface {
 	ListReadyAssets(context.Context, identityapp.Principal, uuid.UUID, string, uuid.UUID, int) ([]domain.MediaAsset, error)
 }
 
-// PreviewSigner signs only server-selected private object keys.
-type PreviewSigner interface {
-	PresignGet(context.Context, string, time.Duration) (string, error)
-}
-
 // AssetSummary deliberately excludes object keys, supplier facts and consent details.
 type AssetSummary struct {
 	ID         uuid.UUID `json:"id"`
@@ -61,14 +56,13 @@ type Preview struct {
 // AssetQuery owns media eligibility and safe projections for preview and canvas references.
 type AssetQuery struct {
 	store        AssetReader
-	signer       PreviewSigner
 	objectSigner ObjectSigner
 	previewTTL   time.Duration
 }
 
-// NewAssetQuery injects the authorized facts and private object signer.
-func NewAssetQuery(store AssetReader, signer PreviewSigner) *AssetQuery {
-	return &AssetQuery{store: store, signer: signer, previewTTL: 10 * time.Minute}
+// NewAssetQuery injects authorized metadata access without private object I/O.
+func NewAssetQuery(store AssetReader) *AssetQuery {
+	return &AssetQuery{store: store}
 }
 
 // NewRoutedAssetQuery requires persisted locations and an explicitly configured lease.
@@ -152,18 +146,16 @@ func (q *AssetQuery) Preview(ctx context.Context, a identityapp.Principal, p, id
 	if err != nil {
 		return Preview{}, err
 	}
-	grant, err := signMediaObject(ctx, asset.ObjectLocation, asset.ObjectKey, q.objectSigner, q.signer, q.previewTTL)
+	grant, err := signMediaObject(ctx, asset.ObjectLocation, asset.ObjectKey, q.objectSigner, q.previewTTL)
 	if err != nil {
 		return Preview{}, err
 	}
-	if q.objectSigner != nil {
-		current, err := q.reference(ctx, a, p, id)
-		if err != nil {
-			return Preview{}, err
-		}
-		if current.Revision != asset.Revision || !sameObjectLocation(current.ObjectLocation, asset.ObjectLocation) {
-			return Preview{}, ErrNotFound
-		}
+	current, err := q.reference(ctx, a, p, id)
+	if err != nil {
+		return Preview{}, err
+	}
+	if current.Revision != asset.Revision || !sameObjectLocation(current.ObjectLocation, asset.ObjectLocation) {
+		return Preview{}, ErrNotFound
 	}
 	if !grant.ExpiresAt.After(time.Now()) {
 		return Preview{}, ErrUnavailable

@@ -91,7 +91,7 @@ func TestPackageLocatedPGSDKWholeSetReplayDefaultSwitchAndPurge(t *testing.T) {
 	routes := pgmedia.NewStorageRoutes(owner)
 	profiles := []media.StorageProfile{}
 	for id, p := range cfg.Profiles {
-		profiles = append(profiles, media.StorageProfile{ID: id, Provider: p.Provider, Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: p.AddressingStyle})
+		profiles = append(profiles, media.StorageProfile{ID: id, Provider: string(p.Provider), Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: string(p.AddressingStyle)})
 	}
 	if err := routes.RegisterProfiles(t.Context(), profiles); err != nil {
 		t.Fatal(err)
@@ -104,16 +104,14 @@ func TestPackageLocatedPGSDKWholeSetReplayDefaultSwitchAndPurge(t *testing.T) {
 	if !errors.As(err, &denied) || denied.Code != "42501" {
 		t.Fatal("runtime gained immutable storage profile UPDATE", err)
 	}
-
-	prior, _ := routes.ReadActive(t.Context())
 	rev := "fixture-" + uuid.NewString()
-	if _, err := routes.Activate(t.Context(), prior.Revision, rev, oldID); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, owner, rev, oldID)); err != nil {
 		t.Fatal(err)
 	}
 	actor, _ := mediaStoreProject(t, owner)
 	repo := mediaPackageStore(runtime, libraryTestAccess, transferTestGuards, time.Now).WithObjectLocations()
 	store := mediaTestStore(runtime)
-	uploads := media.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, nil, time.Now)
+	uploads := media.NewRoutedUploadService(store, store, pgmedia.NewUploadAdmission(store), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(registry, pgmedia.NewStorageRoutes(runtime)), time.Now)
 	objects := mediaobjects.NewRoutedPackageObjects(registry, pgmedia.NewStorageRoutes(runtime))
 	service := media.NewLibraryPackageService(repo, uploads, objects, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
@@ -132,7 +130,7 @@ func TestPackageLocatedPGSDKWholeSetReplayDefaultSwitchAndPurge(t *testing.T) {
 	if len(old.objects) != 4 || len(newer.objects) != 0 {
 		t.Fatal("route changed physical destination", len(old.objects), len(newer.objects))
 	}
-	if _, err := routes.Activate(t.Context(), rev, "fixture-"+uuid.NewString(), newID); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, owner, "fixture-"+uuid.NewString(), newID)); err != nil {
 		t.Fatal(err)
 	}
 	replay, err := service.Import(ctx, actor, in, packageDownloaded(t, data))
@@ -157,7 +155,7 @@ func TestPackageLocatedPGSDKWholeSetReplayDefaultSwitchAndPurge(t *testing.T) {
 	if err != nil {
 		t.Fatal("located purge admission", err)
 	}
-	purged, err := media.NewPurgeWorker(purge.Worker, mediaobjects.NewRoutedPurgeObjects(registry, pgmedia.NewStorageRoutes(runtime))).Execute(ctx, media.PurgeWorkID{JobID: purgeJob.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+	purged, err := media.NewPurgeWorker(purge.Worker, mediaobjects.NewRoutedPurgeObjects(registry)).Execute(ctx, media.PurgeWorkID{JobID: purgeJob.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil || purged.Status != "succeeded" {
 		t.Fatal("located purge", purged, err)
 	}
@@ -207,20 +205,19 @@ func TestPackageLocatedCancellationChecksBytesAndRetiresOnlyOwnUnpublishedSet(t 
 	routes := pgmedia.NewStorageRoutes(owner)
 	profiles := []media.StorageProfile{}
 	for id, p := range cfg.Profiles {
-		profiles = append(profiles, media.StorageProfile{ID: id, Provider: p.Provider, Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: p.AddressingStyle})
+		profiles = append(profiles, media.StorageProfile{ID: id, Provider: string(p.Provider), Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: string(p.AddressingStyle)})
 	}
 	if err := routes.RegisterProfiles(t.Context(), profiles); err != nil {
 		t.Fatal(err)
 	}
-	prior, _ := routes.ReadActive(t.Context())
 	rev := "fixture-" + uuid.NewString()
-	if _, err := routes.Activate(t.Context(), prior.Revision, rev, oldID); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, owner, rev, oldID)); err != nil {
 		t.Fatal(err)
 	}
 	actor, _ := mediaStoreProject(t, owner)
 	repo := mediaPackageStore(runtime, libraryTestAccess, transferTestGuards, time.Now).WithObjectLocations()
 	store := mediaTestStore(runtime)
-	uploads := media.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, nil, time.Now)
+	uploads := media.NewRoutedUploadService(store, store, pgmedia.NewUploadAdmission(store), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(registry, pgmedia.NewStorageRoutes(runtime)), time.Now)
 	objects := mediaobjects.NewRoutedPackageObjects(registry, pgmedia.NewStorageRoutes(runtime))
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 

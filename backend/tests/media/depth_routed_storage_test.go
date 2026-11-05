@@ -86,7 +86,7 @@ func TestDepthRoutedQueryUsesExactAcceptedLocationAndActualExpiry(t *testing.T) 
 	expiry := time.Now().UTC().Add(43 * time.Second).Truncate(time.Second)
 	objects := &routedReadObjects{grants: map[mediadomain.ObjectRef]mediaapp.AccessGrant{asset.ObjectLocation.Ref: {URL: "https://fixture.invalid/depth", ExpiresAt: expiry}}, data: map[mediadomain.ObjectRef][]byte{asset.ObjectLocation.Ref: []byte("depth")}}
 	store := routedDepthQueryStore{job: tooldomain.DepthJob{ID: uuid.New(), Status: tooldomain.DepthSucceeded, SHA256: &sha}, asset: asset}
-	query := toolapp.NewRoutedDepthQuery(store, objects, objects, nil, nil)
+	query := toolapp.NewRoutedDepthQuery(store, objects, objects, 5*time.Minute)
 	preview, err := query.Preview(t.Context(), identityapp.Principal{}, asset.ProjectID, store.job.ID)
 	if err != nil || !preview.ExpiresAt.Equal(expiry) {
 		t.Fatal("depth preview replaced physical grant expiry", err)

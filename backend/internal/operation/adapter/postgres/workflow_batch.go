@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -49,7 +51,7 @@ func (s *Store) LoadWorkflowBatch(ctx context.Context, batchID uuid.UUID) (appli
 		return application.WorkflowBatch{}, application.ErrInvalidWorkflowBatch
 	}
 	var snapshot application.WorkflowBatch
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireBatchWorker(tx, batchID, false); err != nil {
 			return err
 		}
@@ -90,7 +92,7 @@ func (s *Store) LoadWorkflowBatch(ctx context.Context, batchID uuid.UUID) (appli
 			TargetType    *string
 		}
 		result = tx.Raw(`
-			SELECT id, status, failure_code, finished_at, reservation_id, workflow_id, target_type
+			SELECT id, status, failure_code, CASE WHEN finished_at <= (SELECT resumed_at FROM operation.batch WHERE id=operation.operation.batch_id) THEN NULL ELSE finished_at END AS finished_at, reservation_id, workflow_id, target_type
 			FROM operation.operation
 			WHERE batch_id = ?::uuid AND project_id = ?::uuid AND NOT is_delete
 			  AND status <> 'expired'
@@ -107,7 +109,7 @@ func (s *Store) LoadWorkflowBatch(ctx context.Context, batchID uuid.UUID) (appli
 			status := domain.Status(item.Status)
 			if item.ID == uuid.Nil || item.ReservationID == nil || *item.ReservationID == uuid.Nil ||
 				item.WorkflowID == nil || *item.WorkflowID != "operation/"+item.ID.String() ||
-				item.TargetType == nil || *item.TargetType == "agent_session" ||
+				item.TargetType == nil ||
 				status == domain.StatusDraft || status == domain.StatusQuoted || status == domain.StatusExpired ||
 				status.CanTransitionTo(status) != nil {
 				return application.ErrInvalidWorkflowBatch
@@ -138,7 +140,7 @@ func (s *Store) MarkWorkflowBatchRunning(ctx context.Context, batchID uuid.UUID)
 	if batchID == uuid.Nil {
 		return application.ErrInvalidWorkflowBatch
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireBatchWorker(tx, batchID, true); err != nil {
 			return err
 		}
@@ -157,7 +159,7 @@ func (s *Store) MarkWorkflowBatchRunning(ctx context.Context, batchID uuid.UUID)
 			    WHERE o.batch_id = b.id AND o.project_id = b.project_id AND NOT o.is_delete
 			      AND o.status = 'confirmed' AND o.reservation_id IS NOT NULL
 			      AND o.workflow_id = 'operation/' || o.id::text
-			      AND o.target_type IS DISTINCT FROM 'agent_session'
+
 			  )
 			  AND NOT EXISTS (
 			    SELECT 1 FROM operation.operation AS o
@@ -194,7 +196,7 @@ func (s *Store) PauseWorkflowBatch(ctx context.Context, batchID uuid.UUID, reaso
 		len(reason) <= len("provider:") || len(reason) > len("provider:")+64 {
 		return application.ErrInvalidWorkflowBatch
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		updated := tx.Exec(`
 			UPDATE operation.batch SET paused_reason = ?, update_time = now()
 			WHERE id = ?::uuid AND status = 'running' AND paused_reason IS NULL AND NOT is_delete
@@ -230,12 +232,12 @@ func (s *Store) ResumeWorkflowBatch(ctx context.Context, batchID uuid.UUID) erro
 	if batchID == uuid.Nil {
 		return application.ErrInvalidWorkflowBatch
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireBatchWorker(tx, batchID, true); err != nil {
 			return err
 		}
 		updated := tx.Exec(`
-			UPDATE operation.batch SET paused_reason = NULL, update_time = now()
+			UPDATE operation.batch SET paused_reason = NULL, resumed_at = clock_timestamp(), update_time = now()
 			WHERE id = ?::uuid AND status = 'running' AND paused_reason IS NOT NULL
 			  AND cancel_requested_at IS NULL AND NOT is_delete
 		`, batchID.String())
@@ -272,7 +274,7 @@ func (s *Store) MarkWorkflowBatchCancelRequested(ctx context.Context, batchID uu
 	if batchID == uuid.Nil {
 		return application.ErrInvalidWorkflowBatch
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		updated := tx.Exec(`
 			UPDATE operation.batch SET cancel_requested_at = now(), update_time = now()
 			WHERE id = ?::uuid AND status = 'running' AND cancel_requested_at IS NULL AND NOT is_delete
@@ -309,7 +311,7 @@ func (s *Store) FinishWorkflowBatch(ctx context.Context, batchID uuid.UUID) erro
 	if batchID == uuid.Nil {
 		return application.ErrInvalidWorkflowBatch
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		var batch struct {
 			ProjectID         uuid.UUID
 			OrgID             uuid.UUID

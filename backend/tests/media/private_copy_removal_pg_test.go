@@ -36,11 +36,10 @@ func TestStorageAcceptedPrivateCopyRequiresCleanupAndPrivateTargetBeforeRealRemo
 	t.Cleanup(registry.Close)
 	p := cfg.Profiles[profileID]
 	routes := pgmedia.NewStorageRoutes(owner)
-	if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profileID, Provider: p.Provider, Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: p.AddressingStyle}}); err != nil {
+	if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profileID, Provider: string(p.Provider), Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: string(p.AddressingStyle)}}); err != nil {
 		t.Fatal(err)
 	}
-	prior, _ := routes.ReadActive(t.Context())
-	if _, err := routes.Activate(t.Context(), prior.Revision, "private-copy-"+uuid.NewString(), profileID); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, owner, "private-copy-"+uuid.NewString(), profileID)); err != nil {
 		t.Fatal(err)
 	}
 	actor, source := mediaStoreProject(t, owner)

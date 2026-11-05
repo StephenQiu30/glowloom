@@ -86,7 +86,9 @@ func TestSecondaryImportControlKeepsRetryActor(t *testing.T) {
 		t.Fatal(err)
 	}
 	key, job, asset := uuid.New(), uuid.New(), uuid.New()
-	if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,sha256,moderation_status,file_name,codec)VALUES(?,?,'document','upload','ready',?,'text/plain',1,repeat('a',64),'passed','test.txt','txt')`, asset, project, "secondary/"+asset.String()+".txt").Error; err != nil {
+	objectKey := "secondary/" + asset.String() + ".txt"
+	locationID := seedIdentityLocation(t, tx, objectKey)
+	if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,mime_type,byte_size,sha256,moderation_status,file_name,codec)VALUES(?,?,'document','upload','ready',?,?,'text/plain',1,repeat('a',64),'passed','test.txt','txt')`, asset, project, objectKey, locationID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`INSERT INTO script.request(actor_id,request_id,org_id,project_id,action,request_hash,created_at)VALUES(?,?,?,?,'file_import_create',repeat('a',64),now())`, author.OwnerID, key, actor.OrgID, project).Error; err != nil {

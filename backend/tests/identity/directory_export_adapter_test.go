@@ -77,7 +77,7 @@ func (t *cleanupSQLTx) Commit() error {
 }
 func (t *cleanupSQLTx) Rollback() error { return t.Commit() }
 func (c *cleanupConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
-	if strings.Contains(query, "private_object_id=NULL") {
+	if strings.Contains(query, `"private_object_id"=`) {
 		c.state.mu.Lock()
 		defer c.state.mu.Unlock()
 		c.state.finalizeSQL = query
@@ -86,7 +86,7 @@ func (c *cleanupConn) ExecContext(_ context.Context, query string, _ []driver.Na
 	return driver.RowsAffected(1), nil
 }
 func (c *cleanupConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
-	if !strings.Contains(query, "identity.directory_export") {
+	if !strings.Contains(query, `"identity"."directory_export"`) {
 		return nil, errors.New("unexpected test query")
 	}
 	s := c.state
@@ -172,7 +172,7 @@ func TestDirectoryExportCleanupCancellationAndFinalCAS(t *testing.T) {
 		if err != nil || count != 0 {
 			t.Fatal("stale cleanup reported completion", count, err)
 		}
-		for _, guard := range []string{"status='expired'", "updated_at=", "private_object_id IS NOT DISTINCT FROM", "expires_at<="} {
+		for _, guard := range []string{"status =", "updated_at =", "private_object_id IS NOT DISTINCT FROM", "expires_at <=", `"storage_location_id"=`, `"storage_intent_id"=`, `"storage_profile_id"=`, `"storage_bucket"=`} {
 			if !strings.Contains(state.finalizeSQL, guard) {
 				t.Fatalf("cleanup lacks %s CAS", guard)
 			}

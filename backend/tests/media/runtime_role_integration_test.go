@@ -18,8 +18,6 @@ import (
 	"gorm.io/gorm"
 
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func TestMediaIngestAndModerationUnderRuntimeRole(t *testing.T) {
@@ -29,15 +27,8 @@ func TestMediaIngestAndModerationUnderRuntimeRole(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, projectID := mediaStoreProject(t, database)
 	operationID := seedIngestOperation(t, database, actor, projectID, "image")
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	objects, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
-		cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mediaFixtureIngestAdmission(t, database, projectID, operationID)
+	objects := glbTestObjects(t)
 	var picture bytes.Buffer
 	if err := png.Encode(&picture, image.NewRGBA(image.Rect(0, 0, 4, 3))); err != nil {
 		t.Fatal(err)
@@ -52,11 +43,11 @@ func TestMediaIngestAndModerationUnderRuntimeRole(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
 	defer cancel()
 	var ingested mediaflow.IngestOutput
-	err = database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return fmt.Errorf("assume runtime role: %w", err)
 		}
-		activities, err := mediaScopedIngestActivities(tx, objects, mediaflow.DownloadPolicy{
+		activities, err := mediaScopedIngestActivities(t, tx, objects, mediaflow.DownloadPolicy{
 			AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true, TLSRootCAs: pool,
 		})
 		if err != nil {

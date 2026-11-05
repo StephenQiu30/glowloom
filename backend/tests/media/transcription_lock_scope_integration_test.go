@@ -45,7 +45,8 @@ func (m transcriptionPermissionTrace) AuthorizeProject(ctx context.Context, acto
 
 func transcriptionLockFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uuid.UUID, *toolpg.TranscriptionStore, toolapp.TranscriptionWorkID, *[]string) {
 	t.Helper()
-	database := mediaStoreDB(t)
+	_ = mediatoolFixtureDB(t)
+	database := libraryOwnerDB(t)
 	// This transaction outlives test-context cancellation so Cleanup can
 	// explicitly roll it back before cancelling its bounded lifetime.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
@@ -53,6 +54,9 @@ func transcriptionLockFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uu
 	tx := database.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		t.Fatal(tx.Error)
+	}
+	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
+		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		if err := tx.Rollback().Error; err != nil {
@@ -67,13 +71,14 @@ func transcriptionLockFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uu
 	sha := strings.Repeat("a", 64)
 	asset.DurationMS, asset.SHA256 = &duration, &sha
 	asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
+	asset = mediaFixtureAssetLocation(t, tx, asset)
 	if err := mediaTestStore(tx).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	requests := toolpg.NewTranscriptionStore(tx, func(*gorm.DB) toolapp.TranscriptionSourceReader {
+	requests := mediatoolTranscriptionStore(tx, func(*gorm.DB) toolapp.TranscriptionSourceReader {
 		return transcriptionLockSource{asset: asset.ID}
 	}, func(db *gorm.DB) toolapp.DerivedMedia {
 		return mediaapp.NewDerivedService(pgmedia.NewScopedStore(db, app.NewMediaScopeAccess))
@@ -83,12 +88,12 @@ func transcriptionLockFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uu
 		t.Fatal(err)
 	}
 	var events []string
-	workers := toolpg.NewTranscriptionStore(tx, nil, func(db *gorm.DB) toolapp.DerivedMedia {
+	workers := mediatoolTranscriptionStore(tx, nil, func(db *gorm.DB) toolapp.DerivedMedia {
 		return transcriptionPermissionTrace{DerivedMedia: mediaapp.NewDerivedService(pgmedia.NewScopedStore(db, app.NewMediaWorkerScopeAccess)), events: &events}
 	})
 	callback := "test:transcription-job-lock-" + job.ID.String()
-	if err := tx.Callback().Row().After("gorm:row").Register(callback, func(query *gorm.DB) {
-		sql := query.Statement.SQL.String()
+	if err := tx.Callback().Query().After("gorm:query").Register(callback, func(query *gorm.DB) {
+		sql := strings.ReplaceAll(query.Statement.SQL.String(), `"`, "")
 		if !strings.Contains(sql, "mediatool.transcription_job") || !strings.Contains(sql, "FOR UPDATE") {
 			return
 		}
@@ -102,7 +107,7 @@ func transcriptionLockFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uu
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := tx.Callback().Row().Remove(callback); err != nil {
+		if err := tx.Callback().Query().Remove(callback); err != nil {
 			t.Error("remove transcription lock trace", err)
 		}
 	})
@@ -116,7 +121,7 @@ func transcriptionLockDraft() tooldomain.Transcript {
 // Every row, command, outbox event and audit remains inside the outer rollback.
 // The trace forwards the real production worker authority; no native or object I/O runs.
 func TestTranscriptionWorkerPermissionLocksPrecedeJobLocks(t *testing.T) {
-	_, _, _, workers, owner, events := transcriptionLockFixture(t)
+	tx, _, _, workers, owner, events := transcriptionLockFixture(t)
 	check := func(name string) {
 		t.Helper()
 		if len(*events) < 2 || (*events)[0] != "permission" || (*events)[1] != "job" {
@@ -140,6 +145,7 @@ func TestTranscriptionWorkerPermissionLocksPrecedeJobLocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("object write")
+	mediatoolTranscriptReceipt(t, tx, owner, transcriptionLockDraft())
 	if _, err := workers.Complete(t.Context(), owner, transcriptionLockDraft()); err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +216,7 @@ func TestTranscriptionWorkerRejectsChangedAuthorityBinding(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			changed := toolpg.NewTranscriptionStore(tx, nil, func(db *gorm.DB) toolapp.DerivedMedia {
+			changed := mediatoolTranscriptionStore(tx, nil, func(db *gorm.DB) toolapp.DerivedMedia {
 				return transcriptionPermissionTrace{
 					DerivedMedia: mediaapp.NewDerivedService(pgmedia.NewScopedStore(db, app.NewMediaWorkerScopeAccess)),
 					events:       events,

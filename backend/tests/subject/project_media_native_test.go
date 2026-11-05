@@ -16,8 +16,8 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 
 // SQL rows are fixture-proven frozen inputs; byte access/signing use the actual
@@ -51,20 +51,12 @@ func TestNativeProjectMediaSignerRequiresFrozenProjectLocationAndActualBytes(t *
 	}))
 	defer server.Close()
 	profile := "plain-" + uuid.NewString()
-	t.Setenv("GLOWLOOM_ENV_FILE", "")
-	t.Setenv("GLOWLOOM_OBJECT_STORAGE_CONFIG", "")
-	t.Setenv("GLOWLOOM_ENV", "local")
-	for k, v := range map[string]string{"PROVIDER": "minio", "ENDPOINT": server.URL, "BUCKET": bucket, "REGION": "us-east-1", "ACCESS_KEY": "fixture-access", "SECRET_KEY": "fixture-secret", "PROFILE_ID": profile, "REVISION": "plain-test-v1"} {
-		t.Setenv("GLOWLOOM_OBJECT_STORAGE_"+k, v)
-	}
-	for _, k := range []string{"PROVIDER", "ENDPOINT", "BUCKET", "REGION", "ACCESS_KEY", "SECRET_KEY", "PROFILE_ID"} {
-		t.Setenv("GLOWLOOM_OBJECT_STORAGE_LEGACY_"+k, "")
-	}
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	registry, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
+	storageConfig := storagefixture.Configuration(t, server.URL, bucket)
+	physicalProfile := storageConfig.Profiles[storageConfig.DefaultWriteProfile]
+	delete(storageConfig.Profiles, storageConfig.DefaultWriteProfile)
+	storageConfig.DefaultWriteProfile = profile
+	storageConfig.Profiles[profile] = physicalProfile
+	registry, err := objectstorage.OpenProfiles(storageConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +75,7 @@ func TestNativeProjectMediaSignerRequiresFrozenProjectLocationAndActualBytes(t *
 	if err := f.owner.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,ref_id,ref_version,media_asset_id) VALUES(?,?,2,'reference_image','media_asset',?,?,?)`, input, f.quote.OperationID, asset, hash, asset).Error; err != nil {
 		t.Fatal(err)
 	}
-	f.store.WithProjectMedia(func(*gorm.DB) operation.ProjectMediaSigner { return operationwire.NewProjectMediaSigner(registry, nil) })
+	f.store.WithProjectMedia(func(*gorm.DB) operation.ProjectMediaSigner { return operationwire.NewProjectMediaSigner(registry) })
 	ref, handled, err := f.store.ManagedProjectMediaReference(t.Context(), f.quote.OperationID, f.project, input)
 	if err != nil || !handled || ref.URL == "" || ref.MediaKind != "image" || ref.Role != "reference_image" || reads.Load() != 1 {
 		t.Fatal("formal ordinary input did not use exact source", handled, err)
@@ -99,7 +91,8 @@ func TestNativeProjectMediaSignerRequiresFrozenProjectLocationAndActualBytes(t *
 	}
 	addInput := func(id, assetID, projectID uuid.UUID, seq int, key string) {
 		t.Helper()
-		if err := f.owner.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,'fixture.png','image/png',?,?,'passed')`, assetID, projectID, key, len(f.original), hash).Error; err != nil {
+		locationID := seedSubjectLocation(t, f.owner, key, "test-main", "subject-fixture")
+		if err := f.owner.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,?,'fixture.png','image/png',?,?,'passed')`, assetID, projectID, key, locationID, len(f.original), hash).Error; err != nil {
 			t.Fatal(err)
 		}
 		if err := f.owner.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,ref_id,ref_version,media_asset_id) VALUES(?, ?,?,'reference_image','media_asset',?,?,?)`, id, f.quote.OperationID, seq, assetID, hash, assetID).Error; err != nil {

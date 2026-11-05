@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -59,7 +60,7 @@ func (s *DocumentSourceStore) FreezeDocumentSources(ctx context.Context, actor i
 		if err := requireNewMediaVisible(tx, library.ID, ids); err != nil {
 			return err
 		}
-		read := tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND id IN ? ORDER BY id FOR SHARE`, project, ids).Scan(&rows)
+		read := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"project_id": project}).Where("id IN ?", ids).Order("id").Find(&rows)
 		if read.Error != nil {
 			return fmt.Errorf("freeze document source rows: %w", read.Error)
 		}

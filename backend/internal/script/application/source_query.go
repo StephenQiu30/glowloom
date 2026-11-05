@@ -12,19 +12,19 @@ import (
 
 // SourceSummary is the safe lazy-list metadata, excluding object locations and bodies.
 type SourceSummary struct {
-	ID           uuid.UUID  `json:"id"`
-	LineageID    uuid.UUID  `json:"source_lineage_id"`
-	PreviousID   *uuid.UUID `json:"previous_source_id,omitempty"`
-	Revision     int64      `json:"source_revision"`
-	Kind         string     `json:"source_kind"`
-	Title        string     `json:"title"`
-	Status       string     `json:"status"`
-	Origin       string     `json:"origin"`
-	Position     int        `json:"position"`
-	CharCount    int        `json:"char_count"`
-	ContentHash  string     `json:"content_hash"`
-	RichSHA256   string     `json:"rich_sha256"`
-	MediaAssetID *uuid.UUID `json:"media_asset_id,omitempty"`
+	ID           uuid.UUID           `json:"id"`
+	LineageID    uuid.UUID           `json:"source_lineage_id"`
+	PreviousID   *uuid.UUID          `json:"previous_source_id,omitempty"`
+	Revision     int64               `json:"source_revision"`
+	Kind         domain.SourceKind   `json:"source_kind"`
+	Title        string              `json:"title"`
+	Status       domain.SourceStatus `json:"status"`
+	Origin       domain.SourceOrigin `json:"origin"`
+	Position     int                 `json:"position"`
+	CharCount    int                 `json:"char_count"`
+	ContentHash  string              `json:"content_hash"`
+	RichSHA256   string              `json:"rich_sha256"`
+	MediaAssetID *uuid.UUID          `json:"media_asset_id,omitempty"`
 }
 
 // SourceDetail carries selected editable bodies after a current authorization check.

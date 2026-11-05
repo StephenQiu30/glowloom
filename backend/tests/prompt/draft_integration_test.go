@@ -2,7 +2,9 @@ package prompt_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -107,9 +109,27 @@ func TestEditorDraftConcurrentWriters(t *testing.T) {
 
 func TestEditorUploadRecoveryIsPrivateAndReauthorized(t *testing.T) {
 	f := newPreferenceFixture(t)
+	tx := f.db.Begin()
+	if tx.Error != nil {
+		t.Fatal(tx.Error)
+	}
+	t.Cleanup(func() {
+		if err := tx.Rollback().Error; err != nil {
+			t.Error(err)
+		}
+	})
+	f.db = tx
 	store := draftStore(f.db)
-	attempt, asset := uuid.New(), uuid.New()
-	if err := f.db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,'recovery.png','image/png',50,repeat('a',64),'passed')`, asset, f.project, "test/"+asset.String()+"/recovery.png").Error; err != nil {
+	attempt, asset, location := uuid.New(), uuid.New(), uuid.New()
+	profile := "prompt-upload-" + uuid.NewString()
+	key := "test/" + asset.String() + "/recovery.png"
+	if err := f.db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity) VALUES(?,'minio','http://127.0.0.1','http://127.0.0.1','us-east-1','prompt-fixture','path',?)`, profile, fmt.Sprintf("%x", sha256.Sum256([]byte(profile)))).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type) VALUES(?,?,'prompt-fixture',?,'accepted',50,repeat('a',64),'image/png')`, location, profile, key).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,?,'recovery.png','image/png',50,repeat('a',64),'passed')`, asset, f.project, key, location).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := f.db.Exec(`INSERT INTO media.upload_request(project_id,principal_id,request_key,sha256,file_name,byte_size,asset_id,response) VALUES(?,?,?,repeat('a',64),'recovery.png',50,?,'{}')`, f.project, f.actor.ID, attempt, asset).Error; err != nil {

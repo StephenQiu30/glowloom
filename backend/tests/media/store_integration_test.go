@@ -73,6 +73,7 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 		ModerationStatus: domain.ModerationPending, Revision: 1,
 		CreateTime: now, UpdateTime: now,
 	}
+	asset = mediaFixtureAssetLocation(t, database, asset)
 	if err := store.CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatalf("create asset: %v", err)
 	}
@@ -81,6 +82,7 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 		ObjectKey:  "projects/" + projectID.String() + "/image/2026/09/" + assetID.String() + "/thumb_256.webp",
 		CreateTime: now, UpdateTime: now,
 	}
+	r.ObjectLocation = mediaFixtureRenditionLocation(t, database, r)
 	if err := store.AddRendition(t.Context(), actor, projectID, r); err != nil {
 		t.Fatalf("add rendition: %v", err)
 	}
@@ -181,10 +183,12 @@ func TestMediaStoreReturnsEmptyRenditionListForVisibleAsset(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, projectID := mediaStoreProject(t, database)
 	assetID := uuid.New()
+	keyName := "projects/" + projectID.String() + "/audio/2026/09/" + assetID.String() + ".mp3"
+	location := mediaFixtureUnownedLocation(t, database, keyName)
 	if err := database.Exec(`
-		INSERT INTO media.media_asset (id, project_id, kind, origin, status, object_key, mime_type, byte_size)
-		VALUES (?::uuid, ?::uuid, 'audio', 'upload', 'uploading', ?, 'audio/mpeg', 10)
-	`, assetID.String(), projectID.String(), "projects/"+projectID.String()+"/audio/2026/09/"+assetID.String()+".mp3").Error; err != nil {
+		INSERT INTO media.media_asset (id, project_id, kind, origin, status, object_key, mime_type, byte_size,object_location_id)
+		VALUES (?::uuid, ?::uuid, 'audio', 'upload', 'uploading', ?, 'audio/mpeg', 10,?)
+	`, assetID.String(), projectID.String(), keyName, location.ID).Error; err != nil {
 		t.Fatalf("seed asset: %v", err)
 	}
 	rends, err := mediaTestStore(database).FindRenditions(t.Context(), actor, projectID, assetID)
@@ -226,6 +230,7 @@ func TestMediaStorePreservesGeneratedProvenanceAndRejectsForeignOperation(t *tes
 		Revision: 1, CreateTime: now, UpdateTime: now,
 	}
 	store := mediaTestStore(database)
+	asset = mediaFixtureAssetLocation(t, database, asset)
 	if err := store.CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatalf("create generated asset: %v", err)
 	}

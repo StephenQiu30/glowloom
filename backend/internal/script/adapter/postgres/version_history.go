@@ -3,7 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"time"
+	"errors"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -21,8 +21,20 @@ func (s *SourceStore) Confirmations(ctx context.Context, actor identityapp.Princ
 		if _, err := readVersion(tx, actor.OrgID, project, version); err != nil {
 			return err
 		}
-		if err := tx.Raw(`SELECT id,revision,candidate_set_id,formal_set_id,jsonb_array_length(episodes) AS episode_count,created_at FROM script.split_confirmation WHERE org_id=? AND project_id=? AND version_id=? AND (?=0 OR revision<?) ORDER BY revision DESC LIMIT ?`, actor.OrgID, project, version, before, before, limit+1).Scan(&result.Items).Error; err != nil {
+		query := tx.Model(&scriptConfirmationSummaryRow{}).Where("org_id = ? AND project_id = ? AND version_id = ?", actor.OrgID, project, version)
+		if before > 0 {
+			query = query.Where("revision < ?", before)
+		}
+		var rows []scriptConfirmationSummaryRow
+		if err := query.Order("revision DESC").Limit(limit + 1).Find(&rows).Error; err != nil {
 			return err
+		}
+		for _, row := range rows {
+			var episodes []domain.Episode
+			if err := json.Unmarshal(row.Episodes, &episodes); err != nil {
+				return application.ErrUnavailable
+			}
+			result.Items = append(result.Items, application.ConfirmationSummary{ID: row.ID, Revision: row.Revision, CandidateSetID: row.CandidateSetID, FormalSetID: row.FormalSetID, EpisodeCount: len(episodes), CreatedAt: row.CreatedAt.UTC()})
 		}
 		if len(result.Items) > limit {
 			result.Items = result.Items[:limit]
@@ -41,26 +53,21 @@ func (s *SourceStore) Confirmations(ctx context.Context, actor identityapp.Princ
 func (s *SourceStore) Confirmation(ctx context.Context, actor identityapp.Principal, project, version, id uuid.UUID) (domain.SplitConfirmation, error) {
 	var result domain.SplitConfirmation
 	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
-		var row struct {
-			ID, OrgID, ProjectID, VersionID, CandidateSetID, FormalSetID, ActorID uuid.UUID
-			Revision                                                              int64
-			Preface, Episodes                                                     string
-			CreatedAt                                                             time.Time
+		var row scriptSplitConfirmationRow
+		if err := tx.Where("id = ? AND org_id = ? AND project_id = ? AND version_id = ?", id, actor.OrgID, project, version).Take(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return application.ErrNotFound
+			}
+			return err
 		}
-		read := tx.Raw(`SELECT id,org_id,project_id,version_id,candidate_set_id,formal_set_id,actor_id,revision,preface::text,episodes::text,created_at FROM script.split_confirmation WHERE id=? AND org_id=? AND project_id=? AND version_id=?`, id, actor.OrgID, project, version).Scan(&row)
-		if read.Error != nil {
-			return read.Error
+		confirmation, err := row.confirmation()
+		if err != nil {
+			return err
 		}
-		if read.RowsAffected != 1 {
+		if confirmation.ID == uuid.Nil {
 			return application.ErrNotFound
 		}
-		result = domain.SplitConfirmation{ID: row.ID, OrgID: row.OrgID, ProjectID: row.ProjectID, VersionID: row.VersionID, CandidateSetID: row.CandidateSetID, FormalSetID: row.FormalSetID, ActorID: row.ActorID, Revision: row.Revision, CreatedAt: row.CreatedAt.UTC()}
-		if err := json.Unmarshal([]byte(row.Preface), &result.Preface); err != nil {
-			return application.ErrUnavailable
-		}
-		if err := json.Unmarshal([]byte(row.Episodes), &result.Episodes); err != nil {
-			return application.ErrUnavailable
-		}
+		result = confirmation
 		return nil
 	})
 	return result, err

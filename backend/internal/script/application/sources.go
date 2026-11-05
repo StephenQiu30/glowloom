@@ -43,9 +43,9 @@ type SourceAssetReader interface {
 
 // SourceInput is one complete editor input; legacy HTML is normalized at the adapter.
 type SourceInput struct {
-	Kind         string                  `json:"source_kind"`
+	Kind         domain.SourceKind       `json:"source_kind"`
 	Title        string                  `json:"title"`
-	Status       string                  `json:"status"`
+	Status       domain.SourceStatus     `json:"status"`
 	Document     domain.RichDocument     `json:"document"`
 	OriginalHTML *string                 `json:"original_html,omitempty"`
 	Provenance   domain.SourceProvenance `json:"provenance"`
@@ -53,16 +53,16 @@ type SourceInput struct {
 
 // SourceCommand is a whole atomic editor command, including the complete reorder set.
 type SourceCommand struct {
-	ProjectID        uuid.UUID     `json:"project_id"`
-	Key              uuid.UUID     `json:"key"`
-	RequestID        uuid.UUID     `json:"request_id"`
-	Action           string        `json:"action"`
-	ExpectedRevision int64         `json:"expected_revision"`
-	BaseVersionID    *uuid.UUID    `json:"base_version_id,omitempty"`
-	LineageID        *uuid.UUID    `json:"source_lineage_id,omitempty"`
-	RightsConfirmed  bool          `json:"rights_confirmed"`
-	Sources          []SourceInput `json:"sources,omitempty"`
-	Order            []uuid.UUID   `json:"source_lineage_ids,omitempty"`
+	ProjectID        uuid.UUID           `json:"project_id"`
+	Key              uuid.UUID           `json:"key"`
+	RequestID        uuid.UUID           `json:"request_id"`
+	Action           domain.SourceAction `json:"action"`
+	ExpectedRevision int64               `json:"expected_revision"`
+	BaseVersionID    *uuid.UUID          `json:"base_version_id,omitempty"`
+	LineageID        *uuid.UUID          `json:"source_lineage_id,omitempty"`
+	RightsConfirmed  bool                `json:"rights_confirmed"`
+	Sources          []SourceInput       `json:"sources,omitempty"`
+	Order            []uuid.UUID         `json:"source_lineage_ids,omitempty"`
 }
 
 // SourceChange explicitly relates the old snapshot to its new stable-lineage input.
@@ -113,6 +113,12 @@ type PendingWrite struct {
 	Receipt *SourceReceipt
 }
 
+// PublicationAuthorization retains an external producer's original durable
+// authority and exact command hash inside each source mutation transaction.
+type PublicationAuthorization interface {
+	AuthorizeSourcePublication(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string) error
+}
+
 // SourceStore owns authorized CAS and permanent plans/results in short transactions.
 type SourceStore interface {
 	LoadBase(context.Context, identityapp.Principal, uuid.UUID, *uuid.UUID) (SourceBase, error)
@@ -122,16 +128,9 @@ type SourceStore interface {
 	SourceIOStore
 }
 
-// PrivateObjects preserves immutable put and bounded actual-read integrity proofs.
+// PrivateObjects consumes only owner-proved saved physical identities. Bare-key
+// defaults are never consulted for source publication, reads, recovery or copy.
 type PrivateObjects interface {
-	PutIfAbsent(context.Context, string, io.Reader, int64, string, string) error
-	Get(context.Context, string) (io.ReadCloser, error)
-	Remove(context.Context, string) error
-}
-
-// LocatedPrivateObjects consumes an owner-proved physical identity. A located
-// fact must never fall back to a default bucket or a bare-key implementation.
-type LocatedPrivateObjects interface {
 	GetObject(context.Context, domain.ObjectFact) (io.ReadCloser, error)
 	PutObjectIfAbsent(context.Context, domain.ObjectFact, io.Reader) error
 	RemoveObject(context.Context, domain.ObjectFact) error
@@ -160,7 +159,8 @@ func NewSourceServiceSharingIO(store SourceStore, objects PrivateObjects, now fu
 	return &SourceService{store: store, objects: objects, now: now, io: owner.io}
 }
 
-func commandHash(input SourceCommand) (string, error) {
+// SourceCommandHash is the owner canonical hash used for permanent idempotency.
+func SourceCommandHash(input SourceCommand) (string, error) {
 	// Request-ID is trace identity; permanent idempotency binds the exact business input.
 	input.RequestID = uuid.Nil
 	data, err := json.Marshal(input)

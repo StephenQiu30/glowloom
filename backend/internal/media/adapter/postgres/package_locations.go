@@ -21,7 +21,7 @@ func packageWorkOwner(plan application.PackagePlan) application.StorageWorkOwner
 	if plan.Request.Scope.ProjectID != nil {
 		owner = *plan.Request.Scope.ProjectID
 	}
-	return application.StorageWorkOwner{Kind: "package", OwnerID: owner, WorkID: plan.JobID}
+	return application.StorageWorkOwner{Kind: application.StorageWorkKindPackage, OwnerID: owner, WorkID: plan.JobID}
 }
 func admitPackageLocations(ctx context.Context, tx *gorm.DB, plan application.PackagePlan) (map[string]domain.ObjectLocation, error) {
 	routes := NewStorageRoutes(tx)
@@ -44,7 +44,7 @@ func hydratePackageLocations(ctx context.Context, tx *gorm.DB, plan *application
 		ObjectKey        string
 		ObjectLocationID *uuid.UUID
 	}
-	if err := tx.Raw(`SELECT object_key,object_location_id FROM media.package_object WHERE job_id=? ORDER BY object_index`, plan.JobID).Scan(&rows).Error; err != nil {
+	if err := tx.Model(&packageObjectLocationRow{}).Select("object_key", "object_location_id").Where("job_id = ?", plan.JobID).Order("object_index").Find(&rows).Error; err != nil {
 		return err
 	}
 	if len(rows) != len(plan.Objects) {
@@ -59,7 +59,7 @@ func hydratePackageLocations(ctx context.Context, tx *gorm.DB, plan *application
 	}
 	owner := packageWorkOwner(*plan)
 	var work storageWorkRow
-	read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE kind=? AND owner_id=? AND work_id=?`, owner.Kind, owner.OwnerID, owner.WorkID).Scan(&work)
+	read := tx.Where("kind = ? AND owner_id = ? AND work_id = ?", owner.Kind, owner.OwnerID, owner.WorkID).Take(&work)
 	if read.Error != nil {
 		return read.Error
 	}
@@ -88,6 +88,13 @@ func hydratePackageLocations(ctx context.Context, tx *gorm.DB, plan *application
 	}
 	return nil
 }
+
+type packageObjectLocationRow struct {
+	ObjectKey        string
+	ObjectLocationID *uuid.UUID
+}
+
+func (packageObjectLocationRow) TableName() string { return "media.package_object" }
 func acceptPackageLocations(ctx context.Context, tx *gorm.DB, plan *application.PackagePlan) error {
 	if err := hydratePackageLocations(ctx, tx, plan); err != nil {
 		return err

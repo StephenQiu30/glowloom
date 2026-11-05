@@ -27,7 +27,9 @@ export function ApplicationLayout({
       initialSidebarOpen={initialSidebarOpen}
       allowGuest={Boolean(
         authMode ||
-        ["home", "explore", "assets", "invitations"].includes(screen.id),
+        ["home", "conversations", "explore", "assets", "invitations"].includes(
+          screen.id,
+        ),
       )}
       initialAuthMode={authMode}
     >

@@ -3,12 +3,14 @@ package agent
 
 import (
 	"context"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type projectAuthorizer interface {

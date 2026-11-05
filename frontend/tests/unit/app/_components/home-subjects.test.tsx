@@ -43,6 +43,7 @@ vi.mock("@/components/projects/project-picker", () => ({
     </button>
   ),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("next/dynamic", () => ({
   default: (loader: () => Promise<unknown>) =>
     loader.toString().includes("rich-generation")
@@ -91,12 +92,11 @@ beforeEach(() => {
   });
 });
 
-it("无项目的参考菜单保留主体入口，项目素材需显式选择项目", async () => {
+it("无项目的参考堆叠入口先选择项目，不伪造已授权素材", async () => {
   render(<Page />);
   fireEvent.click(await screen.findByRole("button", { name: "添加参考" }));
-  expect(await screen.findByRole("option", { name: "添加主体" })).toBeTruthy();
   expect(
-    screen.getByRole("option", { name: "选择项目后添加项目素材" }),
+    await screen.findByRole("button", { name: "选择验证项目" }),
   ).toBeTruthy();
   expect(screen.queryByRole("option", { name: "上传参考内容" })).toBeNull();
   expect(screen.queryByRole("option", { name: "从参考素材添加" })).toBeNull();

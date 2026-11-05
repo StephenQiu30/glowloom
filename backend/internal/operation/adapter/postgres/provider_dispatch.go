@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -23,7 +25,7 @@ func (s *Store) ClaimProviderDispatch(ctx context.Context, identity application.
 		return application.ProviderDispatchResult{}, err
 	}
 	var dispatch application.ProviderDispatchResult
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireWorker(tx, identity.OperationID, true); err != nil {
 			return err
 		}

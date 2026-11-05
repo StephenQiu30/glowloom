@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 // lockWorkerJob follows the HTTP order: current identity/project authority,
@@ -17,7 +18,7 @@ func (s *Store) lockWorkerJob(ctx context.Context, tx *gorm.DB, id uuid.UUID, ru
 	if err != nil {
 		return jobRow{}, err
 	}
-	authorized := !runningOnly || candidate.Status == "running"
+	authorized := !runningOnly || candidate.Status == domain.Running
 	if authorized {
 		if err := s.authorize(ctx, tx, candidate.actor(), candidate.ProjectID, true); err != nil {
 			return jobRow{}, err
@@ -27,7 +28,7 @@ func (s *Store) lockWorkerJob(ctx context.Context, tx *gorm.DB, id uuid.UUID, ru
 	if err != nil {
 		return jobRow{}, err
 	}
-	if row.ActorID != candidate.ActorID || row.OrgID != candidate.OrgID || row.ProjectID != candidate.ProjectID || !authorized && row.Status == "running" {
+	if row.ActorID != candidate.ActorID || row.OrgID != candidate.OrgID || row.ProjectID != candidate.ProjectID || !authorized && row.Status == domain.Running {
 		return jobRow{}, application.ErrConflict
 	}
 	return row, nil

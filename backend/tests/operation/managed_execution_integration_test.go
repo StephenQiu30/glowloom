@@ -14,7 +14,7 @@ import (
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
@@ -50,10 +50,10 @@ func TestManagedTextDispatchRecoveryAndSettlement(t *testing.T) {
 	require.NoError(t, database.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','fixture prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
 	network := &fixtureGeneration{}
-	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil, nil)
+	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil)
 	progress, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
-	require.Equal(t, "succeeded", progress.State)
+	require.EqualValues(t, "succeeded", progress.State)
 	// Repeating an activity delivery reads its durable manifest; it never resends.
 	replay, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
@@ -133,10 +133,10 @@ func TestManagedCachedTokensReachFrozenSettlement(t *testing.T) {
 	require.NoError(t, database.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','cached prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
 	network := &cachedUsageGeneration{}
-	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil, nil)
+	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil)
 	progress, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
-	require.Equal(t, "succeeded", progress.State)
+	require.EqualValues(t, "succeeded", progress.State)
 	require.NoError(t, store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{OperationID: i.OperationID, Action: "submit", Attempt: 1, Outcome: "ok", State: "completed", Managed: true}))
 	cost, err := store.LoadProviderCost(t.Context(), i.OperationID)
 	require.NoError(t, err)
@@ -174,10 +174,10 @@ func TestManagedVideoUsesSupplierTokensInsteadOfArtifactDuration(t *testing.T) {
 	require.NoError(t, database.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','video prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
 	network := &videoTokenGeneration{}
-	worker := managed.NewActivities(f.store, fixtureUnsealer{}, network, results, nil, network)
+	worker := managed.NewActivities(f.store, fixtureUnsealer{}, network, results, network)
 	progress, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
-	require.Equal(t, "accepted", progress.State)
+	require.EqualValues(t, "accepted", progress.State)
 	taskID := "fixture-video"
 	require.NoError(t, f.store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{ProviderTaskID: &taskID, OperationID: i.OperationID, Action: "submit", Attempt: 1, Outcome: "ok", State: "accepted"}))
 	_, err = f.store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{OperationID: i.OperationID, From: []domain.Status{domain.StatusSubmitting}, To: domain.StatusSubmitted, ProviderTaskID: &taskID})
@@ -185,7 +185,7 @@ func TestManagedVideoUsesSupplierTokensInsteadOfArtifactDuration(t *testing.T) {
 	require.NoError(t, f.store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{OperationID: i.OperationID, Action: "query", Attempt: 1, ProviderTaskID: &taskID}))
 	progress, err = worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "query"})
 	require.NoError(t, err)
-	require.Equal(t, "succeeded", progress.State)
+	require.EqualValues(t, "succeeded", progress.State)
 	require.NoError(t, f.store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{ProviderTaskID: &taskID, OperationID: i.OperationID, Action: "query", Attempt: 1, Outcome: "ok", State: "succeeded", Managed: true}))
 	cost, err := f.store.LoadProviderCost(t.Context(), i.OperationID)
 	require.NoError(t, err)

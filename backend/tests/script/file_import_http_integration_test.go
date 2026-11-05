@@ -43,7 +43,7 @@ func TestScriptFileImportHTTPActualAdmissionRefreshPartialRetryAndControls(t *te
 			t.Fatal("private import fact exposed", forbidden)
 		}
 	}
-	if err := scriptImportWorker(db, storage, &failImportFileOnce{original: extract.NewExtractor()}).Execute(t.Context(), importDelivery(t, owner, actor, key)); err != nil {
+	if err := scriptImportWorker(t, db, storage, &failImportFileOnce{original: extract.NewExtractor()}).Execute(t.Context(), importDelivery(t, owner, actor, key)); err != nil {
 		t.Fatal(err)
 	}
 	detail := scriptHTTP(t, router, "GET", path+"/"+accepted.ID.String(), uuid.Nil, nil)
@@ -57,7 +57,7 @@ func TestScriptFileImportHTTPActualAdmissionRefreshPartialRetryAndControls(t *te
 	if retry.Code != 202 {
 		t.Fatal("retry route", retry.Code, retry.Body.String())
 	}
-	if err := scriptImportWorker(db, storage, extract.NewExtractor()).Execute(t.Context(), importDelivery(t, owner, actor, retryKey)); err != nil {
+	if err := scriptImportWorker(t, db, storage, extract.NewExtractor()).Execute(t.Context(), importDelivery(t, owner, actor, retryKey)); err != nil {
 		t.Fatal(err)
 	}
 	stale := scriptHTTP(t, router, "POST", path+"/"+accepted.ID.String()+"/cancel", uuid.New(), control)

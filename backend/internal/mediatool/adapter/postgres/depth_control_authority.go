@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -45,22 +46,28 @@ func readDepthControl(tx *gorm.DB, r depthRow, action string) (depthControlProof
 		}
 		actions = []string{"cancel", "reconcile"}
 	}
-	var row struct {
-		ActorID, RequestID, EventID                   uuid.UUID
-		RequestHash, Topic, PartitionKey, EventAction string
-		Response, Payload                             []byte
+	var command depthCommandRecord
+	if err := tx.Where("job_id = ? AND event_action IN ? AND event_attempt = ?", r.ID, actions, r.Attempt).
+		Order("created_at DESC").Take(&command).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return proof, application.ErrInvalidDepthInput
+		}
+		return proof, err
 	}
-	res := tx.Raw(`SELECT c.actor_id,c.request_id,c.event_id,c.request_hash,c.response,c.event_action,o.topic,o.partition_key,o.payload
-		FROM mediatool.depth_command c LEFT JOIN infra.outbox o ON o.id=c.event_id
-		WHERE c.job_id=? AND c.event_action IN ? AND c.event_attempt=?
-		ORDER BY (c.response->>'revision')::bigint DESC LIMIT 1`, r.ID, actions, r.Attempt).Scan(&row)
-	if res.Error != nil {
-		return proof, res.Error
-	}
-	if res.RowsAffected != 1 || row.ActorID == uuid.Nil || row.RequestID == uuid.Nil || row.EventID == uuid.Nil || row.Topic != depthTopic || row.PartitionKey != r.ID.String() {
+	if command.ActorID == uuid.Nil || command.RequestID == uuid.Nil || command.EventID == nil || command.EventAction == nil {
 		return proof, application.ErrInvalidDepthInput
 	}
-	action = row.EventAction
+	var outbox mediatoolOutboxRecord
+	if err := tx.Where("id = ?", *command.EventID).Take(&outbox).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return proof, application.ErrInvalidDepthInput
+		}
+		return proof, err
+	}
+	if outbox.Topic != depthTopic || outbox.PartitionKey != r.ID.String() {
+		return proof, application.ErrInvalidDepthInput
+	}
+	action = *command.EventAction
 	var response domain.DepthJob
 	var event struct {
 		EventID    uuid.UUID                 `json:"event_id"`
@@ -69,7 +76,7 @@ func readDepthControl(tx *gorm.DB, r depthRow, action string) (depthControlProof
 		OrgID      uuid.UUID                 `json:"org_id"`
 		Data       application.DepthDelivery `json:"data"`
 	}
-	if depthJSON(row.Response, &response) != nil || depthJSON(row.Payload, &event) != nil || response.ID != r.ID || response.ProjectID != r.ProjectID || response.Source != r.job().Source || response.SourceAssetID != r.SourceAssetID || response.SourceAssetRevision != r.SourceAssetRevision || response.SourceSHA256 != r.SourceSHA256 || response.ProfileID != r.ProfileID || response.Attempt != r.Attempt || response.Revision < 2 || response.Revision > r.Revision {
+	if depthJSON(command.Response, &response) != nil || depthJSON(outbox.Payload, &event) != nil || response.ID != r.ID || response.ProjectID != r.ProjectID || response.Source != r.job().Source || response.SourceAssetID != r.SourceAssetID || response.SourceAssetRevision != r.SourceAssetRevision || response.SourceSHA256 != r.SourceSHA256 || response.ProfileID != r.ProfileID || response.Attempt != r.Attempt || response.Revision < 2 || response.Revision > r.Revision {
 		return proof, application.ErrInvalidDepthInput
 	}
 	if cleanup && !response.CancellationRequested {
@@ -80,11 +87,11 @@ func readDepthControl(tx *gorm.DB, r depthRow, action string) (depthControlProof
 		return proof, err
 	}
 	d := event.Data
-	expectedEvent := uuid.NewSHA1(row.RequestID, []byte("media-depth/"+row.ActorID.String()+"/"+action))
-	if row.EventID != expectedEvent || hash != row.RequestHash || event.EventID != row.EventID || event.EventType != depthTopic || event.OrgID != r.OrgID || event.OccurredAt.IsZero() || d.JobID != r.ID || d.Attempt != r.Attempt || d.ExecutionID != uuid.Nil || d.Reconcile != (action == "reconcile") || d.EventID != row.EventID || d.RequestID != row.RequestID || d.ActorID != row.ActorID || d.OrgID != r.OrgID || d.ProjectID != r.ProjectID || d.Action != action {
+	expectedEvent := uuid.NewSHA1(command.RequestID, []byte("media-depth/"+command.ActorID.String()+"/"+action))
+	if *command.EventID != expectedEvent || hash != command.RequestHash || event.EventID != *command.EventID || event.EventType != depthTopic || event.OrgID != r.OrgID || event.OccurredAt.IsZero() || d.JobID != r.ID || d.Attempt != r.Attempt || d.ExecutionID != uuid.Nil || d.Reconcile != (action == "reconcile") || d.EventID != *command.EventID || d.RequestID != command.RequestID || d.ActorID != command.ActorID || d.OrgID != r.OrgID || d.ProjectID != r.ProjectID || d.Action != action {
 		return proof, application.ErrInvalidDepthInput
 	}
-	proof = depthControlProof{Actor: identityapp.Principal{ID: row.ActorID, OrgID: r.OrgID}, RequestID: row.RequestID, EventID: row.EventID, Revision: response.Revision, Action: action, RequestHash: row.RequestHash}
+	proof = depthControlProof{Actor: identityapp.Principal{ID: command.ActorID, OrgID: r.OrgID}, RequestID: command.RequestID, EventID: *command.EventID, Revision: response.Revision, Action: action, RequestHash: command.RequestHash}
 	return proof, nil
 }
 
@@ -184,9 +191,17 @@ func (s *DepthStore) lockDepthAuthority(ctx context.Context, tx *gorm.DB, id uui
 // depthHasNoOutput proves that an undispatched attempt has no private result
 // obligations. A corrupt or unreadable manifest never grants fence release.
 func depthHasNoOutput(tx *gorm.DB, r depthRow) (bool, error) {
-	var found bool
-	err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM mediatool.depth_result_intent WHERE job_id=? AND attempt=? UNION ALL SELECT 1 FROM mediatool.depth_object WHERE job_id=? AND attempt=?)`, r.ID, r.Attempt, r.ID, r.Attempt).Scan(&found).Error
-	return !found, err
+	var intents, objects int64
+	if err := tx.Model(&depthResultIntentRecord{}).Where("job_id = ? AND attempt = ?", r.ID, r.Attempt).Count(&intents).Error; err != nil {
+		return false, err
+	}
+	if intents > 0 {
+		return false, nil
+	}
+	if err := tx.Model(&depthObjectRecord{}).Where("job_id = ? AND attempt = ?", r.ID, r.Attempt).Count(&objects).Error; err != nil {
+		return false, err
+	}
+	return objects == 0, nil
 }
 
 // withDepthReadAttempt permits an accepted reconciliation only to inspect and
@@ -200,7 +215,7 @@ func (s *DepthStore) withDepthReadAttempt(ctx context.Context, id application.De
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		r, authority, err := s.lockDepthAuthority(ctx, tx, id.JobID, func(r depthRow) string {
-			if r.Attempt != id.Attempt || r.ActiveWorker == nil || *r.ActiveWorker != id.ExecutionID || r.ExecutionUnconfirmed || r.CancellationRequested || r.ProcessState != "ended" || r.Status != "running" || r.Stage != "reconciling" {
+			if r.Attempt != id.Attempt || r.ActiveWorker == nil || *r.ActiveWorker != id.ExecutionID || r.ExecutionUnconfirmed || r.CancellationRequested || r.ProcessState != domain.DepthProcessEnded || r.Status != domain.DepthRunning || r.Stage != domain.DepthStageReconciling {
 				return ""
 			}
 			return "reconcile"
@@ -214,7 +229,7 @@ func (s *DepthStore) withDepthReadAttempt(ctx context.Context, id application.De
 		if r.CancellationRequested {
 			return application.ErrCancelled
 		}
-		if r.ProcessState != "ended" || r.Status != "running" || r.Stage != "reconciling" {
+		if r.ProcessState != domain.DepthProcessEnded || r.Status != domain.DepthRunning || r.Stage != domain.DepthStageReconciling {
 			return application.ErrConflict
 		}
 		if authority.err != nil {

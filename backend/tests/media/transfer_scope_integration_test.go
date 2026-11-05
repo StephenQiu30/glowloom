@@ -8,14 +8,13 @@ import (
 
 	"github.com/google/uuid"
 
-	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestMediaTransferActualProjectToPersonalCreatesIndependentOriginalAndRenditions(t *testing.T) {
 	f := newTransferRecoveryFixture(t, 1)
-	objects := copyobjects.NewProjectCopyObjects(f.objects)
-	projectResult, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
+	objects := mediaFixtureCopyObjects(t, f.db)
+	projectResult, err := mediaapp.NewRoutedTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
 	if err != nil || projectResult.Status != "succeeded" {
 		t.Fatal(projectResult, err)
 	}
@@ -34,7 +33,7 @@ func TestMediaTransferActualProjectToPersonalCreatesIndependentOriginalAndRendit
 			_ = f.objects.Remove(context.Background(), key)
 		}
 	})
-	result, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(job))
+	result, err := mediaapp.NewRoutedTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(job))
 	if err != nil || result.Status != "succeeded" {
 		t.Fatal("actual opposite scope transfer", result, err)
 	}
@@ -67,13 +66,18 @@ func TestMediaTransferQueuedSourceAndTargetFolderChangesFailBeforeAnyObjectWrite
 			library := mediaLibraryStore(f.db, libraryTestAccess, time.Now)
 			job := f.job
 			if changeSource {
-				_, err := library.ApplyLibraryCommand(t.Context(), f.actor, mediaapp.LibraryCommand{Scope: f.input.Source, Key: uuid.New(), ExpectedRevision: 1, Action: "update_item", ItemID: &f.input.Items[0].ID, Metadata: &mediaapp.LibraryMetadata{Title: "新分类描述", Category: "other"}})
+				_, err := library.ApplyLibraryCommand(t.Context(), f.actor, mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: f.input.Source, Key: uuid.New(), ExpectedRevision: 1, Action: "update_item", ItemID: &f.input.Items[0].ID, Metadata: &mediaapp.LibraryMetadata{Title: "新分类描述", Category: "other"}})
 				if err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				if _, err := f.repo.ControlTransfer(t.Context(), f.actor, job.ID, uuid.New(), job.Revision, "cancel"); err != nil {
+				requested, err := f.repo.ControlTransfer(t.Context(), f.actor, job.ID, uuid.New(), job.Revision, "cancel")
+				if err != nil {
 					t.Fatal(err)
+				}
+				cancelled, err := mediaapp.NewRoutedTransferWorker(f.repo.Worker, mediaFixtureCopyObjects(t, f.db), t.TempDir()).Execute(t.Context(), transferExecution(requested))
+				if err != nil || cancelled.Status != "cancelled" || cancelled.NeedsReconciliation {
+					t.Fatal("queued physical cancellation did not drain before new admission", cancelled, err)
 				}
 				created, err := library.ApplyLibraryCommand(t.Context(), f.actor, mediaapp.LibraryCommand{Scope: f.input.Target, Key: uuid.New(), Action: "create_folder", Folder: &mediaapp.LibraryFolderInput{Name: "目标目录", Style: "cinema", Theme: "obsidian"}})
 				if err != nil || created.Folder == nil {
@@ -89,8 +93,8 @@ func TestMediaTransferQueuedSourceAndTargetFolderChangesFailBeforeAnyObjectWrite
 					t.Fatal(err)
 				}
 			}
-			objects := &transferUnknownWrite{ProjectCopyObjects: copyobjects.NewProjectCopyObjects(f.objects), failAt: 100}
-			result, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(job))
+			objects := &transferUnknownWrite{PhysicalTransferObjects: mediaFixtureCopyObjects(t, f.db), failAt: 100}
+			result, err := mediaapp.NewRoutedTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(job))
 			want := map[bool]string{true: "source_changed", false: "target_folder_changed"}[changeSource]
 			if err != nil || result.Status != "failed" || result.NeedsReconciliation || result.Items[0].FailureCode == nil || *result.Items[0].FailureCode != want || objects.writes != 0 {
 				t.Fatal("changed frozen source or folder admitted physical work", result, objects.writes, err)

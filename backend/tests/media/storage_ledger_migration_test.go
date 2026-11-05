@@ -1,7 +1,6 @@
 package media_test
 
 import (
-	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -72,7 +71,7 @@ func storageLedgerMigrationFixture(t *testing.T, shape ...string) *gorm.DB {
 	return tx
 }
 
-func TestStorageLedgerExpansionPreservesLegacyKeysAndDoesNotActivate(t *testing.T) {
+func TestStorageLedgerExpansionRequiresPhysicalLocationsAndDoesNotInventRoutes(t *testing.T) {
 	for _, shape := range []string{"legacy", "partial", "canonical"} {
 		t.Run(shape, func(t *testing.T) { testStorageLedgerExpansion(t, shape) })
 	}
@@ -92,19 +91,16 @@ func testStorageLedgerExpansion(t *testing.T, shape string) {
 		TableCount, BoundColumns, BoundForeignKeys, Profiles, Routes, LegacyPrimaryKeys int
 	}
 	if err := tx.Raw(`SELECT
- (SELECT count(*) FROM pg_tables WHERE schemaname='media' AND (tablename LIKE 'storage_%' AND tablename<>'storage_empty_deployment_evidence' OR tablename IN ('object_location','upload_admission'))) AS table_count,
- (SELECT count(*) FROM pg_attribute WHERE attrelid IN ('media.media_asset'::regclass,'media.rendition'::regclass,'media.package_object'::regclass,'media.project_copy_object'::regclass,'media.transfer_object'::regclass,'media.purge_object'::regclass,'mediatool.depth_object'::regclass,'script.object_intent'::regclass,'script.object_state'::regclass) AND attname IN ('object_location_id','source_location_id','target_location_id') AND atttypid='uuid'::regtype AND NOT attnotnull AND NOT attisdropped) AS bound_columns,
+ (SELECT count(*) FROM pg_tables WHERE schemaname='media' AND tablename IN ('object_location','storage_bucket_evidence','storage_config_revision','storage_probe_evidence','storage_probe_intent','storage_profile','storage_route','storage_work_intent','upload_admission')) AS table_count,
+ (SELECT count(*) FROM pg_attribute WHERE attrelid IN ('media.media_asset'::regclass,'media.rendition'::regclass,'media.package_object'::regclass,'media.project_copy_object'::regclass,'media.transfer_object'::regclass,'media.purge_object'::regclass,'mediatool.depth_object'::regclass,'script.object_intent'::regclass,'script.object_state'::regclass) AND attname IN ('object_location_id','source_location_id','target_location_id') AND atttypid='uuid'::regtype AND attnotnull AND NOT attisdropped) AS bound_columns,
  (SELECT count(*) FROM pg_constraint WHERE confrelid='media.object_location'::regclass AND conrelid IN ('media.media_asset'::regclass,'media.rendition'::regclass,'media.package_object'::regclass,'media.project_copy_object'::regclass,'media.transfer_object'::regclass,'media.purge_object'::regclass,'mediatool.depth_object'::regclass,'script.object_intent'::regclass,'script.object_state'::regclass) AND contype='f' AND convalidated) AS bound_foreign_keys,
  (SELECT count(*) FROM media.storage_profile) AS profiles,
  (SELECT count(*) FROM media.storage_route) AS routes,
  (SELECT count(*) FROM pg_constraint WHERE conrelid IN ('script.object_intent'::regclass,'script.object_state'::regclass) AND contype='p') AS legacy_primary_keys`).Scan(&facts).Error; err != nil {
 		t.Fatal(err)
 	}
-	if facts.TableCount != 16 || facts.BoundColumns != 11 || facts.BoundForeignKeys != 11 || facts.Profiles != 0 || facts.Routes != 0 || facts.LegacyPrimaryKeys != 2 {
+	if facts.TableCount != 9 || facts.BoundColumns != 11 || facts.BoundForeignKeys != 11 || facts.Profiles != 0 || facts.Routes != 0 || facts.LegacyPrimaryKeys != 2 {
 		t.Fatalf("expanded schema changed legacy ownership or invented resource facts: %+v", facts)
-	}
-	if err := pgmedia.NewStorageRoutes(tx).CheckStorageFinalSchema(t.Context()); !errors.Is(err, mediaapp.ErrStorageNotReady) {
-		t.Fatal("nullable expansion advertised as activation-ready", err)
 	}
 	profiles := []mediaapp.StorageProfile{{ID: "fixture-tos", Provider: "tos", Endpoint: "https://tos.example.invalid", SigningEndpoint: "https://tos.example.invalid", Region: "test-region", Bucket: "migration-fixture", AddressingStyle: ""}}
 	routes := pgmedia.NewStorageRoutes(tx)
@@ -116,7 +112,7 @@ func testStorageLedgerExpansion(t *testing.T, shape string) {
 	if err := tx.SavePoint("bad_location").Error; err != nil {
 		t.Fatal(err)
 	}
-	err = tx.Exec(`INSERT INTO media.storage_legacy_receipt(profile_id,bucket,object_key,snapshot_sha256,location_id,byte_size,sha256,mime_type,reference_count) VALUES('fixture-tos','migration-fixture','fixture.mp3',repeat('a',64),?,1,repeat('b',64),'audio/mpeg',1)`, uuid.New()).Error
+	err = tx.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state) VALUES(?,'fixture-tos','wrong-bucket','fixture.mp3','reserved')`, uuid.New()).Error
 	if err == nil {
 		t.Fatal("unproved location was accepted")
 	}
@@ -124,7 +120,7 @@ func testStorageLedgerExpansion(t *testing.T, shape string) {
 		t.Fatal(err)
 	}
 	job, scope := uuid.New(), uuid.New()
-	if err := tx.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'subject-voice',?,?,'fixture-tos','migration-fixture','fixture-revision')`, uuid.New(), scope, job).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'subject-voice',?,?,'fixture-tos','migration-fixture','1')`, uuid.New(), scope, job).Error; err != nil {
 		t.Fatal("voice work dependency missing", err)
 	}
 	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {

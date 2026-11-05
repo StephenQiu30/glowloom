@@ -3,11 +3,13 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -44,7 +46,7 @@ func (s *Store) StoreDerived(ctx context.Context, actor identityapp.Principal, a
 		if asset.Origin != domain.OriginSystem || asset.Status != domain.StatusProcessing || asset.ModerationStatus != domain.ModerationPending {
 			return domain.ErrInvalidMediaAsset
 		}
-		row := map[string]any{"id": asset.ID, "project_id": asset.ProjectID, "kind": string(asset.Kind), "origin": "system", "status": "processing", "object_key": asset.ObjectKey, "file_name": asset.FileName, "mime_type": asset.MimeType, "byte_size": asset.ByteSize, "sha256": asset.SHA256, "width": asset.Width, "height": asset.Height, "duration_ms": asset.DurationMS, "fps": asset.FPS, "audio_channels": asset.AudioChannels, "codec": asset.Codec, "moderation_status": "pending", "moderation_detail": gorm.Expr("'{}'::jsonb"), "revision": 1, "create_time": asset.CreateTime, "update_time": asset.UpdateTime}
+		row := map[string]any{"id": asset.ID, "project_id": asset.ProjectID, "kind": string(asset.Kind), "origin": domain.OriginSystem, "status": domain.StatusProcessing, "object_key": asset.ObjectKey, "file_name": asset.FileName, "mime_type": asset.MimeType, "byte_size": asset.ByteSize, "sha256": asset.SHA256, "width": asset.Width, "height": asset.Height, "duration_ms": asset.DurationMS, "fps": asset.FPS, "audio_channels": asset.AudioChannels, "codec": asset.Codec, "moderation_status": domain.ModerationPending, "moderation_detail": jsonDocument([]byte("{}")), "revision": 1, "create_time": asset.CreateTime, "update_time": asset.UpdateTime}
 		if asset.ObjectLocation != nil {
 			row["object_location_id"] = asset.ObjectLocation.ID
 		}
@@ -90,14 +92,7 @@ func (s *Store) ReviewDerived(ctx context.Context, actor identityapp.Principal, 
 		if err != nil {
 			return err
 		}
-		r := tx.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed',moderation_detail=?::jsonb,revision=revision+1,update_time=? WHERE id=? AND project_id=? AND origin='system' AND status='processing' AND moderation_status='pending' AND sha256=? AND NOT is_delete`, string(detail), now, id, project, sha)
-		if r.Error != nil {
-			return r.Error
-		}
-		if r.RowsAffected != 1 {
-			return ErrOutputConflict
-		}
-		return nil
+		return updateDerived(tx, id, project, sha, map[string]any{"status": domain.StatusReady, "moderation_status": domain.ModerationPassed, "moderation_detail": jsonDocument(detail), "update_time": now}, ErrOutputConflict)
 	})
 }
 
@@ -113,14 +108,7 @@ func (s *Store) RejectDerived(ctx context.Context, actor identityapp.Principal, 
 		if err := s.requireProject(tx, actor, project, true); err != nil {
 			return err
 		}
-		r := tx.Exec(`UPDATE media.media_asset SET status='rejected',moderation_status='rejected',failure_reason=?,revision=revision+1,update_time=? WHERE id=? AND project_id=? AND origin='system' AND status='processing' AND moderation_status='pending' AND NOT is_delete`, reason, now, id, project)
-		if r.Error != nil {
-			return r.Error
-		}
-		if r.RowsAffected != 1 {
-			return ErrOutputConflict
-		}
-		return nil
+		return updateDerived(tx, id, project, "", map[string]any{"status": domain.StatusRejected, "moderation_status": domain.ModerationRejected, "failure_reason": reason, "update_time": now}, ErrOutputConflict)
 	})
 }
 
@@ -157,13 +145,23 @@ func (s *Store) FinalizeDerived(ctx context.Context, actor identityapp.Principal
 		if err != nil {
 			return err
 		}
-		result := tx.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed',moderation_detail=?::jsonb,revision=revision+1,update_time=? WHERE id=? AND project_id=? AND origin='system' AND status='processing' AND moderation_status='pending' AND sha256=? AND NOT is_delete`, string(detail), now, id, project, sha)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return ErrOutputConflict
-		}
-		return nil
+		return updateDerived(tx, id, project, sha, map[string]any{"status": domain.StatusReady, "moderation_status": domain.ModerationPassed, "moderation_detail": jsonDocument(detail), "update_time": now}, ErrOutputConflict)
 	})
+}
+
+func updateDerived(tx *gorm.DB, id, project uuid.UUID, sha string, values map[string]any, conflict error) error {
+	where := map[string]any{"id": id, "project_id": project, "origin": domain.OriginSystem, "status": domain.StatusProcessing, "moderation_status": domain.ModerationPending, "is_delete": false}
+	if sha != "" {
+		where["sha256"] = sha
+	}
+	var asset assetRow
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(where).Take(&asset).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return conflict
+		}
+		return err
+	}
+	values["revision"] = asset.Revision + 1
+	where["revision"] = asset.Revision
+	return requireOne(tx.Model(&assetRow{}).Where(where).Updates(values), conflict)
 }

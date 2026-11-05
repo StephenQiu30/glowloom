@@ -19,6 +19,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trial"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -46,7 +47,7 @@ type trialObjects struct {
 	lostReceipt bool
 }
 
-func (s *trialObjects) PutIfAbsent(_ context.Context, _ string, r io.Reader, size int64, mime, sha string) error {
+func (s *trialObjects) PutIfAbsent(_ context.Context, _ mediadomain.ObjectRef, r io.Reader, size int64, mime, sha string) error {
 	s.writes++
 	if s.data != nil {
 		return errors.New("exists")
@@ -58,15 +59,17 @@ func (s *trialObjects) PutIfAbsent(_ context.Context, _ string, r io.Reader, siz
 	}
 	return nil
 }
-func (s *trialObjects) Stat(context.Context, string) (objectstorage.ObjectInfo, error) {
+func (s *trialObjects) Stat(context.Context, mediadomain.ObjectRef) (objectstorage.ObjectInfo, error) {
 	if s.data == nil {
 		return s.info, errors.New("missing")
 	}
 	return s.info, nil
 }
-func (s *trialObjects) Get(context.Context, string) (io.ReadCloser, error) {
+func (s *trialObjects) Get(context.Context, mediadomain.ObjectRef) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(s.data)), nil
 }
+
+func (s *trialObjects) CheckWrite(context.Context, mediadomain.ObjectRef) error { return nil }
 
 type trialCloud struct {
 	result           application.GenerationResult
@@ -99,12 +102,14 @@ func trialRunnerFixture(t *testing.T) (*trial.Runner, *trialCloud, *trialObjects
 	unseal, err := credentialseal.NewUnsealer("fixture", pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: private}))
 	require.NoError(t, err)
 	in := application.TrialInput{Request: application.TrialRequest{RequestID: uuid.New(), Source: "cloud", Kind: "image", ProviderID: uuid.New(), Model: "fixture-seedream", Prompt: "circle"}}
+	in.Actor = identityapp.Principal{ID: uuid.New(), OrgID: uuid.New()}
+	in.OutputRef = &mediadomain.ObjectRef{ProfileID: "fixture-main", Bucket: "fixture-bucket", Key: application.TrialObjectKey(in, 1)}
 	credential := uuid.New()
 	encrypted, err := seal.Seal(in.Request.ProviderID, credential, []byte(`{"api_key":"fixture-only"}`))
 	require.NoError(t, err)
 	store := &trialBindings{binding: trial.Binding{ConfigID: uuid.New(), CredentialID: credential, KeyID: "fixture", Ciphertext: encrypted}}
 	cloud, objects := &trialCloud{}, &trialObjects{}
-	return &trial.Runner{Store: store, Cloud: cloud, Objects: objects, Keys: unseal, StorageID: "fixture-target"}, cloud, objects, in
+	return &trial.Runner{Store: store, Cloud: cloud, Objects: objects, Keys: unseal}, cloud, objects, in
 }
 func TestTrialRunnerStoresOneImageAndRecoversLostUploadReceiptWithoutInference(t *testing.T) {
 	r, cloud, objects, input := trialRunnerFixture(t)
@@ -114,15 +119,15 @@ func TestTrialRunnerStoresOneImageAndRecoversLostUploadReceiptWithoutInference(t
 	objects.lostReceipt = true
 	result, err := r.Run(t.Context(), input)
 	require.NoError(t, err)
-	require.Equal(t, "succeeded", result.State)
+	require.EqualValues(t, "succeeded", result.State)
 	require.Len(t, result.Artifacts, 1)
 	require.Equal(t, 1, cloud.submits)
 	require.Equal(t, int64(data.Len()), result.Artifacts[0].Size)
-	require.Equal(t, "fixture-target", result.Artifacts[0].StorageID)
+	require.Equal(t, input.OutputRef, result.Artifacts[0].ObjectRef)
 	input.Action = "recover"
 	recovered, err := r.Run(t.Context(), input)
 	require.NoError(t, err)
-	require.Equal(t, "succeeded", recovered.State)
+	require.EqualValues(t, "succeeded", recovered.State)
 	require.Equal(t, 1, cloud.submits)
 	require.Equal(t, 1, objects.writes)
 	reader, err := trial.ReadArtifact(t.Context(), objects, input, recovered.Artifacts[0])
@@ -142,7 +147,7 @@ func TestTrialRunnerRejectsHeaderOnlyImageAndRevokedAuthority(t *testing.T) {
 	cloud.result = application.GenerationResult{Outcome: "completed", Images: []application.GeneratedImage{{Bytes: data.Bytes()[:40], MediaType: "image/png"}}}
 	result, err := r.Run(t.Context(), input)
 	require.NoError(t, err)
-	require.Equal(t, "unknown", result.State)
+	require.EqualValues(t, "unknown", result.State)
 	require.Zero(t, objects.writes)
 	r.Store.(*trialBindings).deny = true
 	_, err = r.Run(t.Context(), input)
@@ -154,7 +159,29 @@ func TestTrialRecoveryWithoutSavedImageNeverSubmitsAgain(t *testing.T) {
 	input.Action = "recover"
 	result, err := r.Run(t.Context(), input)
 	require.NoError(t, err)
-	require.Equal(t, "unknown", result.State)
+	require.EqualValues(t, "unknown", result.State)
 	require.Zero(t, cloud.submits)
 	require.Zero(t, cloud.queries)
+}
+
+func TestTrialRejectsMissingOrForgedOutputBeforeAnyInference(t *testing.T) {
+	for _, change := range []func(*application.TrialInput){func(in *application.TrialInput) { in.OutputRef = nil }, func(in *application.TrialInput) { in.OutputRef.Key = "other-owner/result/1" }} {
+		r, cloud, objects, input := trialRunnerFixture(t)
+		change(&input)
+		result, err := r.Run(t.Context(), input)
+		require.NoError(t, err)
+		require.NotEqual(t, "succeeded", result.State)
+		require.Zero(t, cloud.submits)
+		require.Zero(t, cloud.queries)
+		require.Zero(t, objects.writes)
+	}
+}
+func TestTrialArtifactRejectsDifferentOwnerEvenWithMatchingBytes(t *testing.T) {
+	_, _, objects, input := trialRunnerFixture(t)
+	artifact := application.TrialArtifact{Sequence: 1, ObjectRef: input.OutputRef, Size: 4, SHA256: "matching", MIME: "image/png"}
+	objects.data = []byte("data")
+	objects.info = objectstorage.ObjectInfo{Size: 4, SHA256: "matching", ContentType: "image/png"}
+	input.Actor.ID = uuid.New()
+	_, err := trial.ReadArtifact(t.Context(), objects, input, artifact)
+	require.Error(t, err)
 }

@@ -16,7 +16,6 @@ import (
 // PackageLocations receives fixed admission IDs; it never selects an active route.
 type PackageLocations interface {
 	ReadLocation(context.Context, uuid.UUID) (domain.ObjectLocation, error)
-	ResolveLegacyRef(context.Context, string) (domain.ObjectRef, error)
 	BeginWorkWrite(context.Context, uuid.UUID, domain.ObjectLocation) error
 	ConfirmWorkLocation(context.Context, uuid.UUID, domain.ObjectLocation, application.ObjectInfo) error
 	CancelStorageWork(context.Context, uuid.UUID) error
@@ -39,8 +38,7 @@ func (p *RoutedPackageObjects) location(ctx context.Context, o application.Packa
 		return domain.ObjectLocation{}, application.ErrStorageNotReady
 	}
 	if o.Location == nil {
-		ref, err := p.locations.ResolveLegacyRef(ctx, o.Key)
-		return domain.ObjectLocation{Ref: ref}, err
+		return domain.ObjectLocation{}, application.ErrStorageNotReady
 	}
 	l, err := p.locations.ReadLocation(ctx, o.Location.ID)
 	if err != nil {
@@ -52,7 +50,7 @@ func (p *RoutedPackageObjects) location(ctx context.Context, o application.Packa
 	return l, nil
 }
 
-// GetPackage opens the saved location or an independently proved legacy source.
+// GetPackage opens the package's saved physical location.
 func (p *RoutedPackageObjects) GetPackage(ctx context.Context, o application.PackageObject) (io.ReadCloser, error) {
 	l, e := p.location(ctx, o)
 	if e != nil {
@@ -108,7 +106,7 @@ func (p *RoutedPackageObjects) RemovePackage(ctx context.Context, o application.
 	if e != nil {
 		return e
 	}
-	if l.State == "deleted" {
+	if l.State == domain.ObjectLocationDeleted {
 		return nil
 	}
 	if e = p.locations.CancelStorageWork(ctx, o.StorageIntentID); e != nil {
@@ -134,7 +132,7 @@ func (p *RoutedPackageObjects) ConfirmPackageRemoval(ctx context.Context, o appl
 	if e != nil {
 		return e
 	}
-	if l.State == "deleted" {
+	if l.State == domain.ObjectLocationDeleted {
 		return nil
 	}
 	return p.locations.ConfirmWorkRemoval(ctx, o.StorageIntentID, l)

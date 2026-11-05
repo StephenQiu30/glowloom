@@ -2,50 +2,42 @@ package media_test
 
 import (
 	"bytes"
-	"context"
 	"errors"
-	"io"
 	"testing"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
-type legacyVerificationObjects struct {
-	ref  domain.ObjectRef
-	data []byte
-	info mediaapp.ObjectInfo
-	err  error
-}
-
-func (s legacyVerificationObjects) Get(_ context.Context, ref domain.ObjectRef) (io.ReadCloser, error) {
-	if ref != s.ref {
-		return nil, errors.New("wrong profile")
+func TestStorageFrozenReferenceChecksActualBytesAndProviderFailure(t *testing.T) {
+	data := []byte("immutable audio bytes")
+	a := routedReadImage()
+	a.Kind = domain.KindAudio
+	a.ObjectKey = "projects/" + a.ProjectID.String() + "/audio/2026/11/" + a.ID.String() + ".mp3"
+	a.FileName = "test.mp3"
+	codec := "mp3"
+	a.Codec = &codec
+	duration := int32(1000)
+	a.DurationMS = &duration
+	a.MimeType = "audio/mpeg"
+	facts := sourceDocumentAsset(data)
+	a.SHA256 = facts.SHA256
+	a.ByteSize = facts.ByteSize
+	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
+	reader := routedReferenceReader{file: mediaapp.LibraryMediaFile{Asset: a}}
+	query := mediaapp.NewRoutedReferenceFactQuery(reader, objects)
+	fact, err := query.Reference(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID, domain.KindAudio)
+	if err != nil || fact.SHA256 != *a.SHA256 {
+		t.Fatal("actual bytes not verified", err)
 	}
-	return io.NopCloser(bytes.NewReader(s.data)), s.err
-}
-func (s legacyVerificationObjects) Stat(_ context.Context, ref domain.ObjectRef) (mediaapp.ObjectInfo, error) {
-	if ref != s.ref {
-		return mediaapp.ObjectInfo{}, errors.New("wrong profile")
-	}
-	return s.info, s.err
-}
-func TestStorageLegacyVerifierChecksActualBytesBeforeBackfill(t *testing.T) {
-	data := []byte("legacy immutable bytes")
-	a := sourceDocumentAsset(data)
-	ref := domain.ObjectRef{ProfileID: "minio-main", Bucket: "storage-test", Key: a.ObjectKey}
-	candidate := mediaapp.LegacyObjectCandidate{Ref: ref, ByteSize: &a.ByteSize, SHA256: a.SHA256, MIMEType: &a.MimeType}
-	objects := legacyVerificationObjects{ref: ref, data: data, info: mediaapp.ObjectInfo{Size: a.ByteSize, ContentType: a.MimeType, SHA256: *a.SHA256}}
-	got, err := mediaapp.NewLegacyByteVerifier(objects).VerifyLegacyObject(t.Context(), candidate)
-	if err != nil || got.Size != a.ByteSize || got.SHA256 != *a.SHA256 {
-		t.Fatal("original bytes not verified", err)
-	}
-	objects.data = bytes.Repeat([]byte("x"), len(data))
-	if _, err := mediaapp.NewLegacyByteVerifier(objects).VerifyLegacyObject(t.Context(), candidate); !errors.Is(err, mediaapp.ErrObjectMismatch) {
-		t.Fatal("forged sha metadata became migration proof", err)
+	objects.data[a.ObjectLocation.Ref] = bytes.Repeat([]byte("x"), len(data))
+	if _, err := query.Reference(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID, domain.KindAudio); !errors.Is(err, mediaapp.ErrObjectMismatch) {
+		t.Fatal("forged metadata accepted", err)
 	}
 	objects.err = errors.New("provider forbidden")
-	if _, err := mediaapp.NewLegacyByteVerifier(objects).VerifyLegacyObject(t.Context(), candidate); !errors.Is(err, objects.err) {
-		t.Fatal("provider failure became absence proof", err)
+	if _, err := query.Reference(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID, domain.KindAudio); !errors.Is(err, objects.err) {
+		t.Fatal("provider error became absence proof", err)
 	}
 }

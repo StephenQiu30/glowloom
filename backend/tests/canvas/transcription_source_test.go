@@ -14,6 +14,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing.T) {
@@ -111,11 +112,11 @@ func TestTranscriptionSourceRejectsImageAndKindChangedAfterSave(t *testing.T) {
 	if err != nil || id != audioID {
 		t.Fatalf("audio source: %v %v", id, err)
 	}
-	if err := database.Exec(`UPDATE media.media_asset SET kind='video',object_key=replace(object_key,'/audio/','/video/') WHERE id=?`, audioID).Error; err != nil {
+	if err := database.Exec(`UPDATE media.media_asset SET kind='video' WHERE id=?`, audioID).Error; err != nil {
 		t.Fatal(err)
 	}
 	_, err = reader.FreezeTranscriptionSource(t.Context(), actor, project, doc.ID, audio.ID, saved.Revision)
-	if !errors.Is(err, domain.ErrInvalidCommand) {
+	if !errors.Is(err, mediadomain.ErrInvalidMediaAsset) {
 		t.Fatalf("changed source kind accepted: %v", err)
 	}
 }

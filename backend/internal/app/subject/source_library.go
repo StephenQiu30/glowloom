@@ -40,14 +40,9 @@ func (s personalSourceActor) PersonalSourceActor(ctx context.Context, actor iden
 }
 
 // NewSourceLibrary composes personal and proven generation sources under target authority.
-func NewSourceLibrary(db *gorm.DB, objects Objects) *media.SubjectLibrary {
+func NewSourceLibrary(db *gorm.DB, objects Objects, previewTTL time.Duration) *media.SubjectLibrary {
 	library := pgmedia.NewScopedLibraryStore(db, sourceProjectFactory, time.Now, sourceScopeFactory)
 	catalogue := pgmedia.NewSubjectCatalogueStore(db, library, func(tx *gorm.DB) media.SubjectSourceActor { return personalSourceActor{db: tx} })
-	var files *media.LibraryMediaQuery
-	if objects.Routed != nil {
-		files = media.NewRoutedLibraryMediaQuery(catalogue, objects.Routed, objects.Routed, 10*time.Minute)
-	} else if objects.Legacy != nil {
-		files = media.NewLibraryMediaQuery(catalogue, objects.Legacy, objects.Legacy)
-	}
+	files := media.NewRoutedLibraryMediaQuery(catalogue, objects.Routed, objects.Routed, previewTTL)
 	return media.NewSubjectLibrary(personalSourceActor{db: db}, catalogue, files)
 }

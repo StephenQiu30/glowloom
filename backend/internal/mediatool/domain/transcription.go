@@ -83,6 +83,12 @@ func ValidTranscriptionLanguage(language string) bool {
 // TranscriptionStatus is local speech inference, independent of export review.
 type TranscriptionStatus string
 
+// TranscriptionInferenceState tracks whether the native inference request may still be active.
+type TranscriptionInferenceState string
+
+// TranscriptionStage records the durable speech processing phase.
+type TranscriptionStage string
+
 // Transcription states preserve cancellation until actual inference has ended.
 const (
 	TranscriptionQueued          TranscriptionStatus = "queued"
@@ -93,6 +99,27 @@ const (
 	TranscriptionCancelled       TranscriptionStatus = "cancelled"
 )
 
+// Inference state is separate from the user-visible job lifecycle.
+const (
+	TranscriptionInferenceNone      TranscriptionInferenceState = "none"
+	TranscriptionInferenceSubmitted TranscriptionInferenceState = "submitted"
+	TranscriptionInferenceTerminal  TranscriptionInferenceState = "terminal"
+	TranscriptionInferenceUnknown   TranscriptionInferenceState = "unknown"
+)
+
+// Transcription stages identify the current processing or recovery step.
+const (
+	TranscriptionStageQueued                 TranscriptionStage = "queued"
+	TranscriptionStageDownloading            TranscriptionStage = "downloading"
+	TranscriptionStagePreparingAudio         TranscriptionStage = "preparing_audio"
+	TranscriptionStageTranscribing           TranscriptionStage = "transcribing"
+	TranscriptionStageCancelling             TranscriptionStage = "cancelling"
+	TranscriptionStageAwaitingReconciliation TranscriptionStage = "awaiting_reconciliation"
+	TranscriptionStageComplete               TranscriptionStage = "complete"
+	TranscriptionStageCancelled              TranscriptionStage = "cancelled"
+	TranscriptionStageFailed                 TranscriptionStage = "failed"
+)
+
 // TranscriptionJob exposes safe durable facts; recognized text is a separate query.
 type TranscriptionJob struct {
 	ID           uuid.UUID           `json:"id"`
@@ -100,7 +127,7 @@ type TranscriptionJob struct {
 	Source       TranscriptionSource `json:"source"`
 	Language     string              `json:"language"`
 	Status       TranscriptionStatus `json:"status"`
-	Stage        string              `json:"stage"`
+	Stage        TranscriptionStage  `json:"stage"`
 	Progress     int                 `json:"progress"`
 	Attempt      int                 `json:"attempt"`
 	Revision     int64               `json:"revision"`

@@ -17,12 +17,13 @@ import (
 	"testing"
 	"time"
 
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
+
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
 	"gorm.io/gorm"
 
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
@@ -32,15 +33,13 @@ import (
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
 	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	inputPath := filepath.Join(t.TempDir(), "source.mp4")
@@ -59,8 +58,8 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	download := &mediaapp.Downloaded{File: file, Size: int64(len(data)), MIMEType: "video/mp4", SHA256: hex.EncodeToString(digest[:])}
 	defer func() { _ = download.Close() }()
 	mediaStore := mediaTestStore(db)
-	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	uploaded, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.mp4"}, File: download, LocalReviewConfirmed: true})
+	upload := mediaFixtureRoutedUpload(t, db, mediaStore, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
+	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.mp4"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +77,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 			}
 		}
 	})
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
 	canvasService := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Audio export actual fixture"})
 	if err != nil {
@@ -93,17 +92,17 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+	store := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
 		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
-	workerStore := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx), nil) }))
+	workerStore := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx)) }))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	g := router.Group("/api")
 	g.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	toolhttp.NewHandler(store, toolapp.NewExportQuery(store, objects, objects)).Register(g)
+	toolhttp.NewHandler(store, toolapp.NewRoutedExportQuery(store, mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute)).Register(g)
 	request := func(method, url string, body any) *httptest.ResponseRecorder {
 		t.Helper()
 		var raw []byte
@@ -136,18 +135,10 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker := toolapp.NewWorker(workerStore, toolflow.NewObjects(objects), renderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
-	activities := toolflow.NewActivities(worker, workerStore, workerStore)
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	env.RegisterActivityWithOptions(activities.RenderExport, activity.RegisterOptions{Name: toolflow.RenderActivity})
-	env.RegisterActivityWithOptions(activities.FailExportWorkflow, activity.RegisterOptions{Name: toolflow.FailureActivity})
-	env.ExecuteWorkflow(toolflow.ExportWorkflow, toolapp.WorkID{JobID: job.ID, Attempt: 1})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatal(err)
-	}
-	var rendered tooldomain.ExportJob
-	if err := env.GetWorkflowResult(&rendered); err != nil || rendered.Status != tooldomain.ReviewRequired || rendered.AssetID == nil {
+	worker := toolapp.NewRoutedWorker(workerStore, mediatoolRoutedObjects(t, db), renderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
+	taskfixture.RunWork(t, db, tooltask.Export, map[string]any{"job_id": job.ID}, tooltask.ExportHandler(worker, workerStore))
+	rendered, err := store.Get(t.Context(), actor, project, job.ID)
+	if err != nil || rendered.Status != tooldomain.ReviewRequired || rendered.AssetID == nil {
 		t.Fatalf("actual pending audio: %+v %v", rendered, err)
 	}
 	base := "/api/media-exports/" + job.ID.String()
@@ -193,7 +184,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 			t.Fatal("waveform authorization accepted different project/revision/hash")
 		}
 	}
-	if _, err := mediaapp.NewAssetQuery(mediaStore, objects).Reference(t.Context(), actor, project, *rendered.AssetID); err == nil {
+	if _, err := mediaapp.NewRoutedAssetQuery(mediaStore, mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), actor, project, *rendered.AssetID); err == nil {
 		t.Fatal("unreviewed audio became a canvas reference")
 	}
 	if got := request(http.MethodGet, base+"/download"+scope, nil); got.Code != http.StatusConflict {
@@ -221,7 +212,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	if result.Code != http.StatusOK || result.Header().Get("Content-Type") != "audio/mp4" || !strings.Contains(result.Header().Get("Content-Disposition"), ".m4a") || hex.EncodeToString(outputHash[:]) != preview.SHA256 {
 		t.Fatalf("actual audio attachment: %d %s", result.Code, result.Header().Get("Content-Type"))
 	}
-	asset, err := mediaapp.NewAssetQuery(mediaStore, objects).Reference(t.Context(), actor, project, *rendered.AssetID)
+	asset, err := mediaapp.NewRoutedAssetQuery(mediaStore, mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), actor, project, *rendered.AssetID)
 	if err != nil || asset.Kind != "audio" {
 		t.Fatalf("reviewed audio reference: %+v %v", asset, err)
 	}
@@ -243,7 +234,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	silentHash := sha256.Sum256(silentBytes)
 	silentInput := &mediaapp.Downloaded{File: silentFile, Size: int64(len(silentBytes)), MIMEType: "video/mp4", SHA256: hex.EncodeToString(silentHash[:])}
 	defer func() { _ = silentInput.Close() }()
-	silentAsset, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "silent.mp4"}, File: silentInput, LocalReviewConfirmed: true})
+	silentAsset, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "silent.mp4"}, File: silentInput, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,13 +251,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	if createdSilent.Code != http.StatusAccepted || json.Unmarshal(createdSilent.Body.Bytes(), &silentJob) != nil {
 		t.Fatalf("queue silent extraction: %d %s", createdSilent.Code, createdSilent.Body.String())
 	}
-	silentEnv := suite.NewTestWorkflowEnvironment()
-	silentEnv.RegisterActivityWithOptions(activities.RenderExport, activity.RegisterOptions{Name: toolflow.RenderActivity})
-	silentEnv.RegisterActivityWithOptions(activities.FailExportWorkflow, activity.RegisterOptions{Name: toolflow.FailureActivity})
-	silentEnv.ExecuteWorkflow(toolflow.ExportWorkflow, toolapp.WorkID{JobID: silentJob.ID, Attempt: 1})
-	if silentEnv.GetWorkflowError() == nil {
-		t.Fatal("silent source extraction reported successful")
-	}
+	taskfixture.RunWork(t, db, tooltask.Export, map[string]any{"job_id": silentJob.ID}, tooltask.ExportHandler(worker, workerStore))
 	silentState, err := store.Get(t.Context(), actor, project, silentJob.ID)
 	if err != nil || silentState.Status != tooldomain.Failed || silentState.FailureCode == nil || *silentState.FailureCode != "no_audio_stream" || silentState.AssetID != nil {
 		t.Fatalf("actual no-audio failure facts: %+v %v", silentState, err)
@@ -290,52 +275,51 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	if cancelCreate.Code != http.StatusAccepted || json.Unmarshal(cancelCreate.Body.Bytes(), &cancelJob) != nil {
 		t.Fatalf("queue actual audio cancellation: %d %s", cancelCreate.Code, cancelCreate.Body.String())
 	}
-	cancelEnv := suite.NewTestWorkflowEnvironment()
-	stopped := make(chan struct{})
-	cancelEnv.RegisterActivityWithOptions(func(ctx context.Context, id toolapp.WorkID) (tooldomain.ExportJob, error) {
-		defer close(stopped)
-		return activities.RenderExport(ctx, id)
-	}, activity.RegisterOptions{Name: toolflow.RenderActivity})
-	cancelEnv.RegisterActivityWithOptions(activities.FailExportWorkflow, activity.RegisterOptions{Name: toolflow.FailureActivity})
-	cancelEnv.RegisterDelayedCallback(func() {
-		current, err := store.Get(t.Context(), actor, project, cancelJob.ID)
-		if err != nil || current.Status != tooldomain.Running || current.Progress < 20 {
-			t.Fatalf("actual audio renderer was not running at cancellation: %+v %v", current, err)
+	taskID := taskfixture.StartWork(t, db, tooltask.Export, map[string]any{"job_id": cancelJob.ID}, tooltask.ExportHandler(worker, workerStore))
+	// Observe the committed render stage rather than assuming downloads finish
+	// within 100ms under Race or parallel package load. A terminal job before
+	// rendering remains a failure: cancellation must interrupt real processing.
+	var current tooldomain.ExportJob
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		current, err = store.Get(t.Context(), actor, project, cancelJob.ID)
+		if err != nil {
+			t.Fatal(err)
 		}
-		// Progress commits can legitimately advance the revision between GET and
-		// POST. Retry the user control against current facts without weakening
-		// the production compare-and-swap contract.
-		accepted := false
-		for range 8 {
-			cancelled := request(http.MethodPost, "/api/media-exports/"+cancelJob.ID.String()+"/cancel", toolapp.ControlInput{ProjectID: project, Revision: current.Revision})
-			if cancelled.Code == http.StatusAccepted {
-				accepted = true
-				break
-			}
-			if cancelled.Code != http.StatusConflict {
-				t.Fatalf("actual audio cancel request: %d %s", cancelled.Code, cancelled.Body.String())
-			}
-			current, err = store.Get(t.Context(), actor, project, cancelJob.ID)
-			if err != nil || current.Status != tooldomain.Running {
-				t.Fatalf("refresh running cancellation facts: %+v %v", current, err)
-			}
+		if current.Status == tooldomain.Running && current.Progress >= 20 {
+			break
 		}
-		if !accepted {
-			t.Fatal("actual audio cancellation did not acquire the current revision")
+		if (current.Status != tooldomain.Queued && current.Status != tooldomain.Running) || time.Now().After(deadline) {
+			t.Fatalf("actual audio renderer was not running at cancellation: %+v", current)
 		}
-		cancelEnv.SignalWorkflow("cancel", nil)
-	}, 500*time.Millisecond)
-	cancelEnv.ExecuteWorkflow(toolflow.ExportWorkflow, toolapp.WorkID{JobID: cancelJob.ID, Attempt: 1})
-	if cancelEnv.GetWorkflowError() == nil {
-		t.Fatal("actual audio cancellation completed as success")
+		select {
+		case <-t.Context().Done():
+			t.Fatal(t.Context().Err())
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
-	// A Workflow future is not cessation evidence. Wait for the production
-	// Activity to finish all FFmpeg processes, cleanup and fenced release.
-	select {
-	case <-stopped:
-	case <-time.After(5 * time.Second):
-		t.Fatal("actual audio renderer did not stop")
+	// Progress commits can legitimately advance the revision between GET and
+	// POST. Retry the user control against current facts without weakening
+	// the production compare-and-swap contract.
+	accepted := false
+	for range 8 {
+		cancelled := request(http.MethodPost, "/api/media-exports/"+cancelJob.ID.String()+"/cancel", toolapp.ControlInput{ProjectID: project, Revision: current.Revision})
+		if cancelled.Code == http.StatusAccepted {
+			accepted = true
+			break
+		}
+		if cancelled.Code != http.StatusConflict {
+			t.Fatalf("actual audio cancel request: %d %s", cancelled.Code, cancelled.Body.String())
+		}
+		current, err = store.Get(t.Context(), actor, project, cancelJob.ID)
+		if err != nil || current.Status != tooldomain.Running {
+			t.Fatalf("refresh running cancellation facts: %+v %v", current, err)
+		}
 	}
+	if !accepted {
+		t.Fatal("actual audio cancellation did not acquire the current revision")
+	}
+	taskfixture.WaitWork(t, db, tooltask.Export, taskID, 15*time.Second)
 	final, err := store.Get(t.Context(), actor, project, cancelJob.ID)
 	if err != nil || final.Status != tooldomain.Cancelled || final.AssetID != nil {
 		t.Fatalf("actual audio cancellation facts: %+v %v", final, err)

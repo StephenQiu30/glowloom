@@ -1,6 +1,6 @@
 # 织光工程规则
 
-项目为 Glowloom（织光），仓库 `StephenQiu30/glowloom`；内部为 `frontend/`、`backend/`、`canvas-collab/`、`agent-runtime/` 和 `docs/`。Go 模块暂保留 `github.com/StephenQiu30/glowloom-server/backend`，不随 GitHub 仓库更名改动现有导入与生成合同。配置统一使用 `GLOWLOOM_*`，旧 `LV_*` 在过渡期兼容读取；运行资源与数据库名称以实际部署为准。
+项目为 Glowloom（织光），仓库 `StephenQiu30/glowloom`；当前前端、Go 业务后端、协作运行时及文档同仓维护，包含独立 `agent/`。Go 模块暂保留 `github.com/StephenQiu30/glowloom-server/backend`，模块名称不等于旧实现兼容。目标配置只使用 `GLOWLOOM_*`，不保留 `LV_*` 别名；资源名称以实际部署为准。
 
 ## 1. 当前阶段与文件职责
 
@@ -12,11 +12,15 @@
 
 前端现有 Next.js App Router、React、TypeScript strict、pnpm、Tailwind、shadcn/Radix、ESLint/Prettier；后端现有Go、Gin、GORM、Wire、swag。安装版本以包清单和lockfile为准。继续使用工具不等于继续使用旧业务合同或要求所有旧依赖进入新运行架构。
 
-Agent Harness 与多 Agent 创作服务统一在 Go 后端内部原生实现（`backend/internal/agent/`），基于成熟的 LangGraph StateGraph 状态图编排，吸收 BeefTV 工业级 Harness 状态机规则（提案中断挂起、连续写链 CAS、现场快照自愈与步数看门狗）。状态持久化直接采用 PostgreSQL 关系型检查点，应用启动不执行 DDL；模型与业务授权、计费结算由 Go 业务权威完全闭环。不引入独立的 Node.js 宿主服务。
+Agent Harness 与多 Agent 的已确认目标（2026-11-04，SRC-AGH-12）：同仓库独立 `agent/`，TypeScript strict + 官方 Pi Durable，独立构建/测试/容器与进程；通过当前内部 HTTP/SSE 与 Go 业务 API 交互。Agent 单独拥有会话、运行、计划、子 Agent 和恢复状态；Go 只保留身份/审批/预算/模型出站/工具与业务数据权威，不镜像执行状态、不启动或监督 Node。复用 PostgreSQL，使用独立 `agent` schema 与受限角色；Docker Compose 统一启动。项目移除 Temporal，普通后台任务使用数据库工作记录与 Go worker。新架构无旧实现、兼容/双轨/别名/回退。完整合同见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)；代码与 Compose 已按该合同实施；工程和产品接受分别记录在 BACKLOG，不能由设计推定验证通过。
+
+`agent` 服务与根目录 `agent/`、包名 `agent`（private）、Compose/CI `agent`、镜像 `glowloom/agent` 统一命名。技术选型固定为 Node 24 LTS、TypeScript 6 ESM、Fastify 5、TypeBox/官方 type provider、pg、Pino、Vitest、pnpm + tsc；HTTP TypeBox schema 单源生成校验/类型/OpenAPI。精确基线与依赖支持依据唯一见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，实施落到该包清单/锁文件并验证；不升级无关前端或协作服务。
+
+Harness 按[设计32 §7.6](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)直接组合官方 registry/tool/doc/owned conversation；四个同版 Pi 包中 coding-agent 仅提供受控资源 SDK，不运行 CLI 或第二个 AgentSession。运行固定 manifest、显式角色工具名单，模型/工具出口强制校验 Go 授权；第三方 Skill 脚本走 Go 隔离能力。审批/暂停收束后的 continuation 与崩溃恢复原未决任务分别处理，不自写循环或另造插件加载器。
 
 业务按职责组织，`adapter → application → domain`，依赖显式注入，接口由消费方定义。编码与审查遵循AGENTS的Google Go与Vercel/Next.js规范；不预建未来目录、通用框架或空转发层。
 
-后端只有一个进程入口 `backend/cmd/glowloom`。默认以 `--role=api|worker|relay|all` 运行对应角色；身份维护、对象存储维护、Temporal 计划和分区确保分别是 `glowloom identity`、`glowloom storage`、`glowloom temporal setup`、`glowloom partitions ensure`。不保留独立的 `cmd/identity`；全部运维子命令共用当前二进制。镜像入口和用法字符串同为 `glowloom`。
+Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 API、worker、relay 与身份/存储/分区运维；已移除旧工作流初始化命令。独立 Agent 服务有自己的 TypeScript 入口、Dockerfile 与锁文件，生命周期由 Compose 管理；不把“Go 只有一个入口”解释成整个应用必须单进程。
 
 业务实现放在 `backend/internal/<模块>/`：`domain` 只含规则，`application` 编排用例，`adapter/<技术>` 对接 HTTP、数据库、工作流或外部系统。领域与应用不依赖 Gin、GORM，也不调用另一个业务模块的应用服务。跨模块事实由消费方定义小接口。
 
@@ -24,7 +28,7 @@ Agent Harness 与多 Agent 创作服务统一在 Go 后端内部原生实现（`
 
 `backend/internal/app` 的 `package app` 只保留角色进程、路由入口和 Wire 注入。圣经、素材、项目复制、画布、操作等服务的跨模块适配各自放在 `backend/internal/app/<服务>/`，包名与目录一致。这些包只做注入适配，不放领域规则，也不再增加进程入口。身份运行时、身份维护和存储维护保持各自的包，不并入 `package app`。新的服务接线写入对应服务包；不再往 `package app` 增加服务接线文件。
 
-`backend/internal/platform/` 提供配置、日志以及数据库、Redis、Kafka、Temporal、对象存储连接。进程配置读 `GLOWLOOM_*`，兼容读取旧 `LV_*`；同名新键优先，显式空值不会回退旧键。邮件沿用既有 `SMTP_*`。数据库角色、库名、Kafka 主题、Temporal namespace 和对象桶名保持当前部署标识，命令改名不迁移这些资源。
+`backend/internal/platform/` 的目标职责为 Go 配置、日志及 PostgreSQL、Redis、Kafka、对象存储连接，移除 Temporal。Agent 独立拥有 HTTP、Pi、PostgreSQL Storage 与执行生命周期；双方不共享业务数据库模型。配置只接受当前 `GLOWLOOM_*`，不保留旧键回退。实际凭据、数据库角色与既有资源使用现有部署配置；新增受限角色/schema 通过单次审阅的数据变更提供，应用启动不建表。
 
 前端复用组件按 feature 放在 `frontend/src/components/<feature>/`；`components/ui/` 只保留有消费者的 shadcn/Radix 基础组件。当前跨页面复用内容按实际业务职责归属维护，直接导入具体文件，不使用产品拼音目录或统一导出层。
 
@@ -38,21 +42,21 @@ Agent Harness 与多 Agent 创作服务统一在 Go 后端内部原生实现（`
 - `backend/db/schema.sql` 是唯一的数据库结构定义。它只用于空业务库；禁止对已有业务库重放、重建或清理数据。邮箱与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#81-d6-迁移与切换)。
 - 浏览器请求经同站代理；服务端 `GLOWLOOM_BACKEND_ORIGIN` 不进入浏览器。凭据不进入文档、日志、前端包或提交。
 - 默认本地工程验证不发起真实收费生成；fixture、协议握手或页面成功不能代替真实供应商验收。模型可用性以实际配置和适配能力为准。
-- `docker-compose.yml` 是唯一的项目启动入口。运行 `docker compose up -d --build` 启动或更新前端、后端和现有的私有 Yjs 协作运行时，不使用额外 Compose 文件、启动脚本或生产角色拆分配置。后端在同一容器运行 API、worker、relay，通过 `depends_on: service_healthy` 等待协作运行时就绪；仅更新后端使用 `docker compose up -d --build backend`，由 Compose 处理必要依赖。前端访问 `http://localhost:1122`，后端访问 `http://127.0.0.1:1123`，仅这两个宿主端口对外提供应用访问；浏览器 Origin 同步为 `http://localhost:1122`，旧端口和 Origin 环境变量不覆盖开发栈。数据库、Redis、Kafka、Temporal、对象存储及 namespace 复用现有资源，不随应用启动创建或迁移；身份密钥、现有卷和依赖连接配置保留。后端每次启动从只读挂载的当前源码编译，失败即停止；独立 Go 构建缓存卷减少重复编译。纯 Go 更新也可 `docker compose restart backend`，运行中不自动热重载；依赖、Dockerfile、入口或 Compose 配置变更须重新构建并更新容器。Go 工具链与依赖版本以 go.mod、Dockerfile 为准。不把修改文档解释为重启服务授权。
+- `docker-compose.yml` 是唯一部署入口；完成迁移后的 `docker compose up -d --build` 统一启动 frontend、backend、独立 agent 和 canvas-collaboration。Agent 独立镜像及连接池/资源限制，仅在 Compose 网络监听 `agent:4401`，不发布宿主端口；Go 与 Agent 不设置相互 service_healthy 等待、不管理彼此进程。前端仍为 `http://localhost:1122`，Go 为 `http://127.0.0.1:1123`。复用既有 PostgreSQL、Redis、Kafka、对象存储，不创建依赖栈，不保留 Temporal 服务/namespace 配置。当前源码与 Compose 采用此拓扑；已有部署切换须先清结旧任务并离线审阅增量 SQL，应用启动不自动迁移或删除数据。
 - API 生成使用上述 package.json 命令组织标准工具；其他检查使用现有工具直接命令，不新增 shell 脚本或 Makefile。
 
 ## 4. 质量门禁
 
-| 范围       | 适用检查                                                                                                                                                                            |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Go 实现    | gofmt、goimports、go vet、golangci-lint、go test -race、govulncheck；相应契约生成一致性                                                                                             |
-| 前端实现   | 在 frontend 执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证 |
-| Agent 服务 | 在 backend 执行 go test -race -count=1 ./tests/agent/...；真实隔离 PostgreSQL 检查点恢复、提案中断挂起、连续写链 CAS 与看门狗熔断测试 |
-| 文档       | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                  |
+| 范围       | 适用检查                                                                                                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go 实现    | gofmt、goimports、go vet、golangci-lint、go test -race、govulncheck；相应契约生成一致性                                                                                                                 |
+| 前端实现   | 在 frontend 执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证                     |
+| Agent 服务 | 在 agent 独立执行 TypeScript strict、lint、单元/官方 Storage conformance、真实隔离 PostgreSQL 与跨服务测试及构建；Go Agent 边界保留 backend/tests；验证根 owner/grant、可靠控制投递、SSE 一致性与无兼容 |
+| 文档       | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                                      |
 
-默认 CI 保留 backend、frontend 两个并行任务，以业务测试和可构建性为底线：后端运行私有协作包与 Agent 全量测试（使用隔离 PostgreSQL），及一次 `go test -race -count=1 ./...`，保留 Go 默认 vet、编译和 Race 检查；前端运行全量 `pnpm exec vitest run --maxWorkers=2` 及一次 Next.js 生产构建，由构建执行 TypeScript 检查，不启用跳过类型错误。Vitest 最多两个 worker，控制 jsdom 并发资源开销，不放宽测试超时或业务断言。继续使用锁文件安装，并缓存 Go 依赖/构建和 pnpm store。默认 CI 不再安装或运行 golangci-lint、govulncheck、Wire/goimports 生成检查、ESLint、测试目录布局检查，也不重复执行 next typegen/tsc；这些工具仍按改动风险在本地使用，接口或接线变更仍需相应生成一致性验证。不增加测试矩阵、覆盖率阈值、定时扫描或应用镜像构建。
+当前 CI 为 backend、frontend、agent 三个独立任务，各服务独立验证，以业务测试和可构建性为底线：后端运行私有协作包与 Agent 全量测试（使用隔离 PostgreSQL），及一次 `go test -race -count=1 ./...`，保留 Go 默认 vet、编译和 Race 检查；前端运行全量 `pnpm exec vitest run --maxWorkers=2` 及一次 Next.js 生产构建，由构建执行 TypeScript 检查，不启用跳过类型错误。Vitest 最多两个 worker，控制 jsdom 并发资源开销，不放宽测试超时或业务断言。继续使用锁文件安装，并缓存 Go 依赖/构建和 pnpm store。默认 CI 不再安装或运行 golangci-lint、govulncheck、Wire/goimports 生成检查、ESLint、测试目录布局检查，也不重复执行 next typegen/tsc；这些工具仍按改动风险在本地使用，接口或接线变更仍需相应生成一致性验证。不增加测试矩阵、覆盖率阈值、定时扫描或应用镜像构建。
 
-后端 CI 继续启动隔离 PostgreSQL 18，按空库 schema 初始化并配置画布数据库测试及受限运行角色，保留 FFmpeg 支撑媒体业务测试。画布数据库配置缺失直接失败，不允许以跳过替代通过；不缩减既有业务断言或测试范围。Redis、Kafka、对象存储和 Temporal 的专项集成仍按模块变更在相应环境执行；默认 CI 通过不代表这些专项验收或生产可用性已经通过。
+后端 CI 继续使用隔离 PostgreSQL 和 FFmpeg 覆盖对应 Go 业务；Agent CI 使用同一 PostgreSQL 服务的独立测试库/受限角色执行官方 Storage 与故障恢复测试，不以缺配置跳过代替通过。Agent 新增独立检查任务，不把 TypeScript 服务测试塞入 Go 或前端构建；不增加矩阵/覆盖率阈值或额外基础设施。Redis、Kafka、对象存储及跨服务专项验证按变更风险执行；默认 CI 通过不代表实际供应商、费用或完整产品接受。
 
 验证范围与修改风险匹配。文档变更不需要重跑无关业务测试；UI/工程检查、隔离存储、真实邮件、实际数据库迁移和产品接受分别记录。缺少外部条件或未执行的检查不得报告通过。
 

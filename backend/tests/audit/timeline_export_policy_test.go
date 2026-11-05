@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	"github.com/google/uuid"
+
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 )
 
 func TestTimelineExportRecordedPolicyAcceptsArtifactIdentityWithoutPrivatePayload(t *testing.T) {

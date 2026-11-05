@@ -17,54 +17,30 @@ import (
 
 type projectMediaSigner struct {
 	registry *objectstorage.Registry
-	legacy   *objectstorage.Client
 }
 
-// NewProjectMediaSigner keeps exact saved profiles distinct from original keys.
-func NewProjectMediaSigner(registry *objectstorage.Registry, legacy *objectstorage.Client) application.ProjectMediaSigner {
-	return projectMediaSigner{registry: registry, legacy: legacy}
+// NewProjectMediaSigner signs media through its saved physical route.
+func NewProjectMediaSigner(registry *objectstorage.Registry) application.ProjectMediaSigner {
+	return projectMediaSigner{registry: registry}
 }
 func (s projectMediaSigner) SignProjectMedia(ctx context.Context, f application.ProjectMediaObject, ttl time.Duration) (application.ProviderReference, error) {
-	if f.AssetID == [16]byte{} || f.ProjectID == [16]byte{} || f.Key == "" || f.ByteSize < 1 || f.ByteSize > 500<<20 || len(f.SHA256) != 64 || ttl < time.Second || ttl > 15*time.Minute {
+	if f.AssetID == [16]byte{} || f.ProjectID == [16]byte{} || f.LocationID == nil || *f.LocationID == [16]byte{} || f.Key == "" || f.ByteSize < 1 || f.ByteSize > 500<<20 || len(f.SHA256) != 64 || ttl < time.Second || ttl > 15*time.Minute {
 		return application.ProviderReference{}, application.ErrWorkflowInputNotReady
 	}
-	var reader io.ReadCloser
-	var err error
-	ref := objectstorage.Ref{ProfileID: f.ProfileID, Bucket: f.Bucket, Key: f.Key}
-	var signedURL string
-	if f.LocationID != nil {
-		if s.registry == nil {
-			return application.ProviderReference{}, application.ErrWorkflowInputNotReady
-		}
-		grant, err := s.registry.PresignGet(ctx, ref, ttl)
-		if err != nil {
-			return application.ProviderReference{}, err
-		}
-		signedURL = grant.URL
-	} else {
-		if s.legacy == nil {
-			return application.ProviderReference{}, application.ErrWorkflowInputNotReady
-		}
-		signedURL, err = s.legacy.PresignGet(ctx, f.Key, ttl)
-		if err != nil {
-			return application.ProviderReference{}, err
-		}
+	if s.registry == nil {
+		return application.ProviderReference{}, application.ErrWorkflowInputNotReady
 	}
+	ref := objectstorage.Ref{ProfileID: f.ProfileID, Bucket: f.Bucket, Key: f.Key}
+	grant, err := s.registry.PresignGet(ctx, ref, ttl)
+	if err != nil {
+		return application.ProviderReference{}, err
+	}
+	signedURL := grant.URL
 	inline := f.Kind == "image" && privateImageURL(signedURL)
 	if inline && f.ByteSize > 30<<20 {
 		return application.ProviderReference{}, application.ErrWorkflowInputNotReady
 	}
-	if f.LocationID != nil {
-		if s.registry == nil {
-			return application.ProviderReference{}, application.ErrWorkflowInputNotReady
-		}
-		reader, err = s.registry.Get(ctx, ref)
-	} else {
-		if s.legacy == nil {
-			return application.ProviderReference{}, application.ErrWorkflowInputNotReady
-		}
-		reader, err = s.legacy.Get(ctx, f.Key)
-	}
+	reader, err := s.registry.Get(ctx, ref)
 	if err != nil {
 		return application.ProviderReference{}, err
 	}

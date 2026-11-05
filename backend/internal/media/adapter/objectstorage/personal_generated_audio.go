@@ -34,8 +34,8 @@ func (s *PersonalGeneratedAudioObjects) CreateGeneratedAudioObject(ctx context.C
 		return domain.ObjectLocation{}, application.ErrUnavailable
 	}
 	ref := domain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: key}
-	if intent.ID == uuid.Nil || intent.Owner.Validate() != nil || intent.Owner.Kind != "subject-voice" ||
-		intent.State != "open" || strings.TrimSpace(intent.ConfigRevision) == "" || ref.Validate() != nil ||
+	if intent.ID == uuid.Nil || intent.Owner.Validate() != nil || intent.Owner.Kind != application.StorageWorkKindSubjectVoice ||
+		intent.State != application.StorageWorkOpen || strings.TrimSpace(intent.ConfigRevision) == "" || ref.Validate() != nil ||
 		!strings.HasPrefix(key, "personal/") || !strings.Contains(key, "/audio/") ||
 		file == nil || file.File == nil || file.Size < 1 || file.Size > application.MaxUploadAudioBytes ||
 		len(file.SHA256) != 64 || (file.MIMEType != "audio/mpeg" && file.MIMEType != "image/png") {
@@ -47,7 +47,7 @@ func (s *PersonalGeneratedAudioObjects) CreateGeneratedAudioObject(ctx context.C
 	if err != nil {
 		return domain.ObjectLocation{}, err
 	}
-	if location.ID == uuid.Nil || location.Ref != ref || (location.State != "reserved" && location.State != "present" && location.State != "unknown") {
+	if location.ID == uuid.Nil || location.Ref != ref || (location.State != domain.ObjectLocationReserved && location.State != domain.ObjectLocationPresent && location.State != domain.ObjectLocationUnknown) {
 		return location, application.ErrStorageIdentityConflict
 	}
 	if err := s.locations.BeginWorkWrite(ctx, intent.ID, location); err != nil {
@@ -61,23 +61,23 @@ func (s *PersonalGeneratedAudioObjects) CreateGeneratedAudioObject(ctx context.C
 	body := io.NewSectionReader(file.File, 0, file.Size)
 	err = s.registry.PutIfAbsent(ctx, transportRef(ref), body, file.Size, file.MIMEType, file.SHA256)
 	if err != nil && !errors.Is(err, platform.ErrObjectExists) {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, err
 	}
 	info, err := s.registry.Stat(ctx, transportRef(ref))
 	if err != nil {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, err
 	}
 	if info.Size != file.Size || info.ContentType != file.MIMEType || info.SHA256 != file.SHA256 {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, application.ErrObjectMismatch
 	}
 	if err := s.locations.ConfirmWorkLocation(ctx, intent.ID, location, application.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256}); err != nil {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, err
 	}
-	location.State = "present"
+	location.State = domain.ObjectLocationPresent
 	location.ByteSize, location.MIMEType, location.SHA256 = &info.Size, &info.ContentType, &info.SHA256
 	return location, nil
 }

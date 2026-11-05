@@ -6,14 +6,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -30,24 +32,20 @@ func libraryCommandHash(c application.LibraryCommand) (string, error) {
 }
 
 func libraryCommandLock(tx *gorm.DB, actor, key uuid.UUID) error {
-	return tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-library-command/"+actor.String()+"/"+key.String()).Error
+	return lockStorageIdempotencyKey(tx, storageIdempotencyLibrary, actor, key)
 }
 
 func libraryReplay(tx *gorm.DB, actor identityapp.Principal, c application.LibraryCommand, hash string) (*application.LibraryReceipt, error) {
-	var row struct {
-		OrgID, LibraryID      uuid.UUID
-		Action, RequestSHA256 string
-		ResponseBody          []byte
+	var row libraryCommandRecord
+	read := tx.Where(map[string]any{"actor_id": actor.ID, "idem_key": c.Key}).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-	read := tx.Raw(`SELECT org_id,library_id,action,request_sha256,response_body FROM media.library_command WHERE actor_id=? AND idem_key=?`, actor.ID, c.Key).Scan(&row)
 	if read.Error != nil {
 		return nil, fmt.Errorf("read permanent media library command: %w", read.Error)
 	}
-	if read.RowsAffected == 0 {
-		return nil, nil
-	}
 	id, _ := c.Scope.Identity(actor.OrgID, actor.ID)
-	if row.OrgID != actor.OrgID || row.LibraryID != id || row.Action != c.Action || row.RequestSHA256 != hash {
+	if row.OrgID != actor.OrgID || row.LibraryID != id || row.Action != string(c.Action) || row.RequestSHA256 != hash {
 		return nil, application.ErrLibraryKeyConflict
 	}
 	var receipt application.LibraryReceipt
@@ -123,7 +121,8 @@ func (s *LibraryStore) ApplyLibraryCommand(ctx context.Context, actor identityap
 		if c.Scope.Kind == domain.LibraryPersonal {
 			personal = &actor.ID
 		}
-		if err := tx.Exec(`INSERT INTO media.library(id,kind,org_id,project_id,personal_actor_id) VALUES(?,?,?,?,?) ON CONFLICT(id) DO NOTHING`, id, c.Scope.Kind, actor.OrgID, c.Scope.ProjectID, personal).Error; err != nil {
+		libraryIdentity := libraryIdentityRecord{ID: id, Kind: string(c.Scope.Kind), OrgID: actor.OrgID, ProjectID: c.Scope.ProjectID, PersonalActorID: personal}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(&libraryIdentity).Error; err != nil {
 			return fmt.Errorf("create media library: %w", err)
 		}
 		library, err := readLibrary(tx, actor, c.Scope, true)
@@ -142,14 +141,17 @@ func (s *LibraryStore) ApplyLibraryCommand(ctx context.Context, actor identityap
 		if now.IsZero() {
 			return application.ErrUnavailable
 		}
-		if strings.HasSuffix(c.Action, "folder") {
+		switch c.Action {
+		case application.LibraryActionCreateFolder, application.LibraryActionUpdateFolder, application.LibraryActionDeleteFolder:
 			if err := applyLibraryFolder(tx, actor, c, id, folders, now, &result); err != nil {
 				return err
 			}
-		} else if err := applyLibraryItems(tx, actor, c, id, folders, now, &result); err != nil {
-			return err
+		default:
+			if err := applyLibraryItems(tx, actor, c, id, folders, now, &result); err != nil {
+				return err
+			}
 		}
-		if err := libraryChanged(tx, `UPDATE media.library SET revision=revision+1,update_time=? WHERE id=? AND revision=?`, now, id, library.Revision); err != nil {
+		if err := updateOne(tx, "media.library", map[string]any{"id": id, "revision": library.Revision}, map[string]any{"revision": gorm.Expr("revision + ?", 1), "update_time": now}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		if c.Scope.Kind == domain.LibraryProject {
@@ -167,7 +169,8 @@ func (s *LibraryStore) ApplyLibraryCommand(ctx context.Context, actor identityap
 			return application.ErrUnavailable
 		}
 		commandID := uuid.NewSHA1(c.Key, []byte("media-library-command/"+actor.ID.String()))
-		if err := libraryChanged(tx, `INSERT INTO media.library_command(id,org_id,actor_id,library_id,idem_key,action,request_sha256,response_body) VALUES(?,?,?,?,?,?,?,?)`, commandID, actor.OrgID, actor.ID, id, c.Key, c.Action, hash, body); err != nil {
+		command := libraryCommandRecord{ID: commandID, OrgID: actor.OrgID, ActorID: actor.ID, LibraryID: id, IdemKey: c.Key, Action: string(c.Action), RequestSHA256: hash, ResponseBody: body}
+		if err := requireOne(tx.Create(&command), application.ErrUnavailable); err != nil {
 			return err
 		}
 		// Existing audit writer is INSERT-only. Content, notes and file names never
@@ -181,7 +184,8 @@ func (s *LibraryStore) ApplyLibraryCommand(ctx context.Context, actor identityap
 			Revision  int64     `json:"revision"`
 			Count     int       `json:"count"`
 		}{id, result.Revision, len(result.Items)})
-		return libraryChanged(tx, `INSERT INTO audit.audit_log(id,org_id,project_id,actor_id,actor_kind,action,object_type,object_id,after) VALUES(?,?,?,?,'user',?,'media.library',?,?::jsonb)`, commandID, actor.OrgID, project, actor.ID, "media.library."+c.Action, id.String(), string(safe))
+		audit := libraryAuditRecord{ID: commandID, OrgID: actor.OrgID, ProjectID: project, ActorID: actor.ID, ActorKind: "user", Action: "media.library." + string(c.Action), ObjectType: "media.library", ObjectID: id.String(), After: jsonDocument(safe), CreateTime: now, UpdateTime: now}
+		return requireOne(tx.Create(&audit), application.ErrUnavailable)
 	})
 	return result, err
 }
@@ -192,11 +196,11 @@ func libraryFolderExists(folders []domain.LibraryFolder, id *uuid.UUID) bool {
 
 func applyLibraryFolder(tx *gorm.DB, actor identityapp.Principal, c application.LibraryCommand, library uuid.UUID, folders []domain.LibraryFolder, now time.Time, result *application.LibraryReceipt) error {
 	var folder domain.LibraryFolder
-	if c.Action == "create_folder" {
+	if c.Action == application.LibraryActionCreateFolder {
 		if len(folders) >= 4096 {
 			return domain.ErrInvalidLibrary
 		}
-		folder = domain.LibraryFolder{ID: uuid.NewSHA1(c.Key, []byte("media-library-folder/"+actor.ID.String()+"/"+library.String())), LibraryID: library, Kind: c.Scope.Kind, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		folder = domain.LibraryFolder{ID: uuid.NewSHA1(c.Key, []byte("media-library-folder/"+actor.ID.String()+"/"+library.String())), LibraryID: library, Kind: c.Scope.Kind, Revision: domain.LibraryFolderInitialRevision, CreatedAt: now, UpdatedAt: now}
 		for _, existing := range folders {
 			if existing.Position >= folder.Position {
 				folder.Position = existing.Position + 1
@@ -213,39 +217,40 @@ func applyLibraryFolder(tx *gorm.DB, actor identityapp.Principal, c application.
 		if !found {
 			return application.ErrNotFound
 		}
-		if folder.Revision != c.ExpectedFolderRevision || folder.Revision >= 2147483647 {
+		if folder.Revision != c.ExpectedFolderRevision || folder.Revision >= math.MaxInt32 {
 			return application.ErrLibraryConflict
 		}
 	}
-	if c.Action == "delete_folder" {
+	if c.Action == application.LibraryActionDeleteFolder {
 		if c.Scope.Kind == domain.LibraryProject {
 			if slices.ContainsFunc(folders, func(f domain.LibraryFolder) bool { return f.ParentID != nil && *f.ParentID == folder.ID }) {
 				return application.ErrLibraryFolderNotEmpty
 			}
 			var count int64
-			if err := tx.Raw(`SELECT count(*) FROM media.library_item WHERE library_id=? AND folder_id=?`, library, folder.ID).Scan(&count).Error; err != nil {
+			if err := tx.Model(&libraryItemRow{}).Where(map[string]any{"library_id": library, "folder_id": folder.ID}).Count(&count).Error; err != nil {
 				return err
 			}
 			if count != 0 {
 				return application.ErrLibraryFolderNotEmpty
 			}
 		} else {
-			if err := tx.Exec(`UPDATE media.library_item SET folder_id=NULL,revision=revision+1,update_time=? WHERE library_id=? AND folder_id=?`, now, library, folder.ID).Error; err != nil {
+			if err := tx.Model(&libraryItemRow{}).Where(map[string]any{"library_id": library, "folder_id": folder.ID}).Updates(map[string]any{"folder_id": nil, "revision": gorm.Expr("revision + ?", 1), "update_time": now}).Error; err != nil {
 				return err
 			}
 		}
-		return libraryChanged(tx, `DELETE FROM media.library_folder WHERE id=? AND library_id=? AND revision=?`, folder.ID, library, folder.Revision)
+		return requireOne(tx.Where(map[string]any{"id": folder.ID, "library_id": library, "revision": folder.Revision}).Delete(&libraryFolderRow{}), application.ErrLibraryConflict)
 	}
 	folder.ParentID, folder.Name, folder.Style, folder.Theme = c.Folder.ParentID, c.Folder.Name, c.Folder.Style, c.Folder.Theme
 	if err := domain.ValidateLibraryFolderPlacement(folder, folders); err != nil {
 		return err
 	}
-	if c.Action == "create_folder" {
-		if err := libraryChanged(tx, `INSERT INTO media.library_folder(id,library_id,library_kind,parent_id,name,name_key,position,style,theme,revision,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, folder.ID, library, folder.Kind, folder.ParentID, folder.Name, folder.NameKey(), folder.Position, folder.Style, folder.Theme, folder.Revision, now, now); err != nil {
+	if c.Action == application.LibraryActionCreateFolder {
+		row := libraryFolderRow{ID: folder.ID, LibraryID: library, LibraryKind: string(folder.Kind), ParentID: folder.ParentID, Name: folder.Name, NameKey: folder.NameKey(), Position: folder.Position, Style: folder.Style, Theme: folder.Theme, Revision: folder.Revision, CreateTime: now, UpdateTime: now}
+		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
 	} else {
-		if err := libraryChanged(tx, `UPDATE media.library_folder SET parent_id=?,name=?,name_key=?,style=?,theme=?,revision=revision+1,update_time=? WHERE id=? AND library_id=? AND revision=?`, folder.ParentID, folder.Name, folder.NameKey(), folder.Style, folder.Theme, now, folder.ID, library, folder.Revision); err != nil {
+		if err := updateOne(tx, "media.library_folder", map[string]any{"id": folder.ID, "library_id": library, "revision": folder.Revision}, map[string]any{"parent_id": folder.ParentID, "name": folder.Name, "name_key": folder.NameKey(), "style": folder.Style, "theme": folder.Theme, "revision": gorm.Expr("revision + ?", 1), "update_time": now}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		folder.Revision++
@@ -263,11 +268,14 @@ type libraryItemRow struct {
 	Tags                   []byte
 	SourceLabel, Note      string
 	Favorite               bool
-	CatalogState           string
+	CatalogState           domain.LibraryItemState
 	TrashedAt              *time.Time
+	PurgedAt               *time.Time
 	Position, Revision     int64
 	CreateTime, UpdateTime time.Time
 }
+
+func (libraryItemRow) TableName() string { return "media.library_item" }
 
 func (r libraryItemRow) item() (domain.LibraryItem, error) {
 	var tags []string
@@ -286,7 +294,7 @@ func lockLibraryItems(tx *gorm.DB, actor identityapp.Principal, scope domain.Lib
 		return nil, err
 	}
 	var rows []libraryItemRow
-	if err := tx.Raw(`SELECT * FROM media.library_item WHERE library_id=? AND id IN ? AND purged_at IS NULL ORDER BY id FOR UPDATE`, library, ids).Scan(&rows).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("library_id = ? AND id IN ? AND purged_at IS NULL", library, ids).Order("id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	items := make(map[uuid.UUID]domain.LibraryItem, len(ids))
@@ -296,7 +304,7 @@ func lockLibraryItems(tx *gorm.DB, actor identityapp.Principal, scope domain.Lib
 		if err != nil {
 			return nil, err
 		}
-		if i.State == "removed" {
+		if i.State == domain.LibraryItemStateRemoved {
 			return nil, application.ErrNotFound
 		}
 		items[i.ID] = i
@@ -310,14 +318,14 @@ func lockLibraryItems(tx *gorm.DB, actor identityapp.Principal, scope domain.Lib
 		}
 	}
 	if len(assets) != 0 {
-		query := `SELECT * FROM media.media_asset WHERE id IN ? AND project_id=? AND personal_actor_id IS NULL AND personal_org_id IS NULL ORDER BY id FOR UPDATE`
-		args := []any{assets, scope.ProjectID}
+		query := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id IN ?", assets)
 		if scope.Kind == domain.LibraryPersonal {
-			query = `SELECT * FROM media.media_asset WHERE id IN ? AND project_id IS NULL AND personal_org_id=? AND personal_actor_id=? ORDER BY id FOR UPDATE`
-			args = []any{assets, actor.OrgID, actor.ID}
+			query = query.Where(map[string]any{"project_id": nil, "personal_org_id": actor.OrgID, "personal_actor_id": actor.ID})
+		} else {
+			query = query.Where(map[string]any{"project_id": scope.ProjectID, "personal_org_id": nil, "personal_actor_id": nil})
 		}
 		var binary []assetRow
-		if err := tx.Raw(query, args...).Scan(&binary).Error; err != nil {
+		if err := query.Order("id").Find(&binary).Error; err != nil {
 			return nil, err
 		}
 		found := make(map[uuid.UUID]bool, len(binary))
@@ -343,7 +351,11 @@ func lockLibraryItems(tx *gorm.DB, actor identityapp.Principal, scope domain.Lib
 					title = string(runes[:240])
 				}
 				id := a.ID
-				items[id] = domain.LibraryItem{ID: id, LibraryID: library, AssetID: &id, Title: title, Category: "material", Tags: []string{}, State: "active", CreatedAt: a.CreateTime, UpdatedAt: a.UpdateTime}
+				item := domain.LibraryItem{ID: id, LibraryID: library, AssetID: &id, Title: title, Category: domain.LibraryItemCategoryMaterial, Tags: []string{}, State: domain.LibraryItemStateActive, Revision: domain.LibraryItemInitialRevision, CreatedAt: a.CreateTime, UpdatedAt: a.UpdateTime}
+				if err := persistLibraryItem(tx, item, 0); err != nil {
+					return nil, err
+				}
+				items[id] = item
 			}
 		}
 		for _, id := range assets {
@@ -371,16 +383,28 @@ func persistLibraryItem(tx *gorm.DB, item domain.LibraryItem, previous int64) er
 	if err != nil {
 		return err
 	}
+	values := map[string]any{"id": item.ID, "library_id": item.LibraryID, "asset_id": item.AssetID, "plain_text": item.PlainText, "folder_id": item.FolderID, "title": item.Title, "category": item.Category, "tags": jsonDocument(tags), "source_label": item.SourceLabel, "note": item.Note, "favorite": item.Favorite, "catalog_state": item.State, "trashed_at": item.TrashedAt, "position": item.Position, "revision": item.Revision, "create_time": item.CreatedAt, "update_time": item.UpdatedAt}
 	if previous == 0 {
-		return libraryChanged(tx, `INSERT INTO media.library_item(id,library_id,asset_id,plain_text,folder_id,title,category,tags,source_label,note,favorite,catalog_state,trashed_at,position,revision,create_time,update_time) VALUES(?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?,?,?)`, item.ID, item.LibraryID, item.AssetID, item.PlainText, item.FolderID, item.Title, item.Category, string(tags), item.SourceLabel, item.Note, item.Favorite, item.State, item.TrashedAt, item.Position, item.Revision, item.CreatedAt, item.UpdatedAt)
+		result := tx.Table("media.library_item").Create(values)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return application.ErrLibraryConflict
+		}
+		return nil
 	}
-	return libraryChanged(tx, `UPDATE media.library_item SET plain_text=?,folder_id=?,title=?,category=?,tags=?::jsonb,source_label=?,note=?,favorite=?,catalog_state=?,trashed_at=?,position=?,revision=?,update_time=? WHERE id=? AND library_id=? AND revision=?`, item.PlainText, item.FolderID, item.Title, item.Category, string(tags), item.SourceLabel, item.Note, item.Favorite, item.State, item.TrashedAt, item.Position, item.Revision, item.UpdatedAt, item.ID, item.LibraryID, previous)
+	delete(values, "id")
+	delete(values, "library_id")
+	delete(values, "asset_id")
+	delete(values, "create_time")
+	return requireOne(tx.Model(&libraryItemRow{}).Where(map[string]any{"id": item.ID, "library_id": item.LibraryID, "revision": previous}).Updates(values), application.ErrLibraryConflict)
 }
 
 func applyLibraryItems(tx *gorm.DB, actor identityapp.Principal, c application.LibraryCommand, library uuid.UUID, folders []domain.LibraryFolder, now time.Time, result *application.LibraryReceipt) error {
 	var targets []application.LibraryItemRevision
 	switch {
-	case c.Action == "create_text":
+	case c.Action == application.LibraryActionCreateText:
 		targets = []application.LibraryItemRevision{{ID: uuid.NewSHA1(c.Key, []byte("media-library-text/"+actor.ID.String()+"/"+library.String()))}}
 	case c.ItemID != nil:
 		targets = []application.LibraryItemRevision{{ID: *c.ItemID, Revision: c.ExpectedItemRevision}}
@@ -388,8 +412,8 @@ func applyLibraryItems(tx *gorm.DB, actor identityapp.Principal, c application.L
 		targets = slices.Clone(c.Items)
 	}
 	items := make(map[uuid.UUID]domain.LibraryItem, len(targets))
-	if c.Action == "create_text" {
-		items[targets[0].ID] = domain.LibraryItem{ID: targets[0].ID, LibraryID: library, PlainText: c.Metadata.PlainText, State: "active", CreatedAt: now, UpdatedAt: now}
+	if c.Action == application.LibraryActionCreateText {
+		items[targets[0].ID] = domain.LibraryItem{ID: targets[0].ID, LibraryID: library, PlainText: c.Metadata.PlainText, State: domain.LibraryItemStateActive, CreatedAt: now, UpdatedAt: now}
 	} else {
 		ids := make([]uuid.UUID, 0, len(targets))
 		for _, target := range targets {
@@ -407,36 +431,36 @@ func applyLibraryItems(tx *gorm.DB, actor identityapp.Principal, c application.L
 	// Validate the entire batch before the first item write.
 	for _, target := range targets {
 		item := items[target.ID]
-		if item.Revision != target.Revision || item.Revision >= 2147483647 {
+		if item.Revision != target.Revision || item.Revision >= math.MaxInt32 {
 			return application.ErrLibraryConflict
 		}
 		switch c.Action {
-		case "create_text", "update_item":
+		case application.LibraryActionCreateText, application.LibraryActionUpdateItem:
 			m := c.Metadata
 			if (item.AssetID == nil) != (m.PlainText != nil) || c.Scope.Kind == domain.LibraryProject && m.Favorite {
 				return domain.ErrInvalidLibrary
 			}
 			item.PlainText, item.FolderID, item.Title, item.Category, item.Tags, item.SourceLabel, item.Note, item.Favorite = m.PlainText, m.FolderID, m.Title, m.Category, m.Tags, m.SourceLabel, m.Note, m.Favorite
-		case "move_items":
-			if item.State != "active" {
+		case application.LibraryActionMoveItems:
+			if item.State != domain.LibraryItemStateActive {
 				return domain.ErrMediaStateConflict
 			}
 			item.FolderID = c.TargetFolderID
-		case "recycle_items":
-			if item.State != "active" {
+		case application.LibraryActionRecycleItems:
+			if item.State != domain.LibraryItemStateActive {
 				return domain.ErrMediaStateConflict
 			}
-			item.State, item.TrashedAt = "trashed", &now
-		case "restore_items":
-			if item.State != "trashed" {
+			item.State, item.TrashedAt = domain.LibraryItemStateTrashed, &now
+		case application.LibraryActionRestoreItems:
+			if item.State != domain.LibraryItemStateTrashed {
 				return domain.ErrMediaStateConflict
 			}
-			item.State, item.TrashedAt = "active", nil
-		case "remove_items":
-			if item.State != "active" {
+			item.State, item.TrashedAt = domain.LibraryItemStateActive, nil
+		case application.LibraryActionRemoveItems:
+			if item.State != domain.LibraryItemStateActive {
 				return domain.ErrMediaStateConflict
 			}
-			item.State, item.FolderID = "removed", nil
+			item.State, item.FolderID = domain.LibraryItemStateRemoved, nil
 		default:
 			return domain.ErrInvalidLibrary
 		}
@@ -457,11 +481,11 @@ func applyLibraryItems(tx *gorm.DB, actor identityapp.Principal, c application.L
 		}
 		kind := "text"
 		if item.AssetID != nil {
-			var actual string
-			if err := tx.Raw(`SELECT kind FROM media.media_asset WHERE id=?`, *item.AssetID).Scan(&actual).Error; err != nil {
+			var asset assetRow
+			if err := tx.Select("kind").Where("id = ?", *item.AssetID).Take(&asset).Error; err != nil {
 				return err
 			}
-			kind = actual
+			kind = asset.Kind
 		}
 		result.Items = append(result.Items, application.LibraryItemChange{ID: item.ID, AssetID: item.AssetID, FolderID: item.FolderID, Kind: kind, State: item.State, TrashedAt: item.TrashedAt, Revision: item.Revision})
 	}

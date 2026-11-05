@@ -37,7 +37,7 @@ func assetFinalTeam(t *testing.T, db *gorm.DB, actor identity.Principal, project
 func assetFinalOperation(t *testing.T, db *gorm.DB, actor identity.Principal, project uuid.UUID, capability, kind string) (uuid.UUID, []uuid.UUID) {
 	t.Helper()
 	id := uuid.New()
-	if err := db.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,region)VALUES(?,?,'agent_session',?,'test',repeat('a',64),'agent','completed','domestic')`, id, project, capability).Error; err != nil {
+	if err := db.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,region,model_profile_version_id)VALUES(?,?,'free',?,'test',repeat('a',64),'agent','completed','domestic',gen_random_uuid())`, id, project, capability).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO operation.quote_request(org_id,actor_id,request_id,fingerprint,result)VALUES(?,?,?,decode(repeat('ab',32),'hex'),jsonb_build_object('operation_id',?::text))`, actor.OrgID, actor.ID, uuid.New(), id.String()).Error; err != nil {

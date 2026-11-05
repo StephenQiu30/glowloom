@@ -19,13 +19,13 @@ func (s *ProjectCopyStore) ReferencedMedia(ctx context.Context, actor identityap
 		if err := rejectPendingWrite(tx, b.OrgID, b.SourceProjectID); err != nil {
 			return err
 		}
-		var rows []struct{ ID uuid.UUID }
-		if err := tx.Raw(`SELECT DISTINCT media_asset_id AS id FROM script.script_source WHERE org_id=? AND project_id=? AND media_asset_id IS NOT NULL ORDER BY media_asset_id`, b.OrgID, b.SourceProjectID).Scan(&rows).Error; err != nil {
+		var ids []uuid.UUID
+		if err := tx.Model(&sourceRow{}).
+			Where("org_id = ? AND project_id = ? AND media_asset_id IS NOT NULL", b.OrgID, b.SourceProjectID).
+			Distinct("media_asset_id").Order("media_asset_id").Pluck("media_asset_id", &ids).Error; err != nil {
 			return err
 		}
-		for _, row := range rows {
-			result = append(result, row.ID)
-		}
+		result = append(result, ids...)
 		return nil
 	})
 	return result, err

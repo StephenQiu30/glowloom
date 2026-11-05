@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
 	"github.com/gin-gonic/gin"
@@ -32,10 +33,10 @@ import (
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/http"
 	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 
 // The local HTTP server exercises the actual object SDK and integrity checks.
@@ -68,11 +69,11 @@ func subjectStorage(t *testing.T) *subjectObjectServer {
 		}
 	}))
 	t.Cleanup(server.Close)
-	client, err := objectstorage.Open(server.URL, "subject-fixture", "synthetic-fixture-access", "synthetic-fixture-secret", "us-east-1")
+	client, err := storagefixture.Open(t, server.URL, "subject-fixture")
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.objects = subjectwire.Objects{Legacy: client}
+	f.objects = subjectwire.UseRegistry(client)
 	return f
 }
 
@@ -98,7 +99,8 @@ func subjectStoredPNG(t *testing.T, owner *gorm.DB, actor identity.Principal, st
 	digest := sha256.Sum256(data)
 	id := uuid.New()
 	key := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/2026/10/" + id.String() + ".png"
-	if err := owner.Exec(`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status,width,height) VALUES(?,?,?,'image','upload','ready',?,'原图.png','image/png',?,?,'passed',2,2)`, id, actor.OrgID, actor.ID, key, len(data), hex.EncodeToString(digest[:])).Error; err != nil {
+	locationID := seedSubjectLocation(t, owner, key, "test-main", "subject-fixture")
+	if err := owner.Exec(`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,moderation_status,width,height) VALUES(?,?,?,'image','upload','ready',?,?,'原图.png','image/png',?,?,'passed',2,2)`, id, actor.OrgID, actor.ID, key, locationID, len(data), hex.EncodeToString(digest[:])).Error; err != nil {
 		t.Fatal(err)
 	}
 	storage.put(key, data)
@@ -248,22 +250,16 @@ func TestSubjectAppPersonalAdoptionTeamReuseAndExport(t *testing.T) {
 		t.Fatal("export accepted changed original bytes", err)
 	}
 	storage.put(key, original)
-	// Simulate an administrative owner reassignment with valid new owner path,
-	// preserving asset/revision/hash. The original immutable grant cannot follow it.
+	// The final ledger rejects replacing an asset's admitted physical object.
+	// Source owner mismatch rejection remains covered by the bound-source unit cases.
 	newKey := "personal/" + b.OrgID.String() + "/" + b.ID.String() + "/image/2026/10/" + asset.String() + ".png"
-	if err := owner.Exec(`UPDATE media.media_asset SET personal_org_id=?,personal_actor_id=?,object_key=? WHERE id=?`, b.OrgID, b.ID, newKey, asset).Error; err != nil {
-		t.Fatal(err)
+	newLocationID := seedSubjectLocation(t, owner, newKey, "test-main", "subject-fixture")
+	err = owner.Exec(`UPDATE media.media_asset SET personal_org_id=?,personal_actor_id=?,object_key=?,object_location_id=? WHERE id=?`, b.OrgID, b.ID, newKey, newLocationID, asset).Error
+	var bindingError *pgconn.PgError
+	if !errors.As(err, &bindingError) || bindingError.Code != "23514" {
+		t.Fatal("immutable source ownership guard was not enforced", err)
 	}
-	storage.put(newKey, original)
-	before = storage.count()
-	if _, err := files.Export(t.Context(), teamB, selection); !errors.Is(err, media.ErrNotFound) || storage.count() != before {
-		t.Fatal("frozen binding followed reassigned original ownership", err)
-	}
-	input.ExpectedRevision = updated.Revision
-	input.Primary.BindingID = &updated.Primary.BindingID
-	if _, err := service.Save(t.Context(), teamB, shared.ID, uuid.New(), input); !errors.Is(err, media.ErrNotFound) {
-		t.Fatal("save reused reassigned source ownership", err)
-	}
+	assertSubjectExport(t, files, teamB, selection, original, shared.Primary.BindingID)
 }
 
 func assertSubjectExport(t *testing.T, files subject.Files, actor identity.Principal, in subject.ExportInput, original []byte, binding uuid.UUID) {
@@ -343,7 +339,7 @@ func TestSubjectAppSourceLibraryKeepsTeamBrowsingPersonal(t *testing.T) {
 	assetA, _, _ := subjectStoredPNG(t, owner, a, storage)
 	assetB, _, originalB := subjectStoredPNG(t, owner, b, storage)
 	_, teamB := subjectTeam(t, owner, a, b)
-	library := subjectwire.NewSourceLibrary(runtime, storage.objects)
+	library := subjectwire.NewSourceLibrary(runtime, storage.objects, time.Minute)
 	query := media.SubjectCatalogueQuery{Kind: "image", Page: 1, PageSize: 12}
 	page, err := library.List(t.Context(), teamB, query)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != assetB || page.CurrentActorID != b.ID || page.CurrentScopeID != teamB.ScopeID || page.Items[0].Source != "personal_asset" || page.Items[0].ProjectID != nil {

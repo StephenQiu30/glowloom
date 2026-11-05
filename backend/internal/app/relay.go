@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -16,15 +15,12 @@ import (
 const (
 	realtimeConsumerGroup = "glowloom-realtime"
 	auditConsumerGroup    = "glowloom-audit"
-	workflowStarterGroup  = "glowloom-workflow-starter"
 )
 
 type relayRuntime struct {
 	outbox   *outboxapp.Relay
 	realtime *kafkainbox.Consumer
 	audit    *kafkainbox.Consumer
-	starter  *kafkainbox.Consumer
-	sweep    func(context.Context) error
 }
 
 // RunRelay publishes Outbox rows, consumes projections, and starts confirmed workflows.
@@ -35,23 +31,12 @@ func RunRelay(ctx context.Context, cfg config.Config, logger *zap.Logger) error 
 	}
 	defer cleanup()
 	groups := []string{realtimeConsumerGroup, auditConsumerGroup}
-	if runtime.starter != nil {
-		groups = append(groups, workflowStarterGroup)
-	} else {
-		logger.Warn("workflow starter disabled: Temporal is not configured")
-	}
 	logger.Info("relay running", zap.Strings("consumer_groups", groups))
 	return RunWithHealth(ctx, "relay", cfg.RelayHealthAddr, logger, func(runCtx context.Context) error {
 		loops := []relayLoop{
 			{"outbox", runtime.outbox.Run},
 			{"realtime", runtime.realtime.Run},
 			{"audit", runtime.audit.Run},
-		}
-		if runtime.starter != nil {
-			loops = append(loops,
-				relayLoop{"workflow-starter", runtime.starter.Run},
-				relayLoop{"workflow-starter-sweep", runtime.sweep},
-			)
 		}
 		return runRelayLoops(runCtx, loops)
 	})
@@ -97,22 +82,4 @@ func runRelayLoops(ctx context.Context, loops []relayLoop) error {
 type relayResult struct {
 	name string
 	err  error
-}
-
-func runStarterSweep(ctx context.Context, sweep func(context.Context, time.Time) error) error {
-	if err := sweep(ctx, time.Now()); err != nil {
-		return err
-	}
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case now := <-ticker.C:
-			if err := sweep(ctx, now); err != nil {
-				return err
-			}
-		}
-	}
 }

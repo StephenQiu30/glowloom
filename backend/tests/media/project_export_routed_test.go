@@ -4,6 +4,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -46,11 +47,8 @@ func TestProjectArtifactRoutedPostgresAndNativeTOS(t *testing.T) {
 	if e = repo.CompleteGeneratedWork(t.Context(), op, 1); e != nil {
 		t.Fatal(e)
 	}
-	// The activation row is a local fixture only; native SDK connections stay on TLS wire.
-	if e = owner.Exec(`INSERT INTO media.storage_config_revision(revision,config_sha256,profile_id,upload_policy,session_ttl_seconds) VALUES('controlled-tool-v1',repeat('a',64),'tos-frozen','{}'::jsonb,86400) ON CONFLICT DO NOTHING`).Error; e != nil {
-		t.Fatal(e)
-	}
-	if e = owner.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id) VALUES(1,'controlled-tool-v1','tos-frozen') ON CONFLICT(singleton) DO UPDATE SET revision=excluded.revision,profile_id=excluded.profile_id`).Error; e != nil {
+	// The controlled TLS fixture uses the same validated environment projection.
+	if _, e = routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, owner, "controlled-tool-"+uuid.NewString(), "tos-frozen")); e != nil {
 		t.Fatal(e)
 	}
 	timeline := exportTimeline(t)
@@ -72,7 +70,7 @@ func TestProjectArtifactRoutedPostgresAndNativeTOS(t *testing.T) {
 		t.Fatal("admit", e)
 	}
 	renderer := editproject.NewRenderer(nil)
-	worker := tool.NewRoutedWorker(workerStore, toolflow.NewRoutedObjects(registry, rr, nil), renderer, flow.FFProber{}, flow.FFUploadRenderer{})
+	worker := tool.NewRoutedWorker(workerStore, toolflow.NewRoutedObjects(registry, rr), renderer, flow.FFProber{}, flow.FFUploadRenderer{})
 	work := tool.WorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()}
 	result, e := worker.Execute(t.Context(), work)
 	if e != nil {
@@ -85,7 +83,7 @@ func TestProjectArtifactRoutedPostgresAndNativeTOS(t *testing.T) {
 		t.Fatal("replay created another object", e, *writes)
 	}
 	reader := objects.NewRoutedReadObjects(registry)
-	query := tool.NewRoutedExportQuery(store, reader, reader, nil, nil)
+	query := tool.NewRoutedExportQuery(store, reader, reader, 5*time.Minute)
 	preview, e := query.Preview(t.Context(), actor, project, job.ID)
 	if e != nil || preview.Artifact == nil || !strings.Contains(preview.URL, "controlled-fixture") {
 		t.Fatal("preview exact location", e)

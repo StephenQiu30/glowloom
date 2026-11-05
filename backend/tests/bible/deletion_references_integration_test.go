@@ -55,7 +55,7 @@ func seedDialogue(t *testing.T, db *gorm.DB, actor identityapp.Principal, projec
 			sql  string
 			args []any
 		}{
-			{`INSERT INTO script.script_version(id,org_id,project_id,version_no,source_ids,source_spans,text_key,text_sha256,text_bytes,rich_key,rich_sha256,rich_bytes,content_hash,document_sha256,source_manifest_sha256,char_count,created_at) VALUES(?,?,?,1,'{}','[]',?, ?,1,?, ?,1,?,?,?,100,now())`, []any{script, actor.OrgID, project, script.String() + "/text", hash, script.String() + "/rich", hash, hash, hash, hash}},
+			{`INSERT INTO script.script_version(text_location_id,rich_location_id,id,org_id,project_id,version_no,source_ids,source_spans,text_key,text_sha256,text_bytes,rich_key,rich_sha256,rich_bytes,content_hash,document_sha256,source_manifest_sha256,char_count,created_at) VALUES(?,?,?,?,?,1,'{}','[]',?, ?,1,?, ?,1,?,?,?,100,now())`, []any{businessFixtureLocation(t, tx, script.String()+"/text"), businessFixtureLocation(t, tx, script.String()+"/rich"), script, actor.OrgID, project, script.String() + "/text", hash, script.String() + "/rich", hash, hash, hash, hash}},
 			{`INSERT INTO script.split_set(id,org_id,project_id,version_id,kind,origin,boundaries,warnings,created_at) VALUES(?,?,?,?,'formal','manual','[]','[]',now())`, []any{split, actor.OrgID, project, script}},
 			{`INSERT INTO script.version_head(org_id,project_id,version_id,candidate_split_set_id,confirmed_split_set_id) VALUES(?,?,?,?,?)`, []any{actor.OrgID, project, script, split, split}},
 			{`INSERT INTO script.project_state(project_id,org_id,revision,draft_version_id,updated_at) VALUES(?,?,1,?,now())`, []any{project, actor.OrgID, script}},

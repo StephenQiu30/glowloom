@@ -52,7 +52,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	// No referenced media exists in this text-only graph; the reader remains an
 	// actual owner query so an unexpected reference would fail closed.
 	factory := func(tx *gorm.DB, _ application.ProjectCopyBinding) application.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
 	}
 	var receipt application.ProjectCopyReceipt
 	if err := database.Transaction(func(tx *gorm.DB) error {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -430,9 +431,19 @@ func validAssetObjectKey(a MediaAsset) bool {
 			return false
 		}
 	}
-	extension, ok := strings.CutPrefix(parts[3], a.ID.String()+".")
+	stem, extension, ok := strings.Cut(parts[3], ".")
 	if !ok || len(extension) == 0 || len(extension) > 16 {
 		return false
+	}
+	if stem != a.ID.String() {
+		attempt, ok := strings.CutPrefix(stem, a.ID.String()+"-transfer-")
+		if !ok {
+			return false
+		}
+		number, err := strconv.ParseInt(attempt, 10, 32)
+		if err != nil || number < 1 || strconv.FormatInt(number, 10) != attempt {
+			return false
+		}
 	}
 	for _, letter := range extension {
 		switch {

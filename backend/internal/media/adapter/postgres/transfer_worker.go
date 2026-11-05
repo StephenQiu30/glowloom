@@ -2,10 +2,14 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -16,12 +20,12 @@ func (s *TransferStore) workerActor(tx *gorm.DB, id uuid.UUID) (identityapp.Prin
 	var row struct {
 		ActorID, OrgID uuid.UUID
 	}
-	read := tx.Raw(`SELECT j.actor_id,j.org_id FROM media.transfer_job j WHERE j.id=?`, id).Scan(&row)
+	read := tx.Model(&transferJobRow{}).Select("actor_id", "org_id").Where("id = ?", id).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return identityapp.Principal{}, application.ErrNotFound
+	}
 	if read.Error != nil {
 		return identityapp.Principal{}, read.Error
-	}
-	if read.RowsAffected != 1 {
-		return identityapp.Principal{}, application.ErrNotFound
 	}
 	return identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}, nil
 }
@@ -34,7 +38,7 @@ func (s *TransferStore) withLease(ctx context.Context, lease application.Transfe
 	if err != nil {
 		return domain.ErrTransferConflict
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireCurrentActor(tx, lease.Actor); err != nil {
 			return err
 		}
@@ -57,10 +61,10 @@ func (s *TransferStore) withLease(ctx context.Context, lease application.Transfe
 		if row.Attempt != lease.Work.Attempt || row.WorkerFence == nil || *row.WorkerFence != lease.Fence || row.ExecutionID == nil || *row.ExecutionID != execution || row.LeaseUntil == nil || !row.LeaseUntil.After(s.clock()) || row.ProcessEnded != ended {
 			return domain.ErrTransferConflict
 		}
-		if !allowCancel && row.Status == "cancel_requested" {
+		if !allowCancel && row.Status == domain.TransferStatusCancelRequested {
 			return domain.ErrTransferCancelled
 		}
-		if !allowCancel && row.Status != "running" {
+		if !allowCancel && row.Status != domain.TransferStatusRunning {
 			return domain.ErrTransferConflict
 		}
 		return consume(tx, row, sourceLibrary, targetLibrary)
@@ -77,7 +81,7 @@ func (s *TransferStore) ClaimTransfer(ctx context.Context, work application.Tran
 	if err != nil || execution == uuid.Nil || work.JobID == uuid.Nil || work.Attempt < 1 {
 		return result, domain.ErrTransferConflict
 	}
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		actor, err := s.workerActor(tx, work.JobID)
 		if err != nil {
 			return err
@@ -108,15 +112,15 @@ func (s *TransferStore) ClaimTransfer(ctx context.Context, work application.Tran
 		if err != nil {
 			return err
 		}
-		if row.Status == "succeeded" || row.Status == "cancelled" || row.Status == "failed" || row.Status == "partial_failed" {
+		if row.Status == domain.TransferStatusSucceeded || row.Status == domain.TransferStatusCancelled || row.Status == domain.TransferStatusFailed || row.Status == domain.TransferStatusPartialFailed {
 			result.Done = true
 			return nil
 		}
-		if !row.ProcessEnded || row.ExecutionUnconfirmed || row.Status != "queued" && row.Status != "cancel_requested" {
+		if !row.ProcessEnded || row.ExecutionUnconfirmed || row.Status != domain.TransferStatusQueued && row.Status != domain.TransferStatusCancelRequested {
 			return domain.ErrTransferConflict
 		}
-		var frozen []struct{ Frozen []byte }
-		if err := tx.Raw(`SELECT frozen FROM media.transfer_item WHERE job_id=? ORDER BY item_index`, row.ID).Scan(&frozen).Error; err != nil {
+		var frozen []transferItemRow
+		if err := tx.Select("frozen").Where("job_id = ?", row.ID).Order("item_index").Find(&frozen).Error; err != nil {
 			return err
 		}
 		items := make([]application.FrozenTransferItem, len(frozen))
@@ -129,39 +133,64 @@ func (s *TransferStore) ClaimTransfer(ctx context.Context, work application.Tran
 		if err != nil || digest != row.ManifestSHA256 || len(items) != row.ItemCount {
 			return application.ErrUnavailable
 		}
-		result.Fence = uuid.New()
-		status := "running"
-		if row.CancellationRequested {
-			status = "cancel_requested"
+		for index, item := range items {
+			if _, _, err := readTransferAttempt(tx, row, index, item); err != nil {
+				return err
+			}
 		}
-		return libraryChanged(tx, `UPDATE media.transfer_job SET status=?,stage='copying',worker_fence=?,execution_id=?,lease_until=?,process_ended=false,revision=revision+1,updated_at=? WHERE id=? AND revision=?`, status, result.Fence, execution, s.clock().Add(45*time.Second).UTC(), s.clock().UTC(), row.ID, row.Revision)
+		result.Fence = uuid.New()
+		status := domain.TransferStatusRunning
+		if row.CancellationRequested {
+			status = domain.TransferStatusCancelRequested
+		}
+		return updateOne(tx, "media.transfer_job", map[string]any{"id": row.ID, "revision": row.Revision}, map[string]any{"status": status, "stage": domain.TransferStageCopying, "worker_fence": result.Fence, "execution_id": execution, "lease_until": s.clock().Add(45 * time.Second).UTC(), "process_ended": false, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
 	})
 	return result, err
 }
 
-// HeartbeatTransfer renews only the exact live owner and observes cancellation.
+// HeartbeatTransfer renews cancellation cleanup under the same live fence. The
+// cancellation signal is returned after commit; object write gates stay closed.
 func (s *TransferStore) HeartbeatTransfer(ctx context.Context, lease application.TransferLease) error {
-	return s.withLease(ctx, lease, false, false, func(tx *gorm.DB, row transferJobRow, _, _ libraryRow) error {
-		return libraryChanged(tx, `UPDATE media.transfer_job SET lease_until=?,updated_at=? WHERE id=? AND worker_fence=?`, s.clock().Add(45*time.Second).UTC(), s.clock().UTC(), row.ID, lease.Fence)
+	cancelled := false
+	err := s.withLease(ctx, lease, false, true, func(tx *gorm.DB, row transferJobRow, _, _ libraryRow) error {
+		cancelled = row.CancellationRequested
+		return updateOne(tx, "media.transfer_job", map[string]any{"id": row.ID, "worker_fence": lease.Fence}, map[string]any{"lease_until": s.clock().Add(45 * time.Second).UTC(), "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
 	})
+	if err != nil {
+		return err
+	}
+	if cancelled {
+		return domain.ErrTransferCancelled
+	}
+	return nil
 }
 
 type transferItemRow struct {
-	Frozen []byte
-	Status string
+	JobID                        uuid.UUID
+	ItemIndex                    int
+	SourceItemID, TargetItemID   uuid.UUID
+	SourceAssetID, TargetAssetID *uuid.UUID
+	Frozen                       []byte
+	Status                       domain.TransferItemStatus
+	FailureCode                  *string
 }
+
+func (transferItemRow) TableName() string { return "media.transfer_item" }
 
 func readTransferItem(tx *gorm.DB, id uuid.UUID, index int) (transferItemRow, application.FrozenTransferItem, error) {
 	var row transferItemRow
 	if index < 0 || index > 199 {
 		return row, application.FrozenTransferItem{}, application.ErrNotFound
 	}
-	read := tx.Raw(`SELECT frozen,status FROM media.transfer_item WHERE job_id=? AND item_index=? FOR UPDATE`, id, index).Scan(&row)
+	read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ? AND item_index = ?", id, index).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return row, application.FrozenTransferItem{}, application.ErrUnavailable
+	}
 	if read.Error != nil {
 		return row, application.FrozenTransferItem{}, read.Error
 	}
 	var item application.FrozenTransferItem
-	if read.RowsAffected != 1 || strictCopyMedia(row.Frozen, &item) != nil {
+	if strictCopyMedia(row.Frozen, &item) != nil {
 		return row, item, application.ErrUnavailable
 	}
 	return row, item, nil
@@ -200,13 +229,13 @@ func validateTransferFolder(tx *gorm.DB, row transferJobRow, target libraryRow) 
 	if row.TargetFolderID == nil {
 		return nil
 	}
-	var present int
-	read := tx.Raw(`SELECT 1 FROM media.library_folder WHERE id=? AND library_id=? AND revision=? FOR SHARE`, *row.TargetFolderID, target.ID, row.TargetFolderRevision).Scan(&present)
+	var folder libraryFolderRow
+	read := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("id = ? AND library_id = ? AND revision = ?", *row.TargetFolderID, target.ID, row.TargetFolderRevision).Take(&folder)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return &application.TransferItemError{Code: "target_folder_changed"}
+	}
 	if read.Error != nil {
 		return read.Error
-	}
-	if read.RowsAffected != 1 {
-		return &application.TransferItemError{Code: "target_folder_changed"}
 	}
 	return nil
 }
@@ -219,7 +248,7 @@ func (s *TransferStore) StartTransferItem(ctx context.Context, lease application
 		if err != nil {
 			return err
 		}
-		if state.Status == "succeeded" {
+		if state.Status == domain.TransferItemStatusSucceeded {
 			done = true
 			return nil
 		}
@@ -229,7 +258,7 @@ func (s *TransferStore) StartTransferItem(ctx context.Context, lease application
 		if err := validateTransferFolder(tx, row, target); err != nil {
 			return err
 		}
-		return libraryChanged(tx, `UPDATE media.transfer_item SET status='running',failure_code=NULL WHERE job_id=? AND item_index=? AND status IN ('queued','needs_reconciliation','running')`, row.ID, index)
+		return updateOne(tx, "media.transfer_item", map[string]any{"job_id": row.ID, "item_index": index, "status": []domain.TransferItemStatus{domain.TransferItemStatusQueued, domain.TransferItemStatusNeedsReconciliation, domain.TransferItemStatusRunning}}, map[string]any{"status": domain.TransferItemStatusRunning, "failure_code": nil}, application.ErrLibraryConflict)
 	})
 	return done, err
 }
@@ -244,7 +273,17 @@ func (s *TransferStore) EndTransferPhysical(ctx context.Context, lease applicati
 	if err != nil {
 		return domain.ErrTransferConflict
 	}
-	return libraryChanged(s.db.WithContext(ctx), `UPDATE media.transfer_job SET process_ended=true,execution_unconfirmed=false,revision=revision+1,updated_at=? WHERE id=? AND attempt=? AND worker_fence=? AND execution_id=? AND org_id=? AND actor_id=?`, s.clock().UTC(), lease.Work.JobID, lease.Work.Attempt, lease.Fence, execution, lease.Actor.OrgID, lease.Actor.ID)
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		var row transferJobRow
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND attempt = ? AND worker_fence = ? AND execution_id = ? AND org_id = ? AND actor_id = ?", lease.Work.JobID, lease.Work.Attempt, lease.Fence, execution, lease.Actor.OrgID, lease.Actor.ID).Take(&row)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return application.ErrLibraryConflict
+		}
+		if read.Error != nil {
+			return read.Error
+		}
+		return updateOne(tx, "media.transfer_job", map[string]any{"id": row.ID, "revision": row.Revision}, map[string]any{"process_ended": true, "execution_unconfirmed": false, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
+	})
 }
 
 // FailTransferItem keeps unknown outcomes distinct from a completed failure.
@@ -254,24 +293,24 @@ func (s *TransferStore) FailTransferItem(ctx context.Context, lease application.
 		if err != nil {
 			return err
 		}
-		if state.Status == "succeeded" {
+		if state.Status == domain.TransferItemStatusSucceeded {
 			return domain.ErrTransferConflict
 		}
-		status := "failed"
+		status := domain.TransferItemStatusFailed
 		if unknown {
-			status = "needs_reconciliation"
-		} else if code == "cancelled" {
-			if row.Status == "cancel_requested" {
-				status = "cancelled"
+			status = domain.TransferItemStatusNeedsReconciliation
+		} else if code == domain.TransferFailureCancelled {
+			if row.Status == domain.TransferStatusCancelRequested {
+				status = domain.TransferItemStatusCancelled
 			} else {
 				code = "worker_interrupted"
 			}
 		}
-		if err := libraryChanged(tx, `UPDATE media.transfer_item SET status=?,failure_code=? WHERE job_id=? AND item_index=?`, status, code, row.ID, index); err != nil {
+		if err := updateOne(tx, "media.transfer_item", map[string]any{"job_id": row.ID, "item_index": index}, map[string]any{"status": status, "failure_code": code}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		if unknown {
-			return libraryChanged(tx, `UPDATE media.transfer_job SET needs_reconciliation=true,stage='cleanup',revision=revision+1,updated_at=? WHERE id=? AND worker_fence=?`, s.clock().UTC(), row.ID, lease.Fence)
+			return updateOne(tx, "media.transfer_job", map[string]any{"id": row.ID, "worker_fence": lease.Fence}, map[string]any{"needs_reconciliation": true, "stage": domain.TransferStageCleanup, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
 		}
 		return nil
 	})
@@ -287,44 +326,39 @@ func (s *TransferStore) FinishTransfer(ctx context.Context, lease application.Tr
 		}
 		succeeded, unknown := 0, false
 		for _, item := range job.Items {
-			if item.Status == "succeeded" {
+			if item.Status == domain.TransferItemStatusSucceeded {
 				succeeded++
 			}
-			unknown = unknown || item.Status == "needs_reconciliation"
+			unknown = unknown || item.Status == domain.TransferItemStatusNeedsReconciliation
 		}
-		if !unknown && row.NeedsReconciliation {
-			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.transfer_object o JOIN media.transfer_item i USING(job_id,item_index) WHERE o.job_id=? AND i.status<>'succeeded' AND o.write_started AND o.status<>'removed')`, row.ID).Scan(&unknown).Error; err != nil {
+		if !unknown {
+			pending := tx.Table("media.transfer_object AS o").Joins("JOIN media.transfer_item AS i ON i.job_id = o.job_id AND i.item_index = o.item_index").Where("o.job_id = ? AND i.status <> ? AND o.status <> ?", row.ID, domain.TransferItemStatusSucceeded, application.ProjectCopyObjectRemoved)
+			unknown, err = storageExists(pending)
+			if err != nil {
 				return err
 			}
 		}
-		status := "failed"
+		status := domain.TransferStatusFailed
 		switch {
 		case unknown:
-			status = "needs_reconciliation"
+			status = domain.TransferStatusNeedsReconciliation
 		case succeeded == len(job.Items):
-			status = "succeeded"
+			status = domain.TransferStatusSucceeded
 		case succeeded > 0:
-			status = "partial_failed"
-		case row.Status == "cancel_requested":
-			status = "cancelled"
+			status = domain.TransferStatusPartialFailed
+		case row.Status == domain.TransferStatusCancelRequested:
+			status = domain.TransferStatusCancelled
 		}
 		if row.CancellationRequested && !unknown {
-			var unsafe bool
-			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.transfer_object o JOIN media.transfer_item i USING(job_id,item_index) WHERE o.job_id=? AND i.status<>'succeeded' AND o.write_started AND o.status<>'removed')`, row.ID).Scan(&unsafe).Error; err != nil {
-				return err
-			}
-			if unsafe {
-				return domain.ErrTransferConflict
-			}
-			if err := tx.Exec(`UPDATE media.transfer_item SET status='cancelled',failure_code='cancelled' WHERE job_id=? AND status<>'succeeded'`, row.ID).Error; err != nil {
+			if err := tx.Model(&transferItemRow{}).Where("job_id = ? AND status <> ?", row.ID, domain.TransferItemStatusSucceeded).Updates(map[string]any{"status": domain.TransferItemStatusCancelled, "failure_code": domain.TransferFailureCancelled}).Error; err != nil {
 				return err
 			}
 		}
-		stage := "completed"
+		stage := domain.TransferStageCompleted
 		if unknown {
-			stage = "cleanup"
+			stage = domain.TransferStageCleanup
 		}
-		if err := libraryChanged(tx, `UPDATE media.transfer_job SET status=?,stage=?,needs_reconciliation=?,revision=revision+1,updated_at=? WHERE id=? AND worker_fence=?`, status, stage, unknown, s.clock().UTC(), row.ID, lease.Fence); err != nil {
+		if err := updateOne(tx, "media.transfer_job", map[string]any{"id": row.ID, "worker_fence": lease.Fence}, map[string]any{"status": status, "stage": stage, "needs_reconciliation": unknown, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		row, err = s.readJob(tx, lease.Actor, row.ID, false, true)

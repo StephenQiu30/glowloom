@@ -3,8 +3,9 @@ package http
 import (
 	"net/http"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/gin-gonic/gin"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // RegisterLaunch installs a capability-only native download, without weakening

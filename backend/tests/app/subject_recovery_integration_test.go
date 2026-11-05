@@ -59,7 +59,8 @@ func TestSubjectRecoveryPublicRouter(t *testing.T) {
 		}
 	})
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:18089", PublicOrigin: "http://127.0.0.1:3000"})
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, db.DB, nil, identityruntime.SessionDependencies{})
+	cfg.ObjectStorage = businessUnitStorage(t)
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, db.DB, businessUnitRegistry(t), identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}

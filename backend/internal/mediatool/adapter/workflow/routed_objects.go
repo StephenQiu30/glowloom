@@ -27,12 +27,11 @@ type WorkLedger interface {
 type RoutedObjects struct {
 	registry *platform.Registry
 	ledger   WorkLedger
-	legacy   *platform.Client
 }
 
-// NewRoutedObjects injects official SDKs and the owning transaction ledger.
-func NewRoutedObjects(registry *platform.Registry, ledger WorkLedger, legacy *platform.Client) *RoutedObjects {
-	return &RoutedObjects{registry: registry, ledger: ledger, legacy: legacy}
+// NewRoutedObjects injects the provider registry and owning transaction ledger.
+func NewRoutedObjects(registry *platform.Registry, ledger WorkLedger) *RoutedObjects {
+	return &RoutedObjects{registry: registry, ledger: ledger}
 }
 
 // Open creates an isolated view for one authorized durable attempt.
@@ -44,7 +43,7 @@ func (f *RoutedObjects) Open(ctx context.Context, owner media.StorageWorkOwner, 
 	if err != nil {
 		return nil, err
 	}
-	if intent.Owner != owner || (intent.State != "open" && intent.State != "cancelled" && intent.State != "accepted") {
+	if intent.Owner != owner || (intent.State != media.StorageWorkOpen && intent.State != media.StorageWorkCancelled && intent.State != media.StorageWorkAccepted) {
 		return nil, media.ErrStorageRouteConflict
 	}
 	sources := make(map[string]*domain.ObjectLocation, len(inputs))
@@ -56,10 +55,8 @@ func (f *RoutedObjects) Open(ctx context.Context, owner media.StorageWorkOwner, 
 			return nil, media.ErrStorageIdentityConflict
 		}
 		if a.ObjectLocation == nil {
-			if f.legacy == nil {
-				return nil, media.ErrStorageIdentityConflict
-			}
-		} else if a.ObjectLocation.Ref.Key != a.ObjectKey || a.ObjectLocation.State != "accepted" || a.ObjectLocation.Ref.Validate() != nil {
+			return nil, media.ErrStorageNotReady
+		} else if a.ObjectLocation.Ref.Key != a.ObjectKey || a.ObjectLocation.State != domain.ObjectLocationAccepted || a.ObjectLocation.Ref.Validate() != nil {
 			return nil, media.ErrStorageIdentityConflict
 		}
 		sources[a.ObjectKey] = a.ObjectLocation
@@ -87,16 +84,13 @@ func (o *workObjects) output(ctx context.Context, key string) (domain.ObjectLoca
 	if found {
 		return location, nil
 	}
-	if o.intent.State != "open" {
+	if o.intent.State != media.StorageWorkOpen {
 		return domain.ObjectLocation{}, media.ErrStorageRouteConflict
 	}
 	return o.parent.ledger.ReserveWorkLocation(ctx, o.intent.ID, key)
 }
 func (o *workObjects) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	if loc, ok := o.sources[key]; ok {
-		if loc == nil {
-			return o.parent.legacy.Get(ctx, key)
-		}
 		return o.parent.registry.Get(ctx, ref(loc.Ref))
 	}
 	l, e := o.output(ctx, key)
@@ -108,10 +102,6 @@ func (o *workObjects) Get(ctx context.Context, key string) (io.ReadCloser, error
 func (o *workObjects) Stat(ctx context.Context, key string) (media.ObjectInfo, error) {
 	var r domain.ObjectRef
 	if l, ok := o.sources[key]; ok {
-		if l == nil {
-			info, e := o.parent.legacy.Stat(ctx, key)
-			return media.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256}, e
-		}
 		r = l.Ref
 	} else {
 		l, e := o.output(ctx, key)

@@ -15,24 +15,17 @@ import (
 // DepthQuery keeps private object keys behind current project authorization.
 type DepthQuery struct {
 	store   DepthStore
-	signer  mediaapp.PreviewSigner
-	reader  ResultReader
 	storage *resultAccess
 }
 
 // NewRoutedDepthQuery uses immutable physical identity and the actual SDK lease.
-func NewRoutedDepthQuery(s DepthStore, signer mediaapp.ObjectSigner, reader mediaapp.ObjectReader, legacySigner mediaapp.PreviewSigner, legacyReader ResultReader) *DepthQuery {
-	return &DepthQuery{store: s, storage: &resultAccess{signer: signer, reader: reader, legacySigner: legacySigner, legacyReader: legacyReader}}
-}
-
-// NewDepthQuery injects owner queries, existing private signer and result reader.
-func NewDepthQuery(s DepthStore, signer mediaapp.PreviewSigner, reader ResultReader) *DepthQuery {
-	return &DepthQuery{store: s, signer: signer, reader: reader}
+func NewRoutedDepthQuery(s DepthStore, signer mediaapp.ObjectSigner, reader mediaapp.ObjectReader, ttl time.Duration) *DepthQuery {
+	return &DepthQuery{store: s, storage: &resultAccess{signer: signer, reader: reader, previewTTL: ttl}}
 }
 
 // Preview signs only the exact immutable result approved for inspection.
 func (q *DepthQuery) Preview(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (DepthPreview, error) {
-	if q == nil || q.store == nil || (q.signer == nil && q.storage == nil) {
+	if q == nil || q.store == nil || q.storage == nil || q.storage.signer == nil {
 		return DepthPreview{}, ErrUnavailable
 	}
 	job, asset, err := q.store.PreviewAsset(ctx, actor, project, id)
@@ -42,12 +35,7 @@ func (q *DepthQuery) Preview(ctx context.Context, actor identityapp.Principal, p
 	if job.SHA256 == nil || asset.SHA256 == nil || *job.SHA256 != *asset.SHA256 {
 		return DepthPreview{}, ErrConflict
 	}
-	const ttl = 10 * time.Minute
-	access := q.storage
-	if access == nil {
-		access = &resultAccess{legacySigner: q.signer, legacyReader: q.reader}
-	}
-	grant, err := access.sign(ctx, asset.ObjectKey, asset.ObjectLocation, ttl)
+	grant, err := q.storage.sign(ctx, asset.ObjectKey, asset.ObjectLocation)
 	if err != nil {
 		return DepthPreview{}, err
 	}
@@ -56,7 +44,7 @@ func (q *DepthQuery) Preview(ctx context.Context, actor identityapp.Principal, p
 
 // Download requires completed review before opening any private bytes.
 func (q *DepthQuery) Download(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (io.ReadCloser, int64, error) {
-	if q == nil || q.store == nil || (q.reader == nil && q.storage == nil) {
+	if q == nil || q.store == nil || q.storage == nil || q.storage.reader == nil {
 		return nil, 0, ErrUnavailable
 	}
 	job, asset, err := q.store.PreviewAsset(ctx, actor, project, id)
@@ -66,10 +54,6 @@ func (q *DepthQuery) Download(ctx context.Context, actor identityapp.Principal, 
 	if job.Status != domain.DepthSucceeded || !asset.CanReference() {
 		return nil, 0, ErrConflict
 	}
-	access := q.storage
-	if access == nil {
-		access = &resultAccess{legacySigner: q.signer, legacyReader: q.reader}
-	}
-	reader, err := access.read(ctx, asset.ObjectKey, asset.ObjectLocation)
+	reader, err := q.storage.read(ctx, asset.ObjectKey, asset.ObjectLocation)
 	return reader, asset.ByteSize, err
 }

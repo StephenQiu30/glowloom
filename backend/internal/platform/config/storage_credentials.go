@@ -13,12 +13,12 @@ import (
 
 // StorageCredentialsRef selects exactly one deployment-controlled secret source.
 type StorageCredentialsRef struct {
-	Source          string `yaml:"source"`
-	AccessKeyEnv    string `yaml:"access_key_env"`
-	SecretKeyEnv    string `yaml:"secret_key_env"`
-	SessionTokenEnv string `yaml:"session_token_env"`
-	ExpiresAtEnv    string `yaml:"expires_at_env"`
-	File            string `yaml:"file"`
+	Source          StorageCredentialSource `yaml:"source" json:"source"`
+	AccessKeyEnv    string                  `yaml:"access_key_env" json:"access_key_env"`
+	SecretKeyEnv    string                  `yaml:"secret_key_env" json:"secret_key_env"`
+	SessionTokenEnv string                  `yaml:"session_token_env" json:"session_token_env"`
+	ExpiresAtEnv    string                  `yaml:"expires_at_env" json:"expires_at_env"`
+	File            string                  `yaml:"file" json:"file"`
 }
 
 // StorageCredentials is a resolved secret; structured and formatted logs redact it.
@@ -35,10 +35,10 @@ func (StorageCredentials) Format(state fmt.State, _ rune) {
 }
 
 func (r StorageCredentialsRef) validate() error {
-	if r.Source == "file" && filepath.IsAbs(r.File) && r.AccessKeyEnv == "" && r.SecretKeyEnv == "" && r.SessionTokenEnv == "" && r.ExpiresAtEnv == "" {
+	if r.Source == StorageCredentialsFile && filepath.IsAbs(r.File) && r.AccessKeyEnv == "" && r.SecretKeyEnv == "" && r.SessionTokenEnv == "" && r.ExpiresAtEnv == "" {
 		return nil
 	}
-	if r.Source != "env" || r.File != "" || r.AccessKeyEnv == "" || r.SecretKeyEnv == "" {
+	if r.Source != StorageCredentialsEnvironment || r.File != "" || r.AccessKeyEnv == "" || r.SecretKeyEnv == "" {
 		return fmt.Errorf("%w: select one storage credential source", ErrInvalid)
 	}
 	name := regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -66,7 +66,7 @@ func resolveStorageCredentials(ref StorageCredentialsRef, get func(string) strin
 		SessionToken string    `json:"session_token"`
 		ExpiresAt    time.Time `json:"expires_at"`
 	}
-	if ref.Source == "env" {
+	if ref.Source == StorageCredentialsEnvironment {
 		data.AccessKey, data.SecretKey = get(ref.AccessKeyEnv), get(ref.SecretKeyEnv)
 		data.SessionToken = get(ref.SessionTokenEnv)
 		if value := get(ref.ExpiresAtEnv); value != "" {

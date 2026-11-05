@@ -19,7 +19,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/providerprobe"
-	flow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
+	flow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"

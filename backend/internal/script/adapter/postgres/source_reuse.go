@@ -3,10 +3,11 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
@@ -15,23 +16,24 @@ import (
 )
 
 func reuseOrNumberVersion(tx *gorm.DB, actor identityapp.Principal, state domain.ProjectState, p *application.WritePlan) error {
-	var row struct{ ID uuid.UUID }
-	q := tx.Raw(`SELECT id FROM script.script_version WHERE org_id=? AND project_id=? AND source_manifest_sha256=?`, actor.OrgID, p.Command.ProjectID, p.Version.SourceManifestSHA256).Scan(&row)
-	if q.Error != nil {
-		return q.Error
-	}
-	if q.RowsAffected == 0 {
-		var latest int64
-		if err := tx.Raw(`SELECT coalesce(max(version_no),0) FROM script.script_version WHERE org_id=? AND project_id=?`, actor.OrgID, p.Command.ProjectID).Scan(&latest).Error; err != nil {
-			return err
+	var existing versionRow
+	err := tx.Where("org_id = ? AND project_id = ? AND source_manifest_sha256 = ?", actor.OrgID, p.Command.ProjectID, p.Version.SourceManifestSHA256).Take(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		var latest versionRow
+		latestErr := tx.Select("version_no").Where("org_id = ? AND project_id = ?", actor.OrgID, p.Command.ProjectID).Order("version_no DESC").Take(&latest).Error
+		if latestErr != nil && !errors.Is(latestErr, gorm.ErrRecordNotFound) {
+			return latestErr
 		}
-		p.Version.VersionNo = latest + 1
+		p.Version.VersionNo = latest.VersionNo + 1
 		return nil
+	}
+	if err != nil {
+		return err
 	}
 	if len(p.NewSources) != 0 {
 		return application.ErrObjectMismatch
 	}
-	v, err := readVersion(tx, actor.OrgID, p.Command.ProjectID, row.ID)
+	v, err := readVersion(tx, actor.OrgID, p.Command.ProjectID, existing.ID)
 	if err != nil {
 		return err
 	}
@@ -54,19 +56,21 @@ func reuseOrNumberVersion(tx *gorm.DB, actor identityapp.Principal, state domain
 	return nil
 }
 func requirePendingSource(tx *gorm.DB, p application.WritePlan) error {
-	var count int64
-	if err := tx.Raw(`SELECT count(*) FROM script.command_state WHERE actor_id=? AND request_id=? AND status='pending' AND NOT cancellation_requested AND io_owner_id IS NULL AND io_state='idle'`, p.ActorID, p.Command.Key).Scan(&count).Error; err != nil {
-		return err
-	}
-	if count != 1 {
+	var row scriptCommandStateRow
+	err := tx.Where("actor_id = ? AND request_id = ? AND status = ? AND cancellation_requested = ? AND io_owner_id IS NULL AND io_state = ?", p.ActorID, p.Command.Key, scriptCommandPending, false, scriptIOIdle).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return application.ErrConflict
+	}
+	if err != nil {
+		return err
 	}
 	return nil
 }
 func finishReusedWrite(ctx context.Context, tx *gorm.DB, access application.ProjectAccess, actor identityapp.Principal, project workspaceapp.ProjectContentAccess, state domain.ProjectState, p application.WritePlan) (application.SourceReceipt, error) {
 	result := application.SourceReceipt{ScriptRevision: state.Revision, ProjectRevision: project.Revision, VersionID: p.Version.ID, SplitSetID: p.Candidate.ID, Mappings: p.Mappings, Changed: !p.HeadUnchanged, Duplicate: true}
 	if !p.HeadUnchanged {
-		if err := exactlyOne(tx.Exec(`UPDATE script.project_state SET draft_version_id=?,revision=revision+1,updated_at=? WHERE org_id=? AND project_id=? AND revision=?`, p.Version.ID, p.CreatedAt, actor.OrgID, p.Command.ProjectID, state.Revision)); err != nil {
+		if err := exactlyOne(tx.Model(&scriptProjectStateRow{}).Where("org_id = ? AND project_id = ? AND revision = ?", actor.OrgID, p.Command.ProjectID, state.Revision).
+			Updates(map[string]any{"draft_version_id": p.Version.ID, "revision": state.Revision + 1, "updated_at": p.CreatedAt})); err != nil {
 			return result, err
 		}
 		revision, err := access.TouchContent(ctx, actor, p.Command.ProjectID, project.Revision)
@@ -80,10 +84,19 @@ func finishReusedWrite(ctx context.Context, tx *gorm.DB, access application.Proj
 	if err != nil {
 		return result, err
 	}
-	if err := exactlyOne(tx.Exec(`INSERT INTO script.command_result(actor_id,request_id,response,created_at) VALUES(?,?,?::jsonb,?)`, actor.ID, p.Command.Key, string(bytes), p.CreatedAt)); err != nil {
+	commandResult := scriptCommandResultRow{ActorID: actor.ID, RequestID: p.Command.Key, Response: scriptJSON(bytes), CreatedAt: p.CreatedAt}
+	if err := exactlyOne(tx.Create(&commandResult)); err != nil {
 		return result, err
 	}
-	if err := exactlyOne(tx.Exec(`UPDATE script.command_state SET status='completed',revision=revision+1,updated_at=? WHERE actor_id=? AND request_id=? AND status='pending' AND NOT cancellation_requested`, p.CreatedAt, actor.ID, p.Command.Key)); err != nil {
+	var commandState scriptCommandStateRow
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("actor_id = ? AND request_id = ?", actor.ID, p.Command.Key).Take(&commandState).Error; err != nil {
+		return result, err
+	}
+	if commandState.Status != scriptCommandPending || commandState.CancellationRequested {
+		return result, application.ErrConflict
+	}
+	if err := exactlyOne(tx.Model(&scriptCommandStateRow{}).Where("actor_id = ? AND request_id = ? AND status = ? AND cancellation_requested = ?", actor.ID, p.Command.Key, scriptCommandPending, false).
+		Updates(map[string]any{"status": scriptCommandCompleted, "needs_reconciliation": false, "revision": commandState.Revision + 1, "updated_at": p.CreatedAt})); err != nil {
 		return result, err
 	}
 	return result, sourceAudit(tx, actor, p, result)

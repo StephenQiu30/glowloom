@@ -16,6 +16,9 @@ import (
 	"testing"
 	"time"
 
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
 	"github.com/google/uuid"
@@ -46,6 +49,7 @@ func projectCopyObjects(t *testing.T) *objectstorage.Client {
 	}
 	var cfg struct {
 		Endpoint  string `json:"endpoint"`
+		Region    string `json:"region"`
 		Bucket    string `json:"bucket"`
 		AccessKey string `json:"access_key"`
 		SecretKey string `json:"secret_key"`
@@ -59,7 +63,7 @@ func projectCopyObjects(t *testing.T) *objectstorage.Client {
 	if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || cfg.Bucket != "glowloom-receipt-test" {
 		t.Fatal("copy storage must be the isolated loopback test bucket")
 	}
-	objects, err := objectstorage.Open(cfg.Endpoint, cfg.Bucket, cfg.AccessKey, cfg.SecretKey, "")
+	objects, err := objectstorage.Open(cfg.Endpoint, cfg.Bucket, cfg.AccessKey, cfg.SecretKey, cfg.Region)
 	if err != nil {
 		t.Fatal("open synthetic private copy storage")
 	}
@@ -141,7 +145,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 	if err != nil {
 		t.Fatal(err)
 	}
-	upload := ma.NewUploadService(workspaceMediaStore(db), mf.NewUploadProber(validator), mf.FFUploadNormalizer{}, mf.FFUploadRenderer{}, mf.NewUploadObjects(objects), time.Now)
+	upload := businessFixtureUploads(t, db, workspaceMediaStore(db), mf.NewUploadProber(validator))
 	samples := []struct {
 		Kind, Name string
 		Bytes      []byte
@@ -164,7 +168,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 		if err != nil {
 			t.Fatal(err)
 		}
-		result, uploadErr := upload.Upload(ctx, ma.UploadInput{Actor: actor, Request: ma.UploadRequest{ProjectID: project, Key: uuid.New(), SHA256: file.SHA256, ByteSize: file.Size, FileName: sample.Name, RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true})
+		result, uploadErr := businessFixtureUpload(ctx, t, upload, ma.UploadInput{Actor: actor, Request: ma.UploadRequest{ProjectID: project, Key: uuid.New(), SHA256: file.SHA256, ByteSize: file.Size, FileName: sample.Name, RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true})
 		if err := errors.Join(uploadErr, file.Close()); err != nil {
 			t.Fatal("real source upload", err)
 		}
@@ -184,7 +188,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 			}
 		}
 	})
-	canvas := canvasfixture.NewService(workspaceCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return ma.NewAssetQuery(workspaceMediaStore(tx), nil) }))
+	canvas := canvasfixture.NewService(workspaceCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return ma.NewAssetQuery(workspaceMediaStore(tx)) }))
 	doc, err := canvas.Create(ctx, actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "全部媒体与导演"})
 	if err != nil {
 		t.Fatal(err)
@@ -214,12 +218,12 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 	return actor, project, assets, doc.ID
 }
 
-func actualCopyWorker(t *testing.T, db *gorm.DB, objects ma.ProjectCopyObjects) *wa.ProjectCopyWorker {
+func actualCopyWorker(t *testing.T, db *gorm.DB, objects ma.PhysicalTransferObjects) *wa.ProjectCopyWorker {
 	t.Helper()
 	store := projectCopyStore(db)
 	temp := t.TempDir()
 	return wa.NewProjectCopyWorker(store, func(job wd.ProjectCopyJob, worker uuid.UUID, cleanup bool) *ma.ProjectCopyTransfer {
-		return ma.NewProjectCopyTransfer(wp.NewProjectCopyMediaObjects(store, job.ID, worker, cleanup), objects, temp)
+		return ma.NewRoutedProjectCopyTransfer(wp.NewProjectCopyMediaObjects(store, job.ID, worker, cleanup), objects, temp)
 	}, time.Now)
 }
 
@@ -233,11 +237,11 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 		t.Fatal("whole copy manifest", job.Manifest, err)
 	}
 	worker := uuid.New()
-	finished, err := actualCopyWorker(t, db, mo.NewProjectCopyObjects(objects)).Execute(ctx, wa.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: worker})
+	finished, err := actualCopyWorker(t, db, mo.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db))).Execute(ctx, wa.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: worker})
 	if err != nil || finished.Status != "succeeded" {
 		t.Fatal("real owning copy execution", finished.Status, finished.FailureCode, err)
 	}
-	query := ma.NewAssetQuery(workspaceMediaStore(db), objects)
+	query := ma.NewAssetQuery(workspaceMediaStore(db))
 	items, err := query.List(ctx, actor, finished.TargetProjectID, "", "", 100)
 	if err != nil || len(items.Items) != 4 {
 		t.Fatal("fresh complete media library", items, err)
@@ -324,22 +328,22 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 }
 
 type unknownCopyObjects struct {
-	ma.ProjectCopyObjects
+	ma.PhysicalTransferObjects
 	afterWrite bool
 	failed     bool
 }
 
-func (o *unknownCopyObjects) PutIfAbsent(ctx context.Context, key string, reader io.Reader, size int64, mime, digest string) error {
+func (o *unknownCopyObjects) PutIfAbsent(ctx context.Context, ref mediadomain.ObjectRef, reader io.Reader, size int64, mime, digest string) error {
 	if !o.failed {
 		o.failed = true
 		if o.afterWrite {
-			if err := o.ProjectCopyObjects.PutIfAbsent(ctx, key, reader, size, mime, digest); err != nil {
+			if err := o.PhysicalTransferObjects.PutIfAbsent(ctx, ref, reader, size, mime, digest); err != nil {
 				return err
 			}
 		}
 		return io.ErrUnexpectedEOF
 	}
-	return o.ProjectCopyObjects.PutIfAbsent(ctx, key, reader, size, mime, digest)
+	return o.PhysicalTransferObjects.PutIfAbsent(ctx, ref, reader, size, mime, digest)
 }
 
 func TestProjectCopyRealUnknownRecoveryAndCancellation(t *testing.T) {
@@ -356,8 +360,8 @@ func TestProjectCopyRealUnknownRecoveryAndCancellation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			adapter := mo.NewProjectCopyObjects(objects)
-			fault := &unknownCopyObjects{ProjectCopyObjects: adapter, afterWrite: tc.AfterWrite}
+			adapter := mo.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db))
+			fault := &unknownCopyObjects{PhysicalTransferObjects: adapter, afterWrite: tc.AfterWrite}
 			failed, err := actualCopyWorker(t, db, fault).Execute(ctx, wa.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: uuid.New()})
 			if err != nil || failed.Status != "failed" || !failed.NeedsReconciliation || failed.WorkerID != uuid.Nil || failed.Attempt != 1 {
 				t.Fatal("unknown physical write discarded", failed.Status, failed.FailureCode, err)
@@ -378,6 +382,17 @@ func TestProjectCopyRealUnknownRecoveryAndCancellation(t *testing.T) {
 			result, err := actualCopyWorker(t, db, adapter).Execute(ctx, wa.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: uuid.New()})
 			if err != nil || result.Manifest != job.Manifest || result.TargetProjectID != job.TargetProjectID || result.Attempt != 1 {
 				t.Fatal("recovery changed frozen identity", err)
+			}
+
+			if tc.Cancel && tc.AfterWrite && err == nil && result.Status == "failed" && result.NeedsReconciliation && (result.FailureCode == "object_remove_unknown" || result.FailureCode == "cleanup_requires_reconciliation") {
+				businessExpireStorageWindow(t, db, result.TargetProjectID)
+				if _, err = store.Change(ctx, actor, job.ID, "reconcile", result.Revision, uuid.New(), uuid.NewString()); err != nil {
+					t.Fatal(err)
+				}
+				result, err = actualCopyWorker(t, db, adapter).Execute(ctx, wa.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: uuid.New()})
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			expected := "succeeded"
 			if tc.Cancel {
@@ -464,7 +479,7 @@ func TestProjectCopyRealNonOwnerPermissionsAndObjectFence(t *testing.T) {
 		if _, err := wp.NewProjectCopyMediaObjects(store, job.ID, claimed.WorkerID, false).Objects(ctx, actor, binding, snapshot); !errors.Is(err, wd.ErrProjectCopyWorkerConflict) {
 			return errors.New("old attempt retains object authority")
 		}
-		finished, err := actualCopyWorker(t, tx, mo.NewProjectCopyObjects(objects)).Execute(ctx, wa.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: uuid.New()})
+		finished, err := actualCopyWorker(t, tx, mo.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(tx))).Execute(ctx, wa.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: uuid.New()})
 		if err != nil {
 			return err
 		}

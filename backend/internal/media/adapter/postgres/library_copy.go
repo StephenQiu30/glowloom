@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -32,7 +33,7 @@ func readCopySourceLibrary(tx *gorm.DB, actor identityapp.Principal, binding app
 		return copySourceLibrary{}, err
 	}
 	var rows []libraryItemRow
-	if err := tx.Raw(`SELECT * FROM media.library_item WHERE library_id=? AND purged_at IS NULL ORDER BY id LIMIT 8193 FOR SHARE`, row.ID).Scan(&rows).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("library_id = ? AND purged_at IS NULL", row.ID).Order("id").Limit(8193).Find(&rows).Error; err != nil {
 		return copySourceLibrary{}, fmt.Errorf("freeze complete library items: %w", err)
 	}
 	if len(rows) > 8192 {
@@ -63,7 +64,8 @@ func registerCopiedLibrary(tx *gorm.DB, actor identityapp.Principal, binding app
 	if catalog.Validate(binding) != nil {
 		return application.ErrProjectCopyMediaUnavailable
 	}
-	if err := tx.Exec(`INSERT INTO media.library(id,kind,org_id,project_id,revision) VALUES(?,'project',?,?,1) ON CONFLICT(id) DO NOTHING`, catalog.LibraryID, actor.OrgID, binding.TargetProjectID).Error; err != nil {
+	identity := libraryIdentityRecord{ID: catalog.LibraryID, Kind: string(domain.LibraryProject), OrgID: actor.OrgID, ProjectID: &binding.TargetProjectID, Revision: 1}
+	if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(&identity).Error; err != nil {
 		return err
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &binding.TargetProjectID}
@@ -85,7 +87,8 @@ func registerCopiedLibrary(tx *gorm.DB, actor identityapp.Principal, binding app
 				next = append(next, folder)
 				continue
 			}
-			if err := libraryChanged(tx, `INSERT INTO media.library_folder(id,library_id,library_kind,parent_id,name,name_key,position,style,theme,revision,create_time,update_time) VALUES(?,?,'project',?,?,?,?,?,?,1,?,?)`, folder.ID, folder.LibraryID, folder.ParentID, folder.Name, folder.NameKey(), folder.Position, folder.Style, folder.Theme, folder.CreatedAt, folder.UpdatedAt); err != nil {
+			row := libraryFolderRow{ID: folder.ID, LibraryID: folder.LibraryID, LibraryKind: string(folder.Kind), ParentID: folder.ParentID, Name: folder.Name, NameKey: folder.NameKey(), Position: folder.Position, Style: folder.Style, Theme: folder.Theme, Revision: folder.Revision, CreateTime: folder.CreatedAt, UpdateTime: folder.UpdatedAt}
+			if err := tx.Create(&row).Error; err != nil {
 				return err
 			}
 			inserted[folder.ID] = true
@@ -125,7 +128,7 @@ func verifyCopiedLibrary(tx *gorm.DB, actor identityapp.Principal, binding appli
 		return err
 	}
 	var rows []libraryItemRow
-	if err := tx.Raw(`SELECT * FROM media.library_item WHERE library_id=? ORDER BY id LIMIT 8193 FOR SHARE`, row.ID).Scan(&rows).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("library_id = ?", row.ID).Order("id").Limit(8193).Find(&rows).Error; err != nil {
 		return err
 	}
 	if catalog == nil {

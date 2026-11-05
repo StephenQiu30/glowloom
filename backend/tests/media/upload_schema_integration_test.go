@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
@@ -31,15 +30,15 @@ func TestMediaUploadSchemaPersistsReceiptAndReplay(t *testing.T) {
 		t.Fatal("upload receipt relation missing from initialized schema")
 	}
 	actor, project := mediaStoreProject(t, database)
-	service := mediaapp.NewUploadService(mediaTestStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
+	service := mediaFixtureMockUpload(t, database, mediaTestStore(database), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{})
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project
-	result, err := service.Upload(ctx, in)
+	result, err := fixtureProjectUpload(ctx, service, in)
 	if err != nil {
 		t.Fatalf("seed durable receipt: %v", err)
 	}
-	replayed, err := service.Upload(ctx, in)
+	replayed, err := fixtureProjectUpload(ctx, service, in)
 	if err != nil || !reflect.DeepEqual(result, replayed) {
 		t.Fatalf("permanent upload receipt changed on replay: result=%+v err=%v", replayed, err)
 	}

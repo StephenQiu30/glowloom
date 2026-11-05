@@ -1,0 +1,3062 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Glowloom agent internal API",
+    "version": "1"
+  },
+  "components": {
+    "securitySchemes": {
+      "serviceIdentity": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {}
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/internal/agent/sessions": {
+      "post": {
+        "operationId": "createAgentSession",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "actor_id",
+                  "org_id",
+                  "scope_id",
+                  "project_id",
+                  "request_id",
+                  "content_hash",
+                  "title"
+                ],
+                "properties": {
+                  "actor_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "org_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scope_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "canvas_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "content_hash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "actor_id",
+                    "org_id",
+                    "scope_id",
+                    "project_id",
+                    "id",
+                    "title",
+                    "execution_revision"
+                  ],
+                  "properties": {
+                    "actor_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "org_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "scope_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "canvas_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "execution_revision": {
+                      "type": "integer"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "run": {
+                      "type": "object",
+                      "required": [
+                        "execution_available",
+                        "messages_page",
+                        "root_run_id",
+                        "session_id",
+                        "submission_id",
+                        "goal",
+                        "manifest",
+                        "state",
+                        "snapshot_cursor",
+                        "events"
+                      ],
+                      "properties": {
+                        "execution_available": {
+                          "type": "boolean"
+                        },
+                        "history_incomplete": {
+                          "type": "boolean"
+                        },
+                        "messages_page": {
+                          "type": "object",
+                          "required": [
+                            "items",
+                            "through"
+                          ],
+                          "properties": {
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "message_id",
+                                  "run_id",
+                                  "conversation_id",
+                                  "sequence",
+                                  "part_index",
+                                  "kind",
+                                  "content"
+                                ],
+                                "properties": {
+                                  "message_id": {
+                                    "type": "string"
+                                  },
+                                  "run_id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "conversation_id": {
+                                    "type": "integer"
+                                  },
+                                  "sequence": {
+                                    "type": "string"
+                                  },
+                                  "part_index": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "content": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "next_cursor": {
+                              "type": "string"
+                            },
+                            "through": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "root_run_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "session_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "submission_id": {
+                          "type": "string"
+                        },
+                        "goal": {
+                          "type": "string"
+                        },
+                        "input": {
+                          "type": "object",
+                          "required": [
+                            "schema_version",
+                            "draft",
+                            "input_hash",
+                            "plain_text",
+                            "prompt",
+                            "media_pins"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            "references_unavailable": {
+                              "type": "boolean"
+                            },
+                            "draft": {
+                              "type": "object",
+                              "additionalProperties": {}
+                            },
+                            "input_hash": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "plain_text": {
+                              "type": "string",
+                              "maxLength": 1048576
+                            },
+                            "prompt": {
+                              "type": "string",
+                              "maxLength": 1048576
+                            },
+                            "media_pins": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "sourceId",
+                                  "sourceVersion",
+                                  "mediaKind"
+                                ],
+                                "properties": {
+                                  "sourceId": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "sourceVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "mediaKind": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "image"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "video"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "audio"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "bindingId": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "maxItems": 4
+                            },
+                            "quote": {
+                              "type": "object",
+                              "required": [
+                                "run_id",
+                                "message_id",
+                                "text",
+                                "content_hash"
+                              ],
+                              "properties": {
+                                "run_id": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "message_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "maxLength": 65536
+                                },
+                                "content_hash": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                }
+                              }
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "retry_of_run_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "manifest": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "state": {
+                          "type": "object",
+                          "required": [
+                            "status",
+                            "execution_revision"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "execution_revision": {
+                              "type": "integer"
+                            },
+                            "authorization_revision": {
+                              "type": "integer"
+                            },
+                            "root_run_id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "segment_id": {
+                              "type": "string"
+                            },
+                            "model_steps": {
+                              "type": "integer"
+                            },
+                            "tool_steps": {
+                              "type": "integer"
+                            },
+                            "goal": {
+                              "type": "string"
+                            },
+                            "plan": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "title",
+                                  "status"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "depends_on": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "artifacts": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "delegations": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "task_id",
+                                  "conversation_id",
+                                  "role",
+                                  "status"
+                                ],
+                                "properties": {
+                                  "task_id": {
+                                    "type": "string"
+                                  },
+                                  "conversation_id": {
+                                    "type": "integer"
+                                  },
+                                  "role": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "source_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "adopted": {
+                                    "type": "boolean"
+                                  },
+                                  "model_budget": {
+                                    "type": "integer"
+                                  },
+                                  "tool_budget": {
+                                    "type": "integer"
+                                  },
+                                  "model_used": {
+                                    "type": "integer"
+                                  },
+                                  "tool_used": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            },
+                            "adopted": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": {}
+                              }
+                            },
+                            "pending_proposal": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "proposal": {
+                              "type": "object",
+                              "required": [
+                                "proposal_id",
+                                "candidate_hash",
+                                "authorization_revision",
+                                "candidate"
+                              ],
+                              "properties": {
+                                "proposal_id": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "candidate_hash": {
+                                  "type": "string"
+                                },
+                                "authorization_revision": {
+                                  "type": "integer"
+                                },
+                                "candidate": {
+                                  "type": "object",
+                                  "additionalProperties": {}
+                                },
+                                "canvas_revision": {
+                                  "type": "integer"
+                                },
+                                "price_version": {
+                                  "type": "string"
+                                },
+                                "quote_micros": {
+                                  "type": "integer"
+                                },
+                                "budget_micros": {
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "reconciliation": {
+                              "type": "object",
+                              "additionalProperties": {}
+                            },
+                            "failure": {
+                              "type": "object",
+                              "additionalProperties": {}
+                            }
+                          }
+                        },
+                        "snapshot_cursor": {
+                          "type": "string"
+                        },
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "event_type",
+                              "payload"
+                            ],
+                            "properties": {
+                              "event_type": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "type": "object",
+                                "additionalProperties": {}
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listAgentSessions",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "actor_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "project_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "actor_id",
+                          "org_id",
+                          "scope_id",
+                          "project_id",
+                          "id",
+                          "title",
+                          "execution_revision"
+                        ],
+                        "properties": {
+                          "actor_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "org_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "scope_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "project_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "canvas_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "execution_revision": {
+                            "type": "integer"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "run": {
+                            "type": "object",
+                            "required": [
+                              "execution_available",
+                              "messages_page",
+                              "root_run_id",
+                              "session_id",
+                              "submission_id",
+                              "goal",
+                              "manifest",
+                              "state",
+                              "snapshot_cursor",
+                              "events"
+                            ],
+                            "properties": {
+                              "execution_available": {
+                                "type": "boolean"
+                              },
+                              "history_incomplete": {
+                                "type": "boolean"
+                              },
+                              "messages_page": {
+                                "type": "object",
+                                "required": [
+                                  "items",
+                                  "through"
+                                ],
+                                "properties": {
+                                  "items": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": [
+                                        "message_id",
+                                        "run_id",
+                                        "conversation_id",
+                                        "sequence",
+                                        "part_index",
+                                        "kind",
+                                        "content"
+                                      ],
+                                      "properties": {
+                                        "message_id": {
+                                          "type": "string"
+                                        },
+                                        "run_id": {
+                                          "type": "string",
+                                          "format": "uuid"
+                                        },
+                                        "conversation_id": {
+                                          "type": "integer"
+                                        },
+                                        "sequence": {
+                                          "type": "string"
+                                        },
+                                        "part_index": {
+                                          "type": "integer",
+                                          "minimum": 0
+                                        },
+                                        "kind": {
+                                          "type": "string"
+                                        },
+                                        "content": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "next_cursor": {
+                                    "type": "string"
+                                  },
+                                  "through": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "root_run_id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "session_id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "submission_id": {
+                                "type": "string"
+                              },
+                              "goal": {
+                                "type": "string"
+                              },
+                              "input": {
+                                "type": "object",
+                                "required": [
+                                  "schema_version",
+                                  "draft",
+                                  "input_hash",
+                                  "plain_text",
+                                  "prompt",
+                                  "media_pins"
+                                ],
+                                "properties": {
+                                  "schema_version": {
+                                    "type": "number",
+                                    "enum": [
+                                      1
+                                    ]
+                                  },
+                                  "references_unavailable": {
+                                    "type": "boolean"
+                                  },
+                                  "draft": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                  },
+                                  "input_hash": {
+                                    "type": "string",
+                                    "pattern": "^[a-f0-9]{64}$"
+                                  },
+                                  "plain_text": {
+                                    "type": "string",
+                                    "maxLength": 1048576
+                                  },
+                                  "prompt": {
+                                    "type": "string",
+                                    "maxLength": 1048576
+                                  },
+                                  "media_pins": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": [
+                                        "sourceId",
+                                        "sourceVersion",
+                                        "mediaKind"
+                                      ],
+                                      "properties": {
+                                        "sourceId": {
+                                          "type": "string",
+                                          "format": "uuid"
+                                        },
+                                        "sourceVersion": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 256
+                                        },
+                                        "mediaKind": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "image"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "video"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "audio"
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "bindingId": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "maxItems": 4
+                                  },
+                                  "quote": {
+                                    "type": "object",
+                                    "required": [
+                                      "run_id",
+                                      "message_id",
+                                      "text",
+                                      "content_hash"
+                                    ],
+                                    "properties": {
+                                      "run_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                      },
+                                      "message_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "maxLength": 65536
+                                      },
+                                      "content_hash": {
+                                        "type": "string",
+                                        "pattern": "^[a-f0-9]{64}$"
+                                      }
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              "retry_of_run_id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "manifest": {
+                                "type": "object",
+                                "additionalProperties": {}
+                              },
+                              "state": {
+                                "type": "object",
+                                "required": [
+                                  "status",
+                                  "execution_revision"
+                                ],
+                                "properties": {
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "execution_revision": {
+                                    "type": "integer"
+                                  },
+                                  "authorization_revision": {
+                                    "type": "integer"
+                                  },
+                                  "root_run_id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "segment_id": {
+                                    "type": "string"
+                                  },
+                                  "model_steps": {
+                                    "type": "integer"
+                                  },
+                                  "tool_steps": {
+                                    "type": "integer"
+                                  },
+                                  "goal": {
+                                    "type": "string"
+                                  },
+                                  "plan": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": [
+                                        "id",
+                                        "title",
+                                        "status"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "status": {
+                                          "type": "string"
+                                        },
+                                        "depends_on": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "artifacts": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "delegations": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": [
+                                        "task_id",
+                                        "conversation_id",
+                                        "role",
+                                        "status"
+                                      ],
+                                      "properties": {
+                                        "task_id": {
+                                          "type": "string"
+                                        },
+                                        "conversation_id": {
+                                          "type": "integer"
+                                        },
+                                        "role": {
+                                          "type": "string"
+                                        },
+                                        "status": {
+                                          "type": "string"
+                                        },
+                                        "source_refs": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "adopted": {
+                                          "type": "boolean"
+                                        },
+                                        "model_budget": {
+                                          "type": "integer"
+                                        },
+                                        "tool_budget": {
+                                          "type": "integer"
+                                        },
+                                        "model_used": {
+                                          "type": "integer"
+                                        },
+                                        "tool_used": {
+                                          "type": "integer"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "adopted": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": {}
+                                    }
+                                  },
+                                  "pending_proposal": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "proposal": {
+                                    "type": "object",
+                                    "required": [
+                                      "proposal_id",
+                                      "candidate_hash",
+                                      "authorization_revision",
+                                      "candidate"
+                                    ],
+                                    "properties": {
+                                      "proposal_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                      },
+                                      "candidate_hash": {
+                                        "type": "string"
+                                      },
+                                      "authorization_revision": {
+                                        "type": "integer"
+                                      },
+                                      "candidate": {
+                                        "type": "object",
+                                        "additionalProperties": {}
+                                      },
+                                      "canvas_revision": {
+                                        "type": "integer"
+                                      },
+                                      "price_version": {
+                                        "type": "string"
+                                      },
+                                      "quote_micros": {
+                                        "type": "integer"
+                                      },
+                                      "budget_micros": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  },
+                                  "reconciliation": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                  },
+                                  "failure": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                  }
+                                }
+                              },
+                              "snapshot_cursor": {
+                                "type": "string"
+                              },
+                              "events": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "required": [
+                                    "event_type",
+                                    "payload"
+                                  ],
+                                  "properties": {
+                                    "event_type": {
+                                      "type": "string"
+                                    },
+                                    "payload": {
+                                      "type": "object",
+                                      "additionalProperties": {}
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/agent/sessions/{sid}": {
+      "get": {
+        "operationId": "getAgentSession",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "actor_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "project_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "sid",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "actor_id",
+                    "org_id",
+                    "scope_id",
+                    "project_id",
+                    "id",
+                    "title",
+                    "execution_revision"
+                  ],
+                  "properties": {
+                    "actor_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "org_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "scope_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "canvas_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "execution_revision": {
+                      "type": "integer"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "run": {
+                      "type": "object",
+                      "required": [
+                        "execution_available",
+                        "messages_page",
+                        "root_run_id",
+                        "session_id",
+                        "submission_id",
+                        "goal",
+                        "manifest",
+                        "state",
+                        "snapshot_cursor",
+                        "events"
+                      ],
+                      "properties": {
+                        "execution_available": {
+                          "type": "boolean"
+                        },
+                        "history_incomplete": {
+                          "type": "boolean"
+                        },
+                        "messages_page": {
+                          "type": "object",
+                          "required": [
+                            "items",
+                            "through"
+                          ],
+                          "properties": {
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "message_id",
+                                  "run_id",
+                                  "conversation_id",
+                                  "sequence",
+                                  "part_index",
+                                  "kind",
+                                  "content"
+                                ],
+                                "properties": {
+                                  "message_id": {
+                                    "type": "string"
+                                  },
+                                  "run_id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "conversation_id": {
+                                    "type": "integer"
+                                  },
+                                  "sequence": {
+                                    "type": "string"
+                                  },
+                                  "part_index": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "content": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "next_cursor": {
+                              "type": "string"
+                            },
+                            "through": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "root_run_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "session_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "submission_id": {
+                          "type": "string"
+                        },
+                        "goal": {
+                          "type": "string"
+                        },
+                        "input": {
+                          "type": "object",
+                          "required": [
+                            "schema_version",
+                            "draft",
+                            "input_hash",
+                            "plain_text",
+                            "prompt",
+                            "media_pins"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            "references_unavailable": {
+                              "type": "boolean"
+                            },
+                            "draft": {
+                              "type": "object",
+                              "additionalProperties": {}
+                            },
+                            "input_hash": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "plain_text": {
+                              "type": "string",
+                              "maxLength": 1048576
+                            },
+                            "prompt": {
+                              "type": "string",
+                              "maxLength": 1048576
+                            },
+                            "media_pins": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "sourceId",
+                                  "sourceVersion",
+                                  "mediaKind"
+                                ],
+                                "properties": {
+                                  "sourceId": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "sourceVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "mediaKind": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "image"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "video"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "audio"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "bindingId": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "maxItems": 4
+                            },
+                            "quote": {
+                              "type": "object",
+                              "required": [
+                                "run_id",
+                                "message_id",
+                                "text",
+                                "content_hash"
+                              ],
+                              "properties": {
+                                "run_id": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "message_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "maxLength": 65536
+                                },
+                                "content_hash": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                }
+                              }
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "retry_of_run_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "manifest": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "state": {
+                          "type": "object",
+                          "required": [
+                            "status",
+                            "execution_revision"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "execution_revision": {
+                              "type": "integer"
+                            },
+                            "authorization_revision": {
+                              "type": "integer"
+                            },
+                            "root_run_id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "segment_id": {
+                              "type": "string"
+                            },
+                            "model_steps": {
+                              "type": "integer"
+                            },
+                            "tool_steps": {
+                              "type": "integer"
+                            },
+                            "goal": {
+                              "type": "string"
+                            },
+                            "plan": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "title",
+                                  "status"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "depends_on": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "artifacts": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "delegations": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "task_id",
+                                  "conversation_id",
+                                  "role",
+                                  "status"
+                                ],
+                                "properties": {
+                                  "task_id": {
+                                    "type": "string"
+                                  },
+                                  "conversation_id": {
+                                    "type": "integer"
+                                  },
+                                  "role": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "source_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "adopted": {
+                                    "type": "boolean"
+                                  },
+                                  "model_budget": {
+                                    "type": "integer"
+                                  },
+                                  "tool_budget": {
+                                    "type": "integer"
+                                  },
+                                  "model_used": {
+                                    "type": "integer"
+                                  },
+                                  "tool_used": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            },
+                            "adopted": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": {}
+                              }
+                            },
+                            "pending_proposal": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "proposal": {
+                              "type": "object",
+                              "required": [
+                                "proposal_id",
+                                "candidate_hash",
+                                "authorization_revision",
+                                "candidate"
+                              ],
+                              "properties": {
+                                "proposal_id": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "candidate_hash": {
+                                  "type": "string"
+                                },
+                                "authorization_revision": {
+                                  "type": "integer"
+                                },
+                                "candidate": {
+                                  "type": "object",
+                                  "additionalProperties": {}
+                                },
+                                "canvas_revision": {
+                                  "type": "integer"
+                                },
+                                "price_version": {
+                                  "type": "string"
+                                },
+                                "quote_micros": {
+                                  "type": "integer"
+                                },
+                                "budget_micros": {
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "reconciliation": {
+                              "type": "object",
+                              "additionalProperties": {}
+                            },
+                            "failure": {
+                              "type": "object",
+                              "additionalProperties": {}
+                            }
+                          }
+                        },
+                        "snapshot_cursor": {
+                          "type": "string"
+                        },
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "event_type",
+                              "payload"
+                            ],
+                            "properties": {
+                              "event_type": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "type": "object",
+                                "additionalProperties": {}
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/agent/sessions/{sid}/runs": {
+      "get": {
+        "operationId": "listAgentRuns",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "actor_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "project_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "sid",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "root_run_id",
+                          "session_id",
+                          "accepted_revision",
+                          "created_at",
+                          "status",
+                          "input_excerpt"
+                        ],
+                        "properties": {
+                          "root_run_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "session_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "accepted_revision": {
+                            "type": "integer"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "input_excerpt": {
+                            "type": "string",
+                            "maxLength": 480
+                          },
+                          "retry_of_run_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        }
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAgentRun",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "actor_id",
+                  "org_id",
+                  "scope_id",
+                  "project_id",
+                  "request_id",
+                  "content_hash",
+                  "expected_execution_revision",
+                  "goal",
+                  "input",
+                  "manifest"
+                ],
+                "properties": {
+                  "actor_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "org_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scope_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "canvas_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "content_hash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "expected_execution_revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "goal": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1048576
+                  },
+                  "input": {
+                    "type": "object",
+                    "required": [
+                      "schema_version",
+                      "draft",
+                      "input_hash",
+                      "plain_text",
+                      "prompt",
+                      "media_pins"
+                    ],
+                    "properties": {
+                      "schema_version": {
+                        "type": "number",
+                        "enum": [
+                          1
+                        ]
+                      },
+                      "references_unavailable": {
+                        "type": "boolean"
+                      },
+                      "draft": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      },
+                      "input_hash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "plain_text": {
+                        "type": "string",
+                        "maxLength": 1048576
+                      },
+                      "prompt": {
+                        "type": "string",
+                        "maxLength": 1048576
+                      },
+                      "media_pins": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "sourceId",
+                            "sourceVersion",
+                            "mediaKind"
+                          ],
+                          "properties": {
+                            "sourceId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "sourceVersion": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "mediaKind": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "image"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "video"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "audio"
+                                  ]
+                                }
+                              ]
+                            },
+                            "bindingId": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "maxItems": 4
+                      },
+                      "quote": {
+                        "type": "object",
+                        "required": [
+                          "run_id",
+                          "message_id",
+                          "text",
+                          "content_hash"
+                        ],
+                        "properties": {
+                          "run_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "message_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "text": {
+                            "type": "string",
+                            "maxLength": 65536
+                          },
+                          "content_hash": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "retry_of_run_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "manifest": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "sid",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "root_run_id",
+                    "session_id",
+                    "submission_id",
+                    "status",
+                    "execution_revision"
+                  ],
+                  "properties": {
+                    "root_run_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "submission_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "execution_revision": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/agent/sessions/{sid}/submissions/current": {
+      "get": {
+        "operationId": "getCurrentAgentSubmission",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "actor_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "project_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "sid",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "latest_accepted": {
+                      "type": "object",
+                      "required": [
+                        "root_run_id",
+                        "session_id",
+                        "submission_id",
+                        "status",
+                        "execution_revision"
+                      ],
+                      "properties": {
+                        "root_run_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "session_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "submission_id": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "execution_revision": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "active_run": {
+                      "type": "object",
+                      "required": [
+                        "root_run_id",
+                        "session_id",
+                        "accepted_revision",
+                        "created_at",
+                        "status",
+                        "input_excerpt"
+                      ],
+                      "properties": {
+                        "root_run_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "session_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "accepted_revision": {
+                          "type": "integer"
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "input_excerpt": {
+                          "type": "string",
+                          "maxLength": 480
+                        },
+                        "retry_of_run_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      }
+                    },
+                    "unresolved_run_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/agent/sessions/{sid}/submissions/{requestId}": {
+      "get": {
+        "operationId": "getAgentSubmission",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "actor_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "project_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "sid",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "requestId",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "root_run_id",
+                    "session_id",
+                    "submission_id",
+                    "status",
+                    "execution_revision"
+                  ],
+                  "properties": {
+                    "root_run_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "submission_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "execution_revision": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/agent/runs/{rid}/messages": {
+      "get": {
+        "operationId": "listAgentMessages",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "actor_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "project_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "in": "query",
+            "name": "before",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+:[0-9]+$",
+              "maxLength": 64
+            },
+            "in": "query",
+            "name": "through",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "rid",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "through"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "message_id",
+                          "run_id",
+                          "conversation_id",
+                          "sequence",
+                          "part_index",
+                          "kind",
+                          "content"
+                        ],
+                        "properties": {
+                          "message_id": {
+                            "type": "string"
+                          },
+                          "run_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "conversation_id": {
+                            "type": "integer"
+                          },
+                          "sequence": {
+                            "type": "string"
+                          },
+                          "part_index": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    },
+                    "through": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/agent/runs/{rid}/messages/{messageId}": {
+      "get": {
+        "operationId": "getAgentMessage",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "actor_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "project_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "rid",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "in": "path",
+            "name": "messageId",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message_id",
+                    "run_id",
+                    "conversation_id",
+                    "sequence",
+                    "part_index",
+                    "kind",
+                    "content"
+                  ],
+                  "properties": {
+                    "message_id": {
+                      "type": "string"
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "conversation_id": {
+                      "type": "integer"
+                    },
+                    "sequence": {
+                      "type": "string"
+                    },
+                    "part_index": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/agent/runs/{rid}": {
+      "get": {
+        "operationId": "getAgentRun",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "actor_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "project_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "rid",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "execution_available",
+                    "messages_page",
+                    "root_run_id",
+                    "session_id",
+                    "submission_id",
+                    "goal",
+                    "manifest",
+                    "state",
+                    "snapshot_cursor",
+                    "events"
+                  ],
+                  "properties": {
+                    "execution_available": {
+                      "type": "boolean"
+                    },
+                    "history_incomplete": {
+                      "type": "boolean"
+                    },
+                    "messages_page": {
+                      "type": "object",
+                      "required": [
+                        "items",
+                        "through"
+                      ],
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "message_id",
+                              "run_id",
+                              "conversation_id",
+                              "sequence",
+                              "part_index",
+                              "kind",
+                              "content"
+                            ],
+                            "properties": {
+                              "message_id": {
+                                "type": "string"
+                              },
+                              "run_id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "conversation_id": {
+                                "type": "integer"
+                              },
+                              "sequence": {
+                                "type": "string"
+                              },
+                              "part_index": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "content": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "next_cursor": {
+                          "type": "string"
+                        },
+                        "through": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "root_run_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "submission_id": {
+                      "type": "string"
+                    },
+                    "goal": {
+                      "type": "string"
+                    },
+                    "input": {
+                      "type": "object",
+                      "required": [
+                        "schema_version",
+                        "draft",
+                        "input_hash",
+                        "plain_text",
+                        "prompt",
+                        "media_pins"
+                      ],
+                      "properties": {
+                        "schema_version": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "references_unavailable": {
+                          "type": "boolean"
+                        },
+                        "draft": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "input_hash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "plain_text": {
+                          "type": "string",
+                          "maxLength": 1048576
+                        },
+                        "prompt": {
+                          "type": "string",
+                          "maxLength": 1048576
+                        },
+                        "media_pins": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "sourceId",
+                              "sourceVersion",
+                              "mediaKind"
+                            ],
+                            "properties": {
+                              "sourceId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "sourceVersion": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "mediaKind": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "image"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "video"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "audio"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "bindingId": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "maxItems": 4
+                        },
+                        "quote": {
+                          "type": "object",
+                          "required": [
+                            "run_id",
+                            "message_id",
+                            "text",
+                            "content_hash"
+                          ],
+                          "properties": {
+                            "run_id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "message_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "text": {
+                              "type": "string",
+                              "maxLength": 65536
+                            },
+                            "content_hash": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            }
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "retry_of_run_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "manifest": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "state": {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "execution_revision"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "execution_revision": {
+                          "type": "integer"
+                        },
+                        "authorization_revision": {
+                          "type": "integer"
+                        },
+                        "root_run_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "segment_id": {
+                          "type": "string"
+                        },
+                        "model_steps": {
+                          "type": "integer"
+                        },
+                        "tool_steps": {
+                          "type": "integer"
+                        },
+                        "goal": {
+                          "type": "string"
+                        },
+                        "plan": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "title",
+                              "status"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "depends_on": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "artifacts": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "delegations": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "task_id",
+                              "conversation_id",
+                              "role",
+                              "status"
+                            ],
+                            "properties": {
+                              "task_id": {
+                                "type": "string"
+                              },
+                              "conversation_id": {
+                                "type": "integer"
+                              },
+                              "role": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "source_refs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "adopted": {
+                                "type": "boolean"
+                              },
+                              "model_budget": {
+                                "type": "integer"
+                              },
+                              "tool_budget": {
+                                "type": "integer"
+                              },
+                              "model_used": {
+                                "type": "integer"
+                              },
+                              "tool_used": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        },
+                        "adopted": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        },
+                        "pending_proposal": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "proposal": {
+                          "type": "object",
+                          "required": [
+                            "proposal_id",
+                            "candidate_hash",
+                            "authorization_revision",
+                            "candidate"
+                          ],
+                          "properties": {
+                            "proposal_id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "candidate_hash": {
+                              "type": "string"
+                            },
+                            "authorization_revision": {
+                              "type": "integer"
+                            },
+                            "candidate": {
+                              "type": "object",
+                              "additionalProperties": {}
+                            },
+                            "canvas_revision": {
+                              "type": "integer"
+                            },
+                            "price_version": {
+                              "type": "string"
+                            },
+                            "quote_micros": {
+                              "type": "integer"
+                            },
+                            "budget_micros": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        "reconciliation": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "failure": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      }
+                    },
+                    "snapshot_cursor": {
+                      "type": "string"
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "event_type",
+                          "payload"
+                        ],
+                        "properties": {
+                          "event_type": {
+                            "type": "string"
+                          },
+                          "payload": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/agent/runs/{rid}/commands": {
+      "post": {
+        "operationId": "applyAgentDecision",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "actor_id",
+                  "org_id",
+                  "scope_id",
+                  "project_id",
+                  "decision_id",
+                  "root_run_id",
+                  "session_id",
+                  "authorization_revision",
+                  "action",
+                  "content_hash"
+                ],
+                "properties": {
+                  "actor_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "org_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scope_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "canvas_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "decision_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "root_run_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "authorization_revision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "action": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "approve"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "reject"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "pause"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "resume"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "stop"
+                        ]
+                      }
+                    ]
+                  },
+                  "content_hash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "rid",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "decision_id",
+                    "authorization_revision",
+                    "status",
+                    "execution_revision",
+                    "receipt_id"
+                  ],
+                  "properties": {
+                    "decision_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "authorization_revision": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "execution_revision": {
+                      "type": "integer"
+                    },
+                    "receipt_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/agent/runs/{rid}/events": {
+      "get": {
+        "operationId": "subscribeAgentEvents",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "actor_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "project_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "rid",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "serviceIdentity": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    }
+  }
+}

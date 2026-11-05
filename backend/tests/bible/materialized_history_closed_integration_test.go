@@ -3,14 +3,13 @@ package bible_test
 import (
 	"encoding/json"
 	"errors"
-	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+
 	"github.com/google/uuid"
-	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
@@ -18,49 +17,20 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 )
 
 func bibleClosedHistoryDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	t.Helper()
-	dsn := os.Getenv("GLOWLOOM_TEST_BIBLE_CLOSED_DB_DSN")
-	if dsn == "" {
-		t.Skip("set isolated GLOWLOOM_TEST_BIBLE_CLOSED_DB_DSN")
-	}
-	parsed, err := url.Parse(dsn)
-	if err != nil || parsed.Path != "/glowloom_reference" {
-		t.Fatal("closed history requires isolated glowloom_reference database", err)
-	}
-	query := parsed.Query()
-	query.Set("options", "-c role=glowloom_app")
-	parsed.RawQuery = query.Encode()
-	open := func(dsn string) *gorm.DB {
-		client, err := platformdb.Open(t.Context(), dsn, noop.NewTracerProvider())
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			if err := client.Close(); err != nil {
-				t.Error(err)
-			}
-		})
-		return client.DB
-	}
-	runtime, owner := open(parsed.String()), open(dsn)
-	var role string
-	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
-		t.Fatal("closed history requires actual nonowner", role, err)
-	}
-	return runtime, owner
+	return bibleTestDB(t)
 }
 
-func bibleClosedService(db *gorm.DB, objects *objectstorage.Client) *app.Service {
+func bibleClosedService(t *testing.T, db *gorm.DB, _ *objectstorage.Client) *app.Service {
 	return app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess {
 		return bibleFixtureProjectAccess(tx)
 	}, Media: func(tx *gorm.DB) app.MediaReferences {
-		return actualBibleMedia{mediaapp.NewReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
+		return actualBibleMedia{mediaapp.NewRoutedReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}
 	}, Scopes: func(tx *gorm.DB) app.ScriptScopes {
 		return currentBibleScopes{scriptpg.NewBibleScopes(tx, bibleFixtureProjectAccess(tx))}
 	}}), time.Now)
@@ -70,7 +40,7 @@ func bibleClosedCharacter(t *testing.T, db, owner *gorm.DB) (identityapp.Princip
 	t.Helper()
 	objects := bibleObjects(t)
 	fixture := coordinatedContentFixture(t, db, owner, objects)
-	service := bibleClosedService(db, objects)
+	service := bibleClosedService(t, db, objects)
 	detail, err := service.Find(t.Context(), fixture.actor, fixture.project, domain.KindCharacter, fixture.character)
 	if err != nil || detail.Current.Character.Voice == nil || len(detail.Current.Character.Looks[0].AppliesTo) != 1 {
 		t.Fatal("actual materialized voice and formal scene fixture", err)

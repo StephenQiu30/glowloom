@@ -3,8 +3,9 @@ package operation_test
 import (
 	"context"
 	"errors"
-	"io"
 	"testing"
+
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 
 	"github.com/google/uuid"
 
@@ -17,15 +18,15 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func TestM1StagedIngestPrivateImageCreatesOneCandidate(t *testing.T) {
-	objects := receiptTestObjects(t)
+	receiptTestObjects(t)
 	database := operationStoreDB(t)
 	identity, store := seedDispatchCall(t, database, true)
 	freezeReceiptFixtureModel(t, database, identity)
-	receipts := application.NewProviderStageService(staging.NewObjects(objects), store)
+	businessPinOperation(t, database, identity)
+	receipts := application.NewRoutedProviderStageService(staging.NewRoutedFactory(businessStorageRegistry(t), pgmedia.NewStorageRoutes(database)), store)
 	launch := &codexTestLauncher{t: t, behavior: "success"}
 	adapter, err := codex.New(store, launch, receipts, codex.Config{WorkRoot: t.TempDir()})
 	if err != nil {
@@ -41,7 +42,8 @@ func TestM1StagedIngestPrivateImageCreatesOneCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := &stagedFaultRepository{Repository: pgmedia.NewScopedIngestRepository(database, app.NewMediaWorkerScopeAccess), failSave: true}
-	service := mediaapp.NewStagedIngestService(repo, staged.NewReader(receipts), mediaflow.FFProber{}, mediaflow.FFRenderer{}, stagedMediaObjects{client: objects})
+	businessPinOperation(t, database, identity)
+	service := mediaapp.NewRoutedStagedIngestService(repo, staged.NewReader(receipts), mediaflow.FFProber{}, mediaflow.FFRenderer{}, mediaobjects.NewGeneratedObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(database)), pgmedia.NewStorageRoutes(database))
 	input := mediaapp.IngestInput{OperationID: identity.OperationID.String(), SeqNo: 1, Receipt: result.Receipt}
 	if _, err := service.Ingest(t.Context(), input); err == nil {
 		t.Fatal("injected DB failure lost")
@@ -52,8 +54,17 @@ func TestM1StagedIngestPrivateImageCreatesOneCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	second, err := service.Ingest(t.Context(), input)
-	if err != nil || first != second {
-		t.Fatalf("candidate replay changed: %v", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ObjectLocation == nil || second.ObjectLocation == nil || first.ObjectLocation.ID != second.ObjectLocation.ID || first.ObjectLocation.Ref != second.ObjectLocation.Ref {
+		t.Fatal("candidate replay changed physical identity", first, second)
+	}
+	// Ledger state and fact pointers are refreshed during readback. Replay must
+	// preserve the complete immutable output and the same saved location identity.
+	first.ObjectLocation, second.ObjectLocation = nil, nil
+	if first != second {
+		t.Fatal("candidate replay changed immutable output", first, second)
 	}
 	var count int64
 	if err := database.Raw(`SELECT COUNT(*) FROM operation.operation_output WHERE operation_id=?::uuid`, identity.OperationID.String()).Scan(&count).Error; err != nil {
@@ -105,18 +116,4 @@ func (r *stagedFaultRepository) SaveOutput(ctx context.Context, asset mediadomai
 		return mediaapp.IngestOutput{}, errors.New("fixture media database interruption")
 	}
 	return r.Repository.SaveOutput(ctx, asset, renditions, seq, id)
-}
-
-type stagedMediaObjects struct{ client *objectstorage.Client }
-
-func (s stagedMediaObjects) PutIfAbsent(ctx context.Context, key string, r io.Reader, size int64, mime, digest string) error {
-	err := s.client.PutIfAbsent(ctx, key, r, size, mime, digest)
-	if errors.Is(err, objectstorage.ErrObjectExists) {
-		return mediaapp.ErrObjectAlreadyExists
-	}
-	return err
-}
-func (s stagedMediaObjects) Stat(ctx context.Context, key string) (mediaapp.ObjectInfo, error) {
-	info, err := s.client.Stat(ctx, key)
-	return mediaapp.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256}, err
 }

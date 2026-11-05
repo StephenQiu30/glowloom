@@ -14,7 +14,7 @@ import (
 
 func depthPublic(tx *gorm.DB, r depthRow) (domain.DepthJob, error) {
 	j := r.job()
-	if r.Status == "review_required" || r.Status == "succeeded" {
+	if r.Status == domain.DepthReviewRequired || r.Status == domain.DepthSucceeded {
 		a, found, err := loadDepthArtifact(tx, r)
 		if err != nil {
 			return j, err
@@ -64,25 +64,18 @@ func (s *DepthStore) List(ctx context.Context, actor identityapp.Principal, in a
 		if err := s.authorize(ctx, tx, actor, in.ProjectID, false); err != nil {
 			return err
 		}
-		q := `SELECT * FROM mediatool.depth_job WHERE project_id=? AND org_id=?`
-		args := []any{in.ProjectID, actor.OrgID}
-		for _, f := range []struct {
-			column string
-			id     uuid.UUID
-		}{{"canvas_id", in.CanvasID}, {"node_id", in.NodeID}, {"id", in.After}} {
-			if f.id != uuid.Nil {
-				op := "="
-				if f.column == "id" {
-					op = "<"
-				}
-				q += " AND " + f.column + op + "?"
-				args = append(args, f.id)
-			}
+		query := tx.Model(&depthRow{}).Where("project_id = ? AND org_id = ?", in.ProjectID, actor.OrgID)
+		if in.CanvasID != uuid.Nil {
+			query = query.Where("canvas_id = ?", in.CanvasID)
 		}
-		q += ` ORDER BY id DESC LIMIT ?`
-		args = append(args, in.Limit)
+		if in.NodeID != uuid.Nil {
+			query = query.Where("node_id = ?", in.NodeID)
+		}
+		if in.After != uuid.Nil {
+			query = query.Where("id < ?", in.After)
+		}
 		var rows []depthRow
-		if err := tx.Raw(q, args...).Scan(&rows).Error; err != nil {
+		if err := query.Order("id DESC").Limit(in.Limit).Find(&rows).Error; err != nil {
 			return err
 		}
 		for _, r := range rows {
@@ -118,7 +111,7 @@ func (s *DepthStore) PreviewAsset(ctx context.Context, actor identityapp.Princip
 		if r.OrgID != actor.OrgID {
 			return application.ErrNotFound
 		}
-		if r.Status != "review_required" && r.Status != "succeeded" || r.CancellationRequested {
+		if r.Status != domain.DepthReviewRequired && r.Status != domain.DepthSucceeded || r.CancellationRequested {
 			return application.ErrConflict
 		}
 		a, found, err := loadDepthArtifact(tx, r)
@@ -132,10 +125,10 @@ func (s *DepthStore) PreviewAsset(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return normalize(err)
 		}
-		if asset.IsDelete || asset.ID != a.Asset.ID || asset.ProjectID != project || asset.ObjectKey != a.Asset.ObjectKey || asset.Kind != "video" || asset.SHA256 == nil || a.Asset.SHA256 == nil || *asset.SHA256 != *a.Asset.SHA256 || asset.ByteSize != a.Asset.ByteSize || asset.ContainsRealPerson || asset.ConsentRecordID != nil || (r.Status == "succeeded") != asset.CanReference() {
+		if asset.IsDelete || asset.ID != a.Asset.ID || asset.ProjectID != project || asset.ObjectKey != a.Asset.ObjectKey || asset.Kind != mediadomain.KindVideo || asset.SHA256 == nil || a.Asset.SHA256 == nil || *asset.SHA256 != *a.Asset.SHA256 || asset.ByteSize != a.Asset.ByteSize || asset.ContainsRealPerson || asset.ConsentRecordID != nil || (r.Status == domain.DepthSucceeded) != asset.CanReference() {
 			return application.ErrConflict
 		}
-		if r.Status == "review_required" && (asset.Status != "processing" || asset.ModerationStatus != "pending") {
+		if r.Status == domain.DepthReviewRequired && (asset.Status != mediadomain.StatusProcessing || asset.ModerationStatus != mediadomain.ModerationPending) {
 			return application.ErrConflict
 		}
 		j = r.job()
@@ -154,7 +147,10 @@ func (s *DepthStore) HasInflightWork(ctx context.Context, actor identityapp.Prin
 	if project == uuid.Nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return false, identityapp.ErrForbidden
 	}
-	var exists bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM mediatool.depth_job WHERE project_id=? AND org_id=? AND (status IN ('queued','running','review_required','cancel_requested') OR active_worker IS NOT NULL OR needs_reconciliation OR execution_unconfirmed))`, project, actor.OrgID).Scan(&exists).Error
-	return exists, err
+	var count int64
+	err := s.db.WithContext(ctx).Model(&depthRow{}).
+		Where("project_id = ? AND org_id = ? AND (status IN ? OR active_worker IS NOT NULL OR needs_reconciliation = ? OR execution_unconfirmed = ?)", project, actor.OrgID,
+			[]domain.DepthStatus{domain.DepthQueued, domain.DepthRunning, domain.DepthReviewRequired, domain.DepthCancelRequested}, true, true).
+		Count(&count).Error
+	return count > 0, err
 }

@@ -108,12 +108,6 @@ func ProvideMediaPurgeStore(database *gorm.DB) *pgmedia.PurgeStore {
 	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, provideMediaReferenceOwners, time.Now, NewMediaScopeAccess)
 }
 
-// NewMediaPurgeWorker composes the worker with current membership and reference owners.
-func NewMediaPurgeWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.PurgeWorker, *pgmedia.PurgeStore) {
-	store := ProvideMediaPurgeWorkerStore(database)
-	return mediaapp.NewPurgeWorker(store, mediaobjects.NewProjectCopyObjects(storage)), store
-}
-
 // NewMediaWorkerReferenceOwners composes retained owners without an initiating request session.
 func NewMediaWorkerReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 	return provideMediaReferenceOwnersWithAccess(tx, scopewire.ProvideWorkerProjectContentAccess(tx), NewMediaLibraryWorkerProjectAccess, NewMediaWorkerScopeAccess)
@@ -127,5 +121,5 @@ func ProvideMediaPurgeWorkerStore(database *gorm.DB) *pgmedia.PurgeStore {
 // NewRoutedMediaPurgeWorker keeps every removal on its saved physical location.
 func NewRoutedMediaPurgeWorker(database *gorm.DB, registry *objectstorage.Registry) (*mediaapp.PurgeWorker, *pgmedia.PurgeStore) {
 	store := ProvideMediaPurgeWorkerStore(database)
-	return mediaapp.NewPurgeWorker(store, mediaobjects.NewRoutedPurgeObjects(registry, pgmedia.NewStorageRoutes(database))), store
+	return mediaapp.NewPurgeWorker(store, mediaobjects.NewRoutedPurgeObjects(registry)), store
 }

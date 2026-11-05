@@ -22,7 +22,7 @@ func TestPersonalUploadConcurrentAcceptanceHasOneOriginalAndLibraryRevision(t *t
 			store := mediaTestStore(db)
 			gate := uploadBlockingProber{entered: make(chan struct{}, 2), release: make(chan struct{})}
 			objects := &uploadObjectsFake{}
-			service := mediaapp.NewScopedUploadService(store, store, gate, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+			service := mediaFixtureMockUpload(t, db, store, store, gate, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 			inputs := []mediaapp.UploadInput{uploadInput(t), uploadInput(t)}
 			for i := range inputs {
 				inputs[i].Actor = actor
@@ -35,7 +35,7 @@ func TestPersonalUploadConcurrentAcceptanceHasOneOriginalAndLibraryRevision(t *t
 			errs := make([]error, 2)
 			var wg sync.WaitGroup
 			for i := range inputs {
-				wg.Go(func() { results[i], errs[i] = service.UploadPersonal(t.Context(), inputs[i]) })
+				wg.Go(func() { results[i], errs[i] = fixturePersonalUpload(t.Context(), service, inputs[i]) })
 			}
 			for range 2 {
 				select {
@@ -78,11 +78,11 @@ func TestPersonalUploadRechecksRevocationBeforePublishing(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	service := mediaapp.NewScopedUploadService(store, store, probe, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaFixtureMockUpload(t, db, store, store, probe, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = uuid.Nil
-	if result, err := service.UploadPersonal(t.Context(), in); err == nil || result.Asset.ID != uuid.Nil || len(objects.items) != 0 {
+	if result, err := fixturePersonalUpload(t.Context(), service, in); err == nil || result.Asset.ID != uuid.Nil || len(objects.items) != 0 {
 		t.Fatal("mid upload revoked actor published", err, len(objects.items))
 	}
 	var count int64
@@ -97,7 +97,8 @@ func TestPersonalUploadReceiptSchemaKeepsOwnershipAndRuntimeACLClosed(t *testing
 	foreign, _ := mediaStoreProject(t, db)
 	original := uuid.New()
 	sourceKey := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/2026/10/" + original.String() + ".png"
-	if err := db.Exec(`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,moderation_status) VALUES(?,?,?,'image','upload','ready',?,'scope.png','image/png',1,'passed')`, original, actor.OrgID, actor.ID, sourceKey).Error; err != nil {
+	location := mediaFixtureUnownedLocation(t, db, sourceKey)
+	if err := db.Exec(`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,moderation_status,object_location_id) VALUES(?,?,?,'image','upload','ready',?,'scope.png','image/png',1,'passed',?)`, original, actor.OrgID, actor.ID, sourceKey, location.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	insert := `INSERT INTO media.upload_request(project_id,personal_org_id,principal_id,request_key,sha256,file_name,byte_size,asset_id,response) VALUES(?,?,?,?,?,'scope.txt',1,?,'{}'::jsonb)`

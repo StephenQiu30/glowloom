@@ -120,17 +120,16 @@ func TestBatchCountsAndTransitions(t *testing.T) {
 	}
 }
 
-func TestAgentSessionQuoteHasNoSingleModelSnapshot(t *testing.T) {
+func TestOperationRejectsUnsupportedAgentTarget(t *testing.T) {
 	operation := validQuotedOperation()
 	operation.TargetType = "agent_session"
+	if err := operation.Validate(); !errors.Is(err, domain.ErrInvalidOperation) {
+		t.Fatalf("unsupported target accepted: %v", err)
+	}
 	operation.ModelProfileVersionID = nil
 	operation.PriceRuleVersionID = nil
-	if err := operation.Validate(); err != nil {
-		t.Fatalf("agent session quota: %v", err)
-	}
-	operation.PriceRuleVersionID = uuidPtr(uuid.New())
 	if err := operation.Validate(); !errors.Is(err, domain.ErrInvalidOperation) {
-		t.Fatalf("agent session single price rule = %v", err)
+		t.Fatalf("unsupported model-free target accepted: %v", err)
 	}
 }
 

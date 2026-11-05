@@ -9,9 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
@@ -26,31 +24,24 @@ func personalHistoryPostgres(t *testing.T) *gorm.DB {
 	if dsn == "" {
 		t.Skip("set GLOWLOOM_TEST_PERSONAL_HISTORY_DB_DSN to a fresh disposable PostgreSQL database")
 	}
-	database, err := gorm.Open(gormpostgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	sqlDB, err := database.DB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	database := businessEmptyFixtureDB(t, dsn)
 	// Abort on existing schemas: never reuse or erase application/test data.
 	var existing int64
 	if err := database.Raw(`SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('workspace','operation','catalog','media')`).Scan(&existing).Error; err != nil || existing != 0 {
 		t.Fatalf("requires a fresh isolated DB: schemas=%d err=%v", existing, err)
 	}
-	const ddl = `CREATE SCHEMA workspace;CREATE SCHEMA operation;CREATE SCHEMA catalog;CREATE SCHEMA media;
+	const ddl = `CREATE SCHEMA workspace;CREATE SCHEMA operation;CREATE SCHEMA catalog;CREATE SCHEMA media;` + businessSQLLocationTables + `
  CREATE TABLE workspace.project(id uuid PRIMARY KEY,org_id uuid,owner_scope_id uuid,status text DEFAULT 'active',is_delete boolean DEFAULT false);
  CREATE TABLE catalog.model_profile(id uuid PRIMARY KEY,model_key text,display_name text);
  CREATE TABLE catalog.model_profile_version(id uuid PRIMARY KEY,model_profile_id uuid);
  CREATE TABLE operation.operation(id uuid PRIMARY KEY,project_id uuid,batch_id uuid,capability text,mode text DEFAULT 'test',params jsonb DEFAULT '{}'::jsonb,model_profile_version_id uuid,target_type text DEFAULT 'free',target_id uuid,origin text DEFAULT 'canvas',status text DEFAULT 'completed',quote_micros bigint,settled_micros bigint,failure_code text,retryable boolean,create_time timestamptz,update_time timestamptz,started_at timestamptz,finished_at timestamptz,source_context jsonb,is_delete boolean DEFAULT false);
+ CREATE TABLE operation.provider_call(id uuid PRIMARY KEY,operation_id uuid,project_id uuid,action text,outcome text,attempt int,response_summary jsonb,is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation_event(id uuid,operation_id uuid,reason text,is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation_input(id uuid,operation_id uuid,seq_no int,role text,text_value text,is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation_output(id uuid PRIMARY KEY,project_id uuid,operation_id uuid,seq_no int,kind text,media_asset_id uuid,json_payload jsonb,moderation_status text,create_time timestamptz,is_delete boolean DEFAULT false);
  CREATE TABLE operation.prompt_submission(operation_id uuid,actor_id uuid,project_id uuid);
  CREATE TABLE operation.quote_request(org_id uuid,actor_id uuid,result jsonb);
- CREATE TABLE media.media_asset(id uuid PRIMARY KEY,project_id uuid,status text,moderation_status text,kind text DEFAULT 'image',width int,height int,duration_ms bigint,is_delete boolean DEFAULT false);`
+ CREATE TABLE media.media_asset(id uuid PRIMARY KEY,project_id uuid,object_key text NOT NULL,object_location_id uuid NOT NULL REFERENCES media.object_location(id),status text,moderation_status text,kind text DEFAULT 'image',width int,height int,duration_ms bigint,is_delete boolean DEFAULT false);`
 	if err := database.Exec(ddl).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +143,7 @@ func TestPersonalHistoryRealPostgresProvenanceFiltersPagingAndOutputs(t *testing
 		id             uuid.UUID
 		status, review string
 	}{{ready, "ready", "passed"}, {rejected, "ready", "rejected"}, {pending, "processing", "passed"}} {
-		if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,status,moderation_status)VALUES(?,?,?,?)`, a.id, project, a.status, a.review).Error; err != nil {
+		if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,status,moderation_status,object_key,object_location_id) VALUES(?,?,?,?,?,?)`, a.id, project, a.status, a.review, businessFixtureKey(a.id), businessFixtureLocation(t, db, businessFixtureKey(a.id))).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -255,7 +246,7 @@ func verifyHistoryManagement(t *testing.T, database *gorm.DB, actor identityapp.
 	for n := range outputs {
 		outputs[n] = uuid.New()
 		asset := uuid.New()
-		if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,status,moderation_status,kind,width,height)VALUES(?,?,'ready','passed','image',2048,1152)`, asset, project).Error; err != nil {
+		if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,status,moderation_status,kind,width,height,object_key,object_location_id) VALUES(?,?,'ready','passed','image',2048,1152,?,?)`, asset, project, businessFixtureKey(asset), businessFixtureLocation(t, database, businessFixtureKey(asset))).Error; err != nil {
 			t.Fatal(err)
 		}
 		if err := database.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,media_asset_id,moderation_status,create_time)VALUES(?,?,?,?,'media',?,'passed',now())`, outputs[n], project, op, n, asset).Error; err != nil {
@@ -349,7 +340,7 @@ func verifyHistoryManagement(t *testing.T, database *gorm.DB, actor identityapp.
 	if err := database.Exec(`INSERT INTO operation.quote_request VALUES(?,?,?::jsonb)`, actor.OrgID, actor.ID, `{"operation_id":"`+racing.String()+`"}`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,status,moderation_status)VALUES(?,?,'ready','passed')`, asset, project).Error; err != nil {
+	if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,status,moderation_status,object_key,object_location_id) VALUES(?,?,'ready','passed',?,?)`, asset, project, businessFixtureKey(asset), businessFixtureLocation(t, database, businessFixtureKey(asset))).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,media_asset_id,moderation_status,create_time)VALUES(?,?,?,0,'media',?,'passed',now())`, candidate, project, racing, asset).Error; err != nil {
@@ -417,7 +408,7 @@ func verifyHistoryFinalEligibility(t *testing.T, database *gorm.DB, actor identi
 		if err := database.Exec(`INSERT INTO operation.quote_request VALUES(?,?,?::jsonb)`, actor.OrgID, actor.ID, `{"operation_id":"`+op.String()+`"}`).Error; err != nil {
 			t.Fatal(err)
 		}
-		if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,status,moderation_status,kind)VALUES(?,?,?,?,?)`, asset, project, tc.assetStatus, tc.review, tc.kind).Error; err != nil {
+		if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,status,moderation_status,kind,object_key,object_location_id) VALUES(?,?,?,?,?,?,?)`, asset, project, tc.assetStatus, tc.review, tc.kind, businessFixtureKey(asset), businessFixtureLocation(t, database, businessFixtureKey(asset))).Error; err != nil {
 			t.Fatal(err)
 		}
 		if err := database.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,media_asset_id,moderation_status,create_time)VALUES(?,?,?,0,'media',?,'passed',now())`, out, project, op, asset).Error; err != nil {

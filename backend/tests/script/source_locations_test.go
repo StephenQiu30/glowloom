@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"testing"
 	"time"
@@ -30,19 +29,11 @@ type locatedSourceObjects struct {
 	bare int
 }
 
-func (o *locatedSourceObjects) Get(context.Context, string) (io.ReadCloser, error) {
-	o.bare++
-	return nil, errors.New("unexpected bare-key lookup")
-}
-func (o *locatedSourceObjects) PutIfAbsent(context.Context, string, io.Reader, int64, string, string) error {
-	o.bare++
-	return errors.New("unexpected bare-key write")
-}
-func (o *locatedSourceObjects) Remove(context.Context, string) error {
-	o.bare++
-	return errors.New("unexpected bare-key removal")
-}
 func (o *locatedSourceObjects) GetObject(_ context.Context, f domain.ObjectFact) (io.ReadCloser, error) {
+	if f.LocationID == uuid.Nil {
+		o.bare++
+		return nil, app.ErrUnavailable
+	}
 	b, ok := o.data[f.LocationID]
 	if !ok {
 		return nil, app.ErrObjectMissing
@@ -50,6 +41,10 @@ func (o *locatedSourceObjects) GetObject(_ context.Context, f domain.ObjectFact)
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
 func (o *locatedSourceObjects) PutObjectIfAbsent(_ context.Context, f domain.ObjectFact, r io.Reader) error {
+	if f.LocationID == uuid.Nil {
+		o.bare++
+		return app.ErrUnavailable
+	}
 	b, err := io.ReadAll(r)
 	if err == nil {
 		o.data[f.LocationID] = b

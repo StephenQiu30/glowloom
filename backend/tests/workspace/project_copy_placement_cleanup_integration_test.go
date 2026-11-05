@@ -18,7 +18,7 @@ func TestProjectCopyPlacementPGUnremovedObjectKeepsTargetAndDirectoryFenced(t *t
 	actor, source := lifecycleActorProject(ctx, t, owner)
 	asset := uuid.New()
 	// This test exercises real persistence of a pending transfer intent, not object delivery.
-	lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,moderation_status,sha256,width,height)VALUES(?,?,'image','upload','ready',?,'image/png',12,'passed',repeat('a',64),2,2)`, asset, source, "projects/"+source.String()+"/image/2026/10/"+asset.String()+".png")
+	lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,moderation_status,sha256,width,height,object_location_id) VALUES(?,?,'image','upload','ready',?,'image/png',12,'passed',repeat('a',64),2,2,?)`, asset, source, "projects/"+source.String()+"/image/2026/10/"+asset.String()+".png", businessFixtureLocation(t, owner, "projects/"+source.String()+"/image/2026/10/"+asset.String()+".png"))
 	folders := workspaceapp.NewProjectFolders(folderStore(db), time.Now)
 	f := createTestFolder(ctx, t, folders, actor, "待清理对象保持屏障")
 	f = *moveTestProject(ctx, t, folders, actor, source, f, 0).Folder

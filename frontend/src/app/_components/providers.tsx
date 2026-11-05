@@ -1,5 +1,6 @@
 "use client";
 
+import { ConversationProvider } from "@/components/conversations/conversation-context";
 import { ApplicationLayout } from "@/components/layout/application-layout";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
@@ -25,13 +26,15 @@ export function Providers({
     >
       <SessionProvider>
         <SpaceProvider blockUntilReady={false}>
-          <ProjectCreationProvider>
-            <TooltipProvider>
-              <ApplicationLayout initialSidebarOpen={initialSidebarOpen}>
-                {children}
-              </ApplicationLayout>
-            </TooltipProvider>
-          </ProjectCreationProvider>
+          <ConversationProvider>
+            <ProjectCreationProvider>
+              <TooltipProvider>
+                <ApplicationLayout initialSidebarOpen={initialSidebarOpen}>
+                  {children}
+                </ApplicationLayout>
+              </TooltipProvider>
+            </ProjectCreationProvider>
+          </ConversationProvider>
         </SpaceProvider>
       </SessionProvider>
       <Toaster />

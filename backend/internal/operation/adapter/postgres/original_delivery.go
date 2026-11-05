@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -42,7 +44,7 @@ func (s *Store) OriginalDeliveryRecoveryRequired(ctx context.Context, d applicat
 		return false, ErrUnavailable
 	}
 	var terminal bool
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		var status domain.Status
 		if err := tx.Raw(`SELECT status FROM operation.operation WHERE id=? AND project_id=? AND NOT is_delete`, d.TargetID, d.ProjectID).Scan(&status).Error; err != nil {
 			return err
@@ -115,7 +117,7 @@ func (s *Store) requireRecoveryRequester(tx *gorm.DB, d application.WorkflowCont
 // request-bound checks used by each archive writer.
 func (s *Store) OriginalDeliveryIdentity(ctx context.Context, d application.WorkflowControlDelivery) (application.ProviderDispatchIdentity, error) {
 	var i application.ProviderDispatchIdentity
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.CheckOriginalDelivery(tx, d); err != nil {
 			return err
 		}

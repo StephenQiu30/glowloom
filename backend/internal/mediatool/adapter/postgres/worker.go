@@ -3,12 +3,16 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
@@ -65,7 +69,7 @@ func (s *Store) Claim(ctx context.Context, id application.WorkID) (application.W
 	if s == nil || s.db == nil || id.JobID == uuid.Nil || id.Attempt < 1 {
 		return work, application.ErrInvalidExport
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := s.lockWorkerJob(ctx, tx, id.JobID, false)
 		if err != nil {
 			return err
@@ -73,23 +77,23 @@ func (s *Store) Claim(ctx context.Context, id application.WorkID) (application.W
 		if row.Attempt != id.Attempt {
 			return application.ErrConflict
 		}
-		if row.Status == "cancel_requested" {
+		if row.Status == domain.CancelRequested {
 			if row.ActiveWorker != nil {
 				cancelled = true
 				return nil
 			}
-			row.Status = "cancelled"
-			row.Stage = "cancelled"
+			row.Status = domain.Cancelled
+			row.Stage = domain.ExportStageCancelled
 			row.Revision++
 			row.UpdatedAt = time.Now().UTC()
 			cancelled = true
 			return updateJob(tx, row)
 		}
-		if row.Status == "review_required" || row.Status == "succeeded" {
+		if row.Status == domain.ReviewRequired || row.Status == domain.Succeeded {
 			work.Job = row.public()
 			return nil
 		}
-		if row.Status != "queued" && row.Status != "running" {
+		if row.Status != domain.Queued && row.Status != domain.Running {
 			return application.ErrConflict
 		}
 		if row.ActiveWorker != nil && (id.ExecutionID == uuid.Nil || *row.ActiveWorker != id.ExecutionID) {
@@ -102,9 +106,9 @@ func (s *Store) Claim(ctx context.Context, id application.WorkID) (application.W
 		if err := s.validateSources(ctx, tx, row.actor(), row); err != nil {
 			return err
 		}
-		if row.Status == "queued" {
-			row.Status = "running"
-			row.Stage = "downloading"
+		if row.Status == domain.Queued {
+			row.Status = domain.Running
+			row.Stage = domain.ExportStageDownloading
 			row.Progress = 5
 			row.Revision++
 			row.UpdatedAt = time.Now().UTC()
@@ -137,11 +141,11 @@ func (s *Store) Claim(ctx context.Context, id application.WorkID) (application.W
 }
 
 // Progress records observed renderer stages without releasing cancellation evidence.
-func (s *Store) Progress(ctx context.Context, id application.WorkID, progress int, stage string) error {
+func (s *Store) Progress(ctx context.Context, id application.WorkID, progress int, stage domain.ExportStage) error {
 	if s == nil || s.db == nil || progress < 0 || progress > 99 || len(stage) > 32 {
 		return application.ErrInvalidExport
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := s.lockWorkerJob(ctx, tx, id.JobID, false)
 		if err != nil {
 			return err
@@ -152,10 +156,10 @@ func (s *Store) Progress(ctx context.Context, id application.WorkID, progress in
 		if row.ActiveWorker == nil || *row.ActiveWorker != id.ExecutionID {
 			return application.ErrConflict
 		}
-		if row.Status == "cancel_requested" || row.Status == "cancelled" {
+		if row.Status == domain.CancelRequested || row.Status == domain.Cancelled {
 			return application.ErrCancelled
 		}
-		if row.Status != "running" {
+		if row.Status != domain.Running {
 			return application.ErrConflict
 		}
 		if progress < row.Progress {
@@ -175,7 +179,7 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 	if s == nil || s.db == nil {
 		return job, application.ErrUnavailable
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := s.lockWorkerJob(ctx, tx, id.JobID, true)
 		if err != nil {
 			return err
@@ -186,31 +190,31 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 		if row.ActiveWorker == nil || *row.ActiveWorker != id.ExecutionID {
 			return application.ErrConflict
 		}
-		if row.Status == "review_required" || row.Status == "succeeded" {
+		if row.Status == domain.ReviewRequired || row.Status == domain.Succeeded {
 			if row.AssetID == nil || *row.AssetID != asset.ID || row.SHA256 == nil || asset.SHA256 == nil || *row.SHA256 != *asset.SHA256 {
 				return application.ErrConflict
 			}
 			job = row.public()
 			return nil
 		}
-		if row.Status == "cancel_requested" || row.Status == "cancelled" {
+		if row.Status == domain.CancelRequested || row.Status == domain.Cancelled {
 			return application.ErrCancelled
 		}
-		if row.Status != "running" || asset.ProjectID != row.ProjectID || string(asset.Kind) != string(domain.OutputKind(row.OutputKind).Effective()) {
+		if row.Status != domain.Running || asset.ProjectID != row.ProjectID || string(asset.Kind) != string(domain.OutputKind(row.OutputKind).Effective()) {
 			return application.ErrConflict
 		}
 		if err := s.validateSources(ctx, tx, row.actor(), row); err != nil {
 			return err
 		}
-		if err := acceptToolMedia(ctx, tx, s.storage, application.StorageOwner("export", row.ProjectID, row.ID, row.Attempt), &asset, renditions); err != nil {
+		if err := acceptToolMedia(ctx, tx, s.storage, application.StorageOwner(mediaapp.StorageWorkKindExport, row.ProjectID, row.ID, row.Attempt), &asset, renditions); err != nil {
 			return err
 		}
 		if err := s.media(tx).Store(ctx, row.actor(), asset, renditions); err != nil {
 			return normalize(err)
 		}
 
-		row.Status = "review_required"
-		row.Stage = "review"
+		row.Status = domain.ReviewRequired
+		row.Stage = domain.ExportStageReview
 		row.Progress = 95
 		var frozen domain.FrozenExport
 		if err := json.Unmarshal(row.Frozen, &frozen); err != nil {
@@ -230,8 +234,8 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 			if err = finalizer.Finalize(ctx, row.actor(), row.ProjectID, asset.ID, *asset.SHA256, ids, time.Now().UTC()); err != nil {
 				return normalize(err)
 			}
-			row.Status = "succeeded"
-			row.Stage = "complete"
+			row.Status = domain.Succeeded
+			row.Stage = domain.ExportStageComplete
 			row.Progress = 100
 		}
 		row.AssetID = &asset.ID
@@ -252,7 +256,7 @@ func (s *Store) Finish(ctx context.Context, id application.WorkID, cancelled boo
 	if s == nil || s.db == nil || (code != "" && code != "render_failed" && code != "source_unavailable" && code != "dependency_unavailable" && code != "no_audio_stream") {
 		return application.ErrInvalidExport
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := readJob(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -260,7 +264,7 @@ func (s *Store) Finish(ctx context.Context, id application.WorkID, cancelled boo
 		if row.Attempt != id.Attempt {
 			return application.ErrConflict
 		}
-		if row.Status == "review_required" || row.Status == "succeeded" || row.Status == "failed" || row.Status == "cancelled" {
+		if row.Status == domain.ReviewRequired || row.Status == domain.Succeeded || row.Status == domain.Failed || row.Status == domain.Cancelled {
 			return nil
 		}
 		if row.ActiveWorker == nil || *row.ActiveWorker != id.ExecutionID {
@@ -268,7 +272,7 @@ func (s *Store) Finish(ctx context.Context, id application.WorkID, cancelled boo
 		}
 		if s.storage != nil {
 			ledger := s.storage(tx)
-			intent, err := ledger.ReadStorageWork(ctx, application.StorageOwner("export", row.ProjectID, row.ID, row.Attempt))
+			intent, err := ledger.ReadStorageWork(ctx, application.StorageOwner(mediaapp.StorageWorkKindExport, row.ProjectID, row.ID, row.Attempt))
 			if err != nil {
 				return err
 			}
@@ -277,13 +281,13 @@ func (s *Store) Finish(ctx context.Context, id application.WorkID, cancelled boo
 			}
 		}
 		row.ActiveWorker = nil
-		if cancelled || row.Status == "cancel_requested" {
-			row.Status = "cancelled"
-			row.Stage = "cancelled"
+		if cancelled || row.Status == domain.CancelRequested {
+			row.Status = domain.Cancelled
+			row.Stage = domain.ExportStageCancelled
 			row.FailureCode = nil
 		} else {
-			row.Status = "failed"
-			row.Stage = "failed"
+			row.Status = domain.Failed
+			row.Stage = domain.ExportStageFailed
 			row.FailureCode = &code
 		}
 		row.Revision++
@@ -300,12 +304,21 @@ func (s *Store) verifyDelivery(ctx context.Context, d application.Delivery) (boo
 	if d.EventID == uuid.Nil || d.JobID == uuid.Nil || d.RequestID == uuid.Nil || d.ActorID == uuid.Nil || d.OrgID == uuid.Nil || d.ProjectID == uuid.Nil || d.Attempt < 1 || (d.Action != "start" && d.Action != "cancel") {
 		return false, application.ErrInvalidExport
 	}
-	var exists bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM mediatool.export_command c JOIN mediatool.export_job j ON j.id=c.job_id WHERE c.actor_id=? AND c.request_id=? AND c.event_id=? AND c.event_action=? AND c.event_attempt=? AND j.id=? AND j.project_id=? AND j.org_id=?)`, d.ActorID, d.RequestID, d.EventID, d.Action, d.Attempt, d.JobID, d.ProjectID, d.OrgID).Scan(&exists).Error
-	if err != nil {
+	var command exportCommandRecord
+	if err := s.db.WithContext(ctx).Where("actor_id = ? AND request_id = ? AND event_id = ? AND event_action = ? AND event_attempt = ? AND job_id = ?", d.ActorID, d.RequestID, d.EventID, d.Action, d.Attempt, d.JobID).Take(&command).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, application.ErrInvalidExport
+		}
 		return false, err
 	}
-	if !exists {
+	var ownedJob jobRow
+	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ? AND org_id = ?", d.JobID, d.ProjectID, d.OrgID).Take(&ownedJob).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, application.ErrInvalidExport
+		}
+		return false, err
+	}
+	if command.EventAction == nil || *command.EventAction != d.Action || command.EventAttempt == nil || *command.EventAttempt != d.Attempt {
 		return false, application.ErrInvalidExport
 	}
 	row, err := readJob(s.db.WithContext(ctx), uuid.Nil, d.JobID, false)
@@ -316,9 +329,9 @@ func (s *Store) verifyDelivery(ctx context.Context, d application.Delivery) (boo
 		return false, nil
 	}
 	if d.Action == "start" {
-		return row.Status == "queued" || row.Status == "running" || row.Status == "cancel_requested", nil
+		return row.Status == domain.Queued || row.Status == domain.Running || row.Status == domain.CancelRequested, nil
 	}
-	return row.Status == "cancel_requested", nil
+	return row.Status == domain.CancelRequested, nil
 }
 
 // FailWorkflow records failed orchestration without claiming unknown worker
@@ -327,7 +340,7 @@ func (s *Store) FailWorkflow(ctx context.Context, id application.WorkID) error {
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := readJob(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -335,12 +348,12 @@ func (s *Store) FailWorkflow(ctx context.Context, id application.WorkID) error {
 		if row.Attempt != id.Attempt {
 			return application.ErrConflict
 		}
-		if row.Status != "queued" && row.Status != "running" {
+		if row.Status != domain.Queued && row.Status != domain.Running {
 			return nil
 		}
 		code := "activity_failed"
-		row.Status = "failed"
-		row.Stage = "failed"
+		row.Status = domain.Failed
+		row.Stage = domain.ExportStageFailed
 		row.FailureCode = &code
 		row.Revision++
 		row.UpdatedAt = time.Now().UTC()
@@ -354,7 +367,7 @@ func (s *Store) Release(ctx context.Context, id application.WorkID) error {
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := readJob(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -379,7 +392,7 @@ func (s *Store) VerifyDelivery(ctx context.Context, d application.Delivery) (boo
 		return false, application.ErrUnavailable
 	}
 	valid := false
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		scoped := *s
 		scoped.db = tx
 		var err error
@@ -411,7 +424,7 @@ func (s *Store) AuthorizeObjectWrite(ctx context.Context, id application.WorkID)
 	if s == nil || s.db == nil || id.ExecutionID == uuid.Nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		row, err := s.lockWorkerJob(ctx, tx, id.JobID, false)
 		if err != nil {
 			return err
@@ -419,10 +432,10 @@ func (s *Store) AuthorizeObjectWrite(ctx context.Context, id application.WorkID)
 		if row.Attempt != id.Attempt || row.ActiveWorker == nil || *row.ActiveWorker != id.ExecutionID {
 			return application.ErrConflict
 		}
-		if row.Status == "cancel_requested" || row.Status == "cancelled" {
+		if row.Status == domain.CancelRequested || row.Status == domain.Cancelled {
 			return application.ErrCancelled
 		}
-		if row.Status != "running" {
+		if row.Status != domain.Running {
 			return application.ErrConflict
 		}
 		return nil

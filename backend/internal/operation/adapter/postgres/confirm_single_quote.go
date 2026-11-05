@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -233,7 +235,7 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 				return err
 			}
 		}
-		return nil
+		return taskruntime.Enqueue(ctx, tx, "operation.run", quoted.ID.String(), confirmedAt)
 	})
 	if err != nil {
 		return application.ConfirmSingleQuoteResult{}, fmt.Errorf("confirm single quote transaction: %w", err)

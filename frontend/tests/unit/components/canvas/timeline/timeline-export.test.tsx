@@ -59,10 +59,10 @@ const job = (): API.ExportJobResponse => ({
   sha256: "a".repeat(64),
 });
 const preview = (): API.ExportPreview => ({
-  job_id: job().id,
+  job_id: job().id!,
   revision: 3,
-  sha256: job().sha256,
-  asset: { id: job().asset_id, project_id: projectID, kind: "video" },
+  sha256: job().sha256!,
+  asset: { id: job().asset_id!, project_id: projectID, kind: "video" },
   url: "https://media.example/export.mp4",
   expires_at: new Date(Date.now() + 60000).toISOString(),
 });
@@ -178,13 +178,13 @@ const artifactPreview = (): API.ExportPreview => ({
   asset: undefined,
   url: "https://media.example/export.zip",
   artifact: {
-    id: artifactJob().artifact_id,
-    job_id: job().id,
+    id: artifactJob().artifact_id!,
+    job_id: job().id!,
     project_id: projectID,
     attempt: 1,
     format: "fcpxml",
     format_version: "1.10",
-    sha256: job().sha256,
+    sha256: job().sha256!,
     mime_type: "application/zip",
     file_name: `timeline-${job().id}.zip`,
     byte_size: 8,

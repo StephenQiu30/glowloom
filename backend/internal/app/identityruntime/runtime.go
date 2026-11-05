@@ -56,7 +56,10 @@ func NewMailDelivery(store identityapp.MailDeliveryStore, cfg config.Config, now
 }
 
 // RegisterSelf installs public invitation preview and composes authenticated account services.
-func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, storage *objectstorage.Client, public *gin.RouterGroup, now func() time.Time) (*http.EmailAuthHandler, func(*gin.RouterGroup), error) {
+func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, registry *objectstorage.Registry, public *gin.RouterGroup, now func() time.Time) (*http.EmailAuthHandler, func(*gin.RouterGroup), error) {
+	if registry == nil || cfg.ObjectStorage == nil {
+		return nil, nil, objectstorage.ErrUnavailable
+	}
 	protector, err := credentialproof.LoadValue(cfg.IdentityKey)
 	if err != nil {
 		return nil, nil, err
@@ -67,25 +70,22 @@ func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, 
 	governance := identityapp.NewGovernance(governanceStore, protector, now)
 	invitations := http.NewInvitationHandler(governance)
 	invitations.RegisterPublic(public, cfg.PublicOrigin)
-	var previewSigner mediaapp.PreviewSigner
-	var avatarObjects mediaapp.UploadObjects
-	if storage != nil {
-		previewSigner = storage
-		avatarObjects = mediaobjects.NewAvatarObjects(storage)
-	}
 	return handler, func(group *gin.RouterGroup) {
 		http.NewSelfProfileHandler(identityapp.NewSelfProfile(pgidentity.NewSelfProfileStore(database, func(tx *gorm.DB) identityapp.AvatarAccess { return pgmedia.NewAvatarAccess(tx) }), now)).Register(group)
 		http.NewEmailChangeHandler(identityapp.NewEmailChange(auth, pgidentity.NewEmailChangeStore(database), now), strings.HasPrefix(cfg.PublicOrigin, "https://")).Register(group)
 		http.NewPlatformPasswordResetHandler(identityapp.NewPlatformPasswordReset(governanceStore, auth, now)).Register(group)
 		avatars := pgmedia.NewAvatarStore(database, func(tx *gorm.DB) mediaapp.AvatarActorAccess { return pgidentity.NewStore(tx) })
-		mediahttp.NewAvatarHandler(mediaapp.NewAvatarService(avatars, avatarObjects, now), mediaapp.NewAvatarQuery(avatars, previewSigner, now)).Register(group)
+		routedObjects := mediaobjects.NewRoutedReadObjects(registry)
+		avatarService := mediaapp.NewRoutedAvatarService(avatars, routedObjects, now)
+		avatarQuery := mediaapp.NewRoutedAvatarQuery(avatars, routedObjects, now, cfg.ObjectStorage.Access.PreviewTTL)
+		mediahttp.NewAvatarHandler(avatarService, avatarQuery).Register(group)
 		sessions.Register(group)
 		http.NewPlatformDirectoryHandler(identityapp.NewPlatformDirectory(pgidentity.NewPlatformDirectoryStore(database), protector, now)).Register(group)
-		var exportObjects identityapp.ExportObjects
-		if storage != nil {
-			exportObjects = storage
-		}
-		http.NewDirectoryExportHandler(identityapp.NewDirectoryExport(pgidentity.NewDirectoryExportStore(database), protector, exportObjects, now), identityapp.NewDirectoryStatistics(pgidentity.NewPlatformDirectoryStore(database), now)).Register(group)
+		exportStore := pgidentity.NewDirectoryExportStore(database)
+		var exportService *identityapp.DirectoryExport
+		exportObjects := mediaobjects.NewRoutedIdentityExportObjects(registry, exportStore)
+		exportService = identityapp.NewRoutedDirectoryExport(exportStore, protector, exportObjects, now)
+		http.NewDirectoryExportHandler(exportService, identityapp.NewDirectoryStatistics(pgidentity.NewPlatformDirectoryStore(database), now)).Register(group)
 		http.NewGovernanceHandler(governance).Register(group)
 		invitations.Register(group)
 		teams := pgworkspace.NewTeamProfileStore(database, func(tx *gorm.DB) workspaceapp.TeamActorAccess { return pgidentity.NewTeamActorStore(tx, protector) }, func(tx *gorm.DB) workspaceapp.TeamAvatarAccess { return pgmedia.NewTeamAvatarAccess(tx) })
@@ -93,7 +93,8 @@ func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, 
 		workspacehttp.NewTeamHandler(teamService, workspaceapp.NewTeamDirectory(teams, protector, now)).Register(group)
 		workspacehttp.NewTeamLifecycleHandler(teamService).Register(group)
 		workspacehttp.NewPlatformTeamHandler(workspaceapp.NewPlatformTeams(teams, protector, now)).Register(group)
-		workspacehttp.NewTeamAvatarHandler(workspaceapp.NewTeamAvatars(teams, previewSigner, now)).Register(group)
+		teamAvatars := workspaceapp.NewRoutedTeamAvatars(teams, mediaobjects.NewRoutedTeamAvatarSigner(registry), now, cfg.ObjectStorage.Access.PreviewTTL)
+		workspacehttp.NewTeamAvatarHandler(teamAvatars).Register(group)
 		http.NewEventHandler(identityapp.NewEventQuery(pgidentity.NewEventStore(database), protector, now)).Register(group)
 		http.NewAccountDeletionHandler(identityapp.NewAccountDeletion(auth, pgidentity.NewAccountDeletionStore(database), now), strings.HasPrefix(cfg.PublicOrigin, "https://")).Register(group)
 	}, nil
@@ -144,15 +145,17 @@ func StartMailRunner(ctx context.Context, delivery BatchRunner, logger *zap.Logg
 
 // StartDirectoryExportLoop owns bounded export work in the existing API process.
 // It is independent of SMTP; the caller cancels and joins before closing the DB.
-func StartDirectoryExportLoop(ctx context.Context, database *gorm.DB, cfg config.Config, storage *objectstorage.Client, logger *zap.Logger) (func(), error) {
-	if storage == nil {
-		return func() {}, nil
+func StartDirectoryExportLoop(ctx context.Context, database *gorm.DB, cfg config.Config, registry *objectstorage.Registry, logger *zap.Logger) (func(), error) {
+	if database == nil || registry == nil || cfg.ObjectStorage == nil {
+		return nil, objectstorage.ErrUnavailable
 	}
 	protector, err := credentialproof.LoadValue(cfg.IdentityKey)
 	if err != nil {
 		return nil, err
 	}
-	service := identityapp.NewDirectoryExport(pgidentity.NewDirectoryExportStore(database), protector, storage, time.Now)
+	store := pgidentity.NewDirectoryExportStore(database)
+	objects := mediaobjects.NewRoutedIdentityExportObjects(registry, store)
+	service := identityapp.NewRoutedDirectoryExport(store, protector, objects, time.Now)
 	return StartExportRunner(ctx, service, logger, 5*time.Second), nil
 }
 

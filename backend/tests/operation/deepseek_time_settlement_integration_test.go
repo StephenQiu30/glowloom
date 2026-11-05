@@ -7,12 +7,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.temporal.io/sdk/temporal"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
@@ -61,11 +60,7 @@ func TestDeepSeekTimeSettlementUsesOriginalEvidenceAndSingleLedger(t *testing.T)
 			err = f.store.CompleteProviderCall(t.Context(), completion)
 			if !tc.valid {
 				require.ErrorIs(t, err, application.ErrProviderCostUnknown)
-				activityErr := operationflow.NewActivities(f.store, nil).CompleteProviderCall(t.Context(), completion)
-				var typed *temporal.ApplicationError
-				require.ErrorAs(t, activityErr, &typed)
-				require.Equal(t, "provider_cost_unknown", typed.Type())
-				require.True(t, typed.NonRetryable())
+
 				_, err = f.store.LoadProviderCost(t.Context(), i.OperationID)
 				require.Error(t, err)
 				var held int64
@@ -113,11 +108,11 @@ func TestDeepSeekWorkerPersistsOriginalResponseClock(t *testing.T) {
 	require.NoError(t, db.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','cached prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
 	network := &cachedUsageGeneration{}
-	worker := managed.NewActivities(f.store, fixtureUnsealer{}, network, results, nil, nil)
+	worker := managed.NewActivities(f.store, fixtureUnsealer{}, network, results, nil)
 	before := time.Now().UTC()
 	got, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
-	require.Equal(t, "succeeded", got.State)
+	require.EqualValues(t, "succeeded", got.State)
 	after := time.Now().UTC()
 	evidence, err := f.store.ReadManagedResult(t.Context(), i)
 	require.NoError(t, err)

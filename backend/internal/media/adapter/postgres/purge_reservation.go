@@ -17,8 +17,8 @@ func requireNoPurgeReservation(tx *gorm.DB, ids []uuid.UUID) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	var present bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.purge_item WHERE item_id IN ? AND status IN ('queued','running','needs_reconciliation','succeeded'))`, ids).Scan(&present).Error; err != nil {
+	present, err := storageExists(tx.Model(&purgeItemRow{}).Where("item_id IN ? AND status IN ?", ids, []domain.PurgeItemStatus{domain.PurgeItemStatusQueued, domain.PurgeItemStatusRunning, domain.PurgeItemStatusNeedsReconciliation, domain.PurgeItemStatusSucceeded}))
+	if err != nil {
 		return err
 	}
 	if present {

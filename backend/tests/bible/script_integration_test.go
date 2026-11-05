@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -57,13 +60,13 @@ func (b characterBridge) Reference(ctx context.Context, a identityapp.Principal,
 func characterScriptStore(db *gorm.DB) *scriptpg.SourceStore {
 	return scriptpg.NewSourceStoreWithCharacters(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }, func(tx *gorm.DB) scriptapp.CharacterReferences {
 		return characterBridge{pg.NewReferences(tx, bibleFixtureProjectAccess(tx))}
-	})
+	}).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }
 
 func TestBiblePGScriptImmutableBindingDoesNotMutateRequestAndPinnedHistory(t *testing.T) {
 	db, owner := bibleTestDB(t)
 	actor, project := bibleActorProject(t, owner)
-	objects := scriptobjects.NewStorage(bibleObjects(t))
+	objects := scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db))
 	store := characterScriptStore(db)
 	sources := scriptapp.NewSourceService(store, objects, time.Now)
 	saved, err := sources.Write(t.Context(), actor, scriptapp.SourceCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Action: "create", RightsConfirmed: true, Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "第一章", Status: "draft", Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "王总：你好"}}}}}}}})
@@ -89,7 +92,7 @@ func TestBiblePGScriptImmutableBindingDoesNotMutateRequestAndPinnedHistory(t *te
 	}
 	sceneKey, lineKey := uuid.New(), uuid.New()
 	input := scriptapp.StructureCommand{ProjectID: project, EpisodeID: formal.Episodes[0].ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 2, ExpectedEpisodeRevision: 1, Document: scriptdomain.StructureDocument{Scenes: []scriptdomain.StructureScene{{Key: sceneKey, SeqNo: 1, Heading: "客厅", Start: 0, End: 5, Items: []scriptdomain.StructureItem{{Type: "line", Key: lineKey, Kind: "dialogue", Speaker: "王总", CharacterID: &character.EntryID, Content: "你好", Start: 0, End: 5}}}}}}
-	legacy := scriptpg.NewSourceStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) })
+	legacy := scriptpg.NewSourceStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 	if _, err := legacy.SaveStructure(t.Context(), actor, input, time.Now()); !errors.Is(err, scriptapp.ErrContextUnavailable) {
 		t.Fatal("missing Bible owner guessed success", err)
 	}

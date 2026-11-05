@@ -1,5 +1,6 @@
 /** R6 当前设计入口；业务可用性由真实服务决定。 */
 export const screens = [
+  { id: "conversations", name: "对话", node: "3468:96528", group: "创作" },
   { id: "home", name: "创作", node: "1361:26", group: "创作" },
   { id: "explore", name: "探索", node: "1361:272", group: "创作" },
   { id: "projects", name: "我的画布", node: "347:6984", group: "创作" },

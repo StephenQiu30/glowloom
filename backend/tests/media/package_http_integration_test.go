@@ -22,7 +22,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -45,13 +44,13 @@ func (a packageTestProjectAccess) Authorize(ctx context.Context, actor identitya
 	return facts, err
 }
 
-func packageActualService(t *testing.T, db *gorm.DB, objects mediaapp.PackageObjects, access pgmedia.LibraryProjectAccessFactory) (*pgmedia.PackageStore, *mediaapp.LibraryPackageService) {
+func packageActualService(t *testing.T, db *gorm.DB, objects packageFixtureObjects, access pgmedia.LibraryProjectAccessFactory) (*pgmedia.PackageStore, *mediaapp.LibraryPackageService) {
 	t.Helper()
 	validator, err := gltf.NewValidator()
 	if err != nil {
 		t.Fatal(err)
 	}
-	uploads := mediaapp.NewScopedUploadService(mediaTestStore(db), mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, nil, time.Now)
+	uploads := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	repo := mediaPackageStore(db, access, transferTestGuards, time.Now)
 	return repo, mediaapp.NewLibraryPackageService(repo, uploads, objects, time.Now)
 }
@@ -100,9 +99,16 @@ func packageHTTPImport(t *testing.T, router *gin.Engine, path string, request []
 	return out
 }
 
-func packageCleanup(t *testing.T, repo *pgmedia.PackageStore, objects mediaapp.PackageObjects, actor identityapp.Principal, scope domain.LibraryScope) []string {
+func packageCleanup(t *testing.T, db *gorm.DB, _ *pgmedia.PackageStore, _ mediaapp.PackageObjects, actor identityapp.Principal, scope domain.LibraryScope) []string {
 	t.Helper()
-	keys, err := repo.StorageUsageKeys(t.Context(), actor, scope)
+	locations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), actor, scope)
+	keys := make([]string, 0, len(locations))
+	for _, ref := range locations {
+		if ref.Validate() != nil {
+			t.Fatal("invalid physical inventory identity")
+		}
+		keys = append(keys, ref.Key)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +116,7 @@ func packageCleanup(t *testing.T, repo *pgmedia.PackageStore, objects mediaapp.P
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		for _, key := range keys {
-			_ = objects.Remove(ctx, key)
+			_ = glbTestObjects(t).Remove(ctx, key)
 		}
 	})
 	return keys
@@ -118,7 +124,7 @@ func packageCleanup(t *testing.T, repo *pgmedia.PackageStore, objects mediaapp.P
 
 func TestMediaPackageHTTPAllSixRoutesClosedMultipartActualAttachmentAndCurrentAuthority(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, project := mediaStoreProject(t, db)
 	repo, service := packageActualService(t, db, objects, packageTestAccess)
 	router := packageRouter(actor, service)
@@ -147,7 +153,7 @@ func TestMediaPackageHTTPAllSixRoutesClosedMultipartActualAttachmentAndCurrentAu
 	if created.Code != 202 || json.Unmarshal(created.Body.Bytes(), &job) != nil || job.Status != "succeeded" || job.ItemCount != 2 {
 		t.Fatal(created.Code, created.Body.String())
 	}
-	packageCleanup(t, repo, objects, actor, scope)
+	packageCleanup(t, db, repo, objects, actor, scope)
 	for _, private := range []string{"object_key", "source.zip", "source-text", "plain_text", "principal_id", "request_id"} {
 		if strings.Contains(created.Body.String(), private) {
 			t.Fatal("private frozen facts leaked", private)
@@ -224,12 +230,12 @@ func TestMediaPackageHTTPAllSixRoutesClosedMultipartActualAttachmentAndCurrentAu
 }
 
 type packageUnknownRemove struct {
-	mediaapp.PackageObjects
+	packageFixtureObjects
 	unknown bool
 }
 
-func (o *packageUnknownRemove) Remove(ctx context.Context, key string) error {
-	err := o.PackageObjects.Remove(ctx, key)
+func (o *packageUnknownRemove) RemovePackage(ctx context.Context, object mediaapp.PackageObject) error {
+	err := o.packageFixtureObjects.RemovePackage(ctx, object)
 	if err == nil && o.unknown {
 		o.unknown = false
 		return io.ErrUnexpectedEOF
@@ -239,9 +245,9 @@ func (o *packageUnknownRemove) Remove(ctx context.Context, key string) error {
 
 func TestMediaPackageHTTPCancelUnknownRetainsReservationOriginalReceiptAndFullAbsentProof(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, project := mediaStoreProject(t, db)
-	unknown := &packageUnknownWrite{PackageObjects: objects}
+	unknown := &packageUnknownWrite{packageFixtureObjects: objects}
 	repo, service := packageActualService(t, db, unknown, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	in := mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
@@ -249,8 +255,9 @@ func TestMediaPackageHTTPCancelUnknownRetainsReservationOriginalReceiptAndFullAb
 	if err != nil || job.Status != "needs_reconciliation" {
 		t.Fatal(job, err)
 	}
-	keys := packageCleanup(t, repo, objects, actor, scope)
-	_, cancelService := packageActualService(t, db, &packageUnknownRemove{PackageObjects: objects, unknown: true}, packageTestAccess)
+	keys := packageCleanup(t, db, repo, objects, actor, scope)
+	drainFixtureStorageWork(t, libraryOwnerDB(t), mediaapp.StorageWorkKindPackage, job.ID)
+	_, cancelService := packageActualService(t, db, &packageUnknownRemove{packageFixtureObjects: objects, unknown: true}, packageTestAccess)
 	router := packageRouter(actor, cancelService)
 	path := "/api/media/library/packages/imports/" + job.ID.String() + "/cancel"
 	body, _ := json.Marshal(mediaapp.PackageControl{ExpectedRevision: job.Revision})
@@ -271,7 +278,7 @@ func TestMediaPackageHTTPCancelUnknownRetainsReservationOriginalReceiptAndFullAb
 		t.Fatal("full verified cleanup", second.Code, second.Body.String())
 	}
 	for _, key := range keys {
-		if exists, err := objects.Exists(t.Context(), key); err != nil || exists {
+		if exists, err := glbTestObjects(t).Exists(t.Context(), key); err != nil || exists {
 			t.Fatal("cancelled with retained object", exists, err)
 		}
 	}

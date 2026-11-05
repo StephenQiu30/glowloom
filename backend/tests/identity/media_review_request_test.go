@@ -40,7 +40,8 @@ func reviewVideo(t *testing.T, tx *gorm.DB, project uuid.UUID) md.MediaAsset {
 	w, h, d := int32(64), int32(36), int32(1000)
 	a := md.MediaAsset{ID: uuid.New(), ProjectID: project, Kind: md.KindVideo, Origin: md.OriginUpload, Status: md.StatusReady, MimeType: "video/mp4", ByteSize: 6, SHA256: &sha, Width: &w, Height: &h, DurationMS: &d, ModerationStatus: md.ModerationPassed, Revision: 1, CreateTime: now, UpdateTime: now}
 	a.ObjectKey = "projects/" + project.String() + "/video/2026/10/" + a.ID.String() + ".mp4"
-	if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,sha256,width,height,duration_ms,moderation_status) VALUES(?,?,'video','upload','ready',?,'video/mp4',6,?,64,36,1000,'passed')`, a.ID, project, a.ObjectKey, sha).Error; err != nil {
+	locationID := seedIdentityLocation(t, tx, a.ObjectKey)
+	if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,mime_type,byte_size,sha256,width,height,duration_ms,moderation_status) VALUES(?,?,'video','upload','ready',?,?,'video/mp4',6,?,64,36,1000,'passed')`, a.ID, project, a.ObjectKey, locationID, sha).Error; err != nil {
 		t.Fatal(err)
 	}
 	return a
@@ -109,6 +110,7 @@ func TestMediaRequestControlPreservesSessionPrincipal(t *testing.T) {
 					}
 				} else {
 					artifact := reviewDepthArtifact(t, job, asset)
+					bindReviewDepthArtifact(t, tx, &artifact)
 					frozen := td.FrozenDepth{ProfileID: td.DepthProfileID, Input: td.FrozenSource{AssetID: asset.ID, Revision: 1, Kind: "video", ObjectKey: asset.ObjectKey, MIMEType: asset.MimeType, ByteSize: asset.ByteSize, SHA256: *asset.SHA256, Width: asset.Width, Height: asset.Height, DurationMS: asset.DurationMS}}
 					digest, body, err := tool.DepthArtifactDigest(job, frozen, artifact)
 					if err != nil {
@@ -118,7 +120,7 @@ func TestMediaRequestControlPreservesSessionPrincipal(t *testing.T) {
 						t.Fatal(err)
 					}
 					for _, o := range artifact.Objects {
-						if err = tx.Exec(`INSERT INTO mediatool.depth_object(job_id,attempt,kind,object_key,sha256,byte_size,mime_type,status,write_started,updated_at) VALUES(?,1,?,?,?,?,?,'verified',true,now())`, job.ID, o.Kind, o.ObjectKey, o.SHA256, o.ByteSize, o.MIMEType).Error; err != nil {
+						if err = tx.Exec(`INSERT INTO mediatool.depth_object(job_id,attempt,kind,object_key,object_location_id,sha256,byte_size,mime_type,status,write_started,updated_at) VALUES(?,1,?,?,?,?,?,?,'verified',true,now())`, job.ID, o.Kind, o.ObjectKey, o.ObjectLocationID, o.SHA256, o.ByteSize, o.MIMEType).Error; err != nil {
 							t.Fatal(err)
 						}
 					}
@@ -174,7 +176,25 @@ func reviewDepthArtifact(t *testing.T, job td.DepthJob, source md.MediaAsset) to
 		rkey := strings.TrimSuffix(key, path.Ext(key)) + "/" + string(kind) + "." + ext
 		size := int64(6)
 		result.Renditions = append(result.Renditions, md.Rendition{ID: uuid.NewSHA1(id, []byte(kind)), MediaAssetID: id, Kind: kind, ObjectKey: rkey, Width: &w, Height: &h, ByteSize: &size, CreateTime: now, UpdateTime: now})
-		result.Objects = append(result.Objects, tool.DepthObject{Kind: string(kind), ObjectKey: rkey, SHA256: sha, ByteSize: size, MIMEType: mime})
+		result.Objects = append(result.Objects, tool.DepthObject{Kind: tool.DepthObjectKind(kind), ObjectKey: rkey, SHA256: sha, ByteSize: size, MIMEType: mime})
 	}
 	return result
+}
+
+func bindReviewDepthArtifact(t *testing.T, tx *gorm.DB, artifact *tool.DepthArtifact) {
+	t.Helper()
+	for i := range artifact.Objects {
+		object := &artifact.Objects[i]
+		id := seedIdentityLocation(t, tx, object.ObjectKey)
+		object.ObjectLocationID = &id
+		location := &md.ObjectLocation{ID: id, Ref: md.ObjectRef{ProfileID: "identity-fixture", Bucket: "identity-fixture", Key: object.ObjectKey}, State: md.ObjectLocationAccepted}
+		if object.ObjectKey == artifact.Asset.ObjectKey {
+			artifact.Asset.ObjectLocation = location
+		}
+		for j := range artifact.Renditions {
+			if artifact.Renditions[j].ObjectKey == object.ObjectKey {
+				artifact.Renditions[j].ObjectLocation = location
+			}
+		}
+	}
 }

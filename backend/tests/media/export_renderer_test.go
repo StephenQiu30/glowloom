@@ -56,7 +56,7 @@ func TestTimelineRendererCreatesActualCompositionAndBurnedChinese(t *testing.T) 
 		t.Fatalf("synthetic audio: %v: %s", err, data)
 	}
 	lastProgress := 0
-	result, err := renderer.Render(t.Context(), tool.FrozenExport{Timeline: config}, map[uuid.UUID]string{imageID: picture, audioID: sound}, func(progress int, stage string) error {
+	result, err := renderer.Render(t.Context(), tool.FrozenExport{Timeline: config}, map[uuid.UUID]string{imageID: picture, audioID: sound}, func(progress int, stage tool.ExportStage) error {
 		if progress < lastProgress || stage == "" {
 			t.Fatalf("invalid actual export progress %d after%d", progress, lastProgress)
 		}

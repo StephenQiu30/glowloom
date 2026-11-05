@@ -9,7 +9,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
@@ -138,7 +137,7 @@ func TestMediaTransferWorkspaceLifecycleReleasesOnlyRealCompletedOrUnstartedCanc
 						t.Fatal("unstarted cancellation did not settle", result, err)
 					}
 				} else {
-					result, err := mediaapp.NewTransferWorker(repo.Worker, copyobjects.NewProjectCopyObjects(glbTestObjects(t)), t.TempDir()).Execute(t.Context(), transferExecution(job))
+					result, err := mediaapp.NewRoutedTransferWorker(repo.Worker, mediaFixtureCopyObjects(t, db), t.TempDir()).Execute(t.Context(), transferExecution(job))
 					if err != nil || result.Status != "succeeded" {
 						t.Fatal("actual metadata transfer did not complete", result, err)
 					}

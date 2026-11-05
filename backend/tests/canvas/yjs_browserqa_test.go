@@ -129,20 +129,24 @@ func TestYjsBrowserFixture(t *testing.T) {
 	life, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	if os.Getenv("GLOWLOOM_BROWSER_QA_ADMIN_COPY") == "true" {
-		cfg.TemporalAddr = os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
-		cfg.TemporalNamespace = os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 		if err := database.Exec(`UPDATE identity."user" SET platform_role='platform_admin' WHERE id=?`, accounts[0].User.ID).Error; err != nil {
 			t.Fatal(err)
 		}
 		startAdminCopyBrowserWorkers(t, life, database, cfg, project)
 	}
-	var storage *objectstorage.Client
+	storage := canvasRouterStorage(t, &cfg)
 	if os.Getenv("GLOWLOOM_BROWSER_QA_MEDIA") == "true" {
-		storage, err = objectstorage.Open(os.Getenv("GLOWLOOM_OBJECT_STORAGE_ENDPOINT"), os.Getenv("GLOWLOOM_OBJECT_STORAGE_BUCKET"), os.Getenv("GLOWLOOM_OBJECT_STORAGE_ACCESS_KEY"), os.Getenv("GLOWLOOM_OBJECT_STORAGE_SECRET_KEY"), "us-east-1")
-		if err != nil {
-			t.Fatal("isolated QA object storage configuration unavailable")
+		explicitConfig, loadErr := config.Load()
+		if loadErr != nil || explicitConfig.ObjectStorage == nil {
+			t.Fatal("isolated QA object storage configuration unavailable", loadErr)
 		}
-		if err := storage.Ping(t.Context()); err != nil {
+		storage, err = objectstorage.OpenProfiles(*explicitConfig.ObjectStorage)
+		if err != nil {
+			t.Fatal("isolated QA object storage registry unavailable")
+		}
+		t.Cleanup(storage.Close)
+		cfg.ObjectStorage = explicitConfig.ObjectStorage
+		if err := storage.PingProfile(t.Context(), cfg.ObjectStorage.DefaultWriteProfile); err != nil {
 			t.Fatal("isolated QA object storage unavailable")
 		}
 	}

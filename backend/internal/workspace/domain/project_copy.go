@@ -20,6 +20,24 @@ var (
 	ErrProjectCopyWorkerConflict = errors.New("project copy worker conflict")
 )
 
+// Project copy states retain execution, cleanup and reconciliation outcomes.
+const (
+	ProjectCopyStatusQueued          = "queued"
+	ProjectCopyStatusRunning         = "running"
+	ProjectCopyStatusFailed          = "failed"
+	ProjectCopyStatusCancelRequested = "cancel_requested"
+	ProjectCopyStatusCancelled       = "cancelled"
+	ProjectCopyStatusSucceeded       = "succeeded"
+
+	ProjectCopyStageMedia      = "media"
+	ProjectCopyStageBible      = "bible"
+	ProjectCopyStageScript     = "script"
+	ProjectCopyStageCanvases   = "canvases"
+	ProjectCopyStageFinalizing = "finalizing"
+	ProjectCopyStageCleanup    = "cleanup"
+	ProjectCopyStageComplete   = "complete"
+)
+
 // ProjectCopyManifest records owning-module snapshot identities, not their private contents.
 type ProjectCopyManifest struct {
 	WorkspaceSHA256  string                     `json:"workspace_sha256"`

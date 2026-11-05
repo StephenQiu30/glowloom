@@ -44,7 +44,7 @@ func (g projectWorkGuard) HasInflightWork(ctx context.Context, actor identityapp
 // ProvideWorkspaceLifecycleStore assembles workspace lifecycle storage.
 func ProvideWorkspaceLifecycleStore(database *gorm.DB) *pgworkspace.Store {
 	return pgworkspace.NewScopedStore(database, scopewire.ProvideRequestScopeAccess, ProvideProjectWorkGuard, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
 	})
 }
 

@@ -43,14 +43,14 @@ func TestCloudTextProtocolsKeepProviderRoutingIndependent(t *testing.T) {
 			})})
 			result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: preset.Config, Capability: "text.generate", Mode: "text_to_text", ModelID: map[bool]string{true: "gpt-6.1-sol", false: "fixture-exact-model"}[preset.Config.AdapterKey == "openai"], Prompt: "hello", OutputCount: 1}, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, "completed", result.Outcome)
+			require.Equal(t, operationapp.ProviderOutcome("completed"), result.Outcome)
 			require.Equal(t, "fixture reply", result.Text)
 			require.Equal(t, 1, calls)
 		})
 	}
 }
 
-func TestArkImageRequestsUseSingleImageContractWithoutOpenRouterFields(t *testing.T) {
+func TestArkImageRequestsUseOneImageWithoutOpenRouterFields(t *testing.T) {
 	for _, preset := range domain.BuiltinPresets() {
 		if preset.Config.AdapterKey != "volcengine_ark" && preset.Config.AdapterKey != "byteplus" {
 			continue
@@ -74,12 +74,12 @@ func TestArkImageRequestsUseSingleImageContractWithoutOpenRouterFields(t *testin
 			input := operationapp.GenerationRequest{Config: preset.Config, Capability: "image.generate", Mode: "image2image", ModelID: map[bool]string{true: "gpt-6.1-sol", false: "fixture-exact-model"}[preset.Config.AdapterKey == "openai"], Prompt: "reference image", OutputCount: 1, References: []operationapp.ProviderReference{{Role: "reference_image", URL: "https://assets.example/allowed.png"}}}
 			result, err := client.Submit(t.Context(), input, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, "unknown", result.Outcome)
+			require.Equal(t, operationapp.ProviderOutcome("unknown"), result.Outcome)
 			require.Equal(t, 1, calls)
 			input.OutputCount = 2
 			result, err = client.Submit(t.Context(), input, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, "not_submitted", result.Outcome)
+			require.Equal(t, operationapp.ProviderOutcome("not_submitted"), result.Outcome)
 			require.Equal(t, 1, calls)
 		})
 	}
@@ -168,7 +168,7 @@ func TestTextProtocolsKeepCanonicalCachedTokenEvidence(t *testing.T) {
 			})})
 			result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: config, ModelID: "fixture", Capability: "text.generate", Mode: "text_to_text", Prompt: "hello", OutputCount: 1}, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, "completed", result.Outcome)
+			require.Equal(t, operationapp.ProviderOutcome("completed"), result.Outcome)
 			var usage map[string]int64
 			require.NoError(t, json.Unmarshal(result.Usage, &usage))
 			require.Equal(t, int64(800), usage["cached_input_tokens"])

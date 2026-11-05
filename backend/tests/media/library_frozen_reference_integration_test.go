@@ -33,7 +33,7 @@ func TestLibraryFrozenAudioReferenceKeepsOriginalProofWithoutImageRendition(t *t
 	var fact mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		fact, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindAudio)
+		fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindAudio)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -46,11 +46,11 @@ func TestLibraryFrozenAudioReferenceKeepsOriginalProofWithoutImageRendition(t *t
 		t.Cleanup(func() { _ = objects.Remove(context.Background(), r.ObjectKey) })
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	if _, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID}}}); err != nil {
+	if _, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), actor, project, fact)
+		return mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).VerifyFrozenReference(t.Context(), actor, project, fact)
 	}); err != nil || fact.RenditionID != nil || fact.RenditionSHA256 != nil {
 		t.Fatal("existing actual audio acquired an image proof", fact, err)
 	}
@@ -64,7 +64,7 @@ func TestLibraryFrozenImageReferenceSurvivesCatalogTrashAndRemoval(t *testing.T)
 	var frozen mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		frozen, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
+		frozen, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestLibraryFrozenImageReferenceSurvivesCatalogTrashAndRemoval(t *testing.T)
 	}
 	verify := func(principal identityapp.Principal, pid uuid.UUID, fact mediaapp.ReferenceFact) error {
 		return db.Transaction(func(tx *gorm.DB) error {
-			return mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), principal, pid, fact)
+			return mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).VerifyFrozenReference(t.Context(), principal, pid, fact)
 		})
 	}
 	if err := verify(actor, project, frozen); err != nil {
@@ -86,8 +86,8 @@ func TestLibraryFrozenImageReferenceSurvivesCatalogTrashAndRemoval(t *testing.T)
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
-	for i, action := range []string{"recycle_items", "restore_items", "remove_items"} {
-		if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: action, ExpectedRevision: int64(i), Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: int64(i)}}}); err != nil {
+	for i, action := range []mediaapp.LibraryAction{mediaapp.LibraryActionRecycleItems, mediaapp.LibraryActionRestoreItems, mediaapp.LibraryActionRemoveItems} {
+		if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: action, ExpectedRevision: int64(i), Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: int64(i) + 1}}}); err != nil {
 			t.Fatal(action, err)
 		}
 		if err := verify(actor, project, frozen); err != nil {
@@ -97,7 +97,7 @@ func TestLibraryFrozenImageReferenceSurvivesCatalogTrashAndRemoval(t *testing.T)
 			continue
 		}
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			_, err := mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, frozen.AssetID, domain.KindImage)
+			_, err := mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, frozen.AssetID, domain.KindImage)
 			return err
 		}); !errors.Is(err, mediaapp.ErrNotFound) {
 			t.Fatal("hidden catalog permitted a new binding", action, err)
@@ -147,7 +147,7 @@ func TestLibraryFrozenReferenceRejectsMissingOriginalAndUnprovedSoftDeletion(t *
 	var frozen mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		frozen, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
+		frozen, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -166,7 +166,7 @@ func TestLibraryFrozenReferenceRejectsMissingOriginalAndUnprovedSoftDeletion(t *
 	}
 	verify := func() error {
 		return db.Transaction(func(tx *gorm.DB) error {
-			return mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), actor, project, frozen)
+			return mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).VerifyFrozenReference(t.Context(), actor, project, frozen)
 		})
 	}
 	deleted, err := asset.Delete(time.Now().UTC())

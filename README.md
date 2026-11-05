@@ -21,9 +21,11 @@
 
 <p align="center"><sub>创作页本地实拍 · 2026-10-29。展示创作入口与参考内容；精选封面为 AI 生成的静态示例。</sub></p>
 
+> 同仓库独立 `agent` 服务使用 TypeScript、官方 Pi Durable 与 PostgreSQL；Go 提供业务授权、模型和工具。Docker Compose 统一启动四个服务，当前源码不依赖 Temporal 或旧 Agent 实现。完整合同见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，工程验证与真实创作接受见 [BACKLOG](BACKLOG.md#pi-durable-migration)。
+
 ## 在织光中创作
 
-Glowloom 是一个围绕视觉创作组织的 Web 工作台。这个仓库同时包含 Next.js 前端、Go 后端、私有 Yjs 协作运行时及产品文档。
+Glowloom 是一个围绕视觉创作组织的 Web 工作台。这个仓库同时包含 Next.js 前端、Go 后端、TypeScript Agent、私有 Yjs 协作运行时及产品文档。
 
 - **从参考开始**：通过创作入口和多参考提示词编辑器，组织文字、图片及其他参考内容。
 - **在画布中连接**：用节点组织创作内容、主体与引用关系，配合画布持久化和协作运行时。
@@ -43,9 +45,9 @@ cd glowloom
 
 启动前，按 [.env.example](.env.example) 与 [PROJECT](PROJECT.md) 准备本地配置：
 
-1. 可用的 PostgreSQL、Redis、Kafka、Temporal、对象存储及对应 namespace。
-2. `.env` 中的依赖连接、身份与会话密钥、协作令牌；模型接入另需凭据加密与请求 MAC 密钥。
-3. 现有开发卷与匹配的业务库结构。空库和存量库采用不同初始化／增量升级流程，不对存量库重放 `schema.sql`。
+1. 可用的 PostgreSQL、Redis、Kafka 与对象存储。
+2. `.env` 中的依赖连接、身份与会话密钥、协作令牌、两个方向独立的 Agent 服务令牌与受限 PostgreSQL DSN；模型接入另需凭据加密与请求 MAC 密钥。
+3. 现有开发卷与匹配的业务库结构。空库预先创建受限 `glowloom_agent` 登录角色并加载当前 `schema.sql`；已有库先清结旧在途，离线审阅当前 Agent/业务任务 SQL。应用不执行 DDL，不对存量库重放空库结构。
 
 确认端口可用后，在仓库根目录启动：
 
@@ -59,10 +61,11 @@ docker compose ps
 | ---------- | --------------------------------------- |
 | 前端工作台 | [localhost:1122](http://localhost:1122) |
 | 后端       | [127.0.0.1:1123](http://127.0.0.1:1123) |
+| Agent      | Compose 内部 `agent:4401`，无宿主端口   |
 
 首次启动成功后，打开工作台；需要私人素材、主体、画布或生成时，使用有效账号登录，并按对象权限访问。容器健康不等于真实生成能力已验收。
 
-`docker-compose.yml` 是应用唯一启动入口，包含 `frontend`、`backend` 和 `canvas-collaboration`。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动。仅更新后端时执行：
+`docker-compose.yml` 是应用唯一启动入口，包含 `frontend`、`backend`、`agent` 和 `canvas-collaboration`。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动。仅更新后端时执行：
 
 ```sh
 docker compose up -d --build backend
@@ -74,7 +77,9 @@ docker compose logs --tail=100 backend
 
 两端的浏览器 Origin 同步固定为 `http://localhost:1122`，忽略 `.env` 中旧的 Origin，避免端口切换后登录或写入被 Origin 校验拒绝。worker/relay 健康检查在容器内执行，不额外开放宿主端口。
 
-现有依赖服务、Temporal namespace、身份密钥、前端开发缓存卷及 `.env` 须提前准备；Compose 复用这些资源，不执行数据库迁移。仓库不再提供额外的依赖栈、生产拆分或协作 overlay Compose 文件。
+现有 PostgreSQL/Redis/Kafka/对象存储服务、身份密钥、前端开发缓存卷及 `.env` 须提前准备；Compose 复用这些资源，不执行数据库迁移。仓库不再提供额外的依赖栈、生产拆分或协作 overlay Compose 文件。
+
+Agent 启动前须由结构所有者创建专用 LOGIN 角色 `glowloom_agent`，使用独立密码，离线安装当前 SQL 与表级授权；空库只执行一次 `backend/db/schema.sql`，已有库按[一次性离线切换清单](backend/db/agent_cutover.md)盘点、备份、演练与核对权限，应用启动不运行 DDL。配置 `GLOWLOOM_AGENT_DB_DSN` 使用该受限角色，`GLOWLOOM_AGENT_SERVICE_TOKEN` 和 `GLOWLOOM_AGENT_BUSINESS_TOKEN` 为两个不同的至少32字节凭据；Go 不能把自己的业务库账号复用于 Agent。
 
 旧画布库须先按[画布增量升级记录](docs/plan/17-画布数据库持久化与DAG实施计划.md#75-本地存量画布增量升级2026-10-23)核对、备份并演练，再由结构所有者执行 `backend/db/canvas_protocol_incremental.sql`。不得对存量库重放 `schema.sql`。容器健康不代表业务表已升级，仍需验证真实画布读取。
 
@@ -82,9 +87,7 @@ docker compose logs --tail=100 backend
 
 身份与会话密钥由 `.env` 直接注入，配置名及格式见 `.env.example`：`GLOWLOOM_IDENTITY_KEY`、`GLOWLOOM_IDENTITY_JWT_PRIVATE_KEY`、`GLOWLOOM_IDENTITY_JWT_VERIFY_KEYS`、`GLOWLOOM_IDENTITY_JWT_ACTIVE_KID`、`GLOWLOOM_IDENTITY_REFRESH_RECEIPT_KEY`。JWT 私钥使用 Base64 PEM，验证映射为 KID 到 Base64 公钥 PEM 的 JSON，回执密钥为独立32字节 Base64值；运行时不加载独立密钥文件或 Compose secret 挂载。已有密钥不得随启动重新生成，缺失密钥按恢复授权处理，身份主密钥必须保留。
 
-模型预设接入还需要独立的凭据加密 RSA 密钥对与请求 MAC 密钥，配置四个 `GLOWLOOM_CREDENTIAL_*` 项（见 `.env.example`）。Compose 将本机 `.local/credentials/` 只读挂载到 `/run/glowloom-credentials/`，文件路径填写容器路径。首次配置使用至少 2048 位 RSA 的 PKCS8 私钥及 PKIX 公钥；请求 MAC 密钥为随机 32 字节的十六进制编码。密钥文件和 `.env` 不进入 Git，已有加密凭据对应的密钥必须保留，不在启动时自动重新生成。配置私钥后 `--role=all` 会同时消费 `provider` 队列；独立部署仍通过 `--role=worker --queues=provider` 运行。旧库使用结构所有者执行 `backend/db/provider_onboarding_incremental.sql` 增量升级，不重放全库 schema。
-
-Temporal返回命名空间不存在时，先用`temporal operator namespace list --address 127.0.0.1:7233`核对现有服务，再按`.env`中的实际命名空间显式注册；不改用其他项目的命名空间。本地默认值可使用`temporal operator namespace create --namespace glowloom-local --address 127.0.0.1:7233 --retention 7d`，随后重启后端。
+模型预设接入还需要独立的凭据加密 RSA 密钥对与请求 MAC 密钥，配置四个 `GLOWLOOM_CREDENTIAL_*` 项（见 `.env.example`）。采用 PEM 环境值，或由部署环境明确提供容器内只读密钥文件并配置对应 FILE 项；当前 Compose 不自动挂载宿主凭据目录。首次配置使用至少 2048 位 RSA 的 PKCS8 私钥及 PKIX 公钥；请求 MAC 密钥为随机 32 字节的十六进制编码。密钥文件和 `.env` 不进入 Git，已有加密凭据对应的密钥必须保留，不在启动时自动重新生成。配置私钥后 `--role=all` 会同时消费 `provider` 队列；独立部署仍通过 `--role=worker --queues=provider` 运行。旧库使用结构所有者执行 `backend/db/provider_onboarding_incremental.sql` 增量升级，不重放全库 schema。
 
 后端每次启动都编译只读挂载的当前源码，成功后才启动服务；编译失败直接停止，不运行旧程序。独立 Go 构建缓存卷减少重复编译耗时。首次更新开发镜像后，纯 Go 源码更新也可执行 `docker compose restart backend`；修改依赖、Dockerfile、启动入口或 Compose 配置时重新执行上述带 `--build` 的命令。裸 `docker compose up -d` 不会强制更新已运行容器，开发后端运行中也不会自动热重载。
 
@@ -97,11 +100,12 @@ Temporal返回命名空间不存在时，先用`temporal operator namespace list
 ```text
 frontend/      Next.js 工作台与交互界面
 backend/       Go API、worker、relay 与数据库定义
+agent/         独立 TypeScript/Pi Durable 服务与 PostgreSQL Storage
 canvas-collab/ 私有 Yjs 协作运行时
 docs/          原始需求、设计、PRD、实施计划与验证证据
 ```
 
-GitHub 仓库现名为 `StephenQiu30/glowloom`。后端 Go 模块路径暂保留 `github.com/StephenQiu30/glowloom-server/backend`，以保持现有导入与生成合同一致；应用命令为 `glowloom`，入口为 `backend/cmd/glowloom`。配置使用 `GLOWLOOM_*`，过渡期兼容旧 `LV_*`，新键优先；运行资源名称以实际部署为准。
+GitHub 仓库现名为 `StephenQiu30/glowloom`。后端 Go 模块路径暂保留 `github.com/StephenQiu30/glowloom-server/backend`，以保持现有导入与生成合同一致；应用命令为 `glowloom`，入口为 `backend/cmd/glowloom`。配置只使用当前 `GLOWLOOM_*`，旧环境变量别名已移除；运行资源名称以实际部署为准。
 
 ## 文档与协作
 

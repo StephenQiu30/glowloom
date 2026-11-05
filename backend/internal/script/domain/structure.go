@@ -62,11 +62,11 @@ func (d StructureDocument) Validate(episodeStart, episodeEnd int) error {
 			if item.Key == uuid.Nil || keys[item.Key] || item.Start < priorItemEnd || item.End <= item.Start || item.End > scene.End || !validStructureText(item.Content) || item.Content == "" || !validStructureText(item.Speaker) || !validStructureText(item.Emotion) || item.CharacterID != nil && *item.CharacterID == uuid.Nil || item.CharacterVersionID != nil && (item.CharacterID == nil || *item.CharacterVersionID == uuid.Nil) {
 				return ErrInvalidStructure
 			}
-			if item.Type == "action" {
+			if item.Type == StructureItemTypeAction {
 				if item.Kind != "" || item.Speaker != "" || item.Emotion != "" || item.CharacterID != nil || item.CharacterVersionID != nil {
 					return ErrInvalidStructure
 				}
-			} else if item.Type != "line" || !slices.Contains([]string{"dialogue", "voiceover", "inner"}, item.Kind) {
+			} else if item.Type != StructureItemTypeDialogue || !slices.Contains([]DialogueKind{DialogueKindDialogue, DialogueKindVoiceover, DialogueKindInner}, item.Kind) {
 				return ErrInvalidStructure
 			}
 			keys[item.Key] = true

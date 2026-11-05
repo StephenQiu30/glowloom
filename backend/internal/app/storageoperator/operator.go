@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
-	"gorm.io/gorm"
 
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
@@ -37,22 +36,21 @@ func Run(args []string) error {
 // ordinary application DSN. Errors do not print DSNs, credentials or signed URLs.
 func Execute(ctx context.Context, args []string, output io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: glowloom storage validate|register|prove-empty|finalize|bind-legacy|backfill|backfill-work|reconcile-work|probe|record-deployment|activate")
+		return errors.New("usage: glowloom storage validate|register|prove-empty|check-schema|reconcile-work|probe")
 	}
 	command := args[0]
 	switch command {
-	case "validate", "register", "bind-legacy", "backfill", "backfill-work", "reconcile-work", "probe", "probe-cleanup", "accept-bucket", "record-deployment", "activate", "prove-empty", "finalize":
+	case "validate", "register", "reconcile-work", "probe", "probe-cleanup", "accept-bucket", "prove-empty", "check-schema":
 	default:
 		return errors.New("unknown storage command")
 	}
 	flags := flag.NewFlagSet("storage "+command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	profile := flags.String("profile", "", "explicit resource profile")
-	expected := flags.String("expected-revision", "", "CAS revision; empty only for first activation")
 	evidence := flags.String("evidence-sha256", "", "reviewed external evidence digest")
 	probeID := flags.String("probe-id", "", "persisted failed diagnostic identity")
 	readKey := flags.String("read-key", "", "retained sentinel for read-only probe")
-	batch := flags.Int("batch", 100, "maximum historical objects to verify")
+	batch := flags.Int("batch", 100, "maximum storage work items to reconcile")
 	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 {
 		return errors.New("invalid storage arguments")
 	}
@@ -60,17 +58,13 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 	flags.Visit(func(f *flag.Flag) { visited[f.Name] = true })
 	allowed := map[string]bool{}
 	switch command {
-	case "bind-legacy", "accept-bucket":
+	case "accept-bucket":
 		allowed["profile"], allowed["evidence-sha256"] = true, true
 	case "probe-cleanup":
 		allowed["probe-id"] = true
 	case "probe":
 		allowed["profile"], allowed["read-key"] = true, true
-	case "activate":
-		allowed["expected-revision"] = true
-	case "record-deployment":
-		allowed["evidence-sha256"] = true
-	case "backfill", "backfill-work", "reconcile-work":
+	case "reconcile-work":
 		allowed["batch"] = true
 	}
 	for name := range visited {
@@ -78,7 +72,7 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 			return errors.New("flag is not supported by this storage command")
 		}
 	}
-	if command == "activate" && !visited["expected-revision"] || (command == "bind-legacy" || command == "accept-bucket" || command == "probe") && *profile == "" || (command == "backfill" || command == "backfill-work" || command == "reconcile-work") && (*batch < 1 || *batch > 1000) {
+	if (command == "accept-bucket" || command == "probe") && *profile == "" || command == "reconcile-work" && (*batch < 1 || *batch > 1000) {
 		return errors.New("required storage precondition missing")
 	}
 	process, err := config.Load()
@@ -89,7 +83,7 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 		return errors.New("native object storage environment is incomplete")
 	}
 	cfg := *process.ObjectStorage
-	in, err := Configuration(cfg, *expected)
+	in, err := Configuration(cfg)
 	if err != nil {
 		return err
 	}
@@ -118,8 +112,8 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 			return proofErr
 		}
 		return encode(struct{ ConfigSHA256, EvidenceSHA256 string }{in.ConfigSHA256, proof})
-	case "finalize":
-		err = routes.FinalizeStorageSchema(ctx, in.ConfigSHA256)
+	case "check-schema":
+		err = routes.CheckStorageFinalSchema(ctx)
 	case "probe-cleanup":
 		id, parseErr := uuid.Parse(*probeID)
 		if parseErr != nil {
@@ -128,27 +122,8 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 		err = CleanupProbe(ctx, cfg, id, routes)
 	case "register":
 		err = routes.RegisterProfiles(ctx, profiles)
-	case "bind-legacy":
-		var original *mediaapp.StorageProfile
-		for i := range profiles {
-			if profiles[i].ID == *profile {
-				original = &profiles[i]
-			}
-		}
-		if original == nil {
-			return errors.New("legacy profile is absent from reviewed configuration")
-		}
-		err = routes.BindLegacyStorage(ctx, *original, *evidence)
-	case "record-deployment":
-		err = routes.RecordStorageDeployment(ctx, in.ConfigSHA256, *evidence)
 	case "accept-bucket":
 		err = routes.RecordStorageBucketEvidence(ctx, *profile, in.ConfigSHA256, *evidence, time.Hour)
-	case "backfill-work":
-		count, migrateErr := routes.BackfillLegacyOperationWork(ctx, in.ConfigSHA256, *batch)
-		if encodeErr := encode(struct{ Bound int }{count}); encodeErr != nil {
-			return encodeErr
-		}
-		err = migrateErr
 	case "reconcile-work":
 		if err := routes.RegisterProfiles(ctx, profiles); err != nil {
 			return errors.New("storage resource identity rejected before cleanup")
@@ -163,21 +138,6 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 			return encodeErr
 		}
 		err = cleanupErr
-	case "backfill":
-		if err := routes.RegisterProfiles(ctx, profiles); err != nil {
-			return errors.New("storage resource identity rejected before backfill")
-		}
-		registry, openErr := objectstorage.OpenProfiles(cfg)
-		if openErr != nil {
-			return openErr
-		}
-		defer registry.Close()
-		migration := mediaapp.NewLegacyMigration(routes, mediaapp.NewLegacyByteVerifier(mediaobjects.NewRoutedReadObjects(registry)))
-		report, backfillErr := migration.BackfillBatch(ctx, *batch)
-		if encodeErr := encode(report); encodeErr != nil {
-			return encodeErr
-		}
-		err = backfillErr
 	case "probe":
 		if err := routes.RegisterProfiles(ctx, profiles); err != nil {
 			return errors.New("storage profile registration rejected")
@@ -195,21 +155,6 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 			return errors.New("storage probe receipt not recorded")
 		}
 		return encode(receipt)
-	case "activate":
-		var route mediaapp.StorageRoute
-		activateErr := connection.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			guarded := pgmedia.NewStorageRoutes(tx)
-			if err := guarded.CheckStorageFinalSchema(ctx); err != nil {
-				return err
-			}
-			var err error
-			route, err = guarded.ActivateStorage(ctx, in)
-			return err
-		})
-		if activateErr == nil {
-			return encode(route)
-		}
-		err = activateErr
 	}
 	if err != nil {
 		if errors.Is(err, mediaapp.ErrStorageNotReady) || errors.Is(err, mediaapp.ErrStorageIdentityConflict) || errors.Is(err, mediaapp.ErrStorageRouteConflict) || errors.Is(err, mediaapp.ErrObjectMismatch) {

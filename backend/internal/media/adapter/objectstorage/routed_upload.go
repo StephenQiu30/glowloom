@@ -52,23 +52,23 @@ func (s *RoutedUploadObjects) CreateUploadObject(ctx context.Context, target app
 	body := io.NewSectionReader(file.File, 0, file.Size)
 	err = s.registry.PutIfAbsent(ctx, transportRef(ref), body, file.Size, file.MIMEType, file.SHA256)
 	if err != nil && !errors.Is(err, platform.ErrObjectExists) {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, err
 	}
 	info, err := s.registry.Stat(ctx, transportRef(ref))
 	if err != nil {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, err
 	}
 	if info.Size != file.Size || info.ContentType != file.MIMEType || info.SHA256 != file.SHA256 {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, application.ErrObjectMismatch
 	}
 	if err := s.locations.ConfirmUploadLocation(ctx, location, application.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256}); err != nil {
-		location.State = "unknown"
+		location.State = domain.ObjectLocationUnknown
 		return location, err
 	}
-	location.State = "present"
+	location.State = domain.ObjectLocationPresent
 	location.ByteSize = &file.Size
 	location.SHA256 = &file.SHA256
 	location.MIMEType = &file.MIMEType

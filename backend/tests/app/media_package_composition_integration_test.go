@@ -38,7 +38,7 @@ import (
 
 func TestMediaPackageProductionRouterInstallsAllSix(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t)}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{ObjectStorage: businessUnitStorage(t), Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t)}, &gorm.DB{}, businessUnitRegistry(t), identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,12 +223,12 @@ func (packageCompositionIdleGuard) HasInflightProjectWork(context.Context, ident
 }
 
 type packageCompositionUnknownWrite struct {
-	mediaapp.PackageObjects
+	*mediaobjects.RoutedPackageObjects
 	once bool
 }
 
-func (o *packageCompositionUnknownWrite) PutIfAbsent(ctx context.Context, key string, r io.Reader, size int64, mime, digest string) error {
-	err := o.PackageObjects.PutIfAbsent(ctx, key, r, size, mime, digest)
+func (o *packageCompositionUnknownWrite) PutPackage(ctx context.Context, object mediaapp.PackageObject, r io.Reader) error {
+	err := o.RoutedPackageObjects.PutPackage(ctx, object, r)
 	if err == nil && !o.once {
 		o.once = true
 		return io.ErrUnexpectedEOF
@@ -237,10 +237,10 @@ func (o *packageCompositionUnknownWrite) PutIfAbsent(ctx context.Context, key st
 }
 func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClosed(t *testing.T) {
 	f := newMediaCompositionFixture(t)
-	repo := pgmedia.NewScopedPackageStore(f.runtime, app.NewMediaLibraryProjectAccess, func(*gorm.DB) mediaapp.LibraryWorkGuards { return packageCompositionIdleGuard{} }, time.Now, app.NewMediaScopeAccess)
-	uploads := mediaapp.NewScopedUploadService(pgmedia.NewScopedStore(f.runtime, app.NewMediaScopeAccess), pgmedia.NewScopedStore(f.runtime, app.NewMediaScopeAccess), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, nil, time.Now)
-	objects := mediaobjects.NewProjectCopyObjects(f.objects)
-	service := mediaapp.NewLibraryPackageService(repo, uploads, &packageCompositionUnknownWrite{PackageObjects: objects}, time.Now)
+	repo := pgmedia.NewScopedPackageStore(f.runtime, app.NewMediaLibraryProjectAccess, func(*gorm.DB) mediaapp.LibraryWorkGuards { return packageCompositionIdleGuard{} }, time.Now, app.NewMediaScopeAccess).WithObjectLocations()
+	uploads := businessFixtureUploads(t, f.owner, pgmedia.NewScopedStore(f.runtime, app.NewMediaScopeAccess), mediaflow.FFUploadProber{})
+	objects := mediaobjects.NewRoutedPackageObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(f.runtime))
+	service := mediaapp.NewLibraryPackageService(repo, uploads, &packageCompositionUnknownWrite{RoutedPackageObjects: objects}, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &f.project}
 	in := mediaapp.PackageImportRequest{Scope: scope, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
 	if err := f.owner.Raw(`SELECT revision FROM workspace.project WHERE id=?`, f.project).Scan(&in.ExpectedProjectRevision).Error; err != nil {
@@ -255,7 +255,8 @@ func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClos
 	if err != nil || job.Status != "needs_reconciliation" {
 		t.Fatal("actual unknown private package", job, err)
 	}
-	keys, err := repo.StorageUsageKeys(t.Context(), f.actor, scope)
+	var keys []string
+	err = f.owner.Raw(`SELECT object_key FROM media.package_object WHERE job_id=?`, job.ID).Scan(&keys).Error
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,6 +277,9 @@ func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClos
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
+		if err := f.owner.Exec(`GRANT SELECT ON media.object_location TO glowloom_app`).Error; err != nil {
+			t.Fatal(err)
+		}
 		if err := f.owner.Exec(`GRANT SELECT ON mediatool.export_job TO glowloom_app`).Error; err != nil {
 			t.Error("restore isolated installed owner permission", err)
 		}
@@ -284,6 +288,14 @@ func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClos
 	if response.Code != 503 {
 		t.Fatal("unknown package hid another unreadable lifecycle owner", response.Code, response.Body.String())
 	}
+	if err := f.owner.Exec(`REVOKE SELECT ON media.object_location FROM glowloom_app`).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := f.owner.Exec(`GRANT SELECT ON media.object_location TO glowloom_app`).Error; err != nil {
+			t.Error(err)
+		}
+	})
 	response = mediaCompositionRequest(t, f.router, http.MethodGet, "/api/media/library/storage-usage?scope=project&project_id="+f.project.String(), nil)
 	if response.Code != 503 || strings.Contains(response.Body.String(), "used_bytes") {
 		t.Fatal("retained source ZIP hid another unreadable usage owner", response.Code)
@@ -291,10 +303,18 @@ func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClos
 	if err := f.owner.Exec(`GRANT SELECT ON mediatool.export_job TO glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := f.owner.Exec(`GRANT SELECT ON media.object_location TO glowloom_app`).Error; err != nil {
+		t.Fatal(err)
+	}
 	actual := mediaapp.NewLibraryPackageService(repo, uploads, objects, time.Now)
 	cancelled, err := actual.Cancel(t.Context(), f.actor, job.ID, mediaapp.PackageControl{ExpectedRevision: job.Revision, Key: uuid.New(), RequestID: uuid.New()})
+	if err != nil || cancelled.Status != "needs_reconciliation" {
+		t.Fatal("remote write window did not retain package cleanup", cancelled, err)
+	}
+	businessExpireStorageWindow(t, f.owner, job.ID)
+	cancelled, err = actual.Cancel(t.Context(), f.actor, job.ID, mediaapp.PackageControl{ExpectedRevision: cancelled.Revision, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || cancelled.Status != "cancelled" {
-		t.Fatal("actual unknown package cleanup", cancelled, err)
+		t.Fatal("actual unknown package cleanup after drain", cancelled, err)
 	}
 	response = mediaCompositionRequest(t, f.router, http.MethodPost, path, transition)
 	if response.Code != 200 {

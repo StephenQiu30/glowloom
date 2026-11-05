@@ -2,7 +2,6 @@ package media_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -20,14 +19,14 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 	db := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(db)
 	storageProfiles(t, routes)
-	current := activeTestStorageRoute(t, routes)
+	activeTestStorageRoute(t, db, routes)
 	initial := "read-minio-" + uuid.NewString()
-	if _, err := routes.Activate(t.Context(), current.Revision, initial, "minio-main"); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, initial, "minio-main")); err != nil {
 		t.Fatal(err)
 	}
 	actor, project := mediaStoreProject(t, db)
 	store := routingMediaStore(db)
-	service := mediaapp.NewRoutedUploadService(store, store, pgmedia.NewUploadAdmission(store, uploadRoutingPolicy(), 24*time.Hour), routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, &persistedRoutedUpload{locations: routes}, time.Now)
+	service := mediaapp.NewRoutedUploadService(store, store, pgmedia.NewUploadAdmission(store), routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, &persistedRoutedUpload{locations: routes}, time.Now)
 	input := uploadInput(t)
 	input.Actor = actor
 	input.Request.ProjectID = project
@@ -36,11 +35,11 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 		t.Fatal(err)
 	}
 	input.Target = &target
-	uploaded, err := service.Upload(t.Context(), input)
+	uploaded, err := fixtureProjectUpload(t.Context(), service, input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := routes.Activate(t.Context(), initial, "read-cos-"+uuid.NewString(), "cos-main"); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, "read-cos-"+uuid.NewString(), "cos-main")); err != nil {
 		t.Fatal(err)
 	}
 	asset, err := store.FindAsset(t.Context(), actor, project, uploaded.Asset.ID)
@@ -101,10 +100,10 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 	db := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(db)
 	storageProfiles(t, routes)
-	activeTestStorageRoute(t, routes)
+	activeTestStorageRoute(t, db, routes)
 	actor, project := mediaStoreProject(t, db)
 	store := routingMediaStore(db)
-	service := mediaapp.NewRoutedUploadService(store, store, pgmedia.NewUploadAdmission(store, uploadRoutingPolicy(), 24*time.Hour), routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, &persistedRoutedUpload{locations: routes}, time.Now)
+	service := mediaapp.NewRoutedUploadService(store, store, pgmedia.NewUploadAdmission(store), routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, &persistedRoutedUpload{locations: routes}, time.Now)
 	input := uploadInput(t)
 	input.Actor = actor
 	input.Request.ProjectID = project
@@ -113,7 +112,7 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	input.Target = &target
-	if _, err := service.Upload(t.Context(), input); err != nil {
+	if _, err := fixtureProjectUpload(t.Context(), service, input); err != nil {
 		t.Fatal(err)
 	}
 	library := pgmedia.NewScopedLibraryStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, time.Now, func(*gorm.DB) mediaapp.ScopeAccess { return routingScopeStub{} })
@@ -122,7 +121,7 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 	called := false
 	err = source.InspectStorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(in mediaapp.StorageUsageInventory) error {
 		called = true
-		if len(in.Locations) != 3 || len(in.PhysicalPrefixes) != 2 || len(in.ObjectKeys) != 0 || len(in.Prefixes) != 0 {
+		if len(in.Locations) != 3 || len(in.PhysicalPrefixes) != 2 {
 			t.Fatal("inventory omitted saved identities")
 		}
 		for _, ref := range in.Locations {
@@ -135,22 +134,10 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 	if err != nil || !called {
 		t.Fatal("read physical inventory", err)
 	}
-	// The legacy source must not erase the FK and silently count the original bucket.
-	legacy := pgmedia.NewScopedStorageUsageStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, func(*gorm.DB) mediaapp.StorageUsageIntentSource { return usageIntentFixture{} }, func(*gorm.DB) mediaapp.ScopeAccess { return routingScopeStub{} })
-	legacyCalled := false
-	legacyErr := legacy.InspectStorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(mediaapp.StorageUsageInventory) error { legacyCalled = true; return nil })
-	if !errors.Is(legacyErr, mediaapp.ErrUnavailable) || legacyCalled {
-		t.Fatal("legacy usage source erased a saved location", legacyErr)
-	}
-	// A key-only row is unresolved migration debt, never a guessed current profile.
-	legacyAsset := sourceDocumentAsset([]byte("unproved legacy"))
-	legacyAsset.ObjectKey = "projects/" + project.String() + "/document/2026/10/" + legacyAsset.ID.String() + ".txt"
-	if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,codec,moderation_status,revision) VALUES(?,?,'document','upload','ready',?,?,?,?,?,'txt','passed',1)`, legacyAsset.ID, project, legacyAsset.ObjectKey, legacyAsset.FileName, legacyAsset.MimeType, legacyAsset.ByteSize, *legacyAsset.SHA256).Error; err != nil {
-		t.Fatal(err)
-	}
-	called = false
-	err = source.InspectStorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(mediaapp.StorageUsageInventory) error { called = true; return nil })
-	if !errors.Is(err, mediaapp.ErrStorageNotReady) || called {
-		t.Fatal("unproven legacy row reached inventory consumer", err)
+	// Current schema rejects key-only owner rows at the persistence boundary.
+	unbound := sourceDocumentAsset([]byte("unproved location"))
+	unbound.ObjectKey = "projects/" + project.String() + "/document/2026/10/" + unbound.ID.String() + ".txt"
+	if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,codec,moderation_status,revision) VALUES(?,?,'document','upload','ready',?,?,?,?,?,'txt','passed',1)`, unbound.ID, project, unbound.ObjectKey, unbound.FileName, unbound.MimeType, unbound.ByteSize, *unbound.SHA256).Error; err == nil {
+		t.Fatal("key-only owner bypassed required frozen location")
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -20,7 +22,7 @@ func (s *Store) SaveManagedResult(ctx context.Context, input application.Managed
 	if err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		var present int
 		i := input.Identity
 		r := tx.Raw(`SELECT 1 FROM operation.operation op JOIN operation.provider_call c ON c.operation_id=op.id AND c.project_id=op.project_id
@@ -46,7 +48,7 @@ func (s *Store) SaveManagedResult(ctx context.Context, input application.Managed
 			if jsonEqual(previous.Result, raw) {
 				return nil
 			}
-			if saved.State != "accepted" || input.State != "succeeded" || saved.TaskID != input.TaskID {
+			if saved.State != application.ManagedResultAccepted || input.State != "succeeded" || saved.TaskID != input.TaskID {
 				return application.ErrProviderCallConflict
 			}
 			return tx.Exec(`UPDATE operation.provider_result SET result=?::jsonb,update_time=now() WHERE operation_id=?`, string(raw), i.OperationID).Error
@@ -89,7 +91,7 @@ func (s *Store) IngestOriginalText(ctx context.Context, i application.ProviderDi
 }
 
 func (s *Store) ingestManagedText(ctx context.Context, i application.ProviderDispatchIdentity, d *application.WorkflowControlDelivery) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if d != nil {
 			if err := s.CheckOriginalDelivery(tx, *d); err != nil {
 				return err
@@ -117,7 +119,7 @@ func (s *Store) ingestManagedText(ctx context.Context, i application.ProviderDis
 		if err != nil {
 			return err
 		}
-		if result == nil || result.State != "succeeded" || result.Text == "" {
+		if result == nil || result.State != application.ManagedResultSucceeded || result.Text == "" {
 			return application.ErrProviderCallConflict
 		}
 		payload, err := json.Marshal(map[string]string{"text": result.Text})

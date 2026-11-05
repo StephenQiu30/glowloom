@@ -26,7 +26,7 @@ func ProvideMediaExportStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAc
 		func(tx *gorm.DB) toolapp.TimelineReader {
 			return canvasapp.NewTimelineReader(pgcanvas.NewScopedStore(tx,
 				func(mediaTx *gorm.DB) canvasapp.MediaReader {
-					return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes), nil)
+					return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes))
 				}, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }))
 		},
 		func(tx *gorm.DB) toolapp.DerivedMedia {
@@ -40,6 +40,6 @@ func ProvideRoutedMediaExportStore(database *gorm.DB, scopes pgmedia.ScopeAccess
 }
 
 // ToolObjects provides each tool execution its own frozen object resolver.
-func ToolObjects(database *gorm.DB, registry *objectstorage.Registry, legacy *objectstorage.Client) toolapp.WorkObjectsFactory {
-	return toolflow.NewRoutedObjects(registry, pgmedia.NewStorageRoutes(database), legacy)
+func ToolObjects(database *gorm.DB, registry *objectstorage.Registry) toolapp.WorkObjectsFactory {
+	return toolflow.NewRoutedObjects(registry, pgmedia.NewStorageRoutes(database))
 }

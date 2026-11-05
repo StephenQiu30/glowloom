@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -83,8 +85,8 @@ func bibleUploadedMedia(t *testing.T, db *gorm.DB, objects *objectstorage.Client
 			t.Error(err)
 		}
 	})
-	uploader := mediaapp.NewUploadService(bibleFixtureMediaStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	result, err := uploader.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: input, LocalReviewConfirmed: true})
+	uploader := businessFixtureUploads(t, db, bibleFixtureMediaStore(db), mediaflow.FFUploadProber{})
+	result, err := businessFixtureUpload(t.Context(), t, uploader, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: input, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual owner-reviewed upload", err)
 	}
@@ -137,7 +139,7 @@ func TestBiblePGActualSixImageRolesSampleAndFrozenTrashBoundaries(t *testing.T) 
 	}
 	audioID := bibleUploadedMedia(t, db, objects, actor, project, "voice.wav", audioBytes)
 	factories := pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Media: func(tx *gorm.DB) app.MediaReferences {
-		return actualBibleMedia{mediaapp.NewReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
+		return actualBibleMedia{mediaapp.NewRoutedReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}
 	}}
 	service := app.NewService(pg.NewStore(db, factories), time.Now)
 	first, err := service.Change(t.Context(), actor, createCharacter(project))
@@ -174,7 +176,22 @@ func TestBiblePGActualSixImageRolesSampleAndFrozenTrashBoundaries(t *testing.T) 
 	if err != nil || old.Character.Voice != nil {
 		t.Fatal("sample rewrote prior immutable version", err)
 	}
-	if _, err := bibleFixtureLibraryStore(db, bibleLibraryFactory, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}, Action: "recycle_items", Key: uuid.New(), Items: []mediaapp.LibraryItemRevision{{ID: imageID}}}); err != nil {
+	library := bibleFixtureLibraryStore(db, bibleLibraryFactory, time.Now)
+	scope := mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}
+	page, err := library.ListLibrary(t.Context(), actor, scope, mediaapp.LibraryQuery{Page: 1, PageSize: 100, State: mediadomain.LibraryItemStateActive, Order: "updated_desc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var item mediaapp.LibraryItemRevision
+	for _, row := range page.Items {
+		if row.AssetID != nil && *row.AssetID == imageID {
+			item = mediaapp.LibraryItemRevision{ID: row.ID, Revision: row.Revision}
+		}
+	}
+	if item.ID == uuid.Nil {
+		t.Fatal("uploaded reference is absent from current library")
+	}
+	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, ExpectedRevision: page.Revision, Action: "recycle_items", Key: uuid.New(), Items: []mediaapp.LibraryItemRevision{item}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: third.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {

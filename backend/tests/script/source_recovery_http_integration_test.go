@@ -12,7 +12,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	scripthttp "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/http"
-	objectsadapter "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
@@ -28,7 +27,7 @@ func TestScriptSourceRecoveryHTTPCurrentScopeAndPermanent202IsNotCompletion(t *t
 	db, owner := scriptTestDB(t)
 	creator, pid := scriptActorProject(t, owner)
 	admin := scriptAdmin(t, owner, creator.OrgID)
-	privateObjects := objectsadapter.NewStorage(scriptStorage(t))
+	privateObjects := scriptPrivateObjects(t, db)
 	store := scriptStore(db)
 	sources := app.NewSourceService(store, &lostPrivatePut{PrivateObjects: privateObjects}, time.Now)
 	recovery := app.NewSourceRecovery(store, sources, time.Now)
@@ -38,7 +37,7 @@ func TestScriptSourceRecoveryHTTPCurrentScopeAndPermanent202IsNotCompletion(t *t
 		t.Fatal("fault did not retain intent")
 	}
 	plan := pendingScriptPlan(t, owner, pid)
-	cleanScriptPlan(t, privateObjects, plan)
+	cleanScriptPlan(t, db, privateObjects, plan)
 	router := recoveryRouter(recovery, admin)
 	path := "/api/projects/" + pid.String() + "/script-source-writes"
 	page := scriptHTTP(t, router, "GET", path, uuid.Nil, nil)
@@ -58,6 +57,17 @@ func TestScriptSourceRecoveryHTTPCurrentScopeAndPermanent202IsNotCompletion(t *t
 	}
 	current := scriptHTTP(t, router, "GET", path+"/"+selected.Items[0].ID.String(), uuid.Nil, nil)
 	var intent app.SourceWriteIntent
+	if err := json.Unmarshal(current.Body.Bytes(), &intent); err != nil || current.Code != 200 || intent.Status != "pending" || !intent.NeedsReconciliation || !intent.CanControl {
+		t.Fatal("202 cannot skip remote-write protection", current.Code, current.Body.String(), err)
+	}
+	assertScriptFixtureObjectPresent(t, privateObjects, plan.Objects[0])
+	expireScriptFixtureSourceDrain(t, owner, plan)
+	reconcileBody := scripthttp.SourceControlRequest{ExpectedRevision: &intent.Revision}
+	reconciled := scriptHTTP(t, router, "POST", path+"/"+intent.ID.String()+"/reconcile", uuid.New(), reconcileBody)
+	if reconciled.Code != 202 {
+		t.Fatal("explicit delayed reconciliation", reconciled.Code, reconciled.Body.String())
+	}
+	current = scriptHTTP(t, router, "GET", path+"/"+intent.ID.String(), uuid.Nil, nil)
 	if err := json.Unmarshal(current.Body.Bytes(), &intent); err != nil || current.Code != 200 || intent.Status != "cancelled" || intent.CanControl {
 		t.Fatal("actual public cleanup state", current.Code, current.Body.String(), err)
 	}

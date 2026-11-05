@@ -200,7 +200,7 @@ export async function publishHistoryResults(
   );
 }
 
-/** 自由生成报价 POST /api/projects/${param0}/free-operations */
+/** 自由生成报价 当前生成输入使用 source 绑定画布来源，模型和价格版本由服务端冻结，未知字段返回 422。 POST /api/projects/${param0}/free-operations */
 export async function createFreeQuote(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createFreeQuoteParams,

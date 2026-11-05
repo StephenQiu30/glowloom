@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/task"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -100,7 +103,7 @@ func (s *ProjectCopyStore) find(ctx context.Context, actor identityapp.Principal
 		return domain.ProjectCopyJob{}, application.ErrProjectDependencyUnavailable
 	}
 	var saved domain.ProjectCopyJob
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		var err error
 		saved, err = s.authorizedCopy(ctx, tx, actor, id, false, worker)
 		return err
@@ -172,6 +175,11 @@ func copyChanged(tx *gorm.DB, job domain.ProjectCopyJob, action string, now time
 	if err != nil {
 		return err
 	}
+	if topic == "glowloom.workspace.project_copy_requested.v1" {
+		if err := taskruntime.EnqueueReference(tx.Statement.Context, tx, task.Copy, id.String(), time.Now().UTC(), application.ProjectCopyWorkID{OrgID: job.OrgID, JobID: job.ID}); err != nil {
+			return err
+		}
+	}
 	if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, id, topic, job.ID.String(), string(payload)).Error; err != nil {
 		return err
 	}
@@ -185,7 +193,7 @@ func copyChanged(tx *gorm.DB, job domain.ProjectCopyJob, action string, now time
 // Claim claims one waiting attempt or an explicit same-key reconciliation attempt.
 func (s *ProjectCopyStore) Claim(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID, reconcile bool, now time.Time) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
@@ -216,7 +224,7 @@ func (s *ProjectCopyStore) UseAttempt(ctx context.Context, actor identityapp.Pri
 	if s == nil || s.db == nil || use == nil || worker == uuid.Nil {
 		return application.ErrProjectDependencyUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		job, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
@@ -250,7 +258,7 @@ func (s *ProjectCopyStore) CompleteCanvases(ctx context.Context, actor identitya
 
 func (s *ProjectCopyStore) completeOwner(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID, stage string) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
@@ -326,7 +334,7 @@ func bindCopyPrimaryCanvas(tx *gorm.DB, job domain.ProjectCopyJob) error {
 // Publish activates the entire target and completes the job in the same transaction.
 func (s *ProjectCopyStore) Publish(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
@@ -386,7 +394,7 @@ func (s *ProjectCopyStore) Publish(ctx context.Context, actor identityapp.Princi
 // Fail preserves uncertainty and cancellation after a stopped owned attempt.
 func (s *ProjectCopyStore) Fail(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID, code string, retryable, unknown bool) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
@@ -409,7 +417,7 @@ func (s *ProjectCopyStore) Fail(ctx context.Context, actor identityapp.Principal
 // FinishCancelled commits only after byte absence and both owners' cleanup receipts.
 func (s *ProjectCopyStore) FinishCancelled(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err

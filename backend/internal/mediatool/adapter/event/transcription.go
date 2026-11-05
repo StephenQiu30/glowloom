@@ -33,7 +33,7 @@ type TranscriptionHandler struct {
 	starter   TranscriptionStarter
 }
 
-// NewTranscriptionHandler injects durable delivery proof and the configured Temporal client.
+// NewTranscriptionHandler injects durable delivery proof and the configured command consumer.
 func NewTranscriptionHandler(processed ProcessedStore, store TranscriptionDeliveryStore, starter TranscriptionStarter) *TranscriptionHandler {
 	return &TranscriptionHandler{processed: processed, store: store, starter: starter}
 }

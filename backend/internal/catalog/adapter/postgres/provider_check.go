@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -52,7 +54,7 @@ func recordProviderCheck(tx *gorm.DB, observation application.CredentialTestObse
 // ReadProviderCheck returns safe evidence and bounded discovery candidates.
 func (s *Store) ReadProviderCheck(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (application.ProviderCheck, error) {
 	var result application.ProviderCheck
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
@@ -84,7 +86,7 @@ func (s *Store) ReadProviderCheck(ctx context.Context, actor identityapp.Princip
 
 // FailProviderCheck closes only the exact worker-owned request without exposing errors.
 func (s *Store) FailProviderCheck(ctx context.Context, id, actor, provider, credential uuid.UUID) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := tx.Exec(`UPDATE catalog.provider_check SET status='failed',error_code='check_interrupted',model_result=CASE WHEN kind='model_access' AND dispatch_started_at IS NOT NULL THEN 'unknown' ELSE model_result END,completed_at=now() WHERE id=? AND actor_id=? AND provider_id=? AND credential_id IS NOT DISTINCT FROM NULLIF(?::uuid,'00000000-0000-0000-0000-000000000000'::uuid) AND status IN ('pending','running')`, id, actor, provider, credential).Error; err != nil {
 			return err
 		}
@@ -95,7 +97,7 @@ func (s *Store) FailProviderCheck(ctx context.Context, id, actor, provider, cred
 // ListProviderChecks returns safe evidence; historical passes never become current.
 func (s *Store) ListProviderChecks(ctx context.Context, actor identityapp.Principal, id uuid.UUID, offset int) (application.ProviderCheckPage, error) {
 	page := application.ProviderCheckPage{Items: []application.ProviderCheck{}}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
@@ -151,7 +153,7 @@ func (s *Store) EndProviderCheckTracking(ctx context.Context, actor identityapp.
 // ListProviderTestModels keeps formal release trials separate from light onboarding.
 func (s *Store) ListProviderTestModels(ctx context.Context, actor identityapp.Principal, id uuid.UUID) ([]application.ProviderTestModel, error) {
 	models := []application.ProviderTestModel{}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}

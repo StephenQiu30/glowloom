@@ -10,33 +10,37 @@ import (
 )
 
 type resultAccess struct {
-	signer       media.ObjectSigner
-	reader       media.ObjectReader
-	legacySigner media.PreviewSigner
-	legacyReader ResultReader
+	signer     media.ObjectSigner
+	reader     media.ObjectReader
+	previewTTL time.Duration
 }
 
-func (r *resultAccess) sign(ctx context.Context, key string, l *domain.ObjectLocation, ttl time.Duration) (media.AccessGrant, error) {
-	if l == nil {
-		if r.legacySigner == nil {
-			return media.AccessGrant{}, ErrUnavailable
-		}
-		url, e := r.legacySigner.PresignGet(ctx, key, ttl)
-		return media.AccessGrant{URL: url, ExpiresAt: time.Now().UTC().Add(ttl)}, e
+func (r *resultAccess) sign(ctx context.Context, key string, l *domain.ObjectLocation) (media.AccessGrant, error) {
+	if r == nil || l == nil {
+		return media.AccessGrant{}, ErrUnavailable
 	}
-	if r.signer == nil || l.Ref.Key != key || l.State != "accepted" || l.Ref.Validate() != nil {
+	ttl := r.previewTTL
+	if r.signer == nil || l.Ref.Key != key || l.State != domain.ObjectLocationAccepted || l.Ref.Validate() != nil {
 		return media.AccessGrant{}, ErrConflict
 	}
-	return r.signer.PresignGet(ctx, l.Ref, ttl)
+	if ttl < time.Second || ttl > 15*time.Minute {
+		return media.AccessGrant{}, ErrUnavailable
+	}
+	grant, err := r.signer.PresignGet(ctx, l.Ref, ttl)
+	if err != nil {
+		return media.AccessGrant{}, err
+	}
+	now := time.Now()
+	if grant.URL == "" || !grant.ExpiresAt.After(now) || grant.ExpiresAt.After(now.Add(ttl+5*time.Second)) || grant.ExpiresAt.After(now.Add(15*time.Minute)) {
+		return media.AccessGrant{}, ErrUnavailable
+	}
+	return grant, nil
 }
 func (r *resultAccess) read(ctx context.Context, key string, l *domain.ObjectLocation) (io.ReadCloser, error) {
 	if l == nil {
-		if r.legacyReader == nil {
-			return nil, ErrUnavailable
-		}
-		return r.legacyReader.Get(ctx, key)
+		return nil, ErrUnavailable
 	}
-	if r.reader == nil || l.Ref.Key != key || l.State != "accepted" || l.Ref.Validate() != nil {
+	if r.reader == nil || l.Ref.Key != key || l.State != domain.ObjectLocationAccepted || l.Ref.Validate() != nil {
 		return nil, ErrConflict
 	}
 	return r.reader.Get(ctx, l.Ref)

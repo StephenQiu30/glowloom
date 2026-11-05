@@ -19,7 +19,7 @@ import (
 
 func TestMediaPurgeCancelBeforeIORestoresTrashBytesAndRejectsNewWorkWhileReserved(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	actor, project, in, keys, objects := purgeBinaryFixture(t, db)
+	actor, project, in, keys, _ := purgeBinaryFixture(t, db)
 	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
@@ -45,7 +45,7 @@ func TestMediaPurgeCancelBeforeIORestoresTrashBytesAndRejectsNewWorkWhileReserve
 		t.Fatal("cancel unstarted actual deletion", cancelled, err)
 	}
 	for _, key := range keys {
-		present, err := objects.Exists(t.Context(), key)
+		present, err := glbTestObjects(t).Exists(t.Context(), key)
 		if err != nil || !present {
 			t.Fatal("cancel deleted source bytes", err)
 		}
@@ -116,7 +116,7 @@ func TestMediaPurgeZeroRowPermanentReceiptRollsBackRawDeletionAndReservation(t *
 		}
 	})
 	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	if _, err := repo.CreatePurge(t.Context(), actor, in); !errors.Is(err, mediaapp.ErrLibraryConflict) {
+	if _, err := repo.CreatePurge(t.Context(), actor, in); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("zero-row permanent receipt was treated as a committed mutation", err)
 	}
 	var deleted bool
@@ -140,7 +140,7 @@ func TestMediaPurgeZeroRowPermanentReceiptRollsBackRawDeletionAndReservation(t *
 
 func TestMediaPurgeExpiredFenceCannotStealOrPublishAndRevocationStillAllowsExactEnd(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	actor, _, in, keys, objects := purgeBinaryFixture(t, db)
+	actor, _, in, keys, _ := purgeBinaryFixture(t, db)
 	now := time.Now()
 	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, func() time.Time { return now })
 	job, err := repo.CreatePurge(t.Context(), actor, in)
@@ -171,7 +171,7 @@ func TestMediaPurgeExpiredFenceCannotStealOrPublishAndRevocationStillAllowsExact
 		t.Fatal("exact cessation fact incorrectly required current permissions", err)
 	}
 	for _, key := range keys {
-		present, err := objects.Exists(t.Context(), key)
+		present, err := glbTestObjects(t).Exists(t.Context(), key)
 		if err != nil || !present {
 			t.Fatal("blocked owner physically deleted a source", err)
 		}
@@ -210,7 +210,7 @@ func TestMediaPurgeUnknownRemovalCancelRetainsPurposeAndFinishesOnlyOriginalObje
 	if err != nil {
 		t.Fatal(err)
 	}
-	unknown := &purgeUnknownRemove{PurgeObjects: objects, once: true}
+	unknown := &purgeUnknownRemove{purgeFixtureObjects: objects, once: true}
 	current, err := mediaapp.NewPurgeWorker(repo.Worker, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil || current.Status != "needs_reconciliation" {
 		t.Fatal("unknown original outcome was not retained", current, err)
@@ -225,7 +225,7 @@ func TestMediaPurgeUnknownRemovalCancelRetainsPurposeAndFinishesOnlyOriginalObje
 		t.Fatal("started irreversible cleanup did not finish only its original object set", complete, err, unknown.removeCount)
 	}
 	for _, key := range keys {
-		present, err := objects.Exists(t.Context(), key)
+		present, err := glbTestObjects(t).Exists(t.Context(), key)
 		if err != nil || present {
 			t.Fatal("cleanup completion retained a real original or rendition", err)
 		}
@@ -248,8 +248,8 @@ func TestMediaPurgeUnknownRemovalCancelRetainsPurposeAndFinishesOnlyOriginalObje
 }
 
 func TestMediaPurgeControlZeroRowReceiptsRollbackCancelAndReconcile(t *testing.T) {
-	for _, action := range []string{"cancel", "reconcile"} {
-		t.Run(action, func(t *testing.T) {
+	for _, action := range []mediaapp.PurgeAction{mediaapp.PurgeActionCancel, mediaapp.PurgeActionReconcile} {
+		t.Run(string(action), func(t *testing.T) {
 			db := libraryRuntimeDB(t)
 			owner := libraryOwnerDB(t)
 			actor, _, in, _, objects := purgeBinaryFixture(t, db)
@@ -259,7 +259,7 @@ func TestMediaPurgeControlZeroRowReceiptsRollbackCancelAndReconcile(t *testing.T
 				t.Fatal(err)
 			}
 			if action == "reconcile" {
-				job, err = mediaapp.NewPurgeWorker(repo.Worker, &purgeUnknownRemove{PurgeObjects: objects, once: true}).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+				job, err = mediaapp.NewPurgeWorker(repo.Worker, &purgeUnknownRemove{purgeFixtureObjects: objects, once: true}).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 				if err != nil || job.Status != "needs_reconciliation" {
 					t.Fatal("unknown fixture", job, err)
 				}
@@ -275,7 +275,7 @@ func TestMediaPurgeControlZeroRowReceiptsRollbackCancelAndReconcile(t *testing.T
 				}
 			})
 			key := uuid.New()
-			if _, err := repo.ControlPurge(t.Context(), actor, job.ID, key, job.Revision, action); !errors.Is(err, mediaapp.ErrLibraryConflict) {
+			if _, err := repo.ControlPurge(t.Context(), actor, job.ID, key, job.Revision, action); !errors.Is(err, mediaapp.ErrUnavailable) {
 				t.Fatal("zero-row permanent control was accepted", err)
 			}
 			actual, err := repo.GetPurge(t.Context(), actor, job.ID)

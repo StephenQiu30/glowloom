@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"gorm.io/gorm"
@@ -32,15 +34,16 @@ func freezeReceiptFixtureModel(t *testing.T, database *gorm.DB, identity applica
 // This crosses actual PostgreSQL and MinIO with simulated model output; no
 // account, inference, image pricing, or production bucket participates.
 func TestM1ReceiptRecoveryPrivateObjectsAndPostgres(t *testing.T) {
-	objects := receiptTestObjects(t)
+	receiptTestObjects(t)
 	database := operationStoreDB(t)
 	for _, failure := range []string{"none", "manifest", "database"} {
 		t.Run(failure, func(t *testing.T) {
 			identity, store := seedDispatchCall(t, database, true)
 			freezeReceiptFixtureModel(t, database, identity)
-			objectPort := &receiptFaultObjects{ProviderStagingObjects: staging.NewObjects(objects), manifestFailure: failure == "manifest"}
+			businessPinOperation(t, database, identity)
+			objectPort := receiptFaultFactory{factory: staging.NewRoutedFactory(businessStorageRegistry(t), pgmedia.NewStorageRoutes(database)), manifestFailure: failure == "manifest"}
 			recordPort := &receiptFaultRecords{Store: store, writeFailure: failure == "database"}
-			receiptService := application.NewProviderStageService(objectPort, recordPort)
+			receiptService := application.NewRoutedProviderStageService(objectPort, recordPort)
 			launch := &codexTestLauncher{t: t, behavior: "success"}
 			adapter, err := codex.New(store, launch, receiptService, codex.Config{WorkRoot: t.TempDir()})
 			if err != nil {
@@ -127,6 +130,7 @@ func receiptTestObjects(t *testing.T) *objectstorage.Client {
 	}
 	var config struct {
 		Endpoint  string `json:"endpoint"`
+		Region    string `json:"region"`
 		Bucket    string `json:"bucket"`
 		AccessKey string `json:"access_key"`
 		SecretKey string `json:"secret_key"`
@@ -140,7 +144,7 @@ func receiptTestObjects(t *testing.T) *objectstorage.Client {
 	if err != nil || endpoint.Scheme != "http" || (endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "localhost") || config.Bucket != "glowloom-receipt-test" {
 		t.Fatal("storage fixture must be a dedicated loopback test bucket")
 	}
-	sdk, err := minio.New(endpoint.Host, &minio.Options{Creds: credentials.NewStaticV4(config.AccessKey, config.SecretKey, ""), Secure: false})
+	sdk, err := minio.New(endpoint.Host, &minio.Options{Creds: credentials.NewStaticV4(config.AccessKey, config.SecretKey, ""), Region: config.Region, Secure: false})
 	if err != nil {
 		t.Fatal("configure MinIO fixture")
 	}
@@ -153,7 +157,7 @@ func receiptTestObjects(t *testing.T) *objectstorage.Client {
 			t.Fatal("create isolated test bucket")
 		}
 	}
-	client, err := objectstorage.Open(config.Endpoint, config.Bucket, config.AccessKey, config.SecretKey, "")
+	client, err := objectstorage.Open(config.Endpoint, config.Bucket, config.AccessKey, config.SecretKey, config.Region)
 	if err != nil {
 		t.Fatal("configure private staging client")
 	}
@@ -182,4 +186,17 @@ func (r *receiptFaultRecords) CompleteProviderCall(ctx context.Context, input ap
 		return errors.New("fixture database interruption")
 	}
 	return r.Store.CompleteProviderCall(ctx, input)
+}
+
+type receiptFaultFactory struct {
+	factory         application.ProviderStagingFactory
+	manifestFailure bool
+}
+
+func (f receiptFaultFactory) ForProviderDispatch(ctx context.Context, identity application.ProviderDispatchIdentity) (application.ProviderStagingObjects, error) {
+	objects, err := f.factory.ForProviderDispatch(ctx, identity)
+	if err != nil {
+		return nil, err
+	}
+	return &receiptFaultObjects{ProviderStagingObjects: objects, manifestFailure: f.manifestFailure}, nil
 }

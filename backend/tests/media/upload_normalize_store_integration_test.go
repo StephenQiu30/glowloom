@@ -6,7 +6,6 @@ import (
 	"errors"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -25,11 +24,11 @@ func TestNormalizedUploadStoreKeepsOriginalReceiptAndDeduplicatesSource(t *testi
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
 	store, objects := mediaTestStore(database), &uploadObjectsFake{}
-	service := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaFixtureMockUpload(t, database, store, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
 	in.Actor, in.Request.ProjectID = actor, project
 	in.File, in.Request.FileName = readUploadWebM(t, uploadWebMFixture(t, "libvpx-vp9", "0.6")), "白膜镜头.webm"
-	first, err := service.Upload(t.Context(), in)
+	first, err := fixtureProjectUpload(t.Context(), service, in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,17 +46,17 @@ func TestNormalizedUploadStoreKeepsOriginalReceiptAndDeduplicatesSource(t *testi
 		t.Fatalf("original input receipt=%+v err=%v", receipt, err)
 	}
 	spy := &replayNormalizationSpy{}
-	replayService := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, spy, mediaflow.FFUploadRenderer{}, objects, time.Now)
-	replayed, err := replayService.Upload(t.Context(), in)
+	replayService := mediaFixtureMockUpload(t, database, store, nil, mediaflow.FFUploadProber{}, spy, mediaflow.FFUploadRenderer{}, objects)
+	replayed, err := fixtureProjectUpload(t.Context(), replayService, in)
 	if err != nil || !reflect.DeepEqual(replayed, first) || spy.calls != 0 {
 		t.Fatalf("receipt replay transcoded again: result=%+v err=%v calls=%d", replayed, err, spy.calls)
 	}
 	in.Request.FileName = "新名.webm"
-	if _, err := replayService.Upload(t.Context(), in); !errors.Is(err, mediaapp.ErrUploadConflict) || spy.calls != 0 {
+	if _, err := fixtureProjectUpload(t.Context(), replayService, in); !errors.Is(err, mediaapp.ErrUploadConflict) || spy.calls != 0 {
 		t.Fatalf("changed body key reached normalizer: %v calls=%d", err, spy.calls)
 	}
 	in.Request.Key = uuid.New()
-	reused, err := service.Upload(t.Context(), in)
+	reused, err := fixtureProjectUpload(t.Context(), service, in)
 	if err != nil || reused.Asset.ID != first.Asset.ID || reused.DuplicateOf == nil || *reused.DuplicateOf != first.Asset.ID || len(objects.items) != 3 {
 		t.Fatalf("same source cross-key reuse=%+v err=%v objects=%d", reused, err, len(objects.items))
 	}
@@ -75,8 +74,8 @@ func TestNormalizedUploadStoreRejectsAbsentForgedAndUnknownConversionProof(t *te
 	in := uploadInput(t)
 	in.Actor, in.Request.ProjectID = actor, project
 	in.File, in.Request.FileName = readUploadWebM(t, uploadWebMFixture(t, "libvpx", "0.3")), "白膜镜头.webm"
-	service := mediaapp.NewUploadService(record, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
-	if _, err := service.Upload(t.Context(), in); err != nil {
+	service := mediaFixtureMockUpload(t, database, record, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
+	if _, err := fixtureProjectUpload(t.Context(), service, in); err != nil {
 		t.Fatal(err)
 	}
 	request := in.Request
@@ -127,8 +126,8 @@ func TestNormalizedUploadUnknownCommitPreservesOwnedCanonicalObjects(t *testing.
 			objects := &uploadObjectsFake{}
 			in := uploadInput(t)
 			in.File, in.Request.FileName = readUploadWebM(t, uploadWebMFixture(t, "libvpx", "0.3")), "白膜镜头.webm"
-			service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
-			if _, err := service.Upload(t.Context(), in); !errors.Is(err, context.Canceled) || len(objects.items) != tc.objects {
+			service := unitRoutedUploadService(repo, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
+			if _, err := fixtureProjectUpload(t.Context(), service, in); !errors.Is(err, context.Canceled) || len(objects.items) != tc.objects {
 				t.Fatalf("canonical owner cleanup err=%v objects=%d want=%d", err, len(objects.items), tc.objects)
 			}
 		})

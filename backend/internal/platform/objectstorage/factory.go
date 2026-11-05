@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -47,7 +46,7 @@ var _ Storage = (*Client)(nil)
 
 // Options contains the parameters required to initialize a storage strategy.
 type Options struct {
-	Provider  string // "cos" for Tencent Cloud COS, "minio" for MinIO / S3 compatible
+	Provider  config.StorageProvider
 	Endpoint  string // Service endpoint or bucket URL
 	Bucket    string // Target bucket name
 	Region    string // Provider region (e.g. ap-guangzhou, us-east-1)
@@ -59,17 +58,12 @@ type Options struct {
 // Following the Strategy Pattern, simply changing Options.Provider selects the corresponding
 // storage implementation without modifying any business logic.
 func NewStorage(opts Options) (*Client, error) {
-	provider := strings.ToLower(strings.TrimSpace(opts.Provider))
-	if provider == "" {
-		provider = "minio"
-	}
-
-	switch provider {
-	case "cos":
+	switch opts.Provider {
+	case config.StorageProviderCOS:
 		return newCOSStrategy(opts)
-	case "minio":
+	case config.StorageProviderMinIO:
 		return newMinIOStrategy(opts)
-	case "tos":
+	case config.StorageProviderTOS:
 		return newTOSStrategy(opts)
 	default:
 		return nil, fmt.Errorf("%w: unsupported object storage provider: %s", ErrUnavailable, opts.Provider)
@@ -78,8 +72,8 @@ func NewStorage(opts Options) (*Client, error) {
 
 func newCOSStrategy(opts Options) (*Client, error) {
 	profile := config.StorageProfile{
-		Provider: "cos",
-		Mode:     "read_write",
+		Provider: config.StorageProviderCOS,
+		Mode:     config.StorageProfileReadWrite,
 		Endpoint: opts.Endpoint,
 		Bucket:   opts.Bucket,
 		Region:   opts.Region,
@@ -107,8 +101,8 @@ func newMinIOStrategy(opts Options) (*Client, error) {
 
 func newTOSStrategy(opts Options) (*Client, error) {
 	profile := config.StorageProfile{
-		Provider: "tos",
-		Mode:     "read_write",
+		Provider: config.StorageProviderTOS,
+		Mode:     config.StorageProfileReadWrite,
 		Endpoint: opts.Endpoint,
 		Bucket:   opts.Bucket,
 		Region:   opts.Region,

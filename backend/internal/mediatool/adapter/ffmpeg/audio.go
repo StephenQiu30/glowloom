@@ -20,7 +20,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
-func (r *Renderer) renderAudio(ctx context.Context, frozen domain.FrozenExport, paths map[uuid.UUID]string, progress func(int, string) error) (*mediaapp.Downloaded, error) {
+func (r *Renderer) renderAudio(ctx context.Context, frozen domain.FrozenExport, paths map[uuid.UUID]string, progress func(int, domain.ExportStage) error) (*mediaapp.Downloaded, error) {
 	parts, err := renderSegments(frozen.Timeline)
 	if err != nil {
 		return nil, err

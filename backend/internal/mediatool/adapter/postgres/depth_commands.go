@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"time"
 
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
@@ -40,11 +44,19 @@ func recordDepthCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID,
 		if err != nil {
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, id, depthTopic, job.ID.String(), string(payload)).Error; err != nil {
+		if emit == "cancel" {
+			if err := taskruntime.RequestStop(tx.Statement.Context, tx, task.Depth, map[string]any{"job_id": job.ID, "attempt": job.Attempt}); err != nil {
+				return err
+			}
+		}
+		if err := taskruntime.EnqueueReference(tx.Statement.Context, tx, task.Depth, id.String(), time.Now().UTC(), d.DepthWorkID); err != nil {
+			return err
+		}
+		if err := tx.Create(&mediatoolOutboxRecord{ID: id, Topic: depthTopic, PartitionKey: job.ID.String(), Payload: jsonDocument(payload)}).Error; err != nil {
 			return err
 		}
 	}
-	if err := tx.Exec(`INSERT INTO mediatool.depth_command(actor_id,request_id,job_id,request_hash,response,event_id,event_action,event_attempt,created_at) VALUES(?,?,?,?,?::jsonb,?,?,?,?)`, actor.ID, key, job.ID, hash, string(body), eventID, eventAction, eventAttempt, now).Error; err != nil {
+	if err := tx.Create(&depthCommandRecord{ActorID: actor.ID, RequestID: key, JobID: job.ID, RequestHash: hash, Response: jsonDocument(body), EventID: eventID, EventAction: eventAction, EventAttempt: eventAttempt, CreatedAt: now}).Error; err != nil {
 		return err
 	}
 	return depthAudit(tx, actor, key, action, job)
@@ -57,7 +69,7 @@ func depthAudit(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, action 
 	if err != nil {
 		return err
 	}
-	return tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, id, topic, j.ProjectID.String(), string(data)).Error
+	return tx.Create(&mediatoolOutboxRecord{ID: id, Topic: topic, PartitionKey: j.ProjectID.String(), Payload: jsonDocument(data)}).Error
 }
 
 // Control atomically saves a revision-bound command, keeping unknown work fenced.
@@ -119,12 +131,12 @@ func (s *DepthStore) Control(ctx context.Context, actor identityapp.Principal, p
 			if err := state.Retry(); err != nil {
 				return application.ErrConflict
 			}
-			if err := pinTool(ctx, tx, s.storage, "depth", project, r.ID, state.Job.Attempt); err != nil {
+			if err := pinTool(ctx, tx, s.storage, mediaapp.StorageWorkKindDepth, project, r.ID, state.Job.Attempt); err != nil {
 				return err
 			}
 			emit = "start"
 		case "reconcile":
-			if r.Status != "failed" || !r.NeedsReconciliation || r.ExecutionUnconfirmed || r.ActiveWorker != nil || r.ProcessState != "ended" || r.ReconciliationRequested {
+			if r.Status != domain.DepthFailed || !r.NeedsReconciliation || r.ExecutionUnconfirmed || r.ActiveWorker != nil || r.ProcessState != domain.DepthProcessEnded || r.ReconciliationRequested {
 				return application.ErrConflict
 			}
 			r.ReconciliationRequested = true
@@ -175,7 +187,7 @@ func (s *DepthStore) Review(ctx context.Context, actor identityapp.Principal, id
 		if r.OrgID != actor.OrgID {
 			return application.ErrNotFound
 		}
-		if r.Revision != in.Revision || r.Status != "review_required" || r.CancellationRequested || r.ExecutionUnconfirmed || r.ActiveWorker != nil {
+		if r.Revision != in.Revision || r.Status != domain.DepthReviewRequired || r.CancellationRequested || r.ExecutionUnconfirmed || r.ActiveWorker != nil {
 			return application.ErrConflict
 		}
 		a, found, err := loadDepthArtifact(tx, r)
@@ -188,15 +200,15 @@ func (s *DepthStore) Review(ctx context.Context, actor identityapp.Principal, id
 		if _, err := s.validateSource(ctx, tx, actor, r); err != nil {
 			return err
 		}
-		if err := verifyDepthObjects(tx, r, "verified"); err != nil {
+		if err := verifyDepthObjects(tx, r, application.DepthObjectStatusVerified); err != nil {
 			return err
 		}
 		if err := s.media(tx).Review(ctx, actor, in.ProjectID, a.Asset.ID, in.SHA256, time.Now().UTC()); err != nil {
 			return normalize(err)
 		}
 		before := r
-		r.Status = "succeeded"
-		r.Stage = "complete"
+		r.Status = domain.DepthSucceeded
+		r.Stage = domain.DepthStageComplete
 		r.Revision++
 		r.Retryable = false
 		r.UpdatedAt = time.Now().UTC()

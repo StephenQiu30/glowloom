@@ -26,12 +26,9 @@ func TestCanvasSubjectLocalPostgresRevisionAndSources(t *testing.T) {
 	actor := subjectSession(t, owner)
 	project := subjectProject(t, owner, actor)
 	foreign := subjectProject(t, owner, actor)
-	primary := subjectFixtureMedia(t, owner, actor, "image")
-	if err := owner.Exec(`UPDATE media.media_asset SET project_id=?,personal_org_id=NULL,personal_actor_id=NULL,object_key=? WHERE id=?`, project, "projects/"+project.String()+"/image/2026/10/"+primary.AssetID.String()+".png", primary.AssetID).Error; err != nil {
-		t.Fatal(err)
-	}
+	primary := subjectFixtureMedia(t, owner, actor, project, "image")
 	store := canvaspg.NewScopedStore(runtime, func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(mediapg.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(mediapg.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
 	}, mediawire.NewCanvasProjectAccess).WithSubjectSources(subjectwire.NewPromptSources)
 	writer := canvasfixture.NewEditService(store)
 	doc, err := writer.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "局部主体"})
@@ -43,7 +40,7 @@ func TestCanvasSubjectLocalPostgresRevisionAndSources(t *testing.T) {
 	submit := func(want string, operations ...canvasdomain.Operation) {
 		t.Helper()
 		result, err := writer.Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, Operations: operations})
-		if err != nil || result.Status != want {
+		if err != nil || string(result.Status) != want {
 			t.Fatalf("submit want %s got %+v %v", want, result, err)
 		}
 	}

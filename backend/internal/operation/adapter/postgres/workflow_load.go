@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -108,7 +110,7 @@ func (s *Store) LoadWorkflowOperation(ctx context.Context, operationID uuid.UUID
 			loaded.Outputs = append(loaded.Outputs, application.WorkflowOutput{
 				ID: output.ID, SeqNo: output.SeqNo, Kind: output.Kind,
 				MediaAssetID: output.MediaAssetID, JSONPayload: json.RawMessage(output.JSONPayload),
-				ModerationStatus: output.ModerationStatus, ModerationReason: output.ModerationReason,
+				ModerationStatus: mediadomain.ModerationStatus(output.ModerationStatus), ModerationReason: output.ModerationReason,
 			})
 		}
 		var latest struct{ ProviderTaskID *string }
@@ -137,7 +139,7 @@ func (s *Store) LoadWorkflowOperation(ctx context.Context, operationID uuid.UUID
 func loadWorkflowModel(tx *gorm.DB, loaded *application.WorkflowOperation) error {
 	versionID := loaded.Operation.ModelProfileVersionID
 	if versionID == nil {
-		if loaded.Operation.Origin == "upload" || loaded.Operation.TargetType == "agent_session" {
+		if loaded.Operation.Origin == "upload" {
 			return nil
 		}
 		return ErrWorkflowModelUnavailable

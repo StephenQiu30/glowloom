@@ -6,23 +6,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
-	"go.temporal.io/sdk/client"
 	"go.uber.org/zap"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	maintenanceflow "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
+	maintenanceflow "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
-func TestWorkerRoleRunsMaintenanceOnLocalTemporal(t *testing.T) {
+func TestWorkerRoleRunsMaintenanceOnDatabase(t *testing.T) {
 	dsn := os.Getenv("GLOWLOOM_TEST_WORKER_DB_DSN")
-	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
-	if dsn == "" || addr == "" || namespace == "" {
-		t.Skip("set disposable GLOWLOOM_TEST_WORKER_DB_DSN, GLOWLOOM_TEST_TEMPORAL_ADDR, and GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
+	if dsn == "" {
+		t.Skip("requires disposable worker db")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
@@ -40,12 +39,15 @@ func TestWorkerRoleRunsMaintenanceOnLocalTemporal(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = dbConn.DB.Exec("DELETE FROM infra.processed_event WHERE id = ?::uuid", markerID).Error })
 
+	storageConfig := businessStorageConfig(t)
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan error, 1)
 	healthAddr := localHealthAddress(t)
 	go func() {
 		workerDone <- app.RunWorker(workerCtx, config.Config{
-			DBDSN: dsn, TemporalAddr: addr, TemporalNamespace: namespace,
+			Env:              "local",
+			ObjectStorage:    &storageConfig,
+			DBDSN:            dsn,
 			WorkerHealthAddr: healthAddr,
 		}, zap.NewNop(), "flow")
 	}()
@@ -63,19 +65,22 @@ func TestWorkerRoleRunsMaintenanceOnLocalTemporal(t *testing.T) {
 	})
 	assertRoleHealth(ctx, t, healthAddr)
 
-	workflowClient, err := client.Dial(client.Options{HostPort: addr, Namespace: namespace})
-	if err != nil {
-		t.Fatalf("connect Temporal: %v", err)
+	if err := taskruntime.Enqueue(ctx, dbConn.DB, maintenanceflow.Inbox, markerID, time.Now()); err != nil {
+		t.Fatal(err)
 	}
-	t.Cleanup(workflowClient.Close)
-	run, err := workflowClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID: "worker-role-test-" + uuid.NewString(), TaskQueue: maintenanceflow.FlowTaskQueue,
-	}, maintenanceflow.ProcessedEventCleanupWorkflow)
-	if err != nil {
-		t.Fatalf("start cleanup workflow: %v", err)
-	}
-	if err := run.Get(ctx, nil); err != nil {
-		t.Fatalf("cleanup workflow: %v", err)
+	for {
+		var ran bool
+		if err := dbConn.DB.Raw("SELECT next_run_at>clock_timestamp() AND epoch>0 FROM infra.task_work WHERE kind=? AND business_id=?", maintenanceflow.Inbox, markerID).Scan(&ran).Error; err != nil {
+			t.Fatal(err)
+		}
+		if ran {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(20 * time.Millisecond):
+		}
 	}
 	var count int64
 	if err := dbConn.DB.WithContext(ctx).Raw("SELECT count(*) FROM infra.processed_event WHERE id = ?::uuid", markerID).Scan(&count).Error; err != nil || count != 0 {

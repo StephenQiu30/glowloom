@@ -5,25 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/temporal"
-	"go.temporal.io/sdk/worker"
 	"gorm.io/gorm"
 
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-)
-
-// Activity names are fixed cross-language Temporal contracts.
-const (
-	IngestActivityName           = "media.Ingest"
-	RecordModerationActivityName = "media.RecordModeration"
 )
 
 // IngestInput is the JSON request used by OperationWorkflow.
@@ -32,19 +21,11 @@ type IngestInput = application.IngestInput
 // IngestOutput is the durable candidate returned to OperationWorkflow.
 type IngestOutput = application.IngestOutput
 
-// RecordModerationInput records one final review decision for a generated
-// candidate. A failed moderation call leaves both rows pending for retry.
-type RecordModerationInput struct {
-	OperationID string `json:"operation_id"`
-	OutputID    string `json:"output_id"`
-	Status      string `json:"status"`
-	Reason      string `json:"reason,omitempty"`
-}
+// RecordModerationInput is the media owner's final moderation command.
+type RecordModerationInput = application.RecordModerationInput
 
-// RecordModerationOutput confirms the persisted moderation decision.
-type RecordModerationOutput struct {
-	Status string `json:"status"`
-}
+// RecordModerationOutput is the media owner's accepted moderation result.
+type RecordModerationOutput = application.RecordModerationOutput
 
 // Activities adapts the media application service to the media task queue.
 type Activities struct {
@@ -96,57 +77,31 @@ func NewScopedActivitiesWithStaging(db *gorm.DB, objects *objectstorage.Client, 
 	return activities, nil
 }
 
-// Register adds only the two media activities; the caller chooses the media queue.
-func Register(w worker.Worker, activities *Activities) {
-	w.RegisterActivityWithOptions(activities.Ingest, activity.RegisterOptions{Name: IngestActivityName})
-	w.RegisterActivityWithOptions(activities.RecordModeration, activity.RegisterOptions{Name: RecordModerationActivityName})
-}
-
 // Ingest downloads, validates, stores, and records one provider result.
 func (a *Activities) Ingest(ctx context.Context, input IngestInput) (IngestOutput, error) {
 	if a == nil || a.ingest == nil {
 		return IngestOutput{}, application.ErrStorageNotReady
 	}
-	stop := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				activity.RecordHeartbeat(ctx)
-			}
-		}
-	}()
-	defer func() { close(stop); <-done }()
 	service := a.ingest
 	if input.Receipt != nil && a.staged != nil {
 		service = a.staged
 	}
-	output, err := service.Ingest(ctx, input)
-	if err != nil {
-		return IngestOutput{}, classifyIngestError(err)
-	}
-	return output, nil
+	return service.Ingest(ctx, input)
 }
 
-func classifyIngestError(err error) error {
-	if errors.Is(err, ErrUnsafeResultURL) || errors.Is(err, ErrResultTooLarge) || errors.Is(err, application.ErrInvalidIngest) {
-		return temporal.NewNonRetryableApplicationError("provider result rejected", "provider_result_invalid", err)
+// IngestFailureCode classifies permanent media failures for operation settlement.
+// Empty means the durable step can retry.
+func IngestFailureCode(err error) string {
+	switch {
+	case errors.Is(err, ErrUnsafeResultURL), errors.Is(err, ErrResultTooLarge), errors.Is(err, application.ErrInvalidIngest):
+		return "provider_result_invalid"
+	case errors.Is(err, ErrResultExpired):
+		return "result_expired"
+	case errors.Is(err, ErrUnsupportedMedia):
+		return "unsupported_media"
+	default:
+		return ""
 	}
-	if errors.Is(err, ErrResultExpired) {
-		return temporal.NewNonRetryableApplicationError("provider result URL unavailable", "result_expired", err)
-	}
-	if errors.Is(err, ErrUnsupportedMedia) {
-		return temporal.NewNonRetryableApplicationError("unsupported media result", "unsupported_media", err)
-	}
-	return err
 }
 
 // RecordModeration applies a final moderation decision to the candidate and
@@ -157,7 +112,7 @@ func (a *Activities) RecordModeration(ctx context.Context, input RecordModeratio
 	if opErr != nil || outputErr != nil {
 		return RecordModerationOutput{}, pgmedia.ErrOutputConflict
 	}
-	status := domain.ModerationStatus(input.Status)
+	status := input.Status
 	if err := a.repo.RecordModeration(ctx, opID, outputID, status, input.Reason); err != nil {
 		return RecordModerationOutput{}, err
 	}

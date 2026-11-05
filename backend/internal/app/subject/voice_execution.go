@@ -40,7 +40,7 @@ type voiceOutputs struct {
 }
 
 func voiceMediaIntent(work subject.VoiceWork) media.StorageWorkIntent {
-	return media.StorageWorkIntent{ID: work.Storage.ID, Owner: media.StorageWorkOwner{Kind: "subject-voice", OwnerID: work.Owner.ScopeID, WorkID: work.Job.ID}, ProfileID: work.Storage.ProfileID, Bucket: work.Storage.Bucket, ConfigRevision: work.Storage.ConfigRevision, State: work.Storage.State}
+	return media.StorageWorkIntent{ID: work.Storage.ID, Owner: media.StorageWorkOwner{Kind: media.StorageWorkKindSubjectVoice, OwnerID: work.Owner.ScopeID, WorkID: work.Job.ID}, ProfileID: work.Storage.ProfileID, Bucket: work.Storage.Bucket, ConfigRevision: work.Storage.ConfigRevision, State: media.StorageWorkState(work.Storage.State)}
 }
 func (o *voiceOutputs) PrepareSubmission(ctx context.Context, work subject.VoiceWork) error {
 	if o == nil || o.registry == nil || o.prepare == nil {

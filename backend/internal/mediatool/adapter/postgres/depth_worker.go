@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
@@ -26,7 +29,7 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 		return work, application.ErrInvalidDepthInput
 	}
 	var authorityErr error
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		r, authority, err := s.lockDepthAuthority(ctx, tx, id.JobID, func(r depthRow) string {
 			if r.Attempt != id.Attempt || r.ActiveWorker != nil || r.ExecutionUnconfirmed {
 				return ""
@@ -51,7 +54,7 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 		actor := authority.actor
 		err = authority.err
 		if err != nil {
-			if errors.Is(err, identityapp.ErrForbidden) && r.Status == "cancel_requested" && r.CancellationRequested && r.ProcessState == "none" {
+			if errors.Is(err, identityapp.ErrForbidden) && r.Status == domain.DepthCancelRequested && r.CancellationRequested && r.ProcessState == domain.DepthProcessNone {
 				if empty, checkErr := depthHasNoOutput(tx, r); checkErr != nil {
 					return checkErr
 				} else if empty {
@@ -59,7 +62,7 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 					// response remains available, and a new authorized actor
 					// may explicitly cancel this undispatched attempt.
 					before := r
-					r.Status, r.Stage = "failed", "failed"
+					r.Status, r.Stage = domain.DepthFailed, domain.DepthStageFailed
 					r.CancellationRequested, r.Retryable, r.NeedsReconciliation = false, false, false
 					r.Revision++
 					code := "depth_control_forbidden"
@@ -76,7 +79,7 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 				// revoked authority. No physical owner or object is changed.
 				before := r
 				r.ReconciliationRequested = false
-				r.Status, r.Stage = "failed", "awaiting_reconciliation"
+				r.Status, r.Stage = domain.DepthFailed, domain.DepthStageAwaitingReconciliation
 				r.Revision++
 				code := "depth_cleanup_unknown"
 				r.FailureCode = &code
@@ -88,7 +91,7 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 			}
 			return err
 		}
-		if r.Status == "review_required" || r.Status == "succeeded" || r.Status == "cancelled" {
+		if r.Status == domain.DepthReviewRequired || r.Status == domain.DepthSucceeded || r.Status == domain.DepthCancelled {
 			j, err := depthPublic(tx, r)
 			work.Job = j
 			return err
@@ -124,9 +127,11 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 }
 
 // Phase records only an observed closed execution phase and checks cancellation.
-func (s *DepthStore) Phase(ctx context.Context, id application.DepthWorkID, stage string) error {
+func (s *DepthStore) Phase(ctx context.Context, id application.DepthWorkID, stage application.DepthPhase) error {
 	switch stage {
-	case "downloading", "checking", "preparing", "loading", "inferring", "encoding", "verifying", "previews", "storing", "reconciling":
+	case application.DepthDownloading, application.DepthChecking, application.DepthPreparing, application.DepthLoading,
+		application.DepthInferring, application.DepthEncoding, application.DepthVerifying, application.DepthPreviews,
+		application.DepthStoring, domain.DepthStageReconciling:
 	default:
 		return application.ErrInvalidDepthInput
 	}
@@ -161,7 +166,7 @@ func (s *DepthStore) EndProcess(ctx context.Context, id application.DepthWorkID)
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		r, err := readDepth(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -183,7 +188,7 @@ func (s *DepthStore) EndProcess(ctx context.Context, id application.DepthWorkID)
 func (s *DepthStore) Commit(ctx context.Context, id application.DepthWorkID) (domain.DepthJob, error) {
 	var job domain.DepthJob
 	err := s.withDepthAttempt(ctx, id, false, func(tx *gorm.DB, r depthRow) error {
-		if r.ProcessState != "ended" {
+		if r.ProcessState != domain.DepthProcessEnded {
 			return application.ErrConflict
 		}
 		if _, err := s.validateSource(ctx, tx, r.actor(), r); err != nil {
@@ -196,21 +201,21 @@ func (s *DepthStore) Commit(ctx context.Context, id application.DepthWorkID) (do
 		if !found {
 			return application.ErrConflict
 		}
-		if err := verifyDepthObjects(tx, r, "verified"); err != nil {
+		if err := verifyDepthObjects(tx, r, application.DepthObjectStatusVerified); err != nil {
 			return err
 		}
 		if err := s.verifyDepthStorage(ctx, tx, r); err != nil {
 			return err
 		}
-		if err := acceptToolMedia(ctx, tx, s.storage, application.StorageOwner("depth", r.ProjectID, r.ID, r.Attempt), &a.Asset, a.Renditions); err != nil {
+		if err := acceptToolMedia(ctx, tx, s.storage, application.StorageOwner(mediaapp.StorageWorkKindDepth, r.ProjectID, r.ID, r.Attempt), &a.Asset, a.Renditions); err != nil {
 			return err
 		}
 		if err := s.media(tx).Store(ctx, r.actor(), a.Asset, a.Renditions); err != nil {
 			return normalize(err)
 		}
 		before := r
-		r.Status = "review_required"
-		r.Stage = "review"
+		r.Status = domain.DepthReviewRequired
+		r.Stage = domain.DepthStageReview
 		r.ActiveWorker = nil
 		r.Revision++
 		r.NeedsReconciliation = false
@@ -244,7 +249,7 @@ func (s *DepthStore) Finish(ctx context.Context, id application.DepthWorkID, sto
 			if r.Attempt != id.Attempt || r.ActiveWorker == nil || *r.ActiveWorker != id.ExecutionID {
 				return depthPhysicalMode
 			}
-			if stopped && r.CancellationRequested && (!uncertain || r.ProcessState == "none") && r.Status != "review_required" && r.Status != "succeeded" && r.Status != "cancelled" {
+			if stopped && r.CancellationRequested && (!uncertain || r.ProcessState == domain.DepthProcessNone) && r.Status != domain.DepthReviewRequired && r.Status != domain.DepthSucceeded && r.Status != domain.DepthCancelled {
 				return "cleanup"
 			}
 			return depthPhysicalMode
@@ -255,7 +260,7 @@ func (s *DepthStore) Finish(ctx context.Context, id application.DepthWorkID, sto
 		if r.Attempt != id.Attempt {
 			return application.ErrConflict
 		}
-		if r.Status == "review_required" || r.Status == "succeeded" || r.Status == "cancelled" {
+		if r.Status == domain.DepthReviewRequired || r.Status == domain.DepthSucceeded || r.Status == domain.DepthCancelled {
 			job, err = depthPublic(tx, r)
 			return err
 		}
@@ -302,7 +307,7 @@ func (s *DepthStore) Finish(ctx context.Context, id application.DepthWorkID, sto
 				}
 			}
 			if state.Job.CancellationRequested && !uncertain && authorityErr == nil {
-				if err := verifyDepthObjects(tx, r, "removed"); err != nil {
+				if err := verifyDepthObjects(tx, r, application.DepthObjectStatusRemoved); err != nil {
 					return err
 				}
 				a, found, err := loadDepthArtifact(tx, r)
@@ -329,12 +334,12 @@ func (s *DepthStore) Finish(ctx context.Context, id application.DepthWorkID, sto
 			} else {
 				state.WorkerID = uuid.Nil
 				state.Job.Status = domain.DepthFailed
-				state.Job.Stage = "failed"
+				state.Job.Stage = domain.DepthStageFailed
 				state.Job.Retryable = !uncertain && authorityErr == nil
 				state.Job.NeedsReconciliation = uncertain
 				state.Job.ExecutionUnconfirmed = false
 				if uncertain {
-					state.Job.Stage = "awaiting_reconciliation"
+					state.Job.Stage = domain.DepthStageAwaitingReconciliation
 				}
 				state.Job.Revision++
 			}
@@ -369,7 +374,7 @@ func (s *DepthStore) Interrupt(ctx context.Context, id application.DepthWorkID) 
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		r, err := readDepth(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
 			return err
@@ -426,23 +431,45 @@ func (s *DepthStore) verifyDelivery(ctx context.Context, d application.DepthDeli
 	if d.EventID == uuid.Nil || d.JobID == uuid.Nil || d.RequestID == uuid.Nil || d.ActorID == uuid.Nil || d.OrgID == uuid.Nil || d.ProjectID == uuid.Nil || d.Attempt < 1 || d.ExecutionID != uuid.Nil || d.Reconcile != (d.Action == "reconcile") || (d.Action != "start" && d.Action != "cancel" && d.Action != "reconcile") {
 		return false, application.ErrInvalidDepthInput
 	}
-	body, err := json.Marshal(d)
-	if err != nil {
+	var command depthCommandRecord
+	if err := s.db.WithContext(ctx).Where("actor_id = ? AND request_id = ? AND event_id = ? AND event_action = ? AND event_attempt = ? AND job_id = ?", d.ActorID, d.RequestID, d.EventID, d.Action, d.Attempt, d.JobID).Take(&command).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, application.ErrInvalidDepthInput
+		}
 		return false, err
 	}
-	var found bool
-	err = s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM mediatool.depth_command c JOIN mediatool.depth_job j ON j.id=c.job_id JOIN infra.outbox o ON o.id=c.event_id WHERE c.actor_id=? AND c.request_id=? AND c.event_id=? AND c.event_action=? AND c.event_attempt=? AND j.id=? AND j.project_id=? AND j.org_id=? AND o.topic=? AND o.partition_key=? AND o.payload->'data'=?::jsonb)`, d.ActorID, d.RequestID, d.EventID, d.Action, d.Attempt, d.JobID, d.ProjectID, d.OrgID, depthTopic, d.JobID.String(), string(body)).Scan(&found).Error
-	if err != nil {
+	var job depthRow
+	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ? AND org_id = ?", d.JobID, d.ProjectID, d.OrgID).Take(&job).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, application.ErrInvalidDepthInput
+		}
 		return false, err
 	}
-	if !found {
+	if command.EventAction == nil || *command.EventAction != d.Action || command.EventAttempt == nil || *command.EventAttempt != d.Attempt || command.EventID == nil || *command.EventID != d.EventID {
+		return false, application.ErrInvalidDepthInput
+	}
+	var outbox mediatoolOutboxRecord
+	if err := s.db.WithContext(ctx).Where("id = ?", d.EventID).Take(&outbox).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, application.ErrInvalidDepthInput
+		}
+		return false, err
+	}
+	var event struct {
+		EventID    uuid.UUID                 `json:"event_id"`
+		EventType  string                    `json:"event_type"`
+		OccurredAt time.Time                 `json:"occurred_at"`
+		OrgID      uuid.UUID                 `json:"org_id"`
+		Data       application.DepthDelivery `json:"data"`
+	}
+	if json.Unmarshal(outbox.Payload, &event) != nil || outbox.Topic != depthTopic || outbox.PartitionKey != d.JobID.String() || event.EventID != d.EventID || event.EventType != depthTopic || event.OrgID != d.OrgID || event.OccurredAt.IsZero() || event.Data != d {
 		return false, application.ErrInvalidDepthInput
 	}
 	r, err := readDepth(s.db.WithContext(ctx), d.ProjectID, d.JobID, false)
 	if err != nil {
 		return false, err
 	}
-	if r.Attempt != d.Attempt || r.Status == "succeeded" || r.Status == "cancelled" || r.Status == "review_required" {
+	if r.Attempt != d.Attempt || r.Status == domain.DepthSucceeded || r.Status == domain.DepthCancelled || r.Status == domain.DepthReviewRequired {
 		return false, nil
 	}
 	return true, nil
@@ -456,7 +483,7 @@ func (s *DepthStore) VerifyDelivery(ctx context.Context, d application.DepthDeli
 		return false, application.ErrUnavailable
 	}
 	valid := false
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		scoped := *s
 		scoped.db = tx
 		var err error

@@ -2,8 +2,10 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // PendingWorkRemovals lists bounded durable debts. Each removal still reacquires
@@ -13,7 +15,13 @@ func (s *StorageRoutes) PendingWorkRemovals(ctx context.Context, limit int) ([]a
 		return nil, application.ErrUnavailable
 	}
 	var rows []objectLocationRow
-	err := s.db.WithContext(ctx).Raw(`SELECT l.* FROM media.object_location l JOIN media.storage_work_intent w ON w.id=l.owner_intent_id WHERE w.state='cancelled' AND w.closed_at<clock_timestamp()-interval '10 minutes' AND l.state IN ('reserved','present','unknown','delete_pending') AND (l.write_until IS NULL OR l.write_until<clock_timestamp()) ORDER BY w.closed_at,l.id LIMIT ?`, limit).Scan(&rows).Error
+	now := time.Now().UTC()
+	err := s.db.WithContext(ctx).Table("media.object_location AS l").Select("l.*").
+		Joins("JOIN media.storage_work_intent AS w ON w.id = l.owner_intent_id").
+		Where("w.state = ? AND w.closed_at < ?", application.StorageWorkCancelled, now.Add(-10*time.Minute)).
+		Where("l.state IN ?", []domain.ObjectLocationState{domain.ObjectLocationReserved, domain.ObjectLocationPresent, domain.ObjectLocationUnknown, domain.ObjectLocationDeletePending}).
+		Where("l.write_until IS NULL OR l.write_until < ?", now).
+		Order("w.closed_at").Order("l.id").Limit(limit).Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}

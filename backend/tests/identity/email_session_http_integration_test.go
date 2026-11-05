@@ -174,8 +174,15 @@ func TestHistoricalPasswordFlagDoesNotRestrictSessionDirectory(t *testing.T) {
 		t.Fatalf("restricted self logout=%d, want 204", response.Code)
 	}
 	cookies := response.Result().Cookies()
-	if len(cookies) != 1 || cookies[0].MaxAge >= 0 {
-		t.Fatal("logout did not expire this browser cookie")
+	expiredSession := false
+	for _, cookie := range cookies {
+		if cookie.MaxAge >= 0 {
+			t.Fatalf("logout retained cookie %s", cookie.Name)
+		}
+		expiredSession = expiredSession || cookie.Name == "glowloom_session"
+	}
+	if !expiredSession {
+		t.Fatal("logout did not expire this browser session cookie")
 	}
 	if _, err := auth.Current(t.Context(), login.Token); err == nil {
 		t.Fatal("logout kept current session alive")

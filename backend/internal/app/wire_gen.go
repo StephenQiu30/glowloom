@@ -10,12 +10,9 @@ import (
 	"context"
 	"net/http"
 
-	"go.temporal.io/sdk/worker"
-	"go.uber.org/zap"
-
-	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	"go.uber.org/zap"
 )
 
 // Injectors from wire.go:
@@ -36,23 +33,15 @@ func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (
 		cleanup()
 		return nil, nil, err
 	}
-	temporalconnConnection, cleanup4, err := provideTemporal(cfg, logger, tracerProvider)
+	registry, cleanup4, err := provideObjectStorage(cfg)
 	if err != nil {
 		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	client, err := provideObjectStorage(cfg)
-	if err != nil {
-		cleanup4()
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	readyCheck := provideReadyCheck(connection, redisconnConnection, temporalconnConnection, client)
-	server, cleanup5, err := provideAPIServer(ctx, cfg, logger, readyCheck, tracerProvider, connection, client, redisconnConnection)
+	readyCheck := provideReadyCheck(cfg, connection, redisconnConnection, registry)
+	server, cleanup5, err := provideAPIServer(ctx, cfg, logger, readyCheck, tracerProvider, connection, registry, redisconnConnection)
 	if err != nil {
 		cleanup4()
 		cleanup3()
@@ -69,7 +58,7 @@ func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (
 	}, nil
 }
 
-func initializeWorker(ctx context.Context, cfg config.Config, logger *zap.Logger, queue string) (worker.Worker, func(), error) {
+func initializeWorker(ctx context.Context, cfg config.Config, logger *zap.Logger, queue string) (*taskruntime.Worker, func(), error) {
 	tracerProvider, cleanup, err := provideWorkerTrace(ctx, cfg, logger)
 	if err != nil {
 		return nil, nil, err
@@ -79,20 +68,13 @@ func initializeWorker(ctx context.Context, cfg config.Config, logger *zap.Logger
 		cleanup()
 		return nil, nil, err
 	}
-	temporalconnConnection, cleanup3, err := provideTemporal(cfg, logger, tracerProvider)
+	worker, cleanup3, err := provideBackendWorker(ctx, cfg, connection, queue, logger)
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	workerWorker, err := provideBackendWorker(ctx, cfg, connection, temporalconnConnection, queue)
-	if err != nil {
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	return workerWorker, func() {
+	return worker, func() {
 		cleanup3()
 		cleanup2()
 		cleanup()
@@ -134,50 +116,6 @@ func initializeRelay(ctx context.Context, cfg config.Config, logger *zap.Logger)
 		cleanup5()
 		cleanup4()
 		cleanup3()
-		cleanup2()
-		cleanup()
-	}, nil
-}
-
-func initializeMaintenanceSetup(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) (*temporal.ScheduleInstaller, func(), error) {
-	tracerProvider, cleanup, err := provideSetupTrace(ctx, cfg, logger)
-	if err != nil {
-		return nil, nil, err
-	}
-	connection, cleanup2, err := provideTemporal(cfg, logger, tracerProvider)
-	if err != nil {
-		cleanup()
-		return nil, nil, err
-	}
-	scheduleInstaller, err := provideCleanupScheduleInstaller(ctx, connection, prefix)
-	if err != nil {
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	return scheduleInstaller, func() {
-		cleanup2()
-		cleanup()
-	}, nil
-}
-
-func initializeQuoteExpirySetup(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) (*workflow.QuoteExpiryScheduleInstaller, func(), error) {
-	tracerProvider, cleanup, err := provideSetupTrace(ctx, cfg, logger)
-	if err != nil {
-		return nil, nil, err
-	}
-	connection, cleanup2, err := provideTemporal(cfg, logger, tracerProvider)
-	if err != nil {
-		cleanup()
-		return nil, nil, err
-	}
-	quoteExpiryScheduleInstaller, err := provideQuoteExpiryScheduleInstaller(ctx, connection, prefix)
-	if err != nil {
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	return quoteExpiryScheduleInstaller, func() {
 		cleanup2()
 		cleanup()
 	}, nil

@@ -3,14 +3,11 @@ package media_test
 import (
 	"bytes"
 	"crypto/x509"
-	"errors"
 	"image"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"go.temporal.io/sdk/temporal"
 
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -45,7 +42,8 @@ func TestMediaIngestRejectsPermanentProviderResults(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opID := seedIngestOperation(t, database, actor, projectID, tc.kind)
-			activities, err := mediaScopedIngestActivities(database, objects, mediaflow.DownloadPolicy{
+			mediaFixtureIngestAdmission(t, database, projectID, opID)
+			activities, err := mediaScopedIngestActivities(t, database, objects, mediaflow.DownloadPolicy{
 				AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true,
 				TLSRootCAs: pool, MaxBytes: tc.maxBytes,
 			})
@@ -55,8 +53,7 @@ func TestMediaIngestRejectsPermanentProviderResults(t *testing.T) {
 			_, err = activities.Ingest(t.Context(), mediaflow.IngestInput{
 				OperationID: opID.String(), SeqNo: 1, URL: server.URL + "/result",
 			})
-			var failure *temporal.ApplicationError
-			if !errors.As(err, &failure) || !failure.NonRetryable() || failure.Type() != "provider_result_invalid" {
+			if mediaflow.IngestFailureCode(err) != "provider_result_invalid" {
 				t.Fatalf("permanent provider result must stop retrying: %v", err)
 			}
 		})

@@ -38,7 +38,7 @@ func DepthArtifactDigest(job domain.DepthJob, f domain.FrozenDepth, a DepthArtif
 	}
 	for i, kind := range []string{"original", "poster", "proxy_720p"} {
 		o := a.Objects[i]
-		if o.Kind != kind || !domain.ValidDepthSHA(o.SHA256) || o.ByteSize < 1 || o.ByteSize > 500<<20 {
+		if string(o.Kind) != kind || !domain.ValidDepthSHA(o.SHA256) || o.ByteSize < 1 || o.ByteSize > 500<<20 {
 			return "", nil, ErrDepthOutputInvalid
 		}
 		if i == 0 {

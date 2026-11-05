@@ -34,8 +34,6 @@ var (
 
 // FreeQuoteItemInput describes one canvas request without project metadata.
 type FreeQuoteItemInput struct {
-	// AgentContext is set only by the server-owned Agent use case, never HTTP input.
-	AgentContext            *AgentQuoteContext `json:"agent_context,omitempty"`
 	InputSource             *promptdomain.InputSource
 	ExpectedSubmissionEpoch *int64
 	ModelKey                string
@@ -59,9 +57,6 @@ type FreeQuoteMediaInput struct {
 
 // Validate checks prompt, optional model selection and JSON bounds.
 func (i FreeQuoteItemInput) Validate() error {
-	if i.AgentContext != nil && (!i.AgentContext.Valid() || i.Source != nil || i.InputSource != nil || i.PromptTemplate != nil || !i.ForceRegenerate) {
-		return ErrInvalidFreeQuote
-	}
 	if i.InputSource != nil {
 		if !i.InputSource.Valid() || i.ExpectedSubmissionEpoch == nil || *i.ExpectedSubmissionEpoch < 0 || i.ModelKey != "" || i.Capability != "" || i.Mode != "" || i.Prompt != "" || len(i.Params) != 0 || i.OutputCount != 0 || len(i.MediaInputs) != 0 || i.Source != nil || i.PromptTemplate != nil {
 			return ErrInvalidFreeQuote
@@ -344,10 +339,6 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 		QuoteMicros: &amount, QuoteDetail: quoteDetail, QuoteExpiresAt: &expires,
 		ReusedFromID: candidate, ForceRegenerate: input.ForceRegenerate,
 		Region: &region, CreateTime: now,
-	}
-	if input.AgentContext != nil {
-		op.Origin = "agent"
-		reusable = false
 	}
 	prepared := PreparedFreeQuote{Operation: op, Reusable: reusable,
 		Inputs: inputs,

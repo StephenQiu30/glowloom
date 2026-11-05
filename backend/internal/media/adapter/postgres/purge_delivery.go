@@ -3,9 +3,14 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"reflect"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -21,7 +26,7 @@ func (s *PurgeStore) ListPurges(ctx context.Context, actor identityapp.Principal
 		return nil, domain.ErrInvalidLibrary
 	}
 	result := make([]domain.PurgeJob, 0, size)
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
@@ -30,7 +35,8 @@ func (s *PurgeStore) ListPurges(ctx context.Context, actor identityapp.Principal
 		}
 		library, _ := scope.Identity(actor.OrgID, actor.ID)
 		var rows []purgeJobRow
-		if err := tx.Raw(`SELECT * FROM media.purge_job WHERE actor_id=? AND org_id=? AND library_id=? ORDER BY created_at DESC,id LIMIT ? OFFSET ?`, actor.ID, actor.OrgID, library, size, (page-1)*size).Scan(&rows).Error; err != nil {
+		if err := tx.Where("actor_id = ? AND org_id = ? AND library_id = ?", actor.ID, actor.OrgID, library).
+			Order("created_at DESC").Order("id").Limit(size).Offset((page - 1) * size).Find(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {
@@ -51,20 +57,28 @@ func (s *PurgeStore) VerifyPurgeDelivery(ctx context.Context, d application.Purg
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
-	if d.EventID == uuid.Nil || d.JobID == uuid.Nil || d.RequestID == uuid.Nil || d.ActorID == uuid.Nil || d.OrgID == uuid.Nil || d.Attempt < 1 || d.ExecutionID != "" || d.Action != "create" && d.Action != "cancel" && d.Action != "reconcile" {
+	if d.EventID == uuid.Nil || d.JobID == uuid.Nil || d.RequestID == uuid.Nil || d.ActorID == uuid.Nil || d.OrgID == uuid.Nil || d.Attempt < 1 || d.ExecutionID != "" || d.Action != application.PurgeActionCreate && d.Action != application.PurgeActionCancel && d.Action != application.PurgeActionReconcile {
 		return false, domain.ErrInvalidLibrary
 	}
-	data, err := json.Marshal(d)
-	if err != nil {
-		return false, err
-	}
 	valid := false
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var present bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.purge_command c JOIN media.purge_job j ON j.id=c.job_id JOIN infra.outbox o ON o.id=c.event_id WHERE c.actor_id=? AND c.org_id=? AND c.idem_key=? AND c.event_id=? AND c.action=? AND j.id=? AND j.org_id=c.org_id AND j.actor_id=c.actor_id AND o.topic=? AND o.partition_key=? AND o.payload->'data'=?::jsonb)`, d.ActorID, d.OrgID, d.RequestID, d.EventID, d.Action, d.JobID, PurgeTopic, d.JobID.String(), string(data)).Scan(&present).Error; err != nil {
-			return err
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		var proof struct{ Payload jsonDocument }
+		read := tx.Table("media.purge_command AS c").Select("o.payload").
+			Joins("JOIN media.purge_job AS j ON j.id = c.job_id").
+			Joins("JOIN infra.outbox AS o ON o.id = c.event_id").
+			Where("c.actor_id = ? AND c.org_id = ? AND c.idem_key = ? AND c.event_id = ? AND c.action = ?", d.ActorID, d.OrgID, d.RequestID, d.EventID, d.Action).
+			Where("j.id = ? AND j.org_id = c.org_id AND j.actor_id = c.actor_id", d.JobID).
+			Where("o.topic = ? AND o.partition_key = ?", PurgeTopic, d.JobID.String()).Take(&proof)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return domain.ErrInvalidLibrary
 		}
-		if !present {
+		if read.Error != nil {
+			return read.Error
+		}
+		var envelope struct {
+			Data application.PurgeDelivery `json:"data"`
+		}
+		if json.Unmarshal(proof.Payload, &envelope) != nil || !reflect.DeepEqual(envelope.Data, d) {
 			return domain.ErrInvalidLibrary
 		}
 		actor, err := s.workerActor(tx, d.JobID)
@@ -84,7 +98,7 @@ func (s *PurgeStore) VerifyPurgeDelivery(ctx context.Context, d application.Purg
 		if _, err := s.access(ctx, tx, actor, row.scope(), true); err != nil {
 			return err
 		}
-		valid = row.Attempt == d.Attempt && row.Status != "succeeded" && row.Status != "partial_failed" && row.Status != "failed" && row.Status != "cancelled"
+		valid = row.Attempt == d.Attempt && row.Status != domain.PurgeStatusSucceeded && row.Status != domain.PurgeStatusPartialFailed && row.Status != domain.PurgeStatusFailed && row.Status != domain.PurgeStatusCancelled
 		return nil
 	})
 	return valid, err
@@ -99,14 +113,14 @@ func (s *PurgeStore) InterruptPurge(ctx context.Context, work application.PurgeW
 	if err != nil || execution == uuid.Nil || work.JobID == uuid.Nil || work.Attempt < 1 {
 		return domain.ErrPurgeConflict
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		var row purgeJobRow
-		read := tx.Raw(`SELECT * FROM media.purge_job WHERE id=? FOR UPDATE`, work.JobID).Scan(&row)
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", work.JobID).Take(&row)
 		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrNotFound
+			}
 			return read.Error
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrNotFound
 		}
 		if row.Attempt != work.Attempt {
 			return domain.ErrPurgeConflict
@@ -117,13 +131,13 @@ func (s *PurgeStore) InterruptPurge(ctx context.Context, work application.PurgeW
 		if *row.ExecutionID != execution || row.WorkerFence == nil {
 			return domain.ErrPurgeConflict
 		}
-		if row.Status == "succeeded" || row.Status == "partial_failed" || row.Status == "failed" || row.Status == "cancelled" {
+		if row.Status == domain.PurgeStatusSucceeded || row.Status == domain.PurgeStatusPartialFailed || row.Status == domain.PurgeStatusFailed || row.Status == domain.PurgeStatusCancelled {
 			return nil
 		}
 		uncertain := !row.ProcessEnded
-		if row.Status == "needs_reconciliation" && row.NeedsReconciliation && row.ExecutionUnconfirmed == uncertain {
+		if row.Status == domain.PurgeStatusNeedsReconciliation && row.NeedsReconciliation && row.ExecutionUnconfirmed == uncertain {
 			return nil
 		}
-		return libraryChanged(tx, `UPDATE media.purge_job SET status='needs_reconciliation',stage='removing',needs_reconciliation=true,execution_unconfirmed=?,revision=revision+1,updated_at=? WHERE id=? AND attempt=? AND execution_id=? AND worker_fence=? AND revision=?`, uncertain, s.clock().UTC(), row.ID, work.Attempt, execution, *row.WorkerFence, row.Revision)
+		return updateOne(tx, "media.purge_job", map[string]any{"id": row.ID, "attempt": work.Attempt, "execution_id": execution, "worker_fence": *row.WorkerFence, "revision": row.Revision}, map[string]any{"status": domain.PurgeStatusNeedsReconciliation, "stage": domain.PurgeStageRemoving, "needs_reconciliation": true, "execution_unconfirmed": uncertain, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
 	})
 }

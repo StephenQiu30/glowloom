@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Skill errors classify invalid packages and unavailable skill resources.
 var (
 	ErrSkillInvalidName   = errors.New("invalid skill name")
 	ErrSkillPathTraversal = errors.New("path traversal detected in skill resource path")
@@ -80,9 +81,9 @@ func (p *SkillPackage) ComputeHash() string {
 	sort.Strings(resKeys)
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s|%s|%s|%s|", p.Name, p.Version, p.Description, p.SkillMD))
+	fmt.Fprintf(&sb, "%s|%s|%s|%s|", p.Name, p.Version, p.Description, p.SkillMD)
 	for _, k := range resKeys {
-		sb.WriteString(fmt.Sprintf("%s:%s|", k, p.Resources[k]))
+		fmt.Fprintf(&sb, "%s:%s|", k, p.Resources[k])
 	}
 
 	sum := sha256.Sum256([]byte(sb.String()))

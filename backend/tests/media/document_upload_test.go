@@ -68,8 +68,8 @@ func TestDocumentUploadPreservesOriginalBytesWithoutAVRenditions(t *testing.T) {
 			}
 			repo, objects := &uploadRepoFake{}, &uploadObjectsFake{}
 			in := mediaapp.UploadInput{Actor: identityapp.Principal{ID: uuid.New(), OrgID: uuid.New()}, Request: mediaapp.UploadRequest{ProjectID: uuid.New(), Key: uuid.New(), FileName: tc.name, RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true}
-			service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
-			got, err := service.Upload(t.Context(), in)
+			service := unitRoutedUploadService(repo, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
+			got, err := fixtureProjectUpload(t.Context(), service, in)
 			if err != nil || got.Asset.Kind != "document" || repo.asset.SHA256 == nil || *repo.asset.SHA256 != file.SHA256 || repo.asset.ByteSize != int64(len(tc.data)) || len(repo.rends) != 0 || len(objects.items) != 1 {
 				t.Fatalf("reviewed original document: got=%+v err=%v renditions=%d objects=%d", got, err, len(repo.rends), len(objects.items))
 			}
@@ -120,7 +120,7 @@ func TestDocumentListIsExplicitAndCannotPreviewOrReferenceCanvas(t *testing.T) {
 	now, sha, codec := time.Now(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "txt"
 	asset := domain.MediaAsset{ID: id, ProjectID: project, Kind: domain.KindDocument, Origin: domain.OriginUpload, Status: domain.StatusReady, ModerationStatus: domain.ModerationPassed, FileName: "剧本.txt", MimeType: "text/plain", ByteSize: 3, Revision: 1, SHA256: &sha, Codec: &codec, CreateTime: now, UpdateTime: now, ObjectKey: "projects/" + project.String() + "/document/2026/10/" + id.String() + ".txt"}
 	signer := &previewSigner{}
-	q := mediaapp.NewAssetQuery(readStore{asset: asset}, signer)
+	q := mediaapp.NewRoutedAssetQuery(readStore{asset: asset}, signer, 5*time.Minute)
 	if got, err := q.List(t.Context(), identityapp.Principal{}, project, "document", "", 50); err != nil || len(got.Items) != 1 || got.Items[0].Kind != "document" {
 		t.Fatal("explicit document list", got, err)
 	}

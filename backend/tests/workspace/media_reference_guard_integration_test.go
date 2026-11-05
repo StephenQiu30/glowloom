@@ -3,6 +3,7 @@ package workspace_test
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 
 func workspaceReferenceFixture(t *testing.T) (context.Context, *gorm.DB, identityapp.Principal, uuid.UUID) {
 	t.Helper()
+	t.Setenv("GLOWLOOM_TEST_WORKSPACE_DB_DSN", os.Getenv("GLOWLOOM_TEST_REFERENCE_DB_DSN"))
 	ctx, db := workspaceMigrationDB(t)
 	var name string
 	if db.Raw(`SELECT current_database()`).Scan(&name).Error != nil || name != "glowloom_reference" {

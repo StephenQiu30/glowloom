@@ -211,7 +211,7 @@ it("音乐空目录保留纯音乐草稿，不显示文本朗读", async () => {
   expect(api.quote).not.toHaveBeenCalled();
 });
 
-it("动作模仿显示角色图片和动作视频槽且没有可见正文", async () => {
+it("动作模仿通过统一参考入口添加内容且没有可见正文", async () => {
   api.models.mockResolvedValue({ items: [] });
   const composer = { ...emptyPromptDraft(), mode: "motion" };
   render(
@@ -228,8 +228,11 @@ it("动作模仿显示角色图片和动作视频槽且没有可见正文", asyn
     />,
   );
   await screen.findByLabelText("动作模仿创作编辑器");
-  expect(await screen.findByRole("button", { name: "角色图片" })).toBeTruthy();
-  expect(await screen.findByRole("button", { name: "动作视频" })).toBeTruthy();
+  fireEvent.click(await screen.findByRole("button", { name: "添加参考" }));
+  expect(
+    await screen.findByRole("option", { name: "从参考素材添加" }),
+  ).toBeTruthy();
+  expect(screen.getByRole("option", { name: "上传参考内容" })).toBeTruthy();
   expect(screen.queryByRole("textbox", { name: "创作提示词" })).toBeNull();
   expect(api.quote).not.toHaveBeenCalled();
 });
@@ -1702,6 +1705,11 @@ it("首页取消报价后继续编辑，第二次检查费用仍打开确认弹�
     />,
   );
   const editor = await screen.findByRole("textbox", { name: "创作提示词" });
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "生成模型" }).hasAttribute("disabled"),
+    ).toBe(false),
+  );
   fireEvent.click(screen.getByRole("button", { name: "生成模型" }));
   fireEvent.click(await screen.findByRole("option", { name: /真实模型/ }));
   await waitFor(() =>

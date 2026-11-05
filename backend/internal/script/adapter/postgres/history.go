@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -16,9 +17,16 @@ import (
 func (s *SourceStore) Versions(ctx context.Context, actor identityapp.Principal, project uuid.UUID, before int64, limit int) (application.VersionPage, error) {
 	result := application.VersionPage{Items: []application.VersionSummary{}}
 	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
-		query := `SELECT id,version_no,content_hash,document_sha256,source_manifest_sha256,char_count,cardinality(source_ids) AS source_count,created_at FROM script.script_version WHERE org_id=? AND project_id=? AND (?=0 OR version_no<?) ORDER BY version_no DESC LIMIT ?`
-		if err := tx.Raw(query, actor.OrgID, project, before, before, limit+1).Scan(&result.Items).Error; err != nil {
+		query := tx.Model(&scriptVersionSummaryRow{}).Where("org_id = ? AND project_id = ?", actor.OrgID, project)
+		if before > 0 {
+			query = query.Where("version_no < ?", before)
+		}
+		var rows []scriptVersionSummaryRow
+		if err := query.Order("version_no DESC").Limit(limit + 1).Find(&rows).Error; err != nil {
 			return err
+		}
+		for _, row := range rows {
+			result.Items = append(result.Items, application.VersionSummary{ID: row.ID, VersionNo: row.VersionNo, ContentHash: row.ContentHash, DocumentSHA256: row.DocumentSHA256, SourceManifestSHA256: row.SourceManifestSHA256, CharCount: row.CharCount, SourceCount: len(row.SourceIDs), CreatedAt: row.CreatedAt.UTC()})
 		}
 		if len(result.Items) > limit {
 			result.Items = result.Items[:limit]
@@ -34,9 +42,16 @@ func (s *SourceStore) Versions(ctx context.Context, actor identityapp.Principal,
 func (s *SourceStore) SourceHistory(ctx context.Context, actor identityapp.Principal, project, lineage uuid.UUID, before int64, limit int) (application.SourceHistoryPage, error) {
 	result := application.SourceHistoryPage{Items: []application.SourceSummary{}}
 	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
-		query := `SELECT id,source_lineage_id AS lineage_id,previous_source_id AS previous_id,source_revision AS revision,source_kind AS kind,title,status,origin,char_count,content_hash,rich_sha256,media_asset_id FROM script.script_source WHERE org_id=? AND project_id=? AND source_lineage_id=? AND (?=0 OR source_revision<?) ORDER BY source_revision DESC LIMIT ?`
-		if err := tx.Raw(query, actor.OrgID, project, lineage, before, before, limit+1).Scan(&result.Items).Error; err != nil {
+		query := tx.Model(&scriptSourceSummaryRow{}).Where("org_id = ? AND project_id = ? AND source_lineage_id = ?", actor.OrgID, project, lineage)
+		if before > 0 {
+			query = query.Where("source_revision < ?", before)
+		}
+		var rows []scriptSourceSummaryRow
+		if err := query.Order("source_revision DESC").Limit(limit + 1).Find(&rows).Error; err != nil {
 			return err
+		}
+		for _, row := range rows {
+			result.Items = append(result.Items, application.SourceSummary{ID: row.ID, LineageID: row.LineageID, PreviousID: row.PreviousID, Revision: row.Revision, Kind: row.Kind, Title: row.Title, Status: row.Status, Origin: row.Origin, CharCount: row.CharCount, ContentHash: row.ContentHash, RichSHA256: row.RichSHA256, MediaAssetID: row.MediaAssetID})
 		}
 		if len(result.Items) == 0 {
 			return application.ErrNotFound
@@ -76,8 +91,16 @@ func (s *SourceStore) Structures(ctx context.Context, actor identityapp.Principa
 		return result, err
 	}
 	err = s.transaction(ctx, actor, e.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
-		if err := tx.Raw(`SELECT id,episode_id,version_no,source_hash,created_at FROM script.episode_structure WHERE org_id=? AND project_id=? AND episode_id=? AND (?=0 OR version_no<?) ORDER BY version_no DESC LIMIT ?`, actor.OrgID, e.ProjectID, id, before, before, limit+1).Scan(&result.Items).Error; err != nil {
+		query := tx.Model(&scriptStructureSummaryRow{}).Where("org_id = ? AND project_id = ? AND episode_id = ?", actor.OrgID, e.ProjectID, id)
+		if before > 0 {
+			query = query.Where("version_no < ?", before)
+		}
+		var rows []scriptStructureSummaryRow
+		if err := query.Order("version_no DESC").Limit(limit + 1).Find(&rows).Error; err != nil {
 			return err
+		}
+		for _, row := range rows {
+			result.Items = append(result.Items, application.StructureSummary{ID: row.ID, EpisodeID: row.EpisodeID, VersionNo: row.VersionNo, SourceHash: row.SourceHash, CreatedAt: row.CreatedAt.UTC()})
 		}
 		if len(result.Items) > limit {
 			result.Items = result.Items[:limit]
@@ -99,12 +122,14 @@ func (s *SourceStore) Structure(ctx context.Context, actor identityapp.Principal
 	err = s.transaction(ctx, actor, e.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
 		selected := e.CurrentStructureID
 		if version > 0 {
-			var row struct{ ID uuid.UUID }
-			q := tx.Raw(`SELECT id FROM script.episode_structure WHERE org_id=? AND project_id=? AND episode_id=? AND version_no=?`, actor.OrgID, e.ProjectID, id, version).Scan(&row)
-			if q.Error != nil {
-				return q.Error
+			var row scriptStructureSummaryRow
+			if err := tx.Select("id").Where("org_id = ? AND project_id = ? AND episode_id = ? AND version_no = ?", actor.OrgID, e.ProjectID, id, version).Take(&row).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return application.ErrNotFound
+				}
+				return err
 			}
-			if q.RowsAffected != 1 {
+			if row.ID == uuid.Nil {
 				return application.ErrNotFound
 			}
 			selected = &row.ID

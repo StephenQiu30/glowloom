@@ -2,7 +2,6 @@ package operation_test
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,11 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
@@ -36,21 +32,6 @@ func TestTrialRequestHasNoBillingOrArbitraryRuntimeFields(t *testing.T) {
 	require.Error(t, r.Validate())
 }
 
-func TestTrialWorkflowDoesNotRetryAnUncertainDispatch(t *testing.T) {
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	calls := 0
-	env.RegisterActivityWithOptions(func(context.Context, application.TrialInput) (application.TrialProgress, error) {
-		calls++
-		return application.TrialProgress{}, errors.New("response lost")
-	}, activity.RegisterOptions{Name: "trial.Run"})
-	env.ExecuteWorkflow(operationflow.TrialWorkflow, application.TrialInput{Request: application.TrialRequest{RequestID: uuid.New(), Source: "codex", Kind: "image", Model: "fixture", Prompt: "test"}})
-	require.NoError(t, env.GetWorkflowError())
-	var state application.TrialState
-	require.NoError(t, env.GetWorkflowResult(&state))
-	require.Equal(t, "unknown", state.State)
-	require.Equal(t, 1, calls)
-}
 func TestLocalInstalledCodexTrialProbe(t *testing.T) {
 	binary := os.Getenv("GLOWLOOM_TEST_CODEX_BINARY")
 	if binary == "" {
@@ -101,7 +82,7 @@ func TestLocalInstalledCodexTrialInference(t *testing.T) {
 	require.NoError(t, err)
 	result, err := session.Turn(ctx, "Reply exactly with the token GLOWLOOM_POC_OK.", nil)
 	require.NoError(t, err)
-	require.Equal(t, "completed", result.Outcome)
+	require.EqualValues(t, "completed", result.Outcome)
 	require.Contains(t, result.Text, "GLOWLOOM_POC_OK")
 	thread := session.ThreadID()
 	require.NoError(t, session.Close())
@@ -110,65 +91,7 @@ func TestLocalInstalledCodexTrialInference(t *testing.T) {
 	defer func() { _ = resumed.Close() }()
 	result, err = resumed.Turn(ctx, "What exact token did you reply with in your previous answer? Reply only with that token.", nil)
 	require.NoError(t, err)
-	require.Equal(t, "completed", result.Outcome)
+	require.EqualValues(t, "completed", result.Outcome)
 	require.Contains(t, result.Text, "GLOWLOOM_POC_OK")
 	t.Logf("real two-turn chat and process resume verified: model=%s", model)
-}
-
-func TestTrialWorkflowContinuesOnlyItsOriginalPrivateChatAndDeduplicatesSignals(t *testing.T) {
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	id, nextID := uuid.New(), uuid.New()
-	var inputs []application.TrialInput
-	env.RegisterActivityWithOptions(func(_ context.Context, in application.TrialInput) (application.TrialProgress, error) {
-		inputs = append(inputs, in)
-		return application.TrialProgress{State: "succeeded", Text: "answer", ThreadID: "private-owned-thread"}, nil
-	}, activity.RegisterOptions{Name: "trial.Run"})
-	env.RegisterDelayedCallback(func() { env.SignalWorkflow("turn", application.TrialMessage{RequestID: id, Prompt: "same"}) }, time.Second)
-	env.RegisterDelayedCallback(func() { env.SignalWorkflow("turn", application.TrialMessage{RequestID: nextID, Prompt: "continue"}) }, 2*time.Second)
-	env.RegisterDelayedCallback(func() { env.SignalWorkflow("cancel", true) }, 3*time.Second)
-	env.ExecuteWorkflow(operationflow.TrialWorkflow, application.TrialInput{Request: application.TrialRequest{RequestID: id, Source: "codex", Kind: "chat", Model: "frozen-model", Prompt: "same"}})
-	require.NoError(t, env.GetWorkflowError())
-	require.Len(t, inputs, 2)
-	require.Equal(t, "private-owned-thread", inputs[1].ThreadID)
-	require.Equal(t, "frozen-model", inputs[1].Request.Model)
-	require.Equal(t, nextID, inputs[1].Request.RequestID)
-}
-func TestTrialWorkflowVideoPollsFrozenTaskWithoutResubmitting(t *testing.T) {
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	configID, keyID := uuid.New(), uuid.New()
-	var actions []string
-	env.RegisterActivityWithOptions(func(_ context.Context, in application.TrialInput) (application.TrialProgress, error) {
-		actions = append(actions, in.Action)
-		if len(actions) == 1 {
-			return application.TrialProgress{State: "pending", TaskID: "known-task", ConfigVersionID: configID, CredentialID: keyID}, nil
-		}
-		require.Equal(t, "known-task", in.TaskID)
-		require.Equal(t, configID, in.ConfigVersionID)
-		require.Equal(t, keyID, in.CredentialID)
-		return application.TrialProgress{State: "succeeded"}, nil
-	}, activity.RegisterOptions{Name: "trial.Run"})
-	env.ExecuteWorkflow(operationflow.TrialWorkflow, application.TrialInput{Request: application.TrialRequest{RequestID: uuid.New(), Source: "cloud", ProviderID: uuid.New(), Kind: "video", Model: "fixture", Prompt: "test"}})
-	require.NoError(t, env.GetWorkflowError())
-	require.Equal(t, []string{"submit", "query"}, actions)
-}
-
-func TestTrialWorkflowRetainsOriginalVideoIdentityWhenQueryActivityCrashes(t *testing.T) {
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	configID, keyID := uuid.New(), uuid.New()
-	env.RegisterActivityWithOptions(func(_ context.Context, in application.TrialInput) (application.TrialProgress, error) {
-		if in.Action == "submit" {
-			return application.TrialProgress{State: "pending", TaskID: "known-task", ConfigVersionID: configID, CredentialID: keyID}, nil
-		}
-		return application.TrialProgress{}, errors.New("query worker crashed")
-	}, activity.RegisterOptions{Name: "trial.Run"})
-	env.ExecuteWorkflow(operationflow.TrialWorkflow, application.TrialInput{Request: application.TrialRequest{RequestID: uuid.New(), Source: "cloud", ProviderID: uuid.New(), Kind: "video", Model: "fixture", Prompt: "test"}})
-	var state application.TrialState
-	require.NoError(t, env.GetWorkflowResult(&state))
-	require.Equal(t, "unknown", state.State)
-	require.Equal(t, "known-task", state.Turns[0].TaskID)
-	require.Equal(t, configID, state.Turns[0].ConfigVersionID)
-	require.Equal(t, keyID, state.Turns[0].CredentialID)
 }

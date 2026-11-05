@@ -1,92 +1,36 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
 > **当前聚焦里程碑**：完整创作 Agent Harness、多 Agent 协作系统与 Skill 沙箱体系
-> **核心架构原则**：严格遵循 `PROJECT.md` 单一进程（`backend/cmd/glowloom`）原则，在 Go 后端进程内原生统一实现；采用成熟的 **LangGraph (StateGraph) 状态图引擎**，深度吸收开源 **BeefTV 与 Pi 最新稳定版（v1.3.0）的工业级 Harness 机制**；状态统一持久化至 PostgreSQL，彻底去除多余的独立 Node.js 宿主过度设计。
+> **已确认技术方向（2026-11-04）**：同仓库独立 TypeScript/Pi Durable Agent 服务；Go 保留业务权威，Agent 独占执行状态；PostgreSQL 分 schema/角色；Docker Compose 统一启动；无 Temporal、旧实现或兼容。完整设计见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，状态见[本轮迁移](#pi-durable-migration)。
 
 ---
 
-## 1. 核心架构与设计规范
+## Agent 文档链与验证原则
 
-1. **统一单进程引擎**：
-   - 所有 Agent Harness、节点调度、模型网关与专业 Worker 均内嵌于 Go 业务进程（`backend/internal/agent/`）。
-   - 杜绝多语言微服务运维成本、跨网络 RPC 签名与脑裂风险。
-2. **工业级 Harness 四大机制（吸收 BeefTV 与 Pi 稳定版）**：
-   - **提案即截断中断（Proposal Yield & Human-in-the-Loop）**：模型调用任何涉及计费、媒体渲染或结构性覆写的工具时，主动标记中断并保存检查点，等待创作者审核批准；未获批准前绝不发起后续推理。
-   - **连续多步写链 CAS（Write Chain）**：单轮内连续多次调用写工具时，本地自动在链头递增版本（`Head`），下游工具自动以最新版本作为 `ExpectedRevision`；外部协作者修改被严格拦截在 CAS 边界之外。
-   - **现场快照自愈（Studio Digest & Canvas Changes）**：在图引擎发起推理前，自动比对画布/分镜现场快照哈希；若检测到协同变动，自动生成 `<canvas_changes>` 差异摘要文本并前置注入到模型上下文中。
-   - **双重超时与预算看门狗（Turn Budget & Idle Watchdog）**：单轮最大 40 步模型请求 / 40 步工具调用硬熔断；SSE 分块 45 秒空闲超时看门狗，防止供应商连接假死。
-3. **Supervisor-Worker 多 Agent 编排**：
-   - **制作统筹（Supervisor）**：意图理解、全局计划拆解（维护 `plan_update`）、进度追踪与条件边动态路由；
-   - **剧本解析（Script Worker）**：长文本分集、场景、人物与台词拆解，标记歧义并生成建议；
-   - **分镜编排（Storyboard Worker）**：机位设定、运动轨迹规划与时长切分；
-   - **镜头导演（Shot Worker）**：提示词优化、视频参数装配与生成提案中断；
-   - **后期剪辑（Audio Worker）**：配音音色、音效（SFX）、背景音乐（BGM）与时间线对齐。
-4. **Skill 包生命周期与沙箱安全**：
-   - 以 `SKILL.md` 为统一入口规范，内容哈希锁定与防路径穿越（严格拦截 `../` 越界）；
-   - 支持 `skill_load` 按需动态装载正文与子任务独立上下文重置；
-   - 专用子命令 `glowloom sandbox serve` 提供资源限制、无凭据泄露与超时有界回收的隔离执行环境。
+本节的唯一主链指Agent执行基础；对话产品专项沿[对话工作台](#conversation-workspace)补充，不重置独立Agent迁移的进度或验收。
 
----
+唯一当前链：[需求19](docs/requirement/19-完整创作Agent与Skill多Agent需求.md) → [设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md) → [PRD19](docs/prd/19-完整创作Agent与Skill多Agent.md) → [Plan28](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md)。旧 Go 图引擎、旧单图阶段与假 sandbox 命令的完成清单已删除；历史版本由 Git 追溯，不作为当前实施指南或验收。
 
-## 2. 实施落地完成清单 (T-AH-01 ~ T-AH-08)
+工程测试、隔离基础设施、实际供应商与完整创作接受分别记录；未提交代码、镜像构建或健康页不能代替真实产物与计费验收。
 
-| 任务编号    | 模块职责                      | 核心交付代码路径                                                                                                                                                                                                                                                  | 验证状态                                                                                                   |
-| :---------- | :---------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
-| **T-AH-01** | **StateGraph 引擎与检查点**   | `backend/internal/agent/domain/graph/{engine,state}.go`<br>`backend/internal/agent/adapter/postgres/checkpointer.go`<br>`backend/db/agent_checkpoint.sql`                                                                                                         | **已完成 (Green)**<br>状态图条件边拓扑、步数看门狗、PG 快照持久化与断点接续测试全量通过                    |
-| **T-AH-02** | **Supervisor 统筹与提案中断** | `backend/internal/agent/application/workers/supervisor.go`<br>`backend/internal/agent/application/proposal_interrupt.go`                                                                                                                                          | **已完成 (Green)**<br>目标分解、依赖调度、提案中断挂起与用户批准/驳回接续测试全量通过                      |
-| **T-AH-03** | **统一网关与流式看门狗**      | `backend/internal/agent/application/model_gateway.go`<br>`backend/internal/agent/application/model_stream_watchdog.go`<br>`backend/internal/agent/application/turn_budget.go`                                                                                     | **已完成 (Green)**<br>参数冻结、上下文窗口校验、45s SSE 空闲检测与 40 步硬熔断测试全量通过                 |
-| **T-AH-04** | **业务工具、写链与现场自愈**  | `backend/internal/agent/application/tools.go`<br>`backend/internal/agent/application/write_chain.go`<br>`backend/internal/agent/application/studio_digest.go`                                                                                                     | **已完成 (Green)**<br>连续写链版本自增、CAS 冲突拦截与 `<canvas_changes>` 差异注入测试全量通过             |
-| **T-AH-05** | **Skill 生命周期与动态装载**  | `backend/internal/skill/domain/skill.go`<br>`backend/internal/skill/application/skill_registry.go`                                                                                                                                                                | **已完成 (Green)**<br>版本固定、SHA-256 哈希、路径穿越拦截、`skill_load` 展开与上下文重置测试全量通过      |
-| **T-AH-06** | **专业 Worker 智能体族**      | `backend/internal/agent/application/workers/script_worker.go`<br>`backend/internal/agent/application/workers/storyboard_worker.go`<br>`backend/internal/agent/application/workers/shot_worker.go`<br>`backend/internal/agent/application/workers/audio_worker.go` | **已完成 (Green)**<br>剧本拆解 → 分镜排布 → 镜头提案挂起 → 审批恢复 → 音频后期全流程流水线接力测试全量通过 |
-| **T-AH-07** | **隔离沙箱与安全脚本执行**    | `backend/cmd/glowloom/sandbox.go`<br>`backend/internal/skill/domain/sandbox.go`<br>`backend/internal/skill/application/sandbox_runner.go`                                                                                                                         | **已完成 (Green)**<br>`glowloom sandbox serve` 子命令就绪，超时强制终止与环境变量安全隔离测试全量通过      |
-| **T-AH-08** | **SSE 事件流与前端卡片交互**  | `backend/internal/agent/adapter/http/stream_handler.go`<br>`frontend/src/components/agent/ProposalApprovalCard.tsx`<br>`frontend/src/components/agent/index.ts`                                                                                                   | **已完成 (Green)**<br>SSE 标准事件推送、Next.js 提案审批卡片与参数确认组件全量通过 TypeScript 类型检查     |
+<a id="conversation-workspace"></a>
 
----
+## 2026-11-05 对话工作台与参考输入一致性
 
-## 3. 质量门禁与验证指标
+用户通过需求20 SRC-CONV-07/08授权从知识库开始并确认实施。唯一链：[需求20](docs/requirement/20-对话工作台与参考输入一致性需求.md) → [设计35](docs/design/35-对话工作台与参考输入一致性设计.md) → [PRD22](docs/prd/22-对话工作台与参考输入一致性.md) → [Plan31](docs/plan/31-对话工作台与参考输入一致性实施计划.md)。基础Agent仍沿设计32/PRD19/Plan28，不在此重新声明完成。
 
-- **后端测试套件**：
-  - `backend/tests/agent/...`（20 项）、`backend/tests/skill/...`（3 项）、`backend/tests/config/...`（23 项）；
-  - **46 / 46 测试通过率 100%**；
-  - 启用 `-race` 竞争检测：**0 数据竞争**；
-  - `go vet ./internal/agent/... ./internal/skill/...`：**0 警告**；
-  - `gofmt -l` 规范检查：**0 格式偏差**。
-- **前端类型与规范**：
-  - `pnpm exec tsc --noEmit`：**0 错误**；
-  - 纯正 Radix UI / Tailwind 原生卡片与状态绑定。
-- **版本控制与干净工作区**：
-  - 全部成果已固化在 `main` 分支（提交 `7aaec94b`、`d2fc12f7`、`4a1c76e1`）；
-  - `git status --short` 当前保持 Clean。
+| 工作                                            | 当前状态                                                                                                                                                                                                                                               | 依赖/下一步                                                                                                               |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| T-CONV-DOC 需求、设计、PRD和Plan                | 主链及15项AC、14组场景、9项任务已落盘；用户确认实施，接口与文件责任随实现同步                                                                                                                                                                          | 维持单一来源，产品接受分别记录                                                                                            |
+| T-CONV-01～03 合同、输入、持久历史              | 工程实现已落地：私有分页、不可变完整输入、引用/模型检查、同commit公开消息、原提交查询、Go控制回执与未决消费屏障；旧历史离线回填脚本可重入                                                                                                              | 未向业务库应用增量；部署前盘点在途run/operation                                                                           |
+| T-CONV-04～08 共享参考、客户端、线程/结果和页面 | 首页/对话页/富文本共用参考动作；独立路由、真实私有历史、未知发送、停止恢复、追加尝试、正式任务详情均接线。登录/项目隔离、源撤权、重试原设置和分页缺口有回归。旧Agent Textarea入口已移除                                                                | 真实产品环境登录/上传/触控IME等接受仍与隔离验证区分                                                                       |
+| T-CONV-FIGMA 设计一致性                         | 已只读核对66个原型状态，更新入口3条说明，新增[Figma工程状态合同](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=3491-92778)；明确受理未知、Stop投递中和引用撤权                                                                           | 文档与原型不是供应商接受；未重建或宣称新增全部状态画面                                                                    |
+| T-CONV-09 工程/浏览器验证                       | Agent 134例及官方Storage/恢复通过；Go范围race、实际Go→编译Node24.22.2→Pi→隔离PG及业务权限测试通过；前端295文件/2101测试、类型、ESLint、格式及生产构建通过，实际浏览器已核对桌面、320/390/768、参考展开/移除、发送、Stop pending→applied及retry保留草稿 | 全仓Go race有未配置集成环境及并行模块失败；govulncheck有15项当前Go标准库可达告警，golangci-lint未安装；不冒称全仓门禁通过 |
+| 真实模型、媒体队列取消与费用接受                | 未执行；新增积分与真实生成费用均为0，先前即梦10分已用完                                                                                                                                                                                                | 未解除真实收费禁令；上线和真实供应商接受需另行授权                                                                        |
 
----
+所有本轮命令、边界、review修复、修改文件和剩余并行变更明细保存在git忽略的`.superpowers/sdd/31-对话工作台与参考输入一致性实施计划/`。原Docker测试容器不可连后未启动或修改业务栈，改为任务拥有的临时PostgreSQL两个全新`*_test`库；原业务库未改。保留共享工作区并行改动，HEAD仍为`8549d9d5`，未提交、推送、创建分支或发布。
 
-## 4. 下一步演进计划 (Next Iterations)
-
-借鉴 Pi 最新稳定版（v1.3.0）与真实业务场景，持续进行深度打磨：
-
-1. **Pi `taskId` + `memo` 确定性记忆机制深化**：
-   - 为每次工具调用注入基于 `RunID + StepID + ToolName + ParamsHash` 的确定性 `taskId`；
-   - 增加执行记录 `memo` 查找表，使断点重试与审批接续时已执行完成的只读工具免于重复计算。
-2. **Pi `beforeCompact` 上下文智能有界压缩**：
-   - 监听长文本交互 Token 消耗，在接近模型上下文上限（如 80%）时触发自动压缩，提炼中间思考并保护核心实体。
-3. **画布工作台联调对接**：
-   - 将 `ProposalApprovalCard` 挂载至前端工作台画布实时面板，接入真实项目会话事件流。
-
----
-
-## 5. 唯一权威文档追溯
-
-- **原始需求**：[19-完整创作Agent与Skill多Agent需求.md](docs/requirement/19-完整创作Agent与Skill多Agent需求.md)
-- **架构设计**：[32-完整创作AgentHarness与Skill多Agent架构设计.md](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)
-- **产品PRD**：[19-完整创作Agent与Skill多Agent.md](docs/prd/19-完整创作Agent与Skill多Agent.md)
-- **实施计划**：[28-完整创作Agent与Skill多Agent实施计划.md](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md)
-- **调研分析**：[2026-11-01-AgentHarness与Skill能力分析.md](docs/research/2026-11-01-AgentHarness与Skill能力分析.md)
-
----
-
-<a id="beeftv-adoption"></a>
-
-## 6. BeefTV调研采用：模型接入扩展、计价与结算恢复（2026-11-03）
+## BeefTV调研采用：模型接入扩展、计价与结算恢复（2026-11-03）
 
 本节为该专项实施状态的唯一来源，不改变前文Agent里程碑记录；前文测试/提交记录仅按其原版本理解，不能作为本专项验收。
 
@@ -138,7 +82,7 @@
 
 1. 本轮可执行工程范围已完成并通过独立整体审查；按[验证记录](docs/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md)和[逐项文件清单](docs/research/evidence/2026-11-03-beeftv-adoption/worktree-files.md)审阅本次提交范围；首轮实现已提交main并推送（4ab20c15）；后续Flash运行修复沿同范围交付，本地仅启用已验证Flash。
 2. 分别关闭D-AI-35-01～03的商业/供应商合同；未确认前不开放对应参考计费、原币账单和退款补偿，不以工程fixture充当真实费率。
-3. 在获准的运行环境补D-AI-35-04：真实供应商、生产式Temporal/Kafka/对象存储、捕获历史重放，以及桌面/320/390、键盘焦点和读屏接受。除下述Flash本地观测外，未执行项不计通过。
+3. 在获准的运行环境补D-AI-35-04：真实供应商、生产式 PostgreSQL 任务/Kafka/对象存储与原回执恢复，以及桌面/320/390、键盘焦点和读屏接受。除下述Flash本地观测外，未执行项不计通过。
 4. 新问题或后续发布继续沿对应CASE留证，保留原价格/汇率/Key/预留/账本；不得用清零旧账、超时解锁、同键重POST或新Key补买替代核查。
 
 ### 6.4 首个Flash模型实际接受（SRC-AI-36）
@@ -182,6 +126,16 @@
 
 公共顶栏工具组与账号组已统一桌面36px/手机50px，手机保留44px触点，访客状态同步。Figma先行，1512/1024/390/320实页与批量切换检查完成；实现与验证完成，Git提交以仓库记录为准。来源与证据见设计29§7.16、PRD16 CR-076及Plan25对应回执。
 
+### 2026-11-03 探索搜索一致性纠正
+
+EX-REQ-08：确认现有CommandDialog与即梦探索不符。已按设计28/PRD15/Plan24落实行内搜索、历史、显式提交、URL结果类型和窄屏适配；新增Figma搜索展开/历史稿3426:74255。15项定向测试、lint、类型和构建通过，浏览器验证见[搜索差异证据](docs/research/evidence/2026-11-03-explore-search/validation.md)。完整一致性仍未接受：T04公开目录/查询合同、T11真实三类搜索和联想词、T06卡片/详情/复用、T02/03全状态设计仍需补齐。本轮未提交推送；其他任务修改保留。
+
+### 2026-11-03 探索shadcn组件收敛
+
+EX-REQ-09已落实：搜索采用Field和InputGroup，历史采用PopoverHeader及PopoverTitle，一级采用Tabs line、分隔采用Separator。移除搜索独立外观CSS与分类颜色、字重和圆角覆盖。保留容器响应式布局与搜索行为。15项定向回归、lint、类型和构建通过；浏览器证据见探索搜索验证的shadcn补充。真实公开搜索服务缺口保持未完成，本轮未提交推送。
+
+EX-REQ-10核查完成：侧栏已采用官方Sidebar体系并继续复用；共享顶栏简短未开放提示改用Sonner，正文Empty、登录和决策确认Dialog保留。38项定向回归及生产构建通过，设计09规则与Figma搜索稿已同步；未提交推送。
+
 ## 2026-11-03 连线显示纠错
 
 已修复命令式拖动更新SVG路径但流光沿旧网格的问题，取消恢复也跟随实际路径；取消仅因关联节点active而触发的持续高亮。5文件20项、全局tsc、4文件ESLint通过，原生Chrome已核对用户原画布选中节点后保持灰线。生成中拖动的GPU逐帧验收尚未执行，不冒称新一轮源端全量标定。设计/原始需求/PRD已同步，增量未提交；证据见[本轮验证](docs/research/evidence/2026-11-03-canvas-line-fix/validation.md)。
@@ -193,3 +147,24 @@
 ### 2026-11-04 复核交付与供应商输入修复
 
 限定34文件已提交e7e376b4并推送main，提交前22项定向前端测试通过；CI41751714383前端成功，后端仍为既有agent.graph_checkpoint缺表失败。随后按用户“仅修复，暂不再生成”排查：当前cos-main/COS主路由的真实HeadBucket成功，原引用图片则保存于legacy-main/MinIO，5442字节、回环HTTP签名；Temporal原activity明确invalid_provider_request。已修复该私有图片传输和安全分类保留，公网COS URL不改，未迁移旧资源。8组定向Race、隔离PG调用摘要/幂等、原49事件回放、goimports/vet及后端构建通过，govulncheck无可达漏洞；golangci-lint未安装。Figma原板与设计/PRD/原需求/Plan已同步。只重启本地后端载入修复，readyz正常、运行二进制与已验证构建SHA一致；原失败状态、1条调用和预算预留/结算0保持不变。修复增量未提交，未发起新生成、未加预算。下一步仍需获得真实任务验收条件后核对供应商生成中/完成及其拖动缩放组合；同项目COS图片完整读取、其它本地多模态引用另验，不以本轮图片修复签全量一致。见[根因与证据](docs/research/evidence/2026-11-04-provider-reference/validation.md)。
+
+<a id="pi-durable-migration"></a>
+
+## 2026-11-04 独立 agent 与数据库任务迁移
+
+来源：需求19 SRC-AGH-10～15；唯一设计→PRD→Plan：设计32 → PRD19 → Plan28。2026-11-05工程终验完成；产品与现有部署切换分开判定。完整[验证记录](docs/research/evidence/2026-11-04-agent-service/validation.md)、[机器结果](docs/research/evidence/2026-11-04-agent-service/checks.json)、[逐项工作区路径](docs/research/evidence/2026-11-04-agent-service/working-tree-paths.tsv)。
+
+| 工作                         | 当前状态                                                                                                                                                 | 接受依据                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| 独立包与 PostgreSQL Storage  | Node24.22.2、TypeScript6、Pi1.5.0、Fastify5、TypeBox、pg与固定lockfile；24文件134项通过、0跳过，含官方Storage与真实SIGKILL                               | Task1/2；AC-AH-02/13/15/20 |
+| 官方 Harness、控制与专业协作 | owned子会话、计划/预算/Skill/受控SDK、压缩/图像、可靠控制及故障恢复；原租约/原超时独立重跑全Agent套件通过                                                | Task3/6/7；AC-AH-21/22     |
+| Go业务边界及创作工具         | 完整Go Race覆盖授权、回执、Yjs、媒体、剧本、发布、图片与导出；当前生产Go↔Node边界另作最终定向Race通过                                                    | Task4/5；AC-AH-04/05/18    |
+| 普通任务与旧实现删除         | PG任务/租约/取消/恢复和FFmpeg验证通过；无Temporal SDK/连接/命令/旧Go图/旧阶段接口兼容                                                                    | Task8～11；AC-AH-14/17     |
+| 当前前端合同                 | 当前会话工作台、rich draft与消息分页；295文件2099项通过，strict/lint/格式/官方API生成核对/Next生产构建全部通过                                           | Task12；AC-AH-12/19        |
+| Compose与当前SQL             | 单一四服务Compose；Agent镜像非root/只读/限额，实际Harness完成、health/ready200、SIGTERM0/租约0；空库8运行/8业务表权限及6份冻结SQL一致性通过              | Task13；AC-AH-18～20       |
+| 既有库离线切换               | [清单与脚本](backend/db/agent_cutover.md)交付；历史隔离演练保留其日期与范围；本轮未在现有业务库执行DDL或实际切换                                         | Task13/14                  |
+| 文档与历史错误描述           | 设计、计划、PROJECT、BACKLOG及验证记录更新为当前合同与终验结果；原始需求/有效历史证据保留，不再作为当前失败状态                                          | Task14                     |
+| 全量联合检查                 | Go176包完成，4478测试/子测试通过、0失败；57项既有外部条件测试跳过并逐项列明；Go build/vet/lint/格式均通过，govulncheck0可达/0导入包漏洞                  | Task14                     |
+| 现有部署与真实创作接受       | 真实供应商、费用清结、长剧本至可编辑成片、完整浏览器与线上CI未由fixture代替；Docker Desktop恢复引发已有restart策略自动运行容器，未改其配置，详见环境记录 | AC-AH-01～22               |
+
+工程终验对应提交前快照；后续提交、推送及CI状态以实际Git交付为准。共享并行修改按明确提交范围保留，没有向其他聊天发送消息。工程测试终验已完成；生产切换与真实创作接受继续按上述边界管理。

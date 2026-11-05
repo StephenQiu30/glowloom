@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -19,7 +21,7 @@ func (s *PurgeStore) PurgeObjects(ctx context.Context, lease application.PurgeLe
 		if err != nil {
 			return err
 		}
-		if state.Status != "running" && state.Status != "needs_reconciliation" {
+		if state.Status != domain.PurgeItemStatusRunning && state.Status != domain.PurgeItemStatusNeedsReconciliation {
 			return domain.ErrPurgeConflict
 		}
 		if err := validatePurgeItem(tx, row, frozen); err != nil {
@@ -30,7 +32,7 @@ func (s *PurgeStore) PurgeObjects(ctx context.Context, lease application.PurgeLe
 		}
 		result = make([]application.PurgeObject, 0, 17)
 		var rows []purgeObjectRow
-		if err := tx.Raw(`SELECT object_key,byte_size,sha256,verified,removal_started,removed FROM media.purge_object WHERE job_id=? AND item_index=? ORDER BY rendition_kind FOR UPDATE`, row.ID, index).Scan(&rows).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ? AND item_index = ?", row.ID, index).Order("rendition_kind").Find(&rows).Error; err != nil {
 			return err
 		}
 		for _, r := range rows {
@@ -68,7 +70,7 @@ func (s *PurgeStore) withObject(ctx context.Context, lease application.PurgeLeas
 		if err != nil {
 			return err
 		}
-		if state.Status != "running" && state.Status != "needs_reconciliation" {
+		if state.Status != domain.PurgeItemStatusRunning && state.Status != domain.PurgeItemStatusNeedsReconciliation {
 			return domain.ErrPurgeConflict
 		}
 		if err := validatePurgeItem(tx, row, frozen); err != nil {
@@ -85,12 +87,12 @@ func (s *PurgeStore) withObject(ctx context.Context, lease application.PurgeLeas
 			return application.ErrObjectMismatch
 		}
 		var objectRow purgeObjectRow
-		read := tx.Raw(`SELECT object_key,byte_size,sha256,verified,removal_started,removed FROM media.purge_object WHERE job_id=? AND item_index=? AND object_key=? FOR UPDATE`, row.ID, index, key).Scan(&objectRow)
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ? AND item_index = ? AND object_key = ?", row.ID, index, key).Take(&objectRow)
 		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrObjectMismatch
+			}
 			return read.Error
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrObjectMismatch
 		}
 		object := objectRow.object()
 		if err := loadPurgeLocations(tx, row.ID, index, []application.PurgeObject{object}); err != nil {
@@ -109,7 +111,7 @@ func (s *PurgeStore) RecordPurgeDigest(ctx context.Context, lease application.Pu
 		if object.SHA256 != nil && *object.SHA256 != sha || object.ByteSize != nil && *object.ByteSize != size || object.Removed {
 			return application.ErrObjectMismatch
 		}
-		return libraryChanged(tx, `UPDATE media.purge_object SET sha256=?,byte_size=?,verified=true WHERE job_id=? AND item_index=? AND object_key=?`, sha, size, row.ID, index, key)
+		return updatePurgeObject(tx, row.ID, index, key, map[string]any{"sha256": sha, "byte_size": size, "verified": true})
 	})
 }
 
@@ -117,11 +119,11 @@ func (s *PurgeStore) RecordPurgeDigest(ctx context.Context, lease application.Pu
 func (s *PurgeStore) BeginPurgeRemoval(ctx context.Context, lease application.PurgeLease, index int, key string) error {
 	return s.withObject(ctx, lease, index, key, func(tx *gorm.DB, row purgeJobRow, object application.PurgeObject) error {
 		if row.CancellationRequested {
-			var started bool
-			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.purge_object WHERE job_id=? AND item_index=? AND removal_started)`, row.ID, index).Scan(&started).Error; err != nil {
+			var startedCount int64
+			if err := tx.Model(&purgeObjectRow{}).Where("job_id = ? AND item_index = ? AND removal_started = ?", row.ID, index, true).Limit(1).Count(&startedCount).Error; err != nil {
 				return err
 			}
-			if !started {
+			if startedCount == 0 {
 				return domain.ErrPurgeCancelled
 			}
 		}
@@ -129,16 +131,18 @@ func (s *PurgeStore) BeginPurgeRemoval(ctx context.Context, lease application.Pu
 			return application.ErrObjectMismatch
 		}
 		var unverified bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.purge_object WHERE job_id=? AND item_index=? AND NOT verified)`, row.ID, index).Scan(&unverified).Error; err != nil {
+		var unverifiedCount int64
+		if err := tx.Model(&purgeObjectRow{}).Where("job_id = ? AND item_index = ? AND verified = ?", row.ID, index, false).Limit(1).Count(&unverifiedCount).Error; err != nil {
 			return err
 		}
+		unverified = unverifiedCount > 0
 		if unverified {
 			return application.ErrObjectMismatch
 		}
-		if err := libraryChanged(tx, `UPDATE media.purge_object SET removal_started=true WHERE job_id=? AND item_index=? AND object_key=?`, row.ID, index, key); err != nil {
+		if err := updatePurgeObject(tx, row.ID, index, key, map[string]any{"removal_started": true}); err != nil {
 			return err
 		}
-		return libraryChanged(tx, `UPDATE media.purge_job SET stage='removing',updated_at=? WHERE id=?`, s.clock().UTC(), row.ID)
+		return updatePurgeJob(tx, row.ID, nil, map[string]any{"stage": domain.PurgeStageRemoving, "updated_at": s.clock().UTC()})
 	})
 }
 
@@ -148,7 +152,7 @@ func (s *PurgeStore) ConfirmPurgeRemoval(ctx context.Context, lease application.
 		if !object.Verified || !object.RemovalStarted {
 			return application.ErrObjectMismatch
 		}
-		return libraryChanged(tx, `UPDATE media.purge_object SET removed=true WHERE job_id=? AND item_index=? AND object_key=?`, row.ID, index, key)
+		return updatePurgeObject(tx, row.ID, index, key, map[string]any{"removed": true})
 	})
 }
 
@@ -160,7 +164,7 @@ func (s *PurgeStore) CompletePurgeItem(ctx context.Context, lease application.Pu
 		if err != nil {
 			return err
 		}
-		if state.Status != "running" && state.Status != "needs_reconciliation" {
+		if state.Status != domain.PurgeItemStatusRunning && state.Status != domain.PurgeItemStatusNeedsReconciliation {
 			return domain.ErrPurgeConflict
 		}
 		if err := validatePurgeItem(tx, row, frozen); err != nil {
@@ -169,30 +173,43 @@ func (s *PurgeStore) CompletePurgeItem(ctx context.Context, lease application.Pu
 		if err := s.requirePurgeUnreferenced(ctx, tx, lease.Actor, row, frozen); err != nil {
 			return err
 		}
-		var proof struct {
-			Count  int
-			Unsafe bool
-		}
-		if err := tx.Raw(`SELECT count(*) AS count,COALESCE(bool_or(NOT removed),false) AS unsafe FROM media.purge_object WHERE job_id=? AND item_index=?`, row.ID, index).Scan(&proof).Error; err != nil {
+		var objects []purgeObjectRow
+		if err := tx.Where("job_id = ? AND item_index = ?", row.ID, index).Find(&objects).Error; err != nil {
 			return err
 		}
 		expected := 0
 		if frozen.Asset != nil {
 			expected = len(frozen.Renditions) + 1
 		}
-		if proof.Unsafe || proof.Count != expected {
+		unsafe := false
+		for _, object := range objects {
+			unsafe = unsafe || !object.Removed
+		}
+		if unsafe || len(objects) != expected {
 			return domain.ErrPurgeConflict
 		}
 		now := s.clock().UTC()
-		if err := libraryChanged(tx, `UPDATE media.library_item SET plain_text=CASE WHEN plain_text IS NULL THEN NULL ELSE '' END,folder_id=NULL,title='已永久清理',tags='[]'::jsonb,source_label='',note='',favorite=false,catalog_state='removed',trashed_at=NULL,purged_at=?,revision=revision+1,update_time=? WHERE id=? AND library_id=? AND revision=? AND purged_at IS NULL`, now, now, frozen.ItemID, library.ID, frozen.CatalogRevision); err != nil {
+		var item libraryItemRow
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND library_id = ? AND revision = ? AND purged_at IS NULL", frozen.ItemID, library.ID, frozen.CatalogRevision).Take(&item)
+		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrLibraryConflict
+			}
+			return read.Error
+		}
+		updates := map[string]any{"folder_id": nil, "title": "已永久清理", "tags": jsonDocument([]byte("[]")), "source_label": "", "note": "", "favorite": false, "catalog_state": domain.LibraryItemStateRemoved, "trashed_at": nil, "purged_at": now, "revision": item.Revision + 1, "update_time": now}
+		if item.PlainText != nil {
+			updates["plain_text"] = ""
+		}
+		if err := updateOne(tx, "media.library_item", map[string]any{"id": frozen.ItemID, "library_id": library.ID, "revision": frozen.CatalogRevision, "purged_at": nil}, updates, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		if frozen.Asset != nil {
-			if err := tx.Exec(`UPDATE media.rendition SET is_delete=true,update_time=? WHERE media_asset_id=? AND NOT is_delete`, now, frozen.Asset.ID).Error; err != nil {
+			if err := tx.Model(&renditionRow{}).Where("media_asset_id = ? AND is_delete = ?", frozen.Asset.ID, false).Updates(map[string]any{"is_delete": true, "update_time": now}).Error; err != nil {
 				return err
 			}
 		}
-		if err := libraryChanged(tx, `UPDATE media.library SET revision=revision+1,update_time=? WHERE id=? AND revision=?`, now, library.ID, library.Revision); err != nil {
+		if err := updateOne(tx, "media.library", map[string]any{"id": library.ID, "revision": library.Revision}, map[string]any{"revision": library.Revision + 1, "update_time": now}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		if row.ProjectID != nil {
@@ -200,7 +217,7 @@ func (s *PurgeStore) CompletePurgeItem(ctx context.Context, lease application.Pu
 				return err
 			}
 		}
-		return libraryChanged(tx, `UPDATE media.purge_item SET status='succeeded',failure_code=NULL WHERE job_id=? AND item_index=?`, row.ID, index)
+		return updateOne(tx, "media.purge_item", map[string]any{"job_id": row.ID, "item_index": index}, map[string]any{"status": domain.PurgeItemStatusSucceeded, "failure_code": nil}, application.ErrLibraryConflict)
 	})
 }
 
@@ -215,29 +232,29 @@ func (s *PurgeStore) FinishPurge(ctx context.Context, lease application.PurgeLea
 		success, blocked, unsettled := 0, 0, false
 		for _, item := range job.Items {
 			switch item.Status {
-			case "succeeded":
+			case domain.PurgeItemStatusSucceeded:
 				success++
-			case "blocked":
+			case domain.PurgeItemStatusBlocked:
 				blocked++
-			case "cancelled":
+			case domain.PurgeItemStatusCancelled:
 			default:
 				unsettled = true
 			}
 		}
-		status, stage := "failed", "completed"
+		status, stage := domain.PurgeStatusFailed, domain.PurgeStageCompleted
 		switch {
 		case unsettled:
-			status, stage = "needs_reconciliation", "removing"
+			status, stage = domain.PurgeStatusNeedsReconciliation, domain.PurgeStageRemoving
 		case success == len(job.Items):
-			status = "succeeded"
+			status = domain.PurgeStatusSucceeded
 		case success > 0:
-			status = "partial_failed"
+			status = domain.PurgeStatusPartialFailed
 		case row.CancellationRequested:
-			status = "cancelled"
+			status = domain.PurgeStatusCancelled
 		case blocked == len(job.Items):
-			status = "failed"
+			status = domain.PurgeStatusFailed
 		}
-		if err := libraryChanged(tx, `UPDATE media.purge_job SET status=?,stage=?,needs_reconciliation=?,revision=revision+1,updated_at=? WHERE id=? AND worker_fence=?`, status, stage, unsettled, s.clock().UTC(), row.ID, lease.Fence); err != nil {
+		if err := updateOne(tx, "media.purge_job", map[string]any{"id": row.ID, "worker_fence": lease.Fence}, map[string]any{"status": status, "stage": stage, "needs_reconciliation": unsettled, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		row, err = s.readJob(tx, lease.Actor, row.ID, false)
@@ -254,12 +271,15 @@ var _ application.PurgeWorkerRepository = (*PurgeStore)(nil)
 
 func loadPurgeLocations(tx *gorm.DB, job uuid.UUID, index int, objects []application.PurgeObject) error {
 	for i := range objects {
-		var row struct{ ObjectLocationID *uuid.UUID }
-		if err := tx.Raw(`SELECT object_location_id FROM media.purge_object WHERE job_id=? AND item_index=? AND object_key=?`, job, index, objects[i].ObjectKey).Scan(&row).Error; err != nil {
+		var row purgeObjectRow
+		if err := tx.Model(&purgeObjectRow{}).Select("object_location_id").Where("job_id = ? AND item_index = ? AND object_key = ?", job, index, objects[i].ObjectKey).Take(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return domain.ErrPurgeConflict
+			}
 			return err
 		}
 		if row.ObjectLocationID == nil {
-			continue
+			return domain.ErrPurgeConflict
 		}
 		l, err := NewStorageRoutes(tx).ReadLocation(tx.Statement.Context, *row.ObjectLocationID)
 		if err != nil {
@@ -282,10 +302,28 @@ func locationID(l *domain.ObjectLocation) *uuid.UUID {
 }
 
 type purgeObjectRow struct {
+	JobID                             uuid.UUID
+	ItemIndex                         int
+	ObjectLocationID                  *uuid.UUID
 	ObjectKey                         string
+	RenditionKind                     string
 	ByteSize                          *int64
 	SHA256                            *string
 	Verified, RemovalStarted, Removed bool
+}
+
+func (purgeObjectRow) TableName() string { return "media.purge_object" }
+
+func updatePurgeObject(tx *gorm.DB, jobID uuid.UUID, index int, key string, values map[string]any) error {
+	return updateOne(tx, "media.purge_object", map[string]any{"job_id": jobID, "item_index": index, "object_key": key}, values, application.ErrLibraryConflict)
+}
+
+func updatePurgeJob(tx *gorm.DB, id uuid.UUID, filters map[string]any, values map[string]any) error {
+	where := map[string]any{"id": id}
+	for key, value := range filters {
+		where[key] = value
+	}
+	return updateOne(tx, "media.purge_job", where, values, application.ErrLibraryConflict)
 }
 
 func (r purgeObjectRow) object() application.PurgeObject {

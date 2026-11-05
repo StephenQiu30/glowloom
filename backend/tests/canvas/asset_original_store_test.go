@@ -11,6 +11,7 @@ import (
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type downloadFixtureObjects struct {
@@ -19,7 +20,7 @@ type downloadFixtureObjects struct {
 	afterOpen func()
 }
 
-func (s *downloadFixtureObjects) Get(context.Context, string) (io.ReadCloser, error) {
+func (s *downloadFixtureObjects) Get(context.Context, mediadomain.ObjectRef) (io.ReadCloser, error) {
 	s.calls++
 	if s.afterOpen != nil {
 		s.afterOpen()
@@ -38,7 +39,7 @@ func TestCanvasAssetOriginalRechecksRealOwnerSessionAfterObjectOpen(t *testing.T
 	actor, project := seedCanvasActor(t, db)
 	asset := seedCanvasMedia(t, db, project, "image")
 	objects := &downloadFixtureObjects{}
-	downloads := mediaapp.NewAssetDownloads(pgmedia.NewScopedStore(db, mediawire.NewMediaScopeAccess), nil, objects)
+	downloads := mediaapp.NewAssetDownloads(pgmedia.NewScopedStore(db, mediawire.NewMediaScopeAccess), objects)
 	file, err := downloads.Open(t.Context(), actor, project, asset)
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +69,7 @@ func TestCanvasAssetOriginalUnconfiguredTransportFailsClosed(t *testing.T) {
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	asset := seedCanvasMedia(t, db, project, "image")
-	if file, err := mediawire.ProvideAssetDownloads(db, nil, nil).Open(t.Context(), actor, project, asset); file != nil || !errors.Is(err, mediaapp.ErrUnavailable) {
+	if file, err := mediawire.ProvideAssetDownloads(db, nil).Open(t.Context(), actor, project, asset); file != nil || !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("missing transport admitted stream", file, err)
 	}
 }

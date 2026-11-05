@@ -17,10 +17,31 @@ import (
 
 const storageFixture = `object_storage:
   schema_version: 1
-  revision: storage-test-1
+  revision: 1
+  default_write_profile: minio-main
+  upload:
+    mode: relay
+    signed_url_ttl: 10m
+    session_ttl: 24h
+    multipart_threshold_bytes: 33554432
+    part_size_bytes: 8388608
+    part_concurrency: 3
+    staging_retention: 48h
+  access:
+    preview_ttl: 5m
+    max_signed_url_ttl: 15m
+  limits:
+    max_image_bytes: 20971520
+    max_video_bytes: 524288000
+    max_audio_bytes: 104857600
+    max_model_bytes: 67108864
+    max_document_bytes: 20971520
   profiles:
     minio-main:
       provider: minio
+      mode: read_write
+      addressing_style: path
+      signing_endpoint: https://storage.example.test
       endpoint: https://storage.example.test
       bucket: assets-test
       region: us-east-1
@@ -50,7 +71,7 @@ func TestObjectStorageDefaultsToMinIO(t *testing.T) {
 	if cfg.Access.PreviewTTL != 5*time.Minute || cfg.Access.MaxSignedURLTTL != 15*time.Minute {
 		t.Fatal("bounded private access defaults were lost")
 	}
-	if _, err := config.LoadObjectStorage(storageConfigFile(t, strings.Replace(storageFixture, "  revision:", "  default_write_profile: cos-missing\n  revision:", 1)), "prod"); !errors.Is(err, config.ErrInvalid) {
+	if _, err := config.LoadObjectStorage(storageConfigFile(t, strings.Replace(storageFixture, "default_write_profile: minio-main", "default_write_profile: cos-missing", 1)), "prod"); !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("missing explicit COS target silently fell back: %v", err)
 	}
 }
@@ -86,7 +107,7 @@ func TestObjectStorageRejectsDuplicateResourceAlias(t *testing.T) {
 }
 
 func TestObjectStorageBindsCOSOriginToBucketAndRegion(t *testing.T) {
-	valid := strings.NewReplacer("provider: minio", "provider: cos", "https://storage.example.test", "https://assets-a-1250000000.cos.ap-shanghai.myqcloud.com", "bucket: assets-test", "bucket: assets-a-1250000000", "region: us-east-1", "region: ap-shanghai").Replace(storageFixture)
+	valid := strings.NewReplacer("provider: minio", "provider: cos", "https://storage.example.test", "https://assets-a-1250000000.cos.ap-shanghai.myqcloud.com", "bucket: assets-test", "bucket: assets-a-1250000000", "region: us-east-1", "region: ap-shanghai").Replace(strings.Replace(storageFixture, "      addressing_style: path\n", "", 1))
 	if _, err := config.LoadObjectStorage(storageConfigFile(t, valid), "prod"); err != nil {
 		t.Fatal(err)
 	}

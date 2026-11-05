@@ -1,6 +1,8 @@
 package media_test
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
+	"gorm.io/gorm"
+
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
@@ -19,20 +26,15 @@ import (
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	project "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/editproject"
 	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
-	"gorm.io/gorm"
 )
 
 // The owner connection is only for explicit synthetic fixture state transitions.
 // All application calls, including receipt cleanup, use the restricted runtime role.
 func TestJianyingLaunchPostgresAuthorityIdentityExpiryAndCleanup(t *testing.T) {
-	db, owner := mediaStoreDB(t), projectOwnerDB(t)
+	db, owner := mediatoolFixtureDB(t), projectOwnerDB(t)
 	var role string
 	if err := db.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("launch integration requires the restricted runtime role")
@@ -44,6 +46,7 @@ func TestJianyingLaunchPostgresAuthorityIdentityExpiryAndCleanup(t *testing.T) {
 	asset := imageAsset(projectID, input.AssetID)
 	asset.Width, asset.Height, asset.ByteSize, asset.SHA256 = input.Width, input.Height, input.ByteSize, &input.SHA256
 	asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
+	asset = mediaFixtureAssetLocation(t, db, asset)
 	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
@@ -54,8 +57,13 @@ func TestJianyingLaunchPostgresAuthorityIdentityExpiryAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := &projectObjects{data: map[string][]byte{asset.ObjectKey: original}, info: map[string]mediaapp.ObjectInfo{asset.ObjectKey: {Size: asset.ByteSize, ContentType: asset.MimeType, SHA256: input.SHA256}}}
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
+	provider := glbTestObjects(t)
+	if err := provider.Put(t.Context(), asset.ObjectKey, bytes.NewReader(original), int64(len(original)), asset.MimeType); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = provider.Remove(context.Background(), asset.ObjectKey) })
+	objects := mediatoolRoutedObjects(t, db)
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
 	canvases := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := canvases.Create(t.Context(), actor, projectID, uuid.NewString(), canvasapp.CreateInput{Name: "Native launch integration"})
 	if err != nil {
@@ -66,21 +74,21 @@ func TestJianyingLaunchPostgresAuthorityIdentityExpiryAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+	store := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
 		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
-	workerStore := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx), nil) }))
+	workerStore := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx)) }))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
 	job, err := store.Create(t.Context(), actor, projectID, uuid.New(), toolapp.CreateInput{CanvasID: doc.ID, NodeID: node.ID, Revision: saved.Revision, OutputKind: tool.OutputJianying, Settings: &tool.ExportSettings{FileName: "原生票据测试", Destination: "local", Resolution: 720}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	query := toolapp.NewExportQuery(store, objects, objects).WithLaunchOrigin("http://localhost:3000")
+	query := toolapp.NewRoutedExportQuery(store, mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute).WithLaunchOrigin("http://localhost:3000")
 	if _, e := query.Preview(t.Context(), actor, projectID, job.ID); !errors.Is(e, toolapp.ErrConflict) {
 		t.Fatal("queued job admitted preview")
 	}
-	worker := toolapp.NewWorker(workerStore, objects, project.NewRenderer(nil), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
+	worker := toolapp.NewRoutedWorker(workerStore, objects, project.NewRenderer(nil), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
 	reviewed, err := worker.Execute(t.Context(), toolapp.WorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()})
 	if err != nil || reviewed.Status != tool.Succeeded {
 		t.Fatalf("configured native export status=%s error=%v", reviewed.Status, err)
@@ -158,13 +166,16 @@ func TestJianyingLaunchPostgresAuthorityIdentityExpiryAndCleanup(t *testing.T) {
 	expectHTTP := func(tok string, status int) {
 		t.Helper()
 		w := httptest.NewRecorder()
-		router.ServeHTTP(w, httptest.NewRequest("GET", "/api/media-export-launch?token="+tok, nil))
+		router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), "GET", "/api/media-export-launch?token="+tok, nil))
 		if w.Code != status {
 			t.Fatalf("anonymous launch status=%d want=%d", w.Code, status)
 		}
 		if w.Header().Get("Cache-Control") != "no-store" {
 			t.Fatal("capability response was cacheable")
 		}
+	}
+	if _, err := query.Launch(t.Context(), token); err != nil {
+		t.Fatal("saved authorized launch receipt read", err)
 	}
 	expectHTTP(token, 200)
 	expectHTTP(strings.Repeat("a", 64), 404)
@@ -207,14 +218,21 @@ func TestJianyingLaunchPostgresAuthorityIdentityExpiryAndCleanup(t *testing.T) {
 			t.Fatal("unbounded cleanup accepted")
 		}
 	}
-	for i := 0; i < 2; i++ {
-		n, e := store.PruneLaunches(t.Context(), time.Now(), 1)
+	// Pruning is global and a reusable database may retain other expired
+	// synthetic receipts. Freeze the cutoff and assert each call's exact bound.
+	cutoff := time.Now().UTC()
+	var expired int64
+	if err := owner.Table("mediatool.export_launch").Where("expires_at <= ?", cutoff).Count(&expired).Error; err != nil || expired < 2 {
+		t.Fatal("expired fixture receipts missing", expired, err)
+	}
+	for i := int64(0); i < expired; i++ {
+		n, e := store.PruneLaunches(t.Context(), cutoff, 1)
 		if e != nil || n != 1 {
 			t.Fatalf("bounded cleanup rows=%d error=%v", n, e)
 		}
 	}
-	if n, e := store.PruneLaunches(t.Context(), time.Now(), 1); e != nil || n != 0 {
-		t.Fatal("cleanup removed unexpired receipt")
+	if n, e := store.PruneLaunches(t.Context(), cutoff, 1); e != nil || n != 0 {
+		t.Fatal("cleanup removed unexpired receipt", n, e)
 	}
 	expectHTTP(liveToken, 200)
 	var count int64

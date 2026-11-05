@@ -5,11 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -43,13 +48,58 @@ type purgeJobRow struct {
 	ProjectID                                                                      *uuid.UUID
 	ScopeKind                                                                      string
 	ItemCount, Attempt                                                             int
-	Status, Stage                                                                  string
+	Status                                                                         domain.PurgeStatus
+	Stage                                                                          domain.PurgeStage
 	Revision                                                                       int64
 	CancellationRequested, NeedsReconciliation, ExecutionUnconfirmed, ProcessEnded bool
 	ExecutionID, WorkerFence                                                       *uuid.UUID
 	LeaseUntil                                                                     *time.Time
 	CreatedAt, UpdatedAt                                                           time.Time
 }
+
+func (purgeJobRow) TableName() string { return "media.purge_job" }
+
+type purgeCommandRecord struct {
+	ActorID, OrgID, IdemKey, JobID uuid.UUID
+	Action, RequestSHA256          string
+	ResponseBody                   []byte
+	EventID                        *uuid.UUID
+}
+
+func (purgeCommandRecord) TableName() string { return "media.purge_command" }
+
+type purgeItemViewRow struct {
+	Index       int `gorm:"column:item_index"`
+	ItemID      uuid.UUID
+	AssetID     *uuid.UUID
+	Status      domain.PurgeItemStatus
+	FailureCode *string
+}
+
+func (purgeItemViewRow) TableName() string { return "media.purge_item" }
+
+type outboxRecord struct {
+	ID           uuid.UUID
+	Topic        string
+	PartitionKey string
+	Payload      jsonDocument
+}
+
+func (outboxRecord) TableName() string { return "infra.outbox" }
+
+type purgeAuditRecord struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	ProjectID  *uuid.UUID
+	ActorID    uuid.UUID
+	ActorKind  string
+	Action     string
+	ObjectType string
+	ObjectID   string
+	After      jsonDocument
+}
+
+func (purgeAuditRecord) TableName() string { return "audit.audit_log" }
 
 func (r purgeJobRow) scope() domain.LibraryScope {
 	return domain.LibraryScope{Kind: domain.LibraryKind(r.ScopeKind), ProjectID: r.ProjectID}
@@ -59,7 +109,7 @@ func (s *PurgeStore) access(ctx context.Context, tx *gorm.DB, actor identityapp.
 	return (&LibraryStore{project: s.project, scopeAuthority: s.scopeAuthority}).authorize(ctx, tx, actor, scope, write)
 }
 func purgeLock(tx *gorm.DB, actor, key uuid.UUID) error {
-	return tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-purge/"+actor.String()+"/"+key.String()).Error
+	return lockStorageIdempotencyKey(tx, storageIdempotencyPurge, actor, key)
 }
 func purgeHash(value any) (string, error) {
 	body, err := json.Marshal(value)
@@ -69,20 +119,16 @@ func purgeHash(value any) (string, error) {
 	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:]), nil
 }
-func purgeReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string) (*domain.PurgeJob, error) {
-	var row struct {
-		OrgID, JobID          uuid.UUID
-		RequestSHA256, Action string
-		ResponseBody          []byte
+func purgeReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash string, action application.PurgeAction) (*domain.PurgeJob, error) {
+	var row purgeCommandRecord
+	read := tx.Where("actor_id = ? AND idem_key = ?", actor.ID, key).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-	read := tx.Raw(`SELECT * FROM media.purge_command WHERE actor_id=? AND idem_key=?`, actor.ID, key).Scan(&row)
 	if read.Error != nil {
 		return nil, read.Error
 	}
-	if read.RowsAffected == 0 {
-		return nil, nil
-	}
-	if row.OrgID != actor.OrgID || row.RequestSHA256 != hash || row.Action != action {
+	if row.OrgID != actor.OrgID || row.RequestSHA256 != hash || row.Action != string(action) {
 		return nil, application.ErrLibraryKeyConflict
 	}
 	var result domain.PurgeJob
@@ -92,17 +138,17 @@ func purgeReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, 
 	return &result, nil
 }
 func (s *PurgeStore) readJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, lock bool) (purgeJobRow, error) {
-	query := `SELECT * FROM media.purge_job WHERE id=? AND actor_id=? AND org_id=?`
-	if lock {
-		query += ` FOR UPDATE`
-	}
 	var row purgeJobRow
-	read := tx.Raw(query, id, actor.ID, actor.OrgID).Scan(&row)
-	if read.Error != nil {
-		return row, read.Error
+	query := tx.Where("id = ? AND actor_id = ? AND org_id = ?", id, actor.ID, actor.OrgID)
+	if lock {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
-	if read.RowsAffected != 1 {
-		return row, application.ErrNotFound
+	read := query.Take(&row)
+	if read.Error != nil {
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return row, application.ErrNotFound
+		}
+		return row, read.Error
 	}
 	if row.scope().Validate() != nil || row.Revision < 1 || row.ItemCount < 1 || row.ItemCount > 200 {
 		return row, application.ErrUnavailable
@@ -110,9 +156,13 @@ func (s *PurgeStore) readJob(tx *gorm.DB, actor identityapp.Principal, id uuid.U
 	return row, nil
 }
 func purgeView(tx *gorm.DB, row purgeJobRow) (domain.PurgeJob, error) {
-	items := make([]domain.PurgeItemResult, 0, row.ItemCount)
-	if err := tx.Raw(`SELECT item_index AS index,item_id,asset_id,status,failure_code FROM media.purge_item WHERE job_id=? ORDER BY item_index`, row.ID).Scan(&items).Error; err != nil {
+	var rows []purgeItemViewRow
+	if err := tx.Where("job_id = ?", row.ID).Order("item_index").Find(&rows).Error; err != nil {
 		return domain.PurgeJob{}, err
+	}
+	items := make([]domain.PurgeItemResult, 0, len(rows))
+	for _, item := range rows {
+		items = append(items, domain.PurgeItemResult{Index: item.Index, ItemID: item.ItemID, AssetID: item.AssetID, Status: item.Status, FailureCode: item.FailureCode})
 	}
 	if len(items) != row.ItemCount {
 		return domain.PurgeJob{}, application.ErrUnavailable
@@ -157,9 +207,11 @@ func (s *PurgeStore) HasInflightWork(ctx context.Context, actor identityapp.Prin
 	if project == uuid.Nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return false, identityapp.ErrForbidden
 	}
-	var present bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM media.purge_job j WHERE j.project_id=? AND j.org_id=? AND (j.status IN ('queued','running','needs_reconciliation','cancel_requested') OR j.execution_unconfirmed OR NOT j.process_ended))`, project, actor.OrgID).Scan(&present).Error
-	return present, err
+	var count int64
+	err := s.db.WithContext(ctx).Model(&purgeJobRow{}).
+		Where("project_id = ? AND org_id = ? AND (status IN ? OR execution_unconfirmed = ? OR process_ended = ?)", project, actor.OrgID, []domain.PurgeStatus{domain.PurgeStatusQueued, domain.PurgeStatusRunning, domain.PurgeStatusNeedsReconciliation, domain.PurgeStatusCancelRequested}, true, false).
+		Limit(1).Count(&count).Error
+	return count > 0, err
 }
 
 func (s *PurgeStore) scopeBusy(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, library uuid.UUID) error {
@@ -181,17 +233,19 @@ func (s *PurgeStore) scopeBusy(ctx context.Context, tx *gorm.DB, actor identitya
 		return err
 	}
 	blocked = blocked || packageBusy
-	var busy bool
-	query := `SELECT EXISTS(SELECT 1 FROM media.transfer_job WHERE (source_library_id=? OR target_library_id=?) AND (status IN ('queued','running','needs_reconciliation','cancel_requested') OR execution_unconfirmed OR NOT process_ended))`
-	if err := tx.Raw(query, library, library).Scan(&busy).Error; err != nil {
+	busy, err := storageExists(tx.Model(&transferJobRow{}).Where("(source_library_id = ? OR target_library_id = ?) AND (status IN ? OR execution_unconfirmed = ? OR process_ended = ?)", library, library, []domain.TransferStatus{domain.TransferStatusQueued, domain.TransferStatusRunning, domain.TransferStatusNeedsReconciliation, domain.TransferStatusCancelRequested}, true, false))
+	if err != nil {
 		return err
 	}
 	blocked = blocked || busy
-	ownership, args := `project_id=?`, []any{scope.ProjectID}
+	query := tx.Model(&assetRow{}).Where("status IN ? AND is_delete = ?", []domain.Status{domain.StatusUploading, domain.StatusProcessing}, false)
 	if scope.Kind == domain.LibraryPersonal {
-		ownership, args = `project_id IS NULL AND personal_org_id=? AND personal_actor_id=?`, []any{actor.OrgID, actor.ID}
+		query = query.Where("project_id IS NULL AND personal_org_id = ? AND personal_actor_id = ?", actor.OrgID, actor.ID)
+	} else {
+		query = query.Where("project_id = ?", *scope.ProjectID)
 	}
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.media_asset WHERE `+ownership+` AND status IN ('uploading','processing') AND NOT is_delete)`, args...).Scan(&busy).Error; err != nil {
+	busy, err = storageExists(query)
+	if err != nil {
 		return err
 	}
 	if blocked || busy {
@@ -203,14 +257,14 @@ func (s *PurgeStore) scopeBusy(ctx context.Context, tx *gorm.DB, actor identitya
 // PurgeTopic carries permanent owning commands, not model generation operations.
 const PurgeTopic = "glowloom.media.purge_command.v1"
 
-func recordPurgeCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string, job domain.PurgeJob, emit bool) error {
+func recordPurgeCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash string, action application.PurgeAction, job domain.PurgeJob, emit bool) error {
 	response, err := json.Marshal(job)
 	if err != nil || len(response) > 1<<20 {
 		return application.ErrUnavailable
 	}
 	var eventID *uuid.UUID
 	if emit {
-		id := uuid.NewSHA1(key, []byte("media-purge/"+actor.ID.String()+"/"+action))
+		id := uuid.NewSHA1(key, []byte("media-purge/"+actor.ID.String()+"/"+string(action)))
 		eventID = &id
 		payload, err := json.Marshal(struct {
 			EventID    uuid.UUID                 `json:"event_id"`
@@ -222,21 +276,32 @@ func recordPurgeCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID,
 		if err != nil {
 			return err
 		}
-		if err := libraryChanged(tx, `INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, id, PurgeTopic, job.ID.String(), string(payload)); err != nil {
+		if action == application.PurgeActionCancel {
+			if err := taskruntime.RequestStop(tx.Statement.Context, tx, task.Purge, map[string]any{"job_id": job.ID, "attempt": job.Attempt}); err != nil {
+				return err
+			}
+		}
+		if err := taskruntime.EnqueueReference(tx.Statement.Context, tx, task.Purge, id.String(), time.Now().UTC(), application.PurgeWorkID{JobID: job.ID, Attempt: job.Attempt}); err != nil {
+			return err
+		}
+		outbox := outboxRecord{ID: id, Topic: PurgeTopic, PartitionKey: job.ID.String(), Payload: jsonDocument(payload)}
+		if err := requireOne(tx.Create(&outbox), application.ErrUnavailable); err != nil {
 			return err
 		}
 	}
-	if err := libraryChanged(tx, `INSERT INTO media.purge_command(actor_id,org_id,idem_key,job_id,action,request_sha256,response_body,event_id) VALUES(?,?,?,?,?,?,?,?)`, actor.ID, actor.OrgID, key, job.ID, action, hash, response, eventID); err != nil {
+	command := purgeCommandRecord{ActorID: actor.ID, OrgID: actor.OrgID, IdemKey: key, JobID: job.ID, Action: string(action), RequestSHA256: hash, ResponseBody: response, EventID: eventID}
+	if err := requireOne(tx.Create(&command), application.ErrUnavailable); err != nil {
 		return err
 	}
 	safe, _ := json.Marshal(struct {
-		ID       uuid.UUID `json:"id"`
-		Revision int64     `json:"revision"`
-		Count    int       `json:"count"`
-		Status   string    `json:"status"`
+		ID       uuid.UUID          `json:"id"`
+		Revision int64              `json:"revision"`
+		Count    int                `json:"count"`
+		Status   domain.PurgeStatus `json:"status"`
 	}{job.ID, job.Revision, len(job.Items), job.Status})
-	id := uuid.NewSHA1(key, []byte("media-purge-audit/"+actor.ID.String()+"/"+action))
-	if err := libraryChanged(tx, `INSERT INTO audit.audit_log(id,org_id,project_id,actor_id,actor_kind,action,object_type,object_id,after) VALUES(?,?,?,?,'user',?,'media.purge',?,?::jsonb)`, id, actor.OrgID, job.Scope.ProjectID, actor.ID, "media.purge."+action, job.ID.String(), string(safe)); err != nil {
+	id := uuid.NewSHA1(key, []byte("media-purge-audit/"+actor.ID.String()+"/"+string(action)))
+	audit := purgeAuditRecord{ID: id, OrgID: actor.OrgID, ProjectID: job.Scope.ProjectID, ActorID: actor.ID, ActorKind: "user", Action: "media.purge." + string(action), ObjectType: "media.purge", ObjectID: job.ID.String(), After: jsonDocument(safe)}
+	if err := requireOne(tx.Create(&audit), application.ErrUnavailable); err != nil {
 		return fmt.Errorf("record permanent purge audit: %w", err)
 	}
 	return nil

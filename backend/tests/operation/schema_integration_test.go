@@ -188,17 +188,8 @@ func TestOperationSchemaRejectsInvalidFinancialAndLifecycleValues(t *testing.T) 
 		t.Fatalf("insert upload without provider model: %v", err)
 	}
 
-	agentID := uuid.NewString()
-	if err := database.Exec(`
-		INSERT INTO operation.operation
-		  (id, project_id, target_type, capability, mode, input_hash, origin,
-		   status, quote_micros, quote_expires_at, region)
-		VALUES (?::uuid, ?::uuid, 'agent_session', 'text.chat', 'chat', ?,
-		        'agent', 'quoted', 1000, now() + interval '15 minutes', 'domestic')
-	`, agentID, projectID, "hash-"+agentID).Error; err != nil {
-		t.Fatalf("insert agent session without single model version: %v", err)
-	}
-	if err := database.Exec(`UPDATE operation.operation SET model_profile_version_id = ?::uuid WHERE id = ?::uuid`, uuid.NewString(), agentID).Error; err == nil {
-		t.Fatal("agent session tied to one model version was accepted")
+	invalidID := uuid.NewString()
+	if err := database.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,quote_micros,quote_expires_at,region) VALUES(?,?,'agent_session','text.chat','chat',?,'agent','quoted',1000,now()+interval '15 minutes','domestic')`, invalidID, projectID, "hash-"+invalidID).Error; err == nil {
+		t.Fatal("unsupported model-free target was accepted")
 	}
 }

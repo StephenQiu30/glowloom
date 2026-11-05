@@ -67,7 +67,7 @@ func (f voiceStorageFixture) routesFixtureInsert(ctx context.Context, id, scope,
 }
 func (f voiceStorageFixture) Read(ctx context.Context, scope, job uuid.UUID) (subject.VoiceStorageIntent, error) {
 	r, err := f.routes.ReadStorageWork(ctx, media.StorageWorkOwner{Kind: "subject-voice", OwnerID: scope, WorkID: job})
-	return subject.VoiceStorageIntent{ID: r.ID, ProfileID: r.ProfileID, Bucket: r.Bucket, ConfigRevision: r.ConfigRevision, State: r.State}, err
+	return subject.VoiceStorageIntent{ID: r.ID, ProfileID: r.ProfileID, Bucket: r.Bucket, ConfigRevision: r.ConfigRevision, State: string(r.State)}, err
 }
 
 type voicePGFixture struct {
@@ -128,7 +128,7 @@ func (f *voicePGFixture) Save(ctx context.Context, w subject.VoiceWork, r subjec
 		return subject.VoiceReceipt{}, err
 	}
 	defer func() { _ = file.Close() }()
-	intent := media.StorageWorkIntent{ID: w.Storage.ID, Owner: media.StorageWorkOwner{Kind: "subject-voice", OwnerID: w.Owner.ScopeID, WorkID: w.Job.ID}, ProfileID: w.Storage.ProfileID, Bucket: w.Storage.Bucket, ConfigRevision: w.Storage.ConfigRevision, State: w.Storage.State}
+	intent := media.StorageWorkIntent{ID: w.Storage.ID, Owner: media.StorageWorkOwner{Kind: "subject-voice", OwnerID: w.Owner.ScopeID, WorkID: w.Job.ID}, ProfileID: w.Storage.ProfileID, Bucket: w.Storage.Bucket, ConfigRevision: w.Storage.ConfigRevision, State: media.StorageWorkState(w.Storage.State)}
 	location, err := (voiceLedgerObjects{pgmedia.NewStorageRoutes(f.runtime)}).CreateGeneratedAudioObject(ctx, intent, subject.VoiceAudioKey(w), file)
 	if err != nil {
 		return subject.VoiceReceipt{}, err
@@ -145,7 +145,7 @@ func (f *voicePGFixture) Publish(ctx context.Context, w subject.VoiceWork, r sub
 		return w.Job, err
 	}
 	defer func() { _ = file.Close() }()
-	request := media.PersonalGeneratedAudioRequest{AssetID: w.AssetID, OwnerScopeID: w.Owner.ScopeID, SourceJobID: w.Job.ID, Personal: mediadomain.PersonalOwnership{OrgID: w.Owner.PersonalOrgID, ActorID: w.Job.CurrentActorID}, FileName: w.Job.Name + ".mp3", CreatedAt: w.Job.CreatedAt, SHA256: r.AudioSHA256, ByteSize: r.AudioByteSize, MIMEType: r.MIMEType, Intent: media.StorageWorkIntent{ID: w.Storage.ID, Owner: media.StorageWorkOwner{Kind: "subject-voice", OwnerID: w.Owner.ScopeID, WorkID: w.Job.ID}, ProfileID: w.Storage.ProfileID, Bucket: w.Storage.Bucket, ConfigRevision: w.Storage.ConfigRevision, State: w.Storage.State}, Provenance: media.PersonalGeneratedAudioProvenance{SchemaVersion: 1, ReceiptSHA256: r.Digest(), ReleaseID: w.Job.ReleaseID, ModelVersionID: w.Job.ModelVersionID, ProviderRequestID: w.Job.ID, TerminalCode: 20000000}}
+	request := media.PersonalGeneratedAudioRequest{AssetID: w.AssetID, OwnerScopeID: w.Owner.ScopeID, SourceJobID: w.Job.ID, Personal: mediadomain.PersonalOwnership{OrgID: w.Owner.PersonalOrgID, ActorID: w.Job.CurrentActorID}, FileName: w.Job.Name + ".mp3", CreatedAt: w.Job.CreatedAt, SHA256: r.AudioSHA256, ByteSize: r.AudioByteSize, MIMEType: r.MIMEType, Intent: media.StorageWorkIntent{ID: w.Storage.ID, Owner: media.StorageWorkOwner{Kind: "subject-voice", OwnerID: w.Owner.ScopeID, WorkID: w.Job.ID}, ProfileID: w.Storage.ProfileID, Bucket: w.Storage.Bucket, ConfigRevision: w.Storage.ConfigRevision, State: media.StorageWorkState(w.Storage.State)}, Provenance: media.PersonalGeneratedAudioProvenance{SchemaVersion: 1, ReceiptSHA256: r.Digest(), ReleaseID: w.Job.ReleaseID, ModelVersionID: w.Job.ModelVersionID, ProviderRequestID: w.Job.ID, TerminalCode: 20000000}}
 	prepared, err := media.NewPersonalGeneratedAudioService(mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, voiceLedgerObjects{pgmedia.NewStorageRoutes(f.runtime)}, time.Now).Prepare(ctx, request, file)
 	if err != nil {
 		return w.Job, err

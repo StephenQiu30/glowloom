@@ -2,6 +2,7 @@ package script_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"testing"
@@ -10,9 +11,9 @@ import (
 	"github.com/google/uuid"
 
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
@@ -23,7 +24,7 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 	db, owner := scriptTestDB(t)
 	actor, pid := scriptActorProject(t, owner)
 	storage := scriptStorage(t)
-	objects := scriptobjects.NewStorage(storage)
+	objects := scriptPrivateObjects(t, db)
 	word := docxFile(t, `<w:tbl><w:tr><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>旧表格正文😀</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`)
 	document := scriptDocument(t, db, storage, actor, pid, "历史.docx", word)
 	txt := []byte{0xff, 0xfe, 0x2d, 0x4e, 0x87, 0x65}
@@ -34,7 +35,7 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := scriptImportWorker(db, storage, extract.NewExtractor()).Execute(t.Context(), importDelivery(t, owner, actor, input.Key)); err != nil {
+	if err := scriptImportWorker(t, db, storage, extract.NewExtractor()).Execute(t.Context(), importDelivery(t, owner, actor, input.Key)); err != nil {
 		t.Fatal(err)
 	}
 	j, err = imports.Get(t.Context(), actor, pid, j.ID)
@@ -77,8 +78,10 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 	}
 	mb := mediaapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: pid, TargetProjectID: job.TargetProjectID}
 	ms := mediaapp.ProjectCopySnapshot{ID: job.Manifest.MediaSnapshotID, ManifestSHA256: job.Manifest.MediaSHA256, Assets: job.Manifest.Assets, Renditions: job.Manifest.Renditions}
-	mt := mediaapp.NewProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, job.ID, worker, false), mediaobjects.NewProjectCopyObjects(storage), t.TempDir())
-	if err := mt.Transfer(t.Context(), actor, mb, ms); err != nil {
+	mt := mediaapp.NewRoutedProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, job.ID, worker, false), mediaobjects.NewRoutedCopyObjects(scriptFixtureRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir())
+	transferCtx, cancelTransfer := context.WithTimeout(t.Context(), time.Minute)
+	defer cancelTransfer()
+	if err := mt.Transfer(transferCtx, actor, mb, ms); err != nil {
 		t.Fatal("actual private document transfer", err)
 	}
 	job, err = store.CompleteMedia(t.Context(), actor, job.ID, worker)
@@ -116,7 +119,7 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 		t.Fatal("retained original not independently ready", media, err)
 	}
 	// Deleting only synthetic source bytes cannot affect either private target copy.
-	if err := objects.Remove(t.Context(), old.Sources[0].Original.Key); err != nil {
+	if err := removeScriptFixtureBytes(t, db, old.Sources[0].Original); err != nil {
 		t.Fatal(err)
 	}
 	var originalMediaKey string

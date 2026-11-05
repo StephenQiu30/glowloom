@@ -46,16 +46,9 @@ type LibraryMediaPreview struct {
 // LibraryMediaQuery shares the existing signer and original-byte object reader.
 type LibraryMediaQuery struct {
 	reader       LibraryMediaReader
-	signer       PreviewSigner
-	objects      DocumentObjectGetter
 	objectSigner ObjectSigner
 	objectReader ObjectReader
 	previewTTL   time.Duration
-}
-
-// NewLibraryMediaQuery explicitly injects scope authorization and private I/O.
-func NewLibraryMediaQuery(reader LibraryMediaReader, signer PreviewSigner, objects DocumentObjectGetter) *LibraryMediaQuery {
-	return &LibraryMediaQuery{reader: reader, signer: signer, objects: objects, previewTTL: 10 * time.Minute}
 }
 
 // NewRoutedLibraryMediaQuery requires an explicit saved location for every object.
@@ -92,26 +85,24 @@ func (q *LibraryMediaQuery) Preview(ctx context.Context, actor identityapp.Princ
 	if file.Asset.Kind == domain.KindDocument {
 		return LibraryMediaPreview{}, ErrNotFound
 	}
-	grant, err := signMediaObject(ctx, file.Asset.ObjectLocation, file.Asset.ObjectKey, q.objectSigner, q.signer, q.previewTTL)
+	grant, err := signMediaObject(ctx, file.Asset.ObjectLocation, file.Asset.ObjectKey, q.objectSigner, q.previewTTL)
 	if err != nil {
 		return LibraryMediaPreview{}, err
 	}
 	result := LibraryMediaPreview{Asset: PersonalUploadSummary(file.Asset), URL: grant.URL, ExpiresAt: grant.ExpiresAt, Renditions: []LibraryRenditionPreview{}}
 	for _, rend := range file.Renditions {
-		grant, err := signMediaObject(ctx, rend.ObjectLocation, rend.ObjectKey, q.objectSigner, q.signer, q.previewTTL)
+		grant, err := signMediaObject(ctx, rend.ObjectLocation, rend.ObjectKey, q.objectSigner, q.previewTTL)
 		if err != nil {
 			return LibraryMediaPreview{}, err
 		}
 		result.Renditions = append(result.Renditions, LibraryRenditionPreview{Kind: string(rend.Kind), URL: grant.URL, ExpiresAt: grant.ExpiresAt, Width: rend.Width, Height: rend.Height})
 	}
-	if q.objectSigner != nil {
-		current, err := q.source(ctx, actor, scope, id)
-		if err != nil {
-			return LibraryMediaPreview{}, err
-		}
-		if !sameLibraryLocations(current, file) {
-			return LibraryMediaPreview{}, ErrNotFound
-		}
+	current, err := q.source(ctx, actor, scope, id)
+	if err != nil {
+		return LibraryMediaPreview{}, err
+	}
+	if !sameLibraryLocations(current, file) {
+		return LibraryMediaPreview{}, ErrNotFound
 	}
 	if !result.ExpiresAt.After(time.Now()) {
 		return LibraryMediaPreview{}, ErrUnavailable
@@ -132,14 +123,14 @@ func (q *LibraryMediaQuery) Download(ctx context.Context, actor identityapp.Prin
 		return nil, LibraryAssetSummary{}, err
 	}
 	a := source.Asset
-	if q.objects == nil && q.objectReader == nil || a.SHA256 == nil || len(*a.SHA256) != 64 || a.ByteSize < 1 || a.ByteSize > libraryOriginalLimit(a.Kind) {
+	if q.objectReader == nil || a.SHA256 == nil || len(*a.SHA256) != 64 || a.ByteSize < 1 || a.ByteSize > libraryOriginalLimit(a.Kind) {
 		return nil, LibraryAssetSummary{}, ErrUnavailable
 	}
 	name, err := SafeUploadFileName(a.FileName)
 	if err != nil || name != a.FileName {
 		return nil, LibraryAssetSummary{}, ErrUnavailable
 	}
-	reader, err := readMediaObject(ctx, a.ObjectLocation, a.ObjectKey, q.objectReader, q.objects)
+	reader, err := readMediaObject(ctx, a.ObjectLocation, a.ObjectKey, q.objectReader)
 	if err != nil || reader == nil {
 		return nil, LibraryAssetSummary{}, fmt.Errorf("read library original: %w", errors.Join(ErrUnavailable, err))
 	}

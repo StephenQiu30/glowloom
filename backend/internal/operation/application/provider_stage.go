@@ -258,7 +258,7 @@ func (s *ProviderStageService) ReadImage(ctx context.Context, receipt ProviderRe
 }
 
 func (s *ProviderStageService) record(ctx context.Context, receipt ProviderReceipt) error {
-	if err := s.repo.CompleteProviderCall(ctx, CompleteProviderCallInput{OperationID: receipt.Identity.OperationID, Action: receipt.Identity.Action, Attempt: receipt.Identity.Attempt, Outcome: "ok", State: "completed", Receipt: &receipt}); err != nil {
+	if err := s.repo.CompleteProviderCall(ctx, CompleteProviderCallInput{OperationID: receipt.Identity.OperationID, Action: receipt.Identity.Action, Attempt: receipt.Identity.Attempt, Outcome: ProviderCallOutcomeOK, State: ProviderCallStateCompleted, Receipt: &receipt}); err != nil {
 		return fmt.Errorf("record provider image receipt: %w", err)
 	}
 	return nil

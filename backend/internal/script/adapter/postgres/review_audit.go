@@ -22,5 +22,6 @@ func reviewAudit(tx *gorm.DB, actor identityapp.Principal, project, key, request
 	if err != nil {
 		return err
 	}
-	return exactlyOne(tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, id, topic, project.String(), string(data)))
+	row := scriptOutboxRow{ID: id, Topic: topic, PartitionKey: project.String(), Payload: scriptJSON(data)}
+	return exactlyOne(tx.Create(&row))
 }

@@ -41,23 +41,32 @@ func (s *BibleScopes) ValidateLookScopes(ctx context.Context, actor identityapp.
 		if scope.EpisodeID == uuid.Nil || scope.SceneKey != nil && *scope.SceneKey == uuid.Nil {
 			return domain.ErrInvalidStructure
 		}
-		var row struct {
-			ID                   uuid.UUID
-			ConfirmedStructureID *uuid.UUID
+		tx := s.tx.WithContext(ctx)
+		state, err := readState(tx, actor.OrgID, project, true)
+		if err != nil {
+			return err
 		}
-		read := s.tx.WithContext(ctx).Raw(`SELECT e.id,e.confirmed_structure_id FROM script.episode e JOIN script.version_head h ON h.version_id=e.script_version_id AND h.org_id=e.org_id AND h.project_id=e.project_id AND h.confirmed_split_set_id=e.split_set_id JOIN script.project_state s ON s.project_id=e.project_id AND s.org_id=e.org_id AND COALESCE(s.adopted_version_id,s.draft_version_id)=e.script_version_id WHERE e.org_id=? AND e.project_id=? AND e.id=? AND NOT e.is_delete FOR SHARE OF e,h,s`, actor.OrgID, project, scope.EpisodeID).Scan(&row)
-		if read.Error != nil {
-			return read.Error
+		episode, err := readEpisode(tx, actor.OrgID, scope.EpisodeID, true)
+		if err != nil {
+			return err
 		}
-		if read.RowsAffected != 1 {
+		if episode.ProjectID != project {
+			return application.ErrNotFound
+		}
+		head, err := readVersionHead(tx, actor.OrgID, project, episode.VersionID, true)
+		if err != nil {
+			return err
+		}
+		current := state.DraftVersionID != nil && *state.DraftVersionID == episode.VersionID || state.AdoptedVersionID != nil && *state.AdoptedVersionID == episode.VersionID
+		if !current || head.ConfirmedSetID == nil || *head.ConfirmedSetID != episode.SplitSetID {
 			return application.ErrNotFound
 		}
 		if scope.SceneKey != nil {
-			if row.ConfirmedStructureID == nil {
+			if episode.ConfirmedStructureID == nil {
 				return application.ErrNotFound
 			}
 			var count int64
-			if err := s.tx.Raw(`SELECT count(*) FROM script.scene WHERE org_id=? AND project_id=? AND episode_structure_id=? AND scene_key=?`, actor.OrgID, project, *row.ConfirmedStructureID, *scope.SceneKey).Scan(&count).Error; err != nil {
+			if err := tx.Model(&scriptSceneRow{}).Where("org_id = ? AND project_id = ? AND episode_structure_id = ? AND scene_key = ?", actor.OrgID, project, *episode.ConfirmedStructureID, *scope.SceneKey).Count(&count).Error; err != nil {
 				return err
 			}
 			if count != 1 {

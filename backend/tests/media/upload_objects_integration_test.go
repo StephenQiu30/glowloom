@@ -15,8 +15,6 @@ import (
 
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func TestUploadRealMinIOOriginalRenditionsAndPreview(t *testing.T) {
@@ -25,16 +23,9 @@ func TestUploadRealMinIOOriginalRenditionsAndPreview(t *testing.T) {
 	}
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatal("related object storage configuration unavailable")
-	}
-	objects, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket, cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
-	if err != nil {
-		t.Fatal("private object store configuration invalid")
-	}
+	objects := glbTestObjects(t)
 	store := mediaTestStore(database)
-	service := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	service := mediaFixtureRoutedUpload(t, database, store, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	for _, tc := range []struct {
 		name, kind string
 		args       []string
@@ -80,7 +71,7 @@ func TestUploadRealMinIOOriginalRenditionsAndPreview(t *testing.T) {
 			in.Request.ProjectID = project
 			in.Request.FileName = tc.name
 			in.File = file
-			result, err := service.Upload(t.Context(), in)
+			result, err := fixtureProjectUpload(t.Context(), service, in)
 			if err != nil {
 				t.Fatalf("real %s upload failed: %v", tc.name, err)
 			}
@@ -114,7 +105,7 @@ func TestUploadRealMinIOOriginalRenditionsAndPreview(t *testing.T) {
 					t.Fatalf("real %s rendition verification failed", rendition.Kind)
 				}
 			}
-			preview, err := mediaapp.NewAssetQuery(store, objects).Preview(t.Context(), actor, project, result.Asset.ID)
+			preview, err := mediaapp.NewRoutedAssetQuery(store, mediaFixtureReadObjects(t), 5*time.Minute).Preview(t.Context(), actor, project, result.Asset.ID)
 			if err != nil {
 				t.Fatal("authorized preview signing failed")
 			}

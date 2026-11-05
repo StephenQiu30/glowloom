@@ -30,6 +30,7 @@ import (
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 
 type cosStageEntry struct {
@@ -116,7 +117,8 @@ func stageConfiguration(t *testing.T, first, second string) config.ObjectStorage
 	t.Setenv("STAGE_FIXTURE_AK", "fixture-access")
 	t.Setenv("STAGE_FIXTURE_SK", "fixture-secret")
 	file := filepath.Join(t.TempDir(), "storage.yaml")
-	raw := fmt.Sprintf("object_storage:\n  schema_version: 1\n  revision: fixture-v1\n  default_write_profile: stage-old\n  profiles:\n    stage-old:\n      provider: cos\n      endpoint: %s\n      bucket: fixture-123\n      region: ap-shanghai\n      credentials:\n        source: env\n        access_key_env: STAGE_FIXTURE_AK\n        secret_key_env: STAGE_FIXTURE_SK\n    stage-new:\n      provider: cos\n      endpoint: %s\n      bucket: fixture-123\n      region: ap-shanghai\n      credentials:\n        source: env\n        access_key_env: STAGE_FIXTURE_AK\n        secret_key_env: STAGE_FIXTURE_SK\n", first, second)
+	raw := fmt.Sprintf("object_storage:\n  schema_version: 1\n  revision: 1\n  default_write_profile: stage-old\n  profiles:\n    stage-old:\n      provider: cos\n      mode: read_write\n      signing_endpoint: %s\n      endpoint: %s\n      bucket: fixture-123\n      region: ap-shanghai\n      credentials:\n        source: env\n        access_key_env: STAGE_FIXTURE_AK\n        secret_key_env: STAGE_FIXTURE_SK\n    stage-new:\n      provider: cos\n      mode: read_write\n      signing_endpoint: %s\n      endpoint: %s\n      bucket: fixture-123\n      region: ap-shanghai\n      credentials:\n        source: env\n        access_key_env: STAGE_FIXTURE_AK\n        secret_key_env: STAGE_FIXTURE_SK\n", first, first, second, second)
+	raw += storagefixture.YAMLPolicy
 	if err := os.WriteFile(file, []byte(raw), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +197,7 @@ func TestProviderStagingOfficialSDKAndPersistentIntentKeepAdmittedTarget(t *test
 	oldFixture, first := newCOSStageFixture(t)
 	newFixture, second := newCOSStageFixture(t)
 	cfg := stageConfiguration(t, first.URL, second.URL)
-	public, err := storageoperator.Configuration(cfg, "")
+	public, err := storageoperator.Configuration(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,9 +218,8 @@ func TestProviderStagingOfficialSDKAndPersistentIntentKeepAdmittedTarget(t *test
 			t.Fatal(err)
 		}
 	}
-	current, _ := routes.ReadActive(t.Context())
 	oldRevision := "provider-old-" + suffix
-	if _, err := routes.Activate(t.Context(), current.Revision, oldRevision, cfg.DefaultWriteProfile); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, oldRevision, cfg.DefaultWriteProfile)); err != nil {
 		t.Fatal(err)
 	}
 	registry, err := objectstorage.OpenProfiles(cfg)
@@ -231,7 +232,7 @@ func TestProviderStagingOfficialSDKAndPersistentIntentKeepAdmittedTarget(t *test
 	if err := factory.PinOperationStorage(t.Context(), id.ProjectID, id.OperationID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := routes.Activate(t.Context(), oldRevision, "provider-next-"+suffix, "stage-new-"+suffix); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "provider-next-"+suffix, "stage-new-"+suffix)); err != nil {
 		t.Fatal(err)
 	}
 	data := []byte("native SDK staged original")

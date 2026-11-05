@@ -55,7 +55,7 @@ func libraryScope(query url.Values) (domain.LibraryScope, error) {
 }
 
 func libraryPageQuery(query url.Values, scope domain.LibraryScope) (application.LibraryQuery, error) {
-	page := application.LibraryQuery{Page: 1, PageSize: 40, Kind: query.Get("kind"), Category: query.Get("category"), State: "active", Search: query.Get("search"), Order: "updated_desc"}
+	page := application.LibraryQuery{Page: 1, PageSize: 40, Kind: query.Get("kind"), Category: query.Get("category"), State: domain.LibraryItemStateActive, Search: query.Get("search"), Order: "updated_desc"}
 	if scope.Kind == domain.LibraryProject {
 		page.PageSize = 20
 	}
@@ -85,7 +85,7 @@ func libraryPageQuery(query url.Values, scope domain.LibraryScope) (application.
 		page.FolderID = &value
 	}
 	if query.Has("catalog_state") {
-		page.State = query.Get("catalog_state")
+		page.State = domain.LibraryItemState(query.Get("catalog_state"))
 	}
 	if query.Has("order") {
 		page.Order = query.Get("order")

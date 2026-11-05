@@ -10,37 +10,33 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	enumspb "go.temporal.io/api/enums/v1"
-	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/converter"
 
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trial"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
-// TrialClient is the workflow API required by administrator experiments.
+// TrialClient exposes only local administrator trial operations.
 type TrialClient interface {
-	ExecuteWorkflow(context.Context, client.StartWorkflowOptions, any, ...any) (client.WorkflowRun, error)
-	QueryWorkflow(context.Context, string, string, string, ...any) (converter.EncodedValue, error)
-	SignalWorkflow(context.Context, string, string, string, any) error
+	Start(context.Context, application.TrialInput) (application.TrialState, error)
+	State(context.Context, string) (application.TrialState, error)
+	Turn(context.Context, string, application.TrialMessage) error
+	Cancel(context.Context, string) error
+	Recover(context.Context, string) error
 }
 
 // TrialHandler exposes owner-scoped local administrator experiments.
 type TrialHandler struct {
-	storageID string
-	client    TrialClient
-	auth      trial.Authorizer
-	objects   *objectstorage.Client
+	client  TrialClient
+	auth    trial.Authorizer
+	objects trial.Results
 }
 
 // NewTrialHandler injects execution, authority and private result storage.
-func NewTrialHandler(c TrialClient, a trial.Authorizer, o *objectstorage.Client, storageID string) *TrialHandler {
-	return &TrialHandler{client: c, auth: a, objects: o, storageID: storageID}
+func NewTrialHandler(c TrialClient, a trial.Authorizer, o trial.Results) *TrialHandler {
+	return &TrialHandler{client: c, auth: a, objects: o}
 }
 
 // Register applies current administrator authorization to every trial route.
@@ -83,28 +79,14 @@ func (h *TrialHandler) read(c *gin.Context) (application.TrialState, uuid.UUID, 
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-	value, err := h.client.QueryWorkflow(ctx, application.TrialWorkflowID(identityhttp.Principal(c), id), "", "state")
-	var state application.TrialState
-	if err == nil {
-		err = value.Get(&state)
-	}
+	state, err := h.client.State(ctx, application.TrialID(identityhttp.Principal(c), id))
 	if err != nil {
-		var missing *serviceerror.NotFound
-		if errors.As(err, &missing) {
+		if errors.Is(err, trialtask.ErrMissing) {
 			httpapi.WriteProblem(c, 404, "trial_not_found", nil)
 		} else {
 			httpapi.WriteProblem(c, 503, "trial_state_unavailable", nil)
 		}
 		return state, id, false
-	}
-	if state.State == "unknown" {
-		v, e := h.client.QueryWorkflow(ctx, application.TrialWorkflowID(identityhttp.Principal(c), id)+"/recovery", "", "state")
-		if e == nil {
-			var recovered application.TrialState
-			if v.Get(&recovered) == nil {
-				state = recovered
-			}
-		}
 	}
 	return state, id, true
 }
@@ -112,6 +94,10 @@ func publicTrialState(state application.TrialState) application.TrialState {
 	turns := append([]application.TrialTurn(nil), state.Turns...)
 	for i := range turns {
 		turns[i].ThreadID = ""
+		turns[i].Artifacts = append([]application.TrialArtifact(nil), turns[i].Artifacts...)
+		for j := range turns[i].Artifacts {
+			turns[i].Artifacts[j].ObjectRef = nil
+		}
 	}
 	state.Turns = turns
 	return state
@@ -138,26 +124,16 @@ func (h *TrialHandler) Start(c *gin.Context) {
 	actor := identityhttp.Principal(c)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 8*time.Second)
 	defer cancel()
-	_, err := h.client.ExecuteWorkflow(ctx, client.StartWorkflowOptions{ID: application.TrialWorkflowID(actor, req.RequestID), TaskQueue: "flow", WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE, WorkflowExecutionTimeout: 25 * time.Hour}, operationflow.TrialWorkflow, application.TrialInput{Request: req, Actor: actor})
-	if err != nil {
-		var exists *serviceerror.WorkflowExecutionAlreadyStarted
-		if !errors.As(err, &exists) {
-			httpapi.WriteProblem(c, 503, "trial_start_unconfirmed", nil)
-			return
-		}
-		c.Params = append(c.Params, gin.Param{Key: "id", Value: req.RequestID.String()})
-		state, _, ok := h.read(c)
-		if !ok {
-			return
-		}
-		if state.Fingerprint != req.Fingerprint() {
-			httpapi.WriteProblem(c, 409, "trial_request_conflict", nil)
-			return
-		}
-		c.JSON(202, publicTrialState(state))
+	state, err := h.client.Start(ctx, application.TrialInput{Request: req, Actor: actor})
+	if errors.Is(err, trialtask.ErrConflict) {
+		httpapi.WriteProblem(c, 409, "trial_request_conflict", nil)
 		return
 	}
-	c.JSON(202, application.TrialState{Kind: req.Kind, Model: req.Model, State: "running", Turns: []application.TrialTurn{}})
+	if err != nil {
+		httpapi.WriteProblem(c, 503, "trial_start_unconfirmed", nil)
+		return
+	}
+	c.JSON(202, publicTrialState(state))
 }
 
 // State returns durable progress and final responses, without upstream thread identities.
@@ -213,7 +189,11 @@ func (h *TrialHandler) Turn(c *gin.Context) {
 		httpapi.WriteProblem(c, 409, "trial_session_unavailable", nil)
 		return
 	}
-	if err := h.client.SignalWorkflow(c.Request.Context(), application.TrialWorkflowID(identityhttp.Principal(c), id), "", "turn", message); err != nil {
+	if err := h.client.Turn(c.Request.Context(), application.TrialID(identityhttp.Principal(c), id), message); err != nil {
+		if errors.Is(err, trialtask.ErrConflict) {
+			httpapi.WriteProblem(c, 409, "trial_session_unavailable", nil)
+			return
+		}
 		httpapi.WriteProblem(c, 503, "trial_turn_unconfirmed", nil)
 		return
 	}
@@ -232,12 +212,7 @@ func (h *TrialHandler) Cancel(c *gin.Context) {
 	if !ok {
 		return
 	}
-	workflowID := application.TrialWorkflowID(identityhttp.Principal(c), id)
-	err := h.client.SignalWorkflow(c.Request.Context(), workflowID, "", "cancel", true)
-	var missing *serviceerror.NotFound
-	if errors.As(err, &missing) {
-		err = h.client.SignalWorkflow(c.Request.Context(), workflowID+"/recovery", "", "cancel", true)
-	}
+	err := h.client.Cancel(c.Request.Context(), application.TrialID(identityhttp.Principal(c), id))
 	if err != nil {
 		httpapi.WriteProblem(c, 503, "trial_cancel_unconfirmed", nil)
 		return
@@ -269,10 +244,6 @@ func (h *TrialHandler) Artifact(c *gin.Context) {
 		return
 	}
 	a := artifacts[0]
-	if a.StorageID != h.storageID {
-		httpapi.WriteProblem(c, 503, "trial_storage_changed", nil)
-		return
-	}
 	reader, err := trial.ReadArtifact(c.Request.Context(), h.objects, application.TrialInput{Actor: identityhttp.Principal(c), Request: application.TrialRequest{RequestID: id}}, a)
 	if err != nil {
 		httpapi.WriteProblem(c, 503, "trial_artifact_unavailable", nil)
@@ -299,19 +270,13 @@ func (h *TrialHandler) Recover(c *gin.Context) {
 		httpapi.WriteProblem(c, 409, "trial_recovery_unavailable", nil)
 		return
 	}
-	last := state.Turns[len(state.Turns)-1]
-	input := application.TrialInput{Request: application.TrialRequest{RequestID: id, Source: state.Source, Kind: state.Kind, Model: state.Model, ProviderID: state.ProviderID, Prompt: last.Prompt}, Actor: identityhttp.Principal(c), Action: "recover", TaskID: last.TaskID, ConfigVersionID: last.ConfigVersionID, CredentialID: last.CredentialID, OriginalFingerprint: state.Fingerprint}
-	if state.Kind != "image" && state.Kind != "video" {
-		httpapi.WriteProblem(c, 409, "trial_recovery_unavailable", nil)
-		return
-	}
-	_, err := h.client.ExecuteWorkflow(c.Request.Context(), client.StartWorkflowOptions{ID: application.TrialWorkflowID(input.Actor, id) + "/recovery", TaskQueue: "flow", WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE, WorkflowExecutionTimeout: 30 * time.Minute}, operationflow.TrialWorkflow, input)
-	if err != nil {
-		var exists *serviceerror.WorkflowExecutionAlreadyStarted
-		if !errors.As(err, &exists) {
-			httpapi.WriteProblem(c, 503, "trial_recovery_unavailable", nil)
+	if err := h.client.Recover(c.Request.Context(), application.TrialID(identityhttp.Principal(c), id)); err != nil {
+		if errors.Is(err, trialtask.ErrConflict) {
+			httpapi.WriteProblem(c, 409, "trial_recovery_unavailable", nil)
 			return
 		}
+		httpapi.WriteProblem(c, 503, "trial_recovery_unavailable", nil)
+		return
 	}
 	c.JSON(202, publicTrialState(state))
 }

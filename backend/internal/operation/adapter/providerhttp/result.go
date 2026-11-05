@@ -7,11 +7,11 @@ import (
 )
 
 func unknownResult() application.GenerationResult {
-	return application.GenerationResult{Outcome: "unknown", State: "unknown", ErrorCode: "provider_response_invalid"}
+	return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, State: application.ProviderTaskUnknown, ErrorCode: "provider_response_invalid"}
 }
 
 func invalidSubmissionResult() application.GenerationResult {
-	return application.GenerationResult{Outcome: "not_submitted", ErrorCode: "invalid_provider_request"}
+	return application.GenerationResult{Outcome: application.ProviderOutcomeNotSubmitted, ErrorCode: "invalid_provider_request"}
 }
 
 func safeHTTPError(status int) string {

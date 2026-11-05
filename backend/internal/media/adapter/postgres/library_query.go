@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -20,31 +21,27 @@ import (
 
 // The binary half retains existing asset identities without creating metadata
 // on reads. The text half has no fake media asset, object key or project ID.
-func libraryEntries(actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) (string, []any) {
-	ownership := `a.project_id=? AND a.personal_org_id IS NULL AND a.personal_actor_id IS NULL`
-	args := []any{id, scope.ProjectID, id}
+func libraryEntries(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) *gorm.DB {
+	assetEntries := tx.Table("media.media_asset AS a").
+		Select("COALESCE(i.id, a.id) AS id, a.id AS asset_id, i.folder_id AS folder_id, NULL::text AS plain_text, a.kind AS kind, LEFT(COALESCE(i.title, NULLIF(a.file_name, ''), a.kind), 240) AS title, COALESCE(i.category, ?) AS category, COALESCE(i.tags, '[]'::jsonb) AS tags, COALESCE(i.source_label, '') AS source_label, COALESCE(i.note, '') AS note, COALESCE(i.favorite, false) AS favorite, COALESCE(i.catalog_state, ?) AS catalog_state, i.trashed_at AS trashed_at, COALESCE(i.position, 0) AS position, COALESCE(i.revision, ?) AS revision, COALESCE(i.create_time, a.create_time) AS create_time, COALESCE(i.update_time, a.update_time) AS update_time, a.mime_type AS mime_type, to_jsonb(a) AS asset_facts", domain.LibraryItemCategoryMaterial, domain.LibraryItemStateActive, domain.LibraryItemInitialRevision).
+		Joins("LEFT JOIN media.library_item AS i ON i.library_id = ? AND i.asset_id = a.id", id).
+		Where("NOT a.is_delete AND a.status = ? AND a.moderation_status = ?", domain.StatusReady, domain.ModerationPassed).
+		Where("i.purged_at IS NULL")
 	if scope.Kind == domain.LibraryPersonal {
-		ownership = `a.project_id IS NULL AND a.personal_org_id=? AND a.personal_actor_id=?`
-		args = []any{id, actor.OrgID, actor.ID, id}
+		assetEntries = assetEntries.Where("a.project_id IS NULL AND a.personal_org_id = ? AND a.personal_actor_id = ?", actor.OrgID, actor.ID)
+	} else {
+		assetEntries = assetEntries.Where("a.project_id = ? AND a.personal_org_id IS NULL AND a.personal_actor_id IS NULL", scope.ProjectID)
 	}
-	query := `WITH entries AS (
- SELECT COALESCE(i.id,a.id) AS id,a.id AS asset_id,i.folder_id,NULL::text AS plain_text,a.kind,
- LEFT(COALESCE(i.title,NULLIF(a.file_name,''),a.kind),240) AS title,COALESCE(i.category,'material') AS category,
- COALESCE(i.tags,'[]'::jsonb) AS tags,COALESCE(i.source_label,'') AS source_label,COALESCE(i.note,'') AS note,
- COALESCE(i.favorite,false) AS favorite,COALESCE(i.catalog_state,'active') AS catalog_state,i.trashed_at,
- COALESCE(i.position,0) AS position,COALESCE(i.revision,0) AS revision,
- COALESCE(i.create_time,a.create_time) AS create_time,COALESCE(i.update_time,a.update_time) AS update_time,
- a.mime_type,to_jsonb(a) AS asset_facts
- FROM media.media_asset a LEFT JOIN media.library_item i ON i.library_id=? AND i.asset_id=a.id
- WHERE ` + ownership + ` AND NOT a.is_delete AND a.status='ready' AND a.moderation_status='passed' AND i.purged_at IS NULL
- AND NOT EXISTS(SELECT 1 FROM media.purge_item p WHERE p.item_id=a.id AND p.status IN ('queued','running','needs_reconciliation','succeeded'))
- UNION ALL
- SELECT i.id,NULL::uuid,i.folder_id,i.plain_text,'text',i.title,i.category,i.tags,i.source_label,i.note,
- i.favorite,i.catalog_state,i.trashed_at,i.position,i.revision,i.create_time,i.update_time,''::text,NULL::jsonb
- FROM media.library_item i WHERE i.library_id=? AND i.asset_id IS NULL AND i.purged_at IS NULL
- AND NOT EXISTS(SELECT 1 FROM media.purge_item p WHERE p.item_id=i.id AND p.status IN ('queued','running','needs_reconciliation','succeeded')))
- `
-	return query, args
+	activePurgeStatuses := []domain.PurgeItemStatus{domain.PurgeItemStatusQueued, domain.PurgeItemStatusRunning, domain.PurgeItemStatusNeedsReconciliation, domain.PurgeItemStatusSucceeded}
+	assetPurges := tx.Model(&purgeItemRow{}).Select("item_id").Where("item_id = a.id AND status IN ?", activePurgeStatuses)
+	assetEntries = assetEntries.Where("NOT EXISTS (?)", assetPurges)
+
+	textEntries := tx.Table("media.library_item AS i").
+		Select("i.id AS id, NULL::uuid AS asset_id, i.folder_id AS folder_id, i.plain_text AS plain_text, ? AS kind, i.title AS title, i.category AS category, i.tags AS tags, i.source_label AS source_label, i.note AS note, i.favorite AS favorite, i.catalog_state AS catalog_state, i.trashed_at AS trashed_at, i.position AS position, i.revision AS revision, i.create_time AS create_time, i.update_time AS update_time, ''::text AS mime_type, NULL::jsonb AS asset_facts", domain.LibraryItemKindText).
+		Where("i.library_id = ? AND i.asset_id IS NULL AND i.purged_at IS NULL", id)
+	textPurges := tx.Model(&purgeItemRow{}).Select("item_id").Where("item_id = i.id AND status IN ?", activePurgeStatuses)
+	textEntries = textEntries.Where("NOT EXISTS (?)", textPurges)
+	return tx.Table("(?) AS entries", gorm.Expr("(?) UNION ALL (?)", assetEntries, textEntries))
 }
 
 type libraryEntryRow struct {
@@ -59,13 +56,14 @@ type libraryEntryRow struct {
 	SourceLabel  string
 	Note         string
 	Favorite     bool
-	CatalogState string
+	CatalogState domain.LibraryItemState
 	TrashedAt    *time.Time
 	Position     int64
 	Revision     int64
 	CreateTime   time.Time
 	UpdateTime   time.Time
 	AssetFacts   []byte
+	Asset        *assetRow `gorm:"-"`
 }
 
 func decodeLibraryAsset(raw []byte) (domain.MediaAsset, error) {
@@ -99,10 +97,6 @@ func (r libraryEntryRow) detail(library uuid.UUID) (application.LibraryItemDetai
 		return application.LibraryItemDetail{}, application.ErrUnavailable
 	}
 	item := domain.LibraryItem{ID: r.ID, LibraryID: library, AssetID: r.AssetID, PlainText: r.PlainText, FolderID: r.FolderID, Title: r.Title, Category: r.Category, Tags: tags, SourceLabel: r.SourceLabel, Note: r.Note, Favorite: r.Favorite, State: r.CatalogState, TrashedAt: r.TrashedAt, Position: r.Position, Revision: r.Revision, CreatedAt: r.CreateTime, UpdatedAt: r.UpdateTime}
-	// Only a real binary asset may have the absent-metadata revision zero.
-	if item.Revision == 0 && item.AssetID != nil && item.PlainText == nil {
-		item.Revision = 1
-	}
 	if item.Validate() != nil {
 		return application.LibraryItemDetail{}, application.ErrUnavailable
 	}
@@ -177,22 +171,19 @@ func (s *LibraryStore) ListLibrary(ctx context.Context, actor identityapp.Princi
 		if q.FolderID != nil && !slices.ContainsFunc(folders, func(f domain.LibraryFolder) bool { return f.ID == *q.FolderID }) {
 			return application.ErrNotFound
 		}
-		cte, base := libraryEntries(actor, scope, row.ID)
 		filter, arguments := libraryFilters(q, s.clock())
-		args := append(slices.Clone(base), arguments...)
-		if err := tx.Raw(cte+`SELECT count(*) FROM entries WHERE `+filter, args...).Scan(&result.Total).Error; err != nil {
+		if err := libraryEntries(tx, actor, scope, row.ID).Where(filter, arguments...).Count(&result.Total).Error; err != nil {
 			return fmt.Errorf("count media library page: %w", err)
 		}
-		order := `update_time DESC,id ASC`
+		order := "update_time DESC, id ASC"
 		if q.Order == "updated_asc" {
-			order = `update_time ASC,id ASC`
+			order = "update_time ASC, id ASC"
 		}
 		if q.Order == "name_asc" {
-			order = `lower(title) COLLATE "C" ASC,id ASC`
+			order = `lower(title) COLLATE "C" ASC, id ASC`
 		}
 		var entries []libraryEntryRow
-		args = append(args, q.PageSize, int64(q.Page-1)*int64(q.PageSize))
-		if err := tx.Raw(cte+`SELECT * FROM entries WHERE `+filter+` ORDER BY `+order+` LIMIT ? OFFSET ?`, args...).Scan(&entries).Error; err != nil {
+		if err := libraryEntries(tx, actor, scope, row.ID).Where(filter, arguments...).Order(order).Limit(q.PageSize).Offset((q.Page - 1) * q.PageSize).Find(&entries).Error; err != nil {
 			return fmt.Errorf("read media library page: %w", err)
 		}
 		for _, entry := range entries {
@@ -206,21 +197,25 @@ func (s *LibraryStore) ListLibrary(ctx context.Context, actor identityapp.Princi
 			Category string
 			Count    int64
 		}
-		if err := tx.Raw(cte+`SELECT category,count(*) FROM entries WHERE catalog_state=? GROUP BY category`, append(slices.Clone(base), q.State)...).Scan(&categories).Error; err != nil {
+		if err := libraryEntries(tx, actor, scope, row.ID).Where("catalog_state = ?", q.State).Select("category, COUNT(*) AS count").Group("category").Scan(&categories).Error; err != nil {
 			return err
 		}
 		for _, category := range categories {
 			result.CategoryCounts[category.Category] = category.Count
 		}
 		var counts []struct {
-			Folder string
-			Count  int64
+			FolderID *uuid.UUID
+			Count    int64
 		}
-		if err := tx.Raw(cte+`SELECT COALESCE(folder_id::text,'root') AS folder,count(*) FROM entries WHERE catalog_state=? GROUP BY folder_id`, append(slices.Clone(base), q.State)...).Scan(&counts).Error; err != nil {
+		if err := libraryEntries(tx, actor, scope, row.ID).Where("catalog_state = ?", q.State).Select("folder_id, COUNT(*) AS count").Group("folder_id").Scan(&counts).Error; err != nil {
 			return err
 		}
 		for _, folder := range counts {
-			result.FolderCounts[folder.Folder] = folder.Count
+			key := "root"
+			if folder.FolderID != nil {
+				key = folder.FolderID.String()
+			}
+			result.FolderCounts[key] = folder.Count
 		}
 		return nil
 	})
@@ -235,14 +230,13 @@ func (s *LibraryStore) LibraryDetail(ctx context.Context, actor identityapp.Prin
 	var result application.LibraryItemDetail
 	err := s.read(ctx, actor, scope, func(tx *gorm.DB, row libraryRow) error {
 		result = application.LibraryItemDetail{}
-		cte, args := libraryEntries(actor, scope, row.ID)
 		var entry libraryEntryRow
-		read := tx.Raw(cte+`SELECT * FROM entries WHERE id=? AND catalog_state IN ('active','trashed')`, append(args, id)...).Scan(&entry)
+		read := libraryEntries(tx, actor, scope, row.ID).Where("id = ? AND catalog_state IN ?", id, []domain.LibraryItemState{domain.LibraryItemStateActive, domain.LibraryItemStateTrashed}).Take(&entry)
 		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrNotFound
+			}
 			return fmt.Errorf("read media library detail: %w", read.Error)
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrNotFound
 		}
 		var err error
 		result, err = entry.detail(row.ID)

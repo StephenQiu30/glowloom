@@ -67,14 +67,16 @@ func TestScriptRoutedSDKUsesFrozenIdentityAndRejectsBareWrites(t *testing.T) {
 	if err != nil || !bytes.Equal(got, body) || len(first.objects) != 1 || len(second.objects) != 0 {
 		t.Fatal("script SDK followed current default", err)
 	}
-	if err := objects.PutIfAbsent(t.Context(), fact.Key, bytes.NewReader(body), fact.ByteSize, fact.MIME, fact.SHA256); !errors.Is(err, script.ErrUnavailable) {
+	unbound := fact
+	unbound.LocationID = uuid.Nil
+	if err := objects.PutObjectIfAbsent(t.Context(), unbound, bytes.NewReader(body)); !errors.Is(err, script.ErrUnavailable) {
 		t.Fatal("bare-key write reached native default", err)
 	}
 	fence.denied = true
 	if err := objects.RemoveObject(t.Context(), fact); err == nil || len(first.objects) != 1 {
 		t.Fatal("cancelled/unfenced cleanup reached SDK", err)
 	}
-	if _, err := objects.Get(t.Context(), fact.Key); !errors.Is(err, media.ErrStorageNotReady) {
+	if _, err := objects.GetObject(t.Context(), unbound); !errors.Is(err, script.ErrUnavailable) {
 		t.Fatal("unproved legacy key followed active profile", err)
 	}
 }

@@ -22,7 +22,8 @@ type directoryTestObjects struct {
 	onGet, onPut func()
 }
 
-func (o *directoryTestObjects) Put(_ context.Context, key string, r io.Reader, _ int64, _ string) error {
+func (o *directoryTestObjects) PutIfAbsent(_ context.Context, location identity.ExportObjectLocation, r io.Reader, _ int64, _, _ string) error {
+	key := location.Key
 	b, err := io.ReadAll(r)
 	o.values[key] = b
 	if o.onPut != nil {
@@ -30,13 +31,15 @@ func (o *directoryTestObjects) Put(_ context.Context, key string, r io.Reader, _
 	}
 	return err
 }
-func (o *directoryTestObjects) Get(_ context.Context, key string) (io.ReadCloser, error) {
+func (o *directoryTestObjects) Get(_ context.Context, location identity.ExportObjectLocation) (io.ReadCloser, error) {
+	key := location.Key
 	if o.onGet != nil {
 		o.onGet()
 	}
 	return io.NopCloser(bytes.NewReader(o.values[key])), nil
 }
-func (o *directoryTestObjects) Remove(_ context.Context, key string) error {
+func (o *directoryTestObjects) Remove(_ context.Context, job identity.DirectoryExportJob) error {
+	key := job.ObjectLocation.Key
 	delete(o.values, key)
 	return nil
 }
@@ -50,10 +53,12 @@ func installDirectoryExport(t *testing.T, tx *gorm.DB) {
 		t.Fatal("database is missing identity.directory_export; initialize it from db/schema.sql")
 	}
 	assertDirectoryExportSchema(t, tx)
+	seedIdentityStorageRoute(t, tx)
 }
 func assertDirectoryExportSchema(t *testing.T, tx *gorm.DB) {
 	t.Helper()
 	expected := map[string]string{
+		"storage_location_id": "uuid", "storage_intent_id": "uuid", "storage_profile_id": "text", "storage_bucket": "text",
 		"id": "uuid NOT NULL", "actor_id": "uuid NOT NULL", "team_id": "uuid",
 		"scope_kind": "text NOT NULL", "scope_id": "uuid NOT NULL", "request_key": "uuid NOT NULL",
 		"actor_session_id": "uuid NOT NULL", "credential_epoch": "bigint NOT NULL", "platform_epoch": "bigint NOT NULL", "team_revision": "bigint NOT NULL",
@@ -78,8 +83,8 @@ func assertDirectoryExportSchema(t *testing.T, tx *gorm.DB) {
 	if err := tx.Raw(`SELECT
       (SELECT count(*)=1 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='p') AND
       (SELECT count(*)=1 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='u') AND
-      (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='f') AND
-      (SELECT count(*)=4 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='c') AND
+      (SELECT count(*)=4 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='f') AND
+      (SELECT count(*)=5 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='c') AND
       has_table_privilege('glowloom_app','identity.directory_export','SELECT') AND
       has_table_privilege('glowloom_app','identity.directory_export','INSERT') AND
       has_table_privilege('glowloom_app','identity.directory_export','UPDATE')`).Scan(&valid).Error; err != nil || !valid {
@@ -112,7 +117,7 @@ func TestDirectoryExportPostgresSnapshotStatisticsAndRevocation(t *testing.T) {
 		t.Fatal("deleted action projection", err)
 	}
 	objects := &directoryTestObjects{values: map[string][]byte{}}
-	exports := identity.NewDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), objects, func() time.Time { return now })
+	exports := identity.NewRoutedDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), objects, func() time.Time { return now })
 	filter := identity.ExportFilter{Search: label, Status: "deleted"}
 	key := uuid.New()
 	job, err := exports.Create(t.Context(), actor, nil, filter, key)
@@ -172,7 +177,7 @@ func TestDirectoryExportTeamRoleFilterAndIndependentAuthority(t *testing.T) {
 	if err != nil || view.TotalMembers != 1 || view.MemberStates["suspended"] != 1 {
 		t.Fatalf("member filtered stats %+v %v", view, err)
 	}
-	exports := identity.NewDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), &directoryTestObjects{values: map[string][]byte{}}, func() time.Time { return now })
+	exports := identity.NewRoutedDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), &directoryTestObjects{values: map[string][]byte{}}, func() time.Time { return now })
 	job, err := exports.Create(t.Context(), target, &team, identity.ExportFilter{Role: "member", Status: "suspended"}, uuid.New())
 	if err != nil || job.RowCount != 1 {
 		t.Fatal("member role filter lost", err)
@@ -241,7 +246,7 @@ func TestDirectoryExportRestrictedApplicationRole(t *testing.T) {
 		t.Fatal("runtime role lacks export privileges", err)
 	}
 	objects := &directoryTestObjects{values: map[string][]byte{}}
-	service := identity.NewDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), objects, func() time.Time { return now })
+	service := identity.NewRoutedDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), objects, func() time.Time { return now })
 	job, err := service.Create(t.Context(), actor, nil, identity.ExportFilter{Search: "governance-admin@example.invalid"}, uuid.New())
 	if err != nil {
 		t.Fatal("restricted role create", err)

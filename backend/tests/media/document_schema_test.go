@@ -18,6 +18,8 @@ func TestDocumentSchemaPreservesLegacyRowsButAllOwningReadsAndCopyFailClosed(t *
 	db, owner := documentTestDB(t)
 	actor, project := mediaStoreProject(t, owner)
 	id := uuid.New()
+	keyName := "projects/" + project.String() + "/document/2026/10/" + id.String() + ".pdf"
+	location := mediaFixtureUnownedLocation(t, owner, keyName)
 	// Recover the actual schema constraint instead of retaining a second DDL source.
 	// The transaction prevents other sessions from observing the relaxed fixture.
 	if err := owner.Transaction(func(tx *gorm.DB) error {
@@ -31,7 +33,7 @@ func TestDocumentSchemaPreservesLegacyRowsButAllOwningReadsAndCopyFailClosed(t *
 		if err := tx.Exec(`ALTER TABLE media.media_asset DROP CONSTRAINT media_asset_document_facts_check`).Error; err != nil {
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,moderation_status) VALUES(?,?,'document','upload','ready',?,'legacy.pdf','application/pdf',1,'passed')`, id, project, "projects/"+project.String()+"/document/2026/10/"+id.String()+".pdf").Error; err != nil {
+		if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,moderation_status,object_location_id) VALUES(?,?,'document','upload','ready',?,'legacy.pdf','application/pdf',1,'passed',?)`, id, project, keyName, location.ID).Error; err != nil {
 			return err
 		}
 		return tx.Exec(`ALTER TABLE media.media_asset ADD CONSTRAINT media_asset_document_facts_check ` + definition).Error
@@ -67,11 +69,11 @@ func TestDocumentSchemaPreservesLegacyRowsButAllOwningReadsAndCopyFailClosed(t *
 	if _, _, err := mediaTestStore(db).FindUpload(t.Context(), actor, mediaapp.UploadRequest{ProjectID: project, Key: key, RequestID: uuid.New(), SHA256: strings.Repeat("a", 64), FileName: "legacy.pdf", ByteSize: 1}); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("legacy invalid document upload receipt bypassed owner closure", err)
 	}
-	reader := mediaapp.NewDocumentSources(mediaDocumentStore(db), nil)
+	reader := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), nil)
 	if _, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{id}); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("legacy invalid document silently exposed", err)
 	}
-	query := mediaapp.NewAssetQuery(mediaTestStore(db), nil)
+	query := mediaapp.NewAssetQuery(mediaTestStore(db))
 	if _, err := query.List(t.Context(), actor, project, "document", "", 50); err == nil {
 		t.Fatal("legacy invalid document silently listed or skipped")
 	}

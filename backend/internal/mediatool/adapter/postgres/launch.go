@@ -3,13 +3,29 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
+
+type exportLaunchRow struct {
+	TokenHash  string `gorm:"primaryKey"`
+	JobID      uuid.UUID
+	ArtifactID uuid.UUID
+	ProjectID  uuid.UUID
+	Revision   int64
+	Actor      jsonDocument
+	Envelope   jsonDocument
+	ExpiresAt  time.Time
+}
+
+func (exportLaunchRow) TableName() string { return "mediatool.export_launch" }
 
 // SaveLaunch rechecks authority and the final artifact inside the write transaction.
 func (s *Store) SaveLaunch(ctx context.Context, r application.LaunchReceipt) error {
@@ -24,7 +40,7 @@ func (s *Store) SaveLaunch(ctx context.Context, r application.LaunchReceipt) err
 		if e != nil {
 			return e
 		}
-		if job.Status != "succeeded" || job.OutputKind != "jianying" || job.Revision != r.Revision || job.ArtifactID == nil || *job.ArtifactID != r.ArtifactID {
+		if job.Status != domain.Succeeded || job.OutputKind != "jianying" || job.Revision != r.Revision || job.ArtifactID == nil || *job.ArtifactID != r.ArtifactID {
 			return application.ErrConflict
 		}
 		if e = s.validateSources(ctx, tx, r.Actor, job); e != nil {
@@ -37,24 +53,23 @@ func (s *Store) SaveLaunch(ctx context.Context, r application.LaunchReceipt) err
 		if e != nil {
 			return e
 		}
-		return tx.Exec(`INSERT INTO mediatool.export_launch(token_hash,job_id,artifact_id,project_id,revision,actor,envelope,expires_at) VALUES(?,?,?,?,?,?::jsonb,?::jsonb,?)`, r.TokenHash, r.JobID, r.ArtifactID, r.ProjectID, r.Revision, string(actor), string(r.Body), r.ExpiresAt).Error
+		return tx.Create(&exportLaunchRow{
+			TokenHash: r.TokenHash, JobID: r.JobID, ArtifactID: r.ArtifactID, ProjectID: r.ProjectID,
+			Revision: r.Revision, Actor: jsonDocument(actor), Envelope: jsonDocument(r.Body), ExpiresAt: r.ExpiresAt,
+		}).Error
 	})
 }
+
+// ReadLaunch reads the authorized launch intent for a saved export job.
 func (s *Store) ReadLaunch(ctx context.Context, hash string, now time.Time) ([]byte, error) {
 	var body []byte
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var r struct {
-			JobID, ArtifactID, ProjectID uuid.UUID
-			Revision                     int64
-			Actor, Envelope              []byte
-			ExpiresAt                    time.Time
-		}
-		result := tx.Raw(`SELECT job_id,artifact_id,project_id,revision,actor,envelope,expires_at FROM mediatool.export_launch WHERE token_hash=? AND expires_at>?`, hash, now).Scan(&r)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return application.ErrNotFound
+		var r exportLaunchRow
+		if err := tx.Where("token_hash = ? AND expires_at > ?", hash, now).Take(&r).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return application.ErrNotFound
+			}
+			return err
 		}
 		var actor identity.Principal
 		if json.Unmarshal(r.Actor, &actor) != nil {
@@ -67,7 +82,7 @@ func (s *Store) ReadLaunch(ctx context.Context, hash string, now time.Time) ([]b
 		if e != nil {
 			return application.ErrNotFound
 		}
-		if job.Status != "succeeded" || job.OutputKind != "jianying" || job.Revision != r.Revision || job.ArtifactID == nil || *job.ArtifactID != r.ArtifactID {
+		if job.Status != domain.Succeeded || job.OutputKind != "jianying" || job.Revision != r.Revision || job.ArtifactID == nil || *job.ArtifactID != r.ArtifactID {
 			return application.ErrNotFound
 		}
 		if e = s.validateSources(ctx, tx, actor, job); e != nil {
@@ -90,6 +105,14 @@ func (s *Store) PruneLaunches(ctx context.Context, now time.Time, limit int) (in
 	if limit < 1 || limit > 1000 {
 		return 0, application.ErrInvalidExport
 	}
-	r := s.db.WithContext(ctx).Exec(`DELETE FROM mediatool.export_launch WHERE token_hash IN (SELECT token_hash FROM mediatool.export_launch WHERE expires_at<=? ORDER BY expires_at LIMIT ?)`, now, limit)
-	return r.RowsAffected, r.Error
+	var hashes []string
+	if err := s.db.WithContext(ctx).Model(&exportLaunchRow{}).
+		Where("expires_at <= ?", now).Order("expires_at ASC").Limit(limit).Pluck("token_hash", &hashes).Error; err != nil {
+		return 0, err
+	}
+	if len(hashes) == 0 {
+		return 0, nil
+	}
+	result := s.db.WithContext(ctx).Where("token_hash IN ?", hashes).Delete(&exportLaunchRow{})
+	return result.RowsAffected, result.Error
 }

@@ -24,24 +24,24 @@ func TestPersonalUploadActualPrivateObjectsClosedScopeAndPermanentReplay(t *test
 	actor, project := mediaStoreProject(t, db)
 	foreign, _ := mediaStoreProject(t, db)
 	store := mediaTestStore(db)
-	service := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	service := mediaFixtureRoutedUpload(t, db, store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = uuid.Nil
-	first, err := service.UploadPersonal(t.Context(), in)
+	first, err := fixturePersonalUpload(t.Context(), service, in)
 	if err != nil || first.Asset.ID == uuid.Nil {
 		t.Fatal("actual personal upload", err)
 	}
-	replay, err := service.UploadPersonal(t.Context(), in)
+	replay, err := fixturePersonalUpload(t.Context(), service, in)
 	if err != nil || !reflect.DeepEqual(first, replay) {
 		t.Fatal("personal receipt changed", replay, err)
 	}
 	in.Request.FileName = "renamed.png"
-	if _, err := service.UploadPersonal(t.Context(), in); !errors.Is(err, mediaapp.ErrUploadConflict) {
+	if _, err := fixturePersonalUpload(t.Context(), service, in); !errors.Is(err, mediaapp.ErrUploadConflict) {
 		t.Fatal("different immutable body under original key", err)
 	}
 	in.Request.Key = uuid.New()
-	reused, err := service.UploadPersonal(t.Context(), in)
+	reused, err := fixturePersonalUpload(t.Context(), service, in)
 	if err != nil || reused.DuplicateOf == nil || *reused.DuplicateOf != first.Asset.ID {
 		t.Fatal("personal same hash reuse", reused, err)
 	}
@@ -91,7 +91,7 @@ func TestPersonalUploadActualPrivateObjectsClosedScopeAndPermanentReplay(t *test
 	if _, err := store.FindAsset(t.Context(), actor, project, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("project ordinary media read accepted personal", err)
 	}
-	if _, err := mediaapp.NewAssetQuery(store, nil).Reference(t.Context(), actor, project, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewAssetQuery(store).Reference(t.Context(), actor, project, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("personal became formal project reference", err)
 	}
 	catalog := mediaLibraryStore(db, libraryTestAccess, time.Now)

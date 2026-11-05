@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
@@ -37,7 +39,7 @@ func (f *operationFinalizer) FinalizeOperation(ctx context.Context, input operat
 	if err != nil || id.String() != input.OperationID || input.ActualCostMicros < 0 {
 		return operationflow.ErrInvalidOperationInput
 	}
-	return f.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, f.db, func(tx *gorm.DB) error {
 		facts, err := f.operation.ReadSettlementFactsInTransaction(ctx, tx, id)
 		if err != nil {
 			return fmt.Errorf("load operation for settlement: %w", err)
@@ -132,7 +134,7 @@ func (f *operationFinalizer) CompleteFromReuse(ctx context.Context, operationID 
 		ActualCostMicros: 0, Capability: loaded.Operation.Capability,
 		Region: loaded.Operation.Region, OccurredAt: time.Now().UTC(),
 	}
-	return f.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, f.db, func(tx *gorm.DB) error {
 		prepared, err := f.operation.PrepareFinalizationInTransaction(ctx, tx, finalize)
 		if err != nil {
 			return fmt.Errorf("prepare reused operation: %w", err)
@@ -164,8 +166,7 @@ func (f *operationFinalizer) CompleteFromReuse(ctx context.Context, operationID 
 	})
 }
 
-var _ operationflow.Finalizer = (*operationFinalizer)(nil)
-var _ operationflow.BatchQueuedCanceler = (*operationFinalizer)(nil)
+var _ operationflow.OperationFinalizer = (*operationFinalizer)(nil)
 
 // CancelQueuedBatchOperation uses the durable batch intent to claim an
 // unlaunched child, then performs the normal zero-cost settlement. A crash
@@ -192,7 +193,7 @@ func (f *operationFinalizer) ResolveRevokedOperation(ctx context.Context, operat
 	if err != nil || id.String() != operationID {
 		return operationflow.ErrInvalidOperationInput
 	}
-	return f.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, f.db, func(tx *gorm.DB) error {
 		facts, err := f.operation.PrepareRevocationInTransaction(ctx, tx, id)
 		if err != nil {
 			return err

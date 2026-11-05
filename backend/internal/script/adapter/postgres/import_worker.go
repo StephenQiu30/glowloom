@@ -7,8 +7,11 @@ import (
 	"slices"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
@@ -18,14 +21,36 @@ import (
 )
 
 func importDeliveryProof(tx *gorm.DB, d application.ImportDelivery) error {
-	if d.JobID == uuid.Nil || d.ProjectID == uuid.Nil || d.OrgID == uuid.Nil || d.ActorID == uuid.Nil || d.EventID == uuid.Nil || d.RequestID == uuid.Nil || d.Attempt < 1 || d.Action != "start" && d.Action != "cancel" && d.Action != "reconcile" {
+	if d.JobID == uuid.Nil || d.ProjectID == uuid.Nil || d.OrgID == uuid.Nil || d.ActorID == uuid.Nil || d.EventID == uuid.Nil || d.RequestID == uuid.Nil || d.Attempt < 1 || d.Action != domain.ImportActionStart && d.Action != domain.ImportActionCancel && d.Action != domain.ImportActionReconcile {
 		return domain.ErrInvalidSource
 	}
-	var valid bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.import_command c JOIN infra.outbox o ON o.id=c.event_id JOIN script.import_job j ON j.id=c.job_id WHERE c.actor_id=? AND c.request_id=? AND c.event_id=? AND c.event_action=? AND c.event_attempt=? AND c.job_id=? AND c.project_id=? AND c.org_id=? AND o.topic=? AND o.partition_key=? AND o.payload->>'event_id'=? AND o.payload->'data'->>'job_id'=? AND o.payload->'data'->>'attempt'=? AND o.payload->'data'->>'request_id'=? AND o.payload->'data'->>'actor_id'=? AND o.payload->'data'->>'org_id'=? AND o.payload->'data'->>'project_id'=? AND o.payload->'data'->>'action'=?)`, d.ActorID, d.RequestID, d.EventID, d.Action, d.Attempt, d.JobID, d.ProjectID, d.OrgID, ImportCommandTopic, d.ProjectID.String(), d.EventID.String(), d.JobID.String(), d.Attempt, d.RequestID.String(), d.ActorID.String(), d.OrgID.String(), d.ProjectID.String(), d.Action).Scan(&valid).Error; err != nil {
+	var command scriptImportCommandRow
+	if err := tx.Where("actor_id = ? AND request_id = ?", d.ActorID, d.RequestID).Take(&command).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return application.ErrIdempotencyConflict
+		}
 		return err
 	}
-	if !valid {
+	if command.EventID != d.EventID || command.EventAction != string(d.Action) || command.EventAttempt != d.Attempt || command.JobID != d.JobID || command.ProjectID != d.ProjectID || command.OrgID != d.OrgID {
+		return application.ErrIdempotencyConflict
+	}
+	var outbox scriptOutboxRow
+	if err := tx.Where("id = ? AND topic = ? AND partition_key = ?", d.EventID, ImportCommandTopic, d.ProjectID.String()).Take(&outbox).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return application.ErrIdempotencyConflict
+		}
+		return err
+	}
+	var envelope struct {
+		EventID   uuid.UUID                  `json:"event_id"`
+		EventType string                     `json:"event_type"`
+		OrgID     uuid.UUID                  `json:"org_id"`
+		Data      application.ImportDelivery `json:"data"`
+	}
+	if err := json.Unmarshal(outbox.Payload, &envelope); err != nil {
+		return application.ErrIdempotencyConflict
+	}
+	if envelope.EventID != d.EventID || envelope.EventType != ImportCommandTopic || envelope.OrgID != d.OrgID || envelope.Data != d {
 		return application.ErrIdempotencyConflict
 	}
 	return nil
@@ -37,7 +62,7 @@ func (s *ImportStore) VerifyImportDelivery(ctx context.Context, d application.Im
 		return false, err
 	}
 	var valid bool
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := importDeliveryProof(tx, d); err != nil {
 			return err
 		}
@@ -48,16 +73,16 @@ func (s *ImportStore) VerifyImportDelivery(ctx context.Context, d application.Im
 			if err != nil {
 				return err
 			}
-			if r.Job.Attempt != d.Attempt || r.Job.Status == "succeeded" || r.Job.Status == "cancelled" {
+			if r.Job.Attempt != d.Attempt || r.Job.Status == domain.ImportStatusSucceeded || r.Job.Status == domain.ImportStatusCancelled {
 				return nil
 			}
 			switch d.Action {
-			case "cancel":
+			case domain.ImportActionCancel:
 				valid = r.Job.CancellationRequested
-			case "reconcile":
+			case domain.ImportActionReconcile:
 				valid = r.Job.ReconciliationRequested
 			default:
-				valid = r.Actor.ID == d.ActorID && (r.Job.Status == "queued" || r.Job.Status == "running" && !r.Job.NeedsReconciliation)
+				valid = r.Actor.ID == d.ActorID && (r.Job.Status == domain.ImportStatusQueued || r.Job.Status == domain.ImportStatusRunning && !r.Job.NeedsReconciliation)
 			}
 			return nil
 		})
@@ -71,15 +96,12 @@ func (s *ImportStore) VerifyImportDelivery(ctx context.Context, d application.Im
 }
 
 func importActor(tx *gorm.DB, d application.ImportDelivery) (identityapp.Principal, error) {
-	var row struct {
-		ActorID uuid.UUID
-	}
-	read := tx.Raw(`SELECT actor_id FROM script.import_job WHERE id=? AND org_id=? AND project_id=?`, d.JobID, d.OrgID, d.ProjectID).Scan(&row)
-	if read.Error != nil {
-		return identityapp.Principal{}, read.Error
-	}
-	if read.RowsAffected != 1 {
-		return identityapp.Principal{}, application.ErrNotFound
+	var row scriptImportJobRow
+	if err := tx.Where("id = ? AND org_id = ? AND project_id = ?", d.JobID, d.OrgID, d.ProjectID).Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return identityapp.Principal{}, application.ErrNotFound
+		}
+		return identityapp.Principal{}, err
 	}
 	return identityapp.Principal{ID: row.ActorID, OrgID: d.OrgID}, nil
 }
@@ -109,10 +131,10 @@ func (s *ImportStore) ClaimImport(ctx context.Context, d application.ImportDeliv
 		if r.Job.Attempt != d.Attempt || r.Job.CancellationRequested {
 			return application.ErrConflict
 		}
-		if r.OwnerID != nil || r.IOState == "unknown" || r.IOState == "running" {
+		if r.OwnerID != nil || r.IOState == domain.ImportIOStateUnknown || r.IOState == domain.ImportIOStateRunning {
 			return application.ErrNeedsReconciliation
 		}
-		if d.Action == "start" && (r.Job.Status != "queued" || r.Job.NeedsReconciliation) || d.Action == "reconcile" && !r.Job.ReconciliationRequested {
+		if d.Action == domain.ImportActionStart && (r.Job.Status != domain.ImportStatusQueued || r.Job.NeedsReconciliation) || d.Action == domain.ImportActionReconcile && !r.Job.ReconciliationRequested {
 			return application.ErrConflict
 		}
 		state, err := readState(tx, actor.OrgID, d.ProjectID, true)
@@ -124,11 +146,11 @@ func (s *ImportStore) ClaimImport(ctx context.Context, d application.ImportDeliv
 		}
 		j := r.Job
 		j.Revision++
-		j.Status = "running"
-		j.Stage = "extracting"
+		j.Status = domain.ImportStatusRunning
+		j.Stage = domain.ImportStageExtracting
 		j.ReconciliationRequested = false
 		j.UpdatedAt = now
-		if err := updateImportState(tx, j, &worker, "running"); err != nil {
+		if err := updateImportState(tx, j, &worker, domain.ImportIOStateRunning); err != nil {
 			return err
 		}
 		result, err = readImport(tx, actor, d.ProjectID, d.JobID, false)
@@ -142,24 +164,21 @@ func (s *ImportStore) withWorker(ctx context.Context, work application.ImportWor
 	if err := s.configured(); err != nil {
 		return err
 	}
-	var row struct {
-		ProjectID, OrgID, ActorID uuid.UUID
+	var job scriptImportJobRow
+	if err := s.db.WithContext(ctx).Where("id = ?", work.JobID).Take(&job).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return application.ErrNotFound
+		}
+		return err
 	}
-	read := s.db.WithContext(ctx).Raw(`SELECT project_id,org_id,actor_id FROM script.import_job WHERE id=?`, work.JobID).Scan(&row)
-	if read.Error != nil {
-		return read.Error
-	}
-	if read.RowsAffected != 1 {
-		return application.ErrNotFound
-	}
-	actor := identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}
-	return s.creatorTransaction(ctx, actor, row.ProjectID, func(tx *gorm.DB, current identityapp.Principal) error {
+	actor := identityapp.Principal{ID: job.ActorID, OrgID: job.OrgID}
+	return s.creatorTransaction(ctx, actor, job.ProjectID, func(tx *gorm.DB, current identityapp.Principal) error {
 		actor = current
-		r, err := readImport(tx, actor, row.ProjectID, work.JobID, true)
+		r, err := readImport(tx, actor, job.ProjectID, work.JobID, true)
 		if err != nil {
 			return err
 		}
-		if r.Job.Attempt != work.Attempt || r.OwnerID == nil || *r.OwnerID != worker || r.IOState != "running" {
+		if r.Job.Attempt != work.Attempt || r.OwnerID == nil || *r.OwnerID != worker || r.IOState != domain.ImportIOStateRunning {
 			return application.ErrConflict
 		}
 		r.Actor = actor
@@ -172,8 +191,8 @@ func (s *ImportStore) creatorTransaction(ctx context.Context, seed identityapp.P
 }
 
 // ReportImportPhase records actual current work, never an estimated percentage.
-func (s *ImportStore) ReportImportPhase(ctx context.Context, work application.ImportWork, worker uuid.UUID, phase string, now time.Time) error {
-	if !slices.Contains([]string{"extracting", "normalizing", "storing", "committing"}, phase) {
+func (s *ImportStore) ReportImportPhase(ctx context.Context, work application.ImportWork, worker uuid.UUID, phase domain.ImportStage, now time.Time) error {
+	if phase != domain.ImportStageExtracting && phase != domain.ImportStageNormalizing && phase != domain.ImportStageStoring && phase != domain.ImportStageCommitting {
 		return domain.ErrInvalidSource
 	}
 	return s.withWorker(ctx, work, worker, func(tx *gorm.DB, r application.ImportRecord) error {
@@ -194,7 +213,7 @@ func (s *ImportStore) RecordImportFile(ctx context.Context, work application.Imp
 	if err != nil {
 		return err
 	}
-	if result.Position < 0 || result.Position > 199 || result.Status != "succeeded" && result.Status != "failed" || result.Status == "succeeded" && (len(result.RichSHA256) != 64 || len(result.ContentHash) != 64 || result.CharCount < 0 || result.CharCount > domain.MaxScalarCount) {
+	if result.Position < 0 || result.Position > 199 || result.Status != domain.ImportFileStatusSucceeded && result.Status != domain.ImportFileStatusFailed || result.Status == domain.ImportFileStatusSucceeded && (len(result.RichSHA256) != 64 || len(result.ContentHash) != 64 || result.CharCount < 0 || result.CharCount > domain.MaxScalarCount) {
 		return domain.ErrInvalidSource
 	}
 	return s.withWorker(ctx, work, worker, func(tx *gorm.DB, r application.ImportRecord) error {
@@ -215,7 +234,8 @@ func (s *ImportStore) RecordImportFile(ctx context.Context, work application.Imp
 			}
 			return nil
 		}
-		return exactlyOne(tx.Exec(`INSERT INTO script.import_file_result(job_id,attempt,position,result,created_at) VALUES(?,?,?,?::jsonb,?)`, work.JobID, work.Attempt, result.Position, string(data), now))
+		row := scriptImportFileResultRow{JobID: work.JobID, Attempt: work.Attempt, Position: result.Position, Result: scriptJSON(data), CreatedAt: now}
+		return exactlyOne(tx.Create(&row))
 	})
 }
 
@@ -223,37 +243,40 @@ func (s *ImportStore) RecordImportFile(ctx context.Context, work application.Imp
 func (s *ImportStore) FinishImport(ctx context.Context, work application.ImportWork, worker uuid.UUID, code string, uncertain bool, now time.Time) error {
 	// This nonce proves this owning call actually returned. It does not publish,
 	// delete bytes, or borrow changed caller authorization after revocation.
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var row struct{ OrgID, ProjectID, ActorID uuid.UUID }
-		if err := tx.Raw(`SELECT org_id,project_id,actor_id FROM script.import_job WHERE id=?`, work.JobID).Scan(&row).Error; err != nil {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		var job scriptImportJobRow
+		if err := tx.Where("id = ?", work.JobID).Take(&job).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return application.ErrNotFound
+			}
 			return err
 		}
-		r, err := readImport(tx, identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}, row.ProjectID, work.JobID, true)
+		r, err := readImport(tx, identityapp.Principal{ID: job.ActorID, OrgID: job.OrgID}, job.ProjectID, work.JobID, true)
 		if err != nil {
 			return err
 		}
 		if r.Job.Attempt != work.Attempt || r.OwnerID == nil || *r.OwnerID != worker {
 			return application.ErrConflict
 		}
-		if r.Job.Status == "partial" || r.Job.Status == "succeeded" || r.Job.Status == "cancelled" {
+		if r.Job.Status == domain.ImportStatusPartial || r.Job.Status == domain.ImportStatusSucceeded || r.Job.Status == domain.ImportStatusCancelled {
 			return nil
 		}
-		var pending bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.command c JOIN script.command_state s ON s.actor_id=c.actor_id AND s.request_id=c.request_id WHERE c.actor_id=? AND c.request_id=? AND s.status='pending')`, r.Actor.ID, r.PublicationKey).Scan(&pending).Error; err != nil {
+		var pending int64
+		if err := tx.Model(&scriptCommandStateRow{}).Where("actor_id = ? AND request_id = ? AND status = ?", r.Actor.ID, r.PublicationKey, scriptCommandPending).Count(&pending).Error; err != nil {
 			return err
 		}
 		j := r.Job
 		j.Revision++
 		j.FailureCode = code
-		j.NeedsReconciliation = uncertain || pending
-		j.Stage = "failed"
-		j.Status = "failed"
+		j.NeedsReconciliation = uncertain || pending > 0
+		j.Stage = domain.ImportStageFailed
+		j.Status = domain.ImportStatusFailed
 		if j.CancellationRequested {
-			j.Status = "cancel_requested"
-			j.Stage = "cancelling"
+			j.Status = domain.ImportStatusCancelRequested
+			j.Stage = domain.ImportStageCancelling
 		}
 		if j.NeedsReconciliation {
-			j.Stage = "awaiting_reconciliation"
+			j.Stage = domain.ImportStageAwaitingReconciliation
 		}
 		j.UpdatedAt = now
 		return updateImportState(tx, j, r.OwnerID, r.IOState)
@@ -265,15 +288,36 @@ func (s *ImportStore) EndImportIO(ctx context.Context, work application.ImportWo
 	if err := s.configured(); err != nil {
 		return err
 	}
-	return exactlyOne(s.db.WithContext(ctx).Exec(`UPDATE script.import_state SET io_owner_id=NULL,io_state='ended',needs_reconciliation=needs_reconciliation OR ?,revision=revision+1,updated_at=? WHERE job_id=? AND attempt=? AND io_owner_id=? AND io_state='running'`, uncertain, now, work.JobID, work.Attempt, worker))
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var state scriptImportStateRow
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ? AND attempt = ? AND io_owner_id = ? AND io_state = ?", work.JobID, work.Attempt, worker, domain.ImportIOStateRunning).Take(&state).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return application.ErrConflict
+			}
+			return err
+		}
+		return exactlyOne(tx.Model(&scriptImportStateRow{}).Where("job_id = ? AND attempt = ? AND io_owner_id = ? AND io_state = ?", work.JobID, work.Attempt, worker, domain.ImportIOStateRunning).
+			Updates(map[string]any{"io_owner_id": nil, "io_state": domain.ImportIOStateEnded, "needs_reconciliation": state.NeedsReconciliation || uncertain, "revision": state.Revision + 1, "updated_at": now}))
+	})
 }
 
-// FailImportWorkflow preserves active ownership after Temporal timeout or worker loss.
+// FailImportWorkflow preserves active ownership after an execution timeout or worker loss.
 func (s *ImportStore) FailImportWorkflow(ctx context.Context, work application.ImportWork, now time.Time) error {
 	if err := s.configured(); err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Exec(`UPDATE script.import_state SET needs_reconciliation=true,stage='awaiting_reconciliation',failure_code='import_execution_unconfirmed',revision=revision+1,updated_at=? WHERE job_id=? AND attempt=? AND status IN ('queued','running','cancel_requested')`, now, work.JobID, work.Attempt).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var state scriptImportStateRow
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ? AND attempt = ? AND status IN ?", work.JobID, work.Attempt, []domain.ImportStatus{domain.ImportStatusQueued, domain.ImportStatusRunning, domain.ImportStatusCancelRequested}).Take(&state).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return exactlyOne(tx.Model(&scriptImportStateRow{}).Where("job_id = ? AND attempt = ? AND revision = ?", work.JobID, work.Attempt, state.Revision).
+			Updates(map[string]any{"needs_reconciliation": true, "stage": domain.ImportStageAwaitingReconciliation, "failure_code": "import_execution_unconfirmed", "revision": state.Revision + 1, "updated_at": now}))
+	})
 }
 
 func (s *ImportStore) controlTransaction(ctx context.Context, d application.ImportDelivery, f func(*gorm.DB, application.ImportRecord, identityapp.Principal) error) error {
@@ -314,14 +358,14 @@ func (s *ImportStore) ImportControlRecord(ctx context.Context, d application.Imp
 // FinishImportControl preserves published versions and only releases proven unpublished work.
 func (s *ImportStore) FinishImportControl(ctx context.Context, d application.ImportDelivery, uncertain bool, now time.Time) error {
 	return s.controlTransaction(ctx, d, func(tx *gorm.DB, r application.ImportRecord, actor identityapp.Principal) error {
-		if r.OwnerID != nil || r.IOState != "idle" && r.IOState != "ended" {
+		if r.OwnerID != nil || r.IOState != domain.ImportIOStateIdle && r.IOState != domain.ImportIOStateEnded {
 			uncertain = true
 		}
-		var pending bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.command_state WHERE actor_id=? AND request_id=? AND status='pending')`, r.Actor.ID, r.PublicationKey).Scan(&pending).Error; err != nil {
+		var pending int64
+		if err := tx.Model(&scriptCommandStateRow{}).Where("actor_id = ? AND request_id = ? AND status = ?", r.Actor.ID, r.PublicationKey, scriptCommandPending).Count(&pending).Error; err != nil {
 			return err
 		}
-		if r.Job.CancellationRequested && pending {
+		if r.Job.CancellationRequested && pending > 0 {
 			uncertain = true
 		}
 		j := r.Job
@@ -331,20 +375,20 @@ func (s *ImportStore) FinishImportControl(ctx context.Context, d application.Imp
 		j.ReconciliationRequested = false
 		switch {
 		case uncertain:
-			j.Stage = "awaiting_reconciliation"
+			j.Stage = domain.ImportStageAwaitingReconciliation
 		case j.CancellationRequested:
-			j.Status = "cancelled"
-			j.Stage = "completed"
+			j.Status = domain.ImportStatusCancelled
+			j.Stage = domain.ImportStageCompleted
 			j.FailureCode = ""
 		default:
-			j.Status = "queued"
-			j.Stage = "queued"
+			j.Status = domain.ImportStatusQueued
+			j.Stage = domain.ImportStageQueued
 			j.FailureCode = ""
 		}
 		if err := updateImportState(tx, j, r.OwnerID, r.IOState); err != nil {
 			return err
 		}
-		if j.Status == "cancelled" {
+		if j.Status == domain.ImportStatusCancelled {
 			return importAudit(tx, actor, uuid.NewSHA1(d.EventID, []byte("cancelled")), d.RequestID, "cancelled", j, now)
 		}
 		return nil
@@ -358,15 +402,14 @@ func (s *ImportStore) ImportWorkState(ctx context.Context, work application.Impo
 	if err := s.configured(); err != nil {
 		return application.ImportJob{}, err
 	}
-	var row struct{ OrgID, ProjectID, ActorID uuid.UUID }
-	read := s.db.WithContext(ctx).Raw(`SELECT org_id,project_id,actor_id FROM script.import_job WHERE id=?`, work.JobID).Scan(&row)
-	if read.Error != nil {
-		return application.ImportJob{}, read.Error
+	var job scriptImportJobRow
+	if err := s.db.WithContext(ctx).Where("id = ?", work.JobID).Take(&job).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return application.ImportJob{}, application.ErrNotFound
+		}
+		return application.ImportJob{}, err
 	}
-	if read.RowsAffected != 1 {
-		return application.ImportJob{}, application.ErrNotFound
-	}
-	r, err := readImport(s.db.WithContext(ctx), identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}, row.ProjectID, work.JobID, false)
+	r, err := readImport(s.db.WithContext(ctx), identityapp.Principal{ID: job.ActorID, OrgID: job.OrgID}, job.ProjectID, work.JobID, false)
 	if err != nil {
 		return application.ImportJob{}, err
 	}
@@ -383,12 +426,20 @@ func (s *ImportStore) ProveImportStop(ctx context.Context, d application.ImportD
 		return application.ErrNeedsReconciliation
 	}
 	return s.controlTransaction(ctx, d, func(tx *gorm.DB, r application.ImportRecord, _ identityapp.Principal) error {
-		if r.OwnerID == nil && r.IOState == "ended" {
+		if r.OwnerID == nil && r.IOState == domain.ImportIOStateEnded {
 			return nil
 		}
 		if r.OwnerID == nil || *r.OwnerID != owner {
 			return application.ErrNeedsReconciliation
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.import_state SET io_owner_id=NULL,io_state='ended',revision=revision+1,updated_at=? WHERE job_id=? AND attempt=? AND io_owner_id=? AND io_state IN ('running','unknown')`, now, d.JobID, d.Attempt, owner))
+		var state scriptImportStateRow
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ? AND attempt = ? AND io_owner_id = ? AND io_state IN ?", d.JobID, d.Attempt, owner, []domain.ImportIOState{domain.ImportIOStateRunning, domain.ImportIOStateUnknown}).Take(&state).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return application.ErrConflict
+			}
+			return err
+		}
+		return exactlyOne(tx.Model(&scriptImportStateRow{}).Where("job_id = ? AND attempt = ? AND io_owner_id = ? AND io_state IN ?", d.JobID, d.Attempt, owner, []domain.ImportIOState{domain.ImportIOStateRunning, domain.ImportIOStateUnknown}).
+			Updates(map[string]any{"io_owner_id": nil, "io_state": domain.ImportIOStateEnded, "revision": state.Revision + 1, "updated_at": now}))
 	})
 }

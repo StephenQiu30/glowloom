@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
@@ -132,50 +131,18 @@ func TestStorageStrategyPatternCOSAndMinIO(t *testing.T) {
 	}
 }
 
-func TestOpenFromConfigSwitchesStrategyWithoutBusinessChanges(t *testing.T) {
-	// 1. When GLOWLOOM_OBJECT_STORAGE_PROVIDER is "cos"
-	cfgCOS := config.Config{
-		ObjectStorageProvider:  "cos",
-		ObjectStorageEndpoint:  "http://127.0.0.1:9000",
-		ObjectStorageBucket:    "fixture-bucket",
-		ObjectStorageRegion:    "ap-guangzhou",
-		ObjectStorageAccessKey: "test-ak",
-		ObjectStorageSecretKey: "test-sk",
-	}
-	cosClient, err := objectstorage.OpenFromConfig(cfgCOS)
-	if err != nil {
-		t.Fatalf("expected COS client creation to succeed: %v", err)
-	}
-	if cosClient == nil {
-		t.Fatal("expected non-nil COS client")
-	}
-	cosClient.Close()
-
-	// 2. When GLOWLOOM_OBJECT_STORAGE_PROVIDER is "minio"
-	cfgMinIO := config.Config{
-		ObjectStorageProvider:  "minio",
-		ObjectStorageEndpoint:  "http://127.0.0.1:9000",
-		ObjectStorageBucket:    "fixture-bucket",
-		ObjectStorageRegion:    "us-east-1",
-		ObjectStorageAccessKey: "test-ak",
-		ObjectStorageSecretKey: "test-sk",
-	}
-	minioClient, err := objectstorage.OpenFromConfig(cfgMinIO)
-	if err != nil {
-		t.Fatalf("expected MinIO client creation to succeed: %v", err)
-	}
-	if minioClient == nil {
-		t.Fatal("expected non-nil MinIO client")
-	}
-	minioClient.Close()
-
-	// 3. When storage configuration is entirely empty
-	cfgEmpty := config.Config{}
-	emptyClient, err := objectstorage.OpenFromConfig(cfgEmpty)
-	if err != nil {
-		t.Fatalf("expected empty config to not return error: %v", err)
-	}
-	if emptyClient != nil {
-		t.Fatal("expected nil client for unconfigured storage")
+func TestRegistrySwitchesStrategyWithoutBusinessChanges(t *testing.T) {
+	for _, provider := range []string{"cos", "minio", "tos"} {
+		t.Run(provider, func(t *testing.T) {
+			r := profileRegistry(t, provider, "http://127.0.0.1:9000")
+			ref := objectstorage.Ref{ProfileID: "minio-main", Bucket: "fixture-bucket", Key: "file.txt"}
+			if err := r.CheckWrite(t.Context(), ref); err != nil {
+				t.Fatal(err)
+			}
+			ref.Bucket = "other-bucket"
+			if err := r.CheckWrite(t.Context(), ref); err == nil {
+				t.Fatal("registry accepted an unconfigured bucket")
+			}
+		})
 	}
 }

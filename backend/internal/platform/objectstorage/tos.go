@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos"
+	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/codes"
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -34,10 +35,12 @@ func (b tosBackend) put(ctx context.Context, key string, reader io.Reader, size 
 func (b tosBackend) stat(ctx context.Context, key string) (ObjectInfo, error) {
 	info, err := b.sdk.HeadObjectV2(ctx, &tos.HeadObjectV2Input{Bucket: b.bucket, Key: key})
 	if err != nil {
-		// TOS HEAD errors have no response body, so the SDK has no Code.
-		// The official existence contract uses the HTTP status for this request.
+		// HEAD may have no body, so the SDK error Code is empty. Treat absence as
+		// confirmed only when TOS supplies its object-missing EC response header;
+		// an unclassified 404 can also mean a missing bucket or proxy endpoint.
 		var response *tos.TosServerError
-		if errors.As(err, &response) && response.StatusCode == http.StatusNotFound && response.Code == "" {
+		if errors.As(err, &response) && response.StatusCode == http.StatusNotFound &&
+			(response.Code == codes.NoSuchKey || response.RequestInfo.EcCode == "0017-00000003") {
 			return ObjectInfo{}, errors.Join(ErrObjectMissing, err)
 		}
 		return ObjectInfo{}, err

@@ -16,12 +16,6 @@ func ProvideMediaTransferStore(database *gorm.DB) *pgmedia.TransferStore {
 	return pgmedia.NewScopedTransferStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaScopeAccess)
 }
 
-// ProvideMediaTransferWorker assembles the transfer worker and its store.
-func ProvideMediaTransferWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.TransferWorker, *pgmedia.TransferStore) {
-	store := ProvideMediaTransferWorkerStore(database)
-	return mediaapp.NewTransferWorker(store, mediaobjects.NewProjectCopyObjects(storage), ""), store
-}
-
 // ProvideMediaTransferWorkerStore assembles worker-authorized transfer storage.
 func ProvideMediaTransferWorkerStore(database *gorm.DB) *pgmedia.TransferStore {
 	return pgmedia.NewScopedTransferStore(database, NewMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaWorkerScopeAccess)
@@ -32,11 +26,8 @@ func ProvideRoutedMediaTransferStore(database *gorm.DB) *pgmedia.TransferStore {
 	return ProvideMediaTransferStore(database).WithRoutedStorage()
 }
 
-// ProvideMediaTransferWorkerWithObjects uses only owner-fenced fixed locations.
-func ProvideMediaTransferWorkerWithObjects(database *gorm.DB, registry *objectstorage.Registry, legacy *objectstorage.Client) (*mediaapp.TransferWorker, *pgmedia.TransferStore) {
-	if registry == nil {
-		return ProvideMediaTransferWorker(database, legacy)
-	}
+// ProvideMediaTransferWorker uses only owner-fenced fixed locations.
+func ProvideMediaTransferWorker(database *gorm.DB, registry *objectstorage.Registry) (*mediaapp.TransferWorker, *pgmedia.TransferStore) {
 	store := ProvideMediaTransferWorkerStore(database).WithRoutedStorage()
 	return mediaapp.NewRoutedTransferWorker(store, mediaobjects.NewRoutedCopyObjects(registry, pgmedia.NewStorageRoutes(database)), ""), store
 }

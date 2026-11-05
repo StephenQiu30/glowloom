@@ -19,7 +19,7 @@ func (s *SourceService) WriteFiles(ctx context.Context, actor identityapp.Princi
 	if s == nil || s.store == nil || s.objects == nil || s.now == nil {
 		return SourceReceipt{}, ErrUnavailable
 	}
-	if in.Action != "import" || in.ProjectID == uuid.Nil || in.Key == uuid.Nil || in.RequestID == uuid.Nil || !in.RightsConfirmed || len(files) < 1 || len(files) > 200 || rightsAt.IsZero() {
+	if in.Action != domain.SourceActionImport || in.ProjectID == uuid.Nil || in.Key == uuid.Nil || in.RequestID == uuid.Nil || !in.RightsConfirmed || len(files) < 1 || len(files) > 200 || rightsAt.IsZero() {
 		return SourceReceipt{}, domain.ErrInvalidSource
 	}
 	type frozen struct {
@@ -81,11 +81,11 @@ func (s *SourceService) WriteFiles(ctx context.Context, actor identityapp.Princi
 	objects := []objectBytes{}
 	for _, file := range files {
 		id := file.Frozen.SourceID
-		r, doc, raw, err := makeSource(in.ProjectID, actor, id, id, nil, 1, SourceInput{Kind: "document", Title: file.Title, Status: "draft", Document: file.Extracted.Document}, at)
+		r, doc, raw, err := makeSource(in.ProjectID, actor, id, id, nil, 1, SourceInput{Kind: domain.SourceKindDocument, Title: file.Title, Status: domain.SourceStatusDraft, Document: file.Extracted.Document}, at)
 		if err != nil {
 			return SourceReceipt{}, err
 		}
-		r.Origin = "file"
+		r.Origin = domain.SourceOriginFile
 		r.MediaAssetID = &file.Frozen.Source.AssetID
 		r.MediaRevision = &file.Frozen.Source.Revision
 		r.MediaSHA256 = &file.Frozen.Source.SHA256
@@ -135,7 +135,7 @@ func (s *SourceService) WriteFiles(ctx context.Context, actor identityapp.Princi
 		number = base.Version.VersionNo + 1
 	}
 	plan.Version = domain.ScriptVersion{ID: versionID, OrgID: actor.OrgID, ProjectID: in.ProjectID, VersionNo: number, SourceIDs: ids, Spans: composed.Spans, Text: text, Rich: rich, ContentHash: composed.ContentHash, DocumentSHA256: composed.DocumentSHA256, SourceManifestSHA256: domain.ContentSHA(manifest), CharCount: utf8.RuneCountInString(composed.Text), CreatedAt: at}
-	plan.Candidate = domain.SplitSet{ID: uuid.NewSHA1(versionID, []byte("source-candidates")), VersionID: versionID, OrgID: actor.OrgID, ProjectID: in.ProjectID, Kind: "candidate", Origin: "sources", Boundaries: composed.Candidates, CreatedAt: at}
+	plan.Candidate = domain.SplitSet{ID: uuid.NewSHA1(versionID, []byte("source-candidates")), VersionID: versionID, OrgID: actor.OrgID, ProjectID: in.ProjectID, Kind: domain.SplitSetKindCandidate, Origin: domain.SplitSetOriginSources, Boundaries: composed.Candidates, CreatedAt: at}
 	objects = append(objects, objectBytes{text, []byte(composed.Text)}, objectBytes{rich, composed.RichJSON})
 	for _, object := range objects {
 		plan.Objects = append(plan.Objects, object.fact)

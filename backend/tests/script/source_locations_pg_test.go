@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -18,6 +17,7 @@ import (
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
@@ -42,21 +42,7 @@ func TestScriptLocatedPGAdmissionHistoryAndReplaySurviveDefaultSwitch(t *testing
 		t.Fatal(err)
 	}
 	if !initialized {
-		raw, err := os.ReadFile(filepath.Join("..", "..", "db", "schema.sql"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := owner.DB.Exec(string(raw)).Error; err != nil {
-			t.Fatal(err)
-		}
-		routes := pgmedia.NewStorageRoutes(owner.DB)
-		sha := strings.Repeat("a", 64)
-		if _, err := routes.ProveEmptyStorageDeployment(t.Context(), sha); err != nil {
-			t.Fatal(err)
-		}
-		if err := routes.FinalizeStorageSchema(t.Context(), sha); err != nil {
-			t.Fatal(err)
-		}
+		t.Fatal("initialize the explicitly selected empty test database from db/schema.sql before running")
 	}
 	routes := pgmedia.NewStorageRoutes(owner.DB)
 	profiles := []media.StorageProfile{
@@ -66,12 +52,8 @@ func TestScriptLocatedPGAdmissionHistoryAndReplaySurviveDefaultSwitch(t *testing
 	if err := routes.RegisterProfiles(t.Context(), profiles); err != nil {
 		t.Fatal(err)
 	}
-	prior, _ := routes.ReadActive(t.Context())
-	firstRevision := "fixture-" + uuid.NewString()
-	// Explicit low-level route fixture: no cloud/deployment acceptance is claimed.
-	if _, err := routes.Activate(t.Context(), prior.Revision, firstRevision, profiles[0].ID); err != nil {
-		t.Fatal(err)
-	}
+	// Explicit environment fixture; no cloud/deployment acceptance is claimed.
+	firstRevision := applyScriptFixtureEnvironment(t, owner.DB, profiles, profiles[0].ID)
 	q := u.Query()
 	q.Set("options", "-c role=glowloom_app")
 	u.RawQuery = q.Encode()
@@ -94,8 +76,14 @@ func TestScriptLocatedPGAdmissionHistoryAndReplaySurviveDefaultSwitch(t *testing
 	if err != nil || len(base.Sources) != 1 || base.Sources[0].Rich.LocationID == uuid.Nil {
 		t.Fatal("history did not retain physical identity", err)
 	}
-	if _, err := routes.Activate(t.Context(), firstRevision, "fixture-"+uuid.NewString(), profiles[1].ID); err != nil {
+	secondRevision := applyScriptFixtureEnvironment(t, owner.DB, profiles, profiles[1].ID)
+	firstNumber, err := config.ParseStorageRevision(firstRevision)
+	if err != nil {
 		t.Fatal(err)
+	}
+	secondNumber, err := config.ParseStorageRevision(secondRevision)
+	if err != nil || secondNumber <= firstNumber {
+		t.Fatal("default switch did not advance the numeric deployment revision", firstRevision, secondRevision, err)
 	}
 	if _, err := service.Source(t.Context(), actor, project, base.Sources[0].LineageID, nil); err != nil {
 		t.Fatal("historical read followed new default", err)
@@ -132,7 +120,11 @@ func TestScriptLocatedPGAdmissionHistoryAndReplaySurviveDefaultSwitch(t *testing
 		t.Fatal(err)
 	}
 	if err := runtime.DB.Transaction(func(tx *gorm.DB) error {
-		return scriptwire.ProvideScriptObjectLocations(tx).BeginRemoval(t.Context(), intent, facts[0])
+		ready, err := scriptwire.ProvideScriptObjectLocations(tx).BeginRemoval(t.Context(), intent, facts[0])
+		if ready {
+			t.Fatal("undrained write received removal permission")
+		}
+		return err
 	}); err != nil {
 		t.Fatal("cancellation debt callback rolled back its clock", err)
 	}

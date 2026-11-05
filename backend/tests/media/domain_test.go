@@ -3,6 +3,7 @@ package media_test
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -235,5 +236,59 @@ func TestRenditionValidate(t *testing.T) {
 	base.MediaAssetID = uuid.Nil
 	if err := base.Validate(); !errors.Is(err, domain.ErrInvalidRendition) {
 		t.Fatalf("missing parent = %v", err)
+	}
+}
+
+func TestMediaAssetTransferAttemptKeysRetainExactOwnershipAndCanonicalAttempt(t *testing.T) {
+	for _, personal := range []bool{false, true} {
+		name := "project"
+		asset := validAsset()
+		prefix := fmt.Sprintf("projects/%s/video/2026/09/", asset.ProjectID)
+		if personal {
+			name = "personal"
+			asset.ProjectID = uuid.Nil
+			asset.Personal = &domain.PersonalOwnership{OrgID: uuid.New(), ActorID: uuid.New()}
+			prefix = fmt.Sprintf("personal/%s/%s/video/2026/09/", asset.Personal.OrgID, asset.Personal.ActorID)
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, attempt := range []string{"1", "2147483647"} {
+				candidate := asset
+				candidate.ObjectKey = prefix + asset.ID.String() + "-transfer-" + attempt + ".mp4"
+				if err := candidate.Validate(); err != nil {
+					t.Fatal("current attempt identity rejected", attempt, err)
+				}
+			}
+			for _, suffix := range []string{"0", "-1", "+1", "01", "2147483648", "", "1.0", "１"} {
+				candidate := asset
+				candidate.ObjectKey = prefix + asset.ID.String() + "-transfer-" + suffix + ".mp4"
+				if !errors.Is(candidate.Validate(), domain.ErrInvalidMediaAsset) {
+					t.Fatal("noncanonical attempt accepted", suffix)
+				}
+			}
+			ownerID := asset.ProjectID
+			if asset.Personal != nil {
+				ownerID = asset.Personal.ActorID
+			}
+			foreignPrefix := strings.Replace(prefix, ownerID.String(), uuid.NewString(), 1)
+			for _, key := range []string{
+				foreignPrefix + asset.ID.String() + "-transfer-1.mp4",
+				prefix + uuid.NewString() + "-transfer-1.mp4",
+				prefix + asset.ID.String() + "/transfer-attempts/1/original.mp4",
+				prefix + "../" + asset.ID.String() + "-transfer-1.mp4",
+				prefix + asset.ID.String() + "-transfer-1.",
+				prefix + asset.ID.String() + "-transfer-1.mp-4",
+				prefix + asset.ID.String() + "-transfer-1.mp4/extra",
+				strings.Replace(prefix, "video/", "image/", 1) + asset.ID.String() + "-transfer-1.mp4",
+				strings.Replace(prefix, "/2026/09/", "/2026/13/", 1) + asset.ID.String() + "-transfer-1.mp4",
+				strings.Replace(prefix, "/2026/09/", "/a026/09/", 1) + asset.ID.String() + "-transfer-1.mp4",
+				prefix + asset.ID.String() + "-transfer-1." + strings.Repeat("a", 17),
+			} {
+				candidate := asset
+				candidate.ObjectKey = key
+				if !errors.Is(candidate.Validate(), domain.ErrInvalidMediaAsset) {
+					t.Fatal("foreign, nested or malformed attempt identity accepted", key)
+				}
+			}
+		})
 	}
 }

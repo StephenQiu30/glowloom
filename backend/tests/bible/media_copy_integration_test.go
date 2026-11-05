@@ -15,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -60,7 +63,7 @@ func (r bibleCopyMedia) FreezeReferences(ctx context.Context, actor identityapp.
 
 type bibleTransferredReferences struct {
 	db        *gorm.DB
-	objects   *objectstorage.Client
+	objects   *objectstorage.Registry
 	authority workspaceapp.ProjectCopyAuthority
 	snapshot  mediaapp.ProjectCopySnapshot
 }
@@ -74,7 +77,7 @@ func (r bibleTransferredReferences) VerifyTransferred(ctx context.Context, actor
 		for i, row := range rows {
 			input[i] = mediaapp.ProjectCopyReferenceMapping{Source: referenceFact(row.Source), Target: referenceFact(row.Target)}
 		}
-		return mediaapp.NewProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx), r.objects).VerifyTransferred(ctx, actor, bibleMediaBinding(b), r.snapshot, input)
+		return mediaapp.NewRoutedProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx), mediaobjects.NewRoutedReadObjects(r.objects)).VerifyTransferred(ctx, actor, bibleMediaBinding(b), r.snapshot, input)
 	})
 }
 
@@ -82,7 +85,7 @@ func bibleCopyMediaStore(db *gorm.DB, authority workspaceapp.ProjectCopyAuthorit
 	return pg.NewProjectCopyStore(db, func(tx *gorm.DB) app.ProjectCopyAccess {
 		return bibleCopyAccess{bibleFixtureCopyAccess(tx, authority)}
 	}, func(tx *gorm.DB) app.ProjectCopyMedia {
-		return bibleCopyMedia{mediaapp.NewProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx), nil), media}
+		return bibleCopyMedia{mediaapp.NewProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx)), media}
 	}, nil)
 }
 
@@ -93,15 +96,15 @@ func bibleCoordinatorObjects(db *gorm.DB) *workspacepg.ProjectCopyStore {
 }
 
 type bibleRemoveFault struct {
-	mediaapp.ProjectCopyObjects
+	mediaapp.PhysicalTransferObjects
 	key string
 }
 
-func (f bibleRemoveFault) Remove(ctx context.Context, key string) error {
-	if key == f.key {
+func (f bibleRemoveFault) Remove(ctx context.Context, ref mediadomain.ObjectRef) error {
+	if ref.Key == f.key {
 		return errors.New("injected private removal failure")
 	}
-	return f.ProjectCopyObjects.Remove(ctx, key)
+	return f.PhysicalTransferObjects.Remove(ctx, ref)
 }
 
 // This fixture uses real owning ports and a claimed workspace fence. Root's
@@ -127,7 +130,7 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	service := app.NewService(pg.NewStore(db, pg.Factories{
 		Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) },
 		Media: func(tx *gorm.DB) app.MediaReferences {
-			return actualBibleMedia{mediaapp.NewReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
+			return actualBibleMedia{mediaapp.NewRoutedReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}
 		},
 	}), time.Now)
 	first, err := service.Change(t.Context(), actor, createCharacter(source))
@@ -204,10 +207,10 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	coordinator := bibleCoordinatorObjects(db)
 	repo := workspacepg.NewProjectCopyMediaObjects(coordinator, b.JobID, authority.WorkerID, false)
 	stale := workspacepg.NewProjectCopyMediaObjects(coordinator, b.JobID, uuid.New(), false)
-	if err := mediaapp.NewProjectCopyTransfer(stale, mediaobjects.NewProjectCopyObjects(objects), t.TempDir()).Transfer(t.Context(), actor, bibleMediaBinding(b), media); !errors.Is(err, workspacedomain.ErrProjectCopyWorkerConflict) {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(stale, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir()).Transfer(t.Context(), actor, bibleMediaBinding(b), media); !errors.Is(err, workspacedomain.ErrProjectCopyWorkerConflict) {
 		t.Fatal("stale media worker accepted", err)
 	}
-	if err := mediaapp.NewProjectCopyTransfer(repo, mediaobjects.NewProjectCopyObjects(objects), t.TempDir()).Transfer(t.Context(), actor, bibleMediaBinding(b), media); err != nil {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir()).Transfer(t.Context(), actor, bibleMediaBinding(b), media); err != nil {
 		t.Fatal("actual fenced private transfer", err)
 	}
 	intents, err := repo.Objects(t.Context(), actor, bibleMediaBinding(b), media)
@@ -239,7 +242,7 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 		t.Fatal(err)
 	}
 	copyStore := bibleCopyMediaStore(db, authority, media)
-	consumer := app.NewProjectCopy(copyStore, bibleTransferredReferences{db, objects, authority, media})
+	consumer := app.NewProjectCopy(copyStore, bibleTransferredReferences{db, businessStorageRegistry(t), authority, media})
 	object := intents[0]
 	reader, err := objects.Get(t.Context(), object.TargetObjectKey)
 	if err != nil {
@@ -304,13 +307,14 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 		t.Fatal("seal unpublished immutable history", err)
 	}
 	cleanupRepo := workspacepg.NewProjectCopyMediaObjects(coordinator, b.JobID, authority.WorkerID, true)
-	fault := bibleRemoveFault{ProjectCopyObjects: mediaobjects.NewProjectCopyObjects(objects), key: intents[0].TargetObjectKey}
-	err = mediaapp.NewProjectCopyTransfer(cleanupRepo, fault, t.TempDir()).Cleanup(t.Context(), actor, bibleMediaBinding(b), media)
+	fault := bibleRemoveFault{PhysicalTransferObjects: mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), key: intents[0].TargetObjectKey}
+	err = mediaapp.NewRoutedProjectCopyTransfer(cleanupRepo, fault, t.TempDir()).Cleanup(t.Context(), actor, bibleMediaBinding(b), media)
 	var removal *mediaapp.ProjectCopyTransferError
 	if !errors.As(err, &removal) || !removal.NeedsReconciliation || removal.Code != "object_remove_unknown" {
 		t.Fatal("unknown removal released cleanup fence", err)
 	}
-	if err := mediaapp.NewProjectCopyTransfer(cleanupRepo, mediaobjects.NewProjectCopyObjects(objects), t.TempDir()).Cleanup(t.Context(), actor, bibleMediaBinding(b), media); err != nil {
+	businessExpireStorageWindow(t, owner, b.TargetProjectID)
+	if err := mediaapp.NewRoutedProjectCopyTransfer(cleanupRepo, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir()).Cleanup(t.Context(), actor, bibleMediaBinding(b), media); err != nil {
 		t.Fatal("same frozen object cleanup recovery", err)
 	}
 	if err := coordinator.UseAttempt(t.Context(), actor, b.JobID, authority.WorkerID, "cleanup", func(owners workspaceapp.ProjectCopyOwners, _ workspacedomain.ProjectCopyJob) error {

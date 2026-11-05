@@ -51,7 +51,6 @@ type ModelPrice struct {
 	EffectiveFrom time.Time       `json:"effective_from"`
 }
 
-// ModelResponse is safe display data, excluding provider URLs and credentials.
 // PricingPreview describes catalog information, never a confirmation ticket.
 type PricingPreview struct {
 	AmountKind     string     `json:"amount_kind"`
@@ -62,6 +61,7 @@ type PricingPreview struct {
 	Currency       string     `json:"currency,omitempty"`
 }
 
+// ModelResponse is the public model metadata and current configuration projection.
 type ModelResponse struct {
 	PricingPreview       PricingPreview `json:"pricing_preview"`
 	ID                   uuid.UUID      `json:"id"`

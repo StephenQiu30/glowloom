@@ -48,7 +48,7 @@ func TestOpenAIResponsesProtocol(t *testing.T) {
 			})})
 			result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: openAIConfig(t), Capability: "text.generate", Mode: "text_to_text", ModelID: "gpt-6.1-sol", Prompt: "hello", OutputCount: 1, Params: map[string]any{"max_tokens": 128}}, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, tc.outcome, result.Outcome)
+			require.Equal(t, operationapp.ProviderOutcome(tc.outcome), result.Outcome)
 			require.Equal(t, 1, calls)
 			if tc.outcome == "completed" {
 				require.Equal(t, "fixture reply", result.Text)
@@ -85,12 +85,12 @@ func TestOpenAIImageOmitsRetiredDalleParameters(t *testing.T) {
 	input := operationapp.GenerationRequest{Config: openAIConfig(t), Capability: "image.generate", Mode: "text2image", ModelID: "gpt-image-2.5-sunburst", Prompt: "hello", OutputCount: 1, Params: map[string]any{"size": "1024x1024", "quality": "medium"}}
 	result, err := client.Submit(t.Context(), input, "fixture-key")
 	require.NoError(t, err)
-	require.Equal(t, "completed", result.Outcome)
+	require.Equal(t, operationapp.ProviderOutcome("completed"), result.Outcome)
 	require.Len(t, result.Images, 1)
 	input.Params["seed"] = 1
 	result, err = client.Submit(t.Context(), input, "fixture-key")
 	require.NoError(t, err)
-	require.Equal(t, "not_submitted", result.Outcome)
+	require.Equal(t, operationapp.ProviderOutcome("not_submitted"), result.Outcome)
 	require.Equal(t, 1, calls)
 }
 
@@ -104,7 +104,7 @@ func TestOpenAILegacyFrozenTextKeepsChatProtocolAndParameters(t *testing.T) {
 	})})
 	result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: openAIConfig(t), Capability: "text.generate", Mode: "text_to_text", ModelID: "gpt-4o", Prompt: "hello", OutputCount: 1, Params: map[string]any{"temperature": 0.5}}, "fixture-key")
 	require.NoError(t, err)
-	require.Equal(t, "completed", result.Outcome)
+	require.Equal(t, operationapp.ProviderOutcome("completed"), result.Outcome)
 }
 
 func TestOpenAIImageAliasDoesNotUseDalleResponseFormat(t *testing.T) {

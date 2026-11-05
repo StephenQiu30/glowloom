@@ -1,4 +1,4 @@
-// Package event verifies durable local processing commands before Temporal delivery.
+// Package event verifies durable local processing commands before external delivery.
 package event
 
 import (
@@ -39,7 +39,7 @@ type Handler struct {
 	starter   Starter
 }
 
-// NewHandler injects durable delivery proof and the configured Temporal client.
+// NewHandler injects durable delivery proof and the configured command consumer.
 func NewHandler(processed ProcessedStore, store DeliveryStore, starter Starter) *Handler {
 	return &Handler{processed: processed, store: store, starter: starter}
 }

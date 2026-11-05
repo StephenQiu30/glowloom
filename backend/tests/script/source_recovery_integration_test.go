@@ -15,7 +15,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
-	objectsadapter "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
@@ -34,7 +33,7 @@ func TestScriptSourceRecoveryPGPrivateCancelRevokedCreatorAndImmutableControl(t 
 	db, owner := scriptTestDB(t)
 	creator, pid := scriptActorProject(t, owner)
 	admin := scriptAdmin(t, owner, creator.OrgID)
-	storage := objectsadapter.NewStorage(scriptStorage(t))
+	storage := scriptPrivateObjects(t, db)
 	loss := &lostPrivatePut{PrivateObjects: storage}
 	store := scriptStore(db)
 	sources := app.NewSourceService(store, loss, time.Now)
@@ -58,6 +57,21 @@ func TestScriptSourceRecoveryPGPrivateCancelRevokedCreatorAndImmutableControl(t 
 		t.Fatal("current admin cancel", err)
 	}
 	current, err := recovery.Get(t.Context(), admin, pid, intent.ID)
+	if err != nil || current.Status != "pending" || !current.NeedsReconciliation || current.ActiveIO {
+		t.Fatal("cancel must retain the remote-write drain fence", current, err)
+	}
+	plan := pendingScriptPlan(t, owner, pid)
+	assertScriptFixtureObjectPresent(t, storage, plan.Objects[0])
+	expireScriptFixtureSourceDrain(t, owner, plan)
+	reconcile := command
+	reconcile.Key = uuid.New()
+	reconcile.RequestID = uuid.New()
+	reconcile.Action = "reconcile"
+	reconcile.ExpectedRevision = current.Revision
+	if _, err := recovery.Control(t.Context(), admin, reconcile); err != nil {
+		t.Fatal(err)
+	}
+	current, err = recovery.Get(t.Context(), admin, pid, intent.ID)
 	if err != nil || current.Status != "cancelled" || current.NeedsReconciliation {
 		t.Fatal("actual private cleanup", current, err)
 	}
@@ -87,8 +101,8 @@ type pausedScriptPut struct {
 	exited  chan struct{}
 }
 
-func (p *pausedScriptPut) PutIfAbsent(ctx context.Context, key string, r io.Reader, size int64, mime, sha string) error {
-	if err := p.PrivateObjects.PutIfAbsent(ctx, key, r, size, mime, sha); err != nil {
+func (p *pausedScriptPut) PutObjectIfAbsent(ctx context.Context, fact domain.ObjectFact, r io.Reader) error {
+	if err := p.PrivateObjects.PutObjectIfAbsent(ctx, fact, r); err != nil {
 		return err
 	}
 	close(p.started)
@@ -100,7 +114,7 @@ func TestScriptSourceRecoveryPGActivePrivateIOCancelJoinsBeforeCleanup(t *testin
 	db, owner := scriptTestDB(t)
 	creator, pid := scriptActorProject(t, owner)
 	admin := scriptAdmin(t, owner, creator.OrgID)
-	paused := &pausedScriptPut{PrivateObjects: objectsadapter.NewStorage(scriptStorage(t)), started: make(chan struct{}), exited: make(chan struct{})}
+	paused := &pausedScriptPut{PrivateObjects: scriptPrivateObjects(t, db), started: make(chan struct{}), exited: make(chan struct{})}
 	store := scriptStore(db)
 	sources := app.NewSourceService(store, paused, time.Now)
 	recovery := app.NewSourceRecovery(store, sources, time.Now)
@@ -137,6 +151,21 @@ func TestScriptSourceRecoveryPGActivePrivateIOCancelJoinsBeforeCleanup(t *testin
 		t.Fatal("source routine leaked")
 	}
 	current, err := recovery.Get(ctx, admin, pid, page.Items[0].ID)
+	if err != nil || current.Status != "pending" || !current.NeedsReconciliation || current.ActiveIO {
+		t.Fatal("joined SDK still needs remote-write drain", current, err)
+	}
+	plan := pendingScriptPlan(t, owner, pid)
+	assertScriptFixtureObjectPresent(t, paused, plan.Objects[0])
+	expireScriptFixtureSourceDrain(t, owner, plan)
+	reconcile := command
+	reconcile.Key = uuid.New()
+	reconcile.RequestID = uuid.New()
+	reconcile.Action = "reconcile"
+	reconcile.ExpectedRevision = current.Revision
+	if _, err := recovery.Control(t.Context(), admin, reconcile); err != nil {
+		t.Fatal(err)
+	}
+	current, err = recovery.Get(t.Context(), admin, pid, page.Items[0].ID)
 	if err != nil || current.Status != "cancelled" {
 		t.Fatal("joined cleanup", current, err)
 	}
@@ -147,7 +176,7 @@ func TestScriptSourceRecoveryPGActivePrivateIOCancelJoinsBeforeCleanup(t *testin
 
 type neverScriptPut struct{ app.PrivateObjects }
 
-func (p neverScriptPut) PutIfAbsent(context.Context, string, io.Reader, int64, string, string) error {
+func (p neverScriptPut) PutObjectIfAbsent(context.Context, domain.ObjectFact, io.Reader) error {
 	return errors.New("synthetic private put has an unknown remote outcome")
 }
 
@@ -161,15 +190,38 @@ func pendingScriptPlan(t *testing.T, owner *gorm.DB, pid uuid.UUID) app.WritePla
 	if err := json.Unmarshal([]byte(row.Plan), &plan); err != nil {
 		t.Fatal("decode synthetic script plan")
 	}
+	// Semantic command JSON intentionally excludes physical IDs. The fixture
+	// reads the exact command's own object ledger, as the production store does.
+	var rows []struct {
+		ObjectKey        string
+		ObjectLocationID uuid.UUID
+	}
+	if err := owner.Raw(`SELECT object_key,object_location_id FROM script.object_intent WHERE actor_id=? AND request_id=?`, plan.ActorID, plan.Command.Key).Scan(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	byKey := make(map[string]uuid.UUID, len(rows))
+	for _, row := range rows {
+		byKey[row.ObjectKey] = row.ObjectLocationID
+	}
+	for i := range plan.Objects {
+		plan.Objects[i].LocationID = byKey[plan.Objects[i].Key]
+		if plan.Objects[i].LocationID == uuid.Nil {
+			t.Fatal("command object lacks its admitted physical location")
+		}
+	}
+	for i := range plan.NewSources {
+		plan.NewSources[i].Original.LocationID = byKey[plan.NewSources[i].Original.Key]
+		plan.NewSources[i].Rich.LocationID = byKey[plan.NewSources[i].Rich.Key]
+	}
+	plan.Version.Text.LocationID = byKey[plan.Version.Text.Key]
+	plan.Version.Rich.LocationID = byKey[plan.Version.Rich.Key]
 	return plan
 }
-func cleanScriptPlan(t *testing.T, objects app.PrivateObjects, plan app.WritePlan) {
+func cleanScriptPlan(t *testing.T, db *gorm.DB, _ app.PrivateObjects, plan app.WritePlan) {
 	t.Helper()
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 		for _, f := range plan.Objects {
-			if err := objects.Remove(ctx, f.Key); err != nil {
+			if err := removeScriptFixtureBytes(t, db, f); err != nil {
 				t.Error("clean exact synthetic script object")
 			}
 		}
@@ -181,7 +233,7 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 			db, owner := scriptTestDB(t)
 			creator, pid := scriptActorProject(t, owner)
 			admin := scriptAdmin(t, owner, creator.OrgID)
-			privateObjects := objectsadapter.NewStorage(scriptStorage(t))
+			privateObjects := scriptPrivateObjects(t, db)
 			var objects app.PrivateObjects = &lostPrivatePut{PrivateObjects: privateObjects}
 			if scenario == "unknown_put_absent" {
 				objects = neverScriptPut{PrivateObjects: privateObjects}
@@ -195,7 +247,7 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 				t.Fatal(err)
 			}
 			plan := pendingScriptPlan(t, owner, pid)
-			cleanScriptPlan(t, privateObjects, plan)
+			cleanScriptPlan(t, db, privateObjects, plan)
 			if scenario == "process_lost" {
 				if err := owner.Exec(`UPDATE script.command_state SET io_state='running',io_owner_id=? WHERE actor_id=? AND request_id=?`, uuid.New(), creator.ID, input.Key).Error; err != nil {
 					t.Fatal(err)
@@ -203,11 +255,11 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 			}
 			if scenario == "foreign_digest" {
 				f := plan.Objects[0]
-				if err := privateObjects.Remove(t.Context(), f.Key); err != nil {
+				if err := removeScriptFixtureBytes(t, db, f); err != nil {
 					t.Fatal(err)
 				}
 				bad := []byte("foreign bytes")
-				if err := privateObjects.PutIfAbsent(t.Context(), f.Key, bytes.NewReader(bad), int64(len(bad)), f.MIME, domain.ContentSHA(bad)); err != nil {
+				if err := putScriptFixtureBytes(t, db, f, bytes.NewReader(bad), int64(len(bad)), f.MIME, domain.ContentSHA(bad)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -264,9 +316,10 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 					t.Fatal(err)
 				}
 				f := plan.NewSources[0].Original
-				if err := privateObjects.PutIfAbsent(t.Context(), f.Key, bytes.NewReader(raw), f.ByteSize, f.MIME, f.SHA256); err != nil {
+				if err := putScriptFixtureBytes(t, db, f, bytes.NewReader(raw), f.ByteSize, f.MIME, f.SHA256); err != nil {
 					t.Fatal(err)
 				}
+				expireScriptFixtureSourceDrain(t, owner, plan)
 				recon := command
 				recon.Key = uuid.New()
 				recon.Action = "reconcile"
@@ -307,7 +360,7 @@ func TestScriptSourceRecoveryPGZeroRowFinalizationRollsBackAndCleanupRecovers(t 
 			db, owner := scriptTestDB(t)
 			creator, pid := scriptActorProject(t, owner)
 			admin := scriptAdmin(t, owner, creator.OrgID)
-			privateObjects := objectsadapter.NewStorage(scriptStorage(t))
+			privateObjects := scriptPrivateObjects(t, db)
 			store := scriptStore(db)
 			sources := app.NewSourceService(store, privateObjects, time.Now)
 			table, condition := "script.project_state", "NEW.project_id='"+pid.String()+"'::uuid"
@@ -326,7 +379,7 @@ func TestScriptSourceRecoveryPGZeroRowFinalizationRollsBackAndCleanupRecovers(t 
 				t.Fatal("zero-row commit accepted", err)
 			}
 			plan := pendingScriptPlan(t, owner, pid)
-			cleanScriptPlan(t, privateObjects, plan)
+			cleanScriptPlan(t, db, privateObjects, plan)
 			if s, v, c := scriptCounts(t, owner, pid); s != 0 || v != 0 || c != 1 {
 				t.Fatal("partial formal facts", s, v, c)
 			}
@@ -344,6 +397,20 @@ func TestScriptSourceRecoveryPGZeroRowFinalizationRollsBackAndCleanupRecovers(t 
 				t.Fatal(err)
 			}
 			current, err := recovery.Get(t.Context(), admin, pid, command.IntentID)
+			if err != nil || current.Status != "pending" || !current.NeedsReconciliation {
+				t.Fatal("unexpired rollback outputs lost their drain fence", current, err)
+			}
+			assertScriptFixtureObjectPresent(t, privateObjects, plan.Objects[0])
+			expireScriptFixtureSourceDrain(t, owner, plan)
+			reconcile := command
+			reconcile.Key = uuid.New()
+			reconcile.RequestID = uuid.New()
+			reconcile.Action = "reconcile"
+			reconcile.ExpectedRevision = current.Revision
+			if _, err := recovery.Control(t.Context(), admin, reconcile); err != nil {
+				t.Fatal(err)
+			}
+			current, err = recovery.Get(t.Context(), admin, pid, command.IntentID)
 			if err != nil || current.Status != "cancelled" {
 				t.Fatal("zero row unpublished cleanup", current, err)
 			}
@@ -355,7 +422,7 @@ func TestScriptSourceRecoveryPGCleanupZeroRowKeepsProofForExplicitReconcile(t *t
 	db, owner := scriptTestDB(t)
 	creator, pid := scriptActorProject(t, owner)
 	admin := scriptAdmin(t, owner, creator.OrgID)
-	privateObjects := objectsadapter.NewStorage(scriptStorage(t))
+	privateObjects := scriptPrivateObjects(t, db)
 	store := scriptStore(db)
 	sources := app.NewSourceService(store, &lostPrivatePut{PrivateObjects: privateObjects}, time.Now)
 	recovery := app.NewSourceRecovery(store, sources, time.Now)
@@ -365,14 +432,18 @@ func TestScriptSourceRecoveryPGCleanupZeroRowKeepsProofForExplicitReconcile(t *t
 		t.Fatal(err)
 	}
 	plan := pendingScriptPlan(t, owner, pid)
-	cleanScriptPlan(t, privateObjects, plan)
+	cleanScriptPlan(t, db, privateObjects, plan)
 	// Inject only cleanup bookkeeping loss, after actual deletion. The pre-delete
 	// digest proof must survive so a later absence can be safely reconciled.
 	name := "script_remove_null_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	if err := owner.Exec(`CREATE FUNCTION script.` + name + `() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.removed THEN RETURN NULL; END IF; RETURN NEW; END $$`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.Exec(`CREATE TRIGGER ` + name + ` BEFORE UPDATE ON script.object_state FOR EACH ROW EXECUTE FUNCTION script.` + name + `()`).Error; err != nil {
+	// Fail only the receipt for the exact real object written before the lost
+	// response. Earlier confirmed-absent objects may now correctly finish their
+	// own owner bookkeeping without consuming this post-delete fault.
+	fault := plan.Objects[0]
+	if err := owner.Exec(`CREATE TRIGGER ` + name + ` BEFORE UPDATE ON script.object_state FOR EACH ROW WHEN (NEW.object_location_id='` + fault.LocationID.String() + `'::uuid AND NEW.object_key='` + strings.ReplaceAll(fault.Key, "'", "''") + `') EXECUTE FUNCTION script.` + name + `()`).Error; err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -394,6 +465,30 @@ func TestScriptSourceRecoveryPGCleanupZeroRowKeepsProofForExplicitReconcile(t *t
 	current, err := recovery.Get(t.Context(), admin, pid, command.IntentID)
 	if err != nil || current.Status != "pending" || !current.NeedsReconciliation {
 		t.Fatal("cleanup zero row cleared fence", current, err)
+	}
+	assertScriptFixtureObjectPresent(t, privateObjects, plan.Objects[0])
+	expireScriptFixtureSourceDrain(t, owner, plan)
+	probe := command
+	probe.Key = uuid.New()
+	probe.RequestID = uuid.New()
+	probe.Action = "reconcile"
+	probe.ExpectedRevision = current.Revision
+	if _, err := recovery.Control(t.Context(), admin, probe); err != nil {
+		t.Fatal(err)
+	}
+	reader, absenceErr := privateObjects.GetObject(t.Context(), plan.Objects[0])
+	if absenceErr == nil {
+		// The native MinIO SDK opens lazily; consume the response to observe its
+		// actual missing-object result before checking the lost receipt.
+		_, absenceErr = io.ReadAll(reader)
+		absenceErr = errors.Join(absenceErr, reader.Close())
+	}
+	if !errors.Is(absenceErr, app.ErrObjectMissing) {
+		t.Fatal("bookkeeping fault did not follow real deletion", absenceErr)
+	}
+	current, err = recovery.Get(t.Context(), admin, pid, command.IntentID)
+	if err != nil || current.Status != "pending" || !current.NeedsReconciliation {
+		t.Fatal("lost deletion receipt cleared cancellation fence", current, err)
 	}
 	if err := owner.Exec(`DROP TRIGGER ` + name + ` ON script.object_state`).Error; err != nil {
 		t.Fatal(err)

@@ -37,7 +37,7 @@ func tracedTransferScopes(base pgmedia.ScopeAccessFactory, writes *[]bool) pgmed
 }
 
 // Trace the actual production scope factory while all synthetic text, receipt
-// and job rows stay in an outer rollback. No object or Temporal I/O is needed.
+// and job rows stay in an outer rollback. No object or external worker I/O is needed.
 func TestMediaTransferScopeLocksStartAtRequiredStrength(t *testing.T) {
 	database := mediaStoreDB(t)
 	tx := database.Begin()

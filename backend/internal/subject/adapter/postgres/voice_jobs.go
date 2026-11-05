@@ -9,6 +9,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/task"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -302,6 +305,9 @@ func enqueueVoice(tx *gorm.DB, work application.VoiceWork, eventID uuid.UUID, re
 		Data       application.VoiceDelivery `json:"data"`
 	}{eventID, application.VoiceTopic, time.Now().UTC(), delivery})
 	if err != nil {
+		return err
+	}
+	if err := taskruntime.EnqueueReference(tx.Statement.Context, tx, task.Voice, eventID.String(), time.Now().UTC(), application.VoiceWorkID{JobID: work.Job.ID, RecoveryOnly: recovery}); err != nil {
 		return err
 	}
 	return tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, eventID, application.VoiceTopic, work.Job.ID.String(), string(body)).Error

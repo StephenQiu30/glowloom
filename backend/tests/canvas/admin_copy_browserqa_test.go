@@ -9,23 +9,19 @@ import (
 	"io"
 	"net"
 	"testing"
-	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	copytask "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/worker"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	copywire "github.com/StephenQiu30/glowloom-server/backend/internal/app/projectcopy"
-	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
-	record "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trial"
-	trialflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	copyevent "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/event"
-	copyflow "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/workflow"
 )
 
 // startAdminCopyBrowserWorkers uses actual workflows, activities, stores and
@@ -33,61 +29,10 @@ import (
 // relay is scoped to this fixture's source project and never consumes other jobs.
 func startAdminCopyBrowserWorkers(t *testing.T, ctx context.Context, db *gorm.DB, cfg config.Config, project uuid.UUID) {
 	t.Helper()
-	if cfg.TemporalAddr == "" || cfg.TemporalNamespace == "" {
-		t.Fatal("explicit isolated Temporal required")
-	}
-	c, err := client.Dial(client.Options{HostPort: cfg.TemporalAddr, Namespace: cfg.TemporalNamespace})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(c.Close)
-	flow := worker.New(c, "flow", worker.Options{})
-	flow.RegisterWorkflow(trialflow.TrialWorkflow)
-	copyflow.RegisterProjectCopyWorkflow(flow)
-	media := worker.New(c, "media", worker.Options{})
 	copyWorker, copies := copywire.ProvideProjectCopyWorker(db, nil)
-	copyflow.RegisterProjectCopyActivities(media, copyflow.NewProjectCopyActivities(copyWorker, copies))
-	native := worker.New(c, "agent.codex", worker.Options{})
 	runner := &trial.Runner{Store: trial.NewStore(db, app.NewCatalogStore(db)), Launcher: browserChatLauncher{}, WorkRoot: t.TempDir()}
-	native.RegisterActivityWithOptions(runner.Run, activity.RegisterOptions{Name: "trial.Run"})
-	for _, w := range []worker.Worker{flow, media, native} {
-		if err := w.Start(); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(w.Stop)
-	}
-	handler := copyevent.NewProjectCopyHandler(inbox.NewStore(db), copies, copyflow.NewProjectCopyStarter(c))
-	relayCtx, cancel := context.WithCancel(ctx)
-	done := make(chan struct{})
-	t.Cleanup(func() { cancel(); <-done })
-	go func() {
-		defer close(done)
-		ticker := time.NewTicker(250 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-relayCtx.Done():
-				return
-			case <-ticker.C:
-				var events []struct {
-					PartitionKey string
-					Payload      []byte
-				}
-				if err := db.WithContext(relayCtx).Raw(`SELECT partition_key,payload FROM infra.outbox WHERE topic=? AND payload->'data'->>'source_project_id'=? ORDER BY create_time`, copyevent.ProjectCopyTopic, project.String()).Scan(&events).Error; err != nil {
-					if relayCtx.Err() == nil {
-						t.Error(err)
-					}
-					return
-				}
-				for _, event := range events {
-					if err := handler.Handle(relayCtx, record.Record{Topic: copyevent.ProjectCopyTopic, Key: []byte(event.PartitionKey), Value: event.Payload}); err != nil && relayCtx.Err() == nil {
-						t.Error(err)
-						return
-					}
-				}
-			}
-		}
-	}()
+	taskfixture.Start(t, db, map[string]taskruntime.Handler{trialtask.Codex: trialtask.NewSessions(db).Handler(runner), copytask.Copy: copytask.CopyHandler(copyWorker, copies)})
+
 }
 
 // browserChatLauncher exercises the production RPC parser without credentials,

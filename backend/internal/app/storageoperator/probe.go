@@ -33,12 +33,12 @@ func Probe(ctx context.Context, cfg config.ObjectStorageConfig, profileID, senti
 	if tracker == nil {
 		return result, mediaapp.ErrStorageNotReady
 	}
-	in, err := Configuration(cfg, "")
+	in, err := Configuration(cfg)
 	if err != nil {
 		return result, err
 	}
 	p, found := cfg.Profiles[profileID]
-	if !found || p.Mode == "disabled" {
+	if !found || p.Mode == config.StorageProfileDisabled {
 		return result, objectstorage.ErrInvalidObject
 	}
 	profiles := make([]mediaapp.StorageProfile, 0, len(in.Profiles))
@@ -59,8 +59,8 @@ func Probe(ctx context.Context, cfg config.ObjectStorageConfig, profileID, senti
 	sum := sha256.Sum256(data)
 	digest := hex.EncodeToString(sum[:])
 	resource := sha256.Sum256([]byte(p.ResourceIdentity()))
-	result = ProbeReceipt{ProbeID: uuid.New(), ProfileID: profileID, ConfigSHA256: in.ConfigSHA256, ResourceSHA256: hex.EncodeToString(resource[:]), Mode: p.Mode, VerifiedAt: time.Now().UTC()}
-	if p.Mode == "read_write" {
+	result = ProbeReceipt{ProbeID: uuid.New(), ProfileID: profileID, ConfigSHA256: in.ConfigSHA256, ResourceSHA256: hex.EncodeToString(resource[:]), Mode: string(p.Mode), VerifiedAt: time.Now().UTC()}
+	if p.Mode == config.StorageProfileReadWrite {
 		if sentinel != "" {
 			return result, objectstorage.ErrInvalidObject
 		}
@@ -70,14 +70,14 @@ func Probe(ctx context.Context, cfg config.ObjectStorageConfig, profileID, senti
 		return result, objectstorage.ErrInvalidObject
 	}
 	result.SentinelKey = sentinel
-	intent := mediaapp.StorageProbeIntent{ID: result.ProbeID, ProfileID: profileID, Bucket: p.Bucket, ConfigSHA256: in.ConfigSHA256, SentinelKey: sentinel, Mode: p.Mode}
-	if p.Mode == "read_write" {
+	intent := mediaapp.StorageProbeIntent{ID: result.ProbeID, ProfileID: profileID, Bucket: p.Bucket, ConfigSHA256: in.ConfigSHA256, SentinelKey: sentinel, Mode: mediaapp.StorageProbeMode(p.Mode)}
+	if p.Mode == config.StorageProfileReadWrite {
 		intent.RemovalKey = sentinel + ".remove"
 	}
 	if err := tracker.BeginStorageProbe(ctx, intent); err != nil {
 		return result, err
 	}
-	if p.Mode == "read_write" {
+	if p.Mode == config.StorageProfileReadWrite {
 		ref := objectstorage.Ref{ProfileID: profileID, Bucket: p.Bucket, Key: sentinel}
 		if err := r.PutIfAbsent(ctx, ref, bytes.NewReader(data), int64(len(data)), "text/plain", digest); err != nil {
 			return result, err
@@ -168,7 +168,7 @@ func CleanupProbe(ctx context.Context, cfg config.ObjectStorageConfig, id uuid.U
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	configuration, err := Configuration(cfg, "")
+	configuration, err := Configuration(cfg)
 	if err != nil {
 		return err
 	}
@@ -183,13 +183,13 @@ func CleanupProbe(ctx context.Context, cfg config.ObjectStorageConfig, id uuid.U
 	if err != nil {
 		return err
 	}
-	if intent.ID != id || !probeSentinel(intent.SentinelKey) || intent.Mode != "read_only" && intent.Mode != "read_write" {
+	if intent.ID != id || !probeSentinel(intent.SentinelKey) || intent.Mode != mediaapp.StorageProfileModeReadOnly && intent.Mode != mediaapp.StorageProfileModeReadWrite {
 		return mediaapp.ErrStorageIdentityConflict
 	}
-	if intent.State == "cleaned" {
+	if intent.State == mediaapp.StorageProbeCleaned {
 		return nil
 	}
-	if intent.Mode == "read_only" {
+	if intent.Mode == mediaapp.StorageProfileModeReadOnly {
 		return tracker.CompleteStorageProbeCleanup(ctx, id)
 	}
 	if intent.RemovalKey != intent.SentinelKey+".remove" {

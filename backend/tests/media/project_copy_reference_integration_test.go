@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -43,7 +42,7 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 			var fact mediaapp.ReferenceFact
 			if err := db.Transaction(func(tx *gorm.DB) error {
 				var err error
-				fact, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, kind)
+				fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, upload.Asset.ID, kind)
 				return err
 			}); err != nil {
 				t.Fatal(err)
@@ -102,7 +101,7 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 				if err != nil {
 					return err
 				}
-				mappings, err = mediaapp.NewProjectCopyReferenceQuery(repo, nil).FreezeReferences(t.Context(), actor, binding, snapshot, []mediaapp.ReferenceFact{fact})
+				mappings, err = mediaapp.NewProjectCopyReferenceQuery(repo).FreezeReferences(t.Context(), actor, binding, snapshot, []mediaapp.ReferenceFact{fact})
 				if err != nil {
 					return err
 				}
@@ -111,7 +110,7 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 				t.Fatal("trusted uncataloged historical source omitted", snapshot, mappings, err)
 			}
 			repo := mediaCopyStore(db)
-			if err := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+			if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
 				t.Fatal(err)
 			}
 			intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
@@ -127,7 +126,7 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if err := mediaapp.NewProjectCopyReferenceQuery(repo, objects).VerifyTransferred(t.Context(), actor, binding, snapshot, mappings); err != nil {
+			if err := mediaapp.NewRoutedProjectCopyReferenceQuery(repo, mediaFixtureReadObjects(t)).VerifyTransferred(t.Context(), actor, binding, snapshot, mappings); err != nil {
 				t.Fatal("actual original/rendition retained proof", err)
 			}
 			if _, err := base.FindAsset(t.Context(), actor, project, fact.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
@@ -146,7 +145,7 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 	var fact mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		fact, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
+		fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -164,7 +163,7 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 		t.Cleanup(func() { _ = objects.Remove(context.Background(), r.ObjectKey) })
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	if _, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: asset.ID}}}); err != nil {
+	if _, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: asset.ID, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	deleted, err := asset.Delete(time.Now().UTC())
@@ -188,7 +187,7 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 			return err
 		}
 		// No object getter is supplied: admission must remain SQL-only.
-		mapping, err = mediaapp.NewProjectCopyReferenceQuery(repo, nil).FreezeReferences(t.Context(), actor, binding, snapshot, []mediaapp.ReferenceFact{fact})
+		mapping, err = mediaapp.NewProjectCopyReferenceQuery(repo).FreezeReferences(t.Context(), actor, binding, snapshot, []mediaapp.ReferenceFact{fact})
 		if err != nil {
 			return err
 		}
@@ -200,11 +199,11 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 		t.Fatal("owner mapping changed source history or guessed target evidence", mapping)
 	}
 	repo := mediaCopyStore(db)
-	query := mediaapp.NewProjectCopyReferenceQuery(repo, objects)
+	query := mediaapp.NewRoutedProjectCopyReferenceQuery(repo, mediaFixtureReadObjects(t))
 	if err := query.VerifyTransferred(t.Context(), actor, binding, snapshot, mapping); err == nil {
 		t.Fatal("unregistered/untransferred references passed verification")
 	}
-	if err := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	intents, err := repo.Objects(t.Context(), actor, binding, snapshot)

@@ -23,8 +23,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func seedIngestOperation(t *testing.T, database *gorm.DB, actor identityapp.Principal, projectID uuid.UUID, outputType string) uuid.UUID {
@@ -84,15 +82,8 @@ func TestMediaIngestPersistsOneCandidateAndModeratesExactlyOnce(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, projectID := mediaStoreProject(t, database)
 	opID := seedIngestOperation(t, database, actor, projectID, "image")
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatalf("load MinIO configuration: %v", err)
-	}
-	objects, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
-		cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
-	if err != nil {
-		t.Fatalf("open MinIO client: %v", err)
-	}
+	mediaFixtureIngestAdmission(t, database, projectID, opID)
+	objects := glbTestObjects(t)
 	var imageBytes bytes.Buffer
 	img := image.NewRGBA(image.Rect(0, 0, 2, 3))
 	img.Set(0, 0, color.RGBA{R: 255, A: 255})
@@ -106,7 +97,7 @@ func TestMediaIngestPersistsOneCandidateAndModeratesExactlyOnce(t *testing.T) {
 	t.Cleanup(server.Close)
 	pool := x509.NewCertPool()
 	pool.AddCert(server.Certificate())
-	activities, err := mediaScopedIngestActivities(database, objects, mediaflow.DownloadPolicy{
+	activities, err := mediaScopedIngestActivities(t, database, objects, mediaflow.DownloadPolicy{
 		AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true, TLSRootCAs: pool,
 	})
 	if err != nil {
@@ -160,7 +151,9 @@ func TestMediaIngestPersistsOneCandidateAndModeratesExactlyOnce(t *testing.T) {
 	}
 	server.Close() // replay must return durable rows without fetching the expired URL.
 	replayed, err := activities.Ingest(ctx, input)
-	if err != nil || replayed != first {
+	firstBase, replayedBase := first, replayed
+	firstBase.ObjectLocation, replayedBase.ObjectLocation = nil, nil
+	if err != nil || firstBase != replayedBase || first.ObjectLocation == nil || replayed.ObjectLocation == nil || first.ObjectLocation.ID != replayed.ObjectLocation.ID || first.ObjectLocation.Ref != replayed.ObjectLocation.Ref {
 		t.Fatalf("ingest replay = %+v, %v; want %+v", replayed, err, first)
 	}
 	var count int64
@@ -199,15 +192,8 @@ func TestVideoIngestCreatesProjectAspectProxyAndPoster(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, projectID := mediaStoreProject(t, database) // Project fixture uses 16:9.
 	opID := seedIngestOperation(t, database, actor, projectID, "video")
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	objects, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
-		cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mediaFixtureIngestAdmission(t, database, projectID, opID)
+	objects := glbTestObjects(t)
 	fixture := path.Join(t.TempDir(), "source.mp4")
 	cmd := exec.CommandContext(t.Context(), "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
 		"-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=25", "-t", "1",
@@ -226,7 +212,7 @@ func TestVideoIngestCreatesProjectAspectProxyAndPoster(t *testing.T) {
 	t.Cleanup(server.Close)
 	pool := x509.NewCertPool()
 	pool.AddCert(server.Certificate())
-	activities, err := mediaScopedIngestActivities(database, objects, mediaflow.DownloadPolicy{
+	activities, err := mediaScopedIngestActivities(t, database, objects, mediaflow.DownloadPolicy{
 		AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true, TLSRootCAs: pool,
 	})
 	if err != nil {
@@ -281,7 +267,9 @@ func TestVideoIngestCreatesProjectAspectProxyAndPoster(t *testing.T) {
 	}
 	server.Close()
 	replayed, err := activities.Ingest(ctx, input)
-	if err != nil || replayed != first {
+	firstBase, replayedBase := first, replayed
+	firstBase.ObjectLocation, replayedBase.ObjectLocation = nil, nil
+	if err != nil || firstBase != replayedBase || first.ObjectLocation == nil || replayed.ObjectLocation == nil || first.ObjectLocation.ID != replayed.ObjectLocation.ID || first.ObjectLocation.Ref != replayed.ObjectLocation.Ref {
 		t.Fatalf("video ingest replay = %+v, %v; want %+v", replayed, err, first)
 	}
 	var count int64

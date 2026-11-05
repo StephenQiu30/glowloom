@@ -5,8 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
@@ -45,7 +46,7 @@ func storageProfiles(t *testing.T, store *pgmedia.StorageRoutes) []application.S
 
 func TestStorageMigrationIsRepeatable(t *testing.T) {
 	database := storageRouteDB(t)
-	raw, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "008_object_storage_profiles.sql"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "db", "storage_ledger_expand_incremental.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,54 +66,33 @@ func TestStorageMigrationIsRepeatable(t *testing.T) {
 	}
 }
 
-func TestStorageRouteActivationCASAndLostReply(t *testing.T) {
-	database := storageRouteDB(t)
+func TestStorageEnvironmentRevisionAndLostReply(t *testing.T) {
+	database := storageRouteDB(t).Begin()
+	t.Cleanup(func() { _ = database.Rollback().Error })
 	store := pgmedia.NewStorageRoutes(database)
 	storageProfiles(t, store)
-	if err := database.Exec(`TRUNCATE media.storage_route,media.storage_activation,media.storage_activation_guard`).Error; err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.ReadActive(t.Context()); !errors.Is(err, application.ErrStorageNotReady) {
-		t.Fatal("uninitialized route acquired implicit default", err)
-	}
-	if _, err := store.Activate(t.Context(), "", "initial-v1", "minio-main"); err != nil {
-		t.Fatal(err)
-	}
-	var wg sync.WaitGroup
-	results := make(chan error, 2)
-	for _, rev := range []string{"switch-a", "switch-b"} {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, err := store.Activate(t.Context(), "initial-v1", rev, "cos-main")
-			results <- err
-		}()
-	}
-	wg.Wait()
-	close(results)
-	success, conflict := 0, 0
-	for err := range results {
-		switch {
-		case err == nil:
-			success++
-		case errors.Is(err, application.ErrStorageRouteConflict):
-			conflict++
-		default:
-			t.Fatal(err)
-		}
-	}
-	if success != 1 || conflict != 1 {
-		t.Fatalf("CAS = %d success, %d conflict", success, conflict)
-	}
-	route, err := store.ReadActive(t.Context())
+	input := storageEnvironmentFixture(t, database, "environment-"+uuid.NewString(), "minio-main")
+	first, err := store.ApplyEnvironment(t.Context(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Activate(t.Context(), "initial-v1", route.Revision, route.ProfileID); err != nil {
-		t.Fatal("lost activation reply was not idempotent", err)
+	replay, err := store.ApplyEnvironment(t.Context(), input)
+	if err != nil || first != replay {
+		t.Fatal("lost configuration response changed identity", err)
 	}
-	if _, err := store.Activate(t.Context(), route.Revision, "initial-v1", "minio-main"); !errors.Is(err, application.ErrStorageRouteConflict) {
-		t.Fatal("reused historical revision", err)
+	conflicting := input
+	conflicting.DefaultWriteProfile = "cos-main"
+	if _, err := store.ApplyEnvironment(t.Context(), conflicting); !errors.Is(err, application.ErrStorageRouteConflict) {
+		t.Fatal("same revision rebound", err)
+	}
+	next := storageEnvironmentFixture(t, database, "environment-"+uuid.NewString(), "cos-main")
+	switched, err := store.ApplyEnvironment(t.Context(), next)
+	if err != nil || switched.ProfileID != "cos-main" {
+		t.Fatal("explicit environment route not applied", err)
+	}
+	current, err := store.ReadConfigured(t.Context())
+	if err != nil || current != switched {
+		t.Fatal("configured projection changed", err)
 	}
 }
 

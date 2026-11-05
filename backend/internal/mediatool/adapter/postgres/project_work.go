@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -20,9 +22,11 @@ func (s *Store) HasInflightWork(ctx context.Context, actor identityapp.Principal
 	if projectID == uuid.Nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return false, identityapp.ErrForbidden
 	}
-	var present bool
-	if err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM mediatool.export_job WHERE project_id=? AND status IN ('queued','running','cancel_requested'))`, projectID).Scan(&present).Error; err != nil {
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&jobRow{}).
+		Where("project_id = ? AND org_id = ? AND status IN ?", projectID, actor.OrgID, []domain.Status{domain.Queued, domain.Running, domain.CancelRequested}).
+		Count(&count).Error; err != nil {
 		return false, fmt.Errorf("read mediatool project work: %w", err)
 	}
-	return present, nil
+	return count > 0, nil
 }

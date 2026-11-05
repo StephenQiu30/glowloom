@@ -12,7 +12,6 @@ import (
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/videodepth"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -21,7 +20,7 @@ import (
 func provideMediaToolSourceWithAccess(tx *gorm.DB, scopes pgmedia.ScopeAccessFactory) toolapp.TranscriptionSourceReader {
 	return canvasapp.NewTranscriptionSourceReader(pgcanvas.NewScopedStore(tx,
 		func(mediaTx *gorm.DB) canvasapp.MediaReader {
-			return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes), nil)
+			return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes))
 		}, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }))
 }
 
@@ -52,19 +51,12 @@ func ProvideRoutedMediaDepthStore(database *gorm.DB, enabled bool, scopes pgmedi
 	})
 }
 
-// ProvideMediaDepthWorker owns one Runner for every native job on this media
-// worker, so concurrent Activities share the same physical inference slot.
-func ProvideMediaDepthWorker(database *gorm.DB, storage *objectstorage.Client, cfg config.Config) (*toolapp.DepthWorker, *pgtool.DepthStore, error) {
-	return provideMediaDepthWorker(database, nil, storage, cfg)
-}
-
-// ProvideMediaDepthWorkerRouted retains one native inference slot while each
-// durable attempt opens a separately pinned physical object view.
-func ProvideMediaDepthWorkerRouted(database *gorm.DB, registry *objectstorage.Registry, legacy *objectstorage.Client, cfg config.Config) (*toolapp.DepthWorker, *pgtool.DepthStore, error) {
-	return provideMediaDepthWorker(database, registry, legacy, cfg)
-}
-
-func provideMediaDepthWorker(database *gorm.DB, registry *objectstorage.Registry, storage *objectstorage.Client, cfg config.Config) (*toolapp.DepthWorker, *pgtool.DepthStore, error) {
+// ProvideMediaDepthWorker retains one native inference slot while each durable
+// attempt opens a separately pinned physical object view.
+func ProvideMediaDepthWorker(database *gorm.DB, registry *objectstorage.Registry, cfg config.Config) (*toolapp.DepthWorker, *pgtool.DepthStore, error) {
+	if registry == nil {
+		return nil, nil, mediaapp.ErrStorageNotReady
+	}
 	verifier, err := videodepth.NewPreprocessor("ffmpeg", "ffprobe")
 	if err != nil {
 		return nil, nil, fmt.Errorf("configure video depth verification: %w", err)
@@ -80,12 +72,7 @@ func provideMediaDepthWorker(database *gorm.DB, registry *objectstorage.Registry
 			return nil, nil, fmt.Errorf("configure offline video depth inference: %w", err)
 		}
 	}
-	store := ProvideMediaDepthStoreWithAccess(database, processor != nil, NewMediaWorkerScopeAccess)
-	if registry != nil {
-		store = ProvideRoutedMediaDepthStore(database, processor != nil, NewMediaWorkerScopeAccess)
-		consumer := toolapp.NewRoutedDepthWorker(store, ToolObjects(database, registry, storage), processor, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, verifier)
-		return consumer, store, nil
-	}
-	consumer := toolapp.NewDepthWorker(store, toolflow.NewObjects(storage), processor, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, verifier)
+	store := ProvideRoutedMediaDepthStore(database, processor != nil, NewMediaWorkerScopeAccess)
+	consumer := toolapp.NewRoutedDepthWorker(store, ToolObjects(database, registry), processor, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, verifier)
 	return consumer, store, nil
 }

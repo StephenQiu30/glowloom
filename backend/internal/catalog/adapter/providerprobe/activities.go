@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
-	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
+	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 )

@@ -44,7 +44,12 @@ export function canonicalJson(value) {
 }
 
 export function modelIdentity(value) {
-  if (typeof value === "string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(value) && value !== "00000000-0000-0000-0000-000000000000") return value;
+  if (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(value) &&
+    value !== "00000000-0000-0000-0000-000000000000"
+  )
+    return value;
   if (
     typeof value !== "string" ||
     !/^[1-9][0-9]{0,18}$/.test(value) ||

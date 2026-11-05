@@ -1353,9 +1353,16 @@ button:not(:disabled),
 }
 .creation-editor-body {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
   height: 80px;
+}
+.reference-stack-empty {
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--foreground) 4%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 6px 6px;
 }
 .creation-reference-tools[data-slot="input-group-addon"] {
   padding: 0;
@@ -1406,8 +1413,23 @@ button:not(:disabled),
 .creation-composer-ready[data-slot="input-group"] {
   height: auto;
 }
-.creation-composer-ready > .creation-reference-tools {
-  width: 100%;
+.creation-ready-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+.creation-ready-body > .creation-reference-tools {
+  width: 64px;
+  flex: 0 0 64px;
+}
+.creation-ready-body > .creation-reference-tools:empty {
+  display: none;
+}
+.creation-ready-body > .creation-ready-prompt {
+  flex: 1;
+  padding: 0;
+  min-width: 0;
 }
 .creation-option-tools {
   display: contents;
@@ -3260,10 +3282,8 @@ button:not(:disabled),
 .creation-tabs {
   min-width: 0;
 }
-.home-prompt .tiptap:has(> p:only-child > br:only-child)::before,
-.home-prompt .tiptap:has(> p:only-child:empty)::before,
-.creation-ready-prompt .tiptap:has(> p:only-child > br:only-child)::before,
-.creation-ready-prompt .tiptap:has(> p:only-child:empty)::before {
+.prompt-editor[data-placeholder]:has(> p:only-child > br:only-child)::before,
+.prompt-editor[data-placeholder]:has(> p:only-child:empty)::before {
   content: attr(data-placeholder);
   color: var(--muted-foreground);
   pointer-events: none;

@@ -104,17 +104,6 @@ func (t projectCopyScriptTransfer) Cleanup(ctx context.Context, actor identityap
 	return projectCopyScriptError(t.owner.Cleanup(ctx, actor, projectCopyScriptBinding(b), scriptProjectCopySnapshot(s)))
 }
 
-func provideProjectCopyScriptTransfer(database *gorm.DB, storage *objectstorage.Client) workspaceapp.ProjectCopyScriptTransferFactory {
-	return func(job workspacedomain.ProjectCopyJob, worker uuid.UUID, cleanup bool) workspaceapp.ProjectCopyScriptTransfer {
-		phase := "transfer"
-		if cleanup {
-			phase = "cleanup"
-		}
-		authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, ActorID: job.ExecutionActor(), WorkerID: worker, SourceRevision: job.SourceRevision, Phase: phase, Bible: job.Manifest.Bible}
-		return projectCopyScriptTransfer{owner: scriptapp.NewProjectCopy(provideScriptProjectCopyStore(database, authority), scriptobjects.NewStorage(storage))}
-	}
-}
-
 func withScriptCopyLocations(store *pgscript.ProjectCopyStore) *pgscript.ProjectCopyStore {
 	return store.WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }

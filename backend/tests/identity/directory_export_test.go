@@ -139,7 +139,8 @@ type exportMemoryObjects struct {
 	failPut      bool
 }
 
-func (f *exportMemoryObjects) Put(_ context.Context, key string, r io.Reader, _ int64, _ string) error {
+func (f *exportMemoryObjects) PutIfAbsent(_ context.Context, location identity.ExportObjectLocation, r io.Reader, _ int64, _, _ string) error {
+	key := location.Key
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return err
@@ -153,13 +154,15 @@ func (f *exportMemoryObjects) Put(_ context.Context, key string, r io.Reader, _ 
 	}
 	return nil
 }
-func (f *exportMemoryObjects) Get(_ context.Context, key string) (io.ReadCloser, error) {
+func (f *exportMemoryObjects) Get(_ context.Context, location identity.ExportObjectLocation) (io.ReadCloser, error) {
+	key := location.Key
 	if f.onGet != nil {
 		f.onGet()
 	}
 	return io.NopCloser(bytes.NewReader(f.values[key])), nil
 }
-func (f *exportMemoryObjects) Remove(_ context.Context, key string) error {
+func (f *exportMemoryObjects) Remove(_ context.Context, job identity.DirectoryExportJob) error {
+	key := job.ObjectLocation.Key
 	delete(f.values, key)
 	return nil
 }
@@ -172,7 +175,7 @@ func exportFixture(t *testing.T) (*identity.DirectoryExport, *exportMemoryStore,
 	if err != nil {
 		t.Fatal(err)
 	}
-	return identity.NewDirectoryExport(store, protector, objects, func() time.Time { return now }), store, objects, &now, identity.Principal{ID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1, PlatformEpoch: 1}
+	return identity.NewRoutedDirectoryExport(store, protector, objects, func() time.Time { return now }), store, objects, &now, identity.Principal{ID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1, PlatformEpoch: 1}
 }
 func TestDirectoryExportMaterializedEncryptedSnapshotAndExpiry(t *testing.T) {
 	service, store, objects, now, actor := exportFixture(t)
@@ -287,7 +290,7 @@ type cleanupBlockingObjects struct {
 	sawDeadline bool
 }
 
-func (o *cleanupBlockingObjects) Remove(ctx context.Context, _ string) error {
+func (o *cleanupBlockingObjects) Remove(ctx context.Context, _ identity.DirectoryExportJob) error {
 	_, o.sawDeadline = ctx.Deadline()
 	if !o.sawDeadline {
 		return errors.New("Remove received unbounded parent context")
@@ -303,7 +306,7 @@ func TestDirectoryExportCleanupDeadlineReachesObjectClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := identity.NewDirectoryExport(cleanupContextStore{exportMemoryStore: store, job: identity.DirectoryExportJob{ObjectID: &object}}, protector, blocking, time.Now)
+	service := identity.NewRoutedDirectoryExport(cleanupContextStore{exportMemoryStore: store, job: identity.DirectoryExportJob{ObjectID: &object}}, protector, blocking, time.Now)
 	_, err = service.RunOnce(t.Context(), 1)
 	if !blocking.sawDeadline || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("cleanup discarded its I/O deadline", err)

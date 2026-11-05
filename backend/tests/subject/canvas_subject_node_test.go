@@ -22,10 +22,7 @@ func TestCanvasSubjectNodePostgresFixedVersionAndRevocation(t *testing.T) {
 	runtime, owner := subjectPostgres(t)
 	actor := subjectSession(t, owner)
 	project := subjectProject(t, owner, actor)
-	primary := subjectFixtureMedia(t, owner, actor, "image")
-	if err := owner.Exec(`UPDATE media.media_asset SET object_key=? WHERE id=?`, "personal/"+actor.OrgID.String()+"/"+actor.ID.String()+"/image/2026/10/"+primary.AssetID.String()+".png", primary.AssetID).Error; err != nil {
-		t.Fatal(err)
-	}
+	primary := subjectFixtureMedia(t, owner, actor, uuid.Nil, "image")
 	media := &memoryMedia{facts: map[uuid.UUID]domain.MediaFact{primary.AssetID: primary}}
 	subjects := subjectapp.NewService(subjectFixtureStore(runtime, media), time.Now)
 	saved, err := subjects.Save(t.Context(), actor, uuid.Nil, uuid.New(), subjectapp.SaveInput{Name: "固定主体", Primary: subjectapp.MediaSelection{AssetID: primary.AssetID}})

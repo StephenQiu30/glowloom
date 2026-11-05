@@ -4,29 +4,57 @@ import (
 	"context"
 	"errors"
 
+	"strings"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // ReadyForWork checks only explicit existing work-storage dependencies and route.
-// Missing legacy structure is an expected unavailable state. Permission, network
-// and other database failures are returned; no migration or activation occurs.
+// Missing required structure is an expected unavailable state. Permission, network
+// and other database failures are returned; this read does not apply configuration.
 func (s *StorageRoutes) ReadyForWork(ctx context.Context) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
-	var complete bool
-	if err := s.db.WithContext(ctx).Raw(`SELECT bool_and(EXISTS(SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid=to_regclass(required.relation) AND a.attname=required.column_name AND a.attnum>0 AND NOT a.attisdropped)) FROM (VALUES
- ('media.storage_profile','id'),('media.storage_profile','bucket'),('media.storage_profile','resource_identity'),
- ('media.storage_route','singleton'),('media.storage_route','profile_id'),('media.storage_route','revision'),
- ('media.storage_work_intent','id'),('media.storage_work_intent','kind'),('media.storage_work_intent','owner_id'),('media.storage_work_intent','work_id'),('media.storage_work_intent','profile_id'),('media.storage_work_intent','bucket'),('media.storage_work_intent','config_revision'),('media.storage_work_intent','state'),('media.storage_work_intent','closed_at'),
- ('media.object_location','id'),('media.object_location','profile_id'),('media.object_location','bucket'),('media.object_location','object_key'),('media.object_location','state'),('media.object_location','byte_size'),('media.object_location','sha256'),('media.object_location','mime_type'),('media.object_location','owner_intent_id'),('media.object_location','owner_session_id'),('media.object_location','write_until')
- ) AS required(relation,column_name)`).Scan(&complete).Error; err != nil {
-		return false, err
+	requiredTables := []struct {
+		model   interface{ TableName() string }
+		columns []string
+	}{
+		{&storageProfileRecord{}, []string{"id", "bucket", "resource_identity"}},
+		{&storageRouteRecord{}, []string{"singleton", "profile_id", "revision"}},
+		{&storageWorkRow{}, []string{"id", "kind", "owner_id", "work_id", "profile_id", "bucket", "config_revision", "state", "closed_at"}},
+		{&objectLocationRow{}, []string{"id", "profile_id", "bucket", "object_key", "state", "byte_size", "sha256", "mime_type", "owner_intent_id", "owner_session_id", "write_until"}},
 	}
-	if !complete {
-		return false, nil
+	for _, required := range requiredTables {
+		name := strings.SplitN(required.model.TableName(), ".", 2)
+		var columns []struct{ Name string }
+		// Catalog discovery does not abort the caller transaction when a dependency
+		// is absent and does not hide existing columns merely because SELECT is denied.
+		if err := s.db.WithContext(ctx).Table("pg_catalog.pg_attribute AS a").
+			Select("a.attname AS name").
+			Joins("JOIN pg_catalog.pg_class AS c ON c.oid = a.attrelid").
+			Joins("JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace").
+			Where("n.nspname = ? AND c.relname = ? AND a.attnum > 0 AND NOT a.attisdropped", name[0], name[1]).Find(&columns).Error; err != nil {
+			return false, err
+		}
+		present := make(map[string]bool, len(columns))
+		for _, column := range columns {
+			present[column.Name] = true
+		}
+		for _, column := range required.columns {
+			if !present[column] {
+				return false, nil
+			}
+		}
+		rows, err := s.db.WithContext(ctx).Model(required.model).Select(required.columns).Limit(0).Rows()
+		if err != nil {
+			return false, err
+		}
+		if err := rows.Close(); err != nil {
+			return false, err
+		}
 	}
-	route, err := s.ReadActive(ctx)
+	route, err := s.ReadConfigured(ctx)
 	if errors.Is(err, application.ErrStorageNotReady) {
 		return false, nil
 	}

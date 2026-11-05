@@ -27,7 +27,7 @@ type ImportAuthority struct {
 type ImportWorkerStore interface {
 	VerifyImportDelivery(context.Context, ImportDelivery) (bool, error)
 	ClaimImport(context.Context, ImportDelivery, uuid.UUID, time.Time) (ImportRecord, error)
-	ReportImportPhase(context.Context, ImportWork, uuid.UUID, string, time.Time) error
+	ReportImportPhase(context.Context, ImportWork, uuid.UUID, domain.ImportStage, time.Time) error
 	RecordImportFile(context.Context, ImportWork, uuid.UUID, ImportFileResult, time.Time) error
 	FinishImport(context.Context, ImportWork, uuid.UUID, string, bool, time.Time) error
 	EndImportIO(context.Context, ImportWork, uuid.UUID, bool, time.Time) error
@@ -45,16 +45,16 @@ func (w *ImportWorker) Run(ctx context.Context, d ImportDelivery) (ImportJob, er
 	}
 	var err error
 	switch d.Action {
-	case "start":
+	case domain.ImportActionStart:
 		err = w.Execute(ctx, d)
-	case "cancel":
+	case domain.ImportActionCancel:
 		err = w.Control(ctx, d)
-	case "reconcile":
+	case domain.ImportActionReconcile:
 		r, _, readErr := w.store.ImportControlRecord(ctx, d)
 		if readErr != nil {
 			return ImportJob{}, readErr
 		}
-		if r.Job.CancellationRequested || r.OwnerID != nil || r.IOState != "idle" && r.IOState != "ended" {
+		if r.Job.CancellationRequested || r.OwnerID != nil || r.IOState != domain.ImportIOStateIdle && r.IOState != domain.ImportIOStateEnded {
 			err = w.Control(ctx, d)
 		} else {
 			err = w.Execute(ctx, d)
@@ -91,7 +91,7 @@ func (w *ImportWorker) Execute(ctx context.Context, d ImportDelivery) (err error
 	if w == nil || w.store == nil || w.sources == nil || w.extractor == nil || w.publication == nil || w.now == nil {
 		return ErrUnavailable
 	}
-	if d.Action != "start" && d.Action != "reconcile" {
+	if d.Action != domain.ImportActionStart && d.Action != domain.ImportActionReconcile {
 		return domain.ErrInvalidSource
 	}
 	allowed, err := w.store.VerifyImportDelivery(ctx, d)
@@ -125,20 +125,20 @@ func (w *ImportWorker) Execute(ctx context.Context, d ImportDelivery) (err error
 			continue
 		}
 		prior, found := findImportResult(r.Results, file.Position)
-		if found && prior.Status == "failed" {
+		if found && prior.Status == domain.ImportFileStatusFailed {
 			continue
 		}
-		if err := w.store.ReportImportPhase(ioCtx, d.ImportWork, owner, "extracting", w.now().UTC()); err != nil {
+		if err := w.store.ReportImportPhase(ioCtx, d.ImportWork, owner, domain.ImportStageExtracting, w.now().UTC()); err != nil {
 			return err
 		}
 		out, readErr := w.extractFile(ioCtx, r.Actor, r.Job.ProjectID, file)
-		result := ImportFileResult{Position: file.Position, Status: "failed", FailureCode: importFailureCode(readErr), Warnings: []ExtractionWarning{}}
+		result := ImportFileResult{Position: file.Position, Status: domain.ImportFileStatusFailed, FailureCode: importFailureCode(readErr), Warnings: []ExtractionWarning{}}
 		if readErr == nil {
 			result, readErr = importResult(file.Position, out.Extracted)
 			if readErr == nil {
 				prepared = append(prepared, out)
 			} else {
-				result = ImportFileResult{Position: file.Position, Status: "failed", FailureCode: importFailureCode(readErr), Warnings: []ExtractionWarning{}}
+				result = ImportFileResult{Position: file.Position, Status: domain.ImportFileStatusFailed, FailureCode: importFailureCode(readErr), Warnings: []ExtractionWarning{}}
 			}
 		}
 		if readErr != nil && (ioCtx.Err() != nil || errors.Is(readErr, identityapp.ErrForbidden) || errors.Is(readErr, ErrUnavailable)) {
@@ -157,21 +157,21 @@ func (w *ImportWorker) Execute(ctx context.Context, d ImportDelivery) (err error
 	if len(prepared) == 0 {
 		return w.store.FinishImport(ioCtx, d.ImportWork, owner, "all_files_failed", false, w.now().UTC())
 	}
-	if err := w.store.ReportImportPhase(ioCtx, d.ImportWork, owner, "normalizing", w.now().UTC()); err != nil {
+	if err := w.store.ReportImportPhase(ioCtx, d.ImportWork, owner, domain.ImportStageNormalizing, w.now().UTC()); err != nil {
 		return err
 	}
 	pub := w.publication(ImportAuthority{ImportWork: d.ImportWork, WorkerID: owner, PublicationKey: r.PublicationKey})
 	if pub == nil {
 		return ErrUnavailable
 	}
-	if err := w.store.ReportImportPhase(ioCtx, d.ImportWork, owner, "storing", w.now().UTC()); err != nil {
+	if err := w.store.ReportImportPhase(ioCtx, d.ImportWork, owner, domain.ImportStageStoring, w.now().UTC()); err != nil {
 		return err
 	}
 	order := make([]uuid.UUID, len(r.Files))
 	for i, file := range r.Files {
 		order[i] = file.SourceID
 	}
-	_, err = pub.WriteFiles(ioCtx, r.Actor, SourceCommand{ProjectID: r.Job.ProjectID, Key: r.PublicationKey, RequestID: d.RequestID, Action: "import", ExpectedRevision: r.Job.LatestScriptRevision, BaseVersionID: r.BaseVersionID, RightsConfirmed: true}, prepared, r.Job.CreatedAt, order)
+	_, err = pub.WriteFiles(ioCtx, r.Actor, SourceCommand{ProjectID: r.Job.ProjectID, Key: r.PublicationKey, RequestID: d.RequestID, Action: domain.SourceActionImport, ExpectedRevision: r.Job.LatestScriptRevision, BaseVersionID: r.BaseVersionID, RightsConfirmed: true}, prepared, r.Job.CreatedAt, order)
 	return err
 }
 
@@ -247,7 +247,7 @@ func importResult(position int, e ExtractedDocument) (ImportFileResult, error) {
 	if warnings == nil {
 		warnings = []ExtractionWarning{}
 	}
-	return ImportFileResult{Position: position, Status: "succeeded", RichSHA256: domain.ContentSHA(rich), ContentHash: domain.ContentSHA([]byte(plain)), CharCount: utf8.RuneCountInString(plain), Encoding: e.Encoding, Mapping: e.Mapping, Warnings: warnings}, nil
+	return ImportFileResult{Position: position, Status: domain.ImportFileStatusSucceeded, RichSHA256: domain.ContentSHA(rich), ContentHash: domain.ContentSHA([]byte(plain)), CharCount: utf8.RuneCountInString(plain), Encoding: e.Encoding, Mapping: e.Mapping, Warnings: warnings}, nil
 }
 
 func importFailureCode(err error) string {
@@ -276,7 +276,7 @@ func (w *ImportWorker) Control(ctx context.Context, d ImportDelivery) error {
 	if w == nil || w.store == nil || w.recovery == nil || w.now == nil {
 		return ErrUnavailable
 	}
-	if d.Action != "cancel" && d.Action != "reconcile" {
+	if d.Action != domain.ImportActionCancel && d.Action != domain.ImportActionReconcile {
 		return domain.ErrInvalidSource
 	}
 	allowed, err := w.store.VerifyImportDelivery(ctx, d)
@@ -301,7 +301,7 @@ func (w *ImportWorker) Control(ctx context.Context, d ImportDelivery) error {
 			return err
 		}
 	}
-	if r.IOState != "idle" && r.IOState != "ended" {
+	if r.IOState != domain.ImportIOStateIdle && r.IOState != domain.ImportIOStateEnded {
 		return w.store.FinishImportControl(ctx, d, true, w.now().UTC())
 	}
 	if r.Job.CancellationRequested {
@@ -310,8 +310,8 @@ func (w *ImportWorker) Control(ctx context.Context, d ImportDelivery) error {
 		if findErr != nil && !errors.Is(findErr, ErrNotFound) {
 			return findErr
 		}
-		if findErr == nil && intent.Status == "pending" {
-			_, err := w.recovery.Control(ctx, controller, SourceControlCommand{ProjectID: r.Job.ProjectID, IntentID: intent.ID, Key: uuid.NewSHA1(d.EventID, []byte("source-cleanup")), RequestID: d.RequestID, Action: "cancel", ExpectedRevision: intent.Revision})
+		if findErr == nil && intent.Status == domain.CommandStatusPending {
+			_, err := w.recovery.Control(ctx, controller, SourceControlCommand{ProjectID: r.Job.ProjectID, IntentID: intent.ID, Key: uuid.NewSHA1(d.EventID, []byte("source-cleanup")), RequestID: d.RequestID, Action: domain.SourceControlActionCancel, ExpectedRevision: intent.Revision})
 			if err != nil {
 				return err
 			}
@@ -319,7 +319,7 @@ func (w *ImportWorker) Control(ctx context.Context, d ImportDelivery) error {
 			if err != nil {
 				return err
 			}
-			if intent.Status != "cancelled" {
+			if intent.Status != domain.CommandStatusCancelled {
 				return w.store.FinishImportControl(ctx, d, true, w.now().UTC())
 			}
 		}

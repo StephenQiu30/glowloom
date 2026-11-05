@@ -3,9 +3,14 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"reflect"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -17,20 +22,28 @@ func (s *TransferStore) VerifyTransferDelivery(ctx context.Context, d applicatio
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
-	if d.EventID == uuid.Nil || d.JobID == uuid.Nil || d.RequestID == uuid.Nil || d.ActorID == uuid.Nil || d.OrgID == uuid.Nil || d.Attempt < 1 || d.ExecutionID != "" || d.Reconcile != (d.Action == "reconcile") || d.Action != "start" && d.Action != "cancel" && d.Action != "reconcile" {
+	if d.EventID == uuid.Nil || d.JobID == uuid.Nil || d.RequestID == uuid.Nil || d.ActorID == uuid.Nil || d.OrgID == uuid.Nil || d.Attempt < 1 || d.ExecutionID != "" || d.Reconcile != (d.Action == application.TransferActionReconcile) || d.Action != application.TransferActionStart && d.Action != application.TransferActionCancel && d.Action != application.TransferActionReconcile {
 		return false, domain.ErrInvalidLibrary
 	}
-	body, err := json.Marshal(d)
-	if err != nil {
-		return false, err
-	}
 	valid := false
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var exists bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.transfer_command c JOIN media.transfer_job j ON j.id=c.job_id JOIN infra.outbox o ON o.id=c.event_id WHERE c.actor_id=? AND c.org_id=? AND c.idem_key=? AND c.event_id=? AND c.event_action=? AND c.event_attempt=? AND j.id=? AND j.org_id=c.org_id AND j.actor_id=c.actor_id AND o.topic=? AND o.partition_key=? AND o.payload->'data'=?::jsonb)`, d.ActorID, d.OrgID, d.RequestID, d.EventID, d.Action, d.Attempt, d.JobID, TransferTopic, d.JobID.String(), string(body)).Scan(&exists).Error; err != nil {
-			return err
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		var proof outboxRecord
+		read := tx.Table("media.transfer_command AS c").Select("o.payload").
+			Joins("JOIN media.transfer_job AS j ON j.id = c.job_id").
+			Joins("JOIN infra.outbox AS o ON o.id = c.event_id").
+			Where("c.actor_id = ? AND c.org_id = ? AND c.idem_key = ? AND c.event_id = ? AND c.event_action = ? AND c.event_attempt = ?", d.ActorID, d.OrgID, d.RequestID, d.EventID, d.Action, d.Attempt).
+			Where("j.id = ? AND j.org_id = c.org_id AND j.actor_id = c.actor_id", d.JobID).
+			Where("o.topic = ? AND o.partition_key = ?", TransferTopic, d.JobID.String()).Take(&proof)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return domain.ErrInvalidLibrary
 		}
-		if !exists {
+		if read.Error != nil {
+			return read.Error
+		}
+		var envelope struct {
+			Data application.TransferDelivery `json:"data"`
+		}
+		if json.Unmarshal(proof.Payload, &envelope) != nil || !reflect.DeepEqual(envelope.Data, d) {
 			return domain.ErrInvalidLibrary
 		}
 		actor, err := s.workerActor(tx, d.JobID)
@@ -51,7 +64,7 @@ func (s *TransferStore) VerifyTransferDelivery(ctx context.Context, d applicatio
 		if _, err := s.access(ctx, tx, actor, source, target, true); err != nil {
 			return err
 		}
-		valid = row.Attempt == d.Attempt && row.Status != "succeeded" && row.Status != "cancelled" && row.Status != "failed" && row.Status != "partial_failed"
+		valid = row.Attempt == d.Attempt && row.Status != domain.TransferStatusSucceeded && row.Status != domain.TransferStatusCancelled && row.Status != domain.TransferStatusFailed && row.Status != domain.TransferStatusPartialFailed
 		return nil
 	})
 	return valid, err
@@ -68,14 +81,14 @@ func (s *TransferStore) InterruptTransfer(ctx context.Context, work application.
 	if err != nil || execution == uuid.Nil || work.JobID == uuid.Nil || work.Attempt < 1 {
 		return domain.ErrTransferConflict
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		var row transferJobRow
-		read := tx.Raw(`SELECT * FROM media.transfer_job WHERE id=? FOR UPDATE`, work.JobID).Scan(&row)
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", work.JobID).Take(&row)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return application.ErrNotFound
+		}
 		if read.Error != nil {
 			return read.Error
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrNotFound
 		}
 		if row.Attempt != work.Attempt {
 			return domain.ErrTransferConflict
@@ -86,13 +99,13 @@ func (s *TransferStore) InterruptTransfer(ctx context.Context, work application.
 		if *row.ExecutionID != execution || row.WorkerFence == nil {
 			return domain.ErrTransferConflict
 		}
-		if row.Status == "succeeded" || row.Status == "cancelled" || row.Status == "failed" || row.Status == "partial_failed" {
+		if row.Status == domain.TransferStatusSucceeded || row.Status == domain.TransferStatusCancelled || row.Status == domain.TransferStatusFailed || row.Status == domain.TransferStatusPartialFailed {
 			return nil
 		}
 		uncertain := !row.ProcessEnded
-		if row.Status == "needs_reconciliation" && row.NeedsReconciliation && row.ExecutionUnconfirmed == uncertain {
+		if row.Status == domain.TransferStatusNeedsReconciliation && row.NeedsReconciliation && row.ExecutionUnconfirmed == uncertain {
 			return nil
 		}
-		return libraryChanged(tx, `UPDATE media.transfer_job SET status='needs_reconciliation',stage='cleanup',needs_reconciliation=true,execution_unconfirmed=?,revision=revision+1,updated_at=? WHERE id=? AND attempt=? AND execution_id=? AND worker_fence=? AND revision=?`, uncertain, s.clock().UTC(), row.ID, work.Attempt, execution, *row.WorkerFence, row.Revision)
+		return updateOne(tx, "media.transfer_job", map[string]any{"id": row.ID, "attempt": work.Attempt, "execution_id": execution, "worker_fence": *row.WorkerFence, "revision": row.Revision}, map[string]any{"status": domain.TransferStatusNeedsReconciliation, "stage": domain.TransferStageCleanup, "needs_reconciliation": true, "execution_unconfirmed": uncertain, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
 	})
 }

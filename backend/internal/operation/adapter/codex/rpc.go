@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"sync"
 )
@@ -87,8 +88,7 @@ func (c *rpcClient) send(ctx context.Context, value any) error {
 		return err
 	case <-ctx.Done():
 		c.close()
-		<-done
-		return ctx.Err()
+		return errors.Join(ctx.Err(), <-done)
 	}
 }
 func (c *rpcClient) receive(ctx context.Context) (rpcFrame, error) {

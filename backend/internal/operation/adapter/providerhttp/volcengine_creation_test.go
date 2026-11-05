@@ -79,7 +79,7 @@ func TestCreationQueryDoesNotTreatErrorPayloadAsSuccess(t *testing.T) {
 				key = `{"access_key_id":"fixture-ak","secret_access_key":"fixture-sk"}`
 			}
 			got, err := c.Query(context.Background(), creationConfig(tc.adapter), "task-123", key)
-			if err != nil || got.State != tc.want {
+			if err != nil || string(got.State) != tc.want {
 				t.Fatalf("query = %+v %v; want %s", got, err, tc.want)
 			}
 			if tc.want == "succeeded" && got.TaskID != "task-123" {

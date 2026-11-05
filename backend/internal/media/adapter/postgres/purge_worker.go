@@ -2,10 +2,14 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -16,12 +20,12 @@ func (s *PurgeStore) workerActor(tx *gorm.DB, id uuid.UUID) (identityapp.Princip
 	var row struct {
 		ActorID, OrgID uuid.UUID
 	}
-	read := tx.Raw(`SELECT j.actor_id,j.org_id FROM media.purge_job j WHERE j.id=?`, id).Scan(&row)
+	read := tx.Table("media.purge_job").Select("actor_id", "org_id").Where("id = ?", id).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return identityapp.Principal{}, application.ErrNotFound
+	}
 	if read.Error != nil {
 		return identityapp.Principal{}, read.Error
-	}
-	if read.RowsAffected != 1 {
-		return identityapp.Principal{}, application.ErrNotFound
 	}
 	return identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}, nil
 }
@@ -34,7 +38,7 @@ func (s *PurgeStore) withLease(ctx context.Context, lease application.PurgeLease
 	if err != nil || execution == uuid.Nil {
 		return domain.ErrPurgeConflict
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireCurrentActor(tx, lease.Actor); err != nil {
 			return err
 		}
@@ -67,7 +71,7 @@ func (s *PurgeStore) ClaimPurge(ctx context.Context, work application.PurgeWorkI
 	if err != nil || execution == uuid.Nil || work.JobID == uuid.Nil || work.Attempt < 1 {
 		return result, domain.ErrPurgeConflict
 	}
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		actor, err := s.workerActor(tx, work.JobID)
 		if err != nil {
 			return err
@@ -97,15 +101,15 @@ func (s *PurgeStore) ClaimPurge(ctx context.Context, work application.PurgeWorkI
 		if err != nil {
 			return err
 		}
-		if row.Status == "succeeded" || row.Status == "partial_failed" || row.Status == "failed" || row.Status == "cancelled" {
+		if row.Status == domain.PurgeStatusSucceeded || row.Status == domain.PurgeStatusPartialFailed || row.Status == domain.PurgeStatusFailed || row.Status == domain.PurgeStatusCancelled {
 			result.Done = true
 			return nil
 		}
-		if !row.ProcessEnded || row.ExecutionUnconfirmed || row.Status != "queued" && row.Status != "cancel_requested" {
+		if !row.ProcessEnded || row.ExecutionUnconfirmed || row.Status != domain.PurgeStatusQueued && row.Status != domain.PurgeStatusCancelRequested {
 			return domain.ErrPurgeConflict
 		}
 		result.Fence = uuid.New()
-		return libraryChanged(tx, `UPDATE media.purge_job SET status='running',stage='verifying',worker_fence=?,execution_id=?,lease_until=?,process_ended=false,revision=revision+1,updated_at=? WHERE id=? AND revision=?`, result.Fence, execution, s.clock().Add(45*time.Second).UTC(), s.clock().UTC(), row.ID, row.Revision)
+		return updateOne(tx, "media.purge_job", map[string]any{"id": row.ID, "revision": row.Revision}, map[string]any{"status": domain.PurgeStatusRunning, "stage": domain.PurgeStageVerifying, "worker_fence": result.Fence, "execution_id": execution, "lease_until": s.clock().Add(45 * time.Second).UTC(), "process_ended": false, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
 	})
 	return result, err
 }
@@ -113,15 +117,21 @@ func (s *PurgeStore) ClaimPurge(ctx context.Context, work application.PurgeWorkI
 // HeartbeatPurge renews only the current authorized physical owner.
 func (s *PurgeStore) HeartbeatPurge(ctx context.Context, lease application.PurgeLease) error {
 	return s.withLease(ctx, lease, false, func(tx *gorm.DB, row purgeJobRow, _ libraryRow, _ application.LibraryProjectFacts) error {
-		return libraryChanged(tx, `UPDATE media.purge_job SET lease_until=?,updated_at=? WHERE id=? AND worker_fence=?`, s.clock().Add(45*time.Second).UTC(), s.clock().UTC(), row.ID, lease.Fence)
+		return updateOne(tx, "media.purge_job", map[string]any{"id": row.ID, "worker_fence": lease.Fence}, map[string]any{"lease_until": s.clock().Add(45 * time.Second).UTC(), "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
 	})
 }
 
 type purgeItemRow struct {
-	ItemID uuid.UUID
-	Frozen []byte
-	Status string
+	JobID       uuid.UUID
+	ItemIndex   int
+	ItemID      uuid.UUID
+	AssetID     *uuid.UUID
+	Frozen      []byte
+	Status      domain.PurgeItemStatus
+	FailureCode *string
 }
+
+func (purgeItemRow) TableName() string { return "media.purge_item" }
 
 func readPurgeItem(tx *gorm.DB, id uuid.UUID, index int) (purgeItemRow, application.FrozenPurgeItem, error) {
 	var row purgeItemRow
@@ -129,11 +139,14 @@ func readPurgeItem(tx *gorm.DB, id uuid.UUID, index int) (purgeItemRow, applicat
 	if index < 0 || index > 199 {
 		return row, frozen, application.ErrNotFound
 	}
-	read := tx.Raw(`SELECT item_id,frozen,status FROM media.purge_item WHERE job_id=? AND item_index=? FOR UPDATE`, id, index).Scan(&row)
+	read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ? AND item_index = ?", id, index).Take(&row)
 	if read.Error != nil {
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return row, frozen, application.ErrUnavailable
+		}
 		return row, frozen, read.Error
 	}
-	if read.RowsAffected != 1 || strictCopyMedia(row.Frozen, &frozen) != nil || frozen.ItemID != row.ItemID || frozen.CatalogRevision < 1 || len(frozen.Renditions) > 16 {
+	if strictCopyMedia(row.Frozen, &frozen) != nil || frozen.ItemID != row.ItemID || frozen.CatalogRevision < 1 || len(frozen.Renditions) > 16 {
 		return row, frozen, application.ErrUnavailable
 	}
 	if frozen.Asset != nil {
@@ -159,14 +172,18 @@ func readPurgeItem(tx *gorm.DB, id uuid.UUID, index int) (purgeItemRow, applicat
 func validatePurgeItem(tx *gorm.DB, row purgeJobRow, frozen application.FrozenPurgeItem) error {
 	var item struct {
 		Revision     int64
-		CatalogState string
+		CatalogState domain.LibraryItemState
 		PurgedAt     *time.Time
 	}
-	read := tx.Raw(`SELECT revision,catalog_state,purged_at FROM media.library_item WHERE id=? AND library_id=? FOR UPDATE`, frozen.ItemID, row.LibraryID).Scan(&item)
+	read := tx.Model(&libraryItemRow{}).Select("revision", "catalog_state", "purged_at").
+		Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND library_id = ?", frozen.ItemID, row.LibraryID).Take(&item)
 	if read.Error != nil {
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return domain.ErrPurgeConflict
+		}
 		return read.Error
 	}
-	if read.RowsAffected != 1 || item.PurgedAt != nil || item.Revision != frozen.CatalogRevision || item.CatalogState != "trashed" {
+	if item.PurgedAt != nil || item.Revision != frozen.CatalogRevision || item.CatalogState != domain.LibraryItemStateTrashed {
 		return domain.ErrPurgeConflict
 	}
 	if frozen.Asset == nil {
@@ -178,18 +195,18 @@ func validatePurgeItem(tx *gorm.DB, row purgeJobRow, frozen application.FrozenPu
 		return application.ErrObjectMismatch
 	}
 	var actual assetRow
-	read = tx.Raw(`SELECT * FROM media.media_asset WHERE id=? FOR UPDATE`, frozen.Asset.ID).Scan(&actual)
+	read = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", frozen.Asset.ID).Take(&actual)
 	if read.Error != nil {
 		return read.Error
 	}
 	if err := actual.loadLocation(tx); err != nil {
 		return err
 	}
-	if read.RowsAffected != 1 || !equalCopyMedia(actual.domain(), *frozen.Asset) || !actual.IsDelete {
+	if !equalCopyMedia(actual.domain(), *frozen.Asset) || !actual.IsDelete {
 		return application.ErrObjectMismatch
 	}
 	var rends []renditionRow
-	if err := tx.Raw(`SELECT * FROM media.rendition WHERE media_asset_id=? AND NOT is_delete ORDER BY kind,id FOR UPDATE`, frozen.Asset.ID).Scan(&rends).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("media_asset_id = ? AND is_delete = ?", frozen.Asset.ID, false).Order("kind").Order("id").Find(&rends).Error; err != nil {
 		return err
 	}
 	if len(rends) != len(frozen.Renditions) {
@@ -218,7 +235,7 @@ func (s *PurgeStore) StartPurgeItem(ctx context.Context, lease application.Purge
 		if err != nil {
 			return err
 		}
-		if state.Status == "blocked" || state.Status == "succeeded" || state.Status == "cancelled" {
+		if state.Status == domain.PurgeItemStatusBlocked || state.Status == domain.PurgeItemStatusSucceeded || state.Status == domain.PurgeItemStatusCancelled {
 			done = true
 			return nil
 		}
@@ -236,7 +253,7 @@ func (s *PurgeStore) StartPurgeItem(ctx context.Context, lease application.Purge
 			return err
 		}
 
-		return libraryChanged(tx, `UPDATE media.purge_item SET status='running',failure_code=NULL WHERE job_id=? AND item_index=? AND status IN ('queued','running','needs_reconciliation')`, row.ID, index)
+		return updateOne(tx, "media.purge_item", map[string]any{"job_id": row.ID, "item_index": index, "status": []domain.PurgeItemStatus{domain.PurgeItemStatusQueued, domain.PurgeItemStatusRunning, domain.PurgeItemStatusNeedsReconciliation}}, map[string]any{"status": domain.PurgeItemStatusRunning, "failure_code": nil}, application.ErrLibraryConflict)
 	})
 	return done, err
 }
@@ -251,7 +268,16 @@ func (s *PurgeStore) EndPurgePhysical(ctx context.Context, lease application.Pur
 	if err != nil {
 		return domain.ErrPurgeConflict
 	}
-	return libraryChanged(s.db.WithContext(ctx), `UPDATE media.purge_job SET process_ended=true,execution_unconfirmed=false,revision=revision+1,updated_at=? WHERE id=? AND actor_id=? AND org_id=? AND attempt=? AND worker_fence=? AND execution_id=?`, s.clock().UTC(), lease.Work.JobID, lease.Actor.ID, lease.Actor.OrgID, lease.Work.Attempt, lease.Fence, execution)
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		var row purgeJobRow
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND actor_id = ? AND org_id = ? AND attempt = ? AND worker_fence = ? AND execution_id = ?", lease.Work.JobID, lease.Actor.ID, lease.Actor.OrgID, lease.Work.Attempt, lease.Fence, execution).Take(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return application.ErrLibraryConflict
+			}
+			return err
+		}
+		return updateOne(tx, "media.purge_job", map[string]any{"id": row.ID, "revision": row.Revision}, map[string]any{"process_ended": true, "execution_unconfirmed": false, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
+	})
 }
 
 // FailPurgeItem keeps even a known corrupt source occupied until explicit
@@ -262,10 +288,10 @@ func (s *PurgeStore) FailPurgeItem(ctx context.Context, lease application.PurgeL
 		if err != nil {
 			return err
 		}
-		if state.Status == "succeeded" || state.Status == "blocked" || state.Status == "cancelled" {
+		if state.Status == domain.PurgeItemStatusSucceeded || state.Status == domain.PurgeItemStatusBlocked || state.Status == domain.PurgeItemStatusCancelled {
 			return domain.ErrPurgeConflict
 		}
-		if code == "cancelled" && row.CancellationRequested {
+		if code == domain.PurgeFailureCancelled && row.CancellationRequested {
 			done, err := s.cancelPendingItem(ctx, tx, row, lease.Actor, index, library, facts)
 			if err != nil {
 				return err
@@ -274,10 +300,10 @@ func (s *PurgeStore) FailPurgeItem(ctx context.Context, lease application.PurgeL
 				return nil
 			}
 		}
-		if err := libraryChanged(tx, `UPDATE media.purge_item SET status='needs_reconciliation',failure_code=? WHERE job_id=? AND item_index=?`, code, row.ID, index); err != nil {
+		if err := updateOne(tx, "media.purge_item", map[string]any{"job_id": row.ID, "item_index": index}, map[string]any{"status": domain.PurgeItemStatusNeedsReconciliation, "failure_code": code}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
-		return libraryChanged(tx, `UPDATE media.purge_job SET needs_reconciliation=true,revision=revision+1,updated_at=? WHERE id=?`, s.clock().UTC(), row.ID)
+		return updateOne(tx, "media.purge_job", map[string]any{"id": row.ID}, map[string]any{"needs_reconciliation": true, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
 	})
 }
 

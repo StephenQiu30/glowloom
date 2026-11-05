@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
@@ -48,12 +48,12 @@ func TestDepthJobPGRejectedUndispatchedCancelHasPublicRecovery(t *testing.T) {
 			switch phase {
 			case "consumer_cleanup":
 				store := &depthCleanupRevocation{DepthWorkerStore: f.workerStore, fixture: f, controller: controller.ID}
-				_, err = toolapp.NewDepthWorker(store, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), id)
+				_, err = toolapp.NewRoutedDepthWorker(store, mediatoolRoutedObjects(t, f.db), nil, nil, nil, nil).Execute(t.Context(), id)
 				if !store.revoked {
 					t.Fatal("consumer did not enter its actual cleanup path")
 				}
 			case "before_claim":
-				_, err = toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), id)
+				_, err = toolapp.NewRoutedDepthWorker(f.workerStore, mediatoolRoutedObjects(t, f.db), nil, nil, nil, nil).Execute(t.Context(), id)
 			case "before_finish":
 				_, err = f.workerStore.Finish(t.Context(), id, true, false, "")
 			}
@@ -84,7 +84,7 @@ func TestDepthJobPGRejectedUndispatchedCancelHasPublicRecovery(t *testing.T) {
 				t.Fatal("rejected cancel unexpectedly permits fresh inference", r.Code, r.Body.String())
 			}
 			depthControlThroughHTTP(t, f, failed, "cancel")
-			stopped := depthControlWorkflow(t, f, toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
+			stopped := depthControlWorkflow(t, f, toolapp.NewRoutedDepthWorker(f.workerStore, mediatoolRoutedObjects(t, f.db), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
 			if stopped.Status != tooldomain.DepthCancelled || stopped.NeedsReconciliation || stopped.ExecutionUnconfirmed {
 				t.Fatalf("replacement current controller cannot complete existing public cancel: %+v", stopped)
 			}
@@ -126,7 +126,9 @@ func TestDepthJobPGUndispatchedRejectionRetainsUnknownEvidence(t *testing.T) {
 						t.Fatal(err)
 					}
 					if evidence == "object" {
-						if err := f.db.Exec(`INSERT INTO mediatool.depth_object(job_id,attempt,kind,object_key,sha256,byte_size,mime_type,updated_at) VALUES(?,1,'original',?,?,1,'video/mp4',statement_timestamp())`, j.ID, "depth-proof/"+uuid.NewString(), strings.Repeat("1", 64)).Error; err != nil {
+						key := "projects/" + f.project.String() + "/depth-proof/" + uuid.NewString()
+						location := mediatoolFixtureLocation(t, f.db, mediaapp.StorageWorkKindDepth, f.project, j.ID, 1, key)
+						if err := f.db.Exec(`INSERT INTO mediatool.depth_object(job_id,attempt,kind,object_key,object_location_id,sha256,byte_size,mime_type,updated_at) VALUES(?,1,'original',?,?,?,1,'video/mp4',statement_timestamp())`, j.ID, key, location, strings.Repeat("1", 64)).Error; err != nil {
 							t.Fatal(err)
 						}
 					}
@@ -145,7 +147,7 @@ func TestDepthJobPGUndispatchedRejectionRetainsUnknownEvidence(t *testing.T) {
 				}
 				var err error
 				if evidence == "unreadable_proof" {
-					if err := f.db.Exec(`REVOKE SELECT ON mediatool.depth_result_intent FROM glowloom_app`).Error; err != nil {
+					if err := mediatoolFixtureExec(t, f.db, `REVOKE SELECT ON mediatool.depth_result_intent FROM glowloom_app`).Error; err != nil {
 						t.Fatal(err)
 					}
 					// Permission changes are restricted to the isolated test
@@ -156,7 +158,7 @@ func TestDepthJobPGUndispatchedRejectionRetainsUnknownEvidence(t *testing.T) {
 						}
 						return invoke(depthWorkerStore(tx, true))
 					})
-					if restoreErr := f.db.Exec(`GRANT SELECT ON mediatool.depth_result_intent TO glowloom_app`).Error; restoreErr != nil {
+					if restoreErr := mediatoolFixtureExec(t, f.db, `GRANT SELECT ON mediatool.depth_result_intent TO glowloom_app`).Error; restoreErr != nil {
 						t.Fatal("restore isolated permission", restoreErr)
 					}
 					var pgErr *pgconn.PgError
@@ -183,7 +185,7 @@ func TestDepthJobPGRejectedRedeliveryPreservesCompletedCancel(t *testing.T) {
 	controller, reader := depthControlAdmin(t, f), depthControlAdmin(t, f)
 	f.actor = controller
 	depthControlThroughHTTP(t, f, j, "cancel")
-	completed := depthControlWorkflow(t, f, toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
+	completed := depthControlWorkflow(t, f, toolapp.NewRoutedDepthWorker(f.workerStore, mediatoolRoutedObjects(t, f.db), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
 	if completed.Status != tooldomain.DepthCancelled {
 		t.Fatal("fixture did not complete actual cancellation", completed)
 	}

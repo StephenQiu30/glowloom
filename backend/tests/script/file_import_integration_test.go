@@ -14,18 +14,28 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
-	objectsadapter "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal, project uuid.UUID, name string, data []byte) uuid.UUID {
 	t.Helper()
+	repo := scriptFixtureMediaStore(db)
+	upload := mediaapp.NewRoutedUploadService(repo, repo, pgmedia.NewUploadAdmission(repo), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(scriptFixtureRegistry(t), pgmedia.NewStorageRoutes(db)), time.Now)
+	key := uuid.New()
+	target, err := upload.BeginUpload(t.Context(), actor, mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
 	file, err := mediaapp.ReadUpload(t.Context(), bytes.NewReader(data), name)
 	if err != nil {
 		t.Fatal(err)
@@ -35,8 +45,7 @@ func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 			t.Error(err)
 		}
 	}()
-	upload := mediaapp.NewUploadService(scriptFixtureMediaStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	result, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
+	result, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Target: &target, Request: mediaapp.UploadRequest{ProjectID: project, Key: key, RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,9 +63,9 @@ func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 	return result.Asset.ID
 }
 
-func scriptImportStore(db *gorm.DB, objects *objectstorage.Client) *pg.ImportStore {
+func scriptImportStore(db *gorm.DB, _ *objectstorage.Client) *pg.ImportStore {
 	return scriptFixtureImportStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureProjectAccess(tx) }, func(tx *gorm.DB) app.SourceAssetReader {
-		return mediaapp.NewDocumentSources(scriptFixtureDocumentStore(tx), objects)
+		return mediaapp.NewRoutedDocumentSources(scriptFixtureDocumentStore(tx), nil)
 	})
 }
 
@@ -121,16 +130,16 @@ func importDelivery(t *testing.T, owner *gorm.DB, actor identityapp.Principal, k
 	return envelope.Data
 }
 
-func scriptImportWorker(db *gorm.DB, storage *objectstorage.Client, extractor app.SourceExtractor) *app.ImportWorker {
-	objects := objectsadapter.NewStorage(storage)
-	return scriptImportWorkerWithObjects(db, storage, extractor, objects)
+func scriptImportWorker(t *testing.T, db *gorm.DB, storage *objectstorage.Client, extractor app.SourceExtractor) *app.ImportWorker {
+	objects := scriptPrivateObjects(t, db)
+	return scriptImportWorkerWithObjects(t, db, storage, extractor, objects)
 }
-func scriptImportWorkerWithObjects(db *gorm.DB, storage *objectstorage.Client, extractor app.SourceExtractor, objects app.PrivateObjects) *app.ImportWorker {
+func scriptImportWorkerWithObjects(t *testing.T, db *gorm.DB, storage *objectstorage.Client, extractor app.SourceExtractor, objects app.PrivateObjects) *app.ImportWorker {
 	store := scriptImportStore(db, storage)
 	sources := app.NewSourceService(scriptStore(db), objects, time.Now)
-	return app.NewImportWorker(store, mediaapp.NewDocumentSources(scriptFixtureWorkerDocumentStore(db), storage), extractor, func(a app.ImportAuthority) *app.SourceService {
-		return app.NewSourceServiceSharingIO(pg.NewImportSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureWorkerAccess(tx) }, a), objects, time.Now, sources)
-	}, app.NewSourceRecovery(pg.NewImportRecoveryStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureWorkerAccess(tx) }), sources, time.Now), time.Now)
+	return app.NewImportWorker(store, mediaapp.NewRoutedDocumentSources(scriptFixtureWorkerDocumentStore(db), mediaobjects.NewRoutedReadObjects(scriptFixtureRegistry(t))), extractor, func(a app.ImportAuthority) *app.SourceService {
+		return app.NewSourceServiceSharingIO(pg.NewImportSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureWorkerAccess(tx) }, a).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), objects, time.Now, sources)
+	}, app.NewSourceRecovery(pg.NewImportRecoveryStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureWorkerAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), sources, time.Now), time.Now)
 }
 
 func recoverableSourceExitFault(t *testing.T, owner *gorm.DB, actor uuid.UUID) func() {
@@ -171,13 +180,13 @@ func TestScriptFileImportPGPublicationExitProofFailureStillJoinsAndCleansExactOb
 		t.Fatal(err)
 	}
 	release := recoverableSourceExitFault(t, owner, actor.ID)
-	objects := objectsadapter.NewStorage(storage)
-	worker := scriptImportWorkerWithObjects(db, storage, extract.NewExtractor(), &lostPrivatePut{PrivateObjects: objects})
+	objects := scriptPrivateObjects(t, db)
+	worker := scriptImportWorkerWithObjects(t, db, storage, extract.NewExtractor(), &lostPrivatePut{PrivateObjects: objects})
 	if err := worker.Execute(t.Context(), importDelivery(t, owner, actor, in.Key)); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal("unknown source call", err)
 	}
 	plan := pendingScriptPlan(t, owner, pid)
-	cleanScriptPlan(t, objects, plan)
+	cleanScriptPlan(t, db, objects, plan)
 	var ioState string
 	if err := owner.Raw(`SELECT io_state FROM script.command_state WHERE actor_id=? AND request_id=?`, actor.ID, plan.Command.Key).Scan(&ioState).Error; err != nil || ioState != "running" {
 		t.Fatal("RETURNNULL not exercised", ioState, err)
@@ -198,11 +207,28 @@ func TestScriptFileImportPGPublicationExitProofFailureStillJoinsAndCleansExactOb
 		t.Fatal(err)
 	}
 	after, err := service.Get(t.Context(), admin, pid, accepted.ID)
+	if err != nil || after.Status != "cancel_requested" || !after.NeedsReconciliation || after.ActiveIO {
+		t.Fatal("outer exit cannot skip remote-write drain", after, err)
+	}
+	assertScriptFixtureObjectPresent(t, objects, plan.Objects[0])
+	expireScriptFixtureSourceDrain(t, owner, plan)
+	reconcile := control
+	reconcile.Key = uuid.New()
+	reconcile.RequestID = uuid.New()
+	reconcile.Action = "reconcile"
+	reconcile.ExpectedRevision = after.Revision
+	if _, err := service.Control(t.Context(), admin, reconcile); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.Control(t.Context(), importDelivery(t, owner, admin, reconcile.Key)); err != nil {
+		t.Fatal(err)
+	}
+	after, err = service.Get(t.Context(), admin, pid, accepted.ID)
 	if err != nil || after.Status != "cancelled" || after.NeedsReconciliation || after.ActiveIO {
 		t.Fatal("actual source exit proof was lost between services", after, err)
 	}
 	for _, fact := range plan.Objects {
-		r, err := objects.Get(t.Context(), fact.Key)
+		r, err := objects.GetObject(t.Context(), fact)
 		if err == nil {
 			_, err = io.ReadAll(r)
 			err = errors.Join(err, r.Close())
@@ -225,7 +251,7 @@ func TestScriptFileImportPGWorkerActualOriginalRichVersionAndImmutableAttempt(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker := scriptImportWorker(db, storage, extract.NewExtractor())
+	worker := scriptImportWorker(t, db, storage, extract.NewExtractor())
 	delivery := importDelivery(t, owner, actor, input.Key)
 	if err := worker.Execute(t.Context(), delivery); err != nil {
 		t.Fatal("actual file worker", err)
@@ -238,7 +264,7 @@ func TestScriptFileImportPGWorkerActualOriginalRichVersionAndImmutableAttempt(t 
 	if err != nil || len(base.Sources) != 2 || base.Sources[0].Origin != "file" || *base.Sources[0].MediaAssetID != first || *base.Sources[1].MediaAssetID != second || base.Sources[1].Provenance.Encoding != "utf-16le" {
 		t.Fatal("formal file provenance", base, err)
 	}
-	sourceService := app.NewSourceService(scriptStore(db), objectsadapter.NewStorage(storage), time.Now)
+	sourceService := app.NewSourceService(scriptStore(db), scriptPrivateObjects(t, db), time.Now)
 	text, err := sourceService.VersionText(t.Context(), actor, pid, *current.LatestVersionID)
 	if err != nil || text != "甲😀\n乙 \n\n中文" {
 		t.Fatalf("canonical file text %q %v", text, err)
@@ -296,7 +322,7 @@ func TestScriptFileImportPGPartialRetryKeepsLineageAndOriginalFrozenOrder(t *tes
 	store := scriptImportStore(db, storage)
 	service := app.NewImportService(store, time.Now)
 	extractor := &failImportFileOnce{original: extract.NewExtractor()}
-	worker := scriptImportWorker(db, storage, extractor)
+	worker := scriptImportWorker(t, db, storage, extractor)
 	in := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{first, second}, RightsConfirmed: true}
 	accepted, err := service.Create(t.Context(), actor, in)
 	if err != nil {
@@ -367,7 +393,7 @@ func TestScriptFileImportPGQueuedAdminCancelRevokedCreatorAndPermanentDelivery(t
 	delivery := importDelivery(t, owner, admin, cancel.Key)
 	spoof := delivery
 	spoof.ActorID = actor.ID
-	worker := scriptImportWorker(db, storage, extract.NewExtractor())
+	worker := scriptImportWorker(t, db, storage, extract.NewExtractor())
 	if err := worker.Control(t.Context(), spoof); !errors.Is(err, app.ErrIdempotencyConflict) {
 		t.Fatal("borrowed command actor", err)
 	}
@@ -423,7 +449,7 @@ func TestScriptFileImportPGActiveCancellationJoinsActualExtractionAndLostOwnerSt
 			t.Fatal(err)
 		}
 		extractor := &pausedImportExtractor{started: make(chan struct{}), stopped: make(chan struct{})}
-		worker := scriptImportWorker(db, storage, extractor)
+		worker := scriptImportWorker(t, db, storage, extractor)
 		delivery := importDelivery(t, owner, actor, in.Key)
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
@@ -498,7 +524,7 @@ func TestScriptFileImportPGActiveCancellationJoinsActualExtractionAndLostOwnerSt
 		if _, err := service.Control(t.Context(), actor, control); err != nil {
 			t.Fatal(err)
 		}
-		if err := scriptImportWorker(db, storage, extract.NewExtractor()).Control(t.Context(), importDelivery(t, owner, actor, control.Key)); err != nil {
+		if err := scriptImportWorker(t, db, storage, extract.NewExtractor()).Control(t.Context(), importDelivery(t, owner, actor, control.Key)); err != nil {
 			t.Fatal(err)
 		}
 		after, err := service.Get(t.Context(), actor, pid, accepted.ID)
@@ -546,7 +572,7 @@ func TestScriptFileImportPGOuterExitProofFailureRecoversOnlyJoinedPermanentContr
 		})
 	}
 	t.Cleanup(release)
-	worker := scriptImportWorker(db, storage, failedImportExtractor{})
+	worker := scriptImportWorker(t, db, storage, failedImportExtractor{})
 	if err := worker.Execute(t.Context(), importDelivery(t, owner, actor, input.Key)); err == nil {
 		t.Fatal("zero-row exit fault was not exercised")
 	}

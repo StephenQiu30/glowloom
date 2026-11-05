@@ -3,7 +3,9 @@ package application
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -28,6 +30,16 @@ var (
 
 const exportRowsLimit = 10000
 const exportBytesLimit = 32 << 20
+
+// Directory export states record admission, execution and read availability.
+const (
+	DirectoryExportPending   = "pending"
+	DirectoryExportRunning   = "running"
+	DirectoryExportCompleted = "completed"
+	DirectoryExportFailed    = "failed"
+	DirectoryExportExpired   = "expired"
+	DirectoryExportRevoked   = "revoked"
+)
 
 // ExportFilter has separate platform-account and team-membership whitelists.
 type ExportFilter struct {
@@ -86,7 +98,22 @@ type DirectoryExportJob struct {
 	RowCount                              int
 	AsOf, CreatedAt, UpdatedAt, ExpiresAt time.Time
 	ObjectID                              *uuid.UUID
+	ObjectLocation                        *ExportObjectLocation
+	ObjectLocationInfo                    *ExportObjectInfo
 	ErrorCategory                         string
+}
+
+// ExportObjectLocation identifies one encrypted output in the shared immutable
+// object-location ledger. A current route never reinterprets an older export.
+type ExportObjectLocation struct {
+	ID, IntentID           uuid.UUID
+	ProfileID, Bucket, Key string
+}
+
+// ExportObjectInfo contains the metadata verified from a private export object.
+type ExportObjectInfo struct {
+	Size                int64
+	ContentType, SHA256 string
 }
 
 // ExportTx holds identity/team authorization and the job under one transaction.
@@ -119,17 +146,50 @@ type ExportObjects interface {
 	Remove(context.Context, string) error
 }
 
+// RoutedExportTx extends an authorized identity transaction with storage
+// admission and result publication operations.
+type RoutedExportTx interface {
+	PinExportObject(context.Context, DirectoryExportJob) (ExportObjectLocation, error)
+	BeginExportObjectWrite(context.Context, DirectoryExportJob, time.Time) error
+	ConfirmExportObject(context.Context, DirectoryExportJob, ExportObjectInfo) error
+	AcceptExportObject(context.Context, DirectoryExportJob) error
+	CancelExportObject(context.Context, DirectoryExportJob) error
+}
+
+// RoutedExportLocationStore fences cleanup against a running export and old
+// provider writes before granting deletion of the exact saved location.
+type RoutedExportLocationStore interface {
+	BeginExportObjectRemoval(context.Context, DirectoryExportJob) (ExportObjectLocation, bool, error)
+	ConfirmExportObjectRemoval(context.Context, DirectoryExportJob, ExportObjectLocation) error
+}
+
+// RoutedExportObjects implements provider I/O against immutable refs supplied
+// by the transactional location ledger.
+type RoutedExportObjects interface {
+	PutIfAbsent(context.Context, ExportObjectLocation, io.Reader, int64, string, string) error
+	Stat(context.Context, ExportObjectLocation) (ExportObjectInfo, error)
+	Get(context.Context, ExportObjectLocation) (io.ReadCloser, error)
+	Remove(context.Context, DirectoryExportJob) error
+}
+
 // DirectoryExport owns bounded materialization, generation and authorized downloads.
 type DirectoryExport struct {
 	store     DirectoryExportStore
 	protector ExportProtector
 	objects   ExportObjects
+	routed    RoutedExportObjects
 	now       func() time.Time
 }
 
 // NewDirectoryExport injects the existing database, identity encryption and storage.
 func NewDirectoryExport(store DirectoryExportStore, protector ExportProtector, objects ExportObjects, now func() time.Time) *DirectoryExport {
 	return &DirectoryExport{store: store, protector: protector, objects: objects, now: now}
+}
+
+// NewRoutedDirectoryExport pins every temporary output to the database's
+// accepted route and uses provider adapters only through exact references.
+func NewRoutedDirectoryExport(store DirectoryExportStore, protector ExportProtector, objects RoutedExportObjects, now func() time.Time) *DirectoryExport {
+	return &DirectoryExport{store: store, protector: protector, routed: objects, now: now}
 }
 
 // Create materializes at most 10000 rows before committing an encrypted snapshot.
@@ -141,7 +201,7 @@ func (s *DirectoryExport) Create(ctx context.Context, actor Principal, team *uui
 	if key == uuid.Nil || team != nil && *team == uuid.Nil {
 		return DirectoryExportJob{}, ErrInvalidDirectoryFilter
 	}
-	if s.objects == nil || s.protector == nil {
+	if s.objects == nil && s.routed == nil || s.protector == nil {
 		return DirectoryExportJob{}, ErrExportUnavailable
 	}
 	scope := uuid.Nil
@@ -182,9 +242,20 @@ func (s *DirectoryExport) Create(ctx context.Context, actor Principal, team *uui
 		if len(raw) > exportBytesLimit {
 			return ErrExportLimit
 		}
-		job = DirectoryExportJob{ID: uuid.New(), ActorID: actor.ID, ScopeID: scope, RequestKey: key, TeamID: team, Actor: actor, TeamRevision: revision, Filter: f, Status: "pending", KeyID: s.protector.KeyID(), RowCount: len(rows) - 1, AsOf: now, CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(15 * time.Minute)}
+		job = DirectoryExportJob{ID: uuid.New(), ActorID: actor.ID, ScopeID: scope, RequestKey: key, TeamID: team, Actor: actor, TeamRevision: revision, Filter: f, Status: DirectoryExportPending, KeyID: s.protector.KeyID(), RowCount: len(rows) - 1, AsOf: now, CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(15 * time.Minute)}
 		objectID := uuid.NewSHA1(job.ID, []byte("directory-export-csv"))
 		job.ObjectID = &objectID
+		if s.routed != nil {
+			routedTx, ok := tx.(RoutedExportTx)
+			if !ok {
+				return ErrExportUnavailable
+			}
+			location, err := routedTx.PinExportObject(ctx, job)
+			if err != nil {
+				return err
+			}
+			job.ObjectLocation = &location
+		}
 		job.Snapshot, err = s.protector.Seal(job.ID, raw)
 		if err != nil {
 			return err
@@ -219,7 +290,7 @@ func (s *DirectoryExport) withJob(ctx context.Context, actor Principal, team *uu
 		if _, err := tx.Authorize(actor, team, job.TeamRevision, false, s.now); err != nil {
 			return err
 		}
-		if job.Status == "expired" || job.Status == "revoked" || !s.now().UTC().Before(job.ExpiresAt) {
+		if job.Status == DirectoryExportExpired || job.Status == DirectoryExportRevoked || !s.now().UTC().Before(job.ExpiresAt) {
 			return ErrExportNotFound
 		}
 		return run(job)
@@ -231,17 +302,25 @@ func (s *DirectoryExport) withJob(ctx context.Context, actor Principal, team *uu
 func (s *DirectoryExport) Stream(ctx context.Context, actor Principal, team *uuid.UUID, id uuid.UUID, write func(io.Reader) error) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if s.objects == nil || s.protector == nil {
+	if s.objects == nil && s.routed == nil || s.protector == nil {
 		return ErrExportUnavailable
 	}
 	job, err := s.Read(ctx, actor, team, id)
 	if err != nil {
 		return err
 	}
-	if job.Status != "completed" || job.ObjectID == nil {
+	if job.Status != DirectoryExportCompleted || job.ObjectID == nil {
 		return ErrExportNotFound
 	}
-	reader, err := s.objects.Get(ctx, exportObjectKey(*job.ObjectID))
+	var reader io.ReadCloser
+	if s.routed != nil {
+		if job.ObjectLocation == nil {
+			return ErrExportUnavailable
+		}
+		reader, err = s.routed.Get(ctx, *job.ObjectLocation)
+	} else {
+		reader, err = s.objects.Get(ctx, exportObjectKey(*job.ObjectID))
+	}
 	if err != nil {
 		return ErrExportUnavailable
 	}
@@ -255,7 +334,7 @@ func (s *DirectoryExport) Stream(ctx context.Context, actor Principal, team *uui
 		return ErrExportUnavailable
 	}
 	return s.withJob(ctx, actor, team, id, func(current DirectoryExportJob) error {
-		if current.Status != "completed" || current.ObjectID == nil || *current.ObjectID != *job.ObjectID || !s.now().UTC().Before(current.ExpiresAt) {
+		if current.Status != DirectoryExportCompleted || current.ObjectID == nil || *current.ObjectID != *job.ObjectID || !s.now().UTC().Before(current.ExpiresAt) {
 			return ErrExportNotFound
 		}
 		if err := ctx.Err(); err != nil {
@@ -271,7 +350,7 @@ func exportObjectKey(id uuid.UUID) string {
 
 // RunOnce performs bounded work in the existing API process, independent of SMTP.
 func (s *DirectoryExport) RunOnce(ctx context.Context, limit int) (int, error) {
-	if s.objects == nil || s.protector == nil {
+	if s.objects == nil && s.routed == nil || s.protector == nil {
 		return 0, ErrExportUnavailable
 	}
 	if limit < 1 || limit > 20 {
@@ -279,6 +358,9 @@ func (s *DirectoryExport) RunOnce(ctx context.Context, limit int) (int, error) {
 	}
 	count, err := s.store.Cleanup(ctx, limit, s.now().UTC(), func(cleanupCtx context.Context, job DirectoryExportJob) error {
 		if job.ObjectID != nil {
+			if s.routed != nil {
+				return s.routed.Remove(cleanupCtx, job)
+			}
 			return s.objects.Remove(cleanupCtx, exportObjectKey(*job.ObjectID))
 		}
 		return nil
@@ -313,12 +395,18 @@ func (s *DirectoryExport) process(ctx context.Context, id uuid.UUID) error {
 		if err != nil {
 			return err
 		}
-		if job.Status != "pending" {
+		if job.Status != DirectoryExportPending {
 			return nil
 		}
 		now := s.now().UTC()
 		if !now.Before(job.ExpiresAt) {
-			job.Status = "expired"
+			if s.routed != nil {
+				routedTx, ok := tx.(RoutedExportTx)
+				if !ok || routedTx.CancelExportObject(ctx, job) != nil {
+					return ErrExportUnavailable
+				}
+			}
+			job.Status = DirectoryExportExpired
 			job.Snapshot = nil
 			job.UpdatedAt = now
 			return tx.Save(job)
@@ -327,14 +415,44 @@ func (s *DirectoryExport) process(ctx context.Context, id uuid.UUID) error {
 			if !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrSessionInvalid) {
 				return err
 			}
-			job.Status = "revoked"
+			if s.routed != nil {
+				routedTx, ok := tx.(RoutedExportTx)
+				if !ok || routedTx.CancelExportObject(ctx, job) != nil {
+					return ErrExportUnavailable
+				}
+			}
+			job.Status = DirectoryExportRevoked
 			job.Snapshot = nil
 			job.ErrorCategory = "authority_revoked"
 			job.UpdatedAt = now
 			return tx.Save(job)
 		}
-		job.Status = "running"
+		if s.routed != nil && job.ObjectLocation == nil {
+			routedTx, ok := tx.(RoutedExportTx)
+			if !ok {
+				return ErrExportUnavailable
+			}
+			location, err := routedTx.PinExportObject(ctx, job)
+			if err != nil {
+				return err
+			}
+			job.ObjectLocation = &location
+		}
+		job.Status = DirectoryExportRunning
 		job.UpdatedAt = now
+		if s.routed != nil {
+			routedTx, ok := tx.(RoutedExportTx)
+			if !ok || job.ObjectLocation == nil {
+				return ErrExportUnavailable
+			}
+			deadline, bounded := ctx.Deadline()
+			if !bounded {
+				return ErrExportUnavailable
+			}
+			if err := routedTx.BeginExportObjectWrite(ctx, job, deadline); err != nil {
+				return err
+			}
+		}
 		claimed = true
 		return tx.Save(job)
 	})
@@ -363,7 +481,21 @@ func (s *DirectoryExport) process(ctx context.Context, id uuid.UUID) error {
 		if err != nil {
 			return err
 		}
-		if err := s.objects.Put(ctx, exportObjectKey(*job.ObjectID), bytes.NewReader(ciphertext), int64(len(ciphertext)), "application/octet-stream"); err != nil {
+		if s.routed != nil {
+			if job.ObjectLocation == nil {
+				category = "storage_failed"
+			} else {
+				digest := sha256.Sum256(ciphertext)
+				hash := hex.EncodeToString(digest[:])
+				if err := s.routed.PutIfAbsent(ctx, *job.ObjectLocation, bytes.NewReader(ciphertext), int64(len(ciphertext)), "application/octet-stream", hash); err != nil {
+					category = "storage_failed"
+				} else if info, statErr := s.routed.Stat(ctx, *job.ObjectLocation); statErr != nil || info.Size != int64(len(ciphertext)) || info.ContentType != "application/octet-stream" || info.SHA256 != hash {
+					category = "storage_failed"
+				} else {
+					job.ObjectLocationInfo = &info
+				}
+			}
+		} else if err := s.objects.Put(ctx, exportObjectKey(*job.ObjectID), bytes.NewReader(ciphertext), int64(len(ciphertext)), "application/octet-stream"); err != nil {
 			category = "storage_failed"
 		}
 	}
@@ -374,12 +506,25 @@ func (s *DirectoryExport) process(ctx context.Context, id uuid.UUID) error {
 		if err != nil {
 			return err
 		}
-		if current.Status != "running" {
+		if current.Status != DirectoryExportRunning {
 			return nil
+		}
+		var routedTx RoutedExportTx
+		if s.routed != nil {
+			var ok bool
+			routedTx, ok = tx.(RoutedExportTx)
+			if !ok || current.ObjectLocation == nil {
+				return ErrExportUnavailable
+			}
 		}
 		now := s.now().UTC()
 		if !now.Before(current.ExpiresAt) {
-			current.Status = "expired"
+			if routedTx != nil {
+				if err := routedTx.CancelExportObject(ctx, current); err != nil {
+					return err
+				}
+			}
+			current.Status = DirectoryExportExpired
 			current.Snapshot = nil
 			current.UpdatedAt = now
 			return tx.Save(current)
@@ -388,16 +533,37 @@ func (s *DirectoryExport) process(ctx context.Context, id uuid.UUID) error {
 			if !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrSessionInvalid) {
 				return err
 			}
-			current.Status = "revoked"
+			if routedTx != nil {
+				if cancelErr := routedTx.CancelExportObject(ctx, current); cancelErr != nil {
+					return cancelErr
+				}
+			}
+			current.Status = DirectoryExportRevoked
 			current.Snapshot = nil
 			current.ErrorCategory = "authority_revoked"
 			current.UpdatedAt = now
 			return tx.Save(current)
 		}
 		if category != "" {
+			if routedTx != nil {
+				if err := routedTx.CancelExportObject(ctx, current); err != nil {
+					return err
+				}
+			}
 			return s.fail(tx, current, category)
 		}
-		current.Status = "completed"
+		if routedTx != nil {
+			if job.ObjectLocationInfo == nil {
+				return ErrExportUnavailable
+			}
+			if err := routedTx.ConfirmExportObject(ctx, current, *job.ObjectLocationInfo); err != nil {
+				return err
+			}
+			if err := routedTx.AcceptExportObject(ctx, current); err != nil {
+				return err
+			}
+		}
+		current.Status = DirectoryExportCompleted
 		current.Snapshot = nil
 		current.UpdatedAt = now
 		current.ExpiresAt = now.Add(15 * time.Minute)
@@ -406,7 +572,7 @@ func (s *DirectoryExport) process(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *DirectoryExport) fail(tx ExportTx, job DirectoryExportJob, category string) error {
-	job.Status = "failed"
+	job.Status = DirectoryExportFailed
 	job.Snapshot = nil
 	job.ErrorCategory = category
 	job.UpdatedAt = s.now().UTC()

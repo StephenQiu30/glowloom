@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -15,16 +16,12 @@ import (
 // requireNewMediaVisible is for new ordinary bindings, not previously frozen
 // immutable evidence. Callers hold project then library locks before originals.
 func requireNewMediaVisible(tx *gorm.DB, library uuid.UUID, ids []uuid.UUID) error {
-	var rows []struct {
-		ID           uuid.UUID
-		CatalogState string
-		Purged       bool
-	}
-	if err := tx.Raw(`SELECT id,catalog_state,purged_at IS NOT NULL AS purged FROM media.library_item WHERE library_id=? AND id IN ? ORDER BY id FOR SHARE`, library, ids).Scan(&rows).Error; err != nil {
+	var rows []libraryItemRow
+	if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Select("id, catalog_state, purged_at").Where("library_id = ? AND id IN ?", library, ids).Order("id").Find(&rows).Error; err != nil {
 		return fmt.Errorf("%w: check new media visibility: %w", application.ErrUnavailable, err)
 	}
 	for _, row := range rows {
-		if row.CatalogState != "active" || row.Purged {
+		if row.CatalogState != domain.LibraryItemStateActive || row.PurgedAt != nil {
 			return application.ErrNotFound
 		}
 	}

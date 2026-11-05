@@ -20,7 +20,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	scripthttp "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/http"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
@@ -79,8 +78,7 @@ func scriptHTTP(t *testing.T, router http.Handler, method, path string, key uuid
 func TestScriptSourceHTTPPrivateHTMLRichAndPermanentRecovery(t *testing.T) {
 	db, owner := scriptTestDB(t)
 	actor, pid := scriptActorProject(t, owner)
-	client := scriptStorage(t)
-	objects := scriptobjects.NewStorage(client)
+	objects := scriptPrivateObjects(t, db)
 	service := app.NewSourceService(scriptStore(db), objects, time.Now)
 	router := scriptRouter(service, actor)
 	path := "/api/projects/" + pid.String()
@@ -101,15 +99,13 @@ func TestScriptSourceHTTPPrivateHTMLRichAndPermanentRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 		for _, fact := range []domain.ObjectFact{base.Sources[0].Original, base.Sources[0].Rich, base.Version.Text, base.Version.Rich} {
-			if err := client.Remove(ctx, fact.Key); err != nil {
+			if err := removeScriptFixtureBytes(t, db, fact); err != nil {
 				t.Error("remove exact owned script test object")
 			}
 		}
 	})
-	original, err := client.Get(t.Context(), base.Sources[0].Original.Key)
+	original, err := objects.GetObject(t.Context(), base.Sources[0].Original)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,8 +142,8 @@ type lostPrivatePut struct {
 	lost bool
 }
 
-func (s *lostPrivatePut) PutIfAbsent(ctx context.Context, key string, r io.Reader, size int64, mime, hash string) error {
-	err := s.PrivateObjects.PutIfAbsent(ctx, key, r, size, mime, hash)
+func (s *lostPrivatePut) PutObjectIfAbsent(ctx context.Context, fact domain.ObjectFact, r io.Reader) error {
+	err := s.PrivateObjects.PutObjectIfAbsent(ctx, fact, r)
 	if err != nil {
 		return err
 	}
@@ -161,8 +157,7 @@ func (s *lostPrivatePut) PutIfAbsent(ctx context.Context, key string, r io.Reade
 func TestScriptSourcePGActualUnknownPrivatePutFenceAndSameKeyRecovery(t *testing.T) {
 	db, owner := scriptTestDB(t)
 	actor, pid := scriptActorProject(t, owner)
-	client := scriptStorage(t)
-	objects := scriptobjects.NewStorage(client)
+	objects := scriptPrivateObjects(t, db)
 	loss := &lostPrivatePut{PrivateObjects: objects}
 	_, input := sourceCommand()
 	input.ProjectID = pid
@@ -185,10 +180,8 @@ func TestScriptSourcePGActualUnknownPrivatePutFenceAndSameKeyRecovery(t *testing
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 		for _, fact := range []domain.ObjectFact{base.Sources[0].Original, base.Sources[0].Rich, base.Version.Text, base.Version.Rich} {
-			if err := client.Remove(ctx, fact.Key); err != nil {
+			if err := removeScriptFixtureBytes(t, db, fact); err != nil {
 				t.Error("remove exact owned recovery test object")
 			}
 		}

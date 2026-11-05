@@ -53,7 +53,7 @@ func coverTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {
 
 func coverStore(db *gorm.DB) *workspacepg.Store {
 	return workspaceStoreWithCover(db, folderWork, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
-		return mediaapp.NewAssetQuery(workspaceMediaStore(tx), nil)
+		return mediaapp.NewAssetQuery(workspaceMediaStore(tx))
 	})
 }
 
@@ -72,9 +72,9 @@ func seedCoverAsset(t *testing.T, owner *gorm.DB, project uuid.UUID, kind string
 	t.Helper()
 	id := uuid.New()
 	if kind == "image" {
-		lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,codec,moderation_status)VALUES(?,?,'image','upload','ready',?,'synthetic.png','image/png',12,repeat('a',64),2,2,'png','passed')`, id, project, "projects/"+project.String()+"/"+kind+"/2026/10/"+id.String()+map[string]string{"image": ".png", "audio": ".wav"}[kind])
+		lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,codec,moderation_status,object_location_id) VALUES(?,?,'image','upload','ready',?,'synthetic.png','image/png',12,repeat('a',64),2,2,'png','passed',?)`, id, project, "projects/"+project.String()+"/"+kind+"/2026/10/"+id.String()+map[string]string{"image": ".png", "audio": ".wav"}[kind], businessFixtureLocation(t, owner, "projects/"+project.String()+"/"+kind+"/2026/10/"+id.String()+map[string]string{"image": ".png", "audio": ".wav"}[kind]))
 	} else {
-		lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,duration_ms,codec,moderation_status)VALUES(?,?,'audio','upload','ready',?,'synthetic.wav','audio/wav',12,repeat('a',64),1000,'pcm_s16le','passed')`, id, project, "projects/"+project.String()+"/"+kind+"/2026/10/"+id.String()+map[string]string{"image": ".png", "audio": ".wav"}[kind])
+		lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,duration_ms,codec,moderation_status,object_location_id) VALUES(?,?,'audio','upload','ready',?,'synthetic.wav','audio/wav',12,repeat('a',64),1000,'pcm_s16le','passed',?)`, id, project, "projects/"+project.String()+"/"+kind+"/2026/10/"+id.String()+map[string]string{"image": ".png", "audio": ".wav"}[kind], businessFixtureLocation(t, owner, "projects/"+project.String()+"/"+kind+"/2026/10/"+id.String()+map[string]string{"image": ".png", "audio": ".wav"}[kind]))
 	}
 	return id
 }
@@ -178,8 +178,8 @@ func TestProjectCoverHTTPActualReviewedUploadNullableAndRefresh(t *testing.T) {
 	}
 	defer func() { _ = file.Close() }()
 	mediaStore := workspaceMediaStore(db)
-	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	result, err := upload.Upload(ctx, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "正式主图.png"}, File: file, LocalReviewConfirmed: true})
+	upload := businessFixtureUploads(t, db, mediaStore, mediaflow.FFUploadProber{})
+	result, err := businessFixtureUpload(ctx, t, upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "正式主图.png"}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual reviewed source upload", err)
 	}

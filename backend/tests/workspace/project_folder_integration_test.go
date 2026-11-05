@@ -50,7 +50,7 @@ func folderWork(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 
 func folderStore(db *gorm.DB) *workspacepg.FolderStore {
 	return workspaceFolderStore(db, folderWork, func(tx *gorm.DB) workspaceapp.FolderMediaReader {
-		return mediaapp.NewAssetQuery(workspaceMediaStore(tx), nil)
+		return mediaapp.NewAssetQuery(workspaceMediaStore(tx))
 	})
 }
 
@@ -180,7 +180,7 @@ func TestProjectFolderPGWholeRecycleAtomicGuardsAndRestore(t *testing.T) {
 	operation, asset, export, transcription, depth, copyID, target := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	fixture := func(query string, args ...any) { t.Helper(); lifecycleFixtureSQL(t, owner, query, args...) }
 	fixture(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,quote_micros,quote_expires_at)VALUES(?,?,'free','image.generate','text_to_image','folder-guard','upload','completed',0,clock_timestamp()+interval '1 hour')`, operation, ids[1])
-	fixture(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size)VALUES(?,?,'image','upload','ready',?,'image/png',12)`, asset, ids[1], "folder-tests/"+asset.String())
+	fixture(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,object_location_id) VALUES(?,?,'image','upload','ready',?,'image/png',12,?)`, asset, ids[1], "folder-tests/"+asset.String(), businessFixtureLocation(t, owner, "folder-tests/"+asset.String()))
 	fixture(`INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,status,stage,progress,attempt,revision,created_at,updated_at)VALUES(?,?,?,?,'producer',?,?,1,'{}','failed','failed',0,1,1,clock_timestamp(),clock_timestamp())`, export, ids[1], actor.OrgID, actor.ID, uuid.New(), uuid.New())
 	fixture(`INSERT INTO mediatool.transcription_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,language,frozen,status,stage,progress,attempt,revision,inference_state,created_at,updated_at)VALUES(?,?,?,?,'producer',?,?,1,'zh','{}','failed','failed',0,1,1,'terminal',clock_timestamp(),clock_timestamp())`, transcription, ids[1], actor.OrgID, actor.ID, uuid.New(), uuid.New())
 	fixture(`INSERT INTO mediatool.depth_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,source_asset_id,source_asset_revision,source_sha256,profile_id,frozen,frozen_sha256,status,stage,attempt,revision,process_state,created_at,updated_at)VALUES(?,?,?,?,'producer',?,?,1,?,1,repeat('a',64),'vda-small-relative-v1','{}',repeat('b',64),'failed','failed',1,1,'ended',clock_timestamp(),clock_timestamp())`, depth, ids[1], actor.OrgID, actor.ID, uuid.New(), uuid.New(), asset)
@@ -251,7 +251,7 @@ func TestProjectFolderPGFormalCoverAndIndividualRestore(t *testing.T) {
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
 	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	asset := uuid.New()
-	lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,moderation_status,sha256,width,height)VALUES(?,?,'image','upload','ready',?,'image/png',12,'passed',repeat('a',64),32,32)`, asset, project, "projects/"+project.String()+"/image/2026/10/"+asset.String()+".png")
+	lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,moderation_status,sha256,width,height,object_location_id) VALUES(?,?,'image','upload','ready',?,'image/png',12,'passed',repeat('a',64),32,32,?)`, asset, project, "projects/"+project.String()+"/image/2026/10/"+asset.String()+".png", businessFixtureLocation(t, owner, "projects/"+project.String()+"/image/2026/10/"+asset.String()+".png"))
 	service := workspaceapp.NewProjectFolders(folderStore(db), time.Now)
 	in := folderCommand("create")
 	name := "正式封面"

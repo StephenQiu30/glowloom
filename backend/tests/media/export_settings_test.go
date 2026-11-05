@@ -80,7 +80,7 @@ func TestTimelineExportSelectedResolutionRendersAutoAndItsRealProxy(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer output.Close()
+	defer func() { _ = output.Close() }()
 	probe, err := (mediaflow.FFProber{}).Probe(t.Context(), output)
 	if err != nil || probe.Width == nil || *probe.Width != 480 || probe.Height == nil || *probe.Height != 480 {
 		t.Fatalf("actual 480P auto output %+v %v", probe, err)
@@ -108,7 +108,7 @@ func TestTimelineExportSettingsPortableProjectsKeepNameAndDimensions(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer output.Close()
+			defer func() { _ = output.Close() }()
 			entries := archiveEntries(t, output.File, output.Size)
 			if kind == tool.OutputFCPXML {
 				var doc struct {

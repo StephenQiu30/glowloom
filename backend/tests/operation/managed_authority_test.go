@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/temporal"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -42,18 +41,17 @@ func (s *scopedIngestStore) AuthorizeWorker(context.Context, uuid.UUID, bool) er
 }
 func TestManagedActualConsumersUseInjectedAuthority(t *testing.T) {
 	store := &scopedIngestStore{}
-	ingest := managed.NewScopedIngestActivities(nil, nil, nil, nil, store)
+	ingest := managed.NewRoutedIngestActivities(nil, nil, nil, nil, store)
 	if err := ingest.Ingest(t.Context(), uuid.New()); err != nil || store.loads != 1 || store.texts != 1 {
 		t.Fatalf("injected ingest store not consumed: %v %+v", err, store)
 	}
 	store.revoked = true
 	for _, run := range []func() error{func() error { return ingest.Ingest(t.Context(), uuid.New()) }, func() error {
-		_, err := managed.NewActivities(store, nil, nil, nil, nil, nil).Step(t.Context(), application.ManagedStep{OperationID: uuid.New(), Action: "submit"})
+		_, err := managed.NewActivities(store, nil, nil, nil, nil).Step(t.Context(), application.ManagedStep{OperationID: uuid.New(), Action: "submit"})
 		return err
 	}} {
 		err := run()
-		var appErr *temporal.ApplicationError
-		if !errors.As(err, &appErr) || !appErr.NonRetryable() || appErr.Type() != "execution_authority_revoked" {
+		if !errors.Is(err, application.ErrExecutionAuthorityRevoked) {
 			t.Fatalf("revoked actual consumer retried or dispatched: %v", err)
 		}
 	}

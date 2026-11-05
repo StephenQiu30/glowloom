@@ -37,7 +37,7 @@ func (a assetAccess) AuthorizeProject(ctx context.Context, actor identity.Princi
 }
 
 func (a assetAccess) AssetCoverAvailable(ctx context.Context, actor identity.Principal, project, id uuid.UUID) (bool, error) {
-	fact, err := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(a.tx, mediawire.NewMediaScopeAccess), nil).Reference(ctx, actor, project, id)
+	fact, err := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(a.tx, mediawire.NewMediaScopeAccess)).Reference(ctx, actor, project, id)
 	if errors.Is(err, mediaapp.ErrNotFound) {
 		return false, nil
 	}

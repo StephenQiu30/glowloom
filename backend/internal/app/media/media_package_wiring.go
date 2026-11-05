@@ -21,11 +21,6 @@ func provideMediaPackageStore(database *gorm.DB) *pgmedia.PackageStore {
 	return pgmedia.NewScopedPackageStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaScopeAccess)
 }
 
-// ProvideMediaPackages assembles package operations and their upload dependency.
-func ProvideMediaPackages(database *gorm.DB, storage *objectstorage.Client, uploads *mediaapp.UploadService) *mediaapp.LibraryPackageService {
-	return mediaapp.NewLibraryPackageService(provideMediaPackageStore(database), uploads, mediaobjects.NewProjectCopyObjects(storage), time.Now)
-}
-
 // PackageWorkGuard reports in-flight package work for the workspace lifecycle owner list.
 func PackageWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 	return mediaPackageWorkGuard{store: provideMediaPackageStore(tx)}

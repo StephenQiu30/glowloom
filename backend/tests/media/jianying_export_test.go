@@ -6,9 +6,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/uuid"
+
 	project "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/editproject"
 	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
-	"github.com/google/uuid"
 )
 
 func TestJianyingNativeDraftPreservesEditsAndOriginals(t *testing.T) {
@@ -28,7 +29,11 @@ func TestJianyingNativeDraftPreservesEditsAndOriginals(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	defer out.Close()
+	defer func() {
+		if err := out.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	entries := archiveEntries(t, out.File, out.Size)
 	var doc struct {
 		Version    int    `json:"version"`
@@ -116,7 +121,11 @@ func TestJianyingNativeDraftIdentityFollowsExportJob(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		defer out.Close()
+		defer func() {
+			if err := out.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 		body := archiveEntries(t, out.File, out.Size)["template.json"]
 		var doc struct {
 			ID string `json:"id"`

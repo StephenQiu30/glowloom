@@ -1,6 +1,22 @@
 import { isProjectID } from "@/components/projects/project";
 import { RequestError } from "@/lib/request";
-export function directorProjectQuery(projectID: string, kind: string, search: string, page: number): API.listMediaLibraryParams { return { scope:"project",project_id:projectID,kind,search:search.trim() || undefined,page,page_size:40,catalog_state:"active",order:"updated_desc" }; }
+export function directorProjectQuery(
+  projectID: string,
+  kind: string,
+  search: string,
+  page: number,
+): API.listMediaLibraryParams {
+  return {
+    scope: "project",
+    project_id: projectID,
+    kind,
+    search: search.trim() || undefined,
+    page,
+    page_size: 40,
+    catalog_state: "active",
+    order: "updated_desc",
+  };
+}
 const integer = (value: unknown, min = 0) =>
   Number.isSafeInteger(value) && Number(value) >= min;
 export function requireDirectorProjectPage(

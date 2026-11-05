@@ -61,7 +61,7 @@ func (w *Worker) executeArtifact(ctx context.Context, id WorkID, work Work) (dom
 	}()
 	paths := make(map[uuid.UUID]string)
 	for i, input := range work.Frozen.Inputs {
-		if err := w.store.Progress(ctx, id, 5+i*14/max(1, len(work.Frozen.Inputs)), "downloading"); err != nil {
+		if err := w.store.Progress(ctx, id, 5+i*14/max(1, len(work.Frozen.Inputs)), domain.ExportStageDownloading); err != nil {
 			return domain.ExportJob{}, err
 		}
 		file, e := w.readChecked(ctx, input.ObjectKey, input.ByteSize, input.MIMEType, input.SHA256)
@@ -83,7 +83,7 @@ func (w *Worker) executeArtifact(ctx context.Context, id WorkID, work Work) (dom
 	}
 	output, err := w.existing(ctx, key, "application/zip")
 	if errors.Is(err, ErrObjectMissing) {
-		output, err = renderer.Render(ctx, work.Frozen, paths, func(progress int, stage string) error { return w.store.Progress(ctx, id, progress, stage) })
+		output, err = renderer.Render(ctx, work.Frozen, paths, func(progress int, stage domain.ExportStage) error { return w.store.Progress(ctx, id, progress, stage) })
 		if err != nil {
 			return domain.ExportJob{}, err
 		}
@@ -114,7 +114,7 @@ func (w *Worker) executeArtifact(ctx context.Context, id WorkID, work Work) (dom
 	if err = renderer.VerifyArtifact(ctx, output.File, output.Size, work.Frozen); err != nil {
 		return domain.ExportJob{}, fmt.Errorf("verify export artifact: %w", err)
 	}
-	if err = w.store.Progress(ctx, id, 90, "verifying"); err != nil {
+	if err = w.store.Progress(ctx, id, 90, domain.ExportStageVerifying); err != nil {
 		return domain.ExportJob{}, err
 	}
 	artifact := domain.Artifact{ID: artifactID, JobID: work.Job.ID, ProjectID: work.Job.ProjectID, Attempt: id.Attempt, Format: work.Job.OutputKind, FormatVersion: work.Job.OutputKind.FormatVersion(), FileName: "timeline-" + work.Job.ID.String() + ".zip", MIMEType: "application/zip", ByteSize: output.Size, SHA256: output.SHA256, ObjectKey: key, CreatedAt: time.Now().UTC()}
@@ -125,11 +125,7 @@ func (q *ExportQuery) artifactPreview(ctx context.Context, store ArtifactStore, 
 	if err != nil {
 		return ExportPreview{}, err
 	}
-	access := q.storage
-	if access == nil {
-		access = &resultAccess{legacySigner: q.signer, legacyReader: q.reader}
-	}
-	grant, err := access.sign(ctx, artifact.ObjectKey, artifact.ObjectLocation, 10*time.Minute)
+	grant, err := q.storage.sign(ctx, artifact.ObjectKey, artifact.ObjectLocation)
 	if err != nil {
 		return ExportPreview{}, err
 	}
@@ -147,10 +143,6 @@ func (q *ExportQuery) artifactDownload(ctx context.Context, store ArtifactStore,
 	if job.Status != domain.Succeeded {
 		return nil, 0, ErrConflict
 	}
-	access := q.storage
-	if access == nil {
-		access = &resultAccess{legacySigner: q.signer, legacyReader: q.reader}
-	}
-	reader, err := access.read(ctx, artifact.ObjectKey, artifact.ObjectLocation)
+	reader, err := q.storage.read(ctx, artifact.ObjectKey, artifact.ObjectLocation)
 	return reader, artifact.ByteSize, err
 }

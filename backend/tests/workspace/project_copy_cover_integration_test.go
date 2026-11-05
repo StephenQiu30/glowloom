@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -23,7 +25,7 @@ import (
 type actualProjectCopyCoverOwner struct{ tx *gorm.DB }
 
 func (o actualProjectCopyCoverOwner) Freeze(ctx context.Context, actor identityapp.Principal, project uuid.UUID, asset *uuid.UUID) error {
-	return workspaceapp.FreezeProjectCover(ctx, mediaapp.NewAssetQuery(workspaceMediaStore(o.tx), nil), actor, project, asset)
+	return workspaceapp.FreezeProjectCover(ctx, mediaapp.NewAssetQuery(workspaceMediaStore(o.tx)), actor, project, asset)
 }
 
 func (o actualProjectCopyCoverOwner) Verify(ctx context.Context, actor identityapp.Principal, binding mediaapp.ProjectCopyBinding, expected, actual *uuid.UUID) error {
@@ -41,8 +43,8 @@ func TestProjectCopyCoverRealPrivateImageMappedAndIndependent(t *testing.T) {
 	}
 	defer func() { _ = file.Close() }()
 	media := workspaceMediaStore(db)
-	upload := mediaapp.NewUploadService(media, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	result, err := upload.Upload(ctx, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: source, Key: uuid.New(), RequestID: uuid.New(), FileName: "复制主图.png"}, File: file, LocalReviewConfirmed: true})
+	upload := businessFixtureUploads(t, db, media, mediaflow.FFUploadProber{})
+	result, err := businessFixtureUpload(ctx, t, upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: source, Key: uuid.New(), RequestID: uuid.New(), FileName: "复制主图.png"}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual reviewed cover image", err)
 	}
@@ -80,7 +82,7 @@ func TestProjectCopyCoverRealPrivateImageMappedAndIndependent(t *testing.T) {
 	if _, err := workspaceapp.NewProjectLifecycle(coverStore(db), time.Now).Change(ctx, actor, coverChange(source, 2, nil)); err != nil {
 		t.Fatal("clear current source after copy freeze", err)
 	}
-	transfer := mediaapp.NewProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(copyStore, job.ID, worker, false), mediaobjects.NewProjectCopyObjects(objects), t.TempDir())
+	transfer := mediaapp.NewRoutedProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(copyStore, job.ID, worker, false), mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir())
 	binding := mediaapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}
 	snapshot := mediaapp.ProjectCopySnapshot{ID: job.Manifest.MediaSnapshotID, ManifestSHA256: job.Manifest.MediaSHA256, Assets: job.Manifest.Assets, Renditions: job.Manifest.Renditions}
 	if err := transfer.Transfer(ctx, actor, binding, snapshot); err != nil {

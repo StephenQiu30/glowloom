@@ -3,8 +3,8 @@ package postgres
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -14,20 +14,16 @@ func insertTransferAsset(tx *gorm.DB, asset domain.MediaAsset, renditions []doma
 	if asset.Validate() != nil || asset.IsDelete || asset.Status != domain.StatusReady || asset.ModerationStatus != domain.ModerationPassed || asset.ContainsRealPerson || asset.ConsentRecordID != nil {
 		return application.ErrProjectCopyMediaUnavailable
 	}
-	var project, personalOrg, personalActor *uuid.UUID
-	if asset.Personal == nil {
-		project = &asset.ProjectID
-	} else {
-		personalOrg, personalActor = &asset.Personal.OrgID, &asset.Personal.ActorID
-	}
-	if err := libraryChanged(tx, `INSERT INTO media.media_asset(id,project_id,personal_org_id,personal_actor_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,width,height,duration_ms,fps,audio_channels,codec,moderation_status,moderation_detail,aigc_marked,contains_real_person,revision,create_time,update_time) VALUES(?,?,?,?,?,?,'ready',?,?,?,?,?,?,?,?,?,?,?,?,'passed',?::jsonb,?,false,1,?,?)`, asset.ID, project, personalOrg, personalActor, string(asset.Kind), string(asset.Origin), asset.ObjectKey, locationID(asset.ObjectLocation), asset.FileName, asset.MimeType, asset.ByteSize, asset.SHA256, asset.Width, asset.Height, asset.DurationMS, asset.FPS, asset.AudioChannels, asset.Codec, nullableJSON(asset.ModerationDetail), asset.AIGCMarked, asset.CreateTime, asset.UpdateTime); err != nil {
+	record := mediaAssetRecordFromDomain(asset)
+	if err := tx.Create(&record).Error; err != nil {
 		return err
 	}
 	for _, r := range renditions {
 		if r.Validate() != nil || r.MediaAssetID != asset.ID || r.IsDelete {
 			return application.ErrProjectCopyMediaUnavailable
 		}
-		if err := libraryChanged(tx, `INSERT INTO media.rendition(id,media_asset_id,kind,object_key,object_location_id,width,height,byte_size,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?,?)`, r.ID, r.MediaAssetID, string(r.Kind), r.ObjectKey, locationID(r.ObjectLocation), r.Width, r.Height, r.ByteSize, r.CreateTime, r.UpdateTime); err != nil {
+		record := mediaRenditionRecordFromDomain(r)
+		if err := tx.Create(&record).Error; err != nil {
 			return err
 		}
 	}
@@ -38,15 +34,19 @@ func insertTransferAsset(tx *gorm.DB, asset domain.MediaAsset, renditions []doma
 // The source is unchanged; failed/unknown objects never enter formal media reads.
 func (s *TransferStore) PublishTransferItem(ctx context.Context, lease application.TransferLease, index int) error {
 	return s.withLease(ctx, lease, false, false, func(tx *gorm.DB, row transferJobRow, source, target libraryRow) error {
-		state, item, err := readTransferItem(tx, row.ID, index)
+		state, initial, err := readTransferItem(tx, row.ID, index)
 		if err != nil {
 			return err
 		}
-		if state.Status == "succeeded" {
+		if state.Status == domain.TransferItemStatusSucceeded {
 			return nil
 		}
-		if state.Status != "running" {
+		if state.Status != domain.TransferItemStatusRunning {
 			return domain.ErrTransferConflict
+		}
+		output, item, err := readTransferAttempt(tx, row, index, initial)
+		if err != nil {
+			return err
 		}
 		if err := validateTransferSource(tx, lease.Actor, row, source, item); err != nil {
 			return err
@@ -55,7 +55,7 @@ func (s *TransferStore) PublishTransferItem(ctx context.Context, lease applicati
 			return err
 		}
 		var objects []transferObjectRow
-		if err := tx.Raw(`SELECT * FROM media.transfer_object WHERE job_id=? AND item_index=? ORDER BY rendition_kind FOR UPDATE`, row.ID, index).Scan(&objects).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ? AND item_index = ? AND output_attempt = ?", row.ID, index, output.OutputAttempt).Order("rendition_kind").Find(&objects).Error; err != nil {
 			return err
 		}
 		if len(objects) != len(item.Objects) {
@@ -63,13 +63,20 @@ func (s *TransferStore) PublishTransferItem(ctx context.Context, lease applicati
 		}
 		byKey := make(map[string]transferObjectRow, len(objects))
 		for _, object := range objects {
-			if object.Status != "verified" || !object.SourceVerified || !object.WriteStarted || object.SHA256 == nil || object.ByteSize == nil || !validTransferDigest(*object.SHA256, *object.ByteSize) {
+			if object.Status != application.ProjectCopyObjectVerified || !object.SourceVerified || !object.WriteStarted || object.SHA256 == nil || object.ByteSize == nil || !validTransferDigest(*object.SHA256, *object.ByteSize) {
+				return application.ErrObjectMismatch
+			}
+			matches := false
+			for _, frozen := range item.Objects {
+				matches = matches || transferObjectMatches(object, frozen)
+			}
+			if !matches {
 				return application.ErrObjectMismatch
 			}
 			byKey[object.TargetObjectKey] = object
 		}
 		if len(item.Objects) > 0 && item.Objects[0].TargetLocation != nil {
-			if err := acceptCopyLocations(ctx, tx, transferWorkOwner(row.ID, row.TargetLibraryID, index), item.Objects); err != nil {
+			if err := acceptCopyLocations(ctx, tx, transferWorkOwner(row.ID, row.TargetLibraryID, index, output.OutputAttempt), item.Objects); err != nil {
 				return err
 			}
 		}
@@ -111,7 +118,7 @@ func (s *TransferStore) PublishTransferItem(ctx context.Context, lease applicati
 		if err := persistLibraryItem(tx, item.TargetItem, 0); err != nil {
 			return &application.TransferItemError{Code: "registration_failed", Cause: err}
 		}
-		if err := libraryChanged(tx, `UPDATE media.library SET revision=revision+1,update_time=? WHERE id=? AND revision=?`, s.clock().UTC(), target.ID, target.Revision); err != nil {
+		if err := updateOne(tx, "media.library", map[string]any{"id": target.ID, "revision": target.Revision}, map[string]any{"revision": target.Revision + 1, "update_time": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		_, targetScope := row.scopes()
@@ -125,10 +132,10 @@ func (s *TransferStore) PublishTransferItem(ctx context.Context, lease applicati
 				return err
 			}
 		}
-		if err := libraryChanged(tx, `UPDATE media.transfer_item SET status='succeeded',failure_code=NULL WHERE job_id=? AND item_index=? AND status='running'`, row.ID, index); err != nil {
+		if err := updateOne(tx, "media.transfer_item", map[string]any{"job_id": row.ID, "item_index": index, "status": domain.TransferItemStatusRunning}, map[string]any{"status": domain.TransferItemStatusSucceeded, "failure_code": nil}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
-		return libraryChanged(tx, `UPDATE media.transfer_job SET stage='registering',revision=revision+1,updated_at=? WHERE id=? AND worker_fence=?`, s.clock().UTC(), row.ID, lease.Fence)
+		return updateOne(tx, "media.transfer_job", map[string]any{"id": row.ID, "worker_fence": lease.Fence}, map[string]any{"stage": domain.TransferStageRegistering, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
 	})
 }
 

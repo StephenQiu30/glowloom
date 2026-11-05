@@ -250,7 +250,7 @@ function TaskHistory({
       if (!Array.isArray(r.items)) throw new RequestError("invalid_receipt");
       r.items.forEach((i) => requireTask(i, projectID));
       setItems((v) => (next ? [...v, ...r.items!] : r.items!));
-      setCursor(r.next_cursor);
+      setCursor(r.next_cursor ?? undefined);
       setOpen(true);
     } catch (e) {
       setError(readErrorMessage(e));

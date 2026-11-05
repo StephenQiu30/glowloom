@@ -4,10 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"path"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -88,17 +86,14 @@ func requireRetainedExportRejection(t *testing.T, fixture retainedExportFixture,
 		if err == nil || found {
 			t.Errorf("foreign export result binding became a valid reference: found=%t error=%v", found, err)
 		}
-		keys, err := reader.StorageUsageKeys(t.Context(), fixture.actor, fixture.project)
-		if err == nil || keys != nil {
-			t.Errorf("foreign export result binding returned a usage subtotal: keys=%d error=%v", len(keys), err)
-		}
+
 		return nil
 	})
 }
 
 func TestMediaToolRetainedFailureRejectsExportInputAsItsOutput(t *testing.T) {
 	fixture := newRetainedExportFixture(t, 1)
-	if err := fixture.database.Exec(`UPDATE mediatool.export_job SET asset_id=?,sha256=? WHERE id=?`, fixture.source.ID, *fixture.source.SHA256, fixture.jobs[0].ID).Error; err != nil {
+	if err := mediatoolFixtureExec(t, fixture.database, `UPDATE mediatool.export_job SET asset_id=?,sha256=? WHERE id=?`, fixture.source.ID, *fixture.source.SHA256, fixture.jobs[0].ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	requireRetainedExportRejection(t, fixture, fixture.source.ID)
@@ -107,7 +102,7 @@ func TestMediaToolRetainedFailureRejectsExportInputAsItsOutput(t *testing.T) {
 func TestMediaToolRetainedFailureRejectsAnotherExportsOutput(t *testing.T) {
 	fixture := newRetainedExportFixture(t, 2)
 	foreign := uuid.NewSHA1(fixture.jobs[0].ID, []byte("export-output/1"))
-	if err := fixture.database.Exec(`UPDATE mediatool.export_job SET asset_id=?,sha256=? WHERE id=?`, foreign, *fixture.source.SHA256, fixture.jobs[1].ID).Error; err != nil {
+	if err := mediatoolFixtureExec(t, fixture.database, `UPDATE mediatool.export_job SET asset_id=?,sha256=? WHERE id=?`, foreign, *fixture.source.SHA256, fixture.jobs[1].ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	requireRetainedExportRejection(t, fixture, foreign)
@@ -117,7 +112,7 @@ func TestMediaToolRetainedFailurePreservesOwnOldAttemptOutput(t *testing.T) {
 	fixture := newRetainedExportFixture(t, 1)
 	job := fixture.jobs[0]
 	old := uuid.NewSHA1(job.ID, []byte("export-output/1"))
-	if err := fixture.database.Exec(`UPDATE mediatool.export_job SET attempt=2,asset_id=?,sha256=? WHERE id=?`, old, *fixture.source.SHA256, job.ID).Error; err != nil {
+	if err := mediatoolFixtureExec(t, fixture.database, `UPDATE mediatool.export_job SET attempt=2,asset_id=?,sha256=? WHERE id=?`, old, *fixture.source.SHA256, job.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	retainedRuntimeRead(t, fixture.database, func(reader *toolpg.RetainedMediaReader) error {
@@ -127,19 +122,7 @@ func TestMediaToolRetainedFailurePreservesOwnOldAttemptOutput(t *testing.T) {
 				t.Fatal("own retained source or historical output lost", found, err)
 			}
 		}
-		keys, err := reader.StorageUsageKeys(t.Context(), fixture.actor, fixture.project)
-		if err != nil || len(keys) != 7 || !slices.Contains(keys, fixture.source.ObjectKey) {
-			t.Fatal("own retained history did not remain complete", len(keys), err)
-		}
-		for attempt := 1; attempt <= 2; attempt++ {
-			id := uuid.NewSHA1(job.ID, []byte("export-output/"+strconv.Itoa(attempt)))
-			key := path.Join("projects", fixture.project.String(), "video", job.CreatedAt.UTC().Format("2006/01"), id.String()+".mp4")
-			for _, expected := range []string{key, strings.TrimSuffix(key, ".mp4") + "/poster.png", strings.TrimSuffix(key, ".mp4") + "/proxy_720p.mp4"} {
-				if !slices.Contains(keys, expected) {
-					t.Fatal("own historical attempt lost an exact private object key")
-				}
-			}
-		}
+
 		return nil
 	})
 }
@@ -161,10 +144,11 @@ func TestMediaToolRetainedFailureDoesNotAllocateUnrelatedTranscriptResult(t *tes
 	}
 	read := func() {
 		retainedRuntimeRead(t, database, func(reader *toolpg.RetainedMediaReader) error {
-			keys, err := reader.StorageUsageKeys(t.Context(), actor, project)
-			if err != nil || len(keys) != 1 || keys[0] != input.ObjectKey {
-				t.Fatal("complete transcript history source pin lost", len(keys), err)
+			found, err := reader.HasMediaReferences(t.Context(), actor, project, input.AssetID)
+			if err != nil || !found {
+				t.Fatal("complete transcript history source pin lost", found, err)
 			}
+
 			return nil
 		})
 	}

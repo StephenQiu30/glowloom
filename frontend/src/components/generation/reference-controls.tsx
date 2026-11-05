@@ -108,6 +108,7 @@ import { uploadMediaAsset } from "@/api/media";
 import { validateUpload } from "@/components/media/library";
 import { ReferenceSearch } from "./reference-search";
 import { ReferenceMentionMenu } from "./reference-mention-menu";
+import { ReferenceStack } from "./reference-stack";
 import { ComposerSession } from "./composer-session";
 import {
   referenceLabel,
@@ -267,6 +268,18 @@ export function ReferenceControls({
   }, [canvasSources, canvasSubjectSources, incomingSources]);
   useEffect(() => () => sourceRequest.current?.abort(), []);
   const referenceUploadInput = useRef<HTMLInputElement>(null);
+  const referenceStackAnchor = useRef<HTMLDivElement>(null);
+  const referenceStackAdd = useRef<HTMLButtonElement>(null);
+  const stackAnchor = useMemo(
+    () => ({
+      current: {
+        getBoundingClientRect: () =>
+          referenceStackAnchor.current?.getBoundingClientRect() ??
+          new DOMRect(),
+      },
+    }),
+    [],
+  );
   const inlineSource = useRef(false);
   const files = useRef(new Map<string, File>()),
     [uploading, setUploading] = useState<string[]>([]);
@@ -1398,6 +1411,7 @@ export function ReferenceControls({
           className={cn(
             "flex w-full min-w-0 flex-col gap-3",
             compact && "gap-0",
+            compact && home && !assistant && "w-16",
             assistant && "canvas-assistant-reference",
           )}
         >
@@ -1419,13 +1433,66 @@ export function ReferenceControls({
           {compact ? (
             <>
               <PopoverAnchor virtualRef={mentionAnchor} />
+              {home && !assistant ? (
+                <div ref={referenceStackAnchor}>
+                  <ReferenceStack
+                    addButtonRef={referenceStackAdd}
+                    disabled={disabled}
+                    entries={draft.references.map((ref) => {
+                      const subject = unifiedReferencePreview(ref);
+                      return {
+                        id: ref.id,
+                        label: displayLabel(ref.id),
+                        ...(ref.source.kind === "pending_upload"
+                          ? {
+                              status: uploading.includes(ref.id)
+                                ? "正在上传"
+                                : "待上传",
+                            }
+                          : {}),
+                        preview:
+                          authorized && subject ? (
+                            <UnifiedSubjectMedia
+                              media={subject}
+                              label={displayLabel(ref.id)}
+                            />
+                          ) : authorized &&
+                            ref.source.kind === "media" &&
+                            ref.mediaKind !== "audio" ? (
+                            <ProjectMediaPreview
+                              projectID={projectID}
+                              id={ref.source.sourceId}
+                              kind={ref.mediaKind}
+                              compact
+                            />
+                          ) : (
+                            <ImageIcon className="m-auto mt-5 size-4" />
+                          ),
+                      };
+                    })}
+                    onAdd={() => {
+                      if (!projectID && onChooseProject) onChooseProject();
+                      else setAddOpen(true);
+                    }}
+                    onSelect={setDetailsID}
+                    onRemove={(id) => {
+                      if (mentioned.has(id)) setRemove(id);
+                      else session.removeReference(id);
+                    }}
+                  />
+                </div>
+              ) : null}
               <div
                 className={
-                  assistant
-                    ? "flex items-center"
-                    : "flex w-full min-w-0 items-start gap-2 overflow-x-auto pb-1"
+                  home && !assistant
+                    ? "sr-only"
+                    : assistant
+                      ? "flex items-center"
+                      : "flex w-full min-w-0 items-start gap-2 overflow-x-auto pb-1"
                 }
                 aria-label="参考内容"
+                aria-hidden={(home && !assistant) || undefined}
+                inert={(home && !assistant) || undefined}
               >
                 {(draft.mode === "avatar" || draft.mode === "motion") &&
                   (
@@ -1476,6 +1543,9 @@ export function ReferenceControls({
                         setDetailsID(open ? ref.id : null)
                       }
                     >
+                      {home && !assistant ? (
+                        <PopoverAnchor virtualRef={stackAnchor} />
+                      ) : null}
                       <PopoverTrigger asChild>
                         <Button
                           type="button"
@@ -1488,7 +1558,7 @@ export function ReferenceControls({
                           aria-label={`查看${displayLabel(ref.id)}详情`}
                           tabIndex={assistant ? -1 : undefined}
                         >
-                          {authorized && subjectPreview ? (
+                          {authorized && subjectPreview && !home ? (
                             <span className="absolute inset-0">
                               <UnifiedSubjectMedia
                                 media={subjectPreview}
@@ -1496,6 +1566,7 @@ export function ReferenceControls({
                               />
                             </span>
                           ) : authorized &&
+                            !home &&
                             ref.source.kind === "media" &&
                             ref.mediaKind !== "audio" ? (
                             <span className="absolute inset-0">
@@ -1538,6 +1609,13 @@ export function ReferenceControls({
                         aria-label="参考详情"
                         onClick={(event) => event.stopPropagation()}
                         onCloseAutoFocus={(event) => {
+                          if (home && !assistant) {
+                            event.preventDefault();
+                            referenceStackAnchor.current
+                              ?.querySelector<HTMLButtonElement>("button")
+                              ?.focus();
+                            return;
+                          }
                           if (
                             !session
                               .snapshot()
@@ -1615,6 +1693,9 @@ export function ReferenceControls({
                     setSourceQuery("");
                   }}
                 >
+                  {home && !assistant ? (
+                    <PopoverAnchor virtualRef={stackAnchor} />
+                  ) : null}
                   <PopoverTrigger asChild>
                     <Button
                       type="button"
@@ -1653,7 +1734,10 @@ export function ReferenceControls({
                     aria-label="添加参考素材"
                     onClick={(event) => event.stopPropagation()}
                     onCloseAutoFocus={(event) => {
-                      if (menu || session.editor.isFocused)
+                      if (home && !assistant) {
+                        event.preventDefault();
+                        referenceStackAdd.current?.focus();
+                      } else if (menu || session.editor.isFocused)
                         event.preventDefault();
                     }}
                   >

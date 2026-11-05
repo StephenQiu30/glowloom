@@ -17,7 +17,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -34,8 +33,8 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 		t.Fatal(err)
 	}
 	store := mediaTestStore(db)
-	service := mediaapp.NewScopedUploadService(store, store, mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	query := mediaapp.NewAssetQuery(store, objects)
+	service := mediaFixtureRoutedUpload(t, db, store, store, mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
+	query := mediaapp.NewRoutedAssetQuery(store, mediaFixtureReadObjects(t), 5*time.Minute)
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
@@ -127,7 +126,7 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 		t.Fatal("complete JSON model Copy snapshot failed", snapshot, err)
 	}
 	repo := mediaCopyStore(db)
-	if err := mediaapp.NewProjectCopyTransfer(repo, mediaobjects.NewProjectCopyObjects(objects), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
@@ -158,7 +157,7 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	personal, err := service.UploadPersonal(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{Key: uuid.New(), RequestID: uuid.New(), FileName: "个人JSON场景.gltf"}, File: file, LocalReviewConfirmed: true})
+	personal, err := fixturePersonalUpload(t.Context(), service, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{Key: uuid.New(), RequestID: uuid.New(), FileName: "个人JSON场景.gltf"}, File: file, LocalReviewConfirmed: true})
 	if err != nil || personal.Asset.MIMEType != "model/gltf+json" || personal.Asset.Kind != "model" {
 		t.Fatal("same personal pipeline lost JSON model facts", personal, err)
 	}
@@ -186,8 +185,8 @@ func TestGLTFJSONSchemaFactsAndRetainedOriginalContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	service := mediaapp.NewUploadService(mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	result, err := service.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "约束模型.gltf"}, File: file, LocalReviewConfirmed: true})
+	service := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), nil, mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
+	result, err := fixtureProjectUpload(t.Context(), service, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "约束模型.gltf"}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}

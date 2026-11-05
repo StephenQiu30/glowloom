@@ -13,6 +13,12 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
+// Subject source qualities select the requested media representation.
+const (
+	SubjectSourceQualityDefault  = ""
+	SubjectSourceQualityUpscaled = "upscaled"
+)
+
 // SubjectSourceActor first authorizes the target space, then resolves only the
 // caller's personal source. It never accepts an owner supplied by the browser.
 type SubjectSourceActor interface {
@@ -31,7 +37,7 @@ type SubjectCatalogueQuery struct {
 
 // Validate permits only source filters, never caller-selected ownership.
 func (q SubjectCatalogueQuery) Validate() error {
-	if !slices.Contains([]string{"image", "video", "audio"}, q.Kind) || q.Page < 1 || q.Page > 100000 || q.PageSize < 1 || q.PageSize > 120 || !slices.Contains([]string{"", "upscaled"}, q.Quality) || q.Quality == "upscaled" && q.Kind == "audio" || !utf8.ValidString(q.Search) || utf8.RuneCountInString(q.Search) > 512 || strings.ContainsRune(q.Search, 0) {
+	if !slices.Contains([]string{string(domain.KindImage), string(domain.KindVideo), string(domain.KindAudio)}, q.Kind) || q.Page < 1 || q.Page > 100000 || q.PageSize < 1 || q.PageSize > 120 || !slices.Contains([]string{SubjectSourceQualityDefault, SubjectSourceQualityUpscaled}, q.Quality) || q.Quality == SubjectSourceQualityUpscaled && q.Kind == string(domain.KindAudio) || !utf8.ValidString(q.Search) || utf8.RuneCountInString(q.Search) > 512 || strings.ContainsRune(q.Search, 0) {
 		return ErrInvalidQuery
 	}
 	return nil
@@ -49,10 +55,20 @@ type SubjectSourceMedia struct {
 	Origin string `json:"origin"`
 }
 
+// SubjectSourceKind identifies the owning catalogue from which an asset was selected.
+type SubjectSourceKind string
+
+// Subject source kinds identify the owning personal or project source.
+const (
+	SubjectSourcePersonalAsset   SubjectSourceKind = "personal_asset"
+	SubjectSourceGeneratedOutput SubjectSourceKind = "generated_output"
+	SubjectSourceRevisionInitial int64             = 0
+)
+
 // SubjectSourceItem identifies its real owner without pretending to be a library.
 type SubjectSourceItem struct {
 	ID        uuid.UUID          `json:"id"`
-	Source    string             `json:"source"`
+	Source    SubjectSourceKind  `json:"source"`
 	ProjectID *uuid.UUID         `json:"project_id,omitempty" extensions:"x-nullable"`
 	Revision  int64              `json:"revision"`
 	Favorite  bool               `json:"favorite"`
@@ -66,13 +82,13 @@ type SubjectSourceItem struct {
 
 // Validate rejects ambiguous source identity or incomplete ready asset facts.
 func (i SubjectSourceItem) Validate() error {
-	if i.ID == uuid.Nil || i.Media.ID == uuid.Nil || i.Revision < 0 || i.Media.Revision < 1 || i.Media.ByteSize < 1 || !slices.Contains([]string{"image", "video", "audio"}, i.Kind) || i.Media.Kind != i.Kind || strings.TrimSpace(i.Title) == "" || i.Media.MIMEType == "" || i.CreatedAt.IsZero() || i.UpdatedAt.IsZero() || !slices.Contains([]string{"upload", "generated", "system"}, i.Media.Origin) {
+	if i.ID == uuid.Nil || i.Media.ID == uuid.Nil || i.Revision < SubjectSourceRevisionInitial || i.Media.Revision < 1 || i.Media.ByteSize < 1 || !slices.Contains([]string{string(domain.KindImage), string(domain.KindVideo), string(domain.KindAudio)}, i.Kind) || i.Media.Kind != i.Kind || strings.TrimSpace(i.Title) == "" || i.Media.MIMEType == "" || i.CreatedAt.IsZero() || i.UpdatedAt.IsZero() || !slices.Contains([]string{string(domain.OriginUpload), string(domain.OriginGenerated), string(domain.OriginSystem)}, i.Media.Origin) {
 		return ErrUnavailable
 	}
-	if i.Source == "personal_asset" && i.ProjectID == nil && i.ID == i.Media.ID && !i.Upscaled {
+	if i.Source == SubjectSourcePersonalAsset && i.ProjectID == nil && i.ID == i.Media.ID && !i.Upscaled {
 		return nil
 	}
-	if i.Source == "generated_output" && i.ProjectID != nil && *i.ProjectID != uuid.Nil {
+	if i.Source == SubjectSourceGeneratedOutput && i.ProjectID != nil && *i.ProjectID != uuid.Nil {
 		return nil
 	}
 	return ErrUnavailable
@@ -186,7 +202,7 @@ func (s *SubjectLibrary) Preview(ctx context.Context, actor identity.Principal, 
 	}
 	owner := actor
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: item.ProjectID}
-	if item.Source == "personal_asset" {
+	if item.Source == SubjectSourcePersonalAsset {
 		owner, err = s.SourceActor(ctx, actor, false)
 		if err != nil {
 			return LibraryMediaPreview{}, err

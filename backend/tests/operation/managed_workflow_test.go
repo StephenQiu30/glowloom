@@ -5,165 +5,123 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/temporal"
-	"go.temporal.io/sdk/testsuite"
-	temporalworkflow "go.temporal.io/sdk/workflow"
 
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 
-func TestManagedWorkflowPersistsBeforeIngestAndSettlesOnce(t *testing.T) {
-	for _, kind := range []string{"sync", "video", "recovered_sync", "unknown_cost"} {
-		t.Run(kind, func(t *testing.T) {
-			loaded := workflowFixture()
-			loaded.Provider.AdapterKey = "openrouter"
-			loaded.Provider.Queue = "provider"
-			loaded.Provider.SupportsCancel = false
-			loaded.Provider.Moderation = "provider"
-			id := loaded.Operation.ID
-			suite := &testsuite.WorkflowTestSuite{}
-			env := suite.NewTestWorkflowEnvironment()
-			registerOperationMockActivities(env)
-			env.RegisterActivityWithOptions(func(context.Context, string) (application.ProviderCost, error) {
-				return application.ProviderCost{}, nil
-			}, activity.RegisterOptions{Name: "flow.LoadProviderCost"})
-			env.RegisterActivityWithOptions(func(context.Context, application.ManagedStep) (application.ManagedProgress, error) {
-				return application.ManagedProgress{}, nil
-			}, activity.RegisterOptions{Name: "provider.managed"})
-			env.RegisterActivityWithOptions(func(context.Context, uuid.UUID) error { return nil }, activity.RegisterOptions{Name: "media.IngestManaged"})
-			env.OnActivity("flow.LoadOperation", mock.Anything, id.String()).Return(loaded, nil).Once()
-			env.OnActivity("flow.CheckConsent", mock.Anything, id.String()).Return(nil).Once()
-			env.OnActivity("flow.Transition", mock.Anything, mock.Anything).Return(func(_ context.Context, in application.TransitionInput) (domain.Status, error) { return in.To, nil })
-			env.OnActivity("flow.BeginProviderCall", mock.Anything, mock.Anything).Return(nil)
-			if kind == "unknown_cost" {
-				env.OnActivity("flow.CompleteProviderCall", mock.Anything, mock.MatchedBy(func(in application.CompleteProviderCallInput) bool { return in.Managed })).Return(temporal.NewNonRetryableApplicationError("missing usage", "provider_cost_unknown", nil)).Once()
-				env.RegisterDelayedCallback(func() { env.SignalWorkflow("resolve_manual", operationflow.ManualResolution{Outcome: "retry"}) }, time.Minute)
+type managedProbe struct {
+	steps  []string
+	result application.ManagedProgress
+}
+
+func (p *managedProbe) Step(_ context.Context, in application.ManagedStep) (application.ManagedProgress, error) {
+	p.steps = append(p.steps, in.Action)
+	return p.result, nil
+}
+func TestManagedTaskPersistsBeforeIngestAndSettlesOnce(t *testing.T) {
+	for _, mode := range []string{"sync", "video", "recovered_sync"} {
+		t.Run(mode, func(t *testing.T) {
+			s := newStateStore()
+			s.loaded.Provider.AdapterKey = "openrouter"
+			s.loaded.Provider.Queue = "provider"
+			s.loaded.Operation.Status = domain.StatusSubmitting
+			p := &managedProbe{result: application.ManagedProgress{State: application.ManagedProgressSucceeded}}
+			if mode == "video" {
+				p.result.State = application.ManagedProgressAccepted
+				p.result.TaskID = "original-task"
 			}
-			env.OnActivity("flow.CompleteProviderCall", mock.Anything, mock.Anything).Return(nil)
-			switch kind {
-			case "sync", "unknown_cost":
-				env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "submit"}).Return(application.ManagedProgress{State: "succeeded", OutputCount: 1}, nil).Once()
-			case "recovered_sync":
-				env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "submit"}).Return(application.ManagedProgress{State: "unknown"}, nil).Once()
-				env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "recover"}).Return(application.ManagedProgress{State: "succeeded", OutputCount: 1}, nil).Once()
-			case "video":
-				env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "submit"}).Return(application.ManagedProgress{State: "accepted", TaskID: "task-fixture"}, nil).Once()
-				env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "recover"}).Return(application.ManagedProgress{State: "accepted", TaskID: "task-fixture"}, nil).Once()
-				env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "query"}).Return(application.ManagedProgress{State: "succeeded", TaskID: "task-fixture", OutputCount: 1}, nil).Once()
+			if mode == "recovered_sync" {
+				at := time.Now()
+				s.evidence.DispatchStartedAt = &at
 			}
-			env.OnActivity("media.IngestManaged", mock.Anything, id).Return(nil).Once()
-			env.OnActivity("flow.LoadProviderCost", mock.Anything, id.String()).Return(application.ProviderCost{ActualCostMicros: 100, HasSubmission: true}, nil).Once()
-			env.OnActivity("flow.SettleOperation", mock.Anything, mock.MatchedBy(func(in operationflow.SettlementInput) bool {
-				return in.To == domain.StatusCompleted && in.ActualCostMicros == 100
-			})).Return(nil).Once()
-			env.SetTestTimeout(time.Second * 10)
-			env.ExecuteWorkflow(operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: id.String()})
-			require.NoError(t, env.GetWorkflowError())
-			env.AssertExpectations(t)
+			h := s.handlers()
+			task.RegisterProvider(h, s, p)
+			run := func(k string) {
+				_, err := h[k](t.Context(), taskruntime.Job{BusinessID: s.loaded.Operation.ID.String()})
+				require.NoError(t, err)
+			}
+			run("operation.provider")
+			require.Len(t, s.calls, 1)
+			require.Len(t, s.completes, 1)
+			require.Empty(t, s.settled)
+			run("operation.run")
+			if mode == "video" {
+				p.result.State = application.ManagedProgressSucceeded
+				run("operation.provider")
+			}
+			run("operation.run")
+			s.evidence.Ingested = true
+			s.cost.ActualCostMicros = 100
+			run("operation.run")
+			require.Len(t, s.settled, 1)
+			require.EqualValues(t, 100, s.settled[0].ActualCostMicros)
+			if mode == "recovered_sync" {
+				require.Equal(t, []string{"recover"}, p.steps)
+			} else {
+				require.Equal(t, "submit", p.steps[0])
+			}
 		})
 	}
 }
-
-func TestManagedWorkflowRoutesRevocationToFinancialClosure(t *testing.T) {
-	for _, point := range []string{"submitted", "succeeded", "ingesting", "completed", "reconciling"} {
-		t.Run(point, func(t *testing.T) {
-			loaded := workflowFixture()
-			loaded.Provider.AdapterKey = "openrouter"
-			loaded.Provider.Queue = "provider"
-			loaded.Provider.SupportsCancel = false
-			id := loaded.Operation.ID
-			env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
-			registerOperationMockActivities(env)
-			register := func(name string, fn any) { env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name}) }
-			register("provider.managed", func(context.Context, application.ManagedStep) (application.ManagedProgress, error) {
-				return application.ManagedProgress{}, nil
-			})
-			register("media.IngestManaged", func(context.Context, uuid.UUID) error { return nil })
-			register("flow.LoadProviderCost", func(context.Context, string) (application.ProviderCost, error) {
-				return application.ProviderCost{ActualCostMicros: 7, HasSubmission: true}, nil
-			})
-			register("flow.ResolveRevokedOperation", func(context.Context, string) error { return nil })
-			revoked := temporal.NewNonRetryableApplicationError("authority revoked", "execution_authority_revoked", nil)
-			env.OnActivity("flow.LoadOperation", mock.Anything, id.String()).Return(loaded, nil).Once()
-			env.OnActivity("flow.CheckConsent", mock.Anything, id.String()).Return(nil).Once()
-			env.OnActivity("flow.BeginProviderCall", mock.Anything, mock.Anything).Return(nil)
-			env.OnActivity("flow.CompleteProviderCall", mock.Anything, mock.Anything).Return(nil)
-			env.OnActivity("flow.Transition", mock.Anything, mock.Anything).Return(func(_ context.Context, in application.TransitionInput) (domain.Status, error) {
-				if string(in.To) == point {
-					return "", revoked
-				}
-				return in.To, nil
-			})
-			state := "succeeded"
-			task := ""
-			if point == "submitted" {
-				state, task = "accepted", "fixture-task"
-			}
-			if point == "reconciling" {
-				state = "unknown"
-			}
-			env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "submit"}).Return(application.ManagedProgress{State: state, TaskID: task}, nil).Once()
-			if point == "reconciling" {
-				env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "recover"}).Return(application.ManagedProgress{State: "unknown"}, nil).Once()
-			}
-			if point == "completed" {
-				env.OnActivity("media.IngestManaged", mock.Anything, id).Return(nil).Once()
-				env.OnActivity("flow.SettleOperation", mock.Anything, mock.Anything).Return(revoked).Once()
-			}
-			env.OnActivity("flow.ResolveRevokedOperation", mock.Anything, id.String()).Return(nil).Once()
-			env.SetTestTimeout(10 * time.Second)
-			env.ExecuteWorkflow(operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: id.String()})
-			require.NoError(t, env.GetWorkflowError())
-			env.AssertExpectations(t)
-		})
-	}
+func TestManagedTaskUnknownCostNeverReleasesOrResubmits(t *testing.T) {
+	s := newStateStore()
+	s.loaded.Operation.Status = domain.StatusSubmitting
+	s.loaded.Provider.AdapterKey = "openrouter"
+	s.loaded.Provider.Queue = "provider"
+	s.completeErr = application.ErrProviderCostUnknown
+	p := &managedProbe{result: application.ManagedProgress{State: application.ManagedProgressSucceeded}}
+	h := s.handlers()
+	task.RegisterProvider(h, s, p)
+	_, err := h["operation.provider"](t.Context(), taskruntime.Job{BusinessID: s.loaded.Operation.ID.String()})
+	require.NoError(t, err)
+	require.Equal(t, domain.StatusUnknown, s.loaded.Operation.Status)
+	require.Empty(t, s.settled)
+	require.Equal(t, []string{"submit"}, p.steps)
 }
-
-func TestManagedWorkflowRetainsNotSubmittedClassification(t *testing.T) {
-	for _, legacy := range []bool{false, true} {
-		name := "new"
-		if legacy {
-			name = "legacy"
-		}
-		t.Run(name, func(t *testing.T) {
-			loaded := workflowFixture()
-			loaded.Provider.AdapterKey = "volcengine_ark"
-			loaded.Provider.Queue = "provider"
-			loaded.Provider.SupportsCancel = false
-			loaded.Provider.Moderation = "provider"
-			id := loaded.Operation.ID
-			env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
-			registerOperationMockActivities(env)
-			wantError, wantFailure := "invalid_provider_request", "provider_invalid_parameters"
-			if legacy {
-				env.OnGetVersion("managed-not-submitted-reason-v1", temporalworkflow.DefaultVersion, 1).Return(temporalworkflow.DefaultVersion).Once()
-				wantError, wantFailure = "", "provider_not_submitted"
-			}
-			env.RegisterActivityWithOptions(func(context.Context, application.ManagedStep) (application.ManagedProgress, error) {
-				return application.ManagedProgress{}, nil
-			}, activity.RegisterOptions{Name: "provider.managed"})
-			env.OnActivity("flow.LoadOperation", mock.Anything, id.String()).Return(loaded, nil).Once()
-			env.OnActivity("flow.CheckConsent", mock.Anything, id.String()).Return(nil).Once()
-			env.OnActivity("flow.Transition", mock.Anything, mock.Anything).Return(func(_ context.Context, in application.TransitionInput) (domain.Status, error) { return in.To, nil })
-			env.OnActivity("flow.BeginProviderCall", mock.Anything, mock.Anything).Return(nil).Once()
-			env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "submit"}).Return(application.ManagedProgress{State: "not_submitted", ErrorCode: "invalid_provider_request"}, nil).Once()
-			env.OnActivity("flow.CompleteProviderCall", mock.Anything, mock.MatchedBy(func(in application.CompleteProviderCallInput) bool {
-				return in.State == "not_submitted" && in.ErrorCode == wantError && in.Outcome == "error"
-			})).Return(nil).Once()
-			env.OnActivity("flow.SettleOperation", mock.Anything, mock.MatchedBy(func(in operationflow.SettlementInput) bool {
-				return in.To == domain.StatusFailed && in.FailureCode == wantFailure && in.ActualCostMicros == 0
-			})).Return(nil).Once()
-			env.SetTestTimeout(10 * time.Second)
-			env.ExecuteWorkflow(operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: id.String()})
-			require.NoError(t, env.GetWorkflowError())
-			env.AssertExpectations(t)
-
-		})
-	}
+func TestManagedTaskRetainsNotSubmittedClassification(t *testing.T) {
+	s := newStateStore()
+	s.loaded.Operation.Status = domain.StatusSubmitting
+	s.loaded.Provider.AdapterKey = "volcengine_ark"
+	p := &managedProbe{result: application.ManagedProgress{State: application.ManagedProgressNotSubmitted, ErrorCode: "invalid_provider_request"}}
+	h := s.handlers()
+	task.RegisterProvider(h, s, p)
+	_, err := h["operation.provider"](t.Context(), taskruntime.Job{BusinessID: s.loaded.Operation.ID.String()})
+	require.NoError(t, err)
+	s.run(t, "operation.run")
+	require.Equal(t, "provider_invalid_parameters", s.settled[0].FailureCode)
+	require.Zero(t, s.settled[0].ActualCostMicros)
+}
+func TestManagedTaskCapacitySchedulesWaitingWithoutCallCompletion(t *testing.T) {
+	s := newStateStore()
+	s.loaded.Operation.Status = domain.StatusSubmitting
+	s.loaded.Provider.AdapterKey = "openrouter"
+	p := &managedProbe{result: application.ManagedProgress{State: application.ManagedProgressWaiting}}
+	h := s.handlers()
+	task.RegisterProvider(h, s, p)
+	next, err := h["operation.provider"](t.Context(), taskruntime.Job{BusinessID: s.loaded.Operation.ID.String()})
+	require.NoError(t, err)
+	require.True(t, next.After(time.Now()))
+	require.Empty(t, s.completes)
+	require.Empty(t, s.settled)
+}
+func TestManagedTaskPollDeadlineEntersReconciliation(t *testing.T) {
+	s := newStateStore()
+	s.loaded.Operation.Status = domain.StatusSubmitted
+	s.loaded.Provider.AdapterKey = "openrouter"
+	id := "task-original"
+	s.loaded.ProviderTaskID = &id
+	at := time.Now().Add(-time.Hour)
+	s.loaded.Operation.ConfirmedAt = &at
+	p := &managedProbe{result: application.ManagedProgress{State: application.ManagedProgressPending}}
+	h := s.handlers()
+	task.RegisterProvider(h, s, p)
+	_, err := h["operation.provider"](t.Context(), taskruntime.Job{BusinessID: s.loaded.Operation.ID.String()})
+	require.NoError(t, err)
+	require.Equal(t, domain.StatusReconciling, s.loaded.Operation.Status)
+	require.Equal(t, []string{"query"}, p.steps)
+	require.Empty(t, s.settled)
 }

@@ -61,7 +61,9 @@ func TestProjectCoverPGMediaShareLockAndOuterRollback(t *testing.T) {
 	defer func() {
 		if !finished {
 			cancel()
-			<-done
+			if err := <-done; err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				t.Error("joined lock-test operation:", err)
+			}
 		}
 	}()
 	waitProjectLock(owned, t, db, blocker, blocked)

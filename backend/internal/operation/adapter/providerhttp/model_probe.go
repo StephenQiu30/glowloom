@@ -50,11 +50,11 @@ func (c *Client) ProbeModel(ctx context.Context, config catalogdomain.ProviderCo
 		return ModelProbeResult{Result: "unknown", ErrorCode: "unreachable"}
 	}
 	switch generated.Outcome {
-	case "completed":
+	case application.ProviderOutcomeCompleted:
 		return ModelProbeResult{Result: "completed"}
-	case "accepted":
+	case application.ProviderOutcomeAccepted:
 		return ModelProbeResult{Result: "accepted", TaskID: generated.TaskID}
-	case "rejected", "not_submitted":
+	case application.ProviderOutcomeRejected, application.ProviderOutcomeNotSubmitted:
 		return ModelProbeResult{Result: "rejected", ErrorCode: generated.ErrorCode}
 	default:
 		// This is the onboarding diagnostic only. A recognized rejection of

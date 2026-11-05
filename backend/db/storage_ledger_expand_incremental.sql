@@ -1,9 +1,8 @@
 -- Storage ledger expansion only; copied from the current canonical schema.
 -- PostgreSQL 18. Reviewed old-schema upgrade; never replay schema.sql on a business DB.
 -- Run explicitly with psql -X --single-transaction -v ON_ERROR_STOP=1 -f <this-file>.
--- No profile, legacy binding, route, object location, receipt or readiness evidence is seeded.
--- Nullable owner columns and existing bare-key business keys remain during byte-proved backfill.
--- This is NOT a finalization or activation migration. Do not start roles on a new route yet.
+-- No environment route or object identity is inferred from existing keys.
+-- Physical location columns are mandatory. Existing rows without an exact physical identity fail this migration.
 SET LOCAL lock_timeout='5s';
 SELECT pg_advisory_xact_lock(hashtextextended('glowloom.storage-ledger-expand-v1',0));
 DO $$ DECLARE r record; BEGIN
@@ -56,22 +55,6 @@ CREATE TABLE IF NOT EXISTS media.object_location (
     CONSTRAINT object_location_state_check CHECK ((state = ANY (ARRAY['reserved'::text, 'present'::text, 'accepted'::text, 'delete_pending'::text, 'deleted'::text, 'unknown'::text])))
 );
 
-CREATE TABLE IF NOT EXISTS media.storage_activation (
-    revision text NOT NULL,
-    expected_revision text NOT NULL,
-    profile_id text NOT NULL,
-    activated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_activation_revision_check CHECK ((revision ~ '^[a-z][a-z0-9-]{0,62}$'::text))
-);
-
-CREATE TABLE IF NOT EXISTS media.storage_activation_guard (
-    revision text NOT NULL,
-    config_sha256 text NOT NULL,
-    deployment_evidence_sha256 text NOT NULL,
-    activated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_activation_guard_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text))
-);
-
 CREATE TABLE IF NOT EXISTS media.storage_bucket_evidence (
     id uuid NOT NULL,
     profile_id text NOT NULL,
@@ -96,55 +79,6 @@ CREATE TABLE IF NOT EXISTS media.storage_config_revision (
     CONSTRAINT storage_config_revision_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
     CONSTRAINT storage_config_revision_session_ttl_seconds_check CHECK (((session_ttl_seconds >= 60) AND (session_ttl_seconds <= 604800))),
     CONSTRAINT storage_config_revision_upload_policy_check CHECK ((jsonb_typeof(upload_policy) = 'object'::text))
-);
-
-CREATE TABLE IF NOT EXISTS media.storage_deployment_evidence (
-    config_sha256 text NOT NULL,
-    evidence_sha256 text NOT NULL,
-    recorded_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_deployment_evidence_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_deployment_evidence_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[a-f0-9]{64}$'::text))
-);
-
-CREATE TABLE IF NOT EXISTS media.storage_legacy_binding (
-    singleton integer NOT NULL,
-    profile_id text NOT NULL,
-    bucket text NOT NULL,
-    resource_identity text NOT NULL,
-    evidence_sha256 text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_legacy_binding_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_legacy_binding_resource_identity_check CHECK ((resource_identity ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_legacy_binding_singleton_check CHECK ((singleton = 1))
-);
-
-CREATE TABLE IF NOT EXISTS media.storage_legacy_receipt (
-    profile_id text NOT NULL,
-    bucket text NOT NULL,
-    object_key text NOT NULL,
-    snapshot_sha256 text NOT NULL,
-    location_id uuid NOT NULL,
-    byte_size bigint NOT NULL,
-    sha256 text NOT NULL,
-    mime_type text NOT NULL,
-    reference_count integer NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_legacy_receipt_byte_size_check CHECK ((byte_size >= 0)),
-    CONSTRAINT storage_legacy_receipt_reference_count_check CHECK ((reference_count > 0)),
-    CONSTRAINT storage_legacy_receipt_sha256_check CHECK ((sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_legacy_receipt_snapshot_sha256_check CHECK ((snapshot_sha256 ~ '^[a-f0-9]{64}$'::text))
-);
-
-CREATE TABLE IF NOT EXISTS media.storage_legacy_tombstone (
-    profile_id text NOT NULL,
-    bucket text NOT NULL,
-    object_key text NOT NULL,
-    snapshot_sha256 text NOT NULL,
-    location_id uuid NOT NULL,
-    reference_count integer NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_legacy_tombstone_reference_count_check CHECK ((reference_count > 0)),
-    CONSTRAINT storage_legacy_tombstone_snapshot_sha256_check CHECK ((snapshot_sha256 ~ '^[a-f0-9]{64}$'::text))
 );
 
 CREATE TABLE IF NOT EXISTS media.storage_probe_evidence (
@@ -198,21 +132,8 @@ CREATE TABLE IF NOT EXISTS media.storage_route (
     revision text NOT NULL,
     profile_id text NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_route_revision_check CHECK ((revision ~ '^[a-z][a-z0-9-]{0,62}$'::text)),
+    CONSTRAINT storage_route_revision_check CHECK ((revision ~ '^[1-9][0-9]{0,19}$'::text)),
     CONSTRAINT storage_route_singleton_check CHECK ((singleton = 1))
-);
-
-CREATE TABLE IF NOT EXISTS media.storage_runtime (
-    instance_id uuid NOT NULL,
-    role text NOT NULL,
-    revision text NOT NULL,
-    config_sha256 text NOT NULL,
-    capabilities jsonb NOT NULL,
-    expires_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_runtime_capabilities_check CHECK ((jsonb_typeof(capabilities) = 'array'::text)),
-    CONSTRAINT storage_runtime_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_runtime_role_check CHECK ((role = ANY (ARRAY['api'::text, 'worker'::text, 'relay'::text, 'setup'::text])))
 );
 
 CREATE TABLE IF NOT EXISTS media.storage_work_intent (
@@ -227,7 +148,7 @@ CREATE TABLE IF NOT EXISTS media.storage_work_intent (
     closed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT storage_work_intent_check CHECK ((((state = 'open'::text) AND (closed_at IS NULL)) OR ((state <> 'open'::text) AND (closed_at IS NOT NULL)))),
-    CONSTRAINT storage_work_intent_kind_check CHECK ((kind = ANY (ARRAY['operation'::text, 'script'::text, 'export'::text, 'depth'::text, 'transcription'::text, 'package'::text, 'transfer'::text, 'project-copy'::text, 'subject-voice'::text]))),
+    CONSTRAINT storage_work_intent_kind_check CHECK ((kind = ANY (ARRAY['operation'::text, 'script'::text, 'export'::text, 'depth'::text, 'transcription'::text, 'package'::text, 'transfer'::text, 'project-copy'::text, 'subject-voice'::text, 'avatar'::text]))),
     CONSTRAINT storage_work_intent_owner_id_check CHECK ((owner_id <> '00000000-0000-0000-0000-000000000000'::uuid)),
     CONSTRAINT storage_work_intent_state_check CHECK ((state = ANY (ARRAY['open'::text, 'accepted'::text, 'cancelled'::text]))),
     CONSTRAINT storage_work_intent_work_id_check CHECK ((work_id <> '00000000-0000-0000-0000-000000000000'::uuid))
@@ -251,27 +172,38 @@ CREATE TABLE IF NOT EXISTS media.upload_admission (
     CONSTRAINT upload_admission_scope_kind_check CHECK ((scope_kind = ANY (ARRAY['project'::text, 'personal'::text])))
 );
 
-ALTER TABLE media.media_asset ADD COLUMN IF NOT EXISTS object_location_id uuid;
+ALTER TABLE media.media_asset ADD COLUMN IF NOT EXISTS object_location_id uuid NOT NULL;
+ALTER TABLE media.media_asset ALTER COLUMN object_location_id SET NOT NULL;
 
-ALTER TABLE media.rendition ADD COLUMN IF NOT EXISTS object_location_id uuid;
+ALTER TABLE media.rendition ADD COLUMN IF NOT EXISTS object_location_id uuid NOT NULL;
+ALTER TABLE media.rendition ALTER COLUMN object_location_id SET NOT NULL;
 
-ALTER TABLE media.package_object ADD COLUMN IF NOT EXISTS object_location_id uuid;
+ALTER TABLE media.package_object ADD COLUMN IF NOT EXISTS object_location_id uuid NOT NULL;
+ALTER TABLE media.package_object ALTER COLUMN object_location_id SET NOT NULL;
 
-ALTER TABLE media.project_copy_object ADD COLUMN IF NOT EXISTS source_location_id uuid;
+ALTER TABLE media.project_copy_object ADD COLUMN IF NOT EXISTS source_location_id uuid NOT NULL;
+ALTER TABLE media.project_copy_object ALTER COLUMN source_location_id SET NOT NULL;
 
-ALTER TABLE media.project_copy_object ADD COLUMN IF NOT EXISTS target_location_id uuid;
+ALTER TABLE media.project_copy_object ADD COLUMN IF NOT EXISTS target_location_id uuid NOT NULL;
+ALTER TABLE media.project_copy_object ALTER COLUMN target_location_id SET NOT NULL;
 
-ALTER TABLE media.transfer_object ADD COLUMN IF NOT EXISTS source_location_id uuid;
+ALTER TABLE media.transfer_object ADD COLUMN IF NOT EXISTS source_location_id uuid NOT NULL;
+ALTER TABLE media.transfer_object ALTER COLUMN source_location_id SET NOT NULL;
 
-ALTER TABLE media.transfer_object ADD COLUMN IF NOT EXISTS target_location_id uuid;
+ALTER TABLE media.transfer_object ADD COLUMN IF NOT EXISTS target_location_id uuid NOT NULL;
+ALTER TABLE media.transfer_object ALTER COLUMN target_location_id SET NOT NULL;
 
-ALTER TABLE media.purge_object ADD COLUMN IF NOT EXISTS object_location_id uuid;
+ALTER TABLE media.purge_object ADD COLUMN IF NOT EXISTS object_location_id uuid NOT NULL;
+ALTER TABLE media.purge_object ALTER COLUMN object_location_id SET NOT NULL;
 
-ALTER TABLE mediatool.depth_object ADD COLUMN IF NOT EXISTS object_location_id uuid;
+ALTER TABLE mediatool.depth_object ADD COLUMN IF NOT EXISTS object_location_id uuid NOT NULL;
+ALTER TABLE mediatool.depth_object ALTER COLUMN object_location_id SET NOT NULL;
 
-ALTER TABLE script.object_intent ADD COLUMN IF NOT EXISTS object_location_id uuid;
+ALTER TABLE script.object_intent ADD COLUMN IF NOT EXISTS object_location_id uuid NOT NULL;
+ALTER TABLE script.object_intent ALTER COLUMN object_location_id SET NOT NULL;
 
-ALTER TABLE script.object_state ADD COLUMN IF NOT EXISTS object_location_id uuid;
+ALTER TABLE script.object_state ADD COLUMN IF NOT EXISTS object_location_id uuid NOT NULL;
+ALTER TABLE script.object_state ALTER COLUMN object_location_id SET NOT NULL;
 
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.object_location'::regclass AND conname='object_location_id_object_key_key') THEN
@@ -294,19 +226,9 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_activation_guard'::regclass AND conname='storage_activation_guard_pkey') THEN
-  ALTER TABLE ONLY media.storage_activation_guard
-    ADD CONSTRAINT storage_activation_guard_pkey PRIMARY KEY (revision);
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_activation'::regclass AND conname='storage_activation_pkey') THEN
-  ALTER TABLE ONLY media.storage_activation
-    ADD CONSTRAINT storage_activation_pkey PRIMARY KEY (revision);
- END IF;
-END $$;
+
+
 
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_bucket_evidence'::regclass AND conname='storage_bucket_evidence_pkey') THEN
@@ -322,33 +244,13 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_deployment_evidence'::regclass AND conname='storage_deployment_evidence_pkey') THEN
-  ALTER TABLE ONLY media.storage_deployment_evidence
-    ADD CONSTRAINT storage_deployment_evidence_pkey PRIMARY KEY (config_sha256);
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_legacy_binding'::regclass AND conname='storage_legacy_binding_pkey') THEN
-  ALTER TABLE ONLY media.storage_legacy_binding
-    ADD CONSTRAINT storage_legacy_binding_pkey PRIMARY KEY (singleton);
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_legacy_receipt'::regclass AND conname='storage_legacy_receipt_pkey') THEN
-  ALTER TABLE ONLY media.storage_legacy_receipt
-    ADD CONSTRAINT storage_legacy_receipt_pkey PRIMARY KEY (profile_id, bucket, object_key, snapshot_sha256);
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_legacy_tombstone'::regclass AND conname='storage_legacy_tombstone_pkey') THEN
-  ALTER TABLE ONLY media.storage_legacy_tombstone
-    ADD CONSTRAINT storage_legacy_tombstone_pkey PRIMARY KEY (profile_id, bucket, object_key, snapshot_sha256);
- END IF;
-END $$;
+
+
+
+
 
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_probe_evidence'::regclass AND conname='storage_probe_evidence_pkey') THEN
@@ -399,12 +301,7 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_runtime'::regclass AND conname='storage_runtime_pkey') THEN
-  ALTER TABLE ONLY media.storage_runtime
-    ADD CONSTRAINT storage_runtime_pkey PRIMARY KEY (instance_id);
- END IF;
-END $$;
+
 
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_work_intent'::regclass AND conname='storage_work_intent_id_profile_id_bucket_key') THEN
@@ -511,19 +408,9 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_activation_guard'::regclass AND conname='storage_activation_guard_revision_fkey') THEN
-  ALTER TABLE ONLY media.storage_activation_guard
-    ADD CONSTRAINT storage_activation_guard_revision_fkey FOREIGN KEY (revision) REFERENCES media.storage_activation(revision);
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_activation'::regclass AND conname='storage_activation_profile_id_fkey') THEN
-  ALTER TABLE ONLY media.storage_activation
-    ADD CONSTRAINT storage_activation_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES media.storage_profile(id);
- END IF;
-END $$;
+
+
 
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_bucket_evidence'::regclass AND conname='storage_bucket_evidence_profile_id_resource_identity_fkey') THEN
@@ -539,40 +426,15 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_legacy_binding'::regclass AND conname='storage_legacy_binding_profile_id_bucket_fkey') THEN
-  ALTER TABLE ONLY media.storage_legacy_binding
-    ADD CONSTRAINT storage_legacy_binding_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_legacy_receipt'::regclass AND conname='storage_legacy_receipt_location_id_object_key_fkey') THEN
-  ALTER TABLE ONLY media.storage_legacy_receipt
-    ADD CONSTRAINT storage_legacy_receipt_location_id_object_key_fkey FOREIGN KEY (location_id, object_key) REFERENCES media.object_location(id, object_key);
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_legacy_receipt'::regclass AND conname='storage_legacy_receipt_profile_id_bucket_fkey') THEN
-  ALTER TABLE ONLY media.storage_legacy_receipt
-    ADD CONSTRAINT storage_legacy_receipt_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_legacy_tombstone'::regclass AND conname='storage_legacy_tombstone_location_id_object_key_fkey') THEN
-  ALTER TABLE ONLY media.storage_legacy_tombstone
-    ADD CONSTRAINT storage_legacy_tombstone_location_id_object_key_fkey FOREIGN KEY (location_id, object_key) REFERENCES media.object_location(id, object_key);
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_legacy_tombstone'::regclass AND conname='storage_legacy_tombstone_profile_id_bucket_fkey') THEN
-  ALTER TABLE ONLY media.storage_legacy_tombstone
-    ADD CONSTRAINT storage_legacy_tombstone_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
- END IF;
-END $$;
+
+
+
+
+
 
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_probe_evidence'::regclass AND conname='storage_probe_evidence_profile_id_fkey') THEN
@@ -689,7 +551,7 @@ CREATE OR REPLACE FUNCTION media.keep_storage_identity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    IF TG_TABLE_NAME='storage_profile' OR TG_TABLE_NAME='storage_activation' THEN
+    IF TG_TABLE_NAME='storage_profile' THEN
         RAISE EXCEPTION 'storage identity is immutable' USING ERRCODE='23514';
     END IF;
     IF (NEW.id,NEW.profile_id,NEW.bucket,NEW.object_key,NEW.owner_session_id) IS DISTINCT FROM (OLD.id,OLD.profile_id,OLD.bucket,OLD.object_key,OLD.owner_session_id) THEN
@@ -789,11 +651,7 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_activation_guard'::regclass AND tgname='keep_storage_evidence' AND NOT tgisinternal) THEN
-  CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_activation_guard FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
- END IF;
-END $$;
+
 
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_bucket_evidence'::regclass AND tgname='keep_storage_evidence' AND NOT tgisinternal) THEN
@@ -807,29 +665,13 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_deployment_evidence'::regclass AND tgname='keep_storage_evidence' AND NOT tgisinternal) THEN
-  CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_deployment_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_legacy_binding'::regclass AND tgname='keep_storage_evidence' AND NOT tgisinternal) THEN
-  CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_legacy_binding FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_legacy_receipt'::regclass AND tgname='keep_storage_evidence' AND NOT tgisinternal) THEN
-  CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_legacy_receipt FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
- END IF;
-END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_legacy_tombstone'::regclass AND tgname='keep_storage_evidence' AND NOT tgisinternal) THEN
-  CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_legacy_tombstone FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
- END IF;
-END $$;
+
+
+
+
 
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_probe_evidence'::regclass AND tgname='keep_storage_evidence' AND NOT tgisinternal) THEN
@@ -843,11 +685,7 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_activation'::regclass AND tgname='keep_storage_identity' AND NOT tgisinternal) THEN
-  CREATE TRIGGER keep_storage_identity BEFORE DELETE OR UPDATE ON media.storage_activation FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
- END IF;
-END $$;
+
 
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_profile'::regclass AND tgname='keep_storage_identity' AND NOT tgisinternal) THEN
@@ -921,21 +759,15 @@ CREATE INDEX IF NOT EXISTS storage_work_open_profile_idx ON media.storage_work_i
 
 GRANT SELECT,INSERT,UPDATE ON TABLE media.object_location TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_activation TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_activation_guard TO glowloom_app;
 
 GRANT SELECT,INSERT ON TABLE media.storage_bucket_evidence TO glowloom_app;
 
 GRANT SELECT,INSERT ON TABLE media.storage_config_revision TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_deployment_evidence TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_legacy_binding TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_legacy_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_legacy_tombstone TO glowloom_app;
 
 GRANT SELECT,INSERT ON TABLE media.storage_probe_evidence TO glowloom_app;
 
@@ -945,10 +777,9 @@ GRANT SELECT,INSERT ON TABLE media.storage_profile TO glowloom_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_route TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_runtime TO glowloom_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_work_intent TO glowloom_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE media.upload_admission TO glowloom_app;
 
--- Deliberately no registration, activation, backfill, NOT NULL or bare-key key removal.
+-- The application runtime registers the environment profile and publishes its route projection.

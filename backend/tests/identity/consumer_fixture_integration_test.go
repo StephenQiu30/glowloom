@@ -48,6 +48,8 @@ func TestConsumerFixturesRequireCurrentSessionAndExplicitPersonalOwnership(t *te
 	assetID := uuid.New()
 	now := time.Now().UTC()
 	asset := media.MediaAsset{ID: assetID, ProjectID: project, Kind: media.KindImage, Origin: media.OriginUpload, Status: media.StatusUploading, ObjectKey: "projects/" + project.String() + "/image/2026/10/" + assetID.String() + ".png", FileName: "fixture.png", MimeType: "image/png", ByteSize: 12, ModerationStatus: media.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
+	locationID := seedIdentityLocation(t, tx, asset.ObjectKey)
+	asset.ObjectLocation = &media.ObjectLocation{ID: locationID, Ref: media.ObjectRef{ProfileID: "identity-fixture", Bucket: "identity-fixture", Key: asset.ObjectKey}, State: media.ObjectLocationAccepted}
 	requests := pgmedia.NewScopedStore(tx, app.NewMediaScopeAccess)
 	if err := requests.CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal("media request fixture rejected", err)

@@ -10,8 +10,12 @@ import (
 	"fmt"
 	"time"
 
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -42,45 +46,49 @@ func NewStore(db *gorm.DB, timeline TimelineFactory, media MediaFactory) *Store 
 }
 
 type jobRow struct {
-	ID, ProjectID, OrgID, ActorID, CanvasID, NodeID uuid.UUID
-	ActorRole                                       *string
-	OutputKind                                      string
-	SourceRevision                                  int64
-	Frozen                                          []byte
-	Status, Stage                                   string
-	Progress, Attempt                               int
-	Revision                                        int64
-	ActiveWorker                                    *uuid.UUID
-	AssetID                                         *uuid.UUID
-	ArtifactID                                      *uuid.UUID
-	SHA256, FailureCode                             *string
-	CreatedAt, UpdatedAt                            time.Time
+	ID                                          uuid.UUID `gorm:"primaryKey"`
+	ProjectID, OrgID, ActorID, CanvasID, NodeID uuid.UUID
+	ActorRole                                   *string
+	OutputKind                                  string
+	SourceRevision                              int64
+	Frozen                                      jsonDocument
+	Status                                      domain.Status
+	Stage                                       domain.ExportStage
+	Progress, Attempt                           int
+	Revision                                    int64
+	ActiveWorker                                *uuid.UUID
+	AssetID                                     *uuid.UUID
+	ArtifactID                                  *uuid.UUID
+	SHA256, FailureCode                         *string
+	CreatedAt, UpdatedAt                        time.Time
 }
+
+func (jobRow) TableName() string { return "mediatool.export_job" }
 
 func (r jobRow) public() domain.ExportJob {
 	var frozen domain.FrozenExport
 	_ = json.Unmarshal(r.Frozen, &frozen)
-	return domain.ExportJob{Settings: frozen.Settings, ID: r.ID, ProjectID: r.ProjectID, OutputKind: domain.OutputKind(r.OutputKind).Effective(), Source: domain.Source{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Status: domain.Status(r.Status), Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, AssetID: r.AssetID, ArtifactID: r.ArtifactID, SHA256: r.SHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return domain.ExportJob{Settings: frozen.Settings, ID: r.ID, ProjectID: r.ProjectID, OutputKind: domain.OutputKind(r.OutputKind).Effective(), Source: domain.Source{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Status: r.Status, Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, AssetID: r.AssetID, ArtifactID: r.ArtifactID, SHA256: r.SHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (r jobRow) actor() identityapp.Principal {
 	return identityapp.Principal{ID: r.ActorID, OrgID: r.OrgID}
 }
 func readJob(tx *gorm.DB, project, id uuid.UUID, lock bool) (jobRow, error) {
 	var row jobRow
-	query := `SELECT * FROM mediatool.export_job WHERE id=?`
-	args := []any{id}
+	query := tx.Model(&jobRow{}).Where("id = ?", id)
 	if project != uuid.Nil {
-		query += ` AND project_id=?`
-		args = append(args, project)
+		query = query.Where("project_id = ?", project)
 	}
 	if lock {
-		query += ` FOR UPDATE`
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
-	r := tx.Raw(query, args...).Scan(&row)
-	if r.Error != nil {
-		return row, fmt.Errorf("read media export: %w", r.Error)
+	if err := query.Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return row, application.ErrNotFound
+		}
+		return row, fmt.Errorf("read media export: %w", err)
 	}
-	if r.RowsAffected != 1 {
+	if row.ID == uuid.Nil {
 		return row, application.ErrNotFound
 	}
 	return row, nil
@@ -122,19 +130,16 @@ func commandLock(tx *gorm.DB, actor, key uuid.UUID) error {
 	if key == uuid.Nil || actor == uuid.Nil {
 		return application.ErrInvalidExport
 	}
-	return tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-export-command/"+actor.String()+"/"+key.String()).Error
+	return lockMediatoolPrincipal(tx, actor)
 }
 func commandReplay(tx *gorm.DB, actor, key uuid.UUID, hash string) (domain.ExportJob, bool, error) {
-	var receipt struct {
-		RequestHash string
-		Response    []byte
-	}
-	r := tx.Raw(`SELECT request_hash,response FROM mediatool.export_command WHERE actor_id=? AND request_id=?`, actor, key).Scan(&receipt)
-	if r.Error != nil {
-		return domain.ExportJob{}, false, r.Error
-	}
-	if r.RowsAffected == 0 {
+	var receipt exportCommandRecord
+	err := tx.Where("actor_id = ? AND request_id = ?", actor, key).Take(&receipt).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.ExportJob{}, false, nil
+	}
+	if err != nil {
+		return domain.ExportJob{}, false, err
 	}
 	if receipt.RequestHash != hash {
 		return domain.ExportJob{}, false, application.ErrConflict
@@ -172,31 +177,39 @@ func recordCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash
 		if err != nil {
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, id, topic, actor.OrgID.String(), string(payload)).Error; err != nil {
+		if emit == "cancel" {
+			if err := taskruntime.RequestStop(tx.Statement.Context, tx, task.Export, map[string]any{"job_id": job.ID, "attempt": job.Attempt}); err != nil {
+				return err
+			}
+		}
+		if err := taskruntime.EnqueueReference(tx.Statement.Context, tx, task.Export, id.String(), time.Now().UTC(), delivery.WorkID); err != nil {
+			return err
+		}
+		if err := tx.Create(&mediatoolOutboxRecord{ID: id, Topic: topic, PartitionKey: actor.OrgID.String(), Payload: jsonDocument(payload)}).Error; err != nil {
 			return err
 		}
 	}
-	if err := tx.Exec(`INSERT INTO mediatool.export_command(actor_id,request_id,job_id,request_hash,response,event_id,event_action,event_attempt,created_at) VALUES(?,?,?,?,?::jsonb,?,?,?,?)`, actor.ID, key, job.ID, hash, string(response), eventID, eventAction, eventAttempt, now).Error; err != nil {
+	if err := tx.Create(&exportCommandRecord{ActorID: actor.ID, RequestID: key, JobID: job.ID, RequestHash: hash, Response: jsonDocument(response), EventID: eventID, EventAction: eventAction, EventAttempt: eventAttempt, CreatedAt: now}).Error; err != nil {
 		return err
 	}
 	auditBody, err := json.Marshal(struct {
-		ID             uuid.UUID         `json:"id"`
-		ProjectID      uuid.UUID         `json:"project_id"`
-		OutputKind     domain.OutputKind `json:"output_kind"`
-		CanvasID       uuid.UUID         `json:"canvas_id"`
-		NodeID         uuid.UUID         `json:"node_id"`
-		SourceRevision int64             `json:"source_revision"`
-		Status         domain.Status     `json:"status"`
-		Stage          string            `json:"stage"`
-		Progress       int               `json:"progress"`
-		Attempt        int               `json:"attempt"`
-		Revision       int64             `json:"revision"`
-		AssetID        *uuid.UUID        `json:"asset_id"`
-		ArtifactID     *uuid.UUID        `json:"artifact_id"`
-		SHA256         *string           `json:"sha256"`
-		FailureCode    *string           `json:"failure_code"`
-		CreatedAt      string            `json:"created_at"`
-		UpdatedAt      string            `json:"updated_at"`
+		ID             uuid.UUID          `json:"id"`
+		ProjectID      uuid.UUID          `json:"project_id"`
+		OutputKind     domain.OutputKind  `json:"output_kind"`
+		CanvasID       uuid.UUID          `json:"canvas_id"`
+		NodeID         uuid.UUID          `json:"node_id"`
+		SourceRevision int64              `json:"source_revision"`
+		Status         domain.Status      `json:"status"`
+		Stage          domain.ExportStage `json:"stage"`
+		Progress       int                `json:"progress"`
+		Attempt        int                `json:"attempt"`
+		Revision       int64              `json:"revision"`
+		AssetID        *uuid.UUID         `json:"asset_id"`
+		ArtifactID     *uuid.UUID         `json:"artifact_id"`
+		SHA256         *string            `json:"sha256"`
+		FailureCode    *string            `json:"failure_code"`
+		CreatedAt      string             `json:"created_at"`
+		UpdatedAt      string             `json:"updated_at"`
 	}{job.ID, job.ProjectID, job.OutputKind, job.Source.CanvasID, job.Source.NodeID, job.Source.Revision, job.Status, job.Stage, job.Progress, job.Attempt, job.Revision, job.AssetID, job.ArtifactID, job.SHA256, job.FailureCode, job.CreatedAt.Format(time.RFC3339Nano), job.UpdatedAt.Format(time.RFC3339Nano)})
 	if err != nil {
 		return err
@@ -207,7 +220,7 @@ func recordCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash
 	if err != nil {
 		return err
 	}
-	return tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, auditID, auditTopic, job.ProjectID.String(), string(auditEvent)).Error
+	return tx.Create(&mediatoolOutboxRecord{ID: auditID, Topic: auditTopic, PartitionKey: job.ProjectID.String(), Payload: jsonDocument(auditEvent)}).Error
 }
 
 // Create atomically freezes the saved canvas, original metadata, receipt and outbox.
@@ -256,11 +269,11 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 			job = replay
 			return nil
 		}
-		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-export-project/"+project.String()).Error; err != nil {
+		if err := lockMediatoolProject(tx, project); err != nil {
 			return err
 		}
 		var active int64
-		if err := tx.Raw(`SELECT count(*) FROM mediatool.export_job WHERE project_id=? AND status IN ('queued','running','cancel_requested')`, project).Scan(&active).Error; err != nil {
+		if err := tx.Model(&jobRow{}).Where("project_id = ? AND status IN ?", project, []domain.Status{domain.Queued, domain.Running, domain.CancelRequested}).Count(&active).Error; err != nil {
 			return err
 		}
 		if active >= 2 {
@@ -311,11 +324,11 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 			return err
 		}
 		now := time.Now().UTC()
-		job = domain.ExportJob{Settings: frozen.Settings, ID: jobID, ProjectID: project, OutputKind: kind, Source: domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Status: domain.Queued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
-		if err := tx.Exec(`INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,output_kind,status,stage,progress,attempt,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?::jsonb,?,'queued','queued',0,1,1,?,?)`, job.ID, project, actor.OrgID, actor.ID, nil, input.CanvasID, input.NodeID, input.Revision, string(raw), kind, now, now).Error; err != nil {
+		job = domain.ExportJob{Settings: frozen.Settings, ID: jobID, ProjectID: project, OutputKind: kind, Source: domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Status: domain.Queued, Stage: domain.ExportStageQueued, Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		if err := tx.Create(&jobRow{ID: job.ID, ProjectID: project, OrgID: actor.OrgID, ActorID: actor.ID, CanvasID: input.CanvasID, NodeID: input.NodeID, OutputKind: string(kind), SourceRevision: input.Revision, Frozen: jsonDocument(raw), Status: domain.Queued, Stage: domain.ExportStageQueued, Progress: 0, Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := pinTool(ctx, tx, s.storage, "export", project, job.ID, job.Attempt); err != nil {
+		if err := pinTool(ctx, tx, s.storage, mediaapp.StorageWorkKindExport, project, job.ID, job.Attempt); err != nil {
 			return err
 		}
 		return recordCommand(tx, actor, key, hash, "requested", job, "start")
@@ -355,24 +368,24 @@ func (s *Store) List(ctx context.Context, actor identityapp.Principal, input app
 		if err := s.authorize(ctx, tx, actor, input.ProjectID, false); err != nil {
 			return err
 		}
-		q := `SELECT * FROM mediatool.export_job WHERE project_id=?`
-		args := []any{input.ProjectID}
-		for _, f := range []struct {
-			col string
-			id  uuid.UUID
-		}{{"canvas_id", input.CanvasID}, {"node_id", input.NodeID}} {
-			if f.id != uuid.Nil {
-				q += " AND " + f.col + "=?"
-				args = append(args, f.id)
-			}
+		query := tx.Model(&jobRow{}).Where("project_id = ?", input.ProjectID)
+		if input.CanvasID != uuid.Nil {
+			query = query.Where("canvas_id = ?", input.CanvasID)
+		}
+		if input.NodeID != uuid.Nil {
+			query = query.Where("node_id = ?", input.NodeID)
 		}
 		if input.After != uuid.Nil {
-			q += ` AND (created_at,id)<(SELECT created_at,id FROM mediatool.export_job WHERE id=? AND project_id=?)`
-			args = append(args, input.After, input.ProjectID)
+			var cursor jobRow
+			if err := tx.Model(&jobRow{}).Select("id", "created_at").Where("id = ? AND project_id = ?", input.After, input.ProjectID).Take(&cursor).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}
+			query = query.Where("(created_at, id) < (?, ?)", cursor.CreatedAt, cursor.ID)
 		}
-		q += ` ORDER BY created_at DESC,id DESC LIMIT ?`
-		args = append(args, input.Limit)
-		return tx.Raw(q, args...).Scan(&rows).Error
+		return query.Order("created_at DESC").Order("id DESC").Limit(input.Limit).Find(&rows).Error
 	})
 	jobs := make([]domain.ExportJob, 0, len(rows))
 	for _, row := range rows {

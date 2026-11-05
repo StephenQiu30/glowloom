@@ -21,7 +21,7 @@ func ProvideScriptObjectLocations(tx *gorm.DB) app.SourceObjectLocations {
 type sourceLocations struct{ routes *pgmedia.StorageRoutes }
 
 func (s sourceLocations) Admit(ctx context.Context, project, work uuid.UUID, facts []domain.ObjectFact) (uuid.UUID, []domain.ObjectFact, error) {
-	intent, err := s.routes.PinStorageWork(ctx, media.StorageWorkOwner{Kind: "script", OwnerID: project, WorkID: work})
+	intent, err := s.routes.PinStorageWork(ctx, media.StorageWorkOwner{Kind: media.StorageWorkKindScript, OwnerID: project, WorkID: work})
 	if err != nil {
 		return uuid.Nil, nil, err
 	}
@@ -74,24 +74,24 @@ func (s sourceLocations) Accept(ctx context.Context, id uuid.UUID, facts []domai
 	return s.routes.AcceptStorageWork(ctx, id, ids)
 }
 
-func (s sourceLocations) BeginRemoval(ctx context.Context, id uuid.UUID, f domain.ObjectFact) error {
+func (s sourceLocations) Cancel(ctx context.Context, id uuid.UUID) error {
+	return s.routes.CancelStorageWork(ctx, id)
+}
+
+// BeginRemoval returns readiness separately from transaction success. A false
+// result retains the durable cancellation clock without authorizing SDK removal.
+func (s sourceLocations) BeginRemoval(ctx context.Context, id uuid.UUID, f domain.ObjectFact) (bool, error) {
 	l, err := s.location(ctx, f)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if ready, err := s.routes.BeginPrivateCopyRemoval(ctx, id, l); err != nil {
-		return err
-	} else if ready {
-		return nil
+	if ready, err := s.routes.BeginPrivateCopyRemoval(ctx, id, l); err != nil || ready {
+		return ready, err
 	}
 	if err := s.routes.CancelStorageWork(ctx, id); err != nil {
-		return err
+		return false, err
 	}
-	// Keep cancellation committed while the bounded write drains. The routed
-	// object adapter independently requires delete_pending immediately before SDK
-	// Remove; returning an error here would roll back the cancellation clock.
-	_, err = s.routes.BeginWorkRemoval(ctx, id, l)
-	return err
+	return s.routes.BeginWorkRemoval(ctx, id, l)
 }
 
 func (s sourceLocations) ConfirmRemoval(ctx context.Context, id uuid.UUID, f domain.ObjectFact) error {

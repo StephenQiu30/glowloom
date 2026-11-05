@@ -16,12 +16,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 
 type imageReviewTransport func(*http.Request) (*http.Response, error)
@@ -42,11 +43,13 @@ func TestLocalProjectImageReachesArkAsVerifiedBytes(t *testing.T) {
 		_, _ = w.Write(data)
 	}))
 	defer storage.Close()
-	objects, err := objectstorage.Open(storage.URL, "fixture", "fixture-access", "fixture-secret", "us-east-1")
+	objects, err := storagefixture.Open(t, storage.URL, "fixture")
 	require.NoError(t, err)
 	sum := sha256.Sum256(data)
 	fact := application.ProjectMediaObject{AssetID: uuid.New(), ProjectID: uuid.New(), Key: "input.png", SHA256: hex.EncodeToString(sum[:]), Kind: "image", Role: "reference_image", ByteSize: int64(len(data))}
-	signer := NewProjectMediaSigner(nil, objects)
+	locationID := uuid.New()
+	fact.LocationID, fact.ProfileID, fact.Bucket = &locationID, "test-main", "fixture"
+	signer := NewProjectMediaSigner(objects)
 	ref, err := signer.SignProjectMedia(t.Context(), fact, time.Minute)
 	require.NoError(t, err)
 	require.Equal(t, 1, reads)
@@ -71,7 +74,7 @@ func TestLocalProjectImageReachesArkAsVerifiedBytes(t *testing.T) {
 	result, err := provider.Submit(t.Context(), application.GenerationRequest{Config: config, ModelID: "doubao-seedream-5-0-flash-260915", Capability: "image.generate", Mode: "image2image", Prompt: "fixture", Params: map[string]any{"size": "2K"}, References: []application.ProviderReference{ref}, OutputCount: 1}, "fixture-key")
 	require.NoError(t, err)
 	require.Equal(t, 1, calls, "local storage URL must not be sent to the cloud or block a verified image")
-	require.Equal(t, "succeeded", result.State)
+	require.Equal(t, application.ProviderTaskSucceeded, result.State)
 	encoded, err := json.Marshal(ref)
 	require.NoError(t, err)
 	require.NotContains(t, string(encoded), base64.StdEncoding.EncodeToString(data), "private bytes must stay outside workflow serialization")

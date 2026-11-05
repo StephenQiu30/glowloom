@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,13 +17,13 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
-func personalUploadRouter(db *gorm.DB, actor identityapp.Principal, objects *uploadObjectsFake) *gin.Engine {
+func personalUploadRouter(t *testing.T, db *gorm.DB, actor identityapp.Principal, objects *uploadObjectsFake) *gin.Engine {
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
 	store := mediaTestStore(db)
-	service := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaFixtureMockUpload(t, db, store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	mediahttp.NewUploadHandler(service).Register(group)
 	return router
 }
@@ -32,7 +31,7 @@ func TestPersonalUploadHTTPCurrentActorStrictBodyAndFreshRouterReplay(t *testing
 	db := libraryRuntimeDB(t)
 	actor, _ := mediaStoreProject(t, db)
 	objects := &uploadObjectsFake{}
-	router := personalUploadRouter(db, actor, objects)
+	router := personalUploadRouter(t, db, actor, objects)
 	key := uuid.New()
 	request := uploadHTTPRequest(t, []string{"file", "local_review_confirmed=true"})
 	request.URL.Path = "/api/media/library/uploads"
@@ -47,7 +46,7 @@ func TestPersonalUploadHTTPCurrentActorStrictBodyAndFreshRouterReplay(t *testing
 	request.URL.Path = "/api/media/library/uploads"
 	request.Header.Set("Idempotency-Key", key.String())
 	replay := httptest.NewRecorder()
-	personalUploadRouter(db, actor, objects).ServeHTTP(replay, request)
+	personalUploadRouter(t, db, actor, objects).ServeHTTP(replay, request)
 	if replay.Code != 201 || !bytes.Equal(replay.Body.Bytes(), first.Body.Bytes()) || len(objects.items) != 3 {
 		t.Fatal("fresh router same key created different response", replay.Code, replay.Body.String())
 	}

@@ -69,46 +69,31 @@ func TestAssetOriginalRequiresCurrentEligibleIdentityAndSavedLocation(t *testing
 	a.ObjectLocation = nil
 	repo = &originalReadStore{asset: a}
 	before := objects.calls
-	if _, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) || objects.calls != before {
+	if _, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrNotFound) || objects.calls != before {
 		t.Fatal("legacy bucket guessed", err)
 	}
 }
 
-type originalLegacyObjects struct {
-	calls  int
-	closed bool
-}
-
-func (s *originalLegacyObjects) Get(context.Context, string) (io.ReadCloser, error) {
-	s.calls++
-	return &originalLegacyBody{Reader: strings.NewReader("legacy original"), closed: &s.closed}, nil
-}
-
-type originalLegacyBody struct {
-	io.Reader
-	closed *bool
-}
-
-func (b *originalLegacyBody) Close() error { *b.closed = true; return nil }
-func TestAssetOriginalLegacyCompatibilityAndAttachmentHeaders(t *testing.T) {
+func TestAssetOriginalSavedLocationAndAttachmentHeaders(t *testing.T) {
 	a := routedReadImage()
-	a.ByteSize = int64(len("legacy original"))
+	data := []byte("routed original")
+	a.ByteSize = int64(len(data))
 	a.FileName = "../../不可信\r\n文件.png"
-	legacy := &originalLegacyObjects{}
-	query := mediaapp.NewAssetDownloads(&originalReadStore{asset: a}, &routedReadObjects{}, legacy)
+	a.ObjectLocation = readLocation("tos-main", a.ObjectKey)
+	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
+	query := mediaapp.NewAssetDownloads(&originalReadStore{asset: a}, objects)
 	router := gin.New()
 	mediahttp.NewAssetDownloadHandler(query).Register(router.Group("/api"))
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/projects/"+a.ProjectID.String()+"/media/"+a.ID.String()+"/original", nil))
-	if response.Code != 200 || response.Body.String() != "legacy original" || legacy.calls != 1 || !legacy.closed || response.Header().Get("Cache-Control") != "private, no-store" || response.Header().Get("X-Content-Type-Options") != "nosniff" {
-		t.Fatal("original attachment contract lost", response.Code, response.Body.String())
+	if response.Code != 200 || response.Body.String() != string(data) || objects.calls != 1 || response.Header().Get("Cache-Control") != "private, no-store" || response.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatal("attachment contract lost", response.Code, response.Body.String())
 	}
 	disposition, params, err := mime.ParseMediaType(response.Header().Get("Content-Disposition"))
 	if err != nil || disposition != "attachment" || strings.ContainsAny(params["filename"], "/\\\r\n") {
 		t.Fatal("unsafe attachment filename", disposition, params, err)
 	}
-	a.ObjectLocation = readLocation("tos-main", a.ObjectKey)
-	if _, err := mediaapp.NewAssetDownloads(&originalReadStore{asset: a}, nil, legacy).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) || legacy.calls != 1 {
-		t.Fatal("persisted route fell back to legacy", err)
+	if _, err := mediaapp.NewAssetDownloads(&originalReadStore{asset: a}, nil).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) {
+		t.Fatal("missing registry accepted", err)
 	}
 }

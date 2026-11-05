@@ -56,12 +56,13 @@ func TestMediaPurgeProtectsRetainedAvatars(t *testing.T) {
 	library, _ := (mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}).Identity(actor.OrgID, actor.ID)
 	sha := strings.Repeat("a", 64)
 	key := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/2026/10/" + asset.String() + ".png"
+	locationID := seedIdentityLocation(t, tx, key)
 	for _, q := range []struct {
 		sql  string
 		args []any
 	}{
 		{`INSERT INTO media.library(id,org_id,personal_actor_id,kind,revision) VALUES(?,?,?,'personal',1)`, []any{library, actor.OrgID, actor.ID}},
-		{`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,?,'image','upload','ready',?,'avatar.png','image/png',12,?,'passed')`, []any{asset, actor.OrgID, actor.ID, key, sha}},
+		{`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,?,'image','upload','ready',?,?,'avatar.png','image/png',12,?,'passed')`, []any{asset, actor.OrgID, actor.ID, key, locationID, sha}},
 		{`INSERT INTO media.library_item(id,library_id,asset_id,title,category,catalog_state,trashed_at,position) VALUES(?,?,?,'Avatar','other','trashed',now(),0)`, []any{asset, library, asset}},
 	} {
 		if err := tx.Exec(q.sql, q.args...).Error; err != nil {

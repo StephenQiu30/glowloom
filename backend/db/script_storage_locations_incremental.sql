@@ -1,7 +1,7 @@
--- Additive script physical identities. Execute explicitly in one transaction.
--- No guessed location backfill, no route activation or bare-key key removal.
+-- Script object rows require exact physical identities. Existing rows without them fail; no key-based inference is performed.
 
-ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS original_location_id uuid;
+ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS original_location_id uuid NOT NULL;
+ALTER TABLE script.script_source ALTER COLUMN original_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_source'::regclass AND conname='script_source_original_location_id_fkey') THEN
  ALTER TABLE script.script_source ADD CONSTRAINT script_source_original_location_id_fkey FOREIGN KEY(original_location_id,original_key) REFERENCES media.object_location(id,object_key);
@@ -11,7 +11,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS rich_location_id uuid;
+ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS rich_location_id uuid NOT NULL;
+ALTER TABLE script.script_source ALTER COLUMN rich_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_source'::regclass AND conname='script_source_rich_location_id_fkey') THEN
  ALTER TABLE script.script_source ADD CONSTRAINT script_source_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
@@ -21,7 +22,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS text_location_id uuid;
+ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS text_location_id uuid NOT NULL;
+ALTER TABLE script.script_version ALTER COLUMN text_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_version'::regclass AND conname='script_version_text_location_id_fkey') THEN
  ALTER TABLE script.script_version ADD CONSTRAINT script_version_text_location_id_fkey FOREIGN KEY(text_location_id,text_key) REFERENCES media.object_location(id,object_key);
@@ -31,7 +33,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS rich_location_id uuid;
+ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS rich_location_id uuid NOT NULL;
+ALTER TABLE script.script_version ALTER COLUMN rich_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_version'::regclass AND conname='script_version_rich_location_id_fkey') THEN
  ALTER TABLE script.script_version ADD CONSTRAINT script_version_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
@@ -41,7 +44,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS source_location_id uuid;
+ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS source_location_id uuid NOT NULL;
+ALTER TABLE script.copy_object_intent ALTER COLUMN source_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_intent'::regclass AND conname='copy_object_intent_source_location_id_fkey') THEN
  ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_source_location_id_fkey FOREIGN KEY(source_location_id,source_key) REFERENCES media.object_location(id,object_key);
@@ -51,7 +55,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS target_location_id uuid;
+ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS target_location_id uuid NOT NULL;
+ALTER TABLE script.copy_object_intent ALTER COLUMN target_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_intent'::regclass AND conname='copy_object_intent_target_location_id_fkey') THEN
  ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);
@@ -61,7 +66,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.copy_object_state ADD COLUMN IF NOT EXISTS target_location_id uuid;
+ALTER TABLE script.copy_object_state ADD COLUMN IF NOT EXISTS target_location_id uuid NOT NULL;
+ALTER TABLE script.copy_object_state ALTER COLUMN target_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_state'::regclass AND conname='copy_object_state_target_location_id_fkey') THEN
  ALTER TABLE script.copy_object_state ADD CONSTRAINT copy_object_state_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);

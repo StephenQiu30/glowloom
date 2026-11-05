@@ -48,13 +48,13 @@ func TestRoutedTranscriptionActualPostgresTOSAndFFmpegAcceptsOneFrozenArtifact(t
 	registry, writes, cfg := controlledGeneratedTOS(t)
 	profiles := []media.StorageProfile{}
 	for id, p := range cfg.Profiles {
-		profiles = append(profiles, media.StorageProfile{ID: id, Provider: p.Provider, Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region})
+		profiles = append(profiles, media.StorageProfile{ID: id, Provider: string(p.Provider), Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region})
 	}
 	routes := pgmedia.NewStorageRoutes(owner)
 	if err := routes.RegisterProfiles(t.Context(), profiles); err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.Exec(`INSERT INTO media.storage_route(singleton,profile_id,revision) VALUES(1,'tos-frozen','controlled-tool-v1') ON CONFLICT(singleton) DO UPDATE SET profile_id=excluded.profile_id,revision=excluded.revision`).Error; err != nil {
+	if err := owner.Exec(`INSERT INTO media.storage_route(singleton,profile_id,revision) VALUES(1,'tos-frozen','1') ON CONFLICT(singleton) DO UPDATE SET profile_id=excluded.profile_id,revision=excluded.revision`).Error; err != nil {
 		t.Fatal(err)
 	}
 	pcm := transcriptionPCM(t)
@@ -82,7 +82,7 @@ func TestRoutedTranscriptionActualPostgresTOSAndFFmpegAcceptsOneFrozenArtifact(t
 		if worker {
 			scopes = app.NewMediaWorkerScopeAccess
 		}
-		return pgtool.NewTranscriptionStore(runtime, func(*gorm.DB) tool.TranscriptionSourceReader { return routedSpeechSource{asset} }, func(tx *gorm.DB) tool.DerivedMedia {
+		return mediatoolTranscriptionStore(runtime, func(*gorm.DB) tool.TranscriptionSourceReader { return routedSpeechSource{asset} }, func(tx *gorm.DB) tool.DerivedMedia {
 			return media.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
 		}).WithStorageAdmission(func(tx *gorm.DB) tool.ToolStorageLedger { return pgmedia.NewStorageRoutes(tx) })
 	}
@@ -93,7 +93,7 @@ func TestRoutedTranscriptionActualPostgresTOSAndFFmpegAcceptsOneFrozenArtifact(t
 	if err != nil {
 		t.Fatal("pin before outbox", err)
 	}
-	if err = owner.Exec(`UPDATE media.storage_route SET profile_id='tos-new',revision='switched-after-admission' WHERE singleton=1`).Error; err != nil {
+	if err = owner.Exec(`UPDATE media.storage_route SET profile_id='tos-new',revision='2' WHERE singleton=1`).Error; err != nil {
 		t.Fatal(err)
 	}
 	prep, err := toolff.NewAudioPreprocessor(flow.FFProber{})
@@ -101,7 +101,7 @@ func TestRoutedTranscriptionActualPostgresTOSAndFFmpegAcceptsOneFrozenArtifact(t
 		t.Fatal(err)
 	}
 	recognizer := new(routedSpeechRecognizer)
-	worker := tool.NewRoutedTranscriptionWorker(workerStore, toolflow.NewRoutedObjects(registry, pgmedia.NewStorageRoutes(runtime), nil), prep, recognizer)
+	worker := tool.NewRoutedTranscriptionWorker(workerStore, toolflow.NewRoutedObjects(registry, pgmedia.NewStorageRoutes(runtime)), prep, recognizer)
 	work := tool.TranscriptionWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()}
 	result, err := worker.Execute(t.Context(), work)
 	if err != nil || result.Status != domain.TranscriptionSucceeded {

@@ -7,15 +7,18 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	md "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	td "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
@@ -34,6 +37,7 @@ func reviewBytes(t *testing.T, body, mime string) *media.Downloaded {
 }
 
 type reviewObjects struct {
+	mu       sync.Mutex
 	bodies   map[string][]byte
 	facts    map[string]media.ObjectInfo
 	puts     int
@@ -44,6 +48,8 @@ func newReviewObjects() *reviewObjects {
 	return &reviewObjects{bodies: map[string][]byte{}, facts: map[string]media.ObjectInfo{}}
 }
 func (o *reviewObjects) Get(_ context.Context, key string) (io.ReadCloser, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	b, ok := o.bodies[key]
 	if !ok {
 		return nil, tool.ErrObjectMissing
@@ -51,6 +57,8 @@ func (o *reviewObjects) Get(_ context.Context, key string) (io.ReadCloser, error
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
 func (o *reviewObjects) Stat(_ context.Context, key string) (media.ObjectInfo, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	v, ok := o.facts[key]
 	if !ok {
 		return v, tool.ErrObjectMissing
@@ -58,22 +66,29 @@ func (o *reviewObjects) Stat(_ context.Context, key string) (media.ObjectInfo, e
 	return v, nil
 }
 func (o *reviewObjects) PutIfAbsent(_ context.Context, key string, r io.Reader, n int64, mime, sha string) error {
+	o.mu.Lock()
 	o.puts++
 	if _, ok := o.bodies[key]; ok {
+		o.mu.Unlock()
 		return media.ErrObjectAlreadyExists
 	}
 	b, err := io.ReadAll(r)
 	if err != nil {
+		o.mu.Unlock()
 		return err
 	}
 	o.bodies[key] = b
 	o.facts[key] = media.ObjectInfo{Size: n, ContentType: mime, SHA256: sha}
-	if o.afterPut != nil {
-		o.afterPut(o.puts)
+	callback, callCount := o.afterPut, o.puts
+	o.mu.Unlock()
+	if callback != nil {
+		callback(callCount)
 	}
 	return nil
 }
 func (o *reviewObjects) seed(key, body, mime string) string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	sum := sha256.Sum256([]byte(body))
 	sha := hex.EncodeToString(sum[:])
 	o.bodies[key] = []byte(body)
@@ -103,7 +118,7 @@ type reviewExportRenderer struct {
 	after func()
 }
 
-func (r reviewExportRenderer) Render(context.Context, td.FrozenExport, map[uuid.UUID]string, func(int, string) error) (*media.Downloaded, error) {
+func (r reviewExportRenderer) Render(context.Context, td.FrozenExport, map[uuid.UUID]string, func(int, td.ExportStage) error) (*media.Downloaded, error) {
 	if r.after != nil {
 		r.after()
 	}
@@ -140,8 +155,9 @@ func TestMediaExportLateRevocationStopsEachObjectWrite(t *testing.T) {
 			installMediaScopeMigration(t, tx)
 			installMediaReviewStorageColumns(t, tx)
 			actor.ScopeID = scope
-			asset := reviewVideo(t, tx, project)
 			objects := newReviewObjects()
+			registry, routes := reviewStorage(t, tx, objects)
+			asset := reviewVideo(t, tx, project)
 			sha := objects.seed(asset.ObjectKey, "source", "video/mp4")
 			if err := tx.Exec(`UPDATE media.media_asset SET sha256=? WHERE id=?`, sha, asset.ID).Error; err != nil {
 				t.Fatal(err)
@@ -150,6 +166,7 @@ func TestMediaExportLateRevocationStopsEachObjectWrite(t *testing.T) {
 				return media.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, request: factory(tx)} }))
 			}
 			store := pgtool.NewStore(tx, func(*gorm.DB) tool.TimelineReader { return reviewScopeTimeline{reviewTimeline(asset.ID)} }, request)
+			store = store.WithStorageAdmission(func(inner *gorm.DB) tool.ToolStorageLedger { return pgmedia.NewStorageRoutes(inner) })
 			job, err := store.Create(t.Context(), actor, project, uuid.New(), tool.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
 			if err != nil {
 				t.Fatal(err)
@@ -180,15 +197,15 @@ func TestMediaExportLateRevocationStopsEachObjectWrite(t *testing.T) {
 				}
 				want = 2
 			}
-			_, err = tool.NewWorker(workerStore, objects, renderer, reviewProbe{}, previews).Execute(t.Context(), tool.WorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()})
+			_, err = tool.NewRoutedWorker(workerStore.WithStorageAdmission(func(inner *gorm.DB) tool.ToolStorageLedger { return pgmedia.NewStorageRoutes(inner) }), toolflow.NewRoutedObjects(registry, routes), renderer, reviewProbe{}, previews).Execute(t.Context(), tool.WorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()})
 			if phase == "allowed" && err != nil {
 				t.Fatalf("authorized output: %v", err)
 			}
 			if phase != "allowed" && err == nil {
 				t.Fatal("revoked worker completed")
 			}
-			if objects.puts != want {
-				t.Fatalf("late %s revocation: Put calls=%d want %d (err=%v)", phase, objects.puts, want, err)
+			if objects.count() != want {
+				t.Fatalf("late %s revocation: Put calls=%d want %d (err=%v)", phase, objects.count(), want, err)
 			}
 		})
 	}
@@ -245,8 +262,8 @@ func TestMediaTranscriptionLateRevocationPreservesCessation(t *testing.T) {
 			worker := tool.NewTranscriptionWorker(store, objects, reviewAudio{t}, native)
 			id := tool.TranscriptionWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()}
 			_, err = worker.Execute(t.Context(), id)
-			if err == nil || objects.puts != 0 {
-				t.Fatalf("late revoke: Put calls=%d err=%v", objects.puts, err)
+			if err == nil || objects.count() != 0 {
+				t.Fatalf("late revoke: Put calls=%d err=%v", objects.count(), err)
 			}
 			var state string
 			if err := tx.Raw(`SELECT inference_state FROM mediatool.transcription_job WHERE id=?`, job.ID).Scan(&state).Error; err != nil {
@@ -263,8 +280,8 @@ func TestMediaTranscriptionLateRevocationPreservesCessation(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, _ = worker.Execute(t.Context(), id)
-			if native.calls != 1 || objects.puts != 0 {
-				t.Fatalf("attempt resubmitted/created object: native=%d objects=%d", native.calls, objects.puts)
+			if native.calls != 1 || objects.count() != 0 {
+				t.Fatalf("attempt resubmitted/created object: native=%d objects=%d", native.calls, objects.count())
 			}
 			if err := tx.Raw(`SELECT inference_state FROM mediatool.transcription_job WHERE id=?`, job.ID).Scan(&state).Error; err != nil {
 				t.Fatal(err)
@@ -327,9 +344,13 @@ func TestMediaIngestLateRevocationStopsEachObjectWrite(t *testing.T) {
 					}
 				}
 			}
-			_, err := media.NewIngestService(repo, reviewDownloader{t}, reviewProbe{}, previews, objects).Ingest(t.Context(), media.IngestInput{OperationID: op.String(), SeqNo: 1, URL: "https://controlled.invalid/result"})
-			if (point < 3 && err == nil) || (point == 3 && err != nil) || objects.puts != point {
-				t.Fatalf("revoked ingest: Put calls=%d want %d err=%v", objects.puts, point, err)
+			registry, routes := reviewStorage(t, tx, objects)
+			if _, err := routes.PinStorageWork(t.Context(), media.StorageWorkOwner{Kind: media.StorageWorkKindOperation, OwnerID: project, WorkID: op}); err != nil {
+				t.Fatal(err)
+			}
+			_, err := media.NewRoutedIngestService(repo, reviewDownloader{t}, reviewProbe{}, previews, mediaobjects.NewGeneratedObjects(registry, routes), routes).Ingest(t.Context(), media.IngestInput{OperationID: op.String(), SeqNo: 1, URL: "https://controlled.invalid/result"})
+			if (point < 3 && err == nil) || (point == 3 && err != nil) || objects.count() != point {
+				t.Fatalf("revoked ingest: Put calls=%d want %d err=%v", objects.count(), point, err)
 			}
 			var count int64
 			if err := tx.Raw(`SELECT count(*) FROM operation.operation_output WHERE operation_id=?`, op).Scan(&count).Error; err != nil {
@@ -341,3 +362,5 @@ func TestMediaIngestLateRevocationStopsEachObjectWrite(t *testing.T) {
 		})
 	}
 }
+
+func (o *reviewObjects) count() int { o.mu.Lock(); defer o.mu.Unlock(); return o.puts }

@@ -1,3 +1,4 @@
+// Package domain defines immutable skill packages and isolated execution contracts.
 package domain
 
 import (
@@ -5,6 +6,7 @@ import (
 	"time"
 )
 
+// Sandbox errors classify execution limits, denied network access and invalid input.
 var (
 	ErrSandboxTimeout       = errors.New("sandbox execution timed out")
 	ErrSandboxMemoryLimit   = errors.New("sandbox memory limit exceeded")

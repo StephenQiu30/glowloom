@@ -14,20 +14,20 @@ import (
 
 // SourceWriteIntent exposes only current authorized recovery metadata.
 type SourceWriteIntent struct {
-	ID                     uuid.UUID  `json:"id"`
-	Revision               int64      `json:"revision"`
-	Action                 string     `json:"action"`
-	Status                 string     `json:"status"`
-	ExpectedScriptRevision int64      `json:"expected_script_revision"`
-	BaseVersionID          *uuid.UUID `json:"base_version_id,omitempty"`
-	ObjectCount            int        `json:"object_count"`
-	ConfirmedObjectCount   int        `json:"confirmed_object_count"`
-	CancellationRequested  bool       `json:"cancellation_requested"`
-	NeedsReconciliation    bool       `json:"needs_reconciliation"`
-	ActiveIO               bool       `json:"active_io"`
-	CanControl             bool       `json:"can_control"`
-	CreatedAt              time.Time  `json:"created_at"`
-	UpdatedAt              time.Time  `json:"updated_at"`
+	ID                     uuid.UUID            `json:"id"`
+	Revision               int64                `json:"revision"`
+	Action                 domain.SourceAction  `json:"action"`
+	Status                 domain.CommandStatus `json:"status"`
+	ExpectedScriptRevision int64                `json:"expected_script_revision"`
+	BaseVersionID          *uuid.UUID           `json:"base_version_id,omitempty"`
+	ObjectCount            int                  `json:"object_count"`
+	ConfirmedObjectCount   int                  `json:"confirmed_object_count"`
+	CancellationRequested  bool                 `json:"cancellation_requested"`
+	NeedsReconciliation    bool                 `json:"needs_reconciliation"`
+	ActiveIO               bool                 `json:"active_io"`
+	CanControl             bool                 `json:"can_control"`
+	CreatedAt              time.Time            `json:"created_at"`
+	UpdatedAt              time.Time            `json:"updated_at"`
 }
 
 // SourceWritePage includes only the authenticated current caller's own scope.
@@ -40,20 +40,20 @@ type SourceWritePage struct {
 
 // SourceControlCommand permanently binds one explicit intent control and its CAS.
 type SourceControlCommand struct {
-	ProjectID        uuid.UUID `json:"project_id"`
-	IntentID         uuid.UUID `json:"intent_id"`
-	Key              uuid.UUID `json:"key"`
-	RequestID        uuid.UUID `json:"request_id"`
-	Action           string    `json:"action"`
-	ExpectedRevision int64     `json:"expected_revision"`
+	ProjectID        uuid.UUID                  `json:"project_id"`
+	IntentID         uuid.UUID                  `json:"intent_id"`
+	Key              uuid.UUID                  `json:"key"`
+	RequestID        uuid.UUID                  `json:"request_id"`
+	Action           domain.SourceControlAction `json:"action"`
+	ExpectedRevision int64                      `json:"expected_revision"`
 }
 
 // SourceControlReceipt is the immutable acceptance response, not cleanup success.
 type SourceControlReceipt struct {
-	IntentID uuid.UUID `json:"intent_id"`
-	Revision int64     `json:"revision"`
-	Action   string    `json:"action"`
-	Accepted bool      `json:"accepted"`
+	IntentID uuid.UUID                  `json:"intent_id"`
+	Revision int64                      `json:"revision"`
+	Action   domain.SourceControlAction `json:"action"`
+	Accepted bool                       `json:"accepted"`
 }
 
 // SourceIntentRecord retains private proof for owning cleanup, never HTTP serialization.
@@ -61,7 +61,7 @@ type SourceIntentRecord struct {
 	View    SourceWriteIntent
 	Plan    WritePlan
 	OwnerID *uuid.UUID
-	IOState string
+	IOState domain.CommandIOState
 	Objects []SourceObjectState
 }
 
@@ -175,7 +175,7 @@ func (s *SourceRecovery) Control(ctx context.Context, actor identityapp.Principa
 	if s == nil || s.store == nil || s.sources == nil || s.sources.objects == nil || s.sources.io == nil || s.now == nil {
 		return SourceControlReceipt{}, ErrUnavailable
 	}
-	if input.ProjectID == uuid.Nil || input.IntentID == uuid.Nil || input.Key == uuid.Nil || input.RequestID == uuid.Nil || input.ExpectedRevision < 1 || (input.Action != "cancel" && input.Action != "reconcile") {
+	if input.ProjectID == uuid.Nil || input.IntentID == uuid.Nil || input.Key == uuid.Nil || input.RequestID == uuid.Nil || input.ExpectedRevision < 1 || (input.Action != domain.SourceControlActionCancel && input.Action != domain.SourceControlActionReconcile) {
 		return SourceControlReceipt{}, domain.ErrInvalidSource
 	}
 	receipt, err := s.store.ControlSourceWrite(ctx, actor, input, s.now().UTC())
@@ -200,7 +200,7 @@ func (s *SourceRecovery) recover(ctx context.Context, actor identityapp.Principa
 	if err != nil {
 		return err
 	}
-	if r.View.Status == "completed" || r.View.Status == "cancelled" {
+	if r.View.Status == domain.CommandStatusCompleted || r.View.Status == domain.CommandStatusCancelled {
 		return nil
 	}
 	if r.OwnerID != nil {
@@ -216,7 +216,7 @@ func (s *SourceRecovery) recover(ctx context.Context, actor identityapp.Principa
 			return err
 		}
 	}
-	if r.IOState != "idle" && r.IOState != "ended" {
+	if r.IOState != domain.CommandIOStateIdle && r.IOState != domain.CommandIOStateEnded {
 		return ErrNeedsReconciliation
 	}
 	if !r.View.CancellationRequested {
@@ -236,10 +236,12 @@ func (s *SourceRecovery) recover(ctx context.Context, actor identityapp.Principa
 		if errors.Is(readErr, ErrObjectMissing) && object.PutStarted && !object.Confirmed {
 			return ErrNeedsReconciliation
 		}
+		// A confirmed missing untouched object still needs its owner to retire the
+		// reserved physical identity. It does not require an SDK DELETE.
+		if err := s.store.BeginSourceRemoval(ctx, actor, input, object.Fact, s.now().UTC()); err != nil {
+			return err
+		}
 		if readErr == nil {
-			if err := s.store.BeginSourceRemoval(ctx, actor, input, object.Fact, s.now().UTC()); err != nil {
-				return err
-			}
 			removeErr := removePrivateObject(ctx, s.sources.objects, object.Fact)
 			_, afterErr := s.sources.readObject(ctx, object.Fact)
 			if !errors.Is(afterErr, ErrObjectMissing) {

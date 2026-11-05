@@ -10,11 +10,11 @@ import (
 )
 
 var (
-	// ErrStorageRouteConflict rejects a stale or reused activation revision.
+	// ErrStorageRouteConflict rejects an inconsistent environment revision.
 	ErrStorageRouteConflict = errors.New("storage route revision conflict")
 	// ErrStorageIdentityConflict prevents rebinding or aliasing a physical resource.
 	ErrStorageIdentityConflict = errors.New("storage profile identity conflict")
-	// ErrStorageNotReady prevents use before migration and capabilities are accepted.
+	// ErrStorageNotReady prevents use before environment routing is configured.
 	ErrStorageNotReady = errors.New("storage migration or capability not accepted")
 )
 
@@ -24,13 +24,12 @@ type StorageProfile struct {
 	ID, Provider, Endpoint, SigningEndpoint, Region, Bucket, AddressingStyle string
 }
 
-// StorageRoute is the database-selected destination for future write intents.
+// StorageRoute is the database projection of the environment write destination.
 type StorageRoute struct{ ProfileID, Bucket, Revision string }
 
-// StorageRouteRepository exposes a durable read and explicit compare-and-swap.
+// StorageRouteRepository exposes the environment route projection.
 type StorageRouteRepository interface {
-	ReadActive(context.Context) (StorageRoute, error)
-	Activate(context.Context, string, string, string) (StorageRoute, error)
+	ReadConfigured(context.Context) (StorageRoute, error)
 }
 
 // ObjectLocations owns stable identity independently of the route used for new work.

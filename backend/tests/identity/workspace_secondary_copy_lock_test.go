@@ -133,11 +133,11 @@ func TestSecondaryCopyListLockOrder(t *testing.T) {
 	}
 }
 
-// Execute only the actual List's project-lock SELECTs against existing IDs. No
-// business content is read and no rows are inserted/updated on these connections.
-// Rollback fixtures cannot be seen by a second connection, so this demonstrates
-// PostgreSQL lock interleaving, not a full production copy/worker workflow.
-func exerciseCopyPageLocks(t *testing.T, queries []string, org, scope, source, low, high uuid.UUID, size int) {
+// Execute the actual List's project-lock SELECTs against three exact, newly
+// committed fixture IDs visible to both connections, then remove only those IDs.
+// This demonstrates PostgreSQL lock interleaving; the outer rollback transaction
+// separately verifies the real copy-list scope, receipt and pagination behavior.
+func exerciseCopyPageLocks(t *testing.T, queries []string, org, scope, source, low, high uuid.UUID, _ int) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
 	defer cancel()
@@ -146,19 +146,39 @@ func exerciseCopyPageLocks(t *testing.T, queries []string, org, scope, source, l
 		t.Fatal("open existing lock harness database")
 	}
 	defer func() { _ = conn.Close() }()
+	fixtureOrg := uuid.New()
+	fixtureIDs := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	if err := conn.DB.WithContext(ctx).Transaction(func(seed *gorm.DB) error {
+		if err := seed.Exec(`INSERT INTO workspace.organization(id,name) VALUES(?,'Copy lock fixture')`, fixtureOrg).Error; err != nil {
+			return err
+		}
+		for _, id := range fixtureIDs {
+			if err := seed.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type) VALUES(?,?,'Copy lock fixture','16:9','realistic')`, id, fixtureOrg).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal("commit exact owned lock fixtures", err)
+	}
+	defer func() {
+		cleanup, cancelCleanup := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelCleanup()
+		if err := conn.DB.WithContext(cleanup).Transaction(func(clean *gorm.DB) error {
+			if err := clean.Exec(`DELETE FROM workspace.project WHERE org_id=? AND id IN ?`, fixtureOrg, fixtureIDs).Error; err != nil {
+				return err
+			}
+			return clean.Exec(`DELETE FROM workspace.organization WHERE id=?`, fixtureOrg).Error
+		}); err != nil {
+			t.Error("remove exact owned copy-lock fixture IDs", err)
+		}
+	}()
 	var rows []struct {
 		ID, OrgID    uuid.UUID
 		OwnerScopeID *uuid.UUID
 	}
-	if err := conn.DB.WithContext(ctx).Raw(`SELECT id,org_id,owner_scope_id FROM workspace.project WHERE org_id=(SELECT org_id FROM workspace.project WHERE NOT is_delete GROUP BY org_id HAVING count(*)>=2 ORDER BY org_id LIMIT 1) AND NOT is_delete ORDER BY id LIMIT 3`).Scan(&rows).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) < 2 {
-		t.Fatal("two existing same-org project IDs unavailable; lock interleaving unverified")
-	}
-	if size == 2 && len(rows) < 3 {
-		t.Log("only two existing IDs: multi-job order checked by actual fixture SQL; two-connection interleaving covered by page_1")
-		return
+	if err := conn.DB.WithContext(ctx).Raw(`SELECT id,org_id,owner_scope_id FROM workspace.project WHERE org_id=? AND id IN ? ORDER BY id`, fixtureOrg, fixtureIDs).Scan(&rows).Error; err != nil || len(rows) != 3 {
+		t.Fatal("exact committed lock fixtures unavailable", err)
 	}
 	mappedSource := rows[1].ID
 	mappedHigh := rows[len(rows)-1].ID
@@ -173,7 +193,7 @@ func exerciseCopyPageLocks(t *testing.T, queries []string, org, scope, source, l
 	// Only the fixture predicates are mapped to real IDs/scope values. ORDER BY
 	// and the sequence of lock statements are the actual captured List SQL.
 	replace := strings.NewReplacer("owner_scope_id='"+scope.String()+"'", "("+strings.Join(scopeTerms, " OR ")+")", org.String(), rows[0].OrgID.String(), source.String(), mappedSource.String(), low.String(), rows[0].ID.String(), high.String(), mappedHigh.String())
-	t.Logf("lock harness uses %d existing same-org IDs; scope predicates mapped, content unread", len(rows))
+	t.Logf("lock harness uses %d exact owned same-org IDs; scope predicates mapped", len(rows))
 	reader := conn.DB.WithContext(ctx).Begin()
 	if reader.Error != nil {
 		t.Fatal(reader.Error)
@@ -212,7 +232,9 @@ func exerciseCopyPageLocks(t *testing.T, queries []string, org, scope, source, l
 		_ = worker.Rollback().Error
 		cancel()
 		if !joined {
-			<-done
+			if err := <-done; err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				t.Error("joined lock-test operation:", err)
+			}
 		}
 	}()
 	deadline := time.Now().Add(time.Second)

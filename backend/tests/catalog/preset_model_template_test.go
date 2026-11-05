@@ -101,14 +101,14 @@ func TestOpenRouterAndVercelCandidatesContainFourCoreFamilies(t *testing.T) {
 		require.NotEmpty(t, catalog.Models)
 		var hasChatGPT, hasAnthropic, hasGemini, hasGrok bool
 		for _, m := range catalog.Models {
-			switch {
-			case m.Key == adapter+"-gpt-6-1-sol" || m.Key == "or-gpt-6-1-sol" || m.Key == "vercel-gpt-6-1-sol":
+			switch m.Key {
+			case adapter + "-gpt-6-1-sol", "or-gpt-6-1-sol", "vercel-gpt-6-1-sol":
 				hasChatGPT = true
-			case m.Key == adapter+"-claude-sonnet-5-5" || m.Key == "or-claude-sonnet-5-5" || m.Key == "vercel-claude-sonnet-5-5":
+			case adapter + "-claude-sonnet-5-5", "or-claude-sonnet-5-5", "vercel-claude-sonnet-5-5":
 				hasAnthropic = true
-			case m.Key == adapter+"-gemini-4-argon" || m.Key == "or-gemini-4-argon" || m.Key == "vercel-gemini-4-argon":
+			case adapter + "-gemini-4-argon", "or-gemini-4-argon", "vercel-gemini-4-argon":
 				hasGemini = true
-			case m.Key == adapter+"-grok-4-7" || m.Key == "or-grok-4-7" || m.Key == "vercel-grok-4-7":
+			case adapter + "-grok-4-7", "or-grok-4-7", "vercel-grok-4-7":
 				hasGrok = true
 			}
 		}

@@ -59,7 +59,7 @@ func TestLegacyBibleLocationPreservesLongNameHashAndDraftReference(t *testing.T)
 		if _, known, err := newStore.ReadVersionIfKnown(t.Context(), actor, entry, version); err != nil || known {
 			t.Fatal(stage, "legacy identity was taken over by new Subject", known, err)
 		}
-		old, err := biblewire.ProvideBibleStore(runtime, nil, nil).Version(t.Context(), actor, project, bible.KindLocation, entry, version)
+		old, err := biblewire.ProvideBibleStoreWithObjects(runtime, nil, nil).Version(t.Context(), actor, project, bible.KindLocation, entry, version)
 		if err != nil || old.ID != version || old.EntryID != entry || old.Location == nil || old.Location.Name != legacy.Name || old.ContentSHA256 != originalSHA {
 			t.Fatal(stage, "old typed reader truncated or rehashed history", err)
 		}

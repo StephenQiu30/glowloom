@@ -1,5 +1,5 @@
 -- 空业务库的完整结构，只维护本文件。
--- PostgreSQL 18。由结构所有者执行，并预先创建 glowloom_app NOLOGIN NOSUPERUSER。
+-- PostgreSQL 18。由结构所有者执行；预建 glowloom_app NOLOGIN NOSUPERUSER 与受限 glowloom_agent LOGIN（凭据离线设置）。
 -- psql "$GLOWLOOM_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql
 -- 禁止对已有业务库重放本文件。
 
@@ -198,7 +198,7 @@ CREATE FUNCTION media.keep_storage_identity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    IF TG_TABLE_NAME='storage_profile' OR TG_TABLE_NAME='storage_activation' THEN
+    IF TG_TABLE_NAME='storage_profile' THEN
         RAISE EXCEPTION 'storage identity is immutable' USING ERRCODE='23514';
     END IF;
     IF (NEW.id,NEW.profile_id,NEW.bucket,NEW.object_key,NEW.owner_session_id) IS DISTINCT FROM (OLD.id,OLD.profile_id,OLD.bucket,OLD.object_key,OLD.owner_session_id) THEN
@@ -1227,11 +1227,16 @@ CREATE TABLE identity.directory_export (
     status text NOT NULL,
     row_count integer NOT NULL,
     private_object_id uuid,
+    storage_location_id uuid,
+    storage_intent_id uuid,
+    storage_profile_id text,
+    storage_bucket text,
     expires_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
     error_category text DEFAULT ''::text NOT NULL,
     CONSTRAINT directory_export_check CHECK ((((scope_kind = 'platform'::text) AND (team_id IS NULL) AND (scope_id = '00000000-0000-0000-0000-000000000000'::uuid)) OR ((scope_kind = 'team'::text) AND (team_id IS NOT NULL) AND (scope_id = team_id)))),
+    CONSTRAINT directory_export_storage_identity_check CHECK (((private_object_id IS NULL) AND (storage_location_id IS NULL) AND (storage_intent_id IS NULL) AND (storage_profile_id IS NULL) AND (storage_bucket IS NULL)) OR ((private_object_id IS NOT NULL) AND (storage_location_id IS NOT NULL) AND (storage_intent_id IS NOT NULL) AND (storage_profile_id IS NOT NULL) AND (storage_bucket IS NOT NULL))),
     CONSTRAINT directory_export_row_count_check CHECK (((row_count >= 0) AND (row_count <= 10000))),
     CONSTRAINT directory_export_scope_kind_check CHECK ((scope_kind = ANY (ARRAY['platform'::text, 'team'::text]))),
     CONSTRAINT directory_export_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'completed'::text, 'failed'::text, 'expired'::text, 'revoked'::text])))
@@ -1580,7 +1585,7 @@ CREATE TABLE media.media_asset (
     is_delete boolean DEFAULT false NOT NULL,
     personal_org_id uuid,
     personal_actor_id uuid,
-    object_location_id uuid,
+    object_location_id uuid NOT NULL,
     CONSTRAINT media_asset_byte_size_check CHECK ((byte_size >= 0)),
     CONSTRAINT media_asset_kind_check CHECK ((kind = ANY (ARRAY['image'::text, 'video'::text, 'audio'::text, 'document'::text, 'model'::text]))),
     CONSTRAINT media_asset_model_facts_check CHECK (((kind <> 'model'::text) OR ((origin = 'upload'::text) AND (((mime_type = 'model/gltf-binary'::text) AND (codec = 'glb2'::text)) OR ((mime_type = 'model/gltf+json'::text) AND (codec = 'gltf2'::text))) AND ((byte_size >= 1) AND (byte_size <= 67108864)) AND (codec IS NOT NULL) AND (width IS NULL) AND (height IS NULL) AND (duration_ms IS NULL) AND (fps IS NULL) AND (audio_channels IS NULL)))),
@@ -1670,7 +1675,7 @@ CREATE TABLE media.package_object (
     content_type text NOT NULL,
     sha256 text NOT NULL,
     status text DEFAULT 'pending'::text NOT NULL,
-    object_location_id uuid,
+    object_location_id uuid NOT NULL,
     CONSTRAINT package_object_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= '2147483648'::bigint))),
     CONSTRAINT package_object_object_index_check CHECK (((object_index >= 0) AND (object_index <= 14999))),
     CONSTRAINT package_object_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
@@ -1691,8 +1696,8 @@ CREATE TABLE media.project_copy_object (
     status text DEFAULT 'pending'::text NOT NULL,
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
-    source_location_id uuid,
-    target_location_id uuid,
+    source_location_id uuid NOT NULL,
+    target_location_id uuid NOT NULL,
     CONSTRAINT project_copy_object_byte_size_check CHECK ((byte_size > 0)),
     CONSTRAINT project_copy_object_check CHECK ((source_object_key <> target_object_key)),
     CONSTRAINT project_copy_object_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
@@ -1800,7 +1805,7 @@ CREATE TABLE media.purge_object (
     verified boolean DEFAULT false NOT NULL,
     removal_started boolean DEFAULT false NOT NULL,
     removed boolean DEFAULT false NOT NULL,
-    object_location_id uuid,
+    object_location_id uuid NOT NULL,
     CONSTRAINT purge_object_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= '2147483648'::bigint))),
     CONSTRAINT purge_object_check CHECK (((NOT removal_started) OR (verified AND (sha256 IS NOT NULL) AND (byte_size IS NOT NULL)))),
     CONSTRAINT purge_object_check1 CHECK (((NOT removed) OR removal_started)),
@@ -1819,24 +1824,8 @@ CREATE TABLE media.rendition (
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
-    object_location_id uuid,
+    object_location_id uuid NOT NULL,
     CONSTRAINT rendition_kind_check CHECK ((kind = ANY (ARRAY['thumb_256'::text, 'thumb_640'::text, 'poster'::text, 'proxy_720p'::text, 'waveform'::text])))
-);
-
-CREATE TABLE media.storage_activation (
-    revision text NOT NULL,
-    expected_revision text NOT NULL,
-    profile_id text NOT NULL,
-    activated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_activation_revision_check CHECK ((revision ~ '^[a-z][a-z0-9-]{0,62}$'::text))
-);
-
-CREATE TABLE media.storage_activation_guard (
-    revision text NOT NULL,
-    config_sha256 text NOT NULL,
-    deployment_evidence_sha256 text NOT NULL,
-    activated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_activation_guard_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text))
 );
 
 CREATE TABLE media.storage_bucket_evidence (
@@ -1863,55 +1852,6 @@ CREATE TABLE media.storage_config_revision (
     CONSTRAINT storage_config_revision_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
     CONSTRAINT storage_config_revision_session_ttl_seconds_check CHECK (((session_ttl_seconds >= 60) AND (session_ttl_seconds <= 604800))),
     CONSTRAINT storage_config_revision_upload_policy_check CHECK ((jsonb_typeof(upload_policy) = 'object'::text))
-);
-
-CREATE TABLE media.storage_deployment_evidence (
-    config_sha256 text NOT NULL,
-    evidence_sha256 text NOT NULL,
-    recorded_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_deployment_evidence_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_deployment_evidence_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[a-f0-9]{64}$'::text))
-);
-
-CREATE TABLE media.storage_legacy_binding (
-    singleton integer NOT NULL,
-    profile_id text NOT NULL,
-    bucket text NOT NULL,
-    resource_identity text NOT NULL,
-    evidence_sha256 text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_legacy_binding_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_legacy_binding_resource_identity_check CHECK ((resource_identity ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_legacy_binding_singleton_check CHECK ((singleton = 1))
-);
-
-CREATE TABLE media.storage_legacy_receipt (
-    profile_id text NOT NULL,
-    bucket text NOT NULL,
-    object_key text NOT NULL,
-    snapshot_sha256 text NOT NULL,
-    location_id uuid NOT NULL,
-    byte_size bigint NOT NULL,
-    sha256 text NOT NULL,
-    mime_type text NOT NULL,
-    reference_count integer NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_legacy_receipt_byte_size_check CHECK ((byte_size >= 0)),
-    CONSTRAINT storage_legacy_receipt_reference_count_check CHECK ((reference_count > 0)),
-    CONSTRAINT storage_legacy_receipt_sha256_check CHECK ((sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_legacy_receipt_snapshot_sha256_check CHECK ((snapshot_sha256 ~ '^[a-f0-9]{64}$'::text))
-);
-
-CREATE TABLE media.storage_legacy_tombstone (
-    profile_id text NOT NULL,
-    bucket text NOT NULL,
-    object_key text NOT NULL,
-    snapshot_sha256 text NOT NULL,
-    location_id uuid NOT NULL,
-    reference_count integer NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_legacy_tombstone_reference_count_check CHECK ((reference_count > 0)),
-    CONSTRAINT storage_legacy_tombstone_snapshot_sha256_check CHECK ((snapshot_sha256 ~ '^[a-f0-9]{64}$'::text))
 );
 
 CREATE TABLE media.storage_probe_evidence (
@@ -1965,22 +1905,16 @@ CREATE TABLE media.storage_route (
     revision text NOT NULL,
     profile_id text NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_route_revision_check CHECK ((revision ~ '^[a-z][a-z0-9-]{0,62}$'::text)),
+    CONSTRAINT storage_route_revision_check CHECK ((revision ~ '^[1-9][0-9]{0,19}$'::text)),
     CONSTRAINT storage_route_singleton_check CHECK ((singleton = 1))
 );
 
-CREATE TABLE media.storage_runtime (
-    instance_id uuid NOT NULL,
-    role text NOT NULL,
-    revision text NOT NULL,
-    config_sha256 text NOT NULL,
-    capabilities jsonb NOT NULL,
-    expires_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT storage_runtime_capabilities_check CHECK ((jsonb_typeof(capabilities) = 'array'::text)),
-    CONSTRAINT storage_runtime_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT storage_runtime_role_check CHECK ((role = ANY (ARRAY['api'::text, 'worker'::text, 'relay'::text, 'setup'::text])))
+CREATE TABLE media.storage_route_lock (
+    singleton integer NOT NULL,
+    CONSTRAINT storage_route_lock_singleton_check CHECK ((singleton = 1))
 );
+
+INSERT INTO media.storage_route_lock(singleton) VALUES (1);
 
 CREATE TABLE media.storage_work_intent (
     id uuid NOT NULL,
@@ -1994,7 +1928,7 @@ CREATE TABLE media.storage_work_intent (
     closed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT storage_work_intent_check CHECK ((((state = 'open'::text) AND (closed_at IS NULL)) OR ((state <> 'open'::text) AND (closed_at IS NOT NULL)))),
-    CONSTRAINT storage_work_intent_kind_check CHECK ((kind = ANY (ARRAY['operation'::text, 'script'::text, 'export'::text, 'depth'::text, 'transcription'::text, 'package'::text, 'transfer'::text, 'project-copy'::text, 'subject-voice'::text]))),
+    CONSTRAINT storage_work_intent_kind_check CHECK ((kind = ANY (ARRAY['operation'::text, 'script'::text, 'export'::text, 'depth'::text, 'transcription'::text, 'package'::text, 'transfer'::text, 'project-copy'::text, 'subject-voice'::text, 'avatar'::text]))),
     CONSTRAINT storage_work_intent_owner_id_check CHECK ((owner_id <> '00000000-0000-0000-0000-000000000000'::uuid)),
     CONSTRAINT storage_work_intent_state_check CHECK ((state = ANY (ARRAY['open'::text, 'accepted'::text, 'cancelled'::text]))),
     CONSTRAINT storage_work_intent_work_id_check CHECK ((work_id <> '00000000-0000-0000-0000-000000000000'::uuid))
@@ -2092,6 +2026,7 @@ CREATE TABLE media.transfer_job (
 );
 
 CREATE TABLE media.transfer_object (
+    output_attempt integer NOT NULL CHECK (output_attempt > 0),
     job_id uuid NOT NULL,
     item_index integer NOT NULL,
     rendition_kind text DEFAULT ''::text NOT NULL,
@@ -2103,8 +2038,8 @@ CREATE TABLE media.transfer_object (
     source_verified boolean DEFAULT false NOT NULL,
     write_started boolean DEFAULT false NOT NULL,
     status text DEFAULT 'pending'::text NOT NULL,
-    source_location_id uuid,
-    target_location_id uuid,
+    source_location_id uuid NOT NULL,
+    target_location_id uuid NOT NULL,
     CONSTRAINT transfer_object_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= '2147483648'::bigint))),
     CONSTRAINT transfer_object_rendition_kind_check CHECK ((rendition_kind = ANY (ARRAY[''::text, 'thumb_256'::text, 'thumb_640'::text, 'poster'::text, 'proxy_720p'::text, 'waveform'::text]))),
     CONSTRAINT transfer_object_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
@@ -2222,7 +2157,7 @@ CREATE TABLE mediatool.depth_object (
     delete_started boolean DEFAULT false NOT NULL,
     status text DEFAULT 'pending'::text NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    object_location_id uuid,
+    object_location_id uuid NOT NULL,
     CONSTRAINT depth_object_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= 524288000))),
     CONSTRAINT depth_object_kind_check CHECK ((kind = ANY (ARRAY['original'::text, 'poster'::text, 'proxy_720p'::text]))),
     CONSTRAINT depth_object_sha256_check CHECK ((sha256 ~ '^[a-f0-9]{64}$'::text)),
@@ -2442,12 +2377,11 @@ CREATE TABLE operation.operation (
     is_delete boolean DEFAULT false NOT NULL,
     source_context jsonb,
     prompt_preparation jsonb,
-    CONSTRAINT ck_operation_agent_session CHECK (((target_type <> 'agent_session'::text) OR ((model_profile_version_id IS NULL) AND (price_rule_version_id IS NULL)))),
     CONSTRAINT ck_operation_canvas_source CHECK (((source_context IS NULL) OR ((target_type = 'free'::text) AND (origin = 'canvas'::text) AND (jsonb_typeof(source_context) = 'object'::text) AND (source_context ?& ARRAY['canvas_id'::text, 'node_id'::text, 'revision'::text]) AND ((source_context - ARRAY['canvas_id'::text, 'node_id'::text, 'row_id'::text, 'revision'::text]) = '{}'::jsonb) AND (jsonb_typeof((source_context -> 'canvas_id'::text)) = 'string'::text) AND (jsonb_typeof((source_context -> 'node_id'::text)) = 'string'::text) AND (jsonb_typeof((source_context -> 'revision'::text)) = 'number'::text) AND (((source_context ->> 'revision'::text))::bigint > 0) AND ((NOT (source_context ? 'row_id'::text)) OR (jsonb_typeof((source_context -> 'row_id'::text)) = 'string'::text))))),
     CONSTRAINT ck_operation_prompt_preparation CHECK (((prompt_preparation IS NULL) OR (((jsonb_typeof(prompt_preparation) = 'object'::text) AND (octet_length((prompt_preparation)::text) <= 4096) AND ((prompt_preparation - ARRAY['version'::text, 'operation'::text, 'policy'::text, 'template_id'::text, 'template_version'::text, 'customization_id'::text, 'customization_revision'::text, 'request_sha256'::text, 'user_prompt_sha256'::text, 'content_sha256'::text]) = '{}'::jsonb) AND ((prompt_preparation -> 'version'::text) = '1'::jsonb) AND (origin = 'canvas'::text) AND (target_type = 'free'::text) AND ((prompt_preparation ->> 'operation'::text) = ANY (ARRAY['chapter_assets_extract'::text, 'character_extract'::text, 'character_turnaround'::text, 'storyboard_plan'::text, 'storyboard_repair'::text, 'storyboard_first_frame'::text, 'storyboard_video'::text, 'short_drama_outline'::text, 'skill_draft'::text])) AND ((prompt_preparation ->> 'request_sha256'::text) ~ '^[0-9a-f]{64}$'::text) AND ((prompt_preparation ->> 'user_prompt_sha256'::text) ~ '^[0-9a-f]{64}$'::text) AND ((prompt_preparation ->> 'content_sha256'::text) ~ '^[0-9a-f]{64}$'::text) AND ((((prompt_preparation ->> 'operation'::text) = ANY (ARRAY['character_turnaround'::text, 'storyboard_first_frame'::text])) AND (capability = 'image.generate'::text)) OR (((prompt_preparation ->> 'operation'::text) = 'storyboard_video'::text) AND (capability = 'video.generate'::text)) OR (((prompt_preparation ->> 'operation'::text) <> ALL (ARRAY['character_turnaround'::text, 'storyboard_first_frame'::text, 'storyboard_video'::text])) AND (capability = 'text.structured'::text))) AND ((((prompt_preparation ->> 'policy'::text) = 'bypass_video'::text) AND ((prompt_preparation ->> 'operation'::text) = 'storyboard_video'::text) AND (NOT (prompt_preparation ?| ARRAY['template_id'::text, 'template_version'::text, 'customization_id'::text, 'customization_revision'::text])) AND ((prompt_preparation ->> 'content_sha256'::text) = (prompt_preparation ->> 'user_prompt_sha256'::text))) OR (((prompt_preparation ->> 'policy'::text) = 'compiled'::text) AND ((prompt_preparation ->> 'operation'::text) <> 'storyboard_video'::text) AND ((prompt_preparation ->> 'template_id'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text) AND ((prompt_preparation ->> 'template_id'::text) <> '00000000-0000-0000-0000-000000000000'::text) AND ((prompt_preparation -> 'template_version'::text) = '1'::jsonb) AND (((NOT (prompt_preparation ? 'customization_id'::text)) AND (NOT (prompt_preparation ? 'customization_revision'::text))) OR (((prompt_preparation ->> 'customization_id'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text) AND ((prompt_preparation ->> 'customization_id'::text) <> '00000000-0000-0000-0000-000000000000'::text) AND (jsonb_typeof((prompt_preparation -> 'customization_revision'::text)) = 'number'::text) AND ((prompt_preparation ->> 'customization_revision'::text) ~ '^[1-9][0-9]{0,9}$'::text) AND (((prompt_preparation ->> 'customization_revision'::text))::numeric <= (2147483647)::numeric)))))) IS TRUE))),
     CONSTRAINT ck_operation_quote_amount CHECK (((status <> 'quoted'::text) OR ((quote_micros IS NOT NULL) AND (quote_expires_at IS NOT NULL) AND (quote_expires_at > create_time)))),
     CONSTRAINT ck_operation_reuse_self CHECK ((reused_from_id IS DISTINCT FROM id)),
-    CONSTRAINT ck_operation_upload CHECK (((origin = 'upload'::text) OR ((region IS NOT NULL) AND ((model_profile_version_id IS NOT NULL) OR (NOT (target_type IS DISTINCT FROM 'agent_session'::text)))))),
+    CONSTRAINT ck_operation_upload CHECK (((origin = 'upload'::text) OR ((region IS NOT NULL) AND (model_profile_version_id IS NOT NULL)))),
     CONSTRAINT operation_capability_check CHECK ((btrim(capability) <> ''::text)),
     CONSTRAINT operation_input_hash_check CHECK ((btrim(input_hash) <> ''::text)),
     CONSTRAINT operation_mode_check CHECK ((btrim(mode) <> ''::text)),
@@ -2458,7 +2392,7 @@ CREATE TABLE operation.operation (
     CONSTRAINT operation_region_check CHECK ((region = ANY (ARRAY['domestic'::text, 'overseas'::text]))),
     CONSTRAINT operation_settled_micros_check CHECK ((settled_micros >= 0)),
     CONSTRAINT operation_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'quoted'::text, 'confirmed'::text, 'submitting'::text, 'submitted'::text, 'succeeded'::text, 'ingesting'::text, 'completed'::text, 'failed'::text, 'unknown'::text, 'reconciling'::text, 'manual'::text, 'cancelling'::text, 'cancelled'::text, 'expired'::text]))),
-    CONSTRAINT operation_target_type_check CHECK ((target_type = ANY (ARRAY['shot_frame'::text, 'shot_take'::text, 'reference_slot'::text, 'dialogue_audio'::text, 'voice_preview'::text, 'episode_split'::text, 'episode_parse'::text, 'bible_extract'::text, 'scene_storyboard'::text, 'agent_session'::text, 'free'::text])))
+    CONSTRAINT operation_target_type_check CHECK ((target_type = ANY (ARRAY['shot_frame'::text, 'shot_take'::text, 'reference_slot'::text, 'dialogue_audio'::text, 'voice_preview'::text, 'episode_split'::text, 'episode_parse'::text, 'bible_extract'::text, 'scene_storyboard'::text, 'free'::text])))
 );
 
 CREATE TABLE operation.operation_event (
@@ -2660,7 +2594,7 @@ CREATE TABLE script.command (
     request_hash text NOT NULL,
     plan jsonb NOT NULL,
     created_at timestamp with time zone NOT NULL,
-    CONSTRAINT command_plan_check CHECK ((jsonb_typeof(plan) = 'object'::text)),
+    CONSTRAINT command_plan_check CHECK ((jsonb_typeof(plan) = 'object'::text AND octet_length(plan::text) <= 113246208)),
     CONSTRAINT command_request_hash_check CHECK ((request_hash ~ '^[a-f0-9]{64}$'::text))
 );
 
@@ -2911,7 +2845,7 @@ CREATE TABLE script.object_intent (
     sha256 text NOT NULL,
     byte_size bigint NOT NULL,
     mime text NOT NULL,
-    object_location_id uuid,
+    object_location_id uuid NOT NULL,
     CONSTRAINT object_intent_byte_size_check CHECK (((byte_size >= 0) AND (byte_size <= 37748736))),
     CONSTRAINT object_intent_sha256_check CHECK ((sha256 ~ '^[a-f0-9]{64}$'::text))
 );
@@ -2922,7 +2856,7 @@ CREATE TABLE script.object_state (
     confirmed boolean DEFAULT false NOT NULL,
     removed boolean DEFAULT false NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    object_location_id uuid
+    object_location_id uuid NOT NULL
 );
 
 CREATE TABLE script.project_state (
@@ -3876,12 +3810,6 @@ ALTER TABLE ONLY media.purge_object
 ALTER TABLE ONLY media.rendition
     ADD CONSTRAINT rendition_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY media.storage_activation_guard
-    ADD CONSTRAINT storage_activation_guard_pkey PRIMARY KEY (revision);
-
-ALTER TABLE ONLY media.storage_activation
-    ADD CONSTRAINT storage_activation_pkey PRIMARY KEY (revision);
-
 ALTER TABLE ONLY media.storage_bucket_evidence
     ADD CONSTRAINT storage_bucket_evidence_pkey PRIMARY KEY (id);
 
@@ -3890,18 +3818,6 @@ ALTER TABLE ONLY media.storage_config_revision
 
 ALTER TABLE ONLY media.storage_config_revision
     ADD CONSTRAINT storage_config_revision_pkey PRIMARY KEY (revision);
-
-ALTER TABLE ONLY media.storage_deployment_evidence
-    ADD CONSTRAINT storage_deployment_evidence_pkey PRIMARY KEY (config_sha256);
-
-ALTER TABLE ONLY media.storage_legacy_binding
-    ADD CONSTRAINT storage_legacy_binding_pkey PRIMARY KEY (singleton);
-
-ALTER TABLE ONLY media.storage_legacy_receipt
-    ADD CONSTRAINT storage_legacy_receipt_pkey PRIMARY KEY (profile_id, bucket, object_key, snapshot_sha256);
-
-ALTER TABLE ONLY media.storage_legacy_tombstone
-    ADD CONSTRAINT storage_legacy_tombstone_pkey PRIMARY KEY (profile_id, bucket, object_key, snapshot_sha256);
 
 ALTER TABLE ONLY media.storage_probe_evidence
     ADD CONSTRAINT storage_probe_evidence_pkey PRIMARY KEY (id);
@@ -3924,8 +3840,8 @@ ALTER TABLE ONLY media.storage_profile
 ALTER TABLE ONLY media.storage_route
     ADD CONSTRAINT storage_route_pkey PRIMARY KEY (singleton);
 
-ALTER TABLE ONLY media.storage_runtime
-    ADD CONSTRAINT storage_runtime_pkey PRIMARY KEY (instance_id);
+ALTER TABLE ONLY media.storage_route_lock
+    ADD CONSTRAINT storage_route_lock_pkey PRIMARY KEY (singleton);
 
 ALTER TABLE ONLY media.storage_work_intent
     ADD CONSTRAINT storage_work_intent_id_profile_id_bucket_key UNIQUE (id, profile_id, bucket);
@@ -3952,7 +3868,7 @@ ALTER TABLE ONLY media.transfer_job
     ADD CONSTRAINT transfer_job_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY media.transfer_object
-    ADD CONSTRAINT transfer_object_pkey PRIMARY KEY (job_id, item_index, rendition_kind);
+    ADD CONSTRAINT transfer_object_pkey PRIMARY KEY (job_id, item_index, output_attempt, rendition_kind);
 
 ALTER TABLE ONLY media.transfer_object
     ADD CONSTRAINT transfer_object_target_object_key_key UNIQUE (target_object_key);
@@ -4396,6 +4312,8 @@ CREATE INDEX directory_export_actor_idx ON identity.directory_export USING btree
 
 CREATE INDEX directory_export_work_idx ON identity.directory_export USING btree (status, expires_at, created_at, id);
 
+CREATE INDEX directory_export_storage_idx ON identity.directory_export USING btree (storage_profile_id, status, expires_at) WHERE (private_object_id IS NOT NULL);
+
 CREATE INDEX idx_user_directory ON identity."user" USING btree (org_id, create_time DESC, id DESC) WHERE (NOT is_delete);
 
 CREATE UNIQUE INDEX invitation_pending_account_idx ON identity.invitation USING btree (email_key) WHERE ((kind = 'account'::text) AND (status = 'pending'::text));
@@ -4580,25 +4498,16 @@ CREATE TRIGGER keep_source_location_id BEFORE UPDATE ON media.project_copy_objec
 
 CREATE TRIGGER keep_source_location_id BEFORE UPDATE ON media.transfer_object FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('source_location_id');
 
-CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_activation_guard FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
 
 CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_bucket_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
 
 CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_config_revision FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
 
-CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_deployment_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
-
-CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_legacy_binding FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
-
-CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_legacy_receipt FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
-
-CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_legacy_tombstone FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
 
 CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_probe_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
 
 CREATE TRIGGER keep_storage_identity BEFORE UPDATE ON media.object_location FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
 
-CREATE TRIGGER keep_storage_identity BEFORE DELETE OR UPDATE ON media.storage_activation FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
 
 CREATE TRIGGER keep_storage_identity BEFORE DELETE OR UPDATE ON media.storage_profile FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
 
@@ -4914,6 +4823,12 @@ ALTER TABLE ONLY identity.directory_export
 ALTER TABLE ONLY identity.directory_export
     ADD CONSTRAINT directory_export_team_id_fkey FOREIGN KEY (team_id) REFERENCES workspace.team(id) ON DELETE RESTRICT;
 
+ALTER TABLE ONLY identity.directory_export
+    ADD CONSTRAINT directory_export_storage_location_id_fkey FOREIGN KEY (storage_location_id) REFERENCES media.object_location(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.directory_export
+    ADD CONSTRAINT directory_export_storage_intent_id_fkey FOREIGN KEY (storage_intent_id) REFERENCES media.storage_work_intent(id) ON DELETE RESTRICT;
+
 ALTER TABLE ONLY identity.invitation
     ADD CONSTRAINT invitation_accepted_user_id_fkey FOREIGN KEY (accepted_user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
 
@@ -5097,32 +5012,11 @@ ALTER TABLE ONLY media.rendition
 ALTER TABLE ONLY media.rendition
     ADD CONSTRAINT rendition_object_location_id_fkey FOREIGN KEY (object_location_id, object_key) REFERENCES media.object_location(id, object_key);
 
-ALTER TABLE ONLY media.storage_activation_guard
-    ADD CONSTRAINT storage_activation_guard_revision_fkey FOREIGN KEY (revision) REFERENCES media.storage_activation(revision);
-
-ALTER TABLE ONLY media.storage_activation
-    ADD CONSTRAINT storage_activation_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES media.storage_profile(id);
-
 ALTER TABLE ONLY media.storage_bucket_evidence
     ADD CONSTRAINT storage_bucket_evidence_profile_id_resource_identity_fkey FOREIGN KEY (profile_id, resource_identity) REFERENCES media.storage_profile(id, resource_identity);
 
 ALTER TABLE ONLY media.storage_config_revision
     ADD CONSTRAINT storage_config_revision_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES media.storage_profile(id);
-
-ALTER TABLE ONLY media.storage_legacy_binding
-    ADD CONSTRAINT storage_legacy_binding_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
-
-ALTER TABLE ONLY media.storage_legacy_receipt
-    ADD CONSTRAINT storage_legacy_receipt_location_id_object_key_fkey FOREIGN KEY (location_id, object_key) REFERENCES media.object_location(id, object_key);
-
-ALTER TABLE ONLY media.storage_legacy_receipt
-    ADD CONSTRAINT storage_legacy_receipt_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
-
-ALTER TABLE ONLY media.storage_legacy_tombstone
-    ADD CONSTRAINT storage_legacy_tombstone_location_id_object_key_fkey FOREIGN KEY (location_id, object_key) REFERENCES media.object_location(id, object_key);
-
-ALTER TABLE ONLY media.storage_legacy_tombstone
-    ADD CONSTRAINT storage_legacy_tombstone_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
 
 ALTER TABLE ONLY media.storage_probe_evidence
     ADD CONSTRAINT storage_probe_evidence_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES media.storage_profile(id);
@@ -5998,21 +5892,12 @@ GRANT UPDATE(update_time) ON TABLE media.rendition TO glowloom_app;
 
 GRANT UPDATE(is_delete) ON TABLE media.rendition TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_activation TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_activation_guard TO glowloom_app;
 
 GRANT SELECT,INSERT ON TABLE media.storage_bucket_evidence TO glowloom_app;
 
 GRANT SELECT,INSERT ON TABLE media.storage_config_revision TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_deployment_evidence TO glowloom_app;
-
-GRANT SELECT,INSERT ON TABLE media.storage_legacy_binding TO glowloom_app;
-
-GRANT SELECT,INSERT ON TABLE media.storage_legacy_receipt TO glowloom_app;
-
-GRANT SELECT,INSERT ON TABLE media.storage_legacy_tombstone TO glowloom_app;
 
 GRANT SELECT,INSERT ON TABLE media.storage_probe_evidence TO glowloom_app;
 
@@ -6022,7 +5907,8 @@ GRANT SELECT,INSERT ON TABLE media.storage_profile TO glowloom_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_route TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_runtime TO glowloom_app;
+GRANT SELECT, UPDATE(singleton) ON TABLE media.storage_route_lock TO glowloom_app;
+
 
 GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_work_intent TO glowloom_app;
 
@@ -6951,7 +6837,8 @@ UPDATE catalog.capability SET input_roles=ARRAY(
 -- Additive script physical identities. Execute explicitly in one transaction.
 -- No guessed location backfill, no route activation or bare-key key removal.
 
-ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS original_location_id uuid;
+ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS original_location_id uuid NOT NULL;
+ALTER TABLE script.script_source ALTER COLUMN original_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_source'::regclass AND conname='script_source_original_location_id_fkey') THEN
  ALTER TABLE script.script_source ADD CONSTRAINT script_source_original_location_id_fkey FOREIGN KEY(original_location_id,original_key) REFERENCES media.object_location(id,object_key);
@@ -6961,7 +6848,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS rich_location_id uuid;
+ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS rich_location_id uuid NOT NULL;
+ALTER TABLE script.script_source ALTER COLUMN rich_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_source'::regclass AND conname='script_source_rich_location_id_fkey') THEN
  ALTER TABLE script.script_source ADD CONSTRAINT script_source_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
@@ -6971,7 +6859,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS text_location_id uuid;
+ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS text_location_id uuid NOT NULL;
+ALTER TABLE script.script_version ALTER COLUMN text_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_version'::regclass AND conname='script_version_text_location_id_fkey') THEN
  ALTER TABLE script.script_version ADD CONSTRAINT script_version_text_location_id_fkey FOREIGN KEY(text_location_id,text_key) REFERENCES media.object_location(id,object_key);
@@ -6981,7 +6870,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS rich_location_id uuid;
+ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS rich_location_id uuid NOT NULL;
+ALTER TABLE script.script_version ALTER COLUMN rich_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_version'::regclass AND conname='script_version_rich_location_id_fkey') THEN
  ALTER TABLE script.script_version ADD CONSTRAINT script_version_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
@@ -6991,7 +6881,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS source_location_id uuid;
+ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS source_location_id uuid NOT NULL;
+ALTER TABLE script.copy_object_intent ALTER COLUMN source_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_intent'::regclass AND conname='copy_object_intent_source_location_id_fkey') THEN
  ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_source_location_id_fkey FOREIGN KEY(source_location_id,source_key) REFERENCES media.object_location(id,object_key);
@@ -7001,7 +6892,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS target_location_id uuid;
+ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS target_location_id uuid NOT NULL;
+ALTER TABLE script.copy_object_intent ALTER COLUMN target_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_intent'::regclass AND conname='copy_object_intent_target_location_id_fkey') THEN
  ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);
@@ -7011,7 +6903,8 @@ DO $$ BEGIN
  END IF;
 END $$;
 
-ALTER TABLE script.copy_object_state ADD COLUMN IF NOT EXISTS target_location_id uuid;
+ALTER TABLE script.copy_object_state ADD COLUMN IF NOT EXISTS target_location_id uuid NOT NULL;
+ALTER TABLE script.copy_object_state ALTER COLUMN target_location_id SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_state'::regclass AND conname='copy_object_state_target_location_id_fkey') THEN
  ALTER TABLE script.copy_object_state ADD CONSTRAINT copy_object_state_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);
@@ -7020,6 +6913,23 @@ DO $$ BEGIN
  CREATE TRIGGER keep_target_location_id BEFORE UPDATE ON script.copy_object_state FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('target_location_id');
  END IF;
 END $$;
+
+-- Final object location migration marker; the runtime checks it through GORM.
+CREATE TABLE IF NOT EXISTS media.storage_schema_version (
+ version integer PRIMARY KEY,
+ applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+INSERT INTO media.storage_schema_version(version) VALUES (2) ON CONFLICT (version) DO NOTHING;
+GRANT SELECT ON TABLE media.storage_schema_version TO glowloom_app;
+
+CREATE TABLE IF NOT EXISTS media.storage_idempotency_lock (
+ namespace text NOT NULL CHECK (namespace IN ('purge','package','transfer','upload','personal_upload','library')),
+ actor_id uuid NOT NULL,
+ request_key uuid NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY (namespace, actor_id, request_key)
+);
+GRANT SELECT, INSERT, UPDATE ON TABLE media.storage_idempotency_lock TO glowloom_app;
 
 -- Measured empty deployment proof (no invented legacy profile).
 -- Empty deployment proof contains a measured closed inventory, not a provider claim.
@@ -7070,7 +6980,7 @@ CREATE TABLE IF NOT EXISTS mediatool.export_artifact (
  byte_size bigint NOT NULL CHECK(byte_size BETWEEN 1 AND 524288000),
  sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),
  object_key text NOT NULL,
- object_location_id uuid REFERENCES media.object_location(id),
+ object_location_id uuid NOT NULL REFERENCES media.object_location(id),
  created_at timestamptz NOT NULL,
  UNIQUE(id,job_id,project_id,attempt),
  UNIQUE(job_id,attempt),
@@ -7126,24 +7036,6 @@ UPDATE catalog.capability SET modes=ARRAY(SELECT DISTINCT x FROM unnest(modes ||
 -- A new immutable preset version; existing connection snapshots stay unchanged.
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
 SELECT '6da07a12-0000-4000-8000-000000000005',id,2,'{"schema_version":1,"name":"豆包语音","config":{"adapter_key":"volcengine_speech","base_url":"https://openspeech.bytedance.com/api/v3","region":"domestic","capabilities":["audio"],"timeout_seconds":300,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'76c0029f543321dec270d711133d523c3ad91eb8819eab84eca7459780986682' FROM catalog.provider_preset WHERE slug='volcengine-speech' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
-
--- Private, bounded Agent sessions. No supplier credentials or temporary URLs.
-CREATE SCHEMA IF NOT EXISTS agent;
-CREATE TABLE IF NOT EXISTS agent.session (
- id uuid PRIMARY KEY,
- project_id uuid NOT NULL REFERENCES workspace.project(id),
- actor_id uuid NOT NULL REFERENCES identity."user"(id),
- request_id uuid NOT NULL,
- title text NOT NULL CHECK(length(title)>0 AND octet_length(title)<=240),
- revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),
- turns jsonb NOT NULL DEFAULT '[]'::jsonb CHECK(jsonb_typeof(turns)='array' AND jsonb_array_length(turns)<=20 AND octet_length(turns::text)<=1048576),
- created_at timestamptz NOT NULL DEFAULT now(),
- updated_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE(project_id,actor_id,request_id)
-);
-CREATE INDEX IF NOT EXISTS agent_session_owner_updated ON agent.session(project_id,actor_id,updated_at DESC,id);
-GRANT USAGE ON SCHEMA agent TO glowloom_app;
-GRANT SELECT,INSERT,UPDATE ON agent.session TO glowloom_app;
 
 -- Private reference voices; supplier training is a separate, explicit operation.
 CREATE TABLE IF NOT EXISTS media.voice_profile (
@@ -7215,115 +7107,305 @@ CREATE TABLE IF NOT EXISTS mediatool.export_launch (
 CREATE INDEX IF NOT EXISTS export_launch_expiry_idx ON mediatool.export_launch(expires_at);
 GRANT SELECT,INSERT,DELETE ON mediatool.export_launch TO glowloom_app;
 
--- Agent SDK storage is PostgreSQL-backed; see agent_harness_incremental.sql for existing databases.
--- Agent runtime storage. Run explicitly as the schema owner; never on application startup.
--- Safe to apply again. PostgreSQL remains the only durable data source.
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_roles WHERE rolname = 'glowloom_agent_runtime'
-        AND NOT rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolbypassrls
-    ) THEN
-        RAISE EXCEPTION 'glowloom_agent_runtime must be pre-provisioned NOLOGIN with no administrative privileges';
-    END IF;
-END
-$$;
-CREATE SCHEMA IF NOT EXISTS agent;
-CREATE TABLE IF NOT EXISTS agent.runtime_session (
-    id uuid PRIMARY KEY,
-    lock_key integer GENERATED ALWAYS AS IDENTITY UNIQUE,
-    storage_abi integer NOT NULL DEFAULT 1 CHECK (storage_abi > 0),
-    sdk_version text NOT NULL DEFAULT '1.3.0',
-    owner_epoch bigint NOT NULL DEFAULT 0 CHECK (owner_epoch >= 0 AND owner_epoch <= 9007199254740991),
-    last_seq bigint NOT NULL DEFAULT 0 CHECK (last_seq >= 0 AND last_seq <= 9007199254740991),
-    last_hash text NOT NULL DEFAULT '' CHECK (last_hash = '' OR last_hash ~ '^[a-f0-9]{64}$'),
-    next_id bigint NOT NULL DEFAULT 1 CHECK (next_id >= 1 AND next_id <= 9007199254740991),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS agent.runtime_commit (
-    session_id uuid NOT NULL REFERENCES agent.runtime_session(id) ON DELETE CASCADE,
-    seq bigint NOT NULL CHECK (seq > 0 AND seq <= 9007199254740991),
-    owner_epoch bigint NOT NULL CHECK (owner_epoch > 0),
-    writes bytea NOT NULL,
-    previous_hash text NOT NULL CHECK (previous_hash = '' OR previous_hash ~ '^[a-f0-9]{64}$'),
-    content_hash text NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (session_id, seq)
-);
-GRANT USAGE ON SCHEMA agent TO glowloom_agent_runtime;
-GRANT SELECT, INSERT, UPDATE ON agent.runtime_session TO glowloom_agent_runtime;
-GRANT SELECT, INSERT ON agent.runtime_commit TO glowloom_agent_runtime;
-GRANT USAGE ON SEQUENCE agent.runtime_session_lock_key_seq TO glowloom_agent_runtime;
 
--- Go control data is separate from SDK checkpoints and writable only by Go.
-ALTER TABLE agent.session ADD COLUMN IF NOT EXISTS engine text NOT NULL DEFAULT 'image-agent-json-v1'
-    CHECK (engine IN ('image-agent-json-v1','pi-durable-v1'));
-CREATE TABLE IF NOT EXISTS agent.harness_run (
-    id uuid PRIMARY KEY,
-    session_id uuid NOT NULL REFERENCES agent.session(id),
-    project_id uuid NOT NULL REFERENCES workspace.project(id),
-    actor_id uuid NOT NULL REFERENCES identity."user"(id),
-    org_id uuid NOT NULL REFERENCES workspace.organization(id),
-    scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
-    runtime_session_id uuid NOT NULL UNIQUE,
-    request_id uuid NOT NULL,
-    input_hash text NOT NULL,
-    revision bigint NOT NULL CHECK(revision>0),
-    control_revision bigint NOT NULL CHECK(control_revision>0),
-    status text NOT NULL,
-    state jsonb NOT NULL CHECK(jsonb_typeof(state)='object'),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE(session_id,request_id)
+-- Current independent Agent and database tasks: agent_storage.sql
+-- Offline migration. A deployment administrator provisions the restricted login
+-- glowloom_agent beforehand; the service never creates roles, schemas or tables.
+CREATE SCHEMA IF NOT EXISTS agent;
+CREATE TABLE agent.runtime_sessions (
+    session_id text PRIMARY KEY,
+    owner_id text NOT NULL,
+    owner_epoch bigint NOT NULL CHECK (owner_epoch > 0),
+    lease_until timestamptz NOT NULL,
+    last_id bigint NOT NULL DEFAULT 1 CHECK (last_id BETWEEN 1 AND 9007199254740991),
+    commit_seq bigint NOT NULL DEFAULT 0 CHECK (commit_seq BETWEEN 0 AND 9007199254740991)
 );
-CREATE TABLE IF NOT EXISTS agent.harness_candidate (
-    id uuid PRIMARY KEY,
-    run_id uuid NOT NULL REFERENCES agent.harness_run(id),
-    request_id uuid NOT NULL,
-    purpose text NOT NULL CHECK(purpose IN ('planning','execution')),
-    content_hash text NOT NULL,
-    manifest jsonb NOT NULL,
-    plan_revision bigint NOT NULL,
-    UNIQUE(run_id,request_id)
+-- JSON encoded text preserves JS strings including lone surrogates and NUL.
+-- Indexed identity columns store JSON encoded scalar strings for the same reason.
+CREATE TABLE agent.runtime_records (
+    session_id text NOT NULL REFERENCES agent.runtime_sessions,
+    id bigint NOT NULL CHECK (id BETWEEN 1 AND 9007199254740991),
+    record_type text NOT NULL CHECK (record_type IN ('conversation','entry','task','submission','document')),
+    body text NOT NULL,
+    commit_seq bigint NOT NULL,
+    conversation_id bigint,
+    owner_conversation_id bigint,
+    owner_task_id bigint,
+    parent_id bigint,
+    parent_at bigint,
+    head_id bigint,
+    kind_key text,
+    status text,
+    background boolean,
+    abort_requested boolean,
+    request_key text,
+    scope_key text,
+    address_key text,
+    created_at_seq bigint,
+    retired_at_seq bigint,
+    PRIMARY KEY (session_id, id)
 );
-CREATE TABLE IF NOT EXISTS agent.harness_command (
-    id uuid PRIMARY KEY,
-    run_id uuid NOT NULL REFERENCES agent.harness_run(id),
-    request_id uuid NOT NULL,
-    input_hash text NOT NULL,
-    action text NOT NULL,
-    receipt jsonb NOT NULL,
-    delivery jsonb NOT NULL,
-    delivery_state text NOT NULL CHECK(delivery_state IN ('pending','leased','acknowledged','superseded')),
-    claim_token uuid,
-    claim_until timestamptz,
-    next_attempt_at timestamptz NOT NULL DEFAULT now(),
-    attempts integer NOT NULL DEFAULT 0,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE(run_id,request_id)
+CREATE INDEX runtime_records_scan ON agent.runtime_records(session_id, record_type, id);
+CREATE INDEX runtime_records_conversation ON agent.runtime_records(session_id, record_type, conversation_id, id);
+CREATE INDEX runtime_records_owner_task ON agent.runtime_records(session_id, owner_task_id, id) WHERE owner_task_id IS NOT NULL;
+-- Hash exclusion rechecks exact equality and avoids btree's key-size limit for
+-- arbitrary SDK strings. No digest is treated as a durable identity.
+ALTER TABLE agent.runtime_records ADD CONSTRAINT runtime_submission_request
+  EXCLUDE USING hash ((ARRAY[session_id, conversation_id::text, request_key]) WITH =) WHERE (request_key IS NOT NULL);
+CREATE INDEX runtime_request_lookup ON agent.runtime_records USING hash(request_key) WHERE request_key IS NOT NULL;
+ALTER TABLE agent.runtime_records ADD CONSTRAINT runtime_live_document
+  EXCLUDE USING hash ((ARRAY[session_id,address_key]) WITH =) WHERE (address_key IS NOT NULL AND retired_at_seq IS NULL);
+CREATE INDEX runtime_document_address ON agent.runtime_records USING hash(address_key) WHERE address_key IS NOT NULL;
+CREATE INDEX runtime_document_scope ON agent.runtime_records(session_id,scope_key,id) WHERE scope_key IS NOT NULL;
+CREATE TABLE agent.runtime_document_versions (
+    session_id text NOT NULL,
+    document_id bigint NOT NULL,
+    commit_seq bigint NOT NULL,
+    version integer NOT NULL,
+    content text NOT NULL,
+    deltas_since_base integer NOT NULL,
+    PRIMARY KEY(session_id,document_id,commit_seq),
+    FOREIGN KEY(session_id,document_id) REFERENCES agent.runtime_records
 );
-CREATE INDEX IF NOT EXISTS harness_command_pending ON agent.harness_command(next_attempt_at,created_at,id) WHERE delivery_state IN ('pending','leased');
-CREATE TABLE IF NOT EXISTS agent.harness_approval (
-    id uuid PRIMARY KEY REFERENCES agent.harness_command(id),
-    run_id uuid NOT NULL REFERENCES agent.harness_run(id),
-    candidate_id uuid NOT NULL REFERENCES agent.harness_candidate(id),
-    actor_id uuid NOT NULL REFERENCES identity."user"(id),
-    max_micros bigint NOT NULL CHECK(max_micros>0),
-    expires_at timestamptz NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now()
+CREATE TABLE agent.runtime_events (
+    session_id text NOT NULL REFERENCES agent.runtime_sessions,
+    commit_seq bigint NOT NULL,
+    event_ordinal integer NOT NULL CHECK (event_ordinal > 0),
+    event_type text NOT NULL,
+    payload jsonb NOT NULL,
+    PRIMARY KEY (session_id,commit_seq,event_ordinal)
 );
-CREATE TABLE IF NOT EXISTS agent.harness_admission (
-    id uuid PRIMARY KEY,
-    run_id uuid NOT NULL REFERENCES agent.harness_run(id),
-    request_id uuid NOT NULL,
-    input_hash text NOT NULL,
-    action text NOT NULL,
-    candidate_id uuid NOT NULL REFERENCES agent.harness_candidate(id),
-    control_revision bigint NOT NULL CHECK(control_revision>0),
-    max_micros bigint NOT NULL CHECK(max_micros>=0),
-    status text NOT NULL DEFAULT 'in_flight' CHECK(status IN ('in_flight','settled','unknown')),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE(run_id,request_id)
+REVOKE ALL ON agent.runtime_sessions, agent.runtime_records, agent.runtime_document_versions, agent.runtime_events FROM PUBLIC;
+GRANT USAGE ON SCHEMA agent TO glowloom_agent;
+GRANT SELECT,INSERT,UPDATE ON agent.runtime_sessions, agent.runtime_records TO glowloom_agent;
+GRANT SELECT,INSERT,DELETE ON agent.runtime_document_versions, agent.runtime_events TO glowloom_agent;
+
+-- Current independent Agent and database tasks: agent_service.sql
+-- Current independent Agent admission metadata. Apply offline after agent_storage.sql.
+CREATE TABLE agent.service_sessions (
+ id uuid PRIMARY KEY, actor_id uuid NOT NULL, org_id uuid NOT NULL, scope_id uuid NOT NULL,
+ project_id uuid NOT NULL, canvas_id uuid, title text NOT NULL,
+ request_id uuid NOT NULL, content_hash text NOT NULL,
+ execution_revision bigint NOT NULL DEFAULT 0 CHECK(execution_revision>=0),
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(actor_id,project_id,request_id)
 );
-GRANT SELECT,INSERT,UPDATE ON agent.harness_run,agent.harness_command TO glowloom_app;
-GRANT SELECT,INSERT ON agent.harness_candidate,agent.harness_approval,agent.harness_admission TO glowloom_app;
+CREATE INDEX service_sessions_owner ON agent.service_sessions(actor_id,project_id,created_at DESC,id);
+CREATE TABLE agent.service_runs (
+ id uuid PRIMARY KEY, session_id uuid NOT NULL REFERENCES agent.service_sessions,
+ request_id uuid NOT NULL, content_hash text NOT NULL, goal text NOT NULL, manifest jsonb NOT NULL,
+ submission_id uuid NOT NULL, accepted_revision bigint NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(session_id,request_id)
+);
+CREATE TABLE agent.service_control_inbox (
+ decision_id uuid PRIMARY KEY, root_run_id uuid NOT NULL REFERENCES agent.service_runs,
+ authorization_revision bigint NOT NULL, content_hash text NOT NULL, input jsonb NOT NULL,
+ receipt jsonb, created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(root_run_id,authorization_revision)
+);
+CREATE INDEX service_control_pending ON agent.service_control_inbox(root_run_id,authorization_revision) WHERE receipt IS NULL;
+CREATE INDEX runtime_events_run ON agent.runtime_events(session_id,(payload->>'root_run_id'),commit_seq,event_ordinal);
+REVOKE ALL ON agent.service_sessions,agent.service_runs,agent.service_control_inbox FROM PUBLIC;
+GRANT SELECT,INSERT,UPDATE ON agent.service_sessions,agent.service_control_inbox TO glowloom_agent;
+GRANT SELECT,INSERT ON agent.service_runs TO glowloom_agent;
+
+-- Current independent Agent and database tasks: agent_business.sql
+-- Offline, reviewed business authority migration. Neither service runs DDL at startup.
+-- No references to agent runtime tables. Apply as migration administrator.
+CREATE SCHEMA IF NOT EXISTS agent_business;
+CREATE TABLE IF NOT EXISTS agent_business.run_authorization (
+ root_run_id uuid PRIMARY KEY, session_id uuid NOT NULL, submission_id uuid NOT NULL,
+ request_id uuid NOT NULL, content_hash text NOT NULL, scope jsonb NOT NULL,
+ budget_micros bigint NOT NULL CHECK(budget_micros>=0), reserved_micros bigint NOT NULL DEFAULT 0 CHECK(reserved_micros>=0),
+ authorization_revision bigint NOT NULL DEFAULT 1 CHECK(authorization_revision>0),owner_epoch bigint NOT NULL DEFAULT 0,
+ barrier boolean NOT NULL DEFAULT false, terminal boolean NOT NULL DEFAULT false,
+ current_decision_id uuid, current_proposal_id uuid, created_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(session_id,request_id)
+);
+CREATE TABLE IF NOT EXISTS agent_business.execution_grant (
+ grant_id uuid PRIMARY KEY,root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),
+ submission_id uuid NOT NULL,owner_epoch bigint NOT NULL,authorization_revision bigint NOT NULL,expires_at timestamptz NOT NULL,
+ UNIQUE(root_run_id,submission_id,owner_epoch,authorization_revision)
+);
+CREATE TABLE IF NOT EXISTS agent_business.control_decision (
+ decision_id uuid PRIMARY KEY, root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),
+ request_id uuid NOT NULL,input_hash text NOT NULL,authorization_revision bigint NOT NULL,
+ action text NOT NULL CHECK(action IN ('approve','reject','pause','resume','stop')),body jsonb NOT NULL,
+ delivery_state text NOT NULL DEFAULT 'pending' CHECK(delivery_state IN ('pending','leased','applied','superseded')),
+ attempts integer NOT NULL DEFAULT 0,next_attempt_at timestamptz NOT NULL DEFAULT now(),lease_until timestamptz,
+ applied_receipt jsonb,UNIQUE(root_run_id,request_id),UNIQUE(root_run_id,authorization_revision)
+);
+CREATE INDEX IF NOT EXISTS agent_business_decision_delivery ON agent_business.control_decision(next_attempt_at) WHERE delivery_state IN ('pending','leased');
+CREATE TABLE IF NOT EXISTS agent_business.quiesced_receipt (
+ decision_id uuid PRIMARY KEY REFERENCES agent_business.control_decision(decision_id),receipt_id uuid NOT NULL UNIQUE,
+ root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),continuation_id uuid NOT NULL,
+ owner_epoch bigint NOT NULL,authorization_revision bigint NOT NULL,grant_id uuid NOT NULL REFERENCES agent_business.execution_grant(grant_id),
+ UNIQUE(root_run_id,continuation_id)
+);
+CREATE TABLE IF NOT EXISTS agent_business.proposal (
+ proposal_id uuid PRIMARY KEY,root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),
+ request_id uuid NOT NULL,input_hash text NOT NULL,candidate_hash text NOT NULL,body jsonb NOT NULL,
+ authorization_revision bigint NOT NULL, UNIQUE(root_run_id,request_id)
+);
+CREATE TABLE IF NOT EXISTS agent_business.call_receipt (
+ receipt_id uuid PRIMARY KEY,root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),submission_id uuid NOT NULL,
+ task_id text NOT NULL,call_id text NOT NULL,checkpoint_id text NOT NULL,attempt bigint NOT NULL CHECK(attempt>0),contract_version text NOT NULL,
+ input_hash text NOT NULL,kind text NOT NULL,name text NOT NULL,max_micros bigint NOT NULL CHECK(max_micros>=0),
+ status text NOT NULL CHECK(status IN ('in_flight','completed','failed','unknown')),result jsonb NOT NULL DEFAULT '{}',cost_micros bigint NOT NULL DEFAULT 0,
+ created_at timestamptz NOT NULL DEFAULT now(),UNIQUE(root_run_id,submission_id,task_id,call_id,checkpoint_id,attempt,contract_version)
+);
+-- A source publication retains its original call/grant identity across I/O and restarts.
+CREATE TABLE IF NOT EXISTS agent_business.source_authorization (
+ receipt_id uuid PRIMARY KEY REFERENCES agent_business.call_receipt(receipt_id) ON DELETE CASCADE,
+ grant_id uuid NOT NULL REFERENCES agent_business.execution_grant(grant_id),
+ source_hash text NOT NULL CHECK(source_hash ~ '^[a-f0-9]{64}$')
+);
+CREATE TABLE IF NOT EXISTS agent_business.skill_version (
+ skill_id uuid NOT NULL,version text NOT NULL,resource_hash text NOT NULL,owner_actor_id uuid NOT NULL,org_id uuid NOT NULL,scope_id uuid NOT NULL,
+ name text NOT NULL,description text NOT NULL,body text NOT NULL,resources jsonb NOT NULL DEFAULT '{}',enabled boolean NOT NULL DEFAULT true,
+ PRIMARY KEY(skill_id,version),CHECK(length(body)<=262144)
+);
+REVOKE ALL ON SCHEMA agent_business FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA agent_business FROM PUBLIC;
+-- Application roles must already exist; this fragment never creates login credentials.
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='glowloom_app') THEN
+  GRANT USAGE ON SCHEMA agent_business TO glowloom_app;
+  GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA agent_business TO glowloom_app;
+ END IF;
+ IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='glowloom_agent') THEN
+  REVOKE ALL ON SCHEMA agent_business FROM glowloom_agent;
+  REVOKE ALL ON ALL TABLES IN SCHEMA agent_business FROM glowloom_agent;
+ END IF;
+END $$;
+-- Durable import identity is separate from immutable resource identity.
+ALTER TABLE agent_business.skill_version ADD COLUMN IF NOT EXISTS request_id uuid;
+CREATE UNIQUE INDEX IF NOT EXISTS agent_business_skill_import_request ON agent_business.skill_version(owner_actor_id,org_id,scope_id,request_id);
+-- Immutable authorized Skill pins are business scope, not Harness execution state.
+ALTER TABLE agent_business.run_authorization ADD COLUMN IF NOT EXISTS skill_pins jsonb NOT NULL DEFAULT '[]';
+-- Go freezes the admitted model selection independently of Node's manifest.
+ALTER TABLE agent_business.run_authorization ADD COLUMN IF NOT EXISTS model_selection jsonb NOT NULL DEFAULT '{}';
+
+-- Current independent Agent and database tasks: task_runtime.sql
+-- Install in an empty or explicitly migrated business database.
+CREATE TABLE infra.task_work (
+    kind text NOT NULL,
+    business_id text NOT NULL,
+    next_run_at timestamptz NOT NULL,
+    owner text,
+    epoch bigint NOT NULL DEFAULT 0,
+    lease_until timestamptz,
+    attempt integer NOT NULL DEFAULT 0,
+    reference jsonb NOT NULL DEFAULT 'null',
+    failures integer NOT NULL DEFAULT 0,
+    failed_at timestamptz,
+    stop_requested_at timestamptz,
+    completed_at timestamptz,
+    PRIMARY KEY (kind, business_id),
+    CHECK (kind <> '' AND business_id <> ''),
+    CHECK ((owner IS NULL) = (lease_until IS NULL))
+);
+CREATE INDEX task_work_due ON infra.task_work (kind, next_run_at) WHERE completed_at IS NULL AND failed_at IS NULL;
+
+-- Exactly one cursor for each periodic business sweep. Restarting a process
+-- never resets its due time. The worker checks existing expiries on first claim.
+INSERT INTO infra.task_work (kind,business_id,next_run_at) VALUES
+ ('maintenance.partitions','periodic',now()),
+ ('maintenance.outbox','periodic',now()),
+ ('maintenance.inbox','periodic',now()),
+ -- Content deletion remains disabled until an operator explicitly enables it.
+ ('workspace.retention','periodic','infinity'),
+ ('operation.quote_expiry','periodic',now());
+
+-- Administrator trials previously kept their owner-scoped state in external
+-- execution history. This is the business record for new local trial requests.
+CREATE TABLE operation.development_trial (
+ id text PRIMARY KEY,
+ input jsonb NOT NULL,
+ state jsonb NOT NULL,
+ phase text NOT NULL CHECK(phase IN ('ready','dispatching','poll','done')),
+ generation bigint NOT NULL DEFAULT 1,
+ polls integer NOT NULL DEFAULT 0,
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE ON infra.task_work, operation.development_trial TO glowloom_app;
+
+-- Current independent Agent and database tasks: operation_task.sql
+-- A resumed batch acknowledges failures observed before the operator reopened admission.
+ALTER TABLE operation.batch ADD COLUMN resumed_at timestamptz;
+GRANT SELECT(resumed_at), UPDATE(resumed_at) ON operation.batch TO glowloom_app;
+
+-- Current independent Agent and database tasks: agent_conversation.sql
+-- Additive conversation data only. Apply offline; never replay service initialization.
+ALTER TABLE agent.service_runs ADD COLUMN IF NOT EXISTS input jsonb;
+ALTER TABLE agent.service_runs ADD COLUMN IF NOT EXISTS retry_of_run_id uuid REFERENCES agent.service_runs(id);
+ALTER TABLE agent.service_sessions ADD COLUMN IF NOT EXISTS last_input_at timestamptz;
+CREATE INDEX IF NOT EXISTS service_runs_history ON agent.service_runs(session_id,accepted_revision DESC,id);
+CREATE INDEX IF NOT EXISTS service_sessions_input ON agent.service_sessions(actor_id,project_id,last_input_at DESC,id);
+CREATE TABLE IF NOT EXISTS agent.public_messages (
+ session_id text NOT NULL REFERENCES agent.runtime_sessions(session_id),
+ run_id uuid NOT NULL,
+ commit_seq bigint NOT NULL,
+ event_ordinal integer NOT NULL,
+ part_index integer NOT NULL,
+ message_id uuid NOT NULL,
+ conversation_id bigint NOT NULL,
+ sequence text NOT NULL,
+ kind text NOT NULL,
+ content text NOT NULL,
+ PRIMARY KEY(session_id,commit_seq,event_ordinal,part_index)
+);
+CREATE INDEX IF NOT EXISTS public_messages_history ON agent.public_messages(run_id,commit_seq DESC,event_ordinal DESC,part_index DESC);
+CREATE INDEX IF NOT EXISTS public_messages_identity ON agent.public_messages(run_id,message_id,part_index);
+REVOKE ALL ON agent.public_messages FROM PUBLIC;
+GRANT SELECT,INSERT ON agent.public_messages TO glowloom_agent;
+
+-- Current transfer output attempt facts: media_transfer_attempt.sql
+CREATE TABLE media.transfer_output_attempt (
+  job_id uuid NOT NULL,
+  item_index integer NOT NULL,
+  output_attempt integer NOT NULL CHECK (output_attempt > 0),
+  work_intent_id uuid UNIQUE REFERENCES media.storage_work_intent(id),
+  frozen bytea NOT NULL CHECK (octet_length(frozen) BETWEEN 2 AND 1048576),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (job_id, item_index, output_attempt),
+  FOREIGN KEY (job_id, item_index) REFERENCES media.transfer_item(job_id, item_index)
+);
+ALTER TABLE media.transfer_object ADD CONSTRAINT transfer_object_output_attempt_fkey
+  FOREIGN KEY (job_id, item_index, output_attempt) REFERENCES media.transfer_output_attempt(job_id, item_index, output_attempt);
+CREATE FUNCTION media.reject_transfer_output_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'transfer physical output identity is append-only' USING ERRCODE = '42501';
+END $$;
+
+CREATE TRIGGER transfer_output_attempt_immutable BEFORE UPDATE OR DELETE ON media.transfer_output_attempt
+FOR EACH ROW EXECUTE FUNCTION media.reject_transfer_output_mutation();
+
+CREATE FUNCTION media.protect_transfer_object_attempt() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF ROW(NEW.job_id, NEW.item_index, NEW.output_attempt, NEW.rendition_kind, NEW.source_location_id,
+         NEW.source_object_key, NEW.target_location_id, NEW.target_object_key, NEW.content_type)
+     IS DISTINCT FROM
+     ROW(OLD.job_id, OLD.item_index, OLD.output_attempt, OLD.rendition_kind, OLD.source_location_id,
+         OLD.source_object_key, OLD.target_location_id, OLD.target_object_key, OLD.content_type)
+     OR (OLD.byte_size IS NOT NULL AND NEW.byte_size IS DISTINCT FROM OLD.byte_size)
+     OR (OLD.sha256 IS NOT NULL AND NEW.sha256 IS DISTINCT FROM OLD.sha256)
+     OR (OLD.source_verified AND NOT NEW.source_verified)
+     OR (OLD.write_started AND NOT NEW.write_started)
+     OR (OLD.status = 'removed' AND NEW.status <> 'removed')
+     OR (OLD.status = 'verified' AND NEW.status NOT IN ('verified','removed')) THEN
+    RAISE EXCEPTION 'transfer object identity and receipts cannot regress' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER transfer_object_attempt_immutable BEFORE UPDATE ON media.transfer_object
+FOR EACH ROW EXECUTE FUNCTION media.protect_transfer_object_attempt();
+
+GRANT SELECT, INSERT ON media.transfer_output_attempt TO glowloom_app;
+-- Existing transfer_object SELECT/INSERT and column grants remain sufficient.
+-- No UPDATE is granted on output_attempt, frozen physical identity or work IDs.

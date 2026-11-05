@@ -19,6 +19,15 @@ type ManagedArtifact struct {
 	SHA256   string `json:"sha256"`
 }
 
+// ManagedResultState distinguishes a recoverable accepted task from terminal output.
+type ManagedResultState string
+
+// Managed result states distinguish admitted output from unavailable or uncertain outcomes.
+const (
+	ManagedResultAccepted  ManagedResultState = "accepted"
+	ManagedResultSucceeded ManagedResultState = "succeeded"
+)
+
 // ManagedResult is private durable evidence, never a workflow payload. It is
 // written after every artifact; recovering it cannot issue another paid request.
 type ManagedResult struct {
@@ -27,7 +36,7 @@ type ManagedResult struct {
 	ReceivedAt    *time.Time               `json:"received_at,omitempty"`
 	Subtitle      *AudioSubtitle           `json:"subtitle,omitempty"`
 	Identity      ProviderDispatchIdentity `json:"identity"`
-	State         string                   `json:"state"`
+	State         ManagedResultState       `json:"state"`
 	TaskID        string                   `json:"task_id,omitempty"`
 	Text          string                   `json:"text,omitempty"`
 	Artifacts     []ManagedArtifact        `json:"artifacts,omitempty"`
@@ -43,16 +52,16 @@ func (r ManagedResult) Validate() error {
 	if !r.Subtitle.Valid(240000) {
 		return ErrInvalidProviderCall
 	}
-	if r.ReceivedAt != nil && (r.ReceivedAt.IsZero() || r.State != "succeeded") {
+	if r.ReceivedAt != nil && (r.ReceivedAt.IsZero() || r.State != ManagedResultSucceeded) {
 		return ErrInvalidProviderCall
 	}
-	if r.State == "accepted" {
+	if r.State == ManagedResultAccepted {
 		if r.Subtitle != nil || r.TaskID == "" || r.Text != "" || len(r.Artifacts) > 0 || len(r.Usage) > 0 {
 			return ErrInvalidProviderCall
 		}
 		return nil
 	}
-	if r.State != "succeeded" || (r.Text == "") == (len(r.Artifacts) == 0) {
+	if r.State != ManagedResultSucceeded || (r.Text == "") == (len(r.Artifacts) == 0) {
 		return ErrInvalidProviderCall
 	}
 	if _, err := ParseBillableUsage(r.Usage); err != nil {
@@ -159,7 +168,7 @@ func (s *ManagedResults) Save(ctx context.Context, r ManagedResult) error {
 		return err
 	}
 	stage := ProviderStageService{objects: s.objects}
-	if err := stage.write(ctx, path.Join(managedPrefix(r.Identity), r.State+".json"), raw, "application/json", imageDigest(raw)); err != nil {
+	if err := stage.write(ctx, path.Join(managedPrefix(r.Identity), string(r.State)+".json"), raw, "application/json", imageDigest(raw)); err != nil {
 		return err
 	}
 	return s.repo.SaveManagedResult(ctx, r)
@@ -211,7 +220,7 @@ func (s *ManagedResults) recover(ctx context.Context, i ProviderDispatchIdentity
 			return nil, ErrProviderCallConflict
 		}
 		var r ManagedResult
-		if json.Unmarshal(raw, &r) != nil || r.Validate() != nil || r.Identity != i || r.State != state {
+		if json.Unmarshal(raw, &r) != nil || r.Validate() != nil || r.Identity != i || string(r.State) != state {
 			return nil, ErrProviderCallConflict
 		}
 		for _, a := range r.Artifacts {
@@ -246,7 +255,7 @@ func (s *ManagedResults) ReadArtifact(ctx context.Context, i ProviderDispatchIde
 	if err != nil {
 		return ManagedArtifact{}, nil, err
 	}
-	if r == nil || r.State != "succeeded" || seq < 1 || seq > len(r.Artifacts) {
+	if r == nil || r.State != ManagedResultSucceeded || seq < 1 || seq > len(r.Artifacts) {
 		return ManagedArtifact{}, nil, ErrProviderCallConflict
 	}
 	a := r.Artifacts[seq-1]

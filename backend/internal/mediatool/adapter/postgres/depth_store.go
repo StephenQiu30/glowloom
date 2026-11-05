@@ -13,8 +13,10 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
@@ -37,26 +39,32 @@ func NewDepthStore(db *gorm.DB, source TranscriptionSourceFactory, media DepthMe
 }
 
 type depthRow struct {
+	ID                                                                                                   uuid.UUID `gorm:"primaryKey"`
 	ActorRole                                                                                            *string
-	ID, ProjectID, OrgID, ActorID, CanvasID, NodeID, SourceAssetID                                       uuid.UUID
-	ProfileID, SourceSHA256, FrozenSHA256, Status, Stage, ProcessState                                   string
+	ProjectID, OrgID, ActorID, CanvasID, NodeID, SourceAssetID                                           uuid.UUID
+	ProfileID, SourceSHA256, FrozenSHA256                                                                string
+	Status                                                                                               domain.DepthStatus
+	Stage                                                                                                domain.DepthStage
+	ProcessState                                                                                         domain.DepthProcessState
 	SourceRevision, SourceAssetRevision, Revision                                                        int64
 	Attempt                                                                                              int
-	Frozen                                                                                               []byte
+	Frozen                                                                                               jsonDocument
 	ActiveWorker                                                                                         *uuid.UUID
 	FailureCode                                                                                          *string
 	Retryable, NeedsReconciliation, ExecutionUnconfirmed, CancellationRequested, ReconciliationRequested bool
 	CreatedAt, UpdatedAt                                                                                 time.Time
 }
 
+func (depthRow) TableName() string { return "mediatool.depth_job" }
+
 func (r depthRow) job() domain.DepthJob {
-	return domain.DepthJob{ID: r.ID, ProjectID: r.ProjectID, Source: domain.Source{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, SourceAssetID: r.SourceAssetID, SourceAssetRevision: r.SourceAssetRevision, SourceSHA256: r.SourceSHA256, ProfileID: r.ProfileID, Status: domain.DepthStatus(r.Status), Stage: r.Stage, Attempt: r.Attempt, Revision: r.Revision, FailureCode: r.FailureCode, Retryable: r.Retryable, NeedsReconciliation: r.NeedsReconciliation, ExecutionUnconfirmed: r.ExecutionUnconfirmed, CancellationRequested: r.CancellationRequested, ReconciliationRequested: r.ReconciliationRequested, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return domain.DepthJob{ID: r.ID, ProjectID: r.ProjectID, Source: domain.Source{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, SourceAssetID: r.SourceAssetID, SourceAssetRevision: r.SourceAssetRevision, SourceSHA256: r.SourceSHA256, ProfileID: r.ProfileID, Status: r.Status, Stage: r.Stage, Attempt: r.Attempt, Revision: r.Revision, FailureCode: r.FailureCode, Retryable: r.Retryable, NeedsReconciliation: r.NeedsReconciliation, ExecutionUnconfirmed: r.ExecutionUnconfirmed, CancellationRequested: r.CancellationRequested, ReconciliationRequested: r.ReconciliationRequested, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (r depthRow) actor() identityapp.Principal {
 	return identityapp.Principal{ID: r.ActorID, OrgID: r.OrgID}
 }
 func (r depthRow) state() domain.DepthExecution {
-	s := domain.DepthExecution{Job: r.job(), ProcessState: domain.DepthProcessState(r.ProcessState)}
+	s := domain.DepthExecution{Job: r.job(), ProcessState: r.ProcessState}
 	if r.ActiveWorker != nil {
 		s.WorkerID = *r.ActiveWorker
 	}
@@ -64,13 +72,13 @@ func (r depthRow) state() domain.DepthExecution {
 }
 func (r *depthRow) apply(s domain.DepthExecution) {
 	j := s.Job
-	r.Status = string(j.Status)
+	r.Status = j.Status
 	r.Stage = j.Stage
 	r.Attempt = j.Attempt
 	r.Revision = j.Revision
-	r.ProcessState = string(s.ProcessState)
+	r.ProcessState = s.ProcessState
 	if r.ProcessState == "" {
-		r.ProcessState = "none"
+		r.ProcessState = domain.DepthProcessNone
 	}
 	r.ActiveWorker = nil
 	if s.WorkerID != uuid.Nil {
@@ -112,20 +120,20 @@ func depthFrozen(row depthRow) (domain.FrozenDepth, error) {
 }
 func readDepth(tx *gorm.DB, project, id uuid.UUID, lock bool) (depthRow, error) {
 	var r depthRow
-	q := `SELECT * FROM mediatool.depth_job WHERE id=?`
-	args := []any{id}
+	query := tx.Model(&depthRow{}).Where("id = ?", id)
 	if project != uuid.Nil {
-		q += ` AND project_id=?`
-		args = append(args, project)
+		query = query.Where("project_id = ?", project)
 	}
 	if lock {
-		q += ` FOR UPDATE`
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
-	res := tx.Raw(q, args...).Scan(&r)
-	if res.Error != nil {
-		return r, fmt.Errorf("read depth job: %w", res.Error)
+	if err := query.Take(&r).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return r, application.ErrNotFound
+		}
+		return r, fmt.Errorf("read depth job: %w", err)
 	}
-	if res.RowsAffected != 1 {
+	if r.ID == uuid.Nil {
 		return r, application.ErrNotFound
 	}
 	if _, err := depthFrozen(r); err != nil {
@@ -137,11 +145,17 @@ func saveDepth(tx *gorm.DB, before, after depthRow) error {
 	if after.Revision != before.Revision+1 {
 		return domain.ErrInvalidDepthJob
 	}
-	r := tx.Exec(`UPDATE mediatool.depth_job SET status=?,stage=?,attempt=?,revision=?,process_state=?,active_worker=?,failure_code=?,retryable=?,needs_reconciliation=?,execution_unconfirmed=?,cancellation_requested=?,reconciliation_requested=?,updated_at=? WHERE id=? AND revision=?`, after.Status, after.Stage, after.Attempt, after.Revision, after.ProcessState, after.ActiveWorker, after.FailureCode, after.Retryable, after.NeedsReconciliation, after.ExecutionUnconfirmed, after.CancellationRequested, after.ReconciliationRequested, after.UpdatedAt, after.ID, before.Revision)
-	if r.Error != nil {
-		return r.Error
+	result := tx.Model(&depthRow{}).Where("id = ? AND revision = ?", after.ID, before.Revision).Updates(map[string]any{
+		"status": after.Status, "stage": after.Stage, "attempt": after.Attempt, "revision": after.Revision,
+		"process_state": after.ProcessState, "active_worker": after.ActiveWorker, "failure_code": after.FailureCode,
+		"retryable": after.Retryable, "needs_reconciliation": after.NeedsReconciliation,
+		"execution_unconfirmed": after.ExecutionUnconfirmed, "cancellation_requested": after.CancellationRequested,
+		"reconciliation_requested": after.ReconciliationRequested, "updated_at": after.UpdatedAt,
+	})
+	if result.Error != nil {
+		return result.Error
 	}
-	if r.RowsAffected != 1 {
+	if result.RowsAffected != 1 {
 		return application.ErrConflict
 	}
 	return nil
@@ -174,33 +188,30 @@ func depthCommandLock(tx *gorm.DB, actor, key uuid.UUID) error {
 	if actor == uuid.Nil || key == uuid.Nil {
 		return application.ErrInvalidDepthInput
 	}
-	return tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-depth-command/"+actor.String()+"/"+key.String()).Error
+	return lockMediatoolPrincipal(tx, actor)
 }
 func depthReplay(tx *gorm.DB, actor, key uuid.UUID, hash string) (domain.DepthJob, bool, error) {
-	var r struct {
-		RequestHash string
-		Response    []byte
-	}
-	res := tx.Raw(`SELECT request_hash,response FROM mediatool.depth_command WHERE actor_id=? AND request_id=?`, actor, key).Scan(&r)
-	if res.Error != nil {
-		return domain.DepthJob{}, false, res.Error
-	}
-	if res.RowsAffected == 0 {
+	var receipt depthCommandRecord
+	err := tx.Where("actor_id = ? AND request_id = ?", actor, key).Take(&receipt).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.DepthJob{}, false, nil
 	}
-	if r.RequestHash != hash {
+	if err != nil {
+		return domain.DepthJob{}, false, err
+	}
+	if receipt.RequestHash != hash {
 		return domain.DepthJob{}, false, application.ErrConflict
 	}
 	var j domain.DepthJob
-	err := depthJSON(r.Response, &j)
+	err = depthJSON(receipt.Response, &j)
 	return j, true, err
 }
 func depthQuota(tx *gorm.DB, project uuid.UUID) error {
-	if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-depth-project/"+project.String()).Error; err != nil {
+	if err := lockMediatoolProject(tx, project); err != nil {
 		return err
 	}
-	var n int
-	if err := tx.Raw(`SELECT count(*) FROM mediatool.depth_job WHERE project_id=? AND (status IN ('queued','running','review_required','cancel_requested') OR needs_reconciliation OR execution_unconfirmed)`, project).Scan(&n).Error; err != nil {
+	var n int64
+	if err := tx.Model(&depthRow{}).Where("project_id = ? AND (status IN ? OR needs_reconciliation = ? OR execution_unconfirmed = ?)", project, []domain.DepthStatus{domain.DepthQueued, domain.DepthRunning, domain.DepthReviewRequired, domain.DepthCancelRequested}, true, true).Count(&n).Error; err != nil {
 		return err
 	}
 	if n >= 2 {
@@ -268,11 +279,11 @@ func (s *DepthStore) Create(ctx context.Context, actor identityapp.Principal, pr
 		}
 		sha := sha256.Sum256(body)
 		now := time.Now().UTC().Truncate(time.Microsecond)
-		job = domain.DepthJob{ID: uuid.New(), ProjectID: project, Source: domain.Source{CanvasID: in.CanvasID, NodeID: in.NodeID, Revision: in.Revision}, SourceAssetID: a.ID, SourceAssetRevision: a.Revision, SourceSHA256: *a.SHA256, ProfileID: domain.DepthProfileID, Status: domain.DepthQueued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
-		if err := pinTool(ctx, tx, s.storage, "depth", project, job.ID, job.Attempt); err != nil {
+		job = domain.DepthJob{ID: uuid.New(), ProjectID: project, Source: domain.Source{CanvasID: in.CanvasID, NodeID: in.NodeID, Revision: in.Revision}, SourceAssetID: a.ID, SourceAssetRevision: a.Revision, SourceSHA256: *a.SHA256, ProfileID: domain.DepthProfileID, Status: domain.DepthQueued, Stage: domain.DepthStageQueued, Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		if err := pinTool(ctx, tx, s.storage, mediaapp.StorageWorkKindDepth, project, job.ID, job.Attempt); err != nil {
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO mediatool.depth_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,source_asset_id,source_asset_revision,source_sha256,profile_id,frozen,frozen_sha256,status,stage,attempt,revision,process_state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,'queued','queued',1,1,'none',?,?)`, job.ID, project, actor.OrgID, actor.ID, nil, in.CanvasID, in.NodeID, in.Revision, a.ID, a.Revision, *a.SHA256, domain.DepthProfileID, string(body), hex.EncodeToString(sha[:]), now, now).Error; err != nil {
+		if err := tx.Create(&depthRow{ID: job.ID, ProjectID: project, OrgID: actor.OrgID, ActorID: actor.ID, CanvasID: in.CanvasID, NodeID: in.NodeID, SourceRevision: in.Revision, SourceAssetID: a.ID, SourceAssetRevision: a.Revision, SourceSHA256: *a.SHA256, ProfileID: domain.DepthProfileID, Frozen: jsonDocument(body), FrozenSHA256: hex.EncodeToString(sha[:]), Status: domain.DepthQueued, Stage: domain.DepthStageQueued, Attempt: 1, Revision: 1, ProcessState: domain.DepthProcessNone, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
 		return recordDepthCommand(tx, actor, key, hash, "requested", job, "start")

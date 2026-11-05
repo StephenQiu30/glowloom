@@ -40,7 +40,7 @@ type PurgeHandler struct {
 	starter PurgeStarter
 }
 
-// NewPurgeHandler injects durable inbox, owning proof and Temporal delivery.
+// NewPurgeHandler injects durable inbox, owning proof and external delivery.
 func NewPurgeHandler(inbox PurgeInbox, store PurgeDeliveryStore, starter PurgeStarter) *PurgeHandler {
 	return &PurgeHandler{inbox: inbox, store: store, starter: starter}
 }

@@ -141,11 +141,31 @@ type AvatarRepository interface {
 	AvatarExists(context.Context, uuid.UUID) (bool, error)
 }
 
+// RoutedAvatarRepository pins avatar writes to the active route and keeps
+// uncertain provider outcomes in the shared object-location ledger.
+type RoutedAvatarRepository interface {
+	AvatarRepository
+	ReserveAvatarLocation(context.Context, identityapp.Principal, uuid.UUID, string, func() time.Time) (domain.ObjectLocation, error)
+	BeginAvatarWrite(context.Context, identityapp.Principal, uuid.UUID, domain.ObjectLocation) error
+	ConfirmAvatarLocation(context.Context, identityapp.Principal, uuid.UUID, domain.ObjectLocation, ObjectInfo) error
+	CancelAvatarObject(context.Context, identityapp.Principal, uuid.UUID, domain.ObjectLocation) (bool, error)
+	ConfirmAvatarRemoval(context.Context, identityapp.Principal, uuid.UUID, domain.ObjectLocation) error
+}
+
+// AvatarRoutedStorage performs provider-independent operations on exact saved refs.
+type AvatarRoutedStorage interface {
+	PutIfAbsent(context.Context, domain.ObjectRef, io.Reader, int64, string, string) error
+	Stat(context.Context, domain.ObjectRef) (ObjectInfo, error)
+	Remove(context.Context, domain.ObjectRef) error
+}
+
 // AvatarService reuses the configured media object pipeline and asset storage.
 type AvatarService struct {
-	repo    AvatarRepository
-	objects UploadObjects
-	now     func() time.Time
+	repo          AvatarRepository
+	objects       UploadObjects
+	routedRepo    RoutedAvatarRepository
+	routedObjects AvatarRoutedStorage
+	now           func() time.Time
 }
 
 // NewAvatarService supplies the existing media storage connection.
@@ -153,9 +173,15 @@ func NewAvatarService(repo AvatarRepository, objects UploadObjects, now func() t
 	return &AvatarService{repo: repo, objects: objects, now: now}
 }
 
+// NewRoutedAvatarService stores avatars through the exact profile selected by
+// the database route and attaches the confirmed location to the media asset.
+func NewRoutedAvatarService(repo RoutedAvatarRepository, objects AvatarRoutedStorage, now func() time.Time) *AvatarService {
+	return &AvatarService{repo: repo, routedRepo: repo, routedObjects: objects, now: now}
+}
+
 // Authorize rejects invalid live sessions before reading an upload body.
 func (s *AvatarService) Authorize(ctx context.Context, a identityapp.Principal) error {
-	if s == nil || s.repo == nil || s.objects == nil {
+	if s == nil || s.repo == nil || s.objects == nil && s.routedObjects == nil {
 		return ErrUnavailable
 	}
 	return s.repo.AuthorizeAvatar(ctx, a, s.now)
@@ -182,12 +208,49 @@ func (s *AvatarService) Upload(ctx context.Context, a identityapp.Principal, dat
 	if err := asset.Validate(); err != nil {
 		return LibraryAssetSummary{}, err
 	}
-	if err := s.objects.PutIfAbsent(ctx, key, bytes.NewReader(im.Bytes), size, "image/png", hash); err != nil {
-		return LibraryAssetSummary{}, err
-	}
-	info, err := s.objects.Stat(ctx, key)
-	if err == nil && (info.Size != size || info.ContentType != "image/png" || info.SHA256 != hash) {
-		err = ErrObjectMismatch
+	var location *domain.ObjectLocation
+	if s.routedObjects != nil {
+		if s.routedRepo == nil {
+			return LibraryAssetSummary{}, ErrStorageNotReady
+		}
+		reserved, reserveErr := s.routedRepo.ReserveAvatarLocation(ctx, a, id, key, s.now)
+		if reserveErr != nil {
+			return LibraryAssetSummary{}, reserveErr
+		}
+		location = &reserved
+		asset.ObjectLocation = location
+		writeCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		err = s.routedRepo.BeginAvatarWrite(writeCtx, a, id, reserved)
+		if err == nil {
+			err = s.routedObjects.PutIfAbsent(writeCtx, reserved.Ref, bytes.NewReader(im.Bytes), size, "image/png", hash)
+		}
+		var info ObjectInfo
+		if err == nil {
+			info, err = s.routedObjects.Stat(writeCtx, reserved.Ref)
+		}
+		if err == nil && (info.Size != size || info.ContentType != "image/png" || info.SHA256 != hash) {
+			err = ErrObjectMismatch
+		}
+		if err == nil {
+			err = s.routedRepo.ConfirmAvatarLocation(writeCtx, a, id, reserved, info)
+		}
+		cancel()
+		if err == nil {
+			location.State, location.ByteSize, location.SHA256, location.MIMEType = domain.ObjectLocationPresent, &size, &hash, &asset.MimeType
+			asset.ObjectLocation = location
+		}
+	} else {
+		if s.objects == nil {
+			return LibraryAssetSummary{}, ErrUnavailable
+		}
+		err = s.objects.PutIfAbsent(ctx, key, bytes.NewReader(im.Bytes), size, "image/png", hash)
+		var info ObjectInfo
+		if err == nil {
+			info, err = s.objects.Stat(ctx, key)
+		}
+		if err == nil && (info.Size != size || info.ContentType != "image/png" || info.SHA256 != hash) {
+			err = ErrObjectMismatch
+		}
 	}
 	if err == nil {
 		err = s.repo.CommitAvatar(ctx, a, asset, s.now)
@@ -195,7 +258,18 @@ func (s *AvatarService) Upload(ctx context.Context, a identityapp.Principal, dat
 	if err != nil {
 		exists, checkErr := s.repo.AvatarExists(ctx, id)
 		if checkErr == nil && !exists {
-			err = errors.Join(err, s.objects.Remove(ctx, key))
+			if location != nil && s.routedObjects != nil {
+				remove, removeErr := s.routedRepo.CancelAvatarObject(ctx, a, id, *location)
+				if removeErr == nil && remove {
+					removeErr = s.routedObjects.Remove(ctx, location.Ref)
+					if removeErr == nil {
+						removeErr = s.routedRepo.ConfirmAvatarRemoval(ctx, a, id, *location)
+					}
+				}
+				err = errors.Join(err, removeErr)
+			} else if s.objects != nil {
+				err = errors.Join(err, s.objects.Remove(ctx, key))
+			}
 		}
 		return LibraryAssetSummary{}, err
 	}
@@ -217,18 +291,20 @@ type AvatarPreview struct {
 // AvatarQuery authorizes every preview issuance using the identity-owned session checker.
 type AvatarQuery struct {
 	reader AvatarReader
-	signer PreviewSigner
+	signer ObjectSigner
 	now    func() time.Time
+	ttl    time.Duration
 }
 
-// NewAvatarQuery injects the existing private bucket signer and live avatar reader.
-func NewAvatarQuery(reader AvatarReader, signer PreviewSigner, now func() time.Time) *AvatarQuery {
-	return &AvatarQuery{reader: reader, signer: signer, now: now}
+// NewRoutedAvatarQuery signs the immutable profile and bucket stored with the
+// avatar instead of selecting the current write target.
+func NewRoutedAvatarQuery(reader AvatarReader, signer ObjectSigner, now func() time.Time, ttl time.Duration) *AvatarQuery {
+	return &AvatarQuery{reader: reader, signer: signer, now: now, ttl: ttl}
 }
 
-// Read grants only a sixty-second preview of the currently bound avatar.
+// Read grants a configured preview lease for the currently bound avatar.
 func (q *AvatarQuery) Read(ctx context.Context, a identityapp.Principal) (AvatarPreview, error) {
-	if q == nil || q.reader == nil || q.signer == nil {
+	if q == nil || q.reader == nil || q.signer == nil || q.now == nil || q.ttl < time.Second || q.ttl > 15*time.Minute {
 		return AvatarPreview{}, ErrUnavailable
 	}
 	now := q.now().UTC()
@@ -240,12 +316,18 @@ func (q *AvatarQuery) Read(ctx context.Context, a identityapp.Principal) (Avatar
 	// database locks, then recheck the current binding before exposing the URL.
 	signCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	url, err := q.signer.PresignGet(signCtx, asset.ObjectKey, time.Minute)
+	if asset.ObjectLocation == nil || !asset.ObjectLocation.Readable(asset.ObjectKey) {
+		return AvatarPreview{}, ErrStorageNotReady
+	}
+	grant, err := q.signer.PresignGet(signCtx, asset.ObjectLocation.Ref, q.ttl)
 	if err != nil {
 		return AvatarPreview{}, err
 	}
+	if grant.URL == "" || !grant.ExpiresAt.After(now) || grant.ExpiresAt.After(now.Add(q.ttl+5*time.Second)) || grant.ExpiresAt.After(now.Add(15*time.Minute)) {
+		return AvatarPreview{}, ErrUnavailable
+	}
 	err = q.reader.AvatarTransaction(ctx, a, q.now, func(current domain.MediaAsset) error {
-		if current.ID != asset.ID || current.ObjectKey != asset.ObjectKey {
+		if current.ID != asset.ID || current.ObjectKey != asset.ObjectKey || !sameObjectLocation(current.ObjectLocation, asset.ObjectLocation) {
 			return ErrNotFound
 		}
 		return nil
@@ -253,5 +335,5 @@ func (q *AvatarQuery) Read(ctx context.Context, a identityapp.Principal) (Avatar
 	if err != nil {
 		return AvatarPreview{}, err
 	}
-	return AvatarPreview{Asset: PersonalUploadSummary(asset), URL: url, ExpiresAt: now.Add(time.Minute)}, nil
+	return AvatarPreview{Asset: PersonalUploadSummary(asset), URL: grant.URL, ExpiresAt: grant.ExpiresAt}, nil
 }

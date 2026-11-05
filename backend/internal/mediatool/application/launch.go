@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
-	"github.com/google/uuid"
 )
 
 // LaunchReceipt is an expiring capability, never a new authority to sign media.
@@ -32,6 +33,7 @@ type LaunchStore interface {
 	PruneLaunches(context.Context, time.Time, int) (int64, error)
 }
 
+// WithLaunchOrigin injects the public origin used for authorized editor launch links.
 func (q *ExportQuery) WithLaunchOrigin(origin string) *ExportQuery {
 	u, e := url.Parse(origin)
 	if e == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" && u.User == nil && u.Path == "" && u.RawQuery == "" && u.Fragment == "" {

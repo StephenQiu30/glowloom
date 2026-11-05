@@ -49,7 +49,7 @@ func TestListProjectsScopesStatusesRecycleBinAndLiteralSearchOnPostgres(t *testi
 	otherActor := insertWorkspaceActor(ctx, t, database, otherOrgID)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
 	query := workspaceapp.NewListProjectsQuery(workspaceStore(database))
-	updatedAt := time.Date(2026, time.September, 27, 8, 0, 0, 0, time.UTC)
+	updatedAt := time.Now().UTC().Truncate(time.Second)
 	activeID := insertProjectListFixture(ctx, t, database, actor, "逆光", "active", false, updatedAt)
 	specialID := insertProjectListFixture(ctx, t, database, actor, "片名%_终章", "active", false, updatedAt.Add(time.Minute))
 	decoyID := insertProjectListFixture(ctx, t, database, actor, "片名甲乙终章", "active", false, updatedAt.Add(2*time.Minute))

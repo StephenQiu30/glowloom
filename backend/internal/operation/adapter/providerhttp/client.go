@@ -110,7 +110,7 @@ func (c *Client) Query(ctx context.Context, config catalogdomain.ProviderConfig,
 // a completed task after a queued-to-completed race, and OpenRouter has no reviewed
 // cancellation contract here. Model configuration must advertise supports_cancel=false.
 func (c *Client) Cancel(context.Context, catalogdomain.ProviderConfig, string, string) (application.GenerationResult, error) {
-	return application.GenerationResult{Outcome: "not_cancelled", ErrorCode: "cancel_unsupported"}, nil
+	return application.GenerationResult{Outcome: application.ProviderOutcomeNotCancelled, ErrorCode: "cancel_unsupported"}, nil
 }
 
 var _ application.GenerationProvider = (*Client)(nil)

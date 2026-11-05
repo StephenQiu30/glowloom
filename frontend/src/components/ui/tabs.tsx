@@ -41,9 +41,10 @@ const tabsListVariants = cva(
   },
 );
 
-const TabsListVariantContext = React.createContext<
-  VariantProps<typeof tabsListVariants>["variant"]
->("default");
+const TabsListVariantContext =
+  React.createContext<VariantProps<typeof tabsListVariants>["variant"]>(
+    "default",
+  );
 
 function TabsList({
   className,
@@ -82,7 +83,7 @@ function TabsTrigger({
         "group-data-[variant=navigation]/tabs-list:px-4 group-data-[variant=navigation]/tabs-list:font-normal group-data-[variant=navigation]/tabs-list:data-active:border-transparent group-data-[variant=navigation]/tabs-list:data-active:bg-secondary",
         "group-data-[variant=pill]/tabs-list:rounded-full group-data-[variant=pill]/tabs-list:px-4 group-data-[variant=pill]/tabs-list:font-normal group-data-[variant=pill]/tabs-list:data-active:border-transparent group-data-[variant=pill]/tabs-list:data-active:bg-secondary",
         variant === "workspace" &&
-          "h-9 flex-none rounded-full border-0 px-4 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium text-workspace-muted-foreground data-active:text-workspace-foreground data-active:bg-secondary hover:text-workspace-foreground max-md:min-h-11 pointer-coarse:min-h-11",
+          "h-9 flex-none rounded-full border-0 px-4 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium text-workspace-muted-foreground hover:text-workspace-foreground max-md:min-h-11 pointer-coarse:min-h-11 data-active:bg-secondary data-active:text-workspace-foreground",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
         className,
       )}

@@ -58,9 +58,9 @@ func (r PersonalGeneratedAudioRequest) Validate() error {
 		p.SchemaVersion != 1 || !uploadFactHash(p.ReceiptSHA256) || p.ReleaseID == uuid.Nil || p.ModelVersionID == uuid.Nil ||
 		p.ProviderRequestID != r.SourceJobID || p.TerminalCode != 20000000 ||
 		len(p.ProviderLogID) > 256 || !utf8.ValidString(p.ProviderLogID) || strings.TrimSpace(p.ProviderLogID) != p.ProviderLogID ||
-		r.Intent.ID == uuid.Nil || r.Intent.Owner.Validate() != nil || r.Intent.Owner.Kind != "subject-voice" ||
+		r.Intent.ID == uuid.Nil || r.Intent.Owner.Validate() != nil || r.Intent.Owner.Kind != StorageWorkKindSubjectVoice ||
 		r.Intent.Owner.OwnerID != r.OwnerScopeID || r.Intent.Owner.WorkID != r.SourceJobID ||
-		r.Intent.State != "open" && r.Intent.State != "accepted" || strings.TrimSpace(r.Intent.ConfigRevision) == "" {
+		r.Intent.State != StorageWorkOpen && r.Intent.State != StorageWorkAccepted || strings.TrimSpace(r.Intent.ConfigRevision) == "" {
 		return ErrInvalidGeneratedAudio
 	}
 	for _, char := range p.ProviderLogID {
@@ -158,7 +158,7 @@ func generatedAudioRenditionID(asset uuid.UUID) uuid.UUID {
 
 func generatedAudioLocation(intent StorageWorkIntent, l *domain.ObjectLocation, key string, size int64, mime, sha string) bool {
 	return l != nil && l.ID != uuid.Nil && l.Ref.Validate() == nil && l.Ref.ProfileID == intent.ProfileID && l.Ref.Bucket == intent.Bucket && l.Ref.Key == key &&
-		(l.State == "present" || l.State == "accepted") && l.ByteSize != nil && *l.ByteSize == size &&
+		(l.State == domain.ObjectLocationPresent || l.State == domain.ObjectLocationAccepted) && l.ByteSize != nil && *l.ByteSize == size &&
 		l.MIMEType != nil && *l.MIMEType == mime && l.SHA256 != nil && *l.SHA256 == sha
 }
 
@@ -182,7 +182,7 @@ func (s *PersonalGeneratedAudioService) Prepare(ctx context.Context, r PersonalG
 	if s == nil || s.prober == nil || s.renderer == nil || s.objects == nil || s.now == nil {
 		return PreparedPersonalGeneratedAudio{}, ErrUnavailable
 	}
-	if r.Validate() != nil || r.Intent.State != "open" || s.now().IsZero() || r.CreatedAt.After(s.now()) ||
+	if r.Validate() != nil || r.Intent.State != StorageWorkOpen || s.now().IsZero() || r.CreatedAt.After(s.now()) ||
 		file == nil || file.Size != r.ByteSize || file.SHA256 != r.SHA256 || file.MIMEType != r.MIMEType {
 		return PreparedPersonalGeneratedAudio{}, ErrInvalidGeneratedAudio
 	}

@@ -8,6 +8,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 // HasInflightWork retains lifecycle fencing while any source write lacks a receipt.
@@ -16,10 +17,22 @@ func (s *SourceStore) HasInflightWork(ctx context.Context, actor identityapp.Pri
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
-	var found bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM script.command c JOIN script.command_state s ON s.actor_id=c.actor_id AND s.request_id=c.request_id WHERE c.org_id=? AND c.project_id=? AND s.status='pending') OR EXISTS(SELECT 1 FROM script.import_job j JOIN script.import_state s ON s.job_id=j.id WHERE j.org_id=? AND j.project_id=? AND (s.status IN ('queued','running','cancel_requested') OR s.needs_reconciliation OR s.io_owner_id IS NOT NULL OR s.io_state='unknown'))`, actor.OrgID, project, actor.OrgID, project).Scan(&found).Error
-	if err != nil {
-		return false, fmt.Errorf("read source write ownership fence: %w", err)
+	db := s.db.WithContext(ctx)
+	var pendingCommands int64
+	if err := db.Model(&scriptCommandRow{}).
+		Joins("JOIN script.command_state AS command_state ON command_state.actor_id = script.command.actor_id AND command_state.request_id = script.command.request_id").
+		Where("script.command.org_id = ? AND script.command.project_id = ? AND command_state.status = ?", actor.OrgID, project, scriptCommandPending).
+		Count(&pendingCommands).Error; err != nil {
+		return false, fmt.Errorf("read pending source commands: %w", err)
 	}
-	return found, nil
+	var pendingImports int64
+	err := db.Model(&scriptImportJobRow{}).
+		Joins("JOIN script.import_state AS import_state ON import_state.job_id = script.import_job.id").
+		Where("script.import_job.org_id = ? AND script.import_job.project_id = ?", actor.OrgID, project).
+		Where("(import_state.status IN ? OR import_state.needs_reconciliation = ? OR import_state.io_owner_id IS NOT NULL OR import_state.io_state = ?)", []domain.ImportStatus{domain.ImportStatusQueued, domain.ImportStatusRunning, domain.ImportStatusCancelRequested}, true, domain.ImportIOStateUnknown).
+		Count(&pendingImports).Error
+	if err != nil {
+		return false, fmt.Errorf("read pending source imports: %w", err)
+	}
+	return pendingCommands != 0 || pendingImports != 0, nil
 }

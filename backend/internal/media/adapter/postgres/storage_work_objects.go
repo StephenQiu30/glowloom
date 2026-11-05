@@ -2,8 +2,10 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -24,17 +26,26 @@ func (s *StorageRoutes) readWorkLocationForIO(ctx context.Context, id uuid.UUID,
 	if s == nil || s.db == nil || id == uuid.Nil {
 		return domain.ObjectLocation{}, application.ErrUnavailable
 	}
-	predicate := `w.state='open' AND l.state IN ('reserved','present','unknown') AND l.write_until>clock_timestamp()`
-	if remove {
-		predicate = `(w.state='cancelled' OR (w.state='accepted' AND w.kind IN ('project-copy','script'))) AND l.state='delete_pending' AND (l.write_until IS NULL OR l.write_until<clock_timestamp())`
-	}
 	var row objectLocationRow
-	read := s.db.WithContext(ctx).Raw(`SELECT l.* FROM media.object_location l JOIN media.storage_work_intent w ON w.id=l.owner_intent_id AND w.profile_id=l.profile_id AND w.bucket=l.bucket WHERE l.id=? AND `+predicate, id).Scan(&row)
-	if read.Error != nil {
-		return domain.ObjectLocation{}, read.Error
+	query := s.db.WithContext(ctx).Table("media.object_location AS l").
+		Select("l.*").
+		Joins("JOIN media.storage_work_intent AS w ON w.id = l.owner_intent_id AND w.profile_id = l.profile_id AND w.bucket = l.bucket").
+		Where("l.id = ?", id)
+	if remove {
+		query = query.Where("(w.state = ? OR (w.state = ? AND w.kind IN ?)) AND l.state = ? AND (l.write_until IS NULL OR l.write_until < clock_timestamp())",
+			application.StorageWorkCancelled,
+			application.StorageWorkAccepted,
+			[]application.StorageWorkKind{application.StorageWorkKindProjectCopy, application.StorageWorkKindScript},
+			domain.ObjectLocationDeletePending)
+	} else {
+		query = query.Where("w.state = ? AND l.state IN ? AND l.write_until > clock_timestamp()",
+			application.StorageWorkOpen,
+			[]domain.ObjectLocationState{domain.ObjectLocationReserved, domain.ObjectLocationPresent, domain.ObjectLocationUnknown})
 	}
-	if read.RowsAffected != 1 {
+	if err := query.Take(&row).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.ObjectLocation{}, application.ErrStorageRouteConflict
+	} else if err != nil {
+		return domain.ObjectLocation{}, err
 	}
 	return row.domain(), nil
 }

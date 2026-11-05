@@ -20,12 +20,13 @@ import (
 	"testing"
 	"time"
 
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
+
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
 	"gorm.io/gorm"
 
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
@@ -38,15 +39,13 @@ import (
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
 	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	_, foreign := mediaStoreProject(t, db)
@@ -78,8 +77,8 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	download := &mediaapp.Downloaded{File: file, Size: int64(imageBytes.Len()), MIMEType: "image/png", SHA256: hex.EncodeToString(hash[:])}
 	defer func() { _ = download.Close() }()
 	mediaStore := mediaTestStore(db)
-	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	uploaded, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.png"}, File: download, LocalReviewConfirmed: true})
+	upload := mediaFixtureRoutedUpload(t, db, mediaStore, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
+	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.png"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +97,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 			}
 		}
 	})
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
 	canvasStore := mediaCanvasStore(db, mediaFactory)
 	canvasService := canvasfixture.NewService(canvasStore)
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Export real fixture"})
@@ -116,13 +115,13 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+	store := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
 		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
-	workerStore := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx), nil) }))
+	workerStore := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx)) }))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
-	query := toolapp.NewExportQuery(store, objects, objects)
+	query := toolapp.NewRoutedExportQuery(store, mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute)
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	g := router.Group("/api")
@@ -177,22 +176,13 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker := toolapp.NewWorker(workerStore, toolflow.NewObjects(objects), renderer, mediaflow.FFProber{}, mediaflow.FFRenderer{})
-	var suite testsuite.WorkflowTestSuite
-	workflowEnv := suite.NewTestWorkflowEnvironment()
-	activities := toolflow.NewActivities(worker, workerStore, workerStore)
-	workflowEnv.RegisterWorkflow(toolflow.ExportWorkflow)
-	workflowEnv.RegisterActivityWithOptions(activities.RenderExport, activity.RegisterOptions{Name: toolflow.RenderActivity})
-	workflowEnv.RegisterActivityWithOptions(activities.FailExportWorkflow, activity.RegisterOptions{Name: toolflow.FailureActivity})
-	workflowEnv.ExecuteWorkflow(toolflow.ExportWorkflow, toolapp.WorkID{JobID: job.ID, Attempt: job.Attempt})
-	if !workflowEnv.IsWorkflowCompleted() || workflowEnv.GetWorkflowError() != nil {
-		t.Fatalf("real render under SDK orchestration: %v", workflowEnv.GetWorkflowError())
-	}
-	var rendered tooldomain.ExportJob
-	if err := workflowEnv.GetWorkflowResult(&rendered); err != nil || rendered.Status != tooldomain.ReviewRequired || rendered.AssetID == nil || rendered.SHA256 == nil {
+	worker := toolapp.NewRoutedWorker(workerStore, mediatoolRoutedObjects(t, db), renderer, mediaflow.FFProber{}, mediaflow.FFRenderer{})
+	taskfixture.RunWork(t, db, tooltask.Export, map[string]any{"job_id": job.ID}, tooltask.ExportHandler(worker, workerStore))
+	rendered, err := store.Get(t.Context(), actor, project, job.ID)
+	if err != nil || rendered.Status != tooldomain.ReviewRequired || rendered.AssetID == nil || rendered.SHA256 == nil {
 		t.Fatalf("real render %+v %v", rendered, err)
 	}
-	if _, err := mediaapp.NewAssetQuery(mediaStore, objects).Reference(t.Context(), actor, project, *rendered.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewRoutedAssetQuery(mediaStore, mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), actor, project, *rendered.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("unreviewed output referenceable %v", err)
 	}
 	before := request("GET", jobURL+"/download"+scope, uuid.Nil, nil)
@@ -296,38 +286,19 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	cancelEnv := suite.NewTestWorkflowEnvironment()
-	cancelEnv.RegisterWorkflow(toolflow.ExportWorkflow)
-	stoppedActivity := make(chan struct{})
-	cancelEnv.RegisterActivityWithOptions(func(ctx context.Context, id toolapp.WorkID) (tooldomain.ExportJob, error) {
-		defer close(stoppedActivity)
-		return activities.RenderExport(ctx, id)
-	}, activity.RegisterOptions{Name: toolflow.RenderActivity})
-	cancelEnv.RegisterActivityWithOptions(activities.FailExportWorkflow, activity.RegisterOptions{Name: toolflow.FailureActivity})
-	callback := make(chan error, 1)
-	cancelEnv.RegisterDelayedCallback(func() {
-		current, err := store.Get(t.Context(), actor, project, cancelling.ID)
-		if err == nil && current.Status != tooldomain.Running {
-			err = fmt.Errorf("expected actual running renderer, got %s", current.Status)
-		}
-		if err == nil {
-			_, err = store.Control(t.Context(), actor, project, current.ID, uuid.New(), current.Revision, "cancel")
-		}
-		callback <- err
-		cancelEnv.SignalWorkflow("cancel", nil)
-	}, 100*time.Millisecond)
-	cancelEnv.ExecuteWorkflow(toolflow.ExportWorkflow, toolapp.WorkID{JobID: cancelling.ID, Attempt: 1})
-	if err := <-callback; err != nil {
+	taskID := taskfixture.StartWork(t, db, tooltask.Export, map[string]any{"job_id": cancelling.ID}, tooltask.ExportHandler(worker, workerStore))
+	time.Sleep(100 * time.Millisecond)
+	current, err := store.Get(t.Context(), actor, project, cancelling.ID)
+	if err == nil && current.Status != tooldomain.Running {
+		err = fmt.Errorf("expected actual running renderer, got %s", current.Status)
+	}
+	if err == nil {
+		_, err = store.Control(t.Context(), actor, project, current.ID, uuid.New(), current.Revision, "cancel")
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !cancelEnv.IsWorkflowCompleted() || cancelEnv.GetWorkflowError() == nil {
-		t.Fatal("renderer cancellation did not finish the cancelled workflow")
-	}
-	select {
-	case <-stoppedActivity:
-	case <-time.After(5 * time.Second):
-		t.Fatal("actual export activity failed to exit after cancellation")
-	}
+	taskfixture.WaitWork(t, db, tooltask.Export, taskID, 15*time.Second)
 	stopped, err := store.Get(t.Context(), actor, project, cancelling.ID)
 	if err != nil || stopped.Status != tooldomain.Cancelled || stopped.AssetID != nil {
 		t.Fatalf("actual renderer cessation receipt: %+v %v", stopped, err)

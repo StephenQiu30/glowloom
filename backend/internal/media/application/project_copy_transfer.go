@@ -152,21 +152,21 @@ func (s *ProjectCopyTransfer) Cleanup(ctx context.Context, actor identityapp.Pri
 		if err := s.repo.AuthorizeObjectRemoval(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind); err != nil {
 			return err
 		}
-		exists, err := copyObjectExists(ctx, s.objects, s.physical, object.TargetLocation, object.TargetObjectKey)
+		exists, err := copyObjectExists(ctx, s.physical, object.TargetLocation, object.TargetObjectKey)
 		if err != nil {
 			return err
 		}
-		if !exists && object.Status == "pending" && object.WriteStarted {
+		if !exists && object.Status == ProjectCopyObjectPending && object.WriteStarted {
 			return &ProjectCopyTransferError{Code: "object_absence_unknown", NeedsReconciliation: true, Cause: ErrObjectMismatch}
 		}
 		if exists {
 			if err := s.verifyTarget(ctx, object); err != nil {
 				return &ProjectCopyTransferError{Code: "cleanup_ownership_unverified", NeedsReconciliation: true, Cause: err}
 			}
-			if err := removeCopyObject(ctx, s.objects, s.physical, object.TargetLocation, object.TargetObjectKey); err != nil {
+			if err := removeCopyObject(ctx, s.physical, object.TargetLocation, object.TargetObjectKey); err != nil {
 				return &ProjectCopyTransferError{Code: "object_remove_unknown", NeedsReconciliation: true, Cause: err}
 			}
-			if exists, err := copyObjectExists(ctx, s.objects, s.physical, object.TargetLocation, object.TargetObjectKey); err != nil || exists {
+			if exists, err := copyObjectExists(ctx, s.physical, object.TargetLocation, object.TargetObjectKey); err != nil || exists {
 				return &ProjectCopyTransferError{Code: "object_remove_unverified", NeedsReconciliation: true, Cause: err}
 			}
 		}

@@ -63,14 +63,14 @@ type voiceStorage struct{ routes *pgmedia.StorageRoutes }
 func (v voiceStorage) Ready(ctx context.Context) (bool, error) { return v.routes.ReadyForWork(ctx) }
 
 func voiceStorageFact(intent media.StorageWorkIntent) subject.VoiceStorageIntent {
-	return subject.VoiceStorageIntent{ID: intent.ID, ProfileID: intent.ProfileID, Bucket: intent.Bucket, ConfigRevision: intent.ConfigRevision, State: intent.State}
+	return subject.VoiceStorageIntent{ID: intent.ID, ProfileID: intent.ProfileID, Bucket: intent.Bucket, ConfigRevision: intent.ConfigRevision, State: string(intent.State)}
 }
 func (v voiceStorage) Pin(ctx context.Context, actor, id uuid.UUID) (subject.VoiceStorageIntent, error) {
-	intent, err := v.routes.PinStorageWork(ctx, media.StorageWorkOwner{Kind: "subject-voice", OwnerID: actor, WorkID: id})
+	intent, err := v.routes.PinStorageWork(ctx, media.StorageWorkOwner{Kind: media.StorageWorkKindSubjectVoice, OwnerID: actor, WorkID: id})
 	return voiceStorageFact(intent), err
 }
 func (v voiceStorage) Read(ctx context.Context, actor, id uuid.UUID) (subject.VoiceStorageIntent, error) {
-	intent, err := v.routes.ReadStorageWork(ctx, media.StorageWorkOwner{Kind: "subject-voice", OwnerID: actor, WorkID: id})
+	intent, err := v.routes.ReadStorageWork(ctx, media.StorageWorkOwner{Kind: media.StorageWorkKindSubjectVoice, OwnerID: actor, WorkID: id})
 	return voiceStorageFact(intent), err
 }
 

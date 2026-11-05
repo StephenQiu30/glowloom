@@ -1,443 +1,106 @@
 package operation_test
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/mock"
-	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/converter"
-	"go.temporal.io/sdk/testsuite"
-	"go.temporal.io/sdk/workflow"
+	"github.com/stretchr/testify/require"
 
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 
-func TestBatchWorkflowStartsSelectedChildAndFinishes(t *testing.T) {
-	batchID, projectID, operationID := uuid.New(), uuid.New(), uuid.New()
-	snapshot := operationapp.WorkflowBatch{
-		Batch: domain.Batch{
-			ID: batchID, ProjectID: projectID, Kind: "mixed", Scope: json.RawMessage(`{}`),
-			Status: domain.BatchStatusConfirmed, TotalCount: 1,
-		},
-		Items: []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusConfirmed}},
-	}
-	running := snapshot
-	running.Batch.Status = domain.BatchStatusRunning
-	finishedItem := running
-	finishedItem.Items = []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusCompleted}}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	registerBatchMockActivities(env)
-	id := batchID.String()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(snapshot, nil).Once()
-	env.OnActivity("flow.MarkBatchRunning", mock.Anything, id).Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(running, nil).Once()
-	env.OnActivity("flow.AcquireBatchLaunch", mock.Anything, mock.MatchedBy(func(input operationflow.BatchLaunchInput) bool {
-		return input.BatchID == id && input.OperationID == operationID.String()
-	})).Return(true, nil).Once()
-	env.OnWorkflow(operationflow.OperationWorkflow, mock.Anything, mock.MatchedBy(func(input operationflow.OperationInput) bool {
-		return input.OperationID == operationID.String() && input.BatchID == id
-	})).Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(finishedItem, nil).Once()
-	env.OnActivity("flow.FinishBatch", mock.Anything, id).Return(nil).Once()
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("batch workflow: %v", err)
-	}
-	env.AssertExpectations(t)
+func batchTaskFixture() *stateStore {
+	s := newStateStore()
+	s.batch = application.WorkflowBatch{Batch: domain.Batch{ID: uuid.New(), ProjectID: s.loaded.Operation.ProjectID, Status: domain.BatchStatusRunning}, Items: []application.WorkflowBatchItem{{OperationID: uuid.New(), Status: domain.StatusConfirmed}}}
+	return s
 }
-
-func TestBatchWorkflowChildRunsWithParentIdentity(t *testing.T) {
-	loaded := workflowFixture()
-	batchID := uuid.New()
-	loaded.Operation.BatchID = &batchID
-	sourceID := uuid.New()
-	zero := int64(0)
-	loaded.Operation.ReusedFromID = &sourceID
-	loaded.Operation.QuoteMicros = &zero
-	loaded.Provider = operationapp.WorkflowProvider{}
-	id, operationID := batchID.String(), loaded.Operation.ID.String()
-	snapshot := operationapp.WorkflowBatch{
-		Batch: domain.Batch{ID: batchID, ProjectID: loaded.Operation.ProjectID,
-			Kind: "mixed", Scope: json.RawMessage(`{}`), Status: domain.BatchStatusConfirmed,
-			TotalCount: 1},
-		Items: []operationapp.WorkflowBatchItem{{OperationID: loaded.Operation.ID, Status: domain.StatusConfirmed}},
-	}
-	running := snapshot
-	running.Batch.Status = domain.BatchStatusRunning
-	completed := running
-	completed.Items = []operationapp.WorkflowBatchItem{{OperationID: loaded.Operation.ID, Status: domain.StatusCompleted}}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	env.SetStartWorkflowOptions(client.StartWorkflowOptions{ID: "batch/" + id, TaskQueue: "flow"})
-	env.RegisterWorkflow(operationflow.OperationWorkflow)
-	registerOperationMockActivities(env)
-	registerBatchMockActivities(env)
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(snapshot, nil).Once()
-	env.OnActivity("flow.MarkBatchRunning", mock.Anything, id).Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(running, nil).Once()
-	env.OnActivity("flow.AcquireBatchLaunch", mock.Anything, mock.Anything).Return(true, nil).Once()
-	env.OnActivity("flow.LoadOperation", mock.Anything, operationID).Return(loaded, nil).Once()
-	env.OnActivity("flow.CheckConsent", mock.Anything, operationID).Return(nil).Once()
-	env.OnActivity("flow.CompleteFromReuse", mock.Anything, operationID).Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(completed, nil).Maybe()
-	env.OnActivity("flow.FinishBatch", mock.Anything, id).Return(nil).Once()
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("batch child parent identity: %v", err)
-	}
-	env.AssertExpectations(t)
+func batchStep(t *testing.T, s *stateStore) {
+	t.Helper()
+	_, err := s.handlers()["operation.batch"](t.Context(), taskruntime.Job{BusinessID: s.batch.Batch.ID.String()})
+	require.NoError(t, err)
 }
-
-func TestBatchWorkflowContinuesAfterOneHundredStarts(t *testing.T) {
-	batchID := uuid.New()
-	id := batchID.String()
-	items := make([]operationapp.WorkflowBatchItem, 100)
-	for i := range items {
-		items[i] = operationapp.WorkflowBatchItem{OperationID: uuid.New(), Status: domain.StatusConfirmed}
-	}
-	snapshot := operationapp.WorkflowBatch{
-		Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
-			Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 100},
-		Items: items,
-	}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	registerBatchMockActivities(env)
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(snapshot, nil).Maybe()
-	env.OnActivity("flow.AcquireBatchLaunch", mock.Anything, mock.Anything).Return(true, nil).Times(100)
-	env.OnWorkflow(operationflow.OperationWorkflow, mock.Anything, mock.Anything).Return(nil).Times(100)
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if !workflow.IsContinueAsNewError(env.GetWorkflowError()) {
-		t.Fatalf("100 child starts did not continue as new: %v", env.GetWorkflowError())
-	}
-	env.AssertExpectations(t)
+func TestBatchTaskStartsSelectedChildAndFinishes(t *testing.T) {
+	s := batchTaskFixture()
+	batchStep(t, s)
+	require.Equal(t, []uuid.UUID{s.batch.Items[0].OperationID}, s.acquired)
+	require.Equal(t, []string{"operation.run"}, s.scheduled)
+	s.batch.Items[0].Status = domain.StatusCompleted
+	batchStep(t, s)
+	require.Equal(t, domain.BatchStatusFinished, s.batch.Batch.Status)
 }
-
-func TestBatchWorkflowRollsHistoryWhileWaiting(t *testing.T) {
-	for _, reason := range []string{"paused", "capacity", "manual"} {
-		for _, limit := range []string{"suggested", "events", "bytes", "old_history"} {
-			t.Run(reason+"/"+limit, func(t *testing.T) {
-				batchID := uuid.New()
-				snapshot := operationapp.WorkflowBatch{
-					Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
-						Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 1},
-					Items: []operationapp.WorkflowBatchItem{{OperationID: uuid.New(), Status: domain.StatusConfirmed}},
-				}
-				if reason == "paused" {
-					snapshot.PausedReason = "provider:rate_limited"
-				}
-				if reason == "manual" {
-					snapshot.Items[0].Status = domain.StatusManual
-				}
-				suite := &testsuite.WorkflowTestSuite{}
-				env := suite.NewTestWorkflowEnvironment()
-				registerBatchMockActivities(env)
-				switch limit {
-				case "events":
-					env.SetCurrentHistoryLength(10_000)
-				case "bytes":
-					env.SetCurrentHistorySize(8 * 1024 * 1024)
-				default:
-					env.SetContinueAsNewSuggested(true)
-				}
-				if limit == "old_history" {
-					env.OnGetVersion("batch-history-rollover", workflow.DefaultVersion, workflow.Version(1)).Return(workflow.DefaultVersion)
-				}
-				env.OnActivity("flow.LoadBatch", mock.Anything, batchID.String()).Return(snapshot, nil).Maybe()
-				env.OnActivity("flow.AcquireBatchLaunch", mock.Anything, mock.Anything).Return(false, nil).Maybe()
-				env.RegisterDelayedCallback(env.CancelWorkflow, 10*time.Second)
-				input := operationflow.BatchInput{BatchID: batchID.String(),
-					AcknowledgedTerminalIDs: []string{uuid.NewString()}, CancelSignalledIDs: []string{uuid.NewString()}}
-				env.ExecuteWorkflow(operationflow.BatchWorkflow, input)
-				if limit == "old_history" {
-					if env.GetWorkflowError() == nil || workflow.IsContinueAsNewError(env.GetWorkflowError()) {
-						t.Fatalf("old history changed commands: %v", env.GetWorkflowError())
-					}
-					return
-				}
-				var continued *workflow.ContinueAsNewError
-				if !errors.As(env.GetWorkflowError(), &continued) {
-					t.Fatalf("waiting batch did not roll its history: %v", env.GetWorkflowError())
-				}
-				var next operationflow.BatchInput
-				if err := converter.GetDefaultDataConverter().FromPayloads(continued.Input, &next); err != nil {
-					t.Fatal(err)
-				}
-				if next.BatchID != input.BatchID || len(next.AcknowledgedTerminalIDs) != 1 ||
-					next.AcknowledgedTerminalIDs[0] != input.AcknowledgedTerminalIDs[0] || len(next.CancelSignalledIDs) != 1 ||
-					next.CancelSignalledIDs[0] != input.CancelSignalledIDs[0] {
-					t.Fatalf("rollover lost recovery state: %+v", next)
-				}
-			})
-		}
-	}
+func TestBatchTaskReloadsAlreadyStartedChild(t *testing.T) {
+	s := batchTaskFixture()
+	s.batch.Items[0].Status = domain.StatusSubmitted
+	batchStep(t, s)
+	require.Empty(t, s.acquired)
+	require.Equal(t, []string{"operation.run"}, s.scheduled)
 }
-
-func TestBatchWorkflowReloadsAlreadyStartedChild(t *testing.T) {
-	batchID, operationID := uuid.New(), uuid.New()
-	id := batchID.String()
-	snapshot := operationapp.WorkflowBatch{
-		Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
-			Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 1},
-		Items: []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusConfirmed}},
-	}
-	completed := snapshot
-	completed.Items = []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusCompleted}}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	registerBatchMockActivities(env)
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(snapshot, nil).Twice()
-	env.OnActivity("flow.AcquireBatchLaunch", mock.Anything, mock.Anything).Return(true, nil).Once()
-	env.OnWorkflow(operationflow.OperationWorkflow, mock.Anything, mock.Anything).
-		Return(serviceerror.NewWorkflowExecutionAlreadyStarted("existing child", "operation/"+operationID.String(), "run"))
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(completed, nil).Maybe()
-	env.OnActivity("flow.FinishBatch", mock.Anything, id).Return(nil).Once()
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("already started child replay: %v", err)
-	}
-	env.AssertExpectations(t)
+func TestBatchTaskWaitsForProviderCapacity(t *testing.T) {
+	s := batchTaskFixture()
+	s.capacity = false
+	batchStep(t, s)
+	require.Empty(t, s.acquired)
+	require.Empty(t, s.scheduled)
 }
-
-func TestBatchWorkflowWaitsForProviderCapacity(t *testing.T) {
-	batchID, operationID := uuid.New(), uuid.New()
-	id := batchID.String()
-	snapshot := operationapp.WorkflowBatch{
-		Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
-			Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 1},
-		Items: []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusConfirmed}},
-	}
-	completed := snapshot
-	completed.Items = []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusCompleted}}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	registerBatchMockActivities(env)
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(snapshot, nil).Times(3)
-	env.OnActivity("flow.AcquireBatchLaunch", mock.Anything, mock.Anything).Return(false, nil).Once()
-	env.OnActivity("flow.AcquireBatchLaunch", mock.Anything, mock.Anything).Return(true, nil).Once()
-	env.OnWorkflow(operationflow.OperationWorkflow, mock.Anything, mock.Anything).Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(completed, nil).Maybe()
-	env.OnActivity("flow.FinishBatch", mock.Anything, id).Return(nil).Once()
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("provider capacity wait: %v", err)
-	}
-	env.AssertExpectations(t)
+func TestBatchTaskPausesUntilDurableResume(t *testing.T) {
+	s := batchTaskFixture()
+	s.batch.PausedReason = "provider:rate_limited"
+	batchStep(t, s)
+	require.Empty(t, s.scheduled)
+	require.NoError(t, s.ResumeWorkflowBatch(t.Context(), s.batch.Batch.ID))
+	batchStep(t, s)
+	require.Len(t, s.scheduled, 1)
 }
-
+func TestBatchTaskCancelsUnlaunchedChild(t *testing.T) {
+	s := batchTaskFixture()
+	s.batch.CancelRequested = true
+	batchStep(t, s)
+	require.Equal(t, []uuid.UUID{s.batch.Items[0].OperationID}, s.cancelled)
+	require.Empty(t, s.acquired)
+	require.Empty(t, s.scheduled)
+}
+func TestBatchTaskAcceptsChildCompletionBeforeCancel(t *testing.T) {
+	s := batchTaskFixture()
+	s.batch.CancelRequested = true
+	s.batch.Items[0].Status = domain.StatusCompleted
+	batchStep(t, s)
+	require.Empty(t, s.cancelled)
+	require.Equal(t, domain.BatchStatusFinished, s.batch.Batch.Status)
+}
 func TestBatchFailureStreakUsesTerminalOrderAndProviderCodes(t *testing.T) {
 	base := time.Now().UTC()
-	items := make([]operationapp.WorkflowBatchItem, 0, 7)
+	items := make([]application.WorkflowBatchItem, 0, 7)
 	for i := range 5 {
-		items = append(items, operationapp.WorkflowBatchItem{
+		items = append(items, application.WorkflowBatchItem{
 			OperationID: uuid.New(), Status: domain.StatusFailed,
 			FailureCode: "provider:rate_limited", FinishedAt: base.Add(time.Duration(i) * time.Second),
 		})
 	}
-	items = append(items, operationapp.WorkflowBatchItem{
+	items = append(items, application.WorkflowBatchItem{
 		OperationID: uuid.New(), Status: domain.StatusConfirmed,
 	})
-	if got := operationflow.BatchFailureStreak(items); got != "provider:rate_limited" {
+	if got := task.BatchFailureStreak(items); got != "provider:rate_limited" {
 		t.Fatalf("five provider failures: %q", got)
 	}
 	items[2].FailureCode = "provider:invalid_request"
-	if got := operationflow.BatchFailureStreak(items); got != "" {
+	if got := task.BatchFailureStreak(items); got != "" {
 		t.Fatalf("different provider failure interrupted streak: %q", got)
 	}
 	items[2].FailureCode = "provider:rate_limited"
 	items[4].FailureCode = "provider_result_invalid"
-	if got := operationflow.BatchFailureStreak(items); got != "" {
+	if got := task.BatchFailureStreak(items); got != "" {
 		t.Fatalf("internal failure triggered provider breaker: %q", got)
 	}
 	items[4].FailureCode = "provider:rate_limited"
-	items = append(items, operationapp.WorkflowBatchItem{
+	items = append(items, application.WorkflowBatchItem{
 		OperationID: uuid.New(), Status: domain.StatusCompleted,
 		FinishedAt: base.Add(2500 * time.Millisecond),
 	})
-	if got := operationflow.BatchFailureStreak(items); got != "" {
+	if got := task.BatchFailureStreak(items); got != "" {
 		t.Fatalf("completion order ignored: %q", got)
 	}
-}
-
-func TestBatchWorkflowPausesUntilResumeSignal(t *testing.T) {
-	batchID, pendingID := uuid.New(), uuid.New()
-	id := batchID.String()
-	base := time.Now().UTC()
-	items := make([]operationapp.WorkflowBatchItem, 0, 6)
-	for i := range 5 {
-		items = append(items, operationapp.WorkflowBatchItem{
-			OperationID: uuid.New(), Status: domain.StatusFailed,
-			FailureCode: "provider:rate_limited", FinishedAt: base.Add(time.Duration(i) * time.Second),
-		})
-	}
-	items = append(items, operationapp.WorkflowBatchItem{OperationID: pendingID, Status: domain.StatusConfirmed})
-	running := operationapp.WorkflowBatch{
-		Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
-			Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 6},
-		Items: items,
-	}
-	paused := running
-	paused.PausedReason = "provider:rate_limited"
-	finished := running
-	finished.Items = append([]operationapp.WorkflowBatchItem(nil), items...)
-	finished.Items[5].Status = domain.StatusCompleted
-	finished.Items[5].FinishedAt = base.Add(6 * time.Second)
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	registerBatchMockActivities(env)
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(running, nil).Twice()
-	env.OnActivity("flow.PauseBatch", mock.Anything, id, "provider:rate_limited").Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(paused, nil).Twice()
-	env.OnActivity("flow.ResumeBatch", mock.Anything, id).Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(running, nil).Once()
-	env.OnActivity("flow.AcquireBatchLaunch", mock.Anything, mock.Anything).Return(true, nil).Once()
-	env.OnWorkflow(operationflow.OperationWorkflow, mock.Anything, mock.Anything).Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(finished, nil).Maybe()
-	env.OnActivity("flow.FinishBatch", mock.Anything, id).Return(nil).Once()
-	env.RegisterDelayedCallback(func() { env.SignalWorkflow("resume", nil) }, time.Second)
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("batch pause and resume: %v", err)
-	}
-	env.AssertExpectations(t)
-}
-
-func TestBatchWorkflowCancelsUnlaunchedChild(t *testing.T) {
-	batchID, operationID := uuid.New(), uuid.New()
-	id := batchID.String()
-	cancelling := operationapp.WorkflowBatch{
-		Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
-			Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 1},
-		CancelRequested: true,
-		Items:           []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusConfirmed}},
-	}
-	cancelled := cancelling
-	cancelled.Items = []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusCancelled}}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	registerBatchMockActivities(env)
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(cancelling, nil).Twice()
-	env.OnActivity("flow.CancelQueuedBatchChild", mock.Anything, mock.MatchedBy(func(input operationflow.BatchLaunchInput) bool {
-		return input.BatchID == id && input.OperationID == operationID.String()
-	})).Return(true, nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(cancelled, nil).Once()
-	env.OnActivity("flow.FinishBatch", mock.Anything, id).Return(nil).Once()
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("cancel queued child: %v", err)
-	}
-	env.AssertExpectations(t)
-}
-
-func TestBatchWorkflowSignalsSubmittedChildCancellationOnce(t *testing.T) {
-	batchID, operationID := uuid.New(), uuid.New()
-	id := batchID.String()
-	cancelling := operationapp.WorkflowBatch{
-		Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
-			Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 1},
-		CancelRequested: true,
-		Items:           []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusSubmitted}},
-	}
-	cancelled := cancelling
-	cancelled.Items = []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusCancelled}}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	registerBatchMockActivities(env)
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(cancelling, nil).Twice()
-	env.OnSignalExternalWorkflow(mock.Anything, "operation/"+operationID.String(), "", "cancel", mock.Anything).Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(cancelled, nil).Once()
-	env.OnActivity("flow.FinishBatch", mock.Anything, id).Return(nil).Once()
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("signal submitted child: %v", err)
-	}
-	env.AssertExpectations(t)
-}
-
-func TestBatchWorkflowAcceptsChildCompletionBeforeCancelSignal(t *testing.T) {
-	batchID, operationID := uuid.New(), uuid.New()
-	id := batchID.String()
-	cancelling := operationapp.WorkflowBatch{
-		Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
-			Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 1},
-		CancelRequested: true,
-		Items:           []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusSubmitted}},
-	}
-	completed := cancelling
-	completed.Items = []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusCompleted}}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	registerBatchMockActivities(env)
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(cancelling, nil).Twice()
-	env.OnSignalExternalWorkflow(mock.Anything, "operation/"+operationID.String(), "", "cancel", mock.Anything).
-		Return(serviceerror.NewNotFound("child already closed")).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(completed, nil).Twice()
-	env.OnActivity("flow.FinishBatch", mock.Anything, id).Return(nil).Once()
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("child completed before cancel signal: %v", err)
-	}
-	env.AssertExpectations(t)
-}
-
-func TestBatchWorkflowCancelSignalPersistsBeforeChildAdmission(t *testing.T) {
-	batchID, operationID := uuid.New(), uuid.New()
-	id := batchID.String()
-	running := operationapp.WorkflowBatch{
-		Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
-			Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 1},
-		Items: []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusConfirmed}},
-	}
-	cancelling := running
-	cancelling.CancelRequested = true
-	cancelled := cancelling
-	cancelled.Items = []operationapp.WorkflowBatchItem{{OperationID: operationID, Status: domain.StatusCancelled}}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	registerBatchMockActivities(env)
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(running, nil).
-		Run(func(mock.Arguments) { env.SignalWorkflow("cancel", nil) }).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(running, nil).Once()
-	env.OnActivity("flow.MarkBatchCancelRequested", mock.Anything, id).Return(nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(cancelling, nil).Once()
-	env.OnActivity("flow.CancelQueuedBatchChild", mock.Anything, mock.Anything).Return(true, nil).Once()
-	env.OnActivity("flow.LoadBatch", mock.Anything, id).Return(cancelled, nil).Once()
-	env.OnActivity("flow.FinishBatch", mock.Anything, id).Return(nil).Once()
-	env.ExecuteWorkflow(operationflow.BatchWorkflow, operationflow.BatchInput{BatchID: id})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatalf("batch cancel signal: %v", err)
-	}
-	env.AssertExpectations(t)
-}
-
-func registerBatchMockActivities(env *testsuite.TestWorkflowEnvironment) {
-	env.RegisterActivityWithOptions(func(context.Context, string) (operationapp.WorkflowBatch, error) {
-		return operationapp.WorkflowBatch{}, nil
-	}, activity.RegisterOptions{Name: "flow.LoadBatch"})
-	env.RegisterActivityWithOptions(func(context.Context, string) error { return nil },
-		activity.RegisterOptions{Name: "flow.MarkBatchRunning"})
-	env.RegisterActivityWithOptions(func(context.Context, string) error { return nil },
-		activity.RegisterOptions{Name: "flow.MarkBatchCancelRequested"})
-	env.RegisterActivityWithOptions(func(context.Context, operationflow.BatchLaunchInput) (bool, error) {
-		return false, nil
-	}, activity.RegisterOptions{Name: "flow.CancelQueuedBatchChild"})
-	env.RegisterActivityWithOptions(func(context.Context, operationflow.BatchLaunchInput) (bool, error) {
-		return false, nil
-	}, activity.RegisterOptions{Name: "flow.AcquireBatchLaunch"})
-	env.RegisterActivityWithOptions(func(context.Context, string, string) error { return nil },
-		activity.RegisterOptions{Name: "flow.PauseBatch"})
-	env.RegisterActivityWithOptions(func(context.Context, string) error { return nil },
-		activity.RegisterOptions{Name: "flow.ResumeBatch"})
-	env.RegisterActivityWithOptions(func(context.Context, string) error { return nil },
-		activity.RegisterOptions{Name: "flow.FinishBatch"})
 }

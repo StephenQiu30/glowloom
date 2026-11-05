@@ -1,4 +1,4 @@
-// Package workflow adapts media ingestion to the Temporal activity boundary.
+// Package workflow implements secure fetch and processing for generated media.
 package workflow
 
 import (

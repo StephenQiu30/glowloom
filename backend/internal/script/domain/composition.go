@@ -27,15 +27,15 @@ type SourceDocument struct {
 	LineageID  uuid.UUID    `json:"source_lineage_id"`
 	PreviousID *uuid.UUID   `json:"previous_source_id,omitempty"`
 	Revision   int64        `json:"source_revision"`
-	Kind       string       `json:"source_kind"`
+	Kind       SourceKind   `json:"source_kind"`
 	Title      string       `json:"title"`
-	Status     string       `json:"status"`
+	Status     SourceStatus `json:"status"`
 	Document   RichDocument `json:"document"`
 }
 
 // Validate checks source metadata without interpreting editor status as confirmation.
 func (s SourceDocument) Validate() error {
-	if s.ID == uuid.Nil || s.LineageID == uuid.Nil || s.Revision < 1 || s.PreviousID != nil && *s.PreviousID == uuid.Nil || !slices.Contains([]string{"chapter", "episode", "document"}, s.Kind) || !slices.Contains([]string{"draft", "ready", "completed"}, s.Status) || strings.TrimSpace(s.Title) == "" || !utf8.ValidString(s.Title) || strings.ContainsRune(s.Title, 0) || utf8.RuneCountInString(s.Title) > MaxSourceTitleScalars {
+	if s.ID == uuid.Nil || s.LineageID == uuid.Nil || s.Revision < 1 || s.PreviousID != nil && *s.PreviousID == uuid.Nil || !slices.Contains([]SourceKind{SourceKindChapter, SourceKindEpisode, SourceKindDocument}, s.Kind) || !slices.Contains([]SourceStatus{SourceStatusDraft, SourceStatusReady, SourceStatusCompleted}, s.Status) || strings.TrimSpace(s.Title) == "" || !utf8.ValidString(s.Title) || strings.ContainsRune(s.Title, 0) || utf8.RuneCountInString(s.Title) > MaxSourceTitleScalars {
 		return ErrInvalidSource
 	}
 	return s.Document.Validate()

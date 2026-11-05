@@ -14,9 +14,9 @@ func TestStorageWorkIntentPersistsAcrossSwitchAndWorkerRestart(t *testing.T) {
 	db := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(db)
 	storageProfiles(t, routes)
-	current := activeTestStorageRoute(t, routes)
+	activeTestStorageRoute(t, db, routes)
 	rev := "work-old-" + uuid.NewString()
-	if _, err := routes.Activate(t.Context(), current.Revision, rev, "minio-main"); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, rev, "minio-main")); err != nil {
 		t.Fatal(err)
 	}
 	owner := mediaapp.StorageWorkOwner{Kind: "operation", OwnerID: uuid.New(), WorkID: uuid.New()}
@@ -24,7 +24,7 @@ func TestStorageWorkIntentPersistsAcrossSwitchAndWorkerRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := routes.Activate(t.Context(), rev, "work-new-"+uuid.NewString(), "cos-main"); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, "work-new-"+uuid.NewString(), "cos-main")); err != nil {
 		t.Fatal(err)
 	}
 	restarted := pgmedia.NewStorageRoutes(db)

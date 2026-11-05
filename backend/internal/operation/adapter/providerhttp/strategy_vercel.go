@@ -14,10 +14,12 @@ import (
 // VercelStrategy implements ProtocolStrategy for Vercel AI Gateway endpoints.
 type VercelStrategy struct{}
 
+// Name returns the adapter protocol key.
 func (s *VercelStrategy) Name() string {
 	return "vercel"
 }
 
+// Submit sends generation input using this adapter's provider protocol.
 func (s *VercelStrategy) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
 	if !validKey(key) || !validateCommonInput(input) {
 		return invalidSubmissionResult(), nil
@@ -70,10 +72,10 @@ func (s *VercelStrategy) Submit(ctx context.Context, c *Client, input applicatio
 
 	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, path, payload, 64<<20)
 	if err != nil {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	result, ok := parseStandardGenerationResponse(input, data)
 	if !ok {
@@ -82,10 +84,12 @@ func (s *VercelStrategy) Submit(ctx context.Context, c *Client, input applicatio
 	return result, nil
 }
 
-func (s *VercelStrategy) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
+// Query reads provider progress or reports that polling is unsupported.
+func (s *VercelStrategy) Query(_ context.Context, _ *Client, _ catalogdomain.ProviderConfig, _, _ string) (application.GenerationResult, error) {
 	return unknownResult(), nil
 }
 
+// Probe performs the configured provider credential check.
 func (s *VercelStrategy) Probe(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, key string) ProbeResult {
 	result := ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 	if config.Validate() != nil || !validKey(key) {
@@ -132,6 +136,7 @@ func (s *VercelStrategy) Probe(ctx context.Context, c *Client, config catalogdom
 	return result
 }
 
+// ProbeModelDefaultParams applies this adapter's model-probe parameter defaults.
 func (s *VercelStrategy) ProbeModelDefaultParams(capability string) map[string]any {
 	if capability == "image.generate" {
 		return map[string]any{"size": "1024x1024"}

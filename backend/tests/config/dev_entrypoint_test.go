@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestDevEntrypointConfigurationPrefixPriority(t *testing.T) {
+func TestDevEntrypointUsesOnlyCanonicalEnvironment(t *testing.T) {
 	dockerfile, err := os.ReadFile("../../Dockerfile")
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +27,7 @@ func TestDevEntrypointConfigurationPrefixPriority(t *testing.T) {
 		want   []string
 		reject []string
 	}{
-		{name: "legacy", env: []string{"LV_HOST_SERVICE_PORTS=5432", "LV_DEV_API_PROXY=true"}, want: []string{"TCP-LISTEN:5432", "TCP-LISTEN:18080"}},
+		{name: "legacy_ignored", env: []string{"LV_HOST_SERVICE_PORTS=6543", "LV_DEV_API_PROXY=true"}, want: []string{"TCP-LISTEN:5432"}, reject: []string{"TCP-LISTEN:6543", "TCP-LISTEN:18080", "TCP-LISTEN:7233"}},
 		{name: "canonical", env: []string{"LV_HOST_SERVICE_PORTS=5432", "LV_DEV_API_PROXY=true", "GLOWLOOM_HOST_SERVICE_PORTS=6123", "GLOWLOOM_DEV_API_PROXY=false"}, want: []string{"TCP-LISTEN:6123"}, reject: []string{"TCP-LISTEN:5432", "TCP-LISTEN:18080"}},
 		{name: "explicit_empty", env: []string{"LV_HOST_SERVICE_PORTS=5432", "LV_DEV_API_PROXY=true", "GLOWLOOM_HOST_SERVICE_PORTS=", "GLOWLOOM_DEV_API_PROXY="}, reject: []string{"TCP-LISTEN:"}},
 	} {

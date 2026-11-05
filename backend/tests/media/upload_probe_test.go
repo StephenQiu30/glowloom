@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
-	"time"
 
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -89,8 +88,8 @@ func TestUploadRejectsOversizedFFprobeDimensionsBeforeRenderer(t *testing.T) {
 		t.Fatalf("generated probe semantics changed: %+v err=%v", generated, err)
 	}
 	renderer := &uploadRenderSpy{}
-	service := mediaapp.NewUploadService(&uploadRepoFake{}, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, renderer, &uploadObjectsFake{}, time.Now)
-	if _, err := service.Upload(t.Context(), in); !errors.Is(err, mediaapp.ErrUnsupportedUpload) || renderer.calls != 0 {
+	service := unitRoutedUploadService(&uploadRepoFake{}, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, renderer, &uploadObjectsFake{})
+	if _, err := fixtureProjectUpload(t.Context(), service, in); !errors.Is(err, mediaapp.ErrUnsupportedUpload) || renderer.calls != 0 {
 		t.Fatalf("untrusted oversized probe facts reached renderer: err=%v calls=%d", err, renderer.calls)
 	}
 }
@@ -122,11 +121,11 @@ func TestUploadProbeUsesLongestContainerOrAVTrackDuration(t *testing.T) {
 		t.Fatalf("upload ignored longer audio/container duration: %+v err=%v", upload, err)
 	}
 	repo, objects := &uploadRepoFake{}, &uploadObjectsFake{}
-	service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := unitRoutedUploadService(repo, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
 	in.File = file
 	in.Request.FileName = "reference.mp4"
-	if _, err := service.Upload(t.Context(), in); !errors.Is(err, mediaapp.ErrUnsupportedUpload) || repo.commits != 0 || len(objects.items) != 0 {
+	if _, err := fixtureProjectUpload(t.Context(), service, in); !errors.Is(err, mediaapp.ErrUnsupportedUpload) || repo.commits != 0 || len(objects.items) != 0 {
 		t.Fatalf("90-second mixed-track upload became referenceable: %v", err)
 	}
 }

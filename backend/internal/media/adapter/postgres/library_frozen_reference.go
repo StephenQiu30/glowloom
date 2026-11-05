@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"path"
 	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -23,17 +25,17 @@ func (s *LibraryStore) ReadFrozenReferenceFactSource(ctx context.Context, actor 
 	}
 	var result application.LibraryMediaFile
 	err := s.read(ctx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(tx *gorm.DB, library libraryRow) error {
-		var item struct{ ID uuid.UUID }
-		if err := tx.Raw(`SELECT id FROM media.library_item WHERE library_id=? AND id=? FOR SHARE`, library.ID, id).Scan(&item).Error; err != nil {
+		var item libraryItemRow
+		if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Select("id").Where(map[string]any{"library_id": library.ID, "id": id}).Find(&item).Error; err != nil {
 			return err
 		}
 		var row assetRow
-		read := tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND personal_actor_id IS NULL AND personal_org_id IS NULL AND kind=? FOR SHARE`, id, project, string(kind)).Scan(&row)
+		read := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"id": id, "project_id": project, "personal_actor_id": nil, "personal_org_id": nil, "kind": string(kind)}).Take(&row)
 		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrNotFound
+			}
 			return read.Error
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrNotFound
 		}
 		if err := row.loadLocation(tx); err != nil {
 			return err
@@ -47,7 +49,7 @@ func (s *LibraryStore) ReadFrozenReferenceFactSource(ctx context.Context, actor 
 			return nil
 		}
 		var rows []renditionRow
-		if err := tx.Raw(`SELECT * FROM media.rendition WHERE media_asset_id=? AND NOT is_delete ORDER BY kind,id LIMIT 17 FOR SHARE`, id).Scan(&rows).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("media_asset_id = ? AND NOT is_delete", id).Order("kind").Order("id").Limit(17).Find(&rows).Error; err != nil {
 			return err
 		}
 		if len(rows) > 16 {

@@ -166,7 +166,7 @@ func TestConcurrentCanvasOperationsJointlyAdvanceRevisions(t *testing.T) {
 
 func canvasStore(database *gorm.DB) *pgcanvas.Store {
 	return pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
 	}, mediawire.NewCanvasProjectAccess)
 }
 

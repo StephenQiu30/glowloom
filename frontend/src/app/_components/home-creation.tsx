@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useConversationContext } from "@/components/conversations/conversation-context";
 import { useRef, useState, type ReactElement } from "react";
 import {
   ArrowUp,
@@ -22,6 +24,7 @@ import { ProjectPicker } from "@/components/projects/project-picker";
 import type { Project } from "@/components/projects/project";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
 import { ModelPicker } from "@/components/generation/model-picker";
+import { ReferenceStack } from "@/components/generation/reference-stack";
 import { ProjectRequiredPopover } from "@/components/generation/project-required-popover";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,9 +48,9 @@ import {
   type PromptDraft,
 } from "@/components/generation/prompt-document";
 
-const AgentWorkspace = dynamic(() =>
-  import("@/components/generation/agent-workspace").then(
-    (module) => module.AgentWorkspace,
+const ConversationWorkspace = dynamic(() =>
+  import("@/components/conversations/conversation-workspace").then(
+    (module) => module.ConversationWorkspace,
   ),
 );
 
@@ -94,6 +97,8 @@ export function HomeCreation() {
 function ScopedHomeCreation() {
   const session = useOptionalSession();
   const login = useLoginDialog();
+  const router = useRouter();
+  const conversationMemory = useConversationContext();
   const { selected: space } = useSpace();
   const [mode, setMode] = useState("generate");
   const [type, setType] = useState<CreationType>("image");
@@ -114,7 +119,10 @@ function ScopedHomeCreation() {
   } | null>(null);
   const [inputs, setInputs] = useState<
     Partial<Record<CreationType | "canvas", PromptDraft>>
-  >({});
+  >(() => {
+    const pending = conversationMemory?.readDraft("/new");
+    return pending ? { agent: pending } : {};
+  });
   const [empty] = useState(emptyPromptDraft);
   const inputKey = `${subjectScope}/home-input:${type}`;
   const homeDraft = inputs[type] ?? empty;
@@ -168,6 +176,23 @@ function ScopedHomeCreation() {
         return;
       }
       setError("");
+      if (type === "agent")
+        conversationMemory?.saveDraft(`${project?.id ?? ""}/new`, homeDraft);
+      if (
+        nextType === "agent" &&
+        (type !== "agent" || project?.id !== nextProject?.id)
+      ) {
+        const nextKey = `${nextProject?.id ?? ""}/new`;
+        const nextDraft =
+          !project && type === "agent"
+            ? homeDraft
+            : (conversationMemory?.readDraft(nextKey) ??
+              (project?.id === nextProject?.id ? inputs.agent : undefined) ??
+              emptyPromptDraft());
+        setInputs((current) => ({ ...current, agent: nextDraft }));
+        if (!project && nextProject)
+          conversationMemory?.saveDraft("/new", emptyPromptDraft());
+      }
       setType(nextType);
       setProject(nextProject);
       setWorkspace(
@@ -211,7 +236,10 @@ function ScopedHomeCreation() {
       disabled={locked || switching}
       open={projectOpen}
       onOpenChange={setProjectOpen}
-      onChange={(next) => void select(type, next)}
+      onChange={(next) => {
+        conversationMemory?.selectProject(next);
+        void select(type, next);
+      }}
     />
   ) : null;
   function projectEntry(
@@ -281,21 +309,21 @@ function ScopedHomeCreation() {
           <div className="creation-tabs">
             {/* One active panel, owned by the selected type; switching first flushes its saved draft. */}
             <div>
-              {type === "agent" && project ? (
-                <AgentWorkspace
-                  key={`${subjectScope}/${project.id}`}
-                  projectID={project.id}
-                  initialMessage={prompt}
-                  onMessageChange={(message) => {
-                    const draft = emptyPromptDraft();
-                    draft.document.content = message
-                      .split("\n")
-                      .map((text) => ({
-                        type: "paragraph" as const,
-                        content: text ? [{ type: "text" as const, text }] : [],
-                      }));
-                    inputRecovery.change(draft);
-                  }}
+              {type === "agent" ? (
+                <ConversationWorkspace
+                  key={`${subjectScope}/${project?.id ?? "unscoped"}`}
+                  ownerKey={subjectScope}
+                  projectID={project?.id ?? ""}
+                  enabled={!!session && !!space?.writable && !!project}
+                  initialDraft={homeDraft}
+                  onDraftChange={inputRecovery.change}
+                  embedded
+                  onChooseProject={prepare}
+                  onAccepted={(sid) =>
+                    router.push(
+                      `/conversations/${sid}?projectId=${project!.id}`,
+                    )
+                  }
                   headerActions={typeControl}
                   projectControl={projectControl}
                   onLock={setLocked}
@@ -357,20 +385,23 @@ function ScopedHomeCreation() {
                                   onChooseProject={prepare}
                                 />
                               ) : (
-                                projectEntry(
-                                  <Button
-                                    type="button"
-                                    variant="reference"
-                                    size="reference"
-                                    aria-label="添加参考素材"
-                                    onClick={supported ? undefined : prepare}
-                                    disabled={locked || switching}
-                                  >
-                                    <Plus data-icon="inline-start" />
-                                  </Button>,
-                                  "添加参考素材",
-                                  "选择项目后，可从项目素材或上传内容添加参考。",
-                                )
+                                <ReferenceStack
+                                  entries={[]}
+                                  disabled={locked || switching}
+                                  addLabel="添加参考素材"
+                                  renderAdd={(trigger) =>
+                                    projectEntry(
+                                      trigger,
+                                      "添加参考素材",
+                                      "选择项目后，可从项目素材或上传内容添加参考。",
+                                    )
+                                  }
+                                  onAdd={() => {
+                                    if (!supported) prepare();
+                                  }}
+                                  onSelect={() => {}}
+                                  onRemove={() => {}}
+                                />
                               )}
                             </InputGroupAddon>
                           )}

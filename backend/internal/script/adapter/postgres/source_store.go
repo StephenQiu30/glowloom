@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
@@ -28,6 +30,7 @@ type SourceStore struct {
 	importRecovery  bool
 	characters      CharacterReferenceFactory
 	locations       SourceObjectLocationFactory
+	publication     PublicationAuthorizationFactory
 }
 
 // NewSourceStore injects the own database and the workspace transaction factory.
@@ -99,42 +102,42 @@ func (s *SourceStore) LoadBase(ctx context.Context, actor identityapp.Principal,
 	return result, err
 }
 
-func commandLock(tx *gorm.DB, actor, key uuid.UUID) error {
-	var locked int
-	return tx.Raw(`SELECT 1 FROM pg_advisory_xact_lock(69420,hashtext(?))`, actor.String()+":"+key.String()).Scan(&locked).Error
+// registerCommand runs after write authorization holds the workspace project lock.
+// The unique immutable request records scope/hash; it must never require UPDATE
+// permission just to serialize a write which is already locked by its owner.
+func registerCommand(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID, action, hash string, now time.Time) error {
+	return registerRequest(tx, actor, project, key, action, hash, now)
 }
+
 func findCommand(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID, hash string) (*application.PendingWrite, error) {
 	if err := checkRequestScope(tx, actor, project, key, "", hash); err != nil {
 		return nil, err
 	}
-	var row struct {
-		OrgID, ProjectID  uuid.UUID
-		RequestHash, Plan string
-		Response          *string
-	}
-	read := tx.Raw(`SELECT c.org_id,c.project_id,c.request_hash,c.plan::text AS plan,r.response::text AS response FROM script.command c LEFT JOIN script.command_result r ON r.actor_id=c.actor_id AND r.request_id=c.request_id WHERE c.actor_id=? AND c.request_id=?`, actor.ID, key).Scan(&row)
-	if read.Error != nil {
-		return nil, fmt.Errorf("read permanent script command: %w", read.Error)
-	}
-	if read.RowsAffected == 0 {
+	var row scriptCommandRow
+	if err := tx.Where("actor_id = ? AND request_id = ?", actor.ID, key).Take(&row).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("read permanent script command: %w", err)
 	}
 	if row.OrgID != actor.OrgID || row.ProjectID != project || row.RequestHash != hash {
 		return nil, application.ErrIdempotencyConflict
 	}
 	var saved application.PendingWrite
-	if err := json.Unmarshal([]byte(row.Plan), &saved.Plan); err != nil {
+	if err := json.Unmarshal(row.Plan, &saved.Plan); err != nil {
 		return nil, application.ErrUnavailable
 	}
 	if err := loadPlanLocations(tx, &saved.Plan); err != nil {
 		return nil, err
 	}
-	if row.Response != nil {
+	var responseRow scriptCommandResultRow
+	if err := tx.Where("actor_id = ? AND request_id = ?", actor.ID, key).Take(&responseRow).Error; err == nil {
 		var response application.SourceReceipt
-		if err := json.Unmarshal([]byte(*row.Response), &response); err != nil {
+		if err := json.Unmarshal(responseRow.Response, &response); err != nil {
 			return nil, application.ErrUnavailable
 		}
 		saved.Receipt = &response
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
 	}
 	return &saved, nil
 }
@@ -197,12 +200,12 @@ func (s *SourceStore) BeginWrite(ctx context.Context, actor identityapp.Principa
 		return result, err
 	}
 	for _, source := range p.NewSources {
-		if source.Origin == "file" && s.importAuthority == nil {
+		if source.Origin == domain.SourceOriginFile && s.importAuthority == nil {
 			return result, identityapp.ErrForbidden
 		}
 	}
-	err := s.transaction(ctx, actor, p.Command.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
-		if err := commandLock(tx, actor.ID, p.Command.Key); err != nil {
+	err := s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+		if err := registerCommand(tx, actor, p.Command.ProjectID, p.Command.Key, "source_"+string(p.Command.Action), p.RequestHash, p.CreatedAt); err != nil {
 			return err
 		}
 		prior, err := findCommand(tx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash)
@@ -245,20 +248,30 @@ func (s *SourceStore) BeginWrite(ctx context.Context, actor identityapp.Principa
 		if err != nil {
 			return err
 		}
-		if err := registerRequest(tx, actor, p.Command.ProjectID, p.Command.Key, "source_"+p.Command.Action, p.RequestHash, p.CreatedAt); err != nil {
+		if len(data) > domain.MaxWritePlanBytes {
+			return domain.ErrInvalidSource
+		}
+		if err := registerRequest(tx, actor, p.Command.ProjectID, p.Command.Key, "source_"+string(p.Command.Action), p.RequestHash, p.CreatedAt); err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`INSERT INTO script.command(actor_id,request_id,org_id,project_id,action,request_hash,plan,created_at) VALUES(?,?,?,?,?,?,?::jsonb,?)`, actor.ID, p.Command.Key, actor.OrgID, p.Command.ProjectID, p.Command.Action, p.RequestHash, string(data), p.CreatedAt)); err != nil {
+		command := scriptCommandRow{ActorID: actor.ID, RequestID: p.Command.Key, OrgID: actor.OrgID, ProjectID: p.Command.ProjectID, Action: string(p.Command.Action), RequestHash: p.RequestHash, Plan: scriptJSON(data), CreatedAt: p.CreatedAt}
+		if err := exactlyOne(tx.Create(&command)); err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`INSERT INTO script.command_state(actor_id,request_id,id,status,updated_at) VALUES(?,?,?,'pending',?)`, actor.ID, p.Command.Key, sourceIntentID(p), p.CreatedAt)); err != nil {
+		commandState := scriptCommandStateRow{ActorID: actor.ID, RequestID: p.Command.Key, ID: sourceIntentID(p), Status: scriptCommandPending, Revision: 1, IOState: scriptIOIdle, UpdatedAt: p.CreatedAt}
+		if err := exactlyOne(tx.Create(&commandState)); err != nil {
 			return err
 		}
 		for _, object := range p.Objects {
-			if err := exactlyOne(tx.Exec(`INSERT INTO script.object_intent(actor_id,request_id,org_id,project_id,object_key,sha256,byte_size,mime,object_location_id) VALUES(?,?,?,?,?,?,?,?,?)`, actor.ID, p.Command.Key, actor.OrgID, p.Command.ProjectID, object.Key, object.SHA256, object.ByteSize, object.MIME, nullableLocation(object.LocationID))); err != nil {
+			if object.LocationID == uuid.Nil {
+				return application.ErrObjectMismatch
+			}
+			intent := scriptObjectIntentRow{ActorID: actor.ID, RequestID: p.Command.Key, OrgID: actor.OrgID, ProjectID: p.Command.ProjectID, ObjectKey: object.Key, SHA256: object.SHA256, ByteSize: object.ByteSize, MIME: object.MIME, ObjectLocationID: object.LocationID}
+			if err := exactlyOne(tx.Create(&intent)); err != nil {
 				return err
 			}
-			if err := exactlyOne(tx.Exec(`INSERT INTO script.object_state(object_key,updated_at,object_location_id) VALUES(?,?,?)`, object.Key, p.CreatedAt, nullableLocation(object.LocationID))); err != nil {
+			state := scriptObjectStateRow{ObjectKey: object.Key, UpdatedAt: p.CreatedAt, ObjectLocationID: object.LocationID}
+			if err := exactlyOne(tx.Create(&state)); err != nil {
 				return err
 			}
 		}
@@ -271,8 +284,8 @@ func (s *SourceStore) BeginWrite(ctx context.Context, actor identityapp.Principa
 // FinishWrite commits all immutable sources/version, both heads, events and first receipt.
 func (s *SourceStore) FinishWrite(ctx context.Context, actor identityapp.Principal, p application.WritePlan) (application.SourceReceipt, error) {
 	var result application.SourceReceipt
-	err := s.transaction(ctx, actor, p.Command.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
-		if err := commandLock(tx, actor.ID, p.Command.Key); err != nil {
+	err := s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
+		if err := registerCommand(tx, actor, p.Command.ProjectID, p.Command.Key, "source_"+string(p.Command.Action), p.RequestHash, p.CreatedAt); err != nil {
 			return err
 		}
 		prior, err := findCommand(tx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash)
@@ -324,15 +337,17 @@ func (s *SourceStore) FinishWrite(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		// Current source version numbers derive from the immutable chronological history.
-		var latest int64
-		if err := tx.Raw(`SELECT coalesce(max(version_no),0) FROM script.script_version WHERE org_id=? AND project_id=?`, actor.OrgID, p.Command.ProjectID).Scan(&latest).Error; err != nil {
+		var latestVersion versionRow
+		if err := tx.Model(&versionRow{}).Select("version_no").Where("org_id = ? AND project_id = ?", actor.OrgID, p.Command.ProjectID).Order("version_no DESC").Take(&latestVersion).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			latestVersion.VersionNo = 0
+		} else if err != nil {
 			return err
 		}
-		if p.Version.VersionNo != latest+1 {
+		if p.Version.VersionNo != latestVersion.VersionNo+1 {
 			return application.ErrConflict
 		}
-		if p.StorageIntentID != uuid.Nil {
-			if s.locations == nil || s.locations(tx) == nil {
+		if len(p.Objects) > 0 {
+			if p.StorageIntentID == uuid.Nil || s.locations == nil || s.locations(tx) == nil {
 				return application.ErrUnavailable
 			}
 			if err := s.locations(tx).Accept(ctx, p.StorageIntentID, p.Objects); err != nil {
@@ -348,11 +363,14 @@ func (s *SourceStore) FinishWrite(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		if state.Revision == 0 {
-			if err := exactlyOne(tx.Exec(`INSERT INTO script.project_state(project_id,org_id,revision,draft_version_id,updated_at) VALUES(?,?,1,?,?)`, p.Command.ProjectID, actor.OrgID, p.Version.ID, p.CreatedAt)); err != nil {
+			projectState := scriptProjectStateRow{ProjectID: p.Command.ProjectID, OrgID: actor.OrgID, Revision: 1, DraftVersionID: &p.Version.ID, UpdatedAt: p.CreatedAt}
+			if err := exactlyOne(tx.Create(&projectState)); err != nil {
 				return err
 			}
 		} else {
-			if err := exactlyOne(tx.Exec(`UPDATE script.project_state SET revision=revision+1,draft_version_id=?,updated_at=? WHERE project_id=? AND org_id=? AND revision=?`, p.Version.ID, p.CreatedAt, p.Command.ProjectID, actor.OrgID, state.Revision)); err != nil {
+			updated := tx.Model(&scriptProjectStateRow{}).Where("project_id = ? AND org_id = ? AND revision = ?", p.Command.ProjectID, actor.OrgID, state.Revision).
+				Updates(map[string]any{"revision": state.Revision + 1, "draft_version_id": p.Version.ID, "updated_at": p.CreatedAt})
+			if err := exactlyOne(updated); err != nil {
 				return err
 			}
 		}
@@ -365,10 +383,21 @@ func (s *SourceStore) FinishWrite(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`INSERT INTO script.command_result(actor_id,request_id,response,created_at) VALUES(?,?,?::jsonb,?)`, actor.ID, p.Command.Key, string(response), p.CreatedAt)); err != nil {
+		commandResult := scriptCommandResultRow{ActorID: actor.ID, RequestID: p.Command.Key, Response: scriptJSON(response), CreatedAt: p.CreatedAt}
+		if err := exactlyOne(tx.Create(&commandResult)); err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`UPDATE script.command_state SET status='completed',needs_reconciliation=false,revision=revision+1,updated_at=? WHERE actor_id=? AND request_id=? AND status='pending' AND NOT cancellation_requested`, p.CreatedAt, actor.ID, p.Command.Key)); err != nil {
+		var commandState scriptCommandStateRow
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("actor_id = ? AND request_id = ?", actor.ID, p.Command.Key).Take(&commandState).Error; err != nil {
+			return err
+		}
+		if commandState.Status != scriptCommandPending || commandState.CancellationRequested {
+			return application.ErrConflict
+		}
+		updated := tx.Model(&scriptCommandStateRow{}).
+			Where("actor_id = ? AND request_id = ? AND status = ? AND cancellation_requested = ?", actor.ID, p.Command.Key, scriptCommandPending, false).
+			Updates(map[string]any{"status": scriptCommandCompleted, "needs_reconciliation": false, "revision": commandState.Revision + 1, "updated_at": p.CreatedAt})
+		if err := exactlyOne(updated); err != nil {
 			return err
 		}
 		if s.importAuthority != nil {

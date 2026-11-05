@@ -31,34 +31,35 @@ type previewSigner struct {
 	ttl   time.Duration
 }
 
-func (s *previewSigner) PresignGet(_ context.Context, key string, ttl time.Duration) (string, error) {
+func (s *previewSigner) PresignGet(_ context.Context, ref domain.ObjectRef, ttl time.Duration) (application.AccessGrant, error) {
 	s.calls++
-	s.key = key
+	s.key = ref.Key
 	s.ttl = ttl
-	return "https://fixture.invalid/signed", nil
+	return application.AccessGrant{URL: "https://fixture.invalid/signed", ExpiresAt: time.Now().Add(ttl)}, nil
 }
 func TestMediaPreviewAuthorizesBeforeSigningAndDoesNotExposeStorageFacts(t *testing.T) {
 	p, id := uuid.New(), uuid.New()
 	signer := &previewSigner{}
 	store := readStore{asset: domain.MediaAsset{ID: id, ProjectID: p, Kind: domain.KindImage, Status: domain.StatusReady, ModerationStatus: domain.ModerationPassed, ObjectKey: "projects/" + p.String() + "/image/safe.png", FileName: "safe.png", MimeType: "image/png", ByteSize: 1, Revision: 1}}
-	query := application.NewAssetQuery(store, signer)
+	store.asset.ObjectLocation = readLocation("minio-main", store.asset.ObjectKey)
+	query := application.NewRoutedAssetQuery(store, signer, 5*time.Minute)
 	result, err := query.Preview(t.Context(), identityapp.Principal{}, p, id)
 	if err != nil || result.Asset.ID != id || signer.calls != 1 || signer.ttl > 15*time.Minute || result.ExpiresAt.IsZero() {
 		t.Fatalf("preview %+v %v", result, err)
 	}
 	store.err = application.ErrNotFound
-	query = application.NewAssetQuery(store, signer)
+	query = application.NewRoutedAssetQuery(store, signer, 5*time.Minute)
 	if _, err := query.Preview(t.Context(), identityapp.Principal{}, p, id); !errors.Is(err, application.ErrNotFound) || signer.calls != 1 {
 		t.Fatalf("unauthorized signing: %v calls %d", err, signer.calls)
 	}
 	store.err = nil
 	store.asset.ModerationStatus = domain.ModerationRejected
-	query = application.NewAssetQuery(store, signer)
+	query = application.NewRoutedAssetQuery(store, signer, 5*time.Minute)
 	if _, err := query.Reference(t.Context(), identityapp.Principal{}, p, id); !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("unsafe reference accepted: %v", err)
 	}
 	store.asset.ModerationStatus = domain.ModerationPassed
-	query = application.NewAssetQuery(store, nil)
+	query = application.NewAssetQuery(store)
 	if _, err := query.Preview(t.Context(), identityapp.Principal{}, p, id); !errors.Is(err, application.ErrUnavailable) {
 		t.Fatalf("nil signer: %v", err)
 	}

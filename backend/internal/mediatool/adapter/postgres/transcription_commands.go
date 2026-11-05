@@ -3,13 +3,18 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
+
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
@@ -41,11 +46,19 @@ func recordTranscriptionCommand(tx *gorm.DB, actor identityapp.Principal, key uu
 		if err != nil {
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, id, transcriptionTopic, actor.OrgID.String(), string(payload)).Error; err != nil {
+		if emit == "cancel" {
+			if err := taskruntime.RequestStop(tx.Statement.Context, tx, task.Transcription, map[string]any{"job_id": job.ID, "attempt": job.Attempt}); err != nil {
+				return err
+			}
+		}
+		if err := taskruntime.EnqueueReference(tx.Statement.Context, tx, task.Transcription, id.String(), time.Now().UTC(), delivery.TranscriptionWorkID); err != nil {
+			return err
+		}
+		if err := tx.Create(&mediatoolOutboxRecord{ID: id, Topic: transcriptionTopic, PartitionKey: actor.OrgID.String(), Payload: jsonDocument(payload)}).Error; err != nil {
 			return err
 		}
 	}
-	if err := tx.Exec(`INSERT INTO mediatool.transcription_command(actor_id,request_id,job_id,request_hash,response,event_id,event_action,event_attempt,created_at) VALUES(?,?,?,?,?::jsonb,?,?,?,?)`, actor.ID, key, job.ID, hash, string(response), eventID, eventAction, eventAttempt, now).Error; err != nil {
+	if err := tx.Create(&transcriptionCommandRecord{ActorID: actor.ID, RequestID: key, JobID: job.ID, RequestHash: hash, Response: jsonDocument(response), EventID: eventID, EventAction: eventAction, EventAttempt: eventAttempt, CreatedAt: now}).Error; err != nil {
 		return err
 	}
 	return recordTranscriptionAudit(tx, actor, key, action, job)
@@ -59,7 +72,7 @@ func recordTranscriptionAudit(tx *gorm.DB, actor identityapp.Principal, key uuid
 	if err != nil {
 		return err
 	}
-	return tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, auditID, topic, job.ProjectID.String(), string(payload)).Error
+	return tx.Create(&mediatoolOutboxRecord{ID: auditID, Topic: topic, PartitionKey: job.ProjectID.String(), Payload: jsonDocument(payload)}).Error
 }
 
 // Control records soft cancellation or an explicit retry only after known cessation.
@@ -107,29 +120,29 @@ func (s *TranscriptionStore) Control(ctx context.Context, actor identityapp.Prin
 		}
 		emit := "cancel"
 		if action == "cancel" {
-			if row.Status != "queued" && row.Status != "running" {
+			if row.Status != domain.TranscriptionQueued && row.Status != domain.TranscriptionRunning {
 				return application.ErrConflict
 			}
-			row.Status = "cancel_requested"
-			row.Stage = "cancelling"
-			if row.InferenceState == "unknown" {
-				row.Stage = "awaiting_reconciliation"
+			row.Status = domain.TranscriptionCancelRequested
+			row.Stage = domain.TranscriptionStageCancelling
+			if row.InferenceState == domain.TranscriptionInferenceUnknown {
+				row.Stage = domain.TranscriptionStageAwaitingReconciliation
 			}
 		} else {
-			if (row.Status != "failed" && row.Status != "cancelled") || row.Attempt >= 100 || row.ActiveWorker != nil || row.InferenceState == "submitted" || row.InferenceState == "unknown" {
+			if (row.Status != domain.TranscriptionFailed && row.Status != domain.TranscriptionCancelled) || row.Attempt >= 100 || row.ActiveWorker != nil || row.InferenceState == domain.TranscriptionInferenceSubmitted || row.InferenceState == domain.TranscriptionInferenceUnknown {
 				return application.ErrConflict
 			}
 			if err := s.validateSource(ctx, tx, actor, row); err != nil {
 				return err
 			}
-			row.Status = "queued"
-			row.Stage = "queued"
+			row.Status = domain.TranscriptionQueued
+			row.Stage = domain.TranscriptionStageQueued
 			row.Progress = 0
 			row.Attempt++
-			if err := pinTool(ctx, tx, s.storage, "transcription", row.ProjectID, row.ID, row.Attempt); err != nil {
+			if err := pinTool(ctx, tx, s.storage, mediaapp.StorageWorkKindTranscription, row.ProjectID, row.ID, row.Attempt); err != nil {
 				return err
 			}
-			row.InferenceState = "none"
+			row.InferenceState = domain.TranscriptionInferenceNone
 			row.Result = nil
 			row.ResultSHA256 = nil
 			row.FailureCode = nil
@@ -156,12 +169,21 @@ func (s *TranscriptionStore) verifyDelivery(ctx context.Context, d application.T
 	if d.EventID == uuid.Nil || d.RequestID == uuid.Nil || d.JobID == uuid.Nil || d.ActorID == uuid.Nil || d.OrgID == uuid.Nil || d.ProjectID == uuid.Nil || d.Attempt < 1 || (d.Action != "start" && d.Action != "cancel") {
 		return false, application.ErrInvalidTranscription
 	}
-	var exists bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM mediatool.transcription_command c JOIN mediatool.transcription_job j ON j.id=c.job_id WHERE c.actor_id=? AND c.request_id=? AND c.event_id=? AND c.event_action=? AND c.event_attempt=? AND j.id=? AND j.project_id=? AND j.org_id=?)`, d.ActorID, d.RequestID, d.EventID, d.Action, d.Attempt, d.JobID, d.ProjectID, d.OrgID).Scan(&exists).Error
-	if err != nil {
+	var command transcriptionCommandRecord
+	if err := s.db.WithContext(ctx).Where("actor_id = ? AND request_id = ? AND event_id = ? AND event_action = ? AND event_attempt = ? AND job_id = ?", d.ActorID, d.RequestID, d.EventID, d.Action, d.Attempt, d.JobID).Take(&command).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, application.ErrInvalidTranscription
+		}
 		return false, err
 	}
-	if !exists {
+	var ownedJob transcriptionRow
+	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ? AND org_id = ?", d.JobID, d.ProjectID, d.OrgID).Take(&ownedJob).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, application.ErrInvalidTranscription
+		}
+		return false, err
+	}
+	if command.EventAction == nil || *command.EventAction != d.Action || command.EventAttempt == nil || *command.EventAttempt != d.Attempt {
 		return false, application.ErrInvalidTranscription
 	}
 	row, err := readTranscription(s.db.WithContext(ctx), uuid.Nil, d.JobID, false)
@@ -172,9 +194,9 @@ func (s *TranscriptionStore) verifyDelivery(ctx context.Context, d application.T
 		return false, nil
 	}
 	if d.Action == "cancel" {
-		return row.Status == "cancel_requested", nil
+		return row.Status == domain.TranscriptionCancelRequested, nil
 	}
-	return (row.Status == "queued" || row.Status == "running" || row.Status == "cancel_requested") && row.InferenceState != "unknown", nil
+	return (row.Status == domain.TranscriptionQueued || row.Status == domain.TranscriptionRunning || row.Status == domain.TranscriptionCancelRequested) && row.InferenceState != domain.TranscriptionInferenceUnknown, nil
 }
 func transcriptionRuntimeAudit(tx *gorm.DB, row transcriptionRow, action string) error {
 	key := uuid.NewSHA1(row.ID, []byte(fmt.Sprintf("transcription-%d-%s", row.Attempt, action)))

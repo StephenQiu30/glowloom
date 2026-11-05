@@ -98,7 +98,7 @@ func installMediaReviewStorageColumns(t *testing.T, tx *gorm.DB) {
 	t.Helper()
 	for _, table := range []string{"media_asset", "rendition"} {
 		var valid bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='media' AND table_name=? AND column_name='object_location_id' AND data_type='uuid' AND is_nullable='YES')`, table).Scan(&valid).Error; err != nil {
+		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='media' AND table_name=? AND column_name='object_location_id' AND data_type='uuid' AND is_nullable='NO')`, table).Scan(&valid).Error; err != nil {
 			t.Fatal(err)
 		}
 		if !valid {

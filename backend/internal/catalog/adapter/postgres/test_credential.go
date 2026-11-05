@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -26,7 +28,7 @@ func (s *Store) LoadForCredentialTest(ctx context.Context, request application.C
 	}
 	var provider domain.Provider
 	var credential domain.Credential
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireWorkerPlatform(tx, request); err != nil {
 			return err
 		}
@@ -92,7 +94,7 @@ func (s *Store) RecordCredentialTest(ctx context.Context, observation applicatio
 		!validCredentialTestEvents(observation, events) {
 		return application.ErrInvalidCredentialTest
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireWorkerPlatform(tx, observation.CredentialTestRequest); err != nil {
 			return err
 		}

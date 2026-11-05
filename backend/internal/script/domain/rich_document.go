@@ -19,12 +19,13 @@ import (
 
 // Script budgets apply before normalization and never silently truncate content.
 const (
-	MaxDocumentBytes = 8 << 20
-	MaxVersionBytes  = 32 << 20
-	MaxHTTPBytes     = 36 << 20
-	MaxDocumentNodes = 200000
-	MaxDocumentDepth = 64
-	MaxScalarCount   = 1500000
+	MaxDocumentBytes  = 8 << 20
+	MaxVersionBytes   = 32 << 20
+	MaxHTTPBytes      = 36 << 20
+	MaxWritePlanBytes = MaxHTTPBytes * 3
+	MaxDocumentNodes  = 200000
+	MaxDocumentDepth  = 64
+	MaxScalarCount    = 1500000
 )
 
 var (

@@ -262,7 +262,7 @@ func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *web
 					}
 					continue
 				}
-				if receipt.Status == "accepted" {
+				if receipt.Status == application.YjsReceiptStatusAccepted {
 					h.Notify(id)
 				}
 				if !send(packet{Type: "yjs_ack", OpID: msg.OpID, YjsReceipt: receipt}) {

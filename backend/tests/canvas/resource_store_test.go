@@ -25,7 +25,8 @@ func seedCanvasMedia(t *testing.T, db *gorm.DB, project uuid.UUID, kind string) 
 	t.Helper()
 	id := uuid.New()
 	key := "projects/" + project.String() + "/" + kind + "/2026/09/" + id.String() + ".bin"
-	if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,moderation_status) VALUES(?,?,?,'upload','ready',?,'fixture','application/octet-stream',1,'passed')`, id, project, kind, key).Error; err != nil {
+	locationID := seedCanvasMetadataLocation(t, db, key)
+	if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,moderation_status) VALUES(?,?,?,'upload','ready',?,?,'fixture','application/octet-stream',1,'passed')`, id, project, kind, key, locationID).Error; err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -63,7 +64,7 @@ func TestMediaReferenceRemainsLockedUntilCanvasCommit(t *testing.T) {
 	var workers sync.WaitGroup
 	defer func() { cancel(); workers.Wait() }()
 	store := pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
-		return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil), read: read, resume: resume}
+		return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)), read: read, resume: resume}
 	}, mediawire.NewCanvasProjectAccess)
 	service := canvasfixture.NewService(store)
 	doc, err := service.Create(ctx, actor, project, uuid.NewString(), application.CreateInput{Name: "绑定提交事务"})
@@ -167,7 +168,7 @@ func TestResourcePersistenceScopesMediaAndSoftDeleteReplay(t *testing.T) {
 	if _, err := pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess).FindAsset(t.Context(), actor, project, asset); err != nil {
 		t.Fatalf("source media deleted %v", err)
 	}
-	query := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess), nil)
+	query := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess))
 	page, err := query.List(t.Context(), actor, project, "image", "", 1)
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != asset {
 		t.Fatalf("media list %+v %v", page, err)

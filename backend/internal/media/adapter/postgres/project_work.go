@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // HasInflightWork reads only this module's persisted work for a project.
@@ -19,8 +20,8 @@ func (s *Store) HasInflightWork(ctx context.Context, actor identityapp.Principal
 	if projectID == uuid.Nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return false, identityapp.ErrForbidden
 	}
-	var present bool
-	if err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM media.media_asset WHERE project_id=? AND status IN ('uploading','processing') AND NOT is_delete)`, projectID).Scan(&present).Error; err != nil {
+	present, err := storageExists(s.db.WithContext(ctx).Model(&assetRow{}).Where("project_id = ? AND status IN ? AND NOT is_delete", projectID, []domain.Status{domain.StatusUploading, domain.StatusProcessing}))
+	if err != nil {
 		return false, fmt.Errorf("read media project work: %w", err)
 	}
 	return present, nil

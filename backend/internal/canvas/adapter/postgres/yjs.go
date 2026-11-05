@@ -99,7 +99,7 @@ func (s *Store) LoadYjs(ctx context.Context, a identity.Principal, id uuid.UUID)
 			}
 			tombstones.Nodes = append(tombstones.Nodes, n)
 		}
-		result = application.YjsState{RestorationNodes: application.Snapshot(tombstones).Nodes, YjsBinding: application.YjsBinding{DocumentID: id, Epoch: row.Epoch, WriterTerm: application.Revision(row.WriterTerm), CommitSeq: application.Revision(row.CommitSeq)}, State: row.State, GraphHash: row.GraphHash, Document: application.Snapshot(doc)}
+		result = application.YjsState{CommandDocument: doc, RestorationNodes: application.Snapshot(tombstones).Nodes, YjsBinding: application.YjsBinding{DocumentID: id, Epoch: row.Epoch, WriterTerm: application.Revision(row.WriterTerm), CommitSeq: application.Revision(row.CommitSeq)}, State: row.State, GraphHash: row.GraphHash, Document: application.Snapshot(doc)}
 		return nil
 	})
 	return result, err
@@ -196,7 +196,7 @@ func (s *Store) CommitYjs(ctx context.Context, a identity.Principal, base applic
 			return application.ErrYjsContention
 		}
 		reject := func(code string) error {
-			result = application.YjsReceipt{Epoch: input.Epoch, UpdateID: input.UpdateID, PayloadHash: input.PayloadHash, Status: "rejected", Code: code, CommitSeq: base.CommitSeq, ContentRevision: application.Revision(doc.Revision), GraphHash: row.GraphHash}
+			result = application.YjsReceipt{Epoch: input.Epoch, UpdateID: input.UpdateID, PayloadHash: input.PayloadHash, Status: application.YjsReceiptStatusRejected, Code: code, CommitSeq: base.CommitSeq, ContentRevision: application.Revision(doc.Revision), GraphHash: row.GraphHash}
 			return storeYjsReceipt(tx, a, id, input, result)
 		}
 		if rejection != "" {
@@ -293,7 +293,7 @@ func (s *Store) CommitYjs(ctx context.Context, a identity.Principal, base applic
 		if err = recordYjsVersion(tx, updated, row.Epoch, a.ID, "accepted"); err != nil {
 			return err
 		}
-		result = application.YjsReceipt{Epoch: input.Epoch, CommitSeq: application.Revision(seq), ContentRevision: application.Revision(revision), GraphHash: candidate.GraphHash, UpdateID: input.UpdateID, PayloadHash: input.PayloadHash, Effect: candidate.Effect, Status: "accepted", Update: candidate.AppliedUpdate}
+		result = application.YjsReceipt{Epoch: input.Epoch, CommitSeq: application.Revision(seq), ContentRevision: application.Revision(revision), GraphHash: candidate.GraphHash, UpdateID: input.UpdateID, PayloadHash: input.PayloadHash, Effect: candidate.Effect, Status: application.YjsReceiptStatusAccepted, Update: candidate.AppliedUpdate}
 		return storeYjsReceipt(tx, a, id, input, result)
 	})
 	return result, err

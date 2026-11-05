@@ -31,7 +31,7 @@ func TestGlowloomEmptyKeyDoesNotReuseLegacySecretOrRequiredValue(t *testing.T) {
 	}
 }
 
-func TestGlowloomDotEnvIsPreferredAndSupportsLegacyFileValues(t *testing.T) {
+func TestGlowloomDotEnvUsesOnlyCanonicalFileValues(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "configuration.env")
 	body := "GLOWLOOM_ENV=staging\nGLOWLOOM_PUBLIC_ORIGIN=https://glowloom.example\nGLOWLOOM_HTTP_ADDR=:9002\nLV_HTTP_ADDR=:9001\nLV_WORKER_HEALTH_ADDR=:9003\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
@@ -44,12 +44,38 @@ func TestGlowloomDotEnvIsPreferredAndSupportsLegacyFileValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Env != "staging" || cfg.HTTPAddr != ":9002" || cfg.WorkerHealthAddr != ":9003" {
-		t.Fatalf("canonical file or compatible legacy file values were lost")
+	if cfg.Env != "staging" || cfg.HTTPAddr != ":9002" || cfg.WorkerHealthAddr != ":8081" {
+		t.Fatalf("canonical file values or default health address changed")
 	}
 	t.Setenv("GLOWLOOM_HTTP_ADDR", ":9005")
 	cfg, err = config.Load()
 	if err != nil || cfg.HTTPAddr != ":9005" {
 		t.Fatalf("canonical environment must override canonical file: %v", err)
+	}
+}
+
+func TestGlowloomIgnoresLegacyProcessKeys(t *testing.T) {
+	for _, key := range []string{"GLOWLOOM_HTTP_ADDR", "GLOWLOOM_WORKER_HEALTH_ADDR"} {
+		t.Setenv(key, "")
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("GLOWLOOM_ENV_FILE", "")
+	t.Setenv("LV_HTTP_ADDR", ":9001")
+	t.Setenv("LV_WORKER_HEALTH_ADDR", ":9003")
+	cfg, err := config.Load()
+	if err != nil || cfg.HTTPAddr != "127.0.0.1:8080" || cfg.WorkerHealthAddr != ":8081" {
+		t.Fatalf("legacy process keys took effect: http=%q health=%q err=%v", cfg.HTTPAddr, cfg.WorkerHealthAddr, err)
+	}
+}
+func TestGlowloomIgnoresLegacyEnvironmentFileKey(t *testing.T) {
+	t.Setenv("GLOWLOOM_ENV_FILE", "")
+	if err := os.Unsetenv("GLOWLOOM_ENV_FILE"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LV_ENV_FILE", filepath.Join(t.TempDir(), "must-not-be-read.env"))
+	if _, err := config.Load(); err != nil {
+		t.Fatalf("legacy environment file key was read: %v", err)
 	}
 }

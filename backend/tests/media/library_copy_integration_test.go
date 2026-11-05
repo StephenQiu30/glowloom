@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -35,10 +34,10 @@ func TestProjectCopyLibraryRetainedImagePreservesTrashAndIndependentBytes(t *tes
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &source.ID, Metadata: &mediaapp.LibraryMetadata{Title: "回收的原图", Category: "material", Tags: []string{"保留"}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &source.ID, Metadata: &mediaapp.LibraryMetadata{Title: "回收的原图", Category: "material", Tags: []string{"保留"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "recycle_items", Key: uuid.New(), ExpectedRevision: 1, Items: []mediaapp.LibraryItemRevision{{ID: source.ID, Revision: 1}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "recycle_items", Key: uuid.New(), ExpectedRevision: 1, Items: []mediaapp.LibraryItemRevision{{ID: source.ID, Revision: 2}}}); err != nil {
 		t.Fatal(err)
 	}
 	deleted, err := source.Delete(time.Now().UTC())
@@ -79,7 +78,7 @@ func TestProjectCopyLibraryRetainedImagePreservesTrashAndIndependentBytes(t *tes
 		t.Fatal("incomplete retained original and renditions", snapshot)
 	}
 	repo := mediaCopyStore(db)
-	transfer := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
+	transfer := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir())
 	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +178,7 @@ func TestProjectCopyLibraryUnavailableOriginalNeverPublishesPartialMetadata(t *t
 			}
 			library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 			scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-			if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &source.ID, Metadata: &mediaapp.LibraryMetadata{Title: "不得省略", Category: "other", Tags: []string{}}}); err != nil {
+			if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &source.ID, Metadata: &mediaapp.LibraryMetadata{Title: "不得省略", Category: "other", Tags: []string{}}}); err != nil {
 				t.Fatal(err)
 			}
 			if failure == "unapproved" {
@@ -222,7 +221,7 @@ func TestProjectCopyLibraryUnavailableOriginalNeverPublishesPartialMetadata(t *t
 				t.Fatal(freezeErr)
 			}
 			repo := mediaCopyStore(db)
-			transfer := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
+			transfer := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir())
 			if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err == nil {
 				t.Fatal("missing required bytes copied as success")
 			}
@@ -272,7 +271,7 @@ func TestProjectCopyLibraryPreservesFrozenFoldersTextAndIndependentBinaryMetadat
 		t.Fatal(err)
 	}
 	metadata := &mediaapp.LibraryMetadata{FolderID: &folder.Folder.ID, Title: "冻结的展示标题", Category: "prop", Tags: []string{"道具", "原件"}, SourceLabel: "用户来源", Note: "独立元数据"}
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ExpectedRevision: 1, ItemID: &original.Asset.ID, Metadata: metadata}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: scope, Action: "update_item", Key: uuid.New(), ExpectedRevision: 1, ItemID: &original.Asset.ID, Metadata: metadata}); err != nil {
 		t.Fatal(err)
 	}
 	text := "第一集对白\n第二行原文"
@@ -300,11 +299,11 @@ func TestProjectCopyLibraryPreservesFrozenFoldersTextAndIndependentBinaryMetadat
 	}
 	// Later source editing cannot replace the accepted manifest's metadata.
 	metadata.Title = "源后续修改"
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ExpectedRevision: 3, ItemID: &original.Asset.ID, ExpectedItemRevision: 1, Metadata: metadata}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ExpectedRevision: 3, ItemID: &original.Asset.ID, ExpectedItemRevision: 2, Metadata: metadata}); err != nil {
 		t.Fatal(err)
 	}
 	repo := mediaCopyStore(db)
-	transfer := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
+	transfer := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir())
 	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
 	}

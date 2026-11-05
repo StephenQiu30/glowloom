@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 )
 
 type pendingPersonalCommit struct {
+	started atomic.Bool
 	*pgmedia.Store
 	db                               *gorm.DB
 	ctx                              context.Context
@@ -28,6 +30,7 @@ type pendingPersonalCommit struct {
 }
 
 func (r *pendingPersonalCommit) CommitPersonalUpload(_ context.Context, actor identityapp.Principal, request mediaapp.UploadRequest, a domain.MediaAsset, rends []domain.Rendition) (mediaapp.PersonalUploadResult, error) {
+	r.started.Store(true)
 	r.keys = []string{a.ObjectKey}
 	for _, rend := range rends {
 		r.keys = append(r.keys, rend.ObjectKey)
@@ -70,14 +73,21 @@ func TestPersonalUploadCleanupJoinsUnknownRealCommitBeforeObjectRemoval(t *testi
 	repo := &pendingPersonalCommit{Store: mediaTestStore(db), db: db, ctx: ctx, pending: make(chan struct{}), release: make(chan struct{}), checking: make(chan struct{}), done: make(chan struct{}), finished: make(chan error, 1)}
 	var release sync.Once
 	objects := glbTestObjects(t)
-	service := mediaapp.NewScopedUploadService(repo.Store, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	service := mediaFixtureRoutedUpload(t, db, repo.Store, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = uuid.Nil
 	result := make(chan error, 1)
 	joined := make(chan struct{})
-	go func() { defer close(joined); _, err := service.UploadPersonal(ctx, in); result <- err }()
-	defer func() { release.Do(func() { close(repo.release) }); cancel(); <-repo.done; <-joined }()
+	go func() { defer close(joined); _, err := fixturePersonalUpload(ctx, service, in); result <- err }()
+	defer func() {
+		release.Do(func() { close(repo.release) })
+		cancel()
+		if repo.started.Load() {
+			<-repo.done
+		}
+		<-joined
+	}()
 	select {
 	case <-repo.checking:
 	case <-ctx.Done():
@@ -135,11 +145,11 @@ func TestPersonalUploadZeroRowReceiptRollsBackObjectsAndAudit(t *testing.T) {
 	})
 	objects := &uploadObjectsFake{}
 	store := mediaTestStore(db)
-	service := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaFixtureMockUpload(t, db, store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = uuid.Nil
-	if result, err := service.UploadPersonal(t.Context(), in); err == nil || result.Asset.ID != uuid.Nil {
+	if result, err := fixturePersonalUpload(t.Context(), service, in); err == nil || result.Asset.ID != uuid.Nil {
 		t.Fatal("zero row receipt returned success", err)
 	}
 	var count int64

@@ -27,22 +27,26 @@ func init() {
 	RegisterDriver(&VolcengineMusicDriver{}, "volcengine_music")
 }
 
+// Submit sends generation input using this adapter's provider protocol.
 func (d *VolcengineMusicDriver) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
 	return c.submitMusic(ctx, input, key)
 }
 
+// Query reads provider progress or reports that polling is unsupported.
 func (d *VolcengineMusicDriver) Query(ctx context.Context, c *Client, config catalog.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
 	return c.queryMusic(ctx, config, taskID, key)
 }
 
-func (d *VolcengineMusicDriver) Probe(ctx context.Context, c *Client, config catalog.ProviderConfig, key string) ProbeResult {
+// Probe performs the configured provider credential check.
+func (d *VolcengineMusicDriver) Probe(_ context.Context, _ *Client, config catalog.ProviderConfig, _ string) ProbeResult {
 	if config.Validate() != nil {
 		return ProbeResult{Auth: "unknown", Adapter: "unsupported", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 	}
 	return ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 }
 
-func (d *VolcengineMusicDriver) ProbeModelDefaultParams(capability string) map[string]any {
+// ProbeModelDefaultParams applies this adapter's model-probe parameter defaults.
+func (d *VolcengineMusicDriver) ProbeModelDefaultParams(_ string) map[string]any {
 	return nil
 }
 
@@ -102,7 +106,7 @@ func signMusicRequest(req *http.Request, body []byte, ak, sk string, now time.Ti
 }
 
 func (c *Client) submitMusic(ctx context.Context, input application.GenerationRequest, key string) (application.GenerationResult, error) {
-	invalid := application.GenerationResult{Outcome: "not_submitted", ErrorCode: "invalid_provider_request"}
+	invalid := application.GenerationResult{Outcome: application.ProviderOutcomeNotSubmitted, ErrorCode: "invalid_provider_request"}
 	var credential struct {
 		AK string `json:"access_key_id"`
 		SK string `json:"secret_access_key"`
@@ -158,22 +162,22 @@ func (c *Client) submitMusic(ctx context.Context, input application.GenerationRe
 	}
 	data, status, err := c.musicRequest(ctx, input.Config, key, action, payload)
 	if err != nil {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
 		return submitHTTPFailure(status), nil
 	}
 	var response musicResponse
 	if json.Unmarshal(data, &response) != nil || response.Code == nil || hasProviderError(response.Metadata.Error) {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "invalid_response"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "invalid_response"}, nil
 	}
 	if *response.Code != 0 {
 		return musicError(*response.Code, true), nil
 	}
 	if response.Result == nil || !validTaskID(response.Result.TaskID) {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "invalid_response"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "invalid_response"}, nil
 	}
-	return application.GenerationResult{Outcome: "accepted", State: "pending", TaskID: response.Result.TaskID}, nil
+	return application.GenerationResult{Outcome: application.ProviderOutcomeAccepted, State: application.ProviderTaskPending, TaskID: response.Result.TaskID}, nil
 }
 
 type musicResponse struct {
@@ -212,9 +216,9 @@ func (c *Client) queryMusic(ctx context.Context, config catalog.ProviderConfig, 
 	result := application.GenerationResult{TaskID: taskID}
 	switch *response.Result.Status {
 	case 0:
-		result.State = "pending"
+		result.State = application.ProviderTaskPending
 	case 1:
-		result.State = "running"
+		result.State = application.ProviderTaskRunning
 	case 2:
 		detail := response.Result.SongDetail
 		if detail == nil || !catalog.ValidCreationResultURL(config.AdapterKey, detail.AudioURL) {
@@ -224,11 +228,11 @@ func (c *Client) queryMusic(ctx context.Context, config catalog.ProviderConfig, 
 		if err != nil || seconds <= 0 || seconds > 240 {
 			return unknownResult(), nil
 		}
-		result.State = "succeeded"
+		result.State = application.ProviderTaskSucceeded
 		result.URLs = []string{detail.AudioURL}
 		result.Usage, _ = json.Marshal(map[string]any{"duration_seconds": detail.Duration})
 	case 3:
-		result.State = "failed"
+		result.State = application.ProviderTaskFailed
 		result.ErrorCode = "generation_failed"
 	default:
 		return unknownResult(), nil
@@ -237,9 +241,9 @@ func (c *Client) queryMusic(ctx context.Context, config catalog.ProviderConfig, 
 }
 
 func musicError(code int, submitting bool) application.GenerationResult {
-	result := application.GenerationResult{State: "unknown", ProviderTerminalCode: code, ErrorCode: "provider_error"}
+	result := application.GenerationResult{State: application.ProviderTaskUnknown, ProviderTerminalCode: code, ErrorCode: "provider_error"}
 	if submitting {
-		result.Outcome = "unknown"
+		result.Outcome = application.ProviderOutcomeUnknown
 	}
 	return result
 }

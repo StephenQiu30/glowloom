@@ -18,7 +18,7 @@ type projectCopyCoverOwner struct {
 }
 
 func (o projectCopyCoverOwner) Freeze(ctx context.Context, actor identityapp.Principal, project uuid.UUID, asset *uuid.UUID) error {
-	return workspaceapp.FreezeProjectCover(ctx, mediaapp.NewAssetQuery(pgmedia.NewScopedStore(o.tx, o.scopes), nil), actor, project, asset)
+	return workspaceapp.FreezeProjectCover(ctx, mediaapp.NewAssetQuery(pgmedia.NewScopedStore(o.tx, o.scopes)), actor, project, asset)
 }
 
 func (o projectCopyCoverOwner) Verify(ctx context.Context, actor identityapp.Principal, binding mediaapp.ProjectCopyBinding, expected, actual *uuid.UUID) error {

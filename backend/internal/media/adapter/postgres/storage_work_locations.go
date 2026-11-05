@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"errors"
+
+	"gorm.io/gorm"
 
 	"github.com/google/uuid"
 
@@ -16,12 +19,12 @@ func (s *StorageRoutes) FindWorkLocation(ctx context.Context, intent uuid.UUID, 
 		return domain.ObjectLocation{}, false, application.ErrStorageIdentityConflict
 	}
 	var row objectLocationRow
-	q := s.db.WithContext(ctx).Raw(`SELECT * FROM media.object_location WHERE owner_intent_id=? AND object_key=?`, intent, key).Scan(&row)
-	if q.Error != nil {
-		return domain.ObjectLocation{}, false, q.Error
-	}
-	if q.RowsAffected == 0 {
+	err := s.db.WithContext(ctx).Where("owner_intent_id = ? AND object_key = ?", intent, key).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.ObjectLocation{}, false, nil
+	}
+	if err != nil {
+		return domain.ObjectLocation{}, false, err
 	}
 	loc := row.domain()
 	if loc.Ref.Validate() != nil {

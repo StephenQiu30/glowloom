@@ -106,7 +106,7 @@ func TestMediaPurgeHTTPActualUnknownRequiresExplicitReconcileRevision(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	unknown := &purgeUnknownRemove{PurgeObjects: objects, once: true}
+	unknown := &purgeUnknownRemove{purgeFixtureObjects: objects, once: true}
 	current, err := mediaapp.NewPurgeWorker(repo.Worker, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil {
 		t.Fatal(err)

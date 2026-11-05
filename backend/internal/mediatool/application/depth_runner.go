@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 // ErrInvalidDepthInput and the remaining errors preserve native failure classes.
@@ -20,16 +21,19 @@ var (
 )
 
 // DepthPhase reports actual work without fabricated frame progress.
-type DepthPhase string
+type DepthPhase = domain.DepthStage
 
 // DepthChecking and subsequent phases describe actual native work.
 const (
-	DepthChecking  DepthPhase = "checking"
-	DepthPreparing DepthPhase = "preparing"
-	DepthLoading   DepthPhase = "loading"
-	DepthInferring DepthPhase = "inferring"
-	DepthEncoding  DepthPhase = "encoding"
-	DepthVerifying DepthPhase = "verifying"
+	DepthDownloading DepthPhase = domain.DepthStageDownloading
+	DepthChecking    DepthPhase = domain.DepthStageChecking
+	DepthPreparing   DepthPhase = domain.DepthStagePreparing
+	DepthLoading     DepthPhase = domain.DepthStageLoading
+	DepthInferring   DepthPhase = domain.DepthStageInferring
+	DepthEncoding    DepthPhase = domain.DepthStageEncoding
+	DepthVerifying   DepthPhase = domain.DepthStageVerifying
+	DepthPreviews    DepthPhase = domain.DepthStagePreviews
+	DepthStoring     DepthPhase = domain.DepthStageStoring
 )
 
 // DepthVideoFacts describes fully decoded bytes, rather than a source claim.

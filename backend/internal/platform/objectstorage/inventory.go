@@ -25,7 +25,7 @@ func (c *Client) ListMetadata(ctx context.Context, prefix string, maxItems int) 
 	if c == nil || (c.sdk == nil && c.native == nil) {
 		return nil, ErrUnavailable
 	}
-	if maxItems < 1 || maxItems > 50000 || !strings.HasSuffix(prefix, "/") || strings.Count(prefix, "/") < 3 || !validKey(strings.TrimSuffix(prefix, "/")) || strings.ContainsAny(prefix, "\x00\r\n") {
+	if maxItems < 1 || maxItems > 50000 || !strings.HasSuffix(prefix, "/") || strings.Count(prefix, "/") < 2 || !validKey(strings.TrimSuffix(prefix, "/")) || strings.ContainsAny(prefix, "\x00\r\n") {
 		return nil, ErrInvalidObject
 	}
 	if err := ctx.Err(); err != nil {
@@ -33,7 +33,7 @@ func (c *Client) ListMetadata(ctx context.Context, prefix string, maxItems int) 
 	}
 	if c.native != nil {
 		out, err := c.native.list(ctx, prefix, maxItems)
-		return out, storageError("list", "legacy", err)
+		return out, storageError("list", "direct", err)
 	}
 	readCtx, cancel := context.WithCancel(ctx)
 	defer cancel()

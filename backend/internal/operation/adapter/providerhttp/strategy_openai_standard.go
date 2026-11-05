@@ -14,10 +14,12 @@ import (
 // OpenAIStandardStrategy implements ProtocolStrategy for official OpenAI, DeepSeek, and Codex endpoints.
 type OpenAIStandardStrategy struct{}
 
+// Name returns the adapter protocol key.
 func (s *OpenAIStandardStrategy) Name() string {
 	return "openai_standard"
 }
 
+// Submit sends generation input using this adapter's provider protocol.
 func (s *OpenAIStandardStrategy) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
 	if !validKey(key) || !validateCommonInput(input) {
 		return invalidSubmissionResult(), nil
@@ -73,10 +75,10 @@ func (s *OpenAIStandardStrategy) Submit(ctx context.Context, c *Client, input ap
 
 	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, path, payload, 64<<20)
 	if err != nil {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	result, ok := parseStandardGenerationResponse(input, data)
 	if !ok {
@@ -85,10 +87,12 @@ func (s *OpenAIStandardStrategy) Submit(ctx context.Context, c *Client, input ap
 	return result, nil
 }
 
-func (s *OpenAIStandardStrategy) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
+// Query reads provider progress or reports that polling is unsupported.
+func (s *OpenAIStandardStrategy) Query(_ context.Context, _ *Client, _ catalogdomain.ProviderConfig, _, _ string) (application.GenerationResult, error) {
 	return unknownResult(), nil
 }
 
+// Probe performs the configured provider credential check.
 func (s *OpenAIStandardStrategy) Probe(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, key string) ProbeResult {
 	result := ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 	if config.Validate() != nil || !validKey(key) {
@@ -139,6 +143,7 @@ func (s *OpenAIStandardStrategy) Probe(ctx context.Context, c *Client, config ca
 	return result
 }
 
+// ProbeModelDefaultParams applies this adapter's model-probe parameter defaults.
 func (s *OpenAIStandardStrategy) ProbeModelDefaultParams(capability string) map[string]any {
 	if capability == "image.generate" {
 		return map[string]any{"size": "1024x1024"}

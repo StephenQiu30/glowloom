@@ -116,11 +116,8 @@ func seedCompletedOutput(t *testing.T, database *gorm.DB, projectID uuid.UUID, h
 	}
 	if err := database.Exec(`
 		INSERT INTO media.media_asset
-		  (id, project_id, kind, origin, status, object_key, mime_type,
-		   byte_size, source_operation_id, moderation_status)
-		VALUES (?::uuid, ?::uuid, 'image', 'generated', ?, ?, 'image/png',
-		        1, ?::uuid, ?)
-	`, assetID.String(), projectID.String(), assetStatus, "reuse-test/"+assetID.String(), opID.String(), assetModeration).Error; err != nil {
+		  (id,project_id,kind,origin,status,object_key,mime_type,byte_size,source_operation_id,moderation_status,object_location_id) VALUES(?::uuid,?::uuid,'image','generated',?,?,'image/png',1,?::uuid,?,?)
+	`, assetID.String(), projectID.String(), assetStatus, "reuse-test/"+assetID.String(), opID.String(), assetModeration, businessFixtureLocation(t, database, "reuse-test/"+assetID.String())).Error; err != nil {
 		t.Fatalf("create source media: %v", err)
 	}
 	if err := database.Exec(`

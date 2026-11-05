@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	flow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
+	flow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	domain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )

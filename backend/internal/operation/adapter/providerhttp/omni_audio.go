@@ -23,7 +23,7 @@ import (
 var audioMention = regexp.MustCompile(`@音频([0-9]+)`)
 
 func (c *Client) submitOmniAudio(ctx context.Context, in application.GenerationRequest, key string) (application.GenerationResult, error) {
-	invalid := application.GenerationResult{Outcome: "not_submitted", ErrorCode: "invalid_provider_request"}
+	invalid := application.GenerationResult{Outcome: application.ProviderOutcomeNotSubmitted, ErrorCode: "invalid_provider_request"}
 	if in.Config.Validate() != nil || !validKey(key) || in.ModelID != "seed-audio-1.0" || in.Mode != "omni_audio" || in.Capability != "audio.generate" || in.OutputCount != 1 || in.EndpointTag != "" || strings.TrimSpace(in.Prompt) == "" || utf8.RuneCountInString(in.Prompt) > 3000 || len(in.References) > 3 {
 		return invalid, nil
 	}
@@ -97,7 +97,7 @@ func (c *Client) submitOmniAudio(ctx context.Context, in application.GenerationR
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Api-Key", key)
 	req.Header.Set("X-Api-Request-Id", id)
-	unknown := application.GenerationResult{Outcome: "unknown", ErrorCode: "response_unconfirmed"}
+	unknown := application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "response_unconfirmed"}
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return unknown, nil
@@ -132,5 +132,5 @@ func (c *Client) submitOmniAudio(ctx context.Context, in application.GenerationR
 		return unknown, nil
 	}
 	usage, _ := json.Marshal(map[string]float64{"original_duration": result.OriginalDuration, "duration": result.Duration})
-	return application.GenerationResult{Outcome: "completed", State: "succeeded", Audio: []application.GeneratedAudio{{Bytes: audio, MediaType: "audio/mpeg"}}, Usage: usage, Subtitle: result.Subtitle}, nil
+	return application.GenerationResult{Outcome: application.ProviderOutcomeCompleted, State: application.ProviderTaskSucceeded, Audio: []application.GeneratedAudio{{Bytes: audio, MediaType: "audio/mpeg"}}, Usage: usage, Subtitle: result.Subtitle}, nil
 }

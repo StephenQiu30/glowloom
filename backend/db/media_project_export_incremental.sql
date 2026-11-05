@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS mediatool.export_artifact (
  byte_size bigint NOT NULL CHECK(byte_size BETWEEN 1 AND 524288000),
  sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),
  object_key text NOT NULL,
- object_location_id uuid REFERENCES media.object_location(id),
+ object_location_id uuid NOT NULL REFERENCES media.object_location(id),
  created_at timestamptz NOT NULL,
  UNIQUE(id,job_id,project_id,attempt),
  UNIQUE(job_id,attempt),

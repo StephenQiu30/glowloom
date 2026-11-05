@@ -22,7 +22,7 @@ import {
 import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
 import { authenticationReturn } from "@/components/auth/auth-return";
 import { pendingInvitation } from "@/components/auth/invitation-continuity";
-import { UnavailableDialog } from "@/components/availability/unavailable";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -106,7 +106,6 @@ function Shell({
   const router = useRouter();
   const { isMobile, openMobile, setOpenMobile } = useSidebar();
   const mobileNavigationTrigger = useRef<HTMLButtonElement>(null);
-  const [feature, setFeature] = useState<string | null>(null);
   const [auth, setAuth] = useState(Boolean(initialAuthMode));
   const [closedAuthMode, setClosedAuthMode] = useState<AuthMode | null>(null);
   const authenticated = !!session;
@@ -162,7 +161,11 @@ function Shell({
         onOpenNavigation={() => setOpenMobile(true)}
         onLogin={() => setAuth(true)}
         onLogout={() => setLogout(true)}
-        onFeature={setFeature}
+        onFeature={(feature) =>
+          toast.info(`${feature}暂未开放`, {
+            id: "product-feature-unavailable",
+          })
+        }
       >
         <main
           id="main-content"
@@ -187,7 +190,6 @@ function Shell({
           </PageOptionsContext.Provider>
         </main>
       </ProductNavigation>
-      <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
       <AuthDialog
         fallbackFocusRef={mobileNavigationTrigger}
         open={authOpen}

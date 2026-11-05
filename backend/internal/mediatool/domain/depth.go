@@ -45,6 +45,31 @@ const (
 	DepthProcessUnknown DepthProcessState = "unknown"
 )
 
+// DepthStage identifies one persisted phase of a native depth job.
+type DepthStage string
+
+// Depth stages identify the current processing, publication or cleanup step.
+const (
+	DepthStageQueued                 DepthStage = "queued"
+	DepthStageDownloading            DepthStage = "downloading"
+	DepthStageChecking               DepthStage = "checking"
+	DepthStagePreparing              DepthStage = "preparing"
+	DepthStageLoading                DepthStage = "loading"
+	DepthStageInferring              DepthStage = "inferring"
+	DepthStageEncoding               DepthStage = "encoding"
+	DepthStageVerifying              DepthStage = "verifying"
+	DepthStagePreviews               DepthStage = "previews"
+	DepthStageStoring                DepthStage = "storing"
+	DepthStageReconciling            DepthStage = "reconciling"
+	DepthStageCleanup                DepthStage = "cleanup"
+	DepthStageCancelling             DepthStage = "cancelling"
+	DepthStageCancelled              DepthStage = "cancelled"
+	DepthStageAwaitingReconciliation DepthStage = "awaiting_reconciliation"
+	DepthStageReview                 DepthStage = "review"
+	DepthStageComplete               DepthStage = "complete"
+	DepthStageFailed                 DepthStage = "failed"
+)
+
 // DepthJob is the safe public projection; no output receipt or private key is serialized.
 type DepthJob struct {
 	ID                      uuid.UUID   `json:"id"`
@@ -55,7 +80,7 @@ type DepthJob struct {
 	SourceSHA256            string      `json:"source_sha256"`
 	ProfileID               string      `json:"profile_id"`
 	Status                  DepthStatus `json:"status"`
-	Stage                   string      `json:"stage"`
+	Stage                   DepthStage  `json:"stage"`
 	Attempt                 int         `json:"attempt"`
 	Revision                int64       `json:"revision"`
 	AssetID                 *uuid.UUID  `json:"asset_id" extensions:"x-nullable"`
@@ -111,7 +136,7 @@ func (s *DepthExecution) Claim(worker uuid.UUID, reconcile bool) error {
 			return ErrInvalidDepthJob
 		}
 		s.Job.Status = DepthRunning
-		s.Job.Stage = "reconciling"
+		s.Job.Stage = DepthStageReconciling
 	} else {
 		if (s.Job.Status != DepthQueued && s.Job.Status != DepthCancelRequested) || s.Job.NeedsReconciliation {
 			return ErrInvalidDepthJob
@@ -121,10 +146,10 @@ func (s *DepthExecution) Claim(worker uuid.UUID, reconcile bool) error {
 		}
 		if s.Job.CancellationRequested {
 			s.Job.Status = DepthCancelRequested
-			s.Job.Stage = "cleanup"
+			s.Job.Stage = DepthStageCleanup
 		} else {
 			s.Job.Status = DepthRunning
-			s.Job.Stage = "downloading"
+			s.Job.Stage = DepthStageDownloading
 		}
 	}
 	s.WorkerID = worker
@@ -162,7 +187,7 @@ func (s *DepthExecution) Interrupt(worker uuid.UUID) error {
 		s.ProcessState = DepthProcessUnknown
 	}
 	s.Job.Status = DepthFailed
-	s.Job.Stage = "awaiting_reconciliation"
+	s.Job.Stage = DepthStageAwaitingReconciliation
 	s.Job.NeedsReconciliation = true
 	s.Job.ExecutionUnconfirmed = s.ProcessState != DepthProcessEnded
 	s.Job.Retryable = false
@@ -180,7 +205,7 @@ func (s *DepthExecution) RequestCancel() error {
 	s.Job.CancellationRequested = true
 	if !s.Job.NeedsReconciliation {
 		s.Job.Status = DepthCancelRequested
-		s.Job.Stage = "cancelling"
+		s.Job.Stage = DepthStageCancelling
 	}
 	s.Job.Revision++
 	return nil
@@ -193,7 +218,7 @@ func (s *DepthExecution) FinishCancelled(worker uuid.UUID) error {
 	}
 	s.WorkerID = uuid.Nil
 	s.Job.Status = DepthCancelled
-	s.Job.Stage = "cancelled"
+	s.Job.Stage = DepthStageCancelled
 	s.Job.NeedsReconciliation = false
 	s.Job.Retryable = true
 	s.Job.FailureCode = nil
@@ -207,7 +232,7 @@ func (s *DepthExecution) Retry() error {
 		return ErrInvalidDepthJob
 	}
 	s.Job.Status = DepthQueued
-	s.Job.Stage = "queued"
+	s.Job.Stage = DepthStageQueued
 	s.Job.Attempt++
 	s.Job.Revision++
 	s.ProcessState = DepthProcessNone

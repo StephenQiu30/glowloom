@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
@@ -55,8 +54,8 @@ func TestProjectCopyCleanupKeepsSourceMetadataAndObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := mediaCopyStore(database)
-	transfer := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
-	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	transfer := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, database), t.TempDir())
+	if err := transfer.Transfer(fixtureCopyContext(t), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
@@ -65,6 +64,7 @@ func TestProjectCopyCleanupKeepsSourceMetadataAndObjects(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	prepareFixtureCopyCleanup(t, libraryOwnerDB(t), binding, snapshot)
 	if err := transfer.Cleanup(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
 	}

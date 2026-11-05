@@ -1,4 +1,12 @@
 declare namespace API {
+  type AcceptedRun = {
+    execution_revision: number;
+    root_run_id: string;
+    session_id: string;
+    status: string;
+    submission_id: string;
+  };
+
   type AcceptedView = {
     operation_id: string;
     retry_after_seconds: number;
@@ -76,7 +84,7 @@ declare namespace API {
 
   type AdminModelPage = {
     items?: CreatedModel[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type AdminModelVersion = {
@@ -99,11 +107,11 @@ declare namespace API {
     create_time?: string;
     currency?: string;
     effective_from?: string;
-    fx_rate_to_cny?: string;
+    fx_rate_to_cny?: string | null;
     id?: string;
-    reviewed_at?: string;
+    reviewed_at?: string | null;
     rule?: Record<string, any>;
-    source_url?: string;
+    source_url?: string | null;
     unit?: string;
     version_no?: number;
   };
@@ -141,11 +149,33 @@ declare namespace API {
     expected_split_revision?: number;
   };
 
-  type advanceAgentSessionParams = {
-    /** 项目UUID */
-    pid: string;
-    /** 会话UUID */
-    sid: string;
+  type AgentState = {
+    adopted?: Record<string, any>[];
+    authorization_revision?: number;
+    delegations?: {
+      adopted?: boolean;
+      conversation_id: number;
+      model_budget?: number;
+      model_used?: number;
+      role: string;
+      source_refs?: string[];
+      status: string;
+      task_id: string;
+      tool_budget?: number;
+      tool_used?: number;
+    }[];
+    execution_revision: number;
+    failure?: Record<string, any>;
+    goal?: string;
+    model_steps?: number;
+    pending_proposal?: string | null;
+    plan?: PlanItem[];
+    proposal?: ProposalView;
+    reconciliation?: Record<string, any>;
+    root_run_id?: string;
+    segment_id?: string;
+    status: string;
+    tool_steps?: number;
   };
 
   type appendCanvasAssistantTurnParams = {
@@ -153,6 +183,14 @@ declare namespace API {
     id: string;
     /** 会话UUID */
     sid: string;
+  };
+
+  type AppliedReceipt = {
+    authorization_revision?: number;
+    decision_id?: string;
+    execution_revision?: number;
+    receipt_id?: string;
+    status?: string;
   };
 
   type ApplyConfigInput = {
@@ -194,7 +232,7 @@ declare namespace API {
   type AssetCanvas = {
     can_copy_project?: boolean;
     collection?: string;
-    cover_asset_id?: string;
+    cover_asset_id?: string | null;
     cover_unavailable?: boolean;
     created_at?: string;
     favorite?: boolean;
@@ -208,6 +246,8 @@ declare namespace API {
     revision?: string;
     updated_at?: string;
   };
+
+  type AssetCommandAction = "favorite" | "rename" | "delete";
 
   type AssetCommandInput = {
     action?: "favorite" | "rename" | "delete";
@@ -238,6 +278,8 @@ declare namespace API {
     revision?: string;
     status?: "succeeded" | "failed";
   };
+
+  type AssetCommandStatus = "succeeded" | "failed";
 
   type AssetCreationInput = {
     kind?: "canvas" | "short_drama";
@@ -343,6 +385,27 @@ declare namespace API {
     target_user_id?: string;
   };
 
+  type AuthorizedInput = {
+    draft: Record<string, any>;
+    input_hash: string;
+    media_pins: {
+      bindingId?: string;
+      mediaKind: string;
+      sourceId: string;
+      sourceVersion: string;
+    }[];
+    plain_text: string;
+    prompt: string;
+    quote?: {
+      content_hash: string;
+      message_id: string;
+      run_id: string;
+      text: string;
+    };
+    references_unavailable?: boolean;
+    schema_version: number;
+  };
+
   type AuthPolicyView = {
     available_terms_version: string;
     closed_reason: string;
@@ -359,12 +422,12 @@ declare namespace API {
   };
 
   type BatchDetail = {
-    cancel_requested_at?: string;
+    cancel_requested_at?: string | null;
     failed_count?: number;
     id?: string;
     items?: TaskSummary[];
     kind?: string;
-    paused_reason?: string;
+    paused_reason?: string | null;
     project_id?: string;
     quote_total_micros?: number;
     status?: BatchStatus;
@@ -412,7 +475,7 @@ declare namespace API {
     concurrency?: number;
     global_prompt?: string;
     mode?: string;
-    model_profile_id?: string;
+    model_profile_id?: string | null;
     operation?: string;
     output_count?: number;
     params?: Record<string, any>;
@@ -443,17 +506,17 @@ declare namespace API {
 
   type BillingOutcome = {
     charge_state?: string;
-    charged_micros?: number;
+    charged_micros?: number | null;
     delivery_state?: string;
     evidence_present?: boolean;
     provider_settlement_state?: string;
     reason?: string;
-    reconcile_deadline?: string;
+    reconcile_deadline?: string | null;
     reconciliation_required?: boolean;
-    refunded_micros?: number;
+    refunded_micros?: number | null;
     regenerate?: string;
-    released_micros?: number;
-    reserved_micros?: number;
+    released_micros?: number | null;
+    reserved_micros?: number | null;
   };
 
   type bindBibleVoiceParams = {
@@ -587,7 +650,7 @@ declare namespace API {
     canvas_id?: string;
     node_id?: string;
     revision?: number;
-    row_id?: string;
+    row_id?: string | null;
   };
 
   type CanvasUsage = {
@@ -702,11 +765,27 @@ declare namespace API {
     node_id?: string;
   };
 
+  type commandAgentRunParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+    /** 运行UUID */
+    rid: string;
+  };
+
+  type CommandReceipt = {
+    decision?: Decision;
+    delivery_status?: string;
+  };
+
   type CommandResult = {
     batch?: BatchResult;
     detail?: SubjectDetail;
     item?: ItemResult;
   };
+
+  type CommandStatus = "pending" | "completed" | "cancelled";
 
   type completeEmailChangeParams = {
     /** Operation UUID */
@@ -737,13 +816,6 @@ declare namespace API {
     hash?: string;
     proposed?: ProviderConfig;
     revision?: number;
-  };
-
-  type confirmAgentStageParams = {
-    /** 项目UUID */
-    pid: string;
-    /** 会话UUID */
-    sid: string;
   };
 
   type ConfirmationPage = {
@@ -791,12 +863,6 @@ declare namespace API {
     kind: "character" | "location" | "prop";
     /** Identity UUID */
     id: string;
-  };
-
-  type ConfirmInput = {
-    expected_revision?: number;
-    operation_id?: string;
-    turn_id?: string;
   };
 
   type confirmOperationQuoteParams = {
@@ -870,6 +936,23 @@ declare namespace API {
   type ControlRequest = {
     acknowledged_impact?: ImpactProof;
     expected_revision?: number;
+  };
+
+  type ControlStatus = {
+    application_receipt?: AppliedReceipt;
+    authorization_revision?: number;
+    current_decision?: Decision;
+    delivery_status?: string;
+    request_decision?: Decision;
+    request_delivery_status?: string;
+    request_receipt?: AppliedReceipt;
+  };
+
+  type createAgentRunParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
   };
 
   type createAgentSessionParams = {
@@ -957,7 +1040,7 @@ declare namespace API {
     resolution?: string;
     revision?: number;
     status?: string;
-    style_key?: string;
+    style_key?: string | null;
     style_preset_id?: string;
     style_subtype?: string;
     style_type?: string;
@@ -1029,7 +1112,7 @@ declare namespace API {
     aspect_ratio: "9:16" | "16:9" | "1:1";
     description?: string;
     name: string;
-    style_key?: string;
+    style_key?: string | null;
     style_preset_id?: string;
     style_subtype?: "anime_jp" | "guofeng_xianxia" | "cartoon_3d" | "manhwa";
     style_type?: "realistic" | "stylized";
@@ -1068,6 +1151,7 @@ declare namespace API {
   };
 
   type CreateRequest = {
+    canvas_id?: string;
     request_id?: string;
     title?: string;
   };
@@ -1133,6 +1217,20 @@ declare namespace API {
     node_id?: string;
   };
 
+  type CurrentSubmission = {
+    active_run?: {
+      accepted_revision: number;
+      created_at: string;
+      input_excerpt: string;
+      retry_of_run_id?: string;
+      root_run_id: string;
+      session_id: string;
+      status: string;
+    };
+    latest_accepted?: AcceptedRun;
+    unresolved_run_ids?: string[];
+  };
+
   type Customization = {
     base_template_id?: string;
     content?: string;
@@ -1141,6 +1239,30 @@ declare namespace API {
     operation?: string;
     revision?: number;
     update_time?: string;
+  };
+
+  type Decision = {
+    action?: string;
+    actor_id?: string;
+    authorization_revision?: number;
+    candidate_hash?: string;
+    canvas_id?: string;
+    content_hash?: string;
+    decision_id?: string;
+    org_id?: string;
+    project_id?: string;
+    proposal_id?: string;
+    root_run_id?: string;
+    scope_id?: string;
+    session_id?: string;
+  };
+
+  type DecisionInput = {
+    action?: string;
+    candidate_hash?: string;
+    expected_authorization_revision?: number;
+    proposal_id?: string;
+    request_id?: string;
   };
 
   type declineProposalParams = {
@@ -1255,12 +1377,12 @@ declare namespace API {
   };
 
   type DepthJob = {
-    asset_id?: string;
+    asset_id?: string | null;
     attempt?: number;
     cancellation_requested?: boolean;
     created_at?: string;
     execution_unconfirmed?: boolean;
-    failure_code?: string;
+    failure_code?: string | null;
     id?: string;
     needs_reconciliation?: boolean;
     profile_id?: string;
@@ -1268,23 +1390,23 @@ declare namespace API {
     reconciliation_requested?: boolean;
     retryable?: boolean;
     revision?: number;
-    sha256?: string;
+    sha256?: string | null;
     source?: Source;
     source_asset_id?: string;
     source_asset_revision?: number;
     source_sha256?: string;
-    stage?: string;
+    stage?: DepthStage;
     status?: DepthStatus;
     updated_at?: string;
   };
 
   type DepthJobResponse = {
-    asset_id?: string;
+    asset_id?: string | null;
     attempt?: number;
     cancellation_requested?: boolean;
     created_at?: string;
     execution_unconfirmed?: boolean;
-    failure_code?: string;
+    failure_code?: string | null;
     id?: string;
     needs_reconciliation?: boolean;
     profile_id?: string;
@@ -1292,12 +1414,12 @@ declare namespace API {
     reconciliation_requested?: boolean;
     retryable?: boolean;
     revision?: number;
-    sha256?: string;
+    sha256?: string | null;
     source?: Source;
     source_asset_id?: string;
     source_asset_revision?: number;
     source_sha256?: string;
-    stage?: string;
+    stage?: DepthStage;
     status?: DepthStatus;
     updated_at?: string;
   };
@@ -1306,7 +1428,7 @@ declare namespace API {
     current_actor_id?: string;
     current_org_id?: string;
     items?: DepthJob[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type DepthPreview = {
@@ -1318,6 +1440,26 @@ declare namespace API {
     url?: string;
   };
 
+  type DepthStage =
+    | "queued"
+    | "downloading"
+    | "checking"
+    | "preparing"
+    | "loading"
+    | "inferring"
+    | "encoding"
+    | "verifying"
+    | "previews"
+    | "storing"
+    | "reconciling"
+    | "cleanup"
+    | "cancelling"
+    | "cancelled"
+    | "awaiting_reconciliation"
+    | "review"
+    | "complete"
+    | "failed";
+
   type DepthStatus =
     | "queued"
     | "running"
@@ -1326,6 +1468,8 @@ declare namespace API {
     | "failed"
     | "cancel_requested"
     | "cancelled";
+
+  type DialogueKind = "dialogue" | "voiceover" | "inner";
 
   type DirectorBoneFrame = {
     easing?: string;
@@ -1614,7 +1758,7 @@ declare namespace API {
     operation_version?: number;
     permissions?: Permissions;
     project_id?: string;
-    read_only_reason?: string;
+    read_only_reason?: string | null;
     revision?: string;
     schema_version?: number;
     scope?: Record<string, any>;
@@ -1817,7 +1961,7 @@ declare namespace API {
     confirmed_structure_id?: string;
     current_structure_id?: string;
     id?: string;
-    inherit_status?: string;
+    inherit_status?: EpisodeInheritStatus;
     is_delete?: boolean;
     org_id?: string;
     previous_episode_id?: string;
@@ -1839,9 +1983,12 @@ declare namespace API {
     title?: string;
   };
 
+  type EpisodeInheritStatus =
+    "not_inherited" | "pending" | "inherited" | "retained" | "invalidated";
+
   type EpisodeMapping = {
     episode_id?: string;
-    inherit_status?: string;
+    inherit_status?: EpisodeInheritStatus;
     previous_episode_id?: string;
   };
 
@@ -1883,11 +2030,11 @@ declare namespace API {
   };
 
   type ExportJob = {
-    artifact_id?: string;
-    asset_id?: string;
+    artifact_id?: string | null;
+    asset_id?: string | null;
     attempt?: number;
     created_at?: string;
-    failure_code?: string;
+    failure_code?: string | null;
     id?: string;
     output_kind?:
       "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml" | "jianying";
@@ -1895,19 +2042,19 @@ declare namespace API {
     project_id?: string;
     revision?: number;
     settings?: ExportSettings;
-    sha256?: string;
+    sha256?: string | null;
     source?: Source;
-    stage?: string;
+    stage?: ExportStage;
     status?: MediatoolStatus;
     updated_at?: string;
   };
 
   type ExportJobResponse = {
-    artifact_id?: string;
-    asset_id?: string;
+    artifact_id?: string | null;
+    asset_id?: string | null;
     attempt?: number;
     created_at?: string;
-    failure_code?: string;
+    failure_code?: string | null;
     id?: string;
     output_kind?:
       "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml" | "jianying";
@@ -1915,9 +2062,9 @@ declare namespace API {
     project_id?: string;
     revision?: number;
     settings?: ExportSettings;
-    sha256?: string;
+    sha256?: string | null;
     source?: Source;
-    stage?: string;
+    stage?: ExportStage;
     status?: MediatoolStatus;
     updated_at?: string;
   };
@@ -1931,7 +2078,7 @@ declare namespace API {
 
   type ExportPage = {
     items?: ExportJob[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type ExportPreview = {
@@ -1956,6 +2103,19 @@ declare namespace API {
     file_name?: string;
     resolution?: 480 | 720 | 1080 | 1440 | 2160;
   };
+
+  type ExportStage =
+    | "queued"
+    | "downloading"
+    | "rendering"
+    | "encoding"
+    | "previews"
+    | "verifying"
+    | "review"
+    | "cancelling"
+    | "complete"
+    | "failed"
+    | "cancelled";
 
   type ExportWaveformPreview = {
     expires_at?: string;
@@ -2002,7 +2162,7 @@ declare namespace API {
     capability?: string;
     inputs?: GenerationReference[];
     mode?: string;
-    model_profile_id?: string;
+    model_profile_id?: string | null;
     output_count?: number;
     params?: Record<string, any>;
     prompt?: string;
@@ -2024,11 +2184,51 @@ declare namespace API {
     id: string;
   };
 
+  type getAgentControlStatusParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+    /** 运行UUID */
+    rid: string;
+    /** 原控制请求UUID */
+    request_id?: string;
+  };
+
+  type getAgentMessageParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+    /** 运行UUID */
+    rid: string;
+    /** 消息身份 */
+    messageId: string;
+  };
+
+  type getAgentRunParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+    /** 运行UUID */
+    rid: string;
+  };
+
   type getAgentSessionParams = {
     /** 项目UUID */
     pid: string;
     /** 会话UUID */
     sid: string;
+  };
+
+  type getAgentSubmissionParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+    /** 原请求UUID */
+    requestId: string;
   };
 
   type getAiTrialArtifactParams = {
@@ -2082,6 +2282,13 @@ declare namespace API {
     action: string;
     /** 目标ID，创建为零UUID */
     target_id: string;
+  };
+
+  type getCurrentAgentSubmissionParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
   };
 
   type getMediaDepthParams = {
@@ -2495,9 +2702,11 @@ declare namespace API {
     position?: number;
     source_id?: string;
     source_lineage_id?: string;
-    status?: string;
+    status?: ImportFileStatus;
     warnings?: ExtractionWarning[];
   };
+
+  type ImportFileStatus = "queued" | "succeeded" | "failed";
 
   type ImportJob = {
     active_io?: boolean;
@@ -2516,8 +2725,8 @@ declare namespace API {
     reconciliation_requested?: boolean;
     retryable?: boolean;
     revision?: number;
-    stage?: string;
-    status?: string;
+    stage?: ImportStage;
+    status?: ImportStatus;
     updated_at?: string;
   };
 
@@ -2533,6 +2742,26 @@ declare namespace API {
     pid: string;
   };
 
+  type ImportStage =
+    | "queued"
+    | "extracting"
+    | "normalizing"
+    | "storing"
+    | "committing"
+    | "completed"
+    | "failed"
+    | "cancelling"
+    | "awaiting_reconciliation";
+
+  type ImportStatus =
+    | "queued"
+    | "running"
+    | "partial"
+    | "succeeded"
+    | "failed"
+    | "cancel_requested"
+    | "cancelled";
+
   type Inline = {
     attrs?: ReferenceAttrs;
     text?: string;
@@ -2547,6 +2776,11 @@ declare namespace API {
     kind?: string;
     node_id?: string;
     revision?: number;
+  };
+
+  type installAgentSkillParams = {
+    /** 项目UUID */
+    pid: string;
   };
 
   type Invitation = {
@@ -2604,30 +2838,41 @@ declare namespace API {
     id: string;
   };
 
+  type LibraryAction =
+    | "create_folder"
+    | "update_folder"
+    | "delete_folder"
+    | "create_text"
+    | "update_item"
+    | "move_items"
+    | "recycle_items"
+    | "restore_items"
+    | "remove_items";
+
   type LibraryAssetSummary = {
     byte_size?: number;
-    duration_ms?: number;
+    duration_ms?: number | null;
     file_name?: string;
-    height?: number;
+    height?: number | null;
     id?: string;
     kind?: string;
     mime_type?: string;
     revision?: number;
-    width?: number;
+    width?: number | null;
   };
 
   type LibraryCommand = {
-    action?: string;
+    action?: LibraryAction;
     expected_folder_revision?: number;
     expected_item_revision?: number;
     expected_revision?: number;
-    folder?: LibraryFolderInput;
-    folder_id?: string;
-    item_id?: string;
+    folder?: LibraryFolderInput | null;
+    folder_id?: string | null;
+    item_id?: string | null;
     items?: LibraryItemRevision[];
-    metadata?: LibraryMetadata;
+    metadata?: LibraryMetadata | null;
     scope?: LibraryScope;
-    target_folder_id?: string;
+    target_folder_id?: string | null;
   };
 
   type LibraryFolder = {
@@ -2636,7 +2881,7 @@ declare namespace API {
     library_id?: string;
     library_kind?: LibraryKind;
     name?: string;
-    parent_id?: string;
+    parent_id?: string | null;
     position?: number;
     revision?: number;
     style?: string;
@@ -2646,39 +2891,39 @@ declare namespace API {
 
   type LibraryFolderInput = {
     name?: string;
-    parent_id?: string;
+    parent_id?: string | null;
     style?: string;
     theme?: string;
   };
 
   type LibraryItemChange = {
-    asset_id?: string;
-    catalog_state?: string;
-    folder_id?: string;
+    asset_id?: string | null;
+    catalog_state?: LibraryItemState;
+    folder_id?: string | null;
     id?: string;
     kind?: string;
     revision?: number;
-    trashed_at?: string;
+    trashed_at?: string | null;
   };
 
   type LibraryItemDetail = {
-    asset_id?: string;
-    catalog_state?: string;
+    asset_id?: string | null;
+    catalog_state?: LibraryItemState;
     category?: string;
     created_at?: string;
     favorite?: boolean;
-    folder_id?: string;
+    folder_id?: string | null;
     id?: string;
     kind?: string;
-    media?: LibraryAssetSummary;
+    media?: LibraryAssetSummary | null;
     note?: string;
-    plain_text?: string;
+    plain_text?: string | null;
     position?: number;
     revision?: number;
     source_label?: string;
     tags?: string[];
     title?: string;
-    trashed_at?: string;
+    trashed_at?: string | null;
     updated_at?: string;
   };
 
@@ -2687,23 +2932,25 @@ declare namespace API {
     revision?: number;
   };
 
+  type LibraryItemState = "active" | "trashed" | "removed";
+
   type LibraryItemSummary = {
-    asset_id?: string;
-    catalog_state?: string;
+    asset_id?: string | null;
+    catalog_state?: LibraryItemState;
     category?: string;
     created_at?: string;
     favorite?: boolean;
-    folder_id?: string;
+    folder_id?: string | null;
     id?: string;
     kind?: string;
-    media?: LibraryAssetSummary;
+    media?: LibraryAssetSummary | null;
     note?: string;
     position?: number;
     revision?: number;
     source_label?: string;
     tags?: string[];
     title?: string;
-    trashed_at?: string;
+    trashed_at?: string | null;
     updated_at?: string;
   };
 
@@ -2719,9 +2966,9 @@ declare namespace API {
   type LibraryMetadata = {
     category?: string;
     favorite?: boolean;
-    folder_id?: string;
+    folder_id?: string | null;
     note?: string;
-    plain_text?: string;
+    plain_text?: string | null;
     source_label?: string;
     tags?: string[];
     title?: string;
@@ -2745,25 +2992,25 @@ declare namespace API {
   type LibraryReceipt = {
     current_actor_id?: string;
     current_org_id?: string;
-    folder?: LibraryFolder;
+    folder?: LibraryFolder | null;
     items?: LibraryItemChange[];
     library_id?: string;
-    project_revision?: number;
+    project_revision?: number | null;
     revision?: number;
     scope?: LibraryScope;
   };
 
   type LibraryRenditionPreview = {
     expires_at?: string;
-    height?: number;
+    height?: number | null;
     kind?: string;
     url?: string;
-    width?: number;
+    width?: number | null;
   };
 
   type LibraryScope = {
     kind?: LibraryKind;
-    project_id?: string;
+    project_id?: string | null;
   };
 
   type listAdminModelsParams = {
@@ -2780,7 +3027,42 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listAgentMessagesParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+    /** 运行UUID */
+    rid: string;
+    /** 页大小，默认50，最大100 */
+    limit?: number;
+    /** 消息游标 */
+    before?: string;
+    /** 快照截止游标 */
+    through: string;
+  };
+
+  type listAgentRunsParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+    /** 页大小，默认20，最大50 */
+    limit?: number;
+    /** 历史游标 */
+    cursor?: string;
+  };
+
   type listAgentSessionsParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 页大小，默认20，最大50 */
+    limit?: number;
+    /** 历史游标 */
+    cursor?: string;
+  };
+
+  type listAgentSkillsParams = {
     /** 项目UUID */
     pid: string;
   };
@@ -3403,6 +3685,12 @@ declare namespace API {
     target_id?: string;
   };
 
+  type MessagePage = {
+    items: PublicMessage[];
+    next_cursor?: string;
+    through: string;
+  };
+
   type MeView = {
     avatar_asset_id: string;
     bio: string;
@@ -3449,12 +3737,6 @@ declare namespace API {
     model?: ModelCandidatePreset;
   };
 
-  type ModelChoice = {
-    key?: string;
-    mode?: string;
-    params?: Record<string, any>;
-  };
-
   type ModelDefaults = {
     default_models?: Record<string, any>;
     project_id?: string;
@@ -3468,17 +3750,17 @@ declare namespace API {
 
   type ModelPage = {
     items?: ModelResponse[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type ModelPrice = {
     currency?: string;
     effective_from?: string;
-    fx_rate_to_cny?: string;
+    fx_rate_to_cny?: string | null;
     id?: string;
-    reviewed_at?: string;
+    reviewed_at?: string | null;
     rule?: Record<string, any>;
-    source_url?: string;
+    source_url?: string | null;
     unit?: string;
     version_no?: number;
   };
@@ -3501,9 +3783,9 @@ declare namespace API {
   type ModelResponse = {
     capability?: string;
     credential_present?: boolean;
-    credential_test_result?: string;
-    current_price?: ModelPrice;
-    current_version?: ModelVersion;
+    credential_test_result?: string | null;
+    current_price?: ModelPrice | null;
+    current_version?: ModelVersion | null;
     display_name?: string;
     id?: string;
     input_roles?: string[];
@@ -3570,7 +3852,7 @@ declare namespace API {
     media_ref?: MediaRef;
     node_action?: string;
     node_type?: string;
-    parent_id?: string;
+    parent_id?: string | null;
     ref_id?: string;
     ref_type?: string;
     title?: string;
@@ -3633,7 +3915,7 @@ declare namespace API {
     project_revision?: number;
     revision?: number;
     scope?: LibraryScope;
-    status?: string;
+    status?: PackageStatus;
     updated_at?: string;
     warnings?: PackageWarning[];
   };
@@ -3647,6 +3929,8 @@ declare namespace API {
     scope?: LibraryScope;
     total?: number;
   };
+
+  type PackageStatus = "needs_reconciliation" | "succeeded" | "cancelled";
 
   type PackageWarning = {
     code?: string;
@@ -3712,12 +3996,12 @@ declare namespace API {
   };
 
   type PersonalHistoryItem = {
-    batch_id?: string;
+    batch_id?: string | null;
     cancel_requested?: boolean;
     capability?: string;
     create_time?: string;
-    failure_code?: string;
-    finished_at?: string;
+    failure_code?: string | null;
+    finished_at?: string | null;
     history_revision?: number;
     id?: string;
     mode?: string;
@@ -3727,13 +4011,13 @@ declare namespace API {
     outputs?: PersonalHistoryOutput[];
     project_id?: string;
     prompt_preview?: string;
-    quote_micros?: number;
-    retryable?: boolean;
-    settled_micros?: number;
-    source?: CanvasSource;
-    started_at?: string;
+    quote_micros?: number | null;
+    retryable?: boolean | null;
+    settled_micros?: number | null;
+    source?: CanvasSource | null;
+    started_at?: string | null;
     status?: OperationStatus;
-    target_id?: string;
+    target_id?: string | null;
     target_type?: string;
     update_time?: string;
   };
@@ -3748,7 +4032,7 @@ declare namespace API {
     height?: number;
     id?: string;
     kind?: string;
-    media_asset_id?: string;
+    media_asset_id?: string | null;
     metadata_revision?: number;
     moderation_status?: string;
     process_types?: string[];
@@ -3761,7 +4045,7 @@ declare namespace API {
 
   type PersonalHistoryPageResponse = {
     items?: PersonalHistoryItem[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type PersonalHistoryTarget = {
@@ -3772,13 +4056,15 @@ declare namespace API {
 
   type PersonalUploadResult = {
     asset?: LibraryAssetSummary;
-    duplicate_of?: string;
+    duplicate_of?: string | null;
   };
 
-  type Plan = {
-    action?: string;
-    message?: string;
-    prompt?: string;
+  type PlanItem = {
+    artifacts?: string[];
+    depends_on?: string[];
+    id: string;
+    status: string;
+    title: string;
   };
 
   type platformDeleteUserParams = {
@@ -4081,10 +4367,10 @@ declare namespace API {
 
   type PricingPreview = {
     amount_kind?: string;
-    amount_micros?: number;
+    amount_micros?: number | null;
     confirmable?: boolean;
     currency?: string;
-    price_version_id?: string;
+    price_version_id?: string | null;
     unit?: string;
   };
 
@@ -4106,7 +4392,7 @@ declare namespace API {
   };
 
   type ProfileUpdateRequest = {
-    avatar_asset_id?: string;
+    avatar_asset_id?: string | null;
     bio?: string;
     display_name?: string;
     expected_revision: string;
@@ -4148,13 +4434,13 @@ declare namespace API {
     copies?: ProjectCopyResponse[];
     current_actor_id?: string;
     current_org_id?: string;
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type ProjectCopyPlacementRequest = {
     expected_folder_revision: number;
     expected_placement_revision: number;
-    folder_id?: string;
+    folder_id?: string | null;
   };
 
   type ProjectCopyRequest = {
@@ -4224,34 +4510,34 @@ declare namespace API {
   };
 
   type ProjectCreationRecoveryResponse = {
-    canvas_id?: string;
-    project_id?: string;
-    project_status?: string;
+    canvas_id?: string | null;
+    project_id?: string | null;
+    project_status?: string | null;
     state?: "created" | "unrecorded";
   };
 
   type ProjectDetailResponse = {
     allow_overseas_models?: boolean;
-    archived_at?: string;
+    archived_at?: string | null;
     aspect_ratio?: string;
-    canvas_id?: string;
-    cover_asset_id?: string;
+    canvas_id?: string | null;
+    cover_asset_id?: string | null;
     cover_unavailable?: boolean;
     create_time?: string;
     default_models?: Record<string, any>;
-    delete_time?: string;
+    delete_time?: string | null;
     description?: string;
     id?: string;
     is_delete?: boolean;
     last_modified_at?: string;
     last_modified_basis?: string;
     name?: string;
-    purge_after?: string;
+    purge_after?: string | null;
     resolution?: string;
     revision?: number;
     status?: string;
-    style_key?: string;
-    style_preset_id?: string;
+    style_key?: string | null;
+    style_preset_id?: string | null;
     style_subtype?: string;
     style_type?: string;
     update_time?: string;
@@ -4272,37 +4558,37 @@ declare namespace API {
     current_actor_id?: string;
     current_org_id?: string;
     items?: ProjectFolderResponse[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type ProjectFolderMoveRequest = {
     expected_folder_revision?: number;
     expected_placement_revision?: number;
     expected_project_revision?: number;
-    folder_id?: string;
+    folder_id?: string | null;
   };
 
   type ProjectFolderPlacementResponse = {
-    folder_id?: string;
+    folder_id?: string | null;
     project_id?: string;
     revision?: number;
   };
 
   type ProjectFolderResponse = {
-    cover?: FolderCover;
+    cover?: FolderCover | null;
     cover_unavailable?: boolean;
     create_time?: string;
-    delete_time?: string;
+    delete_time?: string | null;
     id?: string;
     is_delete?: boolean;
     name?: string;
-    project_count?: number;
+    project_count?: number | null;
     revision?: number;
     update_time?: string;
   };
 
   type ProjectFolderUpdateRequest = {
-    cover?: FolderCover;
+    cover?: FolderCover | null;
     expected_revision?: number;
     name?: string;
   };
@@ -4312,23 +4598,23 @@ declare namespace API {
   };
 
   type ProjectResponse = {
-    archived_at?: string;
+    archived_at?: string | null;
     aspect_ratio?: string;
-    canvas_id?: string;
-    cover_asset_id?: string;
+    canvas_id?: string | null;
+    cover_asset_id?: string | null;
     cover_unavailable?: boolean;
-    delete_time?: string;
-    folder_id?: string;
+    delete_time?: string | null;
+    folder_id?: string | null;
     id?: string;
     is_delete?: boolean;
     last_modified_at?: string;
     last_modified_basis?: string;
     name?: string;
     placement_revision?: number;
-    purge_after?: string;
+    purge_after?: string | null;
     revision?: number;
     status?: string;
-    style_key?: string;
+    style_key?: string | null;
     style_type?: string;
     update_time?: string;
   };
@@ -4348,7 +4634,7 @@ declare namespace API {
 
   type ProjectUpdateRequest = {
     allow_overseas_models?: boolean;
-    cover_asset_id?: string;
+    cover_asset_id?: string | null;
     description?: string;
     expected_revision: number;
     name?: string;
@@ -4390,6 +4676,17 @@ declare namespace API {
     as_of?: string;
     items?: AuthorityProposal[];
     next_cursor?: string;
+  };
+
+  type ProposalView = {
+    authorization_revision: number;
+    budget_micros?: number;
+    candidate: Record<string, any>;
+    candidate_hash: string;
+    canvas_revision?: number;
+    price_version?: string;
+    proposal_id: string;
+    quote_micros?: number;
   };
 
   type proposeTakeoverParams = {
@@ -4482,7 +4779,7 @@ declare namespace API {
 
   type ProviderPage = {
     items?: ProviderListItem[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type ProviderReference = {
@@ -4526,6 +4823,16 @@ declare namespace API {
     status?: string;
     supplier_currency?: string;
     supplier_max_micros?: number;
+  };
+
+  type PublicMessage = {
+    content: string;
+    conversation_id: number;
+    kind: string;
+    message_id: string;
+    part_index: number;
+    run_id: string;
+    sequence: string;
   };
 
   type publishAdminModelPriceParams = {
@@ -4610,12 +4917,20 @@ declare namespace API {
   };
 
   type PurgeItemResult = {
-    asset_id?: string;
-    failure_code?: string;
+    asset_id?: string | null;
+    failure_code?: string | null;
     index?: number;
     item_id?: string;
-    status?: string;
+    status?: PurgeItemStatus;
   };
+
+  type PurgeItemStatus =
+    | "queued"
+    | "running"
+    | "needs_reconciliation"
+    | "succeeded"
+    | "blocked"
+    | "cancelled";
 
   type PurgeJob = {
     attempt?: number;
@@ -4629,8 +4944,8 @@ declare namespace API {
     needs_reconciliation?: boolean;
     revision?: number;
     scope?: LibraryScope;
-    stage?: string;
-    status?: string;
+    stage?: PurgeStage;
+    status?: PurgeStatus;
     updated_at?: string;
   };
 
@@ -4641,6 +4956,18 @@ declare namespace API {
     page?: number;
     page_size?: number;
   };
+
+  type PurgeStage = "frozen" | "verifying" | "removing" | "completed";
+
+  type PurgeStatus =
+    | "queued"
+    | "running"
+    | "needs_reconciliation"
+    | "cancel_requested"
+    | "succeeded"
+    | "partial_failed"
+    | "failed"
+    | "cancelled";
 
   type queryProviderModelCheckParams = {
     /** 检查ID */
@@ -4659,13 +4986,18 @@ declare namespace API {
     params?: Record<string, any>;
     prompt?: string;
     prompt_template?: TemplateRequest;
-    source?: CanvasSource;
+    source?: CanvasSource | null;
   };
 
   type QuoteMediaInput = {
     media_asset_id?: string;
     role?: string;
     subject_binding_id?: string;
+  };
+
+  type QuoteRef = {
+    message_id?: string;
+    run_id?: string;
   };
 
   type QuoteResponse = {
@@ -4681,7 +5013,7 @@ declare namespace API {
     quote_detail?: Record<string, any>;
     quote_micros?: number;
     reference_mapping?: ReferenceMapping[];
-    reused_from_id?: string;
+    reused_from_id?: string | null;
     submission_epoch?: number;
     submission_id?: string;
   };
@@ -5088,6 +5420,35 @@ declare namespace API {
     type?: string;
   };
 
+  type RunPage = {
+    items: {
+      accepted_revision: number;
+      created_at: string;
+      input_excerpt: string;
+      retry_of_run_id?: string;
+      root_run_id: string;
+      session_id: string;
+      status: string;
+    }[];
+    next_cursor?: string;
+  };
+
+  type RunSnapshot = {
+    events: { event_type: string; payload: Record<string, any> }[];
+    execution_available: boolean;
+    goal: string;
+    history_incomplete?: boolean;
+    input?: AuthorizedInput;
+    manifest: Record<string, any>;
+    messages_page: MessagePage;
+    retry_of_run_id?: string;
+    root_run_id: string;
+    session_id: string;
+    snapshot_cursor: string;
+    state: AgentState;
+    submission_id: string;
+  };
+
   type SampleInput = {
     asset_id?: string;
     name?: string;
@@ -5194,16 +5555,6 @@ declare namespace API {
     team_id: string;
   };
 
-  type Session = {
-    engine?: string;
-    id?: string;
-    project_id?: string;
-    revision?: number;
-    title?: string;
-    turns?: Turn[];
-    updated_at?: string;
-  };
-
   type SessionGovernanceRequest = {
     expected_revision?: string;
     reason?: string;
@@ -5218,10 +5569,28 @@ declare namespace API {
     last_active_at: string;
   };
 
+  type SessionPage = {
+    items: SessionView[];
+    next_cursor?: string;
+  };
+
   type SessionPageView = {
     as_of: string;
     items: SessionItemView[];
     next_cursor: string;
+  };
+
+  type SessionView = {
+    actor_id: string;
+    canvas_id?: string;
+    created_at?: string;
+    execution_revision: number;
+    id: string;
+    org_id: string;
+    project_id: string;
+    run?: RunSnapshot;
+    scope_id: string;
+    title: string;
   };
 
   type setAdminCredentialParams = {
@@ -5232,6 +5601,15 @@ declare namespace API {
   type setAdminModelStatusParams = {
     /** 模型UUID */
     id: string;
+  };
+
+  type setAgentSkillEnabledParams = {
+    /** 项目UUID */
+    pid: string;
+    /** Skill UUID */
+    id: string;
+    /** Skill 版本 */
+    version: string;
   };
 
   type setBibleDefaultLookParams = {
@@ -5267,11 +5645,36 @@ declare namespace API {
     team_creation_enabled?: boolean;
   };
 
+  type SkillEnabledRequest = {
+    enabled?: boolean;
+  };
+
+  type SkillInput = {
+    body?: string;
+    description?: string;
+    name?: string;
+    request_id?: string;
+    resources?: Record<string, any>;
+    skill_id?: string;
+    version?: string;
+  };
+
+  type SkillVersion = {
+    description?: string;
+    enabled?: boolean;
+    name?: string;
+    resource_hash?: string;
+    skill_id?: string;
+    version?: string;
+  };
+
   type Source = {
     canvas_id?: string;
     node_id?: string;
     revision?: number;
   };
+
+  type SourceAction = "create" | "update" | "import" | "delete" | "reorder";
 
   type SourceChange = {
     new_source_id?: string;
@@ -5279,9 +5682,11 @@ declare namespace API {
     source_lineage_id?: string;
   };
 
+  type SourceControlAction = "cancel" | "reconcile";
+
   type SourceControlReceipt = {
     accepted?: boolean;
-    action?: string;
+    action?: SourceControlAction;
     intent_id?: string;
     revision?: number;
   };
@@ -5301,17 +5706,17 @@ declare namespace API {
     document?: RichDocument;
     id?: string;
     media_asset_id?: string;
-    origin?: string;
+    origin?: SourceOrigin;
     plain_text?: string;
     position?: number;
     previous_source_id?: string;
     provenance?: SourceProvenance;
     rich_sha256?: string;
-    source_kind?: string;
+    source_kind?: SourceKind;
     source_lineage_id?: string;
     source_revision?: number;
     source_span?: SourceSpan;
-    status?: string;
+    status?: SourceStatus;
     title?: string;
   };
 
@@ -5330,8 +5735,8 @@ declare namespace API {
     document?: RichDocument;
     original_html?: string;
     provenance?: SourceProvenance;
-    source_kind?: string;
-    status?: string;
+    source_kind?: SourceKind;
+    status?: SourceStatus;
     title?: string;
   };
 
@@ -5342,12 +5747,16 @@ declare namespace API {
     sources?: SourceImportItem[];
   };
 
+  type SourceKind = "chapter" | "episode" | "document";
+
   type SourceMedia = {
     bindingId?: string;
     mediaKind?: string;
     sourceId?: string;
     sourceVersion?: string;
   };
+
+  type SourceOrigin = "manual" | "beeftv" | "file";
 
   type SourceOriginMapping = {
     decoded_end?: number;
@@ -5394,17 +5803,17 @@ declare namespace API {
     document?: RichDocument;
     id?: string;
     media_asset_id?: string;
-    origin?: string;
+    origin?: SourceOrigin;
     original_html?: string;
     plain_text?: string;
     position?: number;
     previous_source_id?: string;
     provenance?: SourceProvenance;
     rich_sha256?: string;
-    source_kind?: string;
+    source_kind?: SourceKind;
     source_lineage_id?: string;
     source_revision?: number;
-    status?: string;
+    status?: SourceStatus;
     title?: string;
   };
 
@@ -5416,24 +5825,26 @@ declare namespace API {
     start?: number;
   };
 
+  type SourceStatus = "draft" | "ready" | "completed";
+
   type SourceSummary = {
     char_count?: number;
     content_hash?: string;
     id?: string;
     media_asset_id?: string;
-    origin?: string;
+    origin?: SourceOrigin;
     position?: number;
     previous_source_id?: string;
     rich_sha256?: string;
-    source_kind?: string;
+    source_kind?: SourceKind;
     source_lineage_id?: string;
     source_revision?: number;
-    status?: string;
+    status?: SourceStatus;
     title?: string;
   };
 
   type SourceWriteIntent = {
-    action?: string;
+    action?: SourceAction;
     active_io?: boolean;
     base_version_id?: string;
     can_control?: boolean;
@@ -5445,7 +5856,7 @@ declare namespace API {
     needs_reconciliation?: boolean;
     object_count?: number;
     revision?: number;
-    status?: string;
+    status?: CommandStatus;
     updated_at?: string;
   };
 
@@ -5463,8 +5874,8 @@ declare namespace API {
     original_html?: string;
     provenance?: SourceProvenance;
     rights_confirmed?: boolean;
-    source_kind?: string;
-    status?: string;
+    source_kind?: SourceKind;
+    status?: SourceStatus;
     title?: string;
   };
 
@@ -5534,39 +5945,28 @@ declare namespace API {
     boundaries?: EpisodeBoundary[];
     created_at?: string;
     id?: string;
-    kind?: string;
+    kind?: SplitSetKind;
     org_id?: string;
-    origin?: string;
+    origin?: SplitSetOrigin;
     preface?: ScalarSpan;
     project_id?: string;
     version_id?: string;
     warnings?: string[];
   };
 
-  type Stage = {
-    expires_at?: string;
-    operation_id?: string;
-    phase?: string;
-    quote_micros?: number;
-    status?: string;
-  };
+  type SplitSetKind = "candidate" | "formal";
 
-  type startAgentTurnParams = {
-    /** 项目UUID */
-    pid: string;
-    /** 会话UUID */
-    sid: string;
-  };
+  type SplitSetOrigin = "sources" | "rules" | "manual";
 
-  type stopAgentSessionParams = {
-    /** 项目UUID */
-    pid: string;
-    /** 会话UUID */
-    sid: string;
-  };
-
-  type StopRequest = {
-    expected_revision?: number;
+  type StartRequest = {
+    budget_micros?: number;
+    canvas_id?: string;
+    expected_execution_revision?: number;
+    input?: Record<string, any>;
+    manifest?: Record<string, any>;
+    quoted_from?: QuoteRef;
+    request_id?: string;
+    retry_of_run_id?: string;
   };
 
   type StorageUsage = {
@@ -5574,7 +5974,7 @@ declare namespace API {
     current_actor_id?: string;
     current_org_id?: string;
     library_id?: string;
-    limit_bytes?: number;
+    limit_bytes?: number | null;
     object_count?: number;
     scope?: LibraryScope;
     used_bytes?: number;
@@ -5602,13 +6002,15 @@ declare namespace API {
     character_version_id?: string;
     content?: string;
     emotion?: string;
-    kind?: string;
+    kind?: DialogueKind;
     line_key?: string;
     span_end?: number;
     span_start?: number;
     speaker_text?: string;
-    type?: string;
+    type?: StructureItemType;
   };
+
+  type StructureItemType = "line" | "action";
 
   type StructurePage = {
     items?: StructureSummary[];
@@ -5618,11 +6020,13 @@ declare namespace API {
   type StructureReceipt = {
     episode_revision?: number;
     project_revision?: number;
-    review_status?: string;
+    review_status?: StructureReviewStatus;
     script_revision?: number;
     structure_id?: string;
     version_no?: number;
   };
+
+  type StructureReviewStatus = "candidate" | "confirmed";
 
   type StructureSaveRequest = {
     base_structure_version_no?: number;
@@ -5652,7 +6056,7 @@ declare namespace API {
 
   type StylePresetListResponse = {
     items?: StylePresetSummary[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type StylePresetSummary = {
@@ -5710,25 +6114,27 @@ declare namespace API {
     id?: string;
     kind?: string;
     media?: SubjectSourceMedia;
-    project_id?: string;
+    project_id?: string | null;
     revision?: number;
-    source?: string;
+    source?: SubjectSourceKind;
     title?: string;
     updated_at?: string;
     upscaled?: boolean;
   };
 
+  type SubjectSourceKind = "personal_asset" | "generated_output";
+
   type SubjectSourceMedia = {
     byte_size?: number;
-    duration_ms?: number;
+    duration_ms?: number | null;
     file_name?: string;
-    height?: number;
+    height?: number | null;
     id?: string;
     kind?: string;
     mime_type?: string;
     origin?: string;
     revision?: number;
-    width?: number;
+    width?: number | null;
   };
 
   type SubjectSourcePage = {
@@ -5767,6 +6173,15 @@ declare namespace API {
   type SubmissionCurrent = {
     epoch?: number;
     submission?: Submission;
+  };
+
+  type subscribeAgentEventsParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+    /** 运行UUID */
+    rid: string;
   };
 
   type SubtitleSegment = {
@@ -5821,7 +6236,7 @@ declare namespace API {
 
   type TaskDetail = {
     audio_subtitle?: AudioSubtitle;
-    batch_id?: string;
+    batch_id?: string | null;
     billing_outcome?: BillingOutcome;
     cancel_requested?: boolean;
     capability?: string;
@@ -5830,8 +6245,8 @@ declare namespace API {
     editor_draft?: PromptDraft;
     editor_reference_mapping?: ReferenceMapping[];
     events?: TaskEvent[];
-    failure_code?: string;
-    finished_at?: string;
+    failure_code?: string | null;
+    finished_at?: string | null;
     id?: string;
     inputs?: TaskInput[];
     mode?: string;
@@ -5844,40 +6259,40 @@ declare namespace API {
     project_id?: string;
     prompt_preparation?: PromptPreparation;
     quote_detail?: Record<string, any>;
-    quote_expires_at?: string;
-    quote_micros?: number;
-    retryable?: boolean;
-    reused_from_id?: string;
-    settled_micros?: number;
-    source?: CanvasSource;
-    started_at?: string;
+    quote_expires_at?: string | null;
+    quote_micros?: number | null;
+    retryable?: boolean | null;
+    reused_from_id?: string | null;
+    settled_micros?: number | null;
+    source?: CanvasSource | null;
+    started_at?: string | null;
     status?: OperationStatus;
-    target_id?: string;
+    target_id?: string | null;
     target_type?: string;
     update_time?: string;
   };
 
   type TaskEvent = {
     create_time?: string;
-    from_status?: string;
+    from_status?: string | null;
     id?: string;
-    reason?: string;
+    reason?: string | null;
     to_status?: string;
   };
 
   type TaskInput = {
-    mask_asset_id?: string;
-    media_asset_id?: string;
+    mask_asset_id?: string | null;
+    media_asset_id?: string | null;
     role?: string;
     sequence?: number;
-    text?: string;
+    text?: string | null;
   };
 
   type TaskOutput = {
     create_time?: string;
     id?: string;
     kind?: string;
-    media_asset_id?: string;
+    media_asset_id?: string | null;
     moderation_status?: string;
     sequence?: number;
     text?: string;
@@ -5885,29 +6300,29 @@ declare namespace API {
 
   type TaskPageResponse = {
     items?: TaskSummary[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type TaskSummary = {
-    batch_id?: string;
+    batch_id?: string | null;
     cancel_requested?: boolean;
     capability?: string;
     create_time?: string;
-    failure_code?: string;
-    finished_at?: string;
+    failure_code?: string | null;
+    finished_at?: string | null;
     id?: string;
     mode?: string;
     model_key?: string;
     model_name?: string;
     origin?: string;
     project_id?: string;
-    quote_micros?: number;
-    retryable?: boolean;
-    settled_micros?: number;
-    source?: CanvasSource;
-    started_at?: string;
+    quote_micros?: number | null;
+    retryable?: boolean | null;
+    settled_micros?: number | null;
+    source?: CanvasSource | null;
+    started_at?: string | null;
     status?: OperationStatus;
-    target_id?: string;
+    target_id?: string | null;
     target_type?: string;
     update_time?: string;
   };
@@ -6016,7 +6431,7 @@ declare namespace API {
   };
 
   type TeamProfileRequest = {
-    avatar_asset_id?: string;
+    avatar_asset_id?: string | null;
     expected_revision?: string;
     name?: string;
     reason?: string;
@@ -6083,15 +6498,15 @@ declare namespace API {
     "ok" | "auth_failed" | "unreachable" | "timeout" | "unsupported";
 
   type TimelineClip = {
-    asset_id?: string;
-    crop?: TimelineCrop;
+    asset_id?: string | null;
+    crop?: TimelineCrop | null;
     duration_ms?: number;
     fade_in_ms?: number;
     fade_out_ms?: number;
     id?: string;
     kind?: string;
-    node_id?: string;
-    source_duration_ms?: number;
+    node_id?: string | null;
+    source_duration_ms?: number | null;
     source_start_ms?: number;
     start_ms?: number;
     text?: string;
@@ -6144,15 +6559,15 @@ declare namespace API {
   type TranscriptionJob = {
     attempt?: number;
     created_at?: string;
-    failure_code?: string;
+    failure_code?: string | null;
     id?: string;
     language?: string;
     progress?: number;
     project_id?: string;
-    result_sha256?: string;
+    result_sha256?: string | null;
     revision?: number;
     source?: TranscriptionSource;
-    stage?: string;
+    stage?: TranscriptionStage;
     status?: TranscriptionStatus;
     updated_at?: string;
   };
@@ -6160,22 +6575,22 @@ declare namespace API {
   type TranscriptionJobResponse = {
     attempt?: number;
     created_at?: string;
-    failure_code?: string;
+    failure_code?: string | null;
     id?: string;
     language?: string;
     progress?: number;
     project_id?: string;
-    result_sha256?: string;
+    result_sha256?: string | null;
     revision?: number;
     source?: TranscriptionSource;
-    stage?: string;
+    stage?: TranscriptionStage;
     status?: TranscriptionStatus;
     updated_at?: string;
   };
 
   type TranscriptionPage = {
     items?: TranscriptionJob[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type TranscriptionResult = {
@@ -6194,6 +6609,17 @@ declare namespace API {
     node_id?: string;
     revision?: number;
   };
+
+  type TranscriptionStage =
+    | "queued"
+    | "downloading"
+    | "preparing_audio"
+    | "transcribing"
+    | "cancelling"
+    | "awaiting_reconciliation"
+    | "complete"
+    | "cancelled"
+    | "failed";
 
   type TranscriptionStatus =
     | "queued"
@@ -6215,17 +6641,25 @@ declare namespace API {
     items?: LibraryItemRevision[];
     source?: LibraryScope;
     target?: LibraryScope;
-    target_folder_id?: string;
+    target_folder_id?: string | null;
   };
 
   type TransferItemResult = {
-    failure_code?: string;
+    failure_code?: string | null;
     index?: number;
     source_item_id?: string;
-    status?: string;
-    target_asset_id?: string;
+    status?: TransferItemStatus;
+    target_asset_id?: string | null;
     target_item_id?: string;
   };
+
+  type TransferItemStatus =
+    | "queued"
+    | "running"
+    | "needs_reconciliation"
+    | "succeeded"
+    | "failed"
+    | "cancelled";
 
   type TransferJob = {
     attempt?: number;
@@ -6240,10 +6674,10 @@ declare namespace API {
     revision?: number;
     source?: LibraryScope;
     source_scope_id?: string;
-    stage?: string;
-    status?: string;
+    stage?: TransferStage;
+    status?: TransferStatus;
     target?: LibraryScope;
-    target_folder_id?: string;
+    target_folder_id?: string | null;
     target_scope_id?: string;
     updated_at?: string;
   };
@@ -6256,12 +6690,24 @@ declare namespace API {
     page_size?: number;
   };
 
+  type TransferStage =
+    "frozen" | "copying" | "registering" | "cleanup" | "completed";
+
+  type TransferStatus =
+    | "queued"
+    | "running"
+    | "needs_reconciliation"
+    | "cancel_requested"
+    | "succeeded"
+    | "partial_failed"
+    | "failed"
+    | "cancelled";
+
   type TrialArtifact = {
     mime?: string;
     sequence?: number;
     sha256?: string;
     size?: number;
-    storage_id?: string;
   };
 
   type TrialMediaInput = {
@@ -6310,29 +6756,6 @@ declare namespace API {
     task_id?: string;
     text?: string;
     thread_id?: string;
-  };
-
-  type Turn = {
-    created_at?: string;
-    failure_code?: string;
-    id?: string;
-    input?: TurnInput;
-    media_asset_id?: string;
-    output_id?: string;
-    phase?: string;
-    plan?: Plan;
-    policy?: string;
-    reply?: string;
-    stages?: Stage[];
-    status?: string;
-  };
-
-  type TurnInput = {
-    expected_revision?: number;
-    image?: ModelChoice;
-    message?: string;
-    planner?: ModelChoice;
-    request_id?: string;
   };
 
   type unarchiveProjectParams = {
@@ -6687,7 +7110,7 @@ declare namespace API {
 
   type WorkspaceListResponse = {
     items?: ProjectResponse[];
-    next_cursor?: string;
+    next_cursor?: string | null;
     server_time?: string;
   };
 

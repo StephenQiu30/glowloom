@@ -142,10 +142,9 @@ func TestMediaPackageOwnManifestPreservesFoldersAndRejectsDigestOrIdentityMismat
 
 func ptrUUID(id uuid.UUID) *uuid.UUID { return &id }
 
-// This is the exact byte marker in previously exported version-1 archives.
-func TestMediaPackagePublishedV1RemainsReadableAfterBrandChange(t *testing.T) {
-	marker := string([]byte{108, 97, 110, 118, 101, 114, 115, 101, 45, 109, 101, 100, 105, 97, 45, 108, 105, 98, 114, 97, 114, 121})
-	for _, app := range []string{marker, "other-media-library"} {
+func TestMediaPackageCurrentNamespaceRejectsRetiredAndForeignArchives(t *testing.T) {
+	const marker = "glowloom-media-library"
+	for _, app := range []string{marker, "lanverse-media-library", "other-media-library"} {
 		manifest := mediaapp.LibraryPackageManifest{App: app, Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryPersonal, Folders: []mediaapp.LibraryPackageFolder{}, Items: []mediaapp.LibraryPackageItem{}, Files: []mediaapp.LibraryPackageFile{}}
 		body, err := json.Marshal(manifest)
 		if err != nil {

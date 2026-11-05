@@ -14,14 +14,49 @@ var (
 	ErrTransferCancelled = errors.New("media transfer cancelled")
 )
 
+// TransferStatus is the persisted lifecycle of a transfer job.
+type TransferStatus string
+
+// TransferItemStatus is the persisted lifecycle of an individual transfer item.
+type TransferItemStatus string
+
+// TransferStage is the persisted worker stage of a transfer job.
+type TransferStage string
+
+// Transfer job states distinguish queued, executing, uncertain and terminal outcomes.
+const (
+	TransferStatusQueued              TransferStatus = "queued"
+	TransferStatusRunning             TransferStatus = "running"
+	TransferStatusNeedsReconciliation TransferStatus = "needs_reconciliation"
+	TransferStatusCancelRequested     TransferStatus = "cancel_requested"
+	TransferStatusSucceeded           TransferStatus = "succeeded"
+	TransferStatusPartialFailed       TransferStatus = "partial_failed"
+	TransferStatusFailed              TransferStatus = "failed"
+	TransferStatusCancelled           TransferStatus = "cancelled"
+
+	TransferItemStatusQueued              TransferItemStatus = "queued"
+	TransferItemStatusRunning             TransferItemStatus = "running"
+	TransferItemStatusNeedsReconciliation TransferItemStatus = "needs_reconciliation"
+	TransferItemStatusSucceeded           TransferItemStatus = "succeeded"
+	TransferItemStatusFailed              TransferItemStatus = "failed"
+	TransferItemStatusCancelled           TransferItemStatus = "cancelled"
+
+	TransferStageFrozen      TransferStage = "frozen"
+	TransferStageCopying     TransferStage = "copying"
+	TransferStageRegistering TransferStage = "registering"
+	TransferStageCleanup     TransferStage = "cleanup"
+	TransferStageCompleted   TransferStage = "completed"
+	TransferFailureCancelled               = "cancelled"
+)
+
 // TransferItemResult reveals only safe identities and actual per-item outcomes.
 type TransferItemResult struct {
-	Index         int        `json:"index"`
-	SourceItemID  uuid.UUID  `json:"source_item_id"`
-	TargetItemID  uuid.UUID  `json:"target_item_id"`
-	TargetAssetID *uuid.UUID `json:"target_asset_id" extensions:"x-nullable"`
-	Status        string     `json:"status"`
-	FailureCode   *string    `json:"failure_code" extensions:"x-nullable"`
+	Index         int                `json:"index"`
+	SourceItemID  uuid.UUID          `json:"source_item_id"`
+	TargetItemID  uuid.UUID          `json:"target_item_id"`
+	TargetAssetID *uuid.UUID         `json:"target_asset_id" extensions:"x-nullable"`
+	Status        TransferItemStatus `json:"status"`
+	FailureCode   *string            `json:"failure_code" extensions:"x-nullable"`
 }
 
 // TransferJob is a current authorized view of a durable media ownership transfer.
@@ -35,8 +70,8 @@ type TransferJob struct {
 	Source                LibraryScope         `json:"source"`
 	Target                LibraryScope         `json:"target"`
 	TargetFolderID        *uuid.UUID           `json:"target_folder_id" extensions:"x-nullable"`
-	Status                string               `json:"status"`
-	Stage                 string               `json:"stage"`
+	Status                TransferStatus       `json:"status"`
+	Stage                 TransferStage        `json:"stage"`
 	Attempt               int                  `json:"attempt"`
 	Revision              int64                `json:"revision"`
 	NeedsReconciliation   bool                 `json:"needs_reconciliation"`

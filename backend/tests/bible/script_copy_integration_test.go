@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -31,7 +34,7 @@ func (a bibleScriptCopyAccess) Authorize(ctx context.Context, actor identityapp.
 func scriptCopyOwner(db *gorm.DB, a workspaceapp.ProjectCopyAuthority) *scriptpg.ProjectCopyStore {
 	return scriptpg.NewProjectCopyStore(db, func(tx *gorm.DB) scriptapp.ProjectCopyAccess {
 		return bibleScriptCopyAccess{bibleFixtureCopyAccess(tx, a)}
-	})
+	}).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }
 
 type bibleCopyScopes struct{ owner *scriptpg.ProjectCopyStore }
@@ -85,12 +88,11 @@ func (a scriptCopyCharacters) FreezeCharacters(ctx context.Context, actor identi
 
 func TestBibleScriptCopyPGFullPinnedHistoryScopesAndActualPrivateObjects(t *testing.T) {
 	db, owner := bibleTestDB(t)
-	objects := bibleObjects(t)
 	actor, project := bibleActorProject(t, owner)
 	sources := scriptpg.NewSourceStoreWithCharacters(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }, func(tx *gorm.DB) scriptapp.CharacterReferences {
 		return characterBridge{pg.NewReferences(tx, bibleFixtureProjectAccess(tx))}
-	})
-	saved, err := scriptapp.NewSourceService(sources, scriptobjects.NewStorage(objects), time.Now).Write(t.Context(), actor, scriptapp.SourceCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Action: "create", RightsConfirmed: true, Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "历史原文", Status: "draft", Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "王总：你好😀"}}}}}}}})
+	}).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
+	saved, err := scriptapp.NewSourceService(sources, scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), time.Now).Write(t.Context(), actor, scriptapp.SourceCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Action: "create", RightsConfirmed: true, Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "历史原文", Status: "draft", Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "王总：你好😀"}}}}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +167,7 @@ func TestBibleScriptCopyPGFullPinnedHistoryScopesAndActualPrivateObjects(t *test
 			return bibleScriptCopyAccess{bibleFixtureCopyAccess(tx, admission)}
 		}, func(_ *gorm.DB) scriptapp.ProjectCopyCharacters {
 			return scriptCopyCharacters{owner: bowner, snapshot: bibleSnapshot}
-		})
+		}).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 		scriptSnapshot, err = current.Freeze(t.Context(), actor, sb, nil, time.Now())
 		return err
 	})
@@ -175,7 +177,7 @@ func TestBibleScriptCopyPGFullPinnedHistoryScopesAndActualPrivateObjects(t *test
 	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), actor, b, bibleSnapshot); err != nil {
 		t.Fatal(err)
 	}
-	scriptTransfer := scriptapp.NewProjectCopy(scriptCopyOwner(db, authority), scriptobjects.NewStorage(objects))
+	scriptTransfer := scriptapp.NewProjectCopy(scriptCopyOwner(db, authority), scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)))
 	if _, err := scriptTransfer.Transfer(t.Context(), actor, sb, scriptSnapshot); err != nil {
 		t.Fatal("actual source-object transfer", err)
 	}

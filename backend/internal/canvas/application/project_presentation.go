@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 var (
@@ -16,10 +17,20 @@ var (
 	ErrMainCanvasRequired = errors.New("main canvas is required")
 )
 
-// ProjectPresentation contains workspace-owned identity and display metadata.
+// ProjectPresentationStatus describes whether the project presentation is currently writable.
+type ProjectPresentationStatus string
+
+// Project presentation states determine whether canvas presentation writes are permitted.
+const (
+	ProjectPresentationStatusActive   ProjectPresentationStatus = ProjectPresentationStatus(workspacedomain.ProjectStatusActive)
+	ProjectPresentationStatusArchived ProjectPresentationStatus = ProjectPresentationStatus(workspacedomain.ProjectStatusArchived)
+)
+
+// ProjectPresentation contains the project facts exposed to canvas presentation readers.
 type ProjectPresentation struct {
 	MainCanvasID uuid.UUID
-	Name, Status string
+	Name         string
+	Status       ProjectPresentationStatus
 	OwnerName    string
 }
 

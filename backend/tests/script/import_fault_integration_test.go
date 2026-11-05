@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
@@ -61,7 +60,7 @@ func TestScriptFileImportPGAllFailedRetryRejectsChangedDraftWithoutIO(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := scriptImportWorker(db, storage, failedImportExtractor{}).Execute(t.Context(), importDelivery(t, owner, actor, in.Key)); err != nil {
+	if err := scriptImportWorker(t, db, storage, failedImportExtractor{}).Execute(t.Context(), importDelivery(t, owner, actor, in.Key)); err != nil {
 		t.Fatal(err)
 	}
 	current, err := service.Get(t.Context(), actor, pid, accepted.ID)
@@ -73,7 +72,7 @@ func TestScriptFileImportPGAllFailedRetryRejectsChangedDraftWithoutIO(t *testing
 	}
 	_, edit := sourceCommand()
 	edit.ProjectID = pid
-	if _, err := app.NewSourceService(scriptStore(db), scriptobjects.NewStorage(storage), time.Now).Write(t.Context(), actor, edit); err != nil {
+	if _, err := app.NewSourceService(scriptStore(db), scriptPrivateObjects(t, db), time.Now).Write(t.Context(), actor, edit); err != nil {
 		t.Fatal(err)
 	}
 	retry := app.ImportControl{ProjectID: pid, JobID: accepted.ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: current.Revision, Action: "retry"}
@@ -96,7 +95,7 @@ func TestScriptFileImportPGUnknownPublicationObjectsStayFencedUntilExactReconcil
 			db, owner := scriptTestDB(t)
 			actor, pid := scriptActorProject(t, owner)
 			storage := scriptStorage(t)
-			objects := scriptobjects.NewStorage(storage)
+			objects := scriptPrivateObjects(t, db)
 			data := []byte("冻结的精确原件😀")
 			file := scriptDocument(t, db, storage, actor, pid, "未知.txt", data)
 			admin := scriptAdmin(t, owner, actor.OrgID)
@@ -110,22 +109,22 @@ func TestScriptFileImportPGUnknownPublicationObjectsStayFencedUntilExactReconcil
 			if fault == "foreign_digest" {
 				uncertain = &lostPrivatePut{PrivateObjects: objects}
 			}
-			worker := scriptImportWorkerWithObjects(db, storage, extract.NewExtractor(), uncertain)
+			worker := scriptImportWorkerWithObjects(t, db, storage, extract.NewExtractor(), uncertain)
 			if err := worker.Execute(t.Context(), importDelivery(t, owner, actor, input.Key)); !errors.Is(err, app.ErrNeedsReconciliation) {
 				t.Fatal(err)
 			}
 			plan := pendingScriptPlan(t, owner, pid)
-			cleanScriptPlan(t, objects, plan)
+			cleanScriptPlan(t, db, objects, plan)
 			fact := plan.Objects[0]
 			if fact.SHA256 != domain.ContentSHA(data) {
 				t.Fatal("expected first owned original fact")
 			}
 			if fault == "foreign_digest" {
-				if err := objects.Remove(t.Context(), fact.Key); err != nil {
+				if err := removeScriptFixtureBytes(t, db, fact); err != nil {
 					t.Fatal(err)
 				}
 				bad := []byte("不是冻结字节")
-				if err := objects.PutIfAbsent(t.Context(), fact.Key, bytes.NewReader(bad), int64(len(bad)), fact.MIME, domain.ContentSHA(bad)); err != nil {
+				if err := putScriptFixtureBytes(t, db, fact, bytes.NewReader(bad), int64(len(bad)), fact.MIME, domain.ContentSHA(bad)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -148,7 +147,7 @@ func TestScriptFileImportPGUnknownPublicationObjectsStayFencedUntilExactReconcil
 				t.Fatal("unknown object cleanup invented success", pending, err)
 			}
 			if fault == "foreign_digest" {
-				r, err := objects.Get(t.Context(), fact.Key)
+				r, err := objects.GetObject(t.Context(), fact)
 				if err != nil {
 					t.Fatal("removed foreign digest", err)
 				}
@@ -157,15 +156,16 @@ func TestScriptFileImportPGUnknownPublicationObjectsStayFencedUntilExactReconcil
 				if err != nil || string(actual) != "不是冻结字节" {
 					t.Fatal("foreign object modified", err)
 				}
-				if err := objects.Remove(t.Context(), fact.Key); err != nil {
+				if err := removeScriptFixtureBytes(t, db, fact); err != nil {
 					t.Fatal(err)
 				}
 			}
 			// This isolated fixture supplies the previously unknown response bytes. The
 			// worker never reconstructs/re-Puts missing input during cancellation.
-			if err := objects.PutIfAbsent(t.Context(), fact.Key, bytes.NewReader(data), fact.ByteSize, fact.MIME, fact.SHA256); err != nil {
+			if err := putScriptFixtureBytes(t, db, fact, bytes.NewReader(data), fact.ByteSize, fact.MIME, fact.SHA256); err != nil {
 				t.Fatal(err)
 			}
+			expireScriptFixtureSourceDrain(t, owner, plan)
 			reconcile := cancel
 			reconcile.Key = uuid.New()
 			reconcile.RequestID = uuid.New()
@@ -209,7 +209,7 @@ func TestScriptFileImportPGRevokedControllerCanBeRecoveredByNewExplicitControlle
 	if err := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, first.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	worker := scriptImportWorker(db, storage, extract.NewExtractor())
+	worker := scriptImportWorker(t, db, storage, extract.NewExtractor())
 	assertRevokedImportDelivery(t, owner, scriptImportStore(db, storage), worker, importDelivery(t, owner, first, command.Key))
 	current, err := service.Get(t.Context(), second, pid, accepted.ID)
 	if err != nil || current.Revision != response.Revision || !current.CancellationRequested || !current.CanControl {
@@ -243,13 +243,13 @@ func TestScriptFileImportPGInternalPublicationCannotUsePublicSourceRecovery(t *t
 	if _, err := service.Create(t.Context(), actor, input); err != nil {
 		t.Fatal(err)
 	}
-	objects := scriptobjects.NewStorage(storage)
-	worker := scriptImportWorkerWithObjects(db, storage, extract.NewExtractor(), &lostPrivatePut{PrivateObjects: objects})
+	objects := scriptPrivateObjects(t, db)
+	worker := scriptImportWorkerWithObjects(t, db, storage, extract.NewExtractor(), &lostPrivatePut{PrivateObjects: objects})
 	if err := worker.Execute(t.Context(), importDelivery(t, owner, actor, input.Key)); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal(err)
 	}
 	plan := pendingScriptPlan(t, owner, pid)
-	cleanScriptPlan(t, objects, plan)
+	cleanScriptPlan(t, db, objects, plan)
 	id := uuid.NewSHA1(plan.Command.Key, []byte("source-write/"+actor.ID.String()+"/"+pid.String()))
 	normal := app.NewSourceRecovery(scriptStore(db), app.NewSourceService(scriptStore(db), objects, time.Now), time.Now)
 	page, err := normal.List(t.Context(), actor, pid, 0, 100)

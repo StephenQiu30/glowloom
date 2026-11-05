@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
 	"github.com/google/uuid"
@@ -72,7 +74,7 @@ func TestProjectLifecycleOwningGuardsCoverDurableWorkAndKeepContent(t *testing.T
 	actor, project := lifecycleActorProject(ctx, t, db)
 	operation, asset, job, canvas, node := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	lifecycleFixtureSQL(t, db, `INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,quote_micros,quote_expires_at) VALUES(?,?,'free','image.generate','text_to_image','synthetic-guard','upload','draft',0,clock_timestamp()+interval '1 hour')`, operation, project)
-	lifecycleFixtureSQL(t, db, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size) VALUES(?,?,'image','upload','ready',?,'image/png',12)`, asset, project, "lifecycle-test/"+asset.String())
+	lifecycleFixtureSQL(t, db, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,object_location_id) VALUES(?,?,'image','upload','ready',?,'image/png',12,?)`, asset, project, "lifecycle-test/"+asset.String(), businessFixtureLocation(t, db, "lifecycle-test/"+asset.String()))
 	lifecycleFixtureSQL(t, db, `INSERT INTO canvas.document(id,project_id,name) VALUES(?,?,'preserved canvas')`, canvas, project)
 	lifecycleFixtureSQL(t, db, `INSERT INTO canvas.node(id,document_id,title,node_type,node_action,config,x,y) VALUES(?,?,'preserved node','text','resource','{"text":"完整保留"}',12,34)`, node, canvas)
 	lifecycleFixtureSQL(t, db, `INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,status,stage,progress,attempt,revision,created_at,updated_at) VALUES(?,?,?,?,'producer',?,?,1,'{}','failed','failed',0,1,1,clock_timestamp(),clock_timestamp())`, job, project, actor.OrgID, actor.ID, canvas, node)
@@ -289,7 +291,9 @@ func TestProjectLifecycleProjectLockSerializesRealMediaAdmission(t *testing.T) {
 	defer func() {
 		cancel()
 		if !finished {
-			<-done
+			if err := <-done; err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				t.Error("joined lock-test operation:", err)
+			}
 		}
 	}()
 	go func() {
@@ -301,6 +305,12 @@ func TestProjectLifecycleProjectLockSerializesRealMediaAdmission(t *testing.T) {
 	id := uuid.New()
 	sha := strings.Repeat("a", 64)
 	asset := mediadomain.MediaAsset{ID: id, ProjectID: project, Kind: mediadomain.KindImage, Origin: mediadomain.OriginSystem, Status: mediadomain.StatusProcessing, ObjectKey: fmt.Sprintf("projects/%s/image/2026/10/%s.png", project, id), MimeType: "image/png", ByteSize: 12, SHA256: &sha, ModerationStatus: mediadomain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
+	location := businessFixtureLocation(t, admission, asset.ObjectKey)
+	physical, err := pgmedia.NewStorageRoutes(admission).ReadLocation(ctx, location)
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset.ObjectLocation = &physical
 	if err := workspaceMediaStore(admission).StoreDerived(ctx, actor, asset, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +416,9 @@ func assertLifecycleFence(ctx context.Context, t *testing.T, db *gorm.DB, actor 
 	defer func() {
 		if !finished {
 			cancel()
-			<-done
+			if err := <-done; err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				t.Error("joined lock-test operation:", err)
+			}
 		}
 		rollbackLifecycleTest(t, archive)
 	}()

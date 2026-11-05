@@ -21,6 +21,7 @@ func init() {
 	RegisterDriver(&VolcengineArkDriver{}, "volcengine_ark", "byteplus")
 }
 
+// Submit sends generation input using this adapter's provider protocol.
 func (d *VolcengineArkDriver) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
 	if !validKey(key) || !validateCommonInput(input) {
 		return invalidSubmissionResult(), nil
@@ -143,10 +144,10 @@ func (d *VolcengineArkDriver) Submit(ctx context.Context, c *Client, input appli
 
 	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, path, payload, 64<<20)
 	if err != nil {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	result, ok := parseStandardGenerationResponse(input, data)
 	if !ok {
@@ -155,6 +156,7 @@ func (d *VolcengineArkDriver) Submit(ctx context.Context, c *Client, input appli
 	return result, nil
 }
 
+// Query reads provider progress or reports that polling is unsupported.
 func (d *VolcengineArkDriver) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
 	if config.Validate() != nil || !validKey(key) || !validTaskID(taskID) {
 		return unknownResult(), nil
@@ -162,14 +164,14 @@ func (d *VolcengineArkDriver) Query(ctx context.Context, c *Client, config catal
 	path := "/contents/generations/tasks/" + taskID
 	data, status, err := c.request(ctx, config, key, http.MethodGet, path, nil, 1<<20)
 	if err != nil {
-		return application.GenerationResult{State: "unknown", ErrorCode: "query_unreachable"}, nil
+		return application.GenerationResult{State: application.ProviderTaskUnknown, ErrorCode: "query_unreachable"}, nil
 	}
 	if status < 200 || status >= 300 {
 		state := "unknown"
 		if status == 404 {
 			state = "not_found"
 		}
-		return application.GenerationResult{State: state, ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{State: application.ProviderTaskState(state), ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	var response struct {
 		ID      string `json:"id"`
@@ -185,16 +187,16 @@ func (d *VolcengineArkDriver) Query(ctx context.Context, c *Client, config catal
 	result := application.GenerationResult{TaskID: taskID, Usage: safeUsage(response.Usage)}
 	switch response.Status {
 	case "queued", "pending":
-		result.State = "pending"
+		result.State = application.ProviderTaskPending
 	case "running", "in_progress":
-		result.State = "running"
+		result.State = application.ProviderTaskRunning
 	case "failed", "expired":
-		result.State = "failed"
+		result.State = application.ProviderTaskFailed
 		result.ErrorCode = "generation_failed"
 	case "cancelled":
-		result.State = "cancelled"
+		result.State = application.ProviderTaskCancelled
 	case "completed", "succeeded":
-		result.State = "succeeded"
+		result.State = application.ProviderTaskSucceeded
 		parsed, err := url.Parse(response.Content.VideoURL)
 		if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Port() != "" || !strings.HasSuffix(parsed.Hostname(), ".tos-cn-beijing.volces.com") {
 			return unknownResult(), nil
@@ -206,6 +208,7 @@ func (d *VolcengineArkDriver) Query(ctx context.Context, c *Client, config catal
 	return result, nil
 }
 
+// Probe performs the configured provider credential check.
 func (d *VolcengineArkDriver) Probe(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, key string) ProbeResult {
 	result := ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 	if config.Validate() != nil || !validKey(key) {
@@ -233,6 +236,7 @@ func (d *VolcengineArkDriver) Probe(ctx context.Context, c *Client, config catal
 	return result
 }
 
+// ProbeModelDefaultParams applies this adapter's model-probe parameter defaults.
 func (d *VolcengineArkDriver) ProbeModelDefaultParams(capability string) map[string]any {
 	if capability == "image.generate" {
 		return map[string]any{"size": "2K"}

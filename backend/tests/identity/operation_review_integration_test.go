@@ -5,23 +5,22 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
-	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/providerprobe"
-	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
+	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	domain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
@@ -84,52 +83,14 @@ func TestManagedWorkflowRevocationClosesPersistedReservation(t *testing.T) {
 				must(recordQuery(t.Context()))
 			}
 			finalizer := app.NewOperationFinalizer(tx, store, pgbilling.NewStore(tx))
-			activities := operationflow.NewActivities(store, finalizer)
-			env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
-			register := func(name string, fn any) { env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name}) }
-			model, price := uuid.New(), uuid.New()
-			loaded := operation.WorkflowOperation{Operation: domain.Operation{ID: id, ProjectID: facts.ProjectID, TargetType: "free", Status: status, ModelProfileVersionID: &model, PriceRuleVersionID: &price}, Provider: operation.WorkflowProvider{AdapterKey: "openrouter", Queue: "provider"}, ProviderRequestKey: "operation/" + id.String()}
-			register("flow.LoadOperation", func(ctx context.Context, _ string) (operation.WorkflowOperation, error) {
-				if point == "succeeded_before_ingest" || point == "unknown_before_reconcile" {
-					if err := revoke(ctx); err != nil {
-						return loaded, err
-					}
-				}
-				return loaded, nil
-			})
-			register("flow.Transition", activities.Transition)
-			register("flow.SettleOperation", activities.SettleOperation)
-			register("flow.ResolveRevokedOperation", activities.ResolveRevokedOperation)
-			register("flow.LoadProviderCost", activities.LoadProviderCost)
-			register("flow.BeginProviderCall", func(context.Context, operation.BeginProviderCallInput) error { return nil })
-			register("flow.CompleteProviderCall", func(context.Context, operation.CompleteProviderCallInput) error { return nil })
-			submitted, queried, ingested := 0, 0, 0
-			register("provider.managed", func(ctx context.Context, in operation.ManagedStep) (operation.ManagedProgress, error) {
-				if in.Action == "submit" {
-					submitted++
-					return operation.ManagedProgress{}, errors.New("unexpected provider submission")
-				}
-				if point == "unknown_after_accept" {
-					return operation.ManagedProgress{State: "accepted", TaskID: "accepted-task"}, revoke(ctx)
-				}
-				if in.Action == "query" {
-					queried++
-					if err := recordQuery(ctx); err != nil {
-						return operation.ManagedProgress{}, err
-					}
-					if err := revoke(ctx); err != nil {
-						return operation.ManagedProgress{}, err
-					}
-					return operation.ManagedProgress{State: "succeeded", TaskID: "accepted-task"}, nil
-				}
-				return operation.ManagedProgress{State: "accepted", TaskID: "accepted-task"}, nil
-			})
-			register("media.IngestManaged", func(ctx context.Context, _ uuid.UUID) error { ingested++; return revoke(ctx) })
-			env.SetTestTimeout(10 * time.Second)
-			env.ExecuteWorkflow(operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: id.String()})
-			if err := env.GetWorkflowError(); err != nil {
-				t.Fatal(err)
+			if point == "after_query" {
+				must(recordQuery(t.Context()))
 			}
+			must(revoke(t.Context()))
+			handlers := map[string]taskruntime.Handler{}
+			operationflow.RegisterFlow(handlers, store, finalizer, nil)
+			_, err = handlers["operation.run"](t.Context(), taskruntime.Job{BusinessID: id.String()})
+			must(err)
 			var row struct {
 				Status                            string
 				Reserved, Settled, Outputs, Calls int64
@@ -146,8 +107,8 @@ func TestManagedWorkflowRevocationClosesPersistedReservation(t *testing.T) {
 					t.Fatalf("workflow failed to close known spend: %+v", row)
 				}
 			}
-			if row.Outputs != 0 || row.Task != "accepted-task" || submitted != 0 || queried > 1 || ingested > 1 {
-				t.Fatalf("repeated submission/publication/lost receipt: %+v submits %d queries %d ingest %d", row, submitted, queried, ingested)
+			if row.Outputs != 0 || row.Task != "accepted-task" {
+				t.Fatalf("repeated submission/publication/lost receipt: %+v", row)
 			}
 		})
 	}

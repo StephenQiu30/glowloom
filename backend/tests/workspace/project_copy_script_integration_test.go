@@ -117,7 +117,7 @@ func (o scriptCopyContractOwner) FinishCleanup(ctx context.Context, actor identi
 
 func scriptCopyContractStore(db *gorm.DB, factory workspacepg.ProjectCopyScriptOwnerFactory) *workspacepg.ProjectCopyStore {
 	return workspacepg.NewScopedProjectCopyStoreWithScript(db, workspaceRequestScope, workspaceWorkerScope, folderWork, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
-		return workspaceapp.ProjectCopyOwners{Media: workspaceMediaCopyStore(tx), Budget: workspaceCopyBudgetStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx}, Canvas: workspaceCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(workspaceMediaStore(tx), nil) }, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
+		return workspaceapp.ProjectCopyOwners{Media: workspaceMediaCopyStore(tx), Budget: workspaceCopyBudgetStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx}, Canvas: workspaceCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(workspaceMediaStore(tx)) }, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
 			return privateCopyReference{owner: workspaceMediaCopyStore(tx), binding: mediaapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}}
 		})}
 	}, factory)

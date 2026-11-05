@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -24,15 +26,13 @@ func (s *LibraryStore) FindLibraryMedia(ctx context.Context, actor identityapp.P
 	}
 	var result application.LibraryMediaFile
 	err := s.read(ctx, actor, scope, func(tx *gorm.DB, library libraryRow) error {
-		query, args := libraryEntries(actor, scope, library.ID)
-		args = append(args, id)
 		var entry libraryEntryRow
-		read := tx.Raw(query+`SELECT * FROM entries WHERE id=? AND asset_id IS NOT NULL AND catalog_state IN ('active','trashed')`, args...).Scan(&entry)
+		read := libraryEntries(tx, actor, scope, library.ID).Where("id = ? AND asset_id IS NOT NULL AND catalog_state IN ?", id, []domain.LibraryItemState{domain.LibraryItemStateActive, domain.LibraryItemStateTrashed}).Take(&entry)
 		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrNotFound
+			}
 			return fmt.Errorf("read library media item: %w", read.Error)
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrNotFound
 		}
 		if _, err := entry.detail(library.ID); err != nil {
 			return err
@@ -41,12 +41,12 @@ func (s *LibraryStore) FindLibraryMedia(ctx context.Context, actor identityapp.P
 			return err
 		}
 		var a assetRow
-		read = tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND NOT is_delete AND status='ready' AND moderation_status='passed' AND NOT contains_real_person AND consent_record_id IS NULL FOR SHARE`, id).Scan(&a)
+		read = tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"id": id, "is_delete": false, "status": domain.StatusReady, "moderation_status": domain.ModerationPassed, "contains_real_person": false, "consent_record_id": nil}).Take(&a)
 		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrNotFound
+			}
 			return read.Error
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrNotFound
 		}
 		if err := a.loadLocation(tx); err != nil {
 			return err
@@ -57,7 +57,7 @@ func (s *LibraryStore) FindLibraryMedia(ctx context.Context, actor identityapp.P
 		}
 		result.Asset = asset
 		var rows []renditionRow
-		if err := tx.Raw(`SELECT * FROM media.rendition WHERE media_asset_id=? AND NOT is_delete ORDER BY kind,id LIMIT 17 FOR SHARE`, id).Scan(&rows).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("media_asset_id = ? AND NOT is_delete", id).Order("kind").Order("id").Limit(17).Find(&rows).Error; err != nil {
 			return err
 		}
 		if len(rows) > 16 {

@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"path"
 	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -22,24 +24,21 @@ func (s *LibraryStore) ReadReferenceFactSource(ctx context.Context, actor identi
 	}
 	var result application.LibraryMediaFile
 	err := s.read(ctx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(tx *gorm.DB, library libraryRow) error {
-		var state string
-		read := tx.Raw(`SELECT catalog_state FROM media.library_item WHERE library_id=? AND id=? FOR SHARE`, library.ID, id).Scan(&state)
-		if read.Error != nil {
+		var item libraryItemRow
+		read := tx.Clauses(clause.Locking{Strength: "SHARE"}).Select("catalog_state").Where(map[string]any{"library_id": library.ID, "id": id}).Take(&item)
+		if read.Error != nil && !errors.Is(read.Error, gorm.ErrRecordNotFound) {
 			return read.Error
 		}
-		if read.RowsAffected == 1 && state != "active" {
+		if read.Error == nil && item.CatalogState != domain.LibraryItemStateActive {
 			return application.ErrNotFound
 		}
 		if err := requireNoNewMediaPurge(tx, []uuid.UUID{id}); err != nil {
 			return err
 		}
 		var row assetRow
-		read = tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND personal_actor_id IS NULL AND personal_org_id IS NULL AND kind=? AND NOT is_delete AND status='ready' AND moderation_status='passed' AND NOT contains_real_person AND consent_record_id IS NULL FOR SHARE`, id, project, string(kind)).Scan(&row)
+		read = tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"id": id, "project_id": project, "personal_actor_id": nil, "personal_org_id": nil, "kind": string(kind), "is_delete": false, "status": domain.StatusReady, "moderation_status": domain.ModerationPassed, "contains_real_person": false, "consent_record_id": nil}).Take(&row)
 		if read.Error != nil {
 			return read.Error
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrNotFound
 		}
 		if err := row.loadLocation(tx); err != nil {
 			return err
@@ -53,7 +52,7 @@ func (s *LibraryStore) ReadReferenceFactSource(ctx context.Context, actor identi
 			return nil
 		}
 		var rows []renditionRow
-		if err := tx.Raw(`SELECT * FROM media.rendition WHERE media_asset_id=? AND NOT is_delete ORDER BY kind,id LIMIT 17 FOR SHARE`, id).Scan(&rows).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("media_asset_id = ? AND NOT is_delete", id).Order("kind").Order("id").Limit(17).Find(&rows).Error; err != nil {
 			return err
 		}
 		if len(rows) > 16 {

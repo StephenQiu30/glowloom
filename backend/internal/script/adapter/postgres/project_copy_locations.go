@@ -10,6 +10,15 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
+type copyObjectAction uint8
+
+const (
+	copyObjectBegin copyObjectAction = iota + 1
+	copyObjectConfirm
+	copyObjectBeginRemoval
+	copyObjectConfirmRemoval
+)
+
 // WithObjectLocations binds storage work to the coordinator transaction.
 func (s *ProjectCopyStore) WithObjectLocations(factory SourceObjectLocationFactory) *ProjectCopyStore {
 	bound := *s
@@ -35,29 +44,24 @@ func bindCopyTargets(m *application.ProjectCopyManifest, facts []domain.ObjectFa
 }
 
 func hydrateCopyLocations(tx *gorm.DB, m *application.ProjectCopyManifest, snapshot application.ProjectCopySnapshot) error {
-	var rows []struct {
-		SourceKey, TargetKey           string
-		SourceLocation, TargetLocation *uuid.UUID
-	}
-	if err := tx.Raw(`SELECT source_key,target_key,source_location_id AS source_location,target_location_id AS target_location FROM script.copy_object_intent WHERE snapshot_id=?`, snapshot.ID).Scan(&rows).Error; err != nil {
+	var rows []scriptCopyObjectIntentRow
+	if err := tx.Where("snapshot_id = ?", snapshot.ID).Find(&rows).Error; err != nil {
 		return err
 	}
 	if len(rows) != len(m.Objects) {
 		return application.ErrObjectMismatch
 	}
 	targets := make([]domain.ObjectFact, len(m.Objects))
+	byTargetKey := make(map[string]scriptCopyObjectIntentRow, len(rows))
+	for _, row := range rows {
+		byTargetKey[row.TargetKey] = row
+	}
 	for i := range m.Objects {
-		found := false
-		for _, r := range rows {
-			if r.TargetKey == m.Objects[i].Target.Key && r.SourceKey == m.Objects[i].Source.Key {
-				m.Objects[i].Source.LocationID, m.Objects[i].Target.LocationID = locationValue(r.SourceLocation), locationValue(r.TargetLocation)
-				found = true
-				break
-			}
-		}
-		if !found {
+		row, found := byTargetKey[m.Objects[i].Target.Key]
+		if !found || row.SourceKey != m.Objects[i].Source.Key || row.SourceLocationID == uuid.Nil || row.TargetLocationID == uuid.Nil {
 			return application.ErrObjectMismatch
 		}
+		m.Objects[i].Source.LocationID, m.Objects[i].Target.LocationID = row.SourceLocationID, row.TargetLocationID
 		targets[i] = m.Objects[i].Target
 	}
 	bindCopyTargets(m, targets)
@@ -84,28 +88,27 @@ func hydrateCopyLocations(tx *gorm.DB, m *application.ProjectCopyManifest, snaps
 	return nil
 }
 
-func (s *ProjectCopyStore) copyLocationAction(ctx context.Context, tx *gorm.DB, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact, action string) error {
-	var row struct{ StorageIntentID *uuid.UUID }
-	if err := tx.Raw(`SELECT storage_intent_id FROM script.copy_snapshot WHERE id=?`, snapshot.ID).Scan(&row).Error; err != nil {
-		return err
+func (s *ProjectCopyStore) copyLocationAction(ctx context.Context, tx *gorm.DB, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact, action copyObjectAction) (bool, error) {
+	var row scriptCopySnapshotRow
+	if err := tx.Model(&scriptCopySnapshotRow{}).Select("storage_intent_id").Where("id = ?", snapshot.ID).Take(&row).Error; err != nil {
+		return false, err
 	}
-	id := row.StorageIntentID
-	if id == nil {
-		return nil
+	if row.StorageIntentID == nil || *row.StorageIntentID == uuid.Nil || fact.LocationID == uuid.Nil {
+		return false, application.ErrObjectMismatch
 	}
 	if s.locations == nil || s.locations(tx) == nil {
-		return application.ErrUnavailable
+		return false, application.ErrUnavailable
 	}
 	p := s.locations(tx)
 	switch action {
-	case "begin":
-		return p.Begin(ctx, *id, fact)
-	case "confirm":
-		return p.Confirm(ctx, *id, fact)
-	case "remove":
-		return p.BeginRemoval(ctx, *id, fact)
-	case "removed":
-		return p.ConfirmRemoval(ctx, *id, fact)
+	case copyObjectBegin:
+		return true, p.Begin(ctx, *row.StorageIntentID, fact)
+	case copyObjectConfirm:
+		return true, p.Confirm(ctx, *row.StorageIntentID, fact)
+	case copyObjectBeginRemoval:
+		return p.BeginRemoval(ctx, *row.StorageIntentID, fact)
+	case copyObjectConfirmRemoval:
+		return true, p.ConfirmRemoval(ctx, *row.StorageIntentID, fact)
 	}
-	return application.ErrUnavailable
+	return false, application.ErrUnavailable
 }

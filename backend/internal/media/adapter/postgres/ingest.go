@@ -9,9 +9,11 @@ import (
 	"time"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -65,21 +67,18 @@ func findOutput(tx *gorm.DB, operationID uuid.UUID, seq int) (application.Ingest
 		ByteSize         int64
 		SHA256           *string
 	}
-	result := tx.Raw(`
-		SELECT o.id AS output_id, a.id AS media_asset_id, a.project_id, (to_jsonb(a)->>'object_location_id')::uuid AS object_location_id, a.object_key,
-		       a.kind, a.mime_type, a.byte_size, a.sha256
-		FROM operation.operation_output AS o
-		JOIN media.media_asset AS a ON a.id = o.media_asset_id AND a.project_id = o.project_id
-		WHERE o.operation_id = ?::uuid AND o.seq_no = ? AND o.kind = 'media'
-		  AND NOT o.is_delete AND NOT a.is_delete
-	`, operationID.String(), seq).Scan(&row)
-	if result.Error != nil {
-		return application.IngestOutput{}, false, fmt.Errorf("read operation media output: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
+	read := tx.Table("operation.operation_output AS o").
+		Select("o.id AS output_id, a.id AS media_asset_id, a.project_id, a.object_location_id, a.object_key, a.kind, a.mime_type, a.byte_size, a.sha256").
+		Joins("JOIN media.media_asset AS a ON a.id = o.media_asset_id AND a.project_id = o.project_id").
+		Where("o.operation_id = ? AND o.seq_no = ? AND o.kind = ? AND NOT o.is_delete AND NOT a.is_delete", operationID, seq, operationdomain.OutputKindMedia).
+		Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
 		return application.IngestOutput{}, false, nil
 	}
-	if result.RowsAffected != 1 || row.SHA256 == nil {
+	if read.Error != nil {
+		return application.IngestOutput{}, false, fmt.Errorf("read operation media output: %w", read.Error)
+	}
+	if row.SHA256 == nil {
 		return application.IngestOutput{}, false, ErrOutputConflict
 	}
 	location, err := readRowLocation(tx, row.ObjectLocationID, row.ObjectKey)
@@ -100,24 +99,19 @@ func (r *IngestRepository) loadOperation(ctx context.Context, operationID uuid.U
 		return application.SourceOperation{}, ErrUnavailable
 	}
 	var row application.SourceOperation
-	result := r.db.WithContext(ctx).Raw(`
-		SELECT o.id, o.project_id, provider.key AS provider_key,
-		       profile.model_key, o.region, project.aspect_ratio,
-		       capability.output_type AS output_kind, o.create_time
-		FROM operation.operation AS o
-		JOIN workspace.project AS project ON project.id = o.project_id
-		JOIN catalog.model_profile_version AS version ON version.id = o.model_profile_version_id
-		JOIN catalog.model_profile AS profile ON profile.id = version.model_profile_id
-		JOIN catalog.capability AS capability ON capability.key = profile.capability
-		JOIN catalog.provider AS provider ON provider.id = profile.provider_id
-		WHERE o.id = ?::uuid AND (o.status = 'ingesting' OR ?) AND NOT o.is_delete
-		  AND NOT project.is_delete AND NOT version.is_delete
-		  AND NOT profile.is_delete AND NOT provider.is_delete
-	`, operationID.String(), r.original != nil).Scan(&row)
-	if result.Error != nil {
-		return application.SourceOperation{}, fmt.Errorf("load media source operation: %w", result.Error)
+	read := r.db.WithContext(ctx).Table("operation.operation AS o").
+		Select("o.id, o.project_id, provider.key AS provider_key, profile.model_key, o.region, project.aspect_ratio, capability.output_type AS output_kind, o.create_time").
+		Joins("JOIN workspace.project AS project ON project.id = o.project_id").
+		Joins("JOIN catalog.model_profile_version AS version ON version.id = o.model_profile_version_id").
+		Joins("JOIN catalog.model_profile AS profile ON profile.id = version.model_profile_id").
+		Joins("JOIN catalog.capability AS capability ON capability.key = profile.capability").
+		Joins("JOIN catalog.provider AS provider ON provider.id = profile.provider_id").
+		Where("o.id = ? AND (o.status = ? OR ?) AND NOT o.is_delete AND NOT project.is_delete AND NOT version.is_delete AND NOT profile.is_delete AND NOT provider.is_delete", operationID, operationdomain.StatusIngesting, r.original != nil).
+		Take(&row)
+	if read.Error != nil && !errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return application.SourceOperation{}, fmt.Errorf("load media source operation: %w", read.Error)
 	}
-	if result.RowsAffected != 1 || row.ID == uuid.Nil || row.ProjectID == uuid.Nil ||
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) || row.ID == uuid.Nil || row.ProjectID == uuid.Nil ||
 		row.ProviderKey == "" || row.ModelKey == "" || row.Region == "" ||
 		(row.AspectRatio != "9:16" && row.AspectRatio != "16:9") ||
 		(row.OutputKind != domain.KindImage && row.OutputKind != domain.KindVideo && row.OutputKind != domain.KindAudio) ||
@@ -151,17 +145,13 @@ func (r *IngestRepository) SaveOutput(ctx context.Context, asset domain.MediaAss
 		if err := r.authorizeOperation(tx, *asset.SourceOperationID, true); err != nil {
 			return err
 		}
-		var row struct{ Status string }
-		result := tx.Raw(`
-			SELECT status FROM operation.operation
-			WHERE id = ?::uuid AND project_id = ?::uuid AND NOT is_delete
-			FOR UPDATE
-		`, asset.SourceOperationID.String(), asset.ProjectID.String()).Scan(&row)
-		if result.Error != nil {
-			return fmt.Errorf("lock media source operation: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
+		var row ingestOperationRecord
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(map[string]any{"id": *asset.SourceOperationID, "project_id": asset.ProjectID, "is_delete": false}).Take(&row)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
 			return ErrOperationNotIngesting
+		}
+		if read.Error != nil {
+			return fmt.Errorf("lock media source operation: %w", read.Error)
 		}
 		if existing, found, err := findOutput(tx, *asset.SourceOperationID, seq); err != nil {
 			return err
@@ -181,16 +171,10 @@ func (r *IngestRepository) SaveOutput(ctx context.Context, asset domain.MediaAss
 		if err := insertIngestMedia(tx, asset, renditions); err != nil {
 			return err
 		}
-		result = tx.Exec(`
-			INSERT INTO operation.operation_output
-			  (id, project_id, operation_id, seq_no, kind, media_asset_id, moderation_status)
-			VALUES (?::uuid, ?::uuid, ?::uuid, ?, 'media', ?::uuid, 'pending')
-		`, outputID.String(), asset.ProjectID.String(), asset.SourceOperationID.String(), seq, asset.ID.String())
-		if result.Error != nil {
-			return fmt.Errorf("insert operation media output: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return ErrOutputConflict
+		mediaAssetID := asset.ID
+		output := operationOutputRecord{ID: outputID, ProjectID: asset.ProjectID, OperationID: *asset.SourceOperationID, SeqNo: seq, Kind: operationdomain.OutputKindMedia, MediaAssetID: &mediaAssetID, ModerationStatus: string(domain.ModerationPending)}
+		if err := tx.Create(&output).Error; err != nil {
+			return fmt.Errorf("insert operation media output: %w", err)
 		}
 		saved = application.IngestOutput{
 			ProjectID: asset.ProjectID, ObjectLocation: asset.ObjectLocation,
@@ -211,38 +195,16 @@ func (r *IngestRepository) findRenditions(ctx context.Context, assetID uuid.UUID
 	if r == nil || r.db == nil {
 		return nil, ErrUnavailable
 	}
-	var rows []struct {
-		ObjectLocationID *uuid.UUID
-		ID               uuid.UUID
-		MediaAssetID     uuid.UUID
-		Kind             string
-		ObjectKey        string
-		Width            *int32
-		Height           *int32
-		ByteSize         *int64
-		CreateTime       time.Time
-		UpdateTime       time.Time
-	}
-	if err := r.db.WithContext(ctx).Raw(`
-		SELECT id, media_asset_id, kind, object_key, (to_jsonb(r)->>'object_location_id')::uuid AS object_location_id, width, height, byte_size,
-		       create_time, update_time
-		FROM media.rendition AS r WHERE media_asset_id = ?::uuid AND NOT is_delete
-		ORDER BY kind
-	`, assetID.String()).Scan(&rows).Error; err != nil {
+	var rows []renditionRow
+	if err := r.db.WithContext(ctx).Where("media_asset_id = ? AND NOT is_delete", assetID).Order("kind").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("read generated media renditions: %w", err)
 	}
 	result := make([]domain.Rendition, 0, len(rows))
-	for _, row := range rows {
-		rendition := domain.Rendition{
-			ID: row.ID, MediaAssetID: row.MediaAssetID, Kind: domain.RenditionKind(row.Kind),
-			ObjectKey: row.ObjectKey, Width: row.Width, Height: row.Height,
-			ByteSize: row.ByteSize, CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
-		}
-		location, err := readRowLocation(r.db.WithContext(ctx), row.ObjectLocationID, row.ObjectKey)
-		if err != nil {
+	for i := range rows {
+		if err := rows[i].loadLocation(r.db.WithContext(ctx)); err != nil {
 			return nil, err
 		}
-		rendition.ObjectLocation = location
+		rendition := rows[i].domain()
 		if err := rendition.Validate(); err != nil {
 			return nil, fmt.Errorf("validate stored media rendition: %w", err)
 		}
@@ -265,14 +227,13 @@ func (r *IngestRepository) RecordModeration(ctx context.Context, operationID, ou
 		if err := r.authorizeOperation(tx, operationID, true); err != nil {
 			return err
 		}
-		var op struct{ Status string }
-		result := tx.Raw(`SELECT status FROM operation.operation WHERE id = ?::uuid AND NOT is_delete FOR UPDATE`,
-			operationID.String()).Scan(&op)
-		if result.Error != nil {
-			return fmt.Errorf("lock moderation source operation: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
+		var op ingestOperationRecord
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND NOT is_delete", operationID).Take(&op)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
 			return ErrOutputConflict
+		}
+		if read.Error != nil {
+			return fmt.Errorf("lock moderation source operation: %w", read.Error)
 		}
 		var row struct {
 			MediaAssetID     uuid.UUID
@@ -282,21 +243,17 @@ func (r *IngestRepository) RecordModeration(ctx context.Context, operationID, ou
 			AssetModeration  string
 			Revision         int32
 		}
-		result = tx.Raw(`
-			SELECT o.media_asset_id, o.moderation_status, o.moderation_reason,
-			       a.status AS asset_status, a.moderation_status AS asset_moderation,
-			       a.revision
-			FROM operation.operation_output AS o
-			JOIN media.media_asset AS a ON a.id = o.media_asset_id AND a.project_id = o.project_id
-			WHERE o.id = ?::uuid AND o.operation_id = ?::uuid AND o.kind = 'media'
-			  AND NOT o.is_delete AND NOT a.is_delete
-			FOR UPDATE OF o, a
-		`, outputID.String(), operationID.String()).Scan(&row)
-		if result.Error != nil {
-			return fmt.Errorf("lock media moderation output: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
+		read = tx.Table("operation.operation_output AS o").
+			Select("o.media_asset_id, o.moderation_status, o.moderation_reason, a.status AS asset_status, a.moderation_status AS asset_moderation, a.revision").
+			Joins("JOIN media.media_asset AS a ON a.id = o.media_asset_id AND a.project_id = o.project_id").
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("o.id = ? AND o.operation_id = ? AND o.kind = ? AND NOT o.is_delete AND NOT a.is_delete", outputID, operationID, operationdomain.OutputKindMedia).
+			Take(&row)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
 			return ErrOutputConflict
+		}
+		if read.Error != nil {
+			return fmt.Errorf("lock media moderation output: %w", read.Error)
 		}
 		if row.ModerationStatus == string(status) && row.AssetModeration == string(status) &&
 			((row.ModerationReason == nil && reason == "") || (row.ModerationReason != nil && *row.ModerationReason == reason)) {
@@ -314,32 +271,15 @@ func (r *IngestRepository) RecordModeration(ctx context.Context, operationID, ou
 			next = domain.StatusRejected
 		}
 		now := time.Now().UTC()
-		result = tx.Exec(`
-			UPDATE media.media_asset SET status = ?, moderation_status = ?, revision = revision + 1,
-			       update_time = ?
-			WHERE id = ?::uuid AND status = 'processing' AND moderation_status = 'pending'
-			  AND revision = ? AND NOT is_delete
-		`, string(next), string(status), now, row.MediaAssetID.String(), row.Revision)
-		if result.Error != nil {
-			return fmt.Errorf("update reviewed media asset: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return ErrOutputConflict
+		if err := updateOne(tx, "media.media_asset", map[string]any{"id": row.MediaAssetID, "status": domain.StatusProcessing, "moderation_status": domain.ModerationPending, "revision": row.Revision, "is_delete": false}, map[string]any{"status": next, "moderation_status": status, "revision": row.Revision + 1, "update_time": now}, ErrOutputConflict); err != nil {
+			return fmt.Errorf("update reviewed media asset: %w", err)
 		}
 		var reasonValue any
 		if reason != "" {
 			reasonValue = reason
 		}
-		result = tx.Exec(`
-			UPDATE operation.operation_output
-			SET moderation_status = ?, moderation_reason = ?, update_time = ?
-			WHERE id = ?::uuid AND moderation_status = 'pending' AND NOT is_delete
-		`, string(status), reasonValue, now, outputID.String())
-		if result.Error != nil {
-			return fmt.Errorf("update reviewed operation output: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return ErrOutputConflict
+		if err := updateOne(tx, "operation.operation_output", map[string]any{"id": outputID, "operation_id": operationID, "moderation_status": domain.ModerationPending, "is_delete": false}, map[string]any{"moderation_status": status, "moderation_reason": reasonValue, "update_time": now}, ErrOutputConflict); err != nil {
+			return fmt.Errorf("update reviewed operation output: %w", err)
 		}
 		return nil
 	})
@@ -357,12 +297,12 @@ func (r *IngestRepository) authorizeOperation(tx *gorm.DB, id uuid.UUID, write b
 		ProjectID, OrgID uuid.UUID
 		ConfirmedBy      *uuid.UUID
 	}
-	result := tx.Raw(`SELECT o.project_id,o.confirmed_by,p.org_id FROM operation.operation o JOIN workspace.project p ON p.id=o.project_id WHERE o.id=? AND NOT o.is_delete`, id).Scan(&row)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 || row.ConfirmedBy == nil {
+	read := tx.Table("operation.operation AS o").Select("o.project_id, o.confirmed_by, p.org_id").Joins("JOIN workspace.project AS p ON p.id = o.project_id").Where("o.id = ? AND NOT o.is_delete", id).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) || row.ConfirmedBy == nil {
 		return ErrNotFound
+	}
+	if read.Error != nil {
+		return read.Error
 	}
 	return r.requireProject(tx, identityapp.Principal{ID: *row.ConfirmedBy, OrgID: row.OrgID}, row.ProjectID, write)
 }
@@ -393,13 +333,13 @@ func (r *IngestRepository) FindRenditions(ctx context.Context, id uuid.UUID) ([]
 		return nil, ErrUnavailable
 	}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var row struct{ SourceOperationID *uuid.UUID }
-		q := tx.Raw(`SELECT source_operation_id FROM media.media_asset WHERE id=? AND NOT is_delete`, id).Scan(&row)
+		var row assetRow
+		q := tx.Select("source_operation_id").Where("id = ? AND NOT is_delete", id).Take(&row)
+		if errors.Is(q.Error, gorm.ErrRecordNotFound) || row.SourceOperationID == nil {
+			return ErrNotFound
+		}
 		if q.Error != nil {
 			return q.Error
-		}
-		if q.RowsAffected != 1 || row.SourceOperationID == nil {
-			return ErrNotFound
 		}
 		if err := r.authorizeOperation(tx, *row.SourceOperationID, false); err != nil {
 			return err

@@ -37,14 +37,14 @@ type TransferInput struct {
 // Validate closes current scope, batch bounds and revision requirements.
 func (in TransferInput) Validate() error {
 	if in.Source.Validate() != nil || in.Target.Validate() != nil || in.Source.Kind == in.Target.Kind || in.Key == uuid.Nil ||
-		len(in.Items) < 1 || len(in.Items) > 200 || in.ExpectedSourceRevision < 0 || in.ExpectedSourceRevision > math.MaxInt32 ||
-		in.ExpectedTargetRevision < 0 || in.ExpectedTargetRevision > math.MaxInt32 || in.ExpectedProjectRevision < 1 || in.ExpectedProjectRevision > math.MaxInt32 || in.ExpectedFolderRevision > math.MaxInt32 ||
-		(in.TargetFolderID == nil && in.ExpectedFolderRevision != 0) || (in.TargetFolderID != nil && (*in.TargetFolderID == uuid.Nil || in.ExpectedFolderRevision < 1)) {
+		len(in.Items) < 1 || len(in.Items) > 200 || in.ExpectedSourceRevision < domain.LibraryRevisionInitial || in.ExpectedSourceRevision > math.MaxInt32 ||
+		in.ExpectedTargetRevision < domain.LibraryRevisionInitial || in.ExpectedTargetRevision > math.MaxInt32 || in.ExpectedProjectRevision < 1 || in.ExpectedProjectRevision > math.MaxInt32 || in.ExpectedFolderRevision > math.MaxInt32 ||
+		(in.TargetFolderID == nil && in.ExpectedFolderRevision != 0) || (in.TargetFolderID != nil && (*in.TargetFolderID == uuid.Nil || in.ExpectedFolderRevision < domain.LibraryFolderInitialRevision)) {
 		return domain.ErrInvalidLibrary
 	}
 	seen := make(map[uuid.UUID]bool, len(in.Items))
 	for _, item := range in.Items {
-		if item.ID == uuid.Nil || item.Revision < 0 || item.Revision > math.MaxInt32 || seen[item.ID] {
+		if item.Validate() != nil || seen[item.ID] {
 			return domain.ErrInvalidLibrary
 		}
 		seen[item.ID] = true
@@ -66,11 +66,7 @@ type FrozenTransferItem struct {
 // PrepareTransferItem creates deterministic independent identities for one
 // selected item. Source notes/favorites never enter the shared project scope.
 func PrepareTransferItem(job, org, actor uuid.UUID, target domain.LibraryScope, folder *uuid.UUID, source domain.LibraryItem, file *LibraryMediaFile, now time.Time) (FrozenTransferItem, error) {
-	checkedSource := source
-	if checkedSource.Revision == 0 && checkedSource.AssetID != nil {
-		checkedSource.Revision = 1 // A real legacy binary has no metadata row yet.
-	}
-	if job == uuid.Nil || org == uuid.Nil || actor == uuid.Nil || target.Validate() != nil || now.IsZero() || checkedSource.Validate() != nil || source.State != "active" || folder != nil && *folder == uuid.Nil {
+	if job == uuid.Nil || org == uuid.Nil || actor == uuid.Nil || target.Validate() != nil || now.IsZero() || source.Validate() != nil || source.State != domain.LibraryItemStateActive || folder != nil && *folder == uuid.Nil {
 		return FrozenTransferItem{}, domain.ErrInvalidLibrary
 	}
 	encoded, err := json.Marshal(source)
@@ -92,8 +88,8 @@ func PrepareTransferItem(job, org, actor uuid.UUID, target domain.LibraryScope, 
 	now = now.UTC().Truncate(time.Microsecond)
 	lib, _ := target.Identity(org, actor)
 	item.ID = uuid.NewSHA1(job, []byte("transfer-item/"+source.ID.String()))
-	item.LibraryID, item.FolderID, item.Favorite, item.State, item.TrashedAt = lib, folder, false, "active", nil
-	item.Revision, item.CreatedAt, item.UpdatedAt = 1, now, now
+	item.LibraryID, item.FolderID, item.Favorite, item.State, item.TrashedAt = lib, folder, false, domain.LibraryItemStateActive, nil
+	item.Revision, item.CreatedAt, item.UpdatedAt = domain.LibraryItemInitialRevision, now, now
 	if target.Kind == domain.LibraryProject {
 		item.Note = ""
 	}
@@ -152,7 +148,7 @@ func PrepareTransferItem(job, org, actor uuid.UUID, target domain.LibraryScope, 
 	result.SourceRenditions = sourceClone.Renditions
 	result.TargetAsset = &a
 	result.TargetItem.AssetID = &a.ID
-	result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, SourceObjectKey: original.ObjectKey, SourceLocation: original.ObjectLocation, TargetObjectKey: a.ObjectKey, ByteSize: &a.ByteSize, ContentType: a.MimeType, SHA256: a.SHA256, Status: "pending"})
+	result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, SourceObjectKey: original.ObjectKey, SourceLocation: original.ObjectLocation, TargetObjectKey: a.ObjectKey, ByteSize: &a.ByteSize, ContentType: a.MimeType, SHA256: a.SHA256, Status: ProjectCopyObjectPending})
 	seen := make(map[domain.RenditionKind]bool)
 	for _, current := range clone.Renditions {
 		prefix := strings.TrimSuffix(original.ObjectKey, path.Ext(original.ObjectKey)) + "/"
@@ -170,7 +166,7 @@ func PrepareTransferItem(job, org, actor uuid.UUID, target domain.LibraryScope, 
 		current.ObjectKey = strings.TrimSuffix(a.ObjectKey, path.Ext(a.ObjectKey)) + "/" + string(current.Kind) + ext
 		current.CreateTime, current.UpdateTime = now, now
 		result.TargetRenditions = append(result.TargetRenditions, current)
-		result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, RenditionKind: string(current.Kind), SourceObjectKey: from, SourceLocation: fromLocation, TargetObjectKey: current.ObjectKey, ByteSize: current.ByteSize, ContentType: mime, Status: "pending"})
+		result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, RenditionKind: string(current.Kind), SourceObjectKey: from, SourceLocation: fromLocation, TargetObjectKey: current.ObjectKey, ByteSize: current.ByteSize, ContentType: mime, Status: ProjectCopyObjectPending})
 	}
 	return result, nil
 }
@@ -180,8 +176,20 @@ type TransferRepository interface {
 	CreateTransfer(context.Context, identityapp.Principal, TransferInput) (domain.TransferJob, error)
 	GetTransfer(context.Context, identityapp.Principal, uuid.UUID) (domain.TransferJob, error)
 	ListTransfers(context.Context, identityapp.Principal, domain.LibraryScope, int, int) ([]domain.TransferJob, error)
-	ControlTransfer(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, int64, string) (domain.TransferJob, error)
+	ControlTransfer(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, int64, TransferAction) (domain.TransferJob, error)
 }
+
+// TransferAction is a closed command or work-queue action in the transfer lifecycle.
+type TransferAction string
+
+// Transfer actions are the accepted admission, execution and recovery commands.
+const (
+	TransferActionCreate    TransferAction = "create"
+	TransferActionStart     TransferAction = "start"
+	TransferActionCancel    TransferAction = "cancel"
+	TransferActionRetry     TransferAction = "retry"
+	TransferActionReconcile TransferAction = "reconcile"
+)
 
 // TransferWorkID is immutable orchestration identity; execution is supplied by
 // the real workflow and a separate SQL fence prevents an expired worker write.
@@ -195,9 +203,9 @@ type TransferWorkID struct {
 // TransferDelivery proves one permanent command and its actual outbox message.
 type TransferDelivery struct {
 	TransferWorkID
-	EventID   uuid.UUID `json:"event_id"`
-	RequestID uuid.UUID `json:"request_id"`
-	ActorID   uuid.UUID `json:"actor_id"`
-	OrgID     uuid.UUID `json:"org_id"`
-	Action    string    `json:"action"`
+	EventID   uuid.UUID      `json:"event_id"`
+	RequestID uuid.UUID      `json:"request_id"`
+	ActorID   uuid.UUID      `json:"actor_id"`
+	OrgID     uuid.UUID      `json:"org_id"`
+	Action    TransferAction `json:"action"`
 }

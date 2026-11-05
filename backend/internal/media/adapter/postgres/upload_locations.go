@@ -3,15 +3,27 @@ package postgres
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
+
+type uploadLocationReservation struct {
+	ID             uuid.UUID
+	ProfileID      string
+	Bucket         string
+	ObjectKey      string
+	OwnerSessionID uuid.UUID
+}
+
+func (uploadLocationReservation) TableName() string { return "media.object_location" }
 
 // ReserveUploadLocation binds a unique object to its unexpired upload session.
 func (s *StorageRoutes) ReserveUploadLocation(ctx context.Context, session uuid.UUID, ref domain.ObjectRef) (domain.ObjectLocation, error) {
@@ -23,15 +35,23 @@ func (s *StorageRoutes) ReserveUploadLocation(ctx context.Context, session uuid.
 	}
 	var location domain.ObjectLocation
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,owner_session_id) SELECT ?,profile_id,bucket,?,id FROM media.upload_admission WHERE id=? AND profile_id=? AND bucket=? AND expires_at>now() AND accepted_asset_id IS NULL ON CONFLICT(profile_id,bucket,object_key) DO NOTHING`, uuid.New(), ref.Key, session, ref.ProfileID, ref.Bucket).Error; err != nil {
+		var admission uploadAdmissionRow
+		err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("id = ? AND profile_id = ? AND bucket = ? AND expires_at > clock_timestamp() AND accepted_asset_id IS NULL", session, ref.ProfileID, ref.Bucket).Take(&admission).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return application.ErrUploadConflict
+		}
+		if err != nil {
+			return err
+		}
+		candidate := uploadLocationReservation{ID: uuid.New(), ProfileID: ref.ProfileID, Bucket: ref.Bucket, ObjectKey: ref.Key, OwnerSessionID: session}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "profile_id"}, {Name: "bucket"}, {Name: "object_key"}}, DoNothing: true}).Create(&candidate).Error; err != nil {
 			return err
 		}
 		var row objectLocationRow
-		read := tx.Raw(`SELECT * FROM media.object_location WHERE profile_id=? AND bucket=? AND object_key=? FOR SHARE`, ref.ProfileID, ref.Bucket, ref.Key).Scan(&row)
-		if read.Error != nil {
-			return read.Error
+		if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("profile_id = ? AND bucket = ? AND object_key = ?", ref.ProfileID, ref.Bucket, ref.Key).Take(&row).Error; err != nil {
+			return err
 		}
-		if read.RowsAffected != 1 || row.OwnerSessionID == nil || *row.OwnerSessionID != session || (row.State != "reserved" && row.State != "present") {
+		if row.OwnerSessionID == nil || *row.OwnerSessionID != session || (row.State != domain.ObjectLocationReserved && row.State != domain.ObjectLocationPresent) {
 			return application.ErrUploadConflict
 		}
 		location = row.domain()
@@ -51,7 +71,10 @@ func (s *StorageRoutes) ConfirmUploadLocation(ctx context.Context, location doma
 	if _, err := hex.DecodeString(info.SHA256); err != nil {
 		return application.ErrObjectMismatch
 	}
-	r := s.db.WithContext(ctx).Exec(`UPDATE media.object_location SET state='present',byte_size=?,sha256=?,mime_type=? WHERE id=? AND profile_id=? AND bucket=? AND object_key=? AND owner_session_id IS NOT NULL AND state IN ('reserved','present') AND (byte_size IS NULL OR byte_size=?) AND (sha256 IS NULL OR sha256=?) AND (mime_type IS NULL OR mime_type=?)`, info.Size, info.SHA256, info.ContentType, location.ID, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, info.Size, info.SHA256, info.ContentType)
+	r := s.db.WithContext(ctx).Model(&objectLocationRow{}).
+		Where("id = ? AND profile_id = ? AND bucket = ? AND object_key = ? AND owner_session_id IS NOT NULL AND state IN ?", location.ID, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, []domain.ObjectLocationState{domain.ObjectLocationReserved, domain.ObjectLocationPresent}).
+		Where("(byte_size IS NULL OR byte_size = ?) AND (sha256 IS NULL OR sha256 = ?) AND (mime_type IS NULL OR mime_type = ?)", info.Size, info.SHA256, info.ContentType).
+		Updates(map[string]any{"state": domain.ObjectLocationPresent, "byte_size": info.Size, "sha256": info.SHA256, "mime_type": info.ContentType})
 	if r.Error != nil {
 		return fmt.Errorf("confirm uploaded location: %w", r.Error)
 	}
@@ -69,15 +92,15 @@ func (s *StorageRoutes) BeginUploadRemoval(ctx context.Context, location domain.
 	if location.ID == uuid.Nil || location.Ref.Validate() != nil {
 		return false, domain.ErrInvalidObjectRef
 	}
-	state := "delete_pending"
-	if location.State == "unknown" {
-		state = "unknown"
+	state := domain.ObjectLocationDeletePending
+	if location.State == domain.ObjectLocationUnknown {
+		state = domain.ObjectLocationUnknown
 	}
-	r := s.db.WithContext(ctx).Exec(`UPDATE media.object_location SET state=? WHERE id=? AND profile_id=? AND bucket=? AND object_key=? AND owner_session_id IS NOT NULL AND state IN ('reserved','present','delete_pending')`, state, location.ID, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
+	r := s.db.WithContext(ctx).Model(&objectLocationRow{}).Where("id = ? AND profile_id = ? AND bucket = ? AND object_key = ? AND owner_session_id IS NOT NULL AND state IN ?", location.ID, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, []domain.ObjectLocationState{domain.ObjectLocationReserved, domain.ObjectLocationPresent, domain.ObjectLocationDeletePending}).Update("state", state)
 	if r.Error != nil {
 		return false, r.Error
 	}
-	return r.RowsAffected == 1 && state != "unknown", nil
+	return r.RowsAffected == 1 && state != domain.ObjectLocationUnknown, nil
 }
 
 // ConfirmUploadRemoval records a known successful delete without erasing its identity.
@@ -85,7 +108,7 @@ func (s *StorageRoutes) ConfirmUploadRemoval(ctx context.Context, location domai
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	r := s.db.WithContext(ctx).Exec(`UPDATE media.object_location SET state='deleted' WHERE id=? AND profile_id=? AND bucket=? AND object_key=? AND owner_session_id IS NOT NULL AND state='delete_pending'`, location.ID, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
+	r := s.db.WithContext(ctx).Model(&objectLocationRow{}).Where("id = ? AND profile_id = ? AND bucket = ? AND object_key = ? AND owner_session_id IS NOT NULL AND state = ?", location.ID, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, domain.ObjectLocationDeletePending).Update("state", domain.ObjectLocationDeleted)
 	if r.Error != nil {
 		return r.Error
 	}
@@ -115,12 +138,12 @@ func acceptUploadLocations(tx *gorm.DB, actor identityapp.Principal, r applicati
 		return application.ErrUploadConflict
 	}
 	var admission uploadAdmissionRow
-	read := tx.Raw(`SELECT * FROM media.upload_admission WHERE id=? AND org_id=? AND actor_id=? AND scope_id=? AND request_key=? AND profile_id=? AND bucket=? AND config_revision=? AND expires_at>now() FOR UPDATE`, target.SessionID, actor.OrgID, actor.ID, scopeID, r.Key, target.ProfileID, target.Bucket, target.ConfigRevision).Scan(&admission)
-	if read.Error != nil {
-		return read.Error
-	}
-	if read.RowsAffected != 1 || !admission.ExpiresAt.After(asset.CreateTime) {
+	err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND org_id = ? AND actor_id = ? AND scope_id = ? AND request_key = ? AND profile_id = ? AND bucket = ? AND config_revision = ? AND expires_at > clock_timestamp() AND accepted_asset_id IS NULL", target.SessionID, actor.OrgID, actor.ID, scopeID, r.Key, target.ProfileID, target.Bucket, target.ConfigRevision).Take(&admission).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) || err == nil && !admission.ExpiresAt.After(asset.CreateTime) {
 		return application.ErrUploadConflict
+	}
+	if err != nil {
+		return err
 	}
 	stored, err := admission.target()
 	if err != nil || stored != *target {
@@ -135,10 +158,10 @@ func acceptUploadLocations(tx *gorm.DB, actor identityapp.Principal, r applicati
 			locations = append(locations, rend.ObjectLocation)
 		}
 		for _, location := range locations {
-			if location == nil || location.Ref.ProfileID != target.ProfileID || location.Ref.Bucket != target.Bucket || location.State != "present" || location.Ref.Validate() != nil {
+			if location == nil || location.Ref.ProfileID != target.ProfileID || location.Ref.Bucket != target.Bucket || location.State != domain.ObjectLocationPresent || location.Ref.Validate() != nil {
 				return application.ErrInvalidUpload
 			}
-			update := tx.Exec(`UPDATE media.object_location SET state='accepted' WHERE id=? AND owner_session_id=? AND profile_id=? AND bucket=? AND object_key=? AND state='present'`, location.ID, target.SessionID, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
+			update := tx.Model(&objectLocationRow{}).Where("id = ? AND owner_session_id = ? AND profile_id = ? AND bucket = ? AND object_key = ? AND state = ?", location.ID, target.SessionID, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, domain.ObjectLocationPresent).Update("state", domain.ObjectLocationAccepted)
 			if update.Error != nil {
 				return update.Error
 			}
@@ -147,7 +170,7 @@ func acceptUploadLocations(tx *gorm.DB, actor identityapp.Principal, r applicati
 			}
 		}
 	}
-	update := tx.Exec(`UPDATE media.upload_admission SET accepted_asset_id=? WHERE id=? AND (accepted_asset_id IS NULL OR accepted_asset_id=?)`, accepted, target.SessionID, accepted)
+	update := tx.Model(&uploadAdmissionRow{}).Where("id = ? AND (accepted_asset_id IS NULL OR accepted_asset_id = ?)", target.SessionID, accepted).Update("accepted_asset_id", accepted)
 	if update.Error != nil {
 		return update.Error
 	}
@@ -160,7 +183,7 @@ func acceptUploadLocations(tx *gorm.DB, actor identityapp.Principal, r applicati
 // insertReviewedUpload establishes the physical identity in the first INSERT;
 // runtime cannot rewrite accepted asset ownership and finalized columns are NOT NULL.
 func insertReviewedUpload(tx *gorm.DB, a domain.MediaAsset, rends []domain.Rendition) error {
-	row := map[string]any{"id": a.ID, "kind": string(a.Kind), "origin": "upload", "status": "ready", "object_key": a.ObjectKey, "file_name": a.FileName, "mime_type": a.MimeType, "byte_size": a.ByteSize, "sha256": a.SHA256, "width": a.Width, "height": a.Height, "duration_ms": a.DurationMS, "fps": a.FPS, "audio_channels": a.AudioChannels, "codec": a.Codec, "moderation_status": "passed", "moderation_detail": gorm.Expr("?::jsonb", string(a.ModerationDetail)), "revision": 1, "create_time": a.CreateTime, "update_time": a.UpdateTime}
+	row := map[string]any{"id": a.ID, "kind": string(a.Kind), "origin": string(domain.OriginUpload), "status": string(domain.StatusReady), "object_key": a.ObjectKey, "file_name": a.FileName, "mime_type": a.MimeType, "byte_size": a.ByteSize, "sha256": a.SHA256, "width": a.Width, "height": a.Height, "duration_ms": a.DurationMS, "fps": a.FPS, "audio_channels": a.AudioChannels, "codec": a.Codec, "moderation_status": string(domain.ModerationPassed), "moderation_detail": jsonDocument(a.ModerationDetail), "revision": 1, "create_time": a.CreateTime, "update_time": a.UpdateTime}
 	if a.Personal != nil {
 		row["personal_org_id"] = a.Personal.OrgID
 		row["personal_actor_id"] = a.Personal.ActorID

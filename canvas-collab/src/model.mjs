@@ -377,7 +377,7 @@ export function nodeTextBinding(doc, nodeId) {
 }
 
 /** Explicitly chosen private recovery only. Ordinary graph rendering must use the text binding. */
-export function applyRecoveredCanvasChanges(doc, before, after) {
+function applyExplicitCanvasReplacement(doc, before, after) {
   const probe = createCanvasDocument(after);
   probe.destroy();
   const graphOnly = copy(after),
@@ -410,6 +410,15 @@ export function applyRecoveredCanvasChanges(doc, before, after) {
       shared.set("documentPresent", present);
     }
   }, "local-canvas");
+}
+
+/** Private recovery applies an explicitly selected complete baseline. */
+export function applyRecoveredCanvasChanges(doc, before, after) {
+  return applyExplicitCanvasReplacement(doc, before, after);
+}
+/** A Go-authorized semantic command has strict revision/CAS acceptance. */
+export function applyCommandCanvasChanges(doc, before, after) {
+  return applyExplicitCanvasReplacement(doc, before, after);
 }
 
 /** Graph commands have a separate history from Tiptap's ySyncPluginKey transactions. */

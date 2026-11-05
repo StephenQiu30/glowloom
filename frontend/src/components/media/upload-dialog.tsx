@@ -105,7 +105,12 @@ export function UploadDialog({
               r.asset.project_id !== projectID))
         )
           throw new RequestError("invalid_receipt");
-        accepted = r.asset!;
+        accepted = {
+          ...r.asset!,
+          duration_ms: r.asset!.duration_ms ?? undefined,
+          width: r.asset!.width ?? undefined,
+          height: r.asset!.height ?? undefined,
+        };
         setUploaded(accepted);
       }
       await onUploaded(accepted);

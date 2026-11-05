@@ -27,6 +27,7 @@ func init() {
 	RegisterDriver(&VolcengineSpeechDriver{}, "volcengine_speech")
 }
 
+// Submit sends generation input using this adapter's provider protocol.
 func (d *VolcengineSpeechDriver) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
 	if input.ModelID == "seed-audio-1.0" {
 		return c.submitOmniAudio(ctx, input, key)
@@ -34,17 +35,20 @@ func (d *VolcengineSpeechDriver) Submit(ctx context.Context, c *Client, input ap
 	return c.submitSpeech(ctx, input, key)
 }
 
-func (d *VolcengineSpeechDriver) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
+// Query reads provider progress or reports that polling is unsupported.
+func (d *VolcengineSpeechDriver) Query(_ context.Context, _ *Client, _ catalogdomain.ProviderConfig, _, _ string) (application.GenerationResult, error) {
 	return unknownResult(), nil
 }
 
-func (d *VolcengineSpeechDriver) Probe(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, key string) ProbeResult {
+// Probe performs the configured provider credential check.
+func (d *VolcengineSpeechDriver) Probe(_ context.Context, _ *Client, config catalogdomain.ProviderConfig, _ string) ProbeResult {
 	if config.Validate() != nil {
 		return ProbeResult{Auth: "unknown", Adapter: "unsupported", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 	}
 	return ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 }
 
+// ProbeModelDefaultParams applies this adapter's model-probe parameter defaults.
 func (d *VolcengineSpeechDriver) ProbeModelDefaultParams(capability string) map[string]any {
 	if capability == "audio.generate" {
 		return map[string]any{"speaker": "zh_female_vv_uranus_bigtts"}
@@ -55,7 +59,7 @@ func (d *VolcengineSpeechDriver) ProbeModelDefaultParams(capability string) map[
 // submitSpeech is deliberately separate from Ark's Bearer/JSON protocol. A speech
 // Key is sent only to the pinned speech origin, never to a discovered endpoint.
 func (c *Client) submitSpeech(ctx context.Context, input application.GenerationRequest, key string) (application.GenerationResult, error) {
-	rejected := application.GenerationResult{Outcome: "not_submitted", ErrorCode: "invalid_provider_request"}
+	rejected := application.GenerationResult{Outcome: application.ProviderOutcomeNotSubmitted, ErrorCode: "invalid_provider_request"}
 	if input.Config.Validate() != nil || !validKey(key) || input.ModelID != "seed-tts-2.0" || input.Capability != "audio.generate" || input.Mode != "text2audio" || input.OutputCount != 1 || len(input.References) != 0 || input.EndpointTag != "" || strings.TrimSpace(input.Prompt) == "" || len(input.Prompt) > 16384 {
 		return rejected, nil
 	}
@@ -117,7 +121,7 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPError(response.StatusCode)}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPError(response.StatusCode)}, nil
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, (64<<20)+1))
 	if err != nil || len(data) > 64<<20 {
@@ -164,7 +168,7 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 			if len(output) > 0 {
 				return unknownResult(), nil
 			}
-			return application.GenerationResult{Outcome: "unknown", ErrorCode: "invalid_parameters"}, nil
+			return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "invalid_parameters"}, nil
 		}
 		if chunk.Data != "" {
 			part, err := base64.StdEncoding.Strict().DecodeString(chunk.Data)
@@ -193,7 +197,7 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 	if finished {
 		terminalCode = 20000000
 	}
-	return application.GenerationResult{Outcome: "completed", State: "succeeded", ProviderTerminalCode: terminalCode, ProviderLogID: logID, Audio: []application.GeneratedAudio{{Bytes: output, MediaType: "audio/mpeg"}}, Usage: usage}, nil
+	return application.GenerationResult{Outcome: application.ProviderOutcomeCompleted, State: application.ProviderTaskSucceeded, ProviderTerminalCode: terminalCode, ProviderLogID: logID, Audio: []application.GeneratedAudio{{Bytes: output, MediaType: "audio/mpeg"}}, Usage: usage}, nil
 }
 
 func safeSpeechUsage(raw json.RawMessage) json.RawMessage {

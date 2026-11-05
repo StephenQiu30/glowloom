@@ -12,12 +12,13 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/otelconn"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/temporalconn"
 )
 
 func provideTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (trace.TracerProvider, func(), error) {
@@ -65,23 +66,18 @@ func provideRedis(cfg config.Config, logger *zap.Logger) (*redisconn.Connection,
 	return conn, cleanup, nil
 }
 
-func provideTemporal(cfg config.Config, logger *zap.Logger, tracerProvider trace.TracerProvider) (*temporalconn.Connection, func(), error) {
-	conn, err := temporalconn.Open(cfg.TemporalAddr, cfg.TemporalNamespace, logger, tracerProvider)
+func provideObjectStorage(cfg config.Config) (*objectstorage.Registry, func(), error) {
+	if cfg.ObjectStorage == nil {
+		return nil, nil, fmt.Errorf("configure api object storage: %w", objectstorage.ErrUnavailable)
+	}
+	conn, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
 	if err != nil {
-		return nil, nil, fmt.Errorf("configure backend Temporal: %w", err)
+		return nil, nil, fmt.Errorf("configure api object storage: %w", err)
 	}
 	return conn, conn.Close, nil
 }
 
-func provideObjectStorage(cfg config.Config) (*objectstorage.Client, error) {
-	conn, err := objectstorage.OpenFromConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("configure api object storage: %w", err)
-	}
-	return conn, nil
-}
-
-func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, temporalConn *temporalconn.Connection, storageClient *objectstorage.Client) ReadyCheck {
+func provideReadyCheck(cfg config.Config, dbConn *db.Connection, redisConn *redisconn.Connection, storage *objectstorage.Registry) ReadyCheck {
 	return func(ctx context.Context) error {
 		if err := dbConn.Ping(ctx); err != nil {
 			return err
@@ -89,17 +85,25 @@ func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, t
 		if err := redisConn.Ping(ctx); err != nil {
 			return err
 		}
-		if err := temporalConn.Ping(ctx); err != nil {
+		if cfg.ObjectStorage == nil || storage == nil {
+			return mediaapp.ErrStorageNotReady
+		}
+		profile, ok := cfg.ObjectStorage.Profiles[cfg.ObjectStorage.DefaultWriteProfile]
+		if !ok {
+			return mediaapp.ErrStorageNotReady
+		}
+		route, err := pgmedia.NewStorageRoutes(dbConn.DB).ReadConfigured(ctx)
+		if err != nil {
 			return err
 		}
-		if storageClient != nil {
-			return storageClient.Ping(ctx)
+		if route.ProfileID != cfg.ObjectStorage.DefaultWriteProfile || route.Bucket != profile.Bucket || route.Revision != cfg.ObjectStorage.Revision {
+			return mediaapp.ErrStorageRouteConflict
 		}
-		return nil
+		return storage.Ping(ctx)
 	}
 }
 
-func provideAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, dbConn *db.Connection, storage *objectstorage.Client, redisConn *redisconn.Connection) (*http.Server, func(), error) {
+func provideAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, dbConn *db.Connection, storage *objectstorage.Registry, redisConn *redisconn.Connection) (*http.Server, func(), error) {
 	sessions, err := identityruntime.NewSessionDependencies(cfg, redisConn.Client)
 	if err != nil {
 		return nil, nil, err
@@ -123,7 +127,14 @@ func provideAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger
 		cleanup()
 		return nil, nil, err
 	}
-	stopIdentity := func() { stopReceipts(); stopExports(); cleanup() }
+	stopStorageRuntime, err := startStorageRuntime(ctx, cfg, true, dbConn.DB)
+	if err != nil {
+		stopReceipts()
+		stopExports()
+		cleanup()
+		return nil, nil, err
+	}
+	stopIdentity := func() { stopStorageRuntime(); stopReceipts(); stopExports(); cleanup() }
 	return &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,

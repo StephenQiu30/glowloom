@@ -71,7 +71,8 @@ func newTeamLiveFixtures(t *testing.T, configure ...func(*config.Config)) (liveF
 	}
 	life, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, db, nil, identityruntime.SessionDependencies{}, life)
+	storage := canvasRouterStorage(t, &cfg)
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, db, storage, identityruntime.SessionDependencies{}, life)
 	if err != nil {
 		t.Fatal(err)
 	}

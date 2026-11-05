@@ -28,11 +28,11 @@ func uploadRoutingPolicy() mediaapp.UploadPolicy {
 	return mediaapp.UploadPolicy{MaxImageBytes: 20 << 20, MaxVideoBytes: 500 << 20, MaxAudioBytes: 100 << 20, MaxModelBytes: 64 << 20, MaxDocumentBytes: 20 << 20}
 }
 
-func activeTestStorageRoute(t *testing.T, routes *pgmedia.StorageRoutes) mediaapp.StorageRoute {
+func activeTestStorageRoute(t *testing.T, database *gorm.DB, routes *pgmedia.StorageRoutes) mediaapp.StorageRoute {
 	t.Helper()
-	route, err := routes.ReadActive(t.Context())
+	route, err := routes.ReadConfigured(t.Context())
 	if errors.Is(err, mediaapp.ErrStorageNotReady) {
-		route, err = routes.Activate(t.Context(), "", "fixture-"+uuid.NewString(), "minio-main")
+		route, err = routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "fixture-"+uuid.NewString(), "minio-main"))
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -44,20 +44,20 @@ func TestUploadAdmissionPersistsAcrossRouteSwitch(t *testing.T) {
 	database := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(database)
 	storageProfiles(t, routes)
-	current := activeTestStorageRoute(t, routes)
+	activeTestStorageRoute(t, database, routes)
 	revision := "admission-" + uuid.NewString()
-	if _, err := routes.Activate(t.Context(), current.Revision, revision, "minio-main"); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, revision, "minio-main")); err != nil {
 		t.Fatal(err)
 	}
 	actor, project := mediaStoreProject(t, database)
-	admission := pgmedia.NewUploadAdmission(routingMediaStore(database), uploadRoutingPolicy(), 24*time.Hour)
+	admission := pgmedia.NewUploadAdmission(routingMediaStore(database))
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	key := uuid.New()
 	first, err := admission.PinUpload(t.Context(), actor, scope, key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := routes.Activate(t.Context(), revision, "admission-next-"+uuid.NewString(), "cos-main"); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "admission-next-"+uuid.NewString(), "cos-main")); err != nil {
 		t.Fatal(err)
 	}
 	retry, err := admission.PinUpload(t.Context(), actor, scope, key)
@@ -104,7 +104,10 @@ func (o *persistedRoutedUpload) CreateUploadObject(ctx context.Context, target m
 	if err := o.locations.ConfirmUploadLocation(ctx, location, info); err != nil {
 		return location, err
 	}
-	location.State = "present"
+	location.State = domain.ObjectLocationPresent
+	location.ByteSize = &file.Size
+	location.SHA256 = &file.SHA256
+	location.MIMEType = &file.MIMEType
 	return location, nil
 }
 func (o *persistedRoutedUpload) RemoveUploadObject(ctx context.Context, location domain.ObjectLocation) error {
@@ -119,10 +122,10 @@ func TestUploadReplayKeepsOriginalLocation(t *testing.T) {
 	database := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(database)
 	storageProfiles(t, routes)
-	activeTestStorageRoute(t, routes)
+	activeTestStorageRoute(t, database, routes)
 	actor, project := mediaStoreProject(t, database)
 	store := routingMediaStore(database)
-	admission := pgmedia.NewUploadAdmission(store, uploadRoutingPolicy(), 24*time.Hour)
+	admission := pgmedia.NewUploadAdmission(store)
 	objects := &persistedRoutedUpload{locations: routes}
 	service := mediaapp.NewRoutedUploadService(store, store, admission, routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, objects, time.Now)
 	input := uploadInput(t)
@@ -134,7 +137,7 @@ func TestUploadReplayKeepsOriginalLocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	input.Target = &target
-	first, err := service.Upload(t.Context(), input)
+	first, err := fixtureProjectUpload(t.Context(), service, input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,10 +153,10 @@ func TestUploadReplayKeepsOriginalLocation(t *testing.T) {
 	if err != nil || remove {
 		t.Fatal("accepted object admitted to compensation", err)
 	}
-	if _, err := routes.Activate(t.Context(), target.ConfigRevision, "replay-"+uuid.NewString(), "minio-main"); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "replay-"+uuid.NewString(), "minio-main")); err != nil {
 		t.Fatal(err)
 	}
-	replay, err := service.Upload(t.Context(), input)
+	replay, err := fixtureProjectUpload(t.Context(), service, input)
 	if err != nil || replay.Asset.ID != first.Asset.ID || objects.writes != 3 {
 		t.Fatal("replay moved location or wrote objects", err)
 	}
@@ -163,11 +166,11 @@ func TestUploadAcceptanceRejectsAnotherActorsAdmission(t *testing.T) {
 	database := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(database)
 	storageProfiles(t, routes)
-	activeTestStorageRoute(t, routes)
+	activeTestStorageRoute(t, database, routes)
 	owner, ownerProject := mediaStoreProject(t, database)
 	actor, project := mediaStoreProject(t, database)
 	store := routingMediaStore(database)
-	admission := pgmedia.NewUploadAdmission(store, uploadRoutingPolicy(), 24*time.Hour)
+	admission := pgmedia.NewUploadAdmission(store)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &ownerProject}
 	stolen, err := admission.PinUpload(t.Context(), owner, scope, uuid.New())
 	if err != nil {
@@ -181,7 +184,7 @@ func TestUploadAcceptanceRejectsAnotherActorsAdmission(t *testing.T) {
 	// independently bind the session to this actor, scope and idempotency key.
 	badAdmission := &routedAdmissionFake{targets: map[uuid.UUID]mediaapp.UploadTarget{input.Request.Key: stolen}}
 	service := mediaapp.NewRoutedUploadService(store, store, badAdmission, routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, &persistedRoutedUpload{locations: routes}, time.Now)
-	if _, err := service.Upload(t.Context(), input); !errors.Is(err, mediaapp.ErrUploadConflict) {
+	if _, err := fixtureProjectUpload(t.Context(), service, input); !errors.Is(err, mediaapp.ErrUploadConflict) {
 		t.Fatalf("foreign admission reached acceptance: %v", err)
 	}
 }
@@ -212,9 +215,9 @@ func TestStorageAdmissionSnapshotAndOwnerAreImmutable(t *testing.T) {
 	database := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(database)
 	storageProfiles(t, routes)
-	activeTestStorageRoute(t, routes)
+	activeTestStorageRoute(t, database, routes)
 	actor, project := mediaStoreProject(t, database)
-	admission := pgmedia.NewUploadAdmission(routingMediaStore(database), uploadRoutingPolicy(), time.Hour)
+	admission := pgmedia.NewUploadAdmission(routingMediaStore(database))
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	a, err := admission.PinUpload(t.Context(), actor, scope, uuid.New())
 	if err != nil {
@@ -240,14 +243,14 @@ func TestUploadSwitchDuringBodyKeepsPersistentTarget(t *testing.T) {
 	database := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(database)
 	storageProfiles(t, routes)
-	current := activeTestStorageRoute(t, routes)
+	activeTestStorageRoute(t, database, routes)
 	rev := "http-pin-" + uuid.NewString()
-	if _, err := routes.Activate(t.Context(), current.Revision, rev, "minio-main"); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, rev, "minio-main")); err != nil {
 		t.Fatal(err)
 	}
 	actor, project := mediaStoreProject(t, database)
 	store := routingMediaStore(database)
-	admission := pgmedia.NewUploadAdmission(store, uploadRoutingPolicy(), 24*time.Hour)
+	admission := pgmedia.NewUploadAdmission(store)
 	service := mediaapp.NewRoutedUploadService(store, store, admission, routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, &persistedRoutedUpload{locations: routes}, time.Now)
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
@@ -275,7 +278,7 @@ func TestUploadSwitchDuringBodyKeepsPersistentTarget(t *testing.T) {
 		<-done
 		t.Fatal("body read preceded durable admission", err)
 	}
-	_, err = routes.Activate(t.Context(), rev, "http-next-"+uuid.NewString(), "cos-main")
+	_, err = routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "http-next-"+uuid.NewString(), "cos-main"))
 	close(gate.release)
 	<-done
 	if err != nil {
@@ -434,7 +437,7 @@ func TestRoutedUploadCommitUnknownKeepsObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	input.Target = &target
-	if _, err := service.Upload(t.Context(), input); err == nil {
+	if _, err := fixtureProjectUpload(t.Context(), service, input); err == nil {
 		t.Fatal("unknown commit reported successful")
 	}
 	if len(objects.removed) != 0 {

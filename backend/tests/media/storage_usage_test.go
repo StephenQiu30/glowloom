@@ -29,16 +29,16 @@ func (s usageSource) InspectStorageUsage(_ context.Context, _ identityapp.Princi
 
 type usageObjects struct {
 	listed  []mediaapp.StorageUsageObject
-	sizes   map[string]int64
+	sizes   map[domain.ObjectRef]int64
 	err     error
-	checked []string
+	checked []domain.ObjectRef
 }
 
-func (s *usageObjects) ListMetadata(context.Context, string, int) ([]mediaapp.StorageUsageObject, error) {
+func (s *usageObjects) ListMetadata(context.Context, mediaapp.StorageUsagePrefix, int) ([]mediaapp.StorageUsageObject, error) {
 	return s.listed, s.err
 }
 
-func (s *usageObjects) Stat(_ context.Context, key string) (int64, bool, error) {
+func (s *usageObjects) Stat(_ context.Context, key domain.ObjectRef) (int64, bool, error) {
 	s.checked = append(s.checked, key)
 	size, exists := s.sizes[key]
 	return size, exists, s.err
@@ -50,8 +50,8 @@ func TestMediaStorageUsageCountsActualUniqueObjectsAndKeepsUnconfiguredLimitNull
 	id, _ := scope.Identity(actor.OrgID, actor.ID)
 	prefix := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/"
 	one, two, absent := prefix+"a.png", prefix+"b.png", prefix+"removed.png"
-	source := usageSource{inventory: mediaapp.StorageUsageInventory{LibraryID: id, Prefixes: []string{prefix}, ObjectKeys: []string{one, absent}}}
-	objects := &usageObjects{listed: []mediaapp.StorageUsageObject{{Key: one, ByteSize: 9000}, {Key: two, ByteSize: 8000}}, sizes: map[string]int64{one: 21, two: 35}}
+	source := usageSource{inventory: mediaapp.StorageUsageInventory{LibraryID: id, PhysicalPrefixes: []mediaapp.StorageUsagePrefix{{ProfileID: "minio-main", Bucket: "storage-test", Prefix: prefix}}, Locations: []domain.ObjectRef{usageRef(one), usageRef(absent)}}}
+	objects := &usageObjects{listed: []mediaapp.StorageUsageObject{{Ref: usageRef(one), ByteSize: 9000}, {Ref: usageRef(two), ByteSize: 8000}}, sizes: map[domain.ObjectRef]int64{usageRef(one): 21, usageRef(two): 35}}
 	reader := mediaapp.NewStorageUsageReader(source, objects, func() time.Time { return domainNow })
 	result, err := reader.StorageUsage(t.Context(), actor, scope)
 	if err != nil || result.UsedBytes != 56 || result.ObjectCount != 2 || result.LimitBytes != nil || result.CurrentActorID != actor.ID || result.CurrentOrgID != actor.OrgID || result.CalculatedAt != domainNow || len(objects.checked) != 3 {
@@ -65,15 +65,15 @@ func TestMediaStorageUsageRejectsPartialForeignOverflowAndMissingAuthorities(t *
 	id, _ := scope.Identity(actor.OrgID, actor.ID)
 	prefix := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/"
 	for name, objects := range map[string]*usageObjects{
-		"foreign key":         {listed: []mediaapp.StorageUsageObject{{Key: "personal/foreign/file", ByteSize: 1}}},
-		"duplicate inventory": {listed: []mediaapp.StorageUsageObject{{Key: prefix + "a", ByteSize: 1}, {Key: prefix + "a", ByteSize: 1}}},
-		"negative metadata":   {listed: []mediaapp.StorageUsageObject{{Key: prefix + "a", ByteSize: -1}}},
-		"negative stat":       {listed: []mediaapp.StorageUsageObject{{Key: prefix + "a", ByteSize: 1}}, sizes: map[string]int64{prefix + "a": -1}},
-		"sum overflow":        {listed: []mediaapp.StorageUsageObject{{Key: prefix + "a", ByteSize: 1}, {Key: prefix + "b", ByteSize: 1}}, sizes: map[string]int64{prefix + "a": math.MaxInt64, prefix + "b": 1}},
-		"partial transport":   {listed: []mediaapp.StorageUsageObject{{Key: prefix + "a", ByteSize: 1}}, err: errors.New("transport unavailable")},
+		"foreign key":         {listed: []mediaapp.StorageUsageObject{{Ref: usageRef("personal/foreign/file"), ByteSize: 1}}},
+		"duplicate inventory": {listed: []mediaapp.StorageUsageObject{{Ref: usageRef(prefix + "a"), ByteSize: 1}, {Ref: usageRef(prefix + "a"), ByteSize: 1}}},
+		"negative metadata":   {listed: []mediaapp.StorageUsageObject{{Ref: usageRef(prefix + "a"), ByteSize: -1}}},
+		"negative stat":       {listed: []mediaapp.StorageUsageObject{{Ref: usageRef(prefix + "a"), ByteSize: 1}}, sizes: map[domain.ObjectRef]int64{usageRef(prefix + "a"): -1}},
+		"sum overflow":        {listed: []mediaapp.StorageUsageObject{{Ref: usageRef(prefix + "a"), ByteSize: 1}, {Ref: usageRef(prefix + "b"), ByteSize: 1}}, sizes: map[domain.ObjectRef]int64{usageRef(prefix + "a"): math.MaxInt64, usageRef(prefix + "b"): 1}},
+		"partial transport":   {listed: []mediaapp.StorageUsageObject{{Ref: usageRef(prefix + "a"), ByteSize: 1}}, err: errors.New("transport unavailable")},
 	} {
 		t.Run(name, func(t *testing.T) {
-			reader := mediaapp.NewStorageUsageReader(usageSource{inventory: mediaapp.StorageUsageInventory{LibraryID: id, Prefixes: []string{prefix}}}, objects, time.Now)
+			reader := mediaapp.NewStorageUsageReader(usageSource{inventory: mediaapp.StorageUsageInventory{LibraryID: id, PhysicalPrefixes: []mediaapp.StorageUsagePrefix{{ProfileID: "minio-main", Bucket: "storage-test", Prefix: prefix}}}}, objects, time.Now)
 			result, err := reader.StorageUsage(t.Context(), actor, scope)
 			if !errors.Is(err, mediaapp.ErrUnavailable) || !reflect.DeepEqual(result, mediaapp.StorageUsage{}) {
 				t.Fatal("invalid inventory returned partial totals", result, err)
@@ -87,4 +87,8 @@ func TestMediaStorageUsageRejectsPartialForeignOverflowAndMissingAuthorities(t *
 	if _, err := mediaapp.NewStorageUsageReader(nil, nil, time.Now).StorageUsage(t.Context(), actor, scope); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("missing owner returned zero", err)
 	}
+}
+
+func usageRef(key string) domain.ObjectRef {
+	return domain.ObjectRef{ProfileID: "minio-main", Bucket: "storage-test", Key: key}
 }

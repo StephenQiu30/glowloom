@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+
+	copytask "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
-	"go.temporal.io/api/enums/v1"
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/worker"
 
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	inkafka "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
-	inpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	outkafka "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/kafka"
 	outpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
 	outapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
@@ -24,29 +24,26 @@ import (
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
 	copyevent "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/event"
-	copyflow "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/workflow"
-	copyapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	copydomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 
 // This fixture contains zero media objects. Any unexpected object access fails.
 type noCopyObjects struct{}
 
-func (noCopyObjects) Get(context.Context, string) (io.ReadCloser, error) {
+func (noCopyObjects) Get(context.Context, mediadomain.ObjectRef) (io.ReadCloser, error) {
 	return nil, errors.New("unexpected media object")
 }
-func (noCopyObjects) Exists(context.Context, string) (bool, error) {
+func (noCopyObjects) Exists(context.Context, mediadomain.ObjectRef) (bool, error) {
 	return false, errors.New("unexpected media object")
 }
-func (noCopyObjects) PutIfAbsent(context.Context, string, io.Reader, int64, string, string) error {
+func (noCopyObjects) PutIfAbsent(context.Context, mediadomain.ObjectRef, io.Reader, int64, string, string) error {
 	return errors.New("unexpected media object")
 }
-func (noCopyObjects) Remove(context.Context, string) error {
+func (noCopyObjects) Remove(context.Context, mediadomain.ObjectRef) error {
 	return errors.New("unexpected media object")
 }
 
-var _ mediaapp.ProjectCopyObjects = noCopyObjects{}
+var _ mediaapp.PhysicalTransferObjects = noCopyObjects{}
 
 var errLostCopyAcknowledgment = errors.New("injected failure after real external acceptance")
 
@@ -66,30 +63,10 @@ func (p *loseCopyPublishAck) Publish(ctx context.Context, e outapp.Event) error 
 	return nil
 }
 
-type loseCopyStartAck struct {
-	copyevent.ProjectCopyStarter
-	calls int
-}
-
-func (s *loseCopyStartAck) Deliver(ctx context.Context, d copyapp.ProjectCopyDelivery) error {
-	s.calls++
-	if err := s.ProjectCopyStarter.Deliver(ctx, d); err != nil {
-		return err
-	}
-	if s.calls == 1 {
-		return errLostCopyAcknowledgment
-	}
-	return nil
-}
-
-// This test requires a dedicated copy database/topic and Temporal namespace.
-// Prior completed fixture records may remain: the real handler ignores terminal jobs.
-// Both fault wrappers fail only AFTER the real Kafka/Temporal acknowledgment.
-func TestProjectCopyKafkaOutboxInboxTemporalCompleteAndRecover(t *testing.T) {
+func TestProjectCopyKafkaOutboxCompleteAndRecover(t *testing.T) {
 	dsn, brokers := os.Getenv("GLOWLOOM_TEST_COPY_KAFKA_DB_DSN"), os.Getenv("GLOWLOOM_TEST_KAFKA_BROKERS")
-	address, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
-	if dsn == "" || brokers == "" || address == "" || namespace == "" {
-		t.Skip("set isolated COPY_KAFKA_DB_DSN, KAFKA_BROKERS, TEMPORAL_ADDR and TEMPORAL_NAMESPACE")
+	if dsn == "" || brokers == "" {
+		t.Skip("set isolated COPY_KAFKA_DB_DSN, KAFKA_BROKERS")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -141,97 +118,17 @@ func TestProjectCopyKafkaOutboxInboxTemporalCompleteAndRecover(t *testing.T) {
 	if sent, err := relay.RunOnce(ctx); err != nil || !sent {
 		t.Fatal("retry original outbox event", err)
 	}
-	temporal, err := client.Dial(client.Options{HostPort: address, Namespace: namespace})
-	if err != nil {
-		t.Fatal(err)
+	taskfixture.RunWork(t, db, copytask.Copy, map[string]any{"JobID": job.ID}, copytask.CopyHandler(actualCopyWorker(t, db, noCopyObjects{}), store))
+	finished, err := store.FindForWorker(ctx, actor, job.ID)
+	if err != nil || finished.Status != "succeeded" || finished.Attempt != 1 {
+		t.Fatal("copy did not finish once", finished, err)
 	}
-	t.Cleanup(temporal.Close)
-	starter := &loseCopyStartAck{ProjectCopyStarter: copyflow.NewProjectCopyStarter(temporal)}
-	handler := copyevent.NewProjectCopyHandler(inpg.NewStore(db), store, starter)
-	group := "copy-recovery-" + job.ID.String()
-	consumer, err := inkafka.NewConsumer(brokers, group, []string{copyevent.ProjectCopyTopic}, handler)
-	if err != nil {
-		t.Fatal(err)
+	var primary uuid.UUID
+	if err := db.Raw("SELECT initial_canvas_id FROM workspace.project WHERE id=? AND status='active'", job.TargetProjectID).Scan(&primary).Error; err != nil || primary == uuid.Nil || primary == doc.ID {
+		t.Fatal("copy primary identity", primary, err)
 	}
-	for {
-		applied, err := consumer.RunOnce(ctx)
-		if errors.Is(err, errLostCopyAcknowledgment) && !applied {
-			break
-		}
-		if err != nil || !applied {
-			consumer.Close()
-			t.Fatal("consume until lost Temporal acknowledgment", applied, err)
-		}
+	var count int
+	if err := db.Raw("SELECT count(*) FROM infra.task_work WHERE kind=? AND business_id=? AND epoch=1 AND completed_at IS NOT NULL", copytask.Copy, event).Scan(&count).Error; err != nil || count != 1 {
+		t.Fatal("lost broker acknowledgement duplicated the copy", count, err)
 	}
-	consumer.Close()
-	workflowID := "project-copy/" + job.ID.String()
-	first, err := temporal.DescribeWorkflowExecution(ctx, workflowID, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var markers int
-	if err := db.Raw(`SELECT count(*) FROM infra.processed_event WHERE event_id=? AND consumer='project-copy-command'`, event).Scan(&markers).Error; err != nil || markers != 0 {
-		t.Fatal("external failure committed inbox", markers, err)
-	}
-	restarted, err := inkafka.NewConsumer(brokers, group, []string{copyevent.ProjectCopyTopic}, handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 2 { // The original Kafka record and the real duplicate publish.
-		if applied, err := restarted.RunOnce(ctx); !applied || err != nil {
-			restarted.Close()
-			t.Fatal("same group retry/deduplication", applied, err)
-		}
-	}
-	restarted.Close()
-	if starter.calls != 2 {
-		t.Fatalf("duplicate event delivered again: calls=%d", starter.calls)
-	}
-	flow := worker.New(temporal, "flow", worker.Options{})
-	copyflow.RegisterProjectCopyWorkflow(flow)
-	media := worker.New(temporal, "media", worker.Options{})
-	copyflow.RegisterProjectCopyActivities(media, copyflow.NewProjectCopyActivities(actualCopyWorker(t, db, noCopyObjects{}), store))
-	for _, w := range []worker.Worker{flow, media} {
-		if err := w.Start(); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(w.Stop)
-	}
-	var finished copydomain.ProjectCopyJob
-	if err := temporal.GetWorkflow(ctx, workflowID, "").Get(ctx, &finished); err != nil || finished.Status != "succeeded" || finished.Attempt != 1 {
-		t.Fatal("actual copy workflow did not finish once", finished.Status, finished.Attempt, err)
-	}
-	latest, err := temporal.DescribeWorkflowExecution(ctx, workflowID, "")
-	if err != nil || latest.WorkflowExecutionInfo.Execution.RunId != first.WorkflowExecutionInfo.Execution.RunId {
-		t.Fatal("retry created another workflow run", err)
-	}
-	history := temporal.GetWorkflowHistory(ctx, workflowID, "", false, enums.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
-	starts := 0
-	for history.HasNext() {
-		e, err := history.Next()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if e.EventType == enums.EVENT_TYPE_WORKFLOW_EXECUTION_STARTED {
-			starts++
-		}
-	}
-	var primary struct{ ID uuid.UUID }
-	if err := db.Raw(`SELECT initial_canvas_id AS id FROM workspace.project WHERE id=? AND status='active'`, job.TargetProjectID).Scan(&primary).Error; err != nil || primary.ID == uuid.Nil || primary.ID == doc.ID || starts != 1 {
-		t.Fatal("copy primary identity or workflow history", primary, starts, err)
-	}
-	if err := db.Raw(`SELECT count(*) FROM infra.processed_event WHERE event_id=? AND consumer='project-copy-command'`, event).Scan(&markers).Error; err != nil || markers != 1 {
-		t.Fatal("durable inbox marker", markers, err)
-	}
-	verified, err := inkafka.NewConsumer(brokers, group, []string{copyevent.ProjectCopyTopic}, handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer verified.Close()
-	short, stop := context.WithTimeout(ctx, 2*time.Second)
-	defer stop()
-	if applied, err := verified.RunOnce(short); applied || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal("committed group offset replayed records", applied, err)
-	}
-	t.Logf("event=%s group=%s job=%s target=%s canvas=%s run=%s starts=%d inbox=%d", event, group, job.ID, job.TargetProjectID, primary.ID, first.WorkflowExecutionInfo.Execution.RunId, starts, markers)
 }

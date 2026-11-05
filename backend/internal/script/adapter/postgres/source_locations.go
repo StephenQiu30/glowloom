@@ -22,8 +22,11 @@ func (s *SourceStore) WithObjectLocations(factory SourceObjectLocationFactory) *
 }
 
 func (s *SourceStore) admitSourceLocations(ctx context.Context, tx *gorm.DB, p *application.WritePlan) error {
-	if s.locations == nil || len(p.Objects) == 0 {
+	if len(p.Objects) == 0 {
 		return nil
+	}
+	if s.locations == nil {
+		return application.ErrUnavailable
 	}
 	owner := s.locations(tx)
 	if owner == nil {
@@ -68,13 +71,20 @@ func applyPlanLocations(p *application.WritePlan) {
 
 func loadPlanLocations(tx *gorm.DB, p *application.WritePlan) error {
 	if len(p.Objects) == 0 {
+		if p.StorageIntentID != uuid.Nil {
+			return application.ErrObjectMismatch
+		}
 		return nil
 	}
-	var rows []struct {
-		ObjectKey string
-		Location  *uuid.UUID
+	if p.StorageIntentID == uuid.Nil {
+		return application.ErrObjectMismatch
 	}
-	if err := tx.Raw(`SELECT object_key,object_location_id AS location FROM script.object_intent WHERE actor_id=? AND request_id=? ORDER BY object_key`, p.ActorID, p.Command.Key).Scan(&rows).Error; err != nil {
+	var rows []scriptObjectIntentRow
+	if err := tx.Model(&scriptObjectIntentRow{}).
+		Select("object_key", "object_location_id").
+		Where("actor_id = ? AND request_id = ?", p.ActorID, p.Command.Key).
+		Order("object_key").
+		Find(&rows).Error; err != nil {
 		return err
 	}
 	if len(rows) != len(p.Objects) {
@@ -84,29 +94,15 @@ func loadPlanLocations(tx *gorm.DB, p *application.WritePlan) error {
 		found := false
 		for _, row := range rows {
 			if row.ObjectKey == p.Objects[i].Key {
-				p.Objects[i].LocationID = locationValue(row.Location)
+				p.Objects[i].LocationID = row.ObjectLocationID
 				found = true
 				break
 			}
 		}
-		if !found || p.StorageIntentID != uuid.Nil && p.Objects[i].LocationID == uuid.Nil {
+		if !found || p.Objects[i].LocationID == uuid.Nil {
 			return application.ErrObjectMismatch
 		}
 	}
 	applyPlanLocations(p)
 	return nil
-}
-
-func locationValue(p *uuid.UUID) uuid.UUID {
-	if p == nil {
-		return uuid.Nil
-	}
-	return *p
-}
-
-func nullableLocation(id uuid.UUID) *uuid.UUID {
-	if id == uuid.Nil {
-		return nil
-	}
-	return &id
 }

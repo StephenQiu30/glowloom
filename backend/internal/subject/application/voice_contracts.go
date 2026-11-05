@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,8 @@ var (
 	ErrInvalidVoiceJob = errors.New("invalid subject voice job")
 	// ErrVoiceUnavailable rejects unconfigured or disabled speech execution.
 	ErrVoiceUnavailable = errors.New("subject voice generation unavailable")
+	// ErrVoiceCapacity defers an admitted job until its original provider has room.
+	ErrVoiceCapacity = fmt.Errorf("%w: provider capacity reached", ErrVoiceUnavailable)
 	// ErrVoiceJobNotFound hides jobs outside their exact actor and target scope.
 	ErrVoiceJobNotFound = errors.New("subject voice job not found")
 	// ErrVoiceJobKeyConflict preserves one exact permanent generation intent.

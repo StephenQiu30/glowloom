@@ -24,7 +24,7 @@ func (s *DepthStore) WithStorageAdmission(f StorageFactory) *DepthStore {
 	return &c
 }
 
-func pinTool(ctx context.Context, tx *gorm.DB, f StorageFactory, kind string, project, job uuid.UUID, attempt int) error {
+func pinTool(ctx context.Context, tx *gorm.DB, f StorageFactory, kind media.StorageWorkKind, project, job uuid.UUID, attempt int) error {
 	if f == nil {
 		return nil
 	}
@@ -43,7 +43,7 @@ func acceptToolMedia(ctx context.Context, tx *gorm.DB, f StorageFactory, owner m
 	if e != nil {
 		return e
 	}
-	if intent.Owner != owner || intent.State != "open" {
+	if intent.Owner != owner || intent.State != media.StorageWorkOpen {
 		return media.ErrStorageIdentityConflict
 	}
 	ids := make([]uuid.UUID, 0, len(rends)+1)
@@ -52,7 +52,7 @@ func acceptToolMedia(ctx context.Context, tx *gorm.DB, f StorageFactory, owner m
 		if e != nil {
 			return nil, e
 		}
-		if l.ID == uuid.Nil || l.Ref != (domain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: key}) || l.State != "present" || l.ByteSize == nil || *l.ByteSize != size || l.SHA256 == nil || l.MIMEType == nil || (mime != nil && *l.MIMEType != *mime) || (sha != nil && *l.SHA256 != *sha) {
+		if l.ID == uuid.Nil || l.Ref != (domain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: key}) || l.State != domain.ObjectLocationPresent || l.ByteSize == nil || *l.ByteSize != size || l.SHA256 == nil || l.MIMEType == nil || (mime != nil && *l.MIMEType != *mime) || (sha != nil && *l.SHA256 != *sha) {
 			return nil, media.ErrStorageIdentityConflict
 		}
 		ids = append(ids, l.ID)

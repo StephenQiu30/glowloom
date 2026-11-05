@@ -34,7 +34,7 @@ func (s routedDepthSource) FreezeTranscriptionSource(context.Context, identityap
 }
 
 func routedDepthStore(db *gorm.DB, source uuid.UUID, worker bool) *pgtool.DepthStore {
-	return pgtool.NewDepthStore(db, func(*gorm.DB) toolapp.TranscriptionSourceReader {
+	return mediatoolDepthStore(db, func(*gorm.DB) toolapp.TranscriptionSourceReader {
 		return routedDepthSource{asset: source}
 	}, func(tx *gorm.DB) toolapp.DepthDerivedMedia {
 		if worker {
@@ -70,7 +70,7 @@ func routedDepthArtifact(t *testing.T, job tooldomain.DepthJob, frozen tooldomai
 			a.Renditions = append(a.Renditions, mediadomain.Rendition{ID: uuid.NewSHA1(id, []byte(kind)), MediaAssetID: id, Kind: mediadomain.RenditionKind(kind), ObjectKey: objectKey, Width: &width, Height: &height, ByteSize: &size, CreateTime: now, UpdateTime: now})
 		}
 		sum := sha256.Sum256(data[i])
-		a.Objects = append(a.Objects, toolapp.DepthObject{Kind: kind, ObjectKey: objectKey, SHA256: hex.EncodeToString(sum[:]), ByteSize: int64(len(data[i])), MIMEType: mime})
+		a.Objects = append(a.Objects, toolapp.DepthObject{Kind: toolapp.DepthObjectKind(kind), ObjectKey: objectKey, SHA256: hex.EncodeToString(sum[:]), ByteSize: int64(len(data[i])), MIMEType: mime})
 	}
 	if _, _, err := toolapp.DepthArtifactDigest(job, frozen, a); err != nil {
 		t.Fatal("controlled artifact fixture", err)
@@ -99,7 +99,7 @@ func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T
 	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
-	factory := toolflow.NewRoutedObjects(registry, routes, nil)
+	factory := toolflow.NewRoutedObjects(registry, routes)
 	sourceObjects, err := factory.Open(t.Context(), sourceOwner, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -146,10 +146,10 @@ func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T
 	if _, err := store.Create(t.Context(), actor, project, uuid.New(), input); !errors.Is(err, mediaapp.ErrStorageNotReady) {
 		t.Fatal("empty configuration admitted depth", err)
 	}
-	if err := tx.Exec(`INSERT INTO media.storage_config_revision(revision,config_sha256,profile_id,upload_policy,session_ttl_seconds) VALUES('controlled-depth-v1',repeat('c',64),'tos-frozen','{}'::jsonb,86400) ON CONFLICT DO NOTHING`).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO media.storage_config_revision(revision,config_sha256,profile_id,upload_policy,session_ttl_seconds) VALUES('1',repeat('c',64),'tos-frozen','{}'::jsonb,86400) ON CONFLICT DO NOTHING`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id) VALUES(1,'controlled-depth-v1','tos-frozen')`).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id) VALUES(1,'1','tos-frozen')`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
@@ -264,7 +264,7 @@ func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T
 		t.Fatal("partial physical acceptance", err)
 	}
 	reader := objects.NewRoutedReadObjects(registry)
-	query := toolapp.NewRoutedDepthQuery(store, reader, reader, nil, nil)
+	query := toolapp.NewRoutedDepthQuery(store, reader, reader, 5*time.Minute)
 	if _, err := query.Preview(t.Context(), actor, project, job.ID); err != nil {
 		t.Fatal("exact pending preview", err)
 	}
@@ -277,7 +277,7 @@ func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T
 		if err != nil {
 			return err
 		}
-		worker := toolapp.NewRoutedDepthWorker(routedDepthStore(inner, source.ID, true), toolflow.NewRoutedObjects(registry, pgmedia.NewStorageRoutes(inner), nil), nil, nil, nil, nil)
+		worker := toolapp.NewRoutedDepthWorker(routedDepthStore(inner, source.ID, true), toolflow.NewRoutedObjects(registry, pgmedia.NewStorageRoutes(inner)), nil, nil, nil, nil)
 		failed, err := worker.Execute(t.Context(), toolapp.DepthWorkID{JobID: job.ID, Attempt: cancelled.Attempt, ExecutionID: uuid.New()})
 		if err == nil || !failed.NeedsReconciliation || failed.Status == tooldomain.DepthCancelled {
 			t.Fatal("accepted artifact was falsely removed", err)
@@ -324,7 +324,7 @@ func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T
 	if err := routes.RegisterProfiles(t.Context(), []mediaapp.StorageProfile{nextProfile}); err != nil {
 		t.Fatal(err)
 	}
-	revision := "controlled-depth-" + uuid.NewString()
+	revision := "2"
 	if err := tx.Exec(`INSERT INTO media.storage_config_revision(revision,config_sha256,profile_id,upload_policy,session_ttl_seconds) VALUES(?,repeat('d',64),?,'{}'::jsonb,86400)`, revision, nextProfile.ID).Error; err != nil {
 		t.Fatal(err)
 	}

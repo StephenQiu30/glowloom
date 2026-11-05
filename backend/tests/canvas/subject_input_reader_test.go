@@ -4,13 +4,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 func TestSubjectInputReaderRechecksCurrentSourceAndRelation(t *testing.T) {

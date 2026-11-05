@@ -17,6 +17,8 @@ import (
 
 	"github.com/google/uuid"
 
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
@@ -44,6 +46,14 @@ type uploadRepoFake struct {
 	commits      int
 }
 
+type uploadAdmissionFake struct {
+	target mediaapp.UploadTarget
+}
+
+func (a uploadAdmissionFake) PinUpload(context.Context, identityapp.Principal, domain.LibraryScope, uuid.UUID) (mediaapp.UploadTarget, error) {
+	return a.target, nil
+}
+
 func (r *uploadRepoFake) AuthorizeUpload(context.Context, identityapp.Principal, uuid.UUID) (string, error) {
 	return "16:9", r.authorizeErr
 }
@@ -63,10 +73,11 @@ func (r *uploadRepoFake) UploadAssetExists(context.Context, uuid.UUID, uuid.UUID
 }
 
 type uploadObjectsFake struct {
-	mu      sync.Mutex
-	items   map[string]mediaapp.ObjectInfo
-	statErr error
-	removed []string
+	locations *pgmedia.StorageRoutes
+	mu        sync.Mutex
+	items     map[string]mediaapp.ObjectInfo
+	statErr   error
+	removed   []string
 }
 
 func (s *uploadObjectsFake) PutIfAbsent(_ context.Context, key string, reader io.Reader, size int64, mime, sha string) error {
@@ -113,6 +124,19 @@ func uploadInput(t *testing.T) mediaapp.UploadInput {
 		Request: mediaapp.UploadRequest{ProjectID: uuid.New(), Key: uuid.New(), FileName: "参考.png", RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true}
 }
 
+func unitRoutedUploadService(repo mediaapp.UploadRepository, personal mediaapp.PersonalUploadRepository, prober mediaapp.Prober, normalizer mediaapp.UploadNormalizer, renderer mediaapp.Renderer, objects mediaapp.RoutedUploadObjects) *mediaapp.UploadService {
+	policy := mediaapp.UploadPolicy{
+		MaxImageBytes: mediaapp.MaxUploadImageBytes, MaxVideoBytes: mediaapp.MaxUploadVideoBytes,
+		MaxAudioBytes: mediaapp.MaxUploadAudioBytes, MaxModelBytes: mediaapp.MaxUploadModelBytes,
+		MaxDocumentBytes: mediaapp.MaxUploadDocumentBytes,
+	}
+	target := mediaapp.UploadTarget{
+		SessionID: uuid.New(), ProfileID: "test-profile", Bucket: "test-bucket", ConfigRevision: "1",
+		ExpiresAt: time.Now().UTC().Add(time.Hour), Policy: policy,
+	}
+	return mediaapp.NewRoutedUploadService(repo, personal, uploadAdmissionFake{target: target}, prober, normalizer, renderer, objects, time.Now)
+}
+
 func TestUploadPublishesOnlyExplicitReviewedVerifiedMedia(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -126,10 +150,10 @@ func TestUploadPublishesOnlyExplicitReviewedVerifiedMedia(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, objects := &uploadRepoFake{}, &uploadObjectsFake{statErr: tc.statErr}
-			service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+			service := unitRoutedUploadService(repo, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 			in := uploadInput(t)
 			in.LocalReviewConfirmed = tc.review
-			result, err := service.Upload(t.Context(), in)
+			result, err := fixtureProjectUpload(t.Context(), service, in)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("Upload error=%v, want %v", err, tc.wantErr)
 			}
@@ -160,8 +184,8 @@ func TestUploadCleanupPreservesUnknownCommittedObjects(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &uploadRepoFake{commitErr: context.Canceled, exists: tc.exists, existsErr: tc.existsErr}
 			objects := &uploadObjectsFake{}
-			service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
-			_, err := service.Upload(t.Context(), uploadInput(t))
+			service := unitRoutedUploadService(repo, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
+			_, err := fixtureProjectUpload(t.Context(), service, uploadInput(t))
 			if !errors.Is(err, context.Canceled) || len(objects.items) != tc.wantObjects {
 				t.Fatalf("unknown commit cleanup: err=%v objects=%d want=%d", err, len(objects.items), tc.wantObjects)
 			}
@@ -210,8 +234,8 @@ func TestUploadRejectsVideoPastSixtySecondsBeforeRendering(t *testing.T) {
 	repo, objects := &uploadRepoFake{}, &uploadObjectsFake{}
 	in := uploadInput(t)
 	in.File.MIMEType = "video/mp4"
-	service := mediaapp.NewUploadService(repo, uploadLongVideoProbe{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
-	if _, err := service.Upload(t.Context(), in); !errors.Is(err, mediaapp.ErrUnsupportedUpload) || repo.commits != 0 || len(objects.items) != 0 {
+	service := unitRoutedUploadService(repo, nil, uploadLongVideoProbe{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
+	if _, err := fixtureProjectUpload(t.Context(), service, in); !errors.Is(err, mediaapp.ErrUnsupportedUpload) || repo.commits != 0 || len(objects.items) != 0 {
 		t.Fatalf("long video accepted: %v", err)
 	}
 }
@@ -256,8 +280,8 @@ func TestUploadDimensionsAreBoundedBeforeRendering(t *testing.T) {
 				if kind == domain.KindVideo {
 					in.File.MIMEType = "video/mp4"
 				}
-				service := mediaapp.NewUploadService(repo, uploadDimensionProbe{kind, tc.width, tc.height}, mediaflow.FFUploadNormalizer{}, renderer, &uploadObjectsFake{}, time.Now)
-				_, err := service.Upload(t.Context(), in)
+				service := unitRoutedUploadService(repo, nil, uploadDimensionProbe{kind, tc.width, tc.height}, mediaflow.FFUploadNormalizer{}, renderer, &uploadObjectsFake{})
+				_, err := fixtureProjectUpload(t.Context(), service, in)
 				if tc.reject {
 					if !errors.Is(err, mediaapp.ErrUnsupportedUpload) || renderer.calls != 0 {
 						t.Fatalf("oversized decoded dimensions reached renderer: err=%v calls=%d", err, renderer.calls)

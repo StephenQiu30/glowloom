@@ -93,3 +93,12 @@ func (c *Client) call(ctx context.Context, action string, input any) (applicatio
 	}
 	return result, nil
 }
+
+// Commands computes an exact-prefix semantic command through the shared model.
+func (c *Client) Commands(ctx context.Context, state application.YjsState, key uuid.UUID, projection application.DocumentDTO) (application.YjsCandidate, error) {
+	return c.call(ctx, "commands", struct {
+		application.YjsState
+		UpdateID   uuid.UUID               `json:"updateId"`
+		Projection application.DocumentDTO `json:"projection"`
+	}{state, key, projection})
+}

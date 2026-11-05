@@ -31,7 +31,7 @@ func ProvideScriptSourceStore(database *gorm.DB) *pgscript.SourceStore {
 	if characterReferences == nil {
 		panic("script character references are not bound")
 	}
-	return pgscript.NewSourceStoreWithCharacters(database, ProvideScriptProjectAccess, characterReferences)
+	return pgscript.NewSourceStoreWithCharacters(database, ProvideScriptProjectAccess, characterReferences).WithPublicationAuthorization(ProvideSourcePublicationAuthorization)
 }
 
 // ProvideScriptProjectAccess adapts project authority for scripts.
@@ -43,7 +43,7 @@ func ProvideScriptProjectAccess(tx *gorm.DB) scriptapp.ProjectAccess {
 func ProvideScriptImportStore(database *gorm.DB) *pgscript.ImportStore {
 	return pgscript.NewImportStoreWithWorkerAccess(database, ProvideScriptProjectAccess, provideScriptWorkerAccess, func(tx *gorm.DB) scriptapp.SourceAssetReader {
 		// Admission freezes media facts in this transaction, without object I/O.
-		return mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(tx, mediawire.NewMediaScopeAccess), nil)
+		return mediaapp.NewRoutedDocumentSources(pgmedia.NewScopedDocumentSourceStore(tx, mediawire.NewMediaScopeAccess), nil)
 	})
 }
 
@@ -57,56 +57,33 @@ type Services struct {
 	Imports  *scriptapp.ImportService
 }
 
-// ProvideServices assembles script services used by the API.
-func ProvideServices(database *gorm.DB, storage *objectstorage.Client) Services {
-	return ProvideServicesWithObjects(database, nil, storage)
-}
-
-// ProvideServicesWithObjects binds new source publication to formal fixed locations.
-func ProvideServicesWithObjects(database *gorm.DB, registry *objectstorage.Registry, storage *objectstorage.Client) Services {
+// ProvideServicesWithObjects binds script publication to formal fixed locations.
+func ProvideServicesWithObjects(database *gorm.DB, registry *objectstorage.Registry) Services {
 	store := ProvideScriptSourceStore(database)
-	var objects scriptapp.PrivateObjects = scriptobjects.NewStorage(storage)
-	if registry != nil {
-		store = store.WithObjectLocations(ProvideScriptObjectLocations)
-		objects = scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database))
-	}
+	store = store.WithObjectLocations(ProvideScriptObjectLocations)
+	objects := scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database))
 	sources := scriptapp.NewSourceService(store, objects, time.Now)
 	// Recovery joins the same synchronous I/O owner before unpublished cleanup.
 	return Services{Sources: sources, Recovery: scriptapp.NewSourceRecovery(store, sources, time.Now), Episodes: scriptapp.NewEpisodeService(store, sources, time.Now), History: scriptapp.NewHistoryService(store, sources), Adopt: scriptapp.NewAdoptService(store, time.Now), Imports: scriptapp.NewImportService(ProvideScriptImportStore(database), time.Now)}
 }
 
-// ProvideScriptImportWorker assembles the script import worker and its store.
-func ProvideScriptImportWorker(database *gorm.DB, storage *objectstorage.Client) (*scriptapp.ImportWorker, *pgscript.ImportStore) {
-	return ProvideScriptImportWorkerWithObjects(database, nil, storage)
-}
-
 // ProvideScriptImportWorkerWithObjects shares exact source/history location ownership.
-func ProvideScriptImportWorkerWithObjects(database *gorm.DB, registry *objectstorage.Registry, storage *objectstorage.Client) (*scriptapp.ImportWorker, *pgscript.ImportStore) {
+func ProvideScriptImportWorkerWithObjects(database *gorm.DB, registry *objectstorage.Registry) (*scriptapp.ImportWorker, *pgscript.ImportStore) {
 	store := ProvideScriptImportStore(database)
-	var objects scriptapp.PrivateObjects = scriptobjects.NewStorage(storage)
-	if registry != nil {
-		objects = scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database))
-	}
-	services := ProvideServicesWithObjects(database, registry, storage)
+	objects := scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database))
+	services := ProvideServicesWithObjects(database, registry)
 	publication := func(authority scriptapp.ImportAuthority) *scriptapp.SourceService {
 		sourceStore := pgscript.NewImportSourceStore(database, provideScriptWorkerAccess, authority)
-		if registry != nil {
-			sourceStore = sourceStore.WithObjectLocations(ProvideScriptObjectLocations)
-		}
+		sourceStore = sourceStore.WithObjectLocations(ProvideScriptObjectLocations).WithPublicationAuthorization(ProvideSourcePublicationAuthorization)
 		return scriptapp.NewSourceServiceSharingIO(sourceStore, objects, time.Now, services.Sources)
 	}
 	recoveryStore := pgscript.NewImportRecoveryStore(database, provideScriptWorkerAccess)
-	if registry != nil {
-		recoveryStore = recoveryStore.WithObjectLocations(ProvideScriptObjectLocations)
-	}
+	recoveryStore = recoveryStore.WithObjectLocations(ProvideScriptObjectLocations).WithPublicationAuthorization(ProvideSourcePublicationAuthorization)
 	recovery := scriptapp.NewSourceRecovery(recoveryStore, services.Sources, time.Now)
 	// One worker owns extraction and publication I/O until the synchronous
 	// publication call and its durable exit proof both finish. Recovery runs
 	// after that join and checks the source owner's persistent I/O facts.
-	documents := mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaWorkerScopeAccess), storage)
-	if registry != nil {
-		documents = mediaapp.NewRoutedDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaWorkerScopeAccess), mediaobjects.NewRoutedReadObjects(registry))
-	}
+	documents := mediaapp.NewRoutedDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaWorkerScopeAccess), mediaobjects.NewRoutedReadObjects(registry))
 	worker := scriptapp.NewImportWorker(store, documents, scriptextract.NewExtractor(), publication, recovery, time.Now)
 	return worker, store
 }

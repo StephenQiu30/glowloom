@@ -83,7 +83,12 @@ func controlledGeneratedTOS(t *testing.T) (*objectstorage.Registry, *int, config
 		}
 		row, found := entries[key]
 		if !found {
-			http.Error(w, "missing", 404)
+			w.Header().Set("X-Tos-Ec", "0017-00000003")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			if r.Method != http.MethodHead {
+				_, _ = io.WriteString(w, `{"Code":"NoSuchKey","Message":"fixture object is absent"}`)
+			}
 			return
 		}
 		w.Header().Set("Content-Type", row.mime)
@@ -117,7 +122,7 @@ func controlledGeneratedTOS(t *testing.T) (*objectstorage.Registry, *int, config
 	profile := config.StorageProfile{Provider: "tos", Mode: "read_write", Endpoint: "https://tos-fixture.example.invalid", SigningEndpoint: "https://tos-fixture.example.invalid", Bucket: "controlled-fixture", Region: "cn-beijing", Credentials: config.StorageCredentialsRef{Source: "env", AccessKeyEnv: "CONTROLLED_TOS_ACCESS", SecretKeyEnv: "CONTROLLED_TOS_SECRET"}}
 	newer := profile
 	newer.Bucket = "unused-new-default"
-	cfg := config.ObjectStorageConfig{SchemaVersion: 1, Revision: "controlled-v1", DefaultWriteProfile: "tos-new", Profiles: map[string]config.StorageProfile{"tos-frozen": profile, "tos-new": newer}, Upload: config.StorageUploadPolicy{Mode: "relay", SignedURLTTL: 10 * time.Minute, SessionTTL: 24 * time.Hour, MultipartThresholdBytes: 32 << 20, PartSizeBytes: 8 << 20, PartConcurrency: 3, StagingRetention: 48 * time.Hour}, Access: config.StorageAccessPolicy{PreviewTTL: 5 * time.Minute, MaxSignedURLTTL: 15 * time.Minute}, Limits: config.StorageLimits{MaxImageBytes: 20 << 20, MaxVideoBytes: 500 << 20, MaxAudioBytes: 100 << 20, MaxModelBytes: 64 << 20, MaxDocumentBytes: 20 << 20}}
+	cfg := config.ObjectStorageConfig{SchemaVersion: 1, Revision: "1", DefaultWriteProfile: "tos-new", Profiles: map[string]config.StorageProfile{"tos-frozen": profile, "tos-new": newer}, Upload: config.StorageUploadPolicy{Mode: "relay", SignedURLTTL: 10 * time.Minute, SessionTTL: 24 * time.Hour, MultipartThresholdBytes: 32 << 20, PartSizeBytes: 8 << 20, PartConcurrency: 3, StagingRetention: 48 * time.Hour}, Access: config.StorageAccessPolicy{PreviewTTL: 5 * time.Minute, MaxSignedURLTTL: 15 * time.Minute}, Limits: config.StorageLimits{MaxImageBytes: 20 << 20, MaxVideoBytes: 500 << 20, MaxAudioBytes: 100 << 20, MaxModelBytes: 64 << 20, MaxDocumentBytes: 20 << 20}}
 	registry, err := objectstorage.OpenProfiles(cfg)
 	if err != nil {
 		t.Fatal(err)

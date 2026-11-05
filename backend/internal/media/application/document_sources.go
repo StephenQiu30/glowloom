@@ -36,26 +36,15 @@ type DocumentSourceStore interface {
 	FindAsset(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.MediaAsset, error)
 }
 
-// DocumentObjectGetter reads only a media-owner-selected private object key.
-type DocumentObjectGetter interface {
-	Get(context.Context, string) (io.ReadCloser, error)
-}
-
 // DocumentSources owns authorization and exact bounded original-byte reads.
 type DocumentSources struct {
-	store        DocumentSourceStore
-	objects      DocumentObjectGetter
-	objectReader ObjectReader
-}
-
-// NewDocumentSources injects current project facts and the private object reader.
-func NewDocumentSources(store DocumentSourceStore, objects DocumentObjectGetter) *DocumentSources {
-	return &DocumentSources{store: store, objects: objects}
+	store   DocumentSourceStore
+	objects ObjectReader
 }
 
 // NewRoutedDocumentSources reads source rows with their immutable saved locations.
 func NewRoutedDocumentSources(store DocumentSourceStore, objects ObjectReader) *DocumentSources {
-	return &DocumentSources{store: store, objectReader: objects}
+	return &DocumentSources{store: store, objects: objects}
 }
 
 func documentSource(asset domain.MediaAsset) (DocumentSource, error) {
@@ -116,7 +105,7 @@ func (s *DocumentSources) Freeze(ctx context.Context, actor identityapp.Principa
 // Open reauthorizes and compares every frozen fact before fetching private bytes.
 // The caller owns the returned temporary original and must Close it.
 func (s *DocumentSources) Open(ctx context.Context, actor identityapp.Principal, project uuid.UUID, source DocumentSource) (*Downloaded, error) {
-	if s == nil || s.store == nil || s.objects == nil && s.objectReader == nil {
+	if s == nil || s.store == nil || s.objects == nil {
 		return nil, ErrUnavailable
 	}
 	if err := ctx.Err(); err != nil {
@@ -136,7 +125,7 @@ func (s *DocumentSources) Open(ctx context.Context, actor identityapp.Principal,
 	if current != source {
 		return nil, ErrDocumentSourceConflict
 	}
-	reader, err := readMediaObject(ctx, asset.ObjectLocation, asset.ObjectKey, s.objectReader, s.objects)
+	reader, err := readMediaObject(ctx, asset.ObjectLocation, asset.ObjectKey, s.objects)
 	if err != nil {
 		return nil, fmt.Errorf("get document original: %w", errors.Join(ErrUnavailable, err))
 	}

@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -17,7 +20,7 @@ import (
 // TransferTopic identifies media-owned permanent commands, never paid operations.
 const TransferTopic = "glowloom.media.transfer_command.v1"
 
-func recordTransferCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string, job domain.TransferJob, emit string) error {
+func recordTransferCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash string, action, emit application.TransferAction, emitEvent bool, job domain.TransferJob) error {
 	response, err := json.Marshal(job)
 	if err != nil || len(response) > 1<<20 {
 		return application.ErrUnavailable
@@ -25,10 +28,11 @@ func recordTransferCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UU
 	var eventID *uuid.UUID
 	var eventAction *string
 	var eventAttempt *int
-	if emit != "" {
-		id := uuid.NewSHA1(key, []byte("media-transfer/"+actor.ID.String()+"/"+emit))
-		eventID, eventAction, eventAttempt = &id, &emit, &job.Attempt
-		delivery := application.TransferDelivery{TransferWorkID: application.TransferWorkID{JobID: job.ID, Attempt: job.Attempt, Reconcile: emit == "reconcile"}, EventID: id, RequestID: key, ActorID: actor.ID, OrgID: actor.OrgID, Action: emit}
+	if emitEvent {
+		id := uuid.NewSHA1(key, []byte("media-transfer/"+actor.ID.String()+"/"+string(emit)))
+		emitted := string(emit)
+		eventID, eventAction, eventAttempt = &id, &emitted, &job.Attempt
+		delivery := application.TransferDelivery{TransferWorkID: application.TransferWorkID{JobID: job.ID, Attempt: job.Attempt, Reconcile: emit == application.TransferActionReconcile}, EventID: id, RequestID: key, ActorID: actor.ID, OrgID: actor.OrgID, Action: emit}
 		body, err := json.Marshal(struct {
 			EventID    uuid.UUID                    `json:"event_id"`
 			EventType  string                       `json:"event_type"`
@@ -39,21 +43,37 @@ func recordTransferCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UU
 		if err != nil {
 			return err
 		}
-		if err := libraryChanged(tx, `INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, id, TransferTopic, job.ID.String(), string(body)); err != nil {
+		if emit == application.TransferActionCancel {
+			if err := taskruntime.RequestStop(tx.Statement.Context, tx, task.Transfer, map[string]any{"job_id": job.ID, "attempt": job.Attempt}); err != nil {
+				return err
+			}
+		}
+		if err := taskruntime.EnqueueReference(tx.Statement.Context, tx, task.Transfer, id.String(), time.Now().UTC(), delivery.TransferWorkID); err != nil {
+			return err
+		}
+		outbox := outboxRecord{ID: id, Topic: TransferTopic, PartitionKey: job.ID.String(), Payload: jsonDocument(body)}
+		if err := requireOne(tx.Create(&outbox), application.ErrUnavailable); err != nil {
 			return err
 		}
 	}
-	if err := libraryChanged(tx, `INSERT INTO media.transfer_command(actor_id,org_id,idem_key,job_id,action,request_sha256,response_body,event_id,event_action,event_attempt) VALUES(?,?,?,?,?,?,?,?,?,?)`, actor.ID, actor.OrgID, key, job.ID, action, hash, response, eventID, eventAction, eventAttempt); err != nil {
+	command := transferCommandRecord{ActorID: actor.ID, OrgID: actor.OrgID, IdemKey: key, JobID: job.ID, Action: string(action), RequestSHA256: hash, ResponseBody: response, EventID: eventID, EventAction: eventAction, EventAttempt: eventAttempt}
+	if err := requireOne(tx.Create(&command), application.ErrUnavailable); err != nil {
 		return err
 	}
 	safe, _ := json.Marshal(struct {
-		ID       uuid.UUID `json:"id"`
-		Revision int64     `json:"revision"`
-		Status   string    `json:"status"`
-		Count    int       `json:"count"`
+		ID       uuid.UUID             `json:"id"`
+		Revision int64                 `json:"revision"`
+		Status   domain.TransferStatus `json:"status"`
+		Count    int                   `json:"count"`
 	}{job.ID, job.Revision, job.Status, len(job.Items)})
-	id := uuid.NewSHA1(key, []byte("media-transfer-audit/"+actor.ID.String()+"/"+action))
-	return libraryChanged(tx, `INSERT INTO audit.audit_log(id,org_id,project_id,actor_id,actor_kind,action,object_type,object_id,after) VALUES(?,?,?,?,'user',?,'media.transfer',?,?::jsonb)`, id, actor.OrgID, transferProject(job.Source, job.Target), actor.ID, "media.transfer."+action, job.ID.String(), string(safe))
+	id := uuid.NewSHA1(key, []byte("media-transfer-audit/"+actor.ID.String()+"/"+string(action)))
+	projectID := transferProject(job.Source, job.Target)
+	var project *uuid.UUID
+	if projectID != uuid.Nil {
+		project = &projectID
+	}
+	audit := uploadAuditRecord{ID: id, OrgID: actor.OrgID, ProjectID: project, ActorID: actor.ID, ActorKind: "user", Action: "media.transfer." + string(action), ObjectType: "media.transfer", ObjectID: job.ID.String(), After: jsonDocument(safe)}
+	return requireOne(tx.Omit("RequestID", "CreateTime", "UpdateTime").Create(&audit), application.ErrUnavailable)
 }
 
 // CreateTransfer accepts bytes-free SQL facts and permanent target identities.
@@ -82,7 +102,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 			return err
 		}
 		var err error
-		cached, err = s.transferReplay(tx, actor, in.Key, hash, "create")
+		cached, err = s.transferReplay(tx, actor, in.Key, hash, application.TransferActionCreate)
 		return err
 	})
 	if err != nil {
@@ -102,7 +122,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 		if err != nil {
 			return err
 		}
-		replay, err := s.transferReplay(tx, actor, in.Key, hash, "create")
+		replay, err := s.transferReplay(tx, actor, in.Key, hash, application.TransferActionCreate)
 		if err != nil {
 			return err
 		}
@@ -130,8 +150,8 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 		if source.Revision != in.ExpectedSourceRevision || target.Revision != in.ExpectedTargetRevision {
 			return domain.ErrTransferConflict
 		}
-		var active bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.transfer_job WHERE (source_library_id IN ? OR target_library_id IN ?) AND (status IN ('queued','running','needs_reconciliation','cancel_requested') OR execution_unconfirmed OR NOT process_ended))`, []uuid.UUID{source.ID, target.ID}, []uuid.UUID{source.ID, target.ID}).Scan(&active).Error; err != nil {
+		active, err := storageExists(tx.Model(&transferJobRow{}).Where("(source_library_id IN ? OR target_library_id IN ?) AND (status IN ? OR execution_unconfirmed = ? OR process_ended = ?)", []uuid.UUID{source.ID, target.ID}, []uuid.UUID{source.ID, target.ID}, []domain.TransferStatus{domain.TransferStatusQueued, domain.TransferStatusRunning, domain.TransferStatusNeedsReconciliation, domain.TransferStatusCancelRequested}, true, false))
+		if err != nil {
 			return err
 		}
 		if active {
@@ -170,9 +190,10 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 			return application.ErrUnavailable
 		}
 		frozen := make([]application.FrozenTransferItem, 0, len(in.Items))
+		workIntents := make([]*uuid.UUID, 0, len(in.Items))
 		for _, wanted := range in.Items {
 			item := items[wanted.ID]
-			if item.Revision != wanted.Revision || item.State != "active" {
+			if item.Revision != wanted.Revision || item.State != domain.LibraryItemStateActive {
 				return domain.ErrTransferConflict
 			}
 			var file *application.LibraryMediaFile
@@ -187,19 +208,18 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 			if err != nil {
 				return err
 			}
-			if s.routed && len(prepared.Objects) > 0 {
-				if err := bindCopyLocations(ctx, tx, transferWorkOwner(jobID, target.ID, len(frozen)), prepared.Objects); err != nil {
-					return err
-				}
-				if prepared.TargetAsset != nil {
-					a := []application.ProjectCopySourceAsset{{Asset: *prepared.TargetAsset, Renditions: prepared.TargetRenditions}}
-					if err := attachCopyAssetLocations(a, prepared.Objects); err != nil {
-						return err
-					}
-					prepared.TargetAsset = &a[0].Asset
-					prepared.TargetRenditions = a[0].Renditions
-				}
+			prepared, err = transferAttemptItem(prepared, 1)
+			if err != nil {
+				return err
 			}
+			if len(prepared.Objects) > 0 && !s.routed {
+				return application.ErrStorageNotReady
+			}
+			work, err := bindTransferAttempt(ctx, tx, jobID, target.ID, len(frozen), 1, nil, &prepared)
+			if err != nil {
+				return err
+			}
+			workIntents = append(workIntents, work)
 			prepared.TargetItem.Position = int64(len(frozen))
 			frozen = append(frozen, prepared)
 		}
@@ -207,7 +227,8 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 		if err != nil {
 			return err
 		}
-		if err := libraryChanged(tx, `INSERT INTO media.transfer_job(id,org_id,actor_id,source_scope_id,target_scope_id,source_org_id,target_org_id,source_library_id,target_library_id,source_kind,target_kind,source_project_id,target_project_id,target_folder_id,target_folder_revision,source_revision,target_revision,project_revision,manifest_sha256,item_count,status,stage,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'queued','frozen',?,?)`, jobID, actor.OrgID, actor.ID, sourceActor.ScopeID, targetActor.ScopeID, sourceActor.OrgID, targetActor.OrgID, source.ID, target.ID, string(in.Source.Kind), string(in.Target.Kind), in.Source.ProjectID, in.Target.ProjectID, in.TargetFolderID, in.ExpectedFolderRevision, source.Revision, target.Revision, facts.Revision, manifest, len(frozen), now, now); err != nil {
+		jobRecord := transferJobRow{ID: jobID, OrgID: actor.OrgID, ActorID: actor.ID, SourceScopeID: &sourceActor.ScopeID, TargetScopeID: &targetActor.ScopeID, SourceOrgID: &sourceActor.OrgID, TargetOrgID: &targetActor.OrgID, SourceLibraryID: source.ID, TargetLibraryID: target.ID, SourceKind: string(in.Source.Kind), TargetKind: string(in.Target.Kind), SourceProjectID: in.Source.ProjectID, TargetProjectID: in.Target.ProjectID, TargetFolderID: in.TargetFolderID, TargetFolderRevision: in.ExpectedFolderRevision, SourceRevision: source.Revision, TargetRevision: target.Revision, ProjectRevision: facts.Revision, ManifestSHA256: manifest, ItemCount: len(frozen), Status: domain.TransferStatusQueued, Stage: domain.TransferStageFrozen, Attempt: 1, Revision: 1, ProcessEnded: true, CreatedAt: now, UpdatedAt: now}
+		if err := tx.Create(&jobRecord).Error; err != nil {
 			return err
 		}
 		for index, item := range frozen {
@@ -216,13 +237,12 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 				sourceID = &item.SourceAsset.ID
 				targetID = &item.TargetAsset.ID
 			}
-			if err := libraryChanged(tx, `INSERT INTO media.transfer_item(job_id,item_index,source_item_id,target_item_id,source_asset_id,target_asset_id,frozen,status) VALUES(?,?,?,?,?,?,?,'queued')`, jobID, index, item.SourceItem.ID, item.TargetItem.ID, sourceID, targetID, bodies[index]); err != nil {
+			itemRecord := transferItemRow{JobID: jobID, ItemIndex: index, SourceItemID: item.SourceItem.ID, TargetItemID: item.TargetItem.ID, SourceAssetID: sourceID, TargetAssetID: targetID, Frozen: bodies[index], Status: domain.TransferItemStatusQueued}
+			if err := tx.Create(&itemRecord).Error; err != nil {
 				return err
 			}
-			for _, object := range item.Objects {
-				if err := libraryChanged(tx, `INSERT INTO media.transfer_object(job_id,item_index,rendition_kind,source_object_key,target_object_key,byte_size,content_type,sha256,source_location_id,target_location_id) VALUES(?,?,?,?,?,?,?,?,?,?)`, jobID, index, object.RenditionKind, object.SourceObjectKey, object.TargetObjectKey, object.ByteSize, object.ContentType, object.SHA256, locationID(object.SourceLocation), locationID(object.TargetLocation)); err != nil {
-					return err
-				}
+			if err := insertTransferAttempt(tx, jobID, index, 1, workIntents[index], item); err != nil {
+				return err
 			}
 		}
 		row, err := s.readJob(tx, actor, jobID, false, true)
@@ -233,7 +253,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 		if err != nil {
 			return err
 		}
-		return recordTransferCommand(tx, actor, in.Key, hash, "create", result, "start")
+		return recordTransferCommand(tx, actor, in.Key, hash, application.TransferActionCreate, application.TransferActionStart, true, result)
 	})
 	if err != nil {
 		return domain.TransferJob{}, fmt.Errorf("admit media transfer: %w", err)
@@ -250,7 +270,6 @@ func (s *TransferStore) HasInflightWork(ctx context.Context, actor identityapp.P
 	if project == uuid.Nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return false, identityapp.ErrForbidden
 	}
-	var busy bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM media.transfer_job WHERE org_id=? AND (source_project_id=? OR target_project_id=?) AND (status IN ('queued','running','needs_reconciliation','cancel_requested') OR execution_unconfirmed OR NOT process_ended))`, actor.OrgID, project, project).Scan(&busy).Error
+	busy, err := storageExists(s.db.WithContext(ctx).Model(&transferJobRow{}).Where("org_id = ? AND (source_project_id = ? OR target_project_id = ?) AND (status IN ? OR execution_unconfirmed = ? OR process_ended = ?)", actor.OrgID, project, project, []domain.TransferStatus{domain.TransferStatusQueued, domain.TransferStatusRunning, domain.TransferStatusNeedsReconciliation, domain.TransferStatusCancelRequested}, true, false))
 	return busy, err
 }

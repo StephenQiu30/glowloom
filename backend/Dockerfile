@@ -14,7 +14,7 @@ COPY --chmod=755 <<'ENTRYPOINT' /usr/local/bin/glowloom-dev-entrypoint
 #!/bin/sh
 set -eu
 # Optional private settings for this existing local container; explicit env wins.
-if [ "${GLOWLOOM_ENV_FILE+x}" != x ] && [ -z "${LV_ENV_FILE:-}" ] && [ -r /run/secrets/identity-runtime.env ]; then
+if [ "${GLOWLOOM_ENV_FILE+x}" != x ] && [ -r /run/secrets/identity-runtime.env ]; then
   export GLOWLOOM_ENV_FILE=/run/secrets/identity-runtime.env
 fi
 mkdir -p /tmp/glowloom-dev
@@ -23,13 +23,13 @@ if ! go build -mod=readonly -p 2 -o /tmp/glowloom-dev/glowloom ./cmd/glowloom; t
   printf '%s\n' '[glowloom-dev] Build failed; application was not started. Fix the source and restart.' >&2
   exit 1
 fi
-for port in ${GLOWLOOM_HOST_SERVICE_PORTS-${LV_HOST_SERVICE_PORTS:-5432 6379 7233 9000 9092}}; do
+for port in ${GLOWLOOM_HOST_SERVICE_PORTS-5432 6379 9000 9092}; do
   case "$port" in
     ''|*[!0-9]*) echo "Invalid host service port" >&2; exit 1 ;;
   esac
   socat "TCP-LISTEN:$port,bind=127.0.0.1,reuseaddr,fork" "TCP:host.docker.internal:$port" &
 done
-if [ "${GLOWLOOM_DEV_API_PROXY-${LV_DEV_API_PROXY:-false}}" = "true" ]; then
+if [ "${GLOWLOOM_DEV_API_PROXY-false}" = "true" ]; then
   socat TCP-LISTEN:18080,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:8080 &
 fi
 printf '%s\n' '[glowloom-dev] Build succeeded; starting current source.' >&2

@@ -53,7 +53,9 @@ describe("ProviderLogo", () => {
   });
 
   it("未知适配器正确回退到通用地球图标", () => {
-    const { container } = render(<ProviderLogo adapterKey="unknown_provider" />);
+    const { container } = render(
+      <ProviderLogo adapterKey="unknown_provider" />,
+    );
     expect(container.querySelector("svg")).toBeTruthy();
     expect(container.querySelector("img")).toBeNull();
   });

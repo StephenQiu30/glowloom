@@ -44,20 +44,12 @@ func readableRef(location *domain.ObjectLocation, key string) (domain.ObjectRef,
 	return location.Ref, nil
 }
 
-func signMediaObject(ctx context.Context, location *domain.ObjectLocation, key string, signer ObjectSigner, legacy PreviewSigner, ttl time.Duration) (AccessGrant, error) {
+func signMediaObject(ctx context.Context, location *domain.ObjectLocation, key string, signer ObjectSigner, ttl time.Duration) (AccessGrant, error) {
 	if ttl < time.Second || ttl > 15*time.Minute {
 		return AccessGrant{}, ErrUnavailable
 	}
 	if err := ctx.Err(); err != nil {
 		return AccessGrant{}, err
-	}
-	now := time.Now().UTC()
-	if signer == nil && location == nil && legacy != nil {
-		url, err := legacy.PresignGet(ctx, key, ttl)
-		if err != nil || url == "" {
-			return AccessGrant{}, errors.Join(ErrUnavailable, err)
-		}
-		return AccessGrant{URL: url, ExpiresAt: now.Add(ttl)}, nil
 	}
 	ref, err := readableRef(location, key)
 	if err != nil || signer == nil {
@@ -67,18 +59,16 @@ func signMediaObject(ctx context.Context, location *domain.ObjectLocation, key s
 	if err != nil {
 		return AccessGrant{}, errors.Join(ErrUnavailable, err)
 	}
-	if grant.URL == "" || !grant.ExpiresAt.After(time.Now()) || grant.ExpiresAt.After(now.Add(ttl+5*time.Second)) || grant.ExpiresAt.After(time.Now().Add(15*time.Minute)) {
+	now := time.Now()
+	if grant.URL == "" || !grant.ExpiresAt.After(now) || grant.ExpiresAt.After(now.Add(ttl+5*time.Second)) || grant.ExpiresAt.After(now.Add(15*time.Minute)) {
 		return AccessGrant{}, ErrUnavailable
 	}
 	return grant, nil
 }
 
-func readMediaObject(ctx context.Context, location *domain.ObjectLocation, key string, reader ObjectReader, legacy DocumentObjectGetter) (io.ReadCloser, error) {
+func readMediaObject(ctx context.Context, location *domain.ObjectLocation, key string, reader ObjectReader) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
-	}
-	if reader == nil && location == nil && legacy != nil {
-		return legacy.Get(ctx, key)
 	}
 	ref, err := readableRef(location, key)
 	if err != nil || reader == nil {

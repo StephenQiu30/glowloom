@@ -11,7 +11,7 @@ import (
 
 func TestLoadFromDotEnvFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "local.env.example")
-	if err := os.WriteFile(path, []byte("GLOWLOOM_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_WORKER_HEALTH_ADDR=:9012\nLV_RELAY_HEALTH_ADDR=:9013\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_PARTITION_MAINTENANCE_DB_DSN=postgres://owner/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=glowloom-staging\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("GLOWLOOM_ENV=staging\nGLOWLOOM_HTTP_ADDR=:9011\nGLOWLOOM_WORKER_HEALTH_ADDR=:9012\nGLOWLOOM_RELAY_HEALTH_ADDR=:9013\nGLOWLOOM_LOG_LEVEL=warn\nGLOWLOOM_DB_DSN=postgres://local/db\nGLOWLOOM_PARTITION_MAINTENANCE_DB_DSN=postgres://owner/db\nGLOWLOOM_REDIS_URL=redis://127.0.0.1:6379/2\nGLOWLOOM_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GLOWLOOM_ENV_FILE", path)
@@ -22,7 +22,7 @@ func TestLoadFromDotEnvFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.WorkerHealthAddr != ":9012" || cfg.RelayHealthAddr != ":9013" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.PartitionMaintenanceDBDSN != "postgres://owner/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" || cfg.TemporalAddr != "127.0.0.1:7233" || cfg.TemporalNamespace != "glowloom-staging" {
+	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.WorkerHealthAddr != ":9012" || cfg.RelayHealthAddr != ":9013" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.PartitionMaintenanceDBDSN != "postgres://owner/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" {
 		t.Error("Load() did not apply the expected environment override and file values")
 	}
 }
@@ -61,9 +61,6 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.KafkaBrokers != "" {
 		t.Errorf("KafkaBrokers = %q, want empty", cfg.KafkaBrokers)
 	}
-	if cfg.TemporalAddr != "" || cfg.TemporalNamespace != "" {
-		t.Errorf("Temporal config = %q/%q, want empty", cfg.TemporalAddr, cfg.TemporalNamespace)
-	}
 }
 
 func TestCredentialSealingConfigurationRequiresPublicKeyAndIdentity(t *testing.T) {
@@ -89,32 +86,32 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("GLOWLOOM_DB_DSN", "postgres://localhost/glowloom")
 	t.Setenv("GLOWLOOM_REDIS_URL", "redis://localhost:6379/1")
 	t.Setenv("GLOWLOOM_KAFKA_BROKERS", "localhost:9092")
-	t.Setenv("GLOWLOOM_TEMPORAL_ADDR", "localhost:7233")
-	t.Setenv("GLOWLOOM_TEMPORAL_NAMESPACE", "glowloom-staging")
 
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := config.Config{Env: "staging", PublicOrigin: "https://glowloom.example", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/glowloom", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092", TemporalAddr: "localhost:7233", TemporalNamespace: "glowloom-staging"}
+	want := config.Config{Env: "staging", PublicOrigin: "https://glowloom.example", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/glowloom", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092"}
 	if cfg != want {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
 	}
 }
 
 func TestLoadObjectStorageFromEnv(t *testing.T) {
-	t.Setenv("GLOWLOOM_OBJECT_STORAGE_ENDPOINT", "http://127.0.0.1:9000")
-	t.Setenv("GLOWLOOM_OBJECT_STORAGE_BUCKET", "glowloom-local")
-	t.Setenv("GLOWLOOM_OBJECT_STORAGE_ACCESS_KEY", "test-access")
-	t.Setenv("GLOWLOOM_OBJECT_STORAGE_SECRET_KEY", "test-secret")
-	t.Setenv("GLOWLOOM_OBJECT_STORAGE_REGION", "us-east-1")
-
+	t.Setenv("GLOWLOOM_OBJECT_STORAGE_CONFIG", `{"schema_version":1,"revision":"1","upload":{"mode":"relay","signed_url_ttl":600000000000,"session_ttl":86400000000000,"multipart_threshold_bytes":33554432,"part_size_bytes":8388608,"part_concurrency":3,"staging_retention":172800000000000},"access":{"preview_ttl":300000000000,"max_signed_url_ttl":900000000000},"limits":{"max_image_bytes":20971520,"max_video_bytes":524288000,"max_audio_bytes":104857600,"max_model_bytes":67108864,"max_document_bytes":20971520},"default_write_profile":"main","profiles":{"main":{"provider":"minio","mode":"read_write","addressing_style":"path","signing_endpoint":"http://127.0.0.1:9000","endpoint":"http://127.0.0.1:9000","bucket":"glowloom-local","region":"us-east-1","credentials":{"source":"env","access_key_env":"TEST_STORAGE_AK","secret_key_env":"TEST_STORAGE_SK"}}}}`)
+	t.Setenv("TEST_STORAGE_AK", "test-access")
+	t.Setenv("TEST_STORAGE_SK", "test-secret")
 	cfg, err := config.Load()
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatal(err)
 	}
-	if cfg.ObjectStorageEndpoint != "http://127.0.0.1:9000" || cfg.ObjectStorageBucket != "glowloom-local" || cfg.ObjectStorageAccessKey != "test-access" || cfg.ObjectStorageSecretKey != "test-secret" || cfg.ObjectStorageRegion != "us-east-1" {
-		t.Fatal("Load() did not preserve object storage configuration")
+	if cfg.ObjectStorage == nil {
+		t.Fatal("registry configuration missing")
+	}
+	profile := cfg.ObjectStorage.Profiles["main"]
+	credentials, err := cfg.ObjectStorage.ResolveCredentials(profile.Credentials)
+	if err != nil || profile.Bucket != "glowloom-local" || profile.Endpoint != "http://127.0.0.1:9000" || credentials.AccessKey != "test-access" || credentials.SecretKey != "test-secret" {
+		t.Fatal("registry identity or credential references changed", err)
 	}
 }
 

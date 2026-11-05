@@ -14,13 +14,12 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 func TestExportDurableCancelGateRejectsChangedReplayAndForeignRead(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	actor, project := mediaStoreProject(t, db)
 	_, foreign := mediaStoreProject(t, db)
 	timeline := exportTimeline(t)
@@ -31,6 +30,7 @@ func TestExportDurableCancelGateRejectsChangedReplayAndForeignRead(t *testing.T)
 	sha := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	asset.SHA256 = &sha
 	asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
+	asset = mediaFixtureAssetLocation(t, db, asset)
 	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
@@ -38,8 +38,8 @@ func TestExportDurableCancelGateRejectsChangedReplayAndForeignRead(t *testing.T)
 		t.Fatal(err)
 	}
 	freeze := &fixedTimeline{timeline: timeline}
-	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
-	workerStore := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	workerStore := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
 	input := toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}
 	key := uuid.New()
 	job, err := store.Create(t.Context(), actor, project, key, input)
@@ -92,7 +92,7 @@ func imageAsset(project, id uuid.UUID) mediadomain.MediaAsset {
 }
 
 func TestExportCancellationCannotBorrowAnotherWorkersCessation(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	actor, project := mediaStoreProject(t, db)
 	// Caption-only export avoids irrelevant source probing in the worker lock test.
 	timeline := exportTimeline(t)
@@ -100,8 +100,8 @@ func TestExportCancellationCannotBorrowAnotherWorkersCessation(t *testing.T) {
 	timeline.Clips[0].Kind = "subtitle"
 	timeline.Clips[0].AssetID = nil
 	timeline.Clips[0].Text = "caption"
-	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
-	workerStore := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	workerStore := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
 	job, err := store.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestExportRuntimeRoleOwnsOnlyMutableJobFacts(t *testing.T) {
 	if os.Getenv("GLOWLOOM_TEST_MEDIA_EXPORT_REQUIRE_ROLE") != "1" {
 		t.Skip("set GLOWLOOM_TEST_MEDIA_EXPORT_REQUIRE_ROLE=1 with isolated runtime-role DSN")
 	}
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	var role struct {
 		Role                                                                                            string
 		Superuser, OwnsJobs, CanInsert, CanUpdate, CanFreeze, CanCommand, CanOutbox, CanInbox, CanAudit bool
@@ -171,7 +171,7 @@ func TestExportRuntimeRoleOwnsOnlyMutableJobFacts(t *testing.T) {
 }
 
 func TestExportRejectsUnverifiableRealPersonConsentBeforeQueueing(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	actor, project := mediaStoreProject(t, db)
 	timeline := exportTimeline(t)
 	asset := imageAsset(project, *timeline.Clips[0].AssetID)
@@ -182,13 +182,14 @@ func TestExportRejectsUnverifiableRealPersonConsentBeforeQueueing(t *testing.T) 
 	asset.ConsentRecordID = &consent
 	asset.Status = mediadomain.StatusProcessing
 	asset.ModerationStatus = mediadomain.ModerationPending
+	asset = mediaFixtureAssetLocation(t, db, asset)
 	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	if _, err := store.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}); !errors.Is(err, toolapp.ErrNotFound) {
 		t.Fatalf("unknown consent registry bypassed: %v", err)
 	}

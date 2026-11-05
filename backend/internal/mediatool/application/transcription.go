@@ -99,7 +99,7 @@ type TranscriptionWork struct {
 	Job            domain.TranscriptionJob
 	Actor          identityapp.Principal
 	Frozen         domain.FrozenTranscription
-	InferenceState string
+	InferenceState domain.TranscriptionInferenceState
 	SourceAssets   []mediadomain.MediaAsset
 }
 
@@ -107,7 +107,7 @@ type TranscriptionWork struct {
 type TranscriptionWorkerStore interface {
 	Claim(context.Context, TranscriptionWorkID) (TranscriptionWork, error)
 	AuthorizeObjectWrite(context.Context, TranscriptionWorkID) error
-	Progress(context.Context, TranscriptionWorkID, int, string) error
+	Progress(context.Context, TranscriptionWorkID, int, domain.TranscriptionStage) error
 	StartInference(context.Context, TranscriptionWorkID) error
 	EndInference(context.Context, TranscriptionWorkID) error
 	Complete(context.Context, TranscriptionWorkID, domain.Transcript) (domain.TranscriptionJob, error)

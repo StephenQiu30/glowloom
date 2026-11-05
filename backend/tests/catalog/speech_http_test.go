@@ -38,7 +38,7 @@ func TestDoubaoTTSUsesResourceHeadersAndCollectsAudioChunks(t *testing.T) {
 	})})
 	result, err := client.Submit(t.Context(), application.GenerationRequest{Config: speechConfig(), ModelID: "seed-tts-2.0", Capability: "audio.generate", Mode: "text2audio", Prompt: "你好", OutputCount: 1, Params: map[string]any{"speaker": "zh_female_vv_uranus_bigtts"}}, "fixture-speech-key")
 	require.NoError(t, err)
-	require.Equal(t, "completed", result.Outcome)
+	require.Equal(t, application.ProviderOutcome("completed"), result.Outcome)
 	require.Len(t, result.Audio, 1)
 	require.Equal(t, "audio/mpeg", result.Audio[0].MediaType)
 	require.Equal(t, audio, result.Audio[0].Bytes)
@@ -53,12 +53,12 @@ func TestDoubaoTTSRejectsWrongModelsAndNeverRetriesUnknown(t *testing.T) {
 	input := application.GenerationRequest{Config: speechConfig(), ModelID: "seed-tts-2.0", Capability: "audio.generate", Mode: "text2audio", Prompt: "验收", OutputCount: 1, Params: map[string]any{"speaker": "zh_female_vv_uranus_bigtts"}}
 	result, err := client.Submit(t.Context(), input, "fixture-speech-key")
 	require.NoError(t, err)
-	require.Equal(t, "unknown", result.Outcome)
+	require.Equal(t, application.ProviderOutcome("unknown"), result.Outcome)
 	require.Equal(t, 1, calls)
 	input.ModelID = "doubao-seed-2-1-pro-260915"
 	result, err = client.Submit(t.Context(), input, "fixture-speech-key")
 	require.NoError(t, err)
-	require.Equal(t, "not_submitted", result.Outcome)
+	require.Equal(t, application.ProviderOutcome("not_submitted"), result.Outcome)
 	require.Equal(t, 1, calls)
 }
 
@@ -82,7 +82,7 @@ func TestDoubaoTTSRejectsMalformedResponsesAndAuthenticatedRedirects(t *testing.
 			client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(*http.Request) (*http.Response, error) { calls++; return providerResponse(200, body), nil })})
 			result, err := client.Submit(t.Context(), application.GenerationRequest{Config: speechConfig(), ModelID: "seed-tts-2.0", Capability: "audio.generate", Mode: "text2audio", Prompt: "验收", OutputCount: 1}, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, "unknown", result.Outcome)
+			require.Equal(t, application.ProviderOutcome("unknown"), result.Outcome)
 			require.Len(t, result.Audio, 0)
 			require.Equal(t, 1, calls)
 		})
@@ -96,7 +96,7 @@ func TestDoubaoTTSRejectsMalformedResponsesAndAuthenticatedRedirects(t *testing.
 	})})
 	result, err := client.Submit(t.Context(), application.GenerationRequest{Config: speechConfig(), ModelID: "seed-tts-2.0", Capability: "audio.generate", Mode: "text2audio", Prompt: "验收", OutputCount: 1}, "fixture-key")
 	require.NoError(t, err)
-	require.Equal(t, "unknown", result.Outcome)
+	require.Equal(t, application.ProviderOutcome("unknown"), result.Outcome)
 	require.Equal(t, 1, calls)
 }
 
@@ -121,7 +121,7 @@ func TestSeedance25FirstFrameAlwaysUsesAdaptiveRatio(t *testing.T) {
 			}
 			result, err := client.Submit(t.Context(), input, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, "accepted", result.Outcome)
+			require.Equal(t, application.ProviderOutcome("accepted"), result.Outcome)
 		})
 	}
 }
@@ -151,7 +151,7 @@ func TestDoubaoTTSStrictStreamRequiresAnExplicitCompleteTerminal(t *testing.T) {
 			})})
 			result, err := client.Submit(t.Context(), application.GenerationRequest{StrictSpeechTerminal: true, ProviderRequestID: requestID, Config: speechConfig(), ModelID: "seed-tts-2.0", Capability: "audio.generate", Mode: "text2audio", Prompt: "你好", OutputCount: 1}, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, test.outcome, result.Outcome)
+			require.Equal(t, application.ProviderOutcome(test.outcome), result.Outcome)
 			require.Equal(t, 1, calls)
 			if test.outcome == "completed" {
 				require.Equal(t, 20000000, result.ProviderTerminalCode)
@@ -187,7 +187,7 @@ func TestSeedance25OmniUsesTypedReferenceObjects(t *testing.T) {
 			}
 			result, err := client.Submit(t.Context(), application.GenerationRequest{Config: config, ModelID: "doubao-seedance-2-5-260628", Capability: "video.generate", Mode: "omni_reference", Prompt: "测试", OutputCount: 1, References: []application.ProviderReference{{Role: "reference_" + kind, MediaKind: kind, URL: "https://media.example/input"}}}, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, "accepted", result.Outcome)
+			require.Equal(t, application.ProviderOutcome("accepted"), result.Outcome)
 			require.Equal(t, 1, calls)
 		})
 	}

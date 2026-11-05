@@ -34,9 +34,9 @@ func transcriptionWorkerStore(db *gorm.DB) *toolpg.TranscriptionStore {
 
 func transcriptionStoreWithScope(db *gorm.DB, scopes pgmedia.ScopeAccessFactory) *toolpg.TranscriptionStore {
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, scopes), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, scopes))
 	}
-	return toolpg.NewTranscriptionStore(db, func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
+	return mediatoolTranscriptionStore(db, func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
 		return canvasapp.NewTranscriptionSourceReader(mediaCanvasStoreWithScope(tx, mediaFactory, scopes))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia {
 		return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
@@ -45,7 +45,7 @@ func transcriptionStoreWithScope(db *gorm.DB, scopes pgmedia.ScopeAccessFactory)
 
 func transcriptionNode(t *testing.T, db *gorm.DB, actor identityapp.Principal, project, asset uuid.UUID, kind string) toolapp.TranscriptionCreateInput {
 	t.Helper()
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
 	service := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Actual speech source"})
 	if err != nil {
@@ -60,7 +60,7 @@ func transcriptionNode(t *testing.T, db *gorm.DB, actor identityapp.Principal, p
 }
 func transcriptionPGFixture(t *testing.T) (*gorm.DB, *toolpg.TranscriptionStore, identityapp.Principal, uuid.UUID, toolapp.TranscriptionCreateInput) {
 	t.Helper()
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	actor, project := mediaStoreProject(t, db)
 	asset := imageAsset(project, uuid.New())
 	asset.Kind = mediadomain.KindAudio
@@ -73,6 +73,7 @@ func transcriptionPGFixture(t *testing.T) (*gorm.DB, *toolpg.TranscriptionStore,
 	asset.SHA256 = &sha
 	asset.Status = mediadomain.StatusProcessing
 	asset.ModerationStatus = mediadomain.ModerationPending
+	asset = mediaFixtureAssetLocation(t, db, asset)
 	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +88,7 @@ func TestTranscriptionRuntimeRoleOwnsOnlyMutableFacts(t *testing.T) {
 	if os.Getenv("GLOWLOOM_TEST_TRANSCRIPTION_REQUIRE_ROLE") != "1" {
 		t.Skip("set isolated non-owner runtime-role DSN and GLOWLOOM_TEST_TRANSCRIPTION_REQUIRE_ROLE=1")
 	}
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	var role struct {
 		Role                                                                  string
 		Superuser, Owner, Read, Write, Freeze, Commands, Outbox, Inbox, Audit bool
@@ -239,7 +240,7 @@ func TestTranscriptionMissingConfigRejectsNewJobsButKeepsReceiptsAndRead(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	disabled := toolpg.NewTranscriptionStore(db, nil, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	disabled := mediatoolTranscriptionStore(db, nil, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	if _, err := disabled.Create(t.Context(), actor, project, uuid.New(), input); !errors.Is(err, toolapp.ErrUnavailable) {
 		t.Fatal("unconfigured new speech job admitted", err)
 	}

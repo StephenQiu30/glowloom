@@ -2,74 +2,115 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	mediatooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
+
+// hasLiveStorageReference checks every registered owner before granting deletion.
+func hasLiveStorageReference(tx *gorm.DB, column storageOwnerColumn, locationID uuid.UUID) (bool, error) {
+	var records []map[string]any
+	// Callers hold the canonical location UPDATE lock before scanning. Published
+	// owners can be immutable: row locking them would require forbidden UPDATE
+	// privileges and cannot protect a reference which does not exist yet.
+	query := tx.Table(column.table).Where(column.location+" = ?", locationID)
+	if err := query.Find(&records).Error; err != nil {
+		return false, err
+	}
+	for _, record := range records {
+		retired, err := storageOwnerRetired(tx, column, record)
+		if err != nil {
+			return false, err
+		}
+		if !retired {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 // privateWorkReference excludes only the current task's unpublished target
 // reservation. Source history, published assets and another task's pins remain live.
-func privateWorkReference(tx *gorm.DB, c legacyObjectColumn, l domain.ObjectLocation, w storageWorkRow) (bool, error) {
-	var invalid bool
-	var query string
-	var args []any
-	switch c.table {
+func privateWorkReference(tx *gorm.DB, column storageOwnerColumn, location domain.ObjectLocation, work storageWorkRow) (bool, error) {
+	var count int64
+	switch column.table {
 	case "media.package_object":
-		if w.Kind != "package" {
+		if work.Kind != application.StorageWorkKindPackage {
 			return false, nil
 		}
-		query = `SELECT EXISTS(SELECT 1 FROM media.package_object t LEFT JOIN media.package_job j ON j.id=t.job_id WHERE t.object_location_id=? AND (j.id IS NULL OR NOT(j.id=? AND j.status='needs_reconciliation')))`
-		args = []any{l.ID, w.WorkID}
+		err := tx.Table("media.package_object AS o").
+			Joins("LEFT JOIN media.package_job AS j ON j.id = o.job_id").
+			Where("o.object_location_id = ? AND (j.id IS NULL OR NOT (j.id = ? AND j.status = ?))", location.ID, work.WorkID, application.PackageStatusNeedsReconciliation).
+			Count(&count).Error
+		return count == 0, err
 	case "script.object_intent":
-		if w.Kind != "script" {
+		if work.Kind != application.StorageWorkKindScript {
 			return false, nil
 		}
-		query = `SELECT EXISTS(SELECT 1 FROM script.object_intent t JOIN script.command c ON c.actor_id=t.actor_id AND c.request_id=t.request_id JOIN script.command_state s ON s.actor_id=c.actor_id AND s.request_id=c.request_id WHERE t.object_location_id=? AND NOT(COALESCE(c.plan->>'storage_intent_id','')=? AND c.project_id=? AND s.status='pending' AND s.cancellation_requested))`
-		args = []any{l.ID, w.ID.String(), w.OwnerID}
+		err := tx.Table("script.object_intent AS o").
+			Joins("JOIN script.command AS c ON c.actor_id = o.actor_id AND c.request_id = o.request_id").
+			Joins("JOIN script.command_state AS s ON s.actor_id = c.actor_id AND s.request_id = c.request_id").
+			Where("o.object_location_id = ? AND NOT (COALESCE(c.plan->>'storage_intent_id', '') = ? AND c.project_id = ? AND s.status = ? AND s.cancellation_requested)", location.ID, work.ID.String(), work.OwnerID, scriptdomain.CommandStatusPending).
+			Count(&count).Error
+		return count == 0, err
 	case "script.object_state":
-		if w.Kind != "script" {
+		if work.Kind != application.StorageWorkKindScript {
 			return false, nil
 		}
-		query = `SELECT EXISTS(SELECT 1 FROM script.object_state t JOIN script.object_intent i ON i.object_key=t.object_key AND i.object_location_id=t.object_location_id JOIN script.command c ON c.actor_id=i.actor_id AND c.request_id=i.request_id JOIN script.command_state s ON s.actor_id=c.actor_id AND s.request_id=c.request_id WHERE t.object_location_id=? AND NOT(COALESCE(c.plan->>'storage_intent_id','')=? AND c.project_id=? AND s.status='pending' AND s.cancellation_requested))`
-		args = []any{l.ID, w.ID.String(), w.OwnerID}
-	case "script.copy_object_intent", "script.copy_object_state", "script.script_source", "script.script_version":
-		if w.Kind != "script" {
+		err := tx.Table("script.object_state AS o").
+			Joins("JOIN script.object_intent AS i ON i.object_key = o.object_key AND i.object_location_id = o.object_location_id").
+			Joins("JOIN script.command AS c ON c.actor_id = i.actor_id AND c.request_id = i.request_id").
+			Joins("JOIN script.command_state AS s ON s.actor_id = c.actor_id AND s.request_id = c.request_id").
+			Where("o.object_location_id = ? AND NOT (COALESCE(c.plan->>'storage_intent_id', '') = ? AND c.project_id = ? AND s.status = ? AND s.cancellation_requested)", location.ID, work.ID.String(), work.OwnerID, scriptdomain.CommandStatusPending).
+			Count(&count).Error
+		return count == 0, err
+	case "script.copy_object_intent", "script.copy_object_state", "script.script_source", "script.script_version",
+		"media.project_copy_object", "media.media_asset", "media.rendition":
+		if work.Kind != application.StorageWorkKindScript && work.Kind != application.StorageWorkKindProjectCopy {
 			return false, nil
 		}
-		return privateCopyReference(tx, c, l, w)
-	case "media.project_copy_object", "media.media_asset", "media.rendition":
-		if w.Kind != "project-copy" {
-			return false, nil
-		}
-		return privateCopyReference(tx, c, l, w)
+		return privateCopyReference(tx, column, location, work)
 	case "media.transfer_object":
-		if w.Kind != "transfer" || c.location != "target_location_id" {
+		if work.Kind != application.StorageWorkKindTransfer || column.location != "target_location_id" {
 			return false, nil
 		}
 		var rows []struct {
-			JobID           uuid.UUID
-			ItemIndex       int
-			TargetLibraryID uuid.UUID
-			Status          string
+			JobID                    uuid.UUID
+			ItemIndex, OutputAttempt int
+			TargetLibraryID          uuid.UUID
+			WorkIntentID             *uuid.UUID
+			Status                   string
 		}
-		if err := tx.Raw(`SELECT o.job_id,o.item_index,j.target_library_id,i.status FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id JOIN media.transfer_item i ON i.job_id=o.job_id AND i.item_index=o.item_index WHERE o.target_location_id=?`, l.ID).Scan(&rows).Error; err != nil {
+		err := tx.Table("media.transfer_object AS o").
+			Select("o.job_id, o.item_index, o.output_attempt, j.target_library_id, a.work_intent_id, i.status").
+			Joins("JOIN media.transfer_job AS j ON j.id = o.job_id").
+			Joins("JOIN media.transfer_item AS i ON i.job_id = o.job_id AND i.item_index = o.item_index").
+			Joins("JOIN media.transfer_output_attempt AS a ON a.job_id = o.job_id AND a.item_index = o.item_index AND a.output_attempt = o.output_attempt").
+			Where("o.target_location_id = ?", location.ID).
+			Find(&rows).Error
+		if err != nil {
 			return false, err
 		}
 		if len(rows) == 0 {
 			return false, nil
 		}
-		for _, r := range rows {
-			if r.TargetLibraryID != w.OwnerID || uuid.NewSHA1(r.JobID, []byte("item/"+strconv.Itoa(r.ItemIndex))) != w.WorkID || r.Status == "succeeded" {
+		for _, row := range rows {
+			if row.WorkIntentID == nil || *row.WorkIntentID != work.ID || row.TargetLibraryID != work.OwnerID || transferWorkOwner(row.JobID, row.TargetLibraryID, row.ItemIndex, row.OutputAttempt).WorkID != work.WorkID || row.Status == string(domain.TransferItemStatusSucceeded) {
 				return false, nil
 			}
 		}
 		return true, nil
 	case "mediatool.depth_object":
-		if w.Kind != "depth" {
+		if work.Kind != application.StorageWorkKindDepth {
 			return false, nil
 		}
 		var rows []struct {
@@ -79,14 +120,19 @@ func privateWorkReference(tx *gorm.DB, c legacyObjectColumn, l domain.ObjectLoca
 			ExecutionUnconfirmed, CancellationRequested bool
 			Status                                      string
 		}
-		if err := tx.Raw(`SELECT o.job_id,o.attempt,j.project_id,j.process_state,j.execution_unconfirmed,j.cancellation_requested,j.status FROM mediatool.depth_object o JOIN mediatool.depth_job j ON j.id=o.job_id AND j.attempt=o.attempt WHERE o.object_location_id=?`, l.ID).Scan(&rows).Error; err != nil {
+		err := tx.Table("mediatool.depth_object AS o").
+			Select("o.job_id, o.attempt, j.project_id, j.process_state, j.execution_unconfirmed, j.cancellation_requested, j.status").
+			Joins("JOIN mediatool.depth_job AS j ON j.id = o.job_id AND j.attempt = o.attempt").
+			Where("o.object_location_id = ?", location.ID).
+			Find(&rows).Error
+		if err != nil {
 			return false, err
 		}
 		if len(rows) == 0 {
 			return false, nil
 		}
-		for _, r := range rows {
-			if r.ProjectID != w.OwnerID || uuid.NewSHA1(r.JobID, []byte("storage-attempt/"+strconv.Itoa(r.Attempt))) != w.WorkID || r.Status == "succeeded" || r.Status == "review_required" || !r.CancellationRequested || r.ExecutionUnconfirmed || (r.ProcessState != "ended" && r.ProcessState != "none") {
+		for _, row := range rows {
+			if row.ProjectID != work.OwnerID || uuid.NewSHA1(row.JobID, []byte("storage-attempt/"+strconv.Itoa(row.Attempt))) != work.WorkID || row.Status == string(mediatooldomain.DepthSucceeded) || row.Status == string(mediatooldomain.DepthReviewRequired) || !row.CancellationRequested || row.ExecutionUnconfirmed || (row.ProcessState != string(mediatooldomain.DepthProcessEnded) && row.ProcessState != string(mediatooldomain.DepthProcessNone)) {
 				return false, nil
 			}
 		}
@@ -94,108 +140,124 @@ func privateWorkReference(tx *gorm.DB, c legacyObjectColumn, l domain.ObjectLoca
 	default:
 		return false, nil
 	}
-	if err := tx.Raw(query, args...).Scan(&invalid).Error; err != nil {
-		return false, err
-	}
-	return !invalid, nil
 }
 
-func privateCopyReference(tx *gorm.DB, c legacyObjectColumn, l domain.ObjectLocation, w storageWorkRow) (bool, error) {
-	var project, job uuid.UUID
-	query := `SELECT target_project_id,job_id FROM media.project_copy_snapshot WHERE id=? AND target_project_id=?`
-	if w.Kind == "script" {
-		query = `SELECT target_project_id,job_id FROM script.copy_snapshot WHERE id=? AND target_project_id=? AND storage_intent_id=?`
-	}
-	var binding struct{ TargetProjectID, JobID uuid.UUID }
-	args := []any{w.WorkID, w.OwnerID}
-	if w.Kind == "script" {
-		args = append(args, w.ID)
-	}
-	r := tx.Raw(query, args...).Scan(&binding)
-	if r.Error != nil {
-		return false, r.Error
-	}
-	if r.RowsAffected != 1 {
+func privateCopyReference(tx *gorm.DB, column storageOwnerColumn, location domain.ObjectLocation, work storageWorkRow) (bool, error) {
+	table := "media.project_copy_snapshot"
+	query := tx.Table(table).Select("target_project_id, job_id").Where("id = ? AND target_project_id = ?", work.WorkID, work.OwnerID)
+	if work.Kind == application.StorageWorkKindScript {
+		table = "script.copy_snapshot"
+		query = tx.Table(table).Select("target_project_id, job_id").Where("id = ? AND target_project_id = ? AND storage_intent_id = ?", work.WorkID, work.OwnerID, work.ID)
+	} else if work.Kind != application.StorageWorkKindProjectCopy {
 		return false, nil
 	}
-	project, job = binding.TargetProjectID, binding.JobID
-	var private bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM workspace.project p JOIN workspace.project_copy_job j ON j.id=? AND j.target_project_id=p.id WHERE p.id=? AND p.status='copying' AND NOT p.is_delete AND j.stage='cleanup' AND j.status<>'succeeded')`, job, project).Scan(&private).Error; err != nil {
+	var binding struct {
+		TargetProjectID uuid.UUID
+		JobID           uuid.UUID
+	}
+	if err := query.Take(&binding).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	} else if err != nil {
 		return false, err
 	}
-	if !private {
+	// The copy coordinator publishes by changing these mutable owner rows. Keep
+	// that transition outside the private-cleanup decision until this transaction ends.
+	for _, owner := range []struct {
+		table string
+		id    uuid.UUID
+	}{
+		{"workspace.project", binding.TargetProjectID},
+		{"workspace.project_copy_job", binding.JobID},
+	} {
+		var row struct{ ID uuid.UUID }
+		if err := tx.Table(owner.table).Select("id").Where("id = ?", owner.id).
+			Clauses(clause.Locking{Strength: "UPDATE"}).Take(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return false, nil
+			}
+			return false, err
+		}
+	}
+	var privateCount int64
+	if err := tx.Table("workspace.project AS p").
+		Joins("JOIN workspace.project_copy_job AS j ON j.id = ? AND j.target_project_id = p.id", binding.JobID).
+		Where("p.id = ? AND p.status = ? AND NOT p.is_delete AND j.stage = ? AND j.status <> ?", binding.TargetProjectID, workspacedomain.ProjectStatusCopying, workspacedomain.ProjectCopyStageCleanup, workspacedomain.ProjectCopyStatusSucceeded).
+		Count(&privateCount).Error; err != nil {
+		return false, err
+	}
+	if privateCount == 0 {
 		return false, nil
 	}
-	var invalid bool
-	var predicate string
-	args = []any{l.ID}
-	switch c.table {
-	case "media.project_copy_object":
-		if c.location != "target_location_id" {
+	query = tx.Table(column.table+" AS t").Where("t."+column.location+" = ?", location.ID)
+	switch column.table {
+	case "media.project_copy_object", "script.copy_object_intent":
+		if column.location != "target_location_id" {
 			return false, nil
 		}
-		predicate = "t.snapshot_id<>?"
-		args = append(args, w.WorkID)
+		query = query.Where("t.snapshot_id <> ?", work.WorkID)
 	case "media.media_asset":
-		predicate = "t.project_id<>? OR t.personal_actor_id IS NOT NULL"
-		args = append(args, project)
+		query = query.Where("t.project_id <> ? OR t.personal_actor_id IS NOT NULL", binding.TargetProjectID)
 	case "media.rendition":
-		predicate = "NOT EXISTS(SELECT 1 FROM media.media_asset a WHERE a.id=t.media_asset_id AND a.project_id=? AND a.personal_actor_id IS NULL)"
-		args = append(args, project)
-	case "script.copy_object_intent":
-		if c.location != "target_location_id" {
-			return false, nil
-		}
-		predicate = "t.snapshot_id<>?"
-		args = append(args, w.WorkID)
+		query = query.Joins("LEFT JOIN media.media_asset AS a ON a.id = t.media_asset_id").Where("a.id IS NULL OR a.project_id <> ? OR a.personal_actor_id IS NOT NULL", binding.TargetProjectID)
 	case "script.copy_object_state":
-		predicate = "NOT EXISTS(SELECT 1 FROM script.copy_object_intent i WHERE i.target_location_id=t.target_location_id AND i.target_key=t.target_key AND i.snapshot_id=?)"
-		args = append(args, w.WorkID)
+		intent := tx.Table("script.copy_object_intent AS i").Select("1").
+			Where("i.target_location_id = t.target_location_id AND i.target_key = t.target_key AND i.snapshot_id = ?", work.WorkID)
+		query = query.Where("NOT EXISTS (?)", intent)
 	case "script.script_source", "script.script_version":
-		predicate = "t.project_id<>?"
-		args = append(args, project)
+		query = query.Where("t.project_id <> ?", binding.TargetProjectID)
 	default:
 		return false, nil
 	}
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM `+c.table+` t WHERE `+c.location+`=? AND (`+predicate+`))`, args...).Scan(&invalid).Error; err != nil {
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
 		return false, err
 	}
-	return !invalid, nil
+	return count == 0, nil
 }
 
-// BeginPrivateCopyRemoval retires a partially registered result only while its
-// entire workspace target is private and the current coordinator is cleaning it.
-// The caller retains that coordinator's current worker fence transaction.
-func (s *StorageRoutes) BeginPrivateCopyRemoval(ctx context.Context, id uuid.UUID, l domain.ObjectLocation) (bool, error) {
+// BeginPrivateCopyRemoval grants deletion only while the target project is
+// private and the owning copy coordinator is cleaning it.
+func (s *StorageRoutes) BeginPrivateCopyRemoval(ctx context.Context, id uuid.UUID, location domain.ObjectLocation) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
-	removed := false
+	removable := false
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var w storageWorkRow
-		r := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE id=? AND kind IN ('project-copy','script') AND state='accepted' FOR UPDATE`, id).Scan(&w)
-		if r.Error != nil {
-			return r.Error
-		}
-		if r.RowsAffected != 1 {
+		var work storageWorkRow
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND kind IN ? AND state = ?", id, []application.StorageWorkKind{application.StorageWorkKindProjectCopy, application.StorageWorkKindScript}, application.StorageWorkAccepted).
+			Take(&work).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
-		// Match snapshot/job even when this result has not produced any visible row.
-		probe := legacyObjectColumn{table: "media.media_asset", location: "object_location_id"}
-		if w.Kind == "script" {
-			probe = legacyObjectColumn{table: "script.script_source", location: "original_location_id"}
+		if err != nil {
+			return err
 		}
-		private, err := privateCopyReference(tx, probe, l, w)
+		var row objectLocationRow
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND owner_intent_id = ? AND profile_id = ? AND bucket = ? AND object_key = ?", location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key).
+			Where("state IN ? AND (write_until IS NULL OR write_until < clock_timestamp())", []domain.ObjectLocationState{domain.ObjectLocationAccepted, domain.ObjectLocationDeletePending}).Take(&row)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if read.Error != nil {
+			return read.Error
+		}
+		probe := storageOwnerColumn{table: "media.media_asset", key: "object_key", location: "object_location_id"}
+		if work.Kind == application.StorageWorkKindScript {
+			probe = storageOwnerColumn{table: "script.script_source", key: "original_key", location: "original_location_id"}
+		}
+		private, err := privateCopyReference(tx, probe, location, work)
 		if err != nil || !private {
 			return err
 		}
-		for _, c := range legacyObjectColumns {
-			var live bool
-			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM `+c.table+` t WHERE `+c.location+`=? AND NOT(`+legacyRetired(c)+`))`, l.ID).Scan(&live).Error; err != nil {
+		for _, column := range storageOwnerColumns {
+			live, err := hasLiveStorageReference(tx, column, location.ID)
+			if err != nil {
 				return err
 			}
 			if live {
-				private, err := privateWorkReference(tx, c, l, w)
+				private, err := privateWorkReference(tx, column, location, work)
 				if err != nil {
 					return err
 				}
@@ -204,9 +266,15 @@ func (s *StorageRoutes) BeginPrivateCopyRemoval(ctx context.Context, id uuid.UUI
 				}
 			}
 		}
-		u := tx.Exec(`UPDATE media.object_location SET state='delete_pending' WHERE id=? AND owner_intent_id=? AND profile_id=? AND bucket=? AND object_key=? AND state IN ('accepted','delete_pending') AND (write_until IS NULL OR write_until<clock_timestamp())`, l.ID, id, l.Ref.ProfileID, l.Ref.Bucket, l.Ref.Key)
-		removed = u.RowsAffected == 1
-		return u.Error
+		result := tx.Model(&objectLocationRow{}).
+			Where("id = ? AND owner_intent_id = ? AND profile_id = ? AND bucket = ? AND object_key = ?", location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key).
+			Where("state IN ? AND (write_until IS NULL OR write_until < clock_timestamp())", []domain.ObjectLocationState{domain.ObjectLocationAccepted, domain.ObjectLocationDeletePending}).
+			Update("state", domain.ObjectLocationDeletePending)
+		if result.Error != nil {
+			return result.Error
+		}
+		removable = result.RowsAffected == 1
+		return nil
 	})
-	return removed, err
+	return removable, err
 }

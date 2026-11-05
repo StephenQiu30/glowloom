@@ -9,37 +9,25 @@ import (
 	platform "github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
-// PurgeLocations resolves only an explicitly retained legacy binding.
-type PurgeLocations interface {
-	ResolveLegacyRef(context.Context, string) (domain.ObjectRef, error)
-}
-
 // RoutedPurgeObjects receives locations from the currently authorized purge lease.
 type RoutedPurgeObjects struct {
-	objects   *RoutedReadObjects
-	locations PurgeLocations
+	objects *RoutedReadObjects
 }
 
-// NewRoutedPurgeObjects injects the registry and explicit legacy proof resolver.
-func NewRoutedPurgeObjects(registry *platform.Registry, locations PurgeLocations) *RoutedPurgeObjects {
-	return &RoutedPurgeObjects{objects: NewRoutedReadObjects(registry), locations: locations}
+// NewRoutedPurgeObjects injects the provider registry for saved locations.
+func NewRoutedPurgeObjects(registry *platform.Registry) *RoutedPurgeObjects {
+	return &RoutedPurgeObjects{objects: NewRoutedReadObjects(registry)}
 }
-func (p *RoutedPurgeObjects) ref(ctx context.Context, o application.PurgeObject) (domain.ObjectRef, error) {
-	if o.Location != nil {
-		if o.Location.Ref.Key != o.ObjectKey || o.Location.Ref.Validate() != nil {
-			return domain.ObjectRef{}, application.ErrObjectMismatch
-		}
-		return o.Location.Ref, nil
-	}
-	if p == nil || p.locations == nil {
+func (p *RoutedPurgeObjects) ref(o application.PurgeObject) (domain.ObjectRef, error) {
+	if o.Location == nil || o.Location.Ref.Key != o.ObjectKey || o.Location.Ref.Validate() != nil {
 		return domain.ObjectRef{}, application.ErrStorageNotReady
 	}
-	return p.locations.ResolveLegacyRef(ctx, o.ObjectKey)
+	return o.Location.Ref, nil
 }
 
 // GetPurge reads the physical object selected by the purge lease.
 func (p *RoutedPurgeObjects) GetPurge(ctx context.Context, o application.PurgeObject) (io.ReadCloser, error) {
-	r, e := p.ref(ctx, o)
+	r, e := p.ref(o)
 	if e != nil {
 		return nil, e
 	}
@@ -48,7 +36,7 @@ func (p *RoutedPurgeObjects) GetPurge(ctx context.Context, o application.PurgeOb
 
 // ExistsPurge checks exact physical absence without default routing.
 func (p *RoutedPurgeObjects) ExistsPurge(ctx context.Context, o application.PurgeObject) (bool, error) {
-	r, e := p.ref(ctx, o)
+	r, e := p.ref(o)
 	if e != nil {
 		return false, e
 	}
@@ -57,7 +45,7 @@ func (p *RoutedPurgeObjects) ExistsPurge(ctx context.Context, o application.Purg
 
 // RemovePurge deletes the location already verified by its owning purge intent.
 func (p *RoutedPurgeObjects) RemovePurge(ctx context.Context, o application.PurgeObject) error {
-	r, e := p.ref(ctx, o)
+	r, e := p.ref(o)
 	if e != nil {
 		return e
 	}

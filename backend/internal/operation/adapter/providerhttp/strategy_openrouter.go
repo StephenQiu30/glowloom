@@ -16,10 +16,12 @@ import (
 // asynchronous video task handling, and /key probe discovery.
 type OpenRouterStrategy struct{}
 
+// Name returns the adapter protocol key.
 func (s *OpenRouterStrategy) Name() string {
 	return "openrouter"
 }
 
+// Submit sends generation input using this adapter's provider protocol.
 func (s *OpenRouterStrategy) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
 	if !validKey(key) || !validateCommonInput(input) {
 		return invalidSubmissionResult(), nil
@@ -112,10 +114,10 @@ func (s *OpenRouterStrategy) Submit(ctx context.Context, c *Client, input applic
 
 	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, path, payload, 64<<20)
 	if err != nil {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	result, ok := parseStandardGenerationResponse(input, data)
 	if !ok {
@@ -124,6 +126,7 @@ func (s *OpenRouterStrategy) Submit(ctx context.Context, c *Client, input applic
 	return result, nil
 }
 
+// Query reads provider progress or reports that polling is unsupported.
 func (s *OpenRouterStrategy) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
 	if config.Validate() != nil || !validKey(key) || !validTaskID(taskID) {
 		return unknownResult(), nil
@@ -131,14 +134,14 @@ func (s *OpenRouterStrategy) Query(ctx context.Context, c *Client, config catalo
 	path := "/videos/" + taskID
 	data, status, err := c.request(ctx, config, key, http.MethodGet, path, nil, 1<<20)
 	if err != nil {
-		return application.GenerationResult{State: "unknown", ErrorCode: "query_unreachable"}, nil
+		return application.GenerationResult{State: application.ProviderTaskUnknown, ErrorCode: "query_unreachable"}, nil
 	}
 	if status < 200 || status >= 300 {
 		state := "unknown"
 		if status == 404 {
 			state = "not_found"
 		}
-		return application.GenerationResult{State: state, ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{State: application.ProviderTaskState(state), ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	var response struct {
 		ID           string          `json:"id"`
@@ -152,16 +155,16 @@ func (s *OpenRouterStrategy) Query(ctx context.Context, c *Client, config catalo
 	result := application.GenerationResult{TaskID: taskID, Usage: safeUsage(response.Usage)}
 	switch response.Status {
 	case "queued", "pending":
-		result.State = "pending"
+		result.State = application.ProviderTaskPending
 	case "running", "in_progress":
-		result.State = "running"
+		result.State = application.ProviderTaskRunning
 	case "failed", "expired":
-		result.State = "failed"
+		result.State = application.ProviderTaskFailed
 		result.ErrorCode = "generation_failed"
 	case "cancelled":
-		result.State = "cancelled"
+		result.State = application.ProviderTaskCancelled
 	case "completed", "succeeded":
-		result.State = "succeeded"
+		result.State = application.ProviderTaskSucceeded
 		if len(response.UnsignedURLs) != 1 {
 			return unknownResult(), nil
 		}
@@ -176,6 +179,7 @@ func (s *OpenRouterStrategy) Query(ctx context.Context, c *Client, config catalo
 	return result, nil
 }
 
+// Probe performs the configured provider credential check.
 func (s *OpenRouterStrategy) Probe(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, key string) ProbeResult {
 	result := ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 	if config.Validate() != nil || !validKey(key) {
@@ -257,6 +261,7 @@ func (s *OpenRouterStrategy) Probe(ctx context.Context, c *Client, config catalo
 	return result
 }
 
+// ProbeModelDefaultParams applies this adapter's model-probe parameter defaults.
 func (s *OpenRouterStrategy) ProbeModelDefaultParams(capability string) map[string]any {
 	if capability == "image.generate" {
 		return map[string]any{"size": "1024x1024"}

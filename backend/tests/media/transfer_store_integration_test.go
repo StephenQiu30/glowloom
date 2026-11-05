@@ -31,11 +31,11 @@ func TestMediaTransferActualAdmissionPendingVisibilityAndPermanentCurrentScopeRe
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	base := mediaTestStore(db)
-	uploadService := mediaapp.NewScopedUploadService(base, base, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	uploadService := mediaFixtureRoutedUpload(t, db, base, base, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = uuid.Nil
-	upload, err := uploadService.UploadPersonal(t.Context(), in)
+	upload, err := fixturePersonalUpload(t.Context(), uploadService, in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestMediaTransferActualAdmissionPendingVisibilityAndPermanentCurrentScopeRe
 			_ = objects.Remove(ctx, key)
 		}
 	})
-	request := mediaapp.TransferInput{Source: domain.LibraryScope{Kind: domain.LibraryPersonal}, Target: domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID}}, ExpectedSourceRevision: 1, ExpectedProjectRevision: 1, Key: uuid.New()}
+	request := mediaapp.TransferInput{Source: domain.LibraryScope{Kind: domain.LibraryPersonal}, Target: domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: 1}}, ExpectedSourceRevision: 1, ExpectedProjectRevision: 1, Key: uuid.New()}
 	repo := mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
 	job, err := repo.CreateTransfer(t.Context(), actor, request)
 	if err != nil || job.Status != "queued" || len(job.Items) != 1 || job.Items[0].TargetAssetID == nil || *job.Items[0].TargetAssetID == upload.Asset.ID {

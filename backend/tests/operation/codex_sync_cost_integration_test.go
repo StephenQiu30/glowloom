@@ -4,26 +4,26 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
+
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/temporal"
-	"go.temporal.io/sdk/testsuite"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
-// The SDK test environment runs actual PostgreSQL/MinIO Activities and a fake
+// The task handlers run actual PostgreSQL/MinIO adapters and a fake
 // stdio model. This is not a paid provider or real image pricing acceptance.
 func TestM1SyncCostAndManualPostgresRetainsExecutedImageReservation(t *testing.T) {
-	objects := receiptTestObjects(t)
+	receiptTestObjects(t)
 	database := operationStoreDB(t)
 	id, store := seedProviderCallOperation(t, database)
 	if err := database.Exec(`UPDATE catalog.provider SET adapter_key='codex' WHERE id=(SELECT m.provider_id FROM operation.operation o JOIN catalog.model_profile_version v ON v.id=o.model_profile_version_id JOIN catalog.model_profile m ON m.id=v.model_profile_id WHERE o.id=?::uuid)`, id.String()).Error; err != nil {
@@ -32,39 +32,35 @@ func TestM1SyncCostAndManualPostgresRetainsExecutedImageReservation(t *testing.T
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET provider_model_id='fixture-model',queue='agent.codex',supports_query=false,supports_cancel=false WHERE id=(SELECT model_profile_version_id FROM operation.operation WHERE id=?::uuid)`, id.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	service := application.NewProviderStageService(staging.NewObjects(objects), store)
+	loaded, err := store.LoadWorkflowOperation(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	businessPinOperation(t, database, application.ProviderDispatchIdentity{OperationID: id, ProjectID: loaded.Operation.ProjectID})
+	service := application.NewRoutedProviderStageService(staging.NewRoutedFactory(businessStorageRegistry(t), pgmedia.NewStorageRoutes(database)), store)
 	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
-	flowActivities := operationflow.NewActivitiesWithImageRecovery(store, finalizer, store, service)
 	launcher := &codexTestLauncher{t: t, behavior: "success"}
 	adapter, err := codex.New(store, launcher, service, codex.Config{WorkRoot: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	register := func(name string, fn any) { env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name}) }
-	register("flow.LoadOperation", flowActivities.LoadOperation)
-	register("flow.CheckConsent", flowActivities.CheckConsent)
-	register("flow.Transition", flowActivities.Transition)
-	register("flow.BeginProviderCall", flowActivities.BeginProviderCall)
-	register("flow.CompleteProviderCall", flowActivities.CompleteProviderCall)
-	register("flow.LoadProviderCost", flowActivities.LoadProviderCost)
-	register("flow.RecoverProviderImage", flowActivities.RecoverProviderImage)
-	register("flow.CheckManualNotExecuted", flowActivities.CheckManualNotExecuted)
-	register("flow.SettleOperation", flowActivities.SettleOperation)
-	register("provider.submit", func(ctx context.Context, input operationflow.ProviderSubmitInput) (operationflow.ProviderSubmitOutput, error) {
+	h := map[string]taskruntime.Handler{}
+	operationflow.RegisterFlow(h, store, finalizer, service)
+	operationflow.RegisterCodex(h, store, codexSubmitFunc(func(ctx context.Context, input operationflow.ProviderSubmitInput) (operationflow.ProviderSubmitOutput, error) {
 		identity := application.ProviderDispatchIdentity{ProjectID: uuid.MustParse(input.ProjectID), OperationID: uuid.MustParse(input.OperationID), Action: "submit", Attempt: input.Attempt, RequestKey: input.ProviderRequestKey, ModelProfileVersionID: uuid.MustParse(input.ModelProfileVersionID), PriceRuleVersionID: uuid.MustParse(input.PriceRuleVersionID)}
 		result, err := adapter.Submit(ctx, application.ProviderImageInput{Identity: identity, Model: input.ProviderModelID, Prompt: "synthetic image fixture"})
 		return operationflow.ProviderSubmitOutput{Outcome: operationflow.ProviderSubmitOutcome(result.Outcome), Receipt: result.Receipt}, err
-	})
-	env.RegisterDelayedCallback(func() {
-		env.SignalWorkflow("resolve_manual", operationflow.ManualResolution{Outcome: "succeeded", ProviderTaskID: "forged-task"})
-	}, time.Second)
-	env.RegisterDelayedCallback(func() { env.SignalWorkflow("resolve_manual", operationflow.ManualResolution{Outcome: "not_executed"}) }, 2*time.Second)
-	env.RegisterDelayedCallback(env.CancelWorkflow, 3*time.Second)
-	env.ExecuteWorkflow(operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: id.String()})
-	if err := env.GetWorkflowError(); err == nil || !temporal.IsCanceledError(err) {
-		t.Fatalf("unpriced image escaped manual state: %v", err)
+	}))
+	job := taskruntime.Job{BusinessID: id.String()}
+	for n := 0; n < 7; n++ {
+		_, err = h["operation.run"](t.Context(), job)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = h["operation.codex"](t.Context(), job)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	var row struct {
 		Status                                       string
@@ -84,4 +80,10 @@ func TestM1SyncCostAndManualPostgresRetainsExecutedImageReservation(t *testing.T
 	if err := finalizer.FinalizeOperation(t.Context(), operationflow.SettlementInput{OperationID: id.String(), From: domain.StatusManual, To: domain.StatusFailed, FailureCode: "provider_not_executed", ActualCostMicros: 0}); !errors.Is(err, application.ErrManualResolutionUnverified) {
 		t.Fatalf("executed image acquired a zero-cost manual release: %v", err)
 	}
+}
+
+type codexSubmitFunc func(context.Context, operationflow.ProviderSubmitInput) (operationflow.ProviderSubmitOutput, error)
+
+func (f codexSubmitFunc) Submit(ctx context.Context, in operationflow.ProviderSubmitInput) (operationflow.ProviderSubmitOutput, error) {
+	return f(ctx, in)
 }

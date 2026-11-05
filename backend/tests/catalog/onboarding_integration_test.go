@@ -18,7 +18,7 @@ import (
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/providerprobe"
-	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
+	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"

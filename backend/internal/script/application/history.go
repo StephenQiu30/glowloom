@@ -138,7 +138,7 @@ func (s *HistoryService) SourceSnapshot(ctx context.Context, actor identityapp.P
 		return SourceSnapshotDetail{}, ErrObjectMismatch
 	}
 	out := SourceSnapshotDetail{SourceSummary: summary(r, 0), Document: doc, PlainText: plain, Provenance: r.Provenance}
-	if r.Origin == "beeftv" {
+	if r.Origin == domain.SourceOriginBeeftv {
 		data, err := s.sources.readObject(ctx, r.Original)
 		if err != nil {
 			return SourceSnapshotDetail{}, err

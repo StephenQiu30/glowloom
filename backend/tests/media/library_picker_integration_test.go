@@ -10,10 +10,10 @@ import (
 )
 
 func TestLibraryPickerFullFilteredPaginationAndProjectIsolation(t *testing.T) {
-	db := mediaStoreDB(t)
-	owner := projectOwnerDB(t)
+	db := libraryRuntimeDB(t)
+	owner := libraryOwnerDB(t)
 	var name, role string
-	if err := db.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "glowloom_canvas_director_tests" || role != "glowloom_app" {
+	if err := db.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "glowloom_library" || role != "glowloom_app" {
 		t.Fatal("requires isolated picker database and restricted runtime", name, role, err)
 	}
 	actor, project := mediaStoreProject(t, owner)
@@ -37,6 +37,7 @@ func TestLibraryPickerFullFilteredPaginationAndProjectIsolation(t *testing.T) {
 			asset.CreateTime = end
 			asset.UpdateTime = end
 		}
+		asset = mediaFixtureAssetLocation(t, db, asset)
 		if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 			t.Fatal(err)
 		}

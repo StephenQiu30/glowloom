@@ -8,6 +8,7 @@ import (
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 // SourceRecoveryHandler exposes permanent explicit recovery of unpublished writes.
@@ -112,7 +113,9 @@ func (h *SourceRecoveryHandler) Get(c *gin.Context) {
 // @Failure 403 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-source-writes/{wid}/cancel [post]
-func (h *SourceRecoveryHandler) Cancel(c *gin.Context) { h.control(c, "cancel") }
+func (h *SourceRecoveryHandler) Cancel(c *gin.Context) {
+	h.control(c, domain.SourceControlActionCancel)
+}
 
 // Reconcile only verifies the original keys/digests and cannot publish someone else's body.
 // @Summary 核验原正文保存对象与停止证据
@@ -129,13 +132,16 @@ func (h *SourceRecoveryHandler) Cancel(c *gin.Context) { h.control(c, "cancel") 
 // @Failure 403 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-source-writes/{wid}/reconcile [post]
-func (h *SourceRecoveryHandler) Reconcile(c *gin.Context) { h.control(c, "reconcile") }
-func (h *SourceRecoveryHandler) control(c *gin.Context, action string) {
+func (h *SourceRecoveryHandler) Reconcile(c *gin.Context) {
+	h.control(c, domain.SourceControlActionReconcile)
+}
+
+func (h *SourceRecoveryHandler) control(c *gin.Context, action domain.SourceControlAction) {
 	var request SourceControlRequest
 	if !readJSON(c, &request) {
 		return
 	}
-	base, ok := commandInput(c, action, request.ExpectedRevision, nil)
+	project, key, requestID, ok := commandIdentity(c, request.ExpectedRevision)
 	if !ok {
 		return
 	}
@@ -143,7 +149,7 @@ func (h *SourceRecoveryHandler) control(c *gin.Context, action string) {
 	if !ok {
 		return
 	}
-	result, err := h.service.Control(c.Request.Context(), identityhttp.Principal(c), application.SourceControlCommand{ProjectID: base.ProjectID, IntentID: id, Key: base.Key, RequestID: base.RequestID, Action: action, ExpectedRevision: base.ExpectedRevision})
+	result, err := h.service.Control(c.Request.Context(), identityhttp.Principal(c), application.SourceControlCommand{ProjectID: project, IntentID: id, Key: key, RequestID: requestID, Action: action, ExpectedRevision: *request.ExpectedRevision})
 	if err != nil {
 		scriptProblem(c, err)
 		return

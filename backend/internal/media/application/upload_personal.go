@@ -26,14 +26,6 @@ type PersonalUploadRepository interface {
 	PersonalUploadAssetExists(context.Context, domain.PersonalOwnership, uuid.UUID) (bool, error)
 }
 
-// NewScopedUploadService extends the same pipeline through an explicit personal
-// owner. The historical constructor continues to accept project uploads only.
-func NewScopedUploadService(repo UploadRepository, personal PersonalUploadRepository, prober Prober, normalizer UploadNormalizer, renderer Renderer, objects UploadObjects, now func() time.Time) *UploadService {
-	s := NewUploadService(repo, prober, normalizer, renderer, objects, now)
-	s.personal = personal
-	return s
-}
-
 // AuthorizePersonal rejects a stale identity before multipart body reading.
 func (s *UploadService) AuthorizePersonal(ctx context.Context, actor identityapp.Principal) error {
 	if s == nil || s.personal == nil {

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -56,15 +57,26 @@ func sourceCataloguePostgres(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	var existing int64
-	if err := db.Raw(`SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('workspace','media','operation')`).Scan(&existing).Error; err != nil || existing != 0 {
-		t.Fatal("requires a fresh database with no source schemas")
+	fixtureName := "glowloom_subject_source_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if err := db.Exec(`CREATE DATABASE ` + fixtureName).Error; err != nil {
+		t.Fatal("create owned source catalogue database", err)
 	}
+	t.Log("owned source catalogue fixture database", fixtureName)
+	u.Path = "/" + fixtureName
+	db, err = gorm.Open(gormpostgres.Open(u.String()), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtureSQL, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = fixtureSQL.Close() })
 	const ddl = `CREATE SCHEMA workspace;CREATE SCHEMA media;CREATE SCHEMA operation;
  CREATE TABLE workspace.project(id uuid PRIMARY KEY,org_id uuid,owner_scope_id uuid,status text DEFAULT 'active',is_delete boolean DEFAULT false);
  CREATE TABLE media.library(id uuid PRIMARY KEY,kind text,org_id uuid,project_id uuid,personal_actor_id uuid,revision bigint DEFAULT 0);
  CREATE TABLE media.library_item(id uuid PRIMARY KEY,library_id uuid,asset_id uuid,plain_text text,folder_id uuid,title text,category text DEFAULT 'material',tags jsonb DEFAULT '[]',source_label text DEFAULT '',note text DEFAULT '',favorite boolean DEFAULT false,catalog_state text DEFAULT 'active',trashed_at timestamptz,position bigint DEFAULT 0,revision bigint DEFAULT 1,create_time timestamptz DEFAULT now(),update_time timestamptz DEFAULT now(),purged_at timestamptz);
- CREATE TABLE media.media_asset(id uuid PRIMARY KEY,project_id uuid,personal_org_id uuid,personal_actor_id uuid,kind text,origin text,status text,object_key text,file_name text,mime_type text,byte_size bigint,sha256 text,width int,height int,duration_ms int,source_operation_id uuid,provider_key text,model_key text,region text,moderation_status text,aigc_marked boolean DEFAULT false,contains_real_person boolean DEFAULT false,consent_record_id uuid,revision int DEFAULT 1,create_time timestamptz DEFAULT now(),update_time timestamptz DEFAULT now(),is_delete boolean DEFAULT false);
+ CREATE TABLE media.media_asset(id uuid PRIMARY KEY,project_id uuid,personal_org_id uuid,personal_actor_id uuid,kind text,origin text,status text,object_key text,object_location_id uuid NOT NULL,file_name text,mime_type text,byte_size bigint,sha256 text,width int,height int,duration_ms int,source_operation_id uuid,provider_key text,model_key text,region text,moderation_status text,aigc_marked boolean DEFAULT false,contains_real_person boolean DEFAULT false,consent_record_id uuid,revision int DEFAULT 1,create_time timestamptz DEFAULT now(),update_time timestamptz DEFAULT now(),is_delete boolean DEFAULT false);
  CREATE TABLE media.purge_item(item_id uuid,status text);
  CREATE TABLE operation.operation(id uuid PRIMARY KEY,project_id uuid,capability text,mode text,status text,origin text DEFAULT 'canvas',confirmed_by uuid,is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation_output(id uuid PRIMARY KEY,project_id uuid,operation_id uuid,media_asset_id uuid,kind text DEFAULT 'media',moderation_status text DEFAULT 'passed',create_time timestamptz DEFAULT now(),update_time timestamptz DEFAULT now(),is_delete boolean DEFAULT false);
@@ -75,6 +87,22 @@ func sourceCataloguePostgres(t *testing.T) *gorm.DB {
  CREATE TABLE operation.personal_history_output(actor_id uuid,org_id uuid,scope_id uuid,operation_id uuid,output_id uuid,revision bigint DEFAULT 0,favorite boolean DEFAULT false,deleted_at timestamptz);`
 	if err := db.Exec(ddl).Error; err != nil {
 		t.Fatal(err)
+	}
+	schema, err := os.ReadFile("../../db/schema.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"storage_profile", "object_location"} {
+		definition := regexp.MustCompile(`(?s)CREATE TABLE media\.` + table + ` \(.*?\n\);`).Find(schema)
+		if len(definition) == 0 {
+			t.Fatal("canonical storage fixture definition missing", table)
+		}
+		if err := db.Exec(string(definition)).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Exec(`ALTER TABLE media.` + table + ` ADD PRIMARY KEY(id)`).Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 	return db
 }
@@ -141,7 +169,8 @@ func TestSubjectCatalogueRealPostgresMixedPagingProvenanceAndLegacyMetadata(t *t
 	base := time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)
 	upload, metadata := uuid.New(), uuid.New()
 	key := fmt.Sprintf("personal/%s/%s/image/2026/10/%s.png", personal.OrgID, personal.ID, upload)
-	if err := database.Exec(`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,moderation_status,create_time,update_time) VALUES(?,?,?,'image','upload','ready',?,'原生8K.png','image/png',20,?,8192,8192,'passed',?,?)`, upload, personal.OrgID, personal.ID, key, strings.Repeat("a", 64), base.Add(10*time.Minute), base.Add(10*time.Minute)).Error; err != nil {
+	locationID := seedSubjectLocation(t, database, key, "test-main", "subject-fixture")
+	if err := database.Exec(`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,width,height,moderation_status,create_time,update_time) VALUES(?,?,?,'image','upload','ready',?,?,'原生8K.png','image/png',20,?,8192,8192,'passed',?,?)`, upload, personal.OrgID, personal.ID, key, locationID, strings.Repeat("a", 64), base.Add(10*time.Minute), base.Add(10*time.Minute)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Exec(`INSERT INTO media.library_item(id,library_id,asset_id,title,favorite,create_time,update_time) VALUES(?,?,?,'旧元数据标题',true,?,?)`, metadata, personalID, upload, base.Add(10*time.Minute), base.Add(10*time.Minute)).Error; err != nil {
@@ -178,7 +207,8 @@ func TestSubjectCatalogueRealPostgresMixedPagingProvenanceAndLegacyMetadata(t *t
 		}
 		key := fmt.Sprintf("projects/%s/%s/2026/10/%s", p, kind, file)
 		at := base.Add(time.Duration(minute) * time.Minute)
-		if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,source_operation_id,provider_key,model_key,region,moderation_status,aigc_marked,create_time,update_time) VALUES(?,?,?,'generated','ready',?,?,?,20,?,2,2,?,'fixture','fixture','domestic','passed',true,?,?)`, result.asset, p, kind, key, file, mime, strings.Repeat("b", 64), result.operation, at, at).Error; err != nil {
+		locationID := seedSubjectLocation(t, database, key, "test-main", "subject-fixture")
+		if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,width,height,source_operation_id,provider_key,model_key,region,moderation_status,aigc_marked,create_time,update_time) VALUES(?,?,?,'generated','ready',?,?,?,?,20,?,2,2,?,'fixture','fixture','domestic','passed',true,?,?)`, result.asset, p, kind, key, locationID, file, mime, strings.Repeat("b", 64), result.operation, at, at).Error; err != nil {
 			t.Fatal(err)
 		}
 		if err := database.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,media_asset_id,create_time,update_time) VALUES(?,?,?,?,?,?)`, result.id, p, result.operation, result.asset, at, at).Error; err != nil {

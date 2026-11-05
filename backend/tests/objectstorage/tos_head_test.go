@@ -9,16 +9,20 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
-func TestTOSHeadEmptyErrorBodyUsesOfficialExistenceStatus(t *testing.T) {
+func TestTOSHeadRequiresObjectAbsenceEvidence(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		status int
+		ec     string
 		want   error
-	}{{"missing", 404, objectstorage.ErrObjectMissing}, {"denied", 403, objectstorage.ErrAccessDenied}, {"unavailable", 503, objectstorage.ErrOutcomeUnknown}} {
+	}{{"unclassified 404", 404, "", objectstorage.ErrOutcomeUnknown}, {"confirmed missing", 404, "0017-00000003", objectstorage.ErrObjectMissing}, {"denied", 403, "", objectstorage.ErrAccessDenied}, {"unavailable", 503, "", objectstorage.ErrOutcomeUnknown}} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method != "HEAD" {
 					t.Error("must remain HEAD")
+				}
+				if tc.ec != "" {
+					w.Header().Set("x-tos-ec", tc.ec)
 				}
 				w.WriteHeader(tc.status)
 			}))

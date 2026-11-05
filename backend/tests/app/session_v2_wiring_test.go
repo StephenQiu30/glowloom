@@ -210,13 +210,13 @@ func TestSessionV2RealDependencies(t *testing.T) {
 }
 
 func TestSessionV2RouterConsumesSecurity(t *testing.T) {
-	cfg := config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t), IdentitySessionV2Enabled: true, IdentityLegacyUpgradeUntil: time.Now().UTC().Add(time.Hour)}
-	if _, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, &gorm.DB{}, nil, identityruntime.SessionDependencies{}); err == nil {
+	cfg := config.Config{ObjectStorage: businessUnitStorage(t), Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t), IdentitySessionV2Enabled: true, IdentityLegacyUpgradeUntil: time.Now().UTC().Add(time.Hour)}
+	if _, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, &gorm.DB{}, businessUnitRegistry(t), identityruntime.SessionDependencies{}); err == nil {
 		t.Fatal("router allowed enabled security without ports")
 	}
 	codec := &wiringTokens{}
 	coordinator := &wiringCoordinator{}
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, &gorm.DB{}, nil, identityruntime.SessionDependencies{Tokens: codec, Receipts: receiptFixture{}, Coordinator: coordinator})
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, &gorm.DB{}, businessUnitRegistry(t), identityruntime.SessionDependencies{Tokens: codec, Receipts: receiptFixture{}, Coordinator: coordinator})
 	if err != nil {
 		t.Fatal(err)
 	}

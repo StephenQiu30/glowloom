@@ -7,8 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 func TestArkImageReferencesKeepCOSURLAndRejectUnverifiedInputs(t *testing.T) {
@@ -37,7 +38,7 @@ func TestArkImageReferencesKeepCOSURLAndRejectUnverifiedInputs(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.wantCalls, calls)
 			if tc.wantCalls == 0 {
-				require.Equal(t, "not_submitted", result.Outcome)
+				require.EqualValues(t, "not_submitted", result.Outcome)
 			}
 		})
 	}

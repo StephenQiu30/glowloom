@@ -148,7 +148,7 @@ DO $function_guard$ BEGIN
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    IF TG_TABLE_NAME='storage_profile' OR TG_TABLE_NAME='storage_activation' THEN
+    IF TG_TABLE_NAME='storage_profile' THEN
         RAISE EXCEPTION 'storage identity is immutable' USING ERRCODE='23514';
     END IF;
     IF (NEW.id,NEW.profile_id,NEW.bucket,NEW.object_key,NEW.owner_session_id) IS DISTINCT FROM (OLD.id,OLD.profile_id,OLD.bucket,OLD.object_key,OLD.owner_session_id) THEN
@@ -162,7 +162,7 @@ END $$;$canonical_definition$;
   AND l.lanname='plpgsql' AND NOT p.prosecdef
   AND btrim(p.prosrc)=btrim($canonical_body$
 BEGIN
-    IF TG_TABLE_NAME='storage_profile' OR TG_TABLE_NAME='storage_activation' THEN
+    IF TG_TABLE_NAME='storage_profile' THEN
         RAISE EXCEPTION 'storage identity is immutable' USING ERRCODE='23514';
     END IF;
     IF (NEW.id,NEW.profile_id,NEW.bucket,NEW.object_key,NEW.owner_session_id) IS DISTINCT FROM (OLD.id,OLD.profile_id,OLD.bucket,OLD.object_key,OLD.owner_session_id) THEN

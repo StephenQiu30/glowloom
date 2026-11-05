@@ -14,12 +14,15 @@ func TestLibrarySchemaPersonalOwnershipAndRuntimeAuthority(t *testing.T) {
 	foreign, _ := mediaStoreProject(t, db)
 	asset := uuid.New()
 	key := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/2026/10/" + asset.String() + ".png"
-	insert := `INSERT INTO media.media_asset(id,project_id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,moderation_status) VALUES(?,?,?,?,'image','upload','ready',?,'ownership fixture.png','image/png',88,'passed')`
-	if err := db.Exec(insert, asset, nil, actor.OrgID, actor.ID, key).Error; err != nil {
+	location := mediaFixtureUnownedLocation(t, db, key)
+	insert := `INSERT INTO media.media_asset(id,project_id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,moderation_status,object_location_id) VALUES(?,?,?,?,'image','upload','ready',?,'ownership fixture.png','image/png',88,'passed',?)`
+	if err := db.Exec(insert, asset, nil, actor.OrgID, actor.ID, key, location.ID).Error; err != nil {
 		t.Fatal("closed personal ownership cannot be persisted", err)
 	}
 	for _, candidate := range []struct{ project, org, actor any }{{project, actor.OrgID, actor.ID}, {nil, actor.OrgID, foreign.ID}, {nil, nil, nil}} {
-		err := db.Exec(insert, uuid.New(), candidate.project, candidate.org, candidate.actor, "scope-fixture/"+uuid.NewString()).Error
+		candidateKey := "scope-fixture/" + uuid.NewString()
+		candidateLocation := mediaFixtureUnownedLocation(t, db, candidateKey)
+		err := db.Exec(insert, uuid.New(), candidate.project, candidate.org, candidate.actor, candidateKey, candidateLocation.ID).Error
 		var databaseError *pgconn.PgError
 		if !errors.As(err, &databaseError) || databaseError.Code != "23514" && databaseError.Code != "23503" {
 			t.Fatal("invalid personal/project ownership accepted", err)

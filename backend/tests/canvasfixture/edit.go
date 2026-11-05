@@ -35,7 +35,7 @@ type EditInput struct {
 
 // EditReceipt exposes the durable outcome to semantic business tests.
 type EditReceipt struct {
-	Status   string
+	Status   application.YjsReceiptStatus
 	Code     string
 	OpID     string
 	Revision int64

@@ -17,8 +17,8 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
@@ -37,14 +37,20 @@ func seedCopyMedia(t *testing.T, database *gorm.DB, objects *objectstorage.Clien
 			t.Fatal("write scoped synthetic PNG")
 		}
 	}
+	originalLocation := mediaFixtureUnownedLocation(t, database, key)
+	renditionLocation := mediaFixtureUnownedLocation(t, database, rkey)
+	if err := database.Table("media.object_location").Where("id IN ?", []uuid.UUID{originalLocation.ID, renditionLocation.ID}).Update("state", "accepted").Error; err != nil {
+		t.Fatal(err)
+	}
 	// Source SHA and rendition size are intentionally missing legacy facts; the
 	// copy must compute and durably bind real bytes before any target write.
-	if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,width,height,moderation_status,aigc_marked) VALUES(?,?,'image','upload','ready',?,'内容.png','image/png',?,3,2,'passed',true)`, asset, project, key, imageBytes.Len()).Error; err != nil {
+	if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,width,height,moderation_status,aigc_marked,object_location_id) VALUES(?,?,'image','upload','ready',?,'内容.png','image/png',?,3,2,'passed',true,?)`, asset, project, key, imageBytes.Len(), originalLocation.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Exec(`INSERT INTO media.rendition(id,media_asset_id,kind,object_key,width,height) VALUES(?,?,'thumb_256',?,3,2)`, uuid.New(), asset, rkey).Error; err != nil {
+	if err := database.Exec(`INSERT INTO media.rendition(id,media_asset_id,kind,object_key,width,height,object_location_id) VALUES(?,?,'thumb_256',?,3,2,?)`, uuid.New(), asset, rkey, renditionLocation.ID).Error; err != nil {
 		t.Fatal(err)
 	}
+	mediaFixturePackageObjects(t, database)
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
 	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'复制媒体私有目标','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
@@ -92,8 +98,8 @@ func TestProjectCopyMediaRealObjectsRegistrationAndCleanup(t *testing.T) {
 		t.Fatal("metadata registered before object receipts", err)
 	}
 	staging := t.TempDir()
-	transfer := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), staging)
-	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	transfer := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, database), staging)
+	if err := transfer.Transfer(fixtureCopyContext(t), actor, binding, snapshot); err != nil {
 		t.Fatal("actual object transfer", err)
 	}
 	intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
@@ -133,9 +139,10 @@ func TestProjectCopyMediaRealObjectsRegistrationAndCleanup(t *testing.T) {
 			t.Fatal("owning copy reader lost ready private media", ref, err)
 		}
 	}
-	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := transfer.Transfer(fixtureCopyContext(t), actor, binding, snapshot); err != nil {
 		t.Fatal("verified exact-key replay", err)
 	}
+	prepareFixtureCopyCleanup(t, libraryOwnerDB(t), binding, snapshot)
 	if err := transfer.Cleanup(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal("verified private cleanup", err)
 	}
@@ -153,12 +160,12 @@ func TestProjectCopyMediaRealObjectsRegistrationAndCleanup(t *testing.T) {
 }
 
 type copyUnknownWrite struct {
-	mediaapp.ProjectCopyObjects
+	mediaapp.PhysicalTransferObjects
 	failed bool
 }
 
-func (o *copyUnknownWrite) PutIfAbsent(ctx context.Context, key string, reader io.Reader, size int64, mime, digest string) error {
-	err := o.ProjectCopyObjects.PutIfAbsent(ctx, key, reader, size, mime, digest)
+func (o *copyUnknownWrite) PutIfAbsent(ctx context.Context, key domain.ObjectRef, reader io.Reader, size int64, mime, digest string) error {
+	err := o.PhysicalTransferObjects.PutIfAbsent(ctx, key, reader, size, mime, digest)
 	if err == nil && !o.failed {
 		o.failed = true
 		return io.ErrUnexpectedEOF
@@ -173,7 +180,7 @@ func TestProjectCopyMediaRealUnknownWriteAndCollisionRecovery(t *testing.T) {
 			objects := glbTestObjects(t)
 			actor, binding, snapshot, _ := seedCopyMedia(t, database, objects)
 			repo := mediaCopyStore(database)
-			adapter := copyobjects.NewProjectCopyObjects(objects)
+			adapter := mediaFixtureCopyObjects(t, database)
 			intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
 			if err != nil {
 				t.Fatal(err)
@@ -184,9 +191,9 @@ func TestProjectCopyMediaRealUnknownWriteAndCollisionRecovery(t *testing.T) {
 					t.Fatal("create exact synthetic collision")
 				}
 			}
-			transfer := mediaapp.NewProjectCopyTransfer(repo, &copyUnknownWrite{ProjectCopyObjects: adapter}, t.TempDir())
+			transfer := mediaapp.NewRoutedProjectCopyTransfer(repo, &copyUnknownWrite{PhysicalTransferObjects: adapter}, t.TempDir())
 			var failure *mediaapp.ProjectCopyTransferError
-			err = transfer.Transfer(t.Context(), actor, binding, snapshot)
+			err = transfer.Transfer(fixtureCopyContext(t), actor, binding, snapshot)
 			if !errors.As(err, &failure) || !failure.NeedsReconciliation {
 				t.Fatal("unknown write/collision reported success", err)
 			}
@@ -195,7 +202,7 @@ func TestProjectCopyMediaRealUnknownWriteAndCollisionRecovery(t *testing.T) {
 				t.Fatal("unknown outcome lost durable pre-write receipt", intents, err)
 			}
 			if collision {
-				err := mediaapp.NewProjectCopyTransfer(repo, adapter, t.TempDir()).Cleanup(t.Context(), actor, binding, snapshot)
+				err := mediaapp.NewRoutedProjectCopyTransfer(repo, adapter, t.TempDir()).Cleanup(t.Context(), actor, binding, snapshot)
 				if err == nil {
 					t.Fatal("unverified collision deleted")
 				}
@@ -207,7 +214,7 @@ func TestProjectCopyMediaRealUnknownWriteAndCollisionRecovery(t *testing.T) {
 			}
 			// This is an explicit owner-layer recovery fixture; the workspace
 			// worker's claim/CAS and reconciliation boundary is tested separately.
-			if err := mediaapp.NewProjectCopyTransfer(repo, adapter, t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+			if err := mediaapp.NewRoutedProjectCopyTransfer(repo, adapter, t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
 				t.Fatal("same immutable keys not recoverable", err)
 			}
 		})

@@ -22,6 +22,38 @@ var (
 	ErrManualResolutionUnverified = errors.New("manual provider resolution is unverified")
 )
 
+// ProviderCallOutcome records transport certainty for one persisted request.
+type ProviderCallOutcome string
+
+// ProviderCallState is the bounded state evidence allowed for one call action.
+type ProviderCallState string
+
+// Provider call outcomes classify a completed, rejected or uncertain request.
+const (
+	ProviderCallOutcomeOK      ProviderCallOutcome = "ok"
+	ProviderCallOutcomeError   ProviderCallOutcome = "error"
+	ProviderCallOutcomeTimeout ProviderCallOutcome = "timeout"
+	ProviderCallOutcomeUnknown ProviderCallOutcome = "unknown"
+)
+
+// Provider call states record durable dispatch and response progress.
+const (
+	ProviderCallStateUnset             ProviderCallState = ""
+	ProviderCallStateAccepted          ProviderCallState = "accepted"
+	ProviderCallStateCompleted         ProviderCallState = "completed"
+	ProviderCallStateRejected          ProviderCallState = "rejected"
+	ProviderCallStateNotSubmitted      ProviderCallState = "not_submitted"
+	ProviderCallStatePending           ProviderCallState = "pending"
+	ProviderCallStateRunning           ProviderCallState = "running"
+	ProviderCallStateSucceeded         ProviderCallState = "succeeded"
+	ProviderCallStateFailed            ProviderCallState = "failed"
+	ProviderCallStateNotFound          ProviderCallState = "not_found"
+	ProviderCallStateConfirmedNotExist ProviderCallState = "confirmed_not_exist"
+	ProviderCallStateCancelled         ProviderCallState = "cancelled"
+	ProviderCallStateNotCancelled      ProviderCallState = "not_cancelled"
+	ProviderCallStateUnknown           ProviderCallState = "unknown"
+)
+
 // ManualNotExecutedInput is written by an authenticated administrator command,
 // before the workflow receives its resolve_manual signal.
 type ManualNotExecutedInput struct {
@@ -55,16 +87,16 @@ type BeginProviderCallInput struct {
 // Usage contains normalized, non-sensitive billable quantities from a trusted
 // provider adapter. The mock adapter is explicitly free.
 type CompleteProviderCallInput struct {
-	ErrorCode      string           `json:"error_code,omitempty"`
-	Managed        bool             `json:"managed,omitempty"`
-	OperationID    uuid.UUID        `json:"operation_id"`
-	Action         string           `json:"action"`
-	Attempt        int32            `json:"attempt"`
-	Outcome        string           `json:"outcome"`
-	State          string           `json:"state"`
-	ProviderTaskID *string          `json:"provider_task_id,omitempty"`
-	Usage          json.RawMessage  `json:"usage,omitempty"`
-	Receipt        *ProviderReceipt `json:"receipt,omitempty"`
+	ErrorCode      string              `json:"error_code,omitempty"`
+	Managed        bool                `json:"managed,omitempty"`
+	OperationID    uuid.UUID           `json:"operation_id"`
+	Action         string              `json:"action"`
+	Attempt        int32               `json:"attempt"`
+	Outcome        ProviderCallOutcome `json:"outcome"`
+	State          ProviderCallState   `json:"state"`
+	ProviderTaskID *string             `json:"provider_task_id,omitempty"`
+	Usage          json.RawMessage     `json:"usage,omitempty"`
+	Receipt        *ProviderReceipt    `json:"receipt,omitempty"`
 }
 
 // ProviderCost is the amount established by durable, redacted provider calls.
@@ -91,26 +123,26 @@ func (i CompleteProviderCallInput) Validate() error {
 		(i.Usage != nil && (len(i.Usage) > 16*1024 || !json.Valid(i.Usage) || i.Usage[0] != '{')) {
 		return ErrInvalidProviderCall
 	}
-	if i.Managed && (i.Receipt != nil || len(i.Usage) > 0 || (i.State != "completed" && i.State != "succeeded")) {
+	if i.Managed && (i.Receipt != nil || len(i.Usage) > 0 || (i.State != ProviderCallStateCompleted && i.State != ProviderCallStateSucceeded)) {
 		return ErrInvalidProviderCall
 	}
 	switch i.Outcome {
-	case "ok", "error", "timeout", "unknown":
+	case ProviderCallOutcomeOK, ProviderCallOutcomeError, ProviderCallOutcomeTimeout, ProviderCallOutcomeUnknown:
 	default:
 		return ErrInvalidProviderCall
 	}
 	switch i.State {
-	case "accepted", "completed", "rejected", "not_submitted", "pending", "running",
-		"succeeded", "failed", "not_found", "confirmed_not_exist",
-		"cancelled", "not_cancelled", "unknown":
+	case ProviderCallStateAccepted, ProviderCallStateCompleted, ProviderCallStateRejected, ProviderCallStateNotSubmitted, ProviderCallStatePending, ProviderCallStateRunning,
+		ProviderCallStateSucceeded, ProviderCallStateFailed, ProviderCallStateNotFound, ProviderCallStateConfirmedNotExist,
+		ProviderCallStateCancelled, ProviderCallStateNotCancelled, ProviderCallStateUnknown:
 	default:
 		return ErrInvalidProviderCall
 	}
-	if (i.Outcome == "unknown" || i.Outcome == "timeout") != (i.State == "unknown") {
+	if (i.Outcome == ProviderCallOutcomeUnknown || i.Outcome == ProviderCallOutcomeTimeout) != (i.State == ProviderCallStateUnknown) {
 		return ErrInvalidProviderCall
 	}
-	if i.State == "completed" {
-		if i.Action != "submit" || i.Outcome != "ok" || i.ProviderTaskID != nil ||
+	if i.State == ProviderCallStateCompleted {
+		if i.Action != "submit" || i.Outcome != ProviderCallOutcomeOK || i.ProviderTaskID != nil ||
 			(!i.Managed && (i.Receipt == nil || i.Receipt.Validate() != nil ||
 				i.Receipt.Identity.OperationID != i.OperationID ||
 				i.Receipt.Identity.Action != i.Action || i.Receipt.Identity.Attempt != i.Attempt)) || (i.Managed && i.Receipt != nil) {
@@ -126,21 +158,21 @@ func (i CompleteProviderCallInput) Validate() error {
 	}
 	switch i.Action {
 	case "submit":
-		if i.State != "accepted" && i.State != "completed" && i.State != "rejected" &&
-			i.State != "not_submitted" && i.State != "unknown" {
+		if i.State != ProviderCallStateAccepted && i.State != ProviderCallStateCompleted && i.State != ProviderCallStateRejected &&
+			i.State != ProviderCallStateNotSubmitted && i.State != ProviderCallStateUnknown {
 			return ErrInvalidProviderCall
 		}
-		if i.State == "accepted" && (i.Outcome != "ok" || i.ProviderTaskID == nil) {
+		if i.State == ProviderCallStateAccepted && (i.Outcome != ProviderCallOutcomeOK || i.ProviderTaskID == nil) {
 			return ErrInvalidProviderCall
 		}
 	case "query":
-		if i.State != "pending" && i.State != "running" && i.State != "succeeded" &&
-			i.State != "failed" && i.State != "not_found" &&
-			i.State != "confirmed_not_exist" && i.State != "unknown" {
+		if i.State != ProviderCallStatePending && i.State != ProviderCallStateRunning && i.State != ProviderCallStateSucceeded &&
+			i.State != ProviderCallStateFailed && i.State != ProviderCallStateNotFound &&
+			i.State != ProviderCallStateConfirmedNotExist && i.State != ProviderCallStateUnknown {
 			return ErrInvalidProviderCall
 		}
 	case "cancel":
-		if i.State != "cancelled" && i.State != "not_cancelled" && i.State != "unknown" {
+		if i.State != ProviderCallStateCancelled && i.State != ProviderCallStateNotCancelled && i.State != ProviderCallStateUnknown {
 			return ErrInvalidProviderCall
 		}
 	}

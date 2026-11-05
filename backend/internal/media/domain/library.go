@@ -24,6 +24,37 @@ const (
 	LibraryPersonal LibraryKind = "personal"
 )
 
+// LibraryItemState is a closed catalog state with no provider supplied values.
+type LibraryItemState string
+
+// Library item states separate active content from recoverable trash and removal.
+const (
+	LibraryItemStateActive  LibraryItemState = "active"
+	LibraryItemStateTrashed LibraryItemState = "trashed"
+	LibraryItemStateRemoved LibraryItemState = "removed"
+)
+
+// Library item kinds distinguish text from the supported media categories.
+const (
+	LibraryItemKindText = "text"
+
+	LibraryItemCategoryCharacter   = "character"
+	LibraryItemCategoryEnvironment = "environment"
+	LibraryItemCategoryProp        = "prop"
+	LibraryItemCategoryMaterial    = "material"
+	LibraryItemCategoryOther       = "other"
+)
+
+const (
+	// LibraryRevisionInitial is the head revision before the first command, matching media.library.
+	// Folder and item revisions identify existing rows and start at one.
+	LibraryRevisionInitial int64 = 0
+	// LibraryFolderInitialRevision is the revision of a newly created folder.
+	LibraryFolderInitialRevision int64 = 1
+	// LibraryItemInitialRevision is the revision of a newly created catalog item.
+	LibraryItemInitialRevision int64 = 1
+)
+
 // PersonalOwnership has no project or execution identity.
 type PersonalOwnership struct {
 	OrgID   uuid.UUID `json:"org_id"`
@@ -86,7 +117,7 @@ func (f LibraryFolder) Validate() error {
 		return ErrInvalidLibrary
 	}
 	if f.ID == uuid.Nil || f.LibraryID == uuid.Nil || f.ParentID != nil && (*f.ParentID == uuid.Nil || *f.ParentID == f.ID) ||
-		f.Position < 0 || f.Position > math.MaxInt32 || f.Revision < 1 || f.Revision > math.MaxInt32 ||
+		f.Position < 0 || f.Position > math.MaxInt32 || f.Revision < LibraryFolderInitialRevision || f.Revision > math.MaxInt32 ||
 		!libraryText(f.Name, limit, true) || strings.TrimSpace(f.Name) != f.Name {
 		return ErrInvalidLibrary
 	}
@@ -149,33 +180,33 @@ func sameLibraryParent(a, b *uuid.UUID) bool {
 
 // LibraryItem contains editable catalog data, never media execution or review facts.
 type LibraryItem struct {
-	ID          uuid.UUID  `json:"id"`
-	LibraryID   uuid.UUID  `json:"library_id"`
-	AssetID     *uuid.UUID `json:"asset_id" extensions:"x-nullable"`
-	PlainText   *string    `json:"plain_text,omitempty" extensions:"x-nullable"`
-	FolderID    *uuid.UUID `json:"folder_id" extensions:"x-nullable"`
-	Title       string     `json:"title"`
-	Category    string     `json:"category"`
-	Tags        []string   `json:"tags"`
-	SourceLabel string     `json:"source_label"`
-	Note        string     `json:"note"`
-	Favorite    bool       `json:"favorite"`
-	State       string     `json:"catalog_state"`
-	TrashedAt   *time.Time `json:"trashed_at" extensions:"x-nullable"`
-	Position    int64      `json:"position"`
-	Revision    int64      `json:"revision"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID          uuid.UUID        `json:"id"`
+	LibraryID   uuid.UUID        `json:"library_id"`
+	AssetID     *uuid.UUID       `json:"asset_id" extensions:"x-nullable"`
+	PlainText   *string          `json:"plain_text,omitempty" extensions:"x-nullable"`
+	FolderID    *uuid.UUID       `json:"folder_id" extensions:"x-nullable"`
+	Title       string           `json:"title"`
+	Category    string           `json:"category"`
+	Tags        []string         `json:"tags"`
+	SourceLabel string           `json:"source_label"`
+	Note        string           `json:"note"`
+	Favorite    bool             `json:"favorite"`
+	State       LibraryItemState `json:"catalog_state"`
+	TrashedAt   *time.Time       `json:"trashed_at" extensions:"x-nullable"`
+	Position    int64            `json:"position"`
+	Revision    int64            `json:"revision"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
 }
 
 // Validate rejects unsupported editorial fields and enforces media/text exclusivity.
 func (i LibraryItem) Validate() error {
 	if i.ID == uuid.Nil || i.LibraryID == uuid.Nil || (i.AssetID == nil) == (i.PlainText == nil) ||
 		i.AssetID != nil && *i.AssetID == uuid.Nil || i.FolderID != nil && *i.FolderID == uuid.Nil ||
-		!libraryText(i.Title, 240, true) || !slices.Contains([]string{"character", "environment", "prop", "material", "other"}, i.Category) ||
+		!libraryText(i.Title, 240, true) || !slices.Contains([]string{LibraryItemCategoryCharacter, LibraryItemCategoryEnvironment, LibraryItemCategoryProp, LibraryItemCategoryMaterial, LibraryItemCategoryOther}, i.Category) ||
 		!libraryText(i.SourceLabel, 240, false) || !libraryText(i.Note, 8000, false) || len(i.Tags) > 32 ||
-		i.Position < 0 || i.Position > math.MaxInt32 || i.Revision < 1 || i.Revision > math.MaxInt32 ||
-		!slices.Contains([]string{"active", "trashed", "removed"}, i.State) || (i.State == "trashed") != (i.TrashedAt != nil) {
+		i.Position < 0 || i.Position > math.MaxInt32 || i.Revision < LibraryItemInitialRevision || i.Revision > math.MaxInt32 ||
+		!slices.Contains([]LibraryItemState{LibraryItemStateActive, LibraryItemStateTrashed, LibraryItemStateRemoved}, i.State) || (i.State == LibraryItemStateTrashed) != (i.TrashedAt != nil) {
 		return ErrInvalidLibrary
 	}
 	if i.PlainText != nil && (len(*i.PlainText) > 64<<10 || !utf8.ValidString(*i.PlainText) || strings.ContainsRune(*i.PlainText, 0)) {

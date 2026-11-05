@@ -2,6 +2,10 @@
 import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
+import {
+  ConversationHistory,
+  NewConversationLink,
+} from "@/components/conversations/conversation-history";
 import { RecentCanvases } from "./recent-canvases";
 import { ProductNavigationIcon } from "./product-navigation-icon";
 
@@ -17,7 +21,6 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@/components/ui/collapsible";
-import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
   Tooltip,
   TooltipContent,
@@ -208,21 +211,15 @@ export function ProductSider({
             open={conversationsOpen}
             onOpenChange={setConversationsOpen}
             actions={
-              <Link
-                href="/"
-                aria-label="新建创作"
+              <NewConversationLink
                 className="sidebar-section-create"
-                onClick={closeMobile}
+                onNavigate={closeMobile}
               >
                 <ProductNavigationIcon name="new-creation" />
-              </Link>
+              </NewConversationLink>
             }
           >
-            <Empty className="sidebar-history-empty">
-              <EmptyDescription>
-                {session ? "对话功能待开放" : "登录后查看最近创作"}
-              </EmptyDescription>
-            </Empty>
+            <ConversationHistory onNavigate={closeMobile} />
           </NavigationSection>
         )}
         {compact ? (

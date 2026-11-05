@@ -64,7 +64,8 @@ type QuoteMediaInput struct {
 	SubjectBindingID *uuid.UUID `json:"subject_binding_id,omitempty"`
 }
 
-// QuoteItemRequest contains user input; model and price versions freeze server-side.
+// QuoteItemRequest accepts current generation intent and optional canvas source.
+// Model and price versions are frozen by Go; unknown JSON fields are rejected.
 type QuoteItemRequest struct {
 	InputSource             *promptdomain.InputSource  `json:"input_source,omitempty"`
 	ExpectedSubmissionEpoch *int64                     `json:"expected_submission_epoch,omitempty"`
@@ -80,7 +81,7 @@ type QuoteItemRequest struct {
 	PromptTemplate          *promptapp.TemplateRequest `json:"prompt_template,omitempty"`
 }
 
-// UnmarshalJSON rejects mixed saved-pointer and inline intent, even if legacy values are empty.
+// UnmarshalJSON rejects unknown fields and mixed saved-pointer and inline intent.
 func (i *QuoteItemRequest) UnmarshalJSON(body []byte) error {
 	type request QuoteItemRequest
 	var value request
@@ -138,6 +139,7 @@ type QuotesRequest struct {
 
 // FreeQuote creates an estimate without starting a paid request.
 // @Summary 自由生成报价
+// @Description 当前生成输入使用 source 绑定画布来源，模型和价格版本由服务端冻结，未知字段返回 422。
 // @ID createFreeQuote
 // @Tags operations
 // @Accept json

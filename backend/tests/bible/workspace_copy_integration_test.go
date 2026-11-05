@@ -15,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
 	"github.com/google/uuid"
@@ -27,7 +30,6 @@ import (
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
@@ -69,7 +71,7 @@ func coordinatedBibleStore(db *gorm.DB, a workspaceapp.ProjectCopyAuthority, s m
 	return pg.NewProjectCopyStore(db, func(tx *gorm.DB) app.ProjectCopyAccess {
 		return bibleCopyAccess{bibleFixtureCopyAccess(tx, a)}
 	}, func(tx *gorm.DB) app.ProjectCopyMedia {
-		return bibleCopyMedia{mediaapp.NewProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx), nil), s}
+		return bibleCopyMedia{mediaapp.NewProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx)), s}
 	}, func(tx *gorm.DB) app.ProjectCopyScopes { return bibleCopyScopes{scriptCopyOwner(tx, a)} })
 }
 
@@ -107,7 +109,7 @@ func coordinatedScriptStore(db *gorm.DB, a workspaceapp.ProjectCopyAuthority) *s
 			return nil
 		}
 		return scriptCopyCharacters{owner: bibleCopyStore(tx, a), snapshot: ownCoordinatedBibleSnapshot(*a.Bible)}
-	})
+	}).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }
 func ownCoordinatedScriptSnapshot(s workspacedomain.ProjectCopyScriptSnapshot) scriptapp.ProjectCopySnapshot {
 	return scriptapp.ProjectCopySnapshot{ID: s.ID, ManifestSHA256: s.ManifestSHA256, ContentSHA256: s.ContentSHA256, Counts: scriptapp.ScriptCopyCounts(s.Counts)}
@@ -131,7 +133,7 @@ func (o coordinatedScriptOwner) FinishCleanup(ctx context.Context, a identityapp
 }
 
 type coordinatedCanvasMedia struct {
-	owner   *mediapg.ProjectCopyStore
+	owner   *pgmedia.ProjectCopyStore
 	binding mediaapp.ProjectCopyBinding
 }
 
@@ -143,14 +145,14 @@ func (r coordinatedCanvasMedia) Reference(ctx context.Context, a identityapp.Pri
 }
 func coordinatedCopyOwners(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 	return workspaceapp.ProjectCopyOwners{Media: bibleFixtureMediaCopyStore(tx), Budget: bibleFixtureBudgetStore(tx), Canvas: bibleFixtureCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(bibleFixtureWorkerMediaStore(tx), nil)
+		return mediaapp.NewAssetQuery(bibleFixtureWorkerMediaStore(tx))
 	}, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
 		return coordinatedCanvasMedia{bibleFixtureMediaCopyStore(tx), mediaapp.ProjectCopyBinding(b)}
 	})}
 }
 func coordinatedWorkspaceCopy(db *gorm.DB) *workspacepg.ProjectCopyStore {
 	return bibleFixtureWorkspaceCopyWithBible(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-		return scriptpg.NewSourceStore(tx, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) })
+		return scriptpg.NewSourceStore(tx, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 	}, coordinatedCopyOwners, func(tx *gorm.DB, a workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
 		return coordinatedScriptOwner{coordinatedScriptStore(tx, a)}
 	}, func(tx *gorm.DB, a workspaceapp.ProjectCopyAuthority, s mediaapp.ProjectCopySnapshot) workspaceapp.ProjectCopyBibleOwner {
@@ -195,15 +197,15 @@ func (t coordinatedBibleTransfer) Cleanup(ctx context.Context, a identityapp.Pri
 func coordinatedAuthority(j workspacedomain.ProjectCopyJob, w uuid.UUID, phase string) workspaceapp.ProjectCopyAuthority {
 	return workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding{JobID: j.ID, OrgID: j.OrgID, SourceProjectID: j.SourceProjectID, TargetProjectID: j.TargetProjectID}, ActorID: j.ExecutionActor(), WorkerID: w, SourceRevision: j.SourceRevision, Phase: phase, Bible: j.Manifest.Bible}
 }
-func coordinatedWorker(db *gorm.DB, store *workspacepg.ProjectCopyStore, objects *objectstorage.Client, beforeBible func(workspacedomain.ProjectCopyJob)) *workspaceapp.ProjectCopyWorker {
+func coordinatedWorker(t *testing.T, db *gorm.DB, store *workspacepg.ProjectCopyStore, _ *objectstorage.Client, beforeBible func(workspacedomain.ProjectCopyJob)) *workspaceapp.ProjectCopyWorker {
 	return workspaceapp.NewProjectCopyWorkerWithBible(store, func(j workspacedomain.ProjectCopyJob, w uuid.UUID, cleanup bool) *mediaapp.ProjectCopyTransfer {
-		return mediaapp.NewProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, j.ID, w, cleanup), mediaobjects.NewProjectCopyObjects(objects), "")
+		return mediaapp.NewRoutedProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, j.ID, w, cleanup), mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), "")
 	}, func(j workspacedomain.ProjectCopyJob, w uuid.UUID, cleanup bool) workspaceapp.ProjectCopyScriptTransfer {
 		phase := "transfer"
 		if cleanup {
 			phase = "cleanup"
 		}
-		return coordinatedScriptTransfer{scriptapp.NewProjectCopy(coordinatedScriptStore(db, coordinatedAuthority(j, w, phase)), scriptobjects.NewStorage(objects))}
+		return coordinatedScriptTransfer{scriptapp.NewProjectCopy(coordinatedScriptStore(db, coordinatedAuthority(j, w, phase)), scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)))}
 	}, func(j workspacedomain.ProjectCopyJob, w uuid.UUID, cleanup bool) workspaceapp.ProjectCopyBibleTransfer {
 		if beforeBible != nil {
 			beforeBible(j)
@@ -217,7 +219,7 @@ func coordinatedWorker(db *gorm.DB, store *workspacepg.ProjectCopyStore, objects
 		}
 		a := coordinatedAuthority(j, w, phase)
 		s := mediaapp.ProjectCopySnapshot{ID: j.Manifest.MediaSnapshotID, ManifestSHA256: j.Manifest.MediaSHA256, Assets: j.Manifest.Assets, Renditions: j.Manifest.Renditions}
-		return coordinatedBibleTransfer{owner: app.NewProjectCopy(coordinatedBibleStore(db, a, s), bibleTransferredReferences{db, objects, a, s}), database: db, authority: a, mediaSnapshot: s}
+		return coordinatedBibleTransfer{owner: app.NewProjectCopy(coordinatedBibleStore(db, a, s), bibleTransferredReferences{db, businessStorageRegistry(t), a, s}), database: db, authority: a, mediaSnapshot: s}
 	}, time.Now)
 }
 
@@ -249,9 +251,9 @@ func coordinatedContentFixture(t *testing.T, db, owner *gorm.DB, objects *object
 	audioID := bibleUploadedMedia(t, db, objects, actor, p, "full.wav", audio)
 	sources := scriptpg.NewSourceStoreWithCharacters(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }, func(tx *gorm.DB) scriptapp.CharacterReferences {
 		return characterBridge{pg.NewReferences(tx, bibleFixtureProjectAccess(tx))}
-	})
+	}).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 	html := "<p>王总：你好😀</p>"
-	saved, e := scriptapp.NewSourceService(sources, scriptobjects.NewStorage(objects), time.Now).Write(t.Context(), actor, scriptapp.SourceCommand{ProjectID: p, Key: uuid.New(), RequestID: uuid.New(), Action: "create", RightsConfirmed: true, Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "完整正文", Status: "draft", OriginalHTML: &html, Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "王总：你好😀"}}}}}}}})
+	saved, e := scriptapp.NewSourceService(sources, scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), time.Now).Write(t.Context(), actor, scriptapp.SourceCommand{ProjectID: p, Key: uuid.New(), RequestID: uuid.New(), Action: "create", RightsConfirmed: true, Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "完整正文", Status: "draft", OriginalHTML: &html, Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "王总：你好😀"}}}}}}}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -264,7 +266,7 @@ func coordinatedContentFixture(t *testing.T, db, owner *gorm.DB, objects *object
 		t.Fatal(e)
 	}
 	bible := app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Media: func(tx *gorm.DB) app.MediaReferences {
-		return actualBibleMedia{mediaapp.NewReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
+		return actualBibleMedia{mediaapp.NewRoutedReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}
 	}, Scopes: func(tx *gorm.DB) app.ScriptScopes {
 		return currentBibleScopes{scriptpg.NewBibleScopes(tx, bibleFixtureProjectAccess(tx))}
 	}}), time.Now)
@@ -312,7 +314,7 @@ func coordinatedContentFixture(t *testing.T, db, owner *gorm.DB, objects *object
 		}
 	}
 	canvas := canvasfixture.NewService(bibleFixtureCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(bibleFixtureMediaStore(tx), nil)
+		return mediaapp.NewAssetQuery(bibleFixtureMediaStore(tx))
 	}))
 	doc, e := canvas.Create(t.Context(), actor, p, uuid.NewString(), canvasapp.CreateInput{Name: "完整画布"})
 	if e != nil {
@@ -347,7 +349,7 @@ func TestBibleWorkspacePGFullActualOwnersAndFiveStagePublication(t *testing.T) {
 		t.Fatal("complete admission missing content", j.Manifest)
 	}
 	var stages []string
-	worker := coordinatedWorker(db, store, objects, func(j workspacedomain.ProjectCopyJob) { stages = append(stages, j.Stage) })
+	worker := coordinatedWorker(t, db, store, objects, func(j workspacedomain.ProjectCopyJob) { stages = append(stages, j.Stage) })
 	final, e := worker.Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: c.actor.OrgID, JobID: j.ID, WorkerID: uuid.New()})
 	if e != nil || final.Status != "succeeded" || final.BibleReceipt == nil || final.ScriptReceipt == nil {
 		t.Fatal("whole worker", final, e)
@@ -393,7 +395,7 @@ func TestBibleWorkspacePGRevokedCreatorMustLeaveRecoverableStoppedCopy(t *testin
 	c := coordinatedContentFixture(t, db, owner, objects)
 	store, j := coordinatedAdmit(t, db, owner, c)
 	workerID := uuid.New()
-	worker := coordinatedWorker(db, store, objects, func(current workspacedomain.ProjectCopyJob) {
+	worker := coordinatedWorker(t, db, store, objects, func(current workspacedomain.ProjectCopyJob) {
 		if current.Stage == "bible" {
 			if e := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, c.actor.ID).Error; e != nil {
 				t.Fatal(e)
@@ -428,7 +430,7 @@ func TestBibleWorkspacePGFinalizingMissingBytesReconcilesSameObjects(t *testing.
 	store, j := coordinatedAdmit(t, db, owner, c)
 	var key, mime string
 	var exact []byte
-	worker := coordinatedWorker(db, store, objects, func(current workspacedomain.ProjectCopyJob) {
+	worker := coordinatedWorker(t, db, store, objects, func(current workspacedomain.ProjectCopyJob) {
 		if current.Stage != "finalizing" {
 			return
 		}
@@ -463,7 +465,7 @@ func TestBibleWorkspacePGFinalizingMissingBytesReconcilesSameObjects(t *testing.
 	if e != nil || !requested.ReconciliationRequested {
 		t.Fatal("explicit reconciliation", requested, e)
 	}
-	final, e := coordinatedWorker(db, store, objects, nil).Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: c.actor.OrgID, JobID: j.ID, WorkerID: uuid.New()})
+	final, e := coordinatedWorker(t, db, store, objects, nil).Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: c.actor.OrgID, JobID: j.ID, WorkerID: uuid.New()})
 	beforeJSON, beforeErr := json.Marshal(j.Manifest)
 	afterJSON, afterErr := json.Marshal(final.Manifest)
 	if e != nil || final.Status != "succeeded" || final.Attempt != failed.Attempt || beforeErr != nil || afterErr != nil || !bytes.Equal(beforeJSON, afterJSON) {
@@ -492,12 +494,13 @@ func TestBibleWorkspacePGQueuedAndActiveCancellationRetainSourceHistory(t *testi
 			if !duringExecution {
 				cancel(j)
 			}
-			worker := coordinatedWorker(db, store, objects, func(current workspacedomain.ProjectCopyJob) {
+			worker := coordinatedWorker(t, db, store, objects, func(current workspacedomain.ProjectCopyJob) {
 				if duringExecution && current.Stage == "finalizing" {
 					cancel(current)
 				}
 			})
 			final, e := worker.Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: c.actor.OrgID, JobID: j.ID, WorkerID: uuid.New()})
+			final, e = coordinatedAfterStorageDrain(t, owner, store, c.actor, worker, final, e)
 			if e != nil || final.Status != "cancelled" || final.WorkerID != uuid.Nil || final.ExecutionUnconfirmed || final.NeedsReconciliation {
 				t.Fatal("known cleanup failed", final, e)
 			}
@@ -517,7 +520,7 @@ func TestBibleWorkspacePGQueuedAndActiveCancellationRetainSourceHistory(t *testi
 			if e := owner.Raw(`SELECT count(*) FROM bible.character_version WHERE entry_id=?`, c.character).Scan(&preserved).Error; e != nil || preserved != 4 {
 				t.Fatal("source Bible changed", preserved, e)
 			}
-			if _, e := mediaapp.NewAssetQuery(bibleFixtureMediaStore(db), objects).Reference(t.Context(), c.actor, c.project, c.image); e != nil {
+			if _, e := mediaapp.NewAssetQuery(bibleFixtureMediaStore(db)).Reference(t.Context(), c.actor, c.project, c.image); e != nil {
 				t.Fatal("source original lost", e)
 			}
 		})
@@ -536,7 +539,7 @@ func TestBibleWorkspacePGStaleWorkerCannotRegisterBible(t *testing.T) {
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: j.ID, OrgID: j.OrgID, SourceProjectID: j.SourceProjectID, TargetProjectID: j.TargetProjectID}
 	snapshot := mediaapp.ProjectCopySnapshot{ID: j.Manifest.MediaSnapshotID, ManifestSHA256: j.Manifest.MediaSHA256, Assets: j.Manifest.Assets, Renditions: j.Manifest.Renditions}
-	transfer := mediaapp.NewProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, j.ID, workerID, false), mediaobjects.NewProjectCopyObjects(objects), "")
+	transfer := mediaapp.NewRoutedProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, j.ID, workerID, false), mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), "")
 	if e := transfer.Transfer(t.Context(), c.actor, binding, snapshot); e != nil {
 		t.Fatal(e)
 	}
@@ -558,11 +561,18 @@ func TestBibleWorkspacePGStaleWorkerCannotRegisterBible(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	cleanup := mediaapp.NewProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, j.ID, workerID, true), mediaobjects.NewProjectCopyObjects(objects), "")
+	cleanup := mediaapp.NewRoutedProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, j.ID, workerID, true), mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), "")
 	if e := cleanup.Cleanup(t.Context(), c.actor, binding, snapshot); e != nil {
-		t.Fatal(e)
+		var draining *mediaapp.ProjectCopyTransferError
+		if !errors.As(e, &draining) || draining.Code != "object_remove_unknown" {
+			t.Fatal(e)
+		}
+		businessExpireStorageWindow(t, owner, j.TargetProjectID)
+		if e := cleanup.Cleanup(t.Context(), c.actor, binding, snapshot); e != nil {
+			t.Fatal("same cleanup after remote write window", e)
+		}
 	}
-	script := scriptapp.NewProjectCopy(coordinatedScriptStore(db, coordinatedAuthority(final, workerID, "cleanup")), scriptobjects.NewStorage(objects))
+	script := scriptapp.NewProjectCopy(coordinatedScriptStore(db, coordinatedAuthority(final, workerID, "cleanup")), scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)))
 	if e := script.Cleanup(t.Context(), c.actor, scriptapp.ProjectCopyBinding(binding), ownCoordinatedScriptSnapshot(*j.Manifest.Script)); e != nil {
 		t.Fatal(e)
 	}
@@ -594,7 +604,9 @@ func TestBibleWorkspacePGCurrentAdminCancelMustRecoverDisabledQueuedCreator(t *t
 	if e != nil || !accepted.CancellationRequested {
 		t.Fatal("current admin cancel must be durable", accepted, e)
 	}
-	final, e := coordinatedWorker(db, store, objects, nil).Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: c.actor.OrgID, JobID: j.ID, WorkerID: uuid.New()})
+	cleanupWorker := coordinatedWorker(t, db, store, objects, nil)
+	final, e := cleanupWorker.Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: c.actor.OrgID, JobID: j.ID, WorkerID: uuid.New()})
+	final, e = coordinatedAfterStorageDrain(t, owner, store, admin, cleanupWorker, final, e)
 	if e != nil || final.Status != "cancelled" || final.WorkerID != uuid.Nil || final.NeedsReconciliation || final.ExecutionUnconfirmed {
 		t.Fatal("permanent authorized admin cancel remains unconsumable after creator disabled", final.Status, e)
 	}
@@ -620,7 +632,7 @@ func TestBibleWorkspacePGExecutionAuthorityCannotBeBorrowed(t *testing.T) {
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: j.ID, OrgID: j.OrgID, SourceProjectID: j.SourceProjectID, TargetProjectID: j.TargetProjectID}
 	snapshot := mediaapp.ProjectCopySnapshot{ID: j.Manifest.MediaSnapshotID, ManifestSHA256: j.Manifest.MediaSHA256, Assets: j.Manifest.Assets, Renditions: j.Manifest.Renditions}
-	if e := mediaapp.NewProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, j.ID, workerID, false), mediaobjects.NewProjectCopyObjects(objects), "").Transfer(t.Context(), c.actor, binding, snapshot); e != nil {
+	if e := mediaapp.NewRoutedProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, j.ID, workerID, false), mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), "").Transfer(t.Context(), c.actor, binding, snapshot); e != nil {
 		t.Fatal(e)
 	}
 	current, e := store.CompleteMedia(t.Context(), c.actor, j.ID, workerID)
@@ -659,7 +671,9 @@ func TestBibleWorkspacePGExecutionAuthorityCannotBeBorrowed(t *testing.T) {
 	if e != nil || !requested.ReconciliationRequested {
 		t.Fatal("cancelled stopped attempt cannot reconcile", requested, e)
 	}
-	final, e := coordinatedWorker(db, store, objects, nil).Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: j.OrgID, JobID: j.ID, WorkerID: uuid.New()})
+	cleanupWorker := coordinatedWorker(t, db, store, objects, nil)
+	final, e := cleanupWorker.Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: j.OrgID, JobID: j.ID, WorkerID: uuid.New()})
+	final, e = coordinatedAfterStorageDrain(t, owner, store, admin, cleanupWorker, final, e)
 	if e != nil || final.Status != "cancelled" {
 		t.Fatal("current controller cannot complete own cleanup", final, e)
 	}
@@ -714,7 +728,7 @@ func TestBibleWorkspacePGLegacyNilBibleManifestAndReceiptRemainAbsent(t *testing
 	objects := bibleObjects(t)
 	actor, pid := bibleActorProject(t, owner)
 	legacy := bibleFixtureWorkspaceCopyWithScript(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-		return scriptpg.NewSourceStore(tx, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) })
+		return scriptpg.NewSourceStore(tx, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 	}, coordinatedCopyOwners, func(tx *gorm.DB, a workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
 		return coordinatedScriptOwner{coordinatedScriptStore(tx, a)}
 	})
@@ -734,7 +748,7 @@ func TestBibleWorkspacePGLegacyNilBibleManifestAndReceiptRemainAbsent(t *testing
 		t.Fatal("new owner changed permanent old receipt", e, marshalErr)
 	}
 	called := false
-	final, e := coordinatedWorker(db, current, objects, func(workspacedomain.ProjectCopyJob) { called = true }).Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: j.ID, WorkerID: uuid.New()})
+	final, e := coordinatedWorker(t, db, current, objects, func(workspacedomain.ProjectCopyJob) { called = true }).Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: j.ID, WorkerID: uuid.New()})
 	if e != nil || final.Status != "succeeded" || called || final.Manifest.Bible != nil || final.BibleReceipt != nil {
 		t.Fatal("legacy job invented Bible content", final, e, called)
 	}
@@ -742,4 +756,21 @@ func TestBibleWorkspacePGLegacyNilBibleManifestAndReceiptRemainAbsent(t *testing
 	if e != nil || bytes.Contains(wire, []byte(`"bible"`)) {
 		t.Fatal("nil Bible JSON changed", e)
 	}
+}
+
+// The three finite private owners close their clocks sequentially: media,
+// script, and Bible. Each retry must follow an observed durable cleanup debt.
+func coordinatedAfterStorageDrain(t *testing.T, owner *gorm.DB, store *workspacepg.ProjectCopyStore, actor identityapp.Principal, worker *workspaceapp.ProjectCopyWorker, job workspacedomain.ProjectCopyJob, err error) (workspacedomain.ProjectCopyJob, error) {
+	t.Helper()
+	for range 3 {
+		if err != nil || !job.CancellationRequested || !job.NeedsReconciliation || job.Status != "failed" || job.FailureCode != "object_remove_unknown" && job.FailureCode != "cleanup_requires_reconciliation" {
+			return job, err
+		}
+		businessExpireStorageWindow(t, owner, job.TargetProjectID)
+		if _, err := store.Change(t.Context(), actor, job.ID, "reconcile", job.Revision, uuid.New(), uuid.NewString()); err != nil {
+			return job, err
+		}
+		job, err = worker.Execute(t.Context(), workspaceapp.ProjectCopyWorkID{OrgID: job.OrgID, JobID: job.ID, WorkerID: uuid.New()})
+	}
+	return job, err
 }

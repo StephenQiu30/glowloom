@@ -40,7 +40,7 @@ type ImportHandler struct {
 	starter   ImportStarter
 }
 
-// NewImportHandler injects the actual inbox, owning delivery proof and Temporal starter.
+// NewImportHandler injects the actual inbox, owning delivery proof and command consumer.
 func NewImportHandler(p ProcessedStore, s ImportDeliveryStore, start ImportStarter) *ImportHandler {
 	return &ImportHandler{processed: p, store: s, starter: start}
 }

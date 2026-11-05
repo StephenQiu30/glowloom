@@ -11,13 +11,20 @@ import (
 	"image/color"
 	"image/png"
 	"io"
-	"net"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/storageoperator"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 
 	"gorm.io/gorm"
 
@@ -33,46 +40,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
-	"go.temporal.io/api/enums/v1"
-	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/api/workflowservice/v1"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/converter"
-	"go.temporal.io/sdk/testsuite"
-	"google.golang.org/grpc"
 
-	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
-	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	operationevent "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/event"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
-
-type originalDeliveryStarter struct {
-	options client.StartWorkflowOptions
-	input   application.WorkflowControlDelivery
-	starts  int
-}
-
-func (s *originalDeliveryStarter) SignalWorkflow(context.Context, string, string, string, interface{}) error {
-	return fmt.Errorf("terminal recovery must not signal original generation workflow")
-}
-func (s *originalDeliveryStarter) ExecuteWorkflow(_ context.Context, options client.StartWorkflowOptions, name interface{}, args ...interface{}) (client.WorkflowRun, error) {
-	s.starts++
-	s.options = options
-	s.input = args[0].(application.WorkflowControlDelivery)
-	if name != "OriginalDeliveryRecoveryWorkflow" {
-		return nil, fmt.Errorf("unexpected workflow")
-	}
-	if s.starts > 1 {
-		return nil, serviceerror.NewWorkflowExecutionAlreadyStarted("fixture replay", options.ID, "fixture-run")
-	}
-	return nil, nil
-}
 
 func TestTerminalPaidManifestRestoresOriginalDeliveryWithoutNewGeneration(t *testing.T) {
 	for _, tc := range []struct {
@@ -91,7 +66,7 @@ func TestTerminalPaidManifestRestoresOriginalDeliveryWithoutNewGeneration(t *tes
 			objects := &stageTestObjects{entries: map[string]stageTestObject{}}
 			results := application.NewManagedResults(objects, store)
 			network := &fixtureGeneration{}
-			worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil, nil)
+			worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil)
 			_, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 			require.NoError(t, err)
 			require.Equal(t, 1, network.calls)
@@ -116,31 +91,18 @@ func TestTerminalPaidManifestRestoresOriginalDeliveryWithoutNewGeneration(t *tes
 			body := fmt.Sprintf(`{"project_id":%q}`, i.ProjectID)
 			res := publicOperationRequest(t, router, "POST", path, body, key)
 			require.Equal(t, 202, res.Code, res.Body.String())
-			var event struct {
-				Topic, PartitionKey string
-				Payload             []byte
-			}
-			require.NoError(t, db.Raw(`SELECT topic,partition_key,payload FROM infra.outbox WHERE topic=? AND payload->'data'->>'request_id'=?`, operationevent.WorkflowControlTopic, key).Scan(&event).Error)
-			starter := &originalDeliveryStarter{}
-			control := operationflow.NewControl(starter, store)
-			handler := operationevent.NewWorkflowControlHandler(inboxpg.NewStore(db), store, control)
-			record := inbox.Record{Topic: event.Topic, Key: []byte(event.PartitionKey), Value: event.Payload}
-			require.NoError(t, handler.Handle(t.Context(), record))
-			require.NoError(t, handler.Handle(t.Context(), record))
-			require.Equal(t, 1, starter.starts)
-			require.Equal(t, "operation-delivery/"+i.OperationID.String(), starter.options.ID)
-			require.Error(t, control.SignalControl(t.Context(), starter.input)) // already running/succeeded is idempotent
+			delivery := controlTaskDelivery(t, db, key)
+			runControlTask(t, db, store, delivery)
+			runControlTask(t, db, store, delivery)
+			var workCount int
+			require.NoError(t, db.Raw("SELECT count(*) FROM infra.task_work WHERE kind='operation.original' AND business_id=?", delivery.EventID.String()).Scan(&workCount).Error)
+			require.Equal(t, 1, workCount)
 			missingStage := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
-			missingIngest := managed.NewScopedIngestActivities(db, nil, missingStage, app.NewMediaWorkerScopeAccess, store)
-			require.Error(t, missingIngest.IngestOriginal(t.Context(), starter.input), "terminal delivery must verify private staged manifest")
-			ingest := managed.NewScopedIngestActivities(db, nil, results, app.NewMediaWorkerScopeAccess, store)
-			env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
-			env.SetStartWorkflowOptions(starter.options)
-			env.RegisterActivityWithOptions(ingest.IngestOriginal, activity.RegisterOptions{Name: "media.IngestOriginal"})
-			env.SetTestTimeout(10 * time.Second)
-			env.ExecuteWorkflow(operationflow.OriginalDeliveryRecoveryWorkflow, starter.input)
-			require.NoError(t, env.GetWorkflowError())
-			require.NoError(t, ingest.IngestOriginal(t.Context(), starter.input))
+			missingIngest := managed.NewRoutedIngestActivities(db, nil, missingStage, app.NewMediaWorkerScopeAccess, store)
+			require.Error(t, missingIngest.IngestOriginal(t.Context(), delivery), "terminal delivery must verify private staged manifest")
+			ingest := managed.NewRoutedIngestActivities(db, nil, results, app.NewMediaWorkerScopeAccess, store)
+			runOriginalTask(t, store, ingest, delivery)
+			require.NoError(t, ingest.IngestOriginal(t.Context(), delivery))
 			detail := publicOperationRequest(t, router, "GET", fmt.Sprintf("/api/operations/%s?project_id=%s", i.OperationID, i.ProjectID), "", "")
 			require.Equal(t, 200, detail.Code, detail.Body.String())
 			require.Contains(t, detail.Body.String(), `"status":"failed"`)
@@ -161,7 +123,7 @@ func TestTerminalPaidManifestRestoresOriginalDeliveryWithoutNewGeneration(t *tes
 
 // A loopback S3 wire keeps actual media ingest/probe/renderer/PG boundaries in
 // this fixture. It never contacts an object-storage service.
-func originalDeliveryObjects(t *testing.T, second uuid.UUID) (*objectstorage.Client, func(func() error)) {
+func originalDeliveryObjects(t *testing.T, db *gorm.DB, identity application.ProviderDispatchIdentity, second uuid.UUID) (*objectstorage.Registry, func(func() error)) {
 	t.Helper()
 	var mu sync.Mutex
 	entries := map[string]stageTestObject{}
@@ -239,9 +201,39 @@ func originalDeliveryObjects(t *testing.T, second uuid.UUID) (*objectstorage.Cli
 		}
 	}))
 	t.Cleanup(server.Close)
-	objects, err := objectstorage.Open(server.URL, "original-delivery-fixture", "fixture", "fixture", "us-east-1")
+	cfg := businessStorageConfig(t)
+	profileConfig := storagefixture.Configuration(t, server.URL, "original-delivery-fixture")
+	profileID := "delivery-" + uuid.NewString()
+	profile := profileConfig.Profiles[profileConfig.DefaultWriteProfile]
+	profile.Credentials = cfg.Profiles[cfg.DefaultWriteProfile].Credentials
+	cfg.Profiles[profileID] = profile
+	cfg.DefaultWriteProfile, cfg.Revision = profileID, nextOriginalDeliveryRevision(t, db)
+	objects, err := objectstorage.OpenProfiles(cfg)
+	require.NoError(t, err)
+	t.Cleanup(objects.Close)
+	environment, err := storageoperator.Configuration(cfg)
+	require.NoError(t, err)
+	_, err = pgmedia.NewStorageRoutes(db).ApplyEnvironment(t.Context(), environment)
+	require.NoError(t, err)
+	_, err = pgmedia.NewStorageRoutes(db).PinStorageWork(t.Context(), mediaapp.StorageWorkOwner{Kind: mediaapp.StorageWorkKindOperation, OwnerID: identity.ProjectID, WorkID: identity.OperationID})
 	require.NoError(t, err)
 	return objects, func(hook func() error) { mu.Lock(); interrupted = false; afterWrite = hook; mu.Unlock() }
+}
+
+// nextOriginalDeliveryRevision uses the deployment's positive decimal ordering.
+// Historical invalid revisions fail the fixture rather than being translated.
+func nextOriginalDeliveryRevision(t *testing.T, db *gorm.DB) string {
+	t.Helper()
+	var revisions []string
+	require.NoError(t, db.Raw(`SELECT revision FROM media.storage_config_revision UNION SELECT revision FROM media.storage_route`).Scan(&revisions).Error)
+	var highest uint64
+	for _, value := range revisions {
+		revision, err := config.ParseStorageRevision(value)
+		require.NoError(t, err)
+		highest = max(highest, revision)
+	}
+	require.NotEqual(t, uint64(math.MaxUint64), highest, "storage fixture revision exhausted")
+	return strconv.FormatUint(highest+1, 10)
 }
 
 type originalImageGeneration struct {
@@ -255,7 +247,9 @@ func (f *originalImageGeneration) Submit(context.Context, application.Generation
 }
 
 func TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived(t *testing.T) {
-	db := operationStoreDB(t)
+	db := operationStoreDB(t).Begin()
+	require.NoError(t, db.Error)
+	t.Cleanup(func() { _ = db.Rollback().Error })
 	f := seedManagedFixture(t, db)
 	i, store := f.identity, f.store
 	require.NoError(t, db.Exec(`UPDATE billing.budget SET limit_micros=100000 WHERE project_id=?`, i.ProjectID).Error)
@@ -274,7 +268,7 @@ func TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived(t 
 	}
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
 	network := &originalImageGeneration{images: images}
-	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil, nil)
+	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil)
 	_, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
 	require.Equal(t, 1, network.calls)
@@ -290,8 +284,8 @@ func TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived(t 
 	require.NoError(t, db.Raw(`SELECT u.id,u.org_id,u.role FROM identity."user" u JOIN operation.operation o ON o.confirmed_by=u.id WHERE o.id=?`, i.OperationID).Scan(&actor).Error)
 	actor = identityfixture.Session(t, db, actor)
 	second := uuid.NewSHA1(uuid.NameSpaceOID, []byte("media-asset/"+i.OperationID.String()+"/2"))
-	objects, resume := originalDeliveryObjects(t, second)
-	ingest := managed.NewScopedIngestActivities(db, objects, results, app.NewMediaWorkerScopeAccess, store)
+	objects, resume := originalDeliveryObjects(t, db, i, second)
+	ingest := managed.NewRoutedIngestActivities(db, objects, results, app.NewMediaWorkerScopeAccess, store)
 	before, err := readDispatchBudget(t.Context(), db, i.OperationID)
 	require.NoError(t, err)
 	receipt, err := store.RequestWorkflowControl(t.Context(), actor, application.WorkflowControlInput{ProjectID: i.ProjectID, TargetID: i.OperationID, TargetType: "operation", Action: "recover", RequestID: uuid.NewString()})
@@ -331,15 +325,9 @@ func TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived(t 
 	require.NoError(t, db.Exec(`INSERT INTO operation.provider_call(id,project_id,operation_id,attempt,action,provider_key,request_summary,response_summary,outcome,region,create_time)
  SELECT ?,project_id,operation_id,1,'query',provider_key,'{}','{"settlement_state":"settled"}','ok',region,create_time+interval '1 second' FROM operation.provider_call WHERE operation_id=? AND action='submit'`, uuid.New(), i.OperationID).Error)
 
-	starter := &originalDeliveryStarter{}
-	control := operationflow.NewControl(starter, store)
-	require.NoError(t, control.SignalControl(t.Context(), delivery))
-	env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
-	env.SetStartWorkflowOptions(starter.options)
-	env.RegisterActivityWithOptions(ingest.IngestOriginal, activity.RegisterOptions{Name: "media.IngestOriginal"})
-	env.ExecuteWorkflow(operationflow.OriginalDeliveryRecoveryWorkflow, starter.input)
-	require.NoError(t, env.GetWorkflowError())
-	require.NoError(t, ingest.IngestOriginal(t.Context(), starter.input))
+	runControlTask(t, db, store, delivery)
+	runOriginalTask(t, store, ingest, delivery)
+	require.NoError(t, ingest.IngestOriginal(t.Context(), delivery))
 	detail, err = store.ReadPublicTask(t.Context(), actor, i.ProjectID, i.OperationID)
 	require.NoError(t, err)
 	require.Equal(t, "ready", detail.BillingOutcome.DeliveryState)
@@ -358,22 +346,37 @@ func TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived(t 
 		require.NoError(t, db.Exec(`UPDATE media.media_asset SET is_delete=false,moderation_status='passed',status='ready',source_operation_id=?,mime_type='image/png',byte_size=(SELECT (result->'artifacts'->1->>'size')::bigint FROM operation.provider_result WHERE operation_id=?),sha256=(SELECT result->'artifacts'->1->>'sha256' FROM operation.provider_result WHERE operation_id=?) WHERE id=?`, i.OperationID, i.OperationID, i.OperationID, second).Error)
 	}
 
-	loc := uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity) VALUES('review-original','tos','https://example.invalid','https://example.invalid','cn-test','review-fixture','',repeat('a',64)) ON CONFLICT (id) DO NOTHING`).Error)
-	require.NoError(t, db.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type) SELECT ?,'review-original','review-fixture',object_key,'unknown',byte_size,sha256,mime_type FROM media.media_asset WHERE id=?`, loc, second).Error)
-	require.NoError(t, db.Exec(`UPDATE media.media_asset SET object_location_id=? WHERE id=?`, loc, second).Error)
+	var savedLocation struct {
+		ID    uuid.UUID
+		State string
+	}
+	require.NoError(t, db.Raw(`SELECT l.id,l.state FROM media.object_location l JOIN media.media_asset a ON a.object_location_id=l.id WHERE a.id=?`, second).Scan(&savedLocation).Error)
+	require.NotEqual(t, uuid.Nil, savedLocation.ID)
+	// Immutable rebinding is rejected by the current database contract, while a
+	// saved location's unknown execution state still closes original delivery.
+	rebindErr := db.Transaction(func(tx *gorm.DB) error {
+		return tx.Exec(`UPDATE media.media_asset SET object_location_id=? WHERE id=?`, uuid.New(), second).Error
+	})
+	var rejectedBinding *pgconn.PgError
+	require.ErrorAs(t, rebindErr, &rejectedBinding)
+	require.Equal(t, "23514", rejectedBinding.Code)
+	loc := savedLocation.ID
+	require.NoError(t, db.Exec(`UPDATE media.object_location SET state='unknown' WHERE id=?`, loc).Error)
+
 	detail, err = store.ReadPublicTask(t.Context(), actor, i.ProjectID, i.OperationID)
 	require.NoError(t, err)
 	_, err = store.ConfirmSingleQuote(t.Context(), actor, application.ConfirmSingleQuoteInput{ProjectID: i.ProjectID, OperationID: quoted.ID, RequestID: uuid.NewString()})
 	t.Logf("original physical location=unknown; GET delivery=%s action=%s; same target confirm error=%v", detail.BillingOutcome.DeliveryState, detail.BillingOutcome.Regenerate, err)
 	require.ErrorIs(t, err, application.ErrPendingConsumption)
 	require.NotEqual(t, "ready", detail.BillingOutcome.DeliveryState)
-	require.NoError(t, db.Exec(`UPDATE media.object_location SET state='present' WHERE id=?`, loc).Error)
+	require.NoError(t, db.Exec(`UPDATE media.object_location SET state=? WHERE id=?`, savedLocation.State, loc).Error)
 	detail, err = store.ReadPublicTask(t.Context(), actor, i.ProjectID, i.OperationID)
 	require.NoError(t, err)
 	require.Equal(t, "ready", detail.BillingOutcome.DeliveryState)
 	// The composite FK rejects dangling or mismatched bindings on new rows.
-	require.Error(t, db.Exec(`UPDATE media.media_asset SET object_key=object_key||'/wrong' WHERE id=?`, second).Error)
+	require.Error(t, db.Transaction(func(tx *gorm.DB) error {
+		return tx.Exec(`UPDATE media.media_asset SET object_key=object_key||'/wrong' WHERE id=?`, second).Error
+	}))
 
 	for _, mutation := range []string{
 		fmt.Sprintf(`DELETE FROM operation.provider_result WHERE operation_id='%s'`, i.OperationID),
@@ -416,7 +419,7 @@ func TestFinalReviewTerminalLedgerConflictMustRefuseArchive(t *testing.T) {
 	objects := &stageTestObjects{entries: map[string]stageTestObject{}}
 	results := application.NewManagedResults(objects, store)
 	network := &fixtureGeneration{}
-	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil, nil)
+	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil)
 	_, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
 	require.Equal(t, 1, network.calls)
@@ -445,7 +448,7 @@ func TestFinalReviewTerminalLedgerConflictMustRefuseArchive(t *testing.T) {
 	detail := publicOperationRequest(t, router, "GET", "/api/operations/"+i.OperationID.String()+"?project_id="+i.ProjectID.String(), "", "")
 	require.Contains(t, detail.Body.String(), `"reason":"settlement_conflict"`)
 	res := publicOperationRequest(t, router, "POST", path, body, key)
-	ingest := managed.NewScopedIngestActivities(db, nil, results, app.NewMediaWorkerScopeAccess, store)
+	ingest := managed.NewRoutedIngestActivities(db, nil, results, app.NewMediaWorkerScopeAccess, store)
 	err = ingest.IngestOriginal(t.Context(), d)
 	t.Logf("GET=settlement_conflict, POST=%d, direct worker error=%v", res.Code, err)
 	require.Equal(t, 409, res.Code)
@@ -474,7 +477,7 @@ func TestFinalReviewAuthorizedSurvivingTeamMemberCanRecover(t *testing.T) {
 	objects := &stageTestObjects{entries: map[string]stageTestObject{}}
 	results := application.NewManagedResults(objects, store)
 	network := &fixtureGeneration{}
-	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil, nil)
+	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil)
 	_, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
 	require.Equal(t, 1, network.calls)
@@ -493,64 +496,14 @@ func TestFinalReviewAuthorizedSurvivingTeamMemberCanRecover(t *testing.T) {
 	path := "/api/operations/" + i.OperationID.String() + "/recover"
 	res := publicOperationRequest(t, router, "POST", path, body, key)
 	require.Equal(t, 202, res.Code, res.Body.String())
-	var e struct {
-		Topic, PartitionKey string
-		Payload             []byte
-	}
-	require.NoError(t, db.Raw(`SELECT topic,partition_key,payload FROM infra.outbox WHERE topic=? AND payload->'data'->>'request_id'=?`, operationevent.WorkflowControlTopic, key).Scan(&e).Error)
-	// Let the installed SDK handle AlreadyStarted itself. Only its wire service
-	// is simulated; the inbox, receipts, authorization and archive use PostgreSQL.
-	running := false
-	var starts []application.WorkflowControlDelivery
-	attempts := 0
-	firstRun := uuid.NewString()
-	rpc := func(_ context.Context, method string, req, reply any, _ *grpc.ClientConn, _ grpc.UnaryInvoker, _ ...grpc.CallOption) error {
-		switch method {
-		case workflowservice.WorkflowService_GetSystemInfo_FullMethodName:
-			return nil
-		case workflowservice.WorkflowService_StartWorkflowExecution_FullMethodName:
-			attempts++
-			in := req.(*workflowservice.StartWorkflowExecutionRequest)
-			require.Equal(t, "operation-delivery/"+i.OperationID.String(), in.WorkflowId)
-			require.Equal(t, enums.WORKFLOW_ID_CONFLICT_POLICY_FAIL, in.WorkflowIdConflictPolicy)
-			require.Equal(t, enums.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE_FAILED_ONLY, in.WorkflowIdReusePolicy)
-			if running {
-				return serviceerror.ToStatus(serviceerror.NewWorkflowExecutionAlreadyStarted("original archive in progress", in.RequestId, firstRun)).Err()
-			}
-			var delivery application.WorkflowControlDelivery
-			if err := converter.GetDefaultDataConverter().FromPayloads(in.Input, &delivery); err != nil {
-				return err
-			}
-			starts = append(starts, delivery)
-			run := firstRun
-			if len(starts) > 1 {
-				run = uuid.NewString()
-			}
-			running = true
-			reply.(*workflowservice.StartWorkflowExecutionResponse).RunId = run
-			return nil
-		default:
-			return fmt.Errorf("unexpected Temporal RPC %s", method)
-		}
-	}
-	sdk, err := client.NewLazyClient(client.Options{ConnectionOptions: client.ConnectionOptions{DialOptions: []grpc.DialOption{grpc.WithChainUnaryInterceptor(rpc), grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-		return nil, errors.New("offline Temporal SDK fixture")
-	})}}})
-	require.NoError(t, err)
-	t.Cleanup(sdk.Close)
-	h := operationevent.NewWorkflowControlHandler(inboxpg.NewStore(db), store, operationflow.NewControl(sdk, store))
-	first := inbox.Record{Topic: e.Topic, Key: []byte(e.PartitionKey), Value: e.Payload}
-	require.NoError(t, h.Handle(t.Context(), first))
-	require.NoError(t, h.Handle(t.Context(), first))
-	require.Len(t, starts, 1)
-	require.Equal(t, 1, attempts)
-	require.Equal(t, key, starts[0].RequestID.String())
-	ingest := managed.NewScopedIngestActivities(db, nil, results, app.NewMediaWorkerScopeAccess, store)
+	first := controlTaskDelivery(t, db, key)
+	runControlTask(t, db, store, first)
+	ingest := managed.NewRoutedIngestActivities(db, nil, results, app.NewMediaWorkerScopeAccess, store)
 	require.NoError(t, db.Exec(`UPDATE workspace.team_member SET status='suspended' WHERE team_id=? AND user_id=?`, team, member.ID).Error)
-	require.Error(t, ingest.IngestOriginal(t.Context(), starts[0]))
+	require.Error(t, ingest.IngestOriginal(t.Context(), first))
 	require.NoError(t, db.Exec(`UPDATE workspace.team_member SET status='active' WHERE team_id=? AND user_id=?`, team, member.ID).Error)
 	require.NoError(t, db.Exec(`UPDATE identity.user_session SET revoked_at=now() WHERE id=?`, member.SessionID).Error)
-	require.Error(t, ingest.IngestOriginal(t.Context(), starts[0]))
+	require.Error(t, ingest.IngestOriginal(t.Context(), first))
 	member = identityfixture.Session(t, db, identityapp.Principal{ID: member.ID, OrgID: member.OrgID, Role: member.Role})
 	member.ScopeID = scope
 	secondKey := uuid.NewString()
@@ -562,26 +515,11 @@ func TestFinalReviewAuthorizedSurvivingTeamMemberCanRecover(t *testing.T) {
 	var receipt application.WorkflowControlResult
 	require.NoError(t, json.Unmarshal(secondResponse.Body.Bytes(), &receipt))
 	require.True(t, receipt.Accepted)
-	require.NoError(t, db.Raw(`SELECT topic,partition_key,payload FROM infra.outbox WHERE id=?`, receipt.EventID).Scan(&e).Error)
-	next := inbox.Record{Topic: e.Topic, Key: []byte(e.PartitionKey), Value: e.Payload}
-	var occupied *serviceerror.WorkflowExecutionAlreadyStarted
-	require.ErrorAs(t, h.Handle(t.Context(), next), &occupied)
-	require.Equal(t, 2, attempts)
-	require.Len(t, starts, 1)
-	var markers int
-	require.NoError(t, db.Raw(`SELECT count(*) FROM infra.processed_event WHERE consumer='workflow-control' AND event_id=?`, receipt.EventID).Scan(&markers).Error)
-	require.Zero(t, markers)
-	// The old worker actually rejects its revoked request. Once Temporal
-	// records that run failed, the redelivered event may start a fresh run.
-	require.Error(t, ingest.IngestOriginal(t.Context(), starts[0]))
-	running = false
-	require.NoError(t, h.Handle(t.Context(), next))
-	require.Len(t, starts, 2)
-	require.Equal(t, receipt.RequestID, starts[1].RequestID)
-	require.Equal(t, 3, attempts)
-	require.NoError(t, h.Handle(t.Context(), next))
-	require.Equal(t, 3, attempts)
-	require.NoError(t, ingest.IngestOriginal(t.Context(), starts[1]))
+	second := controlTaskDelivery(t, db, secondKey)
+	require.NotEqual(t, first.EventID, second.EventID)
+	require.Error(t, ingest.IngestOriginal(t.Context(), first))
+	runControlTask(t, db, store, second)
+	runOriginalTask(t, store, ingest, second)
 	noop := publicOperationRequest(t, current, "POST", path, body, uuid.NewString())
 	require.Equal(t, 202, noop.Code)
 	require.Contains(t, noop.Body.String(), `"accepted":false`)
@@ -593,7 +531,9 @@ func TestFinalReviewAuthorizedSurvivingTeamMemberCanRecover(t *testing.T) {
 }
 
 func TestRecoveredAudioShowsOnlyOriginalSubtitle(t *testing.T) {
-	db := operationStoreDB(t)
+	db := operationStoreDB(t).Begin()
+	require.NoError(t, db.Error)
+	t.Cleanup(func() { _ = db.Rollback().Error })
 	f := seedManagedFixture(t, db)
 	i, store := f.identity, f.store
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='audio.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
@@ -627,8 +567,8 @@ func TestRecoveredAudioShowsOnlyOriginalSubtitle(t *testing.T) {
 	receipt, err := store.RequestWorkflowControl(t.Context(), actor, application.WorkflowControlInput{ProjectID: i.ProjectID, TargetID: i.OperationID, TargetType: "operation", Action: "recover", RequestID: uuid.NewString()})
 	require.NoError(t, err)
 	d := application.WorkflowControlDelivery{TargetID: i.OperationID, ProjectID: i.ProjectID, OrgID: actor.OrgID, ActorID: actor.ID, Action: "recover", TargetType: "operation", RequestID: receipt.RequestID, EventID: receipt.EventID}
-	objects, _ := originalDeliveryObjects(t, uuid.Nil)
-	ingest := managed.NewScopedIngestActivities(db, objects, results, app.NewMediaWorkerScopeAccess, store)
+	objects, _ := originalDeliveryObjects(t, db, i, uuid.Nil)
+	ingest := managed.NewRoutedIngestActivities(db, objects, results, app.NewMediaWorkerScopeAccess, store)
 	require.NoError(t, ingest.IngestOriginal(t.Context(), d))
 	after, err := store.ReadPublicTask(t.Context(), actor, i.ProjectID, i.OperationID)
 	require.NoError(t, err)
@@ -638,4 +578,32 @@ func TestRecoveredAudioShowsOnlyOriginalSubtitle(t *testing.T) {
 	after, err = store.ReadPublicTask(t.Context(), actor, i.ProjectID, i.OperationID)
 	require.NoError(t, err)
 	require.Nil(t, after.AudioSubtitle)
+}
+
+func controlTaskDelivery(t *testing.T, db *gorm.DB, key string) application.WorkflowControlDelivery {
+	t.Helper()
+	var raw []struct{ Reference []byte }
+	require.NoError(t, db.Raw("SELECT reference FROM infra.task_work WHERE kind='operation.control' AND reference->>'RequestID'=?", key).Scan(&raw).Error)
+	require.Len(t, raw, 1)
+	var d application.WorkflowControlDelivery
+	require.NoError(t, json.Unmarshal(raw[0].Reference, &d))
+	return d
+}
+func runControlTask(t *testing.T, db *gorm.DB, s *pgoperation.Store, d application.WorkflowControlDelivery) {
+	t.Helper()
+	h := map[string]taskruntime.Handler{}
+	operationflow.RegisterFlow(h, s, app.NewOperationFinalizer(db, s, billingpg.NewStore(db)), nil)
+	raw, err := json.Marshal(d)
+	require.NoError(t, err)
+	_, err = h["operation.control"](t.Context(), taskruntime.Job{BusinessID: d.EventID.String(), Reference: raw})
+	require.NoError(t, err)
+}
+func runOriginalTask(t *testing.T, s *pgoperation.Store, m *managed.IngestActivities, d application.WorkflowControlDelivery) {
+	t.Helper()
+	h := map[string]taskruntime.Handler{}
+	operationflow.RegisterMedia(h, s, nil, m)
+	raw, err := json.Marshal(d)
+	require.NoError(t, err)
+	_, err = h["operation.original"](t.Context(), taskruntime.Job{BusinessID: d.EventID.String(), Reference: raw})
+	require.NoError(t, err)
 }

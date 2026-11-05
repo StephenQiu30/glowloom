@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -54,12 +56,12 @@ func (s *SubjectSourceStore) ReadBoundSubjectSource(ctx context.Context, id uuid
 		return application.LibraryMediaFile{}, err
 	}
 	var row assetRow
-	r := s.db.WithContext(ctx).Raw(`SELECT * FROM media.media_asset WHERE id=? AND NOT is_delete AND status='ready' AND moderation_status='passed' AND NOT contains_real_person AND consent_record_id IS NULL FOR SHARE`, id).Scan(&row)
+	r := s.db.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"id": id, "is_delete": false, "status": domain.StatusReady, "moderation_status": domain.ModerationPassed, "contains_real_person": false, "consent_record_id": nil}).Take(&row)
 	if r.Error != nil {
+		if errors.Is(r.Error, gorm.ErrRecordNotFound) {
+			return application.LibraryMediaFile{}, application.ErrNotFound
+		}
 		return application.LibraryMediaFile{}, r.Error
-	}
-	if r.RowsAffected != 1 {
-		return application.LibraryMediaFile{}, application.ErrNotFound
 	}
 	if err := row.loadLocation(s.db); err != nil {
 		return application.LibraryMediaFile{}, err

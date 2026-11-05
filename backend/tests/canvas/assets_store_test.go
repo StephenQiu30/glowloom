@@ -139,7 +139,7 @@ func TestAssetCanvasStoreCopyRetainsShortDramaClassification(t *testing.T) {
 		t.Fatal(err)
 	}
 	factory := func(tx *gorm.DB, _ application.ProjectCopyBinding) application.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
 	}
 	for range 2 {
 		if err := database.Transaction(func(tx *gorm.DB) error {

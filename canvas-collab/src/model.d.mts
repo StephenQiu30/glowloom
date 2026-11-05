@@ -39,6 +39,11 @@ export function applyRecoveredCanvasChanges<G extends CanvasGraphShape>(
   before: CanvasSnapshot<G>,
   after: CanvasSnapshot<G>,
 ): void;
+export function applyCommandCanvasChanges<G extends CanvasGraphShape>(
+  doc: Y.Doc,
+  before: CanvasSnapshot<G>,
+  after: CanvasSnapshot<G>,
+): void;
 export function canvasUndoManager(doc: Y.Doc): Y.UndoManager;
 export type CanvasRestoration = {
   id: string;

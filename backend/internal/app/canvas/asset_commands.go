@@ -91,7 +91,7 @@ func (a assetMutationAccess) RenameAsset(ctx context.Context, actor identity.Pri
 		if err != nil {
 			return result, err
 		}
-		if saved.Status != "accepted" {
+		if saved.Status != canvasapp.YjsReceiptStatusAccepted {
 			return result, &canvasapp.AssetActionError{Code: saved.Code}
 		}
 		result.Revision = saved.ContentRevision

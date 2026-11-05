@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
@@ -68,7 +69,7 @@ func ownedBrowserMedia(t *testing.T) []browserMedia {
 	}
 }
 
-func seedOwnedCanvasBrowserMedia(t *testing.T, database *gorm.DB, storage *objectstorage.Client, project uuid.UUID) map[uuid.UUID][32]byte {
+func seedOwnedCanvasBrowserMedia(t *testing.T, database *gorm.DB, storage *objectstorage.Registry, cfg config.ObjectStorageConfig, project uuid.UUID) map[uuid.UUID][32]byte {
 	t.Helper()
 	digests := make(map[uuid.UUID][32]byte)
 	for _, media := range ownedBrowserMedia(t) {
@@ -76,22 +77,24 @@ func seedOwnedCanvasBrowserMedia(t *testing.T, database *gorm.DB, storage *objec
 		// Both project and asset IDs were created by this test. Canonical media
 		// keys preserve domain validation without claiming any existing object.
 		key := "projects/" + project.String() + "/" + media.kind + "/" + time.Now().UTC().Format("2006/01") + "/" + id.String() + "." + media.extension
+		ref := objectstorage.Ref{ProfileID: cfg.DefaultWriteProfile, Bucket: cfg.Profiles[cfg.DefaultWriteProfile].Bucket, Key: key}
 		t.Cleanup(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			if err := storage.Remove(ctx, key); err != nil {
+			if err := storage.Remove(ctx, ref); err != nil {
 				t.Error("remove exact owned canvas media object failed")
 			}
 		})
 		digest := sha256.Sum256(media.content)
 		sha := hex.EncodeToString(digest[:])
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		err := storage.PutIfAbsent(ctx, key, bytes.NewReader(media.content), int64(len(media.content)), media.mime, sha)
+		err := storage.PutIfAbsent(ctx, ref, bytes.NewReader(media.content), int64(len(media.content)), media.mime, sha)
 		cancel()
 		if err != nil {
 			t.Fatal("write owned canvas media object failed")
 		}
-		if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,duration_ms,moderation_status) VALUES(?,?,?,'upload','ready',?,?,?,?,?,?,?,?,'passed')`, id, project, media.kind, key, media.name, media.mime, len(media.content), sha, media.width, media.height, media.durationMS).Error; err != nil {
+		locationID := seedCanvasLocation(t, database, key, ref.ProfileID, ref.Bucket)
+		if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,width,height,duration_ms,moderation_status) VALUES(?,?,?,'upload','ready',?,?,?,?,?,?,?,?,?,'passed')`, id, project, media.kind, key, locationID, media.name, media.mime, len(media.content), sha, media.width, media.height, media.durationMS).Error; err != nil {
 			t.Fatal("persist owned canvas media fixture failed")
 		}
 		digests[id] = digest

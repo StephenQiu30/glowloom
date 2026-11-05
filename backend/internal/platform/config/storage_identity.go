@@ -45,12 +45,12 @@ func loopbackOrigin(u *url.URL) bool {
 // profile. Signing regions do not split one endpoint/bucket into two resources;
 // COS's known native domain aliases all address the same bucket and region.
 func (p StorageProfile) ResourceIdentity() string {
-	if p.Provider == "cos" {
+	if p.Provider == StorageProviderCOS {
 		u, err := url.Parse(p.Endpoint)
 		if err == nil && !loopbackOrigin(u) {
-			return strings.Join([]string{p.Provider, p.Region, p.Bucket}, "\x00")
+			return strings.Join([]string{string(p.Provider), p.Region, p.Bucket}, "\x00")
 		}
-		return p.Provider + "\x00" + p.Endpoint
+		return string(p.Provider) + "\x00" + p.Endpoint
 	}
-	return strings.Join([]string{p.Provider, p.Endpoint, p.Bucket}, "\x00")
+	return strings.Join([]string{string(p.Provider), p.Endpoint, p.Bucket}, "\x00")
 }

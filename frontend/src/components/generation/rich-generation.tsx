@@ -230,7 +230,7 @@ async function readModelCatalog(
       { signal },
     );
     models.push(...(page.items ?? []));
-    cursor = page.next_cursor;
+    cursor = page.next_cursor ?? undefined;
     if (cursor) {
       if (cursors.has(cursor)) throw new RequestError("invalid_receipt");
       cursors.add(cursor);
@@ -1062,7 +1062,7 @@ function EditorWorkspace({
         limit: 100,
       });
       let found = page.items?.find((m) => m.current_version?.id === version);
-      let cursor = page.next_cursor;
+      let cursor = page.next_cursor ?? undefined;
       const seen = new Set<string>();
       while (!found && cursor && !seen.has(cursor)) {
         seen.add(cursor);
@@ -1073,7 +1073,7 @@ function EditorWorkspace({
           cursor,
         });
         found = next.items?.find((m) => m.current_version?.id === version);
-        cursor = next.next_cursor;
+        cursor = next.next_cursor ?? undefined;
       }
       if (session.pendingTarget?.selectionEpoch !== request.selectionEpoch)
         return;
@@ -1957,16 +1957,53 @@ function EditorWorkspace({
                 : "min-h-[208px] flex-col items-stretch gap-1",
             )}
           >
-            <InputGroupAddon
-              align="block-start"
+            <div
               className={
-                presentation === "home"
-                  ? "creation-reference-tools"
-                  : "items-start px-4 pt-4"
+                presentation === "home" ? "creation-ready-body" : "contents"
               }
             >
-              {referenceControls}
-              {voiceControls}
+              <InputGroupAddon
+                align="block-start"
+                className={
+                  presentation === "home"
+                    ? "creation-reference-tools"
+                    : "items-start px-4 pt-4"
+                }
+              >
+                {referenceControls}
+                {voiceControls}
+                {presentation !== "home" && headerActions}
+                {presentation !== "home" && (
+                  <InputGroupButton
+                    aria-label={full ? "退出全屏" : "展开编辑器"}
+                    size="icon-sm"
+                    className="ml-auto"
+                    onClick={() => setFull((value) => !value)}
+                  >
+                    {full ? <Minimize2 /> : <Maximize2 />}
+                  </InputGroupButton>
+                )}
+              </InputGroupAddon>
+              <div
+                data-slot="input-group-control"
+                className={cn(
+                  presentation === "home"
+                    ? "creation-ready-prompt"
+                    : "min-h-20 w-full flex-1 px-4 py-2 [&_.tiptap]:min-h-16 [&_.tiptap]:outline-none",
+                  full && "[&_.tiptap]:min-h-64",
+                )}
+              >
+                {promptControl}
+              </div>
+            </div>
+            <InputGroupAddon
+              align="block-end"
+              className={
+                presentation === "home"
+                  ? "creation-tools"
+                  : "flex-wrap gap-1 px-4 pb-4"
+              }
+            >
               {presentation === "home" && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -2005,37 +2042,6 @@ function EditorWorkspace({
                   {full ? <Minimize2 /> : <Maximize2 />}
                 </InputGroupButton>
               )}
-              {presentation !== "home" && headerActions}
-              {presentation !== "home" && (
-                <InputGroupButton
-                  aria-label={full ? "退出全屏" : "展开编辑器"}
-                  size="icon-sm"
-                  className="ml-auto"
-                  onClick={() => setFull((value) => !value)}
-                >
-                  {full ? <Minimize2 /> : <Maximize2 />}
-                </InputGroupButton>
-              )}
-            </InputGroupAddon>
-            <div
-              data-slot="input-group-control"
-              className={cn(
-                presentation === "home"
-                  ? "creation-ready-prompt"
-                  : "min-h-20 w-full flex-1 px-4 py-2 [&_.tiptap]:min-h-16 [&_.tiptap]:outline-none",
-                full && "[&_.tiptap]:min-h-64",
-              )}
-            >
-              {promptControl}
-            </div>
-            <InputGroupAddon
-              align="block-end"
-              className={
-                presentation === "home"
-                  ? "creation-tools"
-                  : "flex-wrap gap-1 px-4 pb-4"
-              }
-            >
               <div
                 className={
                   presentation === "home" ? "creation-option-tools" : "contents"

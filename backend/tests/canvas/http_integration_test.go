@@ -32,22 +32,26 @@ import (
 func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_HTTP_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	var storage *objectstorage.Client
+	const origin = "http://127.0.0.1:3140"
+	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: origin})
+	storage := canvasRouterStorage(t, &cfg)
 	var mediaDigests map[uuid.UUID][32]byte
 	if os.Getenv("GLOWLOOM_TEST_CANVAS_USE_ENV_OBJECT_STORAGE") == "1" {
-		// Only the caller can opt in to its already configured local object storage.
 		localConfig, err := config.Load()
 		if err != nil {
 			t.Fatal("object storage test configuration unavailable")
 		}
-		storage, err = objectstorage.Open(localConfig.ObjectStorageEndpoint, localConfig.ObjectStorageBucket, localConfig.ObjectStorageAccessKey, localConfig.ObjectStorageSecretKey, localConfig.ObjectStorageRegion)
-		if err != nil {
-			t.Fatal("object storage test client unavailable")
+		if localConfig.ObjectStorage == nil {
+			t.Fatal("explicit object storage configuration required")
 		}
-		mediaDigests = seedOwnedCanvasBrowserMedia(t, database, storage, project)
+		storage, err = objectstorage.OpenProfiles(*localConfig.ObjectStorage)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(storage.Close)
+		cfg.ObjectStorage = localConfig.ObjectStorage
+		mediaDigests = seedOwnedCanvasBrowserMedia(t, database, storage, *cfg.ObjectStorage, project)
 	}
-	const origin = "http://127.0.0.1:3140"
-	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: origin})
 	router, err := app.NewBusinessRouter(zap.NewNop(), func(_ context.Context) error { return nil }, noop.NewTracerProvider(), cfg, database, storage, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)

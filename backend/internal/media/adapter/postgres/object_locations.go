@@ -2,23 +2,31 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type objectLocationRow struct {
-	OwnerIntentID                       *uuid.UUID
-	OwnerSessionID                      *uuid.UUID
-	ID                                  uuid.UUID
-	ProfileID, Bucket, ObjectKey, State string
-	ByteSize                            *int64
-	SHA256, MIMEType                    *string
+	OwnerIntentID                *uuid.UUID
+	OwnerSessionID               *uuid.UUID
+	WriteUntil                   *time.Time
+	ID                           uuid.UUID
+	ProfileID, Bucket, ObjectKey string
+	State                        domain.ObjectLocationState
+	ByteSize                     *int64
+	SHA256, MIMEType             *string
+	CreatedAt, UpdatedAt         time.Time
 }
+
+func (objectLocationRow) TableName() string { return "media.object_location" }
 
 func (r objectLocationRow) domain() domain.ObjectLocation {
 	return domain.ObjectLocation{ID: r.ID, Ref: domain.ObjectRef{ProfileID: r.ProfileID, Bucket: r.Bucket, Key: r.ObjectKey}, State: r.State, ByteSize: r.ByteSize, SHA256: r.SHA256, MIMEType: r.MIMEType}
@@ -32,12 +40,16 @@ func (s *StorageRoutes) ReserveLocation(ctx context.Context, ref domain.ObjectRe
 	if err := ref.Validate(); err != nil {
 		return domain.ObjectLocation{}, err
 	}
-	var row objectLocationRow
-	read := s.db.WithContext(ctx).Raw(`INSERT INTO media.object_location(id,profile_id,bucket,object_key) VALUES(?,?,?,?) ON CONFLICT(profile_id,bucket,object_key) DO UPDATE SET updated_at=media.object_location.updated_at RETURNING *`, uuid.New(), ref.ProfileID, ref.Bucket, ref.Key).Scan(&row)
-	if read.Error != nil {
-		return domain.ObjectLocation{}, fmt.Errorf("reserve physical object location: %w", read.Error)
+	query := s.db.WithContext(ctx)
+	candidate := objectLocationRow{ID: uuid.New(), ProfileID: ref.ProfileID, Bucket: ref.Bucket, ObjectKey: ref.Key, State: domain.ObjectLocationReserved}
+	if err := query.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "profile_id"}, {Name: "bucket"}, {Name: "object_key"}}, DoNothing: true}).Create(&candidate).Error; err != nil {
+		return domain.ObjectLocation{}, fmt.Errorf("reserve physical object location: %w", err)
 	}
-	if read.RowsAffected != 1 || row.ID == uuid.Nil || row.domain().Ref != ref {
+	var row objectLocationRow
+	if err := query.Where("profile_id = ? AND bucket = ? AND object_key = ?", ref.ProfileID, ref.Bucket, ref.Key).Take(&row).Error; err != nil {
+		return domain.ObjectLocation{}, fmt.Errorf("read reserved physical object location: %w", err)
+	}
+	if row.ID == uuid.Nil || row.domain().Ref != ref {
 		return domain.ObjectLocation{}, application.ErrUnavailable
 	}
 	return row.domain(), nil
@@ -52,12 +64,11 @@ func (s *StorageRoutes) ReadLocation(ctx context.Context, id uuid.UUID) (domain.
 		return domain.ObjectLocation{}, domain.ErrInvalidObjectRef
 	}
 	var row objectLocationRow
-	read := s.db.WithContext(ctx).Raw(`SELECT * FROM media.object_location WHERE id=?`, id).Scan(&row)
-	if read.Error != nil {
-		return domain.ObjectLocation{}, fmt.Errorf("read physical object location: %w", read.Error)
-	}
-	if read.RowsAffected != 1 {
-		return domain.ObjectLocation{}, application.ErrNotFound
+	if err := s.db.WithContext(ctx).Where("id = ?", id).Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.ObjectLocation{}, application.ErrNotFound
+		}
+		return domain.ObjectLocation{}, fmt.Errorf("read physical object location: %w", err)
 	}
 	location := row.domain()
 	if err := location.Ref.Validate(); err != nil {
@@ -67,7 +78,7 @@ func (s *StorageRoutes) ReadLocation(ctx context.Context, id uuid.UUID) (domain.
 }
 
 // rowLocation keeps an unresolved FK visible so an unmigrated reader cannot
-// silently turn a routed row back into a legacy key-only record.
+// silently discard the stable location identity from an object row.
 func rowLocation(id *uuid.UUID, loaded *domain.ObjectLocation) *domain.ObjectLocation {
 	if loaded != nil {
 		return loaded
@@ -86,12 +97,12 @@ func readRowLocation(tx *gorm.DB, id *uuid.UUID, key string) (*domain.ObjectLoca
 		return nil, application.ErrUnavailable
 	}
 	var row objectLocationRow
-	read := tx.Raw(`SELECT * FROM media.object_location WHERE id=? AND object_key=? FOR SHARE`, *id, key).Scan(&row)
+	read := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("id = ? AND object_key = ?", *id, key).Take(&row)
 	if read.Error != nil {
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return nil, application.ErrUnavailable
+		}
 		return nil, fmt.Errorf("read stored media location: %w", read.Error)
-	}
-	if read.RowsAffected != 1 {
-		return nil, application.ErrUnavailable
 	}
 	location := row.domain()
 	if location.Ref.Validate() != nil {

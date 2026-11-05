@@ -24,7 +24,7 @@ func (r *AvatarReferences) HasAvatarReference(ctx context.Context, asset uuid.UU
 	if _, ok := r.tx.Statement.ConnPool.(gorm.TxCommitter); !ok {
 		return false, application.ErrAvatarUnavailable
 	}
-	var used bool
-	err := r.tx.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM identity."user" WHERE avatar_asset_id=?)`, asset).Scan(&used).Error
-	return used, err
+	var row struct{ ID uuid.UUID }
+	read := r.tx.WithContext(ctx).Table(`identity."user"`).Select("id").Where("avatar_asset_id = ?", asset).Limit(1).Find(&row)
+	return read.RowsAffected > 0, read.Error
 }

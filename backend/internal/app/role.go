@@ -12,7 +12,7 @@ type Role string
 const (
 	// RoleAPI selects the API process.
 	RoleAPI Role = "api"
-	// RoleWorker selects the Temporal worker process.
+	// RoleWorker selects the database task worker process.
 	RoleWorker Role = "worker"
 	// RoleRelay selects the Kafka relay process.
 	RoleRelay Role = "relay"

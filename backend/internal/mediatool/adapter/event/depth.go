@@ -33,7 +33,7 @@ type DepthHandler struct {
 	starter   DepthStarter
 }
 
-// NewDepthHandler injects permanent inbox, owning proof and Temporal delivery.
+// NewDepthHandler injects permanent inbox, owning proof and external delivery.
 func NewDepthHandler(p ProcessedStore, s DepthDeliveryStore, start DepthStarter) *DepthHandler {
 	return &DepthHandler{processed: p, store: s, starter: start}
 }

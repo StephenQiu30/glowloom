@@ -13,7 +13,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
@@ -33,7 +32,7 @@ func (a exportAuthorityTrace) AuthorizeProject(ctx context.Context, actor identi
 // Real authority and SQL locks are observed without rendering or object I/O.
 // Every synthetic caption job, account and command is rolled back together.
 func TestExportWorkerLocksAuthorityBeforeJob(t *testing.T) {
-	database := mediaStoreDB(t)
+	database := mediatoolFixtureDB(t)
 	tx := database.Begin()
 	if tx.Error != nil {
 		t.Fatal(tx.Error)
@@ -48,7 +47,7 @@ func TestExportWorkerLocksAuthorityBeforeJob(t *testing.T) {
 	timeline.Tracks[0].Kind, timeline.Clips[0].Kind = "subtitle", "subtitle"
 	timeline.Clips[0].AssetID, timeline.Clips[0].Text = nil, "Caption fixture"
 	reader := func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }
-	requests := toolpg.NewStore(tx, reader, func(db *gorm.DB) toolapp.DerivedMedia {
+	requests := mediatoolExportStore(tx, reader, func(db *gorm.DB) toolapp.DerivedMedia {
 		return mediaapp.NewDerivedService(mediaTestStore(db))
 	})
 	job, err := requests.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
@@ -57,8 +56,8 @@ func TestExportWorkerLocksAuthorityBeforeJob(t *testing.T) {
 	}
 	var events []string
 	callback := "export-lock-order-" + uuid.NewString()
-	if err := tx.Callback().Row().After("gorm:row").Register(callback, func(query *gorm.DB) {
-		sql := query.Statement.SQL.String()
+	if err := tx.Callback().Query().After("gorm:query").Register(callback, func(query *gorm.DB) {
+		sql := strings.ReplaceAll(query.Statement.SQL.String(), `"`, "")
 		if strings.Contains(sql, "FROM mediatool.export_job") && strings.Contains(sql, "FOR UPDATE") {
 			events = append(events, "job-lock")
 		}
@@ -66,11 +65,11 @@ func TestExportWorkerLocksAuthorityBeforeJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := tx.Callback().Row().Remove(callback); err != nil {
+		if err := tx.Callback().Query().Remove(callback); err != nil {
 			t.Error(err)
 		}
 	})
-	workers := toolpg.NewStore(tx, reader, func(db *gorm.DB) toolapp.DerivedMedia {
+	workers := mediatoolExportStore(tx, reader, func(db *gorm.DB) toolapp.DerivedMedia {
 		return exportAuthorityTrace{DerivedMedia: mediaapp.NewDerivedService(mediaWorkerStore(db)), events: &events}
 	})
 	check := func(name string) {
@@ -93,7 +92,7 @@ func TestExportWorkerLocksAuthorityBeforeJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("object write")
-	if _, err := workers.Commit(t.Context(), work, mediadomain.MediaAsset{ProjectID: project, Kind: mediadomain.KindVideo}, nil); !errors.Is(err, mediadomain.ErrInvalidMediaAsset) {
+	if _, err := workers.Commit(t.Context(), work, mediadomain.MediaAsset{ProjectID: project, Kind: mediadomain.KindVideo}, nil); !errors.Is(err, mediadomain.ErrInvalidObjectRef) {
 		t.Fatal("malformed output entered owning metadata", err)
 	}
 	check("commit")

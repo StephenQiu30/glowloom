@@ -12,7 +12,7 @@ import {
 export function PriceEvidenceFields({
   price,
 }: {
-  price?: { source_url?: string; reviewed_at?: string };
+  price?: Pick<API.AdminPrice, "source_url" | "reviewed_at">;
 }) {
   const id = useId();
   return (

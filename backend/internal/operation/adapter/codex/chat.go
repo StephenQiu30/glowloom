@@ -181,7 +181,7 @@ func (s *ChatSession) Turn(ctx context.Context, prompt string, delta func(string
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed || s.uncertain || strings.TrimSpace(prompt) == "" || len(prompt) > 32*1024 || ctx.Err() != nil {
-		return application.GenerationResult{Outcome: "not_submitted", ErrorCode: "codex_chat_unavailable"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeNotSubmitted, ErrorCode: "codex_chat_unavailable"}, nil
 	}
 	s.uncertain = true
 	turnCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -189,16 +189,16 @@ func (s *ChatSession) Turn(ctx context.Context, prompt string, delta func(string
 	ctx = turnCtx
 	turn, err := startTurn(ctx, s.client, s.thread, s.model, prompt)
 	if err != nil {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "codex_turn_delivery_uncertain"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "codex_turn_delivery_uncertain"}, nil
 	}
 	text, err := completedText(ctx, s.client, s.thread, turn, delta)
 	if err != nil {
 		s.client.close()
 		s.closed = true
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "codex_chat_completion_uncertain"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "codex_chat_completion_uncertain"}, nil
 	}
 	s.uncertain = false
-	return application.GenerationResult{Outcome: "completed", State: "succeeded", Text: text}, nil
+	return application.GenerationResult{Outcome: application.ProviderOutcomeCompleted, State: application.ProviderTaskSucceeded, Text: text}, nil
 }
 
 // Close terminates the child and removes scratch files. It never sends a turn.

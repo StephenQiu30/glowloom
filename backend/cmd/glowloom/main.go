@@ -38,33 +38,13 @@ func run() error {
 	if len(os.Args) > 1 && os.Args[1] == "identity" {
 		return identityoperator.Run(os.Args[2:])
 	}
-	if len(os.Args) > 1 && os.Args[1] == "sandbox" {
-		return runSandbox(os.Args[2:])
-	}
 	var role app.Role
-	var queues, schedulePrefix string
-	var projectRetention bool
-	setup := len(os.Args) > 1 && os.Args[1] == "temporal"
+	var queues string
 	if len(os.Args) > 1 && os.Args[1] == "admin" {
 		return fmt.Errorf("legacy administrator bootstrap was removed; use glowloom identity")
 	}
 	partitions := len(os.Args) > 1 && os.Args[1] == "partitions"
 	switch {
-	case setup:
-		if len(os.Args) < 3 || os.Args[2] != "setup" {
-			return fmt.Errorf("usage: glowloom temporal setup [--prefix=value] [--project-retention]")
-		}
-		setupFlags := flag.NewFlagSet("temporal setup", flag.ContinueOnError)
-		prefixFlag := setupFlags.String("prefix", "", "optional prefix for isolated schedule verification")
-		projectRetentionFlag := setupFlags.Bool("project-retention", false, "install only expired project content cleanup after schema review")
-		if err := setupFlags.Parse(os.Args[3:]); err != nil {
-			return err
-		}
-		if setupFlags.NArg() != 0 {
-			return fmt.Errorf("unexpected temporal setup argument: %q", setupFlags.Arg(0))
-		}
-		schedulePrefix = *prefixFlag
-		projectRetention = *projectRetentionFlag
 	case partitions:
 		if len(os.Args) != 3 || os.Args[2] != "ensure" {
 			return fmt.Errorf("usage: glowloom partitions ensure")
@@ -100,10 +80,6 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if setup {
-		logger.Info("starting Temporal setup")
-		return app.SetupTemporalSchedules(ctx, cfg, logger, schedulePrefix, projectRetention)
-	}
 	if partitions {
 		return app.EnsurePartitions(ctx, cfg, logger, time.Now().UTC())
 	}

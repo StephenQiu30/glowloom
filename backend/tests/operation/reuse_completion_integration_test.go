@@ -140,7 +140,7 @@ func TestPaidLegacyZeroBasedDeliveryRetainsReadyAndAdmission(t *testing.T) {
 		return tx.Exec(`UPDATE operation.operation SET status='completed',settled_micros=10 WHERE id=?`, id).Error
 	}))
 	asset := uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,source_operation_id,moderation_status) VALUES(?,?,'image','generated','ready',?,'image/png',1,?,'passed')`, asset, pid, "legacy-fixture/"+asset.String(), id).Error)
+	require.NoError(t, db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,source_operation_id,moderation_status,object_location_id) VALUES(?,?,'image','generated','ready',?,'image/png',1,?,'passed',?)`, asset, pid, "legacy-fixture/"+asset.String(), id, businessFixtureLocation(t, db, "legacy-fixture/"+asset.String())).Error)
 	require.NoError(t, db.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,media_asset_id,moderation_status) VALUES(?,?,?,0,'media',?,'passed')`, uuid.New(), pid, id, asset).Error)
 	require.NoError(t, db.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,json_payload,moderation_status) VALUES(?,?,?,1,'json','{"result":"legacy"}','passed')`, uuid.New(), pid, id).Error)
 	source := domain.CanvasSource{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}

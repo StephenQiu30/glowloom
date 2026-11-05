@@ -51,18 +51,18 @@ func TestRoutedStorageUsageCountsSameKeyCopiesAndRetainedObjectsSeparately(t *te
 	p2.ProfileID = cos.ProfileID
 	inventory := mediaapp.StorageUsageInventory{LibraryID: id, Locations: []domain.ObjectRef{minio, cos, absent, minio, intent}, PhysicalPrefixes: []mediaapp.StorageUsagePrefix{p1, p2}}
 	objects := &physicalUsageObjects{listed: map[mediaapp.StorageUsagePrefix][]mediaapp.StorageUsageObject{p1: {{Ref: minio, ByteSize: 900}, {Ref: retained, ByteSize: 999}}, p2: {{Ref: cos, ByteSize: 900}}}, sizes: map[domain.ObjectRef]int64{minio: 21, cos: 21, retained: 35, intent: 11}}
-	got, err := mediaapp.NewRoutedStorageUsageReader(usageSource{inventory: inventory}, objects, time.Now).StorageUsage(t.Context(), actor, scope)
+	got, err := mediaapp.NewStorageUsageReader(usageSource{inventory: inventory}, objects, time.Now).StorageUsage(t.Context(), actor, scope)
 	if err != nil || got.UsedBytes != 88 || got.ObjectCount != 4 || got.LimitBytes != nil || objects.statCalls != 5 {
 		t.Fatal("physical copies collapsed or trash omitted", got, err)
 	}
 	objects.failProfile = "cos-main"
-	got, err = mediaapp.NewRoutedStorageUsageReader(usageSource{inventory: inventory}, objects, time.Now).StorageUsage(t.Context(), actor, scope)
+	got, err = mediaapp.NewStorageUsageReader(usageSource{inventory: inventory}, objects, time.Now).StorageUsage(t.Context(), actor, scope)
 	if !errors.Is(err, mediaapp.ErrUnavailable) || got.UsedBytes != 0 || got.ObjectCount != 0 {
 		t.Fatal("partial profile total published", got, err)
 	}
 	objects.failProfile = ""
 	objects.listed[p2] = []mediaapp.StorageUsageObject{{Ref: minio, ByteSize: 21}}
-	if _, err := mediaapp.NewRoutedStorageUsageReader(usageSource{inventory: inventory}, objects, time.Now).StorageUsage(t.Context(), actor, scope); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := mediaapp.NewStorageUsageReader(usageSource{inventory: inventory}, objects, time.Now).StorageUsage(t.Context(), actor, scope); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("provider identity mismatch accepted", err)
 	}
 }
@@ -83,7 +83,7 @@ func TestRoutedStorageUsageBoundsCombinedProfilesBeforePublishingTotals(t *testi
 		}
 	}
 	source := usageSource{inventory: mediaapp.StorageUsageInventory{LibraryID: id, PhysicalPrefixes: []mediaapp.StorageUsagePrefix{p1, p2}}}
-	got, err := mediaapp.NewRoutedStorageUsageReader(source, objects, time.Now).StorageUsage(t.Context(), actor, scope)
+	got, err := mediaapp.NewStorageUsageReader(source, objects, time.Now).StorageUsage(t.Context(), actor, scope)
 	if !errors.Is(err, mediaapp.ErrUnavailable) || got.UsedBytes != 0 || got.ObjectCount != 0 || objects.statCalls != 0 {
 		t.Fatal("combined profile limit returned a partial inventory", got, err)
 	}

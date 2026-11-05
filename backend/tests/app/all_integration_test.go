@@ -26,9 +26,7 @@ func TestAllRoleRunsAndStopsOnLocalServices(t *testing.T) {
 	dsn := os.Getenv("GLOWLOOM_TEST_ALL_DB_DSN")
 	brokers := os.Getenv("GLOWLOOM_TEST_ALL_KAFKA_BROKERS")
 	redisURL := os.Getenv("GLOWLOOM_TEST_ALL_REDIS_URL")
-	temporalAddr := os.Getenv("GLOWLOOM_TEST_ALL_TEMPORAL_ADDR")
-	namespace := os.Getenv("GLOWLOOM_TEST_ALL_TEMPORAL_NAMESPACE")
-	if dsn == "" || brokers == "" || redisURL == "" || temporalAddr == "" || namespace == "" || os.Getenv("GLOWLOOM_ENV_FILE") == "" {
+	if dsn == "" || brokers == "" || redisURL == "" || os.Getenv("GLOWLOOM_ENV_FILE") == "" {
 		t.Skip("set absolute GLOWLOOM_ENV_FILE with local MinIO credentials and disposable GLOWLOOM_TEST_ALL_* service configuration")
 	}
 	cfg, err := config.Load()
@@ -45,8 +43,6 @@ func TestAllRoleRunsAndStopsOnLocalServices(t *testing.T) {
 	cfg.DBDSN = dsn
 	cfg.RedisURL = redisURL
 	cfg.KafkaBrokers = brokers
-	cfg.TemporalAddr = temporalAddr
-	cfg.TemporalNamespace = namespace
 	cfg.OTelEndpoint = ""
 
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)

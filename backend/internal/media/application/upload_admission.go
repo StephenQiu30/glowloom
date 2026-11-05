@@ -70,11 +70,27 @@ type RoutedUploadObjects interface {
 	RemoveUploadObject(context.Context, domain.ObjectLocation) error
 }
 
-// NewRoutedUploadService opts the existing relay pipeline into durable routing.
-// The legacy constructors remain restricted to the original single MinIO bucket
-// until all key-only consumers have been migrated and activation is accepted.
-func NewRoutedUploadService(repo UploadRepository, personal PersonalUploadRepository, admission UploadAdmission, prober Prober, normalizer UploadNormalizer, renderer Renderer, objects RoutedUploadObjects, now func() time.Time) *UploadService {
-	return &UploadService{repo: repo, personal: personal, admission: admission, prober: prober, normalizer: normalizer, renderer: renderer, routedObjects: objects, now: now, routed: true}
+// NewRoutedUploadService composes the upload pipeline with durable physical routing.
+func NewRoutedUploadService(
+	repo UploadRepository,
+	personal PersonalUploadRepository,
+	admission UploadAdmission,
+	prober Prober,
+	normalizer UploadNormalizer,
+	renderer Renderer,
+	objects RoutedUploadObjects,
+	now func() time.Time,
+) *UploadService {
+	return &UploadService{
+		repo:          repo,
+		personal:      personal,
+		admission:     admission,
+		prober:        prober,
+		normalizer:    normalizer,
+		renderer:      renderer,
+		routedObjects: objects,
+		now:           now,
+	}
 }
 
 // BeginUpload authorizes again inside the persistent admission transaction. The
@@ -83,14 +99,8 @@ func (s *UploadService) BeginUpload(ctx context.Context, actor identityapp.Princ
 	if s == nil {
 		return UploadTarget{}, ErrUnavailable
 	}
-	if s.routed && (s.admission == nil || s.routedObjects == nil || s.prober == nil || s.normalizer == nil || s.renderer == nil || s.now == nil) {
+	if s.admission == nil || s.routedObjects == nil || s.prober == nil || s.normalizer == nil || s.renderer == nil || s.now == nil {
 		return UploadTarget{}, ErrStorageNotReady
-	}
-	if s.admission == nil {
-		if s.routedObjects != nil {
-			return UploadTarget{}, ErrStorageNotReady
-		}
-		return UploadTarget{}, nil // original single-bucket construction only
 	}
 	if key == uuid.Nil || scope.Validate() != nil {
 		return UploadTarget{}, ErrInvalidUpload

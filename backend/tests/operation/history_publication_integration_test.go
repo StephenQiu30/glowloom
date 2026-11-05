@@ -8,9 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
@@ -33,28 +31,19 @@ func TestHistoryPublicationPostgresSelectionReplayAndRevocation(t *testing.T) {
 	if dsn == "" {
 		t.Skip("requires a fresh disposable publication database")
 	}
-	db, err := gorm.Open(gormpostgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	db := businessEmptyFixtureDB(t, dsn)
 	var existing int64
 	if err := db.Raw(`SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('workspace','operation','media')`).Scan(&existing).Error; err != nil || existing != 0 {
 		t.Fatalf("fresh disposable DB required: schemas=%d err=%v", existing, err)
 	}
-	ddl := `DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='glowloom_app') THEN CREATE ROLE glowloom_app NOLOGIN; END IF; END $$; CREATE SCHEMA workspace;CREATE SCHEMA operation;CREATE SCHEMA media;
+	ddl := `DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='glowloom_app') THEN CREATE ROLE glowloom_app NOLOGIN; END IF; END $$; CREATE SCHEMA workspace;CREATE SCHEMA operation;CREATE SCHEMA media;` + businessSQLLocationTables + `
  CREATE TABLE workspace.project(id uuid PRIMARY KEY,org_id uuid,owner_scope_id uuid,status text DEFAULT 'active',is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation(id uuid PRIMARY KEY,project_id uuid,capability text DEFAULT 'image.generate',mode text DEFAULT 'text_to_image',status text DEFAULT 'completed',is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation_input(id uuid,operation_id uuid,seq_no int,role text,text_value text,is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation_output(id uuid PRIMARY KEY,project_id uuid,operation_id uuid,media_asset_id uuid,moderation_status text,is_delete boolean DEFAULT false);
  CREATE TABLE operation.prompt_submission(operation_id uuid,actor_id uuid,project_id uuid);
  CREATE TABLE operation.quote_request(org_id uuid,actor_id uuid,result jsonb);
- CREATE TABLE media.media_asset(id uuid PRIMARY KEY,project_id uuid,kind text,status text,moderation_status text,is_delete boolean DEFAULT false,contains_real_person boolean DEFAULT false,consent_record_id uuid,object_key text,object_location_id uuid,revision bigint DEFAULT 1);
- CREATE TABLE media.object_location(id uuid PRIMARY KEY,object_key text,profile_id text,bucket text,state text);`
+ CREATE TABLE media.media_asset(id uuid PRIMARY KEY,object_location_id uuid NOT NULL REFERENCES media.object_location(id),project_id uuid,kind text,status text,moderation_status text,is_delete boolean DEFAULT false,contains_real_person boolean DEFAULT false,consent_record_id uuid,object_key text,revision bigint DEFAULT 1);`
 	if err := db.Exec(ddl).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +67,7 @@ func TestHistoryPublicationPostgresSelectionReplayAndRevocation(t *testing.T) {
 	exec(`INSERT INTO workspace.project(id,org_id,owner_scope_id)VALUES(?,?,?)`, project, actor.OrgID, actor.ScopeID)
 	exec(`INSERT INTO operation.operation(id,project_id)VALUES(?,?),(?,?)`, operation, project, foreignOperation, project)
 	exec(`INSERT INTO operation.prompt_submission VALUES(?,?,?),(?,?,?)`, operation, actor.ID, project, foreignOperation, uuid.New(), project)
-	exec(`INSERT INTO media.media_asset(id,project_id,kind,status,moderation_status,object_key)VALUES(?,?,'image','ready','passed','safe/result.png')`, media, project)
+	exec(`INSERT INTO media.media_asset(id,project_id,kind,status,moderation_status,object_key,object_location_id) VALUES(?,?,'image','ready','passed','safe/result.png',?)`, media, project, businessFixtureLocation(t, db, "safe/result.png"))
 	exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,media_asset_id,moderation_status)VALUES(?,?,?,?,'passed'),(?,?,?,?,'passed'),(?,?,?,?,'passed')`, output, project, operation, media, sibling, project, operation, media, foreignOutput, project, foreignOperation, media)
 	exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,text_value)VALUES(?,?,0,'prompt','private prompt'),(?,?,1,'reference','private reference')`, uuid.New(), operation, uuid.New(), operation)
 	denied := false

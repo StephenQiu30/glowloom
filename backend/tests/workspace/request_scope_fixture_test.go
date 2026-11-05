@@ -68,7 +68,7 @@ func workspaceCanvasStore(db *gorm.DB, media pgcanvas.MediaReaderFactory) *pgcan
 }
 
 func workspaceMediaCopyStore(tx *gorm.DB) *pgmedia.ProjectCopyStore {
-	return pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess)
+	return pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess).WithRoutedStorage()
 }
 
 func workspaceCanvasCopyStore(tx *gorm.DB, source pgcanvas.MediaReaderFactory, target pgcanvas.CopyMediaReaderFactory) *pgcanvas.ProjectCopyStore {

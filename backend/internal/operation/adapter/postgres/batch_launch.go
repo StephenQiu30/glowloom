@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -23,7 +25,7 @@ func (s *Store) AcquireBatchLaunch(ctx context.Context, batchID, operationID uui
 		return false, application.ErrInvalidWorkflowBatch
 	}
 	var acquired bool
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireWorker(tx, operationID, true); err != nil {
 			return err
 		}

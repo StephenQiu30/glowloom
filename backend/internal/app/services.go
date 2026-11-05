@@ -14,7 +14,7 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
@@ -26,8 +26,7 @@ func init() {
 	scriptwire.BindCharacterReferences(biblewire.ProvideScriptCharacterReferences)
 }
 
-// The constructors below stay on the process package so existing callers keep one composition entry.
-// Their implementations live in the service packages.
+// Process-level constructors compose dependencies from the owning service packages.
 
 // NewMediaScopeAccess provides request scope access for media callers.
 func NewMediaScopeAccess(tx *gorm.DB) mediaapp.ScopeAccess {
@@ -65,8 +64,8 @@ func NewMediaLibraryWorkerProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAcce
 }
 
 // NewMediaPurgeWorker assembles the media purge worker and its store.
-func NewMediaPurgeWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.PurgeWorker, *pgmedia.PurgeStore) {
-	return mediawire.NewMediaPurgeWorker(database, storage)
+func NewMediaPurgeWorker(database *gorm.DB, registry *objectstorage.Registry) (*mediaapp.PurgeWorker, *pgmedia.PurgeStore) {
+	return mediawire.NewRoutedMediaPurgeWorker(database, registry)
 }
 
 // NewMediaWorkerReferenceOwners assembles reference owners for media workers.

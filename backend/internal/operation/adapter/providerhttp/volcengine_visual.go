@@ -22,22 +22,26 @@ func init() {
 	RegisterDriver(&VolcengineVisualDriver{}, "volcengine_avatar", "volcengine_motion")
 }
 
+// Submit sends generation input using this adapter's provider protocol.
 func (d *VolcengineVisualDriver) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
 	return c.submitVisual(ctx, input, key)
 }
 
+// Query reads provider progress or reports that polling is unsupported.
 func (d *VolcengineVisualDriver) Query(ctx context.Context, c *Client, config catalog.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
 	return c.queryVisual(ctx, config, taskID, key)
 }
 
-func (d *VolcengineVisualDriver) Probe(ctx context.Context, c *Client, config catalog.ProviderConfig, key string) ProbeResult {
+// Probe performs the configured provider credential check.
+func (d *VolcengineVisualDriver) Probe(_ context.Context, _ *Client, config catalog.ProviderConfig, _ string) ProbeResult {
 	if config.Validate() != nil {
 		return ProbeResult{Auth: "unknown", Adapter: "unsupported", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 	}
 	return ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 }
 
-func (d *VolcengineVisualDriver) ProbeModelDefaultParams(capability string) map[string]any {
+// ProbeModelDefaultParams applies this adapter's model-probe parameter defaults.
+func (d *VolcengineVisualDriver) ProbeModelDefaultParams(_ string) map[string]any {
 	return nil
 }
 
@@ -56,7 +60,7 @@ func visualProtocol(adapter string) (model, submit, query string) {
 
 func (c *Client) submitVisual(ctx context.Context, input application.GenerationRequest, key string) (application.GenerationResult, error) {
 	model, path, _ := visualProtocol(input.Config.AdapterKey)
-	invalid := application.GenerationResult{Outcome: "not_submitted", ErrorCode: "invalid_provider_request"}
+	invalid := application.GenerationResult{Outcome: application.ProviderOutcomeNotSubmitted, ErrorCode: "invalid_provider_request"}
 	if input.Config.Validate() != nil || !validKey(key) || input.ModelID != model || input.Capability != "video.generate" || input.OutputCount != 1 || input.EndpointTag != "" || len(input.References) != 2 {
 		return invalid, nil
 	}
@@ -117,22 +121,22 @@ func (c *Client) submitVisual(ctx context.Context, input application.GenerationR
 	}
 	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, path, payload, 1<<20)
 	if err != nil {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
 		return submitHTTPFailure(status), nil
 	}
 	var response visualResponse
 	if json.Unmarshal(data, &response) != nil || response.Code == nil || hasProviderError(response.Metadata.Error) {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "invalid_response"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "invalid_response"}, nil
 	}
 	if *response.Code != 10000 {
 		return visualError(*response.Code, true), nil
 	}
 	if response.Data == nil || !validTaskID(response.Data.TaskID) {
-		return application.GenerationResult{Outcome: "unknown", ErrorCode: "invalid_response"}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "invalid_response"}, nil
 	}
-	return application.GenerationResult{Outcome: "accepted", State: "pending", TaskID: response.Data.TaskID}, nil
+	return application.GenerationResult{Outcome: application.ProviderOutcomeAccepted, State: application.ProviderTaskPending, TaskID: response.Data.TaskID}, nil
 }
 
 type visualResponse struct {
@@ -169,19 +173,19 @@ func (c *Client) queryVisual(ctx context.Context, config catalog.ProviderConfig,
 	result := application.GenerationResult{TaskID: taskID}
 	switch response.Data.Status {
 	case "in_queue":
-		result.State = "pending"
+		result.State = application.ProviderTaskPending
 	case "processing", "generating":
-		result.State = "running"
+		result.State = application.ProviderTaskRunning
 	case "not_found":
-		result.State = "not_found"
+		result.State = application.ProviderTaskNotFound
 	case "expired":
-		result.State = "unknown"
+		result.State = application.ProviderTaskUnknown
 		result.ErrorCode = "task_expired"
 	case "done":
 		if !catalog.ValidCreationResultURL(config.AdapterKey, response.Data.VideoURL) {
 			return unknownResult(), nil
 		}
-		result.State = "succeeded"
+		result.State = application.ProviderTaskSucceeded
 		result.URLs = []string{response.Data.VideoURL}
 	default:
 		return unknownResult(), nil
@@ -190,19 +194,19 @@ func (c *Client) queryVisual(ctx context.Context, config catalog.ProviderConfig,
 }
 
 func visualError(code int, submitting bool) application.GenerationResult {
-	result := application.GenerationResult{State: "unknown", ProviderTerminalCode: code, ErrorCode: "provider_error"}
+	result := application.GenerationResult{State: application.ProviderTaskUnknown, ProviderTerminalCode: code, ErrorCode: "provider_error"}
 	// Unknown server errors never authorize a duplicate charged submission.
 	if submitting {
-		result.Outcome = "unknown"
+		result.Outcome = application.ProviderOutcomeUnknown
 	}
 	if !submitting && slices.Contains([]int{50200, 50201, 50204, 50205, 50211, 50214, 50215, 50411, 50412, 50413, 50511, 50512, 50513, 50514}, code) {
-		result.State = "failed"
+		result.State = application.ProviderTaskFailed
 		result.ErrorCode = "generation_failed"
 	}
 	return result
 }
 
 func submitHTTPFailure(status int) application.GenerationResult {
-	result := application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPError(status)}
+	result := application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPError(status)}
 	return result
 }

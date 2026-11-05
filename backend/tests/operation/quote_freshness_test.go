@@ -76,14 +76,11 @@ func TestQuoteFreshnessHandlesReuseAndAgentSession(t *testing.T) {
 	}
 	quoted = validQuotedOperation()
 	quoted.TargetType = "agent_session"
-	quoted.TargetID = nil
-	quoted.TargetVersionNo = nil
-	quoted.ModelProfileVersionID = nil
-	quoted.PriceRuleVersionID = nil
-	facts = application.QuoteCurrentFacts{Now: quoted.CreateTime}
-	if got, err := application.QuoteFreshnessReasons(quoted, facts); err != nil || len(got) != 0 {
-		t.Fatalf("agent session without model snapshot = %v, %v", got, err)
+	if _, err := application.QuoteFreshnessReasons(quoted, facts); !errors.Is(err, domain.ErrInvalidOperation) {
+		t.Fatalf("unsupported target quote accepted: %v", err)
 	}
+	quoted = validQuotedOperation()
+
 	quoted.Status = domain.StatusConfirmed
 	if _, err := application.QuoteFreshnessReasons(quoted, facts); !errors.Is(err, domain.ErrQuoteNotConfirmable) {
 		t.Fatalf("already confirmed quote = %v", err)

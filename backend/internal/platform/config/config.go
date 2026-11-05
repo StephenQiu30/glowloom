@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,7 +18,9 @@ var ErrInvalid = errors.New("invalid configuration")
 
 // Config is the validated configuration shared by every backend role.
 type Config struct {
-	AgentHarnessEnabled           bool
+	AgentOrigin                   string
+	AgentServiceToken             string
+	AgentBusinessToken            string
 	CanvasRuntimeURL              string
 	CanvasRuntimeToken            string
 	CodexBinary                   string
@@ -34,15 +37,6 @@ type Config struct {
 	StorageMaintenanceDSN         string
 	RedisURL                      string
 	KafkaBrokers                  string
-	TemporalAddr                  string
-	TemporalNamespace             string
-	ObjectStorageProvider         string
-	ObjectStorageLegacy           StorageEnvironment
-	ObjectStorageEndpoint         string
-	ObjectStorageBucket           string
-	ObjectStorageAccessKey        string
-	ObjectStorageSecretKey        string
-	ObjectStorageRegion           string
 	ObjectStorage                 *ObjectStorageConfig
 	CredentialPublicKeyPEM        string `json:"-" yaml:"-"`
 	CredentialPrivateKeyPEM       string `json:"-" yaml:"-"`
@@ -87,13 +81,14 @@ var (
 func Load() (Config, error) {
 	v := viper.New()
 	v.AutomaticEnv()
+	v.AllowEmptyEnv(true)
 	v.SetDefault("GLOWLOOM_ENV", "local")
 	v.SetDefault("GLOWLOOM_HTTP_ADDR", "127.0.0.1:8080")
 	v.SetDefault("GLOWLOOM_PUBLIC_ORIGIN", "http://localhost:3000")
 	v.SetDefault("GLOWLOOM_WORKER_HEALTH_ADDR", ":8081")
 	v.SetDefault("GLOWLOOM_RELAY_HEALTH_ADDR", ":8082")
 	v.SetDefault("GLOWLOOM_LOG_LEVEL", "info")
-	if path := environmentFile(); path != "" {
+	if path := os.Getenv("GLOWLOOM_ENV_FILE"); path != "" {
 		v.SetConfigFile(path)
 		v.SetConfigType("env")
 		if err := v.ReadInConfig(); err != nil {
@@ -101,10 +96,10 @@ func Load() (Config, error) {
 		}
 	}
 
-	applyLegacyEnvironment(v)
-
 	cfg := Config{
-		AgentHarnessEnabled:           v.GetBool("GLOWLOOM_AGENT_HARNESS_ENABLED"),
+		AgentOrigin:                   strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_ORIGIN")),
+		AgentServiceToken:             strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_SERVICE_TOKEN")),
+		AgentBusinessToken:            strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_BUSINESS_TOKEN")),
 		CanvasRuntimeURL:              strings.TrimSpace(v.GetString("GLOWLOOM_CANVAS_RUNTIME_URL")),
 		CanvasRuntimeToken:            v.GetString("GLOWLOOM_COLLAB_RUNTIME_TOKEN"),
 		CodexBinary:                   strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_BINARY")),
@@ -121,13 +116,6 @@ func Load() (Config, error) {
 		StorageMaintenanceDSN:         strings.TrimSpace(v.GetString("GLOWLOOM_STORAGE_MAINTENANCE_DSN")),
 		RedisURL:                      strings.TrimSpace(v.GetString("GLOWLOOM_REDIS_URL")),
 		KafkaBrokers:                  strings.TrimSpace(v.GetString("GLOWLOOM_KAFKA_BROKERS")),
-		TemporalAddr:                  strings.TrimSpace(v.GetString("GLOWLOOM_TEMPORAL_ADDR")),
-		TemporalNamespace:             strings.TrimSpace(v.GetString("GLOWLOOM_TEMPORAL_NAMESPACE")),
-		ObjectStorageEndpoint:         strings.TrimSpace(v.GetString("GLOWLOOM_OBJECT_STORAGE_ENDPOINT")),
-		ObjectStorageBucket:           strings.TrimSpace(v.GetString("GLOWLOOM_OBJECT_STORAGE_BUCKET")),
-		ObjectStorageAccessKey:        v.GetString("GLOWLOOM_OBJECT_STORAGE_ACCESS_KEY"),
-		ObjectStorageSecretKey:        v.GetString("GLOWLOOM_OBJECT_STORAGE_SECRET_KEY"),
-		ObjectStorageRegion:           strings.TrimSpace(v.GetString("GLOWLOOM_OBJECT_STORAGE_REGION")),
 		CredentialPublicKeyPEM:        v.GetString("GLOWLOOM_CREDENTIAL_PUBLIC_KEY_PEM"),
 		CredentialPrivateKeyPEM:       v.GetString("GLOWLOOM_CREDENTIAL_PRIVATE_KEY_PEM"),
 		CredentialPublicKeyFile:       strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_PUBLIC_KEY_FILE")),
@@ -167,9 +155,6 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("%w: legacy upgrade deadline must be RFC3339", ErrInvalid)
 		}
 		cfg.IdentityLegacyUpgradeUntil = deadline
-	}
-	if strings.TrimSpace(v.GetString("GLOWLOOM_OBJECT_STORAGE_CONFIG")) != "" {
-		return Config{}, fmt.Errorf("%w: use the unified object storage environment settings", ErrInvalid)
 	}
 	if err := cfg.configureStorage(v.GetString); err != nil {
 		return Config{}, err

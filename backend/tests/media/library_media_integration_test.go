@@ -33,8 +33,8 @@ func libraryPersonalFixture(t *testing.T, db *gorm.DB, objects *objectstorage.Cl
 	}
 	defer func() { _ = file.Close() }()
 	store := mediaTestStore(db)
-	service := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	uploaded, err := service.UploadPersonal(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
+	service := mediaFixtureRoutedUpload(t, db, store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
+	uploaded, err := fixturePersonalUpload(t.Context(), service, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,12 +53,12 @@ func libraryPersonalFixture(t *testing.T, db *gorm.DB, objects *objectstorage.Cl
 	})
 	return uploaded
 }
-func libraryMediaRouter(db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal) *gin.Engine {
+func libraryMediaRouter(t *testing.T, db *gorm.DB, _ *objectstorage.Client, actor identityapp.Principal) *gin.Engine {
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewLibraryMediaHandler(mediaapp.NewLibraryMediaQuery(mediaLibraryStore(db, libraryTestAccess, time.Now), objects, objects)).Register(group)
+	mediahttp.NewLibraryMediaHandler(mediaapp.NewRoutedLibraryMediaQuery(mediaLibraryStore(db, libraryTestAccess, time.Now), mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute)).Register(group)
 	return router
 }
 func TestLibraryMediaActualScopedSignedPreviewsAndAttachmentOnlyDocument(t *testing.T) {
@@ -68,7 +68,7 @@ func TestLibraryMediaActualScopedSignedPreviewsAndAttachmentOnlyDocument(t *test
 	foreign, _ := mediaStoreProject(t, db)
 	imageAsset := libraryPersonalFixture(t, db, objects, actor, "personal.png", uploadPNG(t))
 	document := libraryPersonalFixture(t, db, objects, actor, "personal.txt", []byte("当前私人正文\n"))
-	router := libraryMediaRouter(db, objects, actor)
+	router := libraryMediaRouter(t, db, objects, actor)
 	preview := libraryHTTPRequest(t, router, http.MethodGet, "/api/media/library/items/"+imageAsset.Asset.ID.String()+"/preview?scope=personal", nil, uuid.Nil)
 	var result mediaapp.LibraryMediaPreview
 	if preview.Code != 200 || json.Unmarshal(preview.Body.Bytes(), &result) != nil || result.Asset.ID != imageAsset.Asset.ID || len(result.Renditions) != 2 || result.URL == "" || result.ExpiresAt.Before(time.Now()) {
@@ -89,7 +89,7 @@ func TestLibraryMediaActualScopedSignedPreviewsAndAttachmentOnlyDocument(t *test
 			t.Fatal("actual signed PNG is not decodable", err)
 		}
 	}
-	if response := libraryHTTPRequest(t, libraryMediaRouter(db, objects, foreign), http.MethodGet, "/api/media/library/items/"+imageAsset.Asset.ID.String()+"/preview?scope=personal", nil, uuid.Nil); response.Code != 404 {
+	if response := libraryHTTPRequest(t, libraryMediaRouter(t, db, objects, foreign), http.MethodGet, "/api/media/library/items/"+imageAsset.Asset.ID.String()+"/preview?scope=personal", nil, uuid.Nil); response.Code != 404 {
 		t.Fatal("foreign personal signed lease", response.Code)
 	}
 	if response := libraryHTTPRequest(t, router, http.MethodGet, "/api/media/library/items/"+imageAsset.Asset.ID.String()+"/preview?scope=project&project_id="+project.String(), nil, uuid.Nil); response.Code != 404 {
@@ -112,7 +112,7 @@ func TestLibraryMediaDownloadRejectsCorruptBytesAndStorageFactsNeverEnterMetadat
 	if err := db.Raw(`SELECT object_key FROM media.media_asset WHERE id=?`, uploaded.Asset.ID).Scan(&key).Error; err != nil {
 		t.Fatal(err)
 	}
-	query := mediaapp.NewLibraryMediaQuery(mediaLibraryStore(db, libraryTestAccess, time.Now), objects, objects)
+	query := mediaapp.NewRoutedLibraryMediaQuery(mediaLibraryStore(db, libraryTestAccess, time.Now), mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute)
 	file, asset, err := query.Download(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}, uploaded.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -137,13 +137,13 @@ func TestLibraryMediaDownloadRejectsCorruptBytesAndStorageFactsNeverEnterMetadat
 	if err := objects.PutIfAbsent(t.Context(), key, corrupt.File, corrupt.Size, corrupt.MIMEType, corrupt.SHA256); err != nil {
 		t.Fatal(err)
 	}
-	if response := libraryHTTPRequest(t, libraryMediaRouter(db, objects, actor), http.MethodGet, "/api/media/library/items/"+uploaded.Asset.ID.String()+"/download?scope=personal", nil, uuid.Nil); response.Code != 503 || bytes.Contains(response.Body.Bytes(), changed.Bytes()) {
+	if response := libraryHTTPRequest(t, libraryMediaRouter(t, db, objects, actor), http.MethodGet, "/api/media/library/items/"+uploaded.Asset.ID.String()+"/download?scope=personal", nil, uuid.Nil); response.Code != 503 || bytes.Contains(response.Body.Bytes(), changed.Bytes()) {
 		t.Fatal("bad original bytes escaped attachment gate", response.Code)
 	}
 	// Ordinary image downloads are attachment-only as well; no raw URL is kept.
 	request := httptest.NewRequestWithContext(t.Context(), "GET", "/api/media/library/items/"+uploaded.Asset.ID.String()+"/preview?scope=personal&actor_id="+actor.ID.String(), nil)
 	response := httptest.NewRecorder()
-	libraryMediaRouter(db, objects, actor).ServeHTTP(response, request)
+	libraryMediaRouter(t, db, objects, actor).ServeHTTP(response, request)
 	if response.Code != 422 {
 		t.Fatal("caller selected preview owner", response.Code)
 	}

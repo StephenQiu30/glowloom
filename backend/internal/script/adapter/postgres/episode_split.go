@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -43,12 +44,14 @@ func (s *SourceStore) Episode(ctx context.Context, actor identityapp.Principal, 
 	if s == nil || s.db == nil {
 		return domain.Episode{}, application.ErrUnavailable
 	}
-	var row struct{ ProjectID uuid.UUID }
-	read := s.db.WithContext(ctx).Raw(`SELECT project_id FROM script.episode WHERE org_id=? AND id=?`, actor.OrgID, id).Scan(&row)
-	if read.Error != nil {
-		return domain.Episode{}, read.Error
+	var row scriptEpisodeRow
+	if err := s.db.WithContext(ctx).Select("project_id").Where("org_id = ? AND id = ?", actor.OrgID, id).Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.Episode{}, application.ErrNotFound
+		}
+		return domain.Episode{}, err
 	}
-	if read.RowsAffected != 1 {
+	if row.ProjectID == uuid.Nil {
 		return domain.Episode{}, application.ErrNotFound
 	}
 	var result domain.Episode
@@ -74,21 +77,17 @@ func replayReview(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UU
 	if err := checkRequestScope(tx, actor, project, key, action, hash); err != nil {
 		return false, err
 	}
-	var row struct {
-		OrgID, ProjectID              uuid.UUID
-		Action, RequestHash, Response string
-	}
-	read := tx.Raw(`SELECT org_id,project_id,action,request_hash,response::text FROM script.review_command WHERE actor_id=? AND request_id=?`, actor.ID, key).Scan(&row)
-	if read.Error != nil {
-		return false, read.Error
-	}
-	if read.RowsAffected == 0 {
+	var row scriptReviewCommandRow
+	err := tx.Where("actor_id = ? AND request_id = ?", actor.ID, key).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
+	} else if err != nil {
+		return false, err
 	}
 	if row.OrgID != actor.OrgID || row.ProjectID != project || row.Action != action || row.RequestHash != hash {
 		return false, application.ErrIdempotencyConflict
 	}
-	if err := json.Unmarshal([]byte(row.Response), out); err != nil {
+	if err := json.Unmarshal(row.Response, out); err != nil {
 		return false, application.ErrUnavailable
 	}
 	return true, nil
@@ -101,7 +100,8 @@ func saveReview(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID
 	if err := registerRequest(tx, actor, project, key, action, hash, now); err != nil {
 		return err
 	}
-	return exactlyOne(tx.Exec(`INSERT INTO script.review_command(actor_id,request_id,org_id,project_id,action,request_hash,response,created_at) VALUES(?,?,?,?,?,?,?::jsonb,?)`, actor.ID, key, actor.OrgID, project, action, hash, string(data), now))
+	row := scriptReviewCommandRow{ActorID: actor.ID, RequestID: key, OrgID: actor.OrgID, ProjectID: project, Action: action, RequestHash: hash, Response: scriptJSON(data), CreatedAt: now}
+	return exactlyOne(tx.Create(&row))
 }
 
 func rejectPendingWrite(tx *gorm.DB, org, project uuid.UUID) error {
@@ -125,12 +125,10 @@ func reviewState(tx *gorm.DB, actor identityapp.Principal, project, version uuid
 	return state, nil
 }
 func advanceReview(ctx context.Context, tx *gorm.DB, access application.ProjectAccess, actor identityapp.Principal, project workspaceapp.ProjectContentAccess, scriptRevision int64, now time.Time) (int64, error) {
-	updated := tx.Exec(`UPDATE script.project_state SET revision=revision+1,updated_at=? WHERE org_id=? AND project_id=? AND revision=?`, now, actor.OrgID, project.ProjectID, scriptRevision)
-	if updated.Error != nil {
-		return 0, updated.Error
-	}
-	if updated.RowsAffected != 1 {
-		return 0, application.ErrConflict
+	updated := tx.Model(&scriptProjectStateRow{}).Where("org_id = ? AND project_id = ? AND revision = ?", actor.OrgID, project.ProjectID, scriptRevision).
+		Updates(map[string]any{"revision": scriptRevision + 1, "updated_at": now})
+	if err := exactlyOne(updated); err != nil {
+		return 0, err
 	}
 	return access.TouchContent(ctx, actor, project.ProjectID, project.Revision)
 }
@@ -145,7 +143,7 @@ func (s *SourceStore) Resplit(ctx context.Context, actor identityapp.Principal, 
 		return result, err
 	}
 	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
-		if err := commandLock(tx, actor.ID, input.Key); err != nil {
+		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "resplit", hash, now); err != nil {
 			return err
 		}
 		found, err := replayReview(tx, actor, input.ProjectID, input.Key, "resplit", hash, &result)
@@ -172,11 +170,11 @@ func (s *SourceStore) Resplit(ctx context.Context, actor identityapp.Principal, 
 				return err
 			}
 		}
-		set := domain.SplitSet{ID: uuid.NewSHA1(input.Key, []byte("rules/"+actor.ID.String()+"/"+input.ProjectID.String())), VersionID: input.VersionID, OrgID: actor.OrgID, ProjectID: input.ProjectID, Kind: "candidate", Origin: "rules", Preface: split.Preface, Boundaries: split.Episodes, Warnings: split.Warnings, CreatedAt: now}
+		set := domain.SplitSet{ID: uuid.NewSHA1(input.Key, []byte("rules/"+actor.ID.String()+"/"+input.ProjectID.String())), VersionID: input.VersionID, OrgID: actor.OrgID, ProjectID: input.ProjectID, Kind: domain.SplitSetKindCandidate, Origin: domain.SplitSetOriginRules, Preface: split.Preface, Boundaries: split.Episodes, Warnings: split.Warnings, CreatedAt: now}
 		if err := insertSplitSet(tx, set); err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`UPDATE script.version_head SET split_revision=split_revision+1,candidate_split_set_id=? WHERE version_id=? AND org_id=? AND project_id=?`, set.ID, input.VersionID, actor.OrgID, input.ProjectID)); err != nil {
+		if err := exactlyOne(tx.Model(&scriptVersionHeadRow{}).Where("version_id = ? AND org_id = ? AND project_id = ? AND split_revision = ?", input.VersionID, actor.OrgID, input.ProjectID, head.SplitRevision).Updates(map[string]any{"split_revision": head.SplitRevision + 1, "candidate_split_set_id": set.ID})); err != nil {
 			return err
 		}
 		revision, err := advanceReview(ctx, tx, access, actor, project, state.Revision, now)
@@ -202,7 +200,7 @@ func (s *SourceStore) ConfirmSplit(ctx context.Context, actor identityapp.Princi
 		return result, err
 	}
 	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
-		if err := commandLock(tx, actor.ID, input.Key); err != nil {
+		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "confirm_split", hash, now); err != nil {
 			return err
 		}
 		found, err := replayReview(tx, actor, input.ProjectID, input.Key, "confirm_split", hash, &result)
@@ -261,14 +259,14 @@ func (s *SourceStore) ConfirmSplit(ctx context.Context, actor identityapp.Princi
 		if setID == nil {
 			id := uuid.NewSHA1(input.Key, []byte("formal/"+actor.ID.String()+"/"+input.ProjectID.String()))
 			setID = &id
-			set := domain.SplitSet{ID: id, VersionID: input.VersionID, OrgID: actor.OrgID, ProjectID: input.ProjectID, Kind: "formal", Origin: "manual", Preface: input.Preface, Boundaries: input.Boundaries, CreatedAt: now}
+			set := domain.SplitSet{ID: id, VersionID: input.VersionID, OrgID: actor.OrgID, ProjectID: input.ProjectID, Kind: domain.SplitSetKindFormal, Origin: domain.SplitSetOriginManual, Preface: input.Preface, Boundaries: input.Boundaries, CreatedAt: now}
 			if err := insertSplitSet(tx, set); err != nil {
 				return err
 			}
 		}
 		// Release the unique active sequence before inserting any changed head.
 		for _, episode := range changed {
-			if err := exactlyOne(tx.Exec(`UPDATE script.episode SET is_delete=true,revision=revision+1 WHERE id=? AND org_id=? AND project_id=?`, episode.ID, actor.OrgID, input.ProjectID)); err != nil {
+			if err := exactlyOne(tx.Model(&scriptEpisodeRow{}).Where("id = ? AND org_id = ? AND project_id = ? AND revision = ? AND is_delete = ?", episode.ID, actor.OrgID, input.ProjectID, episode.Revision, false).Updates(map[string]any{"is_delete": true, "revision": episode.Revision + 1})); err != nil {
 				return err
 			}
 		}
@@ -280,27 +278,27 @@ func (s *SourceStore) ConfirmSplit(ctx context.Context, actor identityapp.Princi
 			if index >= 0 {
 				episode := previous[index]
 				if episode.Title != boundary.Title {
-					episode.Title = boundary.Title
-					episode.Revision++
-					if err := exactlyOne(tx.Exec(`UPDATE script.episode SET title=?,revision=revision+1 WHERE id=? AND org_id=? AND project_id=?`, episode.Title, episode.ID, actor.OrgID, input.ProjectID)); err != nil {
+					if err := exactlyOne(tx.Model(&scriptEpisodeRow{}).Where("id = ? AND org_id = ? AND project_id = ? AND revision = ? AND is_delete = ?", episode.ID, actor.OrgID, input.ProjectID, episode.Revision, false).Updates(map[string]any{"title": boundary.Title, "revision": episode.Revision + 1})); err != nil {
 						return err
 					}
+					episode.Title = boundary.Title
+					episode.Revision++
 					result.RenamedIDs = append(result.RenamedIDs, episode.ID)
 				}
 				result.Episodes = append(result.Episodes, episode)
-				result.Mappings = append(result.Mappings, application.EpisodeMapping{PreviousID: &episode.ID, EpisodeID: &episode.ID, InheritStatus: "retained"})
+				result.Mappings = append(result.Mappings, application.EpisodeMapping{PreviousID: &episode.ID, EpisodeID: &episode.ID, InheritStatus: domain.EpisodeInheritStatusRetained})
 				continue
 			}
 			id := uuid.NewSHA1(input.Key, []byte("episode/"+actor.ID.String()+"/"+input.ProjectID.String()+fmt.Sprint(boundary.SeqNo)))
-			episode := domain.Episode{ID: id, OrgID: actor.OrgID, ProjectID: input.ProjectID, VersionID: input.VersionID, SplitSetID: *setID, SeqNo: boundary.SeqNo, Title: boundary.Title, Start: boundary.Start, End: boundary.End, Revision: 1, InheritStatus: "not_inherited"}
+			episode := domain.Episode{ID: id, OrgID: actor.OrgID, ProjectID: input.ProjectID, VersionID: input.VersionID, SplitSetID: *setID, SeqNo: boundary.SeqNo, Title: boundary.Title, Start: boundary.Start, End: boundary.End, Revision: 1, InheritStatus: domain.EpisodeInheritStatusNotInherited}
 			if err := insertEpisode(tx, episode); err != nil {
 				return err
 			}
 			result.Episodes = append(result.Episodes, episode)
-			result.Mappings = append(result.Mappings, application.EpisodeMapping{EpisodeID: &id, InheritStatus: "not_inherited"})
+			result.Mappings = append(result.Mappings, application.EpisodeMapping{EpisodeID: &id, InheritStatus: domain.EpisodeInheritStatusNotInherited})
 		}
 		for _, episode := range changed {
-			result.Mappings = append(result.Mappings, application.EpisodeMapping{PreviousID: &episode.ID, InheritStatus: "invalidated"})
+			result.Mappings = append(result.Mappings, application.EpisodeMapping{PreviousID: &episode.ID, InheritStatus: domain.EpisodeInheritStatusInvalidated})
 		}
 		confirmationID := uuid.NewSHA1(input.Key, []byte("confirmation/"+actor.ID.String()+"/"+input.ProjectID.String()))
 		result.ConfirmationID = &confirmationID
@@ -312,10 +310,11 @@ func (s *SourceStore) ConfirmSplit(ctx context.Context, actor identityapp.Princi
 		if err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`INSERT INTO script.split_confirmation(id,org_id,project_id,version_id,candidate_set_id,formal_set_id,actor_id,revision,preface,episodes,created_at) VALUES(?,?,?,?,?,?,?,?,?::jsonb,?::jsonb,?)`, confirmationID, actor.OrgID, input.ProjectID, input.VersionID, head.CandidateSetID, *setID, actor.ID, result.SplitRevision, string(preface), string(episodes), now)); err != nil {
+		confirmation := scriptSplitConfirmationRow{ID: confirmationID, OrgID: actor.OrgID, ProjectID: input.ProjectID, VersionID: input.VersionID, CandidateSetID: head.CandidateSetID, FormalSetID: *setID, ActorID: actor.ID, Revision: result.SplitRevision, Preface: scriptJSON(preface), Episodes: scriptJSON(episodes), CreatedAt: now}
+		if err := exactlyOne(tx.Create(&confirmation)); err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`UPDATE script.version_head SET split_revision=split_revision+1,confirmed_split_set_id=coalesce(confirmed_split_set_id,?) WHERE version_id=? AND org_id=? AND project_id=?`, *setID, input.VersionID, actor.OrgID, input.ProjectID)); err != nil {
+		if err := exactlyOne(tx.Model(&scriptVersionHeadRow{}).Where("version_id = ? AND org_id = ? AND project_id = ? AND split_revision = ?", input.VersionID, actor.OrgID, input.ProjectID, head.SplitRevision).Updates(map[string]any{"split_revision": head.SplitRevision + 1, "confirmed_split_set_id": *setID})); err != nil {
 			return err
 		}
 		projectRevision, err := advanceReview(ctx, tx, access, actor, project, state.Revision, now)

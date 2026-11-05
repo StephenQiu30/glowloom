@@ -7,35 +7,24 @@ import (
 	"net/http"
 
 	"github.com/google/wire"
-	"go.temporal.io/sdk/worker"
 	"go.uber.org/zap"
 
-	maintenanceflow "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
 func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (*http.Server, func(), error) {
-	wire.Build(provideTrace, provideDB, provideRedis, provideTemporal, provideObjectStorage, provideReadyCheck, provideAPIServer)
+	wire.Build(provideTrace, provideDB, provideRedis, provideObjectStorage, provideReadyCheck, provideAPIServer)
 	return nil, nil, nil
 }
 
-func initializeWorker(ctx context.Context, cfg config.Config, logger *zap.Logger, queue string) (worker.Worker, func(), error) {
-	wire.Build(provideWorkerTrace, provideDB, provideTemporal, provideBackendWorker)
+func initializeWorker(ctx context.Context, cfg config.Config, logger *zap.Logger, queue string) (*taskruntime.Worker, func(), error) {
+	wire.Build(provideWorkerTrace, provideDB, provideBackendWorker)
 	return nil, nil, nil
 }
 
 func initializeRelay(ctx context.Context, cfg config.Config, logger *zap.Logger) (*relayRuntime, func(), error) {
 	wire.Build(provideRelayTrace, provideDB, provideKafka, provideRedis, provideRelayRuntime)
-	return nil, nil, nil
-}
-
-func initializeMaintenanceSetup(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) (*maintenanceflow.ScheduleInstaller, func(), error) {
-	wire.Build(provideSetupTrace, provideTemporal, provideCleanupScheduleInstaller)
-	return nil, nil, nil
-}
-
-func initializeQuoteExpirySetup(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) (*operationflow.QuoteExpiryScheduleInstaller, func(), error) {
-	wire.Build(provideSetupTrace, provideTemporal, provideQuoteExpiryScheduleInstaller)
 	return nil, nil, nil
 }

@@ -25,7 +25,7 @@ func copyMediaRead[T any](ctx context.Context, db *gorm.DB, read func(*pgmedia.P
 	var result T
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		result, err = read(pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess))
+		result, err = read(pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess).WithRoutedStorage())
 		return err
 	})
 	return result, err
@@ -33,7 +33,7 @@ func copyMediaRead[T any](ctx context.Context, db *gorm.DB, read func(*pgmedia.P
 
 func (s *copyMediaTransactions) write(ctx context.Context, change func(*pgmedia.ProjectCopyStore) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return change(pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess))
+		return change(pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess).WithRoutedStorage())
 	})
 }
 

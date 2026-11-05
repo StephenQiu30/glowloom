@@ -8,6 +8,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Button } from "@/components/ui/button";
+import { ConversationWorkspace } from "@/components/conversations/conversation-workspace";
+import { ConversationProvider } from "@/components/conversations/conversation-context";
 import { HomeCreation } from "@/app/_components/home-creation";
 import type { RichGeneration } from "@/components/generation/rich-generation";
 
@@ -16,6 +18,7 @@ const state = vi.hoisted(() => ({
   save: vi.fn<() => Promise<boolean>>(),
   opened: [] as { capability: string; draftID?: string }[],
   login: vi.fn(),
+  projectID: "test-project",
   generatedID: undefined as string | undefined,
 }));
 vi.mock("@/components/auth/session", () => ({
@@ -27,10 +30,11 @@ vi.mock("@/components/layout/basic-layout", () => ({
 vi.mock("@/components/projects/new-canvas-button", () => ({
   NewCanvasButton: () => <Button>新建画布</Button>,
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("next/dynamic", () => ({
   default: (loader: () => unknown) =>
-    loader.toString().includes("agent-workspace")
-      ? () => <p>Agent 会话</p>
+    loader.toString().includes("conversation-workspace")
+      ? ConversationWorkspace
       : WorkspaceStub,
 }));
 vi.mock("@/components/projects/project-picker", () => ({
@@ -46,7 +50,7 @@ vi.mock("@/components/projects/project-picker", () => ({
     <Button
       disabled={disabled}
       aria-expanded={open}
-      onClick={() => onChange({ id: "test-project", name: "验证项目" })}
+      onClick={() => onChange({ id: state.projectID, name: "验证项目" })}
     >
       选择验证项目
     </Button>
@@ -83,6 +87,7 @@ function Page() {
 }
 beforeEach(() => {
   state.session = null;
+  state.projectID = "test-project";
   state.generatedID = undefined;
   localStorage.clear();
   state.opened = [];
@@ -174,10 +179,10 @@ it("Agent 入口先登录和选择项目，不再显示暂未开放", async () =
   render(<Page />);
   await tab("Agent 模式");
   expect(screen.queryByText(/暂未开放/)).toBeNull();
-  fireEvent.paste(screen.getByLabelText("创作提示词"), {
+  fireEvent.paste(await screen.findByLabelText("对话创作输入"), {
     clipboardData: { files: [], getData: () => "海边海报" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "开始生成" }));
+  fireEvent.click(screen.getByRole("button", { name: "发送" }));
   expect(state.login).toHaveBeenCalledOnce();
 });
 
@@ -255,7 +260,9 @@ it("六类文字草稿往返隔离，首次选择目标类型为空", async () =
     "数字人",
   ]) {
     await tab(name);
-    const editor = await screen.findByLabelText("创作提示词");
+    const editor = await screen.findByLabelText(
+      name === "Agent 模式" ? "对话创作输入" : "创作提示词",
+    );
     expect(editor.textContent).toBe("");
     fireEvent.paste(editor, {
       clipboardData: { files: [], getData: () => name + "独立内容" },
@@ -270,9 +277,13 @@ it("六类文字草稿往返隔离，首次选择目标类型为空", async () =
     "数字人",
   ]) {
     await tab(name);
-    expect(screen.getByLabelText("创作提示词").textContent).toBe(
-      name + "独立内容",
-    );
+    expect(
+      (
+        await screen.findByLabelText(
+          name === "Agent 模式" ? "对话创作输入" : "创作提示词",
+        )
+      ).textContent,
+    ).toBe(name + "独立内容");
   }
 });
 
@@ -368,4 +379,57 @@ it("项目音频草稿页面内复用，重新打开不复用本机指针", asyn
   fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
   await screen.findByText("audio 富文本编辑器");
   expect(state.opened.at(-1)?.draftID).toBeUndefined();
+});
+
+it("keeps a guest Agent draft through login and first project selection", async () => {
+  const view = render(
+    <ConversationProvider>
+      <Page />
+    </ConversationProvider>,
+  );
+  await tab("Agent 模式");
+  fireEvent.paste(await screen.findByLabelText("对话创作输入"), {
+    clipboardData: { files: [], getData: () => "访客尚未发送的正文" },
+  });
+  state.session = { actor: { id: "signed-in" } };
+  view.rerender(
+    <ConversationProvider>
+      <Page />
+    </ConversationProvider>,
+  );
+  await tab("Agent 模式");
+  expect((await screen.findByLabelText("对话创作输入")).textContent).toBe(
+    "访客尚未发送的正文",
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
+  expect((await screen.findByLabelText("对话创作输入")).textContent).toBe(
+    "访客尚未发送的正文",
+  );
+});
+
+it("keeps Agent drafts separate when switching projects", async () => {
+  state.session = { actor: { id: "draft-owner" } };
+  render(
+    <ConversationProvider>
+      <Page />
+    </ConversationProvider>,
+  );
+  await tab("Agent 模式");
+  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
+  fireEvent.paste(await screen.findByLabelText("对话创作输入"), {
+    clipboardData: { files: [], getData: () => "项目A草稿" },
+  });
+  state.projectID = "second-project";
+  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("对话创作输入").textContent).toBe(""),
+  );
+  fireEvent.paste(screen.getByLabelText("对话创作输入"), {
+    clipboardData: { files: [], getData: () => "项目B草稿" },
+  });
+  state.projectID = "test-project";
+  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("对话创作输入").textContent).toBe("项目A草稿"),
+  );
 });

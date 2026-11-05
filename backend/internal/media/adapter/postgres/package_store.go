@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -56,10 +58,12 @@ type packageJobRow struct {
 	RequestSHA256, ArchiveSHA256, FrozenSHA256 string
 	ArchiveBytes                               int64
 	Frozen, Result                             []byte
-	Status                                     string
+	Status                                     application.PackageStatus
 	Revision, LibraryRevision, ProjectRevision int64
 	CreatedAt, UpdatedAt                       time.Time
 }
+
+func (packageJobRow) TableName() string { return "media.package_job" }
 
 func packageRequestHash(in application.PackageImportRequest) (string, error) {
 	body, err := json.Marshal(struct {
@@ -100,7 +104,7 @@ func decodePackagePlan(row packageJobRow) (application.PackagePlan, error) {
 
 func packageJob(row packageJobRow, plan application.PackagePlan) (application.PackageJob, error) {
 	result := application.PackageJob{ID: row.ID, Scope: packageScope(row), Status: row.Status, Revision: row.Revision, ItemCount: len(plan.Items), FolderCount: len(plan.Folders), Warnings: plan.Warnings, LibraryRevision: row.LibraryRevision, ProjectRevision: row.ProjectRevision, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
-	if row.Status == "succeeded" {
+	if row.Status == application.PackageStatusSucceeded {
 		var stored application.PackageJob
 		if decodePackageFrozen(row.Result, &stored) != nil || !packageSameJob(stored, result) {
 			return result, application.ErrUnavailable
@@ -142,7 +146,7 @@ func (s *PackageStore) AuthorizePackage(ctx context.Context, actor identityapp.P
 }
 
 func packageCommandLock(tx *gorm.DB, actor, key uuid.UUID) error {
-	return tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-package/"+actor.String()+"/"+key.String()).Error
+	return lockStorageIdempotencyKey(tx, storageIdempotencyPackage, actor, key)
 }
 
 // FindPackageImport reauthorizes before permanent actor/key replay.
@@ -168,12 +172,12 @@ func (s *PackageStore) FindPackageImport(ctx context.Context, actor identityapp.
 			return err
 		}
 		var row packageJobRow
-		read := tx.Raw(`SELECT * FROM media.package_job WHERE actor_id=? AND org_id=? AND idem_key=?`, actor.ID, actor.OrgID, in.Key).Scan(&row)
+		read := tx.Where("actor_id = ? AND org_id = ? AND idem_key = ?", actor.ID, actor.OrgID, in.Key).Take(&row)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return nil
+		}
 		if read.Error != nil {
 			return read.Error
-		}
-		if read.RowsAffected == 0 {
-			return nil
 		}
 		if row.RequestSHA256 != hash || row.LibraryKind != string(in.Scope.Kind) || !sameScopeProject(row.ProjectID, in.Scope.ProjectID) {
 			return application.ErrPackageConflict
@@ -220,7 +224,8 @@ func (s *PackageStore) scopeLock(ctx context.Context, tx *gorm.DB, actor identit
 		if scope.Kind == domain.LibraryPersonal {
 			personal = &actor.ID
 		}
-		if err := tx.Exec(`INSERT INTO media.library(id,kind,org_id,project_id,personal_actor_id)VALUES(?,?,?,?,?)ON CONFLICT(id)DO NOTHING`, id, scope.Kind, actor.OrgID, scope.ProjectID, personal).Error; err != nil {
+		row := libraryRow{ID: id, Kind: string(scope.Kind), OrgID: actor.OrgID, ProjectID: scope.ProjectID, PersonalActorID: personal}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(&row).Error; err != nil {
 			return libraryRow{}, facts, err
 		}
 	}
@@ -260,11 +265,14 @@ func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor identityapp
 			return err
 		}
 		var existing packageJobRow
-		read := tx.Raw(`SELECT * FROM media.package_job WHERE actor_id=? AND idem_key=?`, actor.ID, in.Key).Scan(&existing)
+		read := tx.Where("actor_id = ? AND idem_key = ?", actor.ID, in.Key).Take(&existing)
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			read.Error = nil
+		}
 		if read.Error != nil {
 			return read.Error
 		}
-		if read.RowsAffected == 1 {
+		if existing.ID != uuid.Nil {
 			if existing.OrgID != actor.OrgID || existing.RequestSHA256 != hash {
 				return application.ErrPackageConflict
 			}
@@ -290,10 +298,19 @@ func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor identityapp
 				return application.ErrPackageConflict
 			}
 		}
-		var active bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.package_job WHERE library_id=? AND status='needs_reconciliation') OR EXISTS(SELECT 1 FROM media.transfer_job WHERE (source_library_id=? OR target_library_id=?) AND (status IN ('queued','running','needs_reconciliation','cancel_requested') OR execution_unconfirmed OR NOT process_ended)) OR EXISTS(SELECT 1 FROM media.purge_job WHERE library_id=? AND (status IN ('queued','running','needs_reconciliation','cancel_requested') OR execution_unconfirmed OR NOT process_ended))`, library.ID, library.ID, library.ID, library.ID).Scan(&active).Error; err != nil {
+		packageBusy, err := storageExists(tx.Model(&packageJobRow{}).Where("library_id = ? AND status = ?", library.ID, application.PackageStatusNeedsReconciliation))
+		if err != nil {
 			return err
 		}
+		transferBusy, err := storageExists(tx.Model(&transferJobRow{}).Where("(source_library_id = ? OR target_library_id = ?) AND (status IN ? OR execution_unconfirmed = ? OR process_ended = ?)", library.ID, library.ID, []domain.TransferStatus{domain.TransferStatusQueued, domain.TransferStatusRunning, domain.TransferStatusNeedsReconciliation, domain.TransferStatusCancelRequested}, true, false))
+		if err != nil {
+			return err
+		}
+		purgeBusy, err := storageExists(tx.Model(&purgeJobRow{}).Where("library_id = ? AND (status IN ? OR execution_unconfirmed = ? OR process_ended = ?)", library.ID, []domain.PurgeStatus{domain.PurgeStatusQueued, domain.PurgeStatusRunning, domain.PurgeStatusNeedsReconciliation, domain.PurgeStatusCancelRequested}, true, false))
+		if err != nil {
+			return err
+		}
+		active := packageBusy || transferBusy || purgeBusy
 		if active {
 			return application.ErrPackageConflict
 		}
@@ -305,11 +322,11 @@ func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor identityapp
 		if len(combined) > 4096 || len(combined) > 0 && domain.ValidateLibraryFolderPlacement(combined[0], combined) != nil {
 			return application.ErrPackageConflict
 		}
-		row := packageJobRow{ID: plan.JobID, OrgID: actor.OrgID, ActorID: actor.ID, LibraryID: library.ID, LibraryKind: string(in.Scope.Kind), ProjectID: in.Scope.ProjectID, IdemKey: in.Key, RequestSHA256: hash, ArchiveSHA256: in.ArchiveSHA256, ArchiveBytes: in.ArchiveBytes, Frozen: body, FrozenSHA256: hex.EncodeToString(digest[:]), Status: "needs_reconciliation", Revision: 1, LibraryRevision: library.Revision, ProjectRevision: facts.Revision, CreatedAt: plan.CreatedAt, UpdatedAt: plan.CreatedAt}
+		row := packageJobRow{ID: plan.JobID, OrgID: actor.OrgID, ActorID: actor.ID, LibraryID: library.ID, LibraryKind: string(in.Scope.Kind), ProjectID: in.Scope.ProjectID, IdemKey: in.Key, RequestSHA256: hash, ArchiveSHA256: in.ArchiveSHA256, ArchiveBytes: in.ArchiveBytes, Frozen: body, FrozenSHA256: hex.EncodeToString(digest[:]), Status: application.PackageStatusNeedsReconciliation, Revision: 1, LibraryRevision: library.Revision, ProjectRevision: facts.Revision, CreatedAt: plan.CreatedAt, UpdatedAt: plan.CreatedAt}
 		if _, err := decodePackagePlan(row); err != nil {
 			return err
 		}
-		if err := libraryChanged(tx, `INSERT INTO media.package_job(id,org_id,actor_id,library_id,library_kind,project_id,idem_key,request_sha256,archive_sha256,archive_bytes,frozen,frozen_sha256,status,revision,library_revision,project_revision,created_at,updated_at)VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'needs_reconciliation',1,?,?,?,?)`, row.ID, row.OrgID, row.ActorID, row.LibraryID, row.LibraryKind, row.ProjectID, row.IdemKey, row.RequestSHA256, row.ArchiveSHA256, row.ArchiveBytes, row.Frozen, row.FrozenSHA256, row.LibraryRevision, row.ProjectRevision, row.CreatedAt, row.UpdatedAt); err != nil {
+		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
 		locations := map[string]domain.ObjectLocation{}
@@ -321,7 +338,8 @@ func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor identityapp
 			}
 		}
 		for index, object := range plan.Objects {
-			if err := libraryChanged(tx, `INSERT INTO media.package_object(job_id,object_index,object_key,object_location_id,byte_size,content_type,sha256)VALUES(?,?,?,?,?,?,?)`, row.ID, index, object.Key, locationIDForKey(locations, object.Key), object.ByteSize, object.MIMEType, object.SHA256); err != nil {
+			objectRecord := packageObjectRecord{JobID: row.ID, ObjectIndex: index, ObjectKey: object.Key, ObjectLocationID: locationIDForKey(locations, object.Key), ByteSize: object.ByteSize, ContentType: object.MIMEType, SHA256: object.SHA256, Status: application.PackageObjectStatusPending}
+			if err := tx.Create(&objectRecord).Error; err != nil {
 				return err
 			}
 		}
@@ -333,16 +351,16 @@ func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor identityapp
 
 func (s *PackageStore) readPackage(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, lock bool) (packageJobRow, application.PackagePlan, error) {
 	var row packageJobRow
-	query := `SELECT * FROM media.package_job WHERE id=? AND org_id=? AND actor_id=?`
+	query := tx.Where("id = ? AND org_id = ? AND actor_id = ?", id, actor.OrgID, actor.ID)
 	if lock {
-		query += ` FOR UPDATE`
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
-	read := tx.Raw(query, id, actor.OrgID, actor.ID).Scan(&row)
+	read := query.Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return row, application.PackagePlan{}, application.ErrNotFound
+	}
 	if read.Error != nil {
 		return row, application.PackagePlan{}, read.Error
-	}
-	if read.RowsAffected != 1 {
-		return row, application.PackagePlan{}, application.ErrNotFound
 	}
 	plan, err := decodePackagePlan(row)
 	if err == nil {
@@ -384,11 +402,11 @@ func (s *PackageStore) ListPackages(ctx context.Context, actor identityapp.Princ
 		return result, application.ErrInvalidPackage
 	}
 	err := s.library.read(ctx, actor, scope, func(tx *gorm.DB, library libraryRow) error {
-		if err := tx.Raw(`SELECT count(*) FROM media.package_job WHERE org_id=? AND actor_id=? AND library_id=?`, actor.OrgID, actor.ID, library.ID).Scan(&result.Total).Error; err != nil {
+		if err := tx.Model(&packageJobRow{}).Where("org_id = ? AND actor_id = ? AND library_id = ?", actor.OrgID, actor.ID, library.ID).Count(&result.Total).Error; err != nil {
 			return err
 		}
 		var rows []packageJobRow
-		if err := tx.Raw(`SELECT * FROM media.package_job WHERE org_id=? AND actor_id=? AND library_id=? ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`, actor.OrgID, actor.ID, library.ID, size, (page-1)*size).Scan(&rows).Error; err != nil {
+		if err := tx.Where("org_id = ? AND actor_id = ? AND library_id = ?", actor.OrgID, actor.ID, library.ID).Order("created_at DESC").Order("id DESC").Limit(size).Offset((page - 1) * size).Find(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {
@@ -422,17 +440,13 @@ func (s *PackageStore) ControlPackageImport(ctx context.Context, actor identitya
 }
 
 func packageReplayCommand(tx *gorm.DB, actor identityapp.Principal, key, id uuid.UUID, hash, action string) (*application.PackageJob, error) {
-	var row struct {
-		JobID, OrgID          uuid.UUID
-		Action, RequestSHA256 string
-		Response              []byte
+	var row packageCommandRecord
+	read := tx.Where("actor_id = ? AND idem_key = ?", actor.ID, key).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-	read := tx.Raw(`SELECT job_id,org_id,action,request_sha256,response FROM media.package_command WHERE actor_id=? AND idem_key=?`, actor.ID, key).Scan(&row)
 	if read.Error != nil {
 		return nil, read.Error
-	}
-	if read.RowsAffected == 0 {
-		return nil, nil
 	}
 	if row.OrgID != actor.OrgID || row.JobID != id || row.Action != action || row.RequestSHA256 != hash {
 		return nil, application.ErrPackageConflict
@@ -456,7 +470,8 @@ func savePackageCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID,
 	if err != nil || len(body) > 1<<20 {
 		return job, application.ErrUnavailable
 	}
-	err = libraryChanged(tx, `INSERT INTO media.package_command(actor_id,org_id,idem_key,job_id,action,request_sha256,response)VALUES(?,?,?,?,?,?,?)`, actor.ID, actor.OrgID, key, job.ID, action, hash, body)
+	command := packageCommandRecord{ActorID: actor.ID, OrgID: actor.OrgID, IdemKey: key, JobID: job.ID, Action: action, RequestSHA256: hash, Response: body}
+	err = tx.Create(&command).Error
 	return job, err
 }
 
@@ -478,7 +493,7 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return err
 		}
-		library, facts, err := s.scopeLock(ctx, tx, actor, packageScope(initial), initial.Status == "needs_reconciliation")
+		library, facts, err := s.scopeLock(ctx, tx, actor, packageScope(initial), initial.Status == application.PackageStatusNeedsReconciliation)
 		if err != nil {
 			return err
 		}
@@ -519,8 +534,8 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 				return application.ErrPackageConflict
 			}
 		}
-		if row.Status != "needs_reconciliation" {
-			if cancel && row.Status == "succeeded" {
+		if row.Status != application.PackageStatusNeedsReconciliation {
+			if cancel && row.Status == application.PackageStatusSucceeded {
 				return application.ErrPackageConflict
 			}
 			result, err = savePackageCommand(tx, actor, key, hash, action, result)
@@ -529,12 +544,8 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 		if !cancel && (library.Revision != plan.Request.ExpectedRevision || facts.Revision != plan.Request.ExpectedProjectRevision) {
 			return application.ErrPackageConflict
 		}
-		var objects []struct {
-			ObjectIndex                            int
-			ObjectKey, ContentType, SHA256, Status string
-			ByteSize                               int64
-		}
-		if err := tx.Raw(`SELECT * FROM media.package_object WHERE job_id=? ORDER BY object_index FOR UPDATE`, id).Scan(&objects).Error; err != nil {
+		var objects []packageObjectRecord
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ?", id).Order("object_index").Find(&objects).Error; err != nil {
 			return err
 		}
 		if len(objects) != len(plan.Objects) {
@@ -542,7 +553,7 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 		}
 		for index, object := range objects {
 			frozen := plan.Objects[index]
-			if object.ObjectIndex != index || object.ObjectKey != frozen.Key || object.ContentType != frozen.MIMEType || object.SHA256 != frozen.SHA256 || object.ByteSize != frozen.ByteSize || object.Status == "removed" && !cancel {
+			if object.ObjectIndex != index || object.ObjectKey != frozen.Key || object.ContentType != frozen.MIMEType || object.SHA256 != frozen.SHA256 || object.ByteSize != frozen.ByteSize || object.Status == application.PackageObjectStatusRemoved && !cancel {
 				return application.ErrUnavailable
 			}
 		}
@@ -555,8 +566,8 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 		now := s.clock().UTC().Truncate(time.Microsecond)
 		row.Revision++
 		row.UpdatedAt = now
-		objectStatus := "removed"
-		row.Status = "cancelled"
+		objectStatus := application.PackageObjectStatusRemoved
+		row.Status = application.PackageStatusCancelled
 		if !cancel {
 			if err := acceptPackageLocations(ctx, tx, &plan); err != nil {
 				return err
@@ -564,7 +575,7 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 			if err := publishPackage(tx, library, plan); err != nil {
 				return err
 			}
-			if err := libraryChanged(tx, `UPDATE media.library SET revision=revision+1,update_time=? WHERE id=? AND revision=?`, now, library.ID, library.Revision); err != nil {
+			if err := updateOne(tx, "media.library", map[string]any{"id": library.ID, "revision": library.Revision}, map[string]any{"revision": library.Revision + 1, "update_time": now}, application.ErrLibraryConflict); err != nil {
 				return err
 			}
 			row.LibraryRevision = library.Revision + 1
@@ -575,14 +586,14 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 				}
 				row.ProjectRevision = next
 			}
-			row.Status = "succeeded"
-			objectStatus = "verified"
+			row.Status = application.PackageStatusSucceeded
+			objectStatus = application.PackageObjectStatusVerified
 		}
-		if err := tx.Exec(`UPDATE media.package_object SET status=? WHERE job_id=?`, objectStatus, id).Error; err != nil {
+		if err := tx.Model(&packageObjectRecord{}).Where("job_id = ?", id).Update("status", objectStatus).Error; err != nil {
 			return err
 		}
 		result, err = packageJob(row, plan)
-		if row.Status == "succeeded" {
+		if row.Status == application.PackageStatusSucceeded {
 			row.Result = nil
 			result = application.PackageJob{ID: row.ID, Scope: packageScope(row), Status: row.Status, Revision: row.Revision, ItemCount: len(plan.Items), FolderCount: len(plan.Folders), Warnings: plan.Warnings, LibraryRevision: row.LibraryRevision, ProjectRevision: row.ProjectRevision, CreatedAt: row.CreatedAt, UpdatedAt: now}
 			err = nil
@@ -597,7 +608,7 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 				return err
 			}
 		}
-		if err := libraryChanged(tx, `UPDATE media.package_job SET status=?,revision=?,library_revision=?,project_revision=?,result=?,updated_at=? WHERE id=? AND status='needs_reconciliation' AND revision=?`, row.Status, row.Revision, row.LibraryRevision, row.ProjectRevision, response, now, id, row.Revision-1); err != nil {
+		if err := updateOne(tx, "media.package_job", map[string]any{"id": id, "status": application.PackageStatusNeedsReconciliation, "revision": row.Revision - 1}, map[string]any{"status": row.Status, "revision": row.Revision, "library_revision": row.LibraryRevision, "project_revision": row.ProjectRevision, "result": response, "updated_at": now}, application.ErrLibraryConflict); err != nil {
 			return err
 		}
 		safe, _ := json.Marshal(map[string]any{"revision": row.Revision, "status": row.Status, "item_count": len(plan.Items), "folder_count": len(plan.Folders)})
@@ -605,7 +616,8 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 		if cancel {
 			auditAction = "media.package.cancelled"
 		}
-		if err := libraryChanged(tx, `INSERT INTO audit.audit_log(id,org_id,project_id,actor_id,actor_kind,action,object_type,object_id,after,request_id)VALUES(?,?,?,?,'user',?,'media.package',?,?::jsonb,?)`, uuid.NewSHA1(id, []byte(auditAction)), actor.OrgID, row.ProjectID, actor.ID, auditAction, id.String(), string(safe), plan.RequestID.String()); err != nil {
+		audit := uploadAuditRecord{ID: uuid.NewSHA1(id, []byte(auditAction)), OrgID: actor.OrgID, ProjectID: row.ProjectID, ActorID: actor.ID, ActorKind: "user", Action: auditAction, ObjectType: "media.package", ObjectID: id.String(), After: jsonDocument(safe), RequestID: plan.RequestID.String()}
+		if err := tx.Omit("CreateTime", "UpdateTime").Create(&audit).Error; err != nil {
 			return err
 		}
 		result, err = savePackageCommand(tx, actor, key, hash, action, result)
@@ -628,7 +640,8 @@ func publishPackage(tx *gorm.DB, library libraryRow, plan application.PackagePla
 			if folder.LibraryID != library.ID || folder.Kind != domain.LibraryKind(library.Kind) || folder.Validate() != nil {
 				return application.ErrUnavailable
 			}
-			if err := libraryChanged(tx, `INSERT INTO media.library_folder(id,library_id,library_kind,parent_id,name,name_key,position,style,theme,revision,create_time,update_time)VALUES(?,?,?,?,?,?,?,?,?,1,?,?)`, folder.ID, library.ID, folder.Kind, folder.ParentID, folder.Name, folder.NameKey(), folder.Position, folder.Style, folder.Theme, folder.CreatedAt, folder.UpdatedAt); err != nil {
+			row := libraryFolderRow{ID: folder.ID, LibraryID: library.ID, LibraryKind: string(folder.Kind), ParentID: folder.ParentID, Name: folder.Name, NameKey: folder.NameKey(), Position: folder.Position, Style: folder.Style, Theme: folder.Theme, Revision: 1, CreateTime: folder.CreatedAt, UpdateTime: folder.UpdatedAt}
+			if err := tx.Create(&row).Error; err != nil {
 				return err
 			}
 			inserted[folder.ID] = true
@@ -676,7 +689,9 @@ func (s *PackageStore) HasInflightPackageWork(ctx context.Context, actor identit
 		if _, err := s.library.authorize(ctx, tx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, false); err != nil {
 			return err
 		}
-		return tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.package_job WHERE org_id=? AND project_id=? AND status='needs_reconciliation')`, actor.OrgID, project).Scan(&busy).Error
+		value, err := storageExists(tx.Model(&packageJobRow{}).Where("org_id = ? AND project_id = ? AND status = ?", actor.OrgID, project, application.PackageStatusNeedsReconciliation))
+		busy = value
+		return err
 	})
 	return busy, err
 }
@@ -689,33 +704,14 @@ func (s *PackageStore) HasInflightLibraryPackageWork(ctx context.Context, actor 
 	}
 	var busy bool
 	err := s.library.read(ctx, actor, scope, func(tx *gorm.DB, library libraryRow) error {
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.package_job WHERE org_id=? AND library_id=? AND status='needs_reconciliation')`, actor.OrgID, library.ID).Scan(&busy).Error; err != nil {
+		var err error
+		busy, err = storageExists(tx.Model(&packageJobRow{}).Where("org_id = ? AND library_id = ? AND status = ?", actor.OrgID, library.ID, application.PackageStatusNeedsReconciliation))
+		if err != nil {
 			return fmt.Errorf("%w: read retained library packages: %w", application.ErrUnavailable, err)
 		}
 		return nil
 	})
 	return busy, err
-}
-
-// StorageUsageKeys includes retained ZIPs and all possibly written private intents.
-func (s *PackageStore) StorageUsageKeys(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope) ([]string, error) {
-	keys := []string{}
-	if s == nil || s.db == nil {
-		return nil, application.ErrUnavailable
-	}
-	err := s.library.read(ctx, actor, scope, func(tx *gorm.DB, library libraryRow) error {
-		if err := tx.Raw(`SELECT o.object_key FROM media.package_object o JOIN media.package_job j ON j.id=o.job_id WHERE j.org_id=? AND j.library_id=? AND o.status<>'removed' ORDER BY o.object_key LIMIT 50001`, actor.OrgID, library.ID).Scan(&keys).Error; err != nil {
-			return err
-		}
-		if len(keys) > 50000 {
-			return application.ErrUnavailable
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return keys, nil
 }
 
 // HasPackageReferences protects every unpublished reserved asset identity.
@@ -726,7 +722,7 @@ func (s *PackageStore) HasPackageReferences(ctx context.Context, actor identitya
 	var found bool
 	err := s.library.read(ctx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(tx *gorm.DB, library libraryRow) error {
 		var rows []packageJobRow
-		if err := tx.Raw(`SELECT * FROM media.package_job WHERE org_id=? AND library_id=? AND status='needs_reconciliation' ORDER BY id LIMIT 2`, actor.OrgID, library.ID).Scan(&rows).Error; err != nil {
+		if err := tx.Where("org_id = ? AND library_id = ? AND status = ?", actor.OrgID, library.ID, application.PackageStatusNeedsReconciliation).Order("id").Limit(2).Find(&rows).Error; err != nil {
 			return err
 		}
 		if len(rows) > 1 {
@@ -758,25 +754,24 @@ func (s *PackageStore) InspectPackageExport(ctx context.Context, actor identitya
 		if err != nil {
 			return err
 		}
-		var purging bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.purge_job WHERE library_id=? AND (status IN ('queued','running','needs_reconciliation','cancel_requested') OR execution_unconfirmed OR NOT process_ended))`, library.ID).Scan(&purging).Error; err != nil {
+		purging, err := storageExists(tx.Model(&purgeJobRow{}).Where("library_id = ? AND (status IN ? OR execution_unconfirmed = ? OR process_ended = ?)", library.ID, []domain.PurgeStatus{domain.PurgeStatusQueued, domain.PurgeStatusRunning, domain.PurgeStatusNeedsReconciliation, domain.PurgeStatusCancelRequested}, true, false))
+		if err != nil {
 			return err
 		}
 		if purging {
 			return application.ErrPackageConflict
 		}
-		query, args := packageExportEntries(actor, scope, library.ID)
-		var rows []libraryEntryRow
-		if err := tx.Raw(query+`SELECT * FROM entries ORDER BY id LIMIT 2501`, args...).Scan(&rows).Error; err != nil {
+		rows, err := packageExportEntries(tx, actor, scope, library.ID)
+		if err != nil {
 			return err
 		}
 		if len(rows) > application.MaxPackageEntries {
 			return application.ErrInvalidPackage
 		}
-		// Compare identities, not counts: unrelated legacy assets cannot mask a
+		// Compare identities, not counts: unrelated assets cannot mask a
 		// missing declared original or a corrupt cross-scope catalog relation.
 		var declared []uuid.UUID
-		if err := tx.Raw(`SELECT id FROM media.library_item WHERE library_id=? AND purged_at IS NULL ORDER BY id LIMIT 2501`, library.ID).Scan(&declared).Error; err != nil {
+		if err := tx.Model(&libraryItemRow{}).Where("library_id = ? AND purged_at IS NULL", library.ID).Order("id").Limit(2501).Pluck("id", &declared).Error; err != nil {
 			return err
 		}
 		if len(declared) > application.MaxPackageEntries {
@@ -794,7 +789,7 @@ func (s *PackageStore) InspectPackageExport(ctx context.Context, actor identitya
 				return application.ErrPackageIncomplete
 			}
 		}
-		export := application.PackageExport{Manifest: application.LibraryPackageManifest{App: "glowloom-media-library", Version: 1, ExportedAt: s.clock().UTC(), LibraryKind: scope.Kind, Folders: []application.LibraryPackageFolder{}, Items: []application.LibraryPackageItem{}, Files: []application.LibraryPackageFile{}}, Objects: map[string]application.PackageObject{}}
+		export := application.PackageExport{Manifest: application.LibraryPackageManifest{App: application.LibraryPackageApplication, Version: application.LibraryPackageVersion, ExportedAt: s.clock().UTC(), LibraryKind: scope.Kind, Folders: []application.LibraryPackageFolder{}, Items: []application.LibraryPackageItem{}, Files: []application.LibraryPackageFile{}}, Objects: map[string]application.PackageObject{}}
 		for _, f := range folders {
 			export.Manifest.Folders = append(export.Manifest.Folders, application.LibraryPackageFolder{ID: f.ID, ParentID: f.ParentID, Name: f.Name, Style: f.Style, Theme: f.Theme, Position: f.Position})
 		}
@@ -806,7 +801,7 @@ func (s *PackageStore) InspectPackageExport(ctx context.Context, actor identitya
 			}
 			item := application.LibraryPackageItem{ID: row.ID.String(), Kind: row.Kind, Metadata: application.LibraryMetadata{PlainText: detail.PlainText, FolderID: row.FolderID, Title: row.Title, Category: row.Category, Tags: detail.Tags, SourceLabel: row.SourceLabel, Note: row.Note, Favorite: row.Favorite}, State: row.CatalogState, TrashedAt: row.TrashedAt, Position: row.Position}
 			if row.AssetID != nil {
-				a, err := decodePackageExportAsset(tx, row.AssetFacts, row.CatalogState)
+				a, err := decodePackageExportAsset(tx, row.Asset, row.CatalogState)
 				if err != nil {
 					return err
 				}

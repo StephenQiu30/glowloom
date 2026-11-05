@@ -88,7 +88,7 @@ func (w *DepthWorker) Execute(ctx context.Context, id DepthWorkID) (job domain.D
 		}
 	}()
 	if w.routes != nil {
-		objects, openErr := w.routes.Open(ctx, StorageOwner("depth", job.ProjectID, id.JobID, id.Attempt), work.SourceAssets)
+		objects, openErr := w.routes.Open(ctx, StorageOwner(mediaapp.StorageWorkKindDepth, job.ProjectID, id.JobID, id.Attempt), work.SourceAssets)
 		if openErr != nil {
 			return job, openErr
 		}
@@ -121,7 +121,7 @@ func (w *DepthWorker) Execute(ctx context.Context, id DepthWorkID) (job domain.D
 		code = "depth_execution_unknown"
 		return job, ErrConflict
 	}
-	if err = w.store.Phase(ctx, id, "downloading"); err != nil {
+	if err = w.store.Phase(ctx, id, DepthDownloading); err != nil {
 		return job, err
 	}
 	input, err := w.read(ctx, DepthObject{ObjectKey: work.Frozen.Input.ObjectKey, ByteSize: work.Frozen.Input.ByteSize, MIMEType: work.Frozen.Input.MIMEType, SHA256: work.Frozen.Input.SHA256})
@@ -139,7 +139,7 @@ func (w *DepthWorker) Execute(ctx context.Context, id DepthWorkID) (job domain.D
 		return job, err
 	}
 	stopped = false
-	output, processErr := w.processor.Process(ctx, input, work.Frozen.Input.SHA256, func(phase DepthPhase) error { return w.store.Phase(ctx, id, string(phase)) })
+	output, processErr := w.processor.Process(ctx, input, work.Frozen.Input.SHA256, func(phase DepthPhase) error { return w.store.Phase(ctx, id, phase) })
 	if output != nil && output.File != nil {
 		owned = append(owned, output.File)
 	}
@@ -159,7 +159,7 @@ func (w *DepthWorker) Execute(ctx context.Context, id DepthWorkID) (job domain.D
 	if processErr != nil {
 		code = depthErrorCode(processErr)
 		check, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		phaseErr := w.store.Phase(check, id, "verifying")
+		phaseErr := w.store.Phase(check, id, DepthVerifying)
 		cancel()
 		if errors.Is(phaseErr, ErrCancelled) {
 			return job, ErrCancelled
@@ -185,7 +185,7 @@ func (w *DepthWorker) Execute(ctx context.Context, id DepthWorkID) (job domain.D
 	if err = ValidateDepthReceipt(work.Frozen, output); err != nil {
 		return job, err
 	}
-	if err = w.store.Phase(ctx, id, "previews"); err != nil {
+	if err = w.store.Phase(ctx, id, DepthPreviews); err != nil {
 		return job, err
 	}
 	rendered, err := w.previews.Render(ctx, output.File, output.Probe, "16:9")
@@ -206,7 +206,7 @@ func (w *DepthWorker) Execute(ctx context.Context, id DepthWorkID) (job domain.D
 	}
 	uncertain = true
 	code = "depth_object_unknown"
-	if err = w.store.Phase(ctx, id, "storing"); err != nil {
+	if err = w.store.Phase(ctx, id, DepthStoring); err != nil {
 		return job, err
 	}
 	for i, o := range artifact.Objects {
@@ -349,7 +349,7 @@ func (w *DepthWorker) reconcile(ctx context.Context, id DepthWorkID) error {
 		return ErrDepthOutputInvalid
 	}
 	for _, o := range objects {
-		if o.DeleteStarted || o.Status == "removed" {
+		if o.DeleteStarted || o.Status == DepthObjectStatusRemoved {
 			return ErrConflict
 		}
 		if !o.WriteStarted {
@@ -371,7 +371,7 @@ func (w *DepthWorker) cleanup(ctx context.Context, id DepthWorkID) error {
 		return err
 	}
 	for _, o := range objects {
-		if o.Status == "removed" {
+		if o.Status == DepthObjectStatusRemoved {
 			continue
 		}
 		if !o.WriteStarted {
@@ -393,7 +393,7 @@ func (w *DepthWorker) cleanup(ctx context.Context, id DepthWorkID) error {
 		if verifyErr != nil {
 			return verifyErr
 		}
-		if o.Status == "pending" {
+		if o.Status == DepthObjectStatusPending {
 			if err = w.store.ConfirmObject(ctx, id, o.ObjectKey); err != nil {
 				return err
 			}
@@ -421,14 +421,14 @@ func (w *DepthWorker) artifact(ctx context.Context, work DepthWork, o *DepthOutp
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	sha := o.File.SHA256
 	p := o.Probe
-	a = DepthArtifact{JobID: work.Job.ID, Attempt: work.Job.Attempt, InputSHA256: work.Frozen.Input.SHA256, Receipt: o.Receipt, Asset: mediadomain.MediaAsset{ID: id, ProjectID: work.Job.ProjectID, Kind: mediadomain.KindVideo, Origin: mediadomain.OriginSystem, Status: mediadomain.StatusProcessing, ModerationStatus: mediadomain.ModerationPending, ObjectKey: key, FileName: "depth-" + work.Job.ID.String() + ".mp4", MimeType: "video/mp4", ByteSize: o.File.Size, SHA256: &sha, Width: p.Width, Height: p.Height, DurationMS: p.DurationMS, FPS: p.FPS, Codec: p.Codec, Revision: 1, CreateTime: now, UpdateTime: now}, Objects: []DepthObject{{Kind: "original", ObjectKey: key, SHA256: sha, ByteSize: o.File.Size, MIMEType: "video/mp4"}}}
+	a = DepthArtifact{JobID: work.Job.ID, Attempt: work.Job.Attempt, InputSHA256: work.Frozen.Input.SHA256, Receipt: o.Receipt, Asset: mediadomain.MediaAsset{ID: id, ProjectID: work.Job.ProjectID, Kind: mediadomain.KindVideo, Origin: mediadomain.OriginSystem, Status: mediadomain.StatusProcessing, ModerationStatus: mediadomain.ModerationPending, ObjectKey: key, FileName: "depth-" + work.Job.ID.String() + ".mp4", MimeType: "video/mp4", ByteSize: o.File.Size, SHA256: &sha, Width: p.Width, Height: p.Height, DurationMS: p.DurationMS, FPS: p.FPS, Codec: p.Codec, Revision: 1, CreateTime: now, UpdateTime: now}, Objects: []DepthObject{{Kind: DepthObjectKindOriginal, ObjectKey: key, SHA256: sha, ByteSize: o.File.Size, MIMEType: "video/mp4"}}}
 	files := []*mediaapp.Downloaded{o.File}
 	for i, r := range rendered {
-		kind, mime, ext, width, height := "poster", "image/png", "png", int32(640), int32(360)
+		kind, mime, ext, width, height := DepthObjectKindPoster, "image/png", "png", int32(640), int32(360)
 		if i == 1 {
-			kind, mime, ext, width, height = "proxy_720p", "video/mp4", "mp4", 1280, 720
+			kind, mime, ext, width, height = DepthObjectKindProxy720p, "video/mp4", "mp4", 1280, 720
 		}
-		if string(r.Kind) != kind || r.Ext != ext || r.Width != width || r.Height != height || r.Result == nil || r.Result.MIMEType != mime {
+		if string(r.Kind) != string(kind) || r.Ext != ext || r.Width != width || r.Height != height || r.Result == nil || r.Result.MIMEType != mime {
 			return a, nil, ErrDepthOutputInvalid
 		}
 		if err := depthHashFile(r.Result); err != nil {
@@ -438,7 +438,7 @@ func (w *DepthWorker) artifact(ctx context.Context, work DepthWork, o *DepthOutp
 		if err != nil || p.Width == nil || p.Height == nil || *p.Width != width || *p.Height != height || i == 0 && p.Kind != mediadomain.KindImage || i == 1 && (p.Kind != mediadomain.KindVideo || p.Codec == nil || *p.Codec != "h264" || p.AudioChannels != nil) {
 			return a, nil, errors.Join(ErrDepthOutputInvalid, err)
 		}
-		rkey := path.Join(key[:len(key)-len(path.Ext(key))], kind+"."+ext)
+		rkey := path.Join(key[:len(key)-len(path.Ext(key))], string(kind)+"."+ext)
 		size := r.Result.Size
 		a.Renditions = append(a.Renditions, mediadomain.Rendition{ID: uuid.NewSHA1(id, []byte(kind)), MediaAssetID: id, Kind: r.Kind, ObjectKey: rkey, Width: &width, Height: &height, ByteSize: &size, CreateTime: now, UpdateTime: now})
 		a.Objects = append(a.Objects, DepthObject{Kind: kind, ObjectKey: rkey, SHA256: r.Result.SHA256, ByteSize: size, MIMEType: mime})

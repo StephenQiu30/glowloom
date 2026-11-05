@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import { prepareCommands } from "./commands.mjs";
 import { AdmissionGate, digest } from "./admission.mjs";
 import { canonicalJson, canonicalGraphJson } from "./canonical.mjs";
 import { prepareTitle } from "./metadata.mjs";
@@ -132,6 +133,16 @@ export async function computeCandidate(action, request) {
     } finally {
       doc.destroy();
     }
+  }
+  if (action === "commands") {
+    const prepared = prepareCommands(
+      request,
+      decodeBinary(request.state, 8 * 1024 * 1024),
+    );
+    return {
+      ...(await computeCandidate("prepare", { ...request, ...prepared })),
+      commandUpdate: prepared.update,
+    };
   }
   if (action === "rename") {
     if (
@@ -278,8 +289,11 @@ function normalizeReferenceLabels(doc, base, transition) {
       },
     );
     for (const reference of node.references) {
-      const kind =
-        ["subject", "canvas_subject"].includes(reference.source?.kind) ? "subject" : reference.mediaKind;
+      const kind = ["subject", "canvas_subject"].includes(
+        reference.source?.kind,
+      )
+        ? "subject"
+        : reference.mediaKind;
       if (!["image", "video", "audio", "subject"].includes(kind))
         throw failure("INVALID_REFERENCE");
       const old = labels.allocations[reference.id];

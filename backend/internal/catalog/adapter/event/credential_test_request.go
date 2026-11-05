@@ -1,4 +1,4 @@
-// Package event adapts durable catalog requests to the existing Temporal workflow.
+// Package event adapts durable catalog requests to the credential command consumer.
 package event
 
 import (
@@ -44,7 +44,7 @@ type CredentialTestHandler struct {
 	starter   CredentialTestStarter
 }
 
-// NewCredentialTestHandler injects durable deduplication, request proof, and Temporal.
+// NewCredentialTestHandler injects durable deduplication, request proof, and the command consumer.
 func NewCredentialTestHandler(processed ProcessedStore, store CredentialTestDeliveryStore, starter CredentialTestStarter) *CredentialTestHandler {
 	return &CredentialTestHandler{processed: processed, store: store, starter: starter}
 }

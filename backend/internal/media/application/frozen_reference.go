@@ -20,7 +20,7 @@ type FrozenReferenceFactReader interface {
 // VerifyFrozenReference checks an existing proof against exact current media
 // facts and actual private bytes; it cannot form or update a new binding.
 func (q *ReferenceFactQuery) VerifyFrozenReference(ctx context.Context, actor identityapp.Principal, project uuid.UUID, fact ReferenceFact) error {
-	if q == nil || q.reader == nil || q.objects == nil && q.objectReader == nil {
+	if q == nil || q.reader == nil || q.objects == nil {
 		return ErrUnavailable
 	}
 	reader, ok := q.reader.(FrozenReferenceFactReader)

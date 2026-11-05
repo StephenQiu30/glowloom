@@ -23,30 +23,31 @@ type objectBytes struct {
 	data []byte
 }
 
-func validateSourceCommand(input SourceCommand) error {
+// ValidateSourceCommand validates a complete atomic editor command before intent or I/O.
+func ValidateSourceCommand(input SourceCommand) error {
 	if input.ProjectID == uuid.Nil || input.Key == uuid.Nil || input.RequestID == uuid.Nil || input.ExpectedRevision < 0 || input.BaseVersionID != nil && *input.BaseVersionID == uuid.Nil {
 		return domain.ErrInvalidSource
 	}
 	switch input.Action {
-	case "create", "update":
+	case domain.SourceActionCreate, domain.SourceActionUpdate:
 		if len(input.Sources) != 1 || !input.RightsConfirmed || len(input.Order) != 0 {
 			return domain.ErrInvalidSource
 		}
-		if input.Action == "update" && (input.LineageID == nil || *input.LineageID == uuid.Nil) {
+		if input.Action == domain.SourceActionUpdate && (input.LineageID == nil || *input.LineageID == uuid.Nil) {
 			return domain.ErrInvalidSource
 		}
-		if input.Action == "create" && input.LineageID != nil {
+		if input.Action == domain.SourceActionCreate && input.LineageID != nil {
 			return domain.ErrInvalidSource
 		}
-	case "import":
+	case domain.SourceActionImport:
 		if len(input.Sources) < 1 || len(input.Sources) > domain.MaxChapterImport || !input.RightsConfirmed || len(input.Order) != 0 || input.LineageID != nil {
 			return domain.ErrInvalidSource
 		}
-	case "delete":
+	case domain.SourceActionDelete:
 		if len(input.Sources) != 0 || len(input.Order) != 0 || input.LineageID == nil || *input.LineageID == uuid.Nil {
 			return domain.ErrInvalidSource
 		}
-	case "reorder":
+	case domain.SourceActionReorder:
 		if len(input.Sources) != 0 || input.LineageID != nil {
 			return domain.ErrInvalidSource
 		}
@@ -83,10 +84,10 @@ func (s *SourceService) Write(ctx context.Context, actor identityapp.Principal, 
 	if s == nil || s.store == nil || s.objects == nil || s.now == nil {
 		return SourceReceipt{}, ErrUnavailable
 	}
-	if err := validateSourceCommand(input); err != nil {
+	if err := ValidateSourceCommand(input); err != nil {
 		return SourceReceipt{}, err
 	}
-	hash, err := commandHash(input)
+	hash, err := SourceCommandHash(input)
 	if err != nil {
 		return SourceReceipt{}, err
 	}
@@ -171,15 +172,10 @@ func (s *SourceService) readObject(ctx context.Context, fact domain.ObjectFact) 
 	if err := fact.Validate(); err != nil {
 		return nil, err
 	}
-	var reader io.ReadCloser
-	var err error
-	if located, ok := s.objects.(LocatedPrivateObjects); ok {
-		reader, err = located.GetObject(ctx, fact)
-	} else if fact.LocationID != uuid.Nil {
+	if s.objects == nil || fact.LocationID == uuid.Nil {
 		return nil, ErrUnavailable
-	} else {
-		reader, err = s.objects.Get(ctx, fact.Key)
 	}
+	reader, err := s.objects.GetObject(ctx, fact)
 	if err != nil {
 		return nil, err
 	}
@@ -218,23 +214,17 @@ func equalObjectContent(a, b []domain.ObjectFact) bool {
 }
 
 func putPrivateObject(ctx context.Context, objects PrivateObjects, f domain.ObjectFact, body io.Reader) error {
-	if located, ok := objects.(LocatedPrivateObjects); ok {
-		return located.PutObjectIfAbsent(ctx, f, body)
-	}
-	if f.LocationID != uuid.Nil {
+	if objects == nil || f.LocationID == uuid.Nil || f.Validate() != nil {
 		return ErrUnavailable
 	}
-	return objects.PutIfAbsent(ctx, f.Key, body, f.ByteSize, f.MIME, f.SHA256)
+	return objects.PutObjectIfAbsent(ctx, f, body)
 }
 
 func removePrivateObject(ctx context.Context, objects PrivateObjects, f domain.ObjectFact) error {
-	if located, ok := objects.(LocatedPrivateObjects); ok {
-		return located.RemoveObject(ctx, f)
-	}
-	if f.LocationID != uuid.Nil {
+	if objects == nil || f.LocationID == uuid.Nil || f.Validate() != nil {
 		return ErrUnavailable
 	}
-	return objects.Remove(ctx, f.Key)
+	return objects.RemoveObject(ctx, f)
 }
 
 func frozenObject(project, id uuid.UUID, name, mime string, data []byte) domain.ObjectFact {
@@ -259,7 +249,7 @@ func (s *SourceService) prepareWrite(ctx context.Context, actor identityapp.Prin
 	}
 	objects := make([]objectBytes, 0, len(input.Sources)*2+2)
 	switch input.Action {
-	case "create", "import":
+	case domain.SourceActionCreate, domain.SourceActionImport:
 		for i, source := range input.Sources {
 			id := uuid.NewSHA1(input.Key, []byte("source/"+actor.ID.String()+"/"+input.ProjectID.String()+fmt.Sprint(i)))
 			record, doc, raw, err := makeSource(input.ProjectID, actor, id, id, nil, 1, source, now)
@@ -272,13 +262,13 @@ func (s *SourceService) prepareWrite(ctx context.Context, actor identityapp.Prin
 			objects = append(objects, raw...)
 			plan.Mappings = append(plan.Mappings, SourceChange{LineageID: id, NewSourceID: &id})
 		}
-	case "update", "delete":
+	case domain.SourceActionUpdate, domain.SourceActionDelete:
 		index := slices.IndexFunc(records, func(r domain.SourceRecord) bool { return r.LineageID == *input.LineageID })
 		if index < 0 {
 			return WritePlan{}, nil, ErrNotFound
 		}
 		old := records[index]
-		if input.Action == "delete" {
+		if input.Action == domain.SourceActionDelete {
 			records = slices.Delete(records, index, index+1)
 			documents = slices.Delete(documents, index, index+1)
 			plan.Mappings = append(plan.Mappings, SourceChange{LineageID: old.LineageID, OldSourceID: &old.ID})
@@ -293,7 +283,7 @@ func (s *SourceService) prepareWrite(ctx context.Context, actor identityapp.Prin
 			objects = append(objects, raw...)
 			plan.Mappings = append(plan.Mappings, SourceChange{LineageID: old.LineageID, OldSourceID: &old.ID, NewSourceID: &id})
 		}
-	case "reorder":
+	case domain.SourceActionReorder:
 		if len(input.Order) != len(records) {
 			return WritePlan{}, nil, domain.ErrInvalidSource
 		}
@@ -337,7 +327,7 @@ func (s *SourceService) prepareWrite(ctx context.Context, actor identityapp.Prin
 		versionNo = base.Version.VersionNo + 1
 	}
 	plan.Version = domain.ScriptVersion{ID: versionID, OrgID: actor.OrgID, ProjectID: input.ProjectID, VersionNo: versionNo, SourceIDs: ids, Spans: composed.Spans, Text: text, Rich: rich, ContentHash: composed.ContentHash, DocumentSHA256: composed.DocumentSHA256, SourceManifestSHA256: domain.ContentSHA(manifest), CharCount: composed.CharCount, CreatedAt: now}
-	plan.Candidate = domain.SplitSet{ID: uuid.NewSHA1(versionID, []byte("source-candidates")), VersionID: versionID, OrgID: actor.OrgID, ProjectID: input.ProjectID, Kind: "candidate", Origin: "sources", Boundaries: composed.Candidates, CreatedAt: now}
+	plan.Candidate = domain.SplitSet{ID: uuid.NewSHA1(versionID, []byte("source-candidates")), VersionID: versionID, OrgID: actor.OrgID, ProjectID: input.ProjectID, Kind: domain.SplitSetKindCandidate, Origin: domain.SplitSetOriginSources, Boundaries: composed.Candidates, CreatedAt: now}
 	objects = append(objects, objectBytes{text, []byte(composed.Text)}, objectBytes{rich, composed.RichJSON})
 	for _, object := range objects {
 		plan.Objects = append(plan.Objects, object.fact)
@@ -363,10 +353,10 @@ func makeSource(project uuid.UUID, actor identityapp.Principal, id, lineage uuid
 		return domain.SourceRecord{}, domain.SourceDocument{}, nil, err
 	}
 	original, mime := canonical, "application/json"
-	origin := "manual"
+	origin := domain.SourceOriginManual
 	if input.OriginalHTML != nil {
 		original, mime = []byte(*input.OriginalHTML), "text/html; charset=utf-8"
-		origin = "beeftv"
+		origin = domain.SourceOriginBeeftv
 	}
 	record := domain.SourceRecord{ID: id, OrgID: actor.OrgID, ProjectID: project, LineageID: lineage, PreviousID: previous, Revision: revision, Origin: origin, Kind: input.Kind, Title: input.Title, Status: input.Status, RightsActorID: actor.ID, RightsConfirmedAt: now, Original: frozenObject(project, id, "original", mime, original), Rich: frozenObject(project, id, "rich.json", "application/json", canonical), ContentHash: domain.ContentSHA([]byte(plain)), CharCount: utf8.RuneCountInString(plain), Provenance: input.Provenance, CreatedAt: now}
 	return record, sourceDocument(record, doc), []objectBytes{{record.Original, original}, {record.Rich, canonical}}, nil

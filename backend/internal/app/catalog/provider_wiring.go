@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"net/http"
 
+	catalogtask "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
+	operationtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
+	trialtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	subjecttask "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/task"
+
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
 
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
 
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/worker"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
@@ -21,7 +25,6 @@ import (
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	managedprovider "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
@@ -29,11 +32,10 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/doubao"
-	subjectflow "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/workflow"
 )
 
-// RegisterProviderActivities registers provider activities with the operation worker.
-func RegisterProviderActivities(ctx context.Context, w worker.Worker, database *gorm.DB, cfg config.Config) error {
+// RegisterProvider registers provider activities with the operation worker.
+func RegisterProvider(ctx context.Context, handlers map[string]taskruntime.Handler, database *gorm.DB, cfg config.Config) error {
 	data, err := cfg.CredentialPrivateBytes()
 	if err != nil {
 		return fmt.Errorf("provider worker requires configured private sealing PEM: %w", err)
@@ -44,42 +46,31 @@ func RegisterProviderActivities(ctx context.Context, w worker.Worker, database *
 		return fmt.Errorf("configure provider worker sealing key: %w", err)
 	}
 	activities := providerprobe.NewScopedActivities(database, unsealer, providerhttp.NewClient(&http.Client{}), operationwire.NewCatalogStore(database))
-	w.RegisterActivityWithOptions(activities.TestReachability, activity.RegisterOptions{Name: "provider.test_reachability"})
-	w.RegisterActivityWithOptions(activities.TestCredential, activity.RegisterOptions{Name: "provider.test_credential"})
+	catalogStore := operationwire.NewCatalogStore(database)
+	handlers[catalogtask.Credential] = catalogtask.CredentialHandler(catalogtask.NewActivities(catalogapp.NewCredentialTestService(catalogStore), catalogStore), activities)
 
-	storage, err := objectstorage.OpenFromConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("configure provider result storage: %w", err)
-	}
-	subjectObjects, err := subjectwire.OpenObjects(cfg, storage)
+	subjectObjects, err := subjectwire.OpenObjects(cfg)
 	if err != nil {
 		return fmt.Errorf("configure subject input transport: %w", err)
 	}
 	context.AfterFunc(ctx, subjectObjects.Close)
+	registry := subjectObjects.Registry()
+	if registry == nil {
+		return objectstorage.ErrUnavailable
+	}
 	store := operationwire.ProvideOperationStore(database).WithSubjectMedia(func(tx *gorm.DB) operationapp.SubjectMediaAccess {
 		return subjectwire.NewGenerationAccess(tx, subjectObjects)
 	})
-	if subjectObjects.Registry() != nil {
-		store.WithProjectMedia(func(*gorm.DB) operationapp.ProjectMediaSigner {
-			return operationwire.NewProjectMediaSigner(subjectObjects.Registry(), subjectObjects.Legacy)
-		})
-	}
+	store.WithProjectMedia(func(*gorm.DB) operationapp.ProjectMediaSigner {
+		return operationwire.NewProjectMediaSigner(registry)
+	})
 	voiceExecution := subjectwire.NewVoiceExecutionWithObjects(database, subjectObjects, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, unsealer, doubao.NewSpeech(providerhttp.NewClient(&http.Client{})))
-	subjectflow.NewActivities(voiceExecution).RegisterActivities(w)
-	if subjectObjects.Registry() == nil && storage == nil {
-		w.RegisterActivityWithOptions(func(context.Context, operationapp.ManagedStep) (operationapp.ManagedProgress, error) {
-			return operationapp.ManagedProgress{}, mediaapp.ErrStorageNotReady
-		}, activity.RegisterOptions{Name: "provider.managed"})
-		return nil
-	}
-	results := operationapp.NewManagedResults(staging.NewObjects(storage), store)
-	if subjectObjects.Registry() != nil {
-		results = operationapp.NewRoutedManagedResults(staging.NewRoutedFactory(subjectObjects.Registry(), pgmedia.NewStorageRoutes(database)), store)
-	}
-	execution := managedprovider.NewActivities(store, unsealer, providerhttp.NewClient(&http.Client{}), results, storage, managedprovider.NewVideos())
-	w.RegisterActivityWithOptions(execution.Step, activity.RegisterOptions{Name: "provider.managed"})
-	if cfg.Env == "local" && storage != nil {
-		trialwire.RegisterCloud(w, database, unsealer, providerhttp.NewClient(&http.Client{}), storage, operationapp.TrialStorageID(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket))
+	handlers[subjecttask.Voice] = subjecttask.VoiceHandler(voiceExecution)
+	results := operationapp.NewRoutedManagedResults(staging.NewRoutedFactory(registry, pgmedia.NewStorageRoutes(database)), store)
+	execution := managedprovider.NewActivities(store, unsealer, providerhttp.NewClient(&http.Client{}), results, managedprovider.NewVideos())
+	operationtask.RegisterProvider(handlers, store, execution)
+	if cfg.Env == "local" {
+		handlers[trialtask.Cloud] = trialwire.Cloud(database, unsealer, providerhttp.NewClient(&http.Client{}), registry)
 	}
 	return nil
 }

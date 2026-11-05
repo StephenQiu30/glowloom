@@ -15,7 +15,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
@@ -232,7 +232,7 @@ func TestM1DispatchClaimRequiresConclusivePriorNonSubmission(t *testing.T) {
 			}
 			if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
 				OperationID: identity.OperationID, Action: "submit", Attempt: 1,
-				Outcome: outcome, State: state, ProviderTaskID: taskID, Receipt: receipt,
+				Outcome: application.ProviderCallOutcome(outcome), State: application.ProviderCallState(state), ProviderTaskID: taskID, Receipt: receipt,
 			}); err != nil {
 				t.Fatal(err)
 			}

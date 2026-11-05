@@ -44,7 +44,7 @@ func readDeliveryReady(tx *gorm.DB, projectID, id uuid.UUID, status domain.Statu
 		if json.Unmarshal(op.Result, manifest) != nil || manifest.Validate() != nil || op.Model == nil || op.Price == nil || manifest.Identity != (application.ProviderDispatchIdentity{ProjectID: projectID, OperationID: id, ModelProfileVersionID: *op.Model, PriceRuleVersionID: *op.Price, RequestKey: op.RequestKey, Action: "submit", Attempt: 1}) {
 			return false, true, nil
 		}
-		if manifest.State != "succeeded" {
+		if manifest.State != application.ManagedResultSucceeded {
 			return false, false, nil
 		}
 		expected = len(manifest.Artifacts)
@@ -161,7 +161,7 @@ func readDeliveryOutputs(tx *gorm.DB, projectID, id uuid.UUID) ([]deliveryOutput
 	}
 	byID := make(map[uuid.UUID]*media.ObjectLocation, len(locations))
 	for _, l := range locations {
-		byID[l.ID] = &media.ObjectLocation{ID: l.ID, State: l.State, Ref: media.ObjectRef{ProfileID: l.ProfileID, Bucket: l.Bucket, Key: l.ObjectKey}}
+		byID[l.ID] = &media.ObjectLocation{ID: l.ID, State: media.ObjectLocationState(l.State), Ref: media.ObjectRef{ProfileID: l.ProfileID, Bucket: l.Bucket, Key: l.ObjectKey}}
 	}
 	for index, out := range outputs {
 		if out.BoundLocationID != nil {

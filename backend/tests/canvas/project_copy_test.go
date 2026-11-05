@@ -76,11 +76,11 @@ func TestProjectCopyRemapsUnusedTimelineImports(t *testing.T) {
 	sourceAsset, targetAsset := uuid.New(), uuid.New()
 	node.Config.Timeline.ImportedAssets = []uuid.UUID{sourceAsset}
 	doc := domain.Document{ID: uuid.New(), ProjectID: uuid.New(), Name: "导入资产", Scope: json.RawMessage(`{}`), Revision: 1, Viewport: domain.Viewport{Zoom: 1}, Nodes: []domain.Node{node}, Edges: []domain.Edge{}}
-	copy, err := domain.CopyProjectDocument(doc, uuid.New(), uuid.New(), map[uuid.UUID]uuid.UUID{sourceAsset: targetAsset})
+	copied, err := domain.CopyProjectDocument(doc, uuid.New(), uuid.New(), map[uuid.UUID]uuid.UUID{sourceAsset: targetAsset})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := copy.Document.Nodes[0].Config.Timeline.ImportedAssets; len(got) != 1 || got[0] != targetAsset {
+	if got := copied.Document.Nodes[0].Config.Timeline.ImportedAssets; len(got) != 1 || got[0] != targetAsset {
 		t.Fatal("unused imported asset was not remapped", got)
 	}
 	if node.Config.Timeline.ImportedAssets[0] != sourceAsset {

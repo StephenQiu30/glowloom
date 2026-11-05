@@ -48,9 +48,9 @@ type SourceWriteRequest struct {
 	ExpectedRevision *int64                  `json:"expected_revision"`
 	BaseVersionID    *uuid.UUID              `json:"base_version_id,omitempty"`
 	RightsConfirmed  bool                    `json:"rights_confirmed"`
-	Kind             string                  `json:"source_kind"`
+	Kind             domain.SourceKind       `json:"source_kind"`
 	Title            string                  `json:"title"`
-	Status           string                  `json:"status"`
+	Status           domain.SourceStatus     `json:"status"`
 	Document         *domain.RichDocument    `json:"document,omitempty"`
 	OriginalHTML     *string                 `json:"original_html,omitempty"`
 	Provenance       domain.SourceProvenance `json:"provenance"`
@@ -58,9 +58,9 @@ type SourceWriteRequest struct {
 
 // SourceImportItem is an atomic chapter item with its preserved source-system labels.
 type SourceImportItem struct {
-	Kind         string                  `json:"source_kind"`
+	Kind         domain.SourceKind       `json:"source_kind"`
 	Title        string                  `json:"title"`
-	Status       string                  `json:"status"`
+	Status       domain.SourceStatus     `json:"status"`
 	Document     *domain.RichDocument    `json:"document,omitempty"`
 	OriginalHTML *string                 `json:"original_html,omitempty"`
 	Provenance   domain.SourceProvenance `json:"provenance"`
@@ -115,19 +115,27 @@ func readJSON(c *gin.Context, out any) bool {
 	}
 	return true
 }
-func commandInput(c *gin.Context, action string, revision *int64, version *uuid.UUID) (application.SourceCommand, bool) {
+func commandIdentity(c *gin.Context, revision *int64) (uuid.UUID, uuid.UUID, uuid.UUID, bool) {
 	if revision == nil || *revision < 0 {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
-		return application.SourceCommand{}, false
+		return uuid.Nil, uuid.Nil, uuid.Nil, false
 	}
 	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
-		return application.SourceCommand{}, false
+		return uuid.Nil, uuid.Nil, uuid.Nil, false
 	}
 	key, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
 	request, requestErr := uuid.Parse(c.GetString("request_id"))
 	if err != nil || requestErr != nil || key == uuid.Nil || request == uuid.Nil {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
+		return uuid.Nil, uuid.Nil, uuid.Nil, false
+	}
+	return project, key, request, true
+}
+
+func commandInput(c *gin.Context, action domain.SourceAction, revision *int64, version *uuid.UUID) (application.SourceCommand, bool) {
+	project, key, request, ok := commandIdentity(c, revision)
+	if !ok {
 		return application.SourceCommand{}, false
 	}
 	return application.SourceCommand{ProjectID: project, Key: key, RequestID: request, Action: action, ExpectedRevision: *revision, BaseVersionID: version}, true
@@ -303,7 +311,7 @@ func (h *SourceHandler) Get(c *gin.Context) {
 	c.JSON(200, result)
 }
 
-func (h *SourceHandler) writeOne(c *gin.Context, action string) {
+func (h *SourceHandler) writeOne(c *gin.Context, action domain.SourceAction) {
 	var request SourceWriteRequest
 	if !readJSON(c, &request) {
 		return
@@ -312,7 +320,7 @@ func (h *SourceHandler) writeOne(c *gin.Context, action string) {
 	if !ok {
 		return
 	}
-	if action == "update" {
+	if action == domain.SourceActionUpdate {
 		lineage, ok := httpapi.PathUUID(c, "lineage")
 		if !ok {
 			return
@@ -348,7 +356,7 @@ func (h *SourceHandler) writeOne(c *gin.Context, action string) {
 // @Failure 409 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-sources [post]
-func (h *SourceHandler) Create(c *gin.Context) { h.writeOne(c, "create") }
+func (h *SourceHandler) Create(c *gin.Context) { h.writeOne(c, domain.SourceActionCreate) }
 
 // Update adds an immutable snapshot under the unchanged source lineage.
 // @Summary 保存来源富文本新版本
@@ -365,7 +373,7 @@ func (h *SourceHandler) Create(c *gin.Context) { h.writeOne(c, "create") }
 // @Failure 409 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-sources/{lineage} [put]
-func (h *SourceHandler) Update(c *gin.Context) { h.writeOne(c, "update") }
+func (h *SourceHandler) Update(c *gin.Context) { h.writeOne(c, domain.SourceActionUpdate) }
 
 // Delete preserves all old snapshots while removing this lineage from a new draft.
 // @Summary 从新草稿移除来源
@@ -386,7 +394,7 @@ func (h *SourceHandler) Delete(c *gin.Context) {
 	if !readJSON(c, &r) {
 		return
 	}
-	input, ok := commandInput(c, "delete", r.ExpectedRevision, r.BaseVersionID)
+	input, ok := commandInput(c, domain.SourceActionDelete, r.ExpectedRevision, r.BaseVersionID)
 	if !ok {
 		return
 	}
@@ -421,7 +429,7 @@ func (h *SourceHandler) Import(c *gin.Context) {
 	if !readJSON(c, &r) {
 		return
 	}
-	input, ok := commandInput(c, "import", r.ExpectedRevision, r.BaseVersionID)
+	input, ok := commandInput(c, domain.SourceActionImport, r.ExpectedRevision, r.BaseVersionID)
 	if !ok {
 		return
 	}
@@ -465,7 +473,7 @@ func (h *SourceHandler) Reorder(c *gin.Context) {
 	if !readJSON(c, &r) {
 		return
 	}
-	input, ok := commandInput(c, "reorder", r.ExpectedRevision, r.BaseVersionID)
+	input, ok := commandInput(c, domain.SourceActionReorder, r.ExpectedRevision, r.BaseVersionID)
 	if !ok {
 		return
 	}

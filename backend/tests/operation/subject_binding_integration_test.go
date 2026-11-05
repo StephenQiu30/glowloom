@@ -52,7 +52,7 @@ func TestSubjectQuoteRequiresProofAndRechecksRevocationAtConfirm(t *testing.T) {
 		t.Fatal(err)
 	}
 	asset, binding := uuid.New(), uuid.New()
-	if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,'image/png',50,?,'passed')`, asset, sourceProject, "synthetic/subject-"+asset.String(), strings.Repeat("a", 64)).Error; err != nil {
+	if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,sha256,moderation_status,object_location_id) VALUES(?,?,'image','upload','ready',?,'image/png',50,?,'passed',?)`, asset, sourceProject, "synthetic/subject-"+asset.String(), strings.Repeat("a", 64), businessFixtureLocation(t, db, "synthetic/subject-"+asset.String())).Error; err != nil {
 		t.Fatal(err)
 	}
 	input := operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{ModelKey: "quote-model-" + model.String(), Capability: quoted.Capability, Mode: "text_to_image", Prompt: "主体", Params: json.RawMessage(`{}`), OutputCount: 1, MediaInputs: []operationapp.FreeQuoteMediaInput{{Role: "subject", MediaAssetID: asset}}}}

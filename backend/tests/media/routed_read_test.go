@@ -89,8 +89,7 @@ func TestRoutedPreviewRejectsMissingLocationAndReauthorizesBeforeSigning(t *test
 			t.Fatal("invalid lease published", err)
 		}
 	}
-	legacy := &previewSigner{}
-	if _, err := mediaapp.NewAssetQuery(readStore{asset: a}, legacy).Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) || legacy.calls != 0 {
+	if _, err := mediaapp.NewAssetQuery(readStore{asset: a}).Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("routed record fell back to original bucket", err)
 	}
 }
@@ -164,8 +163,7 @@ func TestRoutedDocumentSourceUsesSavedLocationAfterFreeze(t *testing.T) {
 	if err != nil || !bytes.Equal(got, data) {
 		t.Fatal("frozen source changed", err)
 	}
-	legacy := &documentSourceObjects{data: data}
-	if _, err := mediaapp.NewDocumentSources(repo, legacy).Open(t.Context(), identityapp.Principal{}, a.ProjectID, frozen[0]); !errors.Is(err, mediaapp.ErrUnavailable) || legacy.calls != 0 {
+	if _, err := mediaapp.NewRoutedDocumentSources(repo, nil).Open(t.Context(), identityapp.Principal{}, a.ProjectID, frozen[0]); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("routed document fell back to original bucket", err)
 	}
 }

@@ -7,6 +7,36 @@ import (
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
+// ProviderOutcome is the normalized result of one provider call.
+type ProviderOutcome string
+
+// ProviderTaskState is the normalized lifecycle of a remote task.
+type ProviderTaskState string
+
+// Provider outcomes distinguish accepted requests from classified failures.
+const (
+	ProviderOutcomeAccepted     ProviderOutcome = "accepted"
+	ProviderOutcomeCompleted    ProviderOutcome = "completed"
+	ProviderOutcomeRejected     ProviderOutcome = "rejected"
+	ProviderOutcomeNotSubmitted ProviderOutcome = "not_submitted"
+	ProviderOutcomeUnknown      ProviderOutcome = "unknown"
+	ProviderOutcomeCancelled    ProviderOutcome = "cancelled"
+	ProviderOutcomeNotCancelled ProviderOutcome = "not_cancelled"
+)
+
+// Provider task states record queued, running and terminal remote progress.
+const (
+	ProviderTaskQueued    ProviderTaskState = "queued"
+	ProviderTaskPending   ProviderTaskState = "pending"
+	ProviderTaskRunning   ProviderTaskState = "running"
+	ProviderTaskSucceeded ProviderTaskState = "succeeded"
+	ProviderTaskFailed    ProviderTaskState = "failed"
+	ProviderTaskCancelled ProviderTaskState = "cancelled"
+	ProviderTaskExpired   ProviderTaskState = "expired"
+	ProviderTaskNotFound  ProviderTaskState = "not_found"
+	ProviderTaskUnknown   ProviderTaskState = "unknown"
+)
+
 // ProviderReference keeps authorized inputs inside the credential-owning worker.
 type ProviderReference struct {
 	Role      string
@@ -50,9 +80,9 @@ type GenerationResult struct {
 	Subtitle             *AudioSubtitle `json:"subtitle,omitempty"`
 	ProviderTerminalCode int            `json:"provider_terminal_code,omitempty"`
 	ProviderLogID        string         `json:"provider_log_id,omitempty"`
-	Outcome              string
+	Outcome              ProviderOutcome
 	TaskID               string
-	State                string
+	State                ProviderTaskState
 	Text                 string
 	Images               []GeneratedImage
 	Audio                []GeneratedAudio

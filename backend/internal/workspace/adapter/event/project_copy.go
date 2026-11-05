@@ -23,7 +23,7 @@ type ProjectCopyProcessedStore interface {
 	ProcessExternalOnce(context.Context, string, string, func(context.Context) error) (bool, error)
 }
 
-// ProjectCopyDeliveryStore proves exact outbox content before Temporal delivery.
+// ProjectCopyDeliveryStore proves exact outbox content before external delivery.
 type ProjectCopyDeliveryStore interface {
 	VerifyDelivery(context.Context, application.ProjectCopyDelivery) (bool, error)
 }

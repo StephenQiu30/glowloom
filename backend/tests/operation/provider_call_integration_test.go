@@ -12,7 +12,7 @@ import (
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
@@ -238,8 +238,8 @@ func TestRealProviderUnclassifiedRejectionCannotSettleZero(t *testing.T) {
 	if err := database.Exec(`UPDATE operation.provider_call SET outcome='error',response_summary='{"state":"rejected"}',cost_micros=0,dispatch_started_at=now() WHERE operation_id=?`, opID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{OperationID: opID, Action: "submit", Attempt: 1, Outcome: "error", State: "rejected"}); err != nil {
-		t.Fatalf("legacy rejection activity replay: %v", err)
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{OperationID: opID, Action: "submit", Attempt: 1, Outcome: "error", State: "rejected"}); !errors.Is(err, application.ErrProviderCallConflict) {
+		t.Fatalf("unproven persisted rejection was adopted: %v", err)
 	}
 	if _, err := store.LoadProviderCost(t.Context(), opID); !errors.Is(err, application.ErrProviderCostUnknown) {
 		t.Fatalf("rejection cost = %v", err)
@@ -313,7 +313,7 @@ func TestRealProviderUsagePricesFrozenRuleOnce(t *testing.T) {
 		}
 		result := application.CompleteProviderCallInput{
 			OperationID: opID, Action: "query", Attempt: sequence,
-			Outcome: "ok", State: state, ProviderTaskID: &taskID, Usage: usage,
+			Outcome: "ok", State: application.ProviderCallState(state), ProviderTaskID: &taskID, Usage: usage,
 		}
 		if state == "succeeded" && sequence == 2 {
 			withoutUsage := result

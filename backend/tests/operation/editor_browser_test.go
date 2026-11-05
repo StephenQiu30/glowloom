@@ -45,7 +45,7 @@ func TestEditorBrowserFixture(t *testing.T) {
 	}
 	for _, name := range []string{"参考图片甲.png", "参考图片乙.png"} {
 		id := uuid.New()
-		if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,?,'image/png',50,repeat('a',64),'passed')`, id, p, "projects/"+p.String()+"/image/2026/10/"+id.String()+".png", name).Error; err != nil {
+		if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status,object_location_id) VALUES(?,?,'image','upload','ready',?,?,'image/png',50,repeat('a',64),'passed',?)`, id, p, "projects/"+p.String()+"/image/2026/10/"+id.String()+".png", name, businessFixtureLocation(t, db, "projects/"+p.String()+"/image/2026/10/"+id.String()+".png")).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -55,7 +55,7 @@ func TestEditorBrowserFixture(t *testing.T) {
 	api.GET("/session", func(c *gin.Context) {
 		c.JSON(200, gin.H{"actor": gin.H{"id": actor.ID, "org_id": actor.OrgID, "role": actor.Role}, "session_id": uuid.NewString()})
 	})
-	mediahttp.NewHandler(mediaapp.NewAssetQuery(mediapg.NewScopedStore(db, app.NewMediaScopeAccess), nil)).Register(api)
+	mediahttp.NewHandler(mediaapp.NewAssetQuery(mediapg.NewScopedStore(db, app.NewMediaScopeAccess))).Register(api)
 	prompthttp.NewDraftHandler(editorDraftStore(db)).Register(api)
 	store := editorOperationStore(db)
 	operationhttp.NewSubmissionHandler(store).Register(api)

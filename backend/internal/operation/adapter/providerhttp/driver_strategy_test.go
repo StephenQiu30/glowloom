@@ -54,12 +54,12 @@ func TestClientUsesStrategyDriverAndSupportsCustomOverride(t *testing.T) {
 		OutputCount: 1,
 	}, "test-key")
 	require.NoError(t, err)
-	require.Equal(t, "not_submitted", res.Outcome)
+	require.EqualValues(t, "not_submitted", res.Outcome)
 
 	// Inject a custom driver dynamically for this client instance.
 	mockCalled := false
 	mockDriver := &mockTestDriver{
-		onSubmit: func(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
+		onSubmit: func(_ context.Context, _ *Client, _ application.GenerationRequest, _ string) (application.GenerationResult, error) {
 			mockCalled = true
 			return application.GenerationResult{Outcome: "completed", State: "succeeded", Text: "mock success"}, nil
 		},
@@ -75,7 +75,7 @@ func TestClientUsesStrategyDriverAndSupportsCustomOverride(t *testing.T) {
 	}, "test-key")
 	require.NoError(t, err)
 	require.True(t, mockCalled)
-	require.Equal(t, "completed", res.Outcome)
+	require.EqualValues(t, "completed", res.Outcome)
 	require.Equal(t, "mock success", res.Text)
 }
 
@@ -105,15 +105,15 @@ func (m *mockTestDriver) Submit(ctx context.Context, c *Client, input applicatio
 	return application.GenerationResult{Outcome: "not_submitted"}, nil
 }
 
-func (m *mockTestDriver) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
+func (m *mockTestDriver) Query(_ context.Context, _ *Client, _ catalogdomain.ProviderConfig, _, _ string) (application.GenerationResult, error) {
 	return unknownResult(), nil
 }
 
-func (m *mockTestDriver) Probe(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, key string) ProbeResult {
+func (m *mockTestDriver) Probe(_ context.Context, _ *Client, _ catalogdomain.ProviderConfig, _ string) ProbeResult {
 	return ProbeResult{Auth: "ok", Adapter: "ok", Discovery: "ok"}
 }
 
-func (m *mockTestDriver) ProbeModelDefaultParams(capability string) map[string]any {
+func (m *mockTestDriver) ProbeModelDefaultParams(_ string) map[string]any {
 	return nil
 }
 

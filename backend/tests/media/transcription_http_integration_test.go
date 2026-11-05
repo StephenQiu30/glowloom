@@ -20,10 +20,11 @@ import (
 	"testing"
 	"time"
 
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
 	"gorm.io/gorm"
 
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
@@ -38,7 +39,6 @@ import (
 	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/whisper"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
@@ -89,11 +89,11 @@ func speechFixtureFrom(t *testing.T, sample, mime, kind string) *speechHTTPFixtu
 	sha := hex.EncodeToString(hash[:])
 	download := &mediaapp.Downloaded{File: file, Size: int64(len(data)), MIMEType: mime, SHA256: sha}
 	defer func() { _ = download.Close() }()
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
-	upload := mediaapp.NewUploadService(mediaTestStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	uploaded, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: filepath.Base(sample)}, File: download, LocalReviewConfirmed: true})
+	upload := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
+	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: filepath.Base(sample)}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual reviewed speech upload", err)
 	}
@@ -168,7 +168,7 @@ func (f *speechHTTPFixture) worker(t *testing.T, client toolapp.Transcriber) *to
 	if err != nil {
 		t.Fatal(err)
 	}
-	return toolapp.NewTranscriptionWorker(f.workerStore, toolflow.NewObjects(f.objects), prepare, client)
+	return toolapp.NewRoutedTranscriptionWorker(f.workerStore, mediatoolRoutedObjects(t, f.db), prepare, client)
 }
 
 func TestTranscriptionActualHTTPWhisperPrivateDraftSourceAndSRT(t *testing.T) {
@@ -206,17 +206,9 @@ func TestTranscriptionActualHTTPWhisperPrivateDraftSourceAndSRT(t *testing.T) {
 		t.Fatalf("stale source admitted %d", response.Code)
 	}
 	worker := f.worker(t, client)
-	activities := toolflow.NewTranscriptionActivities(worker, f.workerStore)
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	env.RegisterActivityWithOptions(activities.TranscribeSpeech, activity.RegisterOptions{Name: toolflow.TranscribeActivity})
-	env.RegisterActivityWithOptions(activities.FailTranscriptionWorkflow, activity.RegisterOptions{Name: toolflow.TranscriptionFailureActivity})
-	env.ExecuteWorkflow(toolflow.TranscriptionWorkflow, toolapp.TranscriptionWorkID{JobID: job.ID, Attempt: 1})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatal("actual native activity", err)
-	}
-	var final tooldomain.TranscriptionJob
-	if err := env.GetWorkflowResult(&final); err != nil || final.Status != tooldomain.TranscriptionSucceeded || final.Progress != 100 || final.ResultSHA256 == nil {
+	taskfixture.RunWork(t, f.db, tooltask.Transcription, map[string]any{"job_id": job.ID}, tooltask.TranscriptionHandler(worker, f.workerStore))
+	final, err := f.store.Get(t.Context(), f.actor, f.project, job.ID)
+	if err != nil || final.Status != tooldomain.TranscriptionSucceeded || final.Progress != 100 || final.ResultSHA256 == nil {
 		t.Fatalf("actual completion %+v %v", final, err)
 	}
 	base := "/api/media-transcriptions/" + job.ID.String()
@@ -402,7 +394,7 @@ func TestTranscriptionUnknownConnectionCannotRePOST(t *testing.T) {
 	}
 }
 
-// This controlled scheduler verifies receipt/inbox dispatch, not a live Temporal run.
+// This controlled scheduler verifies receipt/inbox dispatch, independent from task execution.
 type transcriptionDispatchCounter struct{ calls int }
 
 func (s *transcriptionDispatchCounter) Deliver(context.Context, toolapp.TranscriptionDelivery) error {
@@ -468,13 +460,8 @@ func TestTranscriptionSilentVideoFailsBeforeNativeDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	activities := toolflow.NewTranscriptionActivities(f.worker(t, client), f.workerStore)
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	env.RegisterActivityWithOptions(activities.TranscribeSpeech, activity.RegisterOptions{Name: toolflow.TranscribeActivity})
-	env.RegisterActivityWithOptions(activities.FailTranscriptionWorkflow, activity.RegisterOptions{Name: toolflow.TranscriptionFailureActivity})
-	env.ExecuteWorkflow(toolflow.TranscriptionWorkflow, toolapp.TranscriptionWorkID{JobID: job.ID, Attempt: 1})
-	if env.GetWorkflowError() == nil || calls.Load() != 0 {
+	taskfixture.RunWork(t, f.db, tooltask.Transcription, map[string]any{"job_id": job.ID}, tooltask.TranscriptionHandler(f.worker(t, client), f.workerStore))
+	if calls.Load() != 0 {
 		t.Fatal("silent source sent fabricated speech inference")
 	}
 	failed, err := f.store.Get(t.Context(), f.actor, f.project, job.ID)
@@ -517,18 +504,10 @@ func TestTranscriptionUnconfiguredActivityFailsOldQueuedWithoutSubmission(t *tes
 	}
 	// Dependencies are absent before claim/dispatch. Production workflow cleanup
 	// must terminate this historical queued request rather than leave it orphaned.
-	activities := toolflow.NewTranscriptionActivities(toolapp.NewTranscriptionWorker(transcriptionWorkerStore(db), nil, nil, nil), transcriptionWorkerStore(db))
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	env.RegisterActivityWithOptions(activities.TranscribeSpeech, activity.RegisterOptions{Name: toolflow.TranscribeActivity})
-	env.RegisterActivityWithOptions(activities.FailTranscriptionWorkflow, activity.RegisterOptions{Name: toolflow.TranscriptionFailureActivity})
-	env.ExecuteWorkflow(toolflow.TranscriptionWorkflow, toolapp.TranscriptionWorkID{JobID: job.ID, Attempt: 1})
-	if env.GetWorkflowError() == nil {
-		t.Fatal("absent recognizer fabricated success")
-	}
+	taskfixture.RunWork(t, db, tooltask.Transcription, map[string]any{"job_id": job.ID}, tooltask.TranscriptionHandler(toolapp.NewRoutedTranscriptionWorker(transcriptionWorkerStore(db), nil, nil, nil), transcriptionWorkerStore(db)))
 	failed, err := store.Get(t.Context(), actor, project, job.ID)
 	if err != nil || failed.Status != tooldomain.TranscriptionFailed || failed.Stage != "failed" {
-		t.Fatalf("historical unavailable work orphaned %+v %v; workflow error: %v", failed, err, env.GetWorkflowError())
+		t.Fatalf("historical unavailable work orphaned %+v %v", failed, err)
 	}
 	var state struct {
 		InferenceState string

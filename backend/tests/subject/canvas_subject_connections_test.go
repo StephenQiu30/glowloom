@@ -28,22 +28,16 @@ func TestCanvasSubjectConnectionPostgresFreezeReadbackAndUndo(t *testing.T) {
 	actor := subjectSession(t, owner)
 	project := subjectProject(t, owner, actor)
 	foreign := subjectProject(t, owner, actor)
-	primary := subjectFixtureMedia(t, owner, actor, "image")
-	if err := owner.Exec(`UPDATE media.media_asset SET object_key=? WHERE id=?`, "personal/"+actor.OrgID.String()+"/"+actor.ID.String()+"/image/2026/10/"+primary.AssetID.String()+".png", primary.AssetID).Error; err != nil {
-		t.Fatal(err)
-	}
+	primary := subjectFixtureMedia(t, owner, actor, uuid.Nil, "image")
 	subjects := subjectapp.NewService(subjectFixtureStore(runtime, &memoryMedia{facts: map[uuid.UUID]subject.MediaFact{primary.AssetID: primary}}), time.Now)
 	pin, err := subjects.Save(t.Context(), actor, uuid.Nil, uuid.New(), subjectapp.SaveInput{Name: "连线固定旧主体", Primary: subjectapp.MediaSelection{AssetID: primary.AssetID}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	localAsset := subjectFixtureMedia(t, owner, actor, "image")
-	if err := owner.Exec(`UPDATE media.media_asset SET project_id=?,personal_org_id=NULL,personal_actor_id=NULL,object_key=? WHERE id=?`, project, "projects/"+project.String()+"/image/2026/10/"+localAsset.AssetID.String()+".png", localAsset.AssetID).Error; err != nil {
-		t.Fatal(err)
-	}
+	localAsset := subjectFixtureMedia(t, owner, actor, project, "image")
 	newStore := func() *canvaspg.Store {
 		return canvaspg.NewScopedStore(runtime, func(tx *gorm.DB) canvasapp.MediaReader {
-			return mediaapp.NewAssetQuery(mediapg.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
+			return mediaapp.NewAssetQuery(mediapg.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
 		}, mediawire.NewCanvasProjectAccess).WithSubjectSources(subjectwire.NewPromptSources)
 	}
 	writer := canvasfixture.NewEditService(newStore())

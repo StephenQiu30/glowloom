@@ -8,10 +8,6 @@ import (
 	"net/url"
 	"time"
 
-	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
-	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
-	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
-
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/yjsruntime"
 
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
@@ -67,6 +63,7 @@ import (
 	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	scripthttp "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/http"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/http"
 	subjectapp "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
@@ -79,9 +76,12 @@ import (
 // @version 0.1
 // @description Glowloom local workspace API for projects, canvases, media, scripts, bible, model catalog and operations.
 // @BasePath /
-func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, storage *objectstorage.Client, sessions identityruntime.SessionDependencies, lifetime ...context.Context) (*gin.Engine, error) {
+func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, storage *objectstorage.Registry, sessions identityruntime.SessionDependencies, lifetime ...context.Context) (*gin.Engine, error) {
 	if database == nil {
 		return nil, fmt.Errorf("public API requires database")
+	}
+	if cfg.ObjectStorage == nil || storage == nil {
+		return nil, fmt.Errorf("public API requires unified object storage configuration")
 	}
 	if cfg.Env != "local" {
 		return nil, fmt.Errorf("current workspace API requires local environment")
@@ -117,11 +117,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if len(lifetime) > 0 {
 		socketLifetime = lifetime[0]
 	}
-	subjectObjects, err := subjectwire.OpenObjects(cfg, storage)
-	if err != nil {
-		return nil, fmt.Errorf("configure subject media: %w", err)
-	}
-	context.AfterFunc(socketLifetime, subjectObjects.Close)
+	subjectObjects := subjectwire.UseRegistry(storage)
 	emailAuth, err := identityruntime.NewAuth(database, cfg, time.Now)
 	if err != nil {
 		return nil, fmt.Errorf("configure email authentication: %w", err)
@@ -129,7 +125,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err := identityruntime.ConfigureSessionSecurity(emailAuth, cfg, sessions); err != nil {
 		return nil, fmt.Errorf("configure session security: %w", err)
 	}
-	auth, registerSelf, err := identityruntime.RegisterSelf(database, emailAuth, cfg, storage, api, time.Now)
+	auth, registerSelf, err := identityruntime.RegisterSelf(database, emailAuth, cfg, subjectObjects.Registry(), api, time.Now)
 	if err != nil {
 		return nil, fmt.Errorf("configure self account services: %w", err)
 	}
@@ -145,23 +141,16 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	workspacehttp.NewProjectBudgetHandler(workspaceapp.NewProjectBudgetQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
 	workspacehttp.NewProjectCreationRecoveryHandler(workspaceapp.NewProjectCreationRecoveryQuery(workspaceStore)).Register(protected)
-	copies := copywire.ProvideProjectCopyStore(database)
-	transfers := mediawire.ProvideMediaTransferStore(database)
-	if subjectObjects.Registry() != nil {
-		copies = copywire.ProvideProjectCopyStoreWithObjects(database, mediawire.NewMediaScopeAccess)
-		transfers = mediawire.ProvideRoutedMediaTransferStore(database)
-	}
+	copies := copywire.ProvideProjectCopyStoreWithObjects(database, mediawire.NewMediaScopeAccess)
+	transfers := mediawire.ProvideRoutedMediaTransferStore(database)
 	workspacehttp.NewProjectCopyHandler(workspaceapp.NewProjectCopyService(copies, time.Now)).Register(protected)
 	mediahttp.NewTransferHandler(transfers).Register(protected)
 	mediahttp.NewPurgeHandler(mediawire.ProvideMediaPurgeStore(database)).Register(protected)
-	usage := mediawire.ProvideMediaStorageUsage(database, subjectObjects.Legacy)
-	if subjectObjects.Registry() != nil {
-		usage = mediawire.ProvideRoutedMediaStorageUsage(database, subjectObjects.Registry(), cfg.ObjectStorage)
-	}
+	usage := mediawire.ProvideRoutedMediaStorageUsage(database, subjectObjects.Registry(), cfg.ObjectStorage)
 	mediahttp.NewStorageUsageHandler(usage).Register(protected)
 	workspacehttp.NewProjectFolderHandler(workspaceapp.NewProjectFolders(workspacewire.ProvideProjectFolderStore(database), time.Now)).Register(protected)
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
 	}
 	canvasStore := pgcanvas.NewScopedStore(database, mediaFactory, mediawire.NewCanvasProjectAccess).WithSubjectSources(subjectwire.NewPromptSources).WithCanvasUsage(canvaswire.NewInformationUsage)
 	canvasService := canvasapp.NewService(canvasStore)
@@ -180,23 +169,16 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	canvashttp.NewAssetCommandHandler(canvasapp.NewAssetCommands(pgcanvas.NewAssetCommandStore(database, canvaswire.NewAssetMutationAuthority(yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken))))).WithNotification(live.Notify).Register(protected)
 	assetReader := pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess)
 	documentReader := pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaScopeAccess)
-	assetQuery := mediaapp.NewAssetQuery(assetReader, subjectObjects.Legacy)
-	documents := mediaapp.NewDocumentSources(documentReader, subjectObjects.Legacy)
-	if subjectObjects.Routed != nil {
-		assetQuery = mediaapp.NewRoutedAssetQuery(assetReader, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
-		documents = mediaapp.NewRoutedDocumentSources(documentReader, subjectObjects.Routed)
-	}
+	assetQuery := mediaapp.NewRoutedAssetQuery(assetReader, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
+	documents := mediaapp.NewRoutedDocumentSources(documentReader, subjectObjects.Routed)
 	mediahttp.NewHandler(assetQuery).Register(protected)
 	mediahttp.NewVoiceLibraryHandler(assetReader).Register(protected)
 	mediahttp.NewDocumentHandler(documents).Register(protected)
 	library := pgmedia.NewScopedLibraryStore(database, mediawire.NewMediaLibraryProjectAccess, time.Now, mediawire.NewMediaScopeAccess)
 	mediahttp.NewLibraryHandler(library).Register(protected)
-	libraryQuery := mediaapp.NewLibraryMediaQuery(library, subjectObjects.Legacy, subjectObjects.Legacy)
-	if subjectObjects.Routed != nil {
-		libraryQuery = mediaapp.NewRoutedLibraryMediaQuery(library, subjectObjects.Routed, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
-	}
+	libraryQuery := mediaapp.NewRoutedLibraryMediaQuery(library, subjectObjects.Routed, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
 	mediahttp.NewLibraryMediaHandler(libraryQuery).Register(protected)
-	scripts := scriptwire.ProvideServicesWithObjects(database, subjectObjects.Registry(), subjectObjects.Legacy)
+	scripts := scriptwire.ProvideServicesWithObjects(database, subjectObjects.Registry())
 	scripthttp.NewSourceHandler(scripts.Sources).Register(protected)
 	scripthttp.NewSourceRecoveryHandler(scripts.Recovery).Register(protected)
 	scripthttp.NewReviewHandler(scripts.Episodes, scripts.History).Register(protected)
@@ -207,23 +189,14 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return nil, fmt.Errorf("configure model upload validation: %w", err)
 	}
 	uploadStore := pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess)
-	scopedUpload := mediaapp.NewScopedUploadService(uploadStore, uploadStore, mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(subjectObjects.Legacy), time.Now)
-	if registry := subjectObjects.Registry(); registry != nil {
-		scopedUpload = mediaapp.NewRoutedUploadService(uploadStore, uploadStore, pgmedia.NewActivatedUploadAdmission(uploadStore), mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(registry, pgmedia.NewStorageRoutes(database)), time.Now)
-	}
+	registry := subjectObjects.Registry()
+	scopedUpload := mediaapp.NewRoutedUploadService(uploadStore, uploadStore, pgmedia.NewUploadAdmission(uploadStore), mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(registry, pgmedia.NewStorageRoutes(database)), time.Now)
 	uploadHandler := mediahttp.NewUploadHandler(scopedUpload)
 	uploadHandler.Register(protected)
-	packages := mediawire.ProvideMediaPackages(database, subjectObjects.Legacy, scopedUpload)
-	if registry := subjectObjects.Registry(); registry != nil {
-		packages = mediawire.ProvideRoutedMediaPackages(database, registry, scopedUpload)
-	}
+	packages := mediawire.ProvideRoutedMediaPackages(database, registry, scopedUpload)
 	mediahttp.NewPackageHandler(packages).Register(protected)
-	exports := mediawire.ProvideMediaExportStore(database)
-	exportQuery := toolapp.NewExportQuery(exports, subjectObjects.Legacy, subjectObjects.Legacy)
-	if subjectObjects.Registry() != nil {
-		exports = mediawire.ProvideRoutedMediaExportStore(database, mediawire.NewMediaScopeAccess)
-		exportQuery = toolapp.NewRoutedExportQuery(exports, subjectObjects.Routed, subjectObjects.Routed, subjectObjects.Legacy, subjectObjects.Legacy)
-	}
+	exports := mediawire.ProvideRoutedMediaExportStore(database, mediawire.NewMediaScopeAccess)
+	exportQuery := toolapp.NewRoutedExportQuery(exports, subjectObjects.Routed, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
 	exportQuery.WithLaunchOrigin(cfg.PublicOrigin)
 	exportHandler := toolhttp.NewHandler(exports, exportQuery)
 	exportHandler.Register(protected)
@@ -237,14 +210,10 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		transcriptions = mediawire.ProvideRoutedMediaTranscriptionStore(database, transcriber != nil, mediawire.NewMediaScopeAccess)
 	}
 	toolhttp.NewTranscriptionHandler(transcriptions).Register(protected)
-	depths := mediawire.ProvideMediaDepthStore(database, cfg.VideoDepthPythonPath != "")
-	depthQuery := toolapp.NewDepthQuery(depths, subjectObjects.Legacy, subjectObjects.Legacy)
-	if subjectObjects.Registry() != nil {
-		depths = mediawire.ProvideRoutedMediaDepthStore(database, cfg.VideoDepthPythonPath != "", mediawire.NewMediaScopeAccess)
-		depthQuery = toolapp.NewRoutedDepthQuery(depths, subjectObjects.Routed, subjectObjects.Routed, subjectObjects.Legacy, subjectObjects.Legacy)
-	}
+	depths := mediawire.ProvideRoutedMediaDepthStore(database, cfg.VideoDepthPythonPath != "", mediawire.NewMediaScopeAccess)
+	depthQuery := toolapp.NewRoutedDepthQuery(depths, subjectObjects.Routed, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
 	toolhttp.NewDepthHandler(depths, depthQuery).Register(protected)
-	if err := trialwire.RegisterAPI(socketLifetime, identityProtected, database, subjectObjects.Legacy, cfg); err != nil {
+	if err := trialwire.RegisterAPI(socketLifetime, identityProtected, database, subjectObjects.Registry(), cfg); err != nil {
 		return nil, err
 	}
 	catalogStore := operationwire.NewCatalogStore(database)
@@ -260,13 +229,13 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure model parameter validation: %w", err)
 	}
-	biblehttp.NewHandler(bibleapp.NewService(biblewire.ProvideBibleStore(database, subjectObjects.Legacy, parameterValidator), time.Now)).Register(protected)
-	mediahttp.NewAssetDownloadHandler(mediawire.ProvideAssetDownloads(database, subjectObjects.Routed, subjectObjects.Legacy)).Register(protected)
+	biblehttp.NewHandler(bibleapp.NewService(biblewire.ProvideBibleStoreWithObjects(database, subjectObjects.Registry(), parameterValidator), time.Now)).Register(protected)
+	mediahttp.NewAssetDownloadHandler(mediawire.ProvideAssetDownloads(database, subjectObjects.Routed)).Register(protected)
 	subjectStore := subjectwire.NewStore(database, subjectObjects)
 	subjecthttp.NewHandler(subjectapp.NewService(subjectStore, time.Now), subjectStore).Register(protected)
 	subjecthttp.NewVoiceHandler(subjectwire.NewVoiceJobs(database)).Register(protected)
 	subjecthttp.NewFileHandler(subjectwire.NewFiles(database, subjectObjects)).Register(protected)
-	subjecthttp.NewSourceHandler(subjectwire.NewSourceLibrary(database, subjectObjects), uploadHandler).Register(protected)
+	subjecthttp.NewSourceHandler(subjectwire.NewSourceLibrary(database, subjectObjects, cfg.ObjectStorage.Access.PreviewTTL), uploadHandler).Register(protected)
 	priceValidator, err := pricevalidation.NewValidator()
 	if err != nil {
 		return nil, fmt.Errorf("configure model price validation: %w", err)
@@ -320,11 +289,17 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 			return operationstaging.NewRoutedFactory(registry, pgmedia.NewStorageRoutes(tx))
 		})
 	}
-	agenthttp.NewHandler(&agentapp.Service{Store: agentpg.NewStore(database, operationwire.ProvideOperationProjectAccess, func(tx *gorm.DB) agentapp.Operations { return operations.BindTransaction(tx) })}).Register(protected)
+	agentModel, agentRecover, err := ConfigureAgentBoundaryModel(database, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("configure agent model gateway: %w", err)
+	}
+	if err := RegisterAgentBoundary(socketLifetime, router, protected, database, AgentBoundaryOptions{Origin: cfg.AgentOrigin, ServiceToken: cfg.AgentServiceToken, BusinessToken: cfg.AgentBusinessToken, Model: agentModel, ModelRecover: agentRecover, MediaObjects: subjectObjects.Routed, SourceObjects: scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)), CanvasRuntime: yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken)}, logger); err != nil {
+		return nil, fmt.Errorf("configure agent boundary: %w", err)
+	}
 	operationhttp.NewSubmissionHandler(operations).Register(protected)
 	operationhttp.NewPersonalHistoryHandler(operationapp.NewPersonalHistoryQuery(operations)).Register(protected)
 	operationhttp.NewPersonalHistoryCommandHandler(operationapp.NewPersonalHistoryCommander(operations)).Register(protected)
-	operationhttp.NewHistoryPublicationHandler(operationapp.NewHistoryPublisher(operations), operationapp.NewPublishedWorkQuery(operations, operationwire.PublicationMedia(subjectObjects.Routed, subjectObjects.Legacy))).Register(protected, api)
+	operationhttp.NewHistoryPublicationHandler(operationapp.NewHistoryPublisher(operations), operationapp.NewPublishedWorkQuery(operations, operationwire.PublicationMedia(subjectObjects.Routed))).Register(protected, api)
 	operationhttp.NewProviderTrialHandler(operations).Register(protected)
 	operationhttp.NewHandler(operationhttp.Dependencies{
 		FreeQuote:    operationapp.NewCreateFreeQuoteCommand(operations),

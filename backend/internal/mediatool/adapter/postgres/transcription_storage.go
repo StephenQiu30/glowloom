@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
@@ -27,12 +28,12 @@ func (s *TranscriptionStore) acceptTranscript(ctx context.Context, tx *gorm.DB, 
 		return application.ErrInvalidTranscription
 	}
 	ledger := s.storage(tx)
-	owner := application.StorageOwner("transcription", row.ProjectID, row.ID, row.Attempt)
+	owner := application.StorageOwner(media.StorageWorkKindTranscription, row.ProjectID, row.ID, row.Attempt)
 	intent, err := ledger.ReadStorageWork(ctx, owner)
 	if err != nil {
 		return err
 	}
-	if intent.Owner != owner || intent.State != "open" {
+	if intent.Owner != owner || intent.State != media.StorageWorkOpen {
 		return media.ErrStorageIdentityConflict
 	}
 	key := path.Join("projects", row.ProjectID.String(), "transcriptions", row.ID.String(), "attempt-"+strconv.Itoa(row.Attempt)+".json")
@@ -40,7 +41,7 @@ func (s *TranscriptionStore) acceptTranscript(ctx context.Context, tx *gorm.DB, 
 	if err != nil {
 		return err
 	}
-	if !found || loc.Ref.ProfileID != intent.ProfileID || loc.Ref.Bucket != intent.Bucket || loc.Ref.Key != key || loc.State != "present" || loc.ByteSize == nil || loc.SHA256 == nil || loc.MIMEType == nil || *loc.MIMEType != "application/json" {
+	if !found || loc.Ref.ProfileID != intent.ProfileID || loc.Ref.Bucket != intent.Bucket || loc.Ref.Key != key || loc.State != mediadomain.ObjectLocationPresent || loc.ByteSize == nil || loc.SHA256 == nil || loc.MIMEType == nil || *loc.MIMEType != "application/json" {
 		return media.ErrStorageIdentityConflict
 	}
 	// The application verified and decoded these exact bytes before Complete.

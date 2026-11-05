@@ -264,9 +264,10 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 			custom.ReviewedAt = time.Now().Format("2006-01-02")
 			custom.Lifecycle = "active"
 			if len(custom.Modes) == 0 {
-				if custom.Capability == "text.generate" {
+				switch custom.Capability {
+				case "text.generate":
 					custom.Modes = []string{"text_to_text"}
-				} else if custom.Capability == "image.generate" {
+				case "image.generate":
 					custom.Modes = []string{"text2image"}
 				}
 			}

@@ -59,7 +59,7 @@ func (w *TranscriptionWorker) Execute(ctx context.Context, id TranscriptionWorkI
 		return work.Job, nil
 	}
 	if w.routes != nil {
-		objects, err := w.routes.Open(ctx, StorageOwner("transcription", work.Job.ProjectID, id.JobID, id.Attempt), work.SourceAssets)
+		objects, err := w.routes.Open(ctx, StorageOwner(mediaapp.StorageWorkKindTranscription, work.Job.ProjectID, id.JobID, id.Attempt), work.SourceAssets)
 		if err != nil {
 			return domain.TranscriptionJob{}, err
 		}
@@ -76,7 +76,7 @@ func (w *TranscriptionWorker) Execute(ctx context.Context, id TranscriptionWorkI
 	key := path.Join("projects", work.Job.ProjectID.String(), "transcriptions", id.JobID.String(), "attempt-"+strconv.Itoa(id.Attempt)+".json")
 	draft, err := w.existingTranscript(prepareCtx, key, id, input.SHA256)
 	if err == nil {
-		if work.InferenceState != "terminal" {
+		if work.InferenceState != domain.TranscriptionInferenceTerminal {
 			return domain.TranscriptionJob{}, ErrInferenceUncertain
 		}
 		return w.store.Complete(ctx, id, draft)
@@ -86,7 +86,7 @@ func (w *TranscriptionWorker) Execute(ctx context.Context, id TranscriptionWorkI
 	}
 	// A terminal response without its private draft is safe to fail for explicit
 	// retry, but it is not permission to submit the same attempt a second time.
-	if work.InferenceState == "terminal" {
+	if work.InferenceState == domain.TranscriptionInferenceTerminal {
 		return domain.TranscriptionJob{}, ErrInvalidTranscription
 	}
 	source, err := w.stageAudio(prepareCtx, input)
@@ -94,7 +94,7 @@ func (w *TranscriptionWorker) Execute(ctx context.Context, id TranscriptionWorkI
 		return domain.TranscriptionJob{}, err
 	}
 	defer func() { _ = source.Close() }()
-	if err := w.store.Progress(prepareCtx, id, 20, "preparing_audio"); err != nil {
+	if err := w.store.Progress(prepareCtx, id, 20, domain.TranscriptionStagePreparingAudio); err != nil {
 		return domain.TranscriptionJob{}, err
 	}
 	pcm, err := w.preprocessor.Prepare(prepareCtx, source, int64(*input.DurationMS))

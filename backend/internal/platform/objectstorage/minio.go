@@ -15,13 +15,13 @@ import (
 
 func newBackend(p config.StorageProfile, c config.StorageCredentials, transport http.RoundTripper) (backend, error) {
 	switch p.Provider {
-	case "minio":
+	case config.StorageProviderMinIO:
 		u, err := url.Parse(p.Endpoint)
 		if err != nil {
 			return nil, ErrInvalidEndpoint
 		}
 		lookup := minio.BucketLookupPath
-		if p.AddressingStyle == "virtual" {
+		if p.AddressingStyle == config.StorageAddressingVirtual {
 			lookup = minio.BucketLookupDNS
 		}
 		sdk, err := minio.New(u.Host, &minio.Options{Creds: credentials.NewStaticV4(c.AccessKey, c.SecretKey, c.SessionToken), Secure: u.Scheme == "https", Region: p.Region, Transport: transport, BucketLookup: lookup})
@@ -29,9 +29,9 @@ func newBackend(p config.StorageProfile, c config.StorageCredentials, transport 
 			return nil, err
 		}
 		return minioBackend{client: &Client{sdk: sdk, bucket: p.Bucket}}, nil
-	case "cos":
+	case config.StorageProviderCOS:
 		return newCOS(p, c, transport)
-	case "tos":
+	case config.StorageProviderTOS:
 		return newTOS(p, c, transport)
 	default:
 		return nil, ErrUnsupportedCapability
@@ -39,6 +39,17 @@ func newBackend(p config.StorageProfile, c config.StorageCredentials, transport 
 }
 
 type minioBackend struct{ client *Client }
+
+func (b minioBackend) ping(ctx context.Context) error {
+	exists, err := b.client.sdk.BucketExists(ctx, b.client.bucket)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrBucketMissing
+	}
+	return nil
+}
 
 func (b minioBackend) put(ctx context.Context, key string, reader io.Reader, size int64, contentType, sha string) error {
 	opts := minio.PutObjectOptions{ContentType: contentType, DisableMultipart: true}

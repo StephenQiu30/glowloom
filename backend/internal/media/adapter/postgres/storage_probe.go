@@ -2,9 +2,12 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -15,14 +18,15 @@ func (s *StorageRoutes) BeginStorageProbe(ctx context.Context, in application.St
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	if in.ID == uuid.Nil || !storageDigest(in.ConfigSHA256) || (domain.ObjectRef{ProfileID: in.ProfileID, Bucket: in.Bucket, Key: in.SentinelKey}).Validate() != nil || in.Mode != "read_only" && in.Mode != "read_write" || in.Mode == "read_write" && in.RemovalKey != in.SentinelKey+".remove" || in.Mode == "read_only" && in.RemovalKey != "" {
+	if in.ID == uuid.Nil || !storageDigest(in.ConfigSHA256) || (domain.ObjectRef{ProfileID: in.ProfileID, Bucket: in.Bucket, Key: in.SentinelKey}).Validate() != nil || in.Mode != application.StorageProfileModeReadOnly && in.Mode != application.StorageProfileModeReadWrite || in.Mode == application.StorageProfileModeReadWrite && in.RemovalKey != in.SentinelKey+".remove" || in.Mode == application.StorageProfileModeReadOnly && in.RemovalKey != "" {
 		return application.ErrStorageNotReady
 	}
 	var removal *string
 	if in.RemovalKey != "" {
 		removal = &in.RemovalKey
 	}
-	return s.db.WithContext(ctx).Exec(`INSERT INTO media.storage_probe_intent(id,profile_id,bucket,config_sha256,sentinel_key,removal_key,mode) VALUES(?,?,?,?,?,?,?)`, in.ID, in.ProfileID, in.Bucket, in.ConfigSHA256, in.SentinelKey, removal, in.Mode).Error
+	record := storageProbeIntentRecord{ID: in.ID, ProfileID: in.ProfileID, Bucket: in.Bucket, ConfigSHA256: in.ConfigSHA256, SentinelKey: in.SentinelKey, RemovalKey: removal, Mode: string(in.Mode), State: application.StorageProbeRunning}
+	return s.db.WithContext(ctx).Create(&record).Error
 }
 
 // CompleteStorageProbe cannot publish success after cleanup acquired ownership.
@@ -33,7 +37,10 @@ func (s *StorageRoutes) CompleteStorageProbe(ctx context.Context, id uuid.UUID, 
 	if !storageDigest(evidence) {
 		return application.ErrStorageNotReady
 	}
-	update := s.db.WithContext(ctx).Exec(`UPDATE media.storage_probe_intent SET state='complete',evidence_sha256=?,updated_at=clock_timestamp() WHERE id=? AND (state='running' OR state='complete' AND evidence_sha256=?)`, evidence, id, evidence)
+	now := time.Now().UTC()
+	update := s.db.WithContext(ctx).Model(&storageProbeIntentRecord{}).
+		Where("id = ? AND (state = ? OR (state = ? AND evidence_sha256 = ?))", id, application.StorageProbeRunning, application.StorageProbeComplete, evidence).
+		Updates(map[string]any{"state": application.StorageProbeComplete, "evidence_sha256": evidence, "updated_at": now})
 	if update.Error != nil {
 		return update.Error
 	}
@@ -52,12 +59,17 @@ func (s *StorageRoutes) RecordStorageBucketEvidence(ctx context.Context, profile
 	if !storageDigest(configSHA) || !storageDigest(evidenceSHA) || ttl < time.Minute || ttl > 24*time.Hour {
 		return application.ErrStorageNotReady
 	}
-	update := s.db.WithContext(ctx).Exec(`INSERT INTO media.storage_bucket_evidence(id,profile_id,resource_identity,config_sha256,evidence_sha256,contract,expires_at) SELECT ?,id,resource_identity,?,?,'private-flat-never-versioned-standard-v1',clock_timestamp()+?*interval '1 second' FROM media.storage_profile WHERE id=?`, uuid.New(), configSHA, evidenceSHA, int64(ttl/time.Second), profile)
-	if update.Error != nil {
-		return update.Error
+	var identity storageProfileRecord
+	if err := s.db.WithContext(ctx).Where("id = ?", profile).Take(&identity).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return application.ErrStorageNotReady
+		}
+		return err
 	}
-	if update.RowsAffected != 1 {
-		return application.ErrStorageNotReady
+	now := time.Now().UTC()
+	record := storageBucketEvidenceRecord{ID: uuid.New(), ProfileID: identity.ID, ResourceIdentity: identity.ResourceIdentity, ConfigSHA256: configSHA, EvidenceSHA256: evidenceSHA, Contract: storageBucketContract, ExpiresAt: now.Add(ttl), CreatedAt: now}
+	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
+		return err
 	}
 	return nil
 }
@@ -69,18 +81,33 @@ func (s *StorageRoutes) ClaimStorageProbeCleanup(ctx context.Context, id uuid.UU
 	if s == nil || s.db == nil || id == uuid.Nil {
 		return intent, application.ErrUnavailable
 	}
-	read := s.db.WithContext(ctx).Raw(`UPDATE media.storage_probe_intent SET state='cleaning',updated_at=clock_timestamp() WHERE id=? AND state IN ('running','cleaning') AND created_at<clock_timestamp()-interval '10 minutes' RETURNING id,profile_id,bucket,config_sha256,sentinel_key,COALESCE(removal_key,'') AS removal_key,mode,state`, id).Scan(&intent)
-	if read.Error != nil {
-		return intent, read.Error
-	}
-	if read.RowsAffected != 1 {
-		read = s.db.WithContext(ctx).Raw(`SELECT id,profile_id,bucket,config_sha256,sentinel_key,COALESCE(removal_key,'') AS removal_key,mode,state FROM media.storage_probe_intent WHERE id=? AND state='cleaned'`, id).Scan(&intent)
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var record storageProbeIntentRecord
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).Take(&record)
 		if read.Error != nil {
-			return intent, read.Error
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrStorageNotReady
+			}
+			return read.Error
 		}
-		if read.RowsAffected != 1 {
-			return intent, application.ErrStorageNotReady
+		if record.State != application.StorageProbeCleaned {
+			now := time.Now().UTC()
+			if record.State != application.StorageProbeRunning && record.State != application.StorageProbeCleaning || record.CreatedAt.After(now.Add(-10*time.Minute)) {
+				return application.ErrStorageNotReady
+			}
+			record.State, record.UpdatedAt = application.StorageProbeCleaning, now
+			if err := tx.Model(&record).Select("state", "updated_at").Updates(&record).Error; err != nil {
+				return err
+			}
 		}
+		intent = application.StorageProbeIntent{ID: record.ID, ProfileID: record.ProfileID, Bucket: record.Bucket, ConfigSHA256: record.ConfigSHA256, SentinelKey: record.SentinelKey, Mode: application.StorageProbeMode(record.Mode), State: record.State}
+		if record.RemovalKey != nil {
+			intent.RemovalKey = *record.RemovalKey
+		}
+		return nil
+	})
+	if err != nil {
+		return intent, err
 	}
 	return intent, nil
 }
@@ -90,7 +117,9 @@ func (s *StorageRoutes) CompleteStorageProbeCleanup(ctx context.Context, id uuid
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	update := s.db.WithContext(ctx).Exec(`UPDATE media.storage_probe_intent SET state='cleaned',updated_at=clock_timestamp() WHERE id=? AND state IN ('cleaning','cleaned')`, id)
+	update := s.db.WithContext(ctx).Model(&storageProbeIntentRecord{}).
+		Where("id = ? AND state IN ?", id, []application.StorageProbeState{application.StorageProbeCleaning, application.StorageProbeCleaned}).
+		Updates(map[string]any{"state": application.StorageProbeCleaned, "updated_at": time.Now().UTC()})
 	if update.Error != nil {
 		return update.Error
 	}

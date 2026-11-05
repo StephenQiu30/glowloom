@@ -14,6 +14,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func TestPreparedAgreementCannotEnableRegistration(t *testing.T) {
@@ -68,12 +69,11 @@ func TestExportLoopCleanupCancelsAndJoinsActiveBatch(t *testing.T) {
 		t.Fatal("cleanup did not join export batch")
 	}
 }
-func TestExportLoopDisabledStorageDoesNotRequireSMTPOrKeys(t *testing.T) {
+func TestExportLoopMissingStorageFailsClosed(t *testing.T) {
 	stop, err := identityruntime.StartDirectoryExportLoop(t.Context(), nil, config.Config{}, nil, zap.NewNop())
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, objectstorage.ErrUnavailable) || stop != nil {
+		t.Fatal("missing storage did not fail closed", err)
 	}
-	stop()
 }
 
 func TestSessionV2VerifierOnly(t *testing.T) {

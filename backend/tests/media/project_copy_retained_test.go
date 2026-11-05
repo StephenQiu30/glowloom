@@ -29,7 +29,7 @@ func TestProjectCopyHistoricalDocumentRetainsSourceDeletionEvidence(t *testing.T
 	if _, err := mediaapp.PrepareProjectMediaCopy(binding, []mediaapp.ProjectCopySourceAsset{{Asset: a}}, deleted); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 		t.Fatal("ordinary copy accepted deleted source", err)
 	}
-	proof := &mediaapp.RetainedHistoryProof{AssetID: a.ID, Revision: a.Revision, DeletedAt: *a.DeleteTime, PurgeAfter: *a.PurgeAfter}
+	proof := &mediaapp.RetainedHistoryProof{AssetID: a.ID, Revision: a.Revision, DeletedAt: *a.DeleteTime, PurgeAfter: *a.PurgeAfter, DeclaredBy: mediaapp.RetainedHistoryScriptDocument}
 	result, err := mediaapp.PrepareProjectMediaCopy(binding, []mediaapp.ProjectCopySourceAsset{{Asset: a, RetainedHistory: proof}}, deleted)
 	if err != nil {
 		t.Fatal("explicit retained historical original", err)

@@ -100,12 +100,11 @@ func TestNativeStorageUsagePGSDKIncludesHistoricalProfilesWholeScopeAndPackageAr
 	t.Cleanup(registry.Close)
 	routes := pgmedia.NewStorageRoutes(owner)
 	for id, p := range cfg.Profiles {
-		if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: id, Provider: p.Provider, Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: p.AddressingStyle}}); err != nil {
+		if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: id, Provider: string(p.Provider), Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: string(p.AddressingStyle)}}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	prior, _ := routes.ReadActive(t.Context())
-	if _, err := routes.Activate(t.Context(), prior.Revision, "usage-"+uuid.NewString(), newID); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, owner, "usage-"+uuid.NewString(), newID)); err != nil {
 		t.Fatal(err)
 	}
 	actor, project := mediaStoreProject(t, owner)
@@ -156,7 +155,7 @@ func TestNativeStorageUsagePGSDKIncludesHistoricalProfilesWholeScopeAndPackageAr
 		t.Fatal(err)
 	}
 	store := mediaTestStore(runtime)
-	uploads := media.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, nil, time.Now)
+	uploads := media.NewRoutedUploadService(store, store, pgmedia.NewUploadAdmission(store), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(registry, pgmedia.NewStorageRoutes(runtime)), time.Now)
 	packageObjects := mediaobjects.NewRoutedPackageObjects(registry, pgmedia.NewStorageRoutes(runtime))
 	packageStore := mediaPackageStore(runtime, libraryTestAccess, transferTestGuards, time.Now).WithObjectLocations()
 	packages := media.NewLibraryPackageService(packageStore, uploads, packageObjects, time.Now)
@@ -274,7 +273,7 @@ func TestNativeStorageUsageRetiredProfileDoesNotBlockAuthorizedEmptyScope(t *tes
 	t.Cleanup(registry.Close)
 	routes := pgmedia.NewStorageRoutes(owner)
 	for id, p := range cfg.Profiles {
-		if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: id, Provider: p.Provider, Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: p.AddressingStyle}}); err != nil {
+		if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: id, Provider: string(p.Provider), Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region, AddressingStyle: string(p.AddressingStyle)}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -300,18 +299,18 @@ func TestNativeStorageUsageRetiredProfileDoesNotBlockAuthorizedEmptyScope(t *tes
 		t.Fatal(err)
 	}
 	library := mediaLibraryStore(runtime, libraryTestAccess, time.Now)
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, media.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &asset, Metadata: &media.LibraryMetadata{Title: "Synthetic text", Category: "material", Tags: []string{}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), actor, media.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &asset, ExpectedItemRevision: 1, Metadata: &media.LibraryMetadata{Title: "Synthetic text", Category: "material", Tags: []string{}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, media.LibraryCommand{Scope: scope, Action: "recycle_items", Key: uuid.New(), ExpectedRevision: 1, Items: []media.LibraryItemRevision{{ID: asset, Revision: 1}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), actor, media.LibraryCommand{Scope: scope, Action: "recycle_items", Key: uuid.New(), ExpectedRevision: 1, Items: []media.LibraryItemRevision{{ID: asset, Revision: 2}}}); err != nil {
 		t.Fatal(err)
 	}
 	purge := mediaPurgeStore(runtime, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	job, err := purge.CreatePurge(t.Context(), actor, media.PurgeInput{Scope: scope, ExpectedRevision: 2, Items: []media.LibraryItemRevision{{ID: asset, Revision: 2}}, PermanentDeleteConfirmed: true, Key: uuid.New()})
+	job, err := purge.CreatePurge(t.Context(), actor, media.PurgeInput{Scope: scope, ExpectedRevision: 2, Items: []media.LibraryItemRevision{{ID: asset, Revision: 3}}, PermanentDeleteConfirmed: true, Key: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := media.NewPurgeWorker(purge.Worker, mediaobjects.NewRoutedPurgeObjects(registry, pgmedia.NewStorageRoutes(runtime))).Execute(t.Context(), media.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+	result, err := media.NewPurgeWorker(purge.Worker, mediaobjects.NewRoutedPurgeObjects(registry)).Execute(t.Context(), media.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil || result.Status != "succeeded" {
 		t.Fatal("real owning purge did not finish", result, err)
 	}

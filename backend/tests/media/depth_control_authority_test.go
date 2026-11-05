@@ -8,16 +8,16 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
+
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
@@ -76,18 +76,9 @@ func depthControlThroughHTTP(t *testing.T, f *depthHTTPFixture, j tooldomain.Dep
 
 func depthControlWorkflow(t *testing.T, f *depthHTTPFixture, worker *toolapp.DepthWorker, id toolapp.DepthWorkID) tooldomain.DepthJob {
 	t.Helper()
-	var suite testsuite.WorkflowTestSuite
-	env := suite.NewTestWorkflowEnvironment()
-	env.SetTestTimeout(2 * time.Minute)
-	a := toolflow.NewDepthActivities(worker, f.workerStore)
-	env.RegisterActivityWithOptions(a.ProcessDepth, activity.RegisterOptions{Name: toolflow.DepthActivity})
-	env.RegisterActivityWithOptions(a.InterruptDepth, activity.RegisterOptions{Name: toolflow.DepthFailureActivity})
-	env.ExecuteWorkflow(toolflow.DepthWorkflow, id)
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatal("committed control under Temporal SDK", err)
-	}
-	var job tooldomain.DepthJob
-	if err := env.GetWorkflowResult(&job); err != nil {
+	taskfixture.RunWork(t, f.db, tooltask.Depth, map[string]any{"job_id": id.JobID, "attempt": id.Attempt, "reconcile": id.Reconcile}, tooltask.DepthHandler(worker, f.workerStore))
+	job, err := f.store.Get(t.Context(), f.actor, f.project, id.JobID)
+	if err != nil {
 		t.Fatal(err)
 	}
 	return job
@@ -109,7 +100,7 @@ func TestDepthJobPGAdministratorCancelsAfterCreatorChange(t *testing.T) {
 			}
 			f.actor = admin
 			depthControlThroughHTTP(t, f, j, "cancel")
-			stopped := depthControlWorkflow(t, f, toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
+			stopped := depthControlWorkflow(t, f, toolapp.NewRoutedDepthWorker(f.workerStore, mediatoolRoutedObjects(t, f.db), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
 			if stopped.Status != tooldomain.DepthCancelled || stopped.ExecutionUnconfirmed || stopped.NeedsReconciliation {
 				t.Fatalf("administrator cancellation not complete: %+v", stopped)
 			}
@@ -139,7 +130,7 @@ func TestDepthJobPGEndedInterruptRetainsFenceWithoutInventingUnknown(t *testing.
 		t.Fatal(err)
 	}
 	// This tests durable protocol facts directly. Actual subprocess cessation is
-	// independently covered by TestDepthJobActualRevocationCancelWaitsNativeAndTemporalFinish.
+	// independently covered by TestDepthJobActualRevocationCancelWaitsNativeAndTaskFinish.
 	if err := f.workerStore.StartProcess(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
@@ -205,12 +196,12 @@ func (p *depthRevokedNative) Process(ctx context.Context, input *mediaapp.Downlo
 	})
 }
 
-func TestDepthJobActualRevocationCancelWaitsNativeAndTemporalFinish(t *testing.T) {
+func TestDepthJobActualRevocationCancelWaitsNativeAndTaskFinish(t *testing.T) {
 	native := depthNativeRunner(t)
 	f := depthHTTP(t)
 	j := f.create(t)
 	p := &depthRevokedNative{DepthProcessor: native, t: t, f: f, creator: f.actor, admin: depthControlAdmin(t, f), job: j.ID}
-	stopped := depthControlWorkflow(t, f, f.worker(t, p, toolflow.NewObjects(f.objects)), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
+	stopped := depthControlWorkflow(t, f, f.worker(t, p, mediatoolRoutedObjects(t, f.db)), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
 	if stopped.Status != tooldomain.DepthCancelled || stopped.ExecutionUnconfirmed || stopped.NeedsReconciliation || len(p.children) == 0 {
 		t.Fatalf("revoked creator cancellation manufactured cessation: %+v", stopped)
 	}
@@ -220,17 +211,29 @@ func TestDepthJobActualRevocationCancelWaitsNativeAndTemporalFinish(t *testing.T
 		ActiveWorker *uuid.UUID
 	}
 	if err := f.db.Raw(`SELECT process_state,active_worker FROM mediatool.depth_job WHERE id=?`, j.ID).Scan(&state).Error; err != nil || state.ProcessState != "ended" || state.ActiveWorker != nil {
-		t.Fatal("Temporal completion lost physical stop evidence", state, err)
+		t.Fatal("Task completion lost physical stop evidence", state, err)
 	}
 }
 
 type depthRemoveFault struct {
-	toolapp.DepthObjects
+	toolapp.WorkObjectsFactory
 	deny bool
 }
 
-func (o *depthRemoveFault) Remove(ctx context.Context, key string) error {
-	if o.deny {
+type depthRemoveView struct {
+	toolapp.DepthObjects
+	fault *depthRemoveFault
+}
+
+func (f *depthRemoveFault) Open(ctx context.Context, owner mediaapp.StorageWorkOwner, inputs []mediadomain.MediaAsset) (toolapp.DepthObjects, error) {
+	objects, err := f.WorkObjectsFactory.Open(ctx, owner, inputs)
+	if err != nil {
+		return nil, err
+	}
+	return &depthRemoveView{DepthObjects: objects, fault: f}, nil
+}
+func (o *depthRemoveView) Remove(ctx context.Context, key string) error {
+	if o.fault.deny {
 		return io.ErrUnexpectedEOF
 	}
 	return o.DepthObjects.Remove(ctx, key)
@@ -241,7 +244,7 @@ func TestDepthJobActualAdministratorCleanupFailureReconcilesOriginalObjects(t *t
 	f := depthHTTP(t)
 	j := f.create(t)
 	p := &countedDepth{DepthProcessor: native}
-	unknownObjects := &unknownDepthObjects{DepthObjects: toolflow.NewObjects(f.objects), lastOnly: true}
+	unknownObjects := &unknownDepthObjects{WorkObjectsFactory: mediatoolRoutedObjects(t, f.db), lastOnly: true}
 	unknownObjects.unknown.Store(true)
 	unknown, err := f.worker(t, p, unknownObjects).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
 	if err == nil || !unknown.NeedsReconciliation || unknown.ExecutionUnconfirmed {
@@ -256,7 +259,7 @@ func TestDepthJobActualAdministratorCleanupFailureReconcilesOriginalObjects(t *t
 	// A controller may read and confirm the original immutable objects, but it
 	// cannot borrow that intent to publish for a revoked source creator.
 	depthControlThroughHTTP(t, f, unknown, "reconcile")
-	publication, err := toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New(), Reconcile: true})
+	publication, err := toolapp.NewRoutedDepthWorker(f.workerStore, mediatoolRoutedObjects(t, f.db), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New(), Reconcile: true})
 	if !errors.Is(err, identityapp.ErrForbidden) || !publication.NeedsReconciliation || publication.ExecutionUnconfirmed || publication.Status != tooldomain.DepthFailed || p.calls.Load() != 1 {
 		t.Fatalf("control intent granted creator publication: %+v %v", publication, err)
 	}
@@ -266,8 +269,8 @@ func TestDepthJobActualAdministratorCleanupFailureReconcilesOriginalObjects(t *t
 	}
 	requested := depthControlThroughHTTP(t, f, publication, "cancel")
 	depthControlThroughHTTP(t, f, requested, "reconcile")
-	fault := &depthRemoveFault{DepthObjects: toolflow.NewObjects(f.objects), deny: true}
-	failed, err := toolapp.NewDepthWorker(f.workerStore, fault, nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New(), Reconcile: true})
+	fault := &depthRemoveFault{WorkObjectsFactory: mediatoolRoutedObjects(t, f.db), deny: true}
+	failed, err := toolapp.NewRoutedDepthWorker(f.workerStore, fault, nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New(), Reconcile: true})
 	if err == nil || failed.Status != tooldomain.DepthFailed || !failed.NeedsReconciliation || failed.ExecutionUnconfirmed || p.calls.Load() != 1 {
 		t.Fatalf("cleanup error manufactured cancellation or native uncertainty: %+v %v", failed, err)
 	}
@@ -278,7 +281,7 @@ func TestDepthJobActualAdministratorCleanupFailureReconcilesOriginalObjects(t *t
 	f.actor = replacement
 	depthControlThroughHTTP(t, f, failed, "reconcile")
 	fault.deny = false
-	stopped := depthControlWorkflow(t, f, toolapp.NewDepthWorker(f.workerStore, fault, nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, Reconcile: true})
+	stopped := depthControlWorkflow(t, f, toolapp.NewRoutedDepthWorker(f.workerStore, fault, nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, Reconcile: true})
 	if stopped.Status != tooldomain.DepthCancelled || stopped.NeedsReconciliation || stopped.ExecutionUnconfirmed || p.calls.Load() != 1 {
 		t.Fatalf("original objects not safely cleaned: %+v", stopped)
 	}
@@ -316,15 +319,15 @@ func TestDepthJobPGCleanupRequiresExactLivePermanentControl(t *testing.T) {
 				if fault == "request" {
 					field = "request_id"
 				}
-				err = f.db.Exec(`UPDATE infra.outbox SET payload=jsonb_set(payload,ARRAY['data',?],to_jsonb(?::text)) WHERE id=?`, field, uuid.NewString(), command.EventID).Error
+				err = mediatoolFixtureExec(t, f.db, `UPDATE infra.outbox SET payload=jsonb_set(payload,ARRAY['data',?],to_jsonb(?::text)) WHERE id=?`, field, uuid.NewString(), command.EventID).Error
 			case "action":
-				err = f.db.Exec(`UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,action}','"start"') WHERE id=?`, command.EventID).Error
+				err = mediatoolFixtureExec(t, f.db, `UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,action}','"start"') WHERE id=?`, command.EventID).Error
 			case "attempt":
-				err = f.db.Exec(`UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,attempt}','2') WHERE id=?`, command.EventID).Error
+				err = mediatoolFixtureExec(t, f.db, `UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,attempt}','2') WHERE id=?`, command.EventID).Error
 			case "missing_outbox":
-				err = f.db.Exec(`DELETE FROM infra.outbox WHERE id=?`, command.EventID).Error
+				err = mediatoolFixtureExec(t, f.db, `DELETE FROM infra.outbox WHERE id=?`, command.EventID).Error
 			case "hash":
-				err = f.db.Exec(`UPDATE mediatool.depth_command SET request_hash=repeat('0',64) WHERE actor_id=? AND request_id=?`, admin.ID, command.RequestID).Error
+				err = mediatoolFixtureExec(t, f.db, `UPDATE mediatool.depth_command SET request_hash=repeat('0',64) WHERE actor_id=? AND request_id=?`, admin.ID, command.RequestID).Error
 			case "foreign_actor", "another_controller":
 				var candidate identityapp.Principal
 				if fault == "foreign_actor" {
@@ -332,21 +335,21 @@ func TestDepthJobPGCleanupRequiresExactLivePermanentControl(t *testing.T) {
 				} else {
 					candidate = depthControlAdmin(t, f)
 				}
-				err = f.db.Exec(`UPDATE mediatool.depth_command SET actor_id=? WHERE actor_id=? AND request_id=?`, candidate.ID, admin.ID, command.RequestID).Error
+				err = mediatoolFixtureExec(t, f.db, `UPDATE mediatool.depth_command SET actor_id=? WHERE actor_id=? AND request_id=?`, candidate.ID, admin.ID, command.RequestID).Error
 				if err == nil {
-					err = f.db.Exec(`UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,actor_id}',to_jsonb(?::text)) WHERE id=?`, candidate.ID.String(), command.EventID).Error
+					err = mediatoolFixtureExec(t, f.db, `UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,actor_id}',to_jsonb(?::text)) WHERE id=?`, candidate.ID.String(), command.EventID).Error
 				}
 			case "another_request":
 				request := uuid.New()
-				err = f.db.Exec(`UPDATE mediatool.depth_command SET request_id=? WHERE actor_id=? AND request_id=?`, request, admin.ID, command.RequestID).Error
+				err = mediatoolFixtureExec(t, f.db, `UPDATE mediatool.depth_command SET request_id=? WHERE actor_id=? AND request_id=?`, request, admin.ID, command.RequestID).Error
 				if err == nil {
-					err = f.db.Exec(`UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,request_id}',to_jsonb(?::text)) WHERE id=?`, request.String(), command.EventID).Error
+					err = mediatoolFixtureExec(t, f.db, `UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,request_id}',to_jsonb(?::text)) WHERE id=?`, request.String(), command.EventID).Error
 				}
 			}
 			if err != nil {
 				t.Fatal("isolated authority fault setup", err)
 			}
-			_, err = toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
+			_, err = toolapp.NewRoutedDepthWorker(f.workerStore, mediatoolRoutedObjects(t, f.db), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
 			if err == nil {
 				t.Fatal("invalid or revoked permanent control admitted cleanup")
 			}
@@ -398,7 +401,7 @@ func TestDepthJobPGControlRevocationReleasesOnlyStoppedCoordination(t *testing.T
 				requested = depthControlThroughHTTP(t, f, requested, "reconcile")
 			}
 			if phase == "forged_pending_reconcile" {
-				if err := f.db.Exec(`UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,actor_id}',to_jsonb(?::text)) WHERE id IN(SELECT event_id FROM mediatool.depth_command WHERE job_id=? AND event_action='reconcile')`, uuid.NewString(), j.ID).Error; err != nil {
+				if err := mediatoolFixtureExec(t, f.db, `UPDATE infra.outbox SET payload=jsonb_set(payload,'{data,actor_id}',to_jsonb(?::text)) WHERE id IN(SELECT event_id FROM mediatool.depth_command WHERE job_id=? AND event_action='reconcile')`, uuid.NewString(), j.ID).Error; err != nil {
 					t.Fatal(err)
 				}
 				_, err := f.workerStore.Claim(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New(), Reconcile: true})
@@ -417,7 +420,7 @@ func TestDepthJobPGControlRevocationReleasesOnlyStoppedCoordination(t *testing.T
 			if phase == "finish" {
 				_, err = f.workerStore.Finish(t.Context(), id, true, false, "")
 			} else {
-				_, err = toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New(), Reconcile: true})
+				_, err = toolapp.NewRoutedDepthWorker(f.workerStore, mediatoolRoutedObjects(t, f.db), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New(), Reconcile: true})
 			}
 			if !errors.Is(err, identityapp.ErrForbidden) {
 				t.Fatal("revoked controller authorized completion", err)
@@ -435,7 +438,7 @@ func TestDepthJobPGControlRevocationReleasesOnlyStoppedCoordination(t *testing.T
 				t.Fatal("stopped consumer fence not safely released", state, err)
 			}
 			depthControlThroughHTTP(t, f, failed, "reconcile")
-			stopped := depthControlWorkflow(t, f, toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, Reconcile: true})
+			stopped := depthControlWorkflow(t, f, toolapp.NewRoutedDepthWorker(f.workerStore, mediatoolRoutedObjects(t, f.db), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, Reconcile: true})
 			if stopped.Status != tooldomain.DepthCancelled || stopped.ExecutionUnconfirmed || stopped.NeedsReconciliation {
 				t.Fatal("current replacement control cannot recover original job", stopped)
 			}

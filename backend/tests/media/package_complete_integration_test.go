@@ -18,7 +18,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -62,7 +61,7 @@ func packageWAV(t *testing.T) []byte {
 
 func TestMediaPackageActualAllAcceptedKindsSourceZIPExactOriginalsAndIndependentRenditions(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, _ := mediaStoreProject(t, db)
 	repo, service := packageActualService(t, db, objects, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
@@ -81,7 +80,7 @@ func TestMediaPackageActualAllAcceptedKindsSourceZIPExactOriginalsAndIndependent
 	if err != nil || job.Status != "succeeded" || job.ItemCount != len(files) {
 		t.Fatal("whole kinds package", job, err)
 	}
-	keys := packageCleanup(t, repo, objects, actor, scope)
+	keys := packageCleanup(t, db, repo, objects, actor, scope)
 	if len(keys) != 13 {
 		t.Fatal("ZIP + seven originals + two GIF/two video/one audio renditions", len(keys))
 	}
@@ -95,7 +94,7 @@ func TestMediaPackageActualAllAcceptedKindsSourceZIPExactOriginalsAndIndependent
 	if err := plan.Validate(); err != nil {
 		t.Fatal("valid closed plan", err)
 	}
-	source, err := objects.Get(t.Context(), plan.Objects[0].Key)
+	source, err := glbTestObjects(t).Get(t.Context(), plan.Objects[0].Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +116,7 @@ func TestMediaPackageActualAllAcceptedKindsSourceZIPExactOriginalsAndIndependent
 		if source.data == nil || asset.SHA256 == nil {
 			t.Fatal("original format/name lost", asset.FileName)
 		}
-		input, err := objects.Get(t.Context(), asset.ObjectKey)
+		input, err := glbTestObjects(t).Get(t.Context(), asset.ObjectKey)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -164,7 +163,7 @@ func TestMediaPackageActualAllAcceptedKindsSourceZIPExactOriginalsAndIndependent
 
 func TestMediaPackageSourceV1ActualImportNeverPromotesSourceConsentOrURLs(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, _ := mediaStoreProject(t, db)
 	_, service := packageActualService(t, db, objects, packageTestAccess)
 	image := uploadPNG(t)
@@ -186,7 +185,7 @@ func TestMediaPackageSourceV1ActualImportNeverPromotesSourceConsentOrURLs(t *tes
 func TestMediaPackageCompleteTrashExportOriginalMissingFailsWholeAndRetainsCatalogState(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	owner := libraryOwnerDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, project := mediaStoreProject(t, db)
 	repo, service := packageActualService(t, db, objects, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
@@ -194,7 +193,7 @@ func TestMediaPackageCompleteTrashExportOriginalMissingFailsWholeAndRetainsCatal
 	if err != nil || job.Status != "succeeded" {
 		t.Fatal(job, err)
 	}
-	packageCleanup(t, repo, objects, actor, scope)
+	packageCleanup(t, db, repo, objects, actor, scope)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	library, err := scope.Identity(actor.OrgID, actor.ID)
 	if err != nil {
@@ -230,12 +229,12 @@ func TestMediaPackageCompleteTrashExportOriginalMissingFailsWholeAndRetainsCatal
 	if err != nil || personalImport.Status != "succeeded" {
 		t.Fatal("trash round trip", personalImport, err)
 	}
-	packageCleanup(t, repo, objects, actor, personal)
+	packageCleanup(t, db, repo, objects, actor, personal)
 	var key string
 	if err := db.Raw(`SELECT object_key FROM media.media_asset WHERE project_id=?`, project).Scan(&key).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := objects.Remove(t.Context(), key); err != nil {
+	if err := glbTestObjects(t).Remove(t.Context(), key); err != nil {
 		t.Fatal(err)
 	}
 	if failed, err := service.Export(t.Context(), actor, scope); err == nil || failed != nil {
@@ -251,7 +250,7 @@ func (a packageFailedTouch) TouchContent(context.Context, identityapp.Principal,
 
 func TestMediaPackageAtomicPublicationOutboxFailureLeavesNoHalfLibraryAndSameKeyRecovers(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
+	objects := mediaFixturePackageObjects(t, db)
 	actor, project := mediaStoreProject(t, db)
 	failed := func(tx *gorm.DB) mediaapp.LibraryProjectAccess { return packageFailedTouch{packageTestAccess(tx)} }
 	repo, service := packageActualService(t, db, objects, failed)
@@ -261,7 +260,7 @@ func TestMediaPackageAtomicPublicationOutboxFailureLeavesNoHalfLibraryAndSameKey
 	if _, err := service.Import(t.Context(), actor, in, file); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("publication fault absent", err)
 	}
-	keys := packageCleanup(t, repo, objects, actor, scope)
+	keys := packageCleanup(t, db, repo, objects, actor, scope)
 	if len(keys) != 4 {
 		t.Fatal("uncertain original intents erased", len(keys))
 	}

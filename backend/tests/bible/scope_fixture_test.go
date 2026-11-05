@@ -47,7 +47,7 @@ func bibleFixtureWorkerDocumentStore(db *gorm.DB) *mediapg.DocumentSourceStore {
 	return mediapg.NewScopedDocumentSourceStore(db, composition.NewMediaWorkerScopeAccess)
 }
 func bibleFixtureMediaCopyStore(db *gorm.DB) *mediapg.ProjectCopyStore {
-	return mediapg.NewScopedProjectCopyStore(db, composition.NewMediaWorkerScopeAccess)
+	return mediapg.NewScopedProjectCopyStore(db, composition.NewMediaWorkerScopeAccess).WithRoutedStorage()
 }
 func bibleFixtureLibraryStore(db *gorm.DB, access mediapg.LibraryProjectAccessFactory, clock func() time.Time) *mediapg.LibraryStore {
 	return mediapg.NewScopedLibraryStore(db, access, clock, composition.NewMediaScopeAccess)

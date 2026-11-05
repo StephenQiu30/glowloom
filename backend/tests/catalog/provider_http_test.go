@@ -39,7 +39,7 @@ func TestProviderHTTPRoutesAndDoesNotRetryUnknownSubmission(t *testing.T) {
 			})})
 			result, err := client.Submit(context.Background(), operationapp.GenerationRequest{Config: domain.BuiltinPresets()[1].Config, ModelID: "test/model", Capability: capability, Mode: map[string]string{"text.generate": "text_to_text", "image.generate": "text2image", "video.generate": "text2video"}[capability], Prompt: "test", OutputCount: 1}, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, "unknown", result.Outcome)
+			require.Equal(t, operationapp.ProviderOutcome("unknown"), result.Outcome)
 			require.Equal(t, 1, calls)
 			require.NotContains(t, result.ErrorCode, "fixture-key")
 		})
@@ -49,7 +49,7 @@ func TestProviderHTTPRejectsUnknownParametersBeforeNetwork(t *testing.T) {
 	client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(*http.Request) (*http.Response, error) { t.Fatal("unexpected network request"); return nil, nil })})
 	result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: domain.BuiltinPresets()[1].Config, ModelID: "test/model", Capability: "image.generate", Mode: "text2image", Prompt: "test", OutputCount: 1, Params: map[string]any{"callback_url": "https://evil.test"}}, "key")
 	require.NoError(t, err)
-	require.Equal(t, "not_submitted", result.Outcome)
+	require.Equal(t, operationapp.ProviderOutcome("not_submitted"), result.Outcome)
 }
 func TestProviderHTTPRejectsForeignAuthenticatedVideoURL(t *testing.T) {
 	client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(_ *http.Request) (*http.Response, error) {
@@ -57,7 +57,7 @@ func TestProviderHTTPRejectsForeignAuthenticatedVideoURL(t *testing.T) {
 	})})
 	result, err := client.Query(t.Context(), domain.BuiltinPresets()[1].Config, "task-1", "key")
 	require.NoError(t, err)
-	require.Equal(t, "unknown", result.State)
+	require.Equal(t, operationapp.ProviderTaskState("unknown"), result.State)
 	require.Empty(t, result.URLs)
 }
 
@@ -75,7 +75,7 @@ func TestProviderModesRejectMismatchedReferencesBeforeDispatch(t *testing.T) {
 		input.OutputCount = 1
 		result, err := client.Submit(t.Context(), input, "fixture-key")
 		require.NoError(t, err)
-		require.Equal(t, "not_submitted", result.Outcome)
+		require.Equal(t, operationapp.ProviderOutcome("not_submitted"), result.Outcome)
 	}
 }
 
@@ -99,13 +99,13 @@ func TestProviderVideoMapsInternalDurationWithoutChangingFrozenInput(t *testing.
 		params := map[string]any{"duration_ms": int64(5000), "aspect_ratio": "16:9"}
 		result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: config.Config, ModelID: "fixture", Capability: "video.generate", Mode: "text2video", Prompt: "fixture", OutputCount: 1, Params: params}, "fixture-only")
 		require.NoError(t, err)
-		require.Equal(t, "accepted", result.Outcome)
+		require.Equal(t, operationapp.ProviderOutcome("accepted"), result.Outcome)
 		require.Equal(t, 1, calls)
 		require.Equal(t, int64(5000), params["duration_ms"])
 		params["duration"] = 5
 		result, err = client.Submit(t.Context(), operationapp.GenerationRequest{Config: config.Config, ModelID: "fixture", Capability: "video.generate", Mode: "text2video", Prompt: "fixture", OutputCount: 1, Params: params}, "fixture-only")
 		require.NoError(t, err)
-		require.Equal(t, "not_submitted", result.Outcome)
+		require.Equal(t, operationapp.ProviderOutcome("not_submitted"), result.Outcome)
 		require.Equal(t, 1, calls)
 	}
 }

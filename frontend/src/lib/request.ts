@@ -1,4 +1,9 @@
-import axios, { type AxiosRequestConfig } from "axios";
+import axios, {
+  AxiosError,
+  type AxiosAdapter,
+  type AxiosResponse,
+  type AxiosRequestConfig,
+} from "axios";
 import { developmentResponse } from "./development-transport";
 
 export type RequestOptions = Omit<AxiosRequestConfig, "url"> & {
@@ -303,4 +308,90 @@ export async function request<T>(
       notifySessionInvalidation(generation);
     throw error;
   }
+}
+
+export interface ServerEvent {
+  id: string;
+  event: string;
+  data: unknown;
+}
+/** The generated client supplies the URL and the shared request layer supplies scope/cancellation. */
+export function sseAdapter(
+  onEvent: (event: ServerEvent) => void,
+): AxiosAdapter {
+  return async (config) => {
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(config.headers.toJSON()))
+      if (value !== undefined && value !== null) headers[key] = String(value);
+    const response = await fetch(config.url!, {
+      method: "GET",
+      headers,
+      credentials: "same-origin",
+      signal: config.signal as AbortSignal,
+      redirect: "error",
+    });
+    const result: AxiosResponse = {
+      data: "",
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers),
+      config,
+    };
+    if (!response.ok) {
+      result.data = await response
+        .json()
+        .catch(() => ({ code: "event_stream_failed" }));
+      throw new AxiosError(
+        "Event stream failed",
+        undefined,
+        config,
+        undefined,
+        result,
+      );
+    }
+    if (
+      !response.body ||
+      !response.headers.get("content-type")?.startsWith("text/event-stream")
+    )
+      throw new Error("Invalid event stream response");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let pending = "";
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        pending += decoder
+          .decode(value, { stream: true })
+          .replace(/\r\n/g, "\n");
+        if (pending.length > 1048576)
+          throw new Error("Event frame exceeds limit");
+        let end: number;
+        while ((end = pending.indexOf("\n\n")) >= 0) {
+          const frame = pending.slice(0, end);
+          pending = pending.slice(end + 2);
+          let id = "",
+            event = "message";
+          const data: string[] = [];
+          for (const line of frame.split("\n")) {
+            if (line.startsWith("id:")) id = line.slice(3).trimStart();
+            else if (line.startsWith("event:"))
+              event = line.slice(6).trimStart();
+            else if (line.startsWith("data:"))
+              data.push(line.slice(5).trimStart());
+          }
+          if (data.length)
+            onEvent({
+              id,
+              event,
+              data: JSON.parse(data.join("\n")) as unknown,
+            });
+        }
+      }
+    } finally {
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
+    return result;
+  };
 }

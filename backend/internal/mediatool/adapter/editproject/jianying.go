@@ -3,8 +3,9 @@ package editproject
 import (
 	"encoding/json"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	"github.com/google/uuid"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 // This independent serializer follows an authorized synthetic native draft. It

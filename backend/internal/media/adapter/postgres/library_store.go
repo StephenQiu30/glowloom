@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -40,7 +42,10 @@ type libraryRow struct {
 	ProjectID       *uuid.UUID
 	PersonalActorID *uuid.UUID
 	Revision        int64
+	UpdateTime      time.Time
 }
+
+func (libraryRow) TableName() string { return "media.library" }
 
 func (s *LibraryStore) authorize(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
 	if scope.Kind == domain.LibraryPersonal {
@@ -68,17 +73,19 @@ func readLibrary(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryS
 	if err != nil {
 		return libraryRow{}, err
 	}
-	lock := " FOR SHARE"
-	if write {
-		lock = " FOR UPDATE"
-	}
 	var row libraryRow
-	read := tx.Raw(`SELECT id,kind,org_id,project_id,personal_actor_id,revision FROM media.library WHERE id=?`+lock, id).Scan(&row)
-	if read.Error != nil {
-		return libraryRow{}, fmt.Errorf("read media library: %w", read.Error)
+	query := tx.Where("id = ?", id)
+	if write {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	} else {
+		query = query.Clauses(clause.Locking{Strength: "SHARE"})
 	}
-	if read.RowsAffected == 0 {
+	err = query.Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return libraryRow{ID: id, Kind: string(scope.Kind), OrgID: actor.OrgID, ProjectID: scope.ProjectID}, nil
+	}
+	if err != nil {
+		return libraryRow{}, fmt.Errorf("read media library: %w", err)
 	}
 	if row.ID != id || row.Kind != string(scope.Kind) || row.OrgID != actor.OrgID || row.Revision < 0 ||
 		scope.Kind == domain.LibraryProject && (row.ProjectID == nil || *row.ProjectID != *scope.ProjectID || row.PersonalActorID != nil) ||
@@ -94,6 +101,7 @@ type libraryFolderRow struct {
 	LibraryKind string
 	ParentID    *uuid.UUID
 	Name        string
+	NameKey     string
 	Position    int64
 	Style       string
 	Theme       string
@@ -102,13 +110,17 @@ type libraryFolderRow struct {
 	UpdateTime  time.Time
 }
 
+func (libraryFolderRow) TableName() string { return "media.library_folder" }
+
 func libraryFolders(tx *gorm.DB, id uuid.UUID, write bool) ([]domain.LibraryFolder, error) {
-	lock := " FOR SHARE"
+	query := tx.Where("library_id = ?", id).Order("id").Limit(4097)
 	if write {
-		lock = " FOR UPDATE"
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	} else {
+		query = query.Clauses(clause.Locking{Strength: "SHARE"})
 	}
 	var rows []libraryFolderRow
-	if err := tx.Raw(`SELECT * FROM media.library_folder WHERE library_id=? ORDER BY id LIMIT 4097`+lock, id).Scan(&rows).Error; err != nil {
+	if err := query.Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("read media library folders: %w", err)
 	}
 	if len(rows) > 4096 {
@@ -128,17 +140,6 @@ func libraryFolders(tx *gorm.DB, id uuid.UUID, write bool) ([]domain.LibraryFold
 		return nil, application.ErrUnavailable
 	}
 	return folders, nil
-}
-
-func libraryChanged(tx *gorm.DB, query string, args ...any) error {
-	result := tx.Exec(query, args...)
-	if result.Error != nil {
-		return fmt.Errorf("persist media library change: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return application.ErrLibraryConflict
-	}
-	return nil
 }
 
 func (s *LibraryStore) read(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, consume func(*gorm.DB, libraryRow) error) error {

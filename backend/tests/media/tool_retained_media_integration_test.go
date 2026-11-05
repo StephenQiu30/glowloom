@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"slices"
 	"testing"
 	"time"
 
@@ -22,9 +21,9 @@ import (
 
 func retainedToolDatabase(t *testing.T) (*gorm.DB, identityapp.Principal, uuid.UUID) {
 	t.Helper()
-	database := mediaStoreDB(t)
+	database := mediatoolFixtureDB(t)
 	var name string
-	if err := database.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" {
+	if err := database.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_library" {
 		t.Fatal("isolated reference database required", err)
 	}
 	actor, project := mediaStoreProject(t, database)
@@ -38,6 +37,7 @@ func TestMediaToolRetainedReaderProtectsFrozenSourcesAndUnpublishedDepthObjects(
 	digest := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	source.SHA256 = &digest
 	source.Status, source.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
+	source = mediaFixtureAssetLocation(t, database, source)
 	if err := mediaTestStore(database).CreateAsset(t.Context(), actor, source); err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestMediaToolRetainedReaderProtectsFrozenSourcesAndUnpublishedDepthObjects(
 	if err := database.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, source.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := toolpg.NewStore(database, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	store := mediatoolExportStore(database, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	job, err := store.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestMediaToolRetainedReaderProtectsFrozenSourcesAndUnpublishedDepthObjects(
 		objectKey := key[:len(key)-4] + "/" + string(rendition.Kind) + "." + rendition.Ext
 		size, w, h := int64(128), int32(64), int32(64)
 		artifact.Renditions = append(artifact.Renditions, mediadomain.Rendition{ID: uuid.NewSHA1(outputID, []byte(rendition.Kind)), MediaAssetID: outputID, Kind: rendition.Kind, ObjectKey: objectKey, Width: &w, Height: &h, ByteSize: &size, CreateTime: now, UpdateTime: now})
-		artifact.Objects = append(artifact.Objects, toolapp.DepthObject{Kind: string(rendition.Kind), ObjectKey: objectKey, SHA256: digest, ByteSize: size, MIMEType: rendition.MIME})
+		artifact.Objects = append(artifact.Objects, toolapp.DepthObject{Kind: toolapp.DepthObjectKind(rendition.Kind), ObjectKey: objectKey, SHA256: digest, ByteSize: size, MIMEType: rendition.MIME})
 	}
 	artifactSHA, artifactBody, err := toolapp.DepthArtifactDigest(depthJob, depth, artifact)
 	if err != nil {
@@ -87,11 +87,12 @@ func TestMediaToolRetainedReaderProtectsFrozenSourcesAndUnpublishedDepthObjects(
 		t.Fatal(err)
 	}
 	for i, object := range artifact.Objects {
-		if err := database.Exec(`INSERT INTO mediatool.depth_object(job_id,attempt,kind,object_key,sha256,byte_size,mime_type,write_started,status,updated_at)VALUES(?,1,?,?,?,?,?,?,'pending',?)`, depthID, object.Kind, object.ObjectKey, object.SHA256, object.ByteSize, object.MIMEType, i == 0, now).Error; err != nil {
+		location := mediatoolFixtureLocation(t, database, mediaapp.StorageWorkKindDepth, project, depthID, 1, object.ObjectKey)
+		if err := database.Exec(`INSERT INTO mediatool.depth_object(job_id,attempt,kind,object_key,object_location_id,sha256,byte_size,mime_type,write_started,status,updated_at)VALUES(?,1,?,?,?,?,?,?,?,'pending',?)`, depthID, object.Kind, object.ObjectKey, location, object.SHA256, object.ByteSize, object.MIMEType, i == 0, now).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := database.Exec(`UPDATE mediatool.export_job SET status='cancelled',stage='cancelled',attempt=2 WHERE id=?`, job.ID).Error; err != nil {
+	if err := mediatoolFixtureExec(t, database, `UPDATE mediatool.export_job SET status='cancelled',stage='cancelled',attempt=2 WHERE id=?`, job.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []uuid.UUID{source.ID, video.AssetID, outputID} {
@@ -104,10 +105,7 @@ func TestMediaToolRetainedReaderProtectsFrozenSourcesAndUnpublishedDepthObjects(
 			if err != nil || !found {
 				t.Fatal("lost retained source or pending artifact identity", found, err)
 			}
-			keys, err := reader.StorageUsageKeys(t.Context(), actor, project)
-			if err != nil || !slices.Contains(keys, key) || !slices.Contains(keys, video.ObjectKey) || !slices.Contains(keys, source.ObjectKey) || len(keys) != 11 {
-				t.Fatal("incomplete exact owning keys", len(keys), err)
-			}
+
 			return nil
 		}); err != nil {
 			t.Fatal(err)
@@ -129,9 +127,7 @@ func TestMediaToolRetainedReaderRejectsUnknownHistoryWithoutSubtotal(t *testing.
 		if found, err := reader.HasMediaReferences(t.Context(), actor, project, uuid.New()); err == nil || found {
 			t.Fatal("unknown frozen history became no references", found, err)
 		}
-		if keys, err := reader.StorageUsageKeys(t.Context(), actor, project); err == nil || keys != nil {
-			t.Fatal("unknown frozen history became usage subtotal", err)
-		}
+
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -140,7 +136,7 @@ func TestMediaToolRetainedReaderRejectsUnknownHistoryWithoutSubtotal(t *testing.
 
 func TestMediaToolRetainedReaderRequiresCurrentAuthorityAndCallerTransaction(t *testing.T) {
 	database, actor, project := retainedToolDatabase(t)
-	if _, err := toolpg.NewRetainedMediaReader(database, mediaapp.NewDerivedService(mediaTestStore(database))).StorageUsageKeys(t.Context(), actor, project); err == nil {
+	if _, err := toolpg.NewRetainedMediaReader(database, mediaapp.NewDerivedService(mediaTestStore(database))).HasMediaReferences(t.Context(), actor, project, uuid.New()); err == nil {
 		t.Fatal("pool accepted")
 	}
 	foreign, _ := mediaStoreProject(t, database)
@@ -148,10 +144,10 @@ func TestMediaToolRetainedReaderRequiresCurrentAuthorityAndCallerTransaction(t *
 		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
-		if _, err := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))).StorageUsageKeys(t.Context(), foreign, project); !errors.Is(err, mediaapp.ErrNotFound) {
+		if _, err := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))).HasMediaReferences(t.Context(), foreign, project, uuid.New()); !errors.Is(err, mediaapp.ErrNotFound) {
 			t.Fatal("foreign project", err)
 		}
-		if _, err := toolpg.NewRetainedMediaReader(tx, nil).StorageUsageKeys(t.Context(), actor, project); err == nil {
+		if _, err := toolpg.NewRetainedMediaReader(tx, nil).HasMediaReferences(t.Context(), actor, project, uuid.New()); err == nil {
 			t.Fatal("missing owner treated as empty")
 		}
 		return nil
@@ -165,7 +161,7 @@ func TestMediaToolRetainedReaderRequiresCurrentAuthorityAndCallerTransaction(t *
 		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
-		_, err := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))).StorageUsageKeys(t.Context(), actor, project)
+		_, err := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))).HasMediaReferences(t.Context(), actor, project, uuid.New())
 		if !errors.Is(err, identityapp.ErrSessionInvalid) {
 			t.Fatal("revoked current actor", err)
 		}

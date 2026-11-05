@@ -26,7 +26,8 @@ func TestFinalUserRouterSeparatesIdentityAndContentScopes(t *testing.T) {
 	if err := tx.Exec(`UPDATE identity."user" SET must_change_password=true WHERE id=?`, login.User.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, tx, nil, identityruntime.SessionDependencies{})
+	storage := identityRouterStorage(t, &cfg)
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, tx, storage, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +85,7 @@ func TestMinimumUserRuntimeDependencyIncrement(t *testing.T) {
 	verifyProjectConsumerRollback(t)
 	tx := existingIdentityTransaction(t)
 	var columns int64
-	if err := tx.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema='media' AND ((table_name IN ('media_asset','rendition') AND column_name='object_location_id') OR (table_name IN ('project_copy_object','transfer_object') AND column_name IN ('source_location_id','target_location_id'))) AND data_type='uuid' AND is_nullable='YES'`).Scan(&columns).Error; err != nil || columns != 6 {
+	if err := tx.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema='media' AND ((table_name IN ('media_asset','rendition') AND column_name='object_location_id') OR (table_name IN ('project_copy_object','transfer_object') AND column_name IN ('source_location_id','target_location_id'))) AND data_type='uuid' AND is_nullable='NO'`).Scan(&columns).Error; err != nil || columns != 6 {
 		t.Fatal("runtime dependency columns incomplete", err)
 	}
 	var tables int64
@@ -92,7 +93,7 @@ func TestMinimumUserRuntimeDependencyIncrement(t *testing.T) {
 		t.Fatal("package dependency tables incomplete", err)
 	}
 	var constraints int64
-	if err := tx.Raw(`SELECT count(*) FROM pg_constraint WHERE conrelid IN ('media.package_job'::regclass,'media.package_command'::regclass,'media.package_object'::regclass) AND contype='f'`).Scan(&constraints).Error; err != nil || constraints != 8 {
+	if err := tx.Raw(`SELECT count(*) FROM pg_constraint WHERE conrelid IN ('media.package_job'::regclass,'media.package_command'::regclass,'media.package_object'::regclass) AND contype='f'`).Scan(&constraints).Error; err != nil || constraints != 9 {
 		t.Fatal("package identity/resource foreign keys incomplete", constraints, err)
 	}
 }
@@ -100,7 +101,7 @@ func TestMinimumUserRuntimeDependencyIncrement(t *testing.T) {
 func installUserRuntimeDependencies(t *testing.T, tx *gorm.DB) {
 	t.Helper()
 	var columns int64
-	if err := tx.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema='media' AND ((table_name IN ('media_asset','rendition') AND column_name='object_location_id') OR (table_name IN ('project_copy_object','transfer_object') AND column_name IN ('source_location_id','target_location_id'))) AND data_type='uuid' AND is_nullable='YES'`).Scan(&columns).Error; err != nil || columns != 6 {
+	if err := tx.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema='media' AND ((table_name IN ('media_asset','rendition') AND column_name='object_location_id') OR (table_name IN ('project_copy_object','transfer_object') AND column_name IN ('source_location_id','target_location_id'))) AND data_type='uuid' AND is_nullable='NO'`).Scan(&columns).Error; err != nil || columns != 6 {
 		t.Fatal("runtime dependency columns incomplete", err)
 	}
 }

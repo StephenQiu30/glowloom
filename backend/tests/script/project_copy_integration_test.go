@@ -1,7 +1,6 @@
 package script_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,10 +11,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
@@ -34,7 +33,7 @@ func (a actualScriptCopyAccess) Authorize(ctx context.Context, actor identityapp
 func actualScriptCopyStore(db *gorm.DB, authority workspaceapp.ProjectCopyAuthority) *scriptpg.ProjectCopyStore {
 	return scriptpg.NewProjectCopyStore(db, func(tx *gorm.DB) app.ProjectCopyAccess {
 		return actualScriptCopyAccess{scriptFixtureCopyAccess(tx, authority)}
-	})
+	}).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }
 
 type actualScriptHistoryOwner struct{ store *scriptpg.ProjectCopyStore }
@@ -59,7 +58,7 @@ func (o actualScriptHistoryOwner) FinishCleanup(ctx context.Context, a identitya
 func workspaceWithActualScript(db *gorm.DB) *workspacepg.ProjectCopyStore {
 	return scriptFixtureWorkspaceCopyWithScript(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard { return scriptStore(tx) }, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 		return workspaceapp.ProjectCopyOwners{Media: scriptFixtureMediaCopyStore(tx), Budget: scriptFixtureBudgetStore(tx), Canvas: scriptFixtureCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
-			return mediaapp.NewAssetQuery(scriptFixtureWorkerMediaStore(tx), nil)
+			return mediaapp.NewAssetQuery(scriptFixtureWorkerMediaStore(tx))
 		}, nil)}
 	}, func(tx *gorm.DB, a workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
 		return actualScriptHistoryOwner{actualScriptCopyStore(tx, a)}
@@ -149,7 +148,7 @@ func scriptCopyTransfer(db *gorm.DB, job workspacedomain.ProjectCopyJob, worker 
 }
 func TestScriptCopyPGPrivateObjectsAllHistoricalRowsAndReplay(t *testing.T) {
 	db, owner := scriptTestDB(t)
-	objects := scriptobjects.NewStorage(scriptStorage(t))
+	objects := scriptPrivateObjects(t, db)
 	actor, pid := historyForCopy(t, db, owner, objects)
 	store, job, worker := startActualScriptCopy(t, db, owner, actor, pid)
 	counts := job.Manifest.Script.Counts
@@ -193,7 +192,7 @@ func TestScriptCopyPGCorruptSourceManifestRejectsBeforeSnapshotOrTarget(t *testi
 	for _, mutation := range []string{"hash", "metadata"} {
 		t.Run(mutation, func(t *testing.T) {
 			db, owner := scriptTestDB(t)
-			objects := scriptobjects.NewStorage(scriptStorage(t))
+			objects := scriptPrivateObjects(t, db)
 			actor, pid := historyForCopy(t, db, owner, objects)
 			if mutation == "hash" {
 				if err := owner.Exec(`UPDATE script.script_version SET source_manifest_sha256=? WHERE project_id=? AND version_no=1`, domain.ContentSHA([]byte("corrupt")), pid).Error; err != nil {
@@ -222,7 +221,7 @@ func TestScriptCopyPGCorruptSourceManifestRejectsBeforeSnapshotOrTarget(t *testi
 
 func TestScriptCopyPGWorkerFenceUnknownPutAndActualPrivateCleanup(t *testing.T) {
 	db, owner := scriptTestDB(t)
-	objects := scriptobjects.NewStorage(scriptStorage(t))
+	objects := scriptPrivateObjects(t, db)
 	actor, pid := historyForCopy(t, db, owner, objects)
 	store, job, worker := startActualScriptCopy(t, db, owner, actor, pid)
 	stale, b, snapshot := scriptCopyTransfer(db, job, uuid.New(), false, objects)
@@ -264,23 +263,34 @@ func TestScriptCopyPGWorkerFenceUnknownPutAndActualPrivateCleanup(t *testing.T) 
 		t.Fatal(err)
 	}
 	object := manifest.Objects[0]
-	sourceReader, err := objects.Get(t.Context(), object.Source.Key)
+	sourceReader, err := objects.GetObject(t.Context(), object.Source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := objects.PutIfAbsent(t.Context(), object.Target.Key, sourceReader, object.Target.ByteSize, object.Target.MIME, object.Target.SHA256); err != nil {
+	if err := putScriptFixtureBytes(t, db, object.Target, sourceReader, object.Target.ByteSize, object.Target.MIME, object.Target.SHA256); err != nil {
 		t.Fatal(err)
 	}
 	if err := sourceReader.Close(); err != nil {
 		t.Fatal(err)
 	}
+	if err := cleanup.Cleanup(t.Context(), actor, b, snapshot); !errors.Is(err, app.ErrNeedsReconciliation) {
+		t.Fatal("late bytes must first enter the original bounded cleanup window", err)
+	}
+	assertScriptFixtureObjectPresent(t, objects, object.Target)
+	var drain struct{ StorageIntentID uuid.UUID }
+	if err := owner.Raw(`SELECT storage_intent_id FROM script.copy_snapshot WHERE id=?`, snapshot.ID).Scan(&drain).Error; err != nil {
+		t.Fatal(err)
+	}
+	// Transfer returned before cancellation; model only the natural remote-write
+	// protection expiring, then let the original owner verify and remove bytes.
+	expireScriptFixtureDrain(t, owner, drain.StorageIntentID)
 	if err := cleanup.Cleanup(t.Context(), actor, b, snapshot); err != nil {
 		t.Fatal("same frozen object appeared; explicit exact cleanup", err)
 	}
 	if _, err := store.FinishCancelled(t.Context(), actor, job.ID, worker); err != nil {
 		t.Fatal("actual absence proof", err)
 	}
-	reader, err := objects.Get(t.Context(), object.Source.Key)
+	reader, err := objects.GetObject(t.Context(), object.Source)
 	if err != nil {
 		t.Fatal("source bytes removed", err)
 	}
@@ -292,7 +302,7 @@ func TestScriptCopyPGWorkerFenceUnknownPutAndActualPrivateCleanup(t *testing.T) 
 
 func TestScriptCopyPGTransferRechecksCanonicalSourceSemanticsBeforeTargetPut(t *testing.T) {
 	db, owner := scriptTestDB(t)
-	objects := scriptobjects.NewStorage(scriptStorage(t))
+	objects := scriptPrivateObjects(t, db)
 	actor, pid := historyForCopy(t, db, owner, objects)
 	base, err := scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
 	if err != nil {
@@ -303,14 +313,24 @@ func TestScriptCopyPGTransferRechecksCanonicalSourceSemanticsBeforeTargetPut(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := "projects/" + pid.String() + "/script/" + uuid.NewString() + "/corruption-test.json"
+	fact := domain.ObjectFact{Key: "projects/" + pid.String() + "/script/" + uuid.NewString() + "/corruption-test.json", SHA256: domain.ContentSHA(body), ByteSize: int64(len(body)), MIME: "application/json"}
 	sha := domain.ContentSHA(body)
-	if err := objects.PutIfAbsent(t.Context(), key, bytes.NewReader(body), int64(len(body)), "application/json", sha); err != nil {
+	fact = writeScriptFixtureObject(t, owner, pid, fact, body)
+	// Deliberately corrupt this test-owned source binding while retaining a real,
+	// internally consistent physical object. The production immutable-binding
+	// trigger is restored in the same transaction before testing copy semantics.
+	if err := owner.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`ALTER TABLE script.script_source DISABLE TRIGGER keep_rich_location_id`).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`UPDATE script.script_source SET rich_key=?,rich_sha256=?,rich_bytes=?,rich_location_id=? WHERE id=?`, fact.Key, sha, len(body), fact.LocationID, base.Sources[0].ID).Error; err != nil {
+			return err
+		}
+		return tx.Exec(`ALTER TABLE script.script_source ENABLE TRIGGER keep_rich_location_id`).Error
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.Exec(`UPDATE script.script_source SET rich_key=?,rich_sha256=?,rich_bytes=? WHERE id=?`, key, sha, len(body), base.Sources[0].ID).Error; err != nil {
-		t.Fatal(err)
-	}
+
 	base, err = scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -335,7 +355,7 @@ func TestScriptCopyPGTransferRechecksCanonicalSourceSemanticsBeforeTargetPut(t *
 
 func TestScriptCopyPGReferencedMediaIncludesOldHistoryWithTrustedAdmissionOnly(t *testing.T) {
 	db, owner := scriptTestDB(t)
-	objects := scriptobjects.NewStorage(scriptStorage(t))
+	objects := scriptPrivateObjects(t, db)
 	actor, pid := historyForCopy(t, db, owner, objects)
 	asset := uuid.New()
 	sha := domain.ContentSHA([]byte("file owning reference fixture"))
@@ -400,7 +420,7 @@ func TestScriptCopyPGConsumerRejectsVersionTextAndRichObjectBeforeAnyTargetPut(t
 	for _, kind := range []string{"text", "rich"} {
 		t.Run(kind, func(t *testing.T) {
 			db, owner := scriptTestDB(t)
-			objects := scriptobjects.NewStorage(scriptStorage(t))
+			objects := scriptPrivateObjects(t, db)
 			actor, pid := historyForCopy(t, db, owner, objects)
 			_, job, worker := startActualScriptCopy(t, db, owner, actor, pid)
 			_, b, snapshot := scriptCopyTransfer(db, job, worker, false, objects)
@@ -411,9 +431,7 @@ func TestScriptCopyPGConsumerRejectsVersionTextAndRichObjectBeforeAnyTargetPut(t
 				mime = "application/json"
 			}
 			fact := domain.ObjectFact{Key: "projects/" + pid.String() + "/script/" + uuid.NewString() + "/consumer-fault", SHA256: domain.ContentSHA(body), ByteSize: int64(len(body)), MIME: mime}
-			if err := objects.PutIfAbsent(t.Context(), fact.Key, bytes.NewReader(body), fact.ByteSize, mime, fact.SHA256); err != nil {
-				t.Fatal(err)
-			}
+			fact = writeScriptFixtureObject(t, owner, pid, fact, body)
 			authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding(b), ActorID: actor.ID, WorkerID: worker, SourceRevision: job.SourceRevision, Phase: "transfer"}
 			// Actual PG authorization runs first. This consuming-port fault then changes only
 			// the reported version object while source rich documents stay intact.
@@ -447,7 +465,7 @@ func TestScriptCopyPGCorruptStructuredRowsRejectBeforeSnapshot(t *testing.T) {
 	for _, fault := range []string{"dialogue_content", "missing_action"} {
 		t.Run(fault, func(t *testing.T) {
 			db, owner := scriptTestDB(t)
-			objects := scriptobjects.NewStorage(scriptStorage(t))
+			objects := scriptPrivateObjects(t, db)
 			actor, pid := historyForCopy(t, db, owner, objects)
 			if fault == "dialogue_content" {
 				if err := owner.Exec(`UPDATE script.dialogue_line SET content='损坏的结构正文' WHERE project_id=?`, pid).Error; err != nil {

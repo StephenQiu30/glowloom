@@ -3,7 +3,7 @@ package postgres
 import (
 	"bytes"
 	"encoding/json"
-	"io"
+	"sort"
 
 	"gorm.io/gorm"
 
@@ -14,48 +14,82 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
-// This internal complete-export query includes retained trash only. It does not
-// change the ordinary list, preview, document or reference authorization paths.
-func packageExportEntries(actor identityapp.Principal, scope domain.LibraryScope, library uuid.UUID) (string, []any) {
-	ownership := `a.project_id=? AND a.personal_org_id IS NULL AND a.personal_actor_id IS NULL`
-	args := []any{library, scope.ProjectID, library}
-	if scope.Kind == domain.LibraryPersonal {
-		ownership = `a.project_id IS NULL AND a.personal_org_id=? AND a.personal_actor_id=?`
-		args = []any{library, actor.OrgID, actor.ID, library}
+// packageExportEntries assembles the complete visible catalog from ORM-owned
+// rows while retaining the exact source asset row for subsequent byte reads.
+func packageExportEntries(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, library uuid.UUID) ([]libraryEntryRow, error) {
+	var items []libraryItemRow
+	if err := tx.Where("library_id = ? AND purged_at IS NULL", library).Order("id").Limit(application.MaxPackageEntries + 1).Find(&items).Error; err != nil {
+		return nil, err
 	}
-	return `WITH entries AS (
- SELECT COALESCE(i.id,a.id) AS id,a.id AS asset_id,i.folder_id,NULL::text AS plain_text,a.kind,
- LEFT(COALESCE(i.title,NULLIF(a.file_name,''),a.kind),240) AS title,COALESCE(i.category,'material') AS category,
- COALESCE(i.tags,'[]'::jsonb) AS tags,COALESCE(i.source_label,'') AS source_label,COALESCE(i.note,'') AS note,
- COALESCE(i.favorite,false) AS favorite,COALESCE(i.catalog_state,'active') AS catalog_state,i.trashed_at,
- COALESCE(i.position,0) AS position,COALESCE(i.revision,0) AS revision,
- COALESCE(i.create_time,a.create_time) AS create_time,COALESCE(i.update_time,a.update_time) AS update_time,
- to_jsonb(a) AS asset_facts
- FROM media.media_asset a LEFT JOIN media.library_item i ON i.library_id=? AND i.asset_id=a.id
- WHERE ` + ownership + ` AND i.purged_at IS NULL AND
- ((NOT a.is_delete AND a.status='ready' AND a.moderation_status='passed') OR i.id IS NOT NULL)
- UNION ALL
- SELECT i.id,NULL::uuid,i.folder_id,i.plain_text,'text',i.title,i.category,i.tags,i.source_label,i.note,
- i.favorite,i.catalog_state,i.trashed_at,i.position,i.revision,i.create_time,i.update_time,NULL::jsonb
- FROM media.library_item i WHERE i.library_id=? AND i.asset_id IS NULL AND i.purged_at IS NULL) `, args
+	if len(items) > application.MaxPackageEntries {
+		return nil, application.ErrInvalidPackage
+	}
+	itemsByAsset := make(map[uuid.UUID]libraryItemRow, len(items))
+	entries := make([]libraryEntryRow, 0, len(items))
+	assetIDs := make([]uuid.UUID, 0, len(items))
+	for _, item := range items {
+		if item.AssetID != nil {
+			itemsByAsset[*item.AssetID] = item
+			assetIDs = append(assetIDs, *item.AssetID)
+			continue
+		}
+		entries = append(entries, packageLibraryEntry(item, nil))
+	}
+	query := tx.Model(&assetRow{})
+	if scope.Kind == domain.LibraryPersonal {
+		query = query.Where("project_id IS NULL AND personal_org_id = ? AND personal_actor_id = ?", actor.OrgID, actor.ID)
+	} else {
+		query = query.Where("project_id = ? AND personal_org_id IS NULL AND personal_actor_id IS NULL", *scope.ProjectID)
+	}
+	query = query.Where("((is_delete = ? AND status = ? AND moderation_status = ?) OR id IN ?)", false, domain.StatusReady, domain.ModerationPassed, assetIDs)
+	var assets []assetRow
+	if err := query.Order("id").Limit(application.MaxPackageEntries + 1).Find(&assets).Error; err != nil {
+		return nil, err
+	}
+	if len(assets) > application.MaxPackageEntries {
+		return nil, application.ErrInvalidPackage
+	}
+	for i := range assets {
+		asset := assets[i]
+		if item, exists := itemsByAsset[asset.ID]; exists {
+			entries = append(entries, packageLibraryEntry(item, &asset))
+			continue
+		}
+		assetID := asset.ID
+		title := asset.FileName
+		if title == "" {
+			title = asset.Kind
+		}
+		if runes := []rune(title); len(runes) > 240 {
+			title = string(runes[:240])
+		}
+		entries = append(entries, libraryEntryRow{ID: asset.ID, AssetID: &assetID, Kind: asset.Kind, Title: title, Category: domain.LibraryItemCategoryMaterial, Tags: []byte("[]"), CatalogState: domain.LibraryItemStateActive, Revision: domain.LibraryItemInitialRevision, CreateTime: asset.CreateTime, UpdateTime: asset.UpdateTime, Asset: &asset})
+	}
+	sort.Slice(entries, func(i, j int) bool { return bytes.Compare(entries[i].ID[:], entries[j].ID[:]) < 0 })
+	if len(entries) > application.MaxPackageEntries {
+		return nil, application.ErrInvalidPackage
+	}
+	return entries, nil
 }
 
-func decodePackageExportAsset(tx *gorm.DB, raw []byte, state string) (domain.MediaAsset, error) {
-	var wire struct {
-		assetRow
-		ModerationDetail json.RawMessage `json:"moderation_detail"`
+func packageLibraryEntry(item libraryItemRow, asset *assetRow) libraryEntryRow {
+	kind := "text"
+	if asset != nil {
+		kind = asset.Kind
 	}
-	d := json.NewDecoder(bytes.NewReader(raw))
-	d.DisallowUnknownFields()
-	if d.Decode(&wire) != nil || d.Decode(new(any)) != io.EOF {
+	return libraryEntryRow{ID: item.ID, AssetID: item.AssetID, FolderID: item.FolderID, PlainText: item.PlainText, Kind: kind, Title: item.Title, Category: item.Category, Tags: item.Tags, SourceLabel: item.SourceLabel, Note: item.Note, Favorite: item.Favorite, CatalogState: item.CatalogState, TrashedAt: item.TrashedAt, Position: item.Position, Revision: item.Revision, CreateTime: item.CreateTime, UpdateTime: item.UpdateTime, Asset: asset}
+}
+
+func decodePackageExportAsset(tx *gorm.DB, row *assetRow, state domain.LibraryItemState) (domain.MediaAsset, error) {
+	if row == nil {
 		return domain.MediaAsset{}, application.ErrUnavailable
 	}
-	wire.assetRow.ModerationDetail = wire.ModerationDetail
-	if err := wire.loadLocation(tx); err != nil {
+	loaded := *row
+	if err := loaded.loadLocation(tx); err != nil {
 		return domain.MediaAsset{}, err
 	}
-	a := wire.domain()
-	if a.Validate() != nil || a.Status != domain.StatusReady || a.ModerationStatus != domain.ModerationPassed || a.IsDelete && state != "trashed" {
+	a := loaded.domain()
+	if a.Validate() != nil || a.Status != domain.StatusReady || a.ModerationStatus != domain.ModerationPassed || a.IsDelete && state != domain.LibraryItemStateTrashed {
 		return domain.MediaAsset{}, application.ErrPackageIncomplete
 	}
 	return a, nil
@@ -65,7 +99,7 @@ func packageExportDetail(tx *gorm.DB, r libraryEntryRow, library uuid.UUID) (app
 	if r.AssetID == nil {
 		return r.detail(library)
 	}
-	a, err := decodePackageExportAsset(tx, r.AssetFacts, r.CatalogState)
+	a, err := decodePackageExportAsset(tx, r.Asset, r.CatalogState)
 	if err != nil || a.ID != *r.AssetID || r.ID != a.ID || string(a.Kind) != r.Kind {
 		return application.LibraryItemDetail{}, application.ErrPackageIncomplete
 	}
@@ -74,9 +108,6 @@ func packageExportDetail(tx *gorm.DB, r libraryEntryRow, library uuid.UUID) (app
 		return application.LibraryItemDetail{}, application.ErrUnavailable
 	}
 	item := domain.LibraryItem{ID: r.ID, LibraryID: library, AssetID: r.AssetID, FolderID: r.FolderID, Title: r.Title, Category: r.Category, Tags: tags, SourceLabel: r.SourceLabel, Note: r.Note, Favorite: r.Favorite, State: r.CatalogState, TrashedAt: r.TrashedAt, Position: r.Position, Revision: r.Revision, CreatedAt: r.CreateTime, UpdatedAt: r.UpdateTime}
-	if item.Revision == 0 {
-		item.Revision = 1
-	}
 	if item.Validate() != nil {
 		return application.LibraryItemDetail{}, application.ErrPackageIncomplete
 	}

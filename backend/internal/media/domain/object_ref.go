@@ -15,6 +15,19 @@ var (
 	objectBucket        = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 )
 
+// ObjectLocationState is the persisted lifecycle of one physical object.
+type ObjectLocationState string
+
+// Object location states describe durable physical write, acceptance and removal facts.
+const (
+	ObjectLocationReserved      ObjectLocationState = "reserved"
+	ObjectLocationPresent       ObjectLocationState = "present"
+	ObjectLocationAccepted      ObjectLocationState = "accepted"
+	ObjectLocationDeletePending ObjectLocationState = "delete_pending"
+	ObjectLocationDeleted       ObjectLocationState = "deleted"
+	ObjectLocationUnknown       ObjectLocationState = "unknown"
+)
+
 // ObjectRef is immutable storage identity. It contains no credential or access URL.
 type ObjectRef struct {
 	ProfileID string `json:"profile_id"`
@@ -40,7 +53,7 @@ func (r ObjectRef) Validate() error {
 type ObjectLocation struct {
 	ID       uuid.UUID
 	Ref      ObjectRef
-	State    string
+	State    ObjectLocationState
 	ByteSize *int64
 	SHA256   *string
 	MIMEType *string
@@ -48,5 +61,5 @@ type ObjectLocation struct {
 
 // Readable reports whether this stored location can serve the asset's exact key.
 func (l *ObjectLocation) Readable(key string) bool {
-	return l != nil && l.ID != uuid.Nil && l.Ref.Validate() == nil && l.Ref.Key == key && (l.State == "accepted" || l.State == "present")
+	return l != nil && l.ID != uuid.Nil && l.Ref.Validate() == nil && l.Ref.Key == key && (l.State == ObjectLocationAccepted || l.State == ObjectLocationPresent)
 }

@@ -2,19 +2,27 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type storageWorkRow struct {
-	ID, OwnerID, WorkID                            uuid.UUID
-	Kind, ProfileID, Bucket, ConfigRevision, State string
+	ID, OwnerID, WorkID               uuid.UUID
+	Kind                              application.StorageWorkKind
+	ProfileID, Bucket, ConfigRevision string
+	State                             application.StorageWorkState
+	ClosedAt                          *time.Time
+	CreatedAt                         time.Time
 }
+
+func (storageWorkRow) TableName() string { return "media.storage_work_intent" }
 
 func (r storageWorkRow) intent() application.StorageWorkIntent {
 	return application.StorageWorkIntent{ID: r.ID, Owner: application.StorageWorkOwner{Kind: r.Kind, OwnerID: r.OwnerID, WorkID: r.WorkID}, ProfileID: r.ProfileID, Bucket: r.Bucket, ConfigRevision: r.ConfigRevision, State: r.State}
@@ -22,12 +30,33 @@ func (r storageWorkRow) intent() application.StorageWorkIntent {
 
 func readStorageWork(tx *gorm.DB, owner application.StorageWorkOwner) (application.StorageWorkIntent, bool, error) {
 	var row storageWorkRow
-	read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE kind=? AND owner_id=? AND work_id=? FOR SHARE`, owner.Kind, owner.OwnerID, owner.WorkID).Scan(&row)
-	return row.intent(), read.RowsAffected == 1, read.Error
+	result := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("kind = ? AND owner_id = ? AND work_id = ?", owner.Kind, owner.OwnerID, owner.WorkID).Take(&row)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return application.StorageWorkIntent{}, false, nil
+	}
+	return row.intent(), result.RowsAffected == 1, result.Error
+}
+
+func readStorageWorkByID(tx *gorm.DB, id uuid.UUID, strength string) (storageWorkRow, error) {
+	var row storageWorkRow
+	if id == uuid.Nil {
+		return row, application.ErrStorageRouteConflict
+	}
+	result := tx.Where("id = ?", id)
+	if strength != "" {
+		result = result.Clauses(clause.Locking{Strength: strength})
+	}
+	if err := result.Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return row, application.ErrStorageRouteConflict
+		}
+		return row, err
+	}
+	return row, nil
 }
 
 // PinStorageWork is part of the caller's authorized admission transaction. A
-// retry returns the original intent even if activation has since changed route.
+// retry returns the original intent even if the environment route later changes.
 func (s *StorageRoutes) PinStorageWork(ctx context.Context, owner application.StorageWorkOwner) (application.StorageWorkIntent, error) {
 	var intent application.StorageWorkIntent
 	if s == nil || s.db == nil {
@@ -49,7 +78,8 @@ func (s *StorageRoutes) PinStorageWork(ctx context.Context, owner application.St
 		if err != nil {
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,?,?,?,?,?,?) ON CONFLICT(kind,owner_id,work_id) DO NOTHING`, uuid.New(), owner.Kind, owner.OwnerID, owner.WorkID, route.ProfileID, route.Bucket, route.Revision).Error; err != nil {
+		candidate := storageWorkRow{ID: uuid.New(), Kind: owner.Kind, OwnerID: owner.OwnerID, WorkID: owner.WorkID, ProfileID: route.ProfileID, Bucket: route.Bucket, ConfigRevision: route.Revision, State: application.StorageWorkOpen}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "kind"}, {Name: "owner_id"}, {Name: "work_id"}}, DoNothing: true}).Create(&candidate).Error; err != nil {
 			return err
 		}
 		intent, found, err = readStorageWork(tx, owner)
@@ -89,24 +119,26 @@ func (s *StorageRoutes) ReserveWorkLocation(ctx context.Context, id uuid.UUID, k
 		return location, application.ErrUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var intent storageWorkRow
-		read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE id=? FOR SHARE`, id).Scan(&intent)
-		if read.Error != nil {
-			return read.Error
+		intent, err := readStorageWorkByID(tx, id, "SHARE")
+		if err != nil {
+			return err
 		}
-		if read.RowsAffected != 1 || intent.State != "open" {
+		if intent.State != application.StorageWorkOpen {
 			return application.ErrStorageRouteConflict
 		}
 		ref := domain.ObjectRef{ProfileID: intent.ProfileID, Bucket: intent.Bucket, Key: key}
-		if ref.Validate() != nil {
-			return domain.ErrInvalidObjectRef
+		if err := ref.Validate(); err != nil {
+			return err
+		}
+		candidate := objectLocationRow{ID: uuid.New(), ProfileID: ref.ProfileID, Bucket: ref.Bucket, ObjectKey: ref.Key, State: domain.ObjectLocationReserved, OwnerIntentID: &id}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "profile_id"}, {Name: "bucket"}, {Name: "object_key"}}, DoNothing: true}).Create(&candidate).Error; err != nil {
+			return err
 		}
 		var row objectLocationRow
-		read = tx.Raw(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,owner_intent_id) VALUES(?,?,?,?,?) ON CONFLICT(profile_id,bucket,object_key) DO UPDATE SET updated_at=media.object_location.updated_at RETURNING *`, uuid.New(), ref.ProfileID, ref.Bucket, ref.Key, id).Scan(&row)
-		if read.Error != nil {
-			return read.Error
+		if err := tx.Where("profile_id = ? AND bucket = ? AND object_key = ?", ref.ProfileID, ref.Bucket, ref.Key).Take(&row).Error; err != nil {
+			return err
 		}
-		if read.RowsAffected != 1 || row.OwnerIntentID == nil || *row.OwnerIntentID != id {
+		if row.OwnerIntentID == nil || *row.OwnerIntentID != id {
 			return application.ErrStorageRouteConflict
 		}
 		location = row.domain()
@@ -115,8 +147,7 @@ func (s *StorageRoutes) ReserveWorkLocation(ctx context.Context, id uuid.UUID, k
 	return location, err
 }
 
-// BeginWorkWrite records the existing bounded execution deadline before SDK I/O.
-// A paused worker cannot restart its clock after cancellation or reconciliation.
+// BeginWorkWrite records the bounded execution deadline before SDK I/O.
 func (s *StorageRoutes) BeginWorkWrite(ctx context.Context, id uuid.UUID, location domain.ObjectLocation) error {
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
@@ -126,26 +157,30 @@ func (s *StorageRoutes) BeginWorkWrite(ctx context.Context, id uuid.UUID, locati
 		return application.ErrStorageRouteConflict
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var intent storageWorkRow
-		read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE id=? FOR SHARE`, id).Scan(&intent)
+		intent, err := readStorageWorkByID(tx, id, "SHARE")
+		if err != nil {
+			return err
+		}
+		if intent.State != application.StorageWorkOpen {
+			return application.ErrStorageRouteConflict
+		}
+		var row objectLocationRow
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND owner_intent_id = ? AND profile_id = ? AND bucket = ? AND object_key = ? AND state IN ?", location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, []domain.ObjectLocationState{domain.ObjectLocationReserved, domain.ObjectLocationPresent, domain.ObjectLocationUnknown}).Take(&row)
 		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrStorageRouteConflict
+			}
 			return read.Error
 		}
-		if read.RowsAffected != 1 || intent.State != "open" {
-			return application.ErrStorageRouteConflict
+		if row.WriteUntil != nil && row.WriteUntil.After(deadline) {
+			deadline = *row.WriteUntil
 		}
-		update := tx.Exec(`UPDATE media.object_location SET write_until=GREATEST(write_until,?::timestamptz) WHERE id=? AND owner_intent_id=? AND profile_id=? AND bucket=? AND object_key=? AND state IN ('reserved','present','unknown')`, deadline.UTC(), location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
-		if update.Error != nil {
-			return update.Error
-		}
-		if update.RowsAffected != 1 {
-			return application.ErrStorageRouteConflict
-		}
-		return nil
+		row.WriteUntil = &deadline
+		return tx.Model(&row).Select("write_until").Updates(&row).Error
 	})
 }
 
-// ConfirmWorkLocation CAS-records verified metadata while the task remains open.
+// ConfirmWorkLocation records verified metadata only while the task remains open.
 func (s *StorageRoutes) ConfirmWorkLocation(ctx context.Context, id uuid.UUID, location domain.ObjectLocation, info application.ObjectInfo) error {
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
@@ -154,27 +189,30 @@ func (s *StorageRoutes) ConfirmWorkLocation(ctx context.Context, id uuid.UUID, l
 		return application.ErrObjectMismatch
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var intent storageWorkRow
-		read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE id=? FOR SHARE`, id).Scan(&intent)
+		intent, err := readStorageWorkByID(tx, id, "SHARE")
+		if err != nil {
+			return err
+		}
+		if intent.State != application.StorageWorkOpen {
+			return application.ErrStorageRouteConflict
+		}
+		var row objectLocationRow
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND owner_intent_id = ? AND profile_id = ? AND bucket = ? AND object_key = ? AND state IN ?", location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, []domain.ObjectLocationState{domain.ObjectLocationReserved, domain.ObjectLocationPresent, domain.ObjectLocationUnknown}).Take(&row)
 		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return application.ErrStorageRouteConflict
+			}
 			return read.Error
 		}
-		if read.RowsAffected != 1 || intent.State != "open" {
+		if row.ByteSize != nil && *row.ByteSize != info.Size || row.SHA256 != nil && *row.SHA256 != info.SHA256 || row.MIMEType != nil && *row.MIMEType != info.ContentType {
 			return application.ErrStorageRouteConflict
 		}
-		update := tx.Exec(`UPDATE media.object_location SET state='present',byte_size=?,sha256=?,mime_type=? WHERE id=? AND owner_intent_id=? AND profile_id=? AND bucket=? AND object_key=? AND state IN ('reserved','present','unknown') AND (byte_size IS NULL OR byte_size=?) AND (sha256 IS NULL OR sha256=?) AND (mime_type IS NULL OR mime_type=?)`, info.Size, info.SHA256, info.ContentType, location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, info.Size, info.SHA256, info.ContentType)
-		if update.Error != nil {
-			return update.Error
-		}
-		if update.RowsAffected != 1 {
-			return application.ErrStorageRouteConflict
-		}
-		return nil
+		row.State, row.ByteSize, row.SHA256, row.MIMEType = domain.ObjectLocationPresent, &info.Size, &info.SHA256, &info.ContentType
+		return tx.Model(&row).Select("state", "byte_size", "sha256", "mime_type").Updates(&row).Error
 	})
 }
 
-// AcceptStorageWork runs in the owning result transaction, accepting the exact
-// complete output set before any compensation can acquire these rows.
+// AcceptStorageWork atomically accepts the exact complete output set.
 func (s *StorageRoutes) AcceptStorageWork(ctx context.Context, id uuid.UUID, ids []uuid.UUID) error {
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
@@ -190,30 +228,34 @@ func (s *StorageRoutes) AcceptStorageWork(ctx context.Context, id uuid.UUID, ids
 		seen[object] = true
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var intent storageWorkRow
-		read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE id=? FOR UPDATE`, id).Scan(&intent)
-		if read.Error != nil {
-			return read.Error
+		intent, err := readStorageWorkByID(tx, id, "UPDATE")
+		if err != nil {
+			return err
 		}
-		if read.RowsAffected != 1 || intent.State == "cancelled" {
+		if intent.State == application.StorageWorkCancelled {
 			return application.ErrStorageRouteConflict
 		}
 		var rows []objectLocationRow
-		if err := tx.Raw(`SELECT * FROM media.object_location WHERE owner_intent_id=? ORDER BY id LIMIT 15001 FOR UPDATE`, id).Scan(&rows).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("owner_intent_id = ?", id).Order("id").Limit(15001).Find(&rows).Error; err != nil {
 			return err
 		}
 		if len(rows) != len(ids) {
 			return application.ErrStorageRouteConflict
 		}
 		for _, row := range rows {
-			if !seen[row.ID] || row.State != "present" && row.State != "accepted" {
+			if !seen[row.ID] || row.State != domain.ObjectLocationPresent && row.State != domain.ObjectLocationAccepted {
 				return application.ErrStorageRouteConflict
 			}
 		}
-		if err := tx.Exec(`UPDATE media.object_location SET state='accepted' WHERE owner_intent_id=?`, id).Error; err != nil {
+		if err := tx.Model(&objectLocationRow{}).Where("owner_intent_id = ?", id).Update("state", domain.ObjectLocationAccepted).Error; err != nil {
 			return err
 		}
-		return tx.Exec(`UPDATE media.storage_work_intent SET state='accepted',closed_at=COALESCE(closed_at,now()) WHERE id=?`, id).Error
+		intent.State = application.StorageWorkAccepted
+		if intent.ClosedAt == nil {
+			now := time.Now().UTC()
+			intent.ClosedAt = &now
+		}
+		return tx.Model(&intent).Select("state", "closed_at").Updates(&intent).Error
 	})
 }
 
@@ -222,36 +264,65 @@ func (s *StorageRoutes) CancelStorageWork(ctx context.Context, id uuid.UUID) err
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	update := s.db.WithContext(ctx).Exec(`UPDATE media.storage_work_intent SET state='cancelled',closed_at=COALESCE(closed_at,now()) WHERE id=? AND state IN ('open','cancelled')`, id)
-	if update.Error != nil {
-		return update.Error
-	}
-	if update.RowsAffected != 1 {
-		return application.ErrStorageRouteConflict
-	}
-	return nil
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		intent, err := readStorageWorkByID(tx, id, "UPDATE")
+		if err != nil {
+			return err
+		}
+		if intent.State == application.StorageWorkCancelled {
+			return nil
+		}
+		if intent.State != application.StorageWorkOpen {
+			return application.ErrStorageRouteConflict
+		}
+		intent.State = application.StorageWorkCancelled
+		if intent.ClosedAt == nil {
+			now := time.Now().UTC()
+			intent.ClosedAt = &now
+		}
+		return tx.Model(&intent).Select("state", "closed_at").Updates(&intent).Error
+	})
 }
 
-// BeginWorkRemoval requires cancellation and a ten-minute drain for the bounded
-// five-minute SDK write. A namespace with no write fence has never started SDK
-// mutation and can confirm absence immediately. Accepted assets and uncertain live writes stay protected.
+// BeginWorkRemoval requires cancellation and drains the bounded provider write.
 func (s *StorageRoutes) BeginWorkRemoval(ctx context.Context, id uuid.UUID, location domain.ObjectLocation) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
-	remove := false
+	removable := false
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var intent storageWorkRow
-		read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE id=? AND state='cancelled' AND (closed_at<clock_timestamp()-interval '10 minutes' OR NOT EXISTS(SELECT 1 FROM media.object_location l WHERE l.owner_intent_id=media.storage_work_intent.id AND l.write_until IS NOT NULL)) FOR UPDATE`, id).Scan(&intent)
-		if read.Error != nil {
-			return read.Error
+		intent, err := readStorageWorkByID(tx, id, "UPDATE")
+		if err != nil {
+			return err
 		}
-		if read.RowsAffected != 1 {
+		if intent.State != application.StorageWorkCancelled || intent.ClosedAt == nil {
 			return nil
 		}
-		for _, column := range legacyObjectColumns {
-			var live bool
-			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM `+column.table+` t WHERE `+column.location+`=? AND NOT(`+legacyRetired(column)+`))`, location.ID).Scan(&live).Error; err != nil {
+		var locations []objectLocationRow
+		if err := tx.Where("owner_intent_id = ?", id).Find(&locations).Error; err != nil {
+			return err
+		}
+		hasWriteFence := false
+		for _, row := range locations {
+			hasWriteFence = hasWriteFence || row.WriteUntil != nil
+		}
+		if hasWriteFence && time.Since(*intent.ClosedAt) < 10*time.Minute {
+			return nil
+		}
+		var row objectLocationRow
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND owner_intent_id = ? AND profile_id = ? AND bucket = ? AND object_key = ? AND state IN ?", location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, []domain.ObjectLocationState{domain.ObjectLocationReserved, domain.ObjectLocationPresent, domain.ObjectLocationUnknown, domain.ObjectLocationDeletePending}).Take(&row)
+		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return read.Error
+		}
+		if row.WriteUntil != nil && !row.WriteUntil.Before(time.Now().UTC()) {
+			return nil
+		}
+		for _, column := range storageOwnerColumns {
+			live, err := hasLiveStorageReference(tx, column, location.ID)
+			if err != nil {
 				return err
 			}
 			if live {
@@ -264,11 +335,14 @@ func (s *StorageRoutes) BeginWorkRemoval(ctx context.Context, id uuid.UUID, loca
 				}
 			}
 		}
-		update := tx.Exec(`UPDATE media.object_location l SET state='delete_pending' WHERE l.id=? AND l.owner_intent_id=? AND l.profile_id=? AND l.bucket=? AND l.object_key=? AND l.state IN ('reserved','present','unknown','delete_pending') AND (l.write_until IS NULL OR l.write_until<clock_timestamp())`, location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
-		remove = update.RowsAffected == 1
-		return update.Error
+		row.State = domain.ObjectLocationDeletePending
+		if err := tx.Model(&row).Select("state").Updates(&row).Error; err != nil {
+			return err
+		}
+		removable = true
+		return nil
 	})
-	return remove, err
+	return removable, err
 }
 
 // ConfirmWorkRemoval clears debt only for the same fenced cancelled work object.
@@ -276,12 +350,49 @@ func (s *StorageRoutes) ConfirmWorkRemoval(ctx context.Context, id uuid.UUID, lo
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	update := s.db.WithContext(ctx).Exec(`UPDATE media.object_location SET state='deleted' WHERE id=? AND owner_intent_id=? AND profile_id=? AND bucket=? AND object_key=? AND state IN ('delete_pending','deleted')`, location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
-	if update.Error != nil {
-		return update.Error
+	result := s.db.WithContext(ctx).Model(&objectLocationRow{}).
+		Where("id = ? AND owner_intent_id = ? AND profile_id = ? AND bucket = ? AND object_key = ? AND state IN ?", location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, []domain.ObjectLocationState{domain.ObjectLocationDeletePending, domain.ObjectLocationDeleted}).
+		Update("state", domain.ObjectLocationDeleted)
+	if result.Error != nil {
+		return result.Error
 	}
-	if update.RowsAffected != 1 {
+	if result.RowsAffected != 1 {
 		return application.ErrStorageRouteConflict
 	}
 	return nil
+}
+
+// BeginAcceptedWorkRemoval retires one completed private object after its owner expires it.
+func (s *StorageRoutes) BeginAcceptedWorkRemoval(ctx context.Context, id uuid.UUID, location domain.ObjectLocation) (bool, error) {
+	if s == nil || s.db == nil || id == uuid.Nil || location.ID == uuid.Nil || location.Ref.Validate() != nil {
+		return false, application.ErrUnavailable
+	}
+	removable := false
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		intent, err := readStorageWorkByID(tx, id, "UPDATE")
+		if err != nil {
+			return err
+		}
+		if intent.State != application.StorageWorkAccepted {
+			return application.ErrStorageRouteConflict
+		}
+		var row objectLocationRow
+		read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND owner_intent_id = ? AND profile_id = ? AND bucket = ? AND object_key = ? AND state IN ?", location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key, []domain.ObjectLocationState{domain.ObjectLocationAccepted, domain.ObjectLocationDeletePending}).Take(&row)
+		if read.Error != nil {
+			if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return read.Error
+		}
+		if row.WriteUntil != nil && !row.WriteUntil.Before(time.Now().UTC()) {
+			return nil
+		}
+		row.State = domain.ObjectLocationDeletePending
+		if err := tx.Model(&row).Select("state").Updates(&row).Error; err != nil {
+			return err
+		}
+		removable = true
+		return nil
+	})
+	return removable, err
 }

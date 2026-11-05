@@ -25,24 +25,28 @@ import (
 	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
-// Objects shares legacy and saved-profile transports without persisting access URLs.
+// Objects supplies explicit physical routes to subject media operations.
 type Objects struct {
-	Legacy   *objectstorage.Client
 	Routed   *mediaobjects.RoutedReadObjects
 	registry *objectstorage.Registry
+	owned    bool
 }
 
-// OpenObjects checks configured profiles without contacting a storage provider.
-func OpenObjects(cfg config.Config, legacy *objectstorage.Client) (Objects, error) {
-	objects := Objects{Legacy: legacy}
-	if cfg.ObjectStorage != nil {
-		registry, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
-		if err != nil {
-			return Objects{}, err
-		}
-		objects.registry, objects.Routed = registry, mediaobjects.NewRoutedReadObjects(registry)
+// OpenObjects opens the unified object storage configuration for this process.
+func OpenObjects(cfg config.Config) (Objects, error) {
+	if cfg.ObjectStorage == nil {
+		return Objects{}, objectstorage.ErrUnavailable
 	}
-	return objects, nil
+	registry, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
+	if err != nil {
+		return Objects{}, err
+	}
+	return Objects{Routed: mediaobjects.NewRoutedReadObjects(registry), registry: registry, owned: true}, nil
+}
+
+// UseRegistry composes request services around the process-owned registry.
+func UseRegistry(registry *objectstorage.Registry) Objects {
+	return Objects{Routed: mediaobjects.NewRoutedReadObjects(registry), registry: registry}
 }
 
 // Registry exposes the shared immutable transport to composition roots only.
@@ -50,20 +54,14 @@ func (o Objects) Registry() *objectstorage.Registry { return o.registry }
 
 // Close releases only the profile transport owned by this composition.
 func (o Objects) Close() {
-	if o.registry != nil {
+	if o.owned && o.registry != nil {
 		o.registry.Close()
 	}
 }
 
 func (o Objects) query(tx *gorm.DB, library *pgmedia.LibraryStore) *media.SubjectSourceQuery {
 	reader := pgmedia.NewSubjectSourceStore(tx, library)
-	if o.Routed != nil {
-		return media.NewRoutedSubjectSourceQuery(reader, o.Routed, o.Routed)
-	}
-	if o.Legacy != nil {
-		return media.NewSubjectSourceQuery(reader, o.Legacy, o.Legacy)
-	}
-	return media.NewSubjectSourceQuery(reader, nil, nil)
+	return media.NewRoutedSubjectSourceQuery(reader, o.Routed, o.Routed)
 }
 
 type scopeAccess struct {

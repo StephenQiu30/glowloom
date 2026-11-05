@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -52,6 +53,7 @@ func scriptTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("test lacks actual nonowner", role, err)
 	}
+	admitScriptFixtureProfile(t, owner)
 	return runtime, owner
 }
 func scriptActorProject(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.UUID) {
@@ -78,7 +80,7 @@ func scriptActorProject(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.
 	return actor, pid
 }
 func scriptStore(db *gorm.DB) *pg.SourceStore {
-	return pg.NewSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureProjectAccess(tx) })
+	return pg.NewSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureProjectAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }
 func scriptCounts(t *testing.T, db *gorm.DB, pid uuid.UUID) (int64, int64, int64) {
 	t.Helper()

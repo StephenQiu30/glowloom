@@ -97,7 +97,7 @@ func subjectSession(t *testing.T, owner *gorm.DB) identity.Principal {
 
 // These media rows and facts are fixture-proven SQL inputs. No object bytes or
 // provider behavior is accepted by this integration test.
-func subjectFixtureMedia(t *testing.T, owner *gorm.DB, actor identity.Principal, kind string) domain.MediaFact {
+func subjectFixtureMedia(t *testing.T, owner *gorm.DB, actor identity.Principal, project uuid.UUID, kind string) domain.MediaFact {
 	t.Helper()
 	media := fact(kind)
 	media.PersonalOrgID = &actor.OrgID
@@ -116,8 +116,26 @@ func subjectFixtureMedia(t *testing.T, owner *gorm.DB, actor identity.Principal,
 		duration := int64(1000)
 		media.DurationMS = &duration
 	}
-	key := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/" + kind + "/subject-fixture/" + media.AssetID.String()
-	if err := owner.Exec(`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status,duration_ms) VALUES(?,?,?,?,'upload','ready',?,?,?,?,?,'passed',?)`, media.AssetID, actor.OrgID, actor.ID, kind, key, media.FileName, media.MIMEType, media.ByteSize, media.SHA256, media.DurationMS).Error; err != nil {
+	extension := ".png"
+	if kind == "video" {
+		extension = ".mp4"
+	}
+	if kind == "audio" {
+		extension = ".mp3"
+	}
+	key := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/" + kind + "/2026/10/" + media.AssetID.String() + extension
+	if project != uuid.Nil {
+		key = "projects/" + project.String() + "/" + kind + "/2026/10/" + media.AssetID.String() + extension
+		media.PersonalOrgID = nil
+		media.PersonalActorID = nil
+		media.SourceProjectID = &project
+	}
+	locationID := seedSubjectLocation(t, owner, key, "test-main", "subject-fixture")
+	var projectID any
+	if project != uuid.Nil {
+		projectID = project
+	}
+	if err := owner.Exec(`INSERT INTO media.media_asset(id,project_id,personal_org_id,personal_actor_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,moderation_status,duration_ms) VALUES(?,?,?,?,?,'upload','ready',?,?,?,?,?,?,'passed',?)`, media.AssetID, projectID, media.PersonalOrgID, media.PersonalActorID, kind, key, locationID, media.FileName, media.MIMEType, media.ByteSize, media.SHA256, media.DurationMS).Error; err != nil {
 		t.Fatal(err)
 	}
 	return media
@@ -158,9 +176,9 @@ func TestSubjectPostgresAtomicVersionsReplayAndAuthority(t *testing.T) {
 	runtime, owner := subjectPostgres(t)
 	actor := subjectSession(t, owner)
 	other := subjectSession(t, owner)
-	primary := subjectFixtureMedia(t, owner, actor, "image")
-	supplement := subjectFixtureMedia(t, owner, actor, "image")
-	voice := subjectFixtureMedia(t, owner, actor, "audio")
+	primary := subjectFixtureMedia(t, owner, actor, uuid.Nil, "image")
+	supplement := subjectFixtureMedia(t, owner, actor, uuid.Nil, "image")
+	voice := subjectFixtureMedia(t, owner, actor, uuid.Nil, "audio")
 	media := &memoryMedia{facts: map[uuid.UUID]domain.MediaFact{primary.AssetID: primary, supplement.AssetID: supplement, voice.AssetID: voice}}
 	store := subjectFixtureStore(runtime, media)
 	clock := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Hour)
@@ -307,7 +325,7 @@ func TestSubjectPostgresQueryPaginationSortDatesAndTeamFavorites(t *testing.T) {
 	runtime, owner := subjectPostgres(t)
 	actor := subjectSession(t, owner)
 	other := subjectSession(t, owner)
-	primary := subjectFixtureMedia(t, owner, actor, "video")
+	primary := subjectFixtureMedia(t, owner, actor, uuid.Nil, "video")
 	media := &memoryMedia{facts: map[uuid.UUID]domain.MediaFact{primary.AssetID: primary}}
 	store := subjectFixtureStore(runtime, media)
 	base := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Hour)

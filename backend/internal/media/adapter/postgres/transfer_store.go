@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -46,13 +47,16 @@ type transferJobRow struct {
 	TargetFolderRevision, SourceRevision, TargetRevision, ProjectRevision          int64
 	ManifestSHA256                                                                 string
 	ItemCount, Attempt                                                             int
-	Status, Stage                                                                  string
+	Status                                                                         domain.TransferStatus
+	Stage                                                                          domain.TransferStage
 	Revision                                                                       int64
 	NeedsReconciliation, CancellationRequested, ExecutionUnconfirmed, ProcessEnded bool
 	ExecutionID, WorkerFence                                                       *uuid.UUID
 	LeaseUntil                                                                     *time.Time
 	CreatedAt, UpdatedAt                                                           time.Time
 }
+
+func (transferJobRow) TableName() string { return "media.transfer_job" }
 
 func (r transferJobRow) scopes() (domain.LibraryScope, domain.LibraryScope) {
 	return domain.LibraryScope{Kind: domain.LibraryKind(r.SourceKind), ProjectID: r.SourceProjectID}, domain.LibraryScope{Kind: domain.LibraryKind(r.TargetKind), ProjectID: r.TargetProjectID}
@@ -101,22 +105,18 @@ func transferHash(value any) (string, error) {
 	return hex.EncodeToString(hash[:]), nil
 }
 func transferLock(tx *gorm.DB, actor, key uuid.UUID) error {
-	return tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-transfer/"+actor.String()+"/"+key.String()).Error
+	return lockStorageIdempotencyKey(tx, storageIdempotencyTransfer, actor, key)
 }
-func (s *TransferStore) transferReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string) (*domain.TransferJob, error) {
-	var row struct {
-		OrgID, JobID          uuid.UUID
-		RequestSHA256, Action string
-		ResponseBody          []byte
+func (s *TransferStore) transferReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash string, action application.TransferAction) (*domain.TransferJob, error) {
+	var row transferCommandRecord
+	read := tx.Where("actor_id = ? AND idem_key = ?", actor.ID, key).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-	read := tx.Raw(`SELECT * FROM media.transfer_command WHERE actor_id=? AND idem_key=?`, actor.ID, key).Scan(&row)
 	if read.Error != nil {
 		return nil, read.Error
 	}
-	if read.RowsAffected == 0 {
-		return nil, nil
-	}
-	if row.OrgID != actor.OrgID || row.RequestSHA256 != hash || row.Action != action {
+	if row.OrgID != actor.OrgID || row.RequestSHA256 != hash || row.Action != string(action) {
 		return nil, application.ErrLibraryKeyConflict
 	}
 	var job domain.TransferJob
@@ -138,16 +138,16 @@ func (s *TransferStore) transferReplay(tx *gorm.DB, actor identityapp.Principal,
 // entire transaction. Concurrent read-to-write upgrades can deadlock.
 func (s *TransferStore) readJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, lock, writeScope bool) (transferJobRow, error) {
 	var row transferJobRow
-	query := `SELECT * FROM media.transfer_job WHERE id=? AND org_id=? AND actor_id=?`
+	query := tx.Where("id = ? AND org_id = ? AND actor_id = ?", id, actor.OrgID, actor.ID)
 	if lock {
-		query += ` FOR UPDATE`
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
-	read := tx.Raw(query, id, actor.OrgID, actor.ID).Scan(&row)
+	read := query.Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return row, application.ErrNotFound
+	}
 	if read.Error != nil {
 		return row, read.Error
-	}
-	if read.RowsAffected != 1 {
-		return row, application.ErrNotFound
 	}
 	source, target := row.scopes()
 	if source.Validate() != nil || target.Validate() != nil || source.Kind == target.Kind || row.Revision < 1 || row.Attempt < 1 || row.ItemCount < 1 || row.ItemCount > 200 {
@@ -171,14 +171,8 @@ func transferView(tx *gorm.DB, row transferJobRow) (domain.TransferJob, error) {
 	}
 	source, target := row.scopes()
 	job := domain.TransferJob{ID: row.ID, CurrentActorID: row.ActorID, CurrentOrgID: row.OrgID, Source: source, Target: target, SourceScopeID: *row.SourceScopeID, TargetScopeID: *row.TargetScopeID, TargetFolderID: row.TargetFolderID, Status: row.Status, Stage: row.Stage, Attempt: row.Attempt, Revision: row.Revision, NeedsReconciliation: row.NeedsReconciliation, CancellationRequested: row.CancellationRequested, ExecutionUnconfirmed: row.ExecutionUnconfirmed, Items: []domain.TransferItemResult{}, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
-	var rows []struct {
-		ItemIndex                  int
-		SourceItemID, TargetItemID uuid.UUID
-		TargetAssetID              *uuid.UUID
-		Status                     string
-		FailureCode                *string
-	}
-	if err := tx.Raw(`SELECT item_index,source_item_id,target_item_id,target_asset_id,status,failure_code FROM media.transfer_item WHERE job_id=? ORDER BY item_index`, row.ID).Scan(&rows).Error; err != nil {
+	var rows []transferItemViewRow
+	if err := tx.Where("job_id = ?", row.ID).Order("item_index").Find(&rows).Error; err != nil {
 		return job, err
 	}
 	if len(rows) != row.ItemCount {
@@ -243,16 +237,12 @@ func (s *TransferStore) ListTransfers(ctx context.Context, actor identityapp.Pri
 				return err
 			}
 		}
-		query := `SELECT * FROM media.transfer_job WHERE org_id=? AND actor_id=?`
-		args := []any{actor.OrgID, actor.ID}
+		query := tx.Where("org_id = ? AND actor_id = ?", actor.OrgID, actor.ID)
 		if scope.Kind == domain.LibraryProject {
-			query += ` AND (source_project_id=? OR target_project_id=?)`
-			args = append(args, *scope.ProjectID, *scope.ProjectID)
+			query = query.Where("source_project_id = ? OR target_project_id = ?", *scope.ProjectID, *scope.ProjectID)
 		}
-		query += ` ORDER BY created_at DESC,id LIMIT ? OFFSET ?`
-		args = append(args, limit, (page-1)*limit)
 		var rows []transferJobRow
-		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
+		if err := query.Order("created_at DESC").Order("id").Limit(limit).Offset((page - 1) * limit).Find(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {
@@ -298,10 +288,9 @@ func (s *TransferStore) ensureTransferLibraries(tx *gorm.DB, actor identityapp.P
 		if scope.Kind == domain.LibraryPersonal {
 			personal = &actor.ID
 		}
-		// Legacy originals may have a virtual revision-zero catalogue. Both
-		// durable transfer FKs require that same empty identity to exist;
-		// materializing it changes no source media or catalogue content.
-		if err := tx.Exec(`INSERT INTO media.library(id,kind,org_id,project_id,personal_actor_id,revision) VALUES(?,?,?,?,?,0) ON CONFLICT(id) DO NOTHING`, id, string(scope.Kind), sideActor.OrgID, scope.ProjectID, personal).Error; err != nil {
+		// Ensure both scope identities exist before binding durable transfer rows.
+		library := libraryRow{ID: id, Kind: string(scope.Kind), OrgID: sideActor.OrgID, ProjectID: scope.ProjectID, PersonalActorID: personal}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(&library).Error; err != nil {
 			return libraryRow{}, libraryRow{}, err
 		}
 		row, err := readLibrary(tx, sideActor, scope, scope.Kind == target.Kind)
@@ -333,22 +322,22 @@ func transferFrozenBytes(items []application.FrozenTransferItem) (string, [][]by
 }
 
 func transferSourceFile(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) (application.LibraryMediaFile, error) {
-	query := `SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND personal_actor_id IS NULL AND personal_org_id IS NULL FOR SHARE`
-	args := []any{id, scope.ProjectID}
+	query := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("id = ? AND personal_actor_id IS NULL AND personal_org_id IS NULL", id)
 	if scope.Kind == domain.LibraryPersonal {
-		query = `SELECT * FROM media.media_asset WHERE id=? AND project_id IS NULL AND personal_org_id=? AND personal_actor_id=? FOR SHARE`
-		args = []any{id, actor.OrgID, actor.ID}
+		query = tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"id": id, "project_id": nil, "personal_org_id": actor.OrgID, "personal_actor_id": actor.ID})
+	} else {
+		query = query.Where("project_id = ?", scope.ProjectID)
 	}
 	var row assetRow
-	read := tx.Raw(query, args...).Scan(&row)
+	read := query.Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return application.LibraryMediaFile{}, application.ErrNotFound
+	}
 	if read.Error != nil {
 		return application.LibraryMediaFile{}, read.Error
 	}
-	if read.RowsAffected != 1 {
-		return application.LibraryMediaFile{}, application.ErrNotFound
-	}
 	var rends []renditionRow
-	if err := tx.Raw(`SELECT * FROM media.rendition WHERE media_asset_id=? AND NOT is_delete ORDER BY kind,id LIMIT 17 FOR SHARE`, id).Scan(&rends).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("media_asset_id = ? AND is_delete = ?", id, false).Order("kind").Order("id").Limit(17).Find(&rends).Error; err != nil {
 		return application.LibraryMediaFile{}, err
 	}
 	if len(rends) > 16 {

@@ -89,7 +89,9 @@ func TestDirectorOutputsPersistAndRejectUnavailableImages(t *testing.T) {
 				}
 				if kind == "model" {
 					asset = uuid.New()
-					if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,codec,moderation_status) VALUES(?,?,'model','upload','ready',?,'fixture.glb','model/gltf-binary',128,'glb2','passed')`, asset, project, "projects/"+project.String()+"/model/2026/10/"+asset.String()+".glb").Error; err != nil {
+					key := "projects/" + project.String() + "/model/2026/10/" + asset.String() + ".glb"
+					locationID := seedCanvasMetadataLocation(t, database, key)
+					if err := database.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,codec,moderation_status) VALUES(?,?,'model','upload','ready',?,?,'fixture.glb','model/gltf-binary',128,'glb2','passed')`, asset, project, key, locationID).Error; err != nil {
 						t.Fatal(err)
 					}
 				} else {
@@ -208,7 +210,7 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			var release sync.Once
 			defer func() { release.Do(func() { close(resume) }); cancel(); workers.Wait() }()
 			service := canvasfixture.NewService(pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
-				return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil), read: read, resume: resume}
+				return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)), read: read, resume: resume}
 			}, mediawire.NewCanvasProjectAccess))
 			doc, err := service.Create(ctx, actor, project, uuid.NewString(), application.CreateInput{Name: "截图授权事务"})
 			if err != nil {
@@ -280,7 +282,7 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			if err := <-mutated; err != nil {
 				t.Fatalf("media updater did not resume: %v", err)
 			}
-			if _, err := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess), nil).Reference(ctx, actor, project, asset); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess)).Reference(ctx, actor, project, asset); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatalf("later media state bypassed current authorization: %v", err)
 			}
 		})

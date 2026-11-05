@@ -12,7 +12,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -54,13 +53,13 @@ func TestMediaPackagePersonalUnknownBlocksPurgeUntilActualCancellation(t *testin
 	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 1, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: item, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
-	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
-	repo, service := packageActualService(t, db, &packageUnknownWrite{PackageObjects: objects}, packageTestAccess)
+	objects := mediaFixturePackageObjects(t, db)
+	repo, service := packageActualService(t, db, &packageUnknownWrite{packageFixtureObjects: objects}, packageTestAccess)
 	job, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: scope, ExpectedRevision: 2, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, ownPackageZIP(t)))
 	if err != nil || job.Status != "needs_reconciliation" {
 		t.Fatal("actual retained personal package", job, err)
 	}
-	packageCleanup(t, repo, objects, actor, scope)
+	packageCleanup(t, db, repo, objects, actor, scope)
 	if busy, err := repo.HasInflightLibraryPackageWork(t.Context(), actor, scope); err != nil || !busy {
 		t.Fatal("owning personal guard lost the actual unknown batch", busy, err)
 	}
@@ -82,6 +81,7 @@ func TestMediaPackagePersonalUnknownBlocksPurgeUntilActualCancellation(t *testin
 	if err := db.Raw(`SELECT count(*) FROM media.purge_job WHERE actor_id=?`, actor.ID).Scan(&count).Error; err != nil || count != 0 {
 		t.Fatal("blocked admission left a partial purge", count, err)
 	}
+	drainFixtureStorageWork(t, packagePurgeDB(t, true), mediaapp.StorageWorkKindPackage, job.ID)
 	_, recovered := packageActualService(t, db, objects, packageTestAccess)
 	cancelled, err := recovered.Cancel(t.Context(), actor, job.ID, mediaapp.PackageControl{ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || cancelled.Status != "cancelled" {

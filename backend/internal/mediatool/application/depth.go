@@ -84,17 +84,37 @@ type DepthDerivedMedia interface {
 	AuthorizeRemoval(context.Context, identityapp.Principal, mediaapp.DerivedRemoval) error
 }
 
+// DepthObjectKind identifies one frozen output in a native depth result.
+type DepthObjectKind string
+
+// Depth object kinds identify the original output and its preview representations.
+const (
+	DepthObjectKindOriginal  DepthObjectKind = "original"
+	DepthObjectKindPoster    DepthObjectKind = "poster"
+	DepthObjectKindProxy720p DepthObjectKind = "proxy_720p"
+)
+
+// DepthObjectStatus is the persisted lifecycle of one frozen depth output.
+type DepthObjectStatus string
+
+// Depth object states record pending, verified and removed physical facts.
+const (
+	DepthObjectStatusPending  DepthObjectStatus = "pending"
+	DepthObjectStatusVerified DepthObjectStatus = "verified"
+	DepthObjectStatusRemoved  DepthObjectStatus = "removed"
+)
+
 // DepthObject freezes one server-selected result before any external write.
 type DepthObject struct {
-	Kind             string     `json:"kind"`
-	ObjectKey        string     `json:"object_key"`
-	SHA256           string     `json:"sha256"`
-	ByteSize         int64      `json:"byte_size"`
-	MIMEType         string     `json:"mime_type"`
-	WriteStarted     bool       `json:"-"`
-	DeleteStarted    bool       `json:"-"`
-	Status           string     `json:"-"`
-	ObjectLocationID *uuid.UUID `json:"-"`
+	Kind             DepthObjectKind   `json:"kind"`
+	ObjectKey        string            `json:"object_key"`
+	SHA256           string            `json:"sha256"`
+	ByteSize         int64             `json:"byte_size"`
+	MIMEType         string            `json:"mime_type"`
+	WriteStarted     bool              `json:"-"`
+	DeleteStarted    bool              `json:"-"`
+	Status           DepthObjectStatus `json:"-"`
+	ObjectLocationID *uuid.UUID        `json:"-"`
 }
 
 // DepthArtifact is a permanent private output manifest, never a public DTO.
@@ -121,7 +141,7 @@ type DepthWork struct {
 // External file and object IO never runs within its transaction callbacks.
 type DepthWorkerStore interface {
 	Claim(context.Context, DepthWorkID) (DepthWork, error)
-	Phase(context.Context, DepthWorkID, string) error
+	Phase(context.Context, DepthWorkID, DepthPhase) error
 	StartProcess(context.Context, DepthWorkID) error
 	EndProcess(context.Context, DepthWorkID) error
 	FreezeArtifact(context.Context, DepthWorkID, DepthArtifact) error

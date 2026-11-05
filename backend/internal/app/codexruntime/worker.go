@@ -8,20 +8,20 @@ import (
 	"path/filepath"
 	"time"
 
+	operationtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
+	trialtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
 
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/worker"
 	"gorm.io/gorm"
 
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -30,21 +30,15 @@ import (
 // Register uses the installed CLI identity for local administrator trials.
 // Non-local workers retain a separate service home and strict preflight.
 // Existing project dispatch keeps its own authorization and price gate.
-func Register(ctx context.Context, w worker.Worker, database *gorm.DB, cfg config.Config) error {
-	storage, err := objectstorage.OpenFromConfig(cfg)
-	if err != nil {
-		return err
-	}
-	objects, err := subjectwire.OpenObjects(cfg, storage)
+func Register(ctx context.Context, handlers map[string]taskruntime.Handler, database *gorm.DB, cfg config.Config) error {
+	objects, err := subjectwire.OpenObjects(cfg)
 	if err != nil {
 		return err
 	}
 	context.AfterFunc(ctx, objects.Close)
-	if storage == nil && objects.Registry() == nil {
-		w.RegisterActivityWithOptions(func(context.Context, operationflow.ProviderSubmitInput) (operationflow.ProviderSubmitOutput, error) {
-			return operationflow.ProviderSubmitOutput{Outcome: operationflow.ProviderSubmitNotSubmitted}, mediaapp.ErrStorageNotReady
-		}, activity.RegisterOptions{Name: "provider.submit"})
-		return nil
+	registry := objects.Registry()
+	if registry == nil {
+		return objectstorage.ErrUnavailable
 	}
 	var launcher *codex.ProcessLauncher
 	if cfg.Env == "local" && cfg.CodexHome == "" {
@@ -75,20 +69,17 @@ func Register(ctx context.Context, w worker.Worker, database *gorm.DB, cfg confi
 		return fmt.Errorf("codex service identity must be logged in with image generation available")
 	}
 
-	if cfg.Env == "local" && storage != nil {
-		trialwire.RegisterCodex(w, database, launcher, cfg.CodexWorkRoot, storage, application.TrialStorageID(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket))
+	if cfg.Env == "local" {
+		handlers[trialtask.Codex] = trialwire.Codex(database, launcher, cfg.CodexWorkRoot, objects.Registry())
 	}
 	store := operationwire.ProvideOperationStore(database)
-	receipts := application.NewProviderStageService(staging.NewObjects(storage), store)
-	if objects.Registry() != nil {
-		receipts = application.NewRoutedProviderStageService(staging.NewRoutedFactory(objects.Registry(), pgmedia.NewStorageRoutes(database)), store)
-	}
+	receipts := application.NewRoutedProviderStageService(staging.NewRoutedFactory(registry, pgmedia.NewStorageRoutes(database)), store)
 	adapter, err := codex.New(store, launcher, receipts, codex.Config{WorkRoot: cfg.CodexWorkRoot})
 	if err != nil {
 		return err
 	}
 	activities := NewImageActivities(store, adapter)
-	w.RegisterActivityWithOptions(activities.Submit, activity.RegisterOptions{Name: "provider.submit"})
+	operationtask.RegisterCodex(handlers, store, activities)
 	return nil
 }
 
@@ -112,8 +103,8 @@ func NewImageActivities(store operationReader, adapter imageSubmitter) *ImageAct
 }
 
 // Submit uses the stored project, model, price and prompt, never caller overrides.
-func (a *ImageActivities) Submit(ctx context.Context, input operationflow.ProviderSubmitInput) (operationflow.ProviderSubmitOutput, error) {
-	refused := operationflow.ProviderSubmitOutput{Outcome: operationflow.ProviderSubmitNotSubmitted, Error: &operationflow.ProviderError{Code: "invalid_codex_input"}}
+func (a *ImageActivities) Submit(ctx context.Context, input operationtask.ProviderSubmitInput) (operationtask.ProviderSubmitOutput, error) {
+	refused := operationtask.ProviderSubmitOutput{Outcome: operationtask.ProviderSubmitNotSubmitted, Error: &operationtask.ProviderError{Code: "invalid_codex_input"}}
 	id, err := uuid.Parse(input.OperationID)
 	if err != nil {
 		return refused, nil
@@ -136,11 +127,11 @@ func (a *ImageActivities) Submit(ctx context.Context, input operationflow.Provid
 	request := application.ProviderImageInput{Identity: application.ProviderDispatchIdentity{ProjectID: op.ProjectID, OperationID: op.ID, ModelProfileVersionID: *op.ModelProfileVersionID, PriceRuleVersionID: *op.PriceRuleVersionID, Action: "submit", Attempt: 1, RequestKey: loaded.ProviderRequestKey}, Model: loaded.Provider.ProviderModelID, Prompt: prompt}
 	result, err := a.adapter.Submit(ctx, request)
 	if err != nil {
-		return operationflow.ProviderSubmitOutput{}, err
+		return operationtask.ProviderSubmitOutput{}, err
 	}
-	output := operationflow.ProviderSubmitOutput{Outcome: operationflow.ProviderSubmitOutcome(result.Outcome), Receipt: result.Receipt}
+	output := operationtask.ProviderSubmitOutput{Outcome: operationtask.ProviderSubmitOutcome(result.Outcome), Receipt: result.Receipt}
 	if result.FailureCode != "" {
-		output.Error = &operationflow.ProviderError{Code: result.FailureCode}
+		output.Error = &operationtask.ProviderError{Code: result.FailureCode}
 	}
 	return output, nil
 }

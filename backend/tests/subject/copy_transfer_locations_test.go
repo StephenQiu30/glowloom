@@ -26,9 +26,9 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 
 // Every test owns a new database. Canonical schema is never replayed into the
@@ -135,36 +135,29 @@ func newLocatedCopy(t *testing.T) *locatedCopyFixture {
 	t.Cleanup(server.Close)
 	f.sourceProfile = "old-" + uuid.NewString()
 	f.targetProfile = "new-" + uuid.NewString()
-	t.Setenv("GLOWLOOM_ENV_FILE", "")
-	t.Setenv("GLOWLOOM_ENV", "local")
-	t.Setenv("GLOWLOOM_OBJECT_STORAGE_CONFIG", "")
-	for k, v := range map[string]string{"PROVIDER": "minio", "ENDPOINT": server.URL, "BUCKET": "target-bucket", "REGION": "us-east-1", "ACCESS_KEY": "fixture-access", "SECRET_KEY": "fixture-secret", "PROFILE_ID": f.targetProfile, "REVISION": "copy-fixture-v1"} {
-		t.Setenv("GLOWLOOM_OBJECT_STORAGE_"+k, v)
-	}
-	for _, k := range []string{"PROVIDER", "ENDPOINT", "BUCKET", "REGION", "ACCESS_KEY", "SECRET_KEY", "PROFILE_ID"} {
-		t.Setenv("GLOWLOOM_OBJECT_STORAGE_LEGACY_"+k, "")
-	}
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := cfg.ObjectStorage.Profiles[f.targetProfile]
+	storageConfig := storagefixture.Configuration(t, server.URL, "target-bucket")
+	targetProfile := storageConfig.Profiles[storageConfig.DefaultWriteProfile]
+	delete(storageConfig.Profiles, storageConfig.DefaultWriteProfile)
+	storageConfig.DefaultWriteProfile = f.targetProfile
+	storageConfig.Profiles[f.targetProfile] = targetProfile
+	p := storageConfig.Profiles[f.targetProfile]
 	p.Mode = "read_only"
 	p.Bucket = "source-bucket"
-	cfg.ObjectStorage.Profiles[f.sourceProfile] = p
-	f.registry, err = objectstorage.OpenProfiles(*cfg.ObjectStorage)
+	storageConfig.Profiles[f.sourceProfile] = p
+	var err error
+	f.registry, err = objectstorage.OpenProfiles(storageConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(f.registry.Close)
 	profiles := []media.StorageProfile{}
-	for id, p := range cfg.ObjectStorage.Profiles {
-		profiles = append(profiles, media.StorageProfile{ID: id, Provider: p.Provider, Endpoint: p.Endpoint, SigningEndpoint: p.Endpoint, Region: p.Region, Bucket: p.Bucket, AddressingStyle: p.AddressingStyle})
+	for id, p := range storageConfig.Profiles {
+		profiles = append(profiles, media.StorageProfile{ID: id, Provider: string(p.Provider), Endpoint: p.Endpoint, SigningEndpoint: p.Endpoint, Region: p.Region, Bucket: p.Bucket, AddressingStyle: string(p.AddressingStyle)})
 	}
 	if err := pgmedia.NewStorageRoutes(owner).RegisterProfiles(t.Context(), profiles); err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.Exec(`INSERT INTO media.storage_route(singleton,profile_id,revision) VALUES(1,?,'copy-fixture-v1')`, f.targetProfile).Error; err != nil {
+	if err := owner.Exec(`INSERT INTO media.storage_route(singleton,profile_id,revision) VALUES(1,?,'1')`, f.targetProfile).Error; err != nil {
 		t.Fatal(err)
 	}
 	f.asset = uuid.New()
@@ -208,7 +201,7 @@ func TestLocatedProjectCopyFreezesTargetAcceptsExactReceiptAndReplays(t *testing
 	if err != nil || len(objects) != 2 || objects[0].SourceLocation == nil || objects[0].TargetLocation == nil || objects[0].TargetLocation.Ref.ProfileID != f.targetProfile || objects[0].SourceLocation.Ref.ProfileID != f.sourceProfile {
 		t.Fatal("frozen physical copy identities missing", err)
 	}
-	if err := f.owner.Exec(`UPDATE media.storage_route SET profile_id=?,revision='switched-v2' WHERE singleton=1`, f.sourceProfile).Error; err != nil {
+	if err := f.owner.Exec(`UPDATE media.storage_route SET profile_id=?,revision='2' WHERE singleton=1`, f.sourceProfile).Error; err != nil {
 		t.Fatal(err)
 	}
 	transfer := media.NewRoutedProjectCopyTransfer(repo, mediaobjects.NewRoutedCopyObjects(f.registry, pgmedia.NewStorageRoutes(f.runtime)), t.TempDir())
@@ -224,7 +217,7 @@ func TestLocatedProjectCopyFreezesTargetAcceptsExactReceiptAndReplays(t *testing
 	}
 	digest := hexHash(f.data)
 	fact := media.ReferenceFact{AssetID: f.asset, Revision: 1, Kind: mediadomain.KindImage, SHA256: digest, ByteSize: int64(len(f.data)), RenditionID: &rend, RenditionSHA256: &digest}
-	q := media.NewRoutedProjectCopyReferenceQuery(repo, mediaobjects.NewRoutedReadObjects(f.registry), nil)
+	q := media.NewRoutedProjectCopyReferenceQuery(repo, mediaobjects.NewRoutedReadObjects(f.registry))
 	mappings, e := q.FreezeReferences(t.Context(), f.actor, binding, snapshot, []media.ReferenceFact{fact})
 	if e != nil {
 		t.Fatal("current exact source reference", e)
@@ -265,7 +258,7 @@ func TestLocatedTransferPartialFailureRetainsSourceAndPermanentReplay(t *testing
 	if err := f.owner.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,?,'missing fixture.png','image/png',?,?,'passed')`, missing, f.source, key, location, len(f.data), hexHash(f.data)).Error; err != nil {
 		t.Fatal(err)
 	}
-	input := media.TransferInput{Source: mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &f.source}, Target: mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}, Items: []media.LibraryItemRevision{{ID: f.asset}, {ID: missing}}, ExpectedSourceRevision: 0, ExpectedTargetRevision: 0, ExpectedProjectRevision: 1, Key: uuid.New()}
+	input := media.TransferInput{Source: mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &f.source}, Target: mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}, Items: []media.LibraryItemRevision{{ID: f.asset, Revision: mediadomain.LibraryItemInitialRevision}, {ID: missing, Revision: mediadomain.LibraryItemInitialRevision}}, ExpectedSourceRevision: 0, ExpectedTargetRevision: 0, ExpectedProjectRevision: 1, Key: uuid.New()}
 	sourceLibrary, _ := input.Source.Identity(f.actor.OrgID, f.actor.ID)
 	var sourceBefore int
 	if err := f.owner.Raw(`SELECT count(*) FROM media.library WHERE id=?`, sourceLibrary).Scan(&sourceBefore).Error; err != nil || sourceBefore != 0 {
@@ -282,11 +275,11 @@ func TestLocatedTransferPartialFailureRetainsSourceAndPermanentReplay(t *testing
 	if _, e := requests.CreateTransfer(t.Context(), foreign, rejected); e == nil {
 		t.Fatal("foreign project scope accepted")
 	}
-	if err = f.owner.Exec(`UPDATE media.storage_route SET profile_id=?,revision='changed-after-admission' WHERE singleton=1`, f.sourceProfile).Error; err != nil {
+	if err = f.owner.Exec(`UPDATE media.storage_route SET profile_id=?,revision='2' WHERE singleton=1`, f.sourceProfile).Error; err != nil {
 		t.Fatal(err)
 	}
 	targetLibrary, _ := input.Target.Identity(f.actor.OrgID, f.actor.ID)
-	worker, _ := mediawire.ProvideMediaTransferWorkerWithObjects(f.runtime, f.registry, nil)
+	worker, _ := mediawire.ProvideMediaTransferWorker(f.runtime, f.registry)
 	work := media.TransferWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()}
 	result, err := worker.Execute(t.Context(), work)
 	if err != nil {

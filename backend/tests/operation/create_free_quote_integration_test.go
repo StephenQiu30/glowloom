@@ -96,10 +96,9 @@ func TestCreateFreeQuoteLocksReadyMediaAndFreezesAssetIdentity(t *testing.T) {
 	assetID := uuid.New()
 	if err := database.Exec(`
 		INSERT INTO media.media_asset
-		  (id, project_id, kind, origin, status, object_key, mime_type, byte_size, sha256, moderation_status)
-		VALUES (?::uuid, ?::uuid, 'image', 'upload', 'ready', ?, 'image/png', 50, ?, 'passed')
+		  (id,project_id,kind,origin,status,object_key,mime_type,byte_size,sha256,moderation_status,object_location_id) VALUES(?::uuid,?::uuid,'image','upload','ready',?,'image/png',50,?,'passed',?)
 	`, assetID.String(), projectID.String(), "quote-input/"+assetID.String(),
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").Error; err != nil {
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", businessFixtureLocation(t, database, "quote-input/"+assetID.String())).Error; err != nil {
 		t.Fatal(err)
 	}
 	input := operationapp.CreateFreeQuoteInput{
@@ -175,10 +174,9 @@ func TestCreateFreeQuoteLocksReadyMediaAndFreezesAssetIdentity(t *testing.T) {
 	foreignAssetID := uuid.New()
 	if err := database.Exec(`
 		INSERT INTO media.media_asset
-		  (id, project_id, kind, origin, status, object_key, mime_type, byte_size, sha256, moderation_status)
-		VALUES (?::uuid, ?::uuid, 'image', 'upload', 'ready', ?, 'image/png', 50, ?, 'passed')
+		  (id,project_id,kind,origin,status,object_key,mime_type,byte_size,sha256,moderation_status,object_location_id) VALUES(?::uuid,?::uuid,'image','upload','ready',?,'image/png',50,?,'passed',?)
 	`, foreignAssetID.String(), foreignProjectID.String(), "quote-input/"+foreignAssetID.String(),
-		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc").Error; err != nil {
+		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", businessFixtureLocation(t, database, "quote-input/"+foreignAssetID.String())).Error; err != nil {
 		t.Fatal(err)
 	}
 	good := input.FreeQuoteItemInput

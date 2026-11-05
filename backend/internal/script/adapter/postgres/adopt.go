@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -25,7 +26,7 @@ func (s *SourceStore) Adopt(ctx context.Context, actor identityapp.Principal, in
 		return result, err
 	}
 	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
-		if err := commandLock(tx, actor.ID, input.Key); err != nil {
+		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "adopt", hash, now); err != nil {
 			return err
 		}
 		replayed, err := replayReview(tx, actor, input.ProjectID, input.Key, "adopt", hash, &result)
@@ -60,17 +61,19 @@ func (s *SourceStore) Adopt(ctx context.Context, actor identityapp.Principal, in
 		if err != nil {
 			return err
 		}
-		var latest struct{ Preface string }
-		read := tx.Raw(`SELECT preface::text FROM script.split_confirmation WHERE org_id=? AND project_id=? AND version_id=? AND formal_set_id=? ORDER BY revision DESC LIMIT 1`, actor.OrgID, input.ProjectID, input.VersionID, *head.ConfirmedSetID).Scan(&latest)
-		if read.Error != nil {
-			return read.Error
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrContextUnavailable
+		var latest scriptSplitConfirmationRow
+		if err := tx.Where("org_id = ? AND project_id = ? AND version_id = ? AND formal_set_id = ?", actor.OrgID, input.ProjectID, input.VersionID, *head.ConfirmedSetID).
+			Order("revision DESC").Take(&latest).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return application.ErrContextUnavailable
+			}
+			return err
 		}
 		var preface *domain.ScalarSpan
-		if err := json.Unmarshal([]byte(latest.Preface), &preface); err != nil {
-			return application.ErrUnavailable
+		if len(latest.Preface) > 0 && string(latest.Preface) != "null" {
+			if err := json.Unmarshal(latest.Preface, &preface); err != nil {
+				return application.ErrUnavailable
+			}
 		}
 		boundaries := make([]domain.EpisodeBoundary, 0, len(episodes))
 		for _, e := range episodes {
@@ -101,7 +104,7 @@ func (s *SourceStore) Adopt(ctx context.Context, actor identityapp.Principal, in
 		}
 		result.Duplicate = state.AdoptedVersionID != nil
 		if !result.Duplicate {
-			if err := exactlyOne(tx.Exec(`UPDATE script.project_state SET adopted_version_id=?,revision=revision+1,updated_at=? WHERE org_id=? AND project_id=? AND revision=?`, input.VersionID, now, actor.OrgID, input.ProjectID, state.Revision)); err != nil {
+			if err := exactlyOne(tx.Model(&scriptProjectStateRow{}).Where("org_id = ? AND project_id = ? AND revision = ?", actor.OrgID, input.ProjectID, state.Revision).Updates(map[string]any{"adopted_version_id": input.VersionID, "revision": state.Revision + 1, "updated_at": now})); err != nil {
 				return err
 			}
 			projectRevision, err := access.TouchContent(ctx, actor, input.ProjectID, project.Revision)
@@ -111,9 +114,9 @@ func (s *SourceStore) Adopt(ctx context.Context, actor identityapp.Principal, in
 			result.ScriptRevision, result.ProjectRevision, result.Changed = state.Revision+1, projectRevision, true
 		}
 		for _, e := range episodes {
-			status := "not_inherited"
+			status := domain.EpisodeInheritStatusNotInherited
 			if result.Duplicate {
-				status = "retained"
+				status = domain.EpisodeInheritStatusRetained
 			}
 			result.Mappings = append(result.Mappings, application.EpisodeMapping{EpisodeID: &e.ID, InheritStatus: status})
 		}

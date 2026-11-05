@@ -43,7 +43,7 @@ func document(frozen domain.FrozenExport) (string, []byte, error) {
 }
 
 // Render writes every verified original once and never serializes storage URLs.
-func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths map[uuid.UUID]string, progress func(int, string) error) (*mediaapp.Downloaded, error) {
+func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths map[uuid.UUID]string, progress func(int, domain.ExportStage) error) (*mediaapp.Downloaded, error) {
 	if !frozen.OutputKind.IsArtifact() {
 		if r == nil || r.Media == nil {
 			return nil, application.ErrUnavailable

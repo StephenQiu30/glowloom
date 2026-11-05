@@ -19,9 +19,11 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
@@ -29,17 +31,39 @@ import (
 // These synthetic intent facts test the media consumer boundary. Installed
 // mediatool/operation owning aggregates require their own independent evidence.
 type usageIntentFixture struct {
-	keys []string
-	err  error
+	keys            []string
+	profile, bucket string
+	err             error
 }
 
-func (f usageIntentFixture) StorageUsageKeys(context.Context, identityapp.Principal, domain.LibraryScope) ([]string, error) {
-	return f.keys, f.err
+func (f usageIntentFixture) StorageUsageLocations(context.Context, identityapp.Principal, domain.LibraryScope) ([]domain.ObjectRef, error) {
+	refs := make([]domain.ObjectRef, 0, len(f.keys))
+	for _, key := range f.keys {
+		refs = append(refs, domain.ObjectRef{ProfileID: f.profile, Bucket: f.bucket, Key: key})
+	}
+	return refs, f.err
 }
 
-func usageReader(db *gorm.DB, objects *objectstorage.Client, fixture usageIntentFixture) *mediaapp.StorageUsageReader {
-	store := mediaStorageUsageStore(db, libraryTestAccess, func(*gorm.DB) mediaapp.StorageUsageIntentSource { return fixture })
-	return mediaapp.NewStorageUsageReader(store, mediaobjects.NewStorageUsageObjects(objects), time.Now)
+func usageReader(t *testing.T, db *gorm.DB, _ *objectstorage.Client, fixture usageIntentFixture) *mediaapp.StorageUsageReader {
+	t.Helper()
+	cfg, err := config.Load()
+	if err != nil || cfg.ObjectStorage == nil {
+		t.Fatal("explicit storage registry required", err)
+	}
+	registry, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(registry.Close)
+	var buckets []mediaapp.StorageUsageBucket
+	for id, profile := range cfg.ObjectStorage.Profiles {
+		buckets = append(buckets, mediaapp.StorageUsageBucket{ProfileID: id, Bucket: profile.Bucket, ResourceIdentity: fixtureResourceDigest(profile.ResourceIdentity())})
+	}
+	fixture.profile = cfg.ObjectStorage.DefaultWriteProfile
+	fixture.bucket = cfg.ObjectStorage.Profiles[fixture.profile].Bucket
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
+	store := pgmedia.NewRoutedStorageUsageStore(library, buckets, func(*gorm.DB) mediaapp.StorageUsageLocationSource { return fixture })
+	return mediaapp.NewStorageUsageReader(store, mediaobjects.NewRoutedStorageUsageObjects(registry), time.Now)
 }
 
 func usagePut(t *testing.T, objects *objectstorage.Client, key string, data []byte) {
@@ -76,13 +100,13 @@ func TestMediaStorageUsageActualObjectsIncludesTrashUnknownIntentAndPhysicalRemo
 		expected += info.Size
 	}
 	unknown := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/unknown-" + uuid.NewString() + ".png"
-	intent := "glowloom-library-usage/" + uuid.NewString() + "/unregistered/output.bin"
+	intent := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/intent-" + uuid.NewString() + ".bin"
 	foreignKey := "personal/" + foreign.OrgID.String() + "/" + foreign.ID.String() + "/image/foreign-" + uuid.NewString() + ".png"
 	usagePut(t, objects, unknown, []byte("unregistered upload"))
 	usagePut(t, objects, intent, []byte("unregistered own intent"))
 	usagePut(t, objects, foreignKey, []byte("foreign private object"))
 	expected += int64(len("unregistered upload") + len("unregistered own intent"))
-	reader := usageReader(db, objects, usageIntentFixture{keys: append([]string{intent}, keys...)})
+	reader := usageReader(t, db, objects, usageIntentFixture{keys: append([]string{intent}, keys...)})
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	initial, err := reader.StorageUsage(t.Context(), actor, scope)
 	if err != nil || initial.UsedBytes != expected || initial.ObjectCount != 5 || initial.LimitBytes != nil {
@@ -129,10 +153,10 @@ func TestMediaStorageUsageActualProjectAuthorityAndHTTPClosedQuery(t *testing.T)
 	actor, project := mediaStoreProject(t, db)
 	foreign, foreignProject := mediaStoreProject(t, db)
 	base := mediaTestStore(db)
-	uploads := mediaapp.NewScopedUploadService(base, base, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	uploads := mediaFixtureRoutedUpload(t, db, base, base, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	input := uploadInput(t)
 	input.Actor, input.Request.ProjectID = actor, project
-	asset, err := uploads.Upload(t.Context(), input)
+	asset, err := fixtureProjectUpload(t.Context(), uploads, input)
 	if err != nil {
 		t.Fatal("actual project asset", err)
 	}
@@ -147,7 +171,7 @@ func TestMediaStorageUsageActualProjectAuthorityAndHTTPClosedQuery(t *testing.T)
 			_ = objects.Remove(ctx, key)
 		}
 	})
-	reader := usageReader(db, objects, usageIntentFixture{})
+	reader := usageReader(t, db, objects, usageIntentFixture{})
 	router := usageRouter(reader, actor)
 	url := "/api/media/library/storage-usage?scope=project&project_id=" + project.String()
 	response := libraryHTTPRequest(t, router, http.MethodGet, url, nil, uuid.Nil)
@@ -188,24 +212,24 @@ func TestMediaStorageUsageActualMissingIntentOwnerAndCancelledReadsFailClosed(t 
 	objects := glbTestObjects(t)
 	actor, _ := mediaStoreProject(t, db)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
-	missing := mediaapp.NewStorageUsageReader(mediaStorageUsageStore(db, libraryTestAccess, nil), mediaobjects.NewStorageUsageObjects(objects), time.Now)
+	missing := mediaapp.NewStorageUsageReader(nil, nil, time.Now)
 	if _, err := missing.StorageUsage(t.Context(), actor, scope); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("missing installed owning query returned zero usage", err)
 	}
-	broken := usageReader(db, objects, usageIntentFixture{err: mediaapp.ErrUnavailable})
+	broken := usageReader(t, db, objects, usageIntentFixture{err: mediaapp.ErrUnavailable})
 	if response := libraryHTTPRequest(t, usageRouter(broken, actor), http.MethodGet, "/api/media/library/storage-usage?scope=personal", nil, uuid.Nil); response.Code != 503 {
 		t.Fatal("owner failure became zero DTO", response.Code, response.Body.String())
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := usageReader(db, objects, usageIntentFixture{}).StorageUsage(ctx, actor, scope); !errors.Is(err, context.Canceled) {
+	if _, err := usageReader(t, db, objects, usageIntentFixture{}).StorageUsage(ctx, actor, scope); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancelled private inventory query continued", err)
 	}
 }
 
 func TestMediaStorageUsageActualUnknownTransferCountsIndependentTargetBeforeRegistration(t *testing.T) {
 	f := newTransferRecoveryFixture(t, 1)
-	reader := usageReader(f.db, f.objects, usageIntentFixture{})
+	reader := usageReader(t, f.db, f.objects, usageIntentFixture{})
 	source, err := reader.StorageUsage(t.Context(), f.actor, f.input.Source)
 	if err != nil || source.ObjectCount != 3 || source.UsedBytes < 1 {
 		t.Fatal("source physical image and thumbnails", source, err)
@@ -214,8 +238,8 @@ func TestMediaStorageUsageActualUnknownTransferCountsIndependentTargetBeforeRegi
 	if err != nil || before.ObjectCount != 0 || before.UsedBytes != 0 {
 		t.Fatal("pending object intent without a real object was counted", before, err)
 	}
-	objects := &transferUnknownWrite{ProjectCopyObjects: mediaobjects.NewProjectCopyObjects(f.objects), failAt: 1}
-	unknown, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
+	objects := &transferUnknownWrite{PhysicalTransferObjects: mediaFixtureCopyObjects(t, f.db), failAt: 1}
+	unknown, err := mediaapp.NewRoutedTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
 	if err != nil || !unknown.NeedsReconciliation || unknown.Status != "needs_reconciliation" {
 		t.Fatal("actual unknown transfer write fixture", unknown, err)
 	}
@@ -231,7 +255,7 @@ func TestMediaStorageUsageActualUnknownTransferCountsIndependentTargetBeforeRegi
 	if err != nil {
 		t.Fatal(err)
 	}
-	ready, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(reconcile))
+	ready, err := mediaapp.NewRoutedTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(reconcile))
 	if err != nil || ready.Status != "succeeded" {
 		t.Fatal("actual transfer recovery", ready, err)
 	}

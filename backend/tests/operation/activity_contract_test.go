@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	catalogworkflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
-	workflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	catalogworkflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
+	workflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 )
 
 type activityExample struct {
@@ -17,7 +17,7 @@ type activityExample struct {
 }
 
 func TestProviderActivityJSONContracts(t *testing.T) {
-	// Synthetic wire examples protect historical Temporal payload compatibility.
+	// Synthetic wire examples protect the current provider task contract.
 	// Public HTTP contracts are generated from handler annotations and DTOs.
 	tests := []struct {
 		name        string

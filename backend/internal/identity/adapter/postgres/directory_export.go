@@ -3,15 +3,21 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // DirectoryExportStore uses the existing identity database and private export table.
@@ -22,6 +28,45 @@ func NewDirectoryExportStore(db *gorm.DB) *DirectoryExportStore { return &Direct
 
 type exportTx struct{ db *gorm.DB }
 
+type platformSettingsRecord struct{ Singleton bool }
+
+func (platformSettingsRecord) TableName() string { return "identity.platform_settings" }
+
+type exportTeamRecord struct {
+	ID                uuid.UUID
+	Status            string
+	GovernanceBlocked bool
+	Revision          int64
+}
+
+func (exportTeamRecord) TableName() string { return "workspace.team" }
+
+type exportTeamMemberRecord struct {
+	TeamID, UserID uuid.UUID
+	Role, Status   string
+}
+
+func (exportTeamMemberRecord) TableName() string { return "workspace.team_member" }
+
+type exportJSON []byte
+
+func (j *exportJSON) Scan(value any) error {
+	switch value := value.(type) {
+	case nil:
+		*j = nil
+	case []byte:
+		*j = append((*j)[:0], value...)
+	case string:
+		*j = append((*j)[:0], value...)
+	default:
+		return fmt.Errorf("scan export JSON from %T", value)
+	}
+	return nil
+}
+
+func (j exportJSON) Value() (driver.Value, error) { return string(j), nil }
+func (exportJSON) GormDataType() string           { return "jsonb" }
+
 // Transaction takes the governance lock before authority and receipt reads.
 // READ COMMITTED gives a waiter a fresh receipt snapshot after the lock holder
 // commits. Snapshot materialization itself remains one consistent SQL statement.
@@ -29,18 +74,9 @@ func (s *DirectoryExportStore) Transaction(ctx context.Context, run func(applica
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("SET LOCAL statement_timeout = '30s'").Error; err != nil {
+		var settings platformSettingsRecord
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("singleton = ?", true).Take(&settings).Error; err != nil {
 			return err
-		}
-		if err := tx.Exec("SET LOCAL idle_in_transaction_session_timeout = '35s'").Error; err != nil {
-			return err
-		}
-		var exists bool
-		if err := tx.Raw(`SELECT singleton FROM identity.platform_settings WHERE singleton FOR UPDATE`).Scan(&exists).Error; err != nil {
-			return err
-		}
-		if !exists {
-			return application.ErrSessionInvalid
 		}
 		return run(&exportTx{db: tx})
 	}, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
@@ -63,34 +99,53 @@ func (t *exportTx) Authorize(actor application.Principal, team *uuid.UUID, revis
 	if team == nil {
 		return 0, nil
 	}
-	var row struct{ Revision int64 }
-	r := t.db.Raw(`SELECT t.revision FROM workspace.team t JOIN workspace.team_member m ON m.team_id=t.id WHERE t.id=? AND m.user_id=? AND m.role='team_admin' AND m.status='active' AND t.status IN ('active','archived') AND NOT t.governance_blocked FOR UPDATE OF t,m`, *team, actor.ID).Scan(&row)
-	if r.Error != nil {
-		return 0, r.Error
-	}
-	if r.RowsAffected != 1 || revision != 0 && revision != row.Revision {
+	var teamRow exportTeamRecord
+	err := t.db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND status IN ? AND NOT governance_blocked", *team, []string{"active", "archived"}).Take(&teamRow).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return 0, application.ErrForbidden
 	}
-	return row.Revision, nil
+	if err != nil {
+		return 0, err
+	}
+	var member exportTeamMemberRecord
+	err = t.db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("team_id = ? AND user_id = ? AND role = ? AND status = ?", *team, actor.ID, "team_admin", "active").Take(&member).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) || revision != 0 && revision != teamRow.Revision {
+		return 0, application.ErrForbidden
+	}
+	if err != nil {
+		return 0, err
+	}
+	return teamRow.Revision, nil
 }
 
 type exportRecord struct {
 	ID, ActorID, ScopeID, RequestKey             uuid.UUID
 	TeamID                                       *uuid.UUID
+	ScopeKind                                    string
 	ActorSessionID                               uuid.UUID
 	CredentialEpoch, PlatformEpoch, TeamRevision int64
-	FilterSnapshot                               []byte
+	FilterSnapshot                               exportJSON
 	Status                                       string
 	SnapshotPayload                              []byte
 	SnapshotKeyID                                string
 	RowCount                                     int
 	AsOf, CreatedAt, UpdatedAt, ExpiresAt        time.Time
 	PrivateObjectID                              *uuid.UUID
+	StorageLocationID, StorageIntentID           *uuid.UUID
+	StorageProfileID, StorageBucket              string
 	ErrorCategory                                string
 }
 
+func (exportRecord) TableName() string { return "identity.directory_export" }
+
 func exportJob(r exportRecord) (application.DirectoryExportJob, error) {
 	j := application.DirectoryExportJob{ID: r.ID, ActorID: r.ActorID, ScopeID: r.ScopeID, RequestKey: r.RequestKey, TeamID: r.TeamID, Actor: application.Principal{ID: r.ActorID, SessionID: r.ActorSessionID, CredentialEpoch: r.CredentialEpoch, PlatformEpoch: r.PlatformEpoch}, TeamRevision: r.TeamRevision, Status: r.Status, Snapshot: r.SnapshotPayload, KeyID: r.SnapshotKeyID, RowCount: r.RowCount, AsOf: r.AsOf, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, ExpiresAt: r.ExpiresAt, ObjectID: r.PrivateObjectID, ErrorCategory: r.ErrorCategory}
+	if r.StorageLocationID != nil && r.StorageProfileID != "" && r.StorageBucket != "" && r.PrivateObjectID != nil {
+		j.ObjectLocation = &application.ExportObjectLocation{ID: *r.StorageLocationID, ProfileID: r.StorageProfileID, Bucket: r.StorageBucket, Key: exportObjectKey(*r.PrivateObjectID)}
+		if r.StorageIntentID != nil {
+			j.ObjectLocation.IntentID = *r.StorageIntentID
+		}
+	}
 	err := json.Unmarshal(r.FilterSnapshot, &j.Filter)
 	return j, err
 }
@@ -108,15 +163,20 @@ func (t *exportTx) Request(actor, scope, key uuid.UUID) (application.DirectoryEx
 }
 func (t *exportTx) Load(id uuid.UUID) (application.DirectoryExportJob, error) {
 	var r exportRecord
-	result := t.db.Raw(`SELECT * FROM identity.directory_export WHERE id=? FOR UPDATE`, id).Scan(&r)
-	if result.Error != nil {
-		return application.DirectoryExportJob{}, result.Error
-	}
-	if result.RowsAffected != 1 {
+	err := t.db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).Take(&r).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return application.DirectoryExportJob{}, application.ErrExportNotFound
 	}
-	return exportJob(r)
+	if err != nil {
+		return application.DirectoryExportJob{}, err
+	}
+	job, err := exportJob(r)
+	if err != nil {
+		return job, err
+	}
+	return job, nil
 }
+
 func (t *exportTx) Save(j application.DirectoryExportJob) error {
 	filter, err := json.Marshal(j.Filter)
 	if err != nil {
@@ -126,15 +186,190 @@ func (t *exportTx) Save(j application.DirectoryExportJob) error {
 	if j.TeamID != nil {
 		scopeKind = "team"
 	}
-	return t.db.Exec(`INSERT INTO identity.directory_export (id,actor_id,scope_id,request_key,team_id,scope_kind,actor_session_id,credential_epoch,platform_epoch,team_revision,filter_snapshot,status,snapshot_payload,snapshot_key_id,row_count,as_of,created_at,updated_at,expires_at,private_object_id,error_category)
- VALUES (?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?,?,?,?)
- ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status,snapshot_payload=EXCLUDED.snapshot_payload,updated_at=EXCLUDED.updated_at,expires_at=EXCLUDED.expires_at,private_object_id=EXCLUDED.private_object_id,error_category=EXCLUDED.error_category`, j.ID, j.ActorID, j.ScopeID, j.RequestKey, j.TeamID, scopeKind, j.Actor.SessionID, j.Actor.CredentialEpoch, j.Actor.PlatformEpoch, j.TeamRevision, string(filter), j.Status, j.Snapshot, j.KeyID, j.RowCount, j.AsOf, j.CreatedAt, j.UpdatedAt, j.ExpiresAt, j.ObjectID, j.ErrorCategory).Error
+	var locationID, intentID *uuid.UUID
+	var profileID, bucket string
+	if j.ObjectLocation != nil {
+		locationID, profileID, bucket = &j.ObjectLocation.ID, j.ObjectLocation.ProfileID, j.ObjectLocation.Bucket
+		if j.ObjectLocation.IntentID != uuid.Nil {
+			intentID = &j.ObjectLocation.IntentID
+		}
+	}
+	record := exportRecord{ID: j.ID, ActorID: j.ActorID, ScopeID: j.ScopeID, RequestKey: j.RequestKey, TeamID: j.TeamID, ScopeKind: scopeKind, ActorSessionID: j.Actor.SessionID, CredentialEpoch: j.Actor.CredentialEpoch, PlatformEpoch: j.Actor.PlatformEpoch, TeamRevision: j.TeamRevision, FilterSnapshot: exportJSON(filter), Status: j.Status, SnapshotPayload: j.Snapshot, SnapshotKeyID: j.KeyID, RowCount: j.RowCount, AsOf: j.AsOf, CreatedAt: j.CreatedAt, UpdatedAt: j.UpdatedAt, ExpiresAt: j.ExpiresAt, PrivateObjectID: j.ObjectID, StorageLocationID: locationID, StorageIntentID: intentID, StorageProfileID: profileID, StorageBucket: bucket, ErrorCategory: j.ErrorCategory}
+	return t.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoUpdates: clause.AssignmentColumns([]string{"status", "snapshot_payload", "updated_at", "expires_at", "private_object_id", "storage_location_id", "storage_intent_id", "storage_profile_id", "storage_bucket", "error_category"})}).Create(&record).Error
+}
+
+func exportObjectKey(id uuid.UUID) string {
+	return "private/identity/directory-exports/" + id.String() + ".enc"
+}
+
+func exportStorageOwner(job application.DirectoryExportJob) mediaapp.StorageWorkOwner {
+	return mediaapp.StorageWorkOwner{Kind: mediaapp.StorageWorkKindExport, OwnerID: job.ActorID, WorkID: job.ID}
+}
+
+func exportLocationRef(location application.ExportObjectLocation) mediadomain.ObjectRef {
+	return mediadomain.ObjectRef{ProfileID: location.ProfileID, Bucket: location.Bucket, Key: location.Key}
+}
+
+func exportDomainLocation(location application.ExportObjectLocation) mediadomain.ObjectLocation {
+	return mediadomain.ObjectLocation{ID: location.ID, Ref: exportLocationRef(location)}
+}
+
+func (t *exportTx) PinExportObject(ctx context.Context, job application.DirectoryExportJob) (application.ExportObjectLocation, error) {
+	if job.ObjectID == nil || job.ID == uuid.Nil || job.ActorID == uuid.Nil {
+		return application.ExportObjectLocation{}, application.ErrExportUnavailable
+	}
+	routes := pgmedia.NewStorageRoutes(t.db)
+	intent, err := routes.PinStorageWork(ctx, exportStorageOwner(job))
+	if err != nil {
+		return application.ExportObjectLocation{}, err
+	}
+	location, err := routes.ReserveWorkLocation(ctx, intent.ID, exportObjectKey(*job.ObjectID))
+	if err != nil {
+		return application.ExportObjectLocation{}, err
+	}
+	return application.ExportObjectLocation{ID: location.ID, IntentID: intent.ID, ProfileID: location.Ref.ProfileID, Bucket: location.Ref.Bucket, Key: location.Ref.Key}, nil
+}
+
+func (t *exportTx) exportWork(ctx context.Context, job application.DirectoryExportJob) (mediaapp.StorageWorkIntent, mediadomain.ObjectLocation, error) {
+	if job.ObjectLocation == nil || job.ObjectLocation.ID == uuid.Nil || job.ObjectLocation.IntentID == uuid.Nil {
+		return mediaapp.StorageWorkIntent{}, mediadomain.ObjectLocation{}, application.ErrExportUnavailable
+	}
+	routes := pgmedia.NewStorageRoutes(t.db)
+	intent, err := routes.ReadStorageWork(ctx, exportStorageOwner(job))
+	if err != nil {
+		return intent, mediadomain.ObjectLocation{}, err
+	}
+	if intent.ID != job.ObjectLocation.IntentID || intent.ProfileID != job.ObjectLocation.ProfileID || intent.Bucket != job.ObjectLocation.Bucket {
+		return intent, mediadomain.ObjectLocation{}, application.ErrExportUnavailable
+	}
+	location, err := routes.ReadLocation(ctx, job.ObjectLocation.ID)
+	if err != nil {
+		return intent, location, err
+	}
+	if location.Ref != exportLocationRef(*job.ObjectLocation) {
+		return intent, location, application.ErrExportUnavailable
+	}
+	return intent, location, nil
+}
+
+func (t *exportTx) BeginExportObjectWrite(ctx context.Context, job application.DirectoryExportJob, deadline time.Time) error {
+	intent, location, err := t.exportWork(ctx, job)
+	if err != nil {
+		return err
+	}
+	bounded, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	return pgmedia.NewStorageRoutes(t.db).BeginWorkWrite(bounded, intent.ID, location)
+}
+
+func (t *exportTx) ConfirmExportObject(ctx context.Context, job application.DirectoryExportJob, info application.ExportObjectInfo) error {
+	intent, location, err := t.exportWork(ctx, job)
+	if err != nil {
+		return err
+	}
+	return pgmedia.NewStorageRoutes(t.db).ConfirmWorkLocation(ctx, intent.ID, location, mediaapp.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256})
+}
+
+func (t *exportTx) AcceptExportObject(ctx context.Context, job application.DirectoryExportJob) error {
+	intent, location, err := t.exportWork(ctx, job)
+	if err != nil {
+		return err
+	}
+	return pgmedia.NewStorageRoutes(t.db).AcceptStorageWork(ctx, intent.ID, []uuid.UUID{location.ID})
+}
+
+func (t *exportTx) CancelExportObject(ctx context.Context, job application.DirectoryExportJob) error {
+	if job.ObjectLocation == nil || job.ObjectLocation.IntentID == uuid.Nil {
+		return nil
+	}
+	routes := pgmedia.NewStorageRoutes(t.db)
+	intent, err := routes.ReadStorageWork(ctx, exportStorageOwner(job))
+	if err != nil {
+		return err
+	}
+	if intent.ID != job.ObjectLocation.IntentID {
+		return application.ErrExportUnavailable
+	}
+	return routes.CancelStorageWork(ctx, intent.ID)
+}
+
+// BeginExportObjectRemoval confirms the job has expired, then grants provider
+// deletion only for its exact ledger location after any write deadline drains.
+func (s *DirectoryExportStore) BeginExportObjectRemoval(ctx context.Context, claimed application.DirectoryExportJob) (application.ExportObjectLocation, bool, error) {
+	var location application.ExportObjectLocation
+	var removable bool
+	if s == nil || s.db == nil || claimed.ID == uuid.Nil || claimed.ObjectID == nil {
+		return location, false, application.ErrExportUnavailable
+	}
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row exportRecord
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND status = ? AND private_object_id = ?", claimed.ID, application.DirectoryExportExpired, claimed.ObjectID).Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return application.ErrExportNotFound
+		}
+		if err != nil {
+			return err
+		}
+		job, err := exportJob(row)
+		if err != nil {
+			return err
+		}
+		if job.ObjectLocation == nil || job.ObjectLocation.IntentID == uuid.Nil {
+			return application.ErrExportUnavailable
+		}
+		location = *job.ObjectLocation
+		routes := pgmedia.NewStorageRoutes(tx)
+		physical, err := routes.ReadLocation(ctx, location.ID)
+		if err != nil {
+			return err
+		}
+		if physical.Ref != exportLocationRef(location) {
+			return application.ErrExportUnavailable
+		}
+		if physical.State == mediadomain.ObjectLocationDeleted {
+			removable = true
+			return nil
+		}
+		intent, err := routes.ReadStorageWork(ctx, exportStorageOwner(job))
+		if err != nil {
+			return err
+		}
+		if intent.ID != location.IntentID {
+			return application.ErrExportUnavailable
+		}
+		switch intent.State {
+		case mediaapp.StorageWorkOpen:
+			if err := routes.CancelStorageWork(ctx, intent.ID); err != nil {
+				return err
+			}
+			removable, err = routes.BeginWorkRemoval(ctx, intent.ID, physical)
+			return err
+		case mediaapp.StorageWorkCancelled:
+			removable, err = routes.BeginWorkRemoval(ctx, intent.ID, physical)
+			return err
+		case mediaapp.StorageWorkAccepted:
+			removable, err = routes.BeginAcceptedWorkRemoval(ctx, intent.ID, physical)
+			return err
+		default:
+			return application.ErrExportUnavailable
+		}
+	})
+	return location, removable, err
+}
+
+// ConfirmExportObjectRemoval retires the exact row only after provider deletion.
+func (s *DirectoryExportStore) ConfirmExportObjectRemoval(ctx context.Context, _ application.DirectoryExportJob, location application.ExportObjectLocation) error {
+	if s == nil || s.db == nil || location.ID == uuid.Nil || location.IntentID == uuid.Nil {
+		return application.ErrExportUnavailable
+	}
+	routes := pgmedia.NewStorageRoutes(s.db.WithContext(ctx))
+	return routes.ConfirmWorkRemoval(ctx, location.IntentID, exportDomainLocation(location))
 }
 
 // Pending lists a bounded batch without retaining locks across object I/O.
 func (s *DirectoryExportStore) Pending(ctx context.Context, limit int, now time.Time) ([]uuid.UUID, error) {
 	var ids []uuid.UUID
-	err := s.db.WithContext(ctx).Table("identity.directory_export").Where("status='pending' AND expires_at>?", now).Order("created_at,id").Limit(limit).Pluck("id", &ids).Error
+	err := s.db.WithContext(ctx).Table("identity.directory_export").Where("status = ? AND expires_at > ?", application.DirectoryExportPending, now).Order("created_at,id").Limit(limit).Pluck("id", &ids).Error
 	return ids, err
 }
 
@@ -150,7 +385,12 @@ func (s *DirectoryExportStore) Cleanup(ctx context.Context, limit int, now time.
 	var claimed []application.DirectoryExportJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var records []exportRecord
-		if err := tx.Raw(`SELECT * FROM identity.directory_export WHERE expires_at<=? AND ((status<>'expired' AND (status<>'running' OR updated_at<=?::timestamptz - interval '1 minute')) OR (status='expired' AND (private_object_id IS NOT NULL OR snapshot_payload IS NOT NULL) AND updated_at<=?::timestamptz - interval '1 minute')) ORDER BY expires_at,id LIMIT ? FOR UPDATE SKIP LOCKED`, now, now, now, limit).Scan(&records).Error; err != nil {
+		retryBefore := now.Add(-time.Minute)
+		claim := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+			Where("expires_at <= ?", now).
+			Where("(status <> ? AND (status <> ? OR updated_at <= ?)) OR (status = ? AND (private_object_id IS NOT NULL OR snapshot_payload IS NOT NULL) AND updated_at <= ?)", application.DirectoryExportExpired, application.DirectoryExportRunning, retryBefore, application.DirectoryExportExpired, retryBefore).
+			Order("expires_at,id").Limit(limit)
+		if err := claim.Find(&records).Error; err != nil {
 			return err
 		}
 		for _, r := range records {
@@ -158,10 +398,10 @@ func (s *DirectoryExportStore) Cleanup(ctx context.Context, limit int, now time.
 			if err != nil {
 				return err
 			}
-			if err := tx.Exec(`UPDATE identity.directory_export SET status='expired',snapshot_payload=NULL,updated_at=? WHERE id=?`, now, j.ID).Error; err != nil {
+			if err := tx.Model(&exportRecord{}).Where("id = ?", j.ID).Updates(map[string]any{"status": application.DirectoryExportExpired, "snapshot_payload": nil, "updated_at": now}).Error; err != nil {
 				return err
 			}
-			j.Status = "expired"
+			j.Status = application.DirectoryExportExpired
 			j.Snapshot = nil
 			j.UpdatedAt = now
 			claimed = append(claimed, j)
@@ -181,7 +421,9 @@ func (s *DirectoryExportStore) Cleanup(ctx context.Context, limit int, now time.
 		}
 		// This single statement owns its short implicit transaction. No object call
 		// runs with its row lock held. A newer claim cannot be finalized by this one.
-		result := s.db.WithContext(ctx).Exec(`UPDATE identity.directory_export SET private_object_id=NULL,snapshot_payload=NULL WHERE id=? AND status='expired' AND updated_at=? AND private_object_id IS NOT DISTINCT FROM ?::uuid AND expires_at<=?`, job.ID, job.UpdatedAt, job.ObjectID, now)
+		result := s.db.WithContext(ctx).Model(&exportRecord{}).
+			Where("id = ? AND status = ? AND updated_at = ? AND private_object_id IS NOT DISTINCT FROM ? AND expires_at <= ?", job.ID, application.DirectoryExportExpired, job.UpdatedAt, job.ObjectID, now).
+			Updates(map[string]any{"private_object_id": nil, "storage_location_id": nil, "storage_intent_id": nil, "storage_profile_id": nil, "storage_bucket": nil, "snapshot_payload": nil})
 		if result.Error != nil {
 			return count, result.Error
 		}

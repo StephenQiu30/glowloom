@@ -41,7 +41,6 @@ var (
 type Client struct {
 	sdk       *minio.Client
 	native    backend
-	readOnly  bool
 	transport *http.Transport
 	bucket    string
 }
@@ -90,16 +89,7 @@ func (c *Client) Ping(ctx context.Context) error {
 		return ErrUnavailable
 	}
 	if c.native != nil {
-		switch b := c.native.(type) {
-		case tosBackend:
-			return b.ping(ctx)
-		case cosBackend:
-			return b.ping(ctx)
-		case minioBackend:
-			return b.client.Ping(ctx)
-		default:
-			return ErrUnavailable
-		}
+		return c.native.ping(ctx)
 	}
 	if c.sdk == nil {
 		return ErrUnavailable
@@ -120,9 +110,6 @@ func (c *Client) Put(ctx context.Context, key string, reader io.Reader, size int
 	if c == nil || (c.sdk == nil && c.native == nil) {
 		return ErrUnavailable
 	}
-	if c.readOnly {
-		return ErrAccessDenied
-	}
 	if !validKey(key) || reader == nil || size < 0 || strings.TrimSpace(contentType) == "" {
 		return ErrInvalidObject
 	}
@@ -141,9 +128,6 @@ func (c *Client) Put(ctx context.Context, key string, reader io.Reader, size int
 func (c *Client) PutIfAbsent(ctx context.Context, key string, reader io.Reader, size int64, contentType, sha256 string) error {
 	if c == nil || (c.sdk == nil && c.native == nil) {
 		return ErrUnavailable
-	}
-	if c.readOnly {
-		return ErrAccessDenied
 	}
 	if !validKey(key) || reader == nil || size < 0 ||
 		strings.TrimSpace(contentType) == "" || len(sha256) != 64 {
@@ -177,7 +161,7 @@ func (c *Client) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 	}
 	if c.native != nil {
 		info, err := c.native.stat(ctx, key)
-		return info, storageError("stat", "legacy", err)
+		return info, storageError("stat", "direct", err)
 	}
 	info, err := c.sdk.StatObject(ctx, c.bucket, key, minio.StatObjectOptions{})
 	if err != nil {
@@ -206,9 +190,9 @@ func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	if c.native != nil {
 		body, err := c.native.get(ctx, key)
 		if err != nil {
-			return nil, storageError("get", "legacy", err)
+			return nil, storageError("get", "direct", err)
 		}
-		return &checkedReader{ReadCloser: body, profile: "legacy"}, nil
+		return &checkedReader{ReadCloser: body, profile: "direct"}, nil
 	}
 	object, err := c.sdk.GetObject(ctx, c.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
@@ -222,9 +206,6 @@ func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 func (c *Client) Remove(ctx context.Context, key string) error {
 	if c == nil || (c.sdk == nil && c.native == nil) {
 		return ErrUnavailable
-	}
-	if c.readOnly {
-		return ErrAccessDenied
 	}
 	if !validKey(key) {
 		return ErrInvalidObject
@@ -248,7 +229,7 @@ func (c *Client) PresignGet(ctx context.Context, key string, ttl time.Duration) 
 	}
 	if c.native != nil {
 		grant, err := c.native.sign(ctx, key, ttl)
-		return grant, storageError("sign", "legacy", err)
+		return grant, storageError("sign", "direct", err)
 	}
 	signed, err := c.sdk.PresignedGetObject(ctx, c.bucket, key, ttl, url.Values{})
 	if err != nil {
@@ -269,7 +250,7 @@ func validKey(key string) bool {
 	return true
 }
 
-// Close releases only the native legacy connection owned by this client.
+// Close releases only the native provider connection owned by this client.
 func (c *Client) Close() {
 	if c != nil && c.transport != nil {
 		c.transport.CloseIdleConnections()

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -32,16 +34,21 @@ func (s *ProjectRetentionStore) EnqueueExpired(ctx context.Context, limit int) (
 	if s == nil || s.db == nil || limit < 1 || limit > 500 {
 		return 0, ErrUnavailable
 	}
-	result := s.db.WithContext(ctx).Exec(`INSERT INTO workspace.project_retention_job(project_id,org_id,owner_scope_id,deleted_revision,purge_after)
+	var count int64
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		result := tx.Exec(`INSERT INTO workspace.project_retention_job(project_id,org_id,owner_scope_id,deleted_revision,purge_after)
  SELECT p.id,p.org_id,p.owner_scope_id,p.revision,p.purge_after FROM workspace.project p
  WHERE p.is_delete AND p.status IN ('active','archived') AND p.owner_scope_id IS NOT NULL
  AND p.delete_time IS NOT NULL AND p.purge_after>p.delete_time AND p.purge_after<=clock_timestamp()
  AND NOT EXISTS(SELECT 1 FROM workspace.project_retention_job j WHERE j.project_id=p.id AND j.deleted_revision=p.revision)
  ORDER BY p.purge_after,p.id LIMIT ? ON CONFLICT(project_id,deleted_revision) DO NOTHING`, limit)
-	if result.Error != nil {
-		return 0, fmt.Errorf("enqueue expired projects: %w", result.Error)
-	}
-	return result.RowsAffected, nil
+		if result.Error != nil {
+			return fmt.Errorf("enqueue expired projects: %w", result.Error)
+		}
+		count = result.RowsAffected
+		return nil
+	})
+	return count, err
 }
 
 // ProcessNext locks a job and its exact project deletion version until cleanup commits.
@@ -56,7 +63,7 @@ func (s *ProjectRetentionStore) ProcessNext(ctx context.Context) (bool, error) {
 		PurgeAfter                     time.Time
 	}
 	found := false
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		r := tx.Raw(`SELECT project_id,org_id,owner_scope_id,deleted_revision,purge_after FROM workspace.project_retention_job WHERE status='pending' ORDER BY purge_after,project_id FOR UPDATE SKIP LOCKED LIMIT 1`).Scan(&job)
 		if r.Error != nil {
 			return r.Error
@@ -95,7 +102,9 @@ func (s *ProjectRetentionStore) ProcessNext(ctx context.Context) (bool, error) {
 	})
 	if err != nil && found {
 		// Record only an error category; SQL errors may include private payloads.
-		recordErr := s.db.WithContext(ctx).Exec(`UPDATE workspace.project_retention_job SET attempts=attempts+1,last_error='content_cleanup_failed' WHERE project_id=? AND deleted_revision=? AND status='pending'`, job.ProjectID, job.DeletedRevision).Error
+		recordErr := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+			return tx.Exec(`UPDATE workspace.project_retention_job SET attempts=attempts+1,last_error='content_cleanup_failed' WHERE project_id=? AND deleted_revision=? AND status='pending'`, job.ProjectID, job.DeletedRevision).Error
+		})
 		if recordErr != nil {
 			return false, fmt.Errorf("record project retention failure: %w (cleanup: %w)", recordErr, err)
 		}

@@ -8,6 +8,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -269,7 +271,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 				return err
 			}
 		}
-		return nil
+		return taskruntime.Enqueue(ctx, tx, "operation.batch", input.BatchID.String(), at)
 	})
 	if err != nil {
 		result.Items = result.Items[:preparedItems]

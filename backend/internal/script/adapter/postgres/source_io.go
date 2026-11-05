@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
@@ -18,44 +20,48 @@ func sourceIntentID(p application.WritePlan) uuid.UUID {
 	return uuid.NewSHA1(p.Command.Key, []byte("source-write/"+p.ActorID.String()+"/"+p.Command.ProjectID.String()))
 }
 func requireSourceIO(tx *gorm.DB, p application.WritePlan, owner *uuid.UUID, requireObjects bool) error {
-	var row struct {
-		Status, IOState       string
-		CancellationRequested bool
-		IOOwnerID             *uuid.UUID
-	}
-	read := tx.Raw(`SELECT status,io_state,io_owner_id,cancellation_requested FROM script.command_state WHERE actor_id=? AND request_id=? FOR UPDATE`, p.ActorID, p.Command.Key).Scan(&row)
-	if read.Error != nil {
-		return read.Error
-	}
-	if read.RowsAffected != 1 {
+	var row scriptCommandStateRow
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("actor_id = ? AND request_id = ?", p.ActorID, p.Command.Key).Take(&row).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		return application.ErrNotFound
+	} else if err != nil {
+		return err
 	}
-	if row.Status != "pending" || row.CancellationRequested {
+	if row.Status != scriptCommandPending || row.CancellationRequested {
 		return application.ErrConflict
 	}
-	if row.IOState != "running" || row.IOOwnerID == nil || owner != nil && *row.IOOwnerID != *owner {
+	if row.IOState != scriptIORunning || row.IOOwnerID == nil || owner != nil && *row.IOOwnerID != *owner {
 		return application.ErrNeedsReconciliation
 	}
 	if requireObjects {
-		var incomplete bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.object_intent i JOIN script.object_state s ON s.object_key=i.object_key AND s.object_location_id IS NOT DISTINCT FROM i.object_location_id WHERE i.actor_id=? AND i.request_id=? AND (NOT s.confirmed OR s.removed))`, p.ActorID, p.Command.Key).Scan(&incomplete).Error; err != nil {
+		var intents []scriptObjectIntentRow
+		if err := tx.Where("actor_id = ? AND request_id = ?", p.ActorID, p.Command.Key).Find(&intents).Error; err != nil {
 			return err
 		}
-		if incomplete {
-			return application.ErrNeedsReconciliation
+		if len(intents) != len(p.Objects) {
+			return application.ErrObjectMismatch
+		}
+		for _, intent := range intents {
+			var state scriptObjectStateRow
+			if err := tx.Where("object_key = ? AND object_location_id = ?", intent.ObjectKey, intent.ObjectLocationID).Take(&state).Error; err != nil {
+				return err
+			}
+			if !state.Confirmed || state.Removed {
+				return application.ErrNeedsReconciliation
+			}
 		}
 	}
 	return nil
 }
 func exactSourceObject(tx *gorm.DB, p application.WritePlan, f domain.ObjectFact) error {
-	var count int64
-	if err := tx.Raw(`SELECT count(*) FROM script.object_intent WHERE actor_id=? AND request_id=? AND org_id=? AND project_id=? AND object_key=? AND sha256=? AND byte_size=? AND mime=? AND object_location_id IS NOT DISTINCT FROM ?::uuid`, p.ActorID, p.Command.Key, p.OrgID, p.Command.ProjectID, f.Key, f.SHA256, f.ByteSize, f.MIME, nullableLocation(f.LocationID)).Scan(&count).Error; err != nil {
-		return err
-	}
-	if count != 1 {
+	if f.LocationID == uuid.Nil {
 		return application.ErrObjectMismatch
 	}
-	return nil
+	var intent scriptObjectIntentRow
+	err := tx.Where("actor_id = ? AND request_id = ? AND org_id = ? AND project_id = ? AND object_key = ? AND sha256 = ? AND byte_size = ? AND mime = ? AND object_location_id = ?", p.ActorID, p.Command.Key, p.OrgID, p.Command.ProjectID, f.Key, f.SHA256, f.ByteSize, f.MIME, f.LocationID).Take(&intent).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return application.ErrObjectMismatch
+	}
+	return err
 }
 func exactlyOne(result *gorm.DB) error {
 	if result.Error != nil {
@@ -72,7 +78,7 @@ func (s *SourceStore) ClaimSourceIO(ctx context.Context, actor identityapp.Princ
 	if owner == uuid.Nil {
 		return domain.ErrInvalidSource
 	}
-	return s.transaction(ctx, actor, p.Command.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	return s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
 		prior, err := findCommand(tx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash)
 		if err != nil {
 			return err
@@ -83,63 +89,64 @@ func (s *SourceStore) ClaimSourceIO(ctx context.Context, actor identityapp.Princ
 		if prior.Receipt != nil {
 			return application.ErrConflict
 		}
-		var row struct {
-			Status, IOState       string
-			CancellationRequested bool
-			IOOwnerID             *uuid.UUID
-		}
-		if err := tx.Raw(`SELECT status,io_state,io_owner_id,cancellation_requested FROM script.command_state WHERE actor_id=? AND request_id=? FOR UPDATE`, actor.ID, p.Command.Key).Scan(&row).Error; err != nil {
+		var row scriptCommandStateRow
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("actor_id = ? AND request_id = ?", actor.ID, p.Command.Key).Take(&row).Error; err != nil {
 			return err
 		}
-		if row.Status != "pending" || row.CancellationRequested {
+		if row.Status != scriptCommandPending || row.CancellationRequested {
 			return application.ErrConflict
 		}
-		if row.IOOwnerID != nil || (row.IOState != "idle" && row.IOState != "ended") {
+		if row.IOOwnerID != nil || (row.IOState != scriptIOIdle && row.IOState != scriptIOEnded) {
 			return application.ErrNeedsReconciliation
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.command_state SET io_state='running',io_owner_id=?,revision=revision+1,updated_at=? WHERE actor_id=? AND request_id=? AND status='pending' AND NOT cancellation_requested AND io_owner_id IS NULL`, owner, now, actor.ID, p.Command.Key))
+		result := tx.Model(&scriptCommandStateRow{}).
+			Where("actor_id = ? AND request_id = ? AND status = ? AND cancellation_requested = ? AND io_owner_id IS NULL", actor.ID, p.Command.Key, scriptCommandPending, false).
+			Updates(map[string]any{"io_state": scriptIORunning, "io_owner_id": owner, "revision": row.Revision + 1, "updated_at": now})
+		return exactlyOne(result)
 	})
 }
 
 // BeginSourceObject freezes mutation admission before the synchronous private call.
 func (s *SourceStore) BeginSourceObject(ctx context.Context, actor identityapp.Principal, p application.WritePlan, owner uuid.UUID, f domain.ObjectFact) error {
-	return s.transaction(ctx, actor, p.Command.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	return s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
 		if err := requireSourceIO(tx, p, &owner, false); err != nil {
 			return err
 		}
 		if err := exactSourceObject(tx, p, f); err != nil {
 			return err
 		}
-		if p.StorageIntentID != uuid.Nil {
-			if s.locations == nil || s.locations(tx) == nil {
-				return application.ErrUnavailable
-			}
-			if err := s.locations(tx).Begin(ctx, p.StorageIntentID, f); err != nil {
-				return err
-			}
+		if p.StorageIntentID == uuid.Nil || s.locations == nil || s.locations(tx) == nil {
+			return application.ErrUnavailable
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.object_state SET put_started=true,updated_at=now() WHERE object_key=? AND object_location_id IS NOT DISTINCT FROM ?::uuid AND NOT removed`, f.Key, nullableLocation(f.LocationID)))
+		if err := s.locations(tx).Begin(ctx, p.StorageIntentID, f); err != nil {
+			return err
+		}
+		result := tx.Model(&scriptObjectStateRow{}).
+			Where("object_key = ? AND object_location_id = ? AND removed = ?", f.Key, f.LocationID, false).
+			Updates(map[string]any{"put_started": true, "updated_at": time.Now().UTC()})
+		return exactlyOne(result)
 	})
 }
 
 // ConfirmSourceObject records only an actual full read size and digest proof.
 func (s *SourceStore) ConfirmSourceObject(ctx context.Context, actor identityapp.Principal, p application.WritePlan, owner uuid.UUID, f domain.ObjectFact) error {
-	return s.transaction(ctx, actor, p.Command.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	return s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
 		if err := requireSourceIO(tx, p, &owner, false); err != nil {
 			return err
 		}
 		if err := exactSourceObject(tx, p, f); err != nil {
 			return err
 		}
-		if p.StorageIntentID != uuid.Nil {
-			if s.locations == nil || s.locations(tx) == nil {
-				return application.ErrUnavailable
-			}
-			if err := s.locations(tx).Confirm(ctx, p.StorageIntentID, f); err != nil {
-				return err
-			}
+		if p.StorageIntentID == uuid.Nil || s.locations == nil || s.locations(tx) == nil {
+			return application.ErrUnavailable
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.object_state SET confirmed=true,updated_at=now() WHERE object_key=? AND object_location_id IS NOT DISTINCT FROM ?::uuid AND put_started AND NOT removed`, f.Key, nullableLocation(f.LocationID)))
+		if err := s.locations(tx).Confirm(ctx, p.StorageIntentID, f); err != nil {
+			return err
+		}
+		result := tx.Model(&scriptObjectStateRow{}).
+			Where("object_key = ? AND object_location_id = ? AND put_started = ? AND removed = ?", f.Key, f.LocationID, true, false).
+			Updates(map[string]any{"confirmed": true, "updated_at": time.Now().UTC()})
+		return exactlyOne(result)
 	})
 }
 
@@ -150,7 +157,20 @@ func (s *SourceStore) EndSourceIO(ctx context.Context, p application.WritePlan, 
 		return application.ErrUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		written := tx.Exec(`UPDATE script.command_state SET io_state='ended',io_owner_id=NULL,needs_reconciliation=needs_reconciliation OR ?,revision=revision+1,updated_at=? WHERE actor_id=? AND request_id=? AND io_owner_id=? AND io_state='running' AND EXISTS(SELECT 1 FROM script.command c WHERE c.actor_id=? AND c.request_id=? AND c.org_id=? AND c.project_id=? AND c.request_hash=?)`, uncertain, now, p.ActorID, p.Command.Key, owner, p.ActorID, p.Command.Key, p.OrgID, p.Command.ProjectID, p.RequestHash)
+		var command scriptCommandRow
+		if err := tx.Where("actor_id = ? AND request_id = ?", p.ActorID, p.Command.Key).Take(&command).Error; err != nil {
+			return err
+		}
+		if command.OrgID != p.OrgID || command.ProjectID != p.Command.ProjectID || command.RequestHash != p.RequestHash {
+			return application.ErrConflict
+		}
+		var state scriptCommandStateRow
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("actor_id = ? AND request_id = ? AND io_owner_id = ? AND io_state = ?", p.ActorID, p.Command.Key, owner, scriptIORunning).Take(&state).Error; err != nil {
+			return err
+		}
+		written := tx.Model(&scriptCommandStateRow{}).
+			Where("actor_id = ? AND request_id = ? AND io_owner_id = ? AND io_state = ?", p.ActorID, p.Command.Key, owner, scriptIORunning).
+			Updates(map[string]any{"io_state": scriptIOEnded, "io_owner_id": nil, "needs_reconciliation": state.NeedsReconciliation || uncertain, "revision": state.Revision + 1, "updated_at": now})
 		if err := exactlyOne(written); err != nil {
 			return fmt.Errorf("record source IO exit: %w", err)
 		}

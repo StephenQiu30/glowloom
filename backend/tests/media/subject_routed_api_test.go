@@ -33,7 +33,7 @@ func TestSubjectPublicAPIThroughNativeTOSUploadSaveAndExportWithoutCloudCredenti
 		t.Fatal(tx.Error)
 	}
 	t.Cleanup(func() { _ = tx.Rollback().Error })
-	_, _, storageCfg := controlledGeneratedTOS(t)
+	registry, _, storageCfg := controlledGeneratedTOS(t)
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:18089", PublicOrigin: "http://localhost:1122", ObjectStorage: &storageCfg})
 	account := identityfixture.Create(t, tx, cfg, "Subject Native TOS Fixture", "SyntheticSubject123")
 	scope := identityfixture.Scope(t, tx, account.User.ID)
@@ -41,19 +41,14 @@ func TestSubjectPublicAPIThroughNativeTOSUploadSaveAndExportWithoutCloudCredenti
 	if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: "tos-frozen", Provider: "tos", Endpoint: "https://tos-fixture.example.invalid", SigningEndpoint: "https://tos-fixture.example.invalid", Region: "cn-beijing", Bucket: "controlled-fixture"}}); err != nil {
 		t.Fatal(err)
 	}
-	// Controlled fixture admission only: this is not a real cloud activation proof.
-	policy := media.UploadPolicy{MaxImageBytes: 20 << 20, MaxVideoBytes: 500 << 20, MaxAudioBytes: 100 << 20, MaxModelBytes: 64 << 20, MaxDocumentBytes: 20 << 20}
-	raw, _ := json.Marshal(policy)
-	if err := tx.Exec(`INSERT INTO media.storage_config_revision(revision,config_sha256,profile_id,upload_policy,session_ttl_seconds) VALUES('controlled-api-v1',repeat('b',64),'tos-frozen',?::jsonb,86400) ON CONFLICT DO NOTHING`, string(raw)).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id) VALUES(1,'controlled-api-v1','tos-frozen') ON CONFLICT(singleton) DO UPDATE SET revision=EXCLUDED.revision,profile_id=EXCLUDED.profile_id`).Error; err != nil {
+	// Controlled TLS admission exercises the validated deployment projection.
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, tx, "controlled-api-"+uuid.NewString(), "tos-frozen")); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, tx, nil, identityruntime.SessionDependencies{}, t.Context())
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, tx, registry, identityruntime.SessionDependencies{}, t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

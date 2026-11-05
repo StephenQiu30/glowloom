@@ -11,8 +11,10 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
@@ -35,39 +37,45 @@ func NewTranscriptionStore(db *gorm.DB, source TranscriptionSourceFactory, media
 }
 
 type transcriptionRow struct {
-	ActorRole                                       *string
-	ID, ProjectID, OrgID, ActorID, CanvasID, NodeID uuid.UUID
-	Language, Status, Stage, InferenceState         string
-	SourceRevision, Revision                        int64
-	Frozen, Result                                  []byte
-	Progress, Attempt                               int
-	ResultSHA256, FailureCode                       *string
-	ActiveWorker                                    *uuid.UUID
-	CreatedAt, UpdatedAt                            time.Time
+	ID                                          uuid.UUID `gorm:"primaryKey"`
+	ActorRole                                   *string
+	ProjectID, OrgID, ActorID, CanvasID, NodeID uuid.UUID
+	Language                                    string
+	Status                                      domain.TranscriptionStatus
+	Stage                                       domain.TranscriptionStage
+	InferenceState                              domain.TranscriptionInferenceState
+	SourceRevision, Revision                    int64
+	Frozen, Result                              jsonDocument
+	Progress, Attempt                           int
+	ResultSHA256, FailureCode                   *string
+	ActiveWorker                                *uuid.UUID
+	CreatedAt, UpdatedAt                        time.Time
 }
 
+func (transcriptionRow) TableName() string { return "mediatool.transcription_job" }
+
 func (r transcriptionRow) public() domain.TranscriptionJob {
-	return domain.TranscriptionJob{ID: r.ID, ProjectID: r.ProjectID, Source: domain.TranscriptionSource{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Language: r.Language, Status: domain.TranscriptionStatus(r.Status), Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, ResultSHA256: r.ResultSHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return domain.TranscriptionJob{ID: r.ID, ProjectID: r.ProjectID, Source: domain.TranscriptionSource{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Language: r.Language, Status: r.Status, Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, ResultSHA256: r.ResultSHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (r transcriptionRow) actor() identityapp.Principal {
 	return identityapp.Principal{ID: r.ActorID, OrgID: r.OrgID}
 }
 func readTranscription(tx *gorm.DB, project, id uuid.UUID, lock bool) (transcriptionRow, error) {
 	var row transcriptionRow
-	query := `SELECT * FROM mediatool.transcription_job WHERE id=?`
-	args := []any{id}
+	query := tx.Model(&transcriptionRow{}).Where("id = ?", id)
 	if project != uuid.Nil {
-		query += ` AND project_id=?`
-		args = append(args, project)
+		query = query.Where("project_id = ?", project)
 	}
 	if lock {
-		query += ` FOR UPDATE`
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
-	result := tx.Raw(query, args...).Scan(&row)
-	if result.Error != nil {
-		return row, fmt.Errorf("read transcription: %w", result.Error)
+	if err := query.Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return row, application.ErrNotFound
+		}
+		return row, fmt.Errorf("read transcription: %w", err)
 	}
-	if result.RowsAffected != 1 {
+	if row.ID == uuid.Nil {
 		return row, application.ErrNotFound
 	}
 	return row, nil
@@ -82,19 +90,16 @@ func transcriptionLock(tx *gorm.DB, actor, key uuid.UUID) error {
 	if actor == uuid.Nil || key == uuid.Nil {
 		return application.ErrInvalidTranscription
 	}
-	return tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-transcription-command/"+actor.String()+"/"+key.String()).Error
+	return lockMediatoolPrincipal(tx, actor)
 }
 func transcriptionReplay(tx *gorm.DB, actor, key uuid.UUID, hash string) (domain.TranscriptionJob, bool, error) {
-	var receipt struct {
-		RequestHash string
-		Response    []byte
-	}
-	result := tx.Raw(`SELECT request_hash,response FROM mediatool.transcription_command WHERE actor_id=? AND request_id=?`, actor, key).Scan(&receipt)
-	if result.Error != nil {
-		return domain.TranscriptionJob{}, false, result.Error
-	}
-	if result.RowsAffected == 0 {
+	var receipt transcriptionCommandRecord
+	err := tx.Where("actor_id = ? AND request_id = ?", actor, key).Take(&receipt).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.TranscriptionJob{}, false, nil
+	}
+	if err != nil {
+		return domain.TranscriptionJob{}, false, err
 	}
 	if receipt.RequestHash != hash {
 		return domain.TranscriptionJob{}, false, application.ErrConflict
@@ -112,11 +117,11 @@ func transcriptionInput(asset mediadomain.MediaAsset) (domain.FrozenSource, erro
 	return domain.FrozenSource{AssetID: asset.ID, Revision: asset.Revision, Kind: string(asset.Kind), ObjectKey: asset.ObjectKey, MIMEType: asset.MimeType, ByteSize: asset.ByteSize, SHA256: *asset.SHA256, DurationMS: asset.DurationMS, Width: asset.Width, Height: asset.Height}, nil
 }
 func transcriptionQuota(tx *gorm.DB, project uuid.UUID) error {
-	if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-transcription-project/"+project.String()).Error; err != nil {
+	if err := lockMediatoolProject(tx, project); err != nil {
 		return err
 	}
 	var count int64
-	if err := tx.Raw(`SELECT count(*) FROM mediatool.transcription_job WHERE project_id=? AND status IN ('queued','running','cancel_requested')`, project).Scan(&count).Error; err != nil {
+	if err := tx.Model(&transcriptionRow{}).Where("project_id = ? AND status IN ?", project, []domain.TranscriptionStatus{domain.TranscriptionQueued, domain.TranscriptionRunning, domain.TranscriptionCancelRequested}).Count(&count).Error; err != nil {
 		return err
 	}
 	if count >= 2 {
@@ -189,11 +194,11 @@ func (s *TranscriptionStore) Create(ctx context.Context, actor identityapp.Princ
 			return err
 		}
 		now := time.Now().UTC()
-		job = domain.TranscriptionJob{ID: uuid.New(), ProjectID: project, Source: domain.TranscriptionSource{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Language: input.Language, Status: domain.TranscriptionQueued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
-		if err := tx.Exec(`INSERT INTO mediatool.transcription_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,language,frozen,status,stage,progress,attempt,revision,inference_state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?::jsonb,'queued','queued',0,1,1,'none',?,?)`, job.ID, project, actor.OrgID, actor.ID, nil, input.CanvasID, input.NodeID, input.Revision, input.Language, string(frozen), now, now).Error; err != nil {
+		job = domain.TranscriptionJob{ID: uuid.New(), ProjectID: project, Source: domain.TranscriptionSource{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Language: input.Language, Status: domain.TranscriptionQueued, Stage: domain.TranscriptionStageQueued, Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		if err := tx.Create(&transcriptionRow{ID: job.ID, ProjectID: project, OrgID: actor.OrgID, ActorID: actor.ID, CanvasID: input.CanvasID, NodeID: input.NodeID, SourceRevision: input.Revision, Language: input.Language, Frozen: jsonDocument(frozen), Status: domain.TranscriptionQueued, Stage: domain.TranscriptionStageQueued, Progress: 0, Attempt: 1, Revision: 1, InferenceState: domain.TranscriptionInferenceNone, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := pinTool(ctx, tx, s.storage, "transcription", project, job.ID, job.Attempt); err != nil {
+		if err := pinTool(ctx, tx, s.storage, mediaapp.StorageWorkKindTranscription, project, job.ID, job.Attempt); err != nil {
 			return err
 		}
 		return recordTranscriptionCommand(tx, actor, key, hash, "requested", job, "start")
@@ -233,24 +238,17 @@ func (s *TranscriptionStore) List(ctx context.Context, actor identityapp.Princip
 		if err := s.authorize(ctx, tx, actor, input.ProjectID, false); err != nil {
 			return err
 		}
-		query := `SELECT * FROM mediatool.transcription_job WHERE project_id=?`
-		args := []any{input.ProjectID}
-		for _, filter := range []struct {
-			column string
-			id     uuid.UUID
-		}{{"canvas_id", input.CanvasID}, {"node_id", input.NodeID}, {"id", input.After}} {
-			if filter.id != uuid.Nil {
-				op := "="
-				if filter.column == "id" {
-					op = "<"
-				}
-				query += " AND " + filter.column + op + "?"
-				args = append(args, filter.id)
-			}
+		query := tx.Model(&transcriptionRow{}).Where("project_id = ?", input.ProjectID)
+		if input.CanvasID != uuid.Nil {
+			query = query.Where("canvas_id = ?", input.CanvasID)
 		}
-		query += ` ORDER BY id DESC LIMIT ?`
-		args = append(args, input.Limit)
-		return tx.Raw(query, args...).Scan(&rows).Error
+		if input.NodeID != uuid.Nil {
+			query = query.Where("node_id = ?", input.NodeID)
+		}
+		if input.After != uuid.Nil {
+			query = query.Where("id < ?", input.After)
+		}
+		return query.Order("id DESC").Limit(input.Limit).Find(&rows).Error
 	})
 	if err != nil {
 		return nil, err
@@ -276,7 +274,7 @@ func (s *TranscriptionStore) Result(ctx context.Context, actor identityapp.Princ
 		if err != nil {
 			return err
 		}
-		if row.Status != "succeeded" || row.ResultSHA256 == nil || row.InferenceState != "terminal" {
+		if row.Status != domain.TranscriptionSucceeded || row.ResultSHA256 == nil || row.InferenceState != domain.TranscriptionInferenceTerminal {
 			return application.ErrConflict
 		}
 		var frozen domain.FrozenTranscription
@@ -315,11 +313,16 @@ func (s *TranscriptionStore) Result(ctx context.Context, actor identityapp.Princ
 	return output, err
 }
 func updateTranscription(tx *gorm.DB, row transcriptionRow) error {
-	return tx.Exec(`UPDATE mediatool.transcription_job SET status=?,stage=?,progress=?,attempt=?,revision=?,inference_state=?,result=?::jsonb,result_sha256=?,failure_code=?,active_worker=?,actor_id=?,actor_role=?,updated_at=? WHERE id=?`, row.Status, row.Stage, row.Progress, row.Attempt, row.Revision, row.InferenceState, nullableJSON(row.Result), row.ResultSHA256, row.FailureCode, row.ActiveWorker, row.ActorID, row.ActorRole, row.UpdatedAt, row.ID).Error
+	return tx.Model(&transcriptionRow{}).Where("id = ?", row.ID).Updates(map[string]any{
+		"status": row.Status, "stage": row.Stage, "progress": row.Progress, "attempt": row.Attempt,
+		"revision": row.Revision, "inference_state": row.InferenceState, "result": nullableJSON(row.Result),
+		"result_sha256": row.ResultSHA256, "failure_code": row.FailureCode, "active_worker": row.ActiveWorker,
+		"actor_id": row.ActorID, "actor_role": row.ActorRole, "updated_at": row.UpdatedAt,
+	}).Error
 }
 func nullableJSON(raw []byte) any {
 	if len(raw) == 0 {
 		return nil
 	}
-	return string(raw)
+	return jsonDocument(raw)
 }

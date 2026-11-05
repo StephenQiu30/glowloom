@@ -39,7 +39,7 @@ func (f *RoutedFactory) PinOperationStorage(ctx context.Context, project, id uui
 	if f == nil || f.store == nil {
 		return mediaapp.ErrUnavailable
 	}
-	_, err := f.store.PinStorageWork(ctx, mediaapp.StorageWorkOwner{Kind: "operation", OwnerID: project, WorkID: id})
+	_, err := f.store.PinStorageWork(ctx, mediaapp.StorageWorkOwner{Kind: mediaapp.StorageWorkKindOperation, OwnerID: project, WorkID: id})
 	return err
 }
 
@@ -51,7 +51,7 @@ func (f *RoutedFactory) ForProviderDispatch(ctx context.Context, identity applic
 	if identity.Validate() != nil {
 		return nil, application.ErrInvalidProviderCall
 	}
-	intent, err := f.store.ReadStorageWork(ctx, mediaapp.StorageWorkOwner{Kind: "operation", OwnerID: identity.ProjectID, WorkID: identity.OperationID})
+	intent, err := f.store.ReadStorageWork(ctx, mediaapp.StorageWorkOwner{Kind: mediaapp.StorageWorkKindOperation, OwnerID: identity.ProjectID, WorkID: identity.OperationID})
 	if err != nil {
 		return nil, err
 	}

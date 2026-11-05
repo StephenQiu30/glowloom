@@ -44,7 +44,7 @@ func TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft(t *testing.T
 	require.NoError(t, json.Unmarshal(quote.QuoteDetail, &detail))
 	require.Equal(t, "https://provider.example/pricing", detail.SourceURL)
 	require.NotNil(t, detail.ReviewedAt)
-	require.Equal(t, "2026-11-03T00:00:00Z", detail.ReviewedAt.Format(time.RFC3339))
+	require.Equal(t, "2026-11-03T00:00:00Z", detail.ReviewedAt.UTC().Format(time.RFC3339))
 	recovery, err := f.store.ReadProviderTrialRecovery(t.Context(), actor, f.release)
 	require.NoError(t, err)
 	require.True(t, recovery.Found)

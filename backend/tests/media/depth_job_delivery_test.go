@@ -4,19 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"strconv"
 	"testing"
-	"time"
+
+	current "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
 
 	"github.com/google/uuid"
-	"go.temporal.io/api/enums/v1"
-	"go.temporal.io/sdk/client"
 
 	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	toolevent "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/event"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
@@ -78,89 +74,20 @@ func TestDepthJobPGExactOutboxAndInboxDelivery(t *testing.T) {
 	}
 }
 
-type isolatedDepthClient struct {
-	client.Client
-	queue string
-}
-
-func (c isolatedDepthClient) ExecuteWorkflow(ctx context.Context, options client.StartWorkflowOptions, w any, args ...any) (client.WorkflowRun, error) {
-	options.TaskQueue = c.queue
-	return c.Client.ExecuteWorkflow(ctx, options, w, args...)
-}
-
-func TestDepthJobRealTemporalDuplicateAndCancellationCommands(t *testing.T) {
-	address, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
-	if address == "" || namespace == "" {
-		t.Skip("configure explicitly authorized isolated workflow queue on actual local Temporal")
-	}
-	c, err := client.Dial(client.Options{HostPort: address, Namespace: namespace})
+func TestDepthCancelAdmissionIsDurableAndDeduplicated(t *testing.T) {
+	f := depthHTTP(t)
+	j := f.create(t)
+	key := uuid.New()
+	first, err := f.store.Control(t.Context(), f.actor, f.project, j.ID, key, j.Revision, "cancel")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(c.Close)
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
-	defer cancel()
-	job, key := uuid.New(), uuid.New()
-	d := toolapp.DepthDelivery{DepthWorkID: toolapp.DepthWorkID{JobID: job, Attempt: 1}, RequestID: key, Action: "start"}
-	base := "media-depth/" + job.String() + "/" + strconv.Itoa(d.Attempt)
-	control := base + "/cancel/" + key.String()
-	t.Cleanup(func() {
-		end, stop := context.WithTimeout(context.Background(), 10*time.Second)
-		defer stop()
-		for _, id := range []string{base, control} {
-			if err := c.TerminateWorkflow(end, id, "", "task-owned depth starter verification finished"); err != nil {
-				t.Error(err)
-			}
-		}
-	})
-	start := toolflow.NewDepthStarter(isolatedDepthClient{Client: c, queue: "nativeDepth-test-" + job.String()})
-	if err := start.Deliver(ctx, d); err != nil {
-		t.Fatal(err)
+	second, err := f.store.Control(t.Context(), f.actor, f.project, j.ID, key, j.Revision, "cancel")
+	if err != nil || second.Revision != first.Revision {
+		t.Fatal("cancel replay", err)
 	}
-	first, err := c.DescribeWorkflowExecution(ctx, base, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := start.Deliver(ctx, d); err != nil {
-		t.Fatal(err)
-	}
-	last, err := c.DescribeWorkflowExecution(ctx, base, "")
-	if err != nil || first.WorkflowExecutionInfo.Execution.RunId != last.WorkflowExecutionInfo.Execution.RunId {
-		t.Fatal("duplicate native start created another run", err)
-	}
-	d.Action = "cancel"
-	if err := start.Deliver(ctx, d); err != nil {
-		t.Fatal(err)
-	}
-	cleanup, err := c.DescribeWorkflowExecution(ctx, control, "")
-	if err != nil {
-		t.Fatal("post-review cancellation has no cleanup workflow", err)
-	}
-	if err := start.Deliver(ctx, d); err != nil {
-		t.Fatal(err)
-	}
-	same, err := c.DescribeWorkflowExecution(ctx, control, "")
-	if err != nil || cleanup.WorkflowExecutionInfo.Execution.RunId != same.WorkflowExecutionInfo.Execution.RunId {
-		t.Fatal("duplicate cancellation created another cleanup", err)
-	}
-	history := c.GetWorkflowHistory(ctx, base, first.WorkflowExecutionInfo.Execution.RunId, false, enums.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
-	starts, signals := 0, 0
-	for history.HasNext() {
-		e, err := history.Next()
-		if err != nil {
-			t.Fatal(err)
-		}
-		switch e.EventType {
-		case enums.EVENT_TYPE_WORKFLOW_EXECUTION_STARTED:
-			starts++
-		case enums.EVENT_TYPE_WORKFLOW_EXECUTION_SIGNALED:
-			if e.GetWorkflowExecutionSignaledEventAttributes().SignalName != "cancel" {
-				t.Fatal("wrong native stop signal")
-			}
-			signals++
-		}
-	}
-	if starts != 1 || signals != 2 {
-		t.Fatalf("actual SDK signal/duplicate semantics starts=%d signals=%d", starts, signals)
+	var count int
+	if err := f.db.Raw("SELECT count(*) FROM infra.task_work WHERE kind=? AND reference->>'job_id'=?", current.Depth, j.ID.String()).Scan(&count).Error; err != nil || count != 2 {
+		t.Fatal("expected distinct start and cancel admissions", count, err)
 	}
 }

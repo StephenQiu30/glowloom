@@ -59,12 +59,13 @@ type ProjectCopyScene struct {
 
 // ProjectCopyDialogue retains row identity separately from the stable editable key.
 type ProjectCopyDialogue struct {
-	ID, OrgID, ProjectID, SceneID, LineKey       uuid.UUID
-	SeqNo                                        int
-	Kind, Speaker, Content, Emotion, ContentHash string
-	CharacterID                                  *uuid.UUID
-	CharacterVersionID                           *uuid.UUID `json:"character_version_id,omitempty"`
-	Start, End                                   int
+	ID, OrgID, ProjectID, SceneID, LineKey uuid.UUID
+	SeqNo                                  int
+	Kind                                   domain.DialogueKind
+	Speaker, Content, Emotion, ContentHash string
+	CharacterID                            *uuid.UUID
+	CharacterVersionID                     *uuid.UUID `json:"character_version_id,omitempty"`
+	Start, End                             int
 }
 
 // ProjectCopyAction preserves actual action row identity and item order.

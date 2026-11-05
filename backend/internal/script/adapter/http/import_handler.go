@@ -10,6 +10,7 @@ import (
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 // ImportHandler exposes durable document import acceptance and exact-key controls.
@@ -59,7 +60,7 @@ func (h *ImportHandler) Create(c *gin.Context) {
 	if !readJSON(c, &request) {
 		return
 	}
-	in, ok := commandInput(c, "import", request.ExpectedRevision, request.BaseVersionID)
+	project, key, requestID, ok := commandIdentity(c, request.ExpectedRevision)
 	if !ok {
 		return
 	}
@@ -68,7 +69,7 @@ func (h *ImportHandler) Create(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	out, err := h.service.Create(c.Request.Context(), actor, application.ImportCommand{ProjectID: in.ProjectID, Key: in.Key, RequestID: in.RequestID, ExpectedRevision: in.ExpectedRevision, BaseVersionID: in.BaseVersionID, AssetIDs: request.AssetIDs, RightsConfirmed: request.RightsConfirmed})
+	out, err := h.service.Create(c.Request.Context(), actor, application.ImportCommand{ProjectID: project, Key: key, RequestID: requestID, ExpectedRevision: *request.ExpectedRevision, BaseVersionID: request.BaseVersionID, AssetIDs: request.AssetIDs, RightsConfirmed: request.RightsConfirmed})
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -149,7 +150,7 @@ func (h *ImportHandler) Get(c *gin.Context) {
 // @Success 202 {object} application.ImportJob
 // @Failure 403,404,409,422,503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-file-imports/{id}/cancel [post]
-func (h *ImportHandler) Cancel(c *gin.Context) { h.control(c, "cancel") }
+func (h *ImportHandler) Cancel(c *gin.Context) { h.control(c, domain.ImportActionCancel) }
 
 // Retry accepts only failed originals under the last published draft CAS.
 // @ID retryScriptFileImport
@@ -163,7 +164,7 @@ func (h *ImportHandler) Cancel(c *gin.Context) { h.control(c, "cancel") }
 // @Success 202 {object} application.ImportJob
 // @Failure 403,404,409,422,503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-file-imports/{id}/retry [post]
-func (h *ImportHandler) Retry(c *gin.Context) { h.control(c, "retry") }
+func (h *ImportHandler) Retry(c *gin.Context) { h.control(c, domain.ImportActionRetry) }
 
 // Reconcile retains the original attempt, originals, keys and object digest facts.
 // @ID reconcileScriptFileImport
@@ -177,14 +178,14 @@ func (h *ImportHandler) Retry(c *gin.Context) { h.control(c, "retry") }
 // @Success 202 {object} application.ImportJob
 // @Failure 403,404,409,422,503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-file-imports/{id}/reconcile [post]
-func (h *ImportHandler) Reconcile(c *gin.Context) { h.control(c, "reconcile") }
+func (h *ImportHandler) Reconcile(c *gin.Context) { h.control(c, domain.ImportActionReconcile) }
 
-func (h *ImportHandler) control(c *gin.Context, action string) {
+func (h *ImportHandler) control(c *gin.Context, action domain.ImportAction) {
 	var request FileImportControlRequest
 	if !readJSON(c, &request) {
 		return
 	}
-	in, ok := commandInput(c, action, request.ExpectedRevision, nil)
+	project, key, requestID, ok := commandIdentity(c, request.ExpectedRevision)
 	if !ok {
 		return
 	}
@@ -193,7 +194,7 @@ func (h *ImportHandler) control(c *gin.Context, action string) {
 		return
 	}
 	actor := identityhttp.Principal(c)
-	out, err := h.service.Control(c.Request.Context(), actor, application.ImportControl{ProjectID: in.ProjectID, JobID: id, Key: in.Key, RequestID: in.RequestID, ExpectedRevision: in.ExpectedRevision, Action: action})
+	out, err := h.service.Control(c.Request.Context(), actor, application.ImportControl{ProjectID: project, JobID: id, Key: key, RequestID: requestID, ExpectedRevision: *request.ExpectedRevision, Action: action})
 	if err != nil {
 		scriptProblem(c, err)
 		return

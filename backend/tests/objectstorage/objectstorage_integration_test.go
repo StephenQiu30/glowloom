@@ -24,7 +24,7 @@ func TestPingWithHostObjectStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load object storage configuration: %v", err)
 	}
-	conn, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket, cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
+	conn, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
 	if err != nil {
 		t.Fatalf("configure object storage client: %v", err)
 	}
@@ -43,12 +43,11 @@ func TestPutStatAndRemoveWithHostObjectStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load object storage configuration: %v", err)
 	}
-	conn, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
-		cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
+	conn, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
 	if err != nil {
 		t.Fatalf("configure object storage client: %v", err)
 	}
-	key := "tests/media-ingest/" + uuid.NewString() + ".png"
+	key := objectstorage.Ref{ProfileID: cfg.ObjectStorage.DefaultWriteProfile, Bucket: cfg.ObjectStorage.Profiles[cfg.ObjectStorage.DefaultWriteProfile].Bucket, Key: "tests/media-ingest/" + uuid.NewString() + ".png"}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	t.Cleanup(func() {

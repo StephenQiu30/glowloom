@@ -8,7 +8,8 @@ import {
 
 import { DIRECTOR_BUILTIN_MOTION_PRESETS } from "./director-motion-catalog";
 export { DIRECTOR_BUILTIN_MOTION_PRESETS } from "./director-motion-catalog";
-const RESOURCE = "/director/motions/quaternius-ual1-standard.json?v=standard-43-v1";
+const RESOURCE =
+  "/director/motions/quaternius-ual1-standard.json?v=standard-43-v1";
 const MAX_BYTES = 24 * 1024 * 1024;
 type MotionTrack = { bone: string; times: number[]; values: number[] };
 type MotionLibrary = {

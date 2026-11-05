@@ -14,7 +14,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/providerprobe"
-	flow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
+	flow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"

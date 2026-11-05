@@ -3,6 +3,8 @@ package postgres
 import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 // ForOriginalDelivery binds each read and write transaction to the authorized
@@ -14,7 +16,7 @@ func (r *IngestRepository) ForOriginalDelivery(authorize func(*gorm.DB, uuid.UUI
 }
 
 func (r *IngestRepository) requireIngestState(status string) error {
-	if status == "ingesting" && r.original == nil || r.original != nil && (status == "failed" || status == "completed" || status == "cancelled") {
+	if status == string(operationdomain.StatusIngesting) && r.original == nil || r.original != nil && (status == string(operationdomain.StatusFailed) || status == string(operationdomain.StatusCompleted) || status == string(operationdomain.StatusCancelled)) {
 		return nil
 	}
 	return ErrOperationNotIngesting

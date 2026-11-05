@@ -7,7 +7,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -42,10 +41,10 @@ func (r *personalUploadFake) PersonalUploadAssetExists(context.Context, domain.P
 
 func TestPersonalUploadPublishesReviewedOwnedMediaThroughSharedPipeline(t *testing.T) {
 	repo, objects := &personalUploadFake{}, &uploadObjectsFake{}
-	service := mediaapp.NewScopedUploadService(&uploadRepoFake{}, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := unitRoutedUploadService(&uploadRepoFake{}, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
 	in.Request.ProjectID = uuid.Nil
-	result, err := service.UploadPersonal(t.Context(), in)
+	result, err := fixturePersonalUpload(t.Context(), service, in)
 	if err != nil || result.Asset.ID == uuid.Nil || repo.commits != 1 || repo.asset.Personal == nil || repo.asset.Personal.OrgID != in.Actor.OrgID || repo.asset.Personal.ActorID != in.Actor.ID || repo.asset.ProjectID != uuid.Nil || repo.asset.CanReference() || len(objects.items) != 3 {
 		t.Fatal("personal actual probe/render/ownership failed", err)
 	}
@@ -62,7 +61,7 @@ func TestPersonalUploadRejectsCallerOwnershipAndRequiresExplicitReview(t *testin
 	for _, kind := range []string{"project", "ownership", "review"} {
 		t.Run(kind, func(t *testing.T) {
 			repo, objects := &personalUploadFake{}, &uploadObjectsFake{}
-			service := mediaapp.NewScopedUploadService(&uploadRepoFake{}, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+			service := unitRoutedUploadService(&uploadRepoFake{}, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 			in := uploadInput(t)
 			in.Request.ProjectID = uuid.Nil
 			switch kind {
@@ -73,7 +72,7 @@ func TestPersonalUploadRejectsCallerOwnershipAndRequiresExplicitReview(t *testin
 			case "review":
 				in.LocalReviewConfirmed = false
 			}
-			if _, err := service.UploadPersonal(t.Context(), in); !errors.Is(err, mediaapp.ErrInvalidUpload) || repo.commits != 0 || len(objects.items) != 0 {
+			if _, err := fixturePersonalUpload(t.Context(), service, in); !errors.Is(err, mediaapp.ErrInvalidUpload) || repo.commits != 0 || len(objects.items) != 0 {
 				t.Fatal("unreviewed or caller scope was accepted", err)
 			}
 		})
@@ -88,10 +87,10 @@ func TestPersonalUploadUnknownCommitNeverDestroysOwnedObjects(t *testing.T) {
 	}{{"rollback", false, nil, 0}, {"committed", true, nil, 3}, {"unknown", false, mediaapp.ErrUnavailable, 3}} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, objects := &personalUploadFake{commitErr: context.Canceled, exists: tc.exists, existsErr: tc.checkErr}, &uploadObjectsFake{}
-			service := mediaapp.NewScopedUploadService(&uploadRepoFake{}, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+			service := unitRoutedUploadService(&uploadRepoFake{}, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 			in := uploadInput(t)
 			in.Request.ProjectID = uuid.Nil
-			if _, err := service.UploadPersonal(t.Context(), in); !errors.Is(err, context.Canceled) || len(objects.items) != tc.objects {
+			if _, err := fixturePersonalUpload(t.Context(), service, in); !errors.Is(err, context.Canceled) || len(objects.items) != tc.objects {
 				t.Fatal("unsafe unknown cleanup", err, len(objects.items))
 			}
 		})

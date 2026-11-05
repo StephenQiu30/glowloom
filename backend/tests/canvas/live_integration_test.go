@@ -67,7 +67,8 @@ func newLiveFixture(t *testing.T, lifetime ...context.Context) liveFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, db, nil, identityruntime.SessionDependencies{}, lifetime...)
+	storage := canvasRouterStorage(t, &cfg)
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, db, storage, identityruntime.SessionDependencies{}, lifetime...)
 	if err != nil {
 		t.Fatal(err)
 	}

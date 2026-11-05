@@ -14,18 +14,18 @@ import (
 // ControlTransfer records permanent, actor-scoped cancellation and recovery
 // commands. Only an ended execution can be retried or reconciled; an expired
 // lease alone is never proof that an old physical writer has stopped.
-func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.Principal, id, key uuid.UUID, revision int64, action string) (domain.TransferJob, error) {
+func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.Principal, id, key uuid.UUID, revision int64, action application.TransferAction) (domain.TransferJob, error) {
 	var result domain.TransferJob
 	if s == nil || s.db == nil {
 		return result, application.ErrUnavailable
 	}
-	if id == uuid.Nil || key == uuid.Nil || revision < 1 || action != "cancel" && action != "retry" && action != "reconcile" {
+	if id == uuid.Nil || key == uuid.Nil || revision < 1 || action != application.TransferActionCancel && action != application.TransferActionRetry && action != application.TransferActionReconcile {
 		return result, domain.ErrInvalidLibrary
 	}
 	hash, err := transferHash(struct {
-		ID       uuid.UUID `json:"id"`
-		Revision int64     `json:"revision"`
-		Action   string    `json:"action"`
+		ID       uuid.UUID                  `json:"id"`
+		Revision int64                      `json:"revision"`
+		Action   application.TransferAction `json:"action"`
 	}{id, revision, action})
 	if err != nil {
 		return result, err
@@ -66,61 +66,62 @@ func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.P
 		if row.Revision != revision {
 			return domain.ErrTransferConflict
 		}
-		emit := ""
+		var emit application.TransferAction
+		emitEvent := false
 		switch action {
-		case "cancel":
-			if row.Status == "cancelled" {
+		case application.TransferActionCancel:
+			if row.Status == domain.TransferStatusCancelled {
 				break
 			}
-			if row.Status == "succeeded" || row.Status == "partial_failed" || row.Status == "failed" {
+			if row.Status == domain.TransferStatusSucceeded || row.Status == domain.TransferStatusPartialFailed || row.Status == domain.TransferStatusFailed {
 				return domain.ErrTransferConflict
 			}
-			var started bool
-			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.transfer_object WHERE job_id=? AND write_started)`, id).Scan(&started).Error; err != nil {
+			physical, err := storageExists(tx.Model(&transferObjectRow{}).Where("job_id = ?", id))
+			if err != nil {
 				return err
 			}
-			if row.Status == "queued" && row.ProcessEnded && !row.ExecutionUnconfirmed && !started {
-				if err := tx.Exec(`UPDATE media.transfer_item SET status='cancelled',failure_code='cancelled' WHERE job_id=? AND status='queued'`, id).Error; err != nil {
+			if row.Status == domain.TransferStatusQueued && row.ProcessEnded && !row.ExecutionUnconfirmed && !physical {
+				if err := tx.Model(&transferItemRow{}).Where("job_id = ? AND status = ?", id, domain.TransferItemStatusQueued).Updates(map[string]any{"status": domain.TransferItemStatusCancelled, "failure_code": domain.TransferFailureCancelled}).Error; err != nil {
 					return err
 				}
-				if err := libraryChanged(tx, `UPDATE media.transfer_job SET status='cancelled',stage='completed',cancellation_requested=true,revision=revision+1,updated_at=? WHERE id=? AND revision=?`, s.clock().UTC(), id, revision); err != nil {
+				if err := updateOne(tx, "media.transfer_job", map[string]any{"id": id, "revision": revision}, map[string]any{"status": domain.TransferStatusCancelled, "stage": domain.TransferStageCompleted, "cancellation_requested": true, "revision": revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 					return err
 				}
 			} else {
-				if err := libraryChanged(tx, `UPDATE media.transfer_job SET status='cancel_requested',stage='cleanup',cancellation_requested=true,revision=revision+1,updated_at=? WHERE id=? AND revision=?`, s.clock().UTC(), id, revision); err != nil {
+				if err := updateOne(tx, "media.transfer_job", map[string]any{"id": id, "revision": revision}, map[string]any{"status": domain.TransferStatusCancelRequested, "stage": domain.TransferStageCleanup, "cancellation_requested": true, "revision": revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 					return err
 				}
-				emit = "cancel"
+				emit = application.TransferActionCancel
+				emitEvent = true
 			}
-		case "retry", "reconcile":
-			if action == "retry" && row.CancellationRequested {
+		case application.TransferActionRetry, application.TransferActionReconcile:
+			if action == application.TransferActionRetry && row.CancellationRequested {
 				return domain.ErrTransferConflict
 			}
 			if !row.ProcessEnded || row.ExecutionUnconfirmed || row.Attempt >= 2147483647 {
 				return domain.ErrTransferConflict
 			}
-			if action == "retry" && (row.Status != "failed" && row.Status != "partial_failed" || row.NeedsReconciliation) || action == "reconcile" && (row.Status != "needs_reconciliation" || !row.NeedsReconciliation) {
+			if action == application.TransferActionRetry && (row.Status != domain.TransferStatusFailed && row.Status != domain.TransferStatusPartialFailed || row.NeedsReconciliation) || action == application.TransferActionReconcile && (row.Status != domain.TransferStatusNeedsReconciliation || !row.NeedsReconciliation) {
 				return domain.ErrTransferConflict
 			}
-			if action == "retry" {
-				var unsafe bool
-				if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.transfer_object o JOIN media.transfer_item i USING(job_id,item_index) WHERE o.job_id=? AND i.status<>'succeeded' AND o.write_started AND o.status<>'removed')`, id).Scan(&unsafe).Error; err != nil {
+			if action == application.TransferActionRetry {
+				unsafe, err := storageExists(tx.Table("media.transfer_object AS o").Joins("JOIN media.transfer_item AS i ON i.job_id = o.job_id AND i.item_index = o.item_index").Where("o.job_id = ? AND i.status <> ? AND o.write_started = ? AND o.status <> ?", id, domain.TransferItemStatusSucceeded, true, application.ProjectCopyObjectRemoved))
+				if err != nil {
 					return err
 				}
 				if unsafe {
 					return domain.ErrTransferConflict
 				}
-				if err := tx.Exec(`UPDATE media.transfer_object o SET status='pending',write_started=false FROM media.transfer_item i WHERE o.job_id=i.job_id AND o.item_index=i.item_index AND o.job_id=? AND i.status='failed'`, id).Error; err != nil {
+				if err := retryTransferItems(ctx, tx, row); err != nil {
 					return err
 				}
-				if err := tx.Exec(`UPDATE media.transfer_item SET status='queued',failure_code=NULL WHERE job_id=? AND status='failed'`, id).Error; err != nil {
-					return err
-				}
-				emit = "start"
+				emit = application.TransferActionStart
+				emitEvent = true
 			} else {
-				emit = "reconcile"
+				emit = application.TransferActionReconcile
+				emitEvent = true
 			}
-			if err := libraryChanged(tx, `UPDATE media.transfer_job SET status='queued',stage='frozen',attempt=attempt+1,revision=revision+1,needs_reconciliation=false,execution_id=NULL,worker_fence=NULL,lease_until=NULL,updated_at=? WHERE id=? AND revision=?`, s.clock().UTC(), id, revision); err != nil {
+			if err := updateOne(tx, "media.transfer_job", map[string]any{"id": id, "revision": revision}, map[string]any{"status": domain.TransferStatusQueued, "stage": domain.TransferStageFrozen, "attempt": row.Attempt + 1, "revision": row.Revision + 1, "needs_reconciliation": false, "execution_id": nil, "worker_fence": nil, "lease_until": nil, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict); err != nil {
 				return err
 			}
 		}
@@ -132,7 +133,7 @@ func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.P
 		if err != nil {
 			return err
 		}
-		return recordTransferCommand(tx, actor, key, hash, action, result, emit)
+		return recordTransferCommand(tx, actor, key, hash, action, emit, emitEvent, result)
 	})
 	return result, err
 }

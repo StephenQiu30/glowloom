@@ -3,10 +3,11 @@ package canvas_test
 import (
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
-	"github.com/google/uuid"
 )
 
 func TestTimelineRelationsPersistAtomicallyAndRejectStaleMediaDuration(t *testing.T) {

@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -25,21 +26,28 @@ import (
 
 func purgeScopeFixture(t *testing.T) (*gorm.DB, identity.Principal, uuid.UUID, uuid.UUID, media.PurgeWorkID) {
 	t.Helper()
-	dsn := os.Getenv("GLOWLOOM_TEST_EXISTING_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_APP_SCOPE_DB_DSN")
 	if dsn == "" {
-		t.Skip("existing database connection absent; integration not verified")
+		t.Skip("set isolated GLOWLOOM_TEST_APP_SCOPE_DB_DSN; integration not verified")
+	}
+	fixtureURL, err := url.Parse(dsn)
+	if err != nil || (fixtureURL.Hostname() != "127.0.0.1" && fixtureURL.Hostname() != "localhost") || strings.TrimPrefix(fixtureURL.Path, "/") != "glowloom_app_scope_test" {
+		t.Fatal("app scope fixture requires the dedicated loopback glowloom_app_scope_test database")
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 20*time.Second)
 	t.Cleanup(cancel)
 	conn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
 	if err != nil {
-		t.Fatal("connect existing database")
+		t.Fatal("connect isolated app scope database")
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	var before int64
 	var packageInstalled bool
 	if err := conn.DB.Raw(`SELECT to_regclass('media.package_job') IS NOT NULL`).Scan(&packageInstalled).Error; err != nil {
 		t.Fatal(err)
+	}
+	if !packageInstalled {
+		t.Fatal("database is missing the complete current schema; initialize it from db/schema.sql")
 	}
 	if err := conn.DB.Raw(`SELECT count(*) FROM workspace.project WHERE name='scope-review-purge'`).Scan(&before).Error; err != nil {
 		t.Fatal(err)
@@ -77,26 +85,6 @@ func purgeScopeFixture(t *testing.T) (*gorm.DB, identity.Principal, uuid.UUID, u
 	}
 	if !identityReady || !scopeReady {
 		t.Fatal("database is missing the complete schema; initialize it from db/schema.sql")
-	}
-	// This existing database predates package support. Install only the exact
-	// canonical table declaration needed by the reference SELECT, inside the
-	// rollback transaction; no package rows or persistent schema are created.
-	if !packageInstalled {
-		body, err := os.ReadFile("../../db/schema.sql")
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, declaration, found := strings.Cut(string(body), "CREATE TABLE media.package_job (")
-		if !found {
-			t.Fatal("canonical package table declaration missing")
-		}
-		definition, _, found := strings.Cut(declaration, "\n);")
-		if !found {
-			t.Fatal("canonical package table declaration incomplete")
-		}
-		if err := tx.Exec("CREATE TABLE media.package_job (" + definition + "\n);").Error; err != nil {
-			t.Fatal(err)
-		}
 	}
 	now := time.Now().UTC()
 	hash, err := identitydomain.HashPassword("test only sufficiently long password", "")

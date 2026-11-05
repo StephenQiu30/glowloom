@@ -68,7 +68,7 @@ func TestAssistantSessionPrivateBindingReplayAndFreeze(t *testing.T) {
 		t.Fatal("unresolved turn skipped", err)
 	}
 	op, sub := uuid.New(), uuid.New()
-	if err = owner.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,region) VALUES(?,?,'agent_session','text.generate','test','test','agent','completed','domestic')`, op, p).Error; err != nil {
+	if err = owner.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,region,model_profile_version_id) VALUES(?,?,'free','text.generate','test','test','agent','completed','domestic',gen_random_uuid())`, op, p).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err = owner.Exec(`INSERT INTO operation.prompt_submission(id,actor_id,project_id,owner_key,epoch,operation_id,confirm_key,input_source,snapshot,quote,state) VALUES(?,?,?,?,1,?,?,'{}','{}','{}','accepted')`, sub, a.ID, p, "draft/"+draft.String(), op, uuid.New()).Error; err != nil {

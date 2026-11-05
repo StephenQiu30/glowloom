@@ -1,7 +1,6 @@
 package application
 
 import (
-	"crypto/sha256"
 	"errors"
 	"math"
 	"slices"
@@ -23,7 +22,25 @@ var (
 	ErrPackageUnsupportedKind = errors.New("unsupported media library package item kind")
 )
 
+// PackageStatus is the persisted lifecycle of a package import.
+type PackageStatus string
+
+// PackageObjectStatus is the lifecycle of one staged package object.
+type PackageObjectStatus string
+
+// Package constants identify the owning application and manifest schema.
 const (
+	LibraryPackageApplication  = "glowloom-media-library"
+	LibraryPackageVersion      = 1
+	LibraryPackageSourceFormat = LibraryPackageApplication + "-v1"
+
+	PackageStatusNeedsReconciliation PackageStatus       = "needs_reconciliation"
+	PackageStatusSucceeded           PackageStatus       = "succeeded"
+	PackageStatusCancelled           PackageStatus       = "cancelled"
+	PackageObjectStatusPending       PackageObjectStatus = "pending"
+	PackageObjectStatusVerified      PackageObjectStatus = "verified"
+	PackageObjectStatusRemoved       PackageObjectStatus = "removed"
+
 	// MaxPackageBytes bounds the actual compressed input/output archive.
 	MaxPackageBytes int64 = 500 << 20
 	// MaxPackageExpandedBytes bounds every actual decompressed entry together.
@@ -46,13 +63,13 @@ type LibraryPackageFolder struct {
 // LibraryPackageItem is a declarative source record. Its ID is remapped by the
 // owning import admission; no source execution/review identity can be carried.
 type LibraryPackageItem struct {
-	ID        string          `json:"id"`
-	Kind      string          `json:"kind"`
-	Metadata  LibraryMetadata `json:"metadata"`
-	State     string          `json:"catalog_state"`
-	TrashedAt *time.Time      `json:"trashed_at"`
-	Position  int64           `json:"position"`
-	FilePath  *string         `json:"file_path"`
+	ID        string                  `json:"id"`
+	Kind      string                  `json:"kind"`
+	Metadata  LibraryMetadata         `json:"metadata"`
+	State     domain.LibraryItemState `json:"catalog_state"`
+	TrashedAt *time.Time              `json:"trashed_at"`
+	Position  int64                   `json:"position"`
+	FilePath  *string                 `json:"file_path"`
 }
 
 // LibraryPackageFile closes the contained binary identity independently of any
@@ -84,7 +101,7 @@ type PackageWarning struct {
 }
 
 func (m LibraryPackageManifest) validate() error {
-	if !publishedPackageApp(m.App) || m.Version != 1 || m.ExportedAt.IsZero() ||
+	if m.App != LibraryPackageApplication || m.Version != LibraryPackageVersion || m.ExportedAt.IsZero() ||
 		!slices.Contains([]domain.LibraryKind{domain.LibraryPersonal, domain.LibraryProject}, m.LibraryKind) ||
 		m.Folders == nil || m.Items == nil || m.Files == nil || len(m.Items) > MaxPackageEntries || len(m.Folders) > MaxPackageEntries || len(m.Files) >= MaxPackageEntries {
 		return ErrInvalidPackage
@@ -166,13 +183,4 @@ func packageFileKind(kind string, f LibraryPackageFile) bool {
 		return false
 	}
 	return slices.Contains(allowed, f.MIMEType) && f.ByteSize <= maxBytes
-}
-
-// Historical version-1 archives identify their published format by this exact
-// marker fingerprint. It is read-only compatibility, never a new export label.
-func publishedPackageApp(app string) bool {
-	if app == "glowloom-media-library" {
-		return true
-	}
-	return sha256.Sum256([]byte(app)) == [sha256.Size]byte{0x3f, 0xd5, 0xa9, 0xc0, 0xf9, 0x63, 0xb2, 0xbc, 0xe8, 0x7f, 0x89, 0x53, 0xc2, 0xeb, 0x34, 0x51, 0x89, 0xd5, 0xa7, 0x9b, 0xbd, 0xab, 0x21, 0x31, 0xec, 0x02, 0xf0, 0xc4, 0xe9, 0x98, 0xe8, 0xdd}
 }

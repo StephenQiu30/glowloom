@@ -11,12 +11,11 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
-func purgeBinaryFixture(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.UUID, mediaapp.PurgeInput, []string, mediaapp.PurgeObjects) {
+func purgeBinaryFixture(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.UUID, mediaapp.PurgeInput, []string, purgeFixtureObjects) {
 	t.Helper()
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
@@ -32,13 +31,13 @@ func purgeBinaryFixture(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.
 	})
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "update_item", ItemID: &result.Asset.ID, Metadata: &mediaapp.LibraryMetadata{Title: "仅合成测试原件", Category: "material", Tags: []string{}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: scope, Key: uuid.New(), Action: "update_item", ItemID: &result.Asset.ID, Metadata: &mediaapp.LibraryMetadata{Title: "仅合成测试原件", Category: "material", Tags: []string{}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "recycle_items", ExpectedRevision: 1, Items: []mediaapp.LibraryItemRevision{{ID: result.Asset.ID, Revision: 1}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "recycle_items", ExpectedRevision: 1, Items: []mediaapp.LibraryItemRevision{{ID: result.Asset.ID, Revision: 2}}}); err != nil {
 		t.Fatal(err)
 	}
-	return actor, project, mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: result.Asset.ID, Revision: 2}}, ExpectedRevision: 2, ExpectedProjectRevision: 3, PermanentDeleteConfirmed: true, Key: uuid.New()}, keys, copyobjects.NewProjectCopyObjects(objects)
+	return actor, project, mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: result.Asset.ID, Revision: 3}}, ExpectedRevision: 2, ExpectedProjectRevision: 3, PermanentDeleteConfirmed: true, Key: uuid.New()}, keys, mediaFixturePurgeObjects(t)
 }
 
 func TestMediaPurgeActualOriginalAndEveryRenditionAbsentBeforeTombstone(t *testing.T) {
@@ -55,7 +54,7 @@ func TestMediaPurgeActualOriginalAndEveryRenditionAbsentBeforeTombstone(t *testi
 		t.Fatal("real private-object cleanup", completed, err)
 	}
 	for _, key := range keys {
-		present, err := objects.Exists(t.Context(), key)
+		present, err := glbTestObjects(t).Exists(t.Context(), key)
 		if err != nil || present {
 			t.Fatal("declared success while actual original or rendition exists", key, err)
 		}
@@ -78,14 +77,14 @@ func TestMediaPurgeActualOriginalAndEveryRenditionAbsentBeforeTombstone(t *testi
 }
 
 type purgeUnknownRemove struct {
-	mediaapp.PurgeObjects
+	purgeFixtureObjects
 	once        bool
 	removeCount int
 }
 
-func (p *purgeUnknownRemove) Remove(ctx context.Context, key string) error {
+func (p *purgeUnknownRemove) RemovePurge(ctx context.Context, object mediaapp.PurgeObject) error {
 	p.removeCount++
-	if err := p.PurgeObjects.Remove(ctx, key); err != nil {
+	if err := p.purgeFixtureObjects.RemovePurge(ctx, object); err != nil {
 		return err
 	}
 	if p.once {
@@ -103,7 +102,7 @@ func TestMediaPurgeActualUnknownDeleteReconcileOriginalIntentAndPermanentKey(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	unknown := &purgeUnknownRemove{PurgeObjects: objects, once: true}
+	unknown := &purgeUnknownRemove{purgeFixtureObjects: objects, once: true}
 	current, err := mediaapp.NewPurgeWorker(repo.Worker, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil || current.Status != "needs_reconciliation" || !current.NeedsReconciliation || unknown.removeCount != 1 {
 		t.Fatal("unknown actual deletion was not retained", current, err)
@@ -150,7 +149,7 @@ func TestMediaPurgeFailureReceiptErrorIsReturnedAfterActualPhysicalOwnerEnds(t *
 	}
 	want := errors.New("owning failure receipt unavailable")
 	fault := purgeFailureReceiptFault{PurgeWorkerRepository: repo.Worker, err: want}
-	unknown := &purgeUnknownRemove{PurgeObjects: objects, once: true}
+	unknown := &purgeUnknownRemove{purgeFixtureObjects: objects, once: true}
 	current, err := mediaapp.NewPurgeWorker(fault, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if !errors.Is(err, want) {
 		t.Fatal("failed durable receipt was silently discarded", current, err)

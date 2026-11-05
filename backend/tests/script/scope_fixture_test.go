@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	composition "github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
@@ -38,20 +38,20 @@ func scriptFixtureCopyAccess(tx *gorm.DB, authority workspaceapp.ProjectCopyAuth
 	return workspacepg.NewScopedProjectCopyAccessStore(tx, authority, scriptFixtureRequestScope, scriptFixtureWorkerScope)
 }
 func scriptFixtureMediaStore(db *gorm.DB) *mediapg.Store {
-	return mediapg.NewScopedStore(db, composition.NewMediaScopeAccess)
+	return mediapg.NewScopedStore(db, mediawire.NewMediaScopeAccess)
 }
 func scriptFixtureDocumentStore(db *gorm.DB) *mediapg.DocumentSourceStore {
-	return mediapg.NewScopedDocumentSourceStore(db, composition.NewMediaScopeAccess)
+	return mediapg.NewScopedDocumentSourceStore(db, mediawire.NewMediaScopeAccess)
 }
 func scriptFixtureWorkerDocumentStore(db *gorm.DB) *mediapg.DocumentSourceStore {
-	return mediapg.NewScopedDocumentSourceStore(db, composition.NewMediaWorkerScopeAccess)
+	return mediapg.NewScopedDocumentSourceStore(db, mediawire.NewMediaWorkerScopeAccess)
 }
 func scriptFixtureMediaCopyStore(db *gorm.DB) *mediapg.ProjectCopyStore {
-	return mediapg.NewScopedProjectCopyStore(db, composition.NewMediaWorkerScopeAccess)
+	return mediapg.NewScopedProjectCopyStore(db, mediawire.NewMediaWorkerScopeAccess).WithRoutedStorage()
 }
 
 func scriptFixtureCanvasCopyStore(db *gorm.DB, media canvaspg.MediaReaderFactory, copied canvaspg.CopyMediaReaderFactory) *canvaspg.ProjectCopyStore {
-	return canvaspg.NewScopedProjectCopyStore(db, media, copied, composition.NewWorkerCanvasProjectAccess)
+	return canvaspg.NewScopedProjectCopyStore(db, media, copied, mediawire.NewWorkerCanvasProjectAccess)
 }
 
 func scriptFixtureWorkspaceCopyWithScript(db *gorm.DB, work workspacepg.ProjectWorkFactory, owners workspacepg.ProjectCopyOwnersFactory, script workspacepg.ProjectCopyScriptOwnerFactory) *workspacepg.ProjectCopyStore {
@@ -61,7 +61,7 @@ func scriptFixtureWorkspaceCopyWithScript(db *gorm.DB, work workspacepg.ProjectW
 type scriptFixtureCopyBudgetAccess struct{ tx *gorm.DB }
 
 func (a scriptFixtureCopyBudgetAccess) AuthorizeBilling(ctx context.Context, actor identityapp.Principal, project uuid.UUID, _ bool) error {
-	return composition.NewMediaWorkerScopeAccess(a.tx).AuthorizeCopyTarget(ctx, actor, project)
+	return mediawire.NewMediaWorkerScopeAccess(a.tx).AuthorizeCopyTarget(ctx, actor, project)
 }
 func scriptFixtureBudgetStore(db *gorm.DB) *billingpg.Store {
 	return billingpg.NewScopedStore(db, func(tx *gorm.DB) billingapp.ProjectAccess { return scriptFixtureCopyBudgetAccess{tx} })
@@ -117,5 +117,5 @@ func scriptFixtureNonmember(t *testing.T, db *gorm.DB, owner identityapp.Princip
 }
 
 func scriptFixtureWorkerMediaStore(db *gorm.DB) *mediapg.Store {
-	return mediapg.NewScopedStore(db, composition.NewMediaWorkerScopeAccess)
+	return mediapg.NewScopedStore(db, mediawire.NewMediaWorkerScopeAccess)
 }

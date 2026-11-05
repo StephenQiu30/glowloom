@@ -21,17 +21,11 @@ type Store interface {
 	LoadWorkflowOperation(context.Context, uuid.UUID) (application.WorkflowOperation, error)
 	ClaimProviderDispatch(context.Context, application.ProviderDispatchIdentity) (application.ProviderDispatchResult, error)
 	LoadManagedCredential(context.Context, uuid.UUID) (application.ManagedCredential, error)
-	ManagedMediaKey(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (string, error)
 }
 
 // Unsealer authenticates a saved credential's connection identity.
 type Unsealer interface {
 	Open(string, uuid.UUID, uuid.UUID, []byte) ([]byte, error)
-}
-
-// Signer issues a temporary URL for a project-authorized media object.
-type Signer interface {
-	PresignGet(context.Context, string, time.Duration) (string, error)
 }
 
 // SubjectInputSigner signs only an exact frozen operation input through its
@@ -56,19 +50,17 @@ type Activities struct {
 	keys    Unsealer
 	client  application.GenerationProvider
 	results *application.ManagedResults
-	signer  Signer
 	video   VideoReader
 }
 
 // NewActivities explicitly injects private persistence, HTTP and media dependencies.
-func NewActivities(store Store, keys Unsealer, client application.GenerationProvider, results *application.ManagedResults, signer Signer, video VideoReader) *Activities {
-	return &Activities{store: store, keys: keys, client: client, results: results, signer: signer, video: video}
+func NewActivities(store Store, keys Unsealer, client application.GenerationProvider, results *application.ManagedResults, video VideoReader) *Activities {
+	return &Activities{store: store, keys: keys, client: client, results: results, video: video}
 }
 
 // Step never resubmits a claimed operation, even after a timeout or worker crash.
 func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (output application.ManagedProgress, resultErr error) {
-	defer func() { resultErr = executionAuthorityError(resultErr) }()
-	unknown := application.ManagedProgress{State: "unknown"}
+	unknown := application.ManagedProgress{State: application.ManagedProgressUnknown}
 	if input.OperationID == uuid.Nil || (input.Action != "submit" && input.Action != "query" && input.Action != "recover") {
 		return unknown, application.ErrInvalidProviderCall
 	}
@@ -85,7 +77,7 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	if err != nil {
 		return unknown, err
 	}
-	if saved != nil && (saved.State == "succeeded" || input.Action != "query") {
+	if saved != nil && (saved.State == application.ManagedResultSucceeded || input.Action != "query") {
 		return progress(*saved), nil
 	}
 	if input.Action == "recover" {
@@ -97,13 +89,13 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	if input.Action == "submit" {
 		claim, claimErr := a.store.ClaimProviderDispatch(ctx, identity)
 		if errors.Is(claimErr, application.ErrManagedCapacity) {
-			return application.ManagedProgress{State: "waiting"}, nil
+			return application.ManagedProgress{State: application.ManagedProgressWaiting}, nil
 		}
 		if errors.Is(claimErr, application.ErrProviderDispatchCancelled) {
-			return application.ManagedProgress{State: "not_submitted", ErrorCode: "provider_dispatch_cancelled"}, nil
+			return application.ManagedProgress{State: application.ManagedProgressNotSubmitted, ErrorCode: "provider_dispatch_cancelled"}, nil
 		}
 		if errors.Is(claimErr, application.ErrWorkflowModelUnavailable) {
-			return application.ManagedProgress{State: "not_submitted", ErrorCode: "provider_unavailable"}, nil
+			return application.ManagedProgress{State: application.ManagedProgressNotSubmitted, ErrorCode: "provider_unavailable"}, nil
 		}
 		if claimErr != nil {
 			return unknown, claimErr
@@ -134,7 +126,7 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	if input.Action == "submit" {
 		request, requestErr := a.request(ctx, loaded, config)
 		if requestErr != nil {
-			return application.ManagedProgress{State: "not_submitted", ErrorCode: "input_unavailable"}, nil
+			return application.ManagedProgress{State: application.ManagedProgressNotSubmitted, ErrorCode: "input_unavailable"}, nil
 		}
 		result, err = a.client.Submit(ctx, request, providerKey)
 		if config.AdapterKey == "deepseek" {
@@ -148,26 +140,26 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		return unknown, nil
 	}
 	switch result.Outcome {
-	case "not_submitted":
-		return application.ManagedProgress{State: result.Outcome, ErrorCode: result.ErrorCode}, nil
-	case "rejected", "unknown":
-		return application.ManagedProgress{State: "unknown", ErrorCode: result.ErrorCode}, nil
-	case "accepted":
-		evidence := application.ManagedResult{Identity: identity, State: "accepted", TaskID: result.TaskID}
+	case application.ProviderOutcomeNotSubmitted:
+		return application.ManagedProgress{State: application.ManagedProgressState(result.Outcome), ErrorCode: result.ErrorCode}, nil
+	case application.ProviderOutcomeRejected, application.ProviderOutcomeUnknown:
+		return application.ManagedProgress{State: application.ManagedProgressUnknown, ErrorCode: result.ErrorCode}, nil
+	case application.ProviderOutcomeAccepted:
+		evidence := application.ManagedResult{Identity: identity, State: application.ManagedResultAccepted, TaskID: result.TaskID}
 		if err := a.results.Save(ctx, evidence); err != nil {
 			return unknown, err
 		}
 		return progress(evidence), nil
 	}
-	if result.State != "succeeded" {
+	if result.State != application.ProviderTaskSucceeded {
 		switch result.State {
-		case "pending", "running", "failed":
-			return application.ManagedProgress{State: result.State, TaskID: saved.TaskID, ErrorCode: result.ErrorCode}, nil
+		case application.ProviderTaskPending, application.ProviderTaskRunning, application.ProviderTaskFailed:
+			return application.ManagedProgress{State: application.ManagedProgressState(result.State), TaskID: saved.TaskID, ErrorCode: result.ErrorCode}, nil
 		default:
 			return unknown, nil
 		}
 	}
-	evidence := application.ManagedResult{ReceivedAt: receivedAt, Identity: identity, State: "succeeded", TaskID: result.TaskID, Text: result.Text, SupplierUsage: result.Usage, Subtitle: result.Subtitle}
+	evidence := application.ManagedResult{ReceivedAt: receivedAt, Identity: identity, State: application.ManagedResultSucceeded, TaskID: result.TaskID, Text: result.Text, SupplierUsage: result.Usage, Subtitle: result.Subtitle}
 	var duration int64
 	for index, item := range result.Images {
 		output, e := a.results.StageArtifact(ctx, identity, index+1, item.Bytes, item.MediaType)
@@ -290,7 +282,7 @@ func progress(r application.ManagedResult) application.ManagedProgress {
 	if r.Text != "" {
 		count = 1
 	}
-	return application.ManagedProgress{State: r.State, TaskID: r.TaskID, OutputCount: count}
+	return application.ManagedProgress{State: application.ManagedProgressState(r.State), TaskID: r.TaskID, OutputCount: count}
 }
 func (a *Activities) request(ctx context.Context, loaded application.WorkflowOperation, config catalogdomain.ProviderConfig) (application.GenerationRequest, error) {
 	op := loaded.Operation
@@ -319,30 +311,15 @@ func (a *Activities) request(ctx context.Context, loaded application.WorkflowOpe
 				request.References = append(request.References, ref)
 				continue
 			}
-			if owner, ok := a.store.(ProjectInputSigner); ok {
-				ref, handled, err := owner.ManagedProjectMediaReference(ctx, op.ID, op.ProjectID, input.ID)
-				if handled {
-					if err != nil {
-						return request, err
-					}
-					if ref.Role != input.Role || ref.MediaKind == "" {
-						return request, application.ErrWorkflowInputNotReady
-					}
-					request.References = append(request.References, ref)
-					continue
-				}
+			owner, ok := a.store.(ProjectInputSigner)
+			if !ok {
+				return request, application.ErrWorkflowInputNotReady
 			}
-			var url string
-			var err error
-			var key string
-			key, err = a.store.ManagedMediaKey(ctx, op.ID, op.ProjectID, *input.MediaAssetID)
-			if err == nil {
-				url, err = a.signer.PresignGet(ctx, key, 15*time.Minute)
+			ref, handled, err := owner.ManagedProjectMediaReference(ctx, op.ID, op.ProjectID, input.ID)
+			if err != nil || !handled || ref.Role != input.Role || ref.MediaKind == "" || ref.URL == "" {
+				return request, errors.Join(application.ErrWorkflowInputNotReady, err)
 			}
-			if err != nil {
-				return request, err
-			}
-			request.References = append(request.References, application.ProviderReference{Role: input.Role, URL: url})
+			request.References = append(request.References, ref)
 		}
 		if input.MaskAssetID != nil {
 			return request, application.ErrInvalidProviderCall

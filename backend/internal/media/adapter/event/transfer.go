@@ -40,7 +40,7 @@ type TransferHandler struct {
 	starter TransferStarter
 }
 
-// NewTransferHandler injects durable inbox, owning proof and Temporal delivery.
+// NewTransferHandler injects durable inbox, owning proof and external delivery.
 func NewTransferHandler(inbox TransferInbox, store TransferDeliveryStore, starter TransferStarter) *TransferHandler {
 	return &TransferHandler{inbox: inbox, store: store, starter: starter}
 }

@@ -28,15 +28,13 @@ import (
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
 	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 
 func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	objects := glbTestObjects(t)
 	owner := db
 	if os.Getenv("GLOWLOOM_TEST_PROJECT_EXPORT_OWNER_DSN") != "" {
@@ -67,9 +65,9 @@ func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T
 	}
 	sha := sha256.Sum256(source.Bytes())
 	download := &mediaapp.Downloaded{File: file, Size: int64(source.Len()), MIMEType: "image/png", SHA256: hex.EncodeToString(sha[:])}
-	defer download.Close()
-	upload := mediaapp.NewUploadService(mediaTestStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	uploaded, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "synthetic.png"}, File: download, LocalReviewConfirmed: true})
+	defer func() { _ = download.Close() }()
+	upload := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
+	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "synthetic.png"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +75,7 @@ func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T
 	timeline.Clips[0].Kind = "image"
 	timeline.Clips[0].AssetID = &uploaded.Asset.ID
 	timeline.ImportedAssets = []uuid.UUID{uploaded.Asset.ID}
-	canvasService := canvasfixture.NewService(mediaCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }))
+	canvasService := canvasfixture.NewService(mediaCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }))
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "时间线设置"})
 	if err != nil {
 		t.Fatal(err)
@@ -87,8 +85,8 @@ func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := mediawire.ProvideMediaExportStore(db)
-	workerStore := mediawire.ProvideMediaExportStoreWithAccess(db, mediawire.NewMediaWorkerScopeAccess)
+	store := mediawire.ProvideRoutedMediaExportStore(db, mediawire.NewMediaScopeAccess)
+	workerStore := mediawire.ProvideRoutedMediaExportStore(db, mediawire.NewMediaWorkerScopeAccess)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -108,7 +106,7 @@ func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T
 	router := gin.New()
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	toolhttp.NewHandler(store, toolapp.NewExportQuery(store, objects, objects)).Register(group)
+	toolhttp.NewHandler(store, toolapp.NewRoutedExportQuery(store, mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute)).Register(group)
 	body, err := json.Marshal(input)
 	if err != nil {
 		t.Fatal(err)
@@ -141,12 +139,12 @@ func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker := toolapp.NewWorker(workerStore, toolflow.NewObjects(objects), renderer, mediaflow.FFProber{}, mediaflow.FFRenderer{})
+	worker := toolapp.NewRoutedWorker(workerStore, mediatoolRoutedObjects(t, db), renderer, mediaflow.FFProber{}, mediaflow.FFRenderer{})
 	result, err := worker.Execute(t.Context(), toolapp.WorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()})
 	if err != nil || result.Status != tool.Succeeded || result.AssetID == nil {
 		t.Fatalf("automatic publication %+v %v", result, err)
 	}
-	asset, err := mediaapp.NewAssetQuery(mediaTestStore(db), objects).Reference(t.Context(), actor, project, *result.AssetID)
+	asset, err := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), actor, project, *result.AssetID)
 	if err != nil || asset.FileName != "时间线验证.mp4" || asset.Width == nil || *asset.Width != 854 || asset.Height == nil || *asset.Height != 480 {
 		t.Fatalf("referenceable settings output %+v %v", asset, err)
 	}
@@ -164,14 +162,14 @@ func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T
 }
 
 func TestTimelineExportHistoryRestoresNewestCreatedJob(t *testing.T) {
-	db := mediaStoreDB(t)
+	db := mediatoolFixtureDB(t)
 	actor, project := mediaStoreProject(t, db)
 	timeline := exportTimeline(t)
 	timeline.Tracks[0].Kind = "subtitle"
 	timeline.Clips[0].Kind = "subtitle"
 	timeline.Clips[0].AssetID = nil
 	timeline.Clips[0].Text = "历史"
-	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	input := toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1, Settings: &tool.ExportSettings{FileName: "历史"}}
 	first, err := store.Create(t.Context(), actor, project, uuid.New(), input)
 	if err != nil {
@@ -185,10 +183,10 @@ func TestTimelineExportHistoryRestoresNewestCreatedJob(t *testing.T) {
 	if newer.ID.String() > older.ID.String() {
 		newer, older = older, newer
 	}
-	if err := db.Exec(`UPDATE mediatool.export_job SET created_at=now()-interval '1 hour' WHERE id=?`, older.ID).Error; err != nil {
+	if err := mediatoolFixtureExec(t, db, `UPDATE mediatool.export_job SET created_at=now()-interval '1 hour' WHERE id=?`, older.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`UPDATE mediatool.export_job SET created_at=now() WHERE id=?`, newer.ID).Error; err != nil {
+	if err := mediatoolFixtureExec(t, db, `UPDATE mediatool.export_job SET created_at=now() WHERE id=?`, newer.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	page, err := store.List(t.Context(), actor, toolapp.ListInput{ProjectID: project, CanvasID: input.CanvasID, NodeID: input.NodeID, Limit: 1})

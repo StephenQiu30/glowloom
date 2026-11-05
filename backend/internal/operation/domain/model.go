@@ -32,6 +32,15 @@ var (
 // BatchStatus is the persisted lifecycle state of a batch.
 type BatchStatus string
 
+// BatchLaunchState is the durable reservation state for one batch member.
+type BatchLaunchState string
+
+// Batch launch states determine whether a batch can admit more operations.
+const (
+	BatchLaunchStateActive BatchLaunchState = "active"
+	BatchLaunchStateDone   BatchLaunchState = "done"
+)
+
 // Batch lifecycle values match operation.batch.status.
 const (
 	BatchStatusQuoted    BatchStatus = "quoted"
@@ -158,12 +167,7 @@ func (o Operation) Validate() error {
 	if o.Source != nil && (!o.Source.Valid() || o.Origin != "canvas" || o.TargetType != "free") {
 		return ErrInvalidOperation
 	}
-	if o.Origin != "upload" && (o.Region == nil ||
-		(o.ModelProfileVersionID == nil && o.TargetType != "agent_session")) {
-		return ErrInvalidOperation
-	}
-	if o.TargetType == "agent_session" &&
-		(o.ModelProfileVersionID != nil || o.PriceRuleVersionID != nil) {
+	if o.Origin != "upload" && (o.Region == nil || o.ModelProfileVersionID == nil) {
 		return ErrInvalidOperation
 	}
 	if o.ReusedFromID != nil && (*o.ReusedFromID == o.ID || o.ForceRegenerate ||
@@ -175,7 +179,7 @@ func (o Operation) Validate() error {
 			!o.QuoteExpiresAt.After(o.CreateTime) {
 			return ErrInvalidOperation
 		}
-		if *o.QuoteMicros > 0 && o.PriceRuleVersionID == nil && o.TargetType != "agent_session" {
+		if *o.QuoteMicros > 0 && o.PriceRuleVersionID == nil {
 			return ErrInvalidOperation
 		}
 	}
@@ -266,7 +270,7 @@ func validTargetType(value string) bool {
 	switch value {
 	case "", "shot_frame", "shot_take", "reference_slot", "dialogue_audio",
 		"voice_preview", "episode_split", "episode_parse", "bible_extract",
-		"scene_storyboard", "agent_session", "free":
+		"scene_storyboard", "free":
 		return true
 	default:
 		return false

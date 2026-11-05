@@ -9,17 +9,18 @@ import (
 	"testing"
 	"time"
 
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+
+	copytask "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/testsuite"
 
 	mo "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	wh "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	wf "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/workflow"
 	wa "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	wd "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func copyHTTPRequest(t *testing.T, r *gin.Engine, method, path, body string, key uuid.UUID) *httptest.ResponseRecorder {
@@ -94,21 +95,8 @@ func TestProjectCopyRealHTTPWorkflowAndRefreshRecovery(t *testing.T) {
 	if stale.Code != 409 {
 		t.Fatal("stale cancel accepted", stale.Code)
 	}
-	actual := actualCopyWorker(t, db, mo.NewProjectCopyObjects(objects))
-	activities := wf.NewProjectCopyActivities(actual, store)
-	suite := testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
-	env.RegisterWorkflow(wf.ProjectCopyWorkflow)
-	env.RegisterActivityWithOptions(activities.ExecuteProjectCopy, activity.RegisterOptions{Name: wf.ExecuteCopyActivity})
-	env.RegisterActivityWithOptions(activities.InterruptProjectCopy, activity.RegisterOptions{Name: wf.InterruptCopyActivity})
-	env.ExecuteWorkflow(wf.ProjectCopyWorkflow, wa.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: first.ID})
-	if err := env.GetWorkflowError(); err != nil {
-		t.Fatal("real copy SDK workflow", err)
-	}
-	var result wd.ProjectCopyJob
-	if err := env.GetWorkflowResult(&result); err != nil || result.Status != "succeeded" {
-		t.Fatal("real copy workflow completion", err)
-	}
+	actual := actualCopyWorker(t, db, mo.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)))
+	taskfixture.RunWork(t, db, copytask.Copy, map[string]any{"JobID": first.ID}, copytask.CopyHandler(actual, store))
 	fresh := decodeCopyHTTP(t, copyHTTPRequest(t, router, "GET", get, "", uuid.New()), 200)
 	if fresh.Status != "succeeded" || fresh.CompletedAssets != fresh.Assets || fresh.CompletedDocuments != fresh.Documents || fresh.CompletedRenditions != fresh.Renditions {
 		t.Fatal("actual refreshed receipts", fresh)

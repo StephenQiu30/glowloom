@@ -11,6 +11,25 @@ import (
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
+// AssetCommandAction is one closed operation supported by the canvas asset API.
+type AssetCommandAction string
+
+// Asset commands are the accepted mutations of canvas asset catalog state.
+const (
+	AssetCommandFavorite AssetCommandAction = "favorite"
+	AssetCommandRename   AssetCommandAction = "rename"
+	AssetCommandDelete   AssetCommandAction = "delete"
+)
+
+// AssetCommandStatus is the outcome of one item in a partial batch receipt.
+type AssetCommandStatus string
+
+// Asset command states distinguish accepted, failed and recoverable outcomes.
+const (
+	AssetCommandSucceeded AssetCommandStatus = "succeeded"
+	AssetCommandFailed    AssetCommandStatus = "failed"
+)
+
 // AssetCommandItem binds an object to the revisions displayed before confirmation.
 type AssetCommandItem struct {
 	ID                       uuid.UUID `json:"id"`
@@ -21,7 +40,7 @@ type AssetCommandItem struct {
 
 // AssetCommandInput is a closed object-level mutation; rename is always single-item.
 type AssetCommandInput struct {
-	Action   string             `json:"action" enums:"favorite,rename,delete"`
+	Action   AssetCommandAction `json:"action" enums:"favorite,rename,delete"`
 	Favorite *bool              `json:"favorite,omitempty"`
 	Name     string             `json:"name,omitempty"`
 	Items    []AssetCommandItem `json:"items"`
@@ -33,15 +52,15 @@ func (i AssetCommandInput) Validate() error {
 		return domain.ErrInvalidCommand
 	}
 	switch i.Action {
-	case "favorite":
+	case AssetCommandFavorite:
 		if i.Favorite == nil || i.Name != "" {
 			return domain.ErrInvalidCommand
 		}
-	case "rename":
+	case AssetCommandRename:
 		if len(i.Items) != 1 || i.Favorite != nil || strings.TrimSpace(i.Name) != i.Name || i.Name == "" || !utf8.ValidString(i.Name) || utf8.RuneCountInString(i.Name) > 50 {
 			return domain.ErrInvalidCommand
 		}
-	case "delete":
+	case AssetCommandDelete:
 		if i.Favorite != nil || i.Name != "" {
 			return domain.ErrInvalidCommand
 		}
@@ -50,7 +69,7 @@ func (i AssetCommandInput) Validate() error {
 	}
 	seen := make(map[uuid.UUID]bool)
 	for _, item := range i.Items {
-		if item.ID == uuid.Nil || seen[item.ID] || item.ExpectedRevision < 0 || item.ExpectedFavoriteRevision < 0 || item.ExpectedProjectRevision < 0 || (i.Action != "favorite" && item.ExpectedRevision < 1) {
+		if item.ID == uuid.Nil || seen[item.ID] || item.ExpectedRevision < 0 || item.ExpectedFavoriteRevision < 0 || item.ExpectedProjectRevision < 0 || (i.Action != AssetCommandFavorite && item.ExpectedRevision < 1) {
 			return domain.ErrInvalidCommand
 		}
 		seen[item.ID] = true
@@ -60,13 +79,13 @@ func (i AssetCommandInput) Validate() error {
 
 // AssetCommandResult reports only safe individual outcomes and their current revisions.
 type AssetCommandResult struct {
-	ID               uuid.UUID `json:"id"`
-	Status           string    `json:"status" enums:"succeeded,failed"`
-	Code             string    `json:"code"`
-	Revision         Revision  `json:"revision" swaggertype:"string"`
-	ProjectRevision  int64     `json:"project_revision"`
-	Favorite         bool      `json:"favorite"`
-	FavoriteRevision Revision  `json:"favorite_revision" swaggertype:"string"`
+	ID               uuid.UUID          `json:"id"`
+	Status           AssetCommandStatus `json:"status" enums:"succeeded,failed"`
+	Code             string             `json:"code"`
+	Revision         Revision           `json:"revision" swaggertype:"string"`
+	ProjectRevision  int64              `json:"project_revision"`
+	Favorite         bool               `json:"favorite"`
+	FavoriteRevision Revision           `json:"favorite_revision" swaggertype:"string"`
 }
 
 // AssetCommandReceipt preserves partial outcomes for an exact idempotent replay.

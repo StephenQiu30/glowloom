@@ -44,6 +44,7 @@ func glbTestObjects(t *testing.T) *objectstorage.Client {
 		Bucket    string `json:"bucket"`
 		AccessKey string `json:"access_key"`
 		SecretKey string `json:"secret_key"`
+		Region    string `json:"region"`
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields()
@@ -54,7 +55,7 @@ func glbTestObjects(t *testing.T) *objectstorage.Client {
 	if err != nil || endpoint.Scheme != "http" || endpoint.Hostname() != "127.0.0.1" || cfg.Bucket != "glowloom-receipt-test" {
 		t.Fatal("storage must be an isolated loopback test bucket")
 	}
-	objects, err := objectstorage.Open(cfg.Endpoint, cfg.Bucket, cfg.AccessKey, cfg.SecretKey, "")
+	objects, err := objectstorage.Open(cfg.Endpoint, cfg.Bucket, cfg.AccessKey, cfg.SecretKey, cfg.Region)
 	if err != nil {
 		t.Fatal("initialize synthetic private object storage")
 	}
@@ -97,8 +98,8 @@ func TestGLBUploadRealHTTPPrivateStorageReplayAndAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := mediaTestStore(database)
-	service := mediaapp.NewUploadService(store, mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	query := mediaapp.NewAssetQuery(store, objects)
+	service := mediaFixtureRoutedUpload(t, database, store, nil, mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
+	query := mediaapp.NewRoutedAssetQuery(store, mediaFixtureReadObjects(t), 5*time.Minute)
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")

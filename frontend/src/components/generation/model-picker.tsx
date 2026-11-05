@@ -32,7 +32,9 @@ export function ModelPicker({
   disabled,
   onSelect,
   onChooseProject,
+  label = "生成模型",
 }: {
+  label?: string;
   models: API.ModelResponse[];
   value: string | null | undefined;
   disabled: boolean;
@@ -48,10 +50,10 @@ export function ModelPicker({
         <Button
           type="button"
           variant="ghost"
-          aria-label="生成模型"
+          aria-label={label}
           aria-expanded={open}
           disabled={disabled}
-          className="max-w-60 justify-start"
+          className="max-w-60 min-w-0 justify-start max-md:min-h-11"
         >
           <Sparkles data-icon="inline-start" />
           <span className="truncate">
@@ -71,7 +73,7 @@ export function ModelPicker({
         {onChooseProject ? (
           <Empty>
             <EmptyHeader>
-              <EmptyTitle>选择生成模型</EmptyTitle>
+              <EmptyTitle>选择{label}</EmptyTitle>
               <EmptyDescription>
                 请先选择项目，再查看该项目的可用模型。
               </EmptyDescription>

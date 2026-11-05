@@ -23,18 +23,26 @@ func authorizeImportPublication(tx *gorm.DB, actor identityapp.Principal, projec
 	if a.JobID == uuid.Nil || a.WorkerID == uuid.Nil || a.PublicationKey == uuid.Nil || a.Attempt < 1 {
 		return domain.ErrInvalidSource
 	}
-	var valid bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.import_job j JOIN script.import_state s ON s.job_id=j.id JOIN script.import_attempt a ON a.job_id=j.id AND a.attempt=s.attempt WHERE j.id=? AND j.org_id=? AND j.project_id=? AND j.actor_id=? AND s.attempt=? AND a.publication_key=? AND s.status='running' AND s.io_state='running' AND s.io_owner_id=? AND NOT s.cancellation_requested)`, a.JobID, actor.OrgID, project, actor.ID, a.Attempt, a.PublicationKey, a.WorkerID).Scan(&valid).Error; err != nil {
+	var job scriptImportJobRow
+	if err := tx.Where("id = ? AND org_id = ? AND project_id = ? AND actor_id = ?", a.JobID, actor.OrgID, project, actor.ID).Take(&job).Error; err != nil {
 		return err
 	}
-	if !valid {
+	var state scriptImportStateRow
+	if err := tx.Where("job_id = ?", a.JobID).Take(&state).Error; err != nil {
+		return err
+	}
+	var attempt scriptImportAttemptRow
+	if err := tx.Where("job_id = ? AND attempt = ? AND publication_key = ?", a.JobID, a.Attempt, a.PublicationKey).Take(&attempt).Error; err != nil {
+		return err
+	}
+	if state.Attempt != a.Attempt || state.Status != domain.ImportStatusRunning || state.IOState != domain.ImportIOStateRunning || state.IOOwnerID == nil || *state.IOOwnerID != a.WorkerID || state.CancellationRequested || attempt.JobID != job.ID {
 		return application.ErrConflict
 	}
 	return nil
 }
 
 func validateImportedPlan(tx *gorm.DB, p application.WritePlan, a application.ImportAuthority) error {
-	if p.Command.Key != a.PublicationKey || p.Command.Action != "import" || len(p.NewSources) < 1 {
+	if p.Command.Key != a.PublicationKey || p.Command.Action != domain.SourceActionImport || len(p.NewSources) < 1 {
 		return domain.ErrInvalidSource
 	}
 	r, err := readImport(tx, identityapp.Principal{ID: p.ActorID, OrgID: p.OrgID}, p.Command.ProjectID, a.JobID, true)
@@ -57,7 +65,7 @@ func validateImportedPlan(tx *gorm.DB, p application.WritePlan, a application.Im
 		previous = index
 		f := r.Files[index]
 		result, found := findImportFileResult(r.Results, index)
-		if !found || result.Status != "succeeded" || source.Origin != "file" || source.LineageID != f.SourceID || source.Revision != 1 || source.PreviousID != nil || source.MediaAssetID == nil || *source.MediaAssetID != f.Source.AssetID || source.MediaRevision == nil || *source.MediaRevision != f.Source.Revision || source.MediaSHA256 == nil || *source.MediaSHA256 != f.Source.SHA256 || source.Original.SHA256 != f.Source.SHA256 || source.Original.ByteSize != f.Source.ByteSize || source.Original.MIME != f.Source.MIME || source.Rich.SHA256 != result.RichSHA256 || source.ContentHash != result.ContentHash || source.CharCount != result.CharCount {
+		if !found || result.Status != domain.ImportFileStatusSucceeded || source.Origin != domain.SourceOriginFile || source.LineageID != f.SourceID || source.Revision != 1 || source.PreviousID != nil || source.MediaAssetID == nil || *source.MediaAssetID != f.Source.AssetID || source.MediaRevision == nil || *source.MediaRevision != f.Source.Revision || source.MediaSHA256 == nil || *source.MediaSHA256 != f.Source.SHA256 || source.Original.SHA256 != f.Source.SHA256 || source.Original.ByteSize != f.Source.ByteSize || source.Original.MIME != f.Source.MIME || source.Rich.SHA256 != result.RichSHA256 || source.ContentHash != result.ContentHash || source.CharCount != result.CharCount {
 			return application.ErrObjectMismatch
 		}
 		provenance := domain.SourceProvenance{Encoding: result.Encoding, Mapping: result.Mapping, Warnings: result.Warnings}
@@ -69,7 +77,7 @@ func validateImportedPlan(tx *gorm.DB, p application.WritePlan, a application.Im
 	}
 	successes := 0
 	for _, out := range r.Results {
-		if out.Status == "succeeded" {
+		if out.Status == domain.ImportFileStatusSucceeded {
 			successes++
 		}
 	}
@@ -118,7 +126,8 @@ func finishImportedPublication(tx *gorm.DB, actor identityapp.Principal, p appli
 	if err != nil {
 		return err
 	}
-	if err := exactlyOne(tx.Exec(`INSERT INTO script.import_publication(job_id,attempt,response,created_at) VALUES(?,?,?::jsonb,?)`, a.JobID, a.Attempt, string(data), p.CreatedAt)); err != nil {
+	publication := scriptImportPublicationRow{JobID: a.JobID, Attempt: a.Attempt, Response: scriptJSON(data), CreatedAt: p.CreatedAt}
+	if err := exactlyOne(tx.Create(&publication)); err != nil {
 		return err
 	}
 	r, err := readImport(tx, actor, p.Command.ProjectID, a.JobID, true)
@@ -135,7 +144,7 @@ func finishImportedPublication(tx *gorm.DB, actor identityapp.Principal, p appli
 	}
 	j := r.Job
 	j.Status = domain.ImportOutcome(succeeded, failed)
-	j.Stage = "completed"
+	j.Stage = domain.ImportStageCompleted
 	j.LatestScriptRevision = receipt.ScriptRevision
 	j.LatestVersionID = &receipt.VersionID
 	j.NeedsReconciliation = false

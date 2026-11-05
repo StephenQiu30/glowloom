@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -59,9 +58,9 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	uploads := mediaapp.NewScopedUploadService(mediaTestStore(db), mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	uploads := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	repo := mediaPackageStore(db, libraryTestAccess, transferTestGuards, time.Now)
-	service := mediaapp.NewLibraryPackageService(repo, uploads, mediaobjects.NewProjectCopyObjects(objects), time.Now)
+	service := mediaapp.NewLibraryPackageService(repo, uploads, mediaFixturePackageObjects(t, db), time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	in := mediaapp.PackageImportRequest{Scope: scope, ExpectedRevision: 0, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
 	file := packageDownloaded(t, ownPackageZIP(t))
@@ -69,7 +68,14 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 	if err != nil || job.Status != "succeeded" || job.ItemCount != 2 || job.FolderCount != 1 || job.LibraryRevision != 1 || job.ProjectRevision != 2 {
 		t.Fatal("whole import", job, err)
 	}
-	keys, err := repo.StorageUsageKeys(t.Context(), actor, scope)
+	locations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), actor, scope)
+	keys := make([]string, 0, len(locations))
+	for _, ref := range locations {
+		if ref.Validate() != nil {
+			t.Fatal("invalid physical inventory identity")
+		}
+		keys = append(keys, ref.Key)
+	}
 	if err != nil || len(keys) != 4 {
 		t.Fatal("retained archive/original/two actual thumbnails", len(keys), err)
 	}
@@ -106,7 +112,14 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 	if err != nil || personalImport.Status != "succeeded" || personalImport.ID == job.ID {
 		t.Fatal("personal independent round trip", personalImport, err)
 	}
-	pkeys, err := repo.StorageUsageKeys(t.Context(), actor, personal)
+	plocations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), actor, personal)
+	pkeys := make([]string, 0, len(plocations))
+	for _, ref := range plocations {
+		if ref.Validate() != nil {
+			t.Fatal("invalid physical inventory")
+		}
+		pkeys = append(pkeys, ref.Key)
+	}
 	if err != nil || len(pkeys) != 4 {
 		t.Fatal(err)
 	}
@@ -132,12 +145,14 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 }
 
 type packageUnknownWrite struct {
-	mediaapp.PackageObjects
+	packageFixtureObjects
 	once bool
 }
 
-func (o *packageUnknownWrite) PutIfAbsent(ctx context.Context, key string, reader io.Reader, size int64, mime, digest string) error {
-	err := o.PackageObjects.PutIfAbsent(ctx, key, reader, size, mime, digest)
+func (o *packageUnknownWrite) PutPackage(ctx context.Context, object mediaapp.PackageObject, reader io.Reader) error {
+	bounded, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	err := o.packageFixtureObjects.PutPackage(bounded, object, reader)
 	if !o.once && err == nil {
 		o.once = true
 		return io.ErrUnexpectedEOF
@@ -153,10 +168,10 @@ func TestMediaPackageUnknownWritePersistsWholeBatchAndReconcilesWithoutNewIdenti
 	if err != nil {
 		t.Fatal(err)
 	}
-	uploads := mediaapp.NewScopedUploadService(mediaTestStore(db), mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	uploads := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	repo := mediaPackageStore(db, libraryTestAccess, transferTestGuards, time.Now)
-	base := mediaobjects.NewProjectCopyObjects(objects)
-	unknown := &packageUnknownWrite{PackageObjects: base}
+	base := mediaFixturePackageObjects(t, db)
+	unknown := &packageUnknownWrite{packageFixtureObjects: base}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	input := mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
 	job, err := mediaapp.NewLibraryPackageService(repo, uploads, unknown, time.Now).Import(t.Context(), actor, input, packageDownloaded(t, ownPackageZIP(t)))
@@ -175,7 +190,14 @@ func TestMediaPackageUnknownWritePersistsWholeBatchAndReconcilesWithoutNewIdenti
 	if err != nil || recovered.ID != job.ID || recovered.Status != "succeeded" {
 		t.Fatal("original durable recovery", recovered, err)
 	}
-	keys, err := repo.StorageUsageKeys(t.Context(), actor, scope)
+	locations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), actor, scope)
+	keys := make([]string, 0, len(locations))
+	for _, ref := range locations {
+		if ref.Validate() != nil {
+			t.Fatal("invalid physical inventory identity")
+		}
+		keys = append(keys, ref.Key)
+	}
 	if err != nil || len(keys) != 4 {
 		t.Fatal(err)
 	}
