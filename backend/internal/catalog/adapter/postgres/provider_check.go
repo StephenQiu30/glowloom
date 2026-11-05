@@ -162,7 +162,7 @@ func (s *Store) ListProviderTestModels(ctx context.Context, actor identityapp.Pr
  FROM catalog.model_profile m JOIN catalog.model_profile_version v ON v.id=m.current_version_id AND NOT v.is_delete
  JOIN catalog.model_release r ON r.model_id=m.id AND r.model_version_id=v.id AND r.status IN ('draft','active')
  JOIN catalog.provider p ON p.id=m.provider_id AND p.current_config_version_id=r.config_version_id AND NOT p.is_delete
- WHERE m.provider_id=? AND NOT m.is_delete ORDER BY m.id,(r.id=m.active_release_id) DESC,r.create_time DESC LIMIT 64`, id).Scan(&models).Error
+ WHERE m.provider_id=? AND m.status<>'archived' AND NOT m.is_delete ORDER BY m.id,(r.id=m.active_release_id) DESC,r.create_time DESC LIMIT 64`, id).Scan(&models).Error
 	})
 	return models, err
 }

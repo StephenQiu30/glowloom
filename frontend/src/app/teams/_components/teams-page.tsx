@@ -43,6 +43,7 @@ export function TeamsPage() {
         ) : null}
       </div>
       <form
+        id="team-create"
         className="rounded-xl border p-4"
         onSubmit={async (e) => {
           e.preventDefault();

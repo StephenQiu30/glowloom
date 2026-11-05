@@ -3,6 +3,7 @@ import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { PlatformTeamInvitations } from "./platform-team-invitations";
 import { Field, FieldLabel } from "@/components/ui/field";
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
@@ -262,7 +263,11 @@ function TeamAdministration() {
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading title="团队管理" />
+      <AdminHeading title="团队管理">
+        <Button variant="outline" asChild>
+          <Link href="/teams#team-create">创建团队</Link>
+        </Button>
+      </AdminHeading>
       <Collapsible asChild open={advanced} onOpenChange={setAdvanced}>
         <form
           aria-label="团队筛选"

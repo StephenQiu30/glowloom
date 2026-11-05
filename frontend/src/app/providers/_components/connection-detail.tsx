@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/select";
 import { useState, useId } from "react";
 import { providerConnectionName } from "@/lib/provider-connection-name";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Separator } from "@/components/ui/separator";
@@ -138,6 +139,8 @@ export function ConnectionDetail({
   const credentialID =
     detail?.credential?.status === "active" ? detail.credential.id : undefined;
   const musicCredential = provider?.adapter_key === "volcengine_music";
+  const archived = provider?.status === "archived";
+  const name = providerConnectionName(provider) ?? "";
   const config = settings?.config;
   const credentials = settings?.credentials ?? [];
 
@@ -153,7 +156,11 @@ export function ConnectionDetail({
         </Title>
         {provider ? (
           <Badge variant="secondary">
-            {provider.status === "active" ? "已启用" : "未启用"}
+            {archived
+              ? "已归档"
+              : provider.status === "active"
+                ? "已启用"
+                : "未启用"}
           </Badge>
         ) : null}
       </header>
@@ -182,7 +189,7 @@ export function ConnectionDetail({
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}
-          {!credentialID || editKey ? (
+          {archived ? null : !credentialID || editKey ? (
             <form
               onSubmit={async (event) => {
                 event.preventDefault();
@@ -304,7 +311,7 @@ export function ConnectionDetail({
               </Button>
             </div>
           )}
-          {credentialID ? (
+          {credentialID && !archived ? (
             <>
               <Separator />
               <ConnectionTests
@@ -364,6 +371,49 @@ export function ConnectionDetail({
                 </AlertDialogContent>
               </AlertDialog>
             ) : null}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant={archived ? "outline" : "ghost"}
+                  disabled={keyBusy}
+                >
+                  {archived ? "恢复连接" : "归档连接"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {archived ? "恢复连接？" : "归档连接？"}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {archived
+                      ? "连接将恢复为未启用。启用后才能接收新任务。"
+                      : "归档后停止接收新任务，保留模型、凭据和任务记录。"}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction
+                    variant={archived ? "default" : "destructive"}
+                    disabled={keyBusy}
+                    onClick={() =>
+                      void mutation.run("provider.update", id, (requestID) =>
+                        updateAdminProvider(
+                          { id },
+                          {
+                            expected_revision: provider.revision,
+                            status: archived ? "disabled" : "archived",
+                          },
+                          { headers: { "Idempotency-Key": requestID } },
+                        ),
+                      )
+                    }
+                  >
+                    {archived ? "确认恢复" : "确认归档"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           <Collapsible open={advanced} onOpenChange={setAdvanced}>
             <CollapsibleTrigger asChild>
@@ -379,6 +429,52 @@ export function ConnectionDetail({
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-col gap-4">
+              <form
+                key={provider.revision}
+                className="flex flex-col gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const value = new FormData(event.currentTarget).get("name");
+                  if (
+                    keyBusy ||
+                    typeof value !== "string" ||
+                    !value.trim() ||
+                    value.trim() === name
+                  )
+                    return;
+                  void mutation.run("provider.update", id, (requestID) =>
+                    updateAdminProvider(
+                      { id },
+                      {
+                        name: value.trim(),
+                        expected_revision: provider.revision,
+                      },
+                      { headers: { "Idempotency-Key": requestID } },
+                    ),
+                  );
+                }}
+              >
+                <Field>
+                  <FieldLabel htmlFor={`${formFieldId}-name`}>
+                    连接名称
+                  </FieldLabel>
+                  <Input
+                    id={`${formFieldId}-name`}
+                    name="name"
+                    defaultValue={name}
+                    required
+                    maxLength={100}
+                    disabled={keyBusy}
+                  />
+                </Field>
+                <Button
+                  variant="outline"
+                  className="self-end"
+                  disabled={keyBusy}
+                >
+                  保存连接名称
+                </Button>
+              </form>
               {settingsError ? (
                 <Alert variant="destructive">
                   <AlertDescription>

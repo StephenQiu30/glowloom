@@ -942,7 +942,7 @@ CREATE TABLE catalog.model_profile (
     CONSTRAINT model_profile_display_name_check CHECK ((btrim(display_name) <> ''::text)),
     CONSTRAINT model_profile_model_key_check CHECK ((btrim(model_key) <> ''::text)),
     CONSTRAINT model_profile_revision_check CHECK ((revision > 0)),
-    CONSTRAINT model_profile_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text])))
+    CONSTRAINT model_profile_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text, 'archived'::text])))
 );
 
 CREATE TABLE catalog.model_profile_version (
@@ -1049,7 +1049,7 @@ CREATE TABLE catalog.provider (
     CONSTRAINT provider_rate_limit_per_min_check CHECK ((rate_limit_per_min > 0)),
     CONSTRAINT provider_region_check CHECK ((region = ANY (ARRAY['domestic'::text, 'overseas'::text]))),
     CONSTRAINT provider_revision_check CHECK ((revision > 0)),
-    CONSTRAINT provider_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text])))
+    CONSTRAINT provider_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text, 'archived'::text])))
 );
 
 CREATE TABLE catalog.provider_check (

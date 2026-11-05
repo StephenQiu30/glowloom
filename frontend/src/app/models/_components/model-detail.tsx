@@ -18,6 +18,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   FieldSet,
@@ -58,10 +69,12 @@ import { ModelConfigurationCheck } from "./model-configuration-check";
 export function ModelDetail({
   id,
   capabilities,
+  providers = [],
   onSaved,
 }: {
   id: string;
   capabilities: API.CapabilitySummary[];
+  providers?: API.ProviderListItem[];
   onSaved: () => void;
 }) {
   const formFieldId = useId();
@@ -116,6 +129,10 @@ export function ModelDetail({
     return () => abort.abort();
   }, [id, readAttempt]);
   const model = detail?.model;
+  const archived = model?.status === "archived";
+  const providerStatus = providers.find(
+    (item) => item.provider?.id === model?.provider_id,
+  )?.provider?.status;
   const latest = detail?.versions?.[0];
   const latestPrice = detail?.prices?.[0];
   const active = releases.find((r) => r.status === "active");
@@ -164,19 +181,66 @@ export function ModelDetail({
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            {model?.status === "active"
-              ? "已启用"
-              : releases.some((release) => release.status === "retired")
-                ? "已停用"
-                : latestPrice
-                  ? "待验证"
-                  : "价格待审核"}{" "}
+            {archived
+              ? "已归档"
+              : model?.status === "active"
+                ? "已启用"
+                : releases.some((release) => release.status === "retired")
+                  ? "已停用"
+                  : latestPrice
+                    ? "待验证"
+                    : "价格待审核"}{" "}
             · 当前发布：
             {active
               ? `配置 ${detail.versions?.find((v) => v.id === active.model_version_id)?.version_no ?? "—"} / 价格 ${detail.prices?.find((p) => p.id === active.price_version_id)?.version_no ?? "—"}`
               : "尚未发布"}
           </p>
-          {model?.provider_id && latest?.id && config?.id ? (
+          {model ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="self-start"
+                  disabled={mutation.busy || !!mutation.pending}
+                >
+                  {archived ? "恢复模型" : "归档模型"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {archived ? "恢复模型？" : "归档模型？"}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {archived
+                      ? "模型将恢复为未启用，发布后才能接收新任务。"
+                      : "归档后从创作模型列表移除，保留版本、价格和任务记录。"}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction
+                    variant={archived ? "default" : "destructive"}
+                    onClick={() =>
+                      void mutation.run("model.status", id, (requestID) =>
+                        setAdminModelStatus(
+                          { id },
+                          {
+                            status: archived ? "disabled" : "archived",
+                            expected_revision: model.revision,
+                          },
+                          { headers: { "Idempotency-Key": requestID } },
+                        ),
+                      )
+                    }
+                  >
+                    {archived ? "确认恢复" : "确认归档"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
+          {!archived && model?.provider_id && latest?.id && config?.id ? (
             <ModelConfigurationCheck
               key={`${latest.id}:${config.id}`}
               id={id}
@@ -185,7 +249,7 @@ export function ModelDetail({
               config={config.id}
             />
           ) : null}
-          {detail.candidate && !latest ? (
+          {!archived && detail.candidate && !latest ? (
             <p className="text-sm text-muted-foreground">
               来自通用模型目录 {detail.candidate.catalog_version}。
               {detail.candidate.model?.requires_model_selection
@@ -194,7 +258,12 @@ export function ModelDetail({
               此草稿尚无价格和验证记录。
             </p>
           ) : null}
-          <Tabs value={view} onValueChange={setView} className="gap-5">
+          <Tabs
+            hidden={archived}
+            value={archived ? "archived" : view}
+            onValueChange={setView}
+            className={archived ? "hidden" : "gap-5"}
+          >
             <TabsList
               variant="line"
               aria-label="模型详情视图"
@@ -638,10 +707,17 @@ export function ModelDetail({
                     r.required_modes?.filter(
                       (mode) => !r.validated_modes?.includes(mode),
                     ) ?? [];
+                  const canActivate =
+                    providerStatus !== "archived" &&
+                    (r.status === "draft" ||
+                      r.status === "retired" ||
+                      (r.status === "active" &&
+                        (model?.status === "disabled" ||
+                          providerStatus === "disabled")));
                   const ready =
-                    (r.status === "draft" || r.status === "retired") &&
-                    !!r.required_modes?.length &&
-                    !missing.length;
+                    canActivate &&
+                    ((r.status === "active" && !!r.onboarding_check_id) ||
+                      (!!r.required_modes?.length && !missing.length));
                   return (
                     <article
                       key={r.id}
@@ -702,8 +778,7 @@ export function ModelDetail({
                           onVerified={reloadDetail}
                         />
                       ) : null}
-                      {(r.status === "draft" || r.status === "retired") &&
-                      !onboardingDraft ? (
+                      {canActivate && !onboardingDraft ? (
                         <form
                           onSubmit={async (e) => {
                             e.preventDefault();
@@ -733,6 +808,7 @@ export function ModelDetail({
                               <Checkbox
                                 id={`${formFieldId}-field-12-${fieldIndex1}`}
                                 name="enable"
+                                defaultChecked={providerStatus === "disabled"}
                               />
                               <FieldLabel
                                 htmlFor={`${formFieldId}-field-12-${fieldIndex1}`}
@@ -752,9 +828,11 @@ export function ModelDetail({
                               </FieldLabel>
                             </Field>
                             <Button disabled={!ready || mutation.busy}>
-                              {r.status === "retired"
-                                ? "恢复此历史发布"
-                                : "激活已验证发布"}
+                              {r.status === "active"
+                                ? "重新启用此发布"
+                                : r.status === "retired"
+                                  ? "恢复此历史发布"
+                                  : "激活已验证发布"}
                             </Button>
                           </FieldGroup>
                         </form>
@@ -767,21 +845,18 @@ export function ModelDetail({
                 <Button
                   variant="outline"
                   disabled={mutation.busy}
-                  onClick={async () => {
-                    try {
-                      await setAdminModelStatus(
+                  onClick={() =>
+                    void mutation.run("model.status", id, (requestID) =>
+                      setAdminModelStatus(
                         { id },
                         {
                           status: "disabled",
                           expected_revision: model.revision,
                         },
-                        { headers: { "Idempotency-Key": crypto.randomUUID() } },
-                      );
-                      onSaved();
-                    } catch (e) {
-                      setError(catalogMessage(e));
-                    }
-                  }}
+                        { headers: { "Idempotency-Key": requestID } },
+                      ),
+                    )
+                  }
                 >
                   停用模型（不接受新任务）
                 </Button>

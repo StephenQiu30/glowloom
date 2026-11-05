@@ -126,3 +126,17 @@ func TestModelStatusAndVersionTransitions(t *testing.T) {
 		t.Fatalf("disable model: %+v, %v", model, err)
 	}
 }
+
+func TestModelArchiveRequiresRestoreBeforeActivation(t *testing.T) {
+	model := validModelProfile()
+	archived := domain.ModelStatus("archived")
+	if err := model.SetStatus(archived, false); err != nil {
+		t.Fatalf("archive draft: %v", err)
+	}
+	if err := model.SetStatus(domain.ModelActive, true); !errors.Is(err, domain.ErrInvalidModelTransition) {
+		t.Fatalf("archived model can activate directly: %v", err)
+	}
+	if err := model.SetStatus(domain.ModelDisabled, false); err != nil || model.Revision != 3 {
+		t.Fatalf("restore model: %+v, %v", model, err)
+	}
+}

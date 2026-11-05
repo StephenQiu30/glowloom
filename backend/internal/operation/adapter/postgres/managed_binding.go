@@ -105,7 +105,7 @@ func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderD
 		return application.ErrWorkflowModelUnavailable
 	}
 	var connection struct{ ConcurrencyLimit, RateLimitPerMin int64 }
-	r = tx.Raw(`SELECT concurrency_limit,rate_limit_per_min FROM catalog.provider WHERE id=? AND (status='active' OR ?) AND NOT is_delete FOR UPDATE`, row.ProviderID, isTrial).Scan(&connection)
+	r = tx.Raw(`SELECT concurrency_limit,rate_limit_per_min FROM catalog.provider WHERE id=? AND (status='active' OR (? AND status='disabled')) AND NOT is_delete FOR UPDATE`, row.ProviderID, isTrial).Scan(&connection)
 	if r.Error != nil {
 		return r.Error
 	}
@@ -128,7 +128,7 @@ func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderD
 		return application.ErrWorkflowModelUnavailable
 	}
 	r = tx.Raw(`SELECT 1 FROM catalog.model_profile m JOIN catalog.model_release r ON r.model_id=m.id
- WHERE m.id=? AND NOT m.is_delete AND r.id=? AND ((? AND (r.status='draft' OR (r.status='active' AND m.status='active' AND m.active_release_id=r.id))) OR (NOT ? AND m.status='active' AND m.active_release_id=r.id AND r.status='active'))
+ WHERE m.id=? AND m.status<>'archived' AND NOT m.is_delete AND r.id=? AND ((? AND (r.status='draft' OR (r.status='active' AND m.status='active' AND m.active_release_id=r.id))) OR (NOT ? AND m.status='active' AND m.active_release_id=r.id AND r.status='active'))
  FOR SHARE OF m,r`, row.ModelID, *row.ReleaseID, isTrial, isTrial).Scan(&present)
 	if r.Error != nil {
 		return fmt.Errorf("lock dispatch release: %w", r.Error)

@@ -78,7 +78,7 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 		} else {
 			credentialID = &request.CredentialID
 			var found int
-			row = tx.Raw(`SELECT 1 FROM catalog.provider p JOIN catalog.provider_credential c ON c.provider_id=p.id WHERE p.id=? AND c.id=? AND (p.status='active' OR p.current_config_version_id IS NOT NULL) AND (c.status='active' OR (?='model_query' AND c.status='draining')) AND NOT p.is_delete AND NOT c.is_delete FOR SHARE OF p,c`, request.ProviderID, request.CredentialID, request.Kind).Scan(&found)
+			row = tx.Raw(`SELECT 1 FROM catalog.provider p JOIN catalog.provider_credential c ON c.provider_id=p.id WHERE p.id=? AND c.id=? AND (?='model_query' OR p.status<>'archived') AND (p.status='active' OR p.current_config_version_id IS NOT NULL) AND (c.status='active' OR (?='model_query' AND c.status='draining')) AND NOT p.is_delete AND NOT c.is_delete FOR SHARE OF p,c`, request.ProviderID, request.CredentialID, request.Kind, request.Kind).Scan(&found)
 			if row.Error != nil {
 				return row.Error
 			}
@@ -144,7 +144,7 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 			r := tx.Raw(`SELECT v.id FROM catalog.model_profile m JOIN catalog.model_profile_version v ON v.id=m.current_version_id
  JOIN catalog.model_release release ON release.model_id=m.id AND release.model_version_id=v.id
  JOIN catalog.provider p ON p.id=m.provider_id AND p.current_config_version_id=release.config_version_id
- WHERE m.id=? AND m.provider_id=? AND NOT m.is_delete AND m.candidate_snapshot IS NOT NULL
+ WHERE m.id=? AND m.provider_id=? AND m.status<>'archived' AND NOT m.is_delete AND m.candidate_snapshot IS NOT NULL
  AND (release.status='draft' OR (release.status='active' AND m.active_release_id=release.id))
  AND release.upstream_cost='{}'::jsonb AND NOT v.is_delete FOR SHARE OF m,v,p,release`, request.ModelID, request.ProviderID).Scan(&version)
 			if r.Error != nil {

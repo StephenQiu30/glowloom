@@ -61,7 +61,7 @@ func (c *SetModelStatusCommand) Execute(ctx context.Context, actor identityapp.P
 	if err != nil || requestID == uuid.Nil || requestID.String() != input.RequestID ||
 		input.ModelID == uuid.Nil || input.ExpectedRevision < 1 ||
 		input.ExpectedRevision >= math.MaxInt32 ||
-		(input.Status != domain.ModelActive && input.Status != domain.ModelDisabled) {
+		(input.Status != domain.ModelActive && input.Status != domain.ModelDisabled && input.Status != domain.ModelArchived) {
 		return ChangedModelStatus{}, ErrInvalidSetModelStatus
 	}
 	occurredAt := c.now().UTC()
@@ -90,9 +90,13 @@ func (c *SetModelStatusCommand) Execute(ctx context.Context, actor identityapp.P
 func modelStatusAudit(actor identityapp.Principal, input SetModelStatusInput, occurredAt time.Time) (identityapp.OutboxEvent, error) {
 	previous := domain.ModelActive
 	action := "model.disabled"
-	if input.Status == domain.ModelActive {
+	switch input.Status {
+	case domain.ModelActive:
 		previous = domain.ModelDisabled
 		action = "model.enabled"
+	case domain.ModelArchived:
+		previous = "" // Recorded from the locked row by the store.
+		action = "model.archived"
 	}
 	eventID := uuid.New()
 	payload, err := json.Marshal(map[string]any{

@@ -157,6 +157,40 @@ func TestOnboardingOneModelEnablesSelectionForCreation(t *testing.T) {
 		require.Zero(t, quote.QuoteMicros)
 	}
 	require.Equal(t, 3, found)
+	// Restoring the connection leaves it disabled until the current release
+	// is explicitly re-enabled using the still-current onboarding evidence.
+	updateProvider := catalogapp.NewUpdateProviderCommand(store, time.Now)
+	archivedStatus := domain.ProviderArchived
+	archivedProvider, err := updateProvider.Execute(t.Context(), actor, catalogapp.UpdateProviderInput{
+		ProviderID: connection.ProviderID, ExpectedRevision: enabled.Revision,
+		Status: &archivedStatus, RequestID: uuid.NewString(),
+	})
+	require.NoError(t, err)
+	visible, err := store.ListModelsForProject(t.Context(), actor, catalogapp.ListModelsInput{ProjectID: project, ModelKey: keys[0], Limit: 1})
+	require.NoError(t, err)
+	require.Empty(t, visible.Models)
+	model, err := store.FindModelForAdmin(t.Context(), actor, connection.ModelIDs[0])
+	require.NoError(t, err)
+	releases, err := store.ListModelReleases(t.Context(), actor, model.ID)
+	require.NoError(t, err)
+	require.Len(t, releases, 1)
+	release := releases[0]
+	activate := catalogapp.ActivateReleaseInput{
+		RequestID: uuid.New(), ExpectedRevision: release.Revision, ExpectedModelRevision: model.Revision,
+		ExpectedActiveReleaseID: &release.ID, EnableProvider: true,
+	}
+	_, err = store.ActivateModelRelease(t.Context(), actor, release.ID, activate)
+	require.ErrorIs(t, err, catalogapp.ErrProviderUnavailable)
+	disabledStatus := domain.ProviderDisabled
+	restored, err := updateProvider.Execute(t.Context(), actor, catalogapp.UpdateProviderInput{
+		ProviderID: connection.ProviderID, ExpectedRevision: archivedProvider.Revision,
+		Status: &disabledStatus, RequestID: uuid.NewString(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, disabledStatus, restored.Status)
+	_, err = store.ActivateModelRelease(t.Context(), actor, release.ID, activate)
+	require.NoError(t, err)
+
 	// Management can verify an active model again without reactivating releases.
 	recheck, err := command.ExecuteModel(t.Context(), actor, connection.ProviderID, credential, connection.ModelIDs[0], uuid.NewString())
 	require.NoError(t, err)

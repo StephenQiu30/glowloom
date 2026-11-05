@@ -157,7 +157,7 @@ func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Prin
 		if r.Error != nil {
 			return application.ModelRelease{}, r.Error
 		}
-		if r.RowsAffected != 1 || (!input.EnableProvider && provider.Status != "active") {
+		if r.RowsAffected != 1 || provider.Status == "archived" || (!input.EnableProvider && provider.Status != "active") {
 			return application.ModelRelease{}, application.ErrProviderUnavailable
 		}
 		var credential struct{ ID uuid.UUID }
@@ -172,12 +172,13 @@ func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Prin
 			Revision        int64
 			ActiveReleaseID *uuid.UUID
 			Capability      string
+			Status          string
 		}
-		r = tx.Raw(`SELECT revision,active_release_id,capability FROM catalog.model_profile WHERE id=? AND NOT is_delete FOR UPDATE`, binding.ModelID).Scan(&model)
+		r = tx.Raw(`SELECT revision,active_release_id,capability,status FROM catalog.model_profile WHERE id=? AND NOT is_delete FOR UPDATE`, binding.ModelID).Scan(&model)
 		if r.Error != nil {
 			return application.ModelRelease{}, r.Error
 		}
-		if r.RowsAffected != 1 || model.Revision != input.ExpectedModelRevision || !equalNullableUUID(model.ActiveReleaseID, input.ExpectedActiveReleaseID) {
+		if r.RowsAffected != 1 || model.Status == "archived" || model.Revision != input.ExpectedModelRevision || !equalNullableUUID(model.ActiveReleaseID, input.ExpectedActiveReleaseID) {
 			return application.ModelRelease{}, application.ErrPresetConflict
 		}
 		var revision int64
@@ -187,25 +188,33 @@ func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Prin
 		if revision != input.ExpectedRevision {
 			return application.ModelRelease{}, application.ErrPresetConflict
 		}
+		isCurrentRelease := model.ActiveReleaseID != nil && *model.ActiveReleaseID == id
+		resumeCurrent := isCurrentRelease && (model.Status == "disabled" || provider.Status == "disabled")
 		var ready bool
-		if err := tx.Raw(`SELECT r.status IN ('draft','retired') AND price.effective_from<=now() AND NOT price.is_delete AND NOT v.is_delete
- AND NOT EXISTS(SELECT 1 FROM unnest(v.modes) AS required(mode) WHERE NOT EXISTS(
+		if err := tx.Raw(`SELECT (r.status IN ('draft','retired') OR (r.status='active' AND ?)) AND price.effective_from<=now() AND NOT price.is_delete AND NOT v.is_delete
+ AND ((? AND EXISTS (
+ SELECT 1 FROM catalog.provider_check check_run
+ JOIN catalog.provider p ON p.id=check_run.provider_id AND p.current_config_version_id=check_run.config_version_id
+ WHERE check_run.id=r.onboarding_check_id AND p.id=? AND check_run.config_version_id=r.config_version_id
+ AND check_run.credential_id=? AND check_run.kind='model_access' AND check_run.status='completed'
+ AND check_run.auth_result='ok' AND check_run.model_result IN ('completed','accepted') AND check_run.dispatch_started_at IS NOT NULL
+ )) OR NOT EXISTS(SELECT 1 FROM unnest(v.modes) AS required(mode) WHERE NOT EXISTS(
  SELECT 1 FROM catalog.model_validation validation
  JOIN operation.operation op ON op.id=validation.operation_id AND op.status='completed' AND NOT op.is_delete
  JOIN operation.provider_binding execution ON execution.operation_id=op.id AND execution.release_id=validation.release_id
  JOIN operation.provider_credential_binding used_key ON used_key.operation_id=op.id AND used_key.credential_id=validation.credential_id
  WHERE validation.release_id=r.id AND validation.mode=required.mode AND validation.credential_id=? AND validation.status='succeeded'
  AND validation.adapter_version='ai-provider-v1' AND validation.evidence->>'kind'='real_provider'
- AND op.mode=validation.mode AND op.model_profile_version_id=r.model_version_id AND op.price_rule_version_id=r.price_version_id))
+ AND op.mode=validation.mode AND op.model_profile_version_id=r.model_version_id AND op.price_rule_version_id=r.price_version_id)))
  FROM catalog.model_release r JOIN catalog.model_profile_version v ON v.id=r.model_version_id
- JOIN catalog.price_rule_version price ON price.id=r.price_version_id WHERE r.id=?`, credential.ID, id).Scan(&ready).Error; err != nil {
+ JOIN catalog.price_rule_version price ON price.id=r.price_version_id WHERE r.id=?`, resumeCurrent, resumeCurrent, binding.ProviderID, credential.ID, credential.ID, id).Scan(&ready).Error; err != nil {
 			return application.ModelRelease{}, err
 		}
 		if !ready {
 			return application.ModelRelease{}, application.ErrReleaseUnverified
 		}
 		// Replacing a default release requires an explicit concurrent default switch.
-		if !input.SetDefault && model.ActiveReleaseID != nil {
+		if !input.SetDefault && model.ActiveReleaseID != nil && !isCurrentRelease {
 			var pinned bool
 			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM catalog.capability_default WHERE release_id=?)`, *model.ActiveReleaseID).Scan(&pinned).Error; err != nil {
 				return application.ModelRelease{}, err
@@ -230,7 +239,7 @@ func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Prin
 				return application.ModelRelease{}, err
 			}
 		}
-		if model.ActiveReleaseID != nil {
+		if model.ActiveReleaseID != nil && !isCurrentRelease {
 			if err := tx.Exec(`UPDATE catalog.model_release SET status='retired',revision=revision+1 WHERE id=?`, *model.ActiveReleaseID).Error; err != nil {
 				return application.ModelRelease{}, err
 			}

@@ -140,9 +140,11 @@ export function ConnectionList({
         <Badge variant="secondary">
           {pendingCredential === row.original.id
             ? "保存待确认"
-            : row.original.provider?.status === "active"
-              ? "已启用"
-              : "未启用"}
+            : row.original.provider?.status === "archived"
+              ? "已归档"
+              : row.original.provider?.status === "active"
+                ? "已启用"
+                : "未启用"}
         </Badge>
       ),
     },
@@ -174,7 +176,10 @@ export function ConnectionList({
           data-connection-trigger={`${row.original.id}:manage`}
           aria-label={`管理 ${providerConnectionName(row.original.provider)}`}
         >
-          {row.original.credential?.status === "active" ? "管理" : "配置"}
+          {row.original.provider?.status === "archived" ||
+          row.original.credential?.status === "active"
+            ? "管理"
+            : "配置"}
         </Button>
       ),
     },

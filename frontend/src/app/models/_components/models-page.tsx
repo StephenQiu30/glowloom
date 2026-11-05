@@ -110,6 +110,11 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
     return () => abort.abort();
   }, [refresh, cursors, pageSize, initialProvider]);
   const visible = models;
+  const archivedConnection = providers.some(
+    (item) =>
+      item.provider?.id === initialProvider &&
+      item.provider.status === "archived",
+  );
   const locked = loading || !!error || batch.busy || batch.unresolved;
   const columns: DataTableColumn<API.CreatedModel>[] = [
     {
@@ -148,18 +153,20 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
       header: "状态",
       cell: ({ row }) => (
         <Badge variant="secondary">
-          {row.original.status === "active"
-            ? "启用"
-            : row.original.status === "disabled"
-              ? row.original.has_publication
-                ? "已停用"
-                : !row.original.current_version_id ||
-                    row.original.current_version_id === zeroID
-                  ? "待配置"
-                  : row.original.has_price
-                    ? "待验证"
-                    : "价格待审核"
-              : "未知"}
+          {row.original.status === "archived"
+            ? "已归档"
+            : row.original.status === "active"
+              ? "启用"
+              : row.original.status === "disabled"
+                ? row.original.has_publication
+                  ? "已停用"
+                  : !row.original.current_version_id ||
+                      row.original.current_version_id === zeroID
+                    ? "待配置"
+                    : row.original.has_price
+                      ? "待验证"
+                      : "价格待审核"
+                : "未知"}
         </Badge>
       ),
     },
@@ -192,7 +199,9 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
       <div className="flex flex-wrap items-center justify-end gap-2">
         {!loading && !error && initialProvider ? (
           <div className="mr-auto flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-muted-foreground">本页按连接筛选</span>
+            <span className="text-muted-foreground">
+              {archivedConnection ? "恢复连接后可添加模型" : "本页按连接筛选"}
+            </span>
             <Button asChild variant="link">
               <Link href="/models">查看全部模型</Link>
             </Button>
@@ -210,7 +219,7 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
         ) : null}
         <Button
           className="max-md:h-11"
-          disabled={locked}
+          disabled={locked || archivedConnection}
           onClick={() => setCreateOpen(true)}
         >
           <Plus data-icon="inline-start" />
@@ -245,7 +254,9 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
           </DialogHeader>
           {createOpen ? (
             <AddModelForm
-              providers={providers}
+              providers={providers.filter(
+                (item) => item.provider?.status !== "archived",
+              )}
               initialProvider={initialProvider}
               onAdded={(id) => {
                 setCursors([""]);
@@ -351,6 +362,7 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
               key={selected}
               id={selected}
               capabilities={capabilities}
+              providers={providers}
               onSaved={saved}
             />
           ) : null}

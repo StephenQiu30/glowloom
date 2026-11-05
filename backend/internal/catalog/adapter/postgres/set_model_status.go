@@ -51,20 +51,35 @@ func (s *Store) setModelStatusWithAudit(ctx context.Context, actor identityapp.P
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
-		if err := setModelStatusInTx(tx, modelID, status, expectedRevision); err != nil {
+		row, err := lockModelProfile(tx, modelID)
+		if err != nil {
+			return err
+		}
+		if err := setModelStatusInTx(tx, row.model(), status, expectedRevision); err != nil {
+			return err
+		}
+		var audit modelStatusAuditEvent
+		if err := json.Unmarshal(event.Payload, &audit); err != nil {
+			return err
+		}
+		audit.Data.Before.Status = domain.ModelStatus(row.Status)
+		if audit.Data.Before.Status == domain.ModelArchived {
+			audit.Data.Action = "model.restored"
+		}
+		payload, err := json.Marshal(audit)
+		if err != nil {
 			return err
 		}
 		result := tx.Exec(`
 			INSERT INTO infra.outbox (id, topic, partition_key, payload)
 			VALUES (?::uuid, ?, ?, ?::jsonb)
-		`, event.ID.String(), event.Topic, event.PartitionKey, string(event.Payload))
+		`, event.ID.String(), event.Topic, event.PartitionKey, string(payload))
 		if result.Error != nil {
 			return fmt.Errorf("insert model status audit event: %w", result.Error)
 		}
 		if err := requireOneRow(result, "insert model status audit event"); err != nil {
 			return err
 		}
-		var row modelProfileRow
 		result = tx.Raw(`
 			SELECT id, model_key, provider_id, capability, display_name, status,
 			       current_version_id, revision, create_time, update_time
@@ -126,6 +141,8 @@ func validModelStatusAudit(actorID, orgID, modelID uuid.UUID, status domain.Mode
 		action, previousStatus = "model.enabled", domain.ModelDisabled
 	case domain.ModelDisabled:
 		action, previousStatus = "model.disabled", domain.ModelActive
+	case domain.ModelArchived:
+		action = "model.archived"
 	default:
 		return false
 	}

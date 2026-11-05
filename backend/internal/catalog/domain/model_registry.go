@@ -71,6 +71,7 @@ type ModelStatus string
 const (
 	ModelActive   ModelStatus = "active"
 	ModelDisabled ModelStatus = "disabled"
+	ModelArchived ModelStatus = "archived"
 )
 
 // ModelProfile is the mutable identity and current-version pointer.
@@ -91,7 +92,7 @@ type ModelProfile struct {
 func (m ModelProfile) Validate() error {
 	if m.ID == uuid.Nil || m.ProviderID == uuid.Nil || strings.TrimSpace(m.Key) == "" ||
 		strings.TrimSpace(m.Capability) == "" || strings.TrimSpace(m.DisplayName) == "" ||
-		(m.Status != ModelActive && m.Status != ModelDisabled) ||
+		(m.Status != ModelActive && m.Status != ModelDisabled && m.Status != ModelArchived) ||
 		m.Revision < 1 || m.Revision > math.MaxInt32 ||
 		(m.Status == ModelActive && m.CurrentVersionID == uuid.Nil) {
 		return ErrInvalidModel
@@ -120,10 +121,10 @@ func (m *ModelProfile) SetStatus(status ModelStatus, hasPrice bool) error {
 	if m == nil || m.Validate() != nil {
 		return ErrInvalidModel
 	}
-	if status != ModelActive && status != ModelDisabled {
+	if status != ModelActive && status != ModelDisabled && status != ModelArchived {
 		return ErrInvalidModelTransition
 	}
-	if m.Status == status {
+	if m.Status == status || (m.Status == ModelArchived && status != ModelDisabled) {
 		return ErrInvalidModelTransition
 	}
 	if status == ModelActive && (m.CurrentVersionID == uuid.Nil || !hasPrice) {

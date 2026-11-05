@@ -52,7 +52,7 @@ func (s *Store) ReadProviderOnboarding(ctx context.Context, actor identityapp.Pr
  JOIN catalog.model_profile_version v ON v.id=m.current_version_id
  LEFT JOIN catalog.model_release r ON r.model_id=m.id AND r.model_version_id=v.id AND r.config_version_id=p.current_config_version_id
 
- WHERE m.provider_id=? AND m.candidate_snapshot IS NOT NULL AND NOT m.is_delete AND NOT v.is_delete AND (r.id IS NULL OR r.upstream_cost='{}'::jsonb)
+ WHERE m.provider_id=? AND m.status<>'archived' AND m.candidate_snapshot IS NOT NULL AND NOT m.is_delete AND NOT v.is_delete AND (r.id IS NULL OR r.upstream_cost='{}'::jsonb)
  ORDER BY m.capability,m.display_name LIMIT ?`, id, domain.MaxPresetModels).Scan(&result.Models).Error; err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (s *Store) ActivateProviderOnboarding(ctx context.Context, actor identityap
  FROM catalog.model_profile m JOIN catalog.model_release r ON r.model_id=m.id AND r.model_version_id=m.current_version_id
  JOIN catalog.model_profile_version v ON v.id=r.model_version_id AND NOT v.is_delete
  JOIN catalog.price_rule_version price ON price.id=r.price_version_id AND NOT price.is_delete AND price.effective_from<=now()
- WHERE m.provider_id=? AND m.candidate_snapshot IS NOT NULL AND NOT m.is_delete AND r.config_version_id=? AND r.upstream_cost='{}'::jsonb
+ WHERE m.provider_id=? AND m.status<>'archived' AND m.candidate_snapshot IS NOT NULL AND NOT m.is_delete AND r.config_version_id=? AND r.upstream_cost='{}'::jsonb
  ORDER BY m.id FOR UPDATE OF m,r`, id, provider.ConfigID).Scan(&models).Error; err != nil {
 			return empty, err
 		}

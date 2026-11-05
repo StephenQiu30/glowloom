@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -28,6 +30,7 @@ type UpdateProviderStore interface {
 type UpdateProviderInput struct {
 	ProviderID       uuid.UUID
 	ExpectedRevision int64
+	Name             *string `json:",omitempty"`
 	Status           *domain.ProviderStatus
 	ConcurrencyLimit *int
 	RateLimitPerMin  *int
@@ -56,11 +59,18 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	requestID, err := uuid.Parse(input.RequestID)
 	if input.ProviderID == uuid.Nil || input.ExpectedRevision < 1 || input.ExpectedRevision >= math.MaxInt32 ||
 		err != nil || requestID == uuid.Nil || requestID.String() != input.RequestID ||
-		(input.Status == nil && input.ConcurrencyLimit == nil && input.RateLimitPerMin == nil) ||
-		(input.Status != nil && *input.Status != domain.ProviderActive && *input.Status != domain.ProviderDisabled) ||
+		(input.Name == nil && input.Status == nil && input.ConcurrencyLimit == nil && input.RateLimitPerMin == nil) ||
+		(input.Status != nil && *input.Status != domain.ProviderActive && *input.Status != domain.ProviderDisabled && *input.Status != domain.ProviderArchived) ||
 		(input.ConcurrencyLimit != nil && (*input.ConcurrencyLimit < 1 || *input.ConcurrencyLimit > math.MaxInt32)) ||
 		(input.RateLimitPerMin != nil && (*input.RateLimitPerMin < 1 || *input.RateLimitPerMin > math.MaxInt32)) {
 		return CreatedProvider{}, ErrInvalidUpdateProvider
+	}
+	if input.Name != nil {
+		name := strings.TrimSpace(*input.Name)
+		if name == "" || strings.ContainsRune(name, 0) || !utf8.ValidString(name) || utf8.RuneCountInString(name) > 100 {
+			return CreatedProvider{}, ErrInvalidUpdateProvider
+		}
+		input.Name = &name
 	}
 	if receipt, found, err := c.store.FindProviderUpdateReceipt(ctx, actor, input); err != nil || found {
 		return receipt, err
@@ -75,7 +85,13 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	if before.Revision != input.ExpectedRevision {
 		return CreatedProvider{}, domain.ErrProviderRevisionConflict
 	}
+	if before.Status == domain.ProviderArchived && input.Status != nil && *input.Status != domain.ProviderDisabled {
+		return CreatedProvider{}, ErrInvalidUpdateProvider
+	}
 	after := before
+	if input.Name != nil {
+		after.Name = *input.Name
+	}
 	if input.Status != nil {
 		after.Status = *input.Status
 	}
@@ -85,7 +101,7 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	if input.RateLimitPerMin != nil {
 		after.RateLimitPerMin = *input.RateLimitPerMin
 	}
-	if after.Status == before.Status && after.ConcurrencyLimit == before.ConcurrencyLimit &&
+	if after.Name == before.Name && after.Status == before.Status && after.ConcurrencyLimit == before.ConcurrencyLimit &&
 		after.RateLimitPerMin == before.RateLimitPerMin {
 		return CreatedProvider{}, ErrInvalidUpdateProvider
 	}
@@ -135,7 +151,7 @@ func providerUpdatedEvents(actor identityapp.Principal, before, after domain.Pro
 	summary := func(p domain.Provider) map[string]any {
 		return map[string]any{
 			"status": p.Status, "concurrency_limit": p.ConcurrencyLimit,
-			"rate_limit_per_min": p.RateLimitPerMin,
+			"rate_limit_per_min": p.RateLimitPerMin, "name_changed": before.Name != after.Name,
 		}
 	}
 	audit, err := json.Marshal(map[string]any{

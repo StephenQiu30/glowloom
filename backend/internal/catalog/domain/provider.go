@@ -41,6 +41,7 @@ type ProviderStatus string
 const (
 	ProviderActive   ProviderStatus = "active"
 	ProviderDisabled ProviderStatus = "disabled"
+	ProviderArchived ProviderStatus = "archived"
 )
 
 // Provider is the platform-level adapter and rate-limit configuration.
@@ -64,7 +65,7 @@ func (p Provider) Validate() error {
 	if p.ID == uuid.Nil || strings.TrimSpace(p.Key) == "" || strings.TrimSpace(p.Name) == "" ||
 		strings.TrimSpace(p.AdapterKey) == "" ||
 		(p.Region != RegionDomestic && p.Region != RegionOverseas) ||
-		(p.Status != ProviderActive && p.Status != ProviderDisabled) ||
+		(p.Status != ProviderActive && p.Status != ProviderDisabled && p.Status != ProviderArchived) ||
 		p.ConcurrencyLimit < 1 || p.RateLimitPerMin < 1 || p.Revision < 1 {
 		return ErrInvalidProvider
 	}
@@ -76,7 +77,7 @@ func (p *Provider) Disable() error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
-	if p.Status == ProviderDisabled {
+	if p.Status != ProviderActive {
 		return ErrProviderDisabled
 	}
 	p.Status = ProviderDisabled

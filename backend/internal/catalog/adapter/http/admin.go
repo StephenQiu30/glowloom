@@ -136,7 +136,7 @@ func adminError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrProviderNotFound), errors.Is(err, application.ErrCredentialNotFound), errors.Is(err, application.ErrModelNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
-	case errors.Is(err, application.ErrPresetConflict), errors.Is(err, domain.ErrProviderRevisionConflict), errors.Is(err, domain.ErrModelRevisionConflict):
+	case errors.Is(err, domain.ErrInvalidModelTransition), errors.Is(err, application.ErrPresetConflict), errors.Is(err, domain.ErrProviderRevisionConflict), errors.Is(err, domain.ErrModelRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
 	case errors.Is(err, application.ErrProviderKeyExists), errors.Is(err, application.ErrModelKeyExists), errors.Is(err, application.ErrModelVersionConflict), errors.Is(err, application.ErrPriceVersionConflict), errors.Is(err, application.ErrCredentialTestKeyReused):
 		httpapi.WriteProblem(c, 409, "catalog_conflict", nil)
@@ -248,6 +248,7 @@ func (h *AdminHandler) Provider(c *gin.Context) {
 
 // UpdateProviderRequest applies a guarded enable/disable or rate setting.
 type UpdateProviderRequest struct {
+	Name             *string                `json:"name,omitempty"`
 	ExpectedRevision int64                  `json:"expected_revision"`
 	Status           *domain.ProviderStatus `json:"status,omitempty"`
 	ConcurrencyLimit *int                   `json:"concurrency_limit,omitempty"`
@@ -276,7 +277,7 @@ func (h *AdminHandler) UpdateProvider(c *gin.Context) {
 	if !httpapi.Decode(c, &body) {
 		return
 	}
-	result, err := h.deps.UpdateProvider.Execute(c.Request.Context(), identityhttp.Principal(c), application.UpdateProviderInput{ProviderID: id, ExpectedRevision: body.ExpectedRevision, Status: body.Status, ConcurrencyLimit: body.ConcurrencyLimit, RateLimitPerMin: body.RateLimitPerMin, RequestID: c.GetHeader("Idempotency-Key")})
+	result, err := h.deps.UpdateProvider.Execute(c.Request.Context(), identityhttp.Principal(c), application.UpdateProviderInput{ProviderID: id, ExpectedRevision: body.ExpectedRevision, Name: body.Name, Status: body.Status, ConcurrencyLimit: body.ConcurrencyLimit, RateLimitPerMin: body.RateLimitPerMin, RequestID: c.GetHeader("Idempotency-Key")})
 	if err != nil {
 		adminError(c, err)
 		return

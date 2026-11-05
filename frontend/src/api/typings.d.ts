@@ -3843,7 +3843,7 @@ declare namespace API {
     status?: string;
   };
 
-  type ModelStatus = "active" | "disabled";
+  type ModelStatus = "active" | "disabled" | "archived";
 
   type ModelVersion = {
     id?: string;
@@ -4833,7 +4833,7 @@ declare namespace API {
     url?: string;
   };
 
-  type ProviderStatus = "active" | "disabled";
+  type ProviderStatus = "active" | "disabled" | "archived";
 
   type ProviderTestModel = {
     capability?: string;
@@ -6873,6 +6873,7 @@ declare namespace API {
   type UpdateProviderRequest = {
     concurrency_limit?: number;
     expected_revision?: number;
+    name?: string;
     rate_limit_per_min?: number;
     status?: ProviderStatus;
   };

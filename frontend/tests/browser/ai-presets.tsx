@@ -244,6 +244,7 @@ axios.defaults.adapter = async (config) => {
     data = state;
   } else if (path === "/api/admin/provider-presets" && config.method === "get")
     data = { items: presets };
+  else if (path === "/api/admin/provider-adapters") data = [];
   else if (path === "/api/admin/providers") data = { items: providers };
   else if (path === "/api/admin/models") data = { items: [model] };
   else if (path === `/api/admin/models/${modelID}`)
@@ -316,7 +317,17 @@ axios.defaults.adapter = async (config) => {
     data = { result: receipts.get(path.split("/").at(-1)!) };
   else if (path.startsWith("/api/admin/providers/")) {
     const p = providers.find((p) => p.provider?.id === path.split("/").at(-1));
-    data = p ? { provider: p.provider, credential: p.credential } : {};
+    if (p?.provider && config.method === "patch") {
+      p.provider = {
+        ...p.provider,
+        name: body.name ?? p.provider.name,
+        status: body.status ?? p.provider.status,
+        revision: (p.provider.revision ?? 0) + 1,
+      };
+      data = p.provider;
+    } else {
+      data = p ? { provider: p.provider, credential: p.credential } : {};
+    }
   }
   if (body.request_id) receipts.set(body.request_id, data);
   const key = config.headers?.get("Idempotency-Key");

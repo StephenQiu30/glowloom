@@ -67,7 +67,7 @@ func (s *Store) AddPresetModel(ctx context.Context, actor identityapp.Principal,
 	return catalogMutation(ctx, s.db, s.actors, actor, "model.preset.add", id, input.RequestID, input, func(tx *gorm.DB) (application.CreatedModel, error) {
 		var empty application.CreatedModel
 		var provider struct{ ID uuid.UUID }
-		r := tx.Raw(`SELECT id FROM catalog.provider WHERE id=? AND NOT is_delete FOR UPDATE`, id).Scan(&provider)
+		r := tx.Raw(`SELECT id FROM catalog.provider WHERE id=? AND status<>'archived' AND NOT is_delete FOR UPDATE`, id).Scan(&provider)
 		if r.Error != nil {
 			return empty, r.Error
 		}

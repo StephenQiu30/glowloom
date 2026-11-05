@@ -185,6 +185,28 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 	if _, err := command.Execute(ctx, actor, changed); !errors.Is(err, catalogapp.ErrPresetConflict) {
 		t.Fatalf("model reused changed key: %v", err)
 	}
+	archive := catalogapp.SetModelStatusInput{
+		ModelID: created.ID, Status: domain.ModelArchived,
+		ExpectedRevision: 6, RequestID: uuid.NewString(),
+	}
+	archived, err := command.Execute(ctx, actor, archive)
+	if err != nil || archived.Status != domain.ModelArchived || archived.Revision != 7 {
+		t.Fatalf("archive model: %+v, %v", archived, err)
+	}
+	replayed, err = command.Execute(ctx, actor, archive)
+	if err != nil || replayed != archived {
+		t.Fatalf("archive receipt: %+v, %v", replayed, err)
+	}
+	enable.ExpectedRevision, enable.RequestID = 7, uuid.NewString()
+	if _, err := command.Execute(ctx, actor, enable); !errors.Is(err, domain.ErrInvalidModelTransition) {
+		t.Fatalf("activated archived model: %v", err)
+	}
+	restore := disable
+	restore.ExpectedRevision, restore.RequestID = 7, uuid.NewString()
+	restored, err := command.Execute(ctx, actor, restore)
+	if err != nil || restored.Status != domain.ModelDisabled || restored.Revision != 8 {
+		t.Fatalf("restore model: %+v, %v", restored, err)
+	}
 	var events []struct {
 		Topic        string
 		PartitionKey string
@@ -192,7 +214,7 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 	}
 	if err := conn.DB.WithContext(ctx).Raw(`
 		SELECT topic, partition_key, payload FROM infra.outbox WHERE partition_key = ?
-	`, actor.OrgID.String()).Scan(&events).Error; err != nil || len(events) != 6 {
+	`, actor.OrgID.String()).Scan(&events).Error; err != nil || len(events) != 8 {
 		t.Fatalf("model outbox events %d: %v", len(events), err)
 	}
 	statusAudits := map[string]int{}
@@ -203,14 +225,14 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 		if parseErr != nil {
 			t.Fatalf("unparseable status audit: %v", parseErr)
 		}
-		if audit.Action == "model.enabled" || audit.Action == "model.disabled" {
+		if audit.Action == "model.enabled" || audit.Action == "model.disabled" || audit.Action == "model.archived" || audit.Action == "model.restored" {
 			statusAudits[audit.Action]++
 			if audit.ObjectID != created.ID.String() {
 				t.Fatalf("status audit object %+v", audit)
 			}
 		}
 	}
-	if statusAudits["model.enabled"] != 1 || statusAudits["model.disabled"] != 1 {
+	if statusAudits["model.enabled"] != 1 || statusAudits["model.disabled"] != 1 || statusAudits["model.archived"] != 1 || statusAudits["model.restored"] != 1 {
 		t.Fatalf("status audits: %+v", statusAudits)
 	}
 	var modelVersionCount, priceVersionCount int
@@ -223,7 +245,7 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 	if err := conn.DB.WithContext(ctx).Exec(`UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	enable.ExpectedRevision = 6
+	enable.ExpectedRevision = 8
 	if _, err := command.Execute(ctx, actor, enable); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatalf("revoked administrator enabled model: %v", err)
 	}
@@ -232,7 +254,7 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 		Revision int64
 	}
 	if err := conn.DB.WithContext(ctx).Raw(`SELECT status, revision FROM catalog.model_profile WHERE id = ?::uuid`, created.ID.String()).Scan(&finalStatus).Error; err != nil ||
-		finalStatus.Status != string(domain.ModelDisabled) || finalStatus.Revision != 6 {
+		finalStatus.Status != string(domain.ModelDisabled) || finalStatus.Revision != 8 {
 		t.Fatalf("revoked administrator changed model %+v: %v", finalStatus, err)
 	}
 }

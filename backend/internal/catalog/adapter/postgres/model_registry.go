@@ -85,7 +85,7 @@ func createModelInTx(tx *gorm.DB, model domain.ModelProfile) error {
 			  (id, model_key, provider_id, capability, display_name)
 			SELECT ?::uuid, ?, ?::uuid, ?, ?
 			WHERE EXISTS (
-			  SELECT 1 FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete
+			  SELECT 1 FROM catalog.provider WHERE id = ?::uuid AND status <> 'archived' AND NOT is_delete FOR SHARE
 			) AND EXISTS (
 			  SELECT 1 FROM catalog.capability WHERE key = ? AND NOT is_delete
 			)
@@ -232,17 +232,13 @@ func appendModelVersionInTx(tx *gorm.DB, version domain.ModelVersion, expectedRe
 }
 
 // setModelStatusInTx only runs inside the audited status transaction.
-func setModelStatusInTx(tx *gorm.DB, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64) error {
-	row, err := lockModelProfile(tx, modelID)
-	if err != nil {
-		return err
-	}
-	model := row.model()
+func setModelStatusInTx(tx *gorm.DB, model domain.ModelProfile, status domain.ModelStatus, expectedRevision int64) error {
+	modelID := model.ID
 	if model.Revision != expectedRevision {
 		return domain.ErrModelRevisionConflict
 	}
 	var publishable bool
-	if status == domain.ModelActive {
+	if status == domain.ModelActive && model.Status != domain.ModelArchived {
 		// Real providers can only be activated through verified release publication.
 		var adapter string
 		if err := tx.Raw(`SELECT adapter_key FROM catalog.provider WHERE id=?`, model.ProviderID).Scan(&adapter).Error; err != nil {

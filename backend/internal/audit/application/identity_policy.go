@@ -17,11 +17,13 @@ func NewRecordedActionParser() *Parser {
 	fields["credential.tested"] = []string{"last4"}
 	fields["credential.disabled"] = []string{"last4"}
 	fields["provider.created"] = []string{"key", "adapter_key", "region", "status", "concurrency_limit", "rate_limit_per_min"}
-	fields["provider.updated"] = []string{"status", "concurrency_limit", "rate_limit_per_min"}
+	fields["provider.updated"] = []string{"status", "concurrency_limit", "rate_limit_per_min", "name_changed"}
 	fields["model.created"] = []string{"key", "provider_id", "capability", "display_name", "status"}
 	fields["model.version_published"] = []string{"version_id", "version_no", "provider_model_id", "revision"}
 	fields["model.enabled"] = []string{"status", "revision"}
 	fields["model.disabled"] = []string{"status", "revision"}
+	fields["model.archived"] = []string{"status", "revision"}
+	fields["model.restored"] = []string{"status", "revision"}
 	fields["price.published"] = []string{"version_id", "version_no", "unit", "currency", "effective_from", "revision"}
 	fields["project.created"] = []string{"aspect_ratio", "style_type", "style_key", "style_subtype", "style_preset_id", "status", "revision"}
 	fields["canvas.saved"] = []string{"revision", "node_count"}

@@ -21,6 +21,7 @@ import (
 func (s *Store) UpdateProviderWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent, input application.UpdateProviderInput) (domain.Provider, error) {
 	key, err := uuid.Parse(input.RequestID)
 	if err != nil || key == uuid.Nil || input.ProviderID != before.ID || input.ExpectedRevision != before.Revision ||
+		(input.Name != nil && *input.Name != after.Name) ||
 		(input.Status != nil && *input.Status != after.Status) ||
 		(input.ConcurrencyLimit != nil && *input.ConcurrencyLimit != after.ConcurrencyLimit) ||
 		(input.RateLimitPerMin != nil && *input.RateLimitPerMin != after.RateLimitPerMin) {
@@ -76,10 +77,10 @@ func (s *Store) FindProviderUpdateReceipt(ctx context.Context, actor identityapp
 func (s *Store) updateProviderWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
 	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		before.Validate() != nil || after.Validate() != nil ||
-		before.ID != after.ID || before.Key != after.Key || before.Name != after.Name ||
+		before.ID != after.ID || before.Key != after.Key ||
 		before.AdapterKey != after.AdapterKey || before.Region != after.Region ||
 		before.Revision+1 != after.Revision ||
-		(before.Status == after.Status && before.ConcurrencyLimit == after.ConcurrencyLimit &&
+		(before.Name == after.Name && before.Status == after.Status && before.ConcurrencyLimit == after.ConcurrencyLimit &&
 			before.RateLimitPerMin == after.RateLimitPerMin) ||
 		!validProviderUpdateEvents(actor.ID, actor.OrgID, before, after, events) {
 		return domain.Provider{}, application.ErrInvalidUpdateProvider
@@ -174,11 +175,13 @@ type providerUpdateAuditEvent struct {
 		} `json:"object"`
 		RequestID string `json:"request_id"`
 		Before    struct {
+			NameChanged      bool                  `json:"name_changed"`
 			Status           domain.ProviderStatus `json:"status"`
 			ConcurrencyLimit int                   `json:"concurrency_limit"`
 			RateLimitPerMin  int                   `json:"rate_limit_per_min"`
 		} `json:"before"`
 		After struct {
+			NameChanged      bool                  `json:"name_changed"`
 			Status           domain.ProviderStatus `json:"status"`
 			ConcurrencyLimit int                   `json:"concurrency_limit"`
 			RateLimitPerMin  int                   `json:"rate_limit_per_min"`
@@ -211,6 +214,8 @@ func validProviderUpdateEvents(actorID, orgID uuid.UUID, before, after domain.Pr
 		audit.Aggregate.Type != "audit" || audit.Aggregate.ID != audit.EventID ||
 		audit.Data.Action != "provider.updated" || audit.Data.Object.Type != "provider" ||
 		audit.Data.Object.ID != after.ID ||
+		audit.Data.Before.NameChanged != (before.Name != after.Name) ||
+		audit.Data.After.NameChanged != (before.Name != after.Name) ||
 		audit.Data.Before.Status != before.Status ||
 		audit.Data.Before.ConcurrencyLimit != before.ConcurrencyLimit ||
 		audit.Data.Before.RateLimitPerMin != before.RateLimitPerMin ||

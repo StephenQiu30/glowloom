@@ -186,7 +186,28 @@ func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testi
 	if err := conn.DB.WithContext(ctx).Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key = ?`, actor.OrgID.String()).Scan(&count).Error; err != nil || count != 2 {
 		t.Fatalf("intervening revision wrote %d events: %v", count, err)
 	}
-	input.ExpectedRevision = 3
+	name := "备用 OpenAI"
+	archived := domain.ProviderArchived
+	archive := catalogapp.UpdateProviderInput{
+		ProviderID: provider.ID, ExpectedRevision: 3, Name: &name,
+		Status: &archived, RequestID: uuid.NewString(),
+	}
+	saved, err := command.Execute(ctx, actor, archive)
+	if err != nil || saved.Status != archived || saved.Name != name || saved.Revision != 4 {
+		t.Fatalf("rename and archive provider: %+v, %v", saved, err)
+	}
+	replayed, err = command.Execute(ctx, actor, archive)
+	if err != nil || replayed != saved {
+		t.Fatalf("archive receipt: %+v, %v", replayed, err)
+	}
+	restore := catalogapp.UpdateProviderInput{
+		ProviderID: provider.ID, ExpectedRevision: 4, Status: &status, RequestID: uuid.NewString(),
+	}
+	saved, err = command.Execute(ctx, actor, restore)
+	if err != nil || saved.Status != status || saved.Name != name || saved.Revision != 5 {
+		t.Fatalf("restore provider: %+v, %v", saved, err)
+	}
+	input.ExpectedRevision = 5
 	revoked := catalogapp.NewUpdateProviderCommand(interveningUpdateProviderStore{
 		UpdateProviderStore: store,
 		beforeWrite: func(ctx context.Context) error {
@@ -199,7 +220,7 @@ func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testi
 		t.Fatalf("revoked administrator updated provider: %v", err)
 	}
 	loaded, err = store.FindProvider(ctx, provider.ID)
-	if err != nil || loaded.Status != domain.ProviderDisabled || loaded.Revision != 3 {
+	if err != nil || loaded.Status != domain.ProviderDisabled || loaded.Revision != 5 {
 		t.Fatalf("revocation changed provider %+v: %v", loaded, err)
 	}
 }

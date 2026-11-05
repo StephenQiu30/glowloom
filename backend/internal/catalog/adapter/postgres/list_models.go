@@ -82,7 +82,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 			  ORDER BY effective_from DESC, version_no DESC
 			  LIMIT 1
 			) AS pr ON true
-			WHERE NOT m.is_delete AND (p.adapter_key NOT IN (%[1]s) OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND (? OR p.region = 'domestic')
+			WHERE NOT m.is_delete AND m.status <> 'archived' AND p.status <> 'archived' AND (p.adapter_key NOT IN (%[1]s) OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND (? OR p.region = 'domestic')
 			  AND (? = '' OR m.model_key = ?)
 			  AND (? = '' OR m.capability = ?)
 			  AND (? = '' OR ? = ANY(v.modes))

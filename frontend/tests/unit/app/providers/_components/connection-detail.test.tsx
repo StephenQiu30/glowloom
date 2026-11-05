@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
   save: vi.fn(),
   receipt: vi.fn(),
   disable: vi.fn(),
+  update: vi.fn(),
 }));
 vi.mock("@/components/auth/session", () => ({
   useSession: () => ({
@@ -36,7 +37,7 @@ vi.mock("@/api/settings", () => ({
   testProviderReachability: vi.fn(),
   previewProviderUpgrade: vi.fn(),
   applyProviderPreset: vi.fn(),
-  updateAdminProvider: vi.fn(),
+  updateAdminProvider: api.update,
 }));
 beforeEach(() => {
   vi.clearAllMocks();
@@ -152,4 +153,24 @@ it("已配置密钥只提供更换入口，轮换输入和记录不显示尾号"
   const input = await screen.findByLabelText("API Key");
   expect(input.getAttribute("placeholder")).toBe("已配置，输入新密钥以更换");
   expect(screen.queryByText(/abcd|5678|••••/)).toBeNull();
+});
+
+it("在连接设置中重命名未启用的连接", async () => {
+  api.update.mockResolvedValue({
+    id: "connection",
+    name: "OpenRouter 备用",
+    revision: 2,
+  });
+  const onSaved = vi.fn();
+  render(<ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />);
+  fireEvent.click(await screen.findByRole("button", { name: "连接设置" }));
+  const input = await screen.findByLabelText("连接名称");
+  fireEvent.change(input, { target: { value: "OpenRouter 备用" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存连接名称" }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+  expect(api.update).toHaveBeenCalledWith(
+    { id: "connection" },
+    { name: "OpenRouter 备用", expected_revision: 1 },
+    { headers: { "Idempotency-Key": expect.any(String) } },
+  );
 });

@@ -97,10 +97,10 @@ func (s *Store) UpdateProvider(ctx context.Context, provider domain.Provider, ex
 	}
 	result := s.db.WithContext(ctx).Exec(`
 		UPDATE catalog.provider
-		SET status = ?, concurrency_limit = ?, rate_limit_per_min = ?,
+		SET name = ?, status = ?, concurrency_limit = ?, rate_limit_per_min = ?,
 		    revision = revision + 1, update_time = now()
 		WHERE id = ?::uuid AND revision = ? AND NOT is_delete
-	`, string(provider.Status), provider.ConcurrencyLimit, provider.RateLimitPerMin,
+	`, provider.Name, string(provider.Status), provider.ConcurrencyLimit, provider.RateLimitPerMin,
 		provider.ID.String(), expectedRevision)
 	if result.Error != nil {
 		return fmt.Errorf("update provider: %w", result.Error)

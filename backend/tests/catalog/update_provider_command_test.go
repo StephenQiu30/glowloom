@@ -120,3 +120,32 @@ func TestUpdateProviderCommandRejectsInvalidOrStaleRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateProviderArchivesAndRestoresConnection(t *testing.T) {
+	actor := adminPrincipal()
+	store := &updateProviderStore{provider: validProvider()}
+	command := catalogapp.NewUpdateProviderCommand(store, time.Now)
+	archived := domain.ProviderStatus("archived")
+	input := catalogapp.UpdateProviderInput{
+		ProviderID: store.provider.ID, ExpectedRevision: 1,
+		Status: &archived, RequestID: uuid.NewString(),
+	}
+	result, err := command.Execute(t.Context(), actor, input)
+	if err != nil || result.Status != archived || result.Revision != 2 {
+		t.Fatalf("archive connection: %+v, %v", result, err)
+	}
+	store.provider = store.after
+	input.ExpectedRevision = 2
+	input.RequestID = uuid.NewString()
+	active := domain.ProviderActive
+	input.Status = &active
+	if _, err := command.Execute(t.Context(), actor, input); !errors.Is(err, catalogapp.ErrInvalidUpdateProvider) {
+		t.Fatalf("archived connection activated directly: %v", err)
+	}
+	disabled := domain.ProviderDisabled
+	input.Status = &disabled
+	result, err = command.Execute(t.Context(), actor, input)
+	if err != nil || result.Status != disabled || result.Revision != 3 {
+		t.Fatalf("restore connection: %+v, %v", result, err)
+	}
+}
