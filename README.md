@@ -85,7 +85,7 @@ docker compose up -d --build --no-deps --wait frontend
 
 两端的浏览器 Origin 同步固定为 `http://localhost:1122`，忽略 `.env` 中旧的 Origin，避免端口切换后登录或写入被 Origin 校验拒绝。worker/relay 健康检查在容器内执行，不额外开放宿主端口。
 
-现有 PostgreSQL、Redis、Kafka、COS、身份密钥及 `.env` 须提前准备。Compose 复用这些资源，数据库升级在部署前独立执行。已有业务库仍绑定旧存储时，先完成 [COS 切换检查](backend/config/COS配置说明.md#存量迁移与部署)，再重建或重启后端。
+现有 PostgreSQL、Redis、Kafka、COS、身份密钥及 `.env` 须提前准备。Compose 复用这些资源，数据库升级在部署前独立执行。已有业务库仍绑定旧存储时，先完成 [COS 切换检查](docs/COS配置说明.md#存量迁移与部署)，再重建或重启后端。
 
 Agent 启动前须由结构所有者创建专用 LOGIN 角色 `glowloom_agent`，使用独立密码，离线安装当前 SQL 与表级授权；空库只执行一次 `backend/db/schema.sql`，已有库按[一次性离线切换清单](backend/db/agent_cutover.md)盘点、备份、演练与核对权限，应用启动不运行 DDL。配置 `GLOWLOOM_AGENT_DB_DSN` 使用该受限角色，`GLOWLOOM_AGENT_SERVICE_TOKEN` 和 `GLOWLOOM_AGENT_BUSINESS_TOKEN` 为两个不同的至少32字节凭据；Go 不能把自己的业务库账号复用于 Agent。
 
