@@ -55,6 +55,8 @@ export function BatchDialog<T extends { id?: string }>({
   const ready = batch.entries.filter((e) => e.status === "ready").length;
   const failed = batch.entries.filter((e) => e.status === "failed").length;
   const compact = batch.action?.compact;
+  const simpleConfirmation =
+    batch.action?.simpleConfirmation && !batch.submitted;
   const Root = compact ? AlertDialog : Dialog;
   const Content = compact ? AlertDialogContent : DialogContent;
   const Header = compact ? AlertDialogHeader : DialogHeader;
@@ -94,7 +96,7 @@ export function BatchDialog<T extends { id?: string }>({
     .filter(Boolean)
     .join(" · ");
   const skipReasons = new Map<string, number>();
-  if (blocked && compact) {
+  if (blocked && (compact || simpleConfirmation)) {
     for (const entry of batch.entries) {
       if (entry.status === "skipped")
         skipReasons.set(
@@ -139,14 +141,18 @@ export function BatchDialog<T extends { id?: string }>({
       <Content
         className={cn(
           "flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden",
-          compact || blocked ? "sm:max-w-md" : "sm:max-w-2xl",
+          compact || simpleConfirmation || blocked
+            ? "sm:max-w-md"
+            : "sm:max-w-2xl",
         )}
         {...(blocked
           ? { "aria-describedby": `${id}-skipped` }
           : !hasDescription
             ? { "aria-describedby": undefined }
             : {})}
-        {...(!compact && blocked ? { showCloseButton: false } : {})}
+        {...(!compact && (blocked || simpleConfirmation)
+          ? { showCloseButton: false }
+          : {})}
         onCloseAutoFocus={(event) => {
           if (batch.restoreFocus()) event.preventDefault();
         }}
@@ -159,7 +165,9 @@ export function BatchDialog<T extends { id?: string }>({
                 : `${batch.action?.title}：无可执行项`
               : compact && !batch.busy && !batch.submitted && ready
                 ? `${accountVerb} ${ready} 个账号？`
-                : batch.action?.title}
+                : simpleConfirmation
+                  ? `${batch.action?.title}？`
+                  : batch.action?.title}
           </Title>
           {hasDescription ? (
             <Description>{batch.action?.effect}</Description>
@@ -178,8 +186,12 @@ export function BatchDialog<T extends { id?: string }>({
             <p role="status" className="text-sm text-muted-foreground">
               {resultSummary}
             </p>
-          ) : compact && skipped > 0 && !blocked ? (
-            <p className="text-sm text-muted-foreground">已跳过 {skipped} 项</p>
+          ) : (compact || simpleConfirmation) && skipped > 0 && !blocked ? (
+            <p className="text-sm text-muted-foreground">
+              {simpleConfirmation
+                ? `${skipped} 项无法执行。`
+                : `已跳过 ${skipped} 项`}
+            </p>
           ) : null}
           {blocked ? (
             <ul
@@ -187,7 +199,7 @@ export function BatchDialog<T extends { id?: string }>({
               aria-label="跳过原因"
               className="grid gap-1 text-sm break-words text-muted-foreground"
             >
-              {compact
+              {compact || simpleConfirmation
                 ? Array.from(skipReasons, ([message, count]) => (
                     <li key={message}>
                       {count} 项 · {message}
@@ -199,12 +211,21 @@ export function BatchDialog<T extends { id?: string }>({
                     </li>
                   ))}
             </ul>
-          ) : !compact && batch.entries.length ? (
+          ) : !compact && !simpleConfirmation && batch.entries.length ? (
             <DataTable
               label={batch.submitted ? "批量操作逐项结果" : "批量操作目标"}
               columns={columns}
               data={batch.entries}
             />
+          ) : null}
+          {simpleConfirmation && failed > 0 ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              {failed} 项检查失败。
+              {
+                batch.entries.find((entry) => entry.status === "failed")
+                  ?.message
+              }
+            </p>
           ) : null}
           {compact && (failed > 0 || batch.unresolved) ? (
             <FeedbackToast

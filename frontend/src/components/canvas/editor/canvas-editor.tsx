@@ -7157,15 +7157,10 @@ function InfiniteCanvasPage({
           <DialogContent className={"max-h-dialog overflow-y-auto"}>
             <DialogHeader>
               <DialogTitle>{"清空画布？"}</DialogTitle>
-              <DialogDescription className="sr-only">
-                清空当前页面的所有节点和连线，此操作仅影响编辑草稿。
+              <DialogDescription>
+                将移除当前编辑草稿中的所有节点和连线。
               </DialogDescription>
             </DialogHeader>
-            <div>
-              <p className="text-sm opacity-60">
-                {"这会删除当前画布上的所有节点和连线。"}
-              </p>
-            </div>
             <DialogFooter>
               {
                 <>

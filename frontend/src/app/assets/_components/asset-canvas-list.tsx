@@ -620,8 +620,8 @@ export function AssetCanvasList({
         <CanvasDeleteConfirmation
           description={
             deleting.some((item) => item.is_main)
-              ? "删除主画布将同时删除整个所属项目，是否确认删除？"
-              : `是否确认删除所选${kind === "short_drama" ? "短剧" : "画布"}？`
+              ? "所属项目也会删除。"
+              : undefined
           }
           locked={locked}
           pending={writing}

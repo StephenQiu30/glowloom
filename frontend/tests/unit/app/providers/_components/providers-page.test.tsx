@@ -392,7 +392,7 @@ it("鼠标打开连接弹窗后关闭仍返回原行入口", async () => {
   );
 });
 
-it("批量删除确认列出草稿和历史保护，只提交合格的连接", async () => {
+it("批量删除只显示简短确认，结果说明历史保护", async () => {
   api.role = "platform_admin";
   const draft = {
     provider: {
@@ -433,10 +433,13 @@ it("批量删除确认列出草稿和历史保护，只提交合格的连接", a
   expect(within(toolbar).getByText("已选 2 项")).toBeTruthy();
   expect(within(toolbar).getAllByRole("button")).toHaveLength(2);
   fireEvent.click(within(toolbar).getByRole("button", { name: "删除连接" }));
-  expect(await screen.findByText("一并移除模型草稿：待配置模型")).toBeTruthy();
+  await screen.findByRole("button", { name: "删除 1 个连接" });
+  const confirmation = screen.getByRole("dialog", { name: "删除连接？" });
+  expect(within(confirmation).queryByRole("table")).toBeNull();
   expect(
-    screen.getByText("关联在途或历史任务，可在连接详情归档。"),
-  ).toBeTruthy();
+    within(confirmation).queryByText(/待配置模型|历史连接|草稿连接/),
+  ).toBeNull();
+  expect(within(confirmation).getByText("1 项无法执行。")).toBeTruthy();
   expect(api.deleteConnection).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "取消" }));
   expect(api.deleteConnection).not.toHaveBeenCalled();
@@ -444,6 +447,9 @@ it("批量删除确认列出草稿和历史保护，只提交合格的连接", a
   fireEvent.click(within(toolbar).getByRole("button", { name: "删除连接" }));
   fireEvent.click(await screen.findByRole("button", { name: "删除 1 个连接" }));
   await screen.findByText("连接已删除");
+  expect(
+    screen.getByText("关联在途或历史任务，可在连接详情归档。"),
+  ).toBeTruthy();
   expect(api.deleteConnection).toHaveBeenCalledTimes(1);
   expect(api.deleteConnection).toHaveBeenCalledWith(
     { id: "draft" },
@@ -456,4 +462,38 @@ it("批量删除确认列出草稿和历史保护，只提交合格的连接", a
   expect(screen.queryByRole("checkbox", { name: "选择 草稿连接" })).toBeNull();
   expect(screen.getByRole("checkbox", { name: "选择 历史连接" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "查看批量操作结果" })).toBeTruthy();
+});
+
+it("删除成功后直接关闭确认弹窗并刷新列表", async () => {
+  api.role = "platform_admin";
+  api.providers.mockResolvedValue({
+    items: [
+      {
+        provider: {
+          id: "draft",
+          name: "草稿连接",
+          status: "disabled",
+          revision: 1,
+        },
+      },
+    ],
+  });
+  api.deletionPreview.mockResolvedValue({
+    revision: 1,
+    token: "preview-token",
+  });
+  api.deleteConnection.mockImplementation(async () => {
+    api.providers.mockResolvedValue({ items: [] });
+    return { id: "draft" };
+  });
+
+  render(<ProvidersPage />);
+  fireEvent.click(
+    await screen.findByRole("checkbox", { name: "选择 草稿连接" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "删除连接" }));
+  fireEvent.click(await screen.findByRole("button", { name: "删除 1 个连接" }));
+  await screen.findByText("还没有连接");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(api.deleteConnection).toHaveBeenCalledTimes(1);
 });

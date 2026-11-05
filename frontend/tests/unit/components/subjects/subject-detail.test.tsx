@@ -50,7 +50,7 @@ const proof = {
 };
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
-it("reviews actual zero references and submits the exact accepted proof", async () => {
+it("uses one confirmation when the server reports zero references", async () => {
   api.remove
     .mockRejectedValueOnce(
       new RequestError("impact_acknowledgment_required", 409, {
@@ -72,10 +72,8 @@ it("reviews actual zero references and submits the exact accepted proof", async 
     <SubjectDetail subject={subject} onClose={vi.fn()} onChanged={changed} />,
   );
   fireEvent.click(screen.getByRole("button", { name: "删除主体" }));
-  fireEvent.click(screen.getByRole("button", { name: "检查引用" }));
-  await screen.findByText("已核对：没有关联的剧本引用。");
-  expect(changed).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "删除主体" }));
+  expect(api.remove).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
   await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
   expect(api.remove.mock.calls[1][1]).toEqual({
     expected_revision: 1,
@@ -105,9 +103,7 @@ it("unknown deletion retries the same key and cannot dismiss the pending intent"
     <SubjectDetail subject={subject} onClose={vi.fn()} onChanged={changed} />,
   );
   fireEvent.click(screen.getByRole("button", { name: "删除主体" }));
-  fireEvent.click(screen.getByRole("button", { name: "检查引用" }));
-  await screen.findByText("已核对：没有关联的剧本引用。");
-  fireEvent.click(screen.getByRole("button", { name: "删除主体" }));
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
   await screen.findByRole("button", { name: "重试原操作" });
   expect(
     screen.getByRole("button", { name: "取消" }).hasAttribute("disabled"),
@@ -155,16 +151,16 @@ it("blocks a stale revision until the subject is refreshed", async () => {
     <SubjectDetail subject={subject} onClose={vi.fn()} onChanged={vi.fn()} />,
   );
   fireEvent.click(screen.getByRole("button", { name: "删除主体" }));
-  fireEvent.click(screen.getByRole("button", { name: "检查引用" }));
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
   await screen.findByText("主体已在其他窗口更新，请刷新后重新确认操作。");
   expect(
-    screen.getByRole("button", { name: "检查引用" }).hasAttribute("disabled"),
+    screen.getByRole("button", { name: "删除" }).hasAttribute("disabled"),
   ).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "刷新主体后重试" }));
   await screen.findByRole("button", { name: "编辑主体" });
   fireEvent.click(screen.getByRole("button", { name: "删除主体" }));
   expect(
-    screen.getByRole("button", { name: "检查引用" }).hasAttribute("disabled"),
+    screen.getByRole("button", { name: "删除" }).hasAttribute("disabled"),
   ).toBe(false);
 });
 
@@ -190,12 +186,44 @@ it("accepts a committed receipt when a later restore already advanced the head",
     <SubjectDetail subject={subject} onClose={vi.fn()} onChanged={changed} />,
   );
   fireEvent.click(screen.getByRole("button", { name: "删除主体" }));
-  fireEvent.click(screen.getByRole("button", { name: "检查引用" }));
-  await screen.findByText("已核对：没有关联的剧本引用。");
-  fireEvent.click(screen.getByRole("button", { name: "删除主体" }));
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
   await screen.findByText(
     "操作已完成，主体随后又有更新。当前显示的是最新状态。",
   );
   expect(changed.mock.calls[0][0].head.deleted).toBe(false);
   expect(screen.queryByRole("button", { name: "重试原操作" })).toBeNull();
+});
+
+it("asks for another confirmation only after learning that the subject is referenced", async () => {
+  const referenced = { ...proof, current_lines: 2 };
+  api.remove
+    .mockRejectedValueOnce(
+      new RequestError("impact_acknowledgment_required", 409, {
+        impact: referenced,
+      }),
+    )
+    .mockResolvedValue({
+      entry_id: id,
+      kind: "character",
+      revision: 2,
+      version_id: version,
+    });
+  api.get.mockResolvedValue({
+    ...subject,
+    head: { ...subject.head, revision: 2, deleted: true },
+  });
+  const changed = vi.fn();
+  render(
+    <SubjectDetail subject={subject} onClose={vi.fn()} onChanged={changed} />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "删除主体" }));
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  await screen.findByText("此主体仍被引用。删除后，新创作需重新选择主体。");
+  expect(api.remove).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+  expect(api.remove.mock.calls[1][1]).toEqual({
+    expected_revision: 1,
+    acknowledged_impact: referenced,
+  });
 });

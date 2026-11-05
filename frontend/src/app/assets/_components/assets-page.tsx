@@ -852,12 +852,11 @@ function Library({
                   <AlertDialogTitle>
                     {confirm === "restore_items"
                       ? "恢复所选素材？"
-                      : "移入回收站？"}
+                      : `将 ${selection.length} 项素材移入回收站？`}
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    将处理已选择的 {selection.length} 项素材。
                     {confirm === "restore_items"
-                      ? "恢复后可在素材列表中继续使用。"
+                      ? `将处理已选择的 ${selection.length} 项素材。恢复后可在素材列表中继续使用。`
                       : "移入回收站后可以恢复。"}
                   </AlertDialogDescription>
                 </AlertDialogHeader>

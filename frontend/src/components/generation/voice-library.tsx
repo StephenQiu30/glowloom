@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -383,25 +384,32 @@ export function VoiceLibrary({
               onCloseAutoFocus={restoreManagementFocus}
             >
               <DialogTitle>删除“{deleting.name}”？</DialogTitle>
-              <DialogDescription>
-                从音色库移除，原音频和已有创作引用会保留。
-              </DialogDescription>
-              <Button
-                variant="destructive"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    await changeVoice(projectID, deleting, { delete: true });
-                    setVoices((items) =>
-                      items.filter((v) => v.id !== deleting.id),
-                    );
-                    setDeleting(null);
-                    toast.success("音色已删除");
-                  })
-                }
-              >
-                删除音色
-              </Button>
+              <DialogDescription>原音频会保留。</DialogDescription>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setDeleting(null)}
+                >
+                  取消
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async () => {
+                      await changeVoice(projectID, deleting, { delete: true });
+                      setVoices((items) =>
+                        items.filter((v) => v.id !== deleting.id),
+                      );
+                      setDeleting(null);
+                      toast.success("音色已删除");
+                    })
+                  }
+                >
+                  删除
+                </Button>
+              </DialogFooter>
               {error && <FeedbackToast message={error} />}
             </DialogContent>
           </Dialog>

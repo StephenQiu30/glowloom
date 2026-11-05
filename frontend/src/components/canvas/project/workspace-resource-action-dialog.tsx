@@ -266,11 +266,7 @@ export function WorkspaceResourceActionDialog({
             }}
           >
             {busy && <Spinner data-icon="inline-start" />}
-            {busy
-              ? "正在处理"
-              : started
-                ? "继续删除"
-                : `删除 ${items.length} 项`}
+            {busy ? "正在处理" : started ? "继续删除" : "删除"}
           </AlertDialogAction>
         ) : (
           <Button

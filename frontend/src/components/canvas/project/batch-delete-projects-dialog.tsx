@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -149,12 +148,10 @@ export function BatchDeleteProjectsDialog({
       <DialogContent
         className="project-action-dialog max-h-dialog overflow-y-auto"
         showCloseButton={!busy && !command.unknown}
+        aria-describedby={undefined}
       >
         <DialogHeader>
-          <DialogTitle>批量删除画布？</DialogTitle>
-          <DialogDescription>
-            将删除所选的 {items.length} 个画布，删除后无法打开。
-          </DialogDescription>
+          <DialogTitle>删除 {items.length} 个画布？</DialogTitle>
         </DialogHeader>
         {!command.unknown && command.error?.code === 40901 && (
           <Button
@@ -193,11 +190,7 @@ export function BatchDeleteProjectsDialog({
               }
               onClick={() => void runRemaining()}
             >
-              {busy
-                ? "正在处理"
-                : started
-                  ? "继续删除剩余画布"
-                  : "确认批量删除"}
+              {busy ? "正在处理" : started ? "继续删除剩余画布" : "删除"}
             </Button>
           )}
         </DialogFooter>

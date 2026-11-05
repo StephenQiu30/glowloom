@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -71,14 +70,13 @@ export function CanvasDeleteProjectsDialog({
         if (!open && !locked) onClose();
       }}
     >
-      <DialogContent className="project-action-dialog project-delete-dialog">
+      <DialogContent
+        aria-describedby={undefined}
+        className="project-action-dialog project-delete-dialog"
+      >
         <DialogHeader>
           <DialogTitle>删除「{base.title}」？</DialogTitle>
-          <DialogDescription>删除后将无法打开此画布。</DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          该操作不会自动删除参考素材中独立保存的素材。
-        </p>
         {command.error?.code === 40901 && (
           <Button
             variant="outline"

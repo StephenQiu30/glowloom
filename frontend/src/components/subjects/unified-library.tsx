@@ -632,7 +632,7 @@ export function UnifiedSubjectLibrary({
           >
             <DialogTitle>确认删除主体</DialogTitle>
             <DialogDescription>
-              主体删除后无法恢复，关联的历史作品将无法重新编辑。
+              删除后无法恢复，关联的历史作品将无法重新编辑。
             </DialogDescription>
             <DialogFooter>
               <Button

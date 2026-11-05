@@ -31,7 +31,7 @@ export function userBatchAction(
     title: titles[kind],
     effect:
       kind === "delete"
-        ? "删除后无法登录，作品保留。此操作不可恢复。"
+        ? "删除后，账号无法恢复。作品会保留。"
         : kind === "disable"
           ? "禁用后无法登录，可随时重新启用。"
           : kind === "enable"
@@ -131,11 +131,11 @@ const connectionDeletionReasons: Record<string, string> = {
 
 export const connectionDeleteAction: BatchAction<ConnectionRow> = {
   title: "删除连接",
-  effect: "连接及列出的草稿模型将从管理目录移除。删除后无法恢复。",
+  effect: "关联的模型草稿也会删除。",
+  simpleConfirmation: true,
   confirmLabel: (count) => `删除 ${count} 个连接`,
   destructive: true,
-  label: (row) =>
-    `${providerConnectionName(row.provider) ?? "连接"} · ${row.credential?.status === "active" ? "已配置" : "未配置"} · ${row.id.slice(0, 8)}`,
+  label: (row) => providerConnectionName(row.provider) ?? "连接",
   prepare: async (row, signal, refresh) => {
     const preview = await previewAdminProviderDeletion(
       { id: row.id },
@@ -161,14 +161,7 @@ export const connectionDeleteAction: BatchAction<ConnectionRow> = {
           "连接暂时无法删除。",
       };
     }
-    const names =
-      preview.drafts?.map((draft) => draft.name).filter(Boolean) ?? [];
-    return {
-      row: next,
-      preview: names.length
-        ? `一并移除模型草稿：${names.join("、")}`
-        : undefined,
-    };
+    return { row: next };
   },
   execute: async (entry, _reason, signal) => {
     const result = await deleteAdminProvider(

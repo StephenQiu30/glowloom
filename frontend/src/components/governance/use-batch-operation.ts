@@ -17,12 +17,13 @@ export type BatchAction<T> = {
   reason?: boolean;
   password?: boolean;
   compact?: boolean;
+  simpleConfirmation?: boolean;
   label: (row: T) => string;
   prepare: (
     row: T,
     signal: AbortSignal,
     refresh: boolean,
-  ) => Promise<{ row: T; skip?: string; preview?: string }>;
+  ) => Promise<{ row: T; skip?: string }>;
   execute: (
     entry: BatchEntry<T>,
     reason: string,
@@ -95,6 +96,16 @@ export function useBatchOperation<T extends { id?: string }>(
   function settle(result: BatchEntry<T>[], succeeded: string[]) {
     onSettled(succeeded);
     if (
+      action?.simpleConfirmation &&
+      action.confirmLabel &&
+      result.length > 0 &&
+      result.every((entry) => entry.status === "success")
+    ) {
+      setOpen(false);
+      toast.success(`已${action.confirmLabel(result.length)}`);
+      return;
+    }
+    if (
       !action?.compact ||
       result.some((entry) => !["success", "skipped"].includes(entry.status))
     )
@@ -150,7 +161,7 @@ export function useBatchOperation<T extends { id?: string }>(
                 ...base,
                 row: p.row,
                 status: p.skip ? ("skipped" as const) : ("ready" as const),
-                message: p.skip ?? p.preview ?? "",
+                message: p.skip ?? "",
               };
             } catch (e) {
               checkAuthority(e);

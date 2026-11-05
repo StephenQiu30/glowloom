@@ -27,7 +27,7 @@ export function CanvasDeleteConfirmation({
   onConfirm,
   onCloseAutoFocus,
 }: {
-  description: string;
+  description?: string;
   locked: boolean;
   pending: boolean;
   retry: boolean;
@@ -48,6 +48,7 @@ export function CanvasDeleteConfirmation({
         className="canvas-delete-dialog"
         overlayClassName="canvas-delete-overlay"
         aria-busy={pending}
+        {...(!description ? { "aria-describedby": undefined } : {})}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           cancel.current?.focus();
@@ -59,7 +60,9 @@ export function CanvasDeleteConfirmation({
       >
         <AlertDialogHeader>
           <AlertDialogTitle>确认删除</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
+          {description && (
+            <AlertDialogDescription>{description}</AlertDialogDescription>
+          )}
         </AlertDialogHeader>
         {notice && <FeedbackToast message={notice} />}
         <AlertDialogFooter>

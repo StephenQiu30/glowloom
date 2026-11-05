@@ -788,11 +788,10 @@ export function PersonalHistoryList({
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>确认删除</AlertDialogTitle>
-              <AlertDialogDescription>
-                永久移除 {deleting.length}{" "}
-                项历史记录。任务执行、计费与画布引用不受影响。
-              </AlertDialogDescription>
+              <AlertDialogTitle>
+                删除 {deleting.length} 项历史记录？
+              </AlertDialogTitle>
+              <AlertDialogDescription>删除后无法恢复。</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={locked}>取消</AlertDialogCancel>

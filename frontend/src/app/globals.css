@@ -2409,6 +2409,12 @@ button:not(:disabled),
   border-radius: 16px;
   background: var(--card);
 }
+.subject-control[data-action="delete"] {
+  min-height: 0;
+}
+.subject-control[data-action="delete"] .subject-control-actions {
+  margin-top: 16px;
+}
 .subject-control [data-slot="dialog-title"] {
   padding-right: 36px;
   font-size: 18px;

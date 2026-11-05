@@ -12,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogFooter,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -674,26 +675,31 @@ function CanvasDocumentSession({
             if (!open) setDialog(null);
           }}
         >
-          <DialogContent className="max-h-[80dvh] overflow-y-auto">
+          <DialogContent
+            className="max-h-[80dvh] overflow-y-auto"
+            {...(dialog === "delete" ? { "aria-describedby": undefined } : {})}
+          >
             <DialogHeader>
               <DialogTitle>
                 {dialog === "rename"
                   ? "重命名画布"
                   : dialog === "delete"
-                    ? "删除画布"
+                    ? "删除画布？"
                     : dialog === "conflict"
                       ? "选择要继续使用的版本"
                       : dialog === "discardForm"
                         ? "放弃未应用参数？"
                         : "画布操作"}
               </DialogTitle>
-              <DialogDescription>
-                {dialog === "conflict"
-                  ? "当前草稿会保留，采用服务端版本前可先导出草稿。"
-                  : dialog === "discardForm"
-                    ? "仅放弃此节点尚未应用的参数输入；当前画布的节点、内容和删除操作保持不变。其他节点的未应用参数继续保留。"
-                    : "操作将按当前内容和关联版本提交。"}
-              </DialogDescription>
+              {dialog !== "delete" && (
+                <DialogDescription>
+                  {dialog === "conflict"
+                    ? "当前草稿会保留，采用服务端版本前可先导出草稿。"
+                    : dialog === "discardForm"
+                      ? "仅放弃此节点尚未应用的参数输入；当前画布的节点、内容和删除操作保持不变。其他节点的未应用参数继续保留。"
+                      : "操作将按当前内容和关联版本提交。"}
+                </DialogDescription>
+              )}
             </DialogHeader>
             {dialog === "discardForm" && (
               <div className="flex gap-2">
@@ -737,15 +743,20 @@ function CanvasDocumentSession({
               </form>
             )}
             {dialog === "delete" && (
-              <Button
-                variant="destructive"
-                disabled={!clean}
-                onClick={async () => {
-                  if (await save.runCommand("DELETE")) router.push(root);
-                }}
-              >
-                确认删除
-              </Button>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialog(null)}>
+                  取消
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={!clean}
+                  onClick={async () => {
+                    if (await save.runCommand("DELETE")) router.push(root);
+                  }}
+                >
+                  删除
+                </Button>
+              </DialogFooter>
             )}
             {dialog === "conflict" && server && (
               <div className="space-y-3">

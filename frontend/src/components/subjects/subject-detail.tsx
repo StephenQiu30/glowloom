@@ -28,6 +28,19 @@ import {
   type Subject,
 } from "./contracts";
 import { SubjectEditor } from "./subject-editor";
+function deletionImpact(error: unknown) {
+  return error instanceof RequestError &&
+    error.code === "impact_acknowledgment_required"
+    ? impactProof(error.meta)
+    : undefined;
+}
+
+function hasReferences(proof: API.ImpactProof) {
+  return Boolean(
+    proof.current_lines || proof.historical_lines || proof.aliases,
+  );
+}
+
 export function SubjectDetail({
   subject,
   onClose,
@@ -68,7 +81,7 @@ export function SubjectDetail({
     busy.current = true;
     setPending(true);
     setError("");
-    const t = op.current ?? {
+    let t = op.current ?? {
       key: crypto.randomUUID(),
       body: {
         expected_revision: value.head.revision,
@@ -83,8 +96,27 @@ export function SubjectDetail({
           : action === "restore"
             ? restoreBibleEntry
             : confirmBibleEntry;
+      const response = await fn(params, t.body, {
+        headers: { "Idempotency-Key": t.key },
+      }).catch((error: unknown) => {
+        const impact = deletionImpact(error);
+        if (
+          action !== "delete" ||
+          t.body.acknowledged_impact ||
+          !impact ||
+          hasReferences(impact)
+        )
+          throw error;
+        // The confirmed deletion can proceed without a separate prompt when no references are affected.
+        t = {
+          key: crypto.randomUUID(),
+          body: { ...t.body, acknowledged_impact: impact },
+        };
+        op.current = t;
+        return fn(params, t.body, { headers: { "Idempotency-Key": t.key } });
+      });
       const receipt = requireSubjectReceipt(
-        await fn(params, t.body, { headers: { "Idempotency-Key": t.key } }),
+        response,
         value.head.kind,
         value.head.id,
       );
@@ -116,12 +148,11 @@ export function SubjectDetail({
       setUncertain(false);
       op.current = null;
     } catch (e) {
-      const impact =
-        e instanceof RequestError && e.code === "impact_acknowledgment_required"
-          ? impactProof(e.meta)
-          : undefined;
+      const impact = deletionImpact(e);
       if (impact) {
-        setError(proof ? "引用已发生变化，请核对最新影响后再删除。" : "");
+        setError(
+          t.body.acknowledged_impact ? "引用已发生变化，请重新确认。" : "",
+        );
         setProof(impact);
         setUncertain(false);
         op.current = null;
@@ -214,6 +245,7 @@ export function SubjectDetail({
           className={
             action ? "subject-control" : "subject-detail sm:max-w-[680px]"
           }
+          data-action={action ?? undefined}
           showCloseButton={!pending && !uncertain}
           overlayClassName={action ? "bg-cover-overlay" : undefined}
           onInteractOutside={(e) => e.preventDefault()}
@@ -310,37 +342,31 @@ export function SubjectDetail({
               <DialogDescription>
                 <span className="subject-control-copy">
                   {action === "delete"
-                    ? "已生成作品不受影响。新创作需要重新选择主体。"
+                    ? proof && hasReferences(proof)
+                      ? "此主体仍被引用。删除后，新创作需重新选择主体。"
+                      : "删除后可在「已删除」中恢复。"
                     : action === "restore"
                       ? "恢复后可继续编辑和引用，历史版本与确认记录保留。"
                       : "将当前内容设为可引用的确认版本。"}
                 </span>
               </DialogDescription>
-              <div className="subject-control-body" aria-live="polite">
-                {proof && (
-                  <p>
-                    {proof.current_lines === 0 &&
-                    proof.historical_lines === 0 &&
-                    proof.aliases === 0
-                      ? "已核对：没有关联的剧本引用。"
-                      : `当前台词 ${proof.current_lines} 处 · 历史台词 ${proof.historical_lines} 处 · 合并别名 ${proof.aliases} 个。历史内容保留，新引用需重新选择。`}
-                  </p>
-                )}
-                {action === "delete" && <p>删除后可在“已删除”中恢复。</p>}
-                {error && <FeedbackToast message={error} />}
-                {error && !uncertain && (
-                  <Button
-                    variant="link"
-                    disabled={pending}
-                    onClick={() => void refresh()}
-                  >
-                    刷新主体后重试
-                  </Button>
-                )}
-                {uncertain && (
-                  <p>尚未确认操作结果。重试会核对同一请求，不会重复执行。</p>
-                )}
-              </div>
+              {(action !== "delete" || error || uncertain) && (
+                <div className="subject-control-body" aria-live="polite">
+                  {error && <FeedbackToast message={error} />}
+                  {error && !uncertain && (
+                    <Button
+                      variant="link"
+                      disabled={pending}
+                      onClick={() => void refresh()}
+                    >
+                      刷新主体后重试
+                    </Button>
+                  )}
+                  {uncertain && (
+                    <p>尚未确认操作结果。重试会核对同一请求，不会重复执行。</p>
+                  )}
+                </div>
+              )}
               <div className="subject-control-actions">
                 <Button
                   variant="outline"
@@ -350,7 +376,7 @@ export function SubjectDetail({
                   取消
                 </Button>
                 <Button
-                  variant="default"
+                  variant={action === "delete" ? "destructive" : "default"}
                   disabled={pending || stale}
                   onClick={() => void control()}
                 >
@@ -358,13 +384,11 @@ export function SubjectDetail({
                     ? "正在处理…"
                     : uncertain
                       ? "重试原操作"
-                      : proof
-                        ? "删除主体"
-                        : action === "delete"
-                          ? "检查引用"
-                          : action === "restore"
-                            ? "恢复主体"
-                            : "确认"}
+                      : action === "delete"
+                        ? "删除"
+                        : action === "restore"
+                          ? "恢复主体"
+                          : "确认"}
                 </Button>
               </div>
             </>

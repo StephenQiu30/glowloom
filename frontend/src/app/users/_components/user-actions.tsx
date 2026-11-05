@@ -55,7 +55,7 @@ export function UserActions({
           : kind === "propose_admin"
             ? "目标账号需主动接受授权，接受前平台角色保持原状态。"
             : kind === "delete"
-              ? "删除后无法登录，作品保留。此操作不可恢复。"
+              ? "删除后，账号无法恢复。作品会保留。"
               : kind === "disable"
                 ? "禁用后无法登录，可随时重新启用。"
                 : kind === "profile_reset"

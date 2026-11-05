@@ -611,9 +611,9 @@ it("没有输出的进行中记录不可收藏，删除只提交记录修订且�
   ).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
   expect(state.historyCommand).not.toHaveBeenCalled();
-  expect(screen.getByRole("alertdialog").textContent).toContain(
-    "任务执行、计费",
-  );
+  expect(
+    screen.getByRole("alertdialog", { name: "删除 1 项历史记录？" }),
+  ).toBeTruthy();
   fireEvent.click(
     within(screen.getByRole("alertdialog")).getByRole("button", {
       name: "删除",
@@ -783,7 +783,9 @@ it("主画布删除明确项目影响，并通过统一命令携带项目CAS", a
     .getAllByRole("checkbox", { name: /^选择/ })
     .forEach((item) => fireEvent.click(item));
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
-  expect(screen.getByRole("alertdialog").textContent).toContain("整个所属项目");
+  expect(screen.getByRole("alertdialog").textContent).toContain(
+    "所属项目也会删除。",
+  );
   expect(screen.getByRole("alertdialog").textContent).not.toMatch(
     /回收站|30天/,
   );
@@ -862,7 +864,9 @@ it("画布删除未知结果保留确认框和幂等重试，明确失败展示�
     .getAllByRole("checkbox", { name: /^选择/ })
     .forEach((item) => fireEvent.click(item));
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
-  expect(screen.getByRole("alertdialog").textContent).toContain("整个所属项目");
+  expect(screen.getByRole("alertdialog").textContent).toContain(
+    "所属项目也会删除。",
+  );
   fireEvent.click(
     within(screen.getByRole("alertdialog")).getByRole("button", {
       name: "删除",
