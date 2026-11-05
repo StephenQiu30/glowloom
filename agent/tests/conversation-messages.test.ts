@@ -1,12 +1,12 @@
-import { expect, it } from "vitest";
-import { ROOT_CONVERSATION_ID } from "@earendil-works/pi-durable";
-import { stableId } from "../src/sessions/manifest.js";
-import { publicMessageParts } from "../src/harness/messages.js";
-const run = "00000000-0000-4000-8000-000000000001";
-it("preserves a long unicode answer in stable bounded pieces", () => {
-  const text = "星海🌌".repeat(9000);
+import { expect, it } from 'vitest';
+import { ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable';
+import { stableId } from '../src/sessions/manifest.js';
+import { publicMessageParts } from '../src/runtime/pi-durable/messages.js';
+const run = '00000000-0000-4000-8000-000000000001';
+it('preserves a long unicode answer in stable bounded pieces', () => {
+  const text = '星海🌌'.repeat(9000);
   const event = {
-    type: "text",
+    type: 'text',
     payload: {
       root_run_id: run,
       conversation_id: Number(ROOT_CONVERSATION_ID),
@@ -15,7 +15,7 @@ it("preserves a long unicode answer in stable bounded pieces", () => {
   };
   const parts = publicMessageParts(event, 5, 2);
   expect(parts.length).toBeGreaterThan(1);
-  expect(parts.map((part) => part.content).join("")).toBe(text);
+  expect(parts.map((part) => part.content).join('')).toBe(text);
   expect(parts.every((part) => Buffer.byteLength(part.content) <= 16384)).toBe(
     true,
   );
@@ -26,8 +26,8 @@ it("never turns a specialist's internal text or reasoning into the main answer",
   expect(
     publicMessageParts(
       {
-        type: "text",
-        payload: { root_run_id: run, conversation_id: 999, text: "private" },
+        type: 'text',
+        payload: { root_run_id: run, conversation_id: 999, text: 'private' },
       },
       1,
       1,
@@ -35,17 +35,17 @@ it("never turns a specialist's internal text or reasoning into the main answer",
   ).toEqual([]);
   expect(
     publicMessageParts(
-      { type: "thinking", payload: { root_run_id: run, text: "secret" } },
+      { type: 'thinking', payload: { root_run_id: run, text: 'secret' } },
       1,
       1,
     ),
   ).toEqual([]);
 });
-it("persists only a formal operation identity from a tool receipt", () => {
-  const op = "00000000-0000-4000-8000-000000000005";
+it('persists only a formal operation identity from a tool receipt', () => {
+  const op = '00000000-0000-4000-8000-000000000005';
   expect(
     publicMessageParts(
-      { type: "operation", payload: { root_run_id: run, operation_id: op } },
+      { type: 'operation', payload: { root_run_id: run, operation_id: op } },
       4,
       1,
     ),
@@ -54,17 +54,17 @@ it("persists only a formal operation identity from a tool receipt", () => {
       message_id: stableId(run, `operation:${op}`),
       run_id: run,
       conversation_id: Number(ROOT_CONVERSATION_ID),
-      sequence: "4:1",
+      sequence: '4:1',
       part_index: 0,
-      kind: "operation",
+      kind: 'operation',
       content: op,
     },
   ]);
   expect(
     publicMessageParts(
       {
-        type: "operation",
-        payload: { root_run_id: run, operation_id: "javascript:alert(1)" },
+        type: 'operation',
+        payload: { root_run_id: run, operation_id: 'javascript:alert(1)' },
       },
       4,
       1,

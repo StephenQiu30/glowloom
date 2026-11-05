@@ -1,14 +1,14 @@
-import { Pool } from "pg";
-import { BusinessClient } from "../../src/business/client.js";
-import { SessionRuntime } from "../../src/sessions/runtime.js";
-import type { RunRow } from "../../src/sessions/store.js";
+import { Pool } from 'pg';
+import { BusinessClient } from '../../src/integrations/go-business-api/client.js';
+import { SessionRuntime } from '../../src/sessions/runtime.js';
+import type { RunRow } from '../../src/sessions/persistence/store.js';
 
 const pool = new Pool({
   connectionString: process.env.GLOWLOOM_AGENT_TEST_DB_DSN,
   max: 4,
 });
 const run = (
-  await pool.query<RunRow>("SELECT * FROM agent.service_runs WHERE id=$1", [
+  await pool.query<RunRow>('SELECT * FROM agent.service_runs WHERE id=$1', [
     process.env.RECOVERY_RUN,
   ])
 ).rows[0]!;
@@ -27,10 +27,10 @@ if (faultWindow) {
       const query = client.query.bind(client);
       return new Proxy(client, {
         get(target, key) {
-          if (key === "query")
+          if (key === 'query')
             return async (...queryArgs: unknown[]) => {
               const result = await Reflect.apply(query, target, queryArgs);
-              if (!reached && queryArgs[0] === "COMMIT") {
+              if (!reached && queryArgs[0] === 'COMMIT') {
                 const children = await audit.query<{
                   id: string;
                   owner_task_id: string;
@@ -51,17 +51,17 @@ if (faultWindow) {
                     [run.session_id],
                   );
                   const hit =
-                    faultWindow === "child_create_config" ||
-                    (faultWindow === "child_submit" &&
+                    faultWindow === 'child_create_config' ||
+                    (faultWindow === 'child_submit' &&
                       submissions.rowCount! > 0) ||
-                    (faultWindow === "child_collect" &&
+                    (faultWindow === 'child_collect' &&
                       state.rows[0]?.payload.delegations?.some(
-                        (x) => x.status === "done",
+                        (x) => x.status === 'done',
                       ));
                   if (hit) {
                     reached = true;
                     process.send?.({
-                      kind: "window",
+                      kind: 'window',
                       window: faultWindow,
                       child_id: child.id,
                       owner_task_id: child.owner_task_id,
@@ -74,7 +74,7 @@ if (faultWindow) {
               return result;
             };
           const value = Reflect.get(target, key);
-          return typeof value === "function" ? value.bind(target) : value;
+          return typeof value === 'function' ? value.bind(target) : value;
         },
       });
     })();
@@ -82,16 +82,16 @@ if (faultWindow) {
 }
 const runtime = await SessionRuntime.open(
   pool,
-  new BusinessClient(process.env.RECOVERY_ORIGIN!, "fixture"),
+  new BusinessClient(process.env.RECOVERY_ORIGIN!, 'fixture'),
   run,
   1200,
 );
-process.send?.({ kind: "opened" });
+process.send?.({ kind: 'opened' });
 try {
   await runtime.start();
-  process.send?.({ kind: "settled", state: await runtime.state() });
+  process.send?.({ kind: 'settled', state: await runtime.state() });
 } catch (error) {
-  process.send?.({ kind: "error", error: String(error) });
+  process.send?.({ kind: 'error', error: String(error) });
 } finally {
   await runtime.close();
   await pool.end();

@@ -1,25 +1,28 @@
-import { randomUUID } from "node:crypto";
-import { expect, it } from "vitest";
-import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
-import { Harness, ROOT_CONVERSATION_ID } from "@earendil-works/pi-durable";
+import { randomUUID } from 'node:crypto';
+import { expect, it } from 'vitest';
+import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
+import { Harness, ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable';
 import {
   BusinessClient,
   type Grant,
   type CallReceipt,
-} from "../src/business/client.js";
-import { buildRegistry, type HarnessGate } from "../src/harness/registry.js";
-import { StateDoc } from "../src/harness/docs.js";
-import { createBusinessModels } from "../src/harness/model-provider.js";
-import { PhaseTelemetry } from "../src/harness/telemetry.js";
-import { freezeManifest } from "../src/sessions/manifest.js";
+} from '../src/integrations/go-business-api/client.js';
+import {
+  buildRegistry,
+  type HarnessGate,
+} from '../src/runtime/pi-durable/registry.js';
+import { StateDoc } from '../src/runtime/pi-durable/docs.js';
+import { createBusinessModels } from '../src/runtime/pi-durable/model-provider.js';
+import { PhaseTelemetry } from '../src/runtime/pi-durable/telemetry.js';
+import { freezeManifest } from '../src/sessions/manifest.js';
 import {
   claimSessionOwner,
   releaseSessionOwner,
-} from "../src/storage/ownership.js";
-import { openPostgresStorage } from "../src/storage/postgres.js";
-import { testPool } from "./storage/database.js";
+} from '../src/adapters/postgres/pi-durable/ownership.js';
+import { openPostgresStorage } from '../src/adapters/postgres/pi-durable/postgres.js';
+import { testPool } from './storage/database.js';
 
-it("uses actual official CompactionTask through the business model gate then reinjects typed goal, manifest, Skill, plan and adoption constraints", async () => {
+it('uses actual official CompactionTask through the business model gate then reinjects typed goal, manifest, Skill, plan and adoption constraints', async () => {
   const pool = testPool();
   const session = randomUUID();
   const owner = await claimSessionOwner(pool, session, randomUUID(), 30000);
@@ -43,7 +46,7 @@ it("uses actual official CompactionTask through the business model gate then rei
   };
   class Fixture extends BusinessClient {
     constructor() {
-      super("http://127.0.0.1:1", "fixture");
+      super('http://127.0.0.1:1', 'fixture');
     }
     override async validate(value: Grant) {
       return value;
@@ -56,14 +59,14 @@ it("uses actual official CompactionTask through the business model gate then rei
     }
     override async skill() {
       return {
-        skill_id: "script",
-        version: "v1",
-        resource_hash: "hash",
-        content: "Skill constraint retained: cite real sources.",
+        skill_id: 'script',
+        version: 'v1',
+        resource_hash: 'hash',
+        content: 'Skill constraint retained: cite real sources.',
       };
     }
     override async execute(
-      ...args: Parameters<BusinessClient["execute"]>
+      ...args: Parameters<BusinessClient['execute']>
     ): Promise<CallReceipt> {
       calls++;
       const [, , g, call, input] = args;
@@ -73,13 +76,13 @@ it("uses actual official CompactionTask through the business model gate then rei
         root_run_id: g.root_run_id,
         submission_id: g.submission_id,
         call,
-        status: "completed",
+        status: 'completed',
         cost_micros: 1,
         result: {
-          output: "Official model response " + calls,
+          output: 'Official model response ' + calls,
           usage: { input_tokens: 1, output_tokens: 1 },
-          stop_reason: "stop",
-          model_key: "test",
+          stop_reason: 'stop',
+          model_key: 'test',
         },
       };
     }
@@ -87,8 +90,8 @@ it("uses actual official CompactionTask through the business model gate then rei
   const business = new Fixture();
   const manifest = freezeManifest(
     {
-      model_key: "test",
-      skills: [{ skill_id: "script", version: "v1", resource_hash: "hash" }],
+      model_key: 'test',
+      skills: [{ skill_id: 'script', version: 'v1', resource_hash: 'hash' }],
     },
     [],
   );
@@ -102,12 +105,12 @@ it("uses actual official CompactionTask through the business model gate then rei
       await business.validate(grant);
     },
     proposal: async () => {
-      throw new Error("unexpected proposal");
+      throw new Error('unexpected proposal');
     },
     reserve: async (call, kind) => {
       await harness!.commit(async (tx) => {
         const s = await tx.doc(StateDoc, ROOT_CONVERSATION_ID);
-        s[kind === "model" ? "model_steps" : "tool_steps"]++;
+        s[kind === 'model' ? 'model_steps' : 'tool_steps']++;
         s.reserved_calls.push({ call_id: call.call_id, task_id: call.task_id });
       }, context);
     },
@@ -135,7 +138,7 @@ it("uses actual official CompactionTask through the business model gate then rei
     );
     const root = await harness.root(context, {
       agent: {
-        model: { provider: "glowloom", modelId: "test" },
+        model: { provider: 'glowloom', modelId: 'test' },
         extensions: registry.rootExtensions,
         tools: registry.rootTools,
       },
@@ -145,20 +148,20 @@ it("uses actual official CompactionTask through the business model gate then rei
       Object.assign(s, {
         root_run_id: grant.root_run_id,
         segment_id: grant.submission_id,
-        status: "running",
-        goal: "Permanent creative goal",
+        status: 'running',
+        goal: 'Permanent creative goal',
         manifest_hash: manifest.sha256,
         skills: manifest.skills,
-        plan: [{ id: "p1", title: "Keep this plan" }],
+        plan: [{ id: 'p1', title: 'Keep this plan' }],
         adopted: [
-          { delegation_id: "adopted-task", source_refs: ["asset:real-source"] },
+          { delegation_id: 'adopted-task', source_refs: ['asset:real-source'] },
         ],
         loaded_skills: [
           {
-            skill_id: "script",
-            version: "v1",
-            resource_hash: "hash",
-            content: "Skill constraint retained: cite real sources.",
+            skill_id: 'script',
+            version: 'v1',
+            resource_hash: 'hash',
+            content: 'Skill constraint retained: cite real sources.',
           },
         ],
       });
@@ -166,8 +169,8 @@ it("uses actual official CompactionTask through the business model gate then rei
     await (
       await root.submit(
         {
-          type: "input",
-          content: "Old source history ".repeat(300),
+          type: 'input',
+          content: 'Old source history '.repeat(300),
           requestId: randomUUID(),
         },
         context,
@@ -176,8 +179,8 @@ it("uses actual official CompactionTask through the business model gate then rei
     await (
       await root.submit(
         {
-          type: "input",
-          content: "Recent source ".repeat(80),
+          type: 'input',
+          content: 'Recent source '.repeat(80),
           requestId: randomUUID(),
         },
         context,
@@ -187,28 +190,28 @@ it("uses actual official CompactionTask through the business model gate then rei
     const task = await root.compact(undefined, context);
     const settled = await harness.waitForTask(task, context);
     await root.waitForIdle(context);
-    expect(settled.state.outcome.status).toBe("completed");
+    expect(settled.state.outcome.status).toBe('completed');
     expect(calls).toBe(before + 1);
     const persisted = await harness.getTask(task, context);
-    expect(persisted?.kind).toBe("pi.compaction");
+    expect(persisted?.kind).toBe('pi.compaction');
     expect(settled.state.outcome.result).toBeDefined();
     await (
       await root.submit(
         {
-          type: "input",
-          content: "Continue after compaction",
+          type: 'input',
+          content: 'Continue after compaction',
           requestId: randomUUID(),
         },
         context,
       )
     ).wait(context);
     for (const retained of [
-      "Permanent creative goal",
+      'Permanent creative goal',
       manifest.sha256,
-      "Keep this plan",
-      "asset:real-source",
-      "Skill constraint retained",
-      "Only explicitly adopted",
+      'Keep this plan',
+      'asset:real-source',
+      'Skill constraint retained',
+      'Only explicitly adopted',
     ])
       expect(JSON.stringify(last)).toContain(retained);
     expect(

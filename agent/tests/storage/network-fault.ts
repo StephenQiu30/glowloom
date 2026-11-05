@@ -3,8 +3,8 @@ import {
   createServer,
   type AddressInfo,
   type Socket,
-} from "node:net";
-import { Pool } from "pg";
+} from 'node:net';
+import { Pool } from 'pg';
 
 // Drop precisely a PostgreSQL CommandComplete packet. The backend has executed
 // this command, but the frontend can never learn its result from this connection.
@@ -19,11 +19,11 @@ export async function interruptCommand(dsn: string, command: string) {
     });
     for (const socket of [front, back]) {
       sockets.add(socket);
-      socket.on("error", () => {
+      socket.on('error', () => {
         front.destroy();
         back.destroy();
       });
-      socket.on("close", () => {
+      socket.on('close', () => {
         sockets.delete(socket);
         front.destroy();
         back.destroy();
@@ -31,7 +31,7 @@ export async function interruptCommand(dsn: string, command: string) {
     }
     front.pipe(back);
     let pending = Buffer.alloc(0);
-    back.on("data", (chunk: Buffer) => {
+    back.on('data', (chunk: Buffer) => {
       pending = Buffer.concat([pending, chunk]);
       while (pending.length >= 5) {
         const size = 1 + pending.readUInt32BE(1);
@@ -52,11 +52,11 @@ export async function interruptCommand(dsn: string, command: string) {
       }
     });
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const proxyUrl = new URL(database);
-  proxyUrl.hostname = "127.0.0.1";
+  proxyUrl.hostname = '127.0.0.1';
   proxyUrl.port = String((server.address() as AddressInfo).port);
-  proxyUrl.searchParams.set("sslmode", "disable");
+  proxyUrl.searchParams.set('sslmode', 'disable');
   const pool = new Pool({ connectionString: proxyUrl.href });
   return {
     pool,

@@ -20,9 +20,9 @@
 | 文件范围                                                           | 唯一责任                                                           |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
 | agent/package.json、锁文件、tsconfig、Dockerfile                   | 独立构建与固定依赖                                                 |
-| agent/src/storage、agent/tests/storage                             | 官方 Storage PostgreSQL 实现、owner/fencing、完整一致性测试        |
-| agent/contracts、agent/src/http、agent/src/server.ts               | TypeBox 单源合同、认证、HTTP/SSE、关闭                             |
-| agent/src/harness、agent/src/sessions、agent/src/business          | 官方执行组合、应用 doc、控制投递/回执、Go 客户端                   |
+| agent/src/adapters/postgres/pi-durable、agent/tests/storage        | 官方 Storage PostgreSQL 实现、owner/fencing、完整一致性测试        |
+| agent/contracts、agent/src/transport/http、agent/src/server.ts     | TypeBox 单源合同、认证、HTTP/SSE、关闭                             |
+| agent/src/runtime/pi-durable、agent/src/sessions、agent/src/integrations/go-business-api | 官方执行组合、应用 doc、控制投递/回执、Go 客户端 |
 | backend/internal/agent                                             | 当前公共代理及业务授权接口，删除旧 domain/graph 与执行 application |
 | backend/internal/platform/taskruntime                              | 领取/租约/续租/有界并发的窄运行时，无领域执行状态机                |
 | 各领域 adapter/task、application、postgres                         | 当前后台任务执行、结果及副作用幂等；业务模块保留本身权威           |
@@ -56,7 +56,7 @@
 
 ### Task 2：真实 PostgreSQL 官方 Storage
 
-文件：agent/src/storage/postgres.ts、records.ts、ownership.ts；agent/tests/storage/conformance.test.ts、recovery.test.ts；backend/db/agent_storage.sql。
+文件：agent/src/adapters/postgres/pi-durable/postgres.ts、records.ts、ownership.ts；agent/tests/storage/conformance.test.ts、recovery.test.ts；backend/db/agent_storage.sql。
 
 接口：openPostgresStorage(pool, sessionId, owner) 返回官方 Storage 及 close；owner={id,epoch,leaseUntil}。以 session 为 Storage 分区，包含根与全部 owned children；SQL 静态定义，不在 open 中建表。
 
@@ -69,7 +69,7 @@
 
 ### Task 3：当前服务合同与只读/事件接口
 
-文件：agent/contracts/*.ts、src/http/app.ts、auth.ts、events.ts、src/server.ts、tests/http.test.ts；内部 OpenAPI 导出及生成 Go 客户端。
+文件：agent/contracts/*.ts、agent/src/transport/http/app.ts、agent/src/sessions/port.ts、agent/src/server.ts、agent/tests/http.test.ts；内部 OpenAPI 导出及生成 Go 客户端。
 
 接口：/internal/agent/sessions、/sessions/:sid/runs、/runs/:rid/commands、/runs/:rid/events；请求含 request_id/内容哈希/scope，输入 expected_execution_revision 与控制 authorization_revision 分开；snapshot 返回同一一致性点的 snapshot_cursor。
 
@@ -96,7 +96,7 @@
 
 ### Task 5：Go 模型网关、工具和原调用回执
 
-文件：backend/internal/agent 业务模型/工具适配，复用 catalog/operation/canvas/script/subject/media 的正式应用命令；agent/src/business/client.ts、models.ts、tools.ts；对应双方测试。
+文件：backend/internal/agent 业务模型/工具适配，复用 catalog/operation/canvas/script/subject/media 的正式应用命令；agent/src/integrations/go-business-api/client.ts、agent/src/runtime/pi-durable/model-provider.ts、registry.ts；对应双方测试。
 
 接口：/internal/agent-business 的 grants、snapshot、tools、skills、proposals、decisions、models 与 calls。调用键固定 run/执行段/Pi task/call/请求边界，并绑定不可变参数哈希；未知结果先查 calls，不换 ID。
 
@@ -109,7 +109,7 @@
 
 ### Task 6：官方 Harness 与执行段生命周期
 
-文件：agent/src/harness/registry.ts、extensions.ts、model-provider.ts、src/sessions/service.ts、control.ts、manifest.ts、docs.ts；tests/harness、tests/controls。
+文件：agent/src/runtime/pi-durable/registry.ts、trusted-extensions.ts、model-provider.ts、docs.ts；agent/src/sessions/service.ts、runtime.ts、manifest.ts；agent/tests/controls.test.ts及相关Harness测试。
 
 接口：SessionService 接受输入/控制但不自写模型循环；registry 显式选择工具/扩展，manifest 固定 SDK/定义/工具/模型/Skill/hash；每 session 同时只有一个活动业务 root_run。
 
@@ -123,7 +123,7 @@
 
 ### Task 7：真实专业 Agent、Skill 与压缩
 
-文件：agent/src/harness/delegation.ts、skills.ts、context.ts、trusted-extensions.ts；tests/delegation、skills、compaction。
+文件：agent/src/runtime/pi-durable/delegation.ts、skills.ts、context.ts、trusted-extensions.ts；agent/tests/delegation.test.ts、skills.test.ts及压缩上下文测试。
 
 接口：委派工具在官方 api.commit 按 ownerTaskId 复用/创建 owned conversation，配置后再 submit。角色输入包含采用来源/目标/模型/工具/预算；根额度向子分配，不能复制总额度。
 

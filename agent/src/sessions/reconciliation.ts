@@ -1,28 +1,28 @@
-import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
 import type {
   Conversation,
   Harness,
   JsonObject,
   TaskId,
-} from "@earendil-works/pi-durable";
+} from '@earendil-works/pi-durable';
 import {
   BusinessClient,
   type CallIdentity,
   type CallReceipt,
-} from "../business/client.js";
-import { StateDoc } from "../harness/docs.js";
+} from '../integrations/go-business-api/client.js';
+import { StateDoc } from '../runtime/pi-durable/docs.js';
 
 function identity(value: unknown): CallIdentity | undefined {
-  if (!value || typeof value !== "object") return;
+  if (!value || typeof value !== 'object') return;
   const c = value as Record<string, unknown>;
   if (
     [
-      "task_id",
-      "call_id",
-      "checkpoint_id",
-      "contract_version",
-      "input_hash",
-    ].some((k) => typeof c[k] !== "string") ||
+      'task_id',
+      'call_id',
+      'checkpoint_id',
+      'contract_version',
+      'input_hash',
+    ].some((k) => typeof c[k] !== 'string') ||
     !Number.isSafeInteger(c.attempt) ||
     Number(c.attempt) < 1
   )
@@ -48,7 +48,7 @@ export async function reconcileInterrupted(input: {
   runId: string;
   segmentId: string;
 }): Promise<{
-  status: "completed" | "needs_reconciliation";
+  status: 'completed' | 'needs_reconciliation';
   calls: JsonObject[];
 }> {
   const { harness, root, business, runId, segmentId } = input;
@@ -62,25 +62,25 @@ export async function reconcileInterrupted(input: {
     const call = identity(reserved.call);
     if (!call) {
       calls.push({
-        kind: reserved.kind ?? "unknown",
-        status: "invalid_identity",
+        kind: reserved.kind ?? 'unknown',
+        status: 'invalid_identity',
       });
       continue;
     }
-    if (reserved.origin === "local") {
+    if (reserved.origin === 'local') {
       const taskId = Number(call.task_id);
       const task = Number.isSafeInteger(taskId)
         ? await harness.getTask(taskId as TaskId, context)
         : undefined;
       calls.push({
-        kind: reserved.kind ?? "tool",
-        source: "official_task",
+        kind: reserved.kind ?? 'tool',
+        source: 'official_task',
         call: { ...call },
         status:
-          task?.state.status === "terminal" &&
-          task.state.outcome.status === "completed"
-            ? "completed"
-            : "unknown",
+          task?.state.status === 'terminal' &&
+          task.state.outcome.status === 'completed'
+            ? 'completed'
+            : 'unknown',
       });
       continue;
     }
@@ -94,16 +94,16 @@ export async function reconcileInterrupted(input: {
         receipt.submission_id !== segmentId ||
         !sameCall(receipt.call, call))
     )
-      throw new Error("Business reconciliation receipt identity mismatch");
+      throw new Error('Business reconciliation receipt identity mismatch');
     const proof: JsonObject = {
-      kind: reserved.kind ?? "unknown",
+      kind: reserved.kind ?? 'unknown',
       segment_id: segmentId,
       call: { ...call },
-      status: receipt?.status ?? "unknown",
+      status: receipt?.status ?? 'unknown',
       ...(receipt ? { receipt_id: receipt.receipt_id } : {}),
     };
     calls.push(proof);
-    if (reserved.kind !== "model") continue;
+    if (reserved.kind !== 'model') continue;
     const taskId = Number(call.task_id);
     if (!Number.isSafeInteger(taskId)) continue;
     const task = await harness.getTask(taskId as TaskId, context);
@@ -111,43 +111,43 @@ export async function reconcileInterrupted(input: {
   }
   const result = final?.result as Record<string, unknown> | undefined;
   const complete =
-    final?.status === "completed" &&
-    typeof result?.output === "string" &&
-    result.stop_reason === "stop" &&
+    final?.status === 'completed' &&
+    typeof result?.output === 'string' &&
+    result.stop_reason === 'stop' &&
     (result.tool_calls === undefined ||
       (Array.isArray(result.tool_calls) && result.tool_calls.length === 0)) &&
-    calls.every((c) => c.status === "completed");
+    calls.every((c) => c.status === 'completed');
   if (complete && final) {
     // A bookkeeping-only official write leaves the original Pi submission's interrupted result intact.
     await root.submit(
       {
-        type: "write",
+        type: 'write',
         requestId: `reconciliation:${final.receipt_id}`,
         entry: {
-          kind: "glowloom.reconciled_receipt",
+          kind: 'glowloom.reconciled_receipt',
           data: {
             root_run_id: runId,
             segment_id: segmentId,
             receipt_id: final.receipt_id,
             call: { ...final.call },
             provider_result: final.result as JsonObject,
-            official_submission_status: "interrupted",
+            official_submission_status: 'interrupted',
           },
         },
       },
       context,
     );
   }
-  const status = complete ? "completed" : "needs_reconciliation";
+  const status = complete ? 'completed' : 'needs_reconciliation';
   await harness.commit(async (tx) => {
     const s = await tx.doc(StateDoc, root.id);
     if (s.root_run_id !== runId || s.segment_id !== segmentId)
-      throw new Error("Reconciliation execution segment changed");
+      throw new Error('Reconciliation execution segment changed');
     s.reconciliation = {
       segment_id: segmentId,
       status,
       calls,
-      official_submission_status: "interrupted",
+      official_submission_status: 'interrupted',
     };
   }, context);
   return { status, calls };

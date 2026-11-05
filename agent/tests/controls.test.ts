@@ -1,19 +1,19 @@
-import { authorizedText } from "./helpers/conversation-input.js";
-import { randomUUID } from "node:crypto";
-import { expect, it, vi } from "vitest";
-import { SessionRuntime } from "../src/sessions/runtime.js";
-import { SessionService } from "../src/sessions/service.js";
+import { authorizedText } from './helpers/conversation-input.js';
+import { randomUUID } from 'node:crypto';
+import { expect, it, vi } from 'vitest';
+import { SessionRuntime } from '../src/sessions/runtime.js';
+import { SessionService } from '../src/sessions/service.js';
 import {
   BusinessClient,
   BusinessError,
   type Grant,
   type BusinessDecision,
   type CallReceipt,
-} from "../src/business/client.js";
-import { testPool } from "./storage/database.js";
+} from '../src/integrations/go-business-api/client.js';
+import { testPool } from './storage/database.js';
 
-it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
-  "quiesces an actual proposal round, admits one approved continuation after mode=%s, and never revives an aborted submission",
+it.each(['normal', 'restart', 'prior_job_pending', 'quiesced_reply_lost'])(
+  'quiesces an actual proposal round, admits one approved continuation after mode=%s, and never revives an aborted submission',
   async (mode) => {
     let releaseDrive!: () => void, driveDone!: () => void;
     const held = new Promise<void>((resolve) => {
@@ -25,9 +25,9 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
     let first = true;
     const originalStart = SessionRuntime.prototype.start;
     const spy =
-      mode === "prior_job_pending"
+      mode === 'prior_job_pending'
         ? vi
-            .spyOn(SessionRuntime.prototype, "start")
+            .spyOn(SessionRuntime.prototype, 'start')
             .mockImplementation(async function (this: SessionRuntime) {
               const result = await originalStart.call(this);
               if (first) {
@@ -55,21 +55,21 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
       ownerEpoch = 0;
       remoteSegment: string | undefined;
       constructor() {
-        super("http://127.0.0.1:1", "fixture");
+        super('http://127.0.0.1:1', 'fixture');
       }
       override async tools() {
         return [
           {
-            name: "make_proposal",
-            description: "Propose a paid operation",
+            name: 'make_proposal',
+            description: 'Propose a paid operation',
             parameters: {
-              type: "object",
+              type: 'object',
               properties: {},
               additionalProperties: false,
             },
-            contract_version: "1",
-            replay: "safe" as const,
-            effect: "proposal" as const,
+            contract_version: '1',
+            replay: 'safe' as const,
+            effect: 'proposal' as const,
           },
         ];
       }
@@ -82,17 +82,17 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
         };
       }
       override async grant(
-        input: Parameters<BusinessClient["grant"]>[0],
+        input: Parameters<BusinessClient['grant']>[0],
       ): Promise<Grant> {
         if (
           !this.barrier &&
           this.remoteSegment &&
           input.submission_id !== this.remoteSegment
         )
-          throw new BusinessError(403, "agent_grant_invalid");
+          throw new BusinessError(403, 'agent_grant_invalid');
         this.ownerEpoch = input.owner_epoch;
         if (this.barrier)
-          throw new BusinessError(409, "agent_authorization_blocked");
+          throw new BusinessError(409, 'agent_authorization_blocked');
         return {
           ...input,
           grant_id: randomUUID(),
@@ -103,7 +103,7 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
       }
       override async validate(grant: Grant) {
         if (this.barrier || grant.authorization_revision !== this.revision)
-          throw new BusinessError(409, "blocked");
+          throw new BusinessError(409, 'blocked');
         return grant;
       }
       override async snapshot() {
@@ -118,10 +118,10 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
       }
       override async quiesced(
         run: string,
-        input: Parameters<BusinessClient["quiesced"]>[1],
+        input: Parameters<BusinessClient['quiesced']>[1],
       ) {
         if (input.owner_epoch !== this.ownerEpoch)
-          throw new BusinessError(409, "owner_epoch_conflict");
+          throw new BusinessError(409, 'owner_epoch_conflict');
         this.quiescedCount++;
         this.barrier = false;
         this.remoteSegment = input.continuation_id;
@@ -132,29 +132,29 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
           authorization_revision: input.authorization_revision,
           lease_until: input.lease_until,
         });
-        if (mode === "quiesced_reply_lost" && this.quiescedCount === 1)
-          throw new BusinessError(503, "fixture_reply_lost");
+        if (mode === 'quiesced_reply_lost' && this.quiescedCount === 1)
+          throw new BusinessError(503, 'fixture_reply_lost');
         return grant;
       }
       override async execute(
-        ...args: Parameters<BusinessClient["execute"]>
+        ...args: Parameters<BusinessClient['execute']>
       ): Promise<CallReceipt> {
         const [kind, , grant, call] = args;
         let result: unknown;
-        if (kind === "model") {
+        if (kind === 'model') {
           this.models++;
           result = {
-            output: this.models === 1 ? "需批准生成" : "已按批准接续",
+            output: this.models === 1 ? '需批准生成' : '已按批准接续',
             ...(this.models === 1
               ? {
                   tool_calls: [
-                    { id: "propose", name: "make_proposal", arguments: {} },
+                    { id: 'propose', name: 'make_proposal', arguments: {} },
                   ],
                 }
               : {}),
             usage: { input_tokens: 1, output_tokens: 1 },
-            model_key: "test",
-            stop_reason: this.models === 1 ? "tool_use" : "stop",
+            model_key: 'test',
+            stop_reason: this.models === 1 ? 'tool_use' : 'stop',
           };
         } else {
           this.barrier = true;
@@ -169,7 +169,7 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
           root_run_id: grant.root_run_id,
           submission_id: grant.submission_id,
           call,
-          status: "completed",
+          status: 'completed',
           cost_micros: 0,
           result,
         };
@@ -181,24 +181,24 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
       const session = await service.createSession({
         ...scope,
         request_id: randomUUID(),
-        content_hash: "a".repeat(64),
-        title: "审批",
+        content_hash: 'a'.repeat(64),
+        title: '审批',
       });
       const run = await service.createRun(session.id, {
-        input: authorizedText("执行需批准的生成"),
+        input: authorizedText('执行需批准的生成'),
         ...scope,
         request_id: randomUUID(),
-        content_hash: "b".repeat(64),
-        goal: "执行需批准的生成",
+        content_hash: 'b'.repeat(64),
+        goal: '执行需批准的生成',
         expected_execution_revision: 0,
-        manifest: { model_key: "test" },
+        manifest: { model_key: 'test' },
       });
-      if (mode === "prior_job_pending") await firstDrive;
+      if (mode === 'prior_job_pending') await firstDrive;
       else await service.waitForRun(run.root_run_id);
       expect(
         (await service.readRun(run.root_run_id, scope))?.state.status,
-      ).toBe("waiting_approval");
-      if (mode === "restart") {
+      ).toBe('waiting_approval');
+      if (mode === 'restart') {
         await service.close();
         service = new SessionService(pool, fixture, { leaseMs: 30000 });
       }
@@ -209,13 +209,13 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
         root_run_id: run.root_run_id,
         session_id: session.id,
         authorization_revision: 1,
-        action: "approve",
-        content_hash: "c".repeat(64),
+        action: 'approve',
+        content_hash: 'c'.repeat(64),
       };
-      if (mode === "quiesced_reply_lost") {
+      if (mode === 'quiesced_reply_lost') {
         await expect(
           service.command(run.root_run_id, fixture.current),
-        ).rejects.toMatchObject({ code: "fixture_reply_lost" });
+        ).rejects.toMatchObject({ code: 'fixture_reply_lost' });
         await service.close();
         service = new SessionService(pool, fixture, { leaseMs: 30000 });
       }
@@ -225,18 +225,18 @@ it.each(["normal", "restart", "prior_job_pending", "quiesced_reply_lost"])(
         let i = 0;
         i < 200 &&
         (await service.readRun(run.root_run_id, scope))?.state.status !==
-          "completed";
+          'completed';
         i++
       )
         await new Promise((r) => setTimeout(r, 10));
       await service.waitForRun(run.root_run_id);
       expect(
         (await service.readRun(run.root_run_id, scope))?.state.status,
-      ).toBe("completed");
+      ).toBe('completed');
       const duplicate = await service.command(run.root_run_id, fixture.current);
       expect(duplicate).toEqual(applied);
       expect(fixture.quiescedCount).toBe(
-        mode === "quiesced_reply_lost" ? 2 : 1,
+        mode === 'quiesced_reply_lost' ? 2 : 1,
       );
       expect(fixture.models).toBe(2);
       const inputs = await pool.query(

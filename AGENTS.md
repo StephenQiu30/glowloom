@@ -41,6 +41,10 @@
 7. 保持 TypeScript 严格类型和组件单一职责，外部数据在边界校验；复用项目组件体系及其官方语义，保证键盘操作、焦点、可访问名称与响应式布局。
 8. 修改后运行 PROJECT.md 中适用的前端质量门禁，交互变化补充对应浏览器验证；代码审查须覆盖本节规则。lint、类型检查或构建通过不等于完成最佳实践审查或产品验收。
 
+## Agent 服务工程规范
+
+`agent/` 下的 Node.js / TypeScript 服务遵循 [Agent 服务规范](agent/AGENTS.md)，其中以 Google TypeScript Style Guide 为代码风格基线，并明确本项目的 Node.js、Fastify 和目录职责。该规则只适用于独立 Agent 服务，不把 React / Next.js 的前端规范套用到服务端。
+
 ## 验证与 Git
 
 1. 验证范围与风险匹配，记录真实命令和结果；中断、跳过或缺少外部条件的验证不得报告为通过。

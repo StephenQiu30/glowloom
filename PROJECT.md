@@ -18,7 +18,7 @@ Agent Harness 与多 Agent 的已确认目标（2026-11-04，SRC-AGH-12）：同
 
 Harness 按[设计32 §7.6](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)直接组合官方 registry/tool/doc/owned conversation；四个同版 Pi 包中 coding-agent 仅提供受控资源 SDK，不运行 CLI 或第二个 AgentSession。运行固定 manifest、显式角色工具名单，模型/工具出口强制校验 Go 授权；第三方 Skill 脚本走 Go 隔离能力。审批/暂停收束后的 continuation 与崩溃恢复原未决任务分别处理，不自写循环或另造插件加载器。
 
-业务按职责组织，`adapter → application → domain`，依赖显式注入，接口由消费方定义。编码与审查遵循AGENTS的Google Go与Vercel/Next.js规范；不预建未来目录、通用框架或空转发层。
+Go 业务模块按 `adapter → application → domain` 单向依赖并显式注入依赖；编码与审查遵循根 [AGENTS](AGENTS.md) 中的 Google Go 与 Vercel/Next.js 规则。独立 Node 服务遵循 [Agent 服务规范](agent/AGENTS.md) 中采用的 Google TypeScript Style Guide 及 Node/Fastify 补充规则；Agent 目录职责见[设计32 §7.1.4](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#714-目录与拓扑)。两端都不预建空层、通用框架或仅转发调用的抽象。
 
 Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 API、worker、relay 与身份/存储/分区运维；已移除旧工作流初始化命令。独立 Agent 服务有自己的 TypeScript 入口、Dockerfile 与锁文件，生命周期由 Compose 管理；不把“Go 只有一个入口”解释成整个应用必须单进程。
 

@@ -1,20 +1,20 @@
-import { authorizedText } from "./helpers/conversation-input.js";
-import { afterAll, expect, it } from "vitest";
-import { randomUUID } from "node:crypto";
-import { SessionStore } from "../src/sessions/store.js";
-import { ConversationStore } from "../src/sessions/conversations.js";
-import { freezeManifest } from "../src/sessions/manifest.js";
-import { testPool } from "./storage/database.js";
+import { authorizedText } from './helpers/conversation-input.js';
+import { afterAll, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { SessionStore } from '../src/sessions/persistence/store.js';
+import { ConversationStore } from '../src/sessions/persistence/conversations.js';
+import { freezeManifest } from '../src/sessions/manifest.js';
+import { testPool } from './storage/database.js';
 import {
   ROOT_CONVERSATION_ID,
   type StorageWrite,
-} from "@earendil-works/pi-durable";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { claimSessionOwner } from "../src/storage/ownership.js";
-import { openPostgresStorage } from "../src/storage/postgres.js";
+} from '@earendil-works/pi-durable';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { claimSessionOwner } from '../src/adapters/postgres/pi-durable/ownership.js';
+import { openPostgresStorage } from '../src/adapters/postgres/pi-durable/postgres.js';
 const pool = testPool();
 afterAll(() => pool.end());
-const manifest = freezeManifest({ model_key: "fixture", max_micros: 100 }, []);
+const manifest = freezeManifest({ model_key: 'fixture', max_micros: 100 }, []);
 async function fixture() {
   const store = new SessionStore(pool);
   const who = {
@@ -26,27 +26,27 @@ async function fixture() {
   const session = await store.createSession({
     ...who,
     request_id: randomUUID(),
-    content_hash: "a".repeat(64),
-    title: "会话",
+    content_hash: 'a'.repeat(64),
+    title: '会话',
   });
   return { store, who, session, history: new ConversationStore(pool, store) };
 }
-it("atomically retains the exact accepted input and replays the same admission", async () => {
+it('atomically retains the exact accepted input and replays the same admission', async () => {
   const { store, who, session } = await fixture();
   const input = {
     schema_version: 1 as const,
-    draft: { reference: "frozen" },
-    input_hash: "b".repeat(64),
-    plain_text: "第一条",
-    prompt: "第一条",
+    draft: { reference: 'frozen' },
+    input_hash: 'b'.repeat(64),
+    plain_text: '第一条',
+    prompt: '第一条',
     media_pins: [],
   };
   const command = {
     ...who,
     request_id: randomUUID(),
-    content_hash: "c".repeat(64),
+    content_hash: 'c'.repeat(64),
     expected_execution_revision: 0,
-    goal: "第一条",
+    goal: '第一条',
     manifest: {},
     input,
   };
@@ -56,24 +56,24 @@ it("atomically retains the exact accepted input and replays the same admission",
   await expect(
     store.admitRun(
       session.id,
-      { ...command, input: { ...input, plain_text: "changed" } },
+      { ...command, input: { ...input, plain_text: 'changed' } },
       manifest,
     ),
   ).rejects.toThrow(/identity/);
   const snapshot = await store.snapshot(run);
   expect(snapshot.input).toEqual(input);
-  expect(snapshot.messages_page).toMatchObject({ items: [], through: "0:0" });
+  expect(snapshot.messages_page).toMatchObject({ items: [], through: '0:0' });
 });
-it("pages all attempts and binds the cursor to its private session", async () => {
+it('pages all attempts and binds the cursor to its private session', async () => {
   const { store, who, session, history } = await fixture();
   for (let i = 1; i <= 53; i++)
     await pool.query(
-      "INSERT INTO agent.service_runs(id,session_id,request_id,content_hash,goal,manifest,submission_id,accepted_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+      'INSERT INTO agent.service_runs(id,session_id,request_id,content_hash,goal,manifest,submission_id,accepted_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
       [
         randomUUID(),
         session.id,
         randomUUID(),
-        "a".repeat(64),
+        'a'.repeat(64),
         `消息${i}`,
         manifest,
         randomUUID(),
@@ -109,7 +109,7 @@ it("pages all attempts and binds the cursor to its private session", async () =>
   await expect(
     history.runs(session.id, {
       ...who,
-      cursor: first.next_cursor!.slice(0, -1) + "!",
+      cursor: first.next_cursor!.slice(0, -1) + '!',
     }),
   ).rejects.toThrow(/cursor/);
   expect(
@@ -120,16 +120,16 @@ it("pages all attempts and binds the cursor to its private session", async () =>
   ).toBeUndefined();
 });
 
-it("reopens and pages more than 100 committed messages without losing older output", async () => {
+it('reopens and pages more than 100 committed messages without losing older output', async () => {
   const { store, who, session, history } = await fixture();
   const run = await store.admitRun(
     session.id,
     {
-      input: authorizedText("history"),
+      input: authorizedText('history'),
       ...who,
       request_id: randomUUID(),
-      content_hash: "a".repeat(64),
-      goal: "history",
+      content_hash: 'a'.repeat(64),
+      goal: 'history',
       expected_execution_revision: 0,
       manifest: {},
     },
@@ -140,7 +140,7 @@ it("reopens and pages more than 100 committed messages without losing older outp
   const storage = await openPostgresStorage(pool, session.id, owner, {
     projectEvents: () => [
       {
-        type: "text",
+        type: 'text',
         payload: {
           root_run_id: run.id,
           conversation_id: Number(ROOT_CONVERSATION_ID),
@@ -150,7 +150,7 @@ it("reopens and pages more than 100 committed messages without losing older outp
     ],
   });
   const write: StorageWrite = {
-    type: "conversation",
+    type: 'conversation',
     value: { id: ROOT_CONVERSATION_ID },
   };
   try {
@@ -182,7 +182,7 @@ it("reopens and pages more than 100 committed messages without losing older outp
     expect(page3.next_cursor).toBeUndefined();
     const last = (
       await pool.query<{ payload: { message_parts: unknown[] } }>(
-        "SELECT payload FROM agent.runtime_events WHERE session_id=$1 ORDER BY commit_seq DESC,event_ordinal DESC LIMIT 1",
+        'SELECT payload FROM agent.runtime_events WHERE session_id=$1 ORDER BY commit_seq DESC,event_ordinal DESC LIMIT 1',
         [session.id],
       )
     ).rows[0]!;
@@ -194,25 +194,25 @@ it("reopens and pages more than 100 committed messages without losing older outp
   }
 });
 
-it("rolls back public messages together with a refused Storage commit", async () => {
+it('rolls back public messages together with a refused Storage commit', async () => {
   const { session } = await fixture();
   const owner = await claimSessionOwner(pool, session.id, randomUUID(), 60000);
   const storage = await openPostgresStorage(pool, session.id, owner, {
     projectEvents: () => [
       {
-        type: "text",
+        type: 'text',
         payload: {
           root_run_id: randomUUID(),
           conversation_id: Number(ROOT_CONVERSATION_ID),
-          text: "must roll back",
+          text: 'must roll back',
         },
       },
       {
-        type: "text",
+        type: 'text',
         payload: {
-          root_run_id: "invalid",
+          root_run_id: 'invalid',
           conversation_id: Number(ROOT_CONVERSATION_ID),
-          text: "refused",
+          text: 'refused',
         },
       },
     ],
@@ -220,7 +220,7 @@ it("rolls back public messages together with a refused Storage commit", async ()
   try {
     await expect(
       storage.commit(
-        [[{ type: "conversation", value: { id: ROOT_CONVERSATION_ID } }]],
+        [[{ type: 'conversation', value: { id: ROOT_CONVERSATION_ID } }]],
         () => {},
         BACKGROUND_CONTEXT,
       ),
@@ -229,7 +229,7 @@ it("rolls back public messages together with a refused Storage commit", async ()
       Number(
         (
           await pool.query<{ count: string }>(
-            "SELECT count(*) FROM agent.public_messages WHERE session_id=$1",
+            'SELECT count(*) FROM agent.public_messages WHERE session_id=$1',
             [session.id],
           )
         ).rows[0]!.count,
@@ -239,7 +239,7 @@ it("rolls back public messages together with a refused Storage commit", async ()
       Number(
         (
           await pool.query<{ count: string }>(
-            "SELECT count(*) FROM agent.runtime_events WHERE session_id=$1",
+            'SELECT count(*) FROM agent.runtime_events WHERE session_id=$1',
             [session.id],
           )
         ).rows[0]!.count,
@@ -249,9 +249,9 @@ it("rolls back public messages together with a refused Storage commit", async ()
     await storage.close(BACKGROUND_CONTEXT);
   }
 });
-it("backfills retained public events deterministically and can run twice", async () => {
+it('backfills retained public events deterministically and can run twice', async () => {
   const { backfillConversationMessages } =
-    await import("../src/sessions/backfill-messages.js");
+    await import('../src/sessions/persistence/backfill-messages.js');
   const { session } = await fixture(),
     rid = randomUUID();
   await claimSessionOwner(pool, session.id, randomUUID(), 30000);
@@ -262,7 +262,7 @@ it("backfills retained public events deterministically and can run twice", async
       {
         root_run_id: rid,
         conversation_id: Number(ROOT_CONVERSATION_ID),
-        text: "历史公开文字",
+        text: '历史公开文字',
       },
     ],
   );
@@ -270,24 +270,24 @@ it("backfills retained public events deterministically and can run twice", async
   await backfillConversationMessages(pool, 2);
   const rows = (
     await pool.query(
-      "SELECT message_id,content FROM agent.public_messages WHERE session_id=$1",
+      'SELECT message_id,content FROM agent.public_messages WHERE session_id=$1',
       [session.id],
     )
   ).rows;
   expect(rows).toHaveLength(1);
-  expect(rows[0]?.content).toBe("历史公开文字");
+  expect(rows[0]?.content).toBe('历史公开文字');
 });
-it("rejects retry settings that differ from the accepted manifest", async () => {
+it('rejects retry settings that differ from the accepted manifest', async () => {
   const { store, who, session } = await fixture(),
-    input = authorizedText("原始要求");
+    input = authorizedText('原始要求');
   const first = await store.admitRun(
     session.id,
     {
       ...who,
       request_id: randomUUID(),
-      content_hash: "3".repeat(64),
+      content_hash: '3'.repeat(64),
       expected_execution_revision: 0,
-      goal: "原始要求",
+      goal: '原始要求',
       input,
       manifest: {},
     },
@@ -298,19 +298,19 @@ it("rejects retry settings that differ from the accepted manifest", async () => 
     "INSERT INTO agent.runtime_events(session_id,commit_seq,event_ordinal,event_type,payload) VALUES($1,1,1,'agent.state',$2)",
     [
       session.id,
-      { root_run_id: first.id, status: "completed", execution_revision: 1 },
+      { root_run_id: first.id, status: 'completed', execution_revision: 1 },
     ],
   );
-  const changed = freezeManifest({ model_key: "other", max_micros: 100 }, []);
+  const changed = freezeManifest({ model_key: 'other', max_micros: 100 }, []);
   await expect(
     store.admitRun(
       session.id,
       {
         ...who,
         request_id: randomUUID(),
-        content_hash: "4".repeat(64),
+        content_hash: '4'.repeat(64),
         expected_execution_revision: 1,
-        goal: "原始要求",
+        goal: '原始要求',
         input,
         retry_of_run_id: first.id,
         manifest: {},
@@ -319,23 +319,23 @@ it("rejects retry settings that differ from the accepted manifest", async () => 
     ),
   ).rejects.toThrow(/retry_input_changed/);
 });
-it("rejects a message watermark newer than the committed session", async () => {
+it('rejects a message watermark newer than the committed session', async () => {
   const { store, who, session, history } = await fixture(),
-    input = authorizedText("watermark");
+    input = authorizedText('watermark');
   const run = await store.admitRun(
     session.id,
     {
       ...who,
       request_id: randomUUID(),
-      content_hash: "5".repeat(64),
+      content_hash: '5'.repeat(64),
       expected_execution_revision: 0,
-      goal: "watermark",
+      goal: 'watermark',
       input,
       manifest: {},
     },
     manifest,
   );
   await expect(
-    history.messages(run.id, { ...who, through: "999999:1" }),
+    history.messages(run.id, { ...who, through: '999999:1' }),
   ).rejects.toThrow(/invalid_snapshot_watermark/);
 });

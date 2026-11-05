@@ -1,30 +1,33 @@
-import { authorizedText } from "./helpers/conversation-input.js";
-import { randomUUID } from "node:crypto";
-import { fork, type ChildProcess } from "node:child_process";
-import { createServer, type ServerResponse } from "node:http";
-import { fileURLToPath } from "node:url";
-import { once } from "node:events";
-import { expect, it } from "vitest";
-import { BusinessClient, type CallReceipt } from "../src/business/client.js";
-import { SessionStore } from "../src/sessions/store.js";
-import { freezeManifest, type BusinessTool } from "../src/sessions/manifest.js";
-import { reconcileInterrupted } from "../src/sessions/reconciliation.js";
-import { SessionRuntime } from "../src/sessions/runtime.js";
-import { testPool } from "./storage/database.js";
+import { authorizedText } from './helpers/conversation-input.js';
+import { randomUUID } from 'node:crypto';
+import { fork, type ChildProcess } from 'node:child_process';
+import { createServer, type ServerResponse } from 'node:http';
+import { fileURLToPath } from 'node:url';
+import { once } from 'node:events';
+import { expect, it } from 'vitest';
+import {
+  BusinessClient,
+  type CallReceipt,
+} from '../src/integrations/go-business-api/client.js';
+import { SessionStore } from '../src/sessions/persistence/store.js';
+import { freezeManifest, type BusinessTool } from '../src/sessions/manifest.js';
+import { reconcileInterrupted } from '../src/sessions/reconciliation.js';
+import { SessionRuntime } from '../src/sessions/runtime.js';
+import { testPool } from './storage/database.js';
 
 // Parent HTTP fixture models Go's independent committed call ledger; Agent storage and processes are real.
 const tool: BusinessTool = {
-  name: "write_resource",
-  description: "Write one resource",
-  parameters: { type: "object", properties: {}, additionalProperties: false },
-  contract_version: "1",
-  effect: "write",
-  replay: "safe",
+  name: 'write_resource',
+  description: 'Write one resource',
+  parameters: { type: 'object', properties: {}, additionalProperties: false },
+  contract_version: '1',
+  effect: 'write',
+  replay: 'safe',
 };
 function deadline<T>(work: Promise<T>, ms = 12000): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(Error("Recovery fixture deadline exceeded")),
+      () => reject(Error('Recovery fixture deadline exceeded')),
       ms,
     );
     work.then(
@@ -40,8 +43,8 @@ function deadline<T>(work: Promise<T>, ms = 12000): Promise<T> {
   });
 }
 async function fixture(
-  mode: "model" | "tool" | "owned" | "plan",
-  outcome: "final" | "unknown" | "tool_calls" = "final",
+  mode: 'model' | 'tool' | 'owned' | 'plan',
+  outcome: 'final' | 'unknown' | 'tool_calls' = 'final',
 ) {
   const pool = testPool(),
     store = new SessionStore(pool);
@@ -54,21 +57,21 @@ async function fixture(
   const session = await store.createSession({
     ...scope,
     request_id: randomUUID(),
-    content_hash: "a".repeat(64),
-    title: "SIGKILL recovery",
+    content_hash: 'a'.repeat(64),
+    title: 'SIGKILL recovery',
   });
   const run = await store.admitRun(
     session.id,
     {
-      input: authorizedText("Complete the task once"),
+      input: authorizedText('Complete the task once'),
       ...scope,
       request_id: randomUUID(),
-      content_hash: "b".repeat(64),
-      goal: "Complete the task once",
+      content_hash: 'b'.repeat(64),
+      goal: 'Complete the task once',
       expected_execution_revision: 0,
-      manifest: { model_key: "fixture" },
+      manifest: { model_key: 'fixture' },
     },
-    freezeManifest({ model_key: "fixture" }, [tool]),
+    freezeManifest({ model_key: 'fixture' }, [tool]),
   );
   const ledger = new Map<string, CallReceipt>();
   const sends: string[] = [];
@@ -79,25 +82,25 @@ async function fixture(
     reached = resolve;
   });
   const server = createServer(async (req, res) => {
-    let raw = "";
+    let raw = '';
     for await (const part of req) raw += String(part);
     const body = raw ? JSON.parse(raw) : undefined;
-    const path = new URL(req.url!, "http://fixture").pathname.replace(
-      "/internal/agent-business",
-      "",
+    const path = new URL(req.url!, 'http://fixture').pathname.replace(
+      '/internal/agent-business',
+      '',
     );
     const send = (value: unknown) => {
-      res.setHeader("content-type", "application/json");
+      res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify(value));
     };
-    if (path.endsWith("/decisions"))
+    if (path.endsWith('/decisions'))
       return send({
         current: null,
         authorization_revision: 0,
         barrier: false,
         terminal: false,
       });
-    if (path === "/grants")
+    if (path === '/grants')
       return send({
         ...body,
         grant_id: randomUUID(),
@@ -105,49 +108,49 @@ async function fixture(
         expires_at: body.lease_until,
         scope,
       });
-    if (path === "/grants/validate") return send(body);
-    if (path === "/snapshot") return send({ revision: 1 });
-    if (path.includes("/calls/")) {
-      const id = decodeURIComponent(path.split("/").at(-1)!);
+    if (path === '/grants/validate') return send(body);
+    if (path === '/snapshot') return send({ revision: 1 });
+    if (path.includes('/calls/')) {
+      const id = decodeURIComponent(path.split('/').at(-1)!);
       lookups.push(id);
       const saved = ledger.get(id);
       if (saved) return send(saved);
       res.statusCode = 404;
-      return send({ code: "not_found" });
+      return send({ code: 'not_found' });
     }
-    if (path === "/models/stream" || path.endsWith("/execute")) {
-      const kind = path === "/models/stream" ? "model" : "tool";
+    if (path === '/models/stream' || path.endsWith('/execute')) {
+      const kind = path === '/models/stream' ? 'model' : 'tool';
       sends.push(body.call.call_id);
       const result =
-        kind === "tool"
-          ? { output: "Resource committed", revision: 1 }
+        kind === 'tool'
+          ? { output: 'Resource committed', revision: 1 }
           : {
-              output: "Original provider answer",
+              output: 'Original provider answer',
               usage: { input_tokens: 1, output_tokens: 1 },
-              model_key: "fixture",
+              model_key: 'fixture',
               stop_reason:
-                mode !== "model" && ledger.size === 0 ? "tool_use" : "stop",
-              ...(mode !== "model" && ledger.size === 0
+                mode !== 'model' && ledger.size === 0 ? 'tool_use' : 'stop',
+              ...(mode !== 'model' && ledger.size === 0
                 ? {
                     tool_calls: [
-                      mode === "plan"
+                      mode === 'plan'
                         ? {
-                            id: "plan-once",
-                            name: "plan_update",
+                            id: 'plan-once',
+                            name: 'plan_update',
                             arguments: { items: [] },
                           }
-                        : mode === "owned"
+                        : mode === 'owned'
                           ? {
-                              id: "delegate-once",
-                              name: "delegate",
+                              id: 'delegate-once',
+                              name: 'delegate',
                               arguments: {
-                                role: "script",
-                                task: "Analyze the source",
+                                role: 'script',
+                                task: 'Analyze the source',
                               },
                             }
                           : {
-                              id: "write-once",
-                              name: "write_resource",
+                              id: 'write-once',
+                              name: 'write_resource',
                               arguments: {},
                             },
                     ],
@@ -159,16 +162,16 @@ async function fixture(
         root_run_id: body.grant.root_run_id,
         submission_id: body.grant.submission_id,
         call: body.call,
-        status: outcome === "unknown" ? "unknown" : "completed",
+        status: outcome === 'unknown' ? 'unknown' : 'completed',
         result:
-          outcome === "tool_calls"
+          outcome === 'tool_calls'
             ? {
                 ...result,
-                stop_reason: "tool_use",
+                stop_reason: 'tool_use',
                 tool_calls: [
                   {
-                    id: "not-yet-executed",
-                    name: "write_resource",
+                    id: 'not-yet-executed',
+                    name: 'write_resource',
                     arguments: {},
                   },
                 ],
@@ -179,7 +182,7 @@ async function fixture(
       ledger.set(body.call.call_id, receipt);
       if (
         kind === mode ||
-        (mode === "plan" && kind === "model" && ledger.size === 2)
+        (mode === 'plan' && kind === 'model' && ledger.size === 2)
       ) {
         held = res;
         reached();
@@ -188,13 +191,13 @@ async function fixture(
       return send(receipt);
     }
     res.statusCode = 404;
-    send({ code: "fixture_unknown_path" });
+    send({ code: 'fixture_unknown_path' });
   });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
   const address = server.address();
-  if (!address || typeof address === "string")
-    throw Error("Missing fixture address");
+  if (!address || typeof address === 'string')
+    throw Error('Missing fixture address');
   const origin = `http://127.0.0.1:${address.port}`;
   let child: ChildProcess | undefined;
   return {
@@ -209,28 +212,28 @@ async function fixture(
     committed,
     spawn(window?: string) {
       child = fork(
-        fileURLToPath(new URL("./helpers/recovery-child.ts", import.meta.url)),
+        fileURLToPath(new URL('./helpers/recovery-child.ts', import.meta.url)),
         [],
         {
-          execArgv: ["--import", "tsx"],
+          execArgv: ['--import', 'tsx'],
           env: {
             ...process.env,
             RECOVERY_RUN: run.id,
             RECOVERY_ORIGIN: origin,
             ...(window ? { RECOVERY_WINDOW: window } : {}),
           },
-          stdio: ["ignore", "pipe", "pipe", "ipc"],
+          stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
         },
       );
-      let stderr = "";
-      child.stderr?.on("data", (x) => (stderr += String(x)));
-      child.on("exit", (code, signal) => {
-        if (code && signal !== "SIGKILL") process.stderr.write(stderr);
+      let stderr = '';
+      child.stderr?.on('data', (x) => (stderr += String(x)));
+      child.on('exit', (code, signal) => {
+        if (code && signal !== 'SIGKILL') process.stderr.write(stderr);
       });
       return child;
     },
     async cleanup() {
-      if (child && !child.killed) child.kill("SIGKILL");
+      if (child && !child.killed) child.kill('SIGKILL');
       held?.destroy();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -240,22 +243,22 @@ async function fixture(
 }
 
 it.each([
-  { mode: "model", outcome: "final", status: "completed" },
-  { mode: "model", outcome: "unknown", status: "needs_reconciliation" },
-  { mode: "model", outcome: "tool_calls", status: "needs_reconciliation" },
-  { mode: "tool", outcome: "final", status: "completed" },
-  { mode: "plan", outcome: "final", status: "completed" },
+  { mode: 'model', outcome: 'final', status: 'completed' },
+  { mode: 'model', outcome: 'unknown', status: 'needs_reconciliation' },
+  { mode: 'model', outcome: 'tool_calls', status: 'needs_reconciliation' },
+  { mode: 'tool', outcome: 'final', status: 'completed' },
+  { mode: 'plan', outcome: 'final', status: 'completed' },
 ] as const)(
-  "recovers original $mode receipt ($outcome) after actual SIGKILL between Go commit and Pi result",
+  'recovers original $mode receipt ($outcome) after actual SIGKILL between Go commit and Pi result',
   async ({ mode, outcome, status }) => {
     const f = await fixture(mode, outcome);
     let runtime: SessionRuntime | undefined;
     try {
       const child = f.spawn();
       await deadline(f.committed);
-      const exit = once(child, "exit");
-      child.kill("SIGKILL");
-      expect((await exit)[1]).toBe("SIGKILL");
+      const exit = once(child, 'exit');
+      child.kill('SIGKILL');
+      expect((await exit)[1]).toBe('SIGKILL');
       const original = [...f.ledger.values()].at(-1)!;
       const sentBefore = [...f.sends];
       const lookupsBefore = f.lookups.length;
@@ -269,7 +272,7 @@ it.each([
         (async () => {
           for (;;) {
             const owner = await f.pool.query<{ expired: boolean }>(
-              "SELECT lease_until<=clock_timestamp() expired FROM agent.runtime_sessions WHERE session_id=$1",
+              'SELECT lease_until<=clock_timestamp() expired FROM agent.runtime_sessions WHERE session_id=$1',
               [f.session.id],
             );
             if (owner.rows[0]?.expired) break;
@@ -279,28 +282,28 @@ it.each([
       );
       runtime = await SessionRuntime.open(
         f.pool,
-        new BusinessClient(f.origin, "fixture"),
+        new BusinessClient(f.origin, 'fixture'),
         f.run,
         30000,
       );
       await runtime.start();
       const state = await runtime.state();
       expect(f.lookups.slice(lookupsBefore)).toContain(original.call.call_id);
-      if (mode === "model" || mode === "plan")
+      if (mode === 'model' || mode === 'plan')
         expect(f.sends).toEqual(sentBefore);
       else
         expect(f.sends.filter((x) => x === original.call.call_id)).toHaveLength(
           1,
         );
       expect(state?.status).toBe(status);
-      expect(state?.model_steps).toBe(mode === "model" ? 1 : 2);
-      if (status === "completed") expect(state?.failure).toBeUndefined();
-      if (mode === "model") {
+      expect(state?.model_steps).toBe(mode === 'model' ? 1 : 2);
+      if (status === 'completed') expect(state?.failure).toBeUndefined();
+      if (mode === 'model') {
         expect(state).toMatchObject({
           reconciliation: {
             status,
             segment_id: f.run.submission_id,
-            official_submission_status: "interrupted",
+            official_submission_status: 'interrupted',
             calls: [
               {
                 call: original.call,
@@ -314,12 +317,12 @@ it.each([
           "SELECT body FROM agent.runtime_records WHERE session_id=$1 AND record_type='entry' AND body::jsonb->>'kind'='glowloom.reconciled_receipt'",
           [f.session.id],
         );
-        expect(proof.rowCount).toBe(status === "completed" ? 1 : 0);
-        if (status === "completed") {
+        expect(proof.rowCount).toBe(status === 'completed' ? 1 : 0);
+        if (status === 'completed') {
           await reconcileInterrupted({
             harness: runtime.harness,
             root: runtime.root,
-            business: new BusinessClient(f.origin, "fixture"),
+            business: new BusinessClient(f.origin, 'fixture'),
             runId: f.run.id,
             segmentId: f.run.submission_id,
           });
@@ -340,25 +343,25 @@ it.each([
               payload: {
                 root_run_id: f.run.id,
                 conversation_id: runtime.root.id,
-                text: "Original provider answer",
+                text: 'Original provider answer',
                 receipt_id: original.receipt_id,
-                source: "reconciled_original_receipt",
+                source: 'reconciled_original_receipt',
                 message_parts: [
                   {
                     run_id: f.run.id,
                     conversation_id: runtime.root.id,
                     message_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
                     sequence: expect.stringMatching(/^\d+:\d+$/),
-                    kind: "assistant",
+                    kind: 'assistant',
                     part_index: 0,
-                    content: "Original provider answer",
+                    content: 'Original provider answer',
                   },
                 ],
               },
             },
           ]);
           const messages = await f.pool.query(
-            "SELECT message_id,run_id,conversation_id,sequence,kind,part_index,content FROM agent.public_messages WHERE run_id=$1",
+            'SELECT message_id,run_id,conversation_id,sequence,kind,part_index,content FROM agent.public_messages WHERE run_id=$1',
             [f.run.id],
           );
           expect(messages.rowCount).toBe(1);
@@ -380,9 +383,9 @@ it.each([
       expect(submissions.rowCount).toBe(1);
       const official = JSON.parse(submissions.rows[0]!.body);
       expect(official.status).toBe(
-        mode === "model" || mode === "plan" ? "unanswered" : "done",
+        mode === 'model' || mode === 'plan' ? 'unanswered' : 'done',
       );
-      if (mode === "model") expect(official.reason).toBe("interrupted");
+      if (mode === 'model') expect(official.reason).toBe('interrupted');
     } finally {
       await runtime?.close();
       await f.cleanup();
@@ -391,10 +394,10 @@ it.each([
   20000,
 );
 
-it.each(["child_create_config", "child_submit", "child_collect"])(
-  "reuses the same owned child after SIGKILL at %s",
+it.each(['child_create_config', 'child_submit', 'child_collect'])(
+  'reuses the same owned child after SIGKILL at %s',
   async (window) => {
-    const f = await fixture("owned");
+    const f = await fixture('owned');
     let runtime: SessionRuntime | undefined;
     try {
       const child = f.spawn(window);
@@ -404,37 +407,37 @@ it.each(["child_create_config", "child_submit", "child_collect"])(
           owner_task_id: string;
           submission_ids: string[];
         }>((resolve) =>
-          child.on("message", (message) => {
+          child.on('message', (message) => {
             const m = message as {
               kind: string;
               child_id: string;
               owner_task_id: string;
               submission_ids: string[];
             };
-            if (m.kind === "window") resolve(m);
+            if (m.kind === 'window') resolve(m);
           }),
         ),
       );
-      const exit = once(child, "exit");
-      child.kill("SIGKILL");
-      expect((await exit)[1]).toBe("SIGKILL");
+      const exit = once(child, 'exit');
+      child.kill('SIGKILL');
+      expect((await exit)[1]).toBe('SIGKILL');
       const config = await f.pool.query(
         "SELECT id FROM agent.runtime_records WHERE session_id=$1 AND record_type='document' AND scope_key=$2 AND kind_key=$3",
         [
           f.session.id,
-          JSON.stringify(["conversation", Number(marker.child_id)]),
-          JSON.stringify("pi.agent"),
+          JSON.stringify(['conversation', Number(marker.child_id)]),
+          JSON.stringify('pi.agent'),
         ],
       );
       expect(config.rowCount).toBe(1);
       const configValue = await f.pool.query<{ content: string }>(
-        "SELECT content FROM agent.runtime_document_versions WHERE session_id=$1 AND document_id=$2 ORDER BY commit_seq DESC LIMIT 1",
+        'SELECT content FROM agent.runtime_document_versions WHERE session_id=$1 AND document_id=$2 ORDER BY commit_seq DESC LIMIT 1',
         [f.session.id, config.rows[0]!.id],
       );
       const agent = JSON.parse(configValue.rows[0]!.content);
-      expect(agent.tools).toEqual(["skill_load"]);
-      expect(agent.extensions).not.toContain("glowloom.producer");
-      if (window === "child_create_config")
+      expect(agent.tools).toEqual(['skill_load']);
+      expect(agent.extensions).not.toContain('glowloom.producer');
+      if (window === 'child_create_config')
         expect(marker.submission_ids).toEqual([]);
       else expect(marker.submission_ids).toHaveLength(1);
       await deadline(
@@ -443,7 +446,7 @@ it.each(["child_create_config", "child_submit", "child_collect"])(
             if (
               (
                 await f.pool.query(
-                  "SELECT lease_until<=clock_timestamp() expired FROM agent.runtime_sessions WHERE session_id=$1",
+                  'SELECT lease_until<=clock_timestamp() expired FROM agent.runtime_sessions WHERE session_id=$1',
                   [f.session.id],
                 )
               ).rows[0]?.expired
@@ -455,7 +458,7 @@ it.each(["child_create_config", "child_submit", "child_collect"])(
       );
       runtime = await SessionRuntime.open(
         f.pool,
-        new BusinessClient(f.origin, "fixture"),
+        new BusinessClient(f.origin, 'fixture'),
         f.run,
         30000,
       );
@@ -479,9 +482,9 @@ it.each(["child_create_config", "child_submit", "child_collect"])(
       if (marker.submission_ids.length)
         expect(submissions.rows[0]!.id).toBe(marker.submission_ids[0]);
       const state = await runtime.state();
-      expect(state?.status).toBe("completed");
+      expect(state?.status).toBe('completed');
       expect(state?.delegations).toHaveLength(1);
-      expect(state?.delegations[0]?.status).toBe("done");
+      expect(state?.delegations[0]?.status).toBe('done');
       expect(state?.delegations[0]?.source_refs).toHaveLength(1);
       expect(f.sends).toHaveLength(3);
       expect(new Set(f.sends).size).toBe(3);

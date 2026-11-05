@@ -135,14 +135,19 @@ HTTP JSON Schema 只使用当前 Fastify 验证器与 OpenAPI 3.0 可表达的�
 ```text
 frontend/                 当前前端与生成客户端
 backend/                  Go 业务 API、模型网关、业务工具、数据库 worker
-agent/            独立 TypeScript/Pi Durable 服务
-  src/server.ts           HTTP 服务入口与关闭信号
-  src/sessions/           会话/run 接受、命令与已提交事件
-  src/harness/            官方 Harness、扩展与受限子 Agent
-  src/business/           当前 Go 业务/模型 HTTP 客户端
-  src/storage/            官方 Storage 的 PostgreSQL 实现与所有权
+agent/                     独立 TypeScript/Pi Durable 服务
+  src/server.ts            组合根：配置、依赖组装、服务启动与有界关闭
+  src/config.ts            环境变量解析与校验
+  src/transport/http/      Fastify 内部 HTTP/SSE、服务认证及合同校验
+  src/sessions/            会话/run 用例、控制、manifest、执行恢复
+    errors.ts              与 HTTP 无关的 Agent 错误代码
+    port.ts                HTTP 入站适配器消费的应用接口
+    persistence/           Agent 自有 session/run 元数据及消息/历史投影
+  src/runtime/pi-durable/  官方 Pi Durable Harness、工具/扩展/文档/事件适配
+  src/integrations/go-business-api/  调用 Go 权威 API 的客户端与转换
+  src/adapters/postgres/pi-durable/  官方 Storage 的 PostgreSQL 实现与 owner fencing
   contracts/              TypeBox HTTP schema / operation 元数据（唯一来源）
-  tests/                  单元、官方一致性、真实 PG、跨服务测试
+  tests/                  单元、HTTP、官方一致性、真实 PG、恢复/跨服务测试
   package.json
   pnpm-lock.yaml
   tsconfig.json
@@ -151,7 +156,9 @@ canvas-collab/            现有私有协作运行时
 docker-compose.yml       统一构建/运行入口
 ```
 
-包按实际职责组织，不额外建立空 Controller/Service/Repository 层或通用工作流框架。Go 的 Agent HTTP 适配只做入口鉴权、作用域、协议转发和业务授权；删除 Go 内的旧会话循环、StateGraph、Node launcher 和调度器。Agent 状态模型与业务 DTO 通过正式合同转换，不共享数据库模型或复制领域逻辑。
+目录遵循 [Agent 服务代码规范](../../agent/AGENTS.md)。职责按服务边界和现有模块划分，不机械照搬全局 Controller/Service/Repository 分层，也不预建未来层。`server.ts` 是进程组合根，装配配置、连接池、Go 客户端、会话模块和 Fastify；会话模块可在内部组合私有存储助手。`transport/http` 只负责入站认证、TypeBox 校验、协议传输和 HTTP 错误映射；`sessions` 接受会话/run、命令、读取和恢复用例；`sessions/persistence` 维护 Agent 自有 session/run 元数据及历史投影；`runtime/pi-durable` 适配官方 Pi Harness、工具、文档、事件及受信扩展；`integrations/go-business-api` 访问 Go 的权威业务能力；`adapters/postgres/pi-durable` 负责官方 Storage 与 owner/epoch fencing。应用/持久化代码不依赖 Fastify request/reply，预期服务错误由 `sessions/errors.ts` 表达，再由 HTTP 边界映射为状态码。
+
+Agent 拥有会话、运行、子会话、执行恢复与 Durable 记录；Go 拥有身份和授权、预算、审批、模型出站、业务工具及业务数据。Agent 仅通过正式 HTTP 合同调用 Go，不直接访问业务 schema，也不复制其业务模型。Agent 的 `sessions/persistence` 与 Pi Durable Storage 虽共用受限 PostgreSQL 实例，但职责、表和授权边界分开。
 
 ```mermaid
 flowchart LR

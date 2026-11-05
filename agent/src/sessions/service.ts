@@ -1,6 +1,6 @@
-import { publicState } from "../harness/events.js";
-import type { Pool } from "pg";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { publicState } from '../runtime/pi-durable/events.js';
+import type { Pool } from 'pg';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type {
   CreateSessionInput,
   CreateRunInput,
@@ -8,19 +8,23 @@ import type {
   Identity,
   HistoryInput,
   MessageInput,
-} from "../../contracts/agent.js";
+} from '../../contracts/agent.js';
+import { AgentError } from './errors.js';
+import type { AgentApplication, RuntimeEvent } from './port.js';
+import { BusinessClient } from '../integrations/go-business-api/client.js';
 import {
-  HttpProblem,
-  type AgentApplication,
-  type RuntimeEvent,
-} from "../http/app.js";
-import { BusinessClient } from "../business/client.js";
-import { SessionStore, inTransaction, type RunRow } from "./store.js";
-import { SessionRuntime } from "./runtime.js";
-import { freezeManifest, stableId } from "./manifest.js";
-import { DEFINITION_HASH } from "../harness/definitions.js";
-import { StateDoc, releaseOwnedAllocations } from "../harness/docs.js";
-import { ConversationStore } from "./conversations.js";
+  SessionStore,
+  inTransaction,
+  type RunRow,
+} from './persistence/store.js';
+import { SessionRuntime } from './runtime.js';
+import { freezeManifest, stableId } from './manifest.js';
+import { DEFINITION_HASH } from '../runtime/pi-durable/definitions.js';
+import {
+  StateDoc,
+  releaseOwnedAllocations,
+} from '../runtime/pi-durable/docs.js';
+import { ConversationStore } from './persistence/conversations.js';
 const context = BACKGROUND_CONTEXT;
 export class SessionService implements AgentApplication {
   readonly store: SessionStore;
@@ -41,7 +45,7 @@ export class SessionService implements AgentApplication {
   async ready() {
     try {
       await this.pool.query(
-        "SELECT s.id,r.input,r.retry_of_run_id,m.message_id FROM agent.service_sessions s LEFT JOIN agent.service_runs r ON r.session_id=s.id LEFT JOIN agent.public_messages m ON m.run_id=r.id LIMIT 0",
+        'SELECT s.id,r.input,r.retry_of_run_id,m.message_id FROM agent.service_sessions s LEFT JOIN agent.service_runs r ON r.session_id=s.id LEFT JOIN agent.public_messages m ON m.run_id=r.id LIMIT 0',
       );
       return !this.stopping;
     } catch {
@@ -49,7 +53,7 @@ export class SessionService implements AgentApplication {
     }
   }
   createSession(input: CreateSessionInput) {
-    if (this.stopping) throw new HttpProblem(503, "shutting_down");
+    if (this.stopping) throw new AgentError('shutting_down');
     return this.store.createSession(input);
   }
   listSessions(who: HistoryInput) {
@@ -78,7 +82,7 @@ export class SessionService implements AgentApplication {
         if (!session) return undefined;
         const last = (
           await client.query<RunRow>(
-            "SELECT * FROM agent.service_runs WHERE session_id=$1 ORDER BY accepted_revision DESC LIMIT 1",
+            'SELECT * FROM agent.service_runs WHERE session_id=$1 ORDER BY accepted_revision DESC LIMIT 1',
             [id],
           )
         ).rows[0];
@@ -95,9 +99,9 @@ export class SessionService implements AgentApplication {
     );
   }
   async createRun(id: string, input: CreateRunInput) {
-    if (this.stopping) throw new HttpProblem(503, "shutting_down");
+    if (this.stopping) throw new AgentError('shutting_down');
     const session = await this.store.session(id, input);
-    if (!session) throw new HttpProblem(404, "session_not_found");
+    if (!session) throw new AgentError('session_not_found');
     const manifest = freezeManifest(
       input.manifest,
       await this.business.tools(),
@@ -108,7 +112,7 @@ export class SessionService implements AgentApplication {
       root_run_id: run.id,
       session_id: run.session_id,
       submission_id: run.submission_id,
-      status: "accepted",
+      status: 'accepted',
       execution_revision: Number(run.accepted_revision),
     };
   }
@@ -124,7 +128,7 @@ export class SessionService implements AgentApplication {
   }
   private async runtime(run: RunRow) {
     const prior = this.active.get(run.session_id);
-    if (this.stopping) throw new HttpProblem(503, "shutting_down");
+    if (this.stopping) throw new AgentError('shutting_down');
     if (prior?.run.id === run.id && !prior.isClosed) return prior;
     if (prior) {
       await prior.close();
@@ -141,7 +145,7 @@ export class SessionService implements AgentApplication {
       .then(async (value) => {
         if (this.stopping) {
           await value.close();
-          throw new HttpProblem(503, "shutting_down");
+          throw new AgentError('shutting_down');
         }
         this.active.set(run.session_id, value);
         return value;
@@ -164,13 +168,13 @@ export class SessionService implements AgentApplication {
               const state = await tx.doc(StateDoc, current.root.id);
               if (
                 state.root_run_id === run.id &&
-                ["accepted", "running"].includes(state.status)
+                ['accepted', 'running'].includes(state.status)
               ) {
-                state.status = "failed";
+                state.status = 'failed';
                 state.failure = {
-                  code: "execution_unavailable",
+                  code: 'execution_unavailable',
                   message:
-                    "The execution could not proceed. Check the original business receipts before retrying.",
+                    'The execution could not proceed. Check the original business receipts before retrying.',
                 };
                 state.execution_revision++;
               }
@@ -184,8 +188,8 @@ export class SessionService implements AgentApplication {
           await current
             .serialize(async () => {
               const state = await current.state();
-              continueRun = state?.status === "running";
-              if (state && !["accepted", "running"].includes(state.status)) {
+              continueRun = state?.status === 'running';
+              if (state && !['accepted', 'running'].includes(state.status)) {
                 if (this.active.get(run.session_id) === current)
                   this.active.delete(run.session_id);
                 await current.close();
@@ -203,12 +207,12 @@ export class SessionService implements AgentApplication {
     await this.jobs.get(id);
   }
   async command(id: string, input: ControlInput) {
-    if (this.stopping) throw new HttpProblem(503, "shutting_down");
+    if (this.stopping) throw new AgentError('shutting_down');
     if (input.root_run_id !== id)
-      throw new HttpProblem(409, "decision_scope_conflict");
+      throw new AgentError('decision_scope_conflict');
     const run = await this.store.run(id, input);
     if (!run || run.session_id !== input.session_id)
-      throw new HttpProblem(404, "run_not_found");
+      throw new AgentError('run_not_found');
     const cached = await this.store.acceptControl(input);
     if (cached)
       return this.finishControl(input, cached as Record<string, unknown>);
@@ -225,13 +229,13 @@ export class SessionService implements AgentApplication {
         current.current.action !== input.action
       ) {
         if (current.authorization_revision < input.authorization_revision)
-          throw new HttpProblem(409, "authorization_revision_gap");
+          throw new AgentError('authorization_revision_gap');
         const receipt = {
           decision_id: input.decision_id,
           authorization_revision: input.authorization_revision,
-          status: "superseded",
+          status: 'superseded',
           execution_revision: (await runtime.state())?.execution_revision ?? 0,
-          receipt_id: stableId(id, "receipt:" + input.decision_id),
+          receipt_id: stableId(id, 'receipt:' + input.decision_id),
         };
         await runtime.harness.commit(async (tx) => {
           const state = await tx.doc(StateDoc, runtime.root.id);
@@ -241,8 +245,8 @@ export class SessionService implements AgentApplication {
       }
       runtime.block();
       await runtime.root.abort(context);
-      const continuation = stableId(id, "continuation:" + input.decision_id);
-      const receiptId = stableId(id, "receipt:" + input.decision_id);
+      const continuation = stableId(id, 'continuation:' + input.decision_id);
+      const receiptId = stableId(id, 'receipt:' + input.decision_id);
       await runtime.harness.commit(async (tx) => {
         const state = await tx.doc(StateDoc, runtime.root.id);
         if (state.quiesced?.decision_id === input.decision_id) {
@@ -250,11 +254,11 @@ export class SessionService implements AgentApplication {
           return;
         }
         state.status =
-          input.action === "stop"
-            ? "stopped"
-            : input.action === "reject"
-              ? "rejected"
-              : "paused";
+          input.action === 'stop'
+            ? 'stopped'
+            : input.action === 'reject'
+              ? 'rejected'
+              : 'paused';
         releaseOwnedAllocations(state, input.action);
         state.authorization_revision = input.authorization_revision;
         state.execution_revision++;
@@ -267,7 +271,7 @@ export class SessionService implements AgentApplication {
         };
       }, context);
       let receipt: Record<string, unknown> | undefined;
-      if (input.action === "approve" || input.action === "resume") {
+      if (input.action === 'approve' || input.action === 'resume') {
         await runtime.announceControlOwner(
           input.authorization_revision,
           current.barrier ? undefined : continuation,
@@ -284,20 +288,20 @@ export class SessionService implements AgentApplication {
         await runtime.harness.commit(async (tx) => {
           const state = await tx.doc(StateDoc, runtime.root.id);
           await runtime.root.submit(tx, {
-            type: "input",
+            type: 'input',
             content:
-              "Continue the unfinished adopted plan under the current approval. Query original business receipts before generating or writing again.",
+              'Continue the unfinished adopted plan under the current approval. Query original business receipts before generating or writing again.',
             requestId: continuation,
-            whenBusy: "reject",
+            whenBusy: 'reject',
           });
           state.segment_id = continuation;
-          state.status = "running";
+          state.status = 'running';
           state.pending_proposal = null;
           state.execution_revision++;
           const applied = {
             decision_id: input.decision_id,
             authorization_revision: input.authorization_revision,
-            status: "applied",
+            status: 'applied',
             execution_revision: state.execution_revision,
             receipt_id: receiptId,
           };
@@ -310,7 +314,7 @@ export class SessionService implements AgentApplication {
           const applied = {
             decision_id: input.decision_id,
             authorization_revision: input.authorization_revision,
-            status: "applied",
+            status: 'applied',
             execution_revision: state.execution_revision,
             receipt_id: receiptId,
           };
@@ -318,9 +322,9 @@ export class SessionService implements AgentApplication {
           receipt = applied;
         }, context);
       }
-      if (!receipt) throw new Error("Control receipt was not committed");
+      if (!receipt) throw new Error('Control receipt was not committed');
       const result = await this.finishControl(input, receipt);
-      if (input.action === "approve" || input.action === "resume")
+      if (input.action === 'approve' || input.action === 'resume')
         this.launch(run);
       return result;
     });
@@ -330,12 +334,12 @@ export class SessionService implements AgentApplication {
     receipt: Record<string, unknown>,
   ) {
     await this.pool.query(
-      "UPDATE agent.service_control_inbox SET receipt=$2 WHERE decision_id=$1",
+      'UPDATE agent.service_control_inbox SET receipt=$2 WHERE decision_id=$1',
       [input.decision_id, receipt],
     );
     await this.business.receipt(
       input.root_run_id,
-      receipt as Parameters<BusinessClient["receipt"]>[1],
+      receipt as Parameters<BusinessClient['receipt']>[1],
     );
     return receipt;
   }
@@ -345,21 +349,21 @@ export class SessionService implements AgentApplication {
     after: string | undefined,
   ): Promise<RuntimeEvent[]> {
     const run = await this.store.run(id, who);
-    if (!run) throw new HttpProblem(404, "run_not_found");
-    const match = /^(0|[1-9]\d*):(0|[1-9]\d*)$/.exec(after ?? "0:0");
-    if (!match) throw new HttpProblem(400, "invalid_event_cursor");
+    if (!run) throw new AgentError('run_not_found');
+    const match = /^(0|[1-9]\d*):(0|[1-9]\d*)$/.exec(after ?? '0:0');
+    if (!match) throw new AgentError('invalid_event_cursor');
     const seq = BigInt(match[1]!);
     const ordinal = BigInt(match[2]!);
     if (seq > 9007199254740991n || ordinal > 2147483647n)
-      throw new HttpProblem(400, "invalid_event_cursor");
+      throw new AgentError('invalid_event_cursor');
     const row = (
       await this.pool.query<{ min: string | null }>(
-        "SELECT min(commit_seq)::text min FROM agent.runtime_events WHERE session_id=$1",
+        'SELECT min(commit_seq)::text min FROM agent.runtime_events WHERE session_id=$1',
         [run.session_id],
       )
     ).rows[0];
     if (seq > 0n && row?.min && seq < BigInt(row.min))
-      throw new HttpProblem(409, "snapshot_required");
+      throw new AgentError('snapshot_required');
     const result = await this.pool.query<{
       commit_seq: string;
       event_ordinal: number;
@@ -373,9 +377,9 @@ export class SessionService implements AgentApplication {
       cursor: `${row.commit_seq}:${row.event_ordinal}`,
       type: row.event_type,
       payload:
-        row.event_type === "agent.state"
+        row.event_type === 'agent.state'
           ? publicState(
-              row.payload as import("@earendil-works/pi-durable").JsonObject,
+              row.payload as import('@earendil-works/pi-durable').JsonObject,
             )
           : row.payload,
     }));
@@ -385,7 +389,7 @@ export class SessionService implements AgentApplication {
     const recover = async () => {
       if (this.stopping) return;
       const controls = await this.pool.query<{ input: ControlInput }>(
-        "SELECT input FROM agent.service_control_inbox WHERE receipt IS NULL ORDER BY created_at LIMIT 20",
+        'SELECT input FROM agent.service_control_inbox WHERE receipt IS NULL ORDER BY created_at LIMIT 20',
       );
       for (const row of controls.rows) {
         if (this.stopping) return;
@@ -402,7 +406,7 @@ export class SessionService implements AgentApplication {
       for (const run of runs.rows) {
         if (this.stopping) return;
         const snapshot = await this.store.snapshot(run);
-        if (["accepted", "running"].includes(String(snapshot.state.status)))
+        if (['accepted', 'running'].includes(String(snapshot.state.status)))
           this.launch(run);
       }
     };
