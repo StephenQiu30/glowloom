@@ -9,6 +9,7 @@ import { ProductSider } from "./product-sider";
 /** Ordinary pages share one navigation tree; screen owns only the tool policy. */
 export function ProductNavigation({
   screen,
+  hideSearch,
   children,
   onMobileCloseAutoFocus,
   ...header
@@ -17,6 +18,7 @@ export function ProductNavigation({
   "assetLayout" | "showSearch" | "showUtilities"
 > & {
   screen: Screen;
+  hideSearch?: boolean;
   children: ReactNode;
   onMobileCloseAutoFocus: ComponentProps<
     typeof ProductSider
@@ -34,6 +36,7 @@ export function ProductNavigation({
             {...header}
             assetLayout={screen === "assets"}
             showSearch={
+              !hideSearch &&
               screen !== "home" &&
               (!resolveAdminSection(screen) || Boolean(header.search))
             }

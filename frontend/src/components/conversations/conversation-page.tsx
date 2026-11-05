@@ -1,6 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Folder } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PageToolbar } from "@/components/layout/page-toolbar";
 import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
 import { useSpace } from "@/components/spaces/space-context";
@@ -63,12 +67,24 @@ export function ConversationPage({
     />
   ) : null;
   return (
-    <div className="flex min-w-0 flex-col px-3 py-3 md:px-6">
-      <header className="mx-auto mb-3 flex w-full max-w-[960px] items-center justify-between gap-3">
-        <h1 className="truncate text-sm font-medium">
-          {sessionID ? "创作对话" : "新建对话"}
-        </h1>
-        {projectControl}
+    <div className="flex h-[calc(100dvh-var(--layout-header))] min-h-[22rem] min-w-0 flex-col px-3 pt-3 pb-5 md:px-6">
+      {!sessionID && (
+        <PageToolbar inHeader slot="actions">
+          <Button asChild variant="outline" aria-label="资产库">
+            <Link href="/assets?view=reference">
+              <Folder aria-hidden="true" data-icon="inline-start" />
+              <span className="max-md:sr-only">资产库</span>
+            </Link>
+          </Button>
+        </PageToolbar>
+      )}
+      <header className="mx-auto mb-2 flex h-9 w-full max-w-[960px] shrink-0 items-center justify-between gap-3">
+        {sessionID ? (
+          <h1 className="truncate text-sm font-medium">对话</h1>
+        ) : (
+          <p className="sr-only">新建对话</p>
+        )}
+        <div className="ml-auto">{projectControl}</div>
       </header>
       {failure?.owner === owner ? (
         <p role="alert" className="mb-3 text-sm">

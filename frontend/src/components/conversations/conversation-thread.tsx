@@ -1,6 +1,6 @@
 "use client";
 import { useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, Copy, Quote, RefreshCw } from "lucide-react";
+import { ArrowDown, ChevronRight, Copy, Quote, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -20,7 +20,7 @@ const labels: Record<string, string> = {
   paused: "已暂停",
   failed: "本轮未完成",
   stopped: "已停止",
-  completed: "本轮执行结束",
+  completed: "已完成",
   needs_reconciliation: "原任务结果待核对",
   rejected: "方案已驳回",
 };
@@ -112,6 +112,10 @@ export function ConversationThread({
             const s = run.snapshot,
               state = s.state,
               latest = c.activeRunID === s.root_run_id;
+            const status =
+              latest && c.stopping
+                ? "正在停止，等待执行回执"
+                : (labels[state.status] ?? "正在同步状态");
             const messages = [
               ...new Map(
                 run.messages
@@ -132,18 +136,18 @@ export function ConversationThread({
                 aria-label={`第${summary.accepted_revision}轮创作`}
                 className="space-y-5"
               >
-                <div className="ml-auto max-w-[85%] rounded-2xl bg-muted px-4 py-3">
+                <div className="ml-auto w-fit max-w-[85%] rounded-2xl bg-muted px-4 py-3">
                   {s.retry_of_run_id ? (
                     <p className="mb-2 text-xs text-muted-foreground">
                       重新生成 · 保留原尝试
                     </p>
                   ) : null}
                   {(s.input?.media_pins.length ?? 0) > 0 ? (
-                    <div className="mb-2 flex gap-2">
+                    <div className="mb-2 flex flex-wrap gap-2">
                       {s.input!.media_pins.map((pin, index) => (
                         <div
                           key={`${pin.bindingId ?? pin.sourceId}/${index}`}
-                          className="size-16 overflow-hidden rounded-md"
+                          className="size-16 shrink-0 overflow-hidden rounded-md"
                         >
                           <ProjectMediaPreview
                             projectID={projectID}
@@ -179,13 +183,72 @@ export function ConversationThread({
                       加载本轮较早消息
                     </Button>
                   ) : null}
+                  {state.plan?.length || state.delegations?.length ? (
+                    <Collapsible className="text-sm text-muted-foreground">
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="group/activity -ml-2 px-2 text-muted-foreground"
+                        >
+                          <span role={latest ? "status" : undefined}>
+                            {status}
+                          </span>
+                          <ChevronRight className="size-3.5 group-aria-expanded/activity:rotate-90" />
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2 border-l pl-3">
+                        <ol className="space-y-2">
+                          {state.plan?.map((item) => (
+                            <li key={item.id}>
+                              {item.title}
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                {labels[item.status] ?? item.status}
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                        {state.delegations?.map((item) => (
+                          <p
+                            key={item.task_id}
+                            className="mt-2 text-muted-foreground"
+                          >
+                            {(
+                              {
+                                script: "编剧",
+                                art: "美术",
+                                storyboard: "分镜",
+                                shot: "镜头",
+                                voice: "声音",
+                                edit: "剪辑",
+                                qa: "质检",
+                              } as Record<string, string>
+                            )[item.role] ?? "专业任务"}{" "}
+                            · {labels[item.status] ?? item.status}
+                          </p>
+                        ))}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ) : (
+                    <p
+                      role={latest ? "status" : undefined}
+                      className="text-sm text-muted-foreground"
+                    >
+                      {status}
+                    </p>
+                  )}
                   {messages.map((message) => (
                     <article key={message.id} className="group min-w-0">
                       <MarkdownContent
                         value={message.text}
                         className="break-words"
                       />
-                      <div className="mt-2 flex gap-1">
+                      {terminalStatuses.has(state.status) ? (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          以上内容由 AI 生成
+                        </p>
+                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -220,52 +283,6 @@ export function ConversationThread({
                     messages={run.messages}
                     onReuse={(draft) => c.changeDraft(draft)}
                   />
-                  <p
-                    role={latest ? "status" : undefined}
-                    className="text-sm text-muted-foreground"
-                  >
-                    {latest && c.stopping
-                      ? "正在停止，等待执行回执"
-                      : (labels[state.status] ?? "正在同步状态")}
-                  </p>
-                  {state.plan?.length || state.delegations?.length ? (
-                    <Collapsible className="rounded-xl border p-3 text-sm">
-                      <CollapsibleTrigger asChild>
-                        <Button variant="ghost">创作进度</Button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <ol className="mt-3 space-y-2">
-                          {state.plan?.map((item) => (
-                            <li key={item.id}>
-                              {item.title}
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                {labels[item.status] ?? item.status}
-                              </span>
-                            </li>
-                          ))}
-                        </ol>
-                        {state.delegations?.map((item) => (
-                          <p
-                            key={item.task_id}
-                            className="mt-2 text-muted-foreground"
-                          >
-                            {(
-                              {
-                                script: "编剧",
-                                art: "美术",
-                                storyboard: "分镜",
-                                shot: "镜头",
-                                voice: "声音",
-                                edit: "剪辑",
-                                qa: "质检",
-                              } as Record<string, string>
-                            )[item.role] ?? "专业任务"}{" "}
-                            · {labels[item.status] ?? item.status}
-                          </p>
-                        ))}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  ) : null}
                   {state.status === "waiting_approval" && state.proposal ? (
                     <div className="space-y-3 rounded-xl border p-4">
                       <p>请确认创作方案</p>

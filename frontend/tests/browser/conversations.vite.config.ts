@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createReadStream } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import react from "@vitejs/plugin-react";
@@ -151,7 +152,33 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         },
       ],
     });
-  if (route.endsWith("/agent/skills")) return reply([]);
+  if (route.endsWith("/agent/skills"))
+    return reply([
+      {
+        skill_id: "11111111-1111-4111-8111-111111111141",
+        version: "2",
+        resource_hash: "a".repeat(64),
+        name: "叙事短片导演分镜",
+        description: "从故事构思到镜头设计，逐步完成分镜与创作提示词。",
+        enabled: true,
+      },
+      {
+        skill_id: "11111111-1111-4111-8111-111111111142",
+        version: "1",
+        resource_hash: "b".repeat(64),
+        name: "系列套图生成",
+        description: "围绕同一角色或产品，制作风格一致的系列图片。",
+        enabled: true,
+      },
+      {
+        skill_id: "11111111-1111-4111-8111-111111111143",
+        version: "1",
+        resource_hash: "c".repeat(64),
+        name: "爆款电商短视频题材创意",
+        description: "整理商品卖点，生成短视频创意与分镜方案。",
+        enabled: true,
+      },
+    ]);
   if (route.endsWith("/agent/sessions"))
     return reply(
       req.method === "POST" ? session : { items: runs.length ? [session] : [] },
@@ -334,6 +361,26 @@ const config = {
             res.end(
               '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#7a6fce"/><circle cx="50" cy="50" r="28" fill="#d6d0f8"/></svg>',
             );
+            return;
+          }
+          if (req.url?.startsWith("/_next/image?")) {
+            const src = new URL(req.url, "http://fixture").searchParams.get(
+              "url",
+            );
+            if (
+              !src ||
+              !/^\/design\/reference\/(moonlight-whale|amber-perfume|cobalt-headphones)\.png$/.test(
+                src,
+              )
+            ) {
+              res.statusCode = 404;
+              res.end();
+              return;
+            }
+            res.setHeader("Content-Type", "image/png");
+            createReadStream(
+              path.resolve(import.meta.dirname, "../../public", `.${src}`),
+            ).pipe(res);
             return;
           }
           if (!req.url?.startsWith("/api/")) return next();

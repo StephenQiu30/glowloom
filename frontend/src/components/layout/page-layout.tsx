@@ -18,6 +18,7 @@ export type PageOptions = {
   owner: symbol;
   screen: Screen;
   search?: PageSearch;
+  hideSearch?: boolean;
 };
 
 // Only the stable setter is shared with pages. Header updates do not subscribe
@@ -31,22 +32,24 @@ export function PageLayout({
   children,
   fullBleed = false,
   search,
+  hideSearch = false,
 }: {
   screen: Screen;
   children: ReactNode;
   fullBleed?: boolean;
   search?: PageSearch;
+  hideSearch?: boolean;
 }) {
   const setOptions = useContext(PageOptionsContext);
   const owner = useRef(Symbol("page"));
   useEffect(() => {
     if (!setOptions) return;
     const id = owner.current;
-    setOptions({ owner: id, screen, search });
+    setOptions({ owner: id, screen, search, hideSearch });
     return () => {
       setOptions((current) => (current?.owner === id ? null : current));
     };
-  }, [screen, search, setOptions]);
+  }, [screen, search, hideSearch, setOptions]);
 
   return (
     <div

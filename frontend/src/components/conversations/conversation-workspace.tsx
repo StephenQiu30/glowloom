@@ -1,6 +1,12 @@
 "use client";
-import { useEffect, type ReactNode } from "react";
-import { ConversationComposer } from "./conversation-composer";
+import { useEffect, useRef, type ReactNode } from "react";
+import {
+  ConversationComposer,
+  type ConversationComposerHandle,
+} from "./conversation-composer";
+import { ConversationWelcome } from "./conversation-welcome";
+import { isSameSkillVersion, selectSkillVersion } from "./conversation-state";
+import { cn } from "cn";
 import { ConversationThread } from "./conversation-thread";
 import { useConversation, type ConversationOptions } from "./use-conversation";
 import { Button } from "@/components/ui/button";
@@ -25,21 +31,43 @@ export function ConversationWorkspace({
   }, [c.phase, onLock]);
   const identity = `${options.ownerKey}/${options.projectID}/${options.sessionID ?? "new"}`;
   const hasMessages = c.summaries.length > 0;
+  const welcome = !embedded && !options.sessionID && !hasMessages;
+  const authorized = options.enabled && !c.denied;
+  const composer = useRef<ConversationComposerHandle>(null);
   return (
     <div
-      className={`flex min-h-0 min-w-0 flex-col ${embedded ? (hasMessages ? "h-[min(80dvh,900px)]" : "") : "h-[calc(100dvh-8rem)] min-h-[400px]"}`}
+      data-conversation-welcome={welcome || undefined}
+      className={cn(
+        "flex min-h-0 min-w-0 flex-col",
+        embedded ? hasMessages && "h-[min(80dvh,900px)]" : "flex-1",
+      )}
     >
-      {c.loading ? (
+      {c.loading && !welcome ? (
         <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
           正在读取对话…
         </p>
       ) : null}
       {hasMessages ? (
         <ConversationThread conversation={c} projectID={options.projectID} />
+      ) : welcome ? (
+        <ConversationWelcome
+          skills={authorized && !c.loading ? c.skills : []}
+          selected={c.settings.skills}
+          disabled={c.active || c.phase !== "idle"}
+          onSelect={(skill) => {
+            if (
+              !c.settings.skills.some((pin) => isSameSkillVersion(pin, skill))
+            ) {
+              c.changeSettings({
+                ...c.settings,
+                skills: selectSkillVersion(c.settings.skills, skill),
+              });
+            }
+            composer.current?.focusPrompt();
+          }}
+        />
       ) : !embedded ? (
-        <div className="flex min-h-32 flex-1 items-center justify-center">
-          <h1 className="text-2xl font-medium">你好，想创作什么？</h1>
-        </div>
+        <div className="flex-1" />
       ) : null}
       {c.error || c.connection !== "connected" || c.unresolved.length > 0 ? (
         <div
@@ -64,13 +92,19 @@ export function ConversationWorkspace({
           ) : null}
         </div>
       ) : null}
-      <div className="mx-auto w-full max-w-[960px] shrink-0">
+      <div
+        className={cn(
+          "mx-auto w-full shrink-0",
+          welcome ? "max-w-[800px]" : "max-w-[960px]",
+        )}
+      >
         <ConversationComposer
           key={identity}
+          ref={composer}
           conversation={c}
           contextKey={identity}
           projectID={options.projectID}
-          authorized={options.enabled && !c.denied}
+          authorized={authorized}
           onChooseProject={onChooseProject}
           headerActions={headerActions}
           projectControl={projectControl}

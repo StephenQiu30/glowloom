@@ -119,3 +119,22 @@ it("follows late result-card resizing only while reading the newest messages", (
   unmount();
   expect(disconnect).toHaveBeenCalledOnce();
 });
+
+it("places the expandable public activity before the completed reply", () => {
+  const c = controller();
+  c.runMap.old!.snapshot.state = {
+    ...c.runMap.old!.snapshot.state,
+    status: "completed",
+    plan: [{ id: "step", title: "完成文案", status: "completed" }],
+  } as typeof c.runMap.old.snapshot.state;
+  render(<ConversationThread conversation={c} projectID="project" />);
+  const activity = screen.getByRole("button", { name: "已完成" });
+  const reply = screen.getByText("原来的回复");
+  expect(
+    activity.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(screen.queryByText("完成文案")).toBeNull();
+  fireEvent.click(activity);
+  expect(screen.getByText("完成文案")).toBeTruthy();
+  expect(screen.getByText("以上内容由 AI 生成")).toBeTruthy();
+});

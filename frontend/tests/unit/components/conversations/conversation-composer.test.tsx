@@ -76,3 +76,51 @@ it("offers the current project model catalog after authorization", () => {
   );
   expect(screen.getByText("使用当前项目目录")).toBeTruthy();
 });
+
+it("searches available skill descriptions and keeps a selected version while filtering", () => {
+  const value = controller();
+  value.skills = [
+    {
+      skill_id: "script",
+      version: "1",
+      resource_hash: "script-hash",
+      enabled: true,
+      name: "创作分镜",
+      description: "安排镜头和节奏",
+    },
+    {
+      skill_id: "poster",
+      version: "2",
+      resource_hash: "poster-hash",
+      enabled: true,
+      name: "海报设计",
+      description: "组织商品主图",
+    },
+  ];
+  value.settings.skills = [
+    { skill_id: "script", version: "1", resource_hash: "script-hash" },
+  ];
+  render(
+    <ConversationComposer
+      conversation={value}
+      contextKey="test"
+      projectID="project"
+      authorized
+      onChooseProject={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "选择技能" }));
+  const search = screen.getByRole("searchbox", { name: "搜索技能" });
+  fireEvent.change(search, { target: { value: "  商品  " } });
+  expect(screen.getByText("海报设计")).toBeTruthy();
+  expect(screen.queryByText("创作分镜")).toBeNull();
+  fireEvent.change(search, { target: { value: "无匹配" } });
+  expect(screen.getByText("没有匹配的技能")).toBeTruthy();
+  fireEvent.change(search, { target: { value: "" } });
+  expect(
+    screen
+      .getByRole("checkbox", { name: /创作分镜/ })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+  expect(value.changeSettings).not.toHaveBeenCalled();
+});

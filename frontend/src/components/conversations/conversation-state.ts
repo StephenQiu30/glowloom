@@ -1,4 +1,33 @@
 import type { PromptDraft } from "@/components/generation/prompt-document";
+import type { ConversationSkillPin } from "./conversation-context";
+
+export function isVersionedSkill(
+  skill: API.SkillVersion,
+): skill is API.SkillVersion & ConversationSkillPin {
+  return Boolean(skill.skill_id && skill.version && skill.resource_hash);
+}
+
+export function isSameSkillVersion(
+  a: ConversationSkillPin,
+  b: ConversationSkillPin,
+) {
+  return (
+    a.skill_id === b.skill_id &&
+    a.version === b.version &&
+    a.resource_hash === b.resource_hash
+  );
+}
+
+export function selectSkillVersion(
+  pins: ConversationSkillPin[],
+  { skill_id, version, resource_hash }: ConversationSkillPin,
+) {
+  return [
+    ...pins.filter((pin) => pin.skill_id !== skill_id),
+    { skill_id, version, resource_hash },
+  ];
+}
+
 export interface SubmitCheck {
   draft: PromptDraft;
   planningModel?: API.ModelResponse;

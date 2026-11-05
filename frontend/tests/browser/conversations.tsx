@@ -8,7 +8,9 @@ import { setCSRFToken, setCreationScope } from "../../src/lib/request";
 import "../../src/app/globals.css";
 setCSRFToken("fixture-only");
 setCreationScope("11111111-1111-4111-8111-111111111113");
-if (new URLSearchParams(location.search).get("theme") === "dark")
+const params = new URLSearchParams(location.search);
+const welcome = params.has("welcome");
+if (params.get("theme") === "dark")
   document.documentElement.classList.add("dark");
 const draft = emptyPromptDraft();
 draft.document.content[0]!.content = [
@@ -62,21 +64,25 @@ createRoot(document.getElementById("root")!, {
 }).render(
   <TooltipProvider>
     <Toaster />
-    <main className="mx-auto max-w-5xl p-4">
-      <p className="mb-4 text-xs text-muted-foreground">
-        隔离 fixture · 不调用真实生成服务
-      </p>
-      <AuditControls />
+    <main className="mx-auto flex h-dvh max-w-5xl flex-col px-4 pt-20 pb-5">
+      {!welcome && (
+        <>
+          <p className="mb-4 text-xs text-muted-foreground">
+            隔离 fixture · 不调用真实生成服务
+          </p>
+          <AuditControls />
+        </>
+      )}
       <ConversationWorkspace
         ownerKey="fixture/space"
         projectID="11111111-1111-4111-8111-111111111114"
         sessionID={
-          new URLSearchParams(location.search).get("history")
+          params.get("history")
             ? "11111111-1111-4111-8111-111111111115"
             : undefined
         }
         enabled
-        initialDraft={draft}
+        initialDraft={welcome ? emptyPromptDraft() : draft}
         onChooseProject={() => {}}
       />
     </main>

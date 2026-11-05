@@ -8,7 +8,7 @@ export default async function Page({
 }) {
   const { projectId } = await searchParams;
   return (
-    <PageLayout screen="conversations" fullBleed>
+    <PageLayout screen="conversations" fullBleed hideSearch>
       <ConversationPage
         projectID={isProjectID(projectId) ? projectId : undefined}
       />

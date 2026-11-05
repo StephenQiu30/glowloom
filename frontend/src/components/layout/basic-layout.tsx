@@ -154,6 +154,7 @@ function Shell({
         pageActionsRef={setActionsTarget}
         replaceBase={actionsRegistration?.presentation === "replace-base"}
         search={pageSearch}
+        hideSearch={pageOptions?.screen === screen && pageOptions.hideSearch}
         actor={session?.actor}
         isMobile={isMobile}
         navigationOpen={openMobile}
