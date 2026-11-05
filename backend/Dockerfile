@@ -47,7 +47,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/glowloom ./cmd/glowloom
 
-FROM debian:12-slim
+FROM debian:12-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /work \
@@ -61,3 +61,29 @@ USER 65532:65532
 EXPOSE 8080 8081 8082
 ENTRYPOINT ["/usr/local/bin/glowloom"]
 CMD ["--role=api"]
+
+# Compose reuses middleware on the Docker host. Keep the port bridges in the
+# application container and run the build-stage binary without a source mount.
+FROM runtime AS compose
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends curl socat \
+    && rm -rf /var/lib/apt/lists/*
+COPY --chmod=755 <<'ENTRYPOINT' /usr/local/bin/glowloom-compose-entrypoint
+#!/bin/sh
+set -eu
+for port in ${GLOWLOOM_HOST_SERVICE_PORTS-5432 6379 9092}; do
+  case "$port" in
+    ''|*[!0-9]*) echo "Invalid host service port" >&2; exit 1 ;;
+  esac
+  socat "TCP-LISTEN:$port,bind=127.0.0.1,reuseaddr,fork" "TCP:host.docker.internal:$port" &
+done
+# The local API requires a loopback listener. Forward Compose traffic to it.
+socat TCP-LISTEN:18080,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:8080 &
+exec /usr/local/bin/glowloom "$@"
+ENTRYPOINT
+USER 65532:65532
+EXPOSE 18080
+ENTRYPOINT ["/usr/local/bin/glowloom-compose-entrypoint"]
+CMD ["--role=all"]
+
+FROM runtime AS production

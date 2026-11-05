@@ -104,39 +104,35 @@ services:
     container_name: glowloom-backend
     build:
       context: ./backend
-      target: dev
+      target: compose
     image: glowloom/backend:latest
     init: true
     restart: unless-stopped
     stop_grace_period: 45s
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    volumes:
-      - ./backend:/src:ro
-      - backend-go-build:/go/build-cache
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "curl -fsS http://127.0.0.1:8080/healthz && curl -fsS http://127.0.0.1:8081/healthz && curl -fsS http://127.0.0.1:8082/healthz",
+          "curl -fsS http://127.0.0.1:18080/healthz && curl -fsS http://127.0.0.1:8081/healthz && curl -fsS http://127.0.0.1:8082/healthz",
         ]
       interval: 10s
       timeout: 3s
       retries: 3
-      start_period: 180s
+      start_period: 45s
     command: ["--role=all"]
     tmpfs:
-      - /work:rw,noexec,nosuid,size=8g
+      - /work:rw,noexec,nosuid,size=8g,uid=65532,gid=65532,mode=0700
     environment:
       GLOWLOOM_CANVAS_RUNTIME_URL: http://canvas-collaboration:4400
       GLOWLOOM_AGENT_ORIGIN: http://agent:4401
       GLOWLOOM_AGENT_SERVICE_TOKEN: ${GLOWLOOM_AGENT_SERVICE_TOKEN:?Set a separate Go-to-Agent token}
       GLOWLOOM_AGENT_BUSINESS_TOKEN: ${GLOWLOOM_AGENT_BUSINESS_TOKEN:?Set a separate Agent-to-Go token}
       GLOWLOOM_COLLAB_RUNTIME_TOKEN: ${GLOWLOOM_COLLAB_RUNTIME_TOKEN:?Set an internal collaboration token of at least 32 bytes}
-      GLOWLOOM_HOST_SERVICE_PORTS: ${GLOWLOOM_HOST_SERVICE_PORTS:-5432 6379 9000 9092}
+      GLOWLOOM_HOST_SERVICE_PORTS: ${GLOWLOOM_HOST_SERVICE_PORTS-5432 6379 9092}
       GLOWLOOM_ENV: ${GLOWLOOM_ENV:-local}
       GLOWLOOM_LOG_LEVEL: ${GLOWLOOM_LOG_LEVEL:-info}
-      GLOWLOOM_DEV_API_PROXY: "true"
       GLOWLOOM_CREDENTIAL_KEY_ID: ${GLOWLOOM_CREDENTIAL_KEY_ID:-}
       GLOWLOOM_CREDENTIAL_PUBLIC_KEY_PEM: ${GLOWLOOM_CREDENTIAL_PUBLIC_KEY_PEM:-}
       GLOWLOOM_CREDENTIAL_PRIVATE_KEY_PEM: ${GLOWLOOM_CREDENTIAL_PRIVATE_KEY_PEM:-}
@@ -181,6 +177,3 @@ services:
       GLOWLOOM_OTEL_ENDPOINT: ${GLOWLOOM_OTEL_ENDPOINT:-}
     ports:
       - "127.0.0.1:1123:18080"
-
-volumes:
-  backend-go-build:
