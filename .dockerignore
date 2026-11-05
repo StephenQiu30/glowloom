@@ -5,6 +5,11 @@
 !canvas-collab/package.json
 !canvas-collab/src/
 !canvas-collab/src/**
+!backend/
+!backend/internal/
+!backend/internal/prompt/
+!backend/internal/prompt/domain/
+!backend/internal/prompt/domain/cinema_catalog.json
 **/node_modules
 **/.next
 **/.env*

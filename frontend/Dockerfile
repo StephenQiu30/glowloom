@@ -24,6 +24,8 @@ ARG GLOWLOOM_BACKEND_ORIGIN
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /canvas-collab /canvas-collab
 COPY frontend/ .
+# Type checking includes the test that compares the frontend and backend catalogs.
+COPY backend/internal/prompt/domain/cinema_catalog.json /backend/internal/prompt/domain/cinema_catalog.json
 RUN test -n "$GLOWLOOM_BACKEND_ORIGIN" && pnpm exec next build
 
 FROM node:24.21.0-bookworm-slim
