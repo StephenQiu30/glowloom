@@ -1,15 +1,27 @@
-import { fireEvent, screen, waitFor, cleanup } from "@testing-library/react";
+import { act, fireEvent, screen, cleanup } from "@testing-library/react";
 import { StrictMode } from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { toast } from "sonner";
-import { render, findFeedback } from "../../../feedback";
+import { render } from "../../../feedback";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
 
 afterEach(() => {
   cleanup();
+  // Sonner defers dismissal and removal even after the Toaster unmounts.
+  vi.runAllTimers();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
-it("普通重渲染不重复弹出，重试使用最新回调", async () => {
+
+function showFeedback() {
+  act(() => vi.advanceTimersByTime(1));
+  expect(document.querySelector("[data-sonner-toast]")).not.toBeNull();
+}
+it("普通重渲染不重复弹出，重试使用最新回调", () => {
   const error = vi.spyOn(toast, "error");
   const stale = vi.fn();
   const fresh = vi.fn();
@@ -19,7 +31,7 @@ it("普通重渲染不重复弹出，重试使用最新回调", async () => {
       action={{ label: "重试", onClick: stale }}
     />,
   );
-  await findFeedback();
+  showFeedback();
   view.rerender(
     <FeedbackToast
       message="读取失败"
@@ -31,11 +43,11 @@ it("普通重渲染不重复弹出，重试使用最新回调", async () => {
   expect(fresh).toHaveBeenCalledOnce();
   expect(stale).not.toHaveBeenCalled();
 });
-it("清除或离开视图会关闭对应提示，随后可再次提示相同错误", async () => {
+it("清除或离开视图会关闭对应提示，随后可再次提示相同错误", () => {
   const error = vi.spyOn(toast, "error");
   const dismiss = vi.spyOn(toast, "dismiss");
   const view = render(<FeedbackToast message="上传失败" />);
-  await findFeedback();
+  showFeedback();
   const id = error.mock.calls[0][1]?.id;
   view.rerender(<FeedbackToast message="" />);
   expect(dismiss).toHaveBeenCalledWith(id);
@@ -44,13 +56,13 @@ it("清除或离开视图会关闭对应提示，随后可再次提示相同错�
   view.unmount();
   expect(dismiss).toHaveBeenLastCalledWith(id);
 });
-it("严格模式不堆叠同一条通知，错误可在关闭后重新触发", async () => {
+it("严格模式不堆叠同一条通知，错误可在关闭后重新触发", () => {
   const view = render(
     <StrictMode>
       <FeedbackToast message="保存失败" />
     </StrictMode>,
   );
-  await findFeedback();
+  showFeedback();
   expect(
     document.querySelectorAll('[data-sonner-toast]:not([data-removed="true"])'),
   ).toHaveLength(1);
@@ -59,11 +71,9 @@ it("严格模式不堆叠同一条通知，错误可在关闭后重新触发", a
       <FeedbackToast message="" />
     </StrictMode>,
   );
-  await waitFor(() =>
-    expect(
-      toast.getToasts().filter((t) => "title" in t && t.title === "保存失败"),
-    ).toHaveLength(0),
-  );
+  expect(
+    toast.getToasts().filter((t) => "title" in t && t.title === "保存失败"),
+  ).toHaveLength(0);
 });
 
 it("操作提示不会被 Dialog 当作外部点击关闭表单", async () => {
@@ -83,7 +93,7 @@ it("操作提示不会被 Dialog 当作外部点击关闭表单", async () => {
       </DialogContent>
     </Dialog>,
   );
-  await findFeedback();
+  showFeedback();
   const button = screen.getByRole("button", { name: "重试" });
   fireEvent.pointerDown(button, { pointerType: "mouse" });
   fireEvent.click(button);

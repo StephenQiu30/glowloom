@@ -40,6 +40,8 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 			require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, f.identity.ModelProfileVersionID).Error)
 			require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, f.identity.ModelProfileVersionID).Error)
 			require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":10}' WHERE id=?`, f.identity.PriceRuleVersionID).Error)
+			seedFixtureProcurement(t, database, f.identity.PriceRuleVersionID, f.identity.ModelProfileVersionID)
+			fundOperationProject(t, database, f.identity.ProjectID)
 			var actor struct{ ID, OrgID, ScopeID uuid.UUID }
 			require.NoError(t, database.Raw(`SELECT o.confirmed_by AS id,p.org_id,p.owner_scope_id AS scope_id FROM operation.operation o JOIN workspace.project p ON p.id=o.project_id WHERE o.id=?`, f.identity.OperationID).Scan(&actor).Error)
 			scope := agent.Scope{ActorID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, ProjectID: f.identity.ProjectID}

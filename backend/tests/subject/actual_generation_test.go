@@ -58,7 +58,7 @@ func actualSubjectOperationStore(db *gorm.DB, objects subjectwire.Objects) *pgop
 // credential. No supplier is called, and no credential decryption is claimed.
 func seedActualSubjectCatalog(t *testing.T, owner *gorm.DB, project uuid.UUID) (versionID, releaseID uuid.UUID) {
 	t.Helper()
-	provider, model, price, configID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	provider, model, price, procurement, configID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	versionID, releaseID = uuid.New(), uuid.New()
 	capability := "image.generate.subject-fixture-" + uuid.NewString()
 	statements := []struct {
@@ -70,7 +70,9 @@ func seedActualSubjectCatalog(t *testing.T, owner *gorm.DB, project uuid.UUID) (
 		{`INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES(?,?,'image',ARRAY['image2image'],ARRAY['prompt','reference_image'])`, []any{uuid.New(), capability}},
 		{`INSERT INTO catalog.model_profile(id,model_key,provider_id,capability,display_name,status) VALUES(?,?,?,?,'Subject fixture model','active')`, []any{model, "subject-model-" + model.String(), provider, capability}},
 		{`INSERT INTO catalog.model_profile_version(id,model_profile_id,version_no,provider_model_id,modes,limits,param_schema,supports_query,supports_cancel,supports_callback,expected_max_ms) VALUES(?,?,1,'subject-fixture-model',ARRAY['image2image'],'{"max_outputs":1,"roles":{"reference_image":{"min_count":1,"max_count":2,"types":["image"],"max_bytes":1048576}}}'::jsonb,'[]'::jsonb,true,false,false,30000)`, []any{versionID, model}},
-		{`INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,effective_from) VALUES(?,?,1,'per_image','{"base_micros":1}'::jsonb,?)`, []any{price, model, time.Now().UTC().Add(-time.Hour)}},
+		{`INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,effective_from) VALUES(?,?,1,'per_image','{"base_micros":1}'::jsonb,now()-interval '2 hours')`, []any{procurement, model}},
+		{`INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,effective_from)
+			VALUES(?,?,2,'per_image',jsonb_build_object('base_micros',1,'procurement_price_version_id',?::text),now()-interval '1 hour')`, []any{price, model, procurement}},
 		{`INSERT INTO catalog.provider_config_version(id,provider_id,preset_version_id,version_no,config,content_hash) SELECT ?,?,id,1,payload->'config',content_hash FROM catalog.provider_preset_version WHERE id='6da07a12-0000-4000-8000-000000000001'`, []any{configID, provider}},
 		{`INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,upstream_cost,status) VALUES(?,?,?,?,?,'{}'::jsonb,'active')`, []any{releaseID, model, versionID, price, configID}},
 		{`UPDATE catalog.model_profile SET active_release_id=?,current_version_id=? WHERE id=?`, []any{releaseID, versionID, model}},
@@ -81,6 +83,14 @@ func seedActualSubjectCatalog(t *testing.T, owner *gorm.DB, project uuid.UUID) (
 		if result.Error != nil || result.RowsAffected != 1 {
 			t.Fatalf("seed own actual subject catalog: rows=%d err=%v", result.RowsAffected, result.Error)
 		}
+	}
+	var scope, lot uuid.UUID
+	if err := owner.Raw(`SELECT billing.bind_project_wallet(?)`, project).Row().Scan(&scope); err != nil {
+		t.Fatal("bind subject fixture wallet", err)
+	}
+	if err := owner.Raw(`SELECT billing.issue_promotional_credit(?,?,100,now()+interval '1 hour',NULL,?)`,
+		scope, uuid.New(), "isolated subject generation fixture").Row().Scan(&lot); err != nil {
+		t.Fatal("fund subject fixture wallet", err)
 	}
 	return versionID, releaseID
 }

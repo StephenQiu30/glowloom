@@ -341,10 +341,12 @@ func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.C
 }
 
 func readReleasePrice(tx *gorm.DB, modelID, priceID uuid.UUID) (domain.PriceRuleVersion, error) {
+	// Price versions are append-only for the application role. Release creation
+	// already locks the model; a row lock here would require price UPDATE access.
 	var price domain.PriceRuleVersion
 	r := tx.Raw(`SELECT id,model_profile_id AS model_id,version_no,unit,rule,currency,
  fx_rate_to_cny::text AS fx_rate_to_cny,effective_from,source_url,reviewed_at
- FROM catalog.price_rule_version WHERE id=? AND model_profile_id=? AND NOT is_delete FOR SHARE`, priceID, modelID).Scan(&price)
+ FROM catalog.price_rule_version WHERE id=? AND model_profile_id=? AND NOT is_delete`, priceID, modelID).Scan(&price)
 	if r.Error != nil {
 		return price, r.Error
 	}
