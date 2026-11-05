@@ -270,6 +270,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		Provider:          catalogapp.NewProviderDetailQuery(catalogStore, credentialSchema),
 		CreateProvider:    catalogapp.NewCreateProviderCommand(catalogStore, credentialSchema, time.Now),
 		UpdateProvider:    catalogapp.NewUpdateProviderCommand(catalogStore, time.Now),
+		ProviderDeletion:  catalogapp.NewProviderDeletion(catalogStore),
 		SetCredential:     setCredential,
 		DisableCredential: catalogapp.NewDisableCredentialCommand(catalogStore, time.Now),
 		CredentialTest:    catalogapp.NewRequestCredentialTestCommand(catalogStore),

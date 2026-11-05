@@ -424,7 +424,12 @@ const editorCatalogRoutes: typeof identityRoutes = [
   },
   {
     pattern: `admin/providers/${identityUUID}`,
-    methods: ["GET", "PATCH"],
+    methods: ["GET", "PATCH", "DELETE"],
+    query: [],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/deletion-preview`,
+    methods: ["GET"],
     query: [],
   },
   {

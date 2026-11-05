@@ -1317,6 +1317,11 @@ declare namespace API {
     variables?: Variable[];
   };
 
+  type deleteAdminProviderParams = {
+    /** 连接ID */
+    id: string;
+  };
+
   type deleteBibleEntryParams = {
     /** Project UUID */
     pid: string;
@@ -1353,6 +1358,10 @@ declare namespace API {
     nid: string;
   };
 
+  type DeletedProvider = {
+    id?: string;
+  };
+
   type DeleteDTO = {
     expected_revision?: string;
   };
@@ -1360,6 +1369,10 @@ declare namespace API {
   type deleteProjectParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type DeleteProviderRequest = {
+    token: string;
   };
 
   type DeleteResultDTO = {
@@ -4370,6 +4383,11 @@ declare namespace API {
     url?: string;
   };
 
+  type previewAdminProviderDeletionParams = {
+    /** 连接ID */
+    id: string;
+  };
+
   type previewLibraryMediaAssetParams = {
     /** 二进制素材条目UUID */
     item_id: string;
@@ -4799,6 +4817,19 @@ declare namespace API {
     provider_id?: string;
     status?: CredentialStatus;
     update_time?: string;
+  };
+
+  type ProviderDeletionDraft = {
+    id?: string;
+    name?: string;
+    revision?: number;
+  };
+
+  type ProviderDeletionPreview = {
+    blocked_reason?: string;
+    drafts?: ProviderDeletionDraft[];
+    revision?: number;
+    token?: string;
   };
 
   type ProviderDetail = {

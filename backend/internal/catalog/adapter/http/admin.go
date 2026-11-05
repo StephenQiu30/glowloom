@@ -26,6 +26,7 @@ type AdminDependencies struct {
 	Provider          *application.ProviderDetailQuery
 	CreateProvider    *application.CreateProviderCommand
 	UpdateProvider    *application.UpdateProviderCommand
+	ProviderDeletion  *application.ProviderDeletion
 	SetCredential     *application.SetCredentialCommand
 	DisableCredential *application.DisableCredentialCommand
 	CredentialTest    *application.RequestCredentialTestCommand
@@ -59,6 +60,8 @@ func (h *AdminHandler) Register(group *gin.RouterGroup) {
 	admin.POST("/providers", h.CreateProvider)
 	admin.GET("/providers/:id", h.Provider)
 	admin.PATCH("/providers/:id", h.UpdateProvider)
+	admin.GET("/providers/:id/deletion-preview", h.PreviewProviderDeletion)
+	admin.DELETE("/providers/:id", h.DeleteProvider)
 	admin.PUT("/providers/:id/credentials", h.SetCredential)
 	admin.POST("/providers/:id/credentials/:credential_id/disable", h.DisableCredential)
 	admin.POST("/providers/:id/credentials/:credential_id/test", h.TestCredential)
@@ -144,7 +147,7 @@ func adminError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "release_unverified", nil)
 	case errors.Is(err, application.ErrProviderUnavailable), errors.Is(err, application.ErrModelSourceUnavailable), errors.Is(err, domain.ErrProviderDisabled), errors.Is(err, domain.ErrModelNotPublishable):
 		httpapi.WriteProblem(c, 409, "catalog_unavailable", nil)
-	case errors.Is(err, application.ErrInvalidProviderList), errors.Is(err, application.ErrInvalidProviderDetail), errors.Is(err, application.ErrInvalidAdminModels), errors.Is(err, application.ErrInvalidCreateProvider), errors.Is(err, application.ErrInvalidUpdateProvider), errors.Is(err, application.ErrInvalidSetCredential), errors.Is(err, application.ErrInvalidDisableCredential), errors.Is(err, application.ErrInvalidCredentialTest), errors.Is(err, application.ErrInvalidCreateModel), errors.Is(err, application.ErrInvalidPublishModelVersion), errors.Is(err, application.ErrInvalidPublishPriceRule), errors.Is(err, application.ErrInvalidSetModelStatus), errors.Is(err, domain.ErrInvalidProvider), errors.Is(err, domain.ErrInvalidModel), errors.Is(err, domain.ErrInvalidModelVersion), errors.Is(err, domain.ErrInvalidPriceRule):
+	case errors.Is(err, application.ErrInvalidProviderDeletion), errors.Is(err, application.ErrInvalidProviderList), errors.Is(err, application.ErrInvalidProviderDetail), errors.Is(err, application.ErrInvalidAdminModels), errors.Is(err, application.ErrInvalidCreateProvider), errors.Is(err, application.ErrInvalidUpdateProvider), errors.Is(err, application.ErrInvalidSetCredential), errors.Is(err, application.ErrInvalidDisableCredential), errors.Is(err, application.ErrInvalidCredentialTest), errors.Is(err, application.ErrInvalidCreateModel), errors.Is(err, application.ErrInvalidPublishModelVersion), errors.Is(err, application.ErrInvalidPublishPriceRule), errors.Is(err, application.ErrInvalidSetModelStatus), errors.Is(err, domain.ErrInvalidProvider), errors.Is(err, domain.ErrInvalidModel), errors.Is(err, domain.ErrInvalidModelVersion), errors.Is(err, domain.ErrInvalidPriceRule):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)

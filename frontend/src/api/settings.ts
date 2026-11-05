@@ -560,6 +560,25 @@ export async function getAdminProvider(
   });
 }
 
+/** 删除未使用的连接 DELETE /api/admin/providers/${param0} */
+export async function deleteAdminProvider(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.deleteAdminProviderParams,
+  body: API.DeleteProviderRequest,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.DeletedProvider>(`/api/admin/providers/${param0}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 更新或禁用渠道 PATCH /api/admin/providers/${param0} */
 export async function updateAdminProvider(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -740,6 +759,23 @@ export async function testAdminCredential(
     `/api/admin/providers/${param0}/credentials/${param1}/test`,
     {
       method: "POST",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 预览连接删除 GET /api/admin/providers/${param0}/deletion-preview */
+export async function previewAdminProviderDeletion(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.previewAdminProviderDeletionParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.ProviderDeletionPreview>(
+    `/api/admin/providers/${param0}/deletion-preview`,
+    {
+      method: "GET",
       params: { ...queryParams },
       ...(options || {}),
     },

@@ -8,9 +8,8 @@ import {
   getUserGovernanceReceipt,
 } from "@/api/identity";
 import {
-  getAdminProvider,
-  updateAdminProvider,
-  testAdminCredential,
+  previewAdminProviderDeletion,
+  deleteAdminProvider,
   getAdminModel,
   setAdminModelStatus,
   getConfigReceipt,
@@ -96,7 +95,10 @@ export function userBatchAction(
     },
   };
 }
-export type ConnectionRow = API.ProviderListItem & { id: string };
+export type ConnectionRow = API.ProviderListItem & {
+  id: string;
+  deletionToken?: string;
+};
 async function receipt(
   action: string,
   id: string,
@@ -120,73 +122,73 @@ async function receipt(
     throw e;
   }
 }
-export function connectionBatchAction(
-  kind: "disable" | "check",
-): BatchAction<ConnectionRow> {
-  const check = kind === "check";
-  return {
-    title: check ? "检查连接" : "停用连接",
-    effect: check
-      ? "检查结果在连接详情查看。"
-      : "停用后不能创建新任务，已有任务仍使用原配置。",
-    destructive: !check,
-    label: (r) => providerConnectionName(r.provider) ?? r.id,
-    prepare: async (row, signal, refresh) => {
-      const detail = await getAdminProvider({ id: row.id }, { signal });
-      if (
-        !refresh &&
-        (detail.provider?.revision !== row.provider?.revision ||
-          detail.credential?.id !== row.credential?.id)
-      )
-        throw new RequestError("revision_conflict", 409);
-      const next = refresh ? { ...row, ...detail } : row;
+const connectionDeletionReasons: Record<string, string> = {
+  active: "连接已启用，请先在连接详情停用。",
+  task_history: "关联在途或历史任务，可在连接详情归档。",
+  check_history: "存在进行中或已执行的服务检查或模型调用，可在连接详情查看。",
+  model_reference: "关联发布、默认配置或模型验证，可在连接详情归档。",
+};
+
+export const connectionDeleteAction: BatchAction<ConnectionRow> = {
+  title: "删除连接",
+  effect: "连接及列出的草稿模型将从管理目录移除。删除后无法恢复。",
+  confirmLabel: (count) => `删除 ${count} 个连接`,
+  destructive: true,
+  label: (row) =>
+    `${providerConnectionName(row.provider) ?? "连接"} · ${row.credential?.status === "active" ? "已配置" : "未配置"} · ${row.id.slice(0, 8)}`,
+  prepare: async (row, signal, refresh) => {
+    const preview = await previewAdminProviderDeletion(
+      { id: row.id },
+      { signal },
+    );
+    if (
+      !refresh &&
+      (preview.revision !== row.provider?.revision ||
+        (row.deletionToken && row.deletionToken !== preview.token))
+    ) {
+      throw new RequestError("revision_conflict", 409);
+    }
+    const next = {
+      ...row,
+      provider: { ...row.provider, revision: preview.revision },
+      deletionToken: preview.token,
+    };
+    if (!preview.token) {
       return {
         row: next,
-        skip: check
-          ? detail.credential?.id && detail.credential.status === "active"
-            ? undefined
-            : "没有可检查的有效凭据"
-          : detail.provider?.status === "active"
-            ? undefined
-            : "连接已停用",
+        skip:
+          connectionDeletionReasons[preview.blocked_reason ?? ""] ??
+          "连接暂时无法删除。",
       };
-    },
-    execute: async (entry, _reason, signal) => {
-      if (check) {
-        const result = await testAdminCredential(
-          { id: entry.id, credential_id: entry.row.credential!.id! },
-          { signal, headers: { "Idempotency-Key": entry.requestId } },
-        );
-        if (!result?.check_id) throw new RequestError("request_unconfirmed");
-        return {
-          status: "submitted",
-          message: "在连接详情查看结果",
-        };
-      }
-      await updateAdminProvider(
-        { id: entry.id },
-        { expected_revision: entry.row.provider!.revision, status: "disabled" },
-        { signal, headers: { "Idempotency-Key": entry.requestId } },
-      );
-      return { message: "已停用" };
-    },
-    recover: async (entry, signal) => {
-      const r = await receipt(
-        check ? "credential.test" : "provider.update",
-        entry.id,
-        entry.requestId,
-        signal,
-      );
-      if (!r) return;
-      return check
-        ? {
-            status: "submitted",
-            message: "在连接详情查看结果",
-          }
-        : { message: "已恢复原停用回执" };
-    },
-  };
-}
+    }
+    const names =
+      preview.drafts?.map((draft) => draft.name).filter(Boolean) ?? [];
+    return {
+      row: next,
+      preview: names.length
+        ? `一并移除模型草稿：${names.join("、")}`
+        : undefined,
+    };
+  },
+  execute: async (entry, _reason, signal) => {
+    const result = await deleteAdminProvider(
+      { id: entry.id },
+      { token: entry.row.deletionToken! },
+      { signal, headers: { "Idempotency-Key": entry.requestId } },
+    );
+    if (result.id !== entry.id) throw new RequestError("request_unconfirmed");
+    return { message: "连接已删除" };
+  },
+  recover: async (entry, signal) => {
+    const result = await receipt(
+      "provider.delete",
+      entry.id,
+      entry.requestId,
+      signal,
+    );
+    if (result) return { message: "连接已删除" };
+  },
+};
 export const modelBatchAction: BatchAction<API.CreatedModel> = {
   title: "停用模型",
   effect: "停用后不能创建新任务，已提交任务不受影响。",

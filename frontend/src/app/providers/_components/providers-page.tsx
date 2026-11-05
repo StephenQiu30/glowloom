@@ -3,35 +3,19 @@ import { readErrorMessage } from "@/lib/read-error";
 import { ContentState } from "@/components/layout/content-state";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  AdminHeading,
-  SelectionBar,
-} from "@/components/governance/admin-layout";
+import { AdminHeading } from "@/components/governance/admin-layout";
 import { useBatchOperation } from "@/components/governance/use-batch-operation";
 import { BatchDialog } from "@/components/governance/batch-dialog";
 import {
-  connectionBatchAction,
+  connectionDeleteAction,
   type ConnectionRow,
 } from "@/components/governance/batch-actions";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
-import { ChevronDown, MoreHorizontal, Plus } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/components/auth/session";
-import { DownloadButton } from "@/components/media/download-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -48,17 +32,8 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter,
-} from "@/components/ui/card";
-
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  exportProviderPreset,
   listAdminProviders,
   listProviderPresets,
   listAdminProviderAdapters,
@@ -74,14 +49,13 @@ import { PresetConnect } from "./preset-connect";
 import { ConnectionList, regionLabel } from "./connection-list";
 import { ColumnMenu } from "@/components/governance/column-menu";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ProviderLogo } from "./provider-logo";
 import {
-  canConnectPreset,
-  connectionPresets,
-  providerLabel,
-} from "./provider-label";
+  ProviderPresetList,
+  type PresetStateAction,
+} from "./provider-preset-list";
+import { connectionPresets, providerLabel } from "./provider-label";
 
-type Confirmation = { preset: API.Preset; action: "archive" | "emergency" };
+type Confirmation = { preset: API.Preset; action: PresetStateAction };
 
 type ProvidersPageProps = {
   initialConnection?: string;
@@ -89,6 +63,7 @@ type ProvidersPageProps = {
   initialModel?: string;
   initialRelease?: string;
   initialMode?: string;
+  onPresetViewChange?: (showingPresets: boolean) => void;
 };
 
 export function ProvidersPage(props: ProvidersPageProps) {
@@ -111,6 +86,7 @@ function ProviderAdministration({
   initialModel,
   initialRelease,
   initialMode,
+  onPresetViewChange,
 }: ProvidersPageProps) {
   const mobile = useIsMobile();
   const [visibility, setVisibility] = useState<Record<string, boolean>>({
@@ -155,15 +131,14 @@ function ProviderAdministration({
   const [pageSize, setPageSize] = useState(20);
   const [nextCursor, setNextCursor] = useState("");
   const [refresh, setRefresh] = useState(0);
-  const { registerResultTrigger, ...batch } = useBatchOperation<ConnectionRow>(
-    (ids) => {
+  const { registerResultTrigger, registerFallbackTrigger, ...batch } =
+    useBatchOperation<ConnectionRow>((ids) => {
       setSelection((s) => ({
         ...s,
         rows: s.rows.filter((r) => !ids.includes(r.id)),
       }));
       setRefresh((v) => v + 1);
-    },
-  );
+    });
   const [presets, setPresets] = useState<API.Preset[]>([]);
   const [selected, setSelected] = useState(initialConnection);
   const [context, setContext] = useState({
@@ -173,16 +148,20 @@ function ProviderAdministration({
   });
   const [detailOpen, setDetailOpen] = useState(Boolean(initialConnection));
   const detailContent = useRef<HTMLDivElement>(null);
-  const [connect, setConnect] = useState<API.Preset | true | null>(null);
+  const [connect, setConnect] = useState(false);
   const connectVisible = useRef(false);
-  const [error, setError] = useState("");
+  const [connectionError, setConnectionError] = useState("");
+  const [registryError, setRegistryError] = useState("");
   useEffect(
     () => () => {
       connectVisible.current = false;
     },
     [],
   );
-  const [loading, setLoading] = useState(true);
+  const [connectionsLoading, setConnectionsLoading] = useState(true);
+  const [registryLoading, setRegistryLoading] = useState(true);
+  const loading = registryLoading || (!presetsOpen && connectionsLoading);
+  const error = registryError || (!presetsOpen ? connectionError : "");
   const [editor, setEditor] = useState<API.Preset | "new" | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const mutation = useCatalogMutation(() => {
@@ -200,36 +179,60 @@ function ProviderAdministration({
     "preset.onboarding.credential",
   );
   useEffect(() => {
+    if (presetsOpen) return;
+    const controller = new AbortController();
+    listAdminProviders(
+      { limit: pageSize, cursor: cursors.at(-1) || undefined },
+      { signal: controller.signal },
+    )
+      .then((connections) => {
+        if (controller.signal.aborted) return;
+        const items = connections.items ?? [];
+        if (!items.length && cursors.length > 1) {
+          setCursors(cursors.slice(0, -1));
+          return;
+        }
+        setProviders(items);
+        setNextCursor(connections.next_cursor ?? "");
+        setConnectionError("");
+        setConnectionsLoading(false);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setConnectionError(readErrorMessage(error));
+        setConnectionsLoading(false);
+      });
+    return () => controller.abort();
+  }, [refresh, cursors, pageSize, presetsOpen]);
+  useEffect(() => {
     const controller = new AbortController();
     Promise.all([
-      listAdminProviders(
-        { limit: pageSize, cursor: cursors.at(-1) || undefined },
-        { signal: controller.signal },
-      ),
       listProviderPresets({ signal: controller.signal }),
       listAdminProviderAdapters({ signal: controller.signal }),
     ])
-      .then(([connections, registry, metadata]) => {
+      .then(([registry, metadata]) => {
         if (controller.signal.aborted) return;
-        setProviders(connections.items ?? []);
-        setNextCursor(connections.next_cursor ?? "");
         setPresets(registry.items ?? []);
         setAdapters(metadata);
-        setError("");
-        setLoading(false);
+        setRegistryError("");
+        setRegistryLoading(false);
       })
       .catch((error) => {
-        if (!controller.signal.aborted) {
-          setError(readErrorMessage(error));
-          setLoading(false);
-        }
+        if (controller.signal.aborted) return;
+        setRegistryError(readErrorMessage(error));
+        setRegistryLoading(false);
       });
     return () => controller.abort();
-  }, [refresh, cursors, pageSize]);
-  function openConnect(preset: API.Preset | true) {
+  }, [refresh]);
+  function showPresetView(open: boolean) {
+    setPresetsOpen(open);
+    setSelection({ scope: search, rows: [] });
+    onPresetViewChange?.(open);
+  }
+  function openConnect() {
     rememberTrigger();
     connectVisible.current = true;
-    setConnect(preset);
+    setConnect(true);
   }
   function openEditor(preset: API.Preset | "new") {
     rememberTrigger();
@@ -261,7 +264,7 @@ function ProviderAdministration({
   }
   function closeConnect() {
     connectVisible.current = false;
-    setConnect(null);
+    setConnect(false);
     setRefresh((value) => value + 1);
   }
   function connected() {
@@ -270,7 +273,7 @@ function ProviderAdministration({
       return;
     }
     connectVisible.current = false;
-    setConnect(null);
+    setConnect(false);
     closeDetail(false);
     toast.success("服务已接入");
   }
@@ -291,8 +294,10 @@ function ProviderAdministration({
     ),
   );
   function retry() {
-    setError("");
-    setLoading(true);
+    setConnectionError("");
+    setRegistryError("");
+    setRegistryLoading(true);
+    if (!presetsOpen) setConnectionsLoading(true);
     setRefresh((v) => v + 1);
   }
   const selectedRows =
@@ -301,6 +306,8 @@ function ProviderAdministration({
           visibleProviders.some((p) => p.id === r.id),
         )
       : [];
+  const batchLocked = batch.busy || batch.unresolved;
+  const connectionLocked = batchLocked || Boolean(pendingKey.pending);
   if (batch.denied)
     return (
       <ContentState
@@ -311,35 +318,110 @@ function ProviderAdministration({
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading title="AI 服务接入">
-        {!loading && !error && !mobile && visibleProviders.length > 0 ? (
-          <ColumnMenu
-            columns={[
-              { id: "adapter", label: "供应商" },
-              { id: "models", label: "接入模型" },
-              { id: "credential", label: "配置状态" },
-              { id: "check", label: "最近检查" },
-            ]}
-            visibility={visibility}
-            onChange={setVisibility}
-          />
-        ) : null}
-        <Button
-          className="max-md:h-11"
-          onClick={() => openConnect(true)}
-          disabled={loading || !!error}
-        >
-          <Plus data-icon="inline-start" />
-          接入服务
-        </Button>
+      <AdminHeading title={presetsOpen ? "供应商预设" : "AI 服务接入"}>
+        {presetsOpen ? (
+          <>
+            <Button
+              variant="ghost"
+              className="max-md:h-11"
+              onClick={() => showPresetView(false)}
+            >
+              返回 AI 服务接入
+            </Button>
+            <Button
+              className="max-md:h-11"
+              disabled={loading || Boolean(error)}
+              onClick={() => openEditor("new")}
+            >
+              <Plus data-icon="inline-start" />
+              新建预设
+            </Button>
+          </>
+        ) : (
+          <>
+            {batch.submitted ? (
+              <Button
+                variant="ghost"
+                ref={registerResultTrigger}
+                onClick={() => batch.setOpen(true)}
+              >
+                查看批量操作结果
+              </Button>
+            ) : null}
+            {selectedRows.length && !loading && !error ? (
+              <div
+                className="flex flex-wrap items-center gap-2"
+                role="group"
+                aria-label="批量操作"
+              >
+                <span aria-live="polite" className="text-sm">
+                  已选 {selectedRows.length} 项
+                </span>
+                <Button
+                  variant="ghost"
+                  className="max-md:h-11"
+                  disabled={batchLocked}
+                  onClick={() => setSelection({ scope: search, rows: [] })}
+                >
+                  清除选择
+                </Button>
+                <Button
+                  variant="outline"
+                  className="max-md:h-11"
+                  disabled={connectionLocked}
+                  onClick={() =>
+                    void batch.prepare(selectedRows, connectionDeleteAction)
+                  }
+                >
+                  删除连接
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  className="max-md:h-11"
+                  disabled={batchLocked}
+                  onClick={() => showPresetView(true)}
+                >
+                  供应商预设
+                </Button>
+                {!loading &&
+                !error &&
+                !mobile &&
+                visibleProviders.length > 0 ? (
+                  <ColumnMenu
+                    columns={[
+                      { id: "adapter", label: "供应商" },
+                      { id: "models", label: "接入模型" },
+                      { id: "credential", label: "配置状态" },
+                      { id: "check", label: "最近检查" },
+                    ]}
+                    visibility={visibility}
+                    onChange={setVisibility}
+                  />
+                ) : null}
+                <Button
+                  ref={registerFallbackTrigger}
+                  className="max-md:h-11"
+                  onClick={openConnect}
+                  disabled={loading || Boolean(error) || batchLocked}
+                >
+                  <Plus data-icon="inline-start" />
+                  接入服务
+                </Button>
+              </>
+            )}
+          </>
+        )}
       </AdminHeading>
       {mutation.message || mutation.pending ? (
         <MutationStatus mutation={mutation} />
       ) : null}
-      {pendingCreate.pending || pendingKey.pending ? (
+      {!presetsOpen && (pendingCreate.pending || pendingKey.pending) ? (
         <div className="flex flex-wrap items-center gap-3">
           <Badge variant="secondary">保存待确认</Badge>
-          <Button variant="outline" onClick={() => openConnect(true)}>
+          <Button variant="outline" onClick={openConnect}>
             继续接入
           </Button>
         </div>
@@ -347,7 +429,7 @@ function ProviderAdministration({
       {loading ? (
         <div
           role="status"
-          aria-label="正在加载 AI 服务"
+          aria-label={presetsOpen ? "正在加载供应商预设" : "正在加载 AI 服务"}
           className="flex flex-col gap-4"
         >
           {[0, 1, 2].map((n) => (
@@ -357,276 +439,88 @@ function ProviderAdministration({
       ) : error ? (
         <ContentState
           state="error"
-          title="服务连接暂时无法读取"
+          title={
+            presetsOpen ? "供应商预设暂时无法读取" : "服务连接暂时无法读取"
+          }
           description={error}
           actions={<Button onClick={retry}>重试</Button>}
         />
+      ) : presetsOpen ? (
+        <ProviderPresetList
+          items={visiblePresets}
+          adapters={adapters}
+          busy={mutation.busy}
+          filtered={Boolean(query)}
+          onEdit={openEditor}
+          onState={(preset, action) => openConfirmation({ preset, action })}
+        />
       ) : (
-        <>
-          <section aria-label="已添加的服务" className="flex flex-col gap-3">
-            {selectedRows.length ? (
-              <SelectionBar
-                count={selectedRows.length}
-                total={visibleProviders.length}
-                disabled={batch.busy || batch.unresolved}
-                onClear={() => setSelection({ scope: search, rows: [] })}
-              >
-                <Button
-                  variant="outline"
-                  disabled={
-                    batch.busy || batch.unresolved || !!pendingKey.pending
-                  }
-                  onClick={() =>
-                    void batch.prepare(
-                      selectedRows,
-                      connectionBatchAction("check"),
-                    )
-                  }
-                >
-                  检查凭据（只读）
-                </Button>
-                <Button
-                  variant="destructive"
-                  disabled={
-                    batch.busy || batch.unresolved || !!pendingKey.pending
-                  }
-                  onClick={() =>
-                    void batch.prepare(
-                      selectedRows,
-                      connectionBatchAction("disable"),
-                    )
-                  }
-                >
-                  停用连接
-                </Button>
-              </SelectionBar>
-            ) : null}
-            {visibleProviders.length ? (
-              <ConnectionList
-                adapters={adapters}
-                items={visibleProviders}
-                visibility={visibility}
-                disabled={
-                  batch.busy || batch.unresolved || !!pendingKey.pending
-                }
-                selection={{
-                  selected: selectedRows,
-                  onChange: (updater) =>
-                    setSelection({
-                      scope: search,
-                      rows:
-                        typeof updater === "function"
-                          ? updater(selectedRows)
-                          : updater,
-                    }),
-                }}
-                pendingCredential={
-                  pendingKey.pending?.action === "credential.set"
-                    ? pendingKey.pending.target
-                    : undefined
-                }
-                onSelect={openConnection}
-              />
-            ) : (
-              <ContentState title={query ? "没有匹配的连接" : "还没有连接"} />
-            )}
-            <ListPagination
-              mode="cursor"
-              label="服务连接分页"
-              current={cursors.length}
-              pageSize={pageSize}
-              pageSizeOptions={[20, 50]}
-              itemCount={visibleProviders.length}
-              hasNextPage={!!nextCursor}
-              disabled={batch.busy || batch.unresolved}
-              onPageChange={(next) => {
-                setSelection({ scope: search, rows: [] });
-                setLoading(true);
-                setCursors((c) =>
-                  next < c.length ? c.slice(0, -1) : [...c, nextCursor],
-                );
+        <section aria-label="已添加的服务" className="flex flex-col gap-3">
+          {visibleProviders.length ? (
+            <ConnectionList
+              adapters={adapters}
+              items={visibleProviders}
+              visibility={visibility}
+              disabled={connectionLocked}
+              selection={{
+                selected: selectedRows,
+                onChange: (updater) =>
+                  setSelection({
+                    scope: search,
+                    rows:
+                      typeof updater === "function"
+                        ? updater(selectedRows)
+                        : updater,
+                  }),
               }}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setCursors([""]);
-                setSelection({ scope: search, rows: [] });
-                setLoading(true);
-              }}
+              pendingCredential={
+                pendingKey.pending?.action === "credential.set"
+                  ? pendingKey.pending.target
+                  : undefined
+              }
+              onSelect={openConnection}
+              onDelete={(row, trigger) =>
+                void batch.prepare(
+                  [row],
+                  connectionDeleteAction,
+                  false,
+                  trigger,
+                )
+              }
             />
-            {query ? (
-              <p className="text-xs text-muted-foreground">
-                筛选当前页的连接；翻页后重新选择。
-              </p>
-            ) : null}
-          </section>
-          <Collapsible
-            open={presetsOpen || Boolean(query)}
-            onOpenChange={setPresetsOpen}
-            className="border-t pt-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="group -ml-3 text-muted-foreground max-md:h-11"
-                >
-                  预设管理
-                  <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
-                </Button>
-              </CollapsibleTrigger>
-              {presetsOpen || query ? (
-                <Button variant="outline" onClick={() => openEditor("new")}>
-                  新建预设
-                </Button>
-              ) : null}
-            </div>
-            <CollapsibleContent className="pt-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {visiblePresets.map((p) => {
-                  return (
-                    <Card
-                      key={p.id}
-                      className="min-w-0 gap-4 [--card-spacing:--spacing(4)]"
-                    >
-                      <CardHeader>
-                        <CardTitle>
-                          <h2 className="flex items-center gap-3">
-                            <ProviderLogo
-                              adapterKey={p.document?.config?.adapter_key}
-                              metadata={adapters.find(
-                                (item) =>
-                                  item.adapter_key ===
-                                  p.document?.config?.adapter_key,
-                              )}
-                            />
-                            {p.document?.name}
-                          </h2>
-                        </CardTitle>
-                        <CardDescription>
-                          {regionLabel(p.document?.config?.region)}
-                          {p.emergency_disabled
-                            ? " · 紧急停用"
-                            : p.archived
-                              ? " · 已归档"
-                              : p.origin === "builtin"
-                                ? " · 内置"
-                                : " · 自定义"}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardFooter className="flex-wrap gap-2">
-                        <Button
-                          disabled={
-                            p.archived ||
-                            p.emergency_disabled ||
-                            !canConnectPreset(p)
-                          }
-                          className="max-md:h-11"
-                          onClick={() => openConnect(p)}
-                        >
-                          {canConnectPreset(p) ? "使用预设" : "仅支持维护"}
-                        </Button>
-                        <Collapsible className="w-full">
-                          <CollapsibleTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-muted-foreground"
-                            >
-                              维护预设
-                              <ChevronDown className="size-3.5" />
-                            </Button>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent className="flex flex-wrap gap-2 pt-3">
-                            <Button
-                              variant="outline"
-                              className="max-md:h-11"
-                              onClick={() => openEditor(p)}
-                            >
-                              {p.origin === "builtin"
-                                ? "复制并编辑"
-                                : "编辑新版本"}
-                            </Button>
-                            <DownloadButton
-                              filename={`provider-preset-${p.id}.json`}
-                              load={async () =>
-                                new Blob(
-                                  [
-                                    JSON.stringify(
-                                      await exportProviderPreset({ id: p.id! }),
-                                      null,
-                                      2,
-                                    ),
-                                  ],
-                                  { type: "application/json" },
-                                )
-                              }
-                            >
-                              导出
-                            </DownloadButton>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="max-md:size-11"
-                                  aria-label={`${p.document?.name}预设的操作`}
-                                >
-                                  <MoreHorizontal data-icon="inline-start" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuGroup>
-                                  <DropdownMenuItem
-                                    disabled={mutation.busy}
-                                    onSelect={() =>
-                                      openConfirmation({
-                                        preset: p,
-                                        action: "archive",
-                                      })
-                                    }
-                                  >
-                                    {p.archived ? "恢复预设" : "归档"}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={mutation.busy}
-                                    onSelect={() =>
-                                      openConfirmation({
-                                        preset: p,
-                                        action: "emergency",
-                                      })
-                                    }
-                                  >
-                                    {p.emergency_disabled
-                                      ? "解除紧急停用"
-                                      : "停止新任务"}
-                                  </DropdownMenuItem>
-                                </DropdownMenuGroup>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </CollapsibleContent>
-                        </Collapsible>
-                      </CardFooter>
-                    </Card>
-                  );
-                })}
-              </div>
-              {!visiblePresets.length ? (
-                <ContentState title="没有匹配的预设" />
-              ) : null}
-            </CollapsibleContent>
-          </Collapsible>
-        </>
+          ) : (
+            <ContentState title={query ? "没有匹配的连接" : "还没有连接"} />
+          )}
+          <ListPagination
+            mode="cursor"
+            label="服务连接分页"
+            current={cursors.length}
+            pageSize={pageSize}
+            pageSizeOptions={[20, 50]}
+            itemCount={visibleProviders.length}
+            hasNextPage={!!nextCursor}
+            disabled={batchLocked}
+            onPageChange={(next) => {
+              setSelection({ scope: search, rows: [] });
+              setConnectionsLoading(true);
+              setCursors((c) =>
+                next < c.length ? c.slice(0, -1) : [...c, nextCursor],
+              );
+            }}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCursors([""]);
+              setSelection({ scope: search, rows: [] });
+              setConnectionsLoading(true);
+            }}
+          />
+          {query ? (
+            <p className="text-xs text-muted-foreground">
+              筛选当前页的连接；翻页后重新选择。
+            </p>
+          ) : null}
+        </section>
       )}
-      {batch.action ? (
-        <Button
-          variant="outline"
-          className="self-start"
-          ref={registerResultTrigger}
-          onClick={() => batch.setOpen(true)}
-        >
-          查看批量操作结果
-        </Button>
-      ) : null}
       <BatchDialog key={batch.generation} batch={batch} />
       <Dialog
         open={Boolean(connect)}
@@ -653,7 +547,6 @@ function ProviderAdministration({
                 pendingCreate.pending?.target,
               )}
               providers={providers}
-              initialPreset={connect === true ? undefined : connect.id}
               onCreated={(id) => {
                 setSelected(id);
                 setRefresh((value) => value + 1);
@@ -732,12 +625,16 @@ function ProviderAdministration({
                   : "归档预设？"
                 : confirmation?.preset.emergency_disabled
                   ? "解除紧急停用？"
-                  : "停止新任务？"}
+                  : "紧急停用预设？"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmation?.action === "archive"
-                ? "归档仅限制新连接使用此预设，不改写已有连接。"
-                : "此操作控制相关新任务，不会自动撤销历史 Key。"}
+                ? confirmation.preset.archived
+                  ? "恢复将解除新建连接与升级采用该预设的归档限制。"
+                  : "归档后，新建连接与升级无法采用该预设。已接入的连接继续使用原版本。"
+                : confirmation?.preset.emergency_disabled
+                  ? "解除后，已接入的连接可按当前配置接收新任务。"
+                  : "将阻止采用该预设的已有连接接收新任务。已派发任务可继续查询和恢复。"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

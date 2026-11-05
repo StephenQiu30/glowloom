@@ -63,7 +63,7 @@ func (s *Store) ListModelReleases(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		var rows []releaseRow
-		if err := tx.Raw(releaseSelect+` WHERE r.model_id=? ORDER BY r.create_time DESC,r.id LIMIT 200`, id).Scan(&rows).Error; err != nil {
+		if err := tx.Raw(releaseSelect+` WHERE r.model_id=? AND EXISTS (SELECT 1 FROM catalog.model_profile m WHERE m.id=r.model_id AND NOT m.is_delete) ORDER BY r.create_time DESC,r.id LIMIT 200`, id).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {

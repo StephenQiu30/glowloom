@@ -5,6 +5,7 @@ import {
   fireEvent,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { render } from "../../../../feedback";
@@ -13,6 +14,8 @@ const api = vi.hoisted(() => ({
   providers: vi.fn(),
   detail: vi.fn(),
   presets: vi.fn(),
+  deletionPreview: vi.fn(),
+  deleteConnection: vi.fn(),
   role: "creator",
   delayed: false,
   pendingSave: null as null | (() => void),
@@ -23,6 +26,8 @@ vi.mock("@/components/auth/session", () => ({
 vi.mock("@/api/settings", () => ({
   listAdminProviders: api.providers,
   getAdminProvider: api.detail,
+  previewAdminProviderDeletion: api.deletionPreview,
+  deleteAdminProvider: api.deleteConnection,
   listProviderPresets: api.presets,
   listAdminProviderAdapters: vi.fn().mockResolvedValue([]),
   getConfigReceipt: vi.fn(),
@@ -200,7 +205,7 @@ it.each(["creator", "admin", "team_admin"])(
   },
 );
 
-it("预设与文件维护按需展开，主页面不展示协议与版本", async () => {
+it("页头打开独立供应商预设列表并可返回连接", async () => {
   api.role = "platform_admin";
   api.presets.mockResolvedValue({
     items: [
@@ -220,17 +225,18 @@ it("预设与文件维护按需展开，主页面不展示协议与版本", asyn
   // Shared management navigation is exercised by the persistent shell tests.
   expect(screen.queryByRole("navigation", { name: "管理页面" })).toBeNull();
   expect(screen.queryByRole("button", { name: "使用预设" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "预设管理" }));
-  expect(screen.getByRole("button", { name: "仅支持维护" })).toHaveProperty(
-    "disabled",
-    true,
-  );
-  expect(screen.queryByRole("button", { name: "导出" })).toBeNull();
-  expect(screen.queryByText(/openrouter ·|v9/)).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "维护预设" }));
-  expect(screen.getByRole("button", { name: "导出" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "仅支持维护" }));
-  expect(screen.queryByRole("dialog", { name: "接入服务" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "供应商预设" }));
+  expect(
+    await screen.findByRole("heading", { name: "供应商预设" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "BytePlus预设的操作" }),
+  ).toBeTruthy();
+  expect(screen.getByText("v9")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "接入服务" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "预设管理" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "返回 AI 服务接入" }));
+  expect(await screen.findByText("还没有连接")).toBeTruthy();
 });
 
 it("权限撤销立即卸载管理详情，再恢复权限重新读取", async () => {
@@ -384,4 +390,70 @@ it("鼠标打开连接弹窗后关闭仍返回原行入口", async () => {
       screen.getByRole("button", { name: "管理 OpenAI" }),
     ),
   );
+});
+
+it("批量删除确认列出草稿和历史保护，只提交合格的连接", async () => {
+  api.role = "platform_admin";
+  const draft = {
+    provider: {
+      id: "draft",
+      name: "草稿连接",
+      status: "disabled",
+      revision: 1,
+    },
+  };
+  const historical = {
+    provider: {
+      id: "history",
+      name: "历史连接",
+      status: "disabled",
+      revision: 1,
+    },
+  };
+  api.providers.mockResolvedValue({ items: [draft, historical] });
+  api.deletionPreview.mockImplementation(async ({ id }) =>
+    id === "draft"
+      ? {
+          revision: 1,
+          token: "preview-token",
+          drafts: [{ name: "待配置模型" }],
+        }
+      : { revision: 1, blocked_reason: "task_history" },
+  );
+  api.deleteConnection.mockImplementation(async () => {
+    api.providers.mockResolvedValue({ items: [historical] });
+    return { id: "draft" };
+  });
+
+  render(<ProvidersPage />);
+  fireEvent.click(
+    await screen.findByRole("checkbox", { name: "选择当前页全部连接" }),
+  );
+  const toolbar = screen.getByRole("group", { name: "批量操作" });
+  expect(within(toolbar).getByText("已选 2 项")).toBeTruthy();
+  expect(within(toolbar).getAllByRole("button")).toHaveLength(2);
+  fireEvent.click(within(toolbar).getByRole("button", { name: "删除连接" }));
+  expect(await screen.findByText("一并移除模型草稿：待配置模型")).toBeTruthy();
+  expect(
+    screen.getByText("关联在途或历史任务，可在连接详情归档。"),
+  ).toBeTruthy();
+  expect(api.deleteConnection).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(api.deleteConnection).not.toHaveBeenCalled();
+
+  fireEvent.click(within(toolbar).getByRole("button", { name: "删除连接" }));
+  fireEvent.click(await screen.findByRole("button", { name: "删除 1 个连接" }));
+  await screen.findByText("连接已删除");
+  expect(api.deleteConnection).toHaveBeenCalledTimes(1);
+  expect(api.deleteConnection).toHaveBeenCalledWith(
+    { id: "draft" },
+    { token: "preview-token" },
+    expect.objectContaining({
+      headers: { "Idempotency-Key": expect.any(String) },
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "完成" }));
+  expect(screen.queryByRole("checkbox", { name: "选择 草稿连接" })).toBeNull();
+  expect(screen.getByRole("checkbox", { name: "选择 历史连接" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "查看批量操作结果" })).toBeTruthy();
 });

@@ -112,9 +112,7 @@ export function BatchDialog<T extends { id?: string }>({
           <span className="break-all whitespace-normal">
             {row.original.label}
           </span>
-          {row.original.status !== "ready" &&
-          row.original.status !== "running" &&
-          row.original.message ? (
+          {row.original.status !== "running" && row.original.message ? (
             <span className="text-xs break-words whitespace-normal text-muted-foreground">
               {row.original.message}
             </span>
@@ -330,7 +328,8 @@ export function BatchDialog<T extends { id?: string }>({
                 ? "使用原请求恢复"
                 : compact
                   ? accountVerb
-                  : `确认${batch.action?.title ?? "操作"}（${ready}）`}
+                  : (batch.action?.confirmLabel?.(ready) ??
+                    `确认${batch.action?.title ?? "操作"}（${ready}）`)}
             </Button>
           ) : null}
         </Footer>

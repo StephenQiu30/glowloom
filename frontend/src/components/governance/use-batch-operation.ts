@@ -13,6 +13,7 @@ export type BatchAction<T> = {
   title: string;
   effect: string;
   destructive?: boolean;
+  confirmLabel?: (count: number) => string;
   reason?: boolean;
   password?: boolean;
   compact?: boolean;
@@ -21,7 +22,7 @@ export type BatchAction<T> = {
     row: T,
     signal: AbortSignal,
     refresh: boolean,
-  ) => Promise<{ row: T; skip?: string }>;
+  ) => Promise<{ row: T; skip?: string; preview?: string }>;
   execute: (
     entry: BatchEntry<T>,
     reason: string,
@@ -64,9 +65,14 @@ export function useBatchOperation<T extends { id?: string }>(
   );
   function restoreFocus() {
     const original = trigger.current;
+    const current = original?.isConnected
+      ? original
+      : original?.id
+        ? document.getElementById(original.id)
+        : null;
     const target =
-      original?.isConnected && !original.matches(":disabled")
-        ? original
+      current && !current.matches(":disabled")
+        ? current
         : (resultTrigger.current ?? fallbackTrigger.current);
     if (!target?.isConnected) return false;
     target.focus();
@@ -103,12 +109,18 @@ export function useBatchOperation<T extends { id?: string }>(
       { description: skipped ? `已跳过 ${skipped} 项` : undefined },
     );
   }
-  async function prepare(rows: T[], next: BatchAction<T>, refresh = false) {
+  async function prepare(
+    rows: T[],
+    next: BatchAction<T>,
+    refresh = false,
+    origin?: HTMLElement | null,
+  ) {
     if (lock.current || unresolved) return;
     trigger.current =
-      document.activeElement instanceof HTMLElement
+      origin ??
+      (document.activeElement instanceof HTMLElement
         ? document.activeElement
-        : null;
+        : null);
     lock.current = true;
     setBusy(true);
     setOpen(true);
@@ -138,7 +150,7 @@ export function useBatchOperation<T extends { id?: string }>(
                 ...base,
                 row: p.row,
                 status: p.skip ? ("skipped" as const) : ("ready" as const),
-                message: p.skip ?? "将执行",
+                message: p.skip ?? p.preview ?? "",
               };
             } catch (e) {
               checkAuthority(e);

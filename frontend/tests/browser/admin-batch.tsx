@@ -88,9 +88,27 @@ axios.defaults.adapter = async (config) => {
     }
   } else if (path === "/api/admin/providers")
     data = { items: providers, next_cursor: "" };
+  else if (
+    path === "/api/admin/provider-presets" &&
+    new URLSearchParams(location.search).get("screen") === "providers"
+  )
+    data = {
+      items: [
+        {
+          id: ids[0],
+          origin: "builtin",
+          version: 3,
+          document: {
+            name: "OpenRouter 模板",
+            config: { adapter_key: "openrouter" },
+          },
+        },
+      ],
+    };
   else if (path === "/api/admin/models")
     data = { items: models, next_cursor: "" };
   else if (path === "/api/admin/provider-presets") data = { items: [] };
+  else if (path === "/api/admin/provider-adapters") data = [];
   else if (path === "/api/admin/capabilities")
     data = [
       { key: "text.generate" },
@@ -106,7 +124,22 @@ axios.defaults.adapter = async (config) => {
     };
   else if (path.startsWith("/api/admin/providers/")) {
     const item = providers.find((p) => p.provider.id === target)!;
-    if (path.endsWith("/test"))
+    if (path.endsWith("/deletion-preview")) {
+      data = {
+        revision: item.provider.revision,
+        ...(item.provider.id === ids[2]
+          ? { token: "fixture-preview", drafts: [{ name: "待配置模型" }] }
+          : {
+              blocked_reason:
+                item.provider.id === ids[0] ? "active" : "task_history",
+            }),
+      };
+    } else if (method === "delete") {
+      if (body.token !== "fixture-preview" || target !== ids[2])
+        throw new Error("Unexpected fixture deletion");
+      providers.splice(providers.indexOf(item), 1);
+      data = { id: target };
+    } else if (path.endsWith("/test"))
       data = {
         check_id: crypto.randomUUID(),
         accepted: true,

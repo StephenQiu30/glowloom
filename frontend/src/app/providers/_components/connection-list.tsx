@@ -1,5 +1,6 @@
 "use client";
 
+import { MoreHorizontal } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   DataTable,
@@ -9,6 +10,13 @@ import type { ConnectionRow } from "@/components/governance/batch-actions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ProviderLogo } from "./provider-logo";
 import { providerLabel } from "./provider-label";
 import { providerConnectionName } from "@/lib/provider-connection-name";
@@ -52,6 +60,7 @@ export function ConnectionList({
   adapters,
   items,
   onSelect,
+  onDelete,
   pendingCredential,
   visibility,
   selection,
@@ -62,6 +71,7 @@ export function ConnectionList({
   visibility: Record<string, boolean>;
   items: ConnectionRow[];
   onSelect: (id: string, trigger: HTMLElement) => void;
+  onDelete?: (row: ConnectionRow, trigger: HTMLElement | null) => void;
   selection: {
     selected: ConnectionRow[];
     onChange: Dispatch<SetStateAction<ConnectionRow[]>>;
@@ -167,20 +177,54 @@ export function ConnectionList({
       id: "actions",
       header: "操作",
       cell: ({ row }) => (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={(event) => onSelect(row.original.id, event.currentTarget)}
-          className="max-md:h-11"
-          data-connection-trigger={`${row.original.id}:manage`}
-          aria-label={`管理 ${providerConnectionName(row.original.provider)}`}
-        >
-          {row.original.provider?.status === "archived" ||
-          row.original.credential?.status === "active"
-            ? "管理"
-            : "配置"}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            onClick={(event) => onSelect(row.original.id, event.currentTarget)}
+            className="max-md:h-11"
+            data-connection-trigger={`${row.original.id}:manage`}
+            aria-label={`管理 ${providerConnectionName(row.original.provider)}`}
+          >
+            {row.original.provider?.status === "archived" ||
+            row.original.credential?.status === "active"
+              ? "管理"
+              : "配置"}
+          </Button>
+          {onDelete ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  id={`provider-actions-${row.original.id}`}
+                  variant="ghost"
+                  size="icon-sm"
+                  className="max-md:size-11"
+                  disabled={disabled}
+                  aria-label={`${providerConnectionName(row.original.provider)}的更多操作`}
+                >
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      onDelete(
+                        row.original,
+                        document.getElementById(
+                          `provider-actions-${row.original.id}`,
+                        ),
+                      )
+                    }
+                  >
+                    删除连接
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </div>
       ),
     },
   ];

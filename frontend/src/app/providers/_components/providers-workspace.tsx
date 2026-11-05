@@ -14,18 +14,23 @@ export function ProvidersWorkspace({
   initialRelease?: string;
   initialMode?: string;
 }) {
-  const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
+  const [presetsOpen, setPresetsOpen] = useState(false);
+  const [connections, setConnections] = useState({ draft: "", query: "" });
+  const [presets, setPresets] = useState({ draft: "", query: "" });
+  const search = presetsOpen ? presets : connections;
+  const setSearch = presetsOpen ? setPresets : setConnections;
   const session = useOptionalSession();
   return (
     <PageLayout
       screen="providers"
       search={{
-        value: search,
-        onValueChange: setSearch,
-        onSearch: setQuery,
-        label: "搜索 AI 服务",
-        placeholder: "搜索连接或预设",
+        value: search.draft,
+        onValueChange: (draft) => setSearch((state) => ({ ...state, draft })),
+        onSearch: (query) => setSearch((state) => ({ ...state, query })),
+        label: presetsOpen ? "搜索供应商预设" : "搜索 AI 服务",
+        placeholder: presetsOpen
+          ? "搜索预设名称或供应商"
+          : "搜索连接名称或供应商",
         disabled: session?.actor.platform_role !== "platform_admin",
       }}
     >
@@ -34,7 +39,8 @@ export function ProvidersWorkspace({
         initialModel={initialModel}
         initialRelease={initialRelease}
         initialMode={initialMode}
-        search={query}
+        search={search.query}
+        onPresetViewChange={setPresetsOpen}
       />
     </PageLayout>
   );
