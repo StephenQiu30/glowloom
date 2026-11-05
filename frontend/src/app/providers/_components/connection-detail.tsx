@@ -29,6 +29,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import type { DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,12 +72,14 @@ export function ConnectionDetail({
   initialModel,
   initialRelease,
   initialMode,
+  Title = "h2",
 }: {
   id: string;
   revision?: number;
   initialModel?: string;
   initialRelease?: string;
   initialMode?: string;
+  Title?: typeof DialogTitle | "h2";
   presets: API.Preset[];
   onSaved: () => void;
 }) {
@@ -139,27 +142,19 @@ export function ConnectionDetail({
   const credentials = settings?.credentials ?? [];
 
   return (
-    <section
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto"
-      aria-label="连接详情"
-    >
+    <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
       <header className="flex flex-col gap-2 pr-8">
-        <h2
+        <Title
           data-connection-title
           tabIndex={-1}
-          className="text-lg font-medium outline-none"
+          className="break-words outline-none"
         >
           {providerConnectionName(provider) ?? "连接详情"}
-        </h2>
+        </Title>
         {provider ? (
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">
-              {provider.status === "active" ? "已启用" : "未启用"}
-            </Badge>
-            <Badge variant="outline">
-              {credentialID ? "已配置" : "待配置"}
-            </Badge>
-          </div>
+          <Badge variant="secondary">
+            {provider.status === "active" ? "已启用" : "未启用"}
+          </Badge>
         ) : null}
       </header>
       {detailError ? (
@@ -612,6 +607,6 @@ export function ConnectionDetail({
           </Collapsible>
         </>
       )}
-    </section>
+    </div>
   );
 }

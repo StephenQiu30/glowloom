@@ -114,25 +114,26 @@ export function ConnectionModels({
         </Button>
       </div>
     );
-  const pendingCandidates = onboarding?.models?.filter(
-    (model) =>
-      !model.release_id ||
-      model.release_id === "00000000-0000-0000-0000-000000000000",
-  );
-  const pendingPrices = pendingCandidates?.length ? (
-    <p className="text-xs text-muted-foreground">
-      {pendingCandidates.map((model) => model.display_name).join("、")}
-      价格待审核，尚不可创作。
-    </p>
+  const pendingCount =
+    onboarding?.models?.filter(
+      (model) =>
+        !model.release_id ||
+        model.release_id === "00000000-0000-0000-0000-000000000000",
+    ).length ?? 0;
+  const pendingPriceLabel =
+    pendingCount > 0 ? `${pendingCount} 个模型价格待审核` : "";
+  const pendingPrices = pendingPriceLabel ? (
+    <p className="text-xs text-muted-foreground">{pendingPriceLabel}</p>
   ) : null;
   if (!target)
     return (
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-medium">模型验证</h3>
         <p className="text-sm text-muted-foreground">
-          请先在模型管理中完成发布配置。
+          {pendingPriceLabel
+            ? `暂无可验证模型 · ${pendingPriceLabel}`
+            : "暂无可验证模型"}
         </p>
-        {pendingPrices}
       </div>
     );
   if (!target.requires_trial)

@@ -56,7 +56,12 @@ vi.mock("@/app/providers/_components/preset-connect", () => ({
   ),
 }));
 vi.mock("@/app/providers/_components/connection-detail", () => ({
-  ConnectionDetail: () => <div>连接详情内容</div>,
+  ConnectionDetail: ({ Title = "h2" }: { Title?: React.ElementType }) => (
+    <>
+      <Title>连接详情</Title>
+      <div>连接详情内容</div>
+    </>
+  ),
 }));
 beforeEach(() => {
   vi.clearAllMocks();
@@ -110,7 +115,9 @@ it("连接通过详情抽屉查看，列表不把模型数量当发布结果", a
   expect(screen.queryByText("连接详情内容")).toBeNull();
   expect(screen.queryByText("已发布")).toBeNull();
   fireEvent.click(buttons[0]);
-  expect(screen.getByRole("dialog", { name: "连接详情" })).toBeTruthy();
+  expect(
+    screen.getByRole("dialog", { name: "连接详情" }).getAttribute("data-slot"),
+  ).toBe("dialog-content");
   expect(screen.getByText("连接详情内容")).toBeTruthy();
 });
 it("加载失败显示恢复入口，不伪装成空连接", async () => {
@@ -357,7 +364,7 @@ it("连接列表显示品牌名称和模型数，不将未启用连接称为已�
   expect(screen.queryByText("已停用")).toBeNull();
 });
 
-it("鼠标打开侧栏后关闭仍返回原行入口", async () => {
+it("鼠标打开连接弹窗后关闭仍返回原行入口", async () => {
   api.role = "platform_admin";
   api.providers.mockResolvedValue({
     items: [
@@ -371,7 +378,7 @@ it("鼠标打开侧栏后关闭仍返回原行入口", async () => {
   const trigger = await screen.findByRole("button", { name: "管理 OpenAI" });
   fireEvent.click(trigger);
   await screen.findByText("连接详情内容");
-  fireEvent.click(screen.getByRole("button", { name: /^关闭$/ }));
+  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
   await waitFor(() =>
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "管理 OpenAI" }),

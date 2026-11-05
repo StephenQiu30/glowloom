@@ -39,12 +39,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogHeader,
@@ -178,6 +172,7 @@ function ProviderAdministration({
     mode: initialMode,
   });
   const [detailOpen, setDetailOpen] = useState(Boolean(initialConnection));
+  const detailContent = useRef<HTMLDivElement>(null);
   const [connect, setConnect] = useState<API.Preset | true | null>(null);
   const connectVisible = useRef(false);
   const [error, setError] = useState("");
@@ -248,7 +243,7 @@ function ProviderAdministration({
     overlayTrigger.current = trigger;
     setContext({ model: undefined, release: undefined, mode: undefined });
     const url = new URL(window.location.href);
-    for (const name of ["model", "release", "mode"])
+    for (const name of ["view", "model", "release", "mode"])
       url.searchParams.delete(name);
     url.searchParams.set("connection", id);
     window.history.replaceState(null, "", url);
@@ -259,7 +254,7 @@ function ProviderAdministration({
     setDetailOpen(open);
     if (!open) {
       const url = new URL(window.location.href);
-      for (const name of ["connection", "model", "release", "mode"])
+      for (const name of ["connection", "view", "model", "release", "mode"])
         url.searchParams.delete(name);
       window.history.replaceState(null, "", url);
     }
@@ -669,42 +664,40 @@ function ProviderAdministration({
           ) : null}
         </DialogContent>
       </Dialog>
-      <Sheet open={detailOpen} onOpenChange={closeDetail}>
-        <SheetContent
+      <Dialog open={detailOpen} onOpenChange={closeDetail}>
+        <DialogContent
+          ref={detailContent}
           aria-describedby={undefined}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             restoreFocus();
           }}
           onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            requestAnimationFrame(() =>
-              document
-                .querySelector<HTMLElement>("[data-connection-title]")
-                ?.focus(),
+            const title = detailContent.current?.querySelector<HTMLElement>(
+              "[data-connection-title]",
             );
+            if (title) {
+              event.preventDefault();
+              title.focus();
+            }
           }}
-          className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg max-md:[&_[data-slot=sheet-close]]:size-11"
+          className="flex flex-col overflow-hidden sm:max-w-lg max-md:[&_[data-slot=dialog-close]]:size-11"
         >
-          <SheetHeader className="sr-only">
-            <SheetTitle>连接详情</SheetTitle>
-          </SheetHeader>
-          <div className="flex min-h-0 flex-1 flex-col p-4 md:p-6">
-            {selected ? (
-              <ConnectionDetail
-                key={selected}
-                id={selected}
-                initialModel={context.model}
-                initialRelease={context.release}
-                initialMode={context.mode}
-                revision={refresh}
-                presets={presets}
-                onSaved={() => setRefresh((v) => v + 1)}
-              />
-            ) : null}
-          </div>
-        </SheetContent>
-      </Sheet>
+          {selected ? (
+            <ConnectionDetail
+              key={selected}
+              id={selected}
+              Title={DialogTitle}
+              initialModel={context.model}
+              initialRelease={context.release}
+              initialMode={context.mode}
+              revision={refresh}
+              presets={presets}
+              onSaved={() => setRefresh((v) => v + 1)}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
       {editor ? (
         <PresetEditor
           adapters={adapters}

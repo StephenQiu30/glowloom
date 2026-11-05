@@ -27,19 +27,20 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
-it("无价格发布的已保存候选仍可见并提示从模型管理补审", async () => {
+it("没有可验证模型时汇总待审核数量", async () => {
   api.models.mockResolvedValue([]);
   render(
     <SWRConfig value={{ provider: () => new Map() }}>
       <ConnectionModels id="provider" revision={1} onSaved={vi.fn()} />
     </SWRConfig>,
   );
-  await screen.findByText(/待审候选模型/);
-  expect(screen.getByText(/价格待审核，尚不可创作/)).toBeTruthy();
-  expect(screen.getByText("请先在模型管理中完成发布配置。")).toBeTruthy();
+  expect(
+    await screen.findByText("暂无可验证模型 · 1 个模型价格待审核"),
+  ).toBeTruthy();
+  expect(screen.queryByText("待审候选模型")).toBeNull();
 });
 
-it("部分模型已有发布时仍显示其余候选的待审价格", async () => {
+it("已有可验证模型时不逐项展示待审核模型", async () => {
   api.models.mockResolvedValue([
     {
       id: "priced",
@@ -54,6 +55,6 @@ it("部分模型已有发布时仍显示其余候选的待审价格", async () =
     </SWRConfig>,
   );
   await screen.findByText("已定价模型验证");
-  expect(await screen.findByText(/待审候选模型/)).toBeTruthy();
-  expect(screen.getByText(/价格待审核，尚不可创作/)).toBeTruthy();
+  expect(await screen.findByText("1 个模型价格待审核")).toBeTruthy();
+  expect(screen.queryByText("待审候选模型")).toBeNull();
 });

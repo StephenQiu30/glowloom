@@ -149,7 +149,7 @@ export function ConnectionTests({
       <Collapsible>
         <CollapsibleTrigger asChild>
           <Button variant="ghost" className="group w-full justify-between px-0">
-            网络与凭据诊断
+            连接诊断
             <ChevronDown
               data-icon="inline-end"
               className="transition-transform group-data-[state=open]:rotate-180"
@@ -158,7 +158,7 @@ export function ConnectionTests({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <section
-            className="flex min-w-0 flex-col gap-2 border-b py-4"
+            className="flex min-w-0 flex-col gap-2 py-2"
             aria-labelledby={`${fieldID}-network`}
           >
             <div className="flex items-center gap-2">
@@ -201,7 +201,7 @@ export function ConnectionTests({
             ) : null}
           </section>
           <section
-            className="flex min-w-0 flex-col gap-2 border-b py-4"
+            className="flex min-w-0 flex-col gap-2 py-2"
             aria-labelledby={`${fieldID}-auth`}
           >
             <div className="flex items-center gap-2">
@@ -252,6 +252,163 @@ export function ConnectionTests({
               </p>
             ) : null}
           </section>
+          {data?.items?.length || network || auth ? (
+            <Collapsible className="flex flex-col gap-2">
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="group w-full justify-between px-0 max-md:h-11"
+                >
+                  检测详情
+                  <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="flex flex-col gap-3">
+                {[network, auth].map((check) =>
+                  check ? (
+                    <div
+                      key={check.id}
+                      className="space-y-1 text-xs text-muted-foreground"
+                    >
+                      <p>
+                        {checkKind(check.kind)} · {check.elapsed_ms ?? 0} ms
+                        {check.http_status
+                          ? ` · HTTP ${check.http_status}`
+                          : ""}
+                        {check.attempts ? ` · ${check.attempts} 次尝试` : ""}
+                      </p>
+                      <p>{time(check.completed_at ?? check.created_at)}</p>
+                    </div>
+                  ) : null,
+                )}
+                {auth?.candidates?.length ? (
+                  <div className="max-h-48 overflow-y-auto text-xs text-muted-foreground">
+                    <h4 className="mb-1 font-medium">
+                      候选模型 · {auth.candidates.length}
+                    </h4>
+                    {auth.candidates.map((m) => (
+                      <p className="py-1 break-all" key={m.provider_model_id}>
+                        {m.display_name ?? m.provider_model_id}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                {data?.items?.length ? (
+                  <h4 className="text-xs font-medium">最近记录</h4>
+                ) : null}
+                {isLoading ? (
+                  <p role="status" className="text-xs text-muted-foreground">
+                    正在读取测试记录…
+                  </p>
+                ) : !data?.items?.length ? (
+                  <p className="text-xs text-muted-foreground">
+                    暂无测试记录。
+                  </p>
+                ) : (
+                  (expanded ? data.items : data.items.slice(0, 3)).map(
+                    (check) => (
+                      <Collapsible
+                        key={check.id}
+                        className="border-b pb-2 text-xs"
+                      >
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className="h-auto w-full flex-col items-stretch gap-1 p-0 text-left whitespace-normal max-md:min-h-11"
+                          >
+                            <span className="flex flex-wrap items-center justify-between gap-2">
+                              <span>
+                                {checkKind(check.kind)} · {resultLabel(check)}
+                              </span>
+                              <Badge variant="secondary">
+                                {check.current ? "当前版本" : "历史版本"}
+                              </Badge>
+                            </span>
+                            <span className="mt-1 block text-muted-foreground">
+                              {time(check.created_at)}
+                            </span>
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-2 space-y-1 break-all text-muted-foreground">
+                          <p>检查标识：{check.id}</p>
+                          <p>配置版本：{check.config_version_id ?? "未知"}</p>
+                          {check.model_id ? (
+                            <p>模型版本：{check.model_version_id ?? "未知"}</p>
+                          ) : null}
+                          <p>
+                            结果：
+                            {check.current
+                              ? "当前证据"
+                              : "历史证据，不参与当前启用判定"}
+                          </p>
+                          {check.kind === "model_access" &&
+                          check.task_id &&
+                          ["accepted", "unknown"].includes(
+                            check.model_result ?? "",
+                          ) ? (
+                            <Button
+                              variant="outline"
+                              className="h-11"
+                              disabled={
+                                mutation.busy ||
+                                !!mutation.pending ||
+                                checkRunning(check)
+                              }
+                              onClick={() =>
+                                void mutation.run(
+                                  "credential.test",
+                                  id,
+                                  (requestID) =>
+                                    queryProviderModelCheck(
+                                      { id: check.id! },
+                                      {
+                                        headers: {
+                                          "Idempotency-Key": requestID,
+                                        },
+                                      },
+                                    ),
+                                )
+                              }
+                            >
+                              查询原任务
+                            </Button>
+                          ) : null}
+                          {check.tracking_note ? (
+                            <p>核查说明：{check.tracking_note}</p>
+                          ) : null}
+                          {check.tracking_ended_at ? (
+                            <p>已结束追踪，结果仍为未知。</p>
+                          ) : null}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ),
+                  )
+                )}
+                {(data?.items?.length ?? 0) > 3 && !expanded ? (
+                  <Button variant="outline" onClick={() => setExpanded(true)}>
+                    更多记录
+                  </Button>
+                ) : expanded ? (
+                  <div className="flex justify-between gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={offset === 0}
+                      onClick={() => setOffset((v) => Math.max(0, v - 20))}
+                    >
+                      上一页记录
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={!data?.has_more}
+                      onClick={() => setOffset((v) => v + 20)}
+                    >
+                      下一页记录
+                    </Button>
+                  </div>
+                ) : null}
+              </CollapsibleContent>
+            </Collapsible>
+          ) : null}
         </CollapsibleContent>
       </Collapsible>
       {mutation.pending ? (
@@ -268,159 +425,6 @@ export function ConnectionTests({
         <p role="status" className="text-sm">
           {mutation.message}
         </p>
-      ) : null}
-      {data?.items?.length || network || auth ? (
-        <Collapsible className="flex flex-col gap-2">
-          <CollapsibleTrigger asChild>
-            <Button
-              variant="ghost"
-              className="group w-full justify-between px-0 max-md:h-11"
-            >
-              检测详情
-              <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="flex flex-col gap-3">
-            {[network, auth].map((check) =>
-              check ? (
-                <div
-                  key={check.id}
-                  className="space-y-1 text-xs text-muted-foreground"
-                >
-                  <p>
-                    {checkKind(check.kind)} · {check.elapsed_ms ?? 0} ms
-                    {check.http_status ? ` · HTTP ${check.http_status}` : ""}
-                    {check.attempts ? ` · ${check.attempts} 次尝试` : ""}
-                  </p>
-                  <p>{time(check.completed_at ?? check.created_at)}</p>
-                </div>
-              ) : null,
-            )}
-            <p className="text-xs text-muted-foreground">
-              网络可达不代表凭据或模型可用。
-              {adapter === "volcengine_ark"
-                ? "方舟只读检查仅覆盖视频任务接口。"
-                : ""}
-            </p>
-            {auth?.candidates?.length ? (
-              <div className="max-h-48 overflow-y-auto text-xs text-muted-foreground">
-                <h4 className="mb-1 font-medium">
-                  候选模型 · {auth.candidates.length}
-                </h4>
-                {auth.candidates.map((m) => (
-                  <p className="py-1 break-all" key={m.provider_model_id}>
-                    {m.display_name ?? m.provider_model_id}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-            {data?.items?.length ? (
-              <h4 className="text-xs font-medium">最近记录</h4>
-            ) : null}
-            {isLoading ? (
-              <p role="status" className="text-xs text-muted-foreground">
-                正在读取测试记录…
-              </p>
-            ) : !data?.items?.length ? (
-              <p className="text-xs text-muted-foreground">暂无测试记录。</p>
-            ) : (
-              (expanded ? data.items : data.items.slice(0, 3)).map((check) => (
-                <Collapsible
-                  key={check.id}
-                  className="rounded-lg border p-3 text-xs"
-                >
-                  <CollapsibleTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="h-auto w-full flex-col items-stretch gap-1 p-0 text-left whitespace-normal max-md:min-h-11"
-                    >
-                      <span className="flex flex-wrap items-center justify-between gap-2">
-                        <span>
-                          {checkKind(check.kind)} · {resultLabel(check)}
-                        </span>
-                        <Badge variant="secondary">
-                          {check.current ? "当前版本" : "历史版本"}
-                        </Badge>
-                      </span>
-                      <span className="mt-1 block text-muted-foreground">
-                        {time(check.created_at)}
-                      </span>
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2 space-y-1 break-all text-muted-foreground">
-                    <p>检查标识：{check.id}</p>
-                    <p>配置版本：{check.config_version_id ?? "未知"}</p>
-                    {check.model_id ? (
-                      <p>模型版本：{check.model_version_id ?? "未知"}</p>
-                    ) : null}
-                    <p>
-                      结果：
-                      {check.current
-                        ? "当前证据"
-                        : "历史证据，不参与当前启用判定"}
-                    </p>
-                    {check.kind === "model_access" &&
-                    check.task_id &&
-                    ["accepted", "unknown"].includes(
-                      check.model_result ?? "",
-                    ) ? (
-                      <Button
-                        variant="outline"
-                        className="h-11"
-                        disabled={
-                          mutation.busy ||
-                          !!mutation.pending ||
-                          checkRunning(check)
-                        }
-                        onClick={() =>
-                          void mutation.run(
-                            "credential.test",
-                            id,
-                            (requestID) =>
-                              queryProviderModelCheck(
-                                { id: check.id! },
-                                { headers: { "Idempotency-Key": requestID } },
-                              ),
-                          )
-                        }
-                      >
-                        查询原任务
-                      </Button>
-                    ) : null}
-                    {check.tracking_note ? (
-                      <p>核查说明：{check.tracking_note}</p>
-                    ) : null}
-                    {check.tracking_ended_at ? (
-                      <p>已结束追踪，结果仍为未知。</p>
-                    ) : null}
-                  </CollapsibleContent>
-                </Collapsible>
-              ))
-            )}
-            {(data?.items?.length ?? 0) > 3 && !expanded ? (
-              <Button variant="outline" onClick={() => setExpanded(true)}>
-                更多记录
-              </Button>
-            ) : expanded ? (
-              <div className="flex justify-between gap-2">
-                <Button
-                  variant="outline"
-                  disabled={offset === 0}
-                  onClick={() => setOffset((v) => Math.max(0, v - 20))}
-                >
-                  上一页记录
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={!data?.has_more}
-                  onClick={() => setOffset((v) => v + 20)}
-                >
-                  下一页记录
-                </Button>
-              </div>
-            ) : null}
-          </CollapsibleContent>
-        </Collapsible>
       ) : null}
     </div>
   );
