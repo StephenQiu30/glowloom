@@ -20,7 +20,7 @@ import (
 func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	db := operationStoreDB(t)
 	actor, project := operationStoreProject(t, db)
-	seed, model, provider := seedQuoteCatalog(t, db, project, time.Now().UTC())
+	seed, model, provider := seedUnfundedQuoteCatalog(t, db, project, time.Now().UTC())
 	price, version := *seed.PriceRuleVersionID, *seed.ModelProfileVersionID
 	procurement, config, release := uuid.New(), uuid.New(), uuid.New()
 	modelKey := "quote-model-" + model.String()
@@ -40,15 +40,25 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	require.NoError(t, db.Exec(`INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,upstream_cost,status)
 		VALUES(?,?,?,?,?,'{}','active')`, release, model, version, price, config).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET active_release_id=? WHERE id=?`, release, model).Error)
-	var scope, lot uuid.UUID
-	require.NoError(t, db.Raw(`SELECT billing.bind_project_wallet(?)`, project).Row().Scan(&scope))
-	require.NoError(t, db.Raw(`SELECT billing.issue_promotional_credit(?,?,130000,now()+interval '1 hour',?,?)`,
-		scope, uuid.New(), modelKey, "isolated model wallet test").Row().Scan(&lot))
 
 	store := operationStore(db)
 	input := op.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: op.FreeQuoteItemInput{
 		ModelKey: modelKey, Capability: "text.generate", Mode: "text_to_text", Prompt: "测试分镜", OutputCount: 1,
 	}}
+
+	unfunded, err := store.CreateFreeQuote(t.Context(), actor, input)
+	require.NoError(t, err)
+	require.False(t, unfunded.Confirmable, "project budget must not replace wallet credits")
+	require.Contains(t, string(unfunded.QuoteDetail), "credits_insufficient")
+	_, err = store.ConfirmSingleQuote(t.Context(), actor, op.ConfirmSingleQuoteInput{
+		ProjectID: project, OperationID: unfunded.OperationID, RequestID: uuid.NewString(),
+	})
+	require.ErrorIs(t, err, billingdomain.ErrWalletInsufficient)
+	input.RequestID = uuid.NewString()
+	var scope, lot uuid.UUID
+	require.NoError(t, db.Raw(`SELECT billing.bind_project_wallet(?)`, project).Row().Scan(&scope))
+	require.NoError(t, db.Raw(`SELECT billing.issue_promotional_credit(?,?,130000,now()+interval '1 hour',?,?)`,
+		scope, uuid.New(), modelKey, "isolated model wallet test").Row().Scan(&lot))
 	blocked, err := store.CreateFreeQuote(t.Context(), actor, input)
 	require.NoError(t, err)
 	require.False(t, blocked.Confirmable)
@@ -62,6 +72,20 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	// supplies those already-reviewed immutable versions to the runtime.
 	require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET rule=jsonb_set(rule,'{procurement_price_version_id}',to_jsonb(?::text)) WHERE id=?`,
 		procurement, price).Error)
+	batch, err := store.CreateBatchFreeQuote(t.Context(), actor, op.CreateBatchFreeQuoteInput{
+		ProjectID: project, RequestID: uuid.NewString(), Items: []op.FreeQuoteItemInput{input.FreeQuoteItemInput, input.FreeQuoteItemInput},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, batch.BatchID)
+	require.EqualValues(t, 240_000, batch.TotalMicros)
+	require.False(t, batch.Confirmable)
+	_, err = store.ConfirmBatchQuote(t.Context(), actor, op.ConfirmBatchQuoteInput{
+		ProjectID: project, BatchID: *batch.BatchID, RequestID: uuid.NewString(),
+	})
+	require.ErrorIs(t, err, billingdomain.ErrWalletInsufficient)
+	var reservations int
+	require.NoError(t, db.Raw(`SELECT count(*) FROM billing.reservation WHERE project_id=?`, project).Row().Scan(&reservations))
+	require.Zero(t, reservations, "the affordable first item must roll back as well")
 	input.RequestID = uuid.NewString()
 	quote, err := store.CreateFreeQuote(t.Context(), actor, input)
 	require.NoError(t, err)

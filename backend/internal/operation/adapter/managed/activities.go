@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
@@ -88,6 +89,9 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	}
 	if input.Action == "submit" {
 		claim, claimErr := a.store.ClaimProviderDispatch(ctx, identity)
+		if errors.Is(claimErr, billingdomain.ErrWalletInsufficient) {
+			return application.ManagedProgress{State: application.ManagedProgressNotSubmitted, ErrorCode: "credits_insufficient"}, nil
+		}
 		if errors.Is(claimErr, application.ErrManagedCapacity) {
 			return application.ManagedProgress{State: application.ManagedProgressWaiting}, nil
 		}

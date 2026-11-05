@@ -17,6 +17,7 @@ func TestReserveInTransactionPreservesBudgetAndLedger(t *testing.T) {
 	_, database := billingDB(t)
 	actor, projectID := billingProject(t, database)
 	seedReserveBudget(t, database, projectID, 100)
+	issueWallet(t, database, bindWallet(t, database, projectID), uuid.New(), 100, time.Now().Add(time.Hour), nil)
 	store := billingStore(database)
 	first := seedReserveOperation(t, database, projectID, 60)
 	second := seedReserveOperation(t, database, projectID, 40)
@@ -30,7 +31,7 @@ func TestReserveInTransactionPreservesBudgetAndLedger(t *testing.T) {
 	} {
 		input := billingapp.ReserveInput{
 			Actor: actor, ProjectID: projectID, OperationID: tc.operationID, ActorID: actor.ID,
-			AmountMicros: tc.amount, OccurredAt: time.Now().UTC(),
+			AmountMicros: tc.amount, CommercialPriceReady: true, OccurredAt: time.Now().UTC(),
 		}
 		var result billingapp.ReserveResult
 		if err := database.Transaction(func(tx *gorm.DB) error {
@@ -105,6 +106,7 @@ func TestReserveInTransactionSerializesCompetingQuotes(t *testing.T) {
 	_, database := billingDB(t)
 	actor, projectID := billingProject(t, database)
 	seedReserveBudget(t, database, projectID, 100)
+	issueWallet(t, database, bindWallet(t, database, projectID), uuid.New(), 100, time.Now().Add(time.Hour), nil)
 	store := billingStore(database)
 	operations := []uuid.UUID{
 		seedReserveOperation(t, database, projectID, 60),
@@ -119,7 +121,7 @@ func TestReserveInTransactionSerializesCompetingQuotes(t *testing.T) {
 			results[index] = database.Transaction(func(tx *gorm.DB) error {
 				result, err := store.ReserveInTransaction(t.Context(), tx, billingapp.ReserveInput{
 					Actor: actor, ProjectID: projectID, OperationID: operationID, ActorID: actor.ID,
-					AmountMicros: 60, OccurredAt: time.Now().UTC(),
+					AmountMicros: 60, CommercialPriceReady: true, OccurredAt: time.Now().UTC(),
 				})
 				if err != nil {
 					return err
@@ -150,11 +152,12 @@ func TestReserveInTransactionDoesNotDoubleHoldAnOperation(t *testing.T) {
 	_, database := billingDB(t)
 	actor, projectID := billingProject(t, database)
 	seedReserveBudget(t, database, projectID, 120)
+	issueWallet(t, database, bindWallet(t, database, projectID), uuid.New(), 120, time.Now().Add(time.Hour), nil)
 	operationID := seedReserveOperation(t, database, projectID, 60)
 	store := billingStore(database)
 	input := billingapp.ReserveInput{
 		Actor: actor, ProjectID: projectID, OperationID: operationID, ActorID: actor.ID,
-		AmountMicros: 60, OccurredAt: time.Now().UTC(),
+		AmountMicros: 60, CommercialPriceReady: true, OccurredAt: time.Now().UTC(),
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		result, err := store.ReserveInTransaction(t.Context(), tx, input)

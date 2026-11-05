@@ -155,6 +155,13 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 		if err != nil {
 			return err
 		}
+		if !commercial {
+			// Administrative trials have their own frozen and rechecked supplier ceiling.
+			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM operation.provider_trial WHERE operation_id=? AND actor_id=?)`,
+				quoted.ID, actor.ID).Row().Scan(&commercial); err != nil {
+				return err
+			}
+		}
 		reserve, err := s.billingStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{Actor: actor,
 			ProjectID: quoted.ProjectID, OperationID: quoted.ID, ActorID: actor.ID,
 			AmountMicros: *quoted.QuoteMicros, CommercialPriceReady: commercial, ReusedResult: quoted.ReusedFromID != nil, ModelKey: &model.ModelKey,

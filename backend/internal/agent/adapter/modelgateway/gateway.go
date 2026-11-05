@@ -15,6 +15,7 @@ import (
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billing "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	opstore "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	op "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -198,6 +199,9 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 		key, err = config.CredentialValue(secret)
 		return err
 	})
+	if errors.Is(err, billingdomain.ErrWalletInsufficient) {
+		return failed("credits_insufficient"), nil
+	}
 	if errors.Is(err, agent.ErrConflict) {
 		return pending(), nil
 	}

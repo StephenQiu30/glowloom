@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -120,6 +121,14 @@ func TestReadCurrentQuoteCatalogTracksPublishedVersionsAndAvailability(t *testin
 
 func seedQuoteCatalog(t *testing.T, database *gorm.DB, projectID uuid.UUID, now time.Time) (domain.Operation, uuid.UUID, uuid.UUID) {
 	t.Helper()
+	quoted, model, provider := seedUnfundedQuoteCatalog(t, database, projectID, now)
+	fundOperationProject(t, database, projectID)
+	seedFixtureProcurement(t, database, *quoted.PriceRuleVersionID, *quoted.ModelProfileVersionID)
+	return quoted, model, provider
+}
+
+func seedUnfundedQuoteCatalog(t *testing.T, database *gorm.DB, projectID uuid.UUID, now time.Time) (domain.Operation, uuid.UUID, uuid.UUID) {
+	t.Helper()
 	providerID, modelID, versionID, priceID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	capability := "image.generate." + uuid.NewString()
 	if err := database.Exec(`
@@ -177,4 +186,39 @@ func seedQuoteCatalog(t *testing.T, database *gorm.DB, projectID uuid.UUID, now 
 
 func sameUUID(got, want *uuid.UUID) bool {
 	return got == nil && want == nil || got != nil && want != nil && *got == *want
+}
+
+// fundOperationProject equips confirmation fixtures without raising their project budgets.
+func fundOperationProject(t *testing.T, database *gorm.DB, projectID uuid.UUID) {
+	t.Helper()
+	var scope, lot uuid.UUID
+	require.NoError(t, database.Raw(`SELECT billing.bind_project_wallet(?)`, projectID).Row().Scan(&scope))
+	require.NoError(t, database.Raw(`SELECT billing.issue_promotional_credit(?,?,1000000,now()+interval '1 hour',NULL,?)`,
+		scope, uuid.New(), "isolated confirmation fixture").Row().Scan(&lot))
+}
+
+// seedFixtureProcurement supplies synthetic reviewed pricing to isolated tests.
+func seedFixtureProcurement(t *testing.T, db *gorm.DB, price, version uuid.UUID) {
+	t.Helper()
+	procurement := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,currency,fx_rate_to_cny,effective_from,is_delete)
+		SELECT ?,model_profile_id,2147483647,unit,rule,currency,fx_rate_to_cny,effective_from-interval '1 hour',true
+		FROM catalog.price_rule_version WHERE id=?`, procurement, price).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET
+		rule=jsonb_set(rule,'{procurement_price_version_id}',to_jsonb(?::text)) WHERE id=?`, procurement, price).Error)
+	var hasRelease bool
+	require.NoError(t, db.Raw(`SELECT EXISTS(SELECT 1 FROM catalog.model_release WHERE price_version_id=? AND status='active')`,
+		price).Row().Scan(&hasRelease))
+	if hasRelease {
+		return
+	}
+	var config uuid.UUID
+	require.NoError(t, db.Raw(`INSERT INTO catalog.provider_config_version(id,provider_id,preset_version_id,version_no,config,content_hash)
+		SELECT ?,m.provider_id,pv.id,1,pv.payload->'config',pv.content_hash
+		FROM catalog.model_profile_version v JOIN catalog.model_profile m ON m.id=v.model_profile_id
+		CROSS JOIN catalog.provider_preset_version pv
+		WHERE v.id=? AND pv.id='6da07a11-0000-4000-8000-000000000002' RETURNING id`, uuid.New(), version).Row().Scan(&config))
+	require.NoError(t, db.Exec(`INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,upstream_cost,status)
+		SELECT ?,model_profile_id,id,?,?,'{}','active' FROM catalog.model_profile_version WHERE id=?`,
+		uuid.New(), price, config, version).Error)
 }

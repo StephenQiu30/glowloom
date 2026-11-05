@@ -208,3 +208,15 @@ func TestWalletBoundProjectRejectsOlderUnfundedWriter(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "wallet-backed reservation requires complete funding")
 }
+
+func TestCappedReservationRequiresWalletEvenBeforeBinding(t *testing.T) {
+	_, db := billingDB(t)
+	_, project := billingProject(t, db)
+	seedReserveBudget(t, db, project, 300_000)
+	id := seedReserveOperation(t, db, project, 100_000)
+	err := db.Transaction(func(tx *gorm.DB) error {
+		return tx.Exec(`INSERT INTO billing.reservation(id,project_id,operation_id,amount_micros,status,cap_at_quote)
+			VALUES (?,?,?,100000,'held',true)`, uuid.New(), project, id).Error
+	})
+	require.ErrorContains(t, err, "wallet-backed reservation requires complete funding")
+}

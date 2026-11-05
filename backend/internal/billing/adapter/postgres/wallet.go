@@ -24,8 +24,14 @@ func holdWallet(tx *gorm.DB, input application.ReserveInput, reservationID uuid.
 		return nil
 	}
 	payer, err := walletPayer(tx, input.ProjectID)
-	if err != nil || payer == uuid.Nil {
+	if err != nil {
 		return err
+	}
+	if payer == uuid.Nil {
+		if input.AmountMicros > 0 {
+			return domain.ErrWalletInsufficient
+		}
+		return nil
 	}
 	if payer != input.Actor.ScopeID {
 		return domain.ErrWalletPayerChanged
@@ -99,8 +105,16 @@ func availableWalletLots(tx *gorm.DB, scope uuid.UUID) ([]walletLot, error) {
 // The caller has already checked project access; confirmation still takes locks.
 func (s *Store) CheckWalletQuoteInTransaction(tx *gorm.DB, projectID uuid.UUID, items []application.WalletDemand) error {
 	scope, err := walletPayer(tx, projectID)
-	if err != nil || scope == uuid.Nil {
+	if err != nil {
 		return err
+	}
+	if scope == uuid.Nil {
+		for _, item := range items {
+			if item.Micros > 0 {
+				return domain.ErrWalletInsufficient
+			}
+		}
+		return nil
 	}
 	lots, err := availableWalletLots(tx, scope)
 	if err != nil {

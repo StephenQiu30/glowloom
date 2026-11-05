@@ -37,6 +37,10 @@ func TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft(t *testing.T
 	low.SupplierMaxMicros = 99
 	_, err = f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, low)
 	require.Error(t, err)
+	var scope, lot uuid.UUID
+	require.NoError(t, database.Raw(`SELECT billing.bind_project_wallet(?)`, i.ProjectID).Row().Scan(&scope))
+	require.NoError(t, database.Raw(`SELECT billing.issue_promotional_credit(?,?,100,now()+interval '1 hour',NULL,?)`,
+		scope, uuid.New(), "isolated trial funding").Row().Scan(&lot))
 	quote, err := f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, input)
 	require.NoError(t, err)
 	require.Equal(t, int64(10), quote.QuoteMicros)

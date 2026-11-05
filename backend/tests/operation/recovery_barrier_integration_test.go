@@ -130,11 +130,14 @@ func TestBillingBarrierTerminalEvidenceAndNormalCompletedCounterexample(t *testi
 	require.NoError(t, db.Exec(`UPDATE operation.operation SET status='failed' WHERE id=?`, quoted.ID).Error)
 	_, err = store.ConfirmSingleQuote(t.Context(), actor, next)
 	require.ErrorIs(t, err, application.ErrPendingConsumption)
-	// Closed reservation without its immutable settle fact still blocks.
-	require.NoError(t, db.Exec(`UPDATE billing.reservation SET status='settled',closed_at=now() WHERE id=?`, result.ReservationID).Error)
-	_, err = store.ConfirmSingleQuote(t.Context(), actor, next)
-	require.ErrorIs(t, err, application.ErrPendingConsumption)
-	require.NoError(t, db.Exec(`INSERT INTO billing.ledger_entry(id,project_id,operation_id,entry_type,amount_micros) VALUES(?,?,?,'settle',1)`, uuid.New(), pid, quoted.ID).Error)
+	// A funded reservation can only close alongside its wallet settlement.
+	require.ErrorContains(t, db.Exec(`UPDATE billing.reservation SET status='settled',closed_at=now() WHERE id=?`, result.ReservationID).Error, "wallet-backed reservation requires complete settlement")
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		_, err := billingpg.NewStore(tx).SettleInTransaction(t.Context(), tx, billingapp.SettleInput{
+			ProjectID: pid, OperationID: quoted.ID, ActualCostMicros: 1, Capability: quoted.Capability, OccurredAt: time.Now(),
+		})
+		return err
+	}))
 	_, err = store.ConfirmSingleQuote(t.Context(), actor, next)
 	require.ErrorIs(t, err, application.ErrPendingConsumption, "paid with unknown delivery")
 	// Normal completed and archived output permits a separately confirmed quote.
@@ -267,24 +270,24 @@ func assertPaidAdmissionBlocked(t *testing.T, db *gorm.DB, actor identityapp.Pri
 	require.ErrorIs(t, err, application.ErrPendingConsumption, "actual dispatch")
 }
 
-func TestBillingClosedLedgerAllowsNormalPartialReleaseAndExistingOverage(t *testing.T) {
+func TestBillingClosedLedgerAllowsNormalPartialReleaseAndCappedOverage(t *testing.T) {
 	for _, actual := range []int64{10, 4, 15} {
 		t.Run(fmt.Sprint(actual), func(t *testing.T) {
 			db := operationStoreDB(t)
 			actor, pid, _, items := seedConfirmableBatch(t, db, 10)
 			store := operationStore(db)
 			id := items[0].Operation.ID
-			// Exercise a pre-migration reservation, including the historical uncapped path.
+			// Run the same delivery checks for full, partial and capped charges.
 			require.NoError(t, db.Exec(`UPDATE operation.operation SET batch_id=NULL WHERE id=?`, id).Error)
 			_, err := store.ConfirmSingleQuote(t.Context(), actor, application.ConfirmSingleQuoteInput{ProjectID: pid, OperationID: id, RequestID: uuid.NewString()})
 			require.NoError(t, err)
-			require.NoError(t, db.Exec(`UPDATE billing.reservation SET cap_at_quote=false WHERE operation_id=?`, id).Error)
+			charge := min(actual, 10)
 			require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 				_, err := billingpg.NewStore(tx).SettleInTransaction(t.Context(), tx, billingapp.SettleInput{ProjectID: pid, OperationID: id, ActualCostMicros: actual, Capability: items[0].Operation.Capability, OccurredAt: time.Now()})
 				if err != nil {
 					return err
 				}
-				return tx.Exec(`UPDATE operation.operation SET status='completed',settled_micros=? WHERE id=?`, actual, id).Error
+				return tx.Exec(`UPDATE operation.operation SET status='completed',settled_micros=? WHERE id=?`, charge, id).Error
 			}))
 			require.NoError(t, db.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,json_payload,moderation_status) VALUES(?,?,?,1,'json','{"text":"archived fixture"}','passed')`, uuid.New(), pid, id).Error)
 			source := domain.CanvasSource{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}
@@ -295,7 +298,7 @@ func TestBillingClosedLedgerAllowsNormalPartialReleaseAndExistingOverage(t *test
 			require.Equal(t, "settled", detail.BillingOutcome.ChargeState)
 			require.False(t, detail.BillingOutcome.ReconciliationRequired)
 			require.Equal(t, "confirm", detail.BillingOutcome.Regenerate)
-			require.Equal(t, actual, *detail.BillingOutcome.ChargedMicros)
+			require.Equal(t, charge, *detail.BillingOutcome.ChargedMicros)
 			var releases int64
 			require.NoError(t, db.Raw(`SELECT count(*) FROM billing.ledger_entry WHERE operation_id=? AND entry_type='release' AND NOT is_delete`, id).Scan(&releases).Error)
 			if actual < 10 {
