@@ -35,7 +35,6 @@ const modes = [
     label: "上传剧本",
     title: "从已有剧本开始",
     description: "上传剧本文件或粘贴文本，整理为可继续创作的剧集。",
-    unavailable: "剧本上传与解析暂未开放",
     icon: FileText,
   },
   {
@@ -43,7 +42,6 @@ const modes = [
     label: "剧本创作",
     title: "从创作想法开始",
     description: "用创作要求、小说或参考素材构思短剧剧本。",
-    unavailable: "剧本生成暂未开放",
     icon: Sparkles,
   },
   {
@@ -51,7 +49,6 @@ const modes = [
     label: "转绘",
     title: "从现有视频开始",
     description: "基于源视频，按风格、目标地区和画面比例制作新版本。",
-    unavailable: "视频转绘暂未开放",
     icon: Video,
   },
 ] as const;
@@ -74,7 +71,9 @@ export function ShortDramaStudio() {
   const session = useOptionalSession();
   const { selected, pending } = useSpace();
   const login = useLoginDialog();
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<
+    "canvas" | "upload" | "create" | "redraw" | null
+  >(null);
   const [locked, setLocked] = useState(false);
 
   const createDisabled =
@@ -112,20 +111,29 @@ export function ShortDramaStudio() {
               type="button"
               variant="ghost"
               disabled={createDisabled}
-              onClick={() => (session ? setCreating(true) : login())}
+              onClick={() => (session ? setCreating("canvas") : login())}
             >
               <ArrowUpRight data-icon="inline-start" aria-hidden="true" />
               短剧画布
             </Button>
           </div>
-          {modes.map(({ id, title, description, unavailable, icon }) => (
+          {modes.map(({ id, title, description, icon }) => (
             <TabsContent key={id} value={id} className="px-4 py-6 md:px-6">
               <ContentState
                 icon={icon}
                 title={title}
                 description={description}
                 actions={
-                  <p className="text-sm text-muted-foreground">{unavailable}</p>
+                  <Button
+                    disabled={createDisabled}
+                    onClick={() => (session ? setCreating(id) : login())}
+                  >
+                    {id === "upload"
+                      ? "开始导入"
+                      : id === "redraw"
+                        ? "开始转绘"
+                        : "开始创作"}
+                  </Button>
                 }
               />
             </TabsContent>
@@ -191,8 +199,14 @@ export function ShortDramaStudio() {
       {creating && (
         <AssetCreateProject
           kind="short_drama"
-          onClose={() => setCreating(false)}
+          onClose={() => setCreating(null)}
           onLock={setLocked}
+          destination={
+            creating === "canvas"
+              ? undefined
+              : (projectID) =>
+                  `/short-drama/${projectID}?tab=${creating === "upload" ? "script" : creating === "redraw" ? "video" : "create"}`
+          }
         />
       )}
     </div>

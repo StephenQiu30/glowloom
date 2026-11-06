@@ -27,9 +27,13 @@ const labels: Record<string, string> = {
 export function ConversationThread({
   conversation: c,
   projectID,
+  onUseReply,
+  useReplyLabel = "作为剧本草稿",
 }: {
   conversation: ConversationController;
   projectID: string;
+  onUseReply?: (text: string) => void;
+  useReplyLabel?: string;
 }) {
   const box = useRef<HTMLDivElement>(null),
     content = useRef<HTMLDivElement>(null),
@@ -249,6 +253,17 @@ export function ConversationThread({
                         </p>
                       ) : null}
                       <div className="mt-2 flex flex-wrap gap-1">
+                        {onUseReply &&
+                          state.status === "completed" &&
+                          message.text.trim() && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onUseReply(message.text)}
+                            >
+                              {useReplyLabel}
+                            </Button>
+                          )}
                         <Button
                           variant="ghost"
                           size="sm"

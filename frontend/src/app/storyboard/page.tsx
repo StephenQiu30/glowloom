@@ -1,11 +1,15 @@
-import { PageLayout } from "@/components/layout/page-layout";
-import { UnavailableState } from "@/components/availability/unavailable";
-export const metadata = { title: "分镜 · 织光" };
-export default function Page() {
-  return (
-    <PageLayout screen="storyboard">
-      <h1 className="text-2xl">分镜</h1>
-      <UnavailableState title="分镜暂未开放" />
-    </PageLayout>
+import { redirect } from "next/navigation";
+import { isProjectID } from "@/components/projects/project";
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ project_id?: string | string[] }>;
+}) {
+  const { project_id: projectID } = await searchParams;
+  redirect(
+    isProjectID(projectID)
+      ? `/short-drama/${projectID}?tab=episodes`
+      : "/short-drama",
   );
 }

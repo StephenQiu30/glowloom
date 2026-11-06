@@ -502,7 +502,11 @@ export function AssetCanvasList({
                 </span>
               ) : (
                 <Link
-                  href={`/canvas?project_id=${item.project_id}&canvas_id=${item.id}`}
+                  href={
+                    kind === "short_drama" && item.is_main
+                      ? `/short-drama/${item.project_id}`
+                      : `/canvas?project_id=${item.project_id}&canvas_id=${item.id}`
+                  }
                 >
                   <CanvasCover item={item} />
                   <CanvasText item={item} sort={filters.sort} reserveAction />

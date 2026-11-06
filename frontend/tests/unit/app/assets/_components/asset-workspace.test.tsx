@@ -1069,8 +1069,7 @@ it("游客可切换短剧入口，打开登录时不查询或创建私人项目"
   fireEvent.mouseDown(screen.getByRole("tab", { name: "转绘" }), {
     button: 0,
   });
-  expect(await screen.findByText("视频转绘暂未开放")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "短剧画布" }));
+  fireEvent.click(await screen.findByRole("button", { name: "开始转绘" }));
   expect(state.login).toHaveBeenCalledOnce();
   expect(state.canvases).not.toHaveBeenCalled();
   expect(state.templates).not.toHaveBeenCalled();

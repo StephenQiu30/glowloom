@@ -2,6 +2,48 @@ import { afterEach, expect, it, vi } from "vitest";
 import { GET, POST, PUT } from "@/app/api/[...path]/route";
 afterEach(() => vi.unstubAllGlobals());
 
+it("短剧剧本接口保留版本与幂等键，并拒绝未声明的权限查询", async () => {
+  const upstream = vi.fn(() => Promise.resolve(new Response("{}")));
+  vi.stubGlobal("fetch", upstream);
+  const id = "00000000-0000-4000-8000-000000000001";
+  const path = `projects/${id}/script-sources`;
+  const url = `http://localhost/api/${path}`;
+  expect(
+    (await GET(new Request(`${url}?version_id=${id}`), context(path))).status,
+  ).toBe(200);
+  expect(upstream).toHaveBeenLastCalledWith(
+    expect.objectContaining({ search: `?version_id=${id}` }),
+    expect.objectContaining({ method: "GET" }),
+  );
+  expect(
+    (await GET(new Request(`${url}?actor_id=${id}`), context(path))).status,
+  ).toBe(422);
+  expect(
+    (
+      await POST(
+        new Request(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": id,
+          },
+          body: "{}",
+        }),
+        context(path),
+      )
+    ).status,
+  ).toBe(200);
+  expect(upstream).toHaveBeenLastCalledWith(
+    expect.any(URL),
+    expect.objectContaining({ headers: expect.any(Headers) }),
+  );
+  const [, init] = (upstream.mock.calls as unknown as [URL, RequestInit][]).at(
+    -1,
+  )!;
+  expect(new Headers(init.headers).get("Idempotency-Key")).toBe(id);
+  expect(upstream).toHaveBeenCalledTimes(2);
+});
+
 it("画布助手只开放私有会话读取和绑定路径，不接受外部owner查询", async () => {
   const fetcher = vi
     .fn()

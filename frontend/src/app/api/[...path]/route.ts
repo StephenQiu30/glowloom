@@ -420,7 +420,16 @@ const editorCatalogRoutes: typeof identityRoutes = [
   {
     pattern: "admin/models",
     methods: ["GET", "POST"],
-    query: ["limit", "cursor", "provider_id", "name", "capability", "status", "pricing_review", "billing_status"],
+    query: [
+      "limit",
+      "cursor",
+      "provider_id",
+      "name",
+      "capability",
+      "status",
+      "pricing_review",
+      "billing_status",
+    ],
   },
   {
     pattern: `admin/providers/${identityUUID}`,
@@ -588,7 +597,9 @@ async function proxy(
       ? ["GET"]
       : matches(`projects/${uuid}/(operations|media)`)
         ? ["GET"]
-        : matches(`projects/${uuid}/(free-operations|generation-estimate|media/uploads)`)
+        : matches(
+              `projects/${uuid}/(free-operations|generation-estimate|media/uploads)`,
+            )
           ? ["POST"]
           : matches(`projects/${uuid}/media/${uuid}/preview`)
             ? ["GET"]
@@ -616,6 +627,66 @@ async function proxy(
                           ? ["GET"]
                           : undefined;
   const boundedRoute = [
+    {
+      pattern: `projects/${identityUUID}/script-workspace`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: `projects/${identityUUID}/script-sources`,
+      methods: ["GET", "POST"],
+      query: ["version_id", "after", "limit"],
+    },
+    {
+      pattern: `projects/${identityUUID}/script-sources/${identityUUID}`,
+      methods: ["GET"],
+      query: ["version_id"],
+    },
+    {
+      pattern: `projects/${identityUUID}/script-file-imports`,
+      methods: ["GET", "POST"],
+      query: ["after", "limit"],
+    },
+    {
+      pattern: `projects/${identityUUID}/script-file-imports/${identityUUID}`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: `projects/${identityUUID}/script-file-imports/${identityUUID}/(cancel|retry|reconcile)`,
+      methods: ["POST"],
+      query: [],
+    },
+    {
+      pattern: `projects/${identityUUID}/episodes`,
+      methods: ["GET"],
+      query: ["version_id"],
+    },
+    {
+      pattern: `projects/${identityUUID}/episodes/split/(confirm|resplit)`,
+      methods: ["POST"],
+      query: [],
+    },
+    {
+      pattern: `projects/${identityUUID}/script-versions/${identityUUID}/adopt`,
+      methods: ["POST"],
+      query: [],
+    },
+    {
+      pattern: `episodes/${identityUUID}/source-text`,
+      methods: ["GET"],
+      query: ["from", "to"],
+    },
+    {
+      pattern: `episodes/${identityUUID}/structure`,
+      methods: ["GET", "POST"],
+      query: [],
+    },
+    {
+      pattern: `episodes/${identityUUID}/structure/confirm`,
+      methods: ["POST"],
+      query: [],
+    },
     {
       pattern: `projects/${identityUUID}/media-exports`,
       methods: ["GET", "POST"],
@@ -992,13 +1063,16 @@ async function proxy(
     const reader = request.body?.getReader();
     const chunks: Uint8Array[] = [];
     let size = 0;
+    const maxBodyBytes = matches(`projects/${identityUUID}/script-sources`)
+      ? 8 * 1024 * 1024
+      : 1024 * 1024;
     if (reader) {
       try {
         while (true) {
           const next = await reader.read();
           if (next.done) break;
           size += next.value.byteLength;
-          if (size > 1048576) {
+          if (size > maxBodyBytes) {
             await reader.cancel();
             return Response.json(
               { code: "request_too_large" },

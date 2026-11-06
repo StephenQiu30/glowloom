@@ -21,11 +21,13 @@ export function AssetCreateProject({
   template,
   onClose,
   onLock,
+  destination,
 }: {
   kind: "canvas" | "short_drama";
   template?: { key: string; name: string };
   onClose: () => void;
   onLock: (locked: boolean) => void;
+  destination?: (projectID: string, canvasID: string) => string;
 }) {
   const router = useRouter();
   const [operation] = useState(() => ({
@@ -70,7 +72,8 @@ export function AssetCreateProject({
       onLock(false);
       onClose();
       router.push(
-        `/canvas?project_id=${result.project_id}&canvas_id=${result.id}`,
+        destination?.(result.project_id, result.id) ??
+          `/canvas?project_id=${result.project_id}&canvas_id=${result.id}`,
       );
     } catch (reason) {
       if (controller.signal.aborted) return;

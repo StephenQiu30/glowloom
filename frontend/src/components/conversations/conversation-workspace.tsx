@@ -17,6 +17,8 @@ export function ConversationWorkspace({
   projectSetting,
   alternateComposer,
   onLock,
+  onUseReply,
+  useReplyLabel,
   embedded = false,
   ...options
 }: ConversationOptions & {
@@ -26,6 +28,8 @@ export function ConversationWorkspace({
   projectSetting?: ReactNode;
   alternateComposer?: ReactNode;
   onLock?: (locked: boolean) => void;
+  onUseReply?: (text: string) => void;
+  useReplyLabel?: string;
   embedded?: boolean;
 }) {
   const c = useConversation(options);
@@ -52,7 +56,12 @@ export function ConversationWorkspace({
         </p>
       ) : null}
       {hasMessages ? (
-        <ConversationThread conversation={c} projectID={options.projectID} />
+        <ConversationThread
+          conversation={c}
+          projectID={options.projectID}
+          onUseReply={onUseReply}
+          useReplyLabel={useReplyLabel}
+        />
       ) : welcome ? (
         <ConversationWelcome
           skills={
