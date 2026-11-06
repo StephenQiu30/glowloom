@@ -11,10 +11,8 @@ import {
 /** A new publication requires the administrator to enter its own review evidence. */
 export function PriceEvidenceFields({
   price,
-  compact = false,
 }: {
   price?: Pick<API.AdminPrice, "source_url" | "reviewed_at">;
-  compact?: boolean;
 }) {
   const id = useId();
   return (
@@ -40,7 +38,6 @@ export function PriceEvidenceFields({
           type="url"
           pattern="https://.*"
           required
-          placeholder="https://供应商官方价格说明"
         />
       </Field>
       <Field>
@@ -52,11 +49,6 @@ export function PriceEvidenceFields({
           required
         />
       </Field>
-      {!compact && (
-        <p className="text-xs text-muted-foreground">
-          使用本次核验的官方价格说明。
-        </p>
-      )}
     </>
   );
 }

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -541,19 +542,20 @@ export function PriceSetup({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">
-                {requireProcurement ? "选择采购费率" : "暂不绑定"}
-              </SelectItem>
-              {supplierRates.map((price) => (
-                <SelectItem key={price.id} value={price.id!}>
-                  版本 {price.version_no} · {price.currency}
+              <SelectGroup>
+                <SelectItem value="none">
+                  {requireProcurement ? "选择采购费率" : "暂不绑定"}
                 </SelectItem>
-              ))}
+                {supplierRates.map((price) =>
+                  price.id ? (
+                    <SelectItem key={price.id} value={price.id}>
+                      v{price.version_no} · {price.currency}
+                    </SelectItem>
+                  ) : null,
+                )}
+              </SelectGroup>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
-            先保存有来源和审核时间的采购费率，再发布绑定该版本的用户售价。
-          </p>
         </Field>
       )}
       <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>

@@ -74,6 +74,74 @@ it("模型设置、价格和发布分屏，切换后不丢未保存的配置", a
   );
 });
 
+it("预设模型从普通详情核验采购价，缺少采购价时不显示销售价表单", async () => {
+  api.model.mockResolvedValue({
+    model: { id: "model-a", display_name: "示例预设" },
+    candidate: { model: { provider_model_id: "preset-model-id" } },
+    versions: [{ id: "version-a", provider_model_id: "preset-model-id" }],
+    prices: [],
+  });
+  render(
+    <ModelDetail
+      id="model-a"
+      capabilities={[]}
+      initialView="pricing"
+      onSaved={vi.fn()}
+    />,
+  );
+  const save = await screen.findByRole("button", { name: "保存采购价" });
+  expect((save as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByText("选择计费方式")).toBeTruthy();
+
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "销售价" }), {
+    button: 0,
+  });
+  expect(await screen.findByText("请先核验采购价")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "保存销售价" })).toBeNull();
+});
+
+it("已有采购价的预设沿用计量单位，销售价仍需独立保存", async () => {
+  api.model.mockResolvedValue({
+    model: { id: "model-a", display_name: "示例预设" },
+    candidate: { model: { provider_model_id: "preset-model-id" } },
+    versions: [{ id: "version-a", provider_model_id: "preset-model-id" }],
+    prices: [
+      {
+        id: "procurement-a",
+        version_no: 1,
+        source_url: "https://example.com/price",
+        reviewed_at: "2026-11-06T00:00:00Z",
+        unit: "per_image",
+        currency: "CNY",
+        rule: { base_micros: 120000 },
+      },
+    ],
+  });
+  render(
+    <ModelDetail
+      id="model-a"
+      capabilities={[]}
+      initialView="pricing"
+      onSaved={vi.fn()}
+    />,
+  );
+  await screen.findByRole("button", { name: "保存销售价" });
+  expect(
+    screen.getByRole("combobox", { name: "计费方式" }).textContent,
+  ).toContain("每张图片");
+  expect((screen.getByLabelText("价格（CNY）") as HTMLInputElement).value).toBe(
+    "",
+  );
+
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "采购价" }), {
+    button: 0,
+  });
+  await screen.findByRole("button", { name: "保存采购价" });
+  expect((screen.getByLabelText("价格（CNY）") as HTMLInputElement).value).toBe(
+    "0.12",
+  );
+});
+
 it("已归档模型可恢复，恢复后才可修改配置", async () => {
   let model = {
     id: "model-a",
