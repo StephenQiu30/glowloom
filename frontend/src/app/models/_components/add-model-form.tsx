@@ -20,7 +20,10 @@ import {
 import { useProviderCatalogProbe } from "@/components/catalog/provider-catalog-probe";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DialogClose, DialogFooter } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { ModelCatalogChoices } from "@/components/catalog/model-catalog-choices";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -191,7 +194,7 @@ export function AddModelForm({
         ? "供应商拒绝了凭据，请检查 Key。"
         : check?.discovery_result === "ok" ||
             check?.discovery_result === "partial"
-          ? `目录${check.discovery_result === "partial" ? "部分" : ""}返回 ${online.length} 个候选。已有预设及模型配置继续保留。`
+          ? `目录${check.discovery_result === "partial" ? "部分" : ""}返回 ${online.length} 个候选。`
           : check
             ? "目录暂不可读取，可以使用推荐预设或手动输入模型 ID。"
             : "";
@@ -204,6 +207,7 @@ export function AddModelForm({
   ];
   return (
     <form
+      className="flex min-h-0 flex-col gap-4"
       onSubmit={async (event) => {
         event.preventDefault();
         if (
@@ -238,9 +242,11 @@ export function AddModelForm({
         );
       }}
     >
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor={`${field}-provider`}>供应商</FieldLabel>
+      <FieldGroup className="min-h-0 gap-4 overflow-y-auto p-px">
+        <Field orientation="horizontal" className="justify-between">
+          <FieldLabel htmlFor={`${field}-provider`} className="sr-only">
+            供应商
+          </FieldLabel>
           <Select
             value={providerID}
             disabled={locked}
@@ -255,7 +261,10 @@ export function AddModelForm({
               setAccessKey("");
             }}
           >
-            <SelectTrigger id={`${field}-provider`} className="w-full">
+            <SelectTrigger
+              id={`${field}-provider`}
+              className="w-full max-w-[220px]"
+            >
               <SelectValue placeholder="选择供应商连接">
                 {providerConnectionName(connection?.provider)}
               </SelectValue>
@@ -285,8 +294,33 @@ export function AddModelForm({
               })}
             </SelectContent>
           </Select>
+          {credentialID && <Badge variant="outline">已保存凭据</Badge>}
         </Field>
-        <Field>
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {directoryAdapters.has(adapter) && (
+              <Button
+                type="button"
+                variant="outline"
+                className="self-start max-md:min-h-11"
+                disabled={!config || locked || !credentialID}
+                onClick={() => credentialID && void probe.run(credentialID)}
+              >
+                {readingDirectory && <Spinner data-icon="inline-start" />}
+                {readingDirectory ? "正在读取目录…" : "读取在线目录"}
+              </Button>
+            )}
+            {directoryAdapters.has(adapter) && !credentialID && (
+              <p className="text-sm text-muted-foreground">
+                保存凭据后可读取目录。
+              </p>
+            )}
+            {directoryMessage && (
+              <p role="status" className="text-xs text-muted-foreground">
+                {directoryMessage}
+              </p>
+            )}
+          </div>
           {isLoading ? (
             <p role="status">正在读取预设…</p>
           ) : config ? (
@@ -311,32 +345,11 @@ export function AddModelForm({
           ) : (
             <p>请先选择供应商连接。</p>
           )}
-          {directoryAdapters.has(adapter) && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="self-start"
-              disabled={!config || locked || !credentialID}
-              onClick={() => credentialID && void probe.run(credentialID)}
-            >
-              {readingDirectory && <Spinner data-icon="inline-start" />}
-              {readingDirectory ? "正在读取目录…" : "读取在线目录"}
-            </Button>
-          )}
-          {directoryAdapters.has(adapter) && !credentialID && (
-            <p>请先在连接中保存凭据，再读取在线目录。</p>
-          )}
-          {directoryMessage && (
-            <p role="status" className="text-xs text-muted-foreground">
-              {directoryMessage}
-            </p>
-          )}
           {capabilities.length ? (
             <Button
               type="button"
-              variant="link"
-              className="h-auto w-fit px-0"
+              variant="ghost"
+              className="w-fit max-md:min-h-11"
               disabled={locked}
               onClick={() => chooseManual()}
             >
@@ -344,7 +357,7 @@ export function AddModelForm({
             </Button>
           ) : null}
           {selected && !manual ? (
-            <p className="text-xs text-muted-foreground" role="status">
+            <p className="sr-only" role="status">
               已选择 {selected.display_name}
             </p>
           ) : null}
@@ -360,7 +373,7 @@ export function AddModelForm({
               {probe.mutation.message}
             </p>
           ) : null}
-        </Field>
+        </div>
         {manual ? (
           <>
             <Field>
@@ -371,6 +384,7 @@ export function AddModelForm({
                 id={`${field}-model-id`}
                 value={customID}
                 maxLength={200}
+                className="max-md:min-h-11 max-md:text-base"
                 disabled={locked}
                 required
                 onChange={(e) => {
@@ -448,8 +462,21 @@ export function AddModelForm({
             <Link href="/providers">接入供应商</Link>
           </Button>
         ) : null}
+        {credential.pending || credential.message ? (
+          <MutationStatus mutation={credential} inline />
+        ) : null}
+        {addition.pending || addition.message ? (
+          <MutationStatus mutation={addition} inline />
+        ) : null}
+      </FieldGroup>
+      <Separator />
+      <DialogFooter className="shrink-0 pt-0 max-md:[&_button]:min-h-11">
+        <DialogClose asChild>
+          <Button type="button" variant="ghost">
+            取消
+          </Button>
+        </DialogClose>
         <Button
-          className="w-fit"
           disabled={
             locked ||
             !selectable ||
@@ -460,13 +487,7 @@ export function AddModelForm({
           {savingModel ? <Spinner data-icon="inline-start" /> : null}
           {existing ? "查看模型" : "保存模型"}
         </Button>
-        {credential.pending || credential.message ? (
-          <MutationStatus mutation={credential} inline />
-        ) : null}
-        {addition.pending || addition.message ? (
-          <MutationStatus mutation={addition} inline />
-        ) : null}
-      </FieldGroup>
+      </DialogFooter>
     </form>
   );
 }

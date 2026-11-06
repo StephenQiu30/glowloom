@@ -122,11 +122,12 @@ describe("two-step provider connection", () => {
     });
   });
 
-  it("clears the old key when switching providers and cancels without saving", () => {
+  it("clears the old key when switching providers and cancels without saving", async () => {
     const { cancelled } = openWizard();
-    fireEvent.change(screen.getByLabelText("供应商"), {
-      target: { value: "vendor-two" },
-    });
+    const supplier = screen.getByRole("combobox", { name: "供应商" });
+    fireEvent.keyDown(supplier, { key: "ArrowDown" });
+    const option = await screen.findByRole("option", { name: "供应商二" });
+    fireEvent.keyDown(option, { key: "Enter" });
     expect((screen.getByLabelText("API Key") as HTMLInputElement).value).toBe(
       "",
     );
@@ -278,8 +279,8 @@ describe("two-step provider connection", () => {
     );
     const key = screen.getByLabelText("API Key") as HTMLInputElement;
     expect(key.value).toBe("");
-    expect((screen.getByLabelText("供应商") as HTMLSelectElement).value).toBe(
-      "vendor-one",
+    expect(screen.getByRole("combobox", { name: "供应商" }).textContent).toBe(
+      "供应商一",
     );
     fireEvent.change(key, { target: { value: "fresh-fixture-key" } });
     fireEvent.click(screen.getByRole("button", { name: "核对并继续保存" }));

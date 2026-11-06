@@ -4,6 +4,7 @@ import {
   fireEvent,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
@@ -339,9 +340,26 @@ it.each([false, true])(
       </SWRConfig>,
     );
     fireEvent.click(screen.getByRole("button", { name: "发布复核" }));
-    await screen.findByText("text_to_text · 待复核");
+    const review = await screen.findByRole("dialog", { name: "发布复核" });
+    const legacyMode = await screen.findByText("text_to_text");
+    expect(within(legacyMode.closest("li")!).getByText("待复核")).toBeTruthy();
+    const imageMode = screen.getByText("image2image");
+    expect(
+      within(imageMode.closest("li")!).getByText(
+        complete ? "已验证" : "待复核",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(complete ? "2 / 2 已验证" : "1 / 2 已验证"),
+    ).toBeTruthy();
     if (!complete) {
-      expect(screen.getByText("image2image · 待复核")).toBeTruthy();
+      expect(
+        (
+          within(review).getByRole("button", {
+            name: "批量启用",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
       expect(screen.queryByRole("button", { name: /个已复核模型/ })).toBeNull();
       expect(api.activate).not.toHaveBeenCalled();
     } else {

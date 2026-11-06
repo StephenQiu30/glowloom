@@ -12,6 +12,9 @@ import { useSession } from "@/components/auth/session";
 import { RequestError } from "@/lib/request";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { DialogFooter } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
 import { ModelCatalogChoices } from "@/components/catalog/model-catalog-choices";
 import {
   Field,
@@ -22,9 +25,13 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ConnectInput = Parameters<typeof connectProviderPreset>[1];
 type Model = API.ModelCandidatePreset;
@@ -150,6 +157,8 @@ function ConnectWizard({
   const inFlight = useRef(false);
   const mounted = useRef(false);
   const searchInput = useRef<HTMLInputElement>(null);
+  const supplierInput = useRef<HTMLButtonElement>(null);
+  const previousStep = useRef(step);
 
   useEffect(() => {
     mounted.current = true;
@@ -159,6 +168,8 @@ function ConnectWizard({
   }, []);
   useEffect(() => {
     if (step === 2) searchInput.current?.focus();
+    else if (previousStep.current === 2) supplierInput.current?.focus();
+    previousStep.current = step;
   }, [step]);
 
   function remember(save: Save | null, previous?: string) {
@@ -440,213 +451,225 @@ function ConnectWizard({
         else void saveConnection(false);
       }}
     >
-      <ol aria-label="接入步骤" className="grid grid-cols-2 gap-2 text-sm">
+      <ol aria-label="接入步骤" className="grid shrink-0 grid-cols-2 text-sm">
         <li
           aria-current={step === 1 ? "step" : undefined}
-          className="rounded-md bg-muted px-3 py-2 aria-[current=step]:font-semibold"
+          className="border-t-2 border-border pt-1.5 text-muted-foreground aria-[current=step]:border-primary aria-[current=step]:font-semibold aria-[current=step]:text-foreground"
         >
-          1. 连接服务
+          1 连接服务
         </li>
         <li
           aria-current={step === 2 ? "step" : undefined}
-          className="rounded-md bg-muted px-3 py-2 aria-[current=step]:font-semibold"
+          className="border-t-2 border-border pt-1.5 text-muted-foreground aria-[current=step]:border-primary aria-[current=step]:font-semibold aria-[current=step]:text-foreground"
         >
-          2. 选择模型
+          2 选择模型
         </li>
       </ol>
-      {notice && (
-        <Alert role="status">
-          <AlertDescription>{notice}</AlertDescription>
-        </Alert>
-      )}
-      {step === 1 ? (
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="connect-supplier">供应商</FieldLabel>
-            <NativeSelect
-              id="connect-supplier"
-              value={preset?.id ?? ""}
-              onChange={(event) => changeSupplier(event.target.value)}
-              disabled={!!busy || !!pending || available.length === 0}
-            >
-              {!available.length && (
-                <NativeSelectOption value="">
-                  暂无可用供应商预设
-                </NativeSelectOption>
-              )}
-              {available.map((item) => (
-                <NativeSelectOption key={item.id} value={item.id}>
-                  {item.document?.name ?? item.slug ?? item.id}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          {config?.base_url && (
-            <p className="text-sm break-all text-muted-foreground">
-              {config.base_url}
-            </p>
-          )}
-          {fields.map((field) => {
-            const name = field.name ?? "api_key";
-            return (
-              <Field key={name}>
-                <FieldLabel htmlFor={"connect-" + name}>
-                  {credentialLabels[name] ?? name}
-                </FieldLabel>
-                <Input
-                  id={"connect-" + name}
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={secret[name] ?? ""}
-                  disabled={!!busy || !preset}
-                  onChange={(event) => {
-                    setSecret({ ...secret, [name]: event.target.value });
-                    setCustom((current) =>
-                      current.filter(
-                        (model) =>
-                          !online.includes(model.provider_model_id ?? ""),
-                      ),
-                    );
-                    if (online.includes(manualID)) setManualID("");
-                    setOnline([]);
-                  }}
-                />
-              </Field>
-            );
-          })}
-        </FieldGroup>
-      ) : (
-        <FieldSet
-          disabled={!!busy || !!pending}
-          className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto"
-        >
-          <FieldLegend className="sr-only">选择模型</FieldLegend>
-          <ModelCatalogChoices
-            models={models}
-            online={online}
-            picked={picked}
-            searchRef={searchInput}
-            canSelect={(model) =>
-              picked.includes(model.key!) || selectionCount < 64
-            }
-            onPreset={(model) => {
-              const key = model.key!;
-              setPicked((current) =>
-                current.includes(key)
-                  ? current.filter((item) => item !== key)
-                  : [...current, key],
-              );
-            }}
-            onOnline={(id) => {
-              setManualID(id);
-              setShowManual(true);
-            }}
-          />
-          {modes.length > 0 && !showManual && (
-            <Button
-              type="button"
-              variant="outline"
-              className="self-start"
-              onClick={() => setShowManual(true)}
-            >
-              手动添加模型
-            </Button>
-          )}
-          {modes.length > 0 && showManual && (
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="connect-manual-model">
-                  手动添加模型 ID
-                </FieldLabel>
-                <Input
-                  id="connect-manual-model"
-                  maxLength={200}
-                  value={manualID}
-                  onChange={(event) => setManualID(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addManualModel();
-                    }
-                  }}
-                />
-              </Field>
-              <div className="flex flex-wrap items-end gap-2">
-                <Field className="w-auto">
-                  <FieldLabel htmlFor="connect-capability">能力</FieldLabel>
-                  <NativeSelect
-                    id="connect-capability"
-                    value={mode}
-                    onChange={(event) =>
-                      setManualCapability(event.target.value)
-                    }
-                  >
-                    {modes.length > 1 && (
-                      <NativeSelectOption value="" disabled>
-                        选择能力
-                      </NativeSelectOption>
-                    )}
-                    {modes.map((value) => (
-                      <NativeSelectOption key={value} value={value}>
-                        {capabilities[value] ?? value}
-                      </NativeSelectOption>
+      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-px">
+        {notice && (
+          <Alert role="status">
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        )}
+        {step === 1 ? (
+          <FieldGroup className="gap-4">
+            <Field className="gap-1.5">
+              <FieldLabel htmlFor="connect-supplier">供应商</FieldLabel>
+              <Select
+                value={preset?.id ?? ""}
+                onValueChange={changeSupplier}
+                disabled={!!busy || !!pending || available.length === 0}
+              >
+                <SelectTrigger
+                  id="connect-supplier"
+                  ref={supplierInput}
+                  className="w-full"
+                >
+                  <SelectValue placeholder="暂无可用供应商预设">
+                    {preset &&
+                      (preset.document?.name ?? preset.slug ?? preset.id)}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {available.map((item) => (
+                      <SelectItem key={item.id} value={item.id!}>
+                        {item.document?.name ?? item.slug ?? item.id}
+                      </SelectItem>
                     ))}
-                  </NativeSelect>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            {fields.map((field) => {
+              const name = field.name ?? "api_key";
+              return (
+                <Field key={name} className="gap-1.5">
+                  <FieldLabel htmlFor={"connect-" + name}>
+                    {credentialLabels[name] ?? name}
+                  </FieldLabel>
+                  <Input
+                    id={"connect-" + name}
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="max-md:min-h-11 max-md:text-base"
+                    required={field.required !== false}
+                    value={secret[name] ?? ""}
+                    disabled={!!busy || !preset}
+                    onChange={(event) => {
+                      setSecret({ ...secret, [name]: event.target.value });
+                      setCustom((current) =>
+                        current.filter(
+                          (model) =>
+                            !online.includes(model.provider_model_id ?? ""),
+                        ),
+                      );
+                      if (online.includes(manualID)) setManualID("");
+                      setOnline([]);
+                    }}
+                  />
                 </Field>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={
-                    !mode ||
-                    !manualID.trim() ||
-                    /\s/u.test(manualID.trim()) ||
-                    selectionCount >= 64
-                  }
-                  onClick={addManualModel}
-                >
-                  加入所选
-                </Button>
-              </div>
-            </FieldGroup>
-          )}
-          {custom.length > 0 && (
-            <ul
-              className="flex flex-col gap-1 text-sm"
-              aria-label="手动添加的模型"
-            >
-              {custom.map((model) => (
-                <li
-                  key={model.key}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <span className="min-w-0 break-all">
-                    {model.provider_model_id} ·{" "}
-                    {capabilities[model.capability ?? ""]} · 待配置
-                  </span>
+              );
+            })}
+          </FieldGroup>
+        ) : (
+          <FieldSet
+            disabled={!!busy || !!pending}
+            className="flex min-h-0 min-w-0 flex-col gap-4"
+          >
+            <FieldLegend className="sr-only">选择模型</FieldLegend>
+            <p className="min-w-0 font-medium wrap-anywhere">
+              {preset?.document?.name ?? preset?.slug}
+            </p>
+            <ModelCatalogChoices
+              models={models}
+              online={online}
+              picked={picked}
+              searchRef={searchInput}
+              canSelect={(model) =>
+                picked.includes(model.key!) || selectionCount < 64
+              }
+              onPreset={(model) => {
+                const key = model.key!;
+                setPicked((current) =>
+                  current.includes(key)
+                    ? current.filter((item) => item !== key)
+                    : [...current, key],
+                );
+              }}
+              onOnline={(id) => {
+                setManualID(id);
+                setShowManual(true);
+              }}
+            />
+            {modes.length > 0 && !showManual && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="self-start max-md:min-h-11"
+                onClick={() => setShowManual(true)}
+              >
+                手动添加模型
+              </Button>
+            )}
+            {modes.length > 0 && showManual && (
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="connect-manual-model">
+                    手动添加模型 ID
+                  </FieldLabel>
+                  <Input
+                    id="connect-manual-model"
+                    maxLength={200}
+                    className="max-md:min-h-11 max-md:text-base"
+                    value={manualID}
+                    onChange={(event) => setManualID(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addManualModel();
+                      }
+                    }}
+                  />
+                </Field>
+                <div className="flex flex-wrap items-end gap-2">
+                  <Field className="w-auto">
+                    <FieldLabel htmlFor="connect-capability">能力</FieldLabel>
+                    <Select
+                      value={mode}
+                      onValueChange={setManualCapability}
+                      disabled={!!busy || !!pending}
+                    >
+                      <SelectTrigger id="connect-capability">
+                        <SelectValue placeholder="选择能力" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {modes.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {capabilities[value] ?? value}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
                   <Button
                     type="button"
-                    size="sm"
-                    variant="ghost"
-                    aria-label={"移除 " + model.provider_model_id}
-                    onClick={() =>
-                      setCustom((current) =>
-                        current.filter((item) => item.key !== model.key),
-                      )
+                    variant="outline"
+                    disabled={
+                      !mode ||
+                      !manualID.trim() ||
+                      /\s/u.test(manualID.trim()) ||
+                      selectionCount >= 64
                     }
+                    onClick={addManualModel}
                   >
-                    移除
+                    加入所选
                   </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="text-xs text-muted-foreground" aria-live="polite">
-            已选 {selectionCount} 个模型。保存后可在模型管理中配置和验证。
-          </p>
-        </FieldSet>
-      )}
-      <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
+                </div>
+              </FieldGroup>
+            )}
+            {custom.length > 0 && (
+              <ul
+                className="flex flex-col gap-1 text-sm"
+                aria-label="手动添加的模型"
+              >
+                {custom.map((model) => (
+                  <li
+                    key={model.key}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span className="min-w-0 break-all">
+                      {model.provider_model_id} ·{" "}
+                      {capabilities[model.capability ?? ""]} · 待配置
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      aria-label={"移除 " + model.provider_model_id}
+                      onClick={() =>
+                        setCustom((current) =>
+                          current.filter((item) => item.key !== model.key),
+                        )
+                      }
+                    >
+                      移除
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              已选 {selectionCount} 个模型
+            </p>
+          </FieldSet>
+        )}
+      </div>
+      <Separator />
+      <DialogFooter className="shrink-0 pt-0 max-md:[&_button]:min-h-11">
         {pending ? (
           <Button
             type="button"
@@ -668,19 +691,23 @@ function ConnectWizard({
             >
               取消
             </Button>
+            <Button
+              type="submit"
+              variant={canRead ? "outline" : "default"}
+              disabled={!hasCredentials || !!busy}
+            >
+              {models.length ? "查看预置模型" : "手动添加模型"}
+            </Button>
             {canRead && (
               <Button
                 type="button"
-                variant="outline"
                 disabled={!hasCredentials || !!busy}
                 onClick={() => void readDirectory()}
               >
+                {busy === "read" && <Spinner data-icon="inline-start" />}
                 {busy === "read" ? "正在读取…" : "读取模型"}
               </Button>
             )}
-            <Button type="submit" disabled={!hasCredentials || !!busy}>
-              {models.length ? "查看预置模型" : "手动添加模型"}
-            </Button>
           </>
         ) : (
           <>
@@ -695,20 +722,22 @@ function ConnectWizard({
             >
               上一步
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!!busy || selectionCount > 0}
-              onClick={() => void saveConnection(true)}
-            >
-              仅保存连接
-            </Button>
-            <Button type="submit" disabled={!!busy || selectionCount === 0}>
-              保存接入
-            </Button>
+            {selectionCount === 0 ? (
+              <Button
+                type="button"
+                disabled={!!busy}
+                onClick={() => void saveConnection(true)}
+              >
+                仅保存连接
+              </Button>
+            ) : (
+              <Button type="submit" disabled={!!busy}>
+                保存接入
+              </Button>
+            )}
           </>
         )}
-      </div>
+      </DialogFooter>
     </form>
   );
 }

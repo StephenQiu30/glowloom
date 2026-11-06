@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type Ref } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -9,7 +10,9 @@ import {
   FieldLegend,
   FieldSet,
 } from "@/components/ui/field";
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 
 const groups: Record<string, string> = {
   text: "文本",
@@ -56,10 +59,14 @@ export function ModelCatalogChoices({
   return (
     <>
       <Field>
-        <FieldLabel htmlFor={field}>搜索模型</FieldLabel>
+        <FieldLabel htmlFor={field} className="sr-only">
+          搜索模型
+        </FieldLabel>
         <Input
           id={field}
           ref={searchRef}
+          placeholder="搜索名称或模型 ID"
+          className="max-md:min-h-11 max-md:text-base"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           onKeyDown={(event) => {
@@ -67,11 +74,15 @@ export function ModelCatalogChoices({
           }}
         />
       </Field>
-      <div className="max-h-52 min-h-0 overflow-y-auto rounded-md border">
+      <div className="max-h-64 min-h-0 overflow-y-auto p-px">
         {!visible.length && !onlineOnly.length && (
-          <p className="p-3 text-sm text-muted-foreground">
-            暂无匹配模型，可手动添加。
-          </p>
+          <Empty className="border-0 p-4">
+            <EmptyHeader>
+              <EmptyTitle className="text-sm">
+                暂无匹配模型，可手动添加。
+              </EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         )}
         {Object.entries(groups).map(([group, label]) => {
           const entries = visible.filter(
@@ -79,37 +90,41 @@ export function ModelCatalogChoices({
           );
           if (!entries.length) return null;
           return (
-            <FieldSet
-              key={group}
-              className="mx-3 mb-2 border-b pb-2 last:border-b-0"
-            >
-              <FieldLegend className="pt-2 text-xs font-medium text-muted-foreground">
+            <FieldSet key={group} className="gap-1 px-1 pb-1">
+              <FieldLegend className="mb-1 text-xs font-medium text-muted-foreground">
                 {label}
               </FieldLegend>
               {entries.map((model) => {
                 const key = model.key!;
                 const name = model.display_name ?? model.provider_model_id;
+                const checked = picked.includes(key);
+                const configured = isConfigured?.(model);
                 return (
                   <FieldLabel
                     key={key}
-                    className="flex cursor-pointer items-center gap-2 py-2 text-sm"
+                    className="flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted has-data-checked:bg-muted has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-ring/50"
                   >
                     <Checkbox
-                      checked={picked.includes(key)}
+                      checked={checked}
                       aria-label={name}
                       disabled={disabled || canSelect?.(model) === false}
                       onCheckedChange={() => onPreset(model)}
                     />
-                    <span className="min-w-0 break-all">{name}</span>
-                    <span className="ml-auto min-w-0 text-right text-xs break-all text-muted-foreground">
-                      {isConfigured?.(model)
-                        ? "已添加"
-                        : model.requires_model_selection
-                          ? "需填写接入点"
-                          : model.display_name
-                            ? model.provider_model_id
-                            : ""}
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="break-words text-foreground">
+                        {name}
+                      </span>
+                      {model.display_name && model.provider_model_id && (
+                        <span className="text-xs break-all text-muted-foreground">
+                          {model.provider_model_id}
+                        </span>
+                      )}
                     </span>
+                    {(configured || model.requires_model_selection) && (
+                      <Badge variant="secondary">
+                        {configured ? "已添加" : "需填写接入点"}
+                      </Badge>
+                    )}
                   </FieldLabel>
                 );
               })}
@@ -117,10 +132,9 @@ export function ModelCatalogChoices({
           );
         })}
         {onlineOnly.length > 0 && (
-          <section className="flex flex-col gap-1 p-3" aria-label="在线目录">
-            <p className="text-xs text-muted-foreground">
-              在线目录中的其他型号需要选择能力
-            </p>
+          <section className="flex flex-col gap-1 px-1" aria-label="在线目录">
+            {visible.length > 0 && <Separator className="my-1" />}
+            <p className="text-xs text-muted-foreground">在线目录</p>
             {onlineOnly.slice(0, 50).map((id) => (
               <Button
                 key={id}
@@ -128,10 +142,16 @@ export function ModelCatalogChoices({
                 size="sm"
                 type="button"
                 disabled={disabled}
-                className="h-auto justify-start break-all whitespace-normal"
+                className="h-auto min-h-9 justify-between gap-2 whitespace-normal max-md:min-h-11"
+                aria-label={id}
                 onClick={() => onOnline(id)}
               >
-                {id}
+                <span className="min-w-0 text-left font-mono break-all">
+                  {id}
+                </span>
+                <span aria-hidden="true" className="shrink-0">
+                  选择能力
+                </span>
               </Button>
             ))}
             {onlineOnly.length > 50 && (

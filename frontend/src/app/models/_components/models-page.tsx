@@ -3,7 +3,7 @@ import { readErrorMessage } from "@/lib/read-error";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { ContentState } from "@/components/layout/content-state";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ColumnMenu } from "@/components/governance/column-menu";
 import { Plus } from "lucide-react";
@@ -68,6 +68,7 @@ function ModelAdministration({
   const mobile = useIsMobile();
   const [visibility, setVisibility] = useState<Record<string, boolean>>({});
   const [createOpen, setCreateOpen] = useState(openAdd && !initialReviewModel);
+  const addTrigger = useRef<HTMLButtonElement>(null);
   const [selectedRows, setSelectedRows] = useState<API.CreatedModel[]>([]);
   const [pageSize, setPageSize] = useState(20);
   const [cursors, setCursors] = useState<string[]>([""]);
@@ -228,6 +229,7 @@ function ModelAdministration({
         <Button
           size="toolbar"
           disabled={locked || archivedConnection}
+          ref={addTrigger}
           onClick={() => setCreateOpen(true)}
         >
           <Plus data-icon="inline-start" />
@@ -255,10 +257,17 @@ function ModelAdministration({
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent
           aria-describedby={undefined}
-          className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl"
+          showCloseButton={false}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (!selected) addTrigger.current?.focus();
+          }}
+          className="flex flex-col overflow-hidden border border-border p-4 sm:max-w-[640px] sm:p-6"
         >
           <DialogHeader>
-            <DialogTitle>添加模型</DialogTitle>
+            <DialogTitle size="lg" className="text-xl">
+              添加模型
+            </DialogTitle>
           </DialogHeader>
           {createOpen ? (
             <AddModelForm
