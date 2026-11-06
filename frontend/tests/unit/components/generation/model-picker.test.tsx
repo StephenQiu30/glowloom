@@ -32,7 +32,7 @@ const models: API.ModelResponse[] = [
   },
 ];
 
-it("搜索使用模型和供应商名称，选择返回真实模型而不触发生成", async () => {
+it("键盘打开模型列表并选择真实模型", async () => {
   const select = vi.fn();
   render(
     <ModelPicker
@@ -42,16 +42,11 @@ it("搜索使用模型和供应商名称，选择返回真实模型而不触发�
       onSelect={select}
     />,
   );
-  const trigger = screen.getByRole("button", { name: "生成模型" });
-  fireEvent.click(trigger);
-  fireEvent.change(await screen.findByRole("combobox", { name: "搜索模型" }), {
-    target: { value: "供应商甲" },
-  });
+  const trigger = screen.getByRole("combobox", { name: "生成模型" });
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
   fireEvent.click(await screen.findByRole("option", { name: /图像模型/ }));
   expect(select).toHaveBeenCalledWith(models[0]);
-  await waitFor(() =>
-    expect(screen.queryByRole("combobox", { name: "搜索模型" })).toBeNull(),
-  );
+  await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
 });
 
 it("停用模型保留可见说明但不允许选择", async () => {
@@ -64,7 +59,9 @@ it("停用模型保留可见说明但不允许选择", async () => {
       onSelect={select}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "生成模型" }));
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "生成模型" }), {
+    key: "ArrowDown",
+  });
   const disabled = await screen.findByRole("option", { name: /停用模型/ });
   expect(disabled.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(disabled);

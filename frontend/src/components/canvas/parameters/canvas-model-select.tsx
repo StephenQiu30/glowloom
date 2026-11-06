@@ -13,13 +13,15 @@ import {
 } from "@/components/canvas/runtime/components/feedback/error-notification";
 import {
   Select,
-  SelectContent,
-  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 
+import {
+  ModelSelectList,
+  ModelSelectOption,
+} from "@/components/generation/model-picker";
 import { modelOptionLabel } from "@/components/canvas/runtime/components/generation/model/model-option";
 
 type Selection = NonNullable<
@@ -130,30 +132,32 @@ export function CanvasModelSelect({
           aria-label="生成模型"
           aria-describedby={showStatus ? statusId : undefined}
           title={showStatus ? status : undefined}
-          className="max-w-64 min-w-0 flex-1"
+          size="toolbar"
+          variant="quiet"
+          className="max-w-64 min-w-0 flex-1 text-sm"
         >
           <SelectValue placeholder={showStatus ? status : "选择模型"} />
         </SelectTrigger>
-        <SelectContent onEscapeKeyDown={(event) => event.stopPropagation()}>
-          <SelectGroup>
-            {missing && (
-              <SelectItem value={value} disabled>
-                已保存的模型
-              </SelectItem>
-            )}
-            {rows
-              .filter((row) => row.connectionId != null && row.modelId)
-              .map((row) => (
-                <SelectItem key={modelKey(row)} value={modelKey(row)}>
-                  {modelOptionLabel(row, rows)}
-                </SelectItem>
-              ))}
-            {!rows.length && (
-              <SelectItem value="unavailable" disabled>
-                {status}
-              </SelectItem>
-            )}
-          </SelectGroup>
+        <ModelSelectList compact>
+          {missing && (
+            <SelectItem value={value} disabled>
+              已保存的模型
+            </SelectItem>
+          )}
+          {rows
+            .filter((row) => row.connectionId != null && row.modelId)
+            .map((row) => (
+              <ModelSelectOption
+                key={modelKey(row)}
+                value={modelKey(row)}
+                name={modelOptionLabel(row, rows)}
+              />
+            ))}
+          {!rows.length && (
+            <SelectItem value="unavailable" disabled>
+              {status}
+            </SelectItem>
+          )}
           {enabled && (catalog.error || catalog.data?.length === 0) && (
             <SelectItem
               value="refresh-models"
@@ -163,7 +167,7 @@ export function CanvasModelSelect({
               重新读取模型
             </SelectItem>
           )}
-        </SelectContent>
+        </ModelSelectList>
       </Select>
       {showStatus && (
         <p id={statusId} role="status" className="sr-only">

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { providerConnectionName } from "@/lib/provider-connection-name";
-import { Box, Check, ChevronDown, Sparkles } from "lucide-react";
+import { Box, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -12,26 +12,99 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
-import {
   Popover,
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-/** The same anchored picker is used by homepage and canvas composers. */
+export function ModelSelectList({
+  compact,
+  current,
+  children,
+  ...props
+}: Omit<ComponentProps<typeof SelectContent>, "className"> & {
+  compact?: boolean;
+  current?: string;
+}) {
+  return (
+    <SelectContent
+      side="top"
+      align={compact ? "end" : "start"}
+      sideOffset={8}
+      collisionPadding={16}
+      className={
+        compact
+          ? "model-select-list"
+          : "model-select-list model-select-list-detail"
+      }
+      onEscapeKeyDown={(event) => event.stopPropagation()}
+      {...props}
+    >
+      {!compact && (
+        <div className="px-3 pt-2 pb-1 text-xs text-muted-foreground">
+          选择模型{current ? `：${current}` : ""}
+        </div>
+      )}
+      <SelectGroup className="space-y-1">{children}</SelectGroup>
+    </SelectContent>
+  );
+}
+
+export function ModelSelectOption({
+  name,
+  description,
+  detailed = false,
+  unavailable = false,
+  ...props
+}: Omit<ComponentProps<typeof SelectItem>, "children" | "className"> & {
+  name: string;
+  description?: string;
+  detailed?: boolean;
+  unavailable?: boolean;
+}) {
+  return (
+    <SelectItem textValue={name} className="model-select-option" {...props}>
+      <span className="flex min-w-0 items-center gap-3">
+        {detailed && (
+          <span
+            aria-hidden="true"
+            className="model-select-symbol flex size-[42px] shrink-0 items-center justify-center rounded-lg border"
+          >
+            <Box />
+          </span>
+        )}
+        <span className="min-w-0">
+          <span className="block truncate">
+            {name}
+            {unavailable && !description ? " · 当前不可用" : ""}
+          </span>
+          {description && (
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              {description}
+            </span>
+          )}
+        </span>
+      </span>
+    </SelectItem>
+  );
+}
+
+/** Selection updates the owning editor and leaves submission to its separate action. */
 export function ModelPicker({
   models,
   value,
   disabled,
   onSelect,
   onChooseProject,
+  compact,
   label = "生成模型",
 }: {
   label?: string;
@@ -39,39 +112,56 @@ export function ModelPicker({
   value: string | null | undefined;
   disabled: boolean;
   onSelect: (model: API.ModelResponse) => void;
-  /** The catalog is project-scoped; request its scope only after an explicit action. */
   onChooseProject?: () => void;
+  compact?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const current = models.find((model) => model.current_version?.id === value);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="toolbar"
-          aria-label={label}
-          aria-expanded={open}
-          disabled={disabled}
-          className="max-w-60 min-w-0 justify-start"
+  const [projectPromptOpen, setProjectPromptOpen] = useState(false);
+  const choices = models.flatMap((model) => {
+    const id = model.current_version?.id;
+    if (!id) return [];
+    return [
+      {
+        id,
+        model,
+        name: model.display_name || model.key || "未命名模型",
+        unavailable:
+          model.status !== "active" ||
+          model.provider_status !== "active" ||
+          !model.credential_present,
+      },
+    ];
+  });
+  const current = choices.find((choice) => choice.id === value);
+
+  if (onChooseProject) {
+    return (
+      <Popover open={projectPromptOpen} onOpenChange={setProjectPromptOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="toolbar"
+            disabled={disabled}
+            aria-label={label}
+            aria-expanded={projectPromptOpen}
+            className="max-w-60 min-w-0 justify-start text-sm"
+          >
+            {!compact && <Box data-icon="inline-start" />}
+            选择模型
+            <ChevronDown
+              data-icon="inline-end"
+              className="text-muted-foreground"
+            />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="top"
+          align={compact ? "end" : "start"}
+          sideOffset={8}
+          collisionPadding={16}
+          className="model-select-list p-0"
+          aria-label="选择模型"
         >
-          <Sparkles data-icon="inline-start" />
-          <span className="truncate">
-            {current?.display_name ?? "选择模型"}
-          </span>
-          <ChevronDown data-icon="inline-end" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        side="top"
-        align="start"
-        sideOffset={8}
-        collisionPadding={16}
-        className="max-h-(--radix-popover-content-available-height) w-80 max-w-[calc(100vw-32px)] overflow-y-auto p-0"
-        aria-label="选择模型"
-      >
-        {onChooseProject ? (
           <Empty>
             <EmptyHeader>
               <EmptyTitle>选择{label}</EmptyTitle>
@@ -84,7 +174,7 @@ export function ModelPicker({
                 type="button"
                 variant="secondary"
                 onClick={() => {
-                  setOpen(false);
+                  setProjectPromptOpen(false);
                   onChooseProject();
                 }}
               >
@@ -92,57 +182,53 @@ export function ModelPicker({
               </Button>
             </EmptyContent>
           </Empty>
-        ) : (
-          <Command label="搜索模型">
-            <CommandInput aria-label="搜索模型" placeholder="搜索模型" />
-            <CommandList className="max-h-80">
-              <CommandEmpty>暂无匹配的可用模型</CommandEmpty>
-              <CommandGroup>
-                {models
-                  .filter((model) => model.current_version?.id)
-                  .map((model) => {
-                    const unavailable =
-                      model.status !== "active" ||
-                      model.provider_status !== "active" ||
-                      !model.credential_present;
-                    return (
-                      <CommandItem
-                        key={model.current_version!.id}
-                        value={model.current_version!.id}
-                        keywords={[
-                          model.display_name ?? "",
-                          model.provider_name ?? "",
-                          model.key ?? "",
-                        ]}
-                        disabled={unavailable}
-                        onSelect={() => {
-                          onSelect(model);
-                          setOpen(false);
-                        }}
-                        className="gap-3 py-3"
-                      >
-                        <Box />
-                        <span className="flex min-w-0 flex-1 flex-col gap-1">
-                          <span className="truncate">{model.display_name}</span>
-                          <span className="truncate text-xs text-muted-foreground">
-                            {unavailable
-                              ? "当前不可用"
-                              : providerConnectionName({
-                                  name: model.provider_name,
-                                })}
-                          </span>
-                        </span>
-                        {model.current_version!.id === value ? (
-                          <Check aria-label="当前模型" />
-                        ) : null}
-                      </CommandItem>
-                    );
-                  })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
+  return (
+    <Select
+      value={current?.id ?? ""}
+      disabled={disabled}
+      onValueChange={(next) => {
+        const choice = choices.find(({ id }) => id === next);
+        if (choice && !choice.unavailable) onSelect(choice.model);
+      }}
+    >
+      <SelectTrigger
+        variant="quiet"
+        size="toolbar"
+        aria-label={label}
+        className="max-w-60 text-sm data-[state=open]:bg-(--creation-track) data-[state=open]:[&>svg:last-child]:rotate-180"
+      >
+        {!compact && <Box aria-hidden="true" />}
+        <SelectValue placeholder="选择模型">{current?.name}</SelectValue>
+      </SelectTrigger>
+      <ModelSelectList compact={compact} current={current?.name}>
+        {choices.map(({ id, model, name, unavailable }) => (
+          <ModelSelectOption
+            key={id}
+            value={id}
+            name={name}
+            disabled={unavailable}
+            detailed={!compact}
+            unavailable={unavailable}
+            description={
+              compact
+                ? undefined
+                : unavailable
+                  ? "当前不可用"
+                  : model.provider_name
+                    ? providerConnectionName({ name: model.provider_name })
+                    : undefined
+            }
+          />
+        ))}
+        {!choices.length && (
+          <ModelSelectOption value="unavailable" name="暂无可用模型" disabled />
         )}
-      </PopoverContent>
-    </Popover>
+      </ModelSelectList>
+    </Select>
   );
 }

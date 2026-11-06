@@ -94,7 +94,10 @@ export function ConversationDirectComposer({
     p.content?.some((node) => node.type === "text" && node.text.trim()),
   );
   return (
-    <InputGroup variant="composer" className="creation-composer">
+    <InputGroup
+      variant="composer"
+      className="creation-input-surface creation-composer"
+    >
       <div className="creation-editor-body">
         {acceptsReferences && (
           <InputGroupAddon

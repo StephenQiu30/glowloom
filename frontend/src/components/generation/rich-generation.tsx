@@ -1837,7 +1837,10 @@ function EditorWorkspace({
           </div>
         )}
         {presentation === "assistant" ? (
-          <InputGroup variant="composer" className="canvas-assistant-composer">
+          <InputGroup
+            variant="composer"
+            className="creation-input-surface canvas-assistant-composer"
+          >
             <div
               data-slot="input-group-control"
               className="canvas-assistant-prompt"
@@ -1964,7 +1967,7 @@ function EditorWorkspace({
             variant="composer"
             className={cn(
               presentation === "home"
-                ? "creation-composer creation-composer-ready"
+                ? "creation-input-surface creation-composer creation-composer-ready"
                 : "min-h-[208px] flex-col items-stretch gap-1",
             )}
           >

@@ -128,9 +128,6 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  border-radius: 18px;
-  background: var(--canvas-assistant-input);
-  border-color: var(--canvas-assistant-border);
 }
 .canvas-assistant-prompt {
   flex: 1;
@@ -139,7 +136,6 @@
 }
 .canvas-assistant-prompt .tiptap {
   min-height: 72px;
-  font-size: 13px;
 }
 .canvas-assistant-tools {
   gap: 2px;

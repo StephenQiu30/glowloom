@@ -301,7 +301,7 @@ async function open(reference = false) {
   fireEvent.keyDown(screen.getByRole("combobox", { name: "生成模型" }), {
     key: "ArrowDown",
   });
-  fireEvent.click(await screen.findByRole("option", { name: "真实模型" }));
+  fireEvent.click(await screen.findByRole("option", { name: /真实模型/ }));
   await waitFor(() =>
     expect(
       screen.getByRole("combobox", { name: "生成模式" }).textContent,
@@ -394,7 +394,7 @@ it("画布紧凑呈现等新节点保存但不物化空输入，重渲染不重�
   expect(editor.getAttribute("data-placeholder")).toBe("描述创意，@ 引用素材");
   expect(editor.closest('[data-slot="input-group-control"]')).toBeTruthy();
   expect(
-    screen.getByRole("button", { name: "生成模型" }).textContent,
+    screen.getByRole("combobox", { name: "生成模型" }).textContent,
   ).toContain("真实模型");
   expect(screen.queryByRole("combobox", { name: "生成模式" })).toBeNull();
   expect(screen.getByText("全能参考")).toBeTruthy();
@@ -840,7 +840,7 @@ it("模型目录503仍能输入和保存，局部重试恢复模型且保留正�
     expect(screen.queryByText("模型目录暂不可用")).toBeNull(),
   );
   expect(
-    screen.getByRole("button", { name: "生成模型" }).textContent,
+    screen.getByRole("combobox", { name: "生成模型" }).textContent,
   ).toContain("真实模型");
   expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
   expect(canvas.onChange.mock.calls.at(-1)?.[0]).toEqual(edited);
@@ -1254,11 +1254,13 @@ it("助手紧凑展示保持提示词草稿归属并经正式报价后确认发�
     await screen.findByRole("button", { name: "从本地、画布或资产库添加" }),
   ).toBeTruthy();
   expect(screen.queryByRole("combobox", { name: "生成模式" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "生成模型" })).toBeNull();
+  expect(screen.queryByRole("combobox", { name: "生成模型" })).toBeNull();
   expect(screen.queryByText("全能参考")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "模型与参数" }));
-  fireEvent.click(await screen.findByRole("button", { name: "生成模型" }));
-  fireEvent.click(await screen.findByRole("option", { name: "真实模型" }));
+  fireEvent.keyDown(await screen.findByRole("combobox", { name: "生成模型" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: /真实模型/ }));
   await waitFor(() =>
     expect(
       api.save.mock.calls.some(
@@ -1707,14 +1709,18 @@ it("首页取消报价后继续编辑，第二次检查费用仍打开确认弹�
   const editor = await screen.findByRole("textbox", { name: "创作提示词" });
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "生成模型" }).hasAttribute("disabled"),
+      screen
+        .getByRole("combobox", { name: "生成模型" })
+        .hasAttribute("disabled"),
     ).toBe(false),
   );
-  fireEvent.click(screen.getByRole("button", { name: "生成模型" }));
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "生成模型" }), {
+    key: "ArrowDown",
+  });
   fireEvent.click(await screen.findByRole("option", { name: /真实模型/ }));
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "生成模型" }).textContent,
+      screen.getByRole("combobox", { name: "生成模型" }).textContent,
     ).toContain("真实模型"),
   );
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));

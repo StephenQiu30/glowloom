@@ -112,6 +112,14 @@ export function ConversationComposer({
   const unknown = c.phase === "unknown",
     submitting = c.phase === "submitting";
   const hasInput = !!draftText(c.draft).trim() || c.draft.references.length > 0;
+  function openSkillShortcut() {
+    skillsFromEditor.current = true;
+    setSkillsOpen(true);
+  }
+  function mention() {
+    session?.editor.commands.focus();
+    session?.editor.commands.insertContent("@");
+  }
   const label = c.active
     ? c.stopping
       ? "正在停止"
@@ -130,7 +138,7 @@ export function ConversationComposer({
         : !hasInput;
   return (
     <div
-      className="conversation-composer relative w-full rounded-[24px] border bg-card p-4 text-left data-[welcome=true]:md:py-[15px]"
+      className="conversation-composer creation-input-surface relative w-full p-4 text-left"
       data-welcome={welcome}
       role="group"
       aria-label="创作输入"
@@ -165,7 +173,7 @@ export function ConversationComposer({
       <div
         data-slot="conversation-reference-input"
         data-expanded={expanded}
-        className="flex min-h-[84px] min-w-0 items-start gap-3"
+        className="flex min-w-0 items-start gap-3"
       >
         {session ? (
           <ReferenceControls
@@ -188,7 +196,7 @@ export function ConversationComposer({
         )}
         <div
           data-slot="conversation-prompt"
-          className={`min-w-0 flex-1 overflow-y-auto ${expanded ? "h-[min(50dvh,24rem)]" : "h-[84px]"}`}
+          className={`min-w-0 flex-1 overflow-y-auto ${expanded ? "h-[min(50dvh,24rem)]" : "h-(--creation-prompt-height)"}`}
           onKeyDownCapture={(event) => {
             const selection = session?.editor.state.selection;
             if (
@@ -202,8 +210,7 @@ export function ConversationComposer({
               selection.$from.parent.content.size === 0
             ) {
               event.preventDefault();
-              skillsFromEditor.current = true;
-              setSkillsOpen(true);
+              openSkillShortcut();
             }
           }}
         >
@@ -212,8 +219,34 @@ export function ConversationComposer({
             contextKey={contextKey}
             replicaId={replicaID}
             draft={initial}
-            placeholder="输入想法、剧本或添加参考，支持 / 使用技能，@ 添加主体"
-            className="prompt-editor h-full min-h-[84px] outline-none"
+            placeholder="输入想法、剧本或上传参考，支持 / 使用技能，@ 添加主体，和 Agent 一起创作"
+            placeholderContent={
+              <>
+                输入想法、剧本或上传参考，支持{" "}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="使用技能快捷入口"
+                  onClick={openSkillShortcut}
+                >
+                  /
+                </Button>{" "}
+                使用技能，{" "}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="添加主体快捷入口"
+                  disabled={!session}
+                  onClick={mention}
+                >
+                  @
+                </Button>{" "}
+                添加主体，和 Agent 一起创作
+              </>
+            }
+            className="prompt-editor min-h-(--creation-prompt-height)"
             inputGroup
             onReady={setSession}
             onChange={(snapshot) => {
@@ -404,10 +437,7 @@ export function ConversationComposer({
           size="toolbar-icon"
           aria-label="添加主体或素材引用"
           disabled={!session}
-          onClick={() => {
-            session?.editor.commands.focus();
-            session?.editor.commands.insertContent("@");
-          }}
+          onClick={mention}
         >
           <AtSign className="size-4" />
         </Button>
@@ -433,10 +463,11 @@ export function ConversationComposer({
         >
           <span className="sr-only">对话模型</span>
           <ModelPicker
+            compact
             label="对话模型"
             models={c.models}
             value={c.model?.current_version?.id}
-            disabled={!authorized}
+            disabled={c.denied}
             onChooseProject={authorized ? undefined : onChooseProject}
             onSelect={(model) =>
               c.changeSettings({ ...c.settings, modelKey: model.key })

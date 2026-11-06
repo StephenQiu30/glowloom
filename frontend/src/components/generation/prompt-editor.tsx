@@ -2,7 +2,7 @@
 
 import type { Transaction } from "@tiptap/pm/state";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { EditorContent } from "@tiptap/react";
 import { cn } from "cn";
 import { useEditorSurface } from "./editor-surface";
@@ -23,6 +23,7 @@ export function PromptEditor({
   onRequestSubmit,
   onChange,
   placeholder,
+  placeholderContent,
   className,
   inputGroup = false,
   editable = true,
@@ -35,6 +36,7 @@ export function PromptEditor({
   onRequestSave?: (snapshot: ComposerSnapshot) => void;
   onRequestSubmit?: () => void;
   placeholder?: string;
+  placeholderContent?: ReactNode;
   className?: string;
   inputGroup?: boolean;
   editable?: boolean;
@@ -50,7 +52,10 @@ export function PromptEditor({
     [options.contextKey, options.replicaId],
     {
       "aria-label": label,
-      ...(placeholder === undefined ? {} : { "data-placeholder": placeholder }),
+      ...(placeholder === undefined
+        ? {}
+        : { "data-placeholder": placeholder, "aria-placeholder": placeholder }),
+      ...(placeholderContent ? { "data-placeholder-custom": "" } : {}),
       ...(className === undefined
         ? {}
         : { class: cn("prompt-editor", className) }),
@@ -76,5 +81,12 @@ export function PromptEditor({
     };
   }, [editor, onRequestSave, onRequestSubmit, onChange, options.collaboration]);
 
-  return <EditorContent editor={editor} className="w-full min-w-0 flex-1" />;
+  if (!placeholderContent)
+    return <EditorContent editor={editor} className="w-full min-w-0 flex-1" />;
+  return (
+    <div className="prompt-with-hint relative w-full min-w-0 flex-1">
+      <EditorContent editor={editor} />
+      <div className="prompt-inline-hint">{placeholderContent}</div>
+    </div>
+  );
 }

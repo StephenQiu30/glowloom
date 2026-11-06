@@ -337,7 +337,7 @@ function ScopedHomeCreation() {
                     <Field>
                       <InputGroup
                         variant="composer"
-                        className="creation-composer"
+                        className="creation-input-surface creation-composer"
                       >
                         <div
                           className={
