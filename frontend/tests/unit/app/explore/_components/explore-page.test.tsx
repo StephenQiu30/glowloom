@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { ExplorePage } from "@/app/explore/_components/explore-page";
 import { PageToolbarContext } from "@/components/layout/page-toolbar";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 afterEach(cleanup);
 
 function selectCategory(name: string) {

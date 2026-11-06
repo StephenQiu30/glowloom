@@ -1,11 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Fragment, useState } from "react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { ContentState } from "@/components/layout/content-state";
 import { ExploreReferenceExamples } from "@/components/inspiration/gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { exploreCategories } from "./explore-categories";
 import { OverflowNavigation } from "./overflow-navigation";
@@ -13,7 +15,7 @@ import styles from "./explore.module.css";
 
 export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
   const [search, setSearch] = useState(initialQuery);
-  const [query, setQuery] = useState(initialQuery);
+  const router = useRouter();
   const [selection, setSelection] = useState({
     category: exploreCategories[0].id,
     scene: exploreCategories[0].scenes[0].id,
@@ -27,11 +29,15 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
     <PageLayout
       screen="explore"
       search={{
+        mode: "explore",
         value: search,
         onValueChange: setSearch,
-        onSearch: setQuery,
-        label: "搜索示例作品",
-        placeholder: "搜索广告营销中的示例作品",
+        onSearch: (value) =>
+          router.push(
+            `/explore/search?result=${encodeURIComponent(value)}&type=${category.kind === "skill" ? "skill" : ["work.drama", "work.film", "work.animation"].includes(category.id) ? "shortFilm" : "inspiration"}`,
+          ),
+        label: "搜索",
+        placeholder: "搜索",
       }}
     >
       <h1 className="sr-only">探索</h1>
@@ -49,18 +55,19 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
         <PageToolbar inHeader>
           <OverflowNavigation label="探索分类" primary>
             <TabsList
-              variant="pill"
+              variant="line"
               className={styles.categories}
               aria-label="探索分类"
             >
               {exploreCategories.map((item) => (
                 <Fragment key={item.id}>
                   {item.id === "skill" && (
-                    <span aria-hidden="true" className={styles.divider} />
+                    <Separator
+                      orientation="vertical"
+                      className="mx-1 h-3.5 shrink-0"
+                    />
                   )}
-                  <TabsTrigger value={item.id} className={styles.category}>
-                    {item.label}
-                  </TabsTrigger>
+                  <TabsTrigger value={item.id}>{item.label}</TabsTrigger>
                 </Fragment>
               ))}
             </TabsList>
@@ -86,11 +93,7 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
                   }}
                 >
                   {category.scenes.map((item) => (
-                    <ToggleGroupItem
-                      key={item.id}
-                      value={item.id}
-                      className={styles.scene}
-                    >
+                    <ToggleGroupItem key={item.id} value={item.id}>
                       {item.label}
                     </ToggleGroupItem>
                   ))}
@@ -99,7 +102,7 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
             </div>
           )}
           {category.id === "work.advertising" && scene ? (
-            <ExploreReferenceExamples scene={scene.label} query={query} />
+            <ExploreReferenceExamples scene={scene.label} query="" />
           ) : (
             <ContentState
               title={`${category.kind === "skill" ? "技能" : category.kind === "activity" ? "活动" : "作品"}尚未开放`}

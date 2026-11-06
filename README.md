@@ -65,7 +65,7 @@ docker compose ps
 
 首次启动成功后，打开工作台；需要私人素材、主体、画布或生成时，使用有效账号登录，并按对象权限访问。容器健康不等于真实生成能力已验收。
 
-`docker-compose.yml` 是应用唯一启动入口，包含 `frontend`、`backend`、`agent` 和 `canvas`。前端运行镜像内的 Next.js standalone 构建，完整启动时等待后端健康。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动。仅更新后端时执行：
+`docker-compose.yml` 是应用的基础部署配置，包含 `frontend`、`backend`、`agent` 和 `canvas`。前端运行镜像内的 Next.js standalone 构建，完整启动时等待后端健康。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动。仅更新后端时执行：
 
 ```sh
 docker compose up -d --build --wait backend
@@ -79,6 +79,18 @@ docker compose up -d --build --no-deps --wait frontend
 ```
 
 已有可用镜像时，单独启动前端可用 `docker compose up -d --no-build --no-deps --wait frontend`。在当前服务上执行 `docker compose ps` 并访问两个端口的 `/healthz` 即可确认启动状态。
+
+### 本地开发与热更新
+
+在仓库根目录使用 Docker Compose 2.32.0 或更高版本启动开发模式：
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build --watch
+```
+
+保存 `frontend/src` 或 `frontend/public` 下的文件后，Compose 将改动同步到 Next.js 开发容器。页面组件由 Fast Refresh 更新。前端依赖、配置或共享画布包变更时重建前端镜像。Go、Agent 和画布协作的源码变更会重建对应镜像并替换容器，期间该服务会短暂中断。
+
+开发模式沿用同一个 Compose 项目和本地端口。结束开发模式后，执行 `docker compose up -d --build --wait` 可切回普通镜像。
 
 <details>
 <summary>配置、数据库初始化与运行注意事项</summary>

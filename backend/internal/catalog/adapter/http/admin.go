@@ -96,7 +96,7 @@ type adminCursor struct {
 	Binding    string    `json:"binding"`
 }
 
-func adminPage(c *gin.Context, kind string, extraFilters ...string) (int, *adminCursor, string, bool) {
+func adminPage(c *gin.Context, kind string, filterKeys ...string) (int, *adminCursor, string, bool) {
 	limit := 50
 	if raw := c.Query("limit"); raw != "" {
 		value, err := strconv.Atoi(raw)
@@ -107,11 +107,11 @@ func adminPage(c *gin.Context, kind string, extraFilters ...string) (int, *admin
 		limit = value
 	}
 	actor := identityhttp.Principal(c)
-	key := actor.ID.String() + "/" + actor.OrgID.String() + "/" + kind + "/" + c.Query("provider_id") + "/" + strconv.Itoa(limit)
-	for _, filter := range extraFilters {
-		key += "/" + url.QueryEscape(c.Query(filter))
+	filters := url.Values{}
+	for _, key := range filterKeys {
+		filters.Set(key, c.Query(key))
 	}
-	digest := sha256.Sum256([]byte(key))
+	digest := sha256.Sum256([]byte(actor.ID.String() + "/" + actor.OrgID.String() + "/" + kind + "/" + strconv.Itoa(limit) + "/" + filters.Encode()))
 	binding := hex.EncodeToString(digest[:])
 	if raw := c.Query("cursor"); raw != "" {
 		body, err := base64.RawURLEncoding.DecodeString(raw)
@@ -166,17 +166,20 @@ func adminError(c *gin.Context, err error) {
 // @Tags settings
 // @Produce json
 // @Param limit query integer false "1..200"
-// @Param cursor query string false "绑定管理员与分页的不透明游标"
+// @Param cursor query string false "绑定管理员与筛选条件的不透明游标"
+// @Param name query string false "连接名称关键词"
+// @Param adapter_key query string false "供应商标识"
+// @Param status query string false "active、disabled 或 archived"
 // @Success 200 {object} ProviderPage
 // @Failure 403 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/admin/providers [get]
 func (h *AdminHandler) ListProviders(c *gin.Context) {
-	limit, cursor, binding, ok := adminPage(c, "providers")
+	limit, cursor, binding, ok := adminPage(c, "providers", "name", "adapter_key", "status")
 	if !ok {
 		return
 	}
-	input := application.ListProvidersInput{Limit: limit}
+	input := application.ListProvidersInput{Limit: limit, Name: c.Query("name"), AdapterKey: c.Query("adapter_key"), Status: domain.ProviderStatus(c.Query("status"))}
 	if cursor != nil {
 		input.After = &application.ProviderListCursor{ID: cursor.ID, CreateTime: cursor.CreateTime}
 	}
@@ -420,6 +423,9 @@ func (h *AdminHandler) Capabilities(c *gin.Context) {
 // @Param limit query integer false "1..200"
 // @Param cursor query string false "分页游标"
 // @Param provider_id query string false "供应商连接 ID"
+// @Param name query string false "模型名称或标识关键词"
+// @Param capability query string false "模型能力标识"
+// @Param status query string false "active、archived、disabled、unconfigured、unverified 或 price_pending"
 // @Param pricing_review query boolean false "仅查看已安装预设的计价审核"
 // @Param billing_status query string false "billable、price_pending、usage_pending 或 inactive"
 // @Success 200 {object} AdminModelPage
@@ -427,7 +433,7 @@ func (h *AdminHandler) Capabilities(c *gin.Context) {
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/admin/models [get]
 func (h *AdminHandler) ListModels(c *gin.Context) {
-	limit, cursor, binding, ok := adminPage(c, "models", "pricing_review", "billing_status")
+	limit, cursor, binding, ok := adminPage(c, "models", "provider_id", "name", "capability", "status", "pricing_review", "billing_status")
 	if !ok {
 		return
 	}
@@ -436,7 +442,7 @@ func (h *AdminHandler) ListModels(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	input := application.AdminModelListInput{Limit: limit,
+	input := application.AdminModelListInput{Limit: limit, Name: c.Query("name"), Capability: c.Query("capability"), Status: c.Query("status"),
 		PricingReview: review == "true", BillingStatus: c.Query("billing_status")}
 	if raw := c.Query("provider_id"); raw != "" {
 		id, err := uuid.Parse(raw)

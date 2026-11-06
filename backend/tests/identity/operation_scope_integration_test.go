@@ -116,13 +116,13 @@ func TestCatalogPlatformEpochAndProjectScope(t *testing.T) {
 	if _, err := store.ListModelsForProject(t.Context(), a, catalog.ListModelsInput{ProjectID: project, Limit: 1}); err != nil {
 		t.Fatalf("team model availability: %v", err)
 	}
-	if _, err := store.ListProvidersForAdmin(t.Context(), a, 1, nil); err == nil {
+	if _, err := store.ListProvidersForAdmin(t.Context(), a, catalog.ListProvidersInput{Limit: 1}); err == nil {
 		t.Fatal("legacy role became platform admin")
 	}
 	if err := tx.Exec(`UPDATE identity."user" SET platform_role='platform_admin' WHERE id=?`, a.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ListProvidersForAdmin(t.Context(), a, 1, nil); err != nil {
+	if _, err := store.ListProvidersForAdmin(t.Context(), a, catalog.ListProvidersInput{Limit: 1}); err != nil {
 		t.Fatalf("live platform administrator: %v", err)
 	}
 	request := catalog.CredentialTestRequest{TestID: uuid.New(), ProviderID: uuid.New(), CredentialID: uuid.New(), ActorID: a.ID, OrgID: a.OrgID, RequestID: uuid.NewString()}
@@ -141,7 +141,7 @@ func TestCatalogPlatformEpochAndProjectScope(t *testing.T) {
 	if err := tx.Exec(`UPDATE identity."user" SET platform_epoch=platform_epoch+1 WHERE id=?`, a.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ListProvidersForAdmin(t.Context(), a, 1, nil); err == nil {
+	if _, err := store.ListProvidersForAdmin(t.Context(), a, catalog.ListProvidersInput{Limit: 1}); err == nil {
 		t.Fatal("stale platform epoch accepted")
 	}
 	if err := store.VerifyCredentialTestRequest(t.Context(), request, eventID); err == nil {

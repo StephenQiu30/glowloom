@@ -72,6 +72,7 @@ export function ConnectionDetail({
   onSaved,
   onReview,
   revision = 0,
+  initialRename = false,
   initialModel,
   initialRelease,
   initialMode,
@@ -79,6 +80,7 @@ export function ConnectionDetail({
 }: {
   id: string;
   revision?: number;
+  initialRename?: boolean;
   initialModel?: string;
   initialRelease?: string;
   initialMode?: string;
@@ -92,6 +94,7 @@ export function ConnectionDetail({
   const [apiKey, setAPIKey] = useState("");
   const [accessKeyID, setAccessKeyID] = useState("");
   const [visible, setVisible] = useState(false);
+  const [renaming, setRenaming] = useState(initialRename);
   const [editKey, setEditKey] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [error, setError] = useState("");
@@ -212,6 +215,17 @@ export function ConnectionDetail({
                   ? "已启用"
                   : "未启用"}
             </Badge>
+            {!renaming ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={keyBusy}
+                onClick={() => setRenaming(true)}
+              >
+                编辑名称
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </header>
@@ -239,6 +253,68 @@ export function ConnectionDetail({
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
+          ) : null}
+          {renaming ? (
+            <form
+              key={provider.revision}
+              className="flex flex-col gap-2"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const value = new FormData(event.currentTarget).get("name");
+                if (
+                  keyBusy ||
+                  typeof value !== "string" ||
+                  !value.trim() ||
+                  value.trim() === name
+                )
+                  return;
+                const saved = await mutation.run(
+                  "provider.update",
+                  id,
+                  (requestID) =>
+                    updateAdminProvider(
+                      { id },
+                      {
+                        name: value.trim(),
+                        expected_revision: provider.revision,
+                      },
+                      { headers: { "Idempotency-Key": requestID } },
+                    ),
+                );
+                if (saved) setRenaming(false);
+              }}
+            >
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-name`}>
+                  连接名称
+                </FieldLabel>
+                <Input
+                  id={`${formFieldId}-name`}
+                  name="name"
+                  defaultValue={name}
+                  required
+                  maxLength={100}
+                  disabled={keyBusy}
+                />
+              </Field>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={mutation.busy}
+                  onClick={() => setRenaming(false)}
+                >
+                  取消
+                </Button>
+                <Button
+                  variant="outline"
+                  className="self-end"
+                  disabled={keyBusy}
+                >
+                  保存连接名称
+                </Button>
+              </div>
+            </form>
           ) : null}
           {archived ? null : !credentialID || editKey ? (
             <form
@@ -462,52 +538,6 @@ export function ConnectionDetail({
                 ) : null}
                 {!archived ? archiveAction : null}
               </Toolbar>
-              <form
-                key={provider.revision}
-                className="flex flex-col gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const value = new FormData(event.currentTarget).get("name");
-                  if (
-                    keyBusy ||
-                    typeof value !== "string" ||
-                    !value.trim() ||
-                    value.trim() === name
-                  )
-                    return;
-                  void mutation.run("provider.update", id, (requestID) =>
-                    updateAdminProvider(
-                      { id },
-                      {
-                        name: value.trim(),
-                        expected_revision: provider.revision,
-                      },
-                      { headers: { "Idempotency-Key": requestID } },
-                    ),
-                  );
-                }}
-              >
-                <Field>
-                  <FieldLabel htmlFor={`${formFieldId}-name`}>
-                    连接名称
-                  </FieldLabel>
-                  <Input
-                    id={`${formFieldId}-name`}
-                    name="name"
-                    defaultValue={name}
-                    required
-                    maxLength={100}
-                    disabled={keyBusy}
-                  />
-                </Field>
-                <Button
-                  variant="outline"
-                  className="self-end"
-                  disabled={keyBusy}
-                >
-                  保存连接名称
-                </Button>
-              </form>
               {settingsError ? (
                 <Alert variant="destructive">
                   <AlertDescription>

@@ -34,10 +34,10 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
-		query := `SELECT m.id,m.model_key,m.provider_id,m.capability,m.display_name,m.status,m.current_version_id,m.revision,m.create_time,m.update_time,
+		query := `WITH models AS (SELECT m.id,m.model_key,m.provider_id,m.capability,m.display_name,m.status,m.current_version_id,m.revision,m.create_time,m.update_time,
 			EXISTS(SELECT 1 FROM catalog.model_release r WHERE r.model_id=m.id AND r.status IN ('active','retired')) AS has_publication,
 			EXISTS(SELECT 1 FROM catalog.price_rule_version p WHERE p.model_profile_id=m.id AND NOT p.is_delete) AS has_price
-			FROM catalog.model_profile m WHERE NOT m.is_delete`
+			FROM catalog.model_profile m WHERE NOT m.is_delete) SELECT * FROM models AS m WHERE TRUE`
 		args := []any{}
 		if input.PricingReview {
 			query = adminPresetPricingQuery
@@ -50,6 +50,21 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 		if input.ProviderID != uuid.Nil {
 			query += ` AND m.provider_id=?`
 			args = append(args, input.ProviderID)
+		}
+		if input.Name != "" {
+			query += ` AND (strpos(lower(m.display_name), lower(?)) > 0 OR strpos(lower(m.model_key), lower(?)) > 0)`
+			args = append(args, input.Name, input.Name)
+		}
+		if input.Capability != "" {
+			query += ` AND m.capability = ?`
+			args = append(args, input.Capability)
+		}
+		if input.Status != "" {
+			query += ` AND (CASE WHEN m.status <> 'disabled' OR m.has_publication THEN m.status
+    WHEN m.current_version_id IS NULL THEN 'unconfigured'
+    WHEN m.has_price THEN 'unverified'
+    ELSE 'price_pending' END) = ?`
+			args = append(args, input.Status)
 		}
 		if input.After != nil {
 			query += ` AND (model_key,id)>(?,?::uuid)`

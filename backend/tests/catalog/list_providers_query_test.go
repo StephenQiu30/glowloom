@@ -21,8 +21,8 @@ type listProvidersStore struct {
 	called bool
 }
 
-func (s *listProvidersStore) ListProvidersForAdmin(_ context.Context, _ identityapp.Principal, limit int, after *catalogapp.ProviderListCursor) (catalogapp.ProviderListPage, error) {
-	s.called, s.limit, s.after = true, limit, after
+func (s *listProvidersStore) ListProvidersForAdmin(_ context.Context, _ identityapp.Principal, input catalogapp.ListProvidersInput) (catalogapp.ProviderListPage, error) {
+	s.called, s.limit, s.after = true, input.Limit, input.After
 	return catalogapp.ProviderListPage{Providers: []catalogapp.ProviderListItem{}}, nil
 }
 

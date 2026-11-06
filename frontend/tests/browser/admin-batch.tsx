@@ -47,7 +47,7 @@ const models = ["对话模型", "图像模型", "视频模型"].map((display_nam
   revision: 1,
   model_key: `model-${i}`,
   capability: ["text.generate", "image.generate", "video.generate"][i],
-  status: i === 2 ? "draft" : "active",
+  status: i === 2 ? "disabled" : "active",
 }));
 const receipts = new Map<string, unknown>();
 let loseResponse = new URLSearchParams(location.search).has("lost");
@@ -107,7 +107,12 @@ axios.defaults.adapter = async (config) => {
     };
   else if (path === "/api/admin/models")
     data = { items: models, next_cursor: "" };
-  else if (path === "/api/admin/provider-presets") data = { items: [] };
+  else if (
+    path === "/api/admin/provider-presets" ||
+    path === "/api/admin/capability-defaults" ||
+    path.endsWith("/releases")
+  )
+    data = { items: [] };
   else if (path === "/api/admin/provider-adapters") data = [];
   else if (path === "/api/admin/capabilities")
     data = [

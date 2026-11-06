@@ -1,11 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { MoreHorizontal } from "lucide-react";
-import type { Dispatch, SetStateAction } from "react";
-import {
-  DataTable,
-  type DataTableColumn,
-} from "@/components/canvas/runtime/components/account/list/data-table";
+import type { AdminTableColumn } from "@/components/governance/admin-table";
 import type { ConnectionRow } from "@/components/governance/batch-actions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -56,33 +53,27 @@ function KeySummary({
     </span>
   );
 }
-export function ConnectionList({
+export type ConnectionFilter = "name" | "adapter_key" | "status";
+
+export function useConnectionColumns({
   adapters,
-  items,
   onSelect,
   onDelete,
   pendingCredential,
-  visibility,
-  selection,
   disabled,
 }: {
   adapters?: API.AdapterMetadata[];
   pendingCredential?: string;
-  visibility: Record<string, boolean>;
-  items: ConnectionRow[];
-  onSelect: (id: string, trigger: HTMLElement) => void;
+  onSelect: (id: string, trigger: HTMLElement, rename?: boolean) => void;
   onDelete?: (row: ConnectionRow, trigger: HTMLElement | null) => void;
-  selection: {
-    selected: ConnectionRow[];
-    onChange: Dispatch<SetStateAction<ConnectionRow[]>>;
-  };
   disabled?: boolean;
 }) {
   const mobile = useIsMobile();
-  const columns: DataTableColumn<ConnectionRow>[] = [
+  const columns: AdminTableColumn<ConnectionRow, ConnectionFilter>[] = [
     {
       id: "name",
       header: "连接名称",
+      filter: { name: "name", type: "text", placeholder: "输入连接名称" },
       cell: ({ row }) => {
         const name = providerConnectionName(row.original.provider);
         return (
@@ -115,7 +106,22 @@ export function ConnectionList({
                 ? `${providerLabel(row.original.provider?.adapter_key, adapters)} · `
                 : ""}
               {regionLabel(row.original.provider?.region)}
-              {mobile ? ` · ${row.original.model_count ?? 0} 个模型` : ""}
+              {mobile ? (
+                <>
+                  {" "}
+                  · <KeySummary credential={row.original.credential} /> ·{" "}
+                  {disabled ? (
+                    `${row.original.model_count ?? 0} 个模型`
+                  ) : (
+                    <Link
+                      className="underline underline-offset-2"
+                      href={`/models?provider=${encodeURIComponent(row.original.id)}`}
+                    >
+                      {row.original.model_count ?? 0} 个模型
+                    </Link>
+                  )}
+                </>
+              ) : null}
             </span>
           </div>
         );
@@ -124,6 +130,21 @@ export function ConnectionList({
     {
       id: "adapter",
       header: "供应商",
+      settings: { hideOnMobile: true },
+      filter: {
+        name: "adapter_key",
+        type: "select",
+        options: (adapters ?? []).flatMap(({ adapter_key }) =>
+          adapter_key
+            ? [
+                {
+                  value: adapter_key,
+                  label: providerLabel(adapter_key, adapters),
+                },
+              ]
+            : [],
+        ),
+      },
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <ProviderLogo
@@ -141,11 +162,32 @@ export function ConnectionList({
     {
       id: "models",
       header: "接入模型",
-      cell: ({ row }) => `${row.original.model_count ?? 0} 个模型`,
+      settings: { hideOnMobile: true },
+      cell: ({ row }) =>
+        disabled ? (
+          `${row.original.model_count ?? 0} 个模型`
+        ) : (
+          <Button asChild variant="link" className="h-auto p-0">
+            <Link
+              href={`/models?provider=${encodeURIComponent(row.original.id)}`}
+            >
+              {row.original.model_count ?? 0} 个模型
+            </Link>
+          </Button>
+        ),
     },
     {
       id: "status",
       header: "状态",
+      filter: {
+        name: "status",
+        type: "select",
+        options: [
+          { value: "active", label: "已启用" },
+          { value: "disabled", label: "未启用" },
+          { value: "archived", label: "已归档" },
+        ],
+      },
       cell: ({ row }) => (
         <Badge variant="secondary">
           {pendingCredential === row.original.id
@@ -161,11 +203,13 @@ export function ConnectionList({
     {
       id: "credential",
       header: "配置状态",
+      settings: { hideOnMobile: true },
       cell: ({ row }) => <KeySummary credential={row.original.credential} />,
     },
     {
       id: "check",
       header: "最近检查",
+      settings: { defaultVisible: false, hideOnMobile: true },
       cell: ({ row }) =>
         row.original.credential?.status === "disabled"
           ? "Key 已停用"
@@ -192,22 +236,33 @@ export function ConnectionList({
               ? "管理"
               : "配置"}
           </Button>
-          {onDelete ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  id={`provider-actions-${row.original.id}`}
-                  variant="ghost"
-                  size="icon-sm"
-                  className="max-md:size-11"
-                  disabled={disabled}
-                  aria-label={`${providerConnectionName(row.original.provider)}的更多操作`}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                id={`provider-actions-${row.original.id}`}
+                data-connection-trigger={`${row.original.id}:actions`}
+                variant="ghost"
+                size="icon-sm"
+                className="max-md:size-11"
+                disabled={disabled}
+                aria-label={`${providerConnectionName(row.original.provider)}的更多操作`}
+              >
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    const trigger = document.getElementById(
+                      `provider-actions-${row.original.id}`,
+                    );
+                    if (trigger) onSelect(row.original.id, trigger, true);
+                  }}
                 >
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuGroup>
+                  编辑名称
+                </DropdownMenuItem>
+                {onDelete ? (
                   <DropdownMenuItem
                     onSelect={() =>
                       onDelete(
@@ -220,33 +275,13 @@ export function ConnectionList({
                   >
                     删除连接
                   </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
+                ) : null}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
   ];
-  return (
-    <DataTable
-      density="comfortable"
-      label="连接列表"
-      columns={columns}
-      data={items}
-      emptyTitle="没有匹配的连接"
-      columnVisibility={{
-        adapter: !mobile && visibility.adapter !== false,
-        models: !mobile && visibility.models !== false,
-        credential: !mobile && visibility.credential !== false,
-        check: !mobile && visibility.check !== false,
-      }}
-      selection={{
-        ...selection,
-        getLabel: (r) => providerConnectionName(r.provider) ?? r.id,
-        pageLabel: "选择当前页全部连接",
-        disabled,
-      }}
-    />
-  );
+  return columns;
 }

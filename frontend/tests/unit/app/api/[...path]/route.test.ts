@@ -799,7 +799,10 @@ it.each([
     "projects/11111111-1111-4111-8111-111111111111/prompt-drafts",
     "cursor=next%2Bpage",
   ],
-  ["admin/providers", "limit=10&cursor=next%2Bpage"],
+  [
+    "admin/providers",
+    "limit=10&cursor=next%2Bpage&name=OpenAI&adapter_key=openai&status=active",
+  ],
   [
     "admin/config-requests/11111111-1111-4111-8111-111111111111",
     "action=provider.create&target_id=zero",
@@ -1393,7 +1396,9 @@ it("代理按连接筛选模型及只读草稿配置验证", async () => {
   expect(
     (
       await GET(
-        new Request(`http://localhost/api/${list}?provider_id=${id}`),
+        new Request(
+          `http://localhost/api/${list}?provider_id=${id}&name=Seed&capability=image.generate&status=price_pending`,
+        ),
         context(list),
       )
     ).status,
@@ -1401,6 +1406,13 @@ it("代理按连接筛选模型及只读草稿配置验证", async () => {
   expect(
     (fetcher.mock.calls[0]?.[0] as URL).searchParams.get("provider_id"),
   ).toBe(id);
+  const filters = (fetcher.mock.calls[0]?.[0] as URL).searchParams;
+  expect(Object.fromEntries(filters)).toEqual({
+    provider_id: id,
+    name: "Seed",
+    capability: "image.generate",
+    status: "price_pending",
+  });
   expect(
     (await GET(new Request(`http://localhost/api/${check}`), context(check)))
       .status,

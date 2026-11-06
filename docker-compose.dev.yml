@@ -1,0 +1,75 @@
+# Explicit overlay for the local edit-and-preview loop.
+services:
+  frontend:
+    image: glowloom/frontend:dev
+    build:
+      target: dev
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend/src
+          target: /app/src
+          initial_sync: true
+        - action: sync
+          path: ./frontend/public
+          target: /app/public
+          initial_sync: true
+        - action: rebuild
+          path: ./frontend
+          ignore:
+            - src/
+            - public/
+            - tests/
+            - node_modules/
+            - .next/
+            - coverage/
+            - '*.tsbuildinfo'
+            - .env*
+        - action: rebuild
+          path: ./canvas/src
+        - action: rebuild
+          path: ./canvas/types
+        - action: rebuild
+          path: ./canvas/package.json
+        - action: rebuild
+          path: ./canvas/pnpm-lock.yaml
+        - action: rebuild
+          path: ./canvas/tsconfig.json
+        - action: rebuild
+          path: ./backend/internal/prompt/domain/cinema_catalog.json
+
+  backend:
+    image: glowloom/backend:dev
+    develop:
+      watch:
+        - action: rebuild
+          path: ./backend
+          ignore:
+            - db/
+            - tests/
+
+  agent:
+    image: glowloom/agent:dev
+    develop:
+      watch:
+        - action: rebuild
+          path: ./agent
+          ignore:
+            - node_modules/
+            - dist/
+            - coverage/
+            - tests/
+            - .env*
+
+  canvas:
+    image: glowloom/canvas:dev
+    develop:
+      watch:
+        - action: rebuild
+          path: ./canvas
+          ignore:
+            - node_modules/
+            - dist/
+            - coverage/
+            - tests/
+            - .env*

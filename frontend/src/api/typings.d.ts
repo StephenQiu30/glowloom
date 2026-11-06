@@ -3092,6 +3092,12 @@ declare namespace API {
     cursor?: string;
     /** 供应商连接 ID */
     provider_id?: string;
+    /** 模型名称或标识关键词 */
+    name?: string;
+    /** 模型能力标识 */
+    capability?: string;
+    /** active、archived、disabled、unconfigured、unverified 或 price_pending */
+    status?: string;
     /** 仅查看已安装预设的计价审核 */
     pricing_review?: boolean;
     /** billable、price_pending、usage_pending 或 inactive */
@@ -3101,8 +3107,14 @@ declare namespace API {
   type listAdminProvidersParams = {
     /** 1..200 */
     limit?: number;
-    /** 绑定管理员与分页的不透明游标 */
+    /** 绑定管理员与筛选条件的不透明游标 */
     cursor?: string;
+    /** 连接名称关键词 */
+    name?: string;
+    /** 供应商标识 */
+    adapter_key?: string;
+    /** active、disabled 或 archived */
+    status?: string;
   };
 
   type listAgentMessagesParams = {

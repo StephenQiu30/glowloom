@@ -81,7 +81,7 @@ export function SelectionBar({
   children,
 }: {
   count: number;
-  total: number;
+  total?: number;
   disabled?: boolean;
   onClear: () => void;
   children: ReactNode;
@@ -94,7 +94,8 @@ export function SelectionBar({
       aria-label="批量操作"
     >
       <span className="text-sm" aria-live="polite">
-        已选 {count} / {total} 项
+        已选 {count}
+        {total === undefined ? "" : ` / ${total}`} 项
       </span>
       <Button
         size="toolbar"

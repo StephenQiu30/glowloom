@@ -11,8 +11,10 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -130,11 +132,26 @@ VALUES (?,?,'text.generate','text_to_text','test','canvas','completed','domestic
 	if receipt, err := receipts.Read(ctx, actor, "provider.delete", provider.ID, input.RequestID); err != nil || len(receipt.Result) == 0 {
 		t.Fatalf("missing receipt: %+v %v", receipt, err)
 	}
-	var audits int
-	if err := conn.DB.Raw(`SELECT count(*) FROM infra.outbox
-WHERE topic='glowloom.audit.recorded.v1' AND payload->'data'->>'action'='provider.delete'
-AND payload->'data'->>'request_id'=?`, input.RequestID.String()).Scan(&audits).Error; err != nil || audits != 1 {
-		t.Fatalf("delete and replay wrote %d audits: %v", audits, err)
+	const auditTopic = "glowloom.audit.recorded.v1"
+	var audits []struct {
+		PartitionKey string
+		Payload      []byte
+	}
+	if err := conn.DB.Raw(`SELECT partition_key, payload FROM infra.outbox
+WHERE topic=? AND payload->'data'->>'action'='provider.delete'
+AND payload->'data'->>'request_id'=?`, auditTopic, input.RequestID.String()).Scan(&audits).Error; err != nil || len(audits) != 1 {
+		t.Fatalf("delete and replay wrote %d audits: %v", len(audits), err)
+	}
+	parsed, err := auditapp.NewRecordedActionParser().Parse(inboxapp.Record{
+		Topic: auditTopic,
+		Key:   []byte(audits[0].PartitionKey),
+		Value: audits[0].Payload,
+	})
+	if err != nil {
+		t.Fatalf("audit relay rejected provider deletion: %v", err)
+	}
+	if parsed.Action != "provider.delete" || parsed.ObjectID != provider.ID.String() || parsed.RequestID != input.RequestID.String() {
+		t.Errorf("audit relay parsed action %q, object %q, request %q", parsed.Action, parsed.ObjectID, parsed.RequestID)
 	}
 	exec(`UPDATE identity."user" SET platform_role='creator' WHERE id=?`, actor.ID)
 	if _, err := receipts.Read(ctx, actor, "provider.delete", provider.ID, input.RequestID); err == nil {

@@ -155,7 +155,7 @@ it("已配置密钥只提供更换入口，轮换输入和记录不显示尾号"
   expect(screen.queryByText(/abcd|5678|••••/)).toBeNull();
 });
 
-it("在连接设置中重命名未启用的连接", async () => {
+it("在连接详情顶部重命名未启用的连接", async () => {
   api.update.mockResolvedValue({
     id: "connection",
     name: "OpenRouter 备用",
@@ -163,7 +163,7 @@ it("在连接设置中重命名未启用的连接", async () => {
   });
   const onSaved = vi.fn();
   render(<ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />);
-  fireEvent.click(await screen.findByRole("button", { name: "连接设置" }));
+  fireEvent.click(await screen.findByRole("button", { name: "编辑名称" }));
   const input = await screen.findByLabelText("连接名称");
   fireEvent.change(input, { target: { value: "OpenRouter 备用" } });
   fireEvent.click(screen.getByRole("button", { name: "保存连接名称" }));

@@ -61,10 +61,16 @@ vi.mock("@/app/providers/_components/preset-connect", () => ({
   ),
 }));
 vi.mock("@/app/providers/_components/connection-detail", () => ({
-  ConnectionDetail: ({ Title = "h2" }: { Title?: React.ElementType }) => (
+  ConnectionDetail: ({
+    Title = "h2",
+    initialRename,
+  }: {
+    Title?: React.ElementType;
+    initialRename?: boolean;
+  }) => (
     <>
       <Title>连接详情</Title>
-      <div>连接详情内容</div>
+      <div>{initialRename ? "编辑名称表单" : "连接详情内容"}</div>
     </>
   ),
 }));
@@ -204,6 +210,34 @@ it.each(["creator", "admin", "team_admin"])(
     expect(api.presets).not.toHaveBeenCalled();
   },
 );
+
+it("连接筛选条件提交给服务端，切换预设后仍然保留", async () => {
+  api.role = "platform_admin";
+  render(<ProvidersPage />);
+  await screen.findByText("还没有连接");
+  const filter = within(screen.getByRole("form", { name: "服务连接筛选" }));
+  fireEvent.change(filter.getByLabelText("连接名称"), {
+    target: { value: "OpenAI" },
+  });
+  fireEvent.change(filter.getByLabelText("状态"), {
+    target: { value: "active" },
+  });
+  fireEvent.click(filter.getByRole("button", { name: "筛选" }));
+  await screen.findByText("没有匹配的连接");
+  expect(api.providers.mock.lastCall?.[0]).toEqual({
+    limit: 20,
+    cursor: undefined,
+    name: "OpenAI",
+    status: "active",
+  });
+  fireEvent.click(screen.getByRole("button", { name: "供应商预设" }));
+  expect(screen.queryByRole("form", { name: "服务连接筛选" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "返回 AI 服务接入" }));
+  await screen.findByText("没有匹配的连接");
+  expect((filter.getByLabelText("连接名称") as HTMLInputElement).value).toBe(
+    "OpenAI",
+  );
+});
 
 it("页头打开独立供应商预设列表并可返回连接", async () => {
   api.role = "platform_admin";
@@ -355,7 +389,10 @@ it("连接列表显示品牌名称和模型数，不将未启用连接称为已�
   expect(screen.queryByText(/••••|1234/)).toBeNull();
   expect(screen.getByRole("columnheader", { name: "供应商" })).toBeTruthy();
   expect(screen.getByRole("columnheader", { name: "接入模型" })).toBeTruthy();
-  expect(screen.queryByRole("columnheader", { name: "配置状态" })).toBeNull();
+  expect(screen.getByRole("columnheader", { name: "配置状态" })).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "8 个模型" }).getAttribute("href"),
+  ).toBe("/models?provider=connection");
   expect(screen.queryByRole("columnheader", { name: "最近检查" })).toBeNull();
   fireEvent.pointerDown(screen.getByRole("button", { name: "显示列" }), {
     button: 0,
@@ -365,12 +402,12 @@ it("连接列表显示品牌名称和模型数，不将未启用连接称为已�
     await screen.findByRole("menuitemcheckbox", { name: "配置状态" }),
   );
   fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
-  expect(screen.getByRole("columnheader", { name: "配置状态" })).toBeTruthy();
-  expect(screen.getByText("未启用")).toBeTruthy();
+  expect(screen.queryByRole("columnheader", { name: "配置状态" })).toBeNull();
+  expect(screen.getByRole("cell", { name: "未启用" })).toBeTruthy();
   expect(screen.queryByText("已停用")).toBeNull();
 });
 
-it("鼠标打开连接弹窗后关闭仍返回原行入口", async () => {
+it("更多操作中的改名直达编辑表单，关闭后恢复焦点", async () => {
   api.role = "platform_admin";
   api.providers.mockResolvedValue({
     items: [
@@ -381,13 +418,16 @@ it("鼠标打开连接弹窗后关闭仍返回原行入口", async () => {
     ],
   });
   render(<ProvidersPage />);
-  const trigger = await screen.findByRole("button", { name: "管理 OpenAI" });
-  fireEvent.click(trigger);
-  await screen.findByText("连接详情内容");
+  const trigger = await screen.findByRole("button", {
+    name: "OpenAI的更多操作",
+  });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑名称" }));
+  await screen.findByText("编辑名称表单");
   fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
   await waitFor(() =>
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "管理 OpenAI" }),
+      screen.getByRole("button", { name: "OpenAI的更多操作" }),
     ),
   );
 });

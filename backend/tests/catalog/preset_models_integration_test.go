@@ -204,4 +204,19 @@ func TestAddModelFromConnectedPreset(t *testing.T) {
 	require.Equal(t, connection.ProviderID, page.Items[0].ProviderID)
 	require.False(t, page.Items[0].HasPublication)
 	require.NotNil(t, page.Next)
+	require.NoError(t, conn.DB.Exec(`INSERT INTO catalog.price_rule_version
+		(id, model_profile_id, version_no, unit, rule, effective_from)
+		VALUES (?, ?, 1, 'per_request', '{}'::jsonb, now())`, uuid.New(), manual.ID).Error)
+	query := catalogapp.NewAdminModelsQuery(store)
+	inputPage := catalogapp.AdminModelListInput{Limit: 1, ProviderID: connection.ProviderID, Capability: "text.generate", Status: "unverified"}
+	priced, err := query.List(t.Context(), actor, inputPage)
+	require.NoError(t, err)
+	require.Len(t, priced.Items, 1)
+	require.Equal(t, manual.ID, priced.Items[0].ID)
+	require.Nil(t, priced.Next)
+	inputPage.Status = "price_pending"
+	unpriced, err := query.List(t.Context(), actor, inputPage)
+	require.NoError(t, err)
+	require.Len(t, unpriced.Items, 1)
+	require.Equal(t, model.ID, unpriced.Items[0].ID)
 }

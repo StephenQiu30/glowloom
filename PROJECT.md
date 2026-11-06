@@ -44,7 +44,8 @@ Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 AP
 - `backend/db/schema.sql` 是仓库唯一的 PostgreSQL 结构定义，包含空库所需的基础数据。开发、CI 和部署先用它初始化空库，再导入 `backend/db/data.sql` 的官方计价预设。后者只更新预设参考，不写入连接、凭据或已审核价目。存量环境以 PostgreSQL 实际结构为准，部署前核对其与当前定义是否一致。仓库仅维护完整结构，禁止向已有业务库重放空库 SQL。邮箱与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#81-d6-迁移与切换)。
 - 浏览器请求经同站代理；服务端 `GLOWLOOM_BACKEND_ORIGIN` 不进入浏览器。凭据不进入文档、日志、前端包或提交。
 - 默认本地工程验证不发起真实收费生成；fixture、协议握手或页面成功不能代替真实供应商验收。模型可用性以实际配置和适配能力为准。
-- `docker-compose.yml` 是唯一部署入口；完成数据库结构核验后的 `docker compose up -d --build --wait` 统一启动 frontend、backend、独立 agent 和 canvas。前端使用 Next.js standalone 镜像，完整启动等待后端健康。后端直接运行构建阶段生成的 Go 二进制。Agent 独立镜像及连接池/资源限制，仅在 Compose 网络监听 `agent:4401`，不发布宿主端口；Go 与 Agent 不设置相互 service_healthy 等待、不管理彼此进程。前端仍为 `http://localhost:1122`，Go 为 `http://127.0.0.1:1123`。复用既有 PostgreSQL、Redis、Kafka、对象存储，不创建依赖栈，不保留 Temporal 服务/namespace 配置。当前源码与 Compose 采用此拓扑；已有库的结构核验在启动前独立完成。
+- `docker-compose.yml` 是部署基础配置；完成数据库结构核验后的 `docker compose up -d --build --wait` 统一启动 frontend、backend、独立 agent 和 canvas。前端使用 Next.js standalone 镜像，完整启动等待后端健康。后端直接运行构建阶段生成的 Go 二进制。Agent 独立镜像及连接池/资源限制，仅在 Compose 网络监听 `agent:4401`，不发布宿主端口；Go 与 Agent 不设置相互 service_healthy 等待、不管理彼此进程。前端仍为 `http://localhost:1122`，Go 为 `http://127.0.0.1:1123`。复用既有 PostgreSQL、Redis、Kafka、对象存储，不创建依赖栈，不保留 Temporal 服务/namespace 配置。当前源码与 Compose 采用此拓扑；已有库的结构核验在启动前独立完成。
+- 本地开发可显式叠加 `docker-compose.dev.yml` 使用 Compose Watch。前端用 Next.js 开发服务器同步页面源码和静态文件。Go、Agent、画布协作由 Compose 分别重建并替换容器。开发镜像使用独立标签，沿用基础配置的端口、健康检查和宿主依赖。
 - API 生成使用上述 package.json 命令组织标准工具；其他检查使用现有工具直接命令，不新增 shell 脚本或 Makefile。
 
 ## 4. 质量门禁

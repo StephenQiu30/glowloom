@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,13 +37,16 @@ type ProviderListPage struct {
 
 // ListProvidersStore rechecks current administrator rights in its read transaction.
 type ListProvidersStore interface {
-	ListProvidersForAdmin(context.Context, identityapp.Principal, int, *ProviderListCursor) (ProviderListPage, error)
+	ListProvidersForAdmin(context.Context, identityapp.Principal, ListProvidersInput) (ProviderListPage, error)
 }
 
 // ListProvidersInput requests a bounded internal page.
 type ListProvidersInput struct {
-	Limit int
-	After *ProviderListCursor
+	Limit      int
+	Name       string
+	AdapterKey string
+	Status     domain.ProviderStatus
+	After      *ProviderListCursor
 }
 
 // ListProvidersQuery reads safe, paginated provider summaries.
@@ -61,19 +65,23 @@ func (q *ListProvidersQuery) Execute(ctx context.Context, actor identityapp.Prin
 	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return ProviderListPage{}, identityapp.ErrForbidden
 	}
-	if input.Limit < 0 || input.Limit > 200 ||
+	input.Name = strings.TrimSpace(input.Name)
+	input.AdapterKey = strings.TrimSpace(input.AdapterKey)
+	if len(input.Name) > 400 || strings.ContainsRune(input.Name, 0) ||
+		len(input.AdapterKey) > 128 || strings.ContainsRune(input.AdapterKey, 0) ||
+		(input.Status != "" && input.Status != domain.ProviderActive && input.Status != domain.ProviderDisabled && input.Status != domain.ProviderArchived) ||
+		input.Limit < 0 || input.Limit > 200 ||
 		(input.After != nil && (input.After.ID == uuid.Nil || input.After.CreateTime.IsZero())) {
 		return ProviderListPage{}, ErrInvalidProviderList
 	}
-	limit := input.Limit
-	if limit == 0 {
-		limit = 50
+	if input.Limit == 0 {
+		input.Limit = 50
 	}
-	page, err := q.store.ListProvidersForAdmin(ctx, actor, limit, input.After)
+	page, err := q.store.ListProvidersForAdmin(ctx, actor, input)
 	if err != nil {
 		return ProviderListPage{}, fmt.Errorf("list providers: %w", err)
 	}
-	if len(page.Providers) > limit ||
+	if len(page.Providers) > input.Limit ||
 		(page.Next != nil && (page.Next.ID == uuid.Nil || page.Next.CreateTime.IsZero() || len(page.Providers) == 0)) {
 		return ProviderListPage{}, ErrInvalidProviderList
 	}

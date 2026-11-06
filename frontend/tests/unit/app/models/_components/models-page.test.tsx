@@ -1,4 +1,10 @@
-import { cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, it, expect, vi } from "vitest";
 import { render } from "../../../../feedback";
 import { ModelsPage } from "@/app/models/_components/models-page";
@@ -28,7 +34,9 @@ vi.mock("@/api/settings", () => ({
   getProviderCheck: api.check,
 }));
 vi.mock("@/app/models/_components/model-detail", () => ({
-  ModelDetail: () => null,
+  ModelDetail: ({ initialView }: { initialView: string }) => (
+    <div>{initialView}</div>
+  ),
 }));
 beforeEach(() => {
   vi.clearAllMocks();
@@ -105,8 +113,10 @@ it("连接详情跳转后预选连接，由服务端筛选模型并保留全部�
     ],
   });
   render(<ModelsPage initialProvider="connection" />);
-  await screen.findByRole("button", { name: /当前连接模型/ });
-  expect(screen.getByRole("cell", { name: "OpenAI" })).toBeTruthy();
+  await screen.findByRole("button", { name: "查看 当前连接模型" });
+  expect(
+    screen.getByRole("link", { name: "OpenAI" }).getAttribute("href"),
+  ).toBe("/providers?connection=connection");
   expect(screen.queryByRole("button", { name: /其他连接模型/ })).toBeNull();
   expect(
     screen.getByRole("link", { name: "查看全部模型" }).getAttribute("href"),
@@ -141,8 +151,9 @@ it("按真实版本区分未配置草稿与已有版本的停用模型", async (
   });
   render(<ModelsPage />);
   await screen.findByText("未配置模型");
-  expect(screen.getByText("待配置")).toBeTruthy();
-  expect(screen.getByText("已停用")).toBeTruthy();
+  const table = within(screen.getByRole("table", { name: "模型列表" }));
+  expect(table.getByText("待配置")).toBeTruthy();
+  expect(table.getByText("已停用")).toBeTruthy();
 });
 
 it.each([true, false])(
@@ -270,7 +281,75 @@ it("读取只读目录后能搜索并添加候选模型", async () => {
   expect(api.key).not.toHaveBeenCalled();
 });
 
-it("在独立计价视图显示发布状态并打开行内审核", async () => {
+it("行操作可直接进入发布页，关闭后回到管理按钮", async () => {
+  render(<ModelsPage />);
+  const trigger = await screen.findByRole("button", {
+    name: "管理 当前连接模型",
+  });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "发布" }));
+  await screen.findByText("release");
+  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "管理 当前连接模型" }),
+    ),
+  );
+});
+
+it("组合筛选回到第一页并清除选择，重置恢复默认查询", async () => {
+  api.models
+    .mockResolvedValueOnce({
+      items: [{ id: "a", display_name: "第一页模型" }],
+      next_cursor: "page-2",
+    })
+    .mockResolvedValueOnce({
+      items: [{ id: "b", display_name: "第二页模型" }],
+    })
+    .mockResolvedValueOnce({ items: [] });
+  render(<ModelsPage />);
+  await screen.findByText("第一页模型");
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+  await screen.findByText("第二页模型");
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择 第二页模型" }));
+  expect(screen.getByRole("button", { name: "停用模型" })).toBeTruthy();
+
+  const filter = within(screen.getByRole("form", { name: "模型筛选" }));
+  fireEvent.change(filter.getByLabelText("模型名称"), {
+    target: { value: "  Seed  " },
+  });
+  fireEvent.change(filter.getByLabelText("服务连接"), {
+    target: { value: "connection" },
+  });
+  fireEvent.change(filter.getByLabelText("状态"), {
+    target: { value: "price_pending" },
+  });
+  expect(api.models).toHaveBeenCalledTimes(2);
+  fireEvent.click(filter.getByRole("button", { name: "筛选" }));
+
+  await screen.findByText("没有匹配的模型");
+  expect(api.models.mock.lastCall?.[0]).toEqual({
+    limit: 20,
+    cursor: undefined,
+    name: "Seed",
+    provider_id: "connection",
+    status: "price_pending",
+  });
+  expect(screen.queryByRole("button", { name: "停用模型" })).toBeNull();
+
+  fireEvent.click(filter.getByRole("button", { name: "重置" }));
+  await screen.findByText("当前连接模型");
+  expect(api.models.mock.lastCall?.[0]).toEqual({
+    limit: 20,
+    cursor: undefined,
+    provider_id: undefined,
+  });
+  expect((filter.getByLabelText("模型名称") as HTMLInputElement).value).toBe(
+    "",
+  );
+});
+
+it("计价审核使用服务端筛选并在表格下打开价格页", async () => {
   api.models.mockResolvedValue({
     items: [
       {
@@ -279,9 +358,10 @@ it("在独立计价视图显示发布状态并打开行内审核", async () => {
         display_name: "计价样本",
         billing: {
           unit: "per_image",
-          status: "usage_pending",
           procurement_ready: true,
           sale_ready: true,
+          sale_published: false,
+          status: "usage_pending",
         },
       },
     ],
@@ -289,18 +369,29 @@ it("在独立计价视图显示发布状态并打开行内审核", async () => {
   render(<ModelsPage />);
   await screen.findByRole("button", { name: "查看 计价样本" });
   fireEvent.click(screen.getByRole("button", { name: "计价审核" }));
+  await screen.findByRole("button", { name: "审核计价 计价样本" });
+  const table = within(screen.getByRole("table", { name: "预设计价列表" }));
+  expect(table.getByText("待验证或发布")).toBeTruthy();
+  expect(table.queryByText("可计费")).toBeNull();
+  const filters = within(screen.getByRole("form", { name: "计价筛选" }));
+  fireEvent.change(filters.getByLabelText("计价状态"), {
+    target: { value: "usage_pending" },
+  });
+  fireEvent.click(filters.getByRole("button", { name: "筛选" }));
+  await waitFor(() =>
+    expect(api.models.mock.lastCall?.[0]).toMatchObject({
+      pricing_review: true,
+      billing_status: "usage_pending",
+    }),
+  );
   const review = await screen.findByRole("button", {
     name: "审核计价 计价样本",
   });
-  expect(api.models.mock.lastCall?.[0]).toMatchObject({ pricing_review: true });
-  expect(screen.getByText("待验证或发布")).toBeTruthy();
   fireEvent.click(review);
-  expect(screen.getByRole("region", { name: "审核价目" })).toBeTruthy();
-  expect(screen.queryByRole("dialog")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "关闭计价审核" }));
-  await waitFor(() =>
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "审核计价 计价样本" }),
+  expect(
+    within(screen.getByRole("region", { name: "审核价目" })).getByText(
+      "pricing",
     ),
-  );
+  ).toBeTruthy();
+  expect(screen.queryByRole("dialog", { name: "模型详情" })).toBeNull();
 });

@@ -119,6 +119,20 @@ func TestListProvidersPagesSafeSummariesAndRealModelCountsOnLocalPostgres(t *tes
 		second.Providers[0].Credential != nil {
 		t.Fatalf("second provider page %+v: %v", second, err)
 	}
+	// The matching disabled provider lies beyond the first unfiltered row.
+	filtered, err := query.Execute(ctx, actor, catalogapp.ListProvidersInput{
+		Limit: 1, Name: strings.ToUpper(providers[1].Name), AdapterKey: providers[1].AdapterKey, Status: domain.ProviderDisabled,
+	})
+	if err != nil || len(filtered.Providers) != 1 || filtered.Next != nil || filtered.Providers[0].Provider.ID != providers[1].ID {
+		t.Fatalf("combined provider filters %+v: %v", filtered, err)
+	}
+	models := catalogapp.NewAdminModelsQuery(store)
+	modelPage, err := models.List(ctx, actor, catalogapp.AdminModelListInput{
+		Limit: 1, ProviderID: providers[0].ID, Name: "test model", Capability: capabilityKey, Status: "unconfigured",
+	})
+	if err != nil || len(modelPage.Items) != 1 || modelPage.Next != nil || modelPage.Items[0].Status != domain.ModelDisabled {
+		t.Fatalf("combined model filters %+v: %v", modelPage, err)
+	}
 	encoded, err := json.Marshal(first)
 	if err != nil || strings.Contains(string(encoded), "sealed-private-list-value") ||
 		strings.Contains(string(encoded), "ciphertext") || strings.Contains(string(encoded), "key_id") {

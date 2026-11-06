@@ -10,7 +10,6 @@ import {
   connectionDeleteAction,
   type ConnectionRow,
 } from "@/components/governance/batch-actions";
-import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/components/auth/session";
@@ -47,9 +46,16 @@ import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
 import { ConnectionReleaseReview } from "./connection-release-review";
 import { PresetConnect } from "./preset-connect";
-import { ConnectionList, regionLabel } from "./connection-list";
-import { ColumnMenu } from "@/components/governance/column-menu";
-import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  useConnectionColumns,
+  regionLabel,
+  type ConnectionFilter,
+} from "./connection-list";
+import {
+  AdminTable,
+  type AdminTableFilterValues,
+} from "@/components/governance/admin-table";
+import { providerConnectionName } from "@/lib/provider-connection-name";
 import {
   ProviderPresetList,
   type PresetStateAction,
@@ -89,11 +95,6 @@ function ProviderAdministration({
   initialMode,
   onPresetViewChange,
 }: ProvidersPageProps) {
-  const mobile = useIsMobile();
-  const [visibility, setVisibility] = useState<Record<string, boolean>>({
-    check: false,
-    credential: false,
-  });
   const overlayTrigger = useRef<HTMLElement | null>(null);
   function rememberTrigger() {
     const active = document.activeElement;
@@ -128,6 +129,9 @@ function ProviderAdministration({
   // Invalidate the owned snapshot on every query transition, including a return
   // to a previous query. Keep any running batch's frozen entries independent.
   if (selection.scope !== search) setSelection({ scope: search, rows: [] });
+  const [filters, setFilters] = useState<
+    AdminTableFilterValues<ConnectionFilter>
+  >({});
   const [cursors, setCursors] = useState<string[]>([""]);
   const [pageSize, setPageSize] = useState(20);
   const [nextCursor, setNextCursor] = useState("");
@@ -147,6 +151,7 @@ function ProviderAdministration({
     release: initialRelease,
     mode: initialMode,
   });
+  const [renamingConnection, setRenamingConnection] = useState(false);
   const [detailOpen, setDetailOpen] = useState(Boolean(initialConnection));
   const detailContent = useRef<HTMLDivElement>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -186,7 +191,7 @@ function ProviderAdministration({
     if (presetsOpen) return;
     const controller = new AbortController();
     listAdminProviders(
-      { limit: pageSize, cursor: cursors.at(-1) || undefined },
+      { ...filters, limit: pageSize, cursor: cursors.at(-1) || undefined },
       { signal: controller.signal },
     )
       .then((connections) => {
@@ -207,7 +212,7 @@ function ProviderAdministration({
         setConnectionsLoading(false);
       });
     return () => controller.abort();
-  }, [refresh, cursors, pageSize, presetsOpen]);
+  }, [refresh, cursors, pageSize, presetsOpen, filters]);
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
@@ -246,7 +251,8 @@ function ProviderAdministration({
     rememberTrigger();
     setConfirmation(value);
   }
-  function openConnection(id: string, trigger: HTMLElement) {
+  function openConnection(id: string, trigger: HTMLElement, rename = false) {
+    setRenamingConnection(rename);
     overlayTrigger.current = trigger;
     setContext({ model: undefined, release: undefined, mode: undefined });
     const url = new URL(window.location.href);
@@ -328,6 +334,21 @@ function ProviderAdministration({
       : [];
   const batchLocked = batch.busy || batch.unresolved;
   const connectionLocked = batchLocked || Boolean(pendingKey.pending);
+  const columns = useConnectionColumns({
+    adapters,
+    disabled: connectionLocked,
+    pendingCredential:
+      pendingKey.pending?.action === "credential.set"
+        ? pendingKey.pending.target
+        : undefined,
+    onSelect: openConnection,
+    onDelete: (row, trigger) =>
+      void batch.prepare([row], connectionDeleteAction, false, trigger),
+  });
+  const mutationStatus =
+    mutation.message || mutation.pending ? (
+      <MutationStatus mutation={mutation} />
+    ) : null;
   if (batch.denied)
     return (
       <ContentState
@@ -338,210 +359,196 @@ function ProviderAdministration({
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading title={presetsOpen ? "供应商预设" : "AI 服务接入"}>
-        {presetsOpen ? (
-          <>
+      <div hidden={presetsOpen}>
+        <AdminTable
+          title="AI 服务接入"
+          label="连接列表"
+          columns={columns}
+          rows={visibleProviders}
+          toolbarExtra={
+            batch.submitted ? (
+              <Button
+                size="toolbar"
+                variant="ghost"
+                ref={registerResultTrigger}
+                onClick={() => batch.setOpen(true)}
+              >
+                查看批量操作结果
+              </Button>
+            ) : null
+          }
+          actions={
+            <>
+              <Button
+                size="toolbar"
+                variant="ghost"
+
+                disabled={batchLocked}
+                onClick={() => showPresetView(true)}
+              >
+                供应商预设
+              </Button>
+              <Button
+                size="toolbar"
+                ref={registerFallbackTrigger}
+
+                onClick={openConnect}
+                disabled={loading || Boolean(error) || batchLocked}
+              >
+                <Plus data-icon="inline-start" />
+                接入服务
+              </Button>
+            </>
+          }
+          context={
+            !presetsOpen ? (
+              <>
+                {mutationStatus}
+                {pendingCreate.pending || pendingKey.pending ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Badge variant="secondary">保存待确认</Badge>
+                    <Button variant="outline" onClick={openConnect}>
+                      继续接入
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            ) : null
+          }
+          filter={{
+            label: "服务连接筛选",
+            disabled: connectionLocked,
+            onApply: (values) => {
+              setSelection({ scope: search, rows: [] });
+              setCursors([""]);
+              setConnectionsLoading(true);
+              setFilters(values);
+            },
+          }}
+          loading={loading ? "正在加载 AI 服务" : undefined}
+          error={
+            error
+              ? {
+                  title: "服务连接暂时无法读取",
+                  description: error,
+                  onRetry: retry,
+                }
+              : undefined
+          }
+          emptyTitle={
+            query || Object.keys(filters).length
+              ? "没有匹配的连接"
+              : "还没有连接"
+          }
+          selection={{
+            inToolbar: true,
+            selected: selectedRows,
+            onChange: (updater) =>
+              setSelection({
+                scope: search,
+                rows:
+                  typeof updater === "function"
+                    ? updater(selectedRows)
+                    : updater,
+              }),
+            getLabel: (row) => providerConnectionName(row.provider) ?? row.id,
+            pageLabel: "选择当前页全部连接",
+            disabled: connectionLocked,
+            clearDisabled: batchLocked,
+            actions: (
+              <Button
+                variant="outline"
+                className="max-md:h-11"
+                disabled={connectionLocked}
+                onClick={() =>
+                  void batch.prepare(selectedRows, connectionDeleteAction)
+                }
+              >
+                删除连接
+              </Button>
+            ),
+          }}
+          pagination={{
+            label: "服务连接分页",
+            current: cursors.length,
+            pageSize,
+            pageSizeOptions: [20, 50],
+            hasNextPage: !!nextCursor,
+            disabled: batchLocked,
+            onPageChange: (next) => {
+              setSelection({ scope: search, rows: [] });
+              setConnectionsLoading(true);
+              setCursors((c) =>
+                next < c.length ? c.slice(0, -1) : [...c, nextCursor],
+              );
+            },
+            onPageSizeChange: (size) => {
+              setPageSize(size);
+              setCursors([""]);
+              setSelection({ scope: search, rows: [] });
+              setConnectionsLoading(true);
+            },
+          }}
+          footer={
+            query ? (
+              <p className="text-xs text-muted-foreground">
+                筛选当前页的连接；翻页后重新选择。
+              </p>
+            ) : null
+          }
+        />
+      </div>
+      {presetsOpen ? (
+        <>
+          <AdminHeading title="供应商预设">
             <Button
-              variant="ghost"
               size="toolbar"
+              variant="ghost"
+
               onClick={() => showPresetView(false)}
             >
               返回 AI 服务接入
             </Button>
             <Button
               size="toolbar"
+
               disabled={loading || Boolean(error)}
               onClick={() => openEditor("new")}
             >
               <Plus data-icon="inline-start" />
               新建预设
             </Button>
-          </>
-        ) : (
-          <>
-            {batch.submitted ? (
-              <Button
-                variant="ghost"
-                size="toolbar"
-                ref={registerResultTrigger}
-                onClick={() => batch.setOpen(true)}
-              >
-                查看批量操作结果
-              </Button>
-            ) : null}
-            {selectedRows.length && !loading && !error ? (
-              <div
-                className="flex flex-wrap items-center gap-2"
-                role="group"
-                aria-label="批量操作"
-              >
-                <span aria-live="polite" className="text-sm">
-                  已选 {selectedRows.length} 项
-                </span>
-                <Button
-                  variant="ghost"
-                  size="toolbar"
-                  disabled={batchLocked}
-                  onClick={() => setSelection({ scope: search, rows: [] })}
-                >
-                  清除选择
-                </Button>
-                <Button
-                  variant="outline"
-                  size="toolbar"
-                  disabled={connectionLocked}
-                  onClick={() =>
-                    void batch.prepare(selectedRows, connectionDeleteAction)
-                  }
-                >
-                  删除连接
-                </Button>
-              </div>
-            ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  size="toolbar"
-                  disabled={batchLocked}
-                  onClick={() => showPresetView(true)}
-                >
-                  供应商预设
-                </Button>
-                {!loading &&
-                !error &&
-                !mobile &&
-                visibleProviders.length > 0 ? (
-                  <ColumnMenu
-                    columns={[
-                      { id: "adapter", label: "供应商" },
-                      { id: "models", label: "接入模型" },
-                      { id: "credential", label: "配置状态" },
-                      { id: "check", label: "最近检查" },
-                    ]}
-                    visibility={visibility}
-                    onChange={setVisibility}
-                  />
-                ) : null}
-                <Button
-                  ref={registerFallbackTrigger}
-                  size="toolbar"
-                  onClick={openConnect}
-                  disabled={loading || Boolean(error) || batchLocked}
-                >
-                  <Plus data-icon="inline-start" />
-                  接入服务
-                </Button>
-              </>
-            )}
-          </>
-        )}
-      </AdminHeading>
-      {mutation.message || mutation.pending ? (
-        <MutationStatus mutation={mutation} />
-      ) : null}
-      {!presetsOpen && (pendingCreate.pending || pendingKey.pending) ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="secondary">保存待确认</Badge>
-          <Button variant="outline" onClick={openConnect}>
-            继续接入
-          </Button>
-        </div>
-      ) : null}
-      {loading ? (
-        <div
-          role="status"
-          aria-label={presetsOpen ? "正在加载供应商预设" : "正在加载 AI 服务"}
-          className="flex flex-col gap-4"
-        >
-          {[0, 1, 2].map((n) => (
-            <Skeleton key={n} className="h-20 w-full" />
-          ))}
-        </div>
-      ) : error ? (
-        <ContentState
-          state="error"
-          title={
-            presetsOpen ? "供应商预设暂时无法读取" : "服务连接暂时无法读取"
-          }
-          description={error}
-          actions={<Button onClick={retry}>重试</Button>}
-        />
-      ) : presetsOpen ? (
-        <ProviderPresetList
-          items={visiblePresets}
-          adapters={adapters}
-          busy={mutation.busy}
-          filtered={Boolean(query)}
-          onEdit={openEditor}
-          onState={(preset, action) => openConfirmation({ preset, action })}
-        />
-      ) : (
-        <section aria-label="已添加的服务" className="flex flex-col gap-3">
-          {visibleProviders.length ? (
-            <ConnectionList
-              adapters={adapters}
-              items={visibleProviders}
-              visibility={visibility}
-              disabled={connectionLocked}
-              selection={{
-                selected: selectedRows,
-                onChange: (updater) =>
-                  setSelection({
-                    scope: search,
-                    rows:
-                      typeof updater === "function"
-                        ? updater(selectedRows)
-                        : updater,
-                  }),
-              }}
-              pendingCredential={
-                pendingKey.pending?.action === "credential.set"
-                  ? pendingKey.pending.target
-                  : undefined
-              }
-              onSelect={openConnection}
-              onDelete={(row, trigger) =>
-                void batch.prepare(
-                  [row],
-                  connectionDeleteAction,
-                  false,
-                  trigger,
-                )
-              }
+          </AdminHeading>
+          {mutationStatus}
+          {loading ? (
+            <div
+              role="status"
+              aria-label="正在加载供应商预设"
+              className="flex flex-col gap-4"
+            >
+              {[0, 1, 2].map((n) => (
+                <Skeleton key={n} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : error ? (
+            <ContentState
+              state="error"
+              title="供应商预设暂时无法读取"
+              description={error}
+              actions={<Button onClick={retry}>重试</Button>}
             />
           ) : (
-            <ContentState title={query ? "没有匹配的连接" : "还没有连接"} />
+            <ProviderPresetList
+              items={visiblePresets}
+              adapters={adapters}
+              busy={mutation.busy}
+              filtered={Boolean(query)}
+              onEdit={openEditor}
+              onState={(preset, action) => openConfirmation({ preset, action })}
+            />
           )}
-          <ListPagination
-            mode="cursor"
-            label="服务连接分页"
-            current={cursors.length}
-            pageSize={pageSize}
-            pageSizeOptions={[20, 50]}
-            itemCount={visibleProviders.length}
-            hasNextPage={!!nextCursor}
-            disabled={batchLocked}
-            onPageChange={(next) => {
-              setSelection({ scope: search, rows: [] });
-              setConnectionsLoading(true);
-              setCursors((c) =>
-                next < c.length ? c.slice(0, -1) : [...c, nextCursor],
-              );
-            }}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setCursors([""]);
-              setSelection({ scope: search, rows: [] });
-              setConnectionsLoading(true);
-            }}
-          />
-          {query ? (
-            <p className="text-xs text-muted-foreground">
-              筛选当前页的连接；翻页后重新选择。
-            </p>
-          ) : null}
-        </section>
-      )}
+        </>
+      ) : null}
       <BatchDialog key={batch.generation} batch={batch} />
       <Dialog
         open={Boolean(connect)}
@@ -610,10 +617,11 @@ function ProviderAdministration({
           {selected ? (
             <div className={reviewOpen ? "hidden" : "contents"}>
               <ConnectionDetail
-                key={selected}
+                key={`${selected}:${renamingConnection}`}
                 id={selected}
                 Title={DialogTitle}
                 onReview={openReview}
+                initialRename={renamingConnection}
                 initialModel={context.model}
                 initialRelease={context.release}
                 initialMode={context.mode}

@@ -15,7 +15,8 @@ import (
 
 // ListProvidersForAdmin reads one keyset page with safe credential columns and
 // counts non-deleted model profiles after checking current administrator rights.
-func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Principal, limit int, after *application.ProviderListCursor) (application.ProviderListPage, error) {
+func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Principal, input application.ListProvidersInput) (application.ProviderListPage, error) {
+	limit, after := input.Limit, input.After
 	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || limit < 1 || limit > 200 ||
 		(after != nil && (after.ID == uuid.Nil || after.CreateTime.IsZero())) {
 		return application.ProviderListPage{}, application.ErrInvalidProviderList
@@ -25,7 +26,7 @@ func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Pri
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
-		const baseQuery = `
+		query := `
 			SELECT p.id AS provider_id, p.key, p.name, p.adapter_key, p.region,
 			       p.status AS provider_status, p.concurrency_limit, p.rate_limit_per_min,
 			       p.revision, p.create_time AS provider_create_time,
@@ -42,13 +43,25 @@ func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Pri
 			  ON c.provider_id = p.id AND c.status = 'active' AND NOT c.is_delete
 			WHERE NOT p.is_delete
 		`
-		query := baseQuery + ` ORDER BY p.create_time DESC, p.id DESC LIMIT ?`
-		args := []any{limit + 1}
-		if after != nil {
-			query = baseQuery + ` AND (p.create_time, p.id) < (?::timestamptz, ?::uuid)
-				ORDER BY p.create_time DESC, p.id DESC LIMIT ?`
-			args = []any{after.CreateTime.UTC(), after.ID.String(), limit + 1}
+		args := []any{}
+		if input.Name != "" {
+			query += ` AND strpos(lower(p.name), lower(?)) > 0`
+			args = append(args, input.Name)
 		}
+		if input.AdapterKey != "" {
+			query += ` AND p.adapter_key = ?`
+			args = append(args, input.AdapterKey)
+		}
+		if input.Status != "" {
+			query += ` AND p.status = ?`
+			args = append(args, input.Status)
+		}
+		if after != nil {
+			query += ` AND (p.create_time, p.id) < (?::timestamptz, ?::uuid)`
+			args = append(args, after.CreateTime.UTC(), after.ID)
+		}
+		query += ` ORDER BY p.create_time DESC, p.id DESC LIMIT ?`
+		args = append(args, limit+1)
 		var rows []providerListRow
 		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
 			return fmt.Errorf("read provider list: %w", err)

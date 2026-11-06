@@ -1,0 +1,15 @@
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+@media (max-width: 767px) {
+  .searchRow {
+    gap: 8px;
+  }
+  .searchRow form {
+    flex: 1;
+    width: 0;
+  }
+}
