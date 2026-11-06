@@ -2,7 +2,7 @@
 import { readErrorMessage } from "@/lib/read-error";
 import { ContentState } from "@/components/layout/content-state";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AdminHeading } from "@/components/governance/admin-layout";
 import { useBatchOperation } from "@/components/governance/use-batch-operation";
 import { BatchDialog } from "@/components/governance/batch-dialog";
@@ -45,6 +45,7 @@ import {
 } from "@/components/catalog/mutation";
 import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
+import { ConnectionReleaseReview } from "./connection-release-review";
 import { PresetConnect } from "./preset-connect";
 import { ConnectionList, regionLabel } from "./connection-list";
 import { ColumnMenu } from "@/components/governance/column-menu";
@@ -148,6 +149,9 @@ function ProviderAdministration({
   });
   const [detailOpen, setDetailOpen] = useState(Boolean(initialConnection));
   const detailContent = useRef<HTMLDivElement>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const reviewTitleId = useId();
+  const reviewTrigger = useRef<HTMLButtonElement>(null);
   const [connect, setConnect] = useState(false);
   const connectVisible = useRef(false);
   const [connectionError, setConnectionError] = useState("");
@@ -253,7 +257,23 @@ function ProviderAdministration({
     setSelected(id);
     setDetailOpen(true);
   }
+  function openReview(trigger: HTMLButtonElement) {
+    reviewTrigger.current = trigger;
+    setReviewOpen(true);
+  }
+  useEffect(() => {
+    if (reviewOpen) {
+      document.getElementById(reviewTitleId)?.focus();
+    } else if (reviewTrigger.current) {
+      reviewTrigger.current.focus();
+      reviewTrigger.current = null;
+    }
+  }, [reviewOpen, reviewTitleId]);
   function closeDetail(open: boolean) {
+    if (!open && reviewOpen) {
+      setReviewOpen(false);
+      return;
+    }
     setDetailOpen(open);
     if (!open) {
       const url = new URL(window.location.href);
@@ -563,7 +583,11 @@ function ProviderAdministration({
       <Dialog open={detailOpen} onOpenChange={closeDetail}>
         <DialogContent
           ref={detailContent}
-          aria-describedby={undefined}
+          {...(reviewOpen ? { "aria-labelledby": reviewTitleId } : {})}
+          aria-describedby={
+            reviewOpen ? `${reviewTitleId}-description` : undefined
+          }
+          showCloseButton={!reviewOpen}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             restoreFocus();
@@ -577,19 +601,34 @@ function ProviderAdministration({
               title.focus();
             }
           }}
-          className="flex flex-col overflow-hidden sm:max-w-lg max-md:[&_[data-slot=dialog-close]]:size-11"
+          className={
+            reviewOpen
+              ? "flex flex-col overflow-hidden border border-border p-4 sm:max-w-[640px] sm:p-6"
+              : "flex flex-col overflow-hidden sm:max-w-lg max-md:[&_[data-slot=dialog-close]]:size-11"
+          }
         >
           {selected ? (
-            <ConnectionDetail
-              key={selected}
+            <div className={reviewOpen ? "hidden" : "contents"}>
+              <ConnectionDetail
+                key={selected}
+                id={selected}
+                Title={DialogTitle}
+                onReview={openReview}
+                initialModel={context.model}
+                initialRelease={context.release}
+                initialMode={context.mode}
+                revision={refresh}
+                presets={presets}
+                onSaved={() => setRefresh((v) => v + 1)}
+              />
+            </div>
+          ) : null}
+          {selected && reviewOpen ? (
+            <ConnectionReleaseReview
               id={selected}
-              Title={DialogTitle}
-              initialModel={context.model}
-              initialRelease={context.release}
-              initialMode={context.mode}
-              revision={refresh}
-              presets={presets}
-              onSaved={() => setRefresh((v) => v + 1)}
+              titleId={reviewTitleId}
+              onClose={() => setReviewOpen(false)}
+              onSaved={() => setRefresh((value) => value + 1)}
             />
           ) : null}
         </DialogContent>

@@ -1,6 +1,5 @@
 "use client";
 import { ConnectionTests } from "./connection-tests";
-import { ConnectionReleaseReview } from "./connection-release-review";
 import useSWR from "swr";
 import { useSession } from "@/components/auth/session";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -71,6 +70,7 @@ export function ConnectionDetail({
   id,
   presets,
   onSaved,
+  onReview,
   revision = 0,
   initialModel,
   initialRelease,
@@ -85,6 +85,7 @@ export function ConnectionDetail({
   Title?: typeof DialogTitle | "h2";
   presets: API.Preset[];
   onSaved: () => void;
+  onReview?: (trigger: HTMLButtonElement) => void;
 }) {
   const formFieldId = useId();
   const { actor } = useSession();
@@ -329,7 +330,16 @@ export function ConnectionDetail({
             </>
           ) : null}
           <Separator />
-          {!archived && <ConnectionReleaseReview id={id} onSaved={refresh} />}
+          {!archived && onReview && (
+            <Button
+              variant="outline"
+              type="button"
+              className="max-md:min-h-11"
+              onClick={(event) => onReview(event.currentTarget)}
+            >
+              发布复核
+            </Button>
+          )}
           <Toolbar aria-label="连接操作" className="flex-wrap">
             {!archived && (
               <Button variant="outline" size="toolbar" asChild>

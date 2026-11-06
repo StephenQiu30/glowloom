@@ -12,6 +12,7 @@ import { render } from "../../../../feedback";
 import { pageBusinessMemory } from "@/lib/page-business-memory";
 import { ConnectionOnboarding } from "@/app/providers/_components/connection-onboarding";
 import { ConnectionReleaseReview } from "@/app/providers/_components/connection-release-review";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { RequestError } from "@/lib/request";
 const api = vi.hoisted(() => ({
   read: vi.fn(),
@@ -334,12 +335,21 @@ it.each([false, true])(
         validated_modes: [],
       },
     ];
+    const close = vi.fn();
     render(
       <SWRConfig value={{ provider: () => new Map() }}>
-        <ConnectionReleaseReview id="provider" onSaved={saved} />
+        <Dialog open>
+          <DialogContent aria-labelledby="review-title">
+            <ConnectionReleaseReview
+              id="provider"
+              titleId="review-title"
+              onClose={close}
+              onSaved={saved}
+            />
+          </DialogContent>
+        </Dialog>
       </SWRConfig>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "发布复核" }));
     const review = await screen.findByRole("dialog", { name: "发布复核" });
     const legacyMode = await screen.findByText("text_to_text");
     expect(within(legacyMode.closest("li")!).getByText("待复核")).toBeTruthy();
@@ -362,6 +372,8 @@ it.each([false, true])(
       ).toBe(true);
       expect(screen.queryByRole("button", { name: /个已复核模型/ })).toBeNull();
       expect(api.activate).not.toHaveBeenCalled();
+      fireEvent.click(within(review).getByRole("button", { name: "关闭" }));
+      expect(close).toHaveBeenCalledOnce();
     } else {
       fireEvent.click(
         screen.getByRole("button", { name: "启用 1 个已复核模型" }),
