@@ -12,6 +12,10 @@ vi.mock("@/api/settings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/settings")>()),
   getAdminModel: api.model,
   setAdminModelStatus: api.status,
+  getProviderConfig: async () => ({
+    id: "config-a",
+    config: { adapter_key: "volcengine_ark" },
+  }),
   listModelReleases: async () => ({ items: [] }),
   listCapabilityDefaults: async () => ({ items: [] }),
 }));
@@ -42,12 +46,19 @@ it("详情读取失败时结束加载并允许重试同一模型", async () => {
 
 it("模型设置、价格和发布分屏，切换后不丢未保存的配置", async () => {
   api.model.mockResolvedValue({
-    model: { id: "model-a", display_name: "示例模型", status: "disabled" },
-    versions: [],
+    model: {
+      id: "model-a",
+      provider_id: "provider-a",
+      display_name: "示例模型",
+      status: "disabled",
+    },
+    versions: [{ id: "version-a", provider_model_id: "preset-model-id" }],
     prices: [],
   });
   render(<ModelDetail id="model-a" capabilities={[]} onSaved={vi.fn()} />);
   await screen.findByRole("heading", { name: "示例模型" });
+  expect(screen.queryByRole("button", { name: "归档模型" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "验证配置" })).toBeNull();
   fireEvent.change(screen.getByLabelText("上游模型 ID"), {
     target: { value: "draft-model-id" },
   });
@@ -63,12 +74,12 @@ it("模型设置、价格和发布分屏，切换后不丢未保存的配置", a
   );
 });
 
-it("归档及恢复沿用最新模型版本，恢复后才可修改配置", async () => {
+it("已归档模型可恢复，恢复后才可修改配置", async () => {
   let model = {
     id: "model-a",
     display_name: "示例模型",
-    status: "disabled",
-    revision: 1,
+    status: "archived",
+    revision: 2,
   };
   api.model.mockImplementation(async () => ({
     model,
@@ -80,15 +91,12 @@ it("归档及恢复沿用最新模型版本，恢复后才可修改配置", asyn
     return model;
   });
   render(<ModelDetail id="model-a" capabilities={[]} onSaved={vi.fn()} />);
-  fireEvent.click(await screen.findByRole("button", { name: "归档模型" }));
-  fireEvent.click(screen.getByRole("button", { name: "确认归档" }));
   const restore = await screen.findByRole("button", { name: "恢复模型" });
   expect(screen.queryByRole("tab", { name: "模型设置" })).toBeNull();
   fireEvent.click(restore);
   fireEvent.click(screen.getByRole("button", { name: "确认恢复" }));
   await screen.findByRole("tab", { name: "模型设置" });
   expect(api.status.mock.calls.map(([, body]) => body)).toEqual([
-    { status: "archived", expected_revision: 1 },
     { status: "disabled", expected_revision: 2 },
   ]);
 });

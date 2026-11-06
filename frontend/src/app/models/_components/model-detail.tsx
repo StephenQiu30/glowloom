@@ -65,8 +65,6 @@ import {
   useCatalogMutation,
 } from "@/components/catalog/mutation";
 
-import { ModelConfigurationCheck } from "./model-configuration-check";
-
 export type ModelDetailView = "configuration" | "pricing" | "release";
 
 export function ModelDetail({
@@ -230,7 +228,7 @@ export function ModelDetail({
                   ? `配置 ${detail.versions?.find((v) => v.id === active.model_version_id)?.version_no ?? "—"} / 价格 ${detail.prices?.find((p) => p.id === active.price_version_id)?.version_no ?? "—"}`
                   : "尚未发布"}
               </p>
-              {model ? (
+              {archived && model ? (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button
@@ -238,30 +236,25 @@ export function ModelDetail({
                       className="self-start"
                       disabled={mutation.busy || !!mutation.pending}
                     >
-                      {archived ? "恢复模型" : "归档模型"}
+                      恢复模型
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        {archived ? "恢复模型？" : "归档模型？"}
-                      </AlertDialogTitle>
+                      <AlertDialogTitle>恢复模型？</AlertDialogTitle>
                       <AlertDialogDescription>
-                        {archived
-                          ? "模型将恢复为未启用，发布后才能接收新任务。"
-                          : "归档后从创作模型列表移除，保留版本、价格和任务记录。"}
+                        模型将恢复为未启用，发布后才能接收新任务。
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>取消</AlertDialogCancel>
                       <AlertDialogAction
-                        variant={archived ? "default" : "destructive"}
                         onClick={() =>
                           void mutation.run("model.status", id, (requestID) =>
                             setAdminModelStatus(
                               { id },
                               {
-                                status: archived ? "disabled" : "archived",
+                                status: "disabled",
                                 expected_revision: model.revision,
                               },
                               { headers: { "Idempotency-Key": requestID } },
@@ -269,20 +262,11 @@ export function ModelDetail({
                           )
                         }
                       >
-                        {archived ? "确认恢复" : "确认归档"}
+                        确认恢复
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-              ) : null}
-              {!archived && model?.provider_id && latest?.id && config?.id ? (
-                <ModelConfigurationCheck
-                  key={`${latest.id}:${config.id}`}
-                  id={id}
-                  provider={model.provider_id}
-                  version={latest.id}
-                  config={config.id}
-                />
               ) : null}
             </>
           )}
