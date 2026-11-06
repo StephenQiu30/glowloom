@@ -243,7 +243,7 @@ function WorkspaceScope({
           {view === "history" && (
             <ToggleGroup
               variant="workspace"
-              size="workspace"
+              size="toolbar"
               spacing={0}
               type="single"
               value={kind}
@@ -276,7 +276,7 @@ function WorkspaceScope({
           {view === "canvas" && (
             <ToggleGroup
               variant="workspace"
-              size="workspace"
+              size="toolbar"
               spacing={0}
               type="single"
               value={collection}
@@ -315,7 +315,7 @@ function WorkspaceScope({
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="filter"
-                  size="workspace"
+                  size="toolbar"
                   disabled={!authenticated || locked}
                   aria-label="资产排序"
                 >
@@ -369,7 +369,7 @@ function WorkspaceScope({
             {filtered && (
               <Button
                 variant="filter"
-                size="workspace"
+                size="toolbar"
                 disabled={locked}
                 onClick={clear}
               >
@@ -475,7 +475,7 @@ function TimeFilter({
         <PopoverTrigger asChild>
           <Button
             variant="filter"
-            size="workspace"
+            size="toolbar"
             data-active={!!(value.from || value.through) || undefined}
             disabled={disabled}
           >

@@ -1,5 +1,6 @@
 "use client";
 
+import { ToolbarGroup } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
 import { Keyboard, Moon, Puzzle, Sun } from "lucide-react";
 import type { CSSProperties } from "react";
@@ -25,12 +26,16 @@ export function AppToolbarActions({
     variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
 
   return (
-    <div className="inline-flex shrink-0 items-center gap-1">
+    <ToolbarGroup
+      appearance="plain"
+      aria-label="画布应用操作"
+      className="inline-flex shrink-0 items-center gap-1"
+    >
       {onOpenPlugins ? (
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
+          size="toolbar-icon"
           style={iconStyle}
           onClick={onOpenPlugins}
           aria-label={"节点插件"}
@@ -42,7 +47,7 @@ export function AppToolbarActions({
       <Button
         type="button"
         variant="ghost"
-        size="icon-lg"
+        size="toolbar-icon"
         className="transition-none active:translate-y-0"
         style={iconStyle}
         onClick={toggleTheme}
@@ -56,7 +61,7 @@ export function AppToolbarActions({
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
+          size="toolbar-icon"
           style={iconStyle}
           onClick={onOpenShortcuts}
           aria-label={"快捷键"}
@@ -65,6 +70,6 @@ export function AppToolbarActions({
           <Keyboard />
         </Button>
       ) : null}
-    </div>
+    </ToolbarGroup>
   );
 }

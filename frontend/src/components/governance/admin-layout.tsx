@@ -4,6 +4,7 @@ import type { AdminSection } from "@/components/layout/routes";
 import type { ReactNode } from "react";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
+import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
 export function AdminNavigation({ active }: { active: AdminSection }) {
   const links = [
@@ -20,6 +21,7 @@ export function AdminNavigation({ active }: { active: AdminSection }) {
           key={link.id}
           variant={active === link.id ? "secondary" : "ghost"}
           asChild
+          size="toolbar"
           className="admin-navigation-link"
         >
           <Link
@@ -57,7 +59,19 @@ export function AdminHeading({
   title: string;
   children?: ReactNode;
 }) {
-  return <PageHeader title={title}>{children}</PageHeader>;
+  return (
+    <PageHeader title={title}>
+      {children ? (
+        <ToolbarGroup
+          appearance="plain"
+          className="max-w-full flex-wrap"
+          aria-label="页面操作"
+        >
+          {children}
+        </ToolbarGroup>
+      ) : null}
+    </PageHeader>
+  );
 }
 export function SelectionBar({
   count,
@@ -74,18 +88,23 @@ export function SelectionBar({
 }) {
   if (!count) return null;
   return (
-    <div
-      className="flex min-h-11 flex-wrap items-center gap-2"
-      role="group"
+    <ToolbarGroup
+      appearance="plain"
+      className="flex-wrap"
       aria-label="批量操作"
     >
       <span className="text-sm" aria-live="polite">
         已选 {count} / {total} 项
       </span>
-      <Button variant="ghost" disabled={disabled} onClick={onClear}>
+      <Button
+        size="toolbar"
+        variant="ghost"
+        disabled={disabled}
+        onClick={onClear}
+      >
         清除选择
       </Button>
-      <div className="flex flex-wrap gap-2 sm:ml-auto">{children}</div>
-    </div>
+      <Toolbar className="flex-wrap sm:ml-auto">{children}</Toolbar>
+    </ToolbarGroup>
   );
 }

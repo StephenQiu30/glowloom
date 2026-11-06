@@ -323,13 +323,13 @@ function ProviderAdministration({
           <>
             <Button
               variant="ghost"
-              className="max-md:h-11"
+              size="toolbar"
               onClick={() => showPresetView(false)}
             >
               返回 AI 服务接入
             </Button>
             <Button
-              className="max-md:h-11"
+              size="toolbar"
               disabled={loading || Boolean(error)}
               onClick={() => openEditor("new")}
             >
@@ -342,6 +342,7 @@ function ProviderAdministration({
             {batch.submitted ? (
               <Button
                 variant="ghost"
+                size="toolbar"
                 ref={registerResultTrigger}
                 onClick={() => batch.setOpen(true)}
               >
@@ -359,7 +360,7 @@ function ProviderAdministration({
                 </span>
                 <Button
                   variant="ghost"
-                  className="max-md:h-11"
+                  size="toolbar"
                   disabled={batchLocked}
                   onClick={() => setSelection({ scope: search, rows: [] })}
                 >
@@ -367,7 +368,7 @@ function ProviderAdministration({
                 </Button>
                 <Button
                   variant="outline"
-                  className="max-md:h-11"
+                  size="toolbar"
                   disabled={connectionLocked}
                   onClick={() =>
                     void batch.prepare(selectedRows, connectionDeleteAction)
@@ -380,7 +381,7 @@ function ProviderAdministration({
               <>
                 <Button
                   variant="ghost"
-                  className="max-md:h-11"
+                  size="toolbar"
                   disabled={batchLocked}
                   onClick={() => showPresetView(true)}
                 >
@@ -403,7 +404,7 @@ function ProviderAdministration({
                 ) : null}
                 <Button
                   ref={registerFallbackTrigger}
-                  className="max-md:h-11"
+                  size="toolbar"
                   onClick={openConnect}
                   disabled={loading || Boolean(error) || batchLocked}
                 >

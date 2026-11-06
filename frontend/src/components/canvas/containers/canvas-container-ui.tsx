@@ -1,5 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- These are authorized short-lived canvas media previews. */
+import { Toolbar } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -202,7 +203,7 @@ export function CanvasContainerToolbar({
         ? "所选节点均无可用图片"
         : "分镜组成功态尚未接入";
   return (
-    <div
+    <Toolbar
       role="toolbar"
       aria-label={stack ? "堆叠操作" : "组操作"}
       className="absolute left-1/2 z-[70] flex -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl border bg-popover p-2 shadow-lg"
@@ -215,11 +216,21 @@ export function CanvasContainerToolbar({
     >
       <span className="px-2 text-sm">{members.length} 个节点</span>
       {!stack && (
-        <Button variant="ghost" size="sm" disabled title={storyboardReason}>
+        <Button
+          variant="ghost"
+          size="toolbar"
+          disabled
+          title={storyboardReason}
+        >
           转为分镜组<span className="sr-only">{storyboardReason}</span>
         </Button>
       )}
-      <Button variant="ghost" size="sm" disabled={readOnly} onClick={onRelease}>
+      <Button
+        variant="ghost"
+        size="toolbar"
+        disabled={readOnly}
+        onClick={onRelease}
+      >
         <Ungroup className="size-4" />
         {stack ? "解除堆叠" : "解除编组"}
       </Button>
@@ -227,7 +238,7 @@ export function CanvasContainerToolbar({
         <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" disabled={readOnly}>
+              <Button variant="ghost" size="toolbar" disabled={readOnly}>
                 <LayoutGrid className="size-4" />
                 布局
               </Button>
@@ -246,7 +257,7 @@ export function CanvasContainerToolbar({
           </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" disabled={readOnly}>
+              <Button variant="ghost" size="toolbar" disabled={readOnly}>
                 <Palette className="size-4" />
                 背景色
               </Button>
@@ -280,10 +291,10 @@ export function CanvasContainerToolbar({
           </DropdownMenu>
         </>
       )}
-      <Button variant="ghost" size="sm" onClick={onDownload}>
+      <Button variant="ghost" size="toolbar" onClick={onDownload}>
         <Download className="size-4" />
         下载
       </Button>
-    </div>
+    </Toolbar>
   );
 }

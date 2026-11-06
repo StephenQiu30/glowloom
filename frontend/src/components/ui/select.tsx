@@ -44,7 +44,7 @@ function SelectTrigger({
   children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
-  size?: "sm" | "default";
+  size?: "sm" | "default" | "toolbar";
   variant?: "default" | "quiet";
 }) {
   return (
@@ -54,7 +54,11 @@ function SelectTrigger({
       data-variant={variant}
       className={cn(
         "flex w-fit max-w-full min-w-0 items-center justify-between gap-1.5 rounded-sm border border-transparent py-1 pr-2.5 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:ring-1 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:bg-destructive/5 aria-invalid:ring-1 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground max-md:min-h-11 dark:aria-invalid:ring-destructive/40 pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        size === "sm" ? "h-7" : "h-9",
+        size === "toolbar"
+          ? "h-(--toolbar-control-size) text-xs"
+          : size === "sm"
+            ? "h-7"
+            : "h-9",
         "[&>[data-slot=select-value]]:min-w-0 [&>[data-slot=select-value]]:flex-1 [&>[data-slot=select-value]]:truncate [&>[data-slot=select-value]]:text-left",
         variant === "quiet"
           ? "bg-transparent text-foreground hover:bg-accent"

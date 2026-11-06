@@ -155,10 +155,8 @@
   touch-action: none;
 }
 .timeline-tools {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 38px;
+  flex-wrap: wrap;
+  min-height: var(--toolbar-group-height);
   padding: 4px 10px;
 }
 .timeline-tracks-scroll {
@@ -576,9 +574,6 @@
 .timeline-assets [data-variant="line"] [data-slot="tabs-trigger"] {
   padding: 4px 8px;
   background: transparent;
-}
-.timeline-tools {
-  min-height: 44px;
 }
 .timeline-add-audio {
   opacity: 0;

@@ -1,3 +1,4 @@
+import { Toolbar } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -79,7 +80,8 @@ export function CanvasTopBar({
 }) {
   return (
     <TooltipProvider>
-      <div
+      <Toolbar
+        density="roomy"
         data-canvas-no-zoom
         className="canvas-topbar flex min-w-0 flex-1 items-center justify-between gap-2"
       >
@@ -88,7 +90,7 @@ export function CanvasTopBar({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="default"
+                size="toolbar"
                 className="canvas-brand"
                 aria-label="打开导航菜单"
               >
@@ -139,7 +141,7 @@ export function CanvasTopBar({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="default"
+                size="toolbar"
                 className="canvas-project-trigger"
                 aria-label="打开画布菜单"
               >
@@ -233,7 +235,7 @@ export function CanvasTopBar({
           >
             <Button
               variant="ghost"
-              size="icon-lg"
+              size="toolbar-icon"
               aria-label="搜索画布"
               disabled={!onFocusNode}
             >
@@ -241,7 +243,7 @@ export function CanvasTopBar({
             </Button>
           </CanvasNodeSearch>
           <CanvasHistoryDialog>
-            <Button variant="ghost" size="icon-lg" aria-label="生成历史">
+            <Button variant="ghost" size="toolbar-icon" aria-label="生成历史">
               <History />
             </Button>
           </CanvasHistoryDialog>
@@ -249,7 +251,7 @@ export function CanvasTopBar({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="default"
+                size="toolbar"
                 className="canvas-share-trigger"
                 aria-label="复制画布链接"
                 onClick={() => {
@@ -269,7 +271,7 @@ export function CanvasTopBar({
           </Tooltip>
           <Button
             variant="ghost"
-            size="icon-lg"
+            size="toolbar-icon"
             aria-label="账号设置"
             disabled={!canSwitchCanvas}
             asChild={canSwitchCanvas}
@@ -283,7 +285,7 @@ export function CanvasTopBar({
             )}
           </Button>
         </div>
-      </div>
+      </Toolbar>
     </TooltipProvider>
   );
 }

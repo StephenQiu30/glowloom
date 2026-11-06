@@ -1853,7 +1853,7 @@ function EditorWorkspace({
               {headerActions}
               <InputGroupButton
                 aria-label="引用参考"
-                size="icon-sm"
+                size="toolbar-icon"
                 disabled={frozen || !session}
                 onClick={() =>
                   session?.editor
@@ -1869,7 +1869,7 @@ function EditorWorkspace({
                 <PopoverTrigger asChild>
                   <InputGroupButton
                     aria-label="模型与参数"
-                    size="icon-sm"
+                    size="toolbar-icon"
                     disabled={frozen || !session}
                   >
                     <SlidersHorizontal />
@@ -1920,8 +1920,8 @@ function EditorWorkspace({
                 费用待确认
               </span>
               <InputGroupButton
-                className="ml-auto size-8 shrink-0 rounded-full"
-                size="icon-sm"
+                className="ml-auto rounded-full"
+                size="toolbar-icon"
                 variant="default"
                 aria-label={
                   current.submission
@@ -1987,7 +1987,7 @@ function EditorWorkspace({
                 {presentation !== "home" && (
                   <InputGroupButton
                     aria-label={full ? "退出全屏" : "展开编辑器"}
-                    size="icon-sm"
+                    size="toolbar-icon"
                     className="ml-auto"
                     onClick={() => setFull((value) => !value)}
                   >
@@ -2020,7 +2020,7 @@ function EditorWorkspace({
                   <DropdownMenuTrigger asChild>
                     <InputGroupButton
                       aria-label="更多工具"
-                      size="icon-sm"
+                      size="toolbar-icon"
                       disabled={pending || frozen}
                     >
                       <MoreHorizontal />
@@ -2047,7 +2047,7 @@ function EditorWorkspace({
               {presentation === "home" && (
                 <InputGroupButton
                   aria-label={full ? "退出全屏" : "展开编辑器"}
-                  size="icon-sm"
+                  size="toolbar-icon"
                   onClick={() => setFull((value) => !value)}
                 >
                   {full ? <Minimize2 /> : <Maximize2 />}
@@ -2124,7 +2124,11 @@ function EditorWorkspace({
                       selectMode(draft.modelVersion!, mode)
                     }
                   >
-                    <SelectTrigger aria-label="音乐模式" className="w-auto">
+                    <SelectTrigger
+                      size="toolbar"
+                      aria-label="音乐模式"
+                      className="w-auto"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2156,7 +2160,7 @@ function EditorWorkspace({
                   !["avatar", "motion"].includes(seed.creationType ?? "") && (
                     <InputGroupButton
                       aria-label="提及素材或主体"
-                      size="icon-sm"
+                      size="toolbar-icon"
                       disabled={frozen || !session}
                       onClick={() =>
                         session?.editor
@@ -2178,6 +2182,7 @@ function EditorWorkspace({
               </span>
               {current.submission ? (
                 <InputGroupButton
+                  size="toolbar"
                   className="ml-auto"
                   variant="default"
                   onClick={() => setQuoteReviewOpen(true)}
@@ -2188,8 +2193,8 @@ function EditorWorkspace({
                 </InputGroupButton>
               ) : (
                 <InputGroupButton
-                  className="ml-auto size-9 shrink-0 rounded-full max-md:size-11"
-                  size="icon-sm"
+                  className="ml-auto rounded-full"
+                  size="toolbar-icon"
                   variant="default"
                   aria-label="检查费用"
                   title="检查费用并继续"

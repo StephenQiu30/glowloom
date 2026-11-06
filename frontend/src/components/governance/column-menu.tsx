@@ -20,7 +20,7 @@ export function ColumnMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost">
+        <Button type="button" size="toolbar" variant="ghost">
           <Columns3 data-icon="inline-start" />
           显示列
         </Button>

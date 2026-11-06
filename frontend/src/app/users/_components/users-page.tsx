@@ -536,6 +536,7 @@ function UserAdministration() {
                 ["enable", "revoke_sessions", "disable", "delete"] as const
               ).map((kind) => (
                 <Button
+                  size="toolbar"
                   key={kind}
                   variant={kind === "delete" ? "destructive" : "outline"}
                   disabled={locked || batch.unresolved}

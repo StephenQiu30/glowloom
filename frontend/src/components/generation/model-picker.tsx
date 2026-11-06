@@ -50,10 +50,11 @@ export function ModelPicker({
         <Button
           type="button"
           variant="ghost"
+          size="toolbar"
           aria-label={label}
           aria-expanded={open}
           disabled={disabled}
-          className="max-w-60 min-w-0 justify-start max-md:min-h-11"
+          className="max-w-60 min-w-0 justify-start"
         >
           <Sparkles data-icon="inline-start" />
           <span className="truncate">

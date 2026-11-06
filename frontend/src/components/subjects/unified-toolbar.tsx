@@ -1,4 +1,5 @@
 "use client";
+import { Toolbar } from "@/components/ui/toolbar";
 import type { Ref } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,15 +45,20 @@ export function UnifiedSubjectToolbar({
   onBatch: () => void;
 }) {
   return (
-    <div className="unified-subject-toolbar flex min-w-0 flex-1 flex-col gap-2">
+    <Toolbar className="unified-subject-toolbar flex min-w-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
           <div className="group relative inline-flex min-w-0">
             <DropdownMenuTrigger asChild>
               <Button
+                size="toolbar"
                 variant={value.favorite ? "secondary" : "ghost"}
                 disabled={disabled}
-                className={value.favorite ? "pr-9" : undefined}
+                className={
+                  value.favorite
+                    ? "pr-[var(--toolbar-control-size)]"
+                    : undefined
+                }
               >
                 {value.favorite ? "收藏" : "筛选"}
                 <ChevronDown
@@ -67,10 +73,10 @@ export function UnifiedSubjectToolbar({
             {value.favorite ? (
               <Button
                 variant="ghost"
-                size="icon"
+                size="toolbar-icon"
                 disabled={disabled}
                 aria-label="清空筛选"
-                className="absolute top-0 right-0 h-full w-9 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+                className="absolute top-0 right-0 h-full opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"
                 onClick={() => onChange({ ...value, favorite: false })}
               >
                 <X />
@@ -94,7 +100,11 @@ export function UnifiedSubjectToolbar({
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" disabled={disabled || searching}>
+            <Button
+              size="toolbar"
+              variant="ghost"
+              disabled={disabled || searching}
+            >
               排序
               <ChevronDown />
             </Button>
@@ -137,6 +147,7 @@ export function UnifiedSubjectToolbar({
         </DropdownMenu>
         {showBatchAction ? (
           <Button
+            size="toolbar"
             variant="ghost"
             ref={batchTriggerRef}
             className="ml-auto"
@@ -147,6 +158,6 @@ export function UnifiedSubjectToolbar({
           </Button>
         ) : null}
       </div>
-    </div>
+    </Toolbar>
   );
 }

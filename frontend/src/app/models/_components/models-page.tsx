@@ -202,7 +202,7 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
             <span className="text-muted-foreground">
               {archivedConnection ? "恢复连接后可添加模型" : "本页按连接筛选"}
             </span>
-            <Button asChild variant="link">
+            <Button asChild variant="link" size="toolbar">
               <Link href="/models">查看全部模型</Link>
             </Button>
           </div>
@@ -218,7 +218,7 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
           />
         ) : null}
         <Button
-          className="max-md:h-11"
+          size="toolbar"
           disabled={locked || archivedConnection}
           onClick={() => setCreateOpen(true)}
         >
@@ -281,6 +281,7 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
             >
               <Button
                 variant="destructive"
+                size="toolbar"
                 disabled={locked}
                 onClick={() =>
                   void batch.prepare(selectedRows, modelBatchAction)

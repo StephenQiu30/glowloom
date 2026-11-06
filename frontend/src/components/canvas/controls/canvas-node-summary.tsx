@@ -57,6 +57,7 @@ export function CanvasNodeSummary({
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
+            size="toolbar"
             className="canvas-node-summary-trigger shrink-0 tabular-nums"
             aria-label={`节点统计，共 ${nodes.length} 个节点`}
           >

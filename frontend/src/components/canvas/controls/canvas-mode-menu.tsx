@@ -24,7 +24,7 @@ export function CanvasModeMenu({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-lg"
+          size="toolbar-icon"
           aria-label={`画布操作模式：${value === "pan" ? "抓手" : "选择"}`}
           title="操作模式（V / H）"
           data-canvas-mode-trigger

@@ -1,3 +1,4 @@
+import { ToolbarGroup } from "@/components/ui/toolbar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -478,11 +479,12 @@ export function CanvasNodeHoverToolbar({
 
   return (
     <>
-      <div
+      <ToolbarGroup
+        appearance="plain"
         ref={measureToolbar}
         role="toolbar"
         aria-label="节点工具栏"
-        className="shadow-overlay absolute z-[70] flex min-h-11 w-max -translate-x-1/2 -translate-y-full flex-wrap items-center overflow-visible rounded-xl border text-sm"
+        className="shadow-overlay absolute z-[70] w-max -translate-x-1/2 -translate-y-full flex-wrap items-center overflow-visible rounded-xl border text-sm"
         style={{
           left,
           top,
@@ -513,7 +515,11 @@ export function CanvasNodeHoverToolbar({
           }}
         >
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="更多节点操作">
+            <Button
+              variant="ghost"
+              size="toolbar-icon"
+              aria-label="更多节点操作"
+            >
               <Ellipsis />
             </Button>
           </DropdownMenuTrigger>
@@ -547,7 +553,7 @@ export function CanvasNodeHoverToolbar({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </ToolbarGroup>
       {hasImage ? (
         <ImageToolSettingsModal
           open={imageToolSettingsOpen}
@@ -752,7 +758,7 @@ function ToolbarAction({
       <TooltipTrigger asChild>
         <Button
           variant={danger ? "destructive" : active ? "secondary" : "ghost"}
-          size={hasText ? "sm" : "icon-sm"}
+          size={hasText ? "toolbar" : "toolbar-icon"}
           type="button"
           onClick={onClick}
           aria-label={title}

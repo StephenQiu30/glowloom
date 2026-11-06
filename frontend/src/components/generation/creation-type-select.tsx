@@ -47,6 +47,7 @@ export function CreationTypeSelect({
       <SelectTrigger
         aria-label="创作类型"
         variant="quiet"
+        size="toolbar"
         className="w-auto text-[var(--navigation-accent)] max-md:min-h-11 [&_svg]:text-[var(--navigation-accent)]"
       >
         <Icon aria-hidden="true" />

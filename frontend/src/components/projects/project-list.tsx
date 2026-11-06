@@ -1,4 +1,5 @@
 "use client";
+import { Toolbar } from "@/components/ui/toolbar";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { useEffect, useRef, useState } from "react";
@@ -166,7 +167,7 @@ export function ProjectList({
         : ["archive", "recycle"];
   return (
     <div aria-busy={loading}>
-      <div
+      <Toolbar
         ref={toolbar}
         role="group"
         aria-label="画布管理工具栏"
@@ -200,7 +201,7 @@ export function ProjectList({
                 <Button
                   key={action}
                   variant="outline"
-                  size="default"
+                  size="toolbar"
                   disabled={
                     loading ||
                     !!operation ||
@@ -216,7 +217,7 @@ export function ProjectList({
               ))}
               <Button
                 variant="ghost"
-                size="default"
+                size="toolbar"
                 disabled={!!operation}
                 onClick={() => {
                   setManaging(false);
@@ -239,7 +240,7 @@ export function ProjectList({
               <Button
                 key={value}
                 variant={filter === value ? "secondary" : "ghost"}
-                size="default"
+                size="toolbar"
                 aria-pressed={filter === value}
                 onClick={() => onFilterChange?.(value)}
               >
@@ -269,7 +270,7 @@ export function ProjectList({
             <Button
               className="ml-auto"
               variant="outline"
-              size="default"
+              size="toolbar"
               disabled={!writable || loading || selectable.length === 0}
               onClick={() => setManaging(true)}
             >
@@ -277,7 +278,7 @@ export function ProjectList({
             </Button>
           </>
         )}
-      </div>
+      </Toolbar>
       {loading && !page && (
         <ContentState state="loading" title="正在读取画布" />
       )}

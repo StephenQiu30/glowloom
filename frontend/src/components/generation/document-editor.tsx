@@ -1,5 +1,6 @@
 "use client";
 
+import { Toolbar } from "@/components/ui/toolbar";
 import type { Transaction } from "@tiptap/pm/state";
 import type { ComposerCollaboration } from "./composer-session";
 
@@ -393,7 +394,7 @@ function DocumentToolbar({
     },
   ];
   return (
-    <div
+    <Toolbar
       role="toolbar"
       aria-label="文本格式"
       className="rich-document-toolbar"
@@ -402,7 +403,7 @@ function DocumentToolbar({
     >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" aria-label="文本样式">
+          <Button variant="ghost" size="toolbar" aria-label="文本样式">
             {state.heading ? `标题 ${state.heading}` : "正文"}
             <ChevronDown />
           </Button>
@@ -431,7 +432,7 @@ function DocumentToolbar({
         <Button
           key={label}
           variant="ghost"
-          size="icon-sm"
+          size="toolbar-icon"
           aria-label={label}
           aria-pressed={active}
           onClick={run}
@@ -441,7 +442,7 @@ function DocumentToolbar({
       ))}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="文本对齐">
+          <Button variant="ghost" size="toolbar-icon" aria-label="文本对齐">
             {state.alignment === "center" ? (
               <AlignCenter />
             ) : state.alignment === "right" ? (
@@ -475,7 +476,7 @@ function DocumentToolbar({
         <Button
           key={label}
           variant="ghost"
-          size="icon-sm"
+          size="toolbar-icon"
           aria-label={label}
           aria-pressed={active}
           onClick={run}
@@ -485,7 +486,7 @@ function DocumentToolbar({
       ))}
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="撤销文本编辑"
         disabled={
           collaboration
@@ -502,7 +503,7 @@ function DocumentToolbar({
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="重做文本编辑"
         disabled={
           collaboration
@@ -520,13 +521,13 @@ function DocumentToolbar({
       {!expanded && (
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="toolbar-icon"
           aria-label="全屏编辑文本"
           onClick={onExpand}
         >
           <Maximize2 />
         </Button>
       )}
-    </div>
+    </Toolbar>
   );
 }

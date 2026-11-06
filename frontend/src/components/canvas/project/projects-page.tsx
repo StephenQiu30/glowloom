@@ -1,4 +1,5 @@
 "use client";
+import { Toolbar } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
 import { Square, PanelLeft, Plus, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -160,6 +161,7 @@ function ProjectLibrary() {
             }}
           >
             <SelectTrigger
+              size="toolbar"
               className="workspace-list-sort"
               aria-label="画布排序"
             >
@@ -172,7 +174,7 @@ function ProjectLibrary() {
               </SelectGroup>
             </SelectContent>
           </Select>
-          <div
+          <Toolbar
             className="workspace-list-selection flex flex-wrap items-center justify-between gap-3"
             aria-label="画布批量操作"
           >
@@ -241,6 +243,7 @@ function ProjectLibrary() {
             {selected.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <Button
+                  size="toolbar"
                   variant="ghost"
                   disabled={active || !selected.length}
                   onClick={() => setSelected([])}
@@ -248,6 +251,7 @@ function ProjectLibrary() {
                   清空选择
                 </Button>
                 <Button
+                  size="toolbar"
                   variant="destructive"
                   disabled={selectionDisabled || !selected.length}
                   onClick={() =>
@@ -263,7 +267,7 @@ function ProjectLibrary() {
                 </Button>
               </div>
             )}
-          </div>
+          </Toolbar>
           <ToggleGroup
             type="single"
             value={view}

@@ -428,6 +428,7 @@ function ScopedHomeCreation() {
                               />
                             ) : (
                               <Button
+                                size="toolbar"
                                 type="button"
                                 variant="ghost"
                                 onClick={prepare}
@@ -440,6 +441,7 @@ function ScopedHomeCreation() {
                           </div>
                           {projectEntry(
                             <Button
+                              size="toolbar"
                               type="button"
                               variant="ghost"
                               onClick={supported ? undefined : prepare}
@@ -455,7 +457,7 @@ function ScopedHomeCreation() {
                             <Button
                               type="button"
                               variant="ghost"
-                              size="icon"
+                              size="toolbar-icon"
                               aria-label="添加主体或素材引用"
                               onClick={() => {
                                 if (!session) login();
@@ -479,7 +481,7 @@ function ScopedHomeCreation() {
                           </span>
                           <Button
                             type="submit"
-                            size="icon"
+                            size="toolbar-icon"
                             className="creation-submit"
                             disabled={supported && !hasInput}
                             aria-label={

@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "next-themes";
+import { TooltipProvider } from "../../src/components/ui/tooltip";
 import { CanvasProviders } from "../../src/components/canvas/editor";
 import { serviceGraph } from "../../src/components/canvas/service-graph";
 import "../../src/app/globals.css";
@@ -23,19 +24,21 @@ const document = serviceGraph(
 );
 createRoot(window.document.getElementById("root")!).render(
   <ThemeProvider attribute="class">
-    <CanvasProviders>
-      <CanvasPage
-        documentIntegration={{
-          projectId: project,
-          initialState: document,
-          viewStateKey: "canvas-ui-fixture",
-          mediaEnabled: false,
-          canNavigate: true,
-          frozen: false,
-          onChange: () => {},
-          toolbar: () => null,
-        }}
-      />
-    </CanvasProviders>
+    <TooltipProvider>
+      <CanvasProviders>
+        <CanvasPage
+          documentIntegration={{
+            projectId: project,
+            initialState: document,
+            viewStateKey: "canvas-ui-fixture",
+            mediaEnabled: false,
+            canNavigate: true,
+            frozen: false,
+            onChange: () => {},
+            toolbar: () => null,
+          }}
+        />
+      </CanvasProviders>
+    </TooltipProvider>
   </ThemeProvider>,
 );

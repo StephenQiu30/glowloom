@@ -396,9 +396,15 @@ button:not(:disabled),
 :root {
   --toolbar-control-size: 28px;
   --toolbar-group-padding: 3px;
+}
+:root,
+[data-toolbar-density="roomy"] {
   --toolbar-group-height: calc(
     var(--toolbar-control-size) + 2 * var(--toolbar-group-padding) + 2px
   );
+}
+[data-toolbar-density="roomy"] {
+  --toolbar-control-size: 40px;
 }
 .toolbar-group {
   display: inline-flex;
@@ -419,6 +425,9 @@ button:not(:disabled),
   :root {
     --toolbar-control-size: 44px;
     --toolbar-group-padding: 2px;
+  }
+  [data-toolbar-density="roomy"] {
+    --toolbar-control-size: 44px;
   }
 }
 .product-header {
@@ -1713,21 +1722,12 @@ button:not(:disabled),
     gap: 8px;
     align-items: center;
   }
-  .creation-tools > button {
-    min-height: 44px;
-    min-width: 44px;
-    padding-inline: 8px;
-  }
-  .creation-option-tools button,
   .creation-project-control > button {
     min-height: 44px;
     min-width: 44px;
   }
   .creation-project-control {
     max-width: 120px;
-  }
-  .creation-submit {
-    width: 44px;
   }
   .creation-reference-tools > button {
     min-width: 44px;
@@ -3135,17 +3135,6 @@ button:not(:disabled),
   }
   .billing-metrics {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.creation-tools button {
-  min-height: 36px;
-  min-width: 36px;
-}
-@media (max-width: 767px) {
-  .creation-tools button {
-    min-height: 44px;
-    min-width: 44px;
   }
 }
 

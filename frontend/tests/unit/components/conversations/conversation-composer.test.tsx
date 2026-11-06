@@ -43,6 +43,11 @@ it("submits from the keyboard only when sending is eligible", () => {
       onChooseProject={() => {}}
     />,
   );
+  expect(
+    screen
+      .getByRole("group", { name: "创作输入" })
+      .contains(screen.getByRole("button", { name: "模拟键盘提交" })),
+  ).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "模拟键盘提交" }));
   expect(value.send).toHaveBeenCalledTimes(1);
 });

@@ -448,6 +448,7 @@ function TeamAdministration() {
           >
             {(["restore", "suspend"] as const).map((kind) => (
               <Button
+                size="toolbar"
                 key={kind}
                 variant="outline"
                 disabled={locked}

@@ -1,5 +1,6 @@
 "use client";
 
+import { Toolbar } from "@/components/ui/toolbar";
 import { useRef, useState } from "react";
 import { Download, Maximize2 } from "lucide-react";
 import { toast } from "sonner";
@@ -64,10 +65,10 @@ export function CanvasTextActions({
     content: textToDocument(node.metadata?.content ?? ""),
   };
   const left = Math.max(
-    88,
+    96,
     Math.min(
       viewport.x + (node.position.x + node.width / 2) * viewport.k,
-      canvasSize.width - 88,
+      canvasSize.width - 96,
     ),
   );
   // Screen-space controls stay the same size at every world-space zoom.
@@ -81,7 +82,7 @@ export function CanvasTextActions({
 
   return (
     <>
-      <div
+      <Toolbar
         role="toolbar"
         aria-label="文本选中操作"
         className="canvas-text-actions"
@@ -104,6 +105,7 @@ export function CanvasTextActions({
         >
           <DropdownMenuTrigger asChild>
             <Button
+              size="toolbar"
               variant="ghost"
               className="canvas-text-background-trigger"
               aria-label="背景色"
@@ -155,7 +157,7 @@ export function CanvasTextActions({
         <span className="canvas-text-action-divider" aria-hidden="true" />
         <Button
           variant="ghost"
-          size="icon"
+          size="toolbar-icon"
           ref={expandRef}
           aria-label="全屏"
           onClick={() => {
@@ -167,7 +169,7 @@ export function CanvasTextActions({
         </Button>
         <Button
           variant="ghost"
-          size="icon"
+          size="toolbar-icon"
           aria-label="下载文本"
           onClick={() => {
             void import("../runtime/components/editor/lib/rich-text-download")
@@ -179,7 +181,7 @@ export function CanvasTextActions({
         >
           <Download />
         </Button>
-      </div>
+      </Toolbar>
       {expanded && (
         <div className="hidden">
           <RichTextInput

@@ -1,5 +1,6 @@
 "use client";
 
+import { Toolbar } from "@/components/ui/toolbar";
 import { useState, type ComponentProps, type ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -69,7 +70,12 @@ export function CanvasIconButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={label} {...props}>
+        <Button
+          variant="ghost"
+          size="toolbar-icon"
+          aria-label={label}
+          {...props}
+        >
           {children}
         </Button>
       </TooltipTrigger>
@@ -92,7 +98,12 @@ function Unavailable({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" aria-label={label} className={className}>
+        <Button
+          variant="ghost"
+          size="toolbar-icon"
+          aria-label={label}
+          className={className}
+        >
           {children}
         </Button>
       </PopoverTrigger>
@@ -323,12 +334,13 @@ export function CanvasToolPalette({
     { kind: "audio", label: "添加音频", Icon: AudioLines },
   ] as const;
   return (
-    <div
+    <Toolbar
+      density="roomy"
       role="toolbar"
       aria-label="画布工具"
       aria-orientation="vertical"
       data-canvas-chrome="tools"
-      className="absolute top-1/2 left-3 flex max-h-[calc(100dvh-10rem)] w-12 -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto rounded-2xl border bg-card py-1 shadow-sm [&_button]:size-11 [&_button]:shrink-0 [&_svg]:size-5"
+      className="absolute top-1/2 left-3 flex max-h-[calc(100dvh-10rem)] w-12 -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto rounded-2xl border bg-card py-1 shadow-sm [&_button]:shrink-0 [&_svg]:size-5"
     >
       {tools.map(({ kind, label, Icon }) =>
         readOnly ? (
@@ -397,7 +409,7 @@ export function CanvasToolPalette({
           <Upload />
         </CanvasIconButton>
       )}
-    </div>
+    </Toolbar>
   );
 }
 
@@ -433,16 +445,20 @@ export function CanvasViewControls({
   onSnap?: () => void;
 }) {
   return (
-    <div
+    <Toolbar
       role="toolbar"
       aria-label="画布视图"
       data-canvas-chrome="view"
-      className="absolute bottom-3 left-3 flex h-9 items-center gap-1 rounded-lg bg-background/90 sm:gap-2"
+      className="absolute bottom-3 left-3 flex items-center gap-1 rounded-lg bg-background/90 sm:gap-2"
     >
       {onTool ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="secondary" size="icon" aria-label="切换画布工具">
+            <Button
+              variant="secondary"
+              size="toolbar-icon"
+              aria-label="切换画布工具"
+            >
               {tool === "select" ? (
                 <MousePointer2 className="size-5" />
               ) : (
@@ -492,6 +508,7 @@ export function CanvasViewControls({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
+            size="toolbar"
             variant="ghost"
             className="min-w-18 tabular-nums"
             aria-label="缩放菜单"
@@ -546,7 +563,7 @@ export function CanvasViewControls({
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Toolbar>
   );
 }
 

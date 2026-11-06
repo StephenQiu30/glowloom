@@ -94,7 +94,7 @@ export function AssetFilterMenu({
       <DropdownMenuTrigger asChild>
         <Button
           variant="filter"
-          size="workspace"
+          size="toolbar"
           data-active={active || undefined}
           disabled={disabled}
           aria-label={value.favorite ? "筛选资产：收藏" : "筛选资产"}

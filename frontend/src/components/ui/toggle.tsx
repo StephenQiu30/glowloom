@@ -19,6 +19,8 @@ const toggleVariants = cva(
         outline: "border border-input bg-transparent hover:bg-muted",
       },
       size: {
+        toolbar:
+          "h-(--toolbar-control-size) min-w-(--toolbar-control-size) px-2 text-xs",
         workspace:
           "h-9 min-w-0 px-4 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium max-md:min-h-11 pointer-coarse:min-h-11",
         hero: "h-8 min-w-0 px-3 leading-5",

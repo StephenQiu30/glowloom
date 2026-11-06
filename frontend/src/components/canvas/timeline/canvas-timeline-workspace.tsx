@@ -1,4 +1,5 @@
 "use client";
+import { Toolbar } from "@/components/ui/toolbar";
 import {
   useCallback,
   useEffect,
@@ -718,10 +719,14 @@ function TimelineWorkspace({
   const trackWidth = trackGeometry.lane;
   const rulerIntervals = timelineRulerIntervals(zoom, compact);
   const toolbar = (
-    <div role="toolbar" aria-label="时间线剪辑工具" className="timeline-tools">
+    <Toolbar
+      role="toolbar"
+      aria-label="时间线剪辑工具"
+      className="timeline-tools"
+    >
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="撤销"
         disabled={readOnly || !client.timelineHistoryState(nodeID).canUndo}
         onClick={() => changeHistory("undo")}
@@ -730,7 +735,7 @@ function TimelineWorkspace({
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="重做"
         disabled={readOnly || !client.timelineHistoryState(nodeID).canRedo}
         onClick={() => changeHistory("redo")}
@@ -739,7 +744,7 @@ function TimelineWorkspace({
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="分割"
         title={!cuttable ? "将播放头移动到目标片段内进行剪切。" : "分割"}
         disabled={readOnly || !cuttable}
@@ -751,7 +756,7 @@ function TimelineWorkspace({
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="向左剪裁"
         title={!cuttable ? "将播放头移动到目标片段内进行剪切。" : "向左剪裁"}
         disabled={readOnly || !cuttable}
@@ -763,7 +768,7 @@ function TimelineWorkspace({
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="向右剪裁"
         title={!cuttable ? "将播放头移动到目标片段内进行剪切。" : "向右剪裁"}
         disabled={readOnly || !cuttable}
@@ -775,7 +780,7 @@ function TimelineWorkspace({
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="删除"
         disabled={readOnly || !selectedClip || selectedTrack?.locked}
         onClick={() => selected && edit({ type: "remove", id: selected })}
@@ -787,7 +792,7 @@ function TimelineWorkspace({
         <div className="timeline-audio-controls">
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="toolbar-icon"
             disabled={readOnly || selectedTrack?.locked}
             aria-label={selectedClip.volume ? "静音片段" : "开启片段声音"}
             onClick={() =>
@@ -828,7 +833,7 @@ function TimelineWorkspace({
 
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label={timeline.snapping ? "关闭自动吸附" : "开启自动吸附"}
         aria-pressed={timeline.snapping}
         disabled={readOnly}
@@ -845,7 +850,7 @@ function TimelineWorkspace({
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="缩小视图"
         onClick={() => changeZoom(zoom / 1.1)}
       >
@@ -862,13 +867,13 @@ function TimelineWorkspace({
       />
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="放大视图"
         onClick={() => changeZoom(zoom * 1.1)}
       >
         <CirclePlus />
       </Button>
-    </div>
+    </Toolbar>
   );
   const importer = (trigger: ReactNode, trackID?: string) => (
     <DropdownMenu>

@@ -1,4 +1,5 @@
 "use client";
+import { ToolbarGroup } from "@/components/ui/toolbar";
 import {
   useCallback,
   useEffect,
@@ -1422,7 +1423,8 @@ function DirectorWorkspace({
         )}
         <div className="director-stage">
           {!compact && (
-            <div
+            <ToolbarGroup
+              appearance="plain"
               className="director-stage-tools"
               role="toolbar"
               aria-label="场景工具"
@@ -1438,7 +1440,7 @@ function DirectorWorkspace({
                 <Button
                   key={mode}
                   variant={tool === mode ? "secondary" : "ghost"}
-                  size="icon-sm"
+                  size="toolbar-icon"
                   aria-label={label}
                   aria-pressed={tool === mode}
                   onClick={() => setTool(mode)}
@@ -1448,7 +1450,7 @@ function DirectorWorkspace({
               ))}
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="toolbar-icon"
                 aria-label="聚焦选中对象"
                 onClick={() => setFocus((v) => v + 1)}
               >
@@ -1456,7 +1458,7 @@ function DirectorWorkspace({
               </Button>
               <Button
                 variant="ghost"
-                size="sm"
+                size="toolbar"
                 disabled={!selected || locked}
                 onClick={() => {
                   const grounded =
@@ -1466,7 +1468,7 @@ function DirectorWorkspace({
               >
                 落地
               </Button>
-            </div>
+            </ToolbarGroup>
           )}
           {motionPreview && (
             <div role="status" className="director-placement-banner">

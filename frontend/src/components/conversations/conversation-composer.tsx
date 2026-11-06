@@ -28,6 +28,7 @@ import { canonical } from "@/components/generation/draft-save";
 import { ReferenceControls } from "@/components/generation/reference-controls";
 import { ReferenceStack } from "@/components/generation/reference-stack";
 import { ModelPicker } from "@/components/generation/model-picker";
+import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -131,6 +132,7 @@ export function ConversationComposer({
     <div
       className="conversation-composer relative w-full rounded-[24px] border bg-card p-4 text-left data-[welcome=true]:md:py-[15px]"
       data-welcome={welcome}
+      role="group"
       aria-label="创作输入"
       onKeyDown={(event) => {
         if (
@@ -226,10 +228,14 @@ export function ConversationComposer({
           />
         </div>
       </div>
-      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-1">
+      <Toolbar
+        className="mt-3 flex-wrap"
+        aria-label="对话创作工具"
+        role="group"
+      >
         {headerActions ?? (
           <span
-            className="flex h-9 items-center gap-1.5 px-2 text-sm data-[welcome=true]:text-[var(--navigation-accent)]"
+            className="flex h-(--toolbar-control-size) items-center gap-1.5 px-2 text-sm data-[welcome=true]:text-[var(--navigation-accent)]"
             data-welcome={welcome}
           >
             <Sparkles className="size-4" />
@@ -242,7 +248,7 @@ export function ConversationComposer({
             <Button
               type="button"
               variant="ghost"
-              className="max-md:min-h-11"
+              size="toolbar"
               aria-label="创作设置"
             >
               <SlidersHorizontal className="size-4" />
@@ -297,7 +303,7 @@ export function ConversationComposer({
               type="button"
               variant="ghost"
               aria-label="选择技能"
-              className="max-md:min-h-11"
+              size="toolbar"
             >
               <WandSparkles className="size-4" />
               <span className="max-sm:sr-only">
@@ -395,8 +401,7 @@ export function ConversationComposer({
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="max-md:size-11"
+          size="toolbar-icon"
           aria-label="添加主体或素材引用"
           disabled={!session}
           onClick={() => {
@@ -410,8 +415,7 @@ export function ConversationComposer({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="max-md:size-11"
+            size="toolbar-icon"
             aria-label={expanded ? "收起输入" : "展开输入"}
             onClick={() => setExpanded((value) => !value)}
           >
@@ -422,7 +426,11 @@ export function ConversationComposer({
             )}
           </Button>
         )}
-        <div className="ml-auto flex min-w-0 items-center gap-1">
+        <ToolbarGroup
+          appearance="plain"
+          aria-label="模型与发送"
+          className="ml-auto max-w-full"
+        >
           <span className="sr-only">对话模型</span>
           <ModelPicker
             label="对话模型"
@@ -436,11 +444,11 @@ export function ConversationComposer({
           />
           <Button
             type="button"
-            size="icon-round"
+            size="toolbar-icon"
             aria-label={label}
             aria-describedby={hintID}
             disabled={disabled}
-            className="size-9 shrink-0 rounded-full max-md:size-11"
+            className="rounded-full"
             onClick={() => {
               if (!authorized) {
                 onChooseProject();
@@ -460,8 +468,8 @@ export function ConversationComposer({
               <ArrowUp className="size-5" />
             )}
           </Button>
-        </div>
-      </div>
+        </ToolbarGroup>
+      </Toolbar>
       <p id={hintID} className="sr-only">
         {c.sendReason ?? "发送当前需求"}
       </p>

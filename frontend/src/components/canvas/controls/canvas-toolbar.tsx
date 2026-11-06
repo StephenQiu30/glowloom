@@ -1,3 +1,4 @@
+import { Toolbar } from "@/components/ui/toolbar";
 import type { ReactNode } from "react";
 import { ThemeToggle } from "@/components/controls/theme-controls";
 import { Button } from "@/components/ui/button";
@@ -88,7 +89,8 @@ export function CanvasToolbar({
     <div className="canvas-controls-layout" data-canvas-controls>
       <header className="canvas-control-header" data-canvas-no-zoom>
         {header}
-        <div
+        <Toolbar
+          density="roomy"
           data-canvas-no-zoom
           className="canvas-global-actions flex shrink-0 items-center gap-1"
         >
@@ -96,7 +98,7 @@ export function CanvasToolbar({
             <PopoverTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-lg"
+                size="toolbar-icon"
                 className="canvas-more-trigger"
                 aria-label="更多画布操作"
                 title="更多画布操作"
@@ -130,7 +132,7 @@ export function CanvasToolbar({
                     <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
-                        size="icon-lg"
+                        size="toolbar-icon"
                         aria-label={label}
                         onClick={action}
                         disabled={!enabled}
@@ -145,7 +147,7 @@ export function CanvasToolbar({
                 <CanvasGuideDialog kind="shortcuts">
                   <Button
                     variant="ghost"
-                    size="icon-lg"
+                    size="toolbar-icon"
                     aria-label="快捷键"
                     title="快捷键"
                   >
@@ -230,14 +232,17 @@ export function CanvasToolbar({
               </Button>
             </PopoverContent>
           </Popover>
-        </div>
+        </Toolbar>
       </header>
       <div
         data-canvas-no-zoom
         className="canvas-action-dock"
         aria-label="画布工具栏"
       >
-        <div className="canvas-dock-surface flex flex-col items-center">
+        <Toolbar
+          density="roomy"
+          className="canvas-dock-surface flex flex-col items-center"
+        >
           {definitions
             .filter((item) =>
               [
@@ -278,7 +283,7 @@ export function CanvasToolbar({
                     <PopoverTrigger asChild>
                       <Button
                         variant="ghost"
-                        size="icon-lg"
+                        size="toolbar-icon"
                         aria-label="导演工具箱"
                         disabled={!canEdit}
                       >
@@ -316,7 +321,7 @@ export function CanvasToolbar({
                     <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
-                        size="icon-lg"
+                        size="toolbar-icon"
                         aria-label={`添加${definition.title}节点`}
                         disabled={!canEdit}
                         onClick={() => onCreateNode(definition.type)}
@@ -334,7 +339,7 @@ export function CanvasToolbar({
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
-                      size="icon-lg"
+                      size="toolbar-icon"
                       aria-label={`添加${definition.title}节点`}
                       disabled={!canEdit}
                       onClick={() => onCreateNode(definition.type)}
@@ -353,7 +358,7 @@ export function CanvasToolbar({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-lg"
+                size="toolbar-icon"
                 aria-label="资产管理"
                 disabled={!canEdit}
                 onClick={onBrowseAssets}
@@ -367,7 +372,7 @@ export function CanvasToolbar({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-lg"
+                size="toolbar-icon"
                 aria-label="本地上传"
                 disabled={!canEdit}
                 onClick={onUpload}
@@ -377,11 +382,11 @@ export function CanvasToolbar({
             </TooltipTrigger>
             <TooltipContent side="right">本地上传</TooltipContent>
           </Tooltip>
-        </div>
+        </Toolbar>
       </div>
       <footer className="canvas-control-footer" data-canvas-no-zoom>
         {viewControls}
-        <div className="canvas-assistant-action">
+        <Toolbar className="canvas-assistant-action">
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -390,7 +395,7 @@ export function CanvasToolbar({
               >
                 <Button
                   variant="secondary"
-                  size="sm"
+                  size="toolbar"
                   aria-label="与 AI 对话"
                   onClick={onOpenAssistant}
                   disabled={!onOpenAssistant}
@@ -405,7 +410,7 @@ export function CanvasToolbar({
               {onOpenAssistant ? "与 AI 对话" : "AI 对话暂不可用"}
             </TooltipContent>
           </Tooltip>
-        </div>
+        </Toolbar>
       </footer>
     </div>
   );

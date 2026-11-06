@@ -1,10 +1,17 @@
 import type { ComponentProps } from "react";
 import { cn } from "cn";
 
-export function Toolbar({ className, ...props }: ComponentProps<"div">) {
+export function Toolbar({
+  className,
+  density = "standard",
+  ...props
+}: ComponentProps<"div"> & {
+  density?: "standard" | "roomy";
+}) {
   return (
     <div
       data-slot="toolbar"
+      data-toolbar-density={density}
       className={cn("flex min-w-0 items-center gap-2", className)}
       {...props}
     />

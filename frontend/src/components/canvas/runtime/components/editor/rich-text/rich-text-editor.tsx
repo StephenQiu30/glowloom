@@ -1,5 +1,6 @@
 "use client";
 
+import { Toolbar } from "@/components/ui/toolbar";
 import { Node, Extension, type Editor } from "@tiptap/core";
 import Mention, { type MentionOptions } from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -1036,7 +1037,7 @@ function EditorToolbar({
     "下划线",
   ];
   return (
-    <div
+    <Toolbar
       className="rich-text-toolbar"
       role="toolbar"
       aria-label="文档格式"
@@ -1045,6 +1046,7 @@ function EditorToolbar({
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
+            size="toolbar"
             variant="ghost"
             className="rich-text-style-trigger"
             disabled={disabled}
@@ -1133,7 +1135,7 @@ function EditorToolbar({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-sm"
+                    size="toolbar-icon"
                     disabled={disabled}
                     className="canvas-text-alignment-trigger"
                     aria-label="段落对齐"
@@ -1189,7 +1191,7 @@ function EditorToolbar({
       <Button
         type="button"
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="撤销文字编辑"
         title="撤销文字编辑"
         disabled={disabled || !state.undo}
@@ -1200,7 +1202,7 @@ function EditorToolbar({
       <Button
         type="button"
         variant="ghost"
-        size="icon-sm"
+        size="toolbar-icon"
         aria-label="重做文字编辑"
         title="重做文字编辑"
         disabled={disabled || !state.redo}
@@ -1214,7 +1216,7 @@ function EditorToolbar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="toolbar-icon"
               disabled={disabled}
               aria-label="插入素材引用"
               title="插入素材引用"
@@ -1229,6 +1231,7 @@ function EditorToolbar({
           >
             {references.map((r) => (
               <Button
+                size="toolbar"
                 key={r.id}
                 variant="ghost"
                 className="w-full justify-start"
@@ -1267,7 +1270,7 @@ function EditorToolbar({
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
+          size="toolbar-icon"
           aria-label="展开文档编辑"
           title="展开文档编辑"
           onClick={onExpand}
@@ -1275,7 +1278,7 @@ function EditorToolbar({
           <Maximize2 />
         </Button>
       ) : null}
-    </div>
+    </Toolbar>
   );
 }
 

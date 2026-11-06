@@ -173,7 +173,7 @@ export function ConversationDirectComposer({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
+            size="toolbar"
             onClick={onChooseProject}
           >
             <SlidersHorizontal data-icon="inline-start" />
@@ -184,7 +184,7 @@ export function ConversationDirectComposer({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
+            size="toolbar"
             onClick={onChooseProject}
           >
             上传音频
@@ -193,7 +193,7 @@ export function ConversationDirectComposer({
         {projectSetting}
         <Button
           type="button"
-          size="icon"
+          size="toolbar-icon"
           className="creation-submit ml-auto"
           disabled={!hasText}
           aria-label="生成"

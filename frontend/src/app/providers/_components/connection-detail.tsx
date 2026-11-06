@@ -45,6 +45,7 @@ import { useState, useId } from "react";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Toolbar } from "@/components/ui/toolbar";
 import { Spinner } from "@/components/ui/spinner";
 import { Separator } from "@/components/ui/separator";
 import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
@@ -327,8 +328,8 @@ export function ConnectionDetail({
             </>
           ) : null}
           <Separator />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" asChild>
+          <Toolbar aria-label="连接操作" className="flex-wrap">
+            <Button variant="outline" size="toolbar" asChild>
               <Link href={`/models?provider=${encodeURIComponent(id)}`}>
                 模型管理
               </Link>
@@ -336,7 +337,7 @@ export function ConnectionDetail({
             {provider?.status === "active" ? (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="ghost" className="max-md:h-11">
+                  <Button variant="ghost" size="toolbar">
                     停用连接
                   </Button>
                 </AlertDialogTrigger>
@@ -375,6 +376,7 @@ export function ConnectionDetail({
               <AlertDialogTrigger asChild>
                 <Button
                   variant={archived ? "outline" : "ghost"}
+                  size="toolbar"
                   disabled={keyBusy}
                 >
                   {archived ? "恢复连接" : "归档连接"}
@@ -414,7 +416,7 @@ export function ConnectionDetail({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          </div>
+          </Toolbar>
           <Collapsible open={advanced} onOpenChange={setAdvanced}>
             <CollapsibleTrigger asChild>
               <Button

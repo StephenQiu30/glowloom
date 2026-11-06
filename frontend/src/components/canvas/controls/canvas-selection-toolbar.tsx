@@ -1,3 +1,4 @@
+import { ToolbarGroup } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
 import { CanvasColorTags } from "./canvas-color-tags";
 import type { CanvasColorTag } from "../lib/canvas-color-tags";
@@ -114,10 +115,11 @@ export function CanvasSelectionToolbar({
         />
       </div>
       {showActions ? (
-        <div
+        <ToolbarGroup
+          appearance="plain"
           role="toolbar"
           aria-label="多选节点操作"
-          className="shadow-overlay absolute z-[70] flex min-h-12 max-w-[calc(100%-1.5rem)] flex-wrap justify-center rounded-xl border text-sm"
+          className="shadow-overlay absolute z-[70] max-w-[calc(100%-1.5rem)] flex-wrap justify-center rounded-xl border text-sm"
           style={{
             left: left + width / 2,
             transform: "translateX(-50%)",
@@ -144,7 +146,7 @@ export function CanvasSelectionToolbar({
           {canGroup && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-12 px-3" aria-label="编组">
+                <Button variant="ghost" size="toolbar-icon" aria-label="编组">
                   <Group className="size-4" />
                   编组
                 </Button>
@@ -168,7 +170,7 @@ export function CanvasSelectionToolbar({
           {onLayout && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-12 px-3" aria-label="布局">
+                <Button variant="ghost" size="toolbar-icon" aria-label="布局">
                   <LayoutDashboard className="size-4" />
                   布局
                 </Button>
@@ -214,7 +216,7 @@ export function CanvasSelectionToolbar({
               onClick={onUngroup}
             />
           ) : null}
-        </div>
+        </ToolbarGroup>
       ) : null}
       {showActions && onColorTagChange && (
         <div
@@ -275,15 +277,13 @@ function SelectionAction({
         <Button
           variant="ghost"
           type="button"
-          className="group relative flex h-12 items-center px-1.5 whitespace-nowrap"
+          size="toolbar"
           onClick={() => onClick()}
           disabled={disabled}
           aria-label={title}
         >
-          <span className="group-hover:bg-media-backdrop/5 dark:group-hover:bg-media-foreground/10 flex h-9 items-center gap-2 rounded-lg px-2.5 transition">
-            {icon}
-            <span>{label}</span>
-          </span>
+          {icon}
+          <span>{label}</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top">{title}</TooltipContent>

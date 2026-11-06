@@ -264,10 +264,6 @@ html:has(.canvas-controls-layout) {
       height: 40px;
       gap: 8px;
     }
-    .canvas-control-header :is(button, a[data-size]) {
-      height: 40px;
-    }
-    .canvas-control-header [data-size="icon-lg"],
     .canvas-controls-layout .canvas-brand {
       width: 40px;
       height: 40px;
@@ -288,7 +284,6 @@ html:has(.canvas-controls-layout) {
       height: 12px;
     }
     .canvas-control-header .canvas-node-summary-trigger {
-      height: 28px;
       padding-inline: 8px;
       font-size: 10px;
       font-weight: 400;
@@ -312,16 +307,10 @@ html:has(.canvas-controls-layout) {
       border-radius: 12px;
     }
     .canvas-dock-surface {
-      width: 48px;
+      width: max-content;
       gap: 2px;
       padding: 4px 4px 8px;
       border: 0;
-    }
-    .canvas-dock-surface [data-size="icon-lg"] {
-      width: 40px;
-      height: 40px;
-      padding: 10px;
-      border-radius: 8px;
     }
     .canvas-dock-surface [data-size] svg:not([class*="size-"]) {
       width: 20px;
@@ -330,18 +319,6 @@ html:has(.canvas-controls-layout) {
     .canvas-control-footer {
       min-height: 34px;
     }
-    .canvas-viewport-controls {
-      gap: 4px;
-      padding: 4px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-    }
-    .canvas-viewport-controls [data-size="icon-lg"] {
-      width: 28px;
-      height: 28px;
-      padding: 0;
-      border-radius: 6px;
-    }
     .canvas-viewport-controls [data-size] svg:not([class*="size-"]) {
       width: 12px;
       height: 12px;
@@ -349,7 +326,6 @@ html:has(.canvas-controls-layout) {
     .canvas-viewport-controls > [data-canvas-view-control] {
       width: 48px;
       min-width: 48px;
-      height: 28px;
       padding-inline: 8px;
       font-size: 10px;
       line-height: 18px;
@@ -1288,11 +1264,6 @@ html:has(.canvas-controls-layout) {
     overflow-y: hidden;
     scrollbar-width: none;
   }
-  .canvas-document-toolbar .rich-text-toolbar button,
-  .canvas-document-fullscreen > .rich-text-toolbar button {
-    min-width: 32px;
-    height: 32px;
-  }
   .canvas-text-style-menu {
     width: 200px;
     padding: 6px;
@@ -1543,9 +1514,8 @@ html:has(.canvas-controls-layout) {
     display: flex;
     align-items: center;
     gap: 2px;
-    width: 160px;
-    height: 40px;
-    padding: 4px;
+    width: max-content;
+    padding: var(--toolbar-group-padding);
     border: 1px solid
       color-mix(in srgb, var(--canvas-reference-foreground) 4%, transparent);
     border-radius: 12px;
@@ -1557,12 +1527,6 @@ html:has(.canvas-controls-layout) {
       sans-serif;
   }
   .canvas-text-actions button {
-    width: 32px;
-    height: 32px;
-    min-width: 0;
-    min-height: 0;
-    padding: 0;
-    border-radius: 8px;
     color: inherit;
     flex-shrink: 0;
   }
@@ -1652,17 +1616,10 @@ html:has(.canvas-controls-layout) {
     > .rich-text-toolbar {
     width: min(1320px, 100%);
     max-width: 100%;
-    height: 40px;
-    min-height: 40px;
+    min-height: var(--toolbar-group-height);
     border-radius: 12px 12px 0 0;
     padding: 4px;
     background: var(--canvas-text-editor);
-  }
-  .canvas-document-fullscreen[data-document-export="markdown"]
-    > .rich-text-toolbar
-    button {
-    min-height: 32px;
-    height: 32px;
   }
   .canvas-document-fullscreen[data-document-export="markdown"]
     .canvas-expanded-body {
@@ -1691,9 +1648,7 @@ html:has(.canvas-controls-layout) {
 @layer utilities {
   .canvas-document-fullscreen .rich-text-toolbar .canvas-text-alignment-trigger,
   .canvas-document-toolbar .rich-text-toolbar .canvas-text-alignment-trigger {
-    width: 48px;
     min-width: 48px;
-    height: 32px;
     gap: 4px;
     padding: 4px 6px;
   }

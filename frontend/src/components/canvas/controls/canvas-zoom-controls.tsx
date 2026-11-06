@@ -1,3 +1,4 @@
+import { ToolbarGroup } from "@/components/ui/toolbar";
 import { CanvasModeMenu } from "./canvas-mode-menu";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,9 +49,10 @@ export function CanvasZoomControls({
   const [error, setError] = useState("");
   const percent = Math.round(scale * 100);
   return (
-    <div
+    <ToolbarGroup
+      appearance="plain"
       data-canvas-no-zoom
-      className="canvas-viewport-controls flex min-w-0 items-center gap-1"
+      className="canvas-viewport-controls"
       aria-label="画布视图控制"
     >
       {onCanvasToolChange && (
@@ -75,7 +77,7 @@ export function CanvasZoomControls({
             <TooltipTrigger asChild>
               <Button
                 variant={pressed ? "secondary" : "ghost"}
-                size="icon-lg"
+                size="toolbar-icon"
                 onClick={onClick}
                 aria-label={label}
                 data-canvas-view-control={label === "适合屏幕" ? "" : undefined}
@@ -101,7 +103,7 @@ export function CanvasZoomControls({
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
-            size="default"
+            size="toolbar"
             className="min-w-16"
             aria-label={`缩放选项，当前 ${percent}%`}
             data-canvas-view-control
@@ -199,6 +201,6 @@ export function CanvasZoomControls({
           </Button>
         </PopoverContent>
       </Popover>
-    </div>
+    </ToolbarGroup>
   );
 }

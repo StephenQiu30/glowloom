@@ -1,5 +1,6 @@
 "use client";
 
+import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import type { ReactNode } from "react";
 import Link from "next/link";
 
@@ -79,7 +80,7 @@ export function LibraryToolbar({
             <>
               <Button
                 variant="ghost"
-                size="lg"
+                size="toolbar"
                 className="library-desktop-action"
                 disabled={inactive}
                 onClick={onBatch}
@@ -90,7 +91,7 @@ export function LibraryToolbar({
               </Button>
               <Button
                 variant="ghost"
-                size="lg"
+                size="toolbar"
                 className="library-folder-action"
                 disabled={inactive || !canCreateFolder}
                 onClick={onFolder}
@@ -99,7 +100,7 @@ export function LibraryToolbar({
                 新建文件夹
               </Button>
               <Button
-                size="lg"
+                size="toolbar"
                 aria-label="上传素材"
                 disabled={inactive}
                 onClick={onUpload}
@@ -112,18 +113,24 @@ export function LibraryToolbar({
           )
         }
       />
-      <div className="library-controls">
+      <Toolbar className="library-controls">
         {onBack ? (
-          <Button variant="ghost" disabled={locked} onClick={onBack}>
+          <Button
+            size="toolbar"
+            variant="ghost"
+            disabled={locked}
+            onClick={onBack}
+          >
             返回资产
           </Button>
         ) : (
-          <Button variant="ghost" asChild>
+          <Button size="toolbar" variant="ghost" asChild>
             <Link href="/assets">返回资产</Link>
           </Button>
         )}
         <div className="library-filter-row">
           <ToggleGroup
+            size="toolbar"
             type="single"
             value={filter.kind}
             onValueChange={(kind) => {
@@ -142,7 +149,7 @@ export function LibraryToolbar({
             ))}
           </ToggleGroup>
           <Separator orientation="vertical" className="toolbar-separator" />
-          <div className="toolbar-filter-group">
+          <ToolbarGroup appearance="plain" className="toolbar-filter-group">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -151,7 +158,7 @@ export function LibraryToolbar({
                       ? "secondary"
                       : "ghost"
                   }
-                  size="lg"
+                  size="toolbar"
                   disabled={inactive}
                   aria-label={
                     filter.favorite
@@ -247,7 +254,7 @@ export function LibraryToolbar({
             </DropdownMenu>
             <Button
               variant="ghost"
-              size="lg"
+              size="toolbar"
               className="library-desktop-filter"
               disabled={inactive}
               aria-pressed={filter.recent}
@@ -259,7 +266,7 @@ export function LibraryToolbar({
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="toolbar"
                   className="library-desktop-filter"
                   disabled={inactive}
                   aria-label="素材排序"
@@ -286,9 +293,9 @@ export function LibraryToolbar({
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+          </ToolbarGroup>
         </div>
-      </div>
+      </Toolbar>
     </>
   );
 }

@@ -162,9 +162,10 @@ export function SubjectDateRange({
         <PopoverTrigger asChild>
           <Button
             variant={active ? "secondary" : "ghost"}
+            size="toolbar"
             disabled={disabled}
             aria-label="时间"
-            className={active ? "pr-9" : undefined}
+            className={active ? "pr-[var(--toolbar-control-size)]" : undefined}
           >
             <span className="max-w-[190px] truncate">{triggerLabel}</span>
             <ChevronDown
@@ -179,10 +180,10 @@ export function SubjectDateRange({
         {active ? (
           <Button
             variant="ghost"
-            size="icon"
+            size="toolbar-icon"
             disabled={disabled}
             aria-label="清空时间"
-            className="absolute top-0 right-0 h-full w-9 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+            className="absolute top-0 right-0 h-full opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"
             onClick={() => {
               setPreset(null);
               setTarget(null);
