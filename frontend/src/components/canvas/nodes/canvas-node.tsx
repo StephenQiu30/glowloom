@@ -29,7 +29,13 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   ChevronRight,
   Contact,
@@ -112,6 +118,8 @@ type CanvasNodeProps = {
   referenceSelectionState?: "target" | "disabled" | "available";
   showPanel: boolean;
   isMobile?: boolean;
+  panelSide?: "top" | "bottom";
+  onPanelOpen?: (nodeId: string) => void;
   connectionTypes?: { input: boolean; output: boolean };
   showImageInfo: boolean;
   mentionReferences?: CanvasResourceReference[];
@@ -210,6 +218,8 @@ export const CanvasNode = React.memo(function CanvasNode({
   referenceSelectionState,
   showPanel,
   isMobile = false,
+  panelSide = "bottom",
+  onPanelOpen,
   connectionTypes,
   showImageInfo,
   mentionReferences = [],
@@ -914,10 +924,11 @@ export const CanvasNode = React.memo(function CanvasNode({
             !isGroup &&
             (connectionTypes?.input ?? true) ? (
               <CanvasConnectionHandle
+                tap={isMobile}
                 disabled={readOnly}
                 scale={scale}
                 side="left"
-                visible={hovered || isSelected || isConnecting}
+                visible={isSelected || (!isMobile && (hovered || isConnecting))}
                 onMouseDown={(event) =>
                   onConnectStart(event, data.id, "target")
                 }
@@ -928,27 +939,42 @@ export const CanvasNode = React.memo(function CanvasNode({
               ((definition?.hasSourceHandle ?? true) &&
                 data.type !== CanvasNodeType.Config)) ? (
               <CanvasConnectionHandle
+                tap={isMobile}
                 disabled={readOnly}
                 scale={scale}
                 side="right"
-                visible={hovered || isSelected || isConnecting}
+                visible={isSelected || (!isMobile && (hovered || isConnecting))}
                 onMouseDown={(event) =>
                   onConnectStart(event, data.id, "source")
                 }
               />
             ) : null}
+            {isMobile &&
+              isSelected &&
+              !isConnecting &&
+              onPanelOpen &&
+              !panelOpen && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="absolute top-full left-1/2 mt-2 min-h-11 origin-top -translate-x-1/2"
+                  style={{ scale: 1 / scale }}
+                  data-canvas-no-pan
+                  onClick={() => onPanelOpen(data.id)}
+                >
+                  编辑
+                </Button>
+              )}
           </div>
         </PopoverAnchor>
         {renderPanel && !isGroup && !isMobile ? (
           <PopoverContent
             className="canvas-node-composer"
-            style={{
-              width: "min(680px, calc(100dvw - 32px))",
-            }}
-            side="bottom"
+            side={panelSide}
             align="center"
             sideOffset={16}
-            collisionPadding={{ top: 64, right: 16, bottom: 16, left: 16 }}
+            collisionPadding={{ top: 64, right: 16, bottom: 56, left: 64 }}
+            hideWhenDetached
             updatePositionStrategy="always"
             onEscapeKeyDown={(event) => {
               if (isImeComposing(event)) event.preventDefault();
@@ -998,7 +1024,6 @@ export const CanvasNode = React.memo(function CanvasNode({
           <SheetContent
             aria-describedby={undefined}
             side="bottom"
-            showCloseButton={false}
             className="canvas-node-sheet"
             onEscapeKeyDown={(event) => {
               if (isImeComposing(event)) event.preventDefault();
@@ -1012,7 +1037,10 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             data-canvas-no-zoom
           >
-            <SheetTitle className="sr-only">节点参数</SheetTitle>
+            <SheetHeader className="shrink-0 pr-14">
+              <SheetTitle className="truncate">{data.title} · 编辑</SheetTitle>
+            </SheetHeader>
+            <Separator />
 
             {renderPanel(data)}
           </SheetContent>

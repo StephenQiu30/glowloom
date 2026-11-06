@@ -246,7 +246,7 @@ html:has(.canvas-controls-layout) {
     flex-wrap: wrap;
   }
   /* Desktop chrome follows the measured Jimeng sizes; touch layout stays separate. */
-  @container canvas (min-width: 641px) {
+  @container canvas (min-width: 768px) {
     .canvas-controls-layout {
       padding: 10px 12px 12px;
       font-family:
@@ -340,38 +340,36 @@ html:has(.canvas-controls-layout) {
       line-height: 20px;
     }
   }
-  @container canvas (max-width: 640px) {
-    .canvas-control-header {
-      flex-wrap: wrap;
-      column-gap: 0.125rem;
-    }
-    .canvas-topbar {
-      display: contents;
-    }
+  @container canvas (max-width: 767px) {
     .canvas-topbar > .canvas-chrome-panel {
-      flex-basis: 100%;
-      max-width: 100%;
+      flex: 1;
+      max-width: none;
     }
     .canvas-project-trigger {
-      max-width: calc(100cqw - 5.5rem);
-    }
-    .canvas-header-actions {
-      display: contents;
+      max-width: 100%;
     }
     .canvas-status-panel {
-      flex-basis: 100%;
+      min-width: 0;
+    }
+    .canvas-control-header,
+    .canvas-control-footer {
+      padding-inline: 0;
     }
     .canvas-global-actions {
-      gap: 0.125rem;
       margin-left: auto;
-    }
-    .canvas-header-actions > button {
-      width: 2.75rem;
-      padding-inline: 0;
     }
     .canvas-assistant-action button {
       width: 2.75rem;
       padding: 0;
+    }
+  }
+  @container canvas (max-width: 420px) {
+    .canvas-viewport-controls {
+      gap: 0;
+    }
+    .canvas-viewport-controls [data-size] {
+      min-width: 2.5rem;
+      padding-inline: 0.25rem;
     }
   }
   .canvas-design-panel[data-slot="dialog-content"] {
@@ -618,11 +616,13 @@ html:has(.canvas-controls-layout) {
 @layer utilities {
   .canvas-node-composer[data-slot="popover-content"] {
     max-height: min(
-      calc(100dvh - 11rem),
+      calc(100dvh - 7.5rem),
       var(--radix-popover-content-available-height)
     );
+    width: min(var(--spacing-canvas-composer), calc(100dvw - 25.625rem));
+    max-width: var(--radix-popover-content-available-width);
     overflow-y: auto;
-    width: var(--spacing-canvas-composer);
+    overscroll-behavior: contain;
     padding: 0;
     border-radius: var(--radius-xl);
     background: var(--popover);
@@ -893,6 +893,26 @@ html:has(.canvas-controls-layout) {
   .canvas-connection-handle[data-disabled="true"]::before {
     pointer-events: none;
   }
+  .canvas-connection-handle[data-tap]::before {
+    pointer-events: none;
+  }
+  .canvas-connection-handle[data-tap] .canvas-node-port[data-slot="button"] {
+    border: 0;
+    background: transparent;
+  }
+  .canvas-connection-handle[data-tap][data-visible="true"]:not(
+      [data-disabled="true"]
+    )
+    .canvas-node-port {
+    pointer-events: auto;
+  }
+  .canvas-connection-handle[data-tap] .canvas-node-port::after {
+    position: absolute;
+    inset: 12px;
+    border: 1px solid var(--canvas-handle-foreground);
+    border-radius: 50%;
+    content: "";
+  }
   .canvas-node-port[data-slot="button"] {
     position: absolute;
     left: 0;
@@ -981,6 +1001,74 @@ html:has(.canvas-controls-layout) {
   }
   .canvas-prompt-parameters [data-slot="popover-trigger"] {
     min-height: 2.25rem;
+  }
+  /* Keep the rich-text instance mounted when expanding out of the anchored panel. */
+  [data-radix-popper-content-wrapper]:has(
+    > .canvas-node-composer [data-expanded]
+  ) {
+    inset: 0 !important;
+    transform: none !important;
+    width: 100%;
+    height: 100%;
+  }
+  .canvas-node-composer[data-slot="popover-content"]:has([data-expanded]) {
+    display: contents;
+  }
+  .canvas-node-sheet[data-slot="sheet-content"]:has([data-expanded]) {
+    inset: 0;
+    max-height: none;
+  }
+  .canvas-formal-generator
+    [data-presentation="canvas"]:not([data-expanded])
+    [data-slot="input-group-control"] {
+    max-height: clamp(4rem, 16dvh, 8rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .canvas-node-sheet
+    .canvas-formal-generator
+    [data-slot="input-group-control"] {
+    max-height: clamp(4rem, 21dvh, 10rem);
+  }
+  @media (max-height: 420px) and (min-width: 768px) {
+    [data-radix-popper-content-wrapper]:has(
+        > .canvas-node-composer .canvas-formal-generator
+      ):not(:has([data-expanded])) {
+      inset: auto 1rem 3.5rem auto !important;
+      transform: none !important;
+      min-width: 0 !important;
+    }
+    .canvas-node-composer[data-slot="popover-content"]:has(
+        .canvas-formal-generator
+      ):not(:has([data-expanded])) {
+      width: auto;
+      max-height: calc(100dvh - 7.5rem);
+    }
+    .canvas-node-composer:not(:has([data-expanded]))
+      .canvas-formal-generator
+      > :not([data-presentation]) {
+      display: none;
+    }
+
+    .canvas-node-composer
+      .canvas-formal-generator
+      [data-presentation="canvas"]:not([data-expanded])
+      [data-slot="input-group"] {
+      min-height: 0;
+    }
+    .canvas-node-composer
+      .canvas-formal-generator
+      [data-presentation="canvas"]:not([data-expanded])
+      :is(
+        [aria-label="参考素材"],
+        [data-slot="input-group-control"],
+        [data-align="block-end"]
+      ) {
+      display: none;
+    }
+  }
+  [data-slot="sheet-overlay"]:has(+ .canvas-node-sheet) {
+    backdrop-filter: none;
   }
   .canvas-node-sheet[data-slot="sheet-content"] {
     max-height: calc(100dvh - 4rem);

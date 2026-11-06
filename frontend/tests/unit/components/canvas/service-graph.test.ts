@@ -213,6 +213,21 @@ describe("Yjs editor projection boundary", () => {
     state.viewport = { x: 100, y: 200, k: 2 };
     expect(serviceDocumentFromEditor(dto, state)).toEqual(dto);
   });
+  it("hydrates legacy primary media when editor metadata has no content file", () => {
+    const dto = document();
+    dto.nodes![0] = {
+      ...dto.nodes![0],
+      node_type: "image",
+      node_action: "resource",
+      media_ref: { asset_id: project },
+      config: { editor: { files: [] } },
+    };
+    expect(
+      serviceGraph(dto, canvas, project).nodes[0].documentData?.fileReferences,
+    ).toEqual([
+      expect.objectContaining({ fileId: project, purpose: "CONTENT" }),
+    ]);
+  });
   it.each(["image", "video", "audio"])(
     "preserves %s upload identity and dimensions",
     (type) => {

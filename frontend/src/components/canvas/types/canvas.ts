@@ -152,6 +152,7 @@ export type CanvasAssistantSession = {
 export type ConnectionHandle = {
   nodeId: string;
   handleType: "source" | "target";
+  tap?: boolean;
 };
 
 export type SelectionBox = {

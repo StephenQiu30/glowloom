@@ -26,6 +26,26 @@ export type CanvasResourceReference = {
   active: boolean;
 };
 
+export function canvasEdgeReferenceFiles(
+  source: CanvasNodeData,
+  edge: CanvasContract.CanvasDocumentConnectionDTO,
+) {
+  const purpose = edge.fromPortId === "last_frame" ? "LAST_FRAME" : "CONTENT";
+  const binding = edge.binding;
+  const files =
+    binding.kind === "RUN_OUTPUT"
+      ? source.metadata?.generationOutput?.files
+      : source.documentData?.fileReferences;
+  return (files ?? []).filter(
+    (file) =>
+      file.purpose === purpose &&
+      (binding.kind === "FILE_REFERENCE"
+        ? file.referenceKey === binding.referenceKey
+        : binding.selection?.mode !== "ITEM" ||
+          file.referenceKey === `output-${binding.selection.index}`),
+  );
+}
+
 /** UI references identify source nodes, while document edges may bind several files or ports. */
 export function buildConnectedNodeMap(
   nodes: CanvasNodeData[],
@@ -74,21 +94,7 @@ export function buildConnectedNodeMap(
         ordinals = new Map();
         byKind.set(kind, ordinals);
       }
-      const purpose =
-        edge.fromPortId === "last_frame" ? "LAST_FRAME" : "CONTENT";
-      const refs =
-        (edge.binding.kind === "RUN_OUTPUT"
-          ? source.metadata?.generationOutput?.files
-          : source.documentData?.fileReferences) ?? [];
-      const selected = refs.filter(
-        (ref) =>
-          ref.purpose === purpose &&
-          (edge.binding.kind === "FILE_REFERENCE"
-            ? ref.referenceKey === edge.binding.referenceKey
-            : edge.binding.selection?.mode === "ITEM"
-              ? ref.referenceKey === `output-${edge.binding.selection.index}`
-              : true),
-      );
+      const selected = canvasEdgeReferenceFiles(source, edge);
       // Pending output keeps a provisional slot; resolved files determine actual ordinals.
       const keys = selected.length
         ? selected.map((ref) => `${ref.fileId}:${ref.version}:${edge.toPortId}`)

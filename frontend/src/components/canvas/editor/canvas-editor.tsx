@@ -1360,7 +1360,11 @@ function InfiniteCanvasPage({
             !!integrationRef.current?.audioConnections)
         )
           connectDomainNodes([fromNodeId], toNodeId);
-        else connectDocumentNodes(fromNodeId, toNodeId);
+        else if (connectDocumentNodes(fromNodeId, toNodeId)) {
+          setSelectedNodeIds(new Set([toNodeId]));
+          setToolbarNodeId(toNodeId);
+          if (!isMobile) setDialogNodeId(toNodeId);
+        }
         setContextMenu(null);
         return;
       }
@@ -1386,7 +1390,13 @@ function InfiniteCanvasPage({
       }
       setContextMenu(null);
     },
-    [connectDocumentNodes, connectDomainNodes, message, setConnections],
+    [
+      connectDocumentNodes,
+      connectDomainNodes,
+      isMobile,
+      message,
+      setConnections,
+    ],
   );
 
   const createConnectedNode = useCallback(
@@ -1749,6 +1759,56 @@ function InfiniteCanvasPage({
     () => new Map(nodes.map((node) => [node.id, node])),
     [nodes],
   );
+  const panelNode = dialogNodeId ? nodeById.get(dialogNodeId) : undefined;
+  const panelAnchorY = panelNode
+    ? viewport.y + panelNode.position.y * viewport.k
+    : 0;
+  const panelSpaceBelow =
+    size.height - panelAnchorY - (panelNode?.height ?? 0) * viewport.k - 56;
+  const panelSide =
+    panelSpaceBelow < 248 && panelAnchorY - 64 > panelSpaceBelow
+      ? "top"
+      : "bottom";
+  const tapConnectionTargets = useMemo(() => {
+    if (!connectingParams?.tap) return null;
+    const fromOutput = connectingParams.handleType === "source";
+    const blocked = new Set([connectingParams.nodeId]);
+    const pending = [connectingParams.nodeId];
+    const nextByNode = new Map<string, string[]>();
+    for (const edge of connections) {
+      const from = fromOutput ? edge.toNodeId : edge.fromNodeId;
+      const to = fromOutput ? edge.fromNodeId : edge.toNodeId;
+      const adjacent = nextByNode.get(from) ?? [];
+      adjacent.push(to);
+      nextByNode.set(from, adjacent);
+      if (to === connectingParams.nodeId) blocked.add(from);
+    }
+    const visited = new Set<string>();
+    while (pending.length) {
+      const id = pending.pop()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      blocked.add(id);
+      pending.push(...(nextByNode.get(id) ?? []));
+    }
+    return new Set(
+      nodes.flatMap((node) => {
+        if (blocked.has(node.id)) return [];
+        const { fromNodeId, toNodeId } = canvasConnectionDirection(
+          connectingParams,
+          node.id,
+        );
+        const from = nodeById.get(fromNodeId),
+          to = nodeById.get(toNodeId);
+        return from &&
+          to &&
+          !isFixedCanvasMedia(to) &&
+          supportsCanvasConnection(from.type, to.type, from)
+          ? [node.id]
+          : [];
+      }),
+    );
+  }, [connectingParams, connections, nodeById, nodes]);
   const spatialIndex = useMemo(
     () =>
       buildCanvasSpatialIndex(
@@ -2039,7 +2099,7 @@ function InfiniteCanvasPage({
           : definition?.useBuiltinPanel
             ? true
             : isBuiltinType(type) && type !== CanvasNodeType.Group;
-      if (wantsPanel) setDialogNodeId(newNode.id);
+      setDialogNodeId(wantsPanel && !isMobile ? newNode.id : null);
       return newNode.id;
     },
     [
@@ -2049,6 +2109,7 @@ function InfiniteCanvasPage({
       effectiveConfig.model,
       effectiveConfig.size,
       getCanvasCenter,
+      isMobile,
       setNodes,
     ],
   );
@@ -2658,7 +2719,11 @@ function InfiniteCanvasPage({
       setHoveredNodeId(null);
       setToolbarNodeId(null);
       setDialogNodeId(null);
-      if (pendingConnectionCreateRef.current) cancelPendingConnectionCreate();
+      if (
+        pendingConnectionCreateRef.current ||
+        connectingParamsRef.current?.tap
+      )
+        cancelPendingConnectionCreate();
       if (event.button !== 0) return;
 
       const world = screenToCanvas(event.clientX, event.clientY);
@@ -2714,13 +2779,24 @@ function InfiniteCanvasPage({
   const handleNodeSelectCapture = useCallback(
     (event: ReactMouseEvent, nodeId: string) => {
       if (event.button !== 0) return;
+      const element = event.target instanceof Element ? event.target : null;
+      if (element?.closest("[data-canvas-connection-handle]")) return;
+      const current = connectingParamsRef.current;
+      if (current?.tap) {
+        event.preventDefault();
+        event.stopPropagation();
+        connectNodes(current, nodeId);
+        setConnecting(null);
+        return;
+      }
       setContextMenu(null);
       setHoveredNodeId(null);
       setSelectedConnectionId(null);
+      if (isMobile) setDialogNodeId((open) => (open === nodeId ? open : null));
       const { nextSelected } = selectNodeByEvent(event, nodeId);
       pendingSelectionRef.current = nextSelected;
     },
-    [selectNodeByEvent],
+    [connectNodes, isMobile, selectNodeByEvent, setConnecting],
   );
 
   const handleNodeMouseDown = useCallback(
@@ -2815,12 +2891,12 @@ function InfiniteCanvasPage({
           setDialogNodeId((current) =>
             current === clickedNodeId ? current : null,
           );
-        } else if (clickedNode?.type !== CanvasNodeType.Group) {
+        } else if (!isMobile && clickedNode?.type !== CanvasNodeType.Group) {
           setDialogNodeId(clickedNodeId);
         }
       }
     },
-    [setNodes],
+    [isMobile, setNodes],
   );
 
   useLayoutEffect(() => {
@@ -2844,7 +2920,12 @@ function InfiniteCanvasPage({
         return;
       }
 
-      if (connectingParamsRef.current && !pendingConnectionCreateRef.current) {
+      const connection = connectingParamsRef.current;
+      if (
+        connection &&
+        !connection.tap &&
+        !pendingConnectionCreateRef.current
+      ) {
         const start = connectionStartRef.current;
         if (start) {
           const next = updateConnectionGesture(start, {
@@ -2858,7 +2939,7 @@ function InfiniteCanvasPage({
         const dropTarget = getConnectionDropTarget(
           event.clientX,
           event.clientY,
-          connectingParamsRef.current,
+          connection,
         );
         connectionTargetNodeIdRef.current = dropTarget.nodeId;
         setConnectionTargetNodeId(dropTarget.nodeId);
@@ -2922,7 +3003,11 @@ function InfiniteCanvasPage({
       selectionBoxRef.current = null;
       setSelectionBox(null);
 
-      if (pendingConnectionCreateRef.current) return;
+      if (
+        pendingConnectionCreateRef.current ||
+        connectingParamsRef.current?.tap
+      )
+        return;
 
       const currentConnection = connectingParamsRef.current;
       if (currentConnection) {
@@ -3297,13 +3382,20 @@ function InfiniteCanvasPage({
       event.preventDefault();
       containerRef.current?.focus({ preventScroll: true });
       const keyboard = event.type === "click" && event.detail === 0;
-      const rect = keyboard
-        ? event.currentTarget.getBoundingClientRect()
-        : null;
+      const tap = isMobile && event.type === "click" && !keyboard;
+      const previous = connectingParamsRef.current;
+      if (tap && previous?.tap) {
+        connectNodes(previous, nodeId);
+        setConnecting(null);
+        return;
+      }
+      const rect =
+        keyboard || tap ? event.currentTarget.getBoundingClientRect() : null;
       const point = rect
         ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
         : { x: event.clientX, y: event.clientY };
-      const connection = { nodeId, handleType };
+      const connection = { nodeId, handleType, tap };
+      if (tap) setDialogNodeId(null);
       connectionStartRef.current = { ...point, dragged: false };
       setMouseWorld(screenToCanvas(point.x, point.y));
       setConnecting(connection);
@@ -3324,7 +3416,7 @@ function InfiniteCanvasPage({
       setConnectionTargetNodeId(null);
       setSelectedConnectionId(null);
     },
-    [screenToCanvas, setConnecting, message],
+    [connectNodes, isMobile, screenToCanvas, setConnecting, message],
   );
 
   const handleNodeResize = useCallback(
@@ -6405,7 +6497,10 @@ function InfiniteCanvasPage({
               isSelected={selectedNodeIds.has(node.id)}
               isRelated={relatedHighlight.nodeIds.has(node.id)}
               isFocusRelated={activeNodeId === node.id}
-              isConnectionTarget={connectionTargetNodeId === node.id}
+              isConnectionTarget={
+                connectionTargetNodeId === node.id ||
+                !!tapConnectionTargets?.has(node.id)
+              }
               isConnecting={Boolean(connectingParams)}
               referenceSelectionState={
                 !referencePickerNodeId
@@ -6435,12 +6530,24 @@ function InfiniteCanvasPage({
               showPanel={
                 !documentIntegration?.frozen &&
                 !isNodeResizing &&
+                !connectingParams &&
                 dialogNodeId === node.id &&
                 !selectionBox &&
                 !getNodeDefinition(node.type)?.hidePanel &&
                 !isFixedCanvasMedia(node)
               }
               isMobile={isMobile}
+              panelSide={dialogNodeId === node.id ? panelSide : undefined}
+              onPanelOpen={
+                isMobile &&
+                node.type !== CanvasNodeType.Group &&
+                !documentIntegration?.frozen &&
+                !getNodeDefinition(node.type)?.hidePanel &&
+                !isFixedCanvasMedia(node) &&
+                !hasMultipleSelectedNodes
+                  ? setDialogNodeId
+                  : undefined
+              }
               connectionTypes={
                 !connectionGraphReady ||
                 (hasMultipleSelectedNodes && selectedNodeIds.has(node.id))
@@ -6675,8 +6782,13 @@ function InfiniteCanvasPage({
               Math.min(32, (node.metadata?.fontSize || 14) + 2),
             )
           }
-          onToggleDialog={(node) =>
-            setDialogNodeId((current) => (current === node.id ? null : node.id))
+          onToggleDialog={
+            isMobile
+              ? undefined
+              : (node) =>
+                  setDialogNodeId((current) =>
+                    current === node.id ? null : node.id,
+                  )
           }
           onGenerateImage={generateImageFromTextNode}
           onUpload={handleUploadRequest}

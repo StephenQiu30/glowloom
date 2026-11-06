@@ -16,6 +16,7 @@ import {
   Search,
   Copy,
   ClipboardPaste,
+  Type,
 } from "lucide-react";
 import {
   Popover,
@@ -34,12 +35,7 @@ import {
   CommandEmpty,
   CommandSeparator,
 } from "@/components/ui/command";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { getMediaPreview } from "@/api/media";
 import { listSubjects, getSubjectVersion } from "@/api/subjects";
 import { useOptionalSession } from "@/components/auth/session";
@@ -63,6 +59,7 @@ import { UnifiedSubjectMedia } from "@/components/subjects/unified-media";
 import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
 import {
   referenceRoleLabel,
+  type CanvasLinkedReferenceSource,
   type CanvasReferenceSource,
   type CanvasSubjectReferenceSource,
 } from "./reference-source";
@@ -83,6 +80,7 @@ import {
   useState,
   useId,
   useMemo,
+  type ComponentProps,
 } from "react";
 import {
   resolvePromptUpload,
@@ -91,6 +89,7 @@ import {
 import { draftRequest } from "./draft-save";
 import { validatePromptDraft } from "./prompt-document";
 import { Button } from "@/components/ui/button";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -191,6 +190,7 @@ export function ReferenceControls({
   canvasSources,
   canvasSubjectSources,
   incomingSources,
+  onMotion,
   onChooseProject,
 }: {
   session: ComposerSession;
@@ -204,7 +204,8 @@ export function ReferenceControls({
   assistant?: boolean;
   canvasSources?: CanvasReferenceSource[];
   canvasSubjectSources?: CanvasSubjectReferenceSource[];
-  incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
+  incomingSources?: CanvasLinkedReferenceSource[];
+  onMotion?: () => void;
   onChooseProject?: () => void;
 }) {
   const actorID = useOptionalSession()?.actor.id;
@@ -462,7 +463,10 @@ export function ReferenceControls({
     const range = inline ? mention?.range : undefined;
     const connection = incomingSources?.find(
       (item) =>
-        item.nodeID === source.nodeID && item.assetID === source.assetID,
+        item.kind !== "text" &&
+        item.nodeID === source.nodeID &&
+        item.assetID === source.assetID &&
+        (!("edgeID" in source) || item.edgeID === source.edgeID),
     );
     const sessionGeneration = getSessionGeneration(),
       scopeGeneration = getScopeGeneration();
@@ -495,8 +499,8 @@ export function ReferenceControls({
         !latestSources?.some(
           (item) =>
             item.nodeID === source.nodeID &&
-            item.assetID === source.assetID &&
             item.kind === source.kind &&
+            item.assetID === source.assetID &&
             (!connection ||
               ("edgeID" in item && item.edgeID === connection.edgeID)),
         )
@@ -1421,6 +1425,9 @@ export function ReferenceControls({
               compact && "sr-only",
             )}
           >
+            {incomingSources?.length
+              ? `已连接 ${incomingSources.length} 项 · `
+              : ""}
             本次参考 {draft.references.length} 项 · 正文提及{" "}
             {draft.document.content.reduce(
               (count, p) =>
@@ -1482,13 +1489,19 @@ export function ReferenceControls({
                   />
                 </div>
               ) : null}
-              <div
+              <ReferenceRow
+                scroll={!!incomingSources}
                 className={
                   home && !assistant
                     ? "sr-only"
                     : assistant
                       ? "flex items-center"
-                      : "flex w-full min-w-0 items-start gap-2 overflow-x-auto pb-1"
+                      : cn(
+                          "flex min-w-0 items-center gap-2 pb-1",
+                          incomingSources
+                            ? "min-h-14 w-max"
+                            : "w-full overflow-x-auto",
+                        )
                 }
                 aria-label="参考内容"
                 aria-hidden={(home && !assistant) || undefined}
@@ -1531,7 +1544,7 @@ export function ReferenceControls({
                         : ref.mediaKind === "audio"
                           ? AudioLines
                           : ImageIcon;
-                  const automatic = incomingSources?.some(
+                  const linked = incomingSources?.some(
                     (source) => source.edgeID === ref.id,
                   );
                   const subjectPreview = unifiedReferencePreview(ref);
@@ -1588,11 +1601,11 @@ export function ReferenceControls({
                               待上传
                             </span>
                           ) : null}
-                          {automatic ? (
+                          {linked ? (
                             <Badge
                               variant="secondary"
                               className="absolute top-0 right-0 p-0.5"
-                              aria-label="自动引用"
+                              aria-label="已连接"
                             >
                               <Link2 data-icon="inline-start" />
                             </Badge>
@@ -1631,10 +1644,10 @@ export function ReferenceControls({
                         <PopoverHeader>
                           <PopoverTitle>
                             {displayLabel(ref.id)}
-                            {automatic ? (
+                            {linked ? (
                               <Badge variant="secondary" className="ml-2">
                                 <Link2 data-icon="inline-start" />
-                                自动引用
+                                已连接
                               </Badge>
                             ) : null}
                           </PopoverTitle>
@@ -1648,6 +1661,7 @@ export function ReferenceControls({
                 {incomingSources
                   ?.filter(
                     (source) =>
+                      source.kind === "text" ||
                       !draft.references.some(
                         (ref) =>
                           ref.source.kind === "media" &&
@@ -1656,34 +1670,18 @@ export function ReferenceControls({
                       ),
                   )
                   .map((source) => (
-                    <Tooltip key={source.edgeID}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="h-14 w-16 shrink-0 flex-col gap-1"
-                          aria-label={`${source.title}：${source.assetID ? "未引用" : "内容为空"}`}
-                          disabled={
-                            disabled || !source.assetID || !!readingSource
-                          }
-                          onClick={() => void addCanvasSource(source, false)}
-                        >
-                          {source.kind === "video" ? (
-                            <Video />
-                          ) : source.kind === "audio" ? (
-                            <AudioLines />
-                          ) : (
-                            <ImageIcon />
-                          )}
-                          <span className="text-xs">
-                            {source.assetID ? "未引用" : "内容为空"}
-                          </span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {source.title} ·{" "}
-                        {source.assetID ? "点击加入参考" : "节点内容为空"}
-                      </TooltipContent>
-                    </Tooltip>
+                    <ConnectedReference
+                      key={
+                        source.kind === "text"
+                          ? source.edgeID
+                          : `${source.edgeID}:${source.assetID ?? ""}`
+                      }
+                      source={source}
+                      projectID={projectID}
+                      authorized={authorized}
+                      disabled={disabled || !!readingSource}
+                      onAdd={addCanvasSource}
+                    />
                   ))}
                 <Popover
                   open={addOpen}
@@ -1708,11 +1706,13 @@ export function ReferenceControls({
                         assistant ? "从本地、画布或资产库添加" : "添加参考"
                       }
                       className={
-                        assistant
-                          ? "shrink-0"
-                          : home
+                        incomingSources
+                          ? "order-first shrink-0"
+                          : assistant
                             ? "shrink-0"
-                            : "size-14 shrink-0"
+                            : home
+                              ? "shrink-0"
+                              : "size-14 shrink-0"
                       }
                     >
                       <Plus />
@@ -1744,7 +1744,7 @@ export function ReferenceControls({
                     {compactMenu(false)}
                   </PopoverContent>
                 </Popover>
-              </div>
+              </ReferenceRow>
             </>
           ) : (
             referenceActions
@@ -1754,8 +1754,8 @@ export function ReferenceControls({
               <PopoverContent
                 data-canvas-no-zoom={assistant || undefined}
                 data-canvas-shortcuts-ignore={assistant || undefined}
-                side="bottom"
-                align="start"
+                side={incomingSources ? "top" : "bottom"}
+                align={incomingSources ? "center" : "start"}
                 sideOffset={8}
                 collisionPadding={16}
                 className="max-h-(--radix-popover-content-available-height) w-60 overflow-visible p-0"
@@ -1774,7 +1774,20 @@ export function ReferenceControls({
                 <ReferenceMentionMenu
                   session={session}
                   draft={draft}
-                  sources={incomingSources ?? canvasSources}
+                  canvas={incomingSources !== undefined}
+                  projectID={authorized ? projectID : undefined}
+                  onMotion={
+                    onMotion &&
+                    (() => {
+                      setMenu(false);
+                      onMotion();
+                    })
+                  }
+                  sources={
+                    incomingSources?.filter(
+                      (source) => source.kind !== "text",
+                    ) ?? canvasSources
+                  }
                   query={mention ? search : ""}
                   busy={!!readingSource}
                   disabled={disabled}
@@ -2032,5 +2045,96 @@ export function ReferenceControls({
         </section>
       </Popover>
     </TooltipProvider>
+  );
+}
+
+function ReferenceRow({
+  scroll,
+  ...props
+}: ComponentProps<"div"> & { scroll: boolean }) {
+  const row = <div {...props} />;
+  return scroll ? (
+    <ScrollArea className="min-w-0">
+      {row}
+      <ScrollBar orientation="horizontal" />
+    </ScrollArea>
+  ) : (
+    row
+  );
+}
+
+function ConnectedReference({
+  source,
+  projectID,
+  authorized,
+  disabled,
+  onAdd,
+}: {
+  source: CanvasLinkedReferenceSource;
+  projectID: string;
+  authorized: boolean;
+  disabled: boolean;
+  onAdd: (source: CanvasReferenceSource, inline: boolean) => void;
+}) {
+  const text = source.kind === "text" ? source.text : undefined;
+  const assetID = source.kind === "text" ? undefined : source.assetID;
+  const status = text ? "可预览" : assetID ? "可 @ 引用" : "待补内容";
+  const Icon =
+    source.kind === "text"
+      ? Type
+      : source.kind === "video"
+        ? Video
+        : source.kind === "audio"
+          ? AudioLines
+          : ImageIcon;
+  const tile = (
+    <Button
+      variant="secondary"
+      className="h-14 w-29 shrink-0 justify-start gap-1.5 px-1.5"
+      aria-label={`${source.title}：${text ? "预览文本" : assetID ? "未引用" : "内容为空"}`}
+      disabled={!text && (disabled || !assetID)}
+      onClick={
+        source.kind !== "text" && assetID
+          ? () => onAdd(source, false)
+          : undefined
+      }
+    >
+      <span className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-sm">
+        {authorized &&
+        assetID &&
+        (source.kind === "image" || source.kind === "video") ? (
+          <ProjectMediaPreview
+            projectID={projectID}
+            id={assetID}
+            kind={source.kind}
+            compact
+          />
+        ) : (
+          <Icon data-icon="inline-start" />
+        )}
+      </span>
+      <span className="flex min-w-0 flex-col items-start gap-0.5">
+        <span className="w-full truncate text-xs">{source.title}</span>
+        <span className="text-[10px] text-muted-foreground">{status}</span>
+      </span>
+    </Button>
+  );
+  return text ? (
+    <Popover>
+      <PopoverTrigger asChild>{tile}</PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        collisionPadding={16}
+        aria-label="参考文本"
+      >
+        <PopoverTitle>{source.title}</PopoverTitle>
+        <ScrollArea className="max-h-48 break-words whitespace-pre-wrap [&_[data-slot=scroll-area-viewport]]:max-h-48">
+          {text}
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  ) : (
+    tile
   );
 }

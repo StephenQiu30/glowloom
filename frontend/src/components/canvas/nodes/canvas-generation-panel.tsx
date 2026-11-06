@@ -17,6 +17,9 @@ import { replaceCanvasNodeAsset } from "../lib/canvas-asset-replacement";
 import { textToDocument } from "../runtime/components/editor/lib/rich-text-document";
 import { canvasSubjectSources } from "../lib/canvas-subject-source";
 import { CanvasSubjectConnectionBar } from "../subject/canvas-subject-connection-bar";
+import type { CanvasLinkedReferenceSource } from "@/components/generation/reference-source";
+import { canvasInputPort } from "../constants/canvas-input-ports";
+import { canvasEdgeReferenceFiles } from "../lib/canvas-resource-references";
 import { canonical } from "@/components/generation/draft-save";
 
 const CanvasCinemaKitBar = dynamic(
@@ -58,6 +61,7 @@ export function CanvasGenerationPanel({
   const [recoveryError, setRecoveryError] = useState("");
   const retained = view.inputDrafts[nodeID];
   const editor = useRef<ComposerSession | null>(null);
+  const motionButton = useRef<HTMLButtonElement>(null);
   const node = view.document?.nodes.find((item) => item.id === nodeID);
   if (!node || !["text", "image", "video", "audio"].includes(node.type))
     return null;
@@ -127,13 +131,44 @@ export function CanvasGenerationPanel({
       return client.prepareInput(nodeID);
     },
     referenceSources: references,
+    onMotion:
+      capability === "video" && view.writable && !view.migration
+        ? () => motionButton.current?.click()
+        : undefined,
     subjectSources: canvasSubjectSources(view.document?.nodes ?? [], canvasID),
-    incomingSources: (view.document?.connections ?? []).flatMap((edge) => {
-      const source = references.find((item) => item.nodeID === edge.fromNodeId);
-      return edge.toNodeId === nodeID && source
-        ? [{ ...source, edgeID: edge.id }]
-        : [];
-    }),
+    incomingSources: (view.document?.connections ?? [])
+      .filter((edge) => edge.toNodeId === nodeID)
+      .sort(
+        (a, b) => (a.documentData?.order ?? 0) - (b.documentData?.order ?? 0),
+      )
+      .flatMap((edge): CanvasLinkedReferenceSource[] => {
+        const source = view.document?.nodes.find(
+          (item) => item.id === edge.fromNodeId,
+        );
+        if (!source) return [];
+        const port =
+          edge.documentData && canvasInputPort(edge.documentData.toPortId);
+        const kind = port?.source ?? String(source.type);
+        const identity = {
+          edgeID: edge.id,
+          nodeID: source.id,
+          title: source.title,
+        };
+        if (kind === "text")
+          return [
+            { ...identity, kind, text: source.metadata?.content?.trim() },
+          ];
+        if (kind !== "image" && kind !== "video" && kind !== "audio") return [];
+        const files = edge.documentData
+          ? canvasEdgeReferenceFiles(source, edge.documentData)
+          : source.documentData?.fileReferences?.filter(
+              (file) => file.purpose === "CONTENT",
+            );
+        const assetIDs = [...new Set(files?.map((file) => file.fileId))];
+        return assetIDs.length
+          ? assetIDs.map((assetID) => ({ ...identity, kind, assetID }))
+          : [{ ...identity, kind }];
+      }),
   };
   const resultIdentity = () => {
     const current = client
@@ -205,7 +240,11 @@ export function CanvasGenerationPanel({
         </div>
       )}
       <CanvasSubjectConnectionBar graph={view.document} nodeID={nodeID} />
-      <CanvasCinemaKitBar client={client} nodeID={nodeID} />
+      <CanvasCinemaKitBar
+        client={client}
+        nodeID={nodeID}
+        motionButtonRef={motionButton}
+      />
       <RichGeneration
         key={`${canvasID}/${nodeID}`}
         projectID={projectID}

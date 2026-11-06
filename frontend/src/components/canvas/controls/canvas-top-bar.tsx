@@ -22,6 +22,13 @@ import { toast } from "sonner";
 import { Search, UserRound, Link2 } from "lucide-react";
 import Link from "next/link";
 import { BrandMark } from "@/components/canvas/runtime/components/layout/shell/brand-mark";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { MoreHorizontal } from "lucide-react";
 import { CanvasNodeSummary } from "./canvas-node-summary";
 import type { CanvasNodeData } from "../types/canvas";
 
@@ -78,6 +85,58 @@ export function CanvasTopBar({
   projectCanvas?: boolean;
   projectPath?: string;
 }) {
+  const isMobile = useIsMobile();
+  const nodeSummary = nodes && (
+    <CanvasNodeSummary
+      nodes={nodes}
+      canvasID={canvasID}
+      projectID={projectID}
+    />
+  );
+  const secondaryActions = (
+    <>
+      <CanvasHistoryDialog>
+        <Button variant="ghost" size="toolbar-icon" aria-label="生成历史">
+          <History />
+        </Button>
+      </CanvasHistoryDialog>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="toolbar"
+            className="canvas-share-trigger"
+            aria-label="复制画布链接"
+            onClick={() => {
+              void navigator.clipboard
+                .writeText(window.location.href)
+                .then(() => toast.success("画布链接已复制"))
+                .catch(() => toast.error("复制失败，请从浏览器地址栏复制链接"));
+            }}
+          >
+            <span className="hidden sm:inline">分享</span>
+            <Link2 className="sm:hidden" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>复制画布链接，保留现有访问权限</TooltipContent>
+      </Tooltip>
+      <Button
+        variant="ghost"
+        size="toolbar-icon"
+        aria-label="账号设置"
+        disabled={!canSwitchCanvas}
+        asChild={canSwitchCanvas}
+      >
+        {canSwitchCanvas ? (
+          <Link href="/account">
+            <UserRound />
+          </Link>
+        ) : (
+          <UserRound />
+        )}
+      </Button>
+    </>
+  );
   return (
     <TooltipProvider>
       <Toolbar
@@ -199,13 +258,7 @@ export function CanvasTopBar({
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="canvas-status-panel flex items-center gap-1">
-            {nodes && (
-              <CanvasNodeSummary
-                nodes={nodes}
-                canvasID={canvasID}
-                projectID={projectID}
-              />
-            )}
+            {!isMobile && nodeSummary}
             {workflowControl}
             {saveControl === undefined ? (
               <Tooltip>
@@ -228,7 +281,7 @@ export function CanvasTopBar({
           </div>
         </div>
         <div className="canvas-header-actions pointer-events-auto flex items-center gap-1">
-          {participantsControl}
+          {!isMobile && participantsControl}
           <CanvasNodeSearch
             nodes={nodes ?? []}
             onLocate={(id) => onFocusNode?.(id)}
@@ -242,48 +295,33 @@ export function CanvasTopBar({
               <Search />
             </Button>
           </CanvasNodeSearch>
-          <CanvasHistoryDialog>
-            <Button variant="ghost" size="toolbar-icon" aria-label="生成历史">
-              <History />
-            </Button>
-          </CanvasHistoryDialog>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="toolbar"
-                className="canvas-share-trigger"
-                aria-label="复制画布链接"
-                onClick={() => {
-                  void navigator.clipboard
-                    .writeText(window.location.href)
-                    .then(() => toast.success("画布链接已复制"))
-                    .catch(() =>
-                      toast.error("复制失败，请从浏览器地址栏复制链接"),
-                    );
-                }}
+          {isMobile ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="更多画布信息"
+                >
+                  <MoreHorizontal data-icon="inline-start" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="bottom"
+                align="end"
+                className="w-auto"
+                data-canvas-no-zoom
               >
-                <span className="hidden sm:inline">分享</span>
-                <Link2 className="sm:hidden" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>复制画布链接，保留现有访问权限</TooltipContent>
-          </Tooltip>
-          <Button
-            variant="ghost"
-            size="toolbar-icon"
-            aria-label="账号设置"
-            disabled={!canSwitchCanvas}
-            asChild={canSwitchCanvas}
-          >
-            {canSwitchCanvas ? (
-              <Link href="/account">
-                <UserRound />
-              </Link>
-            ) : (
-              <UserRound />
-            )}
-          </Button>
+                <div className="flex flex-wrap items-center gap-1">
+                  {nodeSummary}
+                  {participantsControl}
+                  {secondaryActions}
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            secondaryActions
+          )}
         </div>
       </Toolbar>
     </TooltipProvider>

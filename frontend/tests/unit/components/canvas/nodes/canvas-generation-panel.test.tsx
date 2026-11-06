@@ -22,7 +22,10 @@ const projectID = "22222222-2222-4222-8222-222222222222";
 const nodeID = "33333333-3333-4333-8333-333333333333";
 const operationID = "44444444-4444-4444-8444-444444444444";
 const outputID = "55555555-5555-4555-8555-555555555555";
-function setup(kind = "text") {
+function setup(
+  kind = "text",
+  configure?: (graph: ReturnType<typeof serviceGraph>) => void,
+) {
   const dto: API.DocumentDTO = {
     id: canvasID,
     project_id: projectID,
@@ -54,6 +57,7 @@ function setup(kind = "text") {
     inputDrafts: {},
     epoch: "epoch-1",
   };
+  configure?.(state.document);
   const changed = vi.fn((graph) => {
     state.document = graph;
   });
@@ -99,6 +103,96 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
+it("projects each incoming binding into the composer, including text and unresolved media", () => {
+  setup("video", (graph) => {
+    const target = graph.nodes[0];
+    const source = {
+      ...target,
+      id: "source",
+      type: "video",
+      title: "片段",
+      documentData: {
+        ...target.documentData!,
+        fileReferences: [
+          {
+            fileId: "unrelated",
+            referenceKey: "first",
+            version: "1",
+            purpose: "CONTENT" as const,
+          },
+          {
+            fileId: "linked",
+            referenceKey: "second",
+            version: "2",
+            purpose: "CONTENT" as const,
+          },
+        ],
+      },
+    };
+    const text = {
+      ...target,
+      id: "text",
+      title: "镜头描述",
+      type: "text",
+      metadata: { content: "镜头缓慢推进" },
+    };
+    graph.nodes.push(source, text);
+    graph.connections.push(
+      {
+        id: "fixed",
+        fromNodeId: source.id,
+        toNodeId: nodeID,
+        documentData: {
+          id: "fixed",
+          fromNodeId: source.id,
+          toNodeId: nodeID,
+          fromPortId: "video",
+          toPortId: "reference_videos",
+          purpose: "REFERENCE_VIDEO",
+          order: 0,
+          binding: { kind: "FILE_REFERENCE", referenceKey: "second" },
+        },
+      },
+      {
+        id: "pending",
+        fromNodeId: source.id,
+        toNodeId: nodeID,
+        documentData: {
+          id: "pending",
+          fromNodeId: source.id,
+          toNodeId: nodeID,
+          fromPortId: "video",
+          toPortId: "reference_videos",
+          purpose: "REFERENCE_VIDEO",
+          order: 1,
+          binding: {
+            kind: "RUN_OUTPUT",
+            selection: { mode: "ITEM", index: 1 },
+          },
+        },
+      },
+      { id: "legacy-text", fromNodeId: text.id, toNodeId: nodeID },
+    );
+  });
+  expect(captured.props?.canvas?.incomingSources).toEqual([
+    {
+      edgeID: "fixed",
+      nodeID: "source",
+      title: "片段",
+      kind: "video",
+      assetID: "linked",
+    },
+    {
+      edgeID: "legacy-text",
+      nodeID: "text",
+      title: "镜头描述",
+      kind: "text",
+      text: "镜头缓慢推进",
+    },
+    { edgeID: "pending", nodeID: "source", title: "片段", kind: "video" },
+  ]);
+});
+
 it("adopts a checked text result into the same resource only after durable save", async () => {
   captured.get.mockResolvedValue(textResult());
   const { state, changed, waitForSaved } = setup();

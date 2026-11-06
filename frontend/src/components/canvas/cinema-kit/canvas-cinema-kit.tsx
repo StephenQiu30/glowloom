@@ -186,9 +186,11 @@ export function CanvasCinemaKitNode({
 export function CanvasCinemaKitBar({
   client,
   nodeID,
+  motionButtonRef,
 }: {
   client: CanvasYjsLiveSession;
   nodeID: string;
+  motionButtonRef?: React.Ref<HTMLButtonElement>;
 }) {
   const view = useSyncExternalStore(
       client.subscribe,
@@ -229,6 +231,7 @@ export function CanvasCinemaKitBar({
           return (
             <span className={active ? "cinema-kit-chip" : ""} key={kind}>
               <Button
+                ref={kind === "motion" ? motionButtonRef : undefined}
                 variant="ghost"
                 size="sm"
                 disabled={!view.writable}

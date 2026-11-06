@@ -8,6 +8,11 @@ export type CanvasReferenceSource = {
   assetID?: string;
 };
 
+export type CanvasLinkedReferenceSource = { edgeID: string } & (
+  | CanvasReferenceSource
+  | { nodeID: string; title: string; kind: "text"; text?: string }
+);
+
 /** A subject keeps its own immutable version and expands into its authorized media. */
 export type CanvasSubjectReferenceSource = { nodeID: string; title: string } & (
   | { source: "subject"; subjectID: string; versionID: string }

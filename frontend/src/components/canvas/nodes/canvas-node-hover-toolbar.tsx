@@ -80,7 +80,7 @@ type CanvasNodeHoverToolbarProps = {
   onInfo: (node: CanvasNodeData) => void;
   onDecreaseFont: (node: CanvasNodeData) => void;
   onIncreaseFont: (node: CanvasNodeData) => void;
-  onToggleDialog: (node: CanvasNodeData) => void;
+  onToggleDialog?: (node: CanvasNodeData) => void;
   onGenerateImage: (node: CanvasNodeData) => void;
   onUpload: (node: CanvasNodeData) => void;
   onRemoveAsset?: (node: CanvasNodeData) => void;
@@ -315,7 +315,7 @@ export function CanvasNodeHoverToolbar({
           },
         ]
       : []),
-    ...(isVideo && !fixedMedia
+    ...(isVideo && !fixedMedia && onToggleDialog
       ? [
           {
             id: "edit",
@@ -337,7 +337,7 @@ export function CanvasNodeHoverToolbar({
           },
         ]
       : []),
-    ...(isConfig
+    ...(isConfig && onToggleDialog
       ? [
           {
             id: "config",

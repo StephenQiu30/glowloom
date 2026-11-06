@@ -53,6 +53,21 @@ export function serviceGraph(
             schemaVersion: 1 as const,
             content: textToDocument(node.config?.text ?? ""),
           };
+    const files = (editor?.files ??
+      []) as CanvasContract.CanvasFileReferenceDTO[];
+    const assetID = node.media_ref?.asset_id;
+    const fileReferences =
+      assetID && !files.some((file) => file.purpose === "CONTENT")
+        ? [
+            ...files,
+            {
+              referenceKey: assetID,
+              fileId: assetID,
+              version: node.content_version ?? "1",
+              purpose: "CONTENT" as const,
+            },
+          ]
+        : files;
     return {
       id: node.id!,
       type: nodeType,
@@ -79,23 +94,7 @@ export function serviceGraph(
           CanvasContract.CanvasNodeParametersDTO | undefined) ?? {
           mode: node.node_action === "generate" ? "GENERATE" : "MANUAL",
         },
-        ...(editor
-          ? {
-              fileReferences: (editor.files ??
-                []) as CanvasContract.CanvasFileReferenceDTO[],
-            }
-          : node.media_ref?.asset_id
-            ? {
-                fileReferences: [
-                  {
-                    referenceKey: node.media_ref.asset_id,
-                    fileId: node.media_ref.asset_id,
-                    version: node.content_version ?? "1",
-                    purpose: "CONTENT",
-                  },
-                ],
-              }
-            : {}),
+        ...(editor || fileReferences.length ? { fileReferences } : {}),
       },
       metadata: {
         freeResize: !["image", "video"].includes(nodeType),

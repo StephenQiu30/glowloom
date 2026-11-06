@@ -1,4 +1,5 @@
 "use client";
+import { Badge } from "@/components/ui/badge";
 import { QuoteCostDetail } from "./quote-cost-detail";
 import { GenerationCredits, useGenerationCredits } from "./generation-credits";
 import dynamic from "next/dynamic";
@@ -134,6 +135,7 @@ import { editorIssues, compatibleParams } from "./editor-capabilities";
 import { fieldsForMode, requireQuote, money, type Quote } from "./contracts";
 import { TaskDetail, type GenerationSeed } from "./generation-dialog";
 import type {
+  CanvasLinkedReferenceSource,
   CanvasReferenceSource,
   CanvasSubjectReferenceSource,
 } from "./reference-source";
@@ -149,7 +151,8 @@ export type CanvasComposerOwner = {
   flush: () => Promise<API.InputSource>;
   referenceSources?: CanvasReferenceSource[];
   subjectSources?: CanvasSubjectReferenceSource[];
-  incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
+  incomingSources?: CanvasLinkedReferenceSource[];
+  onMotion?: () => void;
 };
 type Props = {
   adoptLabel?: string;
@@ -1407,7 +1410,7 @@ function EditorWorkspace({
       />
     ) : null;
   const referenceControls =
-    session && !textOnlyAudio ? (
+    session && (!textOnlyAudio || presentation === "canvas") ? (
       <ReferenceControls
         session={session}
         draft={draft}
@@ -1421,6 +1424,7 @@ function EditorWorkspace({
         canvasSources={canvas?.referenceSources ?? referenceSources}
         canvasSubjectSources={canvas?.subjectSources ?? subjectSources}
         incomingSources={canvas?.incomingSources}
+        onMotion={canvas?.onMotion}
       />
     ) : null;
   const collaborativeNegativeField =
@@ -2184,10 +2188,10 @@ function EditorWorkspace({
                   </span>
                 ) : (
                   presentation !== "home" &&
-                  draft.mode === "omni_reference" && (
-                    <span className="shrink-0 px-2 text-xs text-muted-foreground">
-                      全能参考
-                    </span>
+                  draft.mode && (
+                    <Badge variant="secondary">
+                      {creationModeLabel(draft.mode)}
+                    </Badge>
                   )
                 )}
                 {!textOnlyAudio &&

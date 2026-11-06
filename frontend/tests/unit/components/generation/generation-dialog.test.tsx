@@ -1,5 +1,11 @@
 import { render, findFeedback } from "../../../feedback";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   TaskDetail,
@@ -536,9 +542,14 @@ it("@分类候选展示已连接内容，核验后替换为真实引用且不混
     asset: { id, project_id: project.id, kind: "image", revision: 3 },
   });
   fireEvent.click(screen.getByRole("button", { name: "提及素材或主体" }));
+  expect(
+    await screen.findByRole("option", { name: "已连接海报" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("dialog", { name: "图片引用候选" })).toBeNull();
   fireEvent.click(await screen.findByRole("option", { name: "图片" }));
   expect(screen.queryByRole("option", { name: /未连接海报/ })).toBeNull();
-  fireEvent.click(screen.getByRole("option", { name: /已连接海报/ }));
+  const submenu = await screen.findByRole("dialog", { name: "图片引用候选" });
+  fireEvent.click(within(submenu).getByRole("option", { name: /已连接海报/ }));
   await waitFor(() =>
     expect(canvas.onChange.mock.calls.at(-1)?.[0].references).toEqual([
       expect.objectContaining({
@@ -579,7 +590,8 @@ it("@核验期间连接被移除时拒绝旧结果，不把断线素材加入正
   );
   fireEvent.click(screen.getByRole("button", { name: "提及素材或主体" }));
   fireEvent.click(await screen.findByRole("option", { name: "图片" }));
-  fireEvent.click(screen.getByRole("option", { name: /待核验海报/ }));
+  const submenu = await screen.findByRole("dialog", { name: "图片引用候选" });
+  fireEvent.click(within(submenu).getByRole("option", { name: /待核验海报/ }));
   await waitFor(() => expect(resolve).toBeTypeOf("function"));
   rerender(
     <RichGeneration {...props} canvas={{ ...canvas, incomingSources: [] }} />,

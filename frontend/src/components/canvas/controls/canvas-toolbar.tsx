@@ -1,5 +1,6 @@
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Toolbar } from "@/components/ui/toolbar";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ThemeToggle } from "@/components/controls/theme-controls";
 import { Button } from "@/components/ui/button";
 import { CanvasGuideDialog } from "./canvas-guide-dialog";
@@ -33,6 +34,7 @@ import {
   Keyboard,
   Info,
   MoreHorizontal,
+  Plus,
   Redo2,
   Trash2,
   Undo2,
@@ -81,10 +83,168 @@ export function CanvasToolbar({
   onShowImageInfoChange: (show: boolean) => void;
 }) {
   useNodeRegistryVersion();
+  const isMobile = useIsMobile();
+  const [createOpen, setCreateOpen] = useState(false);
   const definitions = listNodeDefinitions().filter(
     (definition) => definition.showInCreateMenu !== false,
   );
 
+  const create = (type: string) => {
+    setCreateOpen(false);
+    onCreateNode(type);
+  };
+  const dock = (
+    <Toolbar
+      density="roomy"
+      className={
+        isMobile
+          ? "grid grid-cols-4 gap-1 [&_button]:min-h-11 [&_button]:min-w-11"
+          : "canvas-dock-surface flex flex-col items-center"
+      }
+    >
+      {definitions
+        .filter((item) =>
+          [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "timeline",
+            "subject",
+            "director",
+          ].includes(item.type),
+        )
+        .sort(
+          (a, b) =>
+            [
+              "text",
+              "image",
+              "video",
+              "audio",
+              "timeline",
+              "subject",
+              "director",
+            ].indexOf(a.type) -
+            [
+              "text",
+              "image",
+              "video",
+              "audio",
+              "timeline",
+              "subject",
+              "director",
+            ].indexOf(b.type),
+        )
+        .map((definition) =>
+          definition.type === "director" ? (
+            <div key={definition.type} className="flex flex-col">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="toolbar-icon"
+                    aria-label="导演工具箱"
+                    disabled={!canEdit}
+                  >
+                    <Clapperboard />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="right"
+                  align="center"
+                  className="w-44 p-1"
+                  data-canvas-no-zoom
+                  data-canvas-shortcuts-ignore
+                >
+                  {(
+                    [
+                      { kind: "camera", label: "相机", Icon: Camera },
+                      { kind: "palette", label: "配色", Icon: Palette },
+                      { kind: "style", label: "风格", Icon: Clapperboard },
+                      { kind: "motion", label: "运镜", Icon: MoveRight },
+                    ] as const
+                  ).map(({ kind, label, Icon }) => (
+                    <Button
+                      key={kind}
+                      variant="ghost"
+                      className="w-full justify-start"
+                      onClick={() => create(`cinema_studio:${kind}`)}
+                    >
+                      <Icon />
+                      {label}
+                    </Button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="toolbar-icon"
+                    aria-label={`添加${definition.title}节点`}
+                    disabled={!canEdit}
+                    onClick={() => create(definition.type)}
+                  >
+                    {definition.icon}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{definition.title}</TooltipContent>
+              </Tooltip>
+            </div>
+          ) : (
+            <Tooltip key={definition.type}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="toolbar-icon"
+                  aria-label={`添加${definition.title}节点`}
+                  disabled={!canEdit}
+                  onClick={() => create(definition.type)}
+                >
+                  {definition.icon}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{definition.title}</TooltipContent>
+            </Tooltip>
+          ),
+        )}
+      <Separator className={isMobile ? "col-span-full" : "my-1 max-w-8"} />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="toolbar-icon"
+            aria-label="资产管理"
+            disabled={!canEdit}
+            onClick={() => {
+              setCreateOpen(false);
+              onBrowseAssets();
+            }}
+          >
+            <Folder data-icon="inline-start" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">从参考素材添加</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="toolbar-icon"
+            aria-label="本地上传"
+            disabled={!canEdit}
+            onClick={() => {
+              setCreateOpen(false);
+              onUpload();
+            }}
+          >
+            <Upload data-icon="inline-start" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">本地上传</TooltipContent>
+      </Tooltip>
+    </Toolbar>
+  );
   return (
     <div className="canvas-controls-layout" data-canvas-controls>
       <header className="canvas-control-header" data-canvas-no-zoom>
@@ -234,158 +394,43 @@ export function CanvasToolbar({
           </Popover>
         </Toolbar>
       </header>
-      <div
-        data-canvas-no-zoom
-        className="canvas-action-dock"
-        aria-label="画布工具栏"
-      >
-        <Toolbar
-          density="roomy"
-          className="canvas-dock-surface flex flex-col items-center"
+      {!isMobile && (
+        <div
+          data-canvas-no-zoom
+          className="canvas-action-dock"
+          aria-label="画布工具栏"
         >
-          {definitions
-            .filter((item) =>
-              [
-                "text",
-                "image",
-                "video",
-                "audio",
-                "timeline",
-                "subject",
-                "director",
-              ].includes(item.type),
-            )
-            .sort(
-              (a, b) =>
-                [
-                  "text",
-                  "image",
-                  "video",
-                  "audio",
-                  "timeline",
-                  "subject",
-                  "director",
-                ].indexOf(a.type) -
-                [
-                  "text",
-                  "image",
-                  "video",
-                  "audio",
-                  "timeline",
-                  "subject",
-                  "director",
-                ].indexOf(b.type),
-            )
-            .map((definition) =>
-              definition.type === "director" ? (
-                <div key={definition.type} className="flex flex-col">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="toolbar-icon"
-                        aria-label="导演工具箱"
-                        disabled={!canEdit}
-                      >
-                        <Clapperboard />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      side="right"
-                      align="center"
-                      className="w-44 p-1"
-                      data-canvas-no-zoom
-                      data-canvas-shortcuts-ignore
-                    >
-                      {(
-                        [
-                          { kind: "camera", label: "相机", Icon: Camera },
-                          { kind: "palette", label: "配色", Icon: Palette },
-                          { kind: "style", label: "风格", Icon: Clapperboard },
-                          { kind: "motion", label: "运镜", Icon: MoveRight },
-                        ] as const
-                      ).map(({ kind, label, Icon }) => (
-                        <Button
-                          key={kind}
-                          variant="ghost"
-                          className="w-full justify-start"
-                          onClick={() => onCreateNode(`cinema_studio:${kind}`)}
-                        >
-                          <Icon />
-                          {label}
-                        </Button>
-                      ))}
-                    </PopoverContent>
-                  </Popover>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="toolbar-icon"
-                        aria-label={`添加${definition.title}节点`}
-                        disabled={!canEdit}
-                        onClick={() => onCreateNode(definition.type)}
-                      >
-                        {definition.icon}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      {definition.title}
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              ) : (
-                <Tooltip key={definition.type}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="toolbar-icon"
-                      aria-label={`添加${definition.title}节点`}
-                      disabled={!canEdit}
-                      onClick={() => onCreateNode(definition.type)}
-                    >
-                      {definition.icon}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    {definition.title}
-                  </TooltipContent>
-                </Tooltip>
-              ),
-            )}
-          <Separator className="my-1 max-w-8" />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="toolbar-icon"
-                aria-label="资产管理"
-                disabled={!canEdit}
-                onClick={onBrowseAssets}
-              >
-                <Folder data-icon="inline-start" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">从参考素材添加</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="toolbar-icon"
-                aria-label="本地上传"
-                disabled={!canEdit}
-                onClick={onUpload}
-              >
-                <Upload data-icon="inline-start" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">本地上传</TooltipContent>
-          </Tooltip>
-        </Toolbar>
-      </div>
+          {dock}
+        </div>
+      )}
       <footer className="canvas-control-footer" data-canvas-no-zoom>
-        {viewControls}
+        <div className="flex min-w-0 items-center gap-1">
+          {viewControls}
+          {isMobile && (
+            <Popover open={createOpen} onOpenChange={setCreateOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="添加节点"
+                  disabled={!canEdit}
+                >
+                  <Plus data-icon="inline-start" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="top"
+                align="end"
+                collisionPadding={12}
+                className="w-auto max-w-[calc(100dvw-24px)]"
+                aria-label="画布工具栏"
+                data-canvas-no-zoom
+              >
+                {dock}
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
         <Toolbar className="canvas-assistant-action">
           <Tooltip>
             <TooltipTrigger asChild>

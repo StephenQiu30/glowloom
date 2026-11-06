@@ -26,6 +26,7 @@ type Props = {
   side: ConnectionHandleSide;
   visible: boolean;
   disabled?: boolean;
+  tap?: boolean;
   onMouseDown: (event: MouseEvent) => void;
 };
 
@@ -35,6 +36,7 @@ export function CanvasConnectionHandle({
   side,
   visible,
   disabled = false,
+  tap = false,
   onMouseDown,
 }: Props) {
   const field = useRef<HTMLDivElement>(null);
@@ -44,13 +46,22 @@ export function CanvasConnectionHandle({
   const pointer = useRef<HandlePoint | null>(null);
   const aggregate = variant === "aggregate";
   const rest = useCallback(
-    () => (aggregate ? { x: 30, y: 60 } : connectionHandleRest(side, scale)),
-    [aggregate, scale, side],
+    () =>
+      aggregate
+        ? { x: 30, y: 60 }
+        : tap
+          ? { x: 30 + (side === "right" ? 22 : -22) / scale, y: 60 }
+          : connectionHandleRest(side, scale),
+    [aggregate, scale, side, tap],
   );
   const current = useRef(rest());
   const reduced = useRef(false);
   const [hovered, setHovered] = useState(false);
-  const counterScale = aggregate ? 1 : connectionHandleCounterScale(scale);
+  const counterScale = aggregate
+    ? 1
+    : tap
+      ? 1 / scale
+      : connectionHandleCounterScale(scale);
   const shown = visible || (hovered && !disabled);
 
   const write = useCallback(
@@ -109,7 +120,7 @@ export function CanvasConnectionHandle({
   }, [sampleTarget, stop, write]);
 
   const followPointer = (clientX: number, clientY: number) => {
-    if (disabled) return;
+    if (disabled || tap) return;
     pointer.current = { x: clientX, y: clientY };
     field.current?.setAttribute(
       "data-canvas-connection-glyph-tracking",
@@ -145,6 +156,7 @@ export function CanvasConnectionHandle({
       data-variant={variant}
       data-visible={shown}
       data-disabled={disabled}
+      data-tap={tap || undefined}
       className="canvas-connection-handle"
       style={
         {
@@ -169,7 +181,7 @@ export function CanvasConnectionHandle({
         reset();
       }}
       onMouseDown={(event) => {
-        if (!disabled && event.button === 0) onMouseDown(event);
+        if (!tap && !disabled && event.button === 0) onMouseDown(event);
       }}
     >
       {aggregate ? (
@@ -211,18 +223,18 @@ export function CanvasConnectionHandle({
           variant="outline"
           size="icon-xs"
           aria-label={side === "left" ? "连接输入节点" : "连接输出节点"}
-          aria-haspopup="menu"
+          aria-haspopup={tap ? undefined : "menu"}
           disabled={disabled}
           tabIndex={shown && !disabled ? 0 : -1}
           data-canvas-connection-glyph
           className="canvas-node-port"
           style={{
-            width: 20,
-            height: 20,
+            width: tap ? 44 : 20,
+            height: tap ? 44 : 20,
             transform: connectionHandleTransform(rest(), counterScale),
           }}
           onClick={(event) => {
-            if (!disabled && event.detail === 0) onMouseDown(event);
+            if (!disabled && (tap || event.detail === 0)) onMouseDown(event);
           }}
         >
           <span aria-hidden="true" className="canvas-node-port-plus" />
