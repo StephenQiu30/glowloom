@@ -4,10 +4,7 @@ import {
   stableId,
   canonicalHash,
 } from '../src/sessions/manifest.js';
-import {
-  PhaseTelemetry,
-  modelPhase,
-} from '../src/runtime/pi-durable/telemetry.js';
+import { PhaseTelemetry, modelPhase } from '../src/pi-durable/telemetry.js';
 
 describe('frozen execution identity', () => {
   it('uses immutable content, distinct run/continuation namespaces, and rejects duplicate tools', () => {

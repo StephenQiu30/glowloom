@@ -6,12 +6,12 @@ import {
   BusinessClient,
   type Grant,
   type CallReceipt,
-} from '../src/integrations/go-business-api/client.js';
+} from '../src/business/client.js';
 import { SessionRuntime } from '../src/sessions/runtime.js';
 import { SessionService } from '../src/sessions/service.js';
 import { SessionStore } from '../src/sessions/persistence/store.js';
 import { freezeManifest } from '../src/sessions/manifest.js';
-import { StateDoc } from '../src/runtime/pi-durable/docs.js';
+import { StateDoc } from '../src/pi-durable/docs.js';
 import { testPool } from './storage/database.js';
 import { recoveryPumpPool } from './helpers/recovery-database.js';
 

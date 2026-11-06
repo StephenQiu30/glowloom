@@ -11,11 +11,11 @@ import {
   claimSessionOwner,
   renewSessionOwner,
   releaseSessionOwner,
-} from '../../src/adapters/postgres/pi-durable/ownership.js';
+} from '../../src/pi-durable/storage/ownership.js';
 import {
   openPostgresStorage,
   openReadonlyPostgresStorage,
-} from '../../src/adapters/postgres/pi-durable/postgres.js';
+} from '../../src/pi-durable/storage/postgres.js';
 import { testPool } from './database.js';
 import { interruptCommand } from './network-fault.js';
 

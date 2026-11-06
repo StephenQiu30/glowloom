@@ -86,85 +86,36 @@ func (h *BusinessHandler) Register(router *gin.Engine) {
 		}
 	})
 	h.registerInputSources(g)
-	g.POST("/grants", func(c *gin.Context) {
-		var in domain.GrantRequest
-		if !httpapi.Decode(c, &in) {
-			return
-		}
-		out, err := h.store.RegisterGrant(c.Request.Context(), in)
-		send(c, out, err)
-	})
-	g.POST("/grants/validate", func(c *gin.Context) {
-		var in domain.Grant
-		if !httpapi.Decode(c, &in) {
-			return
-		}
-		out, err := h.store.ValidateGrant(c.Request.Context(), in)
-		send(c, out, err)
-	})
-	g.GET("/runs/:rid/decisions", func(c *gin.Context) {
-		rid, ok := httpapi.PathUUID(c, "rid")
-		if !ok {
-			return
-		}
-		out, err := h.store.CurrentAuthority(c.Request.Context(), rid)
-		send(c, out, err)
-	})
-	g.POST("/runs/:rid/quiesced", func(c *gin.Context) {
-		rid, ok := httpapi.PathUUID(c, "rid")
-		if !ok {
-			return
-		}
-		var in domain.QuiescedReceipt
-		if !httpapi.Decode(c, &in) {
-			return
-		}
-		out, err := h.store.Quiesce(c.Request.Context(), rid, in)
-		send(c, out, err)
-	})
-	g.POST("/runs/:rid/receipts", func(c *gin.Context) {
-		rid, ok := httpapi.PathUUID(c, "rid")
-		if !ok {
-			return
-		}
-		var in domain.AppliedReceipt
-		if !httpapi.Decode(c, &in) {
-			return
-		}
-		err := h.store.Acknowledge(c.Request.Context(), rid, in)
-		send(c, gin.H{"accepted": err == nil}, err)
-	})
-	g.POST("/proposals", func(c *gin.Context) {
-		var in domain.ProposalInput
-		if !httpapi.Decode(c, &in) {
-			return
-		}
-		out, err := h.store.Propose(c.Request.Context(), in)
-		send(c, proposalResponse(out), err)
-	})
+	g.POST("/grants", h.registerGrant)
+	g.POST("/grants/validate", h.validateGrant)
+	g.GET("/runs/:rid/decisions", h.getDecisions)
+	g.POST("/runs/:rid/quiesced", h.quiesceRun)
+	g.POST("/runs/:rid/receipts", h.acknowledgeReceipt)
+	g.POST("/proposals", h.createProposal)
 	h.registerSkills(g)
 	g.GET("/tools", h.tools)
 	g.POST("/tools/:name/execute", h.tool)
 	g.POST("/models/stream", h.model)
 	g.GET("/runs/:rid/calls/:call_id", h.call)
-	g.POST("/snapshot", func(c *gin.Context) {
-		var in domain.Grant
-		if !httpapi.Decode(c, &in) {
-			return
-		}
-		grant, err := h.store.ValidateGrant(c.Request.Context(), in)
-		if err != nil {
-			send(c, nil, err)
-			return
-		}
-		if h.capabilities.Snapshot == nil {
-			send(c, nil, domain.ErrUnavailable)
-			return
-		}
-		out, err := h.capabilities.Snapshot(c.Request.Context(), grant.Scope)
-		send(c, out, err)
-	})
+	g.POST("/snapshot", h.getSnapshot)
 }
+
+// @Summary listTools
+// @ID listTools
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Success 200 {array} app.ToolDescriptor
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/tools [get]
 func (h *BusinessHandler) tools(c *gin.Context) {
 	out := make([]app.ToolDescriptor, 0, len(h.capabilities.Tools))
 	for _, tool := range h.capabilities.Tools {
@@ -172,6 +123,25 @@ func (h *BusinessHandler) tools(c *gin.Context) {
 	}
 	send(c, out, nil)
 }
+
+// @Summary executeTool
+// @ID executeTool
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param name path string true "name"
+// @Param body body domain.CallInput true "Request"
+// @Success 200 {object} domain.CallReceipt
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/tools/{name}/execute [post]
 func (h *BusinessHandler) tool(c *gin.Context) {
 	var in domain.CallInput
 	if !httpapi.Decode(c, &in) {
@@ -202,6 +172,24 @@ func (h *BusinessHandler) tool(c *gin.Context) {
 	}
 	send(c, nil, domain.ErrNotFound)
 }
+
+// @Summary executeModel
+// @ID executeModel
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param body body domain.CallInput true "Request"
+// @Success 200 {object} domain.CallReceipt
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/models/stream [post]
 func (h *BusinessHandler) model(c *gin.Context) {
 	var in domain.CallInput
 	if !decodeModel(c, &in) {
@@ -216,6 +204,30 @@ func (h *BusinessHandler) model(c *gin.Context) {
 	})
 	send(c, out, err)
 }
+
+// @Summary getCall
+// @ID getCall
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param rid path string true "rid"
+// @Param call_id path string true "call_id"
+// @Param submission_id query string true "submission_id"
+// @Param task_id query string true "task_id"
+// @Param checkpoint_id query string true "checkpoint_id"
+// @Param attempt query integer true "attempt"
+// @Param contract_version query string true "contract_version"
+// @Success 200 {object} domain.CallReceipt
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/runs/{rid}/calls/{call_id} [get]
 func (h *BusinessHandler) call(c *gin.Context) {
 	rid, ok := httpapi.PathUUID(c, "rid")
 	if !ok {
@@ -249,6 +261,207 @@ func (h *BusinessHandler) call(c *gin.Context) {
 	send(c, out, err)
 }
 
-func proposalResponse(p domain.Proposal) any {
-	return gin.H{"proposal_id": p.ProposalID, "root_run_id": p.RootRunID, "candidate_hash": p.CandidateHash, "authorization_revision": p.AuthorizationRevision, "candidate": p.Candidate, "canvas_revision": p.CanvasRevision, "price_version": p.PriceVersion, "budget_micros": p.BudgetMicros, "control": p.Control}
+func proposalResponse(p domain.Proposal) businessProposal {
+	return businessProposal{ProposalID: p.ProposalID, RootRunID: p.RootRunID, CandidateHash: p.CandidateHash, AuthorizationRevision: p.AuthorizationRevision, Candidate: p.Candidate, CanvasRevision: p.CanvasRevision, PriceVersion: p.PriceVersion, BudgetMicros: p.BudgetMicros, Control: p.Control}
+}
+
+// @Summary registerGrant
+// @ID registerGrant
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param body body domain.GrantRequest true "Request"
+// @Success 200 {object} domain.Grant
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/grants [post]
+func (h *BusinessHandler) registerGrant(c *gin.Context) {
+	var in domain.GrantRequest
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	out, err := h.store.RegisterGrant(c.Request.Context(), in)
+	send(c, out, err)
+}
+
+// @Summary validateGrant
+// @ID validateGrant
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param body body domain.Grant true "Request"
+// @Success 200 {object} domain.Grant
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/grants/validate [post]
+func (h *BusinessHandler) validateGrant(c *gin.Context) {
+	var in domain.Grant
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	out, err := h.store.ValidateGrant(c.Request.Context(), in)
+	send(c, out, err)
+}
+
+// @Summary getDecisions
+// @ID getDecisions
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param rid path string true "rid"
+// @Success 200 {object} domain.Authority
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/runs/{rid}/decisions [get]
+func (h *BusinessHandler) getDecisions(c *gin.Context) {
+	rid, ok := httpapi.PathUUID(c, "rid")
+	if !ok {
+		return
+	}
+	out, err := h.store.CurrentAuthority(c.Request.Context(), rid)
+	send(c, out, err)
+}
+
+// @Summary quiesceRun
+// @ID quiesceRun
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param rid path string true "rid"
+// @Param body body domain.QuiescedReceipt true "Request"
+// @Success 200 {object} domain.Grant
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/runs/{rid}/quiesced [post]
+func (h *BusinessHandler) quiesceRun(c *gin.Context) {
+	rid, ok := httpapi.PathUUID(c, "rid")
+	if !ok {
+		return
+	}
+	var in domain.QuiescedReceipt
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	out, err := h.store.Quiesce(c.Request.Context(), rid, in)
+	send(c, out, err)
+}
+
+// @Summary acknowledgeReceipt
+// @ID acknowledgeReceipt
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param rid path string true "rid"
+// @Param body body domain.AppliedReceipt true "Request"
+// @Success 200 {object} businessAccepted
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/runs/{rid}/receipts [post]
+func (h *BusinessHandler) acknowledgeReceipt(c *gin.Context) {
+	rid, ok := httpapi.PathUUID(c, "rid")
+	if !ok {
+		return
+	}
+	var in domain.AppliedReceipt
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	err := h.store.Acknowledge(c.Request.Context(), rid, in)
+	send(c, businessAccepted{Accepted: err == nil}, err)
+}
+
+// @Summary createProposal
+// @ID createProposal
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param body body domain.ProposalInput true "Request"
+// @Success 200 {object} businessProposal
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/proposals [post]
+func (h *BusinessHandler) createProposal(c *gin.Context) {
+	var in domain.ProposalInput
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	out, err := h.store.Propose(c.Request.Context(), in)
+	send(c, proposalResponse(out), err)
+}
+
+// @Summary getSnapshot
+// @ID getSnapshot
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param body body domain.Grant true "Request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/snapshot [post]
+func (h *BusinessHandler) getSnapshot(c *gin.Context) {
+	var in domain.Grant
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	grant, err := h.store.ValidateGrant(c.Request.Context(), in)
+	if err != nil {
+		send(c, nil, err)
+		return
+	}
+	if h.capabilities.Snapshot == nil {
+		send(c, nil, domain.ErrUnavailable)
+		return
+	}
+	out, err := h.capabilities.Snapshot(c.Request.Context(), grant.Scope)
+	send(c, out, err)
 }

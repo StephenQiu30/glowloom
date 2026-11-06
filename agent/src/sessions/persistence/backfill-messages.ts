@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import type { JsonObject } from '@earendil-works/pi-durable';
-import { publicMessageParts } from '../../runtime/pi-durable/messages.js';
+import { publicMessageParts } from '../../pi-durable/messages.js';
 /** Offline, bounded, restart-safe projection of retained public events. No Harness or business calls. */
 export async function backfillConversationMessages(
   pool: Pool,

@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { registerStorageConformance } from '@earendil-works/pi-durable/testing';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { afterAll, describe, expect, it } from 'vitest';
-import { claimSessionOwner } from '../../src/adapters/postgres/pi-durable/ownership.js';
-import { openPostgresStorage } from '../../src/adapters/postgres/pi-durable/postgres.js';
+import { claimSessionOwner } from '../../src/pi-durable/storage/ownership.js';
+import { openPostgresStorage } from '../../src/pi-durable/storage/postgres.js';
 import { testPool } from './database.js';
 
 const pool = testPool();

@@ -1,5 +1,21 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+<a id="agent-nestjs-migration"></a>
+
+## Agent 服务 NestJS 迁移（2026-11-06）
+
+来源：[需求22](docs/requirement/22-Agent服务目录与TypeScript规范需求.md) · [设计37](docs/design/37-Agent服务目录与TypeScript规范设计.md) · [Plan28](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md#nestjs-框架切换顺序)。
+
+| 范围 | 工程状态 |
+| --- | --- |
+| 单版本源码 | NestJS 接管入口、HTTP/SSE 和生命周期。删除旧 HTTP 应用、TypeBox HTTP 合同与脚本。Go 使用重新生成的客户端，Agent 使用独立 Go Swagger 生成的业务客户端。 |
+| 目录职责 | 入站统一在 `http/`，Go 客户端和生成物统一在 `business/`。移除独立 Nest 装配包装与连接池关闭回调。复验 OpenAPI 和编译后的 Pi 定义指纹与目录整理前一致。 |
+| Agent 门禁 | 冻结安装、类型检查、lint、格式、构建与双向生成校验通过。27 文件 146 项全过，含实际 socket、隔离 PostgreSQL、官方 Storage conformance 与进程恢复。 |
+| Go 与镜像 | 全 backend 编译、Agent 范围 race、真实 Go→Nest→隔离 PostgreSQL、业务边界、公网 Swagger 合同及 vet 通过。固定 Node 24.22.2 的非 root Linux 镜像验证健康、就绪及 SIGTERM 正常退出。模型和工具使用受控 fixture。 |
+| 正式切换 | 待盘点目标环境可接续运行、未决控制及未知业务回执。目标镜像定义指纹为 `4bb42e794eb9db16c658ae71fa412c01d6878bc5d5904dfa54c321bb7a72f6bf`，与切换前源码重建的编译指纹不同。按设计37 §7.5 收束无法接续的运行后执行单版本切换。 |
+
+生成 TypeScript 声明通过独立 `pnpm api:typecheck` 严格校验。全项目关闭 `skipLibCheck` 时，外部 Pi、Chord 和 Google GenAI 声明仍报错。Agent 相关 Go 包的 `govulncheck` 无可达结果。
+
 <a id="official-model-contracts"></a>
 
 ## 官方模型接入、预设与参数计价（SRC-AI-40，2026-11-05）

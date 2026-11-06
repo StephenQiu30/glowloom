@@ -6,7 +6,7 @@ import {
   BusinessClient,
   type Grant,
   type CallReceipt,
-} from '../src/integrations/go-business-api/client.js';
+} from '../src/business/client.js';
 import { testPool } from './storage/database.js';
 
 it('creates a real task-owned specialist conversation and returns its committed answer to the producer', async () => {

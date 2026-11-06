@@ -7,10 +7,11 @@ import { once } from 'node:events';
 import { expect, it } from 'vitest';
 import {
   BusinessClient,
+  type BusinessTool,
   type CallReceipt,
-} from '../src/integrations/go-business-api/client.js';
+} from '../src/business/client.js';
 import { SessionStore } from '../src/sessions/persistence/store.js';
-import { freezeManifest, type BusinessTool } from '../src/sessions/manifest.js';
+import { freezeManifest } from '../src/sessions/manifest.js';
 import { reconcileInterrupted } from '../src/sessions/reconciliation.js';
 import { SessionRuntime } from '../src/sessions/runtime.js';
 import { testPool } from './storage/database.js';

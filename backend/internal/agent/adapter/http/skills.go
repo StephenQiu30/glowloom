@@ -24,41 +24,8 @@ type SkillStore interface {
 // WithSkills injects the owning skill store for internal business routes.
 func (h *BusinessHandler) WithSkills(store SkillStore) *BusinessHandler { h.skills = store; return h }
 func (h *BusinessHandler) registerSkills(g *gin.RouterGroup) {
-	g.POST("/skills/discover", func(c *gin.Context) {
-		var in struct {
-			Grant domain.Grant `json:"grant"`
-		}
-		if !httpapi.Decode(c, &in) {
-			return
-		}
-		if h.skills == nil {
-			send(c, nil, domain.ErrUnavailable)
-			return
-		}
-		out, err := h.skills.DiscoverSkills(c.Request.Context(), in.Grant)
-		send(c, out, err)
-	})
-	g.POST("/skills/:id/load", func(c *gin.Context) {
-		id, ok := httpapi.PathUUID(c, "id")
-		if !ok {
-			return
-		}
-		var in struct {
-			Grant        domain.Grant `json:"grant"`
-			Version      string       `json:"version"`
-			ResourceHash string       `json:"resource_hash"`
-			ResourcePath string       `json:"resource_path,omitempty"`
-		}
-		if !httpapi.Decode(c, &in) {
-			return
-		}
-		if h.skills == nil {
-			send(c, nil, domain.ErrUnavailable)
-			return
-		}
-		out, err := h.skills.ReadSkill(c.Request.Context(), in.Grant, id, in.Version, in.ResourceHash, in.ResourcePath)
-		send(c, out, err)
-	})
+	g.POST("/skills/discover", h.discoverSkills)
+	g.POST("/skills/:id/load", h.loadSkill)
 }
 
 // SkillManagementHandler manages private immutable package versions.
@@ -143,5 +110,70 @@ func (h *SkillManagementHandler) SetEnabled(c *gin.Context) {
 		return
 	}
 	out, err := h.store.SetSkillEnabled(c.Request.Context(), identityhttp.Principal(c), pid, id, c.Param("version"), in.Enabled)
+	send(c, out, err)
+}
+
+// @Summary discoverSkills
+// @ID discoverSkills
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param body body businessSkillDiscover true "Request"
+// @Success 200 {array} domain.SkillVersion
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/skills/discover [post]
+func (h *BusinessHandler) discoverSkills(c *gin.Context) {
+	var in businessSkillDiscover
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	if h.skills == nil {
+		send(c, nil, domain.ErrUnavailable)
+		return
+	}
+	out, err := h.skills.DiscoverSkills(c.Request.Context(), in.Grant)
+	send(c, out, err)
+}
+
+// @Summary loadSkill
+// @ID loadSkill
+// @Tags business
+// @Accept json
+// @Produce json
+// @Security ServiceIdentity
+// @Param X-Agent-Audience header string true "Agent audience"
+// @Param id path string true "id"
+// @Param body body businessSkillLoad true "Request"
+// @Success 200 {object} domain.SkillContent
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /internal/agent-business/skills/{id}/load [post]
+func (h *BusinessHandler) loadSkill(c *gin.Context) {
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	var in businessSkillLoad
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	if h.skills == nil {
+		send(c, nil, domain.ErrUnavailable)
+		return
+	}
+	out, err := h.skills.ReadSkill(c.Request.Context(), in.Grant, id, in.Version, in.ResourceHash, in.ResourcePath)
 	send(c, out, err)
 }

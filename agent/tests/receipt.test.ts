@@ -4,8 +4,8 @@ import {
   type CallIdentity,
   type CallReceipt,
   type Grant,
-} from '../src/integrations/go-business-api/client.js';
-import { completedReceipt } from '../src/runtime/pi-durable/model-provider.js';
+} from '../src/business/client.js';
+import { completedReceipt } from '../src/pi-durable/model-provider.js';
 const call: CallIdentity = {
   task_id: '1',
   call_id: 'call',

@@ -293,13 +293,13 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	create := map[string]any{"request_id": uuid.NewString(), "title": "Cross-process boundary fixture"}
 	var session runtimeclient.SessionView
 	decode(t, requestJSON(t, client, "POST", base, create, nil, 201), &session)
-	sid, err = uuid.Parse(session.ID)
-	if err != nil || session.ActorID != scope.ActorID.String() {
-		t.Fatal("untrusted session identity:", session.ID, err)
+	sid, err = uuid.Parse(session.Id)
+	if err != nil || session.ActorId != scope.ActorID.String() {
+		t.Fatal("untrusted session identity:", session.Id, err)
 	}
 	var again runtimeclient.SessionView
 	decode(t, requestJSON(t, client, "POST", base, create, nil, 201), &again)
-	if again.ID != session.ID {
+	if again.Id != session.Id {
 		t.Fatal("duplicate session created another identity")
 	}
 	changed := cloneMap(create)
@@ -316,8 +316,8 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	start := map[string]any{"request_id": uuid.NewString(), "expected_execution_revision": 0, "input": boundaryDraft("Read a formal project snapshot, then report its receipt."), "manifest": map[string]any{"model_key": "boundary-fixture", "max_tokens": 256, "max_micros": 10}, "budget_micros": 100}
 	var accepted runtimeclient.AcceptedRun
 	decode(t, requestJSON(t, client, "POST", base+"/"+sid.String()+"/runs", start, nil, 202), &accepted)
-	rid, err := uuid.Parse(accepted.RootRunID)
-	if err != nil || rid != domain.RootRunID(sid, uuid.MustParse(start["request_id"].(string))) || accepted.SubmissionID != domain.SubmissionID(rid).String() {
+	rid, err := uuid.Parse(accepted.RootRunId)
+	if err != nil || rid != domain.RootRunID(sid, uuid.MustParse(start["request_id"].(string))) || accepted.SubmissionId != domain.SubmissionID(rid).String() {
 		t.Fatal("cross-language stable run/submission identity mismatch", err)
 	}
 	runURL := base + "/" + sid.String() + "/runs/" + rid.String()

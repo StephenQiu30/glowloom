@@ -8,9 +8,9 @@ import {
   BusinessError,
   type Grant,
   type CallReceipt,
-} from '../src/integrations/go-business-api/client.js';
+} from '../src/business/client.js';
 import { testPool } from './storage/database.js';
-import { type BusinessTool } from '../src/sessions/manifest.js';
+import type { BusinessTool } from '../src/business/client.js';
 const scope = () => ({
   actor_id: randomUUID(),
   org_id: randomUUID(),
@@ -536,9 +536,7 @@ it('stops a real parent-child ownership tree and releases an interrupted special
   let models = 0;
   let aborted = false;
   class AbortFixture extends BusinessClient {
-    current:
-      | import('../src/integrations/go-business-api/client.js').BusinessDecision
-      | null = null;
+    current: import('../src/business/client.js').BusinessDecision | null = null;
     constructor() {
       super('http://127.0.0.1:1', 'fixture');
     }

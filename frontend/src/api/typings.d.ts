@@ -166,18 +166,7 @@ declare namespace API {
   type AgentState = {
     adopted?: Record<string, any>[];
     authorization_revision?: number;
-    delegations?: {
-      adopted?: boolean;
-      conversation_id: number;
-      model_budget?: number;
-      model_used?: number;
-      role: string;
-      source_refs?: string[];
-      status: string;
-      task_id: string;
-      tool_budget?: number;
-      tool_used?: number;
-    }[];
+    delegations?: DelegationView[];
     execution_revision: number;
     failure?: Record<string, any>;
     goal?: string;
@@ -402,23 +391,15 @@ declare namespace API {
   type AuthorizedInput = {
     draft: Record<string, any>;
     input_hash: string;
-    media_pins: {
-      bindingId?: string;
-      mediaKind: string;
-      sourceId: string;
-      sourceVersion: string;
-    }[];
+    media_pins: MediaPin[];
     plain_text: string;
     prompt: string;
-    quote?: {
-      content_hash: string;
-      message_id: string;
-      run_id: string;
-      text: string;
-    };
+    quote?: QuotedMessage;
     references_unavailable?: boolean;
-    schema_version: number;
+    schema_version: AuthorizedInputSchemaVersion;
   };
+
+  type AuthorizedInputSchemaVersion = 1;
 
   type AuthPolicyView = {
     available_terms_version: string;
@@ -805,6 +786,11 @@ declare namespace API {
   };
 
   type CommandStatus = "pending" | "completed" | "cancelled";
+
+  type CommittedEvent = {
+    event_type: string;
+    payload: Record<string, any>;
+  };
 
   type completeEmailChangeParams = {
     /** Operation UUID */
@@ -1247,15 +1233,7 @@ declare namespace API {
   };
 
   type CurrentSubmission = {
-    active_run?: {
-      accepted_revision: number;
-      created_at: string;
-      input_excerpt: string;
-      retry_of_run_id?: string;
-      root_run_id: string;
-      session_id: string;
-      status: string;
-    };
+    active_run?: RunSummary;
     latest_accepted?: AcceptedRun;
     unresolved_run_ids?: string[];
   };
@@ -1315,6 +1293,19 @@ declare namespace API {
     template_id?: string;
     template_version?: number;
     variables?: Variable[];
+  };
+
+  type DelegationView = {
+    adopted?: boolean;
+    conversation_id: number;
+    model_budget?: number;
+    model_used?: number;
+    role: string;
+    source_refs?: string[];
+    status: string;
+    task_id: string;
+    tool_budget?: number;
+    tool_used?: number;
   };
 
   type deleteAdminProviderParams = {
@@ -3689,6 +3680,15 @@ declare namespace API {
     sha256?: string;
   };
 
+  type MediaPin = {
+    bindingId?: string;
+    mediaKind: MediaPinMediaKind;
+    sourceId: string;
+    sourceVersion: string;
+  };
+
+  type MediaPinMediaKind = "audio" | "image" | "video";
+
   type MediaRef = {
     asset_id?: string;
     empty?: boolean;
@@ -5051,6 +5051,13 @@ declare namespace API {
     id: string;
   };
 
+  type QuotedMessage = {
+    content_hash: string;
+    message_id: string;
+    run_id: string;
+    text: string;
+  };
+
   type QuoteItemRequest = {
     capability?: string;
     expected_submission_epoch?: number;
@@ -5498,20 +5505,12 @@ declare namespace API {
   };
 
   type RunPage = {
-    items: {
-      accepted_revision: number;
-      created_at: string;
-      input_excerpt: string;
-      retry_of_run_id?: string;
-      root_run_id: string;
-      session_id: string;
-      status: string;
-    }[];
+    items: RunSummary[];
     next_cursor?: string;
   };
 
   type RunSnapshot = {
-    events: { event_type: string; payload: Record<string, any> }[];
+    events: CommittedEvent[];
     execution_available: boolean;
     goal: string;
     history_incomplete?: boolean;
@@ -5524,6 +5523,16 @@ declare namespace API {
     snapshot_cursor: string;
     state: AgentState;
     submission_id: string;
+  };
+
+  type RunSummary = {
+    accepted_revision: number;
+    created_at: string;
+    input_excerpt: string;
+    retry_of_run_id?: string;
+    root_run_id: string;
+    session_id: string;
+    status: string;
   };
 
   type SampleInput = {

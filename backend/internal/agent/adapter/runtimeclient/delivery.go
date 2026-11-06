@@ -12,7 +12,7 @@ import (
 
 // DeliverControls owns a bounded polling loop. Only committed application
 // receipts acknowledge an outbox record; transport acceptance never does.
-func (c *Client) DeliverControls(ctx context.Context, store app.BusinessStore, onError func(error)) {
+func (c *RuntimeClient) DeliverControls(ctx context.Context, store app.BusinessStore, onError func(error)) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -47,10 +47,10 @@ func (c *Client) DeliverControls(ctx context.Context, store app.BusinessStore, o
 		}
 	}
 }
-func (c *Client) deliver(ctx context.Context, store app.BusinessStore, d domain.Decision) error {
+func (c *RuntimeClient) deliver(ctx context.Context, store app.BusinessStore, d domain.Decision) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	body := ControlRequest{ActorID: d.ActorID.String(), OrgID: d.OrgID.String(), ScopeID: d.ScopeID.String(), ProjectID: d.ProjectID.String(), CanvasID: canvasID(d), DecisionID: d.DecisionID.String(), RootRunID: d.RootRunID.String(), SessionID: d.SessionID.String(), AuthorizationRevision: d.AuthorizationRevision, Action: d.Action, ContentHash: d.ContentHash}
+	body := ControlRequest{ActorId: d.ActorID.String(), OrgId: d.OrgID.String(), ScopeId: d.ScopeID.String(), ProjectId: d.ProjectID.String(), CanvasId: canvasID(d), DecisionId: d.DecisionID.String(), RootRunId: d.RootRunID.String(), SessionId: d.SessionID.String(), AuthorizationRevision: d.AuthorizationRevision, Action: ControlRequestAction(d.Action), ContentHash: d.ContentHash}
 	response, err := c.Request(ctx, "applyAgentDecision", map[string]string{"rid": d.RootRunID.String()}, nil, body, "")
 	if err != nil {
 		return err

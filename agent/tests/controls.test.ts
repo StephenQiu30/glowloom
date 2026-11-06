@@ -9,7 +9,7 @@ import {
   type Grant,
   type BusinessDecision,
   type CallReceipt,
-} from '../src/integrations/go-business-api/client.js';
+} from '../src/business/client.js';
 import { testPool } from './storage/database.js';
 
 it.each(['normal', 'restart', 'prior_job_pending', 'quiesced_reply_lost'])(

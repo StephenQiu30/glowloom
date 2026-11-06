@@ -25,7 +25,7 @@ import type {
   TaskQuery,
 } from '@earendil-works/pi-durable';
 import type { Pool, PoolClient } from 'pg';
-import { publicMessageParts } from '../../../runtime/pi-durable/messages.js';
+import { publicMessageParts } from '../messages.js';
 import {
   document,
   findDocument,

@@ -2,6 +2,7 @@ package http
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -164,24 +165,29 @@ func (h *PublicHandler) proxy(c *gin.Context, operation string, scope domain.Sco
 	}
 	if response.StatusCode >= 200 && response.StatusCode < 300 && (operation == "getAgentSession" || operation == "createAgentSession" || operation == "updateAgentSession") {
 		var session runtimeclient.SessionView
-		if json.Unmarshal(data, &session) != nil || session.ActorID != scope.ActorID.String() || session.OrgID != scope.OrgID.String() || session.ScopeID != scope.ScopeID.String() || session.ProjectID != scope.ProjectID.String() || (params["sid"] != "" && session.ID != params["sid"]) {
+		if json.Unmarshal(data, &session) != nil || session.ActorId != scope.ActorID.String() || session.OrgId != scope.OrgID.String() || session.ScopeId != scope.ScopeID.String() || session.ProjectId != scope.ProjectID.String() || (params["sid"] != "" && session.Id != params["sid"]) {
 			send(c, nil, domain.ErrNotFound)
 			return
 		}
 	}
 	if response.StatusCode >= 200 && response.StatusCode < 300 && operation == "listAgentSessions" {
 		var page struct {
-			Items      []runtimeclient.SessionView `json:"items"`
-			NextCursor string                      `json:"next_cursor,omitempty"`
+			Items      []json.RawMessage `json:"items"`
+			NextCursor string            `json:"next_cursor,omitempty"`
 		}
 		if json.Unmarshal(data, &page) != nil || page.Items == nil {
 			send(c, nil, domain.ErrUnavailable)
 			return
 		}
-		filtered := make([]runtimeclient.SessionView, 0, len(page.Items))
-		for _, session := range page.Items {
-			if session.ActorID == scope.ActorID.String() && session.OrgID == scope.OrgID.String() && session.ScopeID == scope.ScopeID.String() && session.ProjectID == scope.ProjectID.String() {
-				filtered = append(filtered, session)
+		filtered := make([]json.RawMessage, 0, len(page.Items))
+		for _, item := range page.Items {
+			var session runtimeclient.SessionView
+			if json.Unmarshal(item, &session) != nil {
+				send(c, nil, domain.ErrUnavailable)
+				return
+			}
+			if session.ActorId == scope.ActorID.String() && session.OrgId == scope.OrgID.String() && session.ScopeId == scope.ScopeID.String() && session.ProjectId == scope.ProjectID.String() {
+				filtered = append(filtered, item)
 			}
 		}
 		page.Items = filtered
@@ -290,7 +296,7 @@ func (h *PublicHandler) Create(c *gin.Context) {
 	if !h.checkCanvas(c, scope) {
 		return
 	}
-	body := runtimeclient.CreateSessionRequest{ActorID: scope.ActorID.String(), OrgID: scope.OrgID.String(), ScopeID: scope.ScopeID.String(), ProjectID: scope.ProjectID.String(), CanvasID: canvasString(scope.CanvasID), RequestID: in.RequestID.String(), ContentHash: domain.ContentHash(in), Title: in.Title}
+	body := runtimeclient.CreateSessionRequest{ActorId: scope.ActorID.String(), OrgId: scope.OrgID.String(), ScopeId: scope.ScopeID.String(), ProjectId: scope.ProjectID.String(), CanvasId: canvasString(scope.CanvasID), RequestId: in.RequestID.String(), ContentHash: domain.ContentHash(in), Title: in.Title}
 	h.proxy(c, "createAgentSession", scope, body)
 }
 func (h *PublicHandler) checkCanvas(c *gin.Context, scope domain.Scope) bool {
@@ -390,9 +396,9 @@ func (h *PublicHandler) Update(c *gin.Context) {
 		return
 	}
 	h.proxy(c, "updateAgentSession", scope, runtimeclient.UpdateSessionRequest{
-		ActorID: scope.ActorID.String(), OrgID: scope.OrgID.String(),
-		ScopeID: scope.ScopeID.String(), ProjectID: scope.ProjectID.String(),
-		Action: input.Action, Title: input.Title,
+		ActorId: scope.ActorID.String(), OrgId: scope.OrgID.String(),
+		ScopeId: scope.ScopeID.String(), ProjectId: scope.ProjectID.String(),
+		Action: runtimeclient.UpdateSessionRequestAction(input.Action), Title: input.Title,
 	})
 }
 
@@ -465,12 +471,12 @@ func (h *PublicHandler) Start(c *gin.Context) {
 		send(c, nil, domain.ErrUnavailable)
 		return
 	}
-	if session.ID != sid.String() || session.ActorID != scope.ActorID.String() || session.OrgID != scope.OrgID.String() || session.ScopeID != scope.ScopeID.String() || session.ProjectID != scope.ProjectID.String() {
+	if session.Id != sid.String() || session.ActorId != scope.ActorID.String() || session.OrgId != scope.OrgID.String() || session.ScopeId != scope.ScopeID.String() || session.ProjectId != scope.ProjectID.String() {
 		send(c, nil, domain.ErrNotFound)
 		return
 	}
-	if session.CanvasID != nil {
-		canvas, err := uuid.Parse(*session.CanvasID)
+	if session.CanvasId != nil {
+		canvas, err := uuid.Parse(*session.CanvasId)
 		if err != nil {
 			send(c, nil, domain.ErrUnavailable)
 			return
@@ -562,15 +568,19 @@ func (h *PublicHandler) Start(c *gin.Context) {
 	if strings.TrimSpace(goal) == "" {
 		goal = "请根据已提供的参考素材创作。"
 	}
-	body := runtimeclient.CreateRunRequest{ActorID: scope.ActorID.String(), OrgID: scope.OrgID.String(), ScopeID: scope.ScopeID.String(), ProjectID: scope.ProjectID.String(), CanvasID: canvasString(scope.CanvasID), RequestID: in.RequestID.String(), ContentHash: hash, ExpectedExecutionRevision: in.ExpectedExecutionRevision, Goal: goal, Manifest: in.Manifest}
+	body := runtimeclient.CreateRunRequest{ActorId: scope.ActorID.String(), OrgId: scope.OrgID.String(), ScopeId: scope.ScopeID.String(), ProjectId: scope.ProjectID.String(), CanvasId: canvasString(scope.CanvasID), RequestId: in.RequestID.String(), ContentHash: hash, ExpectedExecutionRevision: in.ExpectedExecutionRevision, Goal: goal}
 	encoded, err := json.Marshal(frozen)
-	if err != nil || json.Unmarshal(encoded, &body.Input) != nil {
+	inputDecoder := json.NewDecoder(bytes.NewReader(encoded))
+	inputDecoder.UseNumber()
+	manifestDecoder := json.NewDecoder(bytes.NewReader(in.Manifest))
+	manifestDecoder.UseNumber()
+	if err != nil || inputDecoder.Decode(&body.Input) != nil || manifestDecoder.Decode(&body.Manifest) != nil {
 		send(c, nil, domain.ErrInvalid)
 		return
 	}
 	if in.RetryOfRunID != nil {
 		value := in.RetryOfRunID.String()
-		body.RetryOfRunID = &value
+		body.RetryOfRunId = &value
 	}
 	h.proxy(c, "createAgentRun", scope, body)
 }

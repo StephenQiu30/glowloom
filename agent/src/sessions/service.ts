@@ -1,7 +1,9 @@
-import { publicState } from '../runtime/pi-durable/events.js';
+import { publicState } from '../pi-durable/events.js';
 import type { Pool } from 'pg';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type {
+  RuntimeEvent,
+  AgentApplication,
   CreateSessionInput,
   UpdateSessionInput,
   CreateRunInput,
@@ -9,10 +11,9 @@ import type {
   Identity,
   HistoryInput,
   MessageInput,
-} from '../../contracts/agent.js';
+} from './types.js';
 import { AgentError } from './errors.js';
-import type { AgentApplication, RuntimeEvent } from './port.js';
-import { BusinessClient } from '../integrations/go-business-api/client.js';
+import { BusinessClient } from '../business/client.js';
 import {
   SessionStore,
   inTransaction,
@@ -20,11 +21,8 @@ import {
 } from './persistence/store.js';
 import { SessionRuntime } from './runtime.js';
 import { freezeManifest, stableId } from './manifest.js';
-import { DEFINITION_HASH } from '../runtime/pi-durable/definitions.js';
-import {
-  StateDoc,
-  releaseOwnedAllocations,
-} from '../runtime/pi-durable/docs.js';
+import { DEFINITION_HASH } from '../pi-durable/definitions.js';
+import { StateDoc, releaseOwnedAllocations } from '../pi-durable/docs.js';
 import { ConversationStore } from './persistence/conversations.js';
 const context = BACKGROUND_CONTEXT;
 export class SessionService implements AgentApplication {
@@ -35,6 +33,8 @@ export class SessionService implements AgentApplication {
   private jobs = new Map<string, Promise<void>>();
   private stopping = false;
   private pump: NodeJS.Timeout | undefined;
+  private recovery: Promise<void> | undefined;
+  private closing: Promise<void> | undefined;
   constructor(
     private pool: Pool,
     private business: BusinessClient,
@@ -390,7 +390,7 @@ export class SessionService implements AgentApplication {
     }));
   }
   startRecovery() {
-    if (this.pump) return;
+    if (this.pump || this.stopping) return;
     const recover = async () => {
       if (this.stopping) return;
       const controls = await this.pool.query<{ input: ControlInput }>(
@@ -415,16 +415,32 @@ export class SessionService implements AgentApplication {
           this.launch(run);
       }
     };
-    this.pump = setInterval(() => {
-      void recover().catch(() => {});
-    }, 1000);
+    const tick = () => {
+      if (this.stopping || this.recovery) return;
+      this.recovery = recover()
+        .catch(() => {})
+        .finally(() => {
+          this.recovery = undefined;
+        });
+    };
+    this.pump = setInterval(tick, 1000);
     this.pump.unref();
-    void recover().catch(() => {});
+    tick();
   }
-  async close() {
-    if (this.stopping) return;
+
+  stopAccepting() {
     this.stopping = true;
     if (this.pump) clearInterval(this.pump);
+  }
+
+  close(): Promise<void> {
+    this.stopAccepting();
+    this.closing ??= this.drain();
+    return this.closing;
+  }
+
+  private async drain() {
+    await this.recovery;
     await Promise.allSettled([...this.opening.values()]);
     await Promise.allSettled(
       [...this.active.values()].map((runtime) => runtime.close()),

@@ -14,11 +14,11 @@
 
 Agent Harness 与多 Agent 的已确认目标（2026-11-04，SRC-AGH-12）：同仓库独立 `agent/`，TypeScript strict + 官方 Pi Durable，独立构建/测试/容器与进程；通过当前内部 HTTP/SSE 与 Go 业务 API 交互。Agent 单独拥有会话、运行、计划、子 Agent 和恢复状态；Go 只保留身份/审批/预算/模型出站/工具与业务数据权威，不镜像执行状态、不启动或监督 Node。复用 PostgreSQL，使用独立 `agent` schema 与受限角色；Docker Compose 统一启动。项目移除 Temporal，普通后台任务使用数据库工作记录与 Go worker。新架构无旧实现、兼容/双轨/别名/回退。完整合同见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)；代码与 Compose 已按该合同实施；工程和产品接受分别记录在 BACKLOG，不能由设计推定验证通过。
 
-`agent` 服务与根目录 `agent/`、包名 `agent`（private）、Compose/CI `agent`、镜像 `glowloom/agent` 统一命名。技术选型固定为 Node 24 LTS、TypeScript 6 ESM、Fastify 5、TypeBox/官方 type provider、pg、Pino、Vitest、pnpm + tsc；HTTP TypeBox schema 单源生成校验/类型/OpenAPI。精确基线与依赖支持依据唯一见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，实施落到该包清单/锁文件并验证；不升级无关前端或协作服务。
+`agent` 服务与根目录 `agent/`、包名 `agent`（private）、Compose/CI `agent`、镜像 `glowloom/agent` 统一命名。服务使用 Node 24、TypeScript ESM、NestJS 与官方 Fastify 适配器。Controller/DTO 注解生成 OpenAPI，TypeBox 仅用于 Pi 工具参数。Pi Durable、pg、Pino、Vitest 与 pnpm/tsc 延续现有基线。只发布单一 NestJS 实现，移除原生 Fastify 入口、TypeBox HTTP 合同及兼容分支。完整技术栈与版本见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，目标目录和生成链见[设计37](docs/design/37-Agent服务目录与TypeScript规范设计.md)。
 
 Harness 按[设计32 §7.6](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)直接组合官方 registry/tool/doc/owned conversation；四个同版 Pi 包中 coding-agent 仅提供受控资源 SDK，不运行 CLI 或第二个 AgentSession。运行固定 manifest、显式角色工具名单，模型/工具出口强制校验 Go 授权；第三方 Skill 脚本走 Go 隔离能力。审批/暂停收束后的 continuation 与崩溃恢复原未决任务分别处理，不自写循环或另造插件加载器。
 
-Go 业务模块按 `adapter → application → domain` 单向依赖并显式注入依赖；编码与审查遵循根 [AGENTS](AGENTS.md) 中的 Google Go 与 Vercel/Next.js 规则。独立 Node 服务遵循 [Agent 服务规范](agent/AGENTS.md) 中采用的 Google TypeScript Style Guide 及 Node/Fastify 补充规则；Agent 目录职责见[设计32 §7.1.4](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#714-目录与拓扑)。两端都不预建空层、通用框架或仅转发调用的抽象。
+Go 业务模块按 `adapter → application → domain` 单向依赖并显式注入依赖；编码与审查遵循根 [AGENTS](AGENTS.md) 中的 Google Go 与 Vercel/Next.js 规则。独立 Node 服务遵循 [Agent 服务规范](agent/AGENTS.md) 中采用的 Google TypeScript Style Guide 及 NodeNext/NestJS 项目约定；Agent 目录职责见[设计37 §7.2](docs/design/37-Agent服务目录与TypeScript规范设计.md#72-目录与依赖)。两端都不预建空层、通用框架或仅转发调用的抽象。
 
 Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 API、worker、relay 与身份/存储/分区运维；已移除旧工作流初始化命令。独立 Agent 服务有自己的 TypeScript 入口、Dockerfile 与锁文件，生命周期由 Compose 管理；不把“Go 只有一个入口”解释成整个应用必须单进程。
 

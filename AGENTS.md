@@ -43,7 +43,7 @@
 
 ## Agent 服务工程规范
 
-`agent/` 下的 Node.js / TypeScript 服务遵循 [Agent 服务规范](agent/AGENTS.md)，其中以 Google TypeScript Style Guide 为代码风格基线，并明确本项目的 Node.js、Fastify 和目录职责。该规则只适用于独立 Agent 服务，不把 React / Next.js 的前端规范套用到服务端。
+`agent/` 下的 Node.js / TypeScript 服务遵循 [Agent 服务规范](agent/AGENTS.md)，其中以 Google TypeScript Style Guide 为代码风格基线，并明确 Node.js、NestJS 装饰器及模块边界的项目约定。该规则只适用于独立 Agent 服务，不把 React / Next.js 的前端规范套用到服务端。
 
 ## 验证与 Git
 

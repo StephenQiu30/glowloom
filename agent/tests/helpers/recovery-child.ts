@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { BusinessClient } from '../../src/integrations/go-business-api/client.js';
+import { BusinessClient } from '../../src/business/client.js';
 import { SessionRuntime } from '../../src/sessions/runtime.js';
 import type { RunRow } from '../../src/sessions/persistence/store.js';
 

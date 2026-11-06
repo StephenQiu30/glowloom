@@ -1,10 +1,7 @@
 import type { TextContent, ImageContent } from '@earendil-works/pi-ai';
 import type { JsonObject } from '@earendil-works/pi-durable';
-import type {
-  BusinessClient,
-  Grant,
-} from '../../integrations/go-business-api/client.js';
-import type { FrozenManifest } from '../../sessions/manifest.js';
+import type { BusinessClient, Grant } from '../business/client.js';
+import type { FrozenManifest } from '../sessions/manifest.js';
 
 export async function readPinnedSkill(
   client: BusinessClient,

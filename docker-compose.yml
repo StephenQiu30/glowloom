@@ -27,6 +27,7 @@ services:
       GLOWLOOM_AGENT_BUSINESS_TOKEN: ${GLOWLOOM_AGENT_BUSINESS_TOKEN:?Set a separate Agent-to-Go token of at least 32 bytes}
       GLOWLOOM_AGENT_POOL_MAX: "12"
       GLOWLOOM_AGENT_LEASE_MS: "30000"
+      GLOWLOOM_AGENT_SWAGGER_ENABLED: ${GLOWLOOM_AGENT_SWAGGER_ENABLED:-false}
     expose: ["4401"]
     healthcheck:
       test:

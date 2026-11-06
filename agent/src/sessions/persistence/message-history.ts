@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { MessageInput } from '../../../contracts/agent.js';
-import type { PublicMessagePart } from '../../runtime/pi-durable/messages.js';
+import type { MessageInput } from '../types.js';
+import type { PublicMessagePart } from '../../pi-durable/messages.js';
 import { AgentError } from '../errors.js';
 import { eventPosition, type ScopedCursors } from './pagination.js';
 export async function readMessagePage(

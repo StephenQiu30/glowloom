@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable';
 import { stableId } from '../src/sessions/manifest.js';
-import { publicMessageParts } from '../src/runtime/pi-durable/messages.js';
+import { publicMessageParts } from '../src/pi-durable/messages.js';
 const run = '00000000-0000-4000-8000-000000000001';
 it('preserves a long unicode answer in stable bounded pieces', () => {
   const text = '星海🌌'.repeat(9000);

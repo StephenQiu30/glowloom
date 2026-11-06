@@ -4,7 +4,7 @@ import type {
   Identity,
   MessageInput,
   UpdateSessionInput,
-} from '../../../contracts/agent.js';
+} from '../types.js';
 import { AgentError } from '../errors.js';
 import { SessionStore, inTransaction, type RunRow } from './store.js';
 

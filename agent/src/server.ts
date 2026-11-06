@@ -1,9 +1,9 @@
 import { Pool } from 'pg';
 import pino from 'pino';
 import { loadConfig } from './config.js';
-import { BusinessClient } from './integrations/go-business-api/client.js';
+import { BusinessClient } from './business/client.js';
 import { SessionService } from './sessions/service.js';
-import { buildApp } from './transport/http/app.js';
+import { buildApp } from './http/app.js';
 const config = loadConfig(process.env);
 const logger = pino({
   name: 'agent',
@@ -46,34 +46,45 @@ const app = await buildApp({
   service,
   serviceToken: config.serviceToken,
   logger,
+  swagger: config.swagger,
+}).catch(async (error: unknown) => {
+  await pool.end();
+  throw error;
 });
-await app.listen({ host: config.host, port: config.port });
-service.startRecovery();
-let closing = false;
-async function close() {
-  if (closing) return;
-  closing = true;
-  logger.info('Closing agent');
-  const deadline = setTimeout(() => {
-    logger.error(
-      { code: 'shutdown_timeout' },
-      'Agent shutdown deadline exceeded',
-    );
-    process.exit(1);
-  }, 30000);
-  deadline.unref();
-  try {
-    await app.close();
-    await pool.end();
-    clearTimeout(deadline);
-  } catch {
+
+let closing: Promise<void> | undefined;
+function close(): Promise<void> {
+  closing ??= (async () => {
+    logger.info('Closing agent');
+    const deadline = setTimeout(() => {
+      logger.error(
+        { code: 'shutdown_timeout' },
+        'Agent shutdown deadline exceeded',
+      );
+      process.exit(1);
+    }, 30000);
+    deadline.unref();
+    try {
+      await app.close().finally(() => pool.end());
+    } finally {
+      clearTimeout(deadline);
+    }
+  })();
+  return closing;
+}
+function onSignal() {
+  void close().catch(() => {
     logger.error({ code: 'shutdown_failed' }, 'Agent shutdown failed');
     process.exitCode = 1;
-  }
+  });
 }
-process.once('SIGTERM', () => {
-  void close();
-});
-process.once('SIGINT', () => {
-  void close();
-});
+process.on('SIGTERM', onSignal);
+process.on('SIGINT', onSignal);
+
+try {
+  await app.listen(config.port, config.host);
+  if (!closing) service.startRecovery();
+} catch (error) {
+  await close();
+  throw error;
+}

@@ -14,6 +14,7 @@ describe('agent configuration', () => {
       host: '0.0.0.0',
       port: 4401,
       poolMax: 8,
+      swagger: false,
     });
   });
   it.each([
@@ -29,6 +30,7 @@ describe('agent configuration', () => {
       'postgresql://glowloom_agent@pg/db?user=postgres',
     ],
     ['GLOWLOOM_AGENT_POOL_MAX', '0'],
+    ['GLOWLOOM_AGENT_SWAGGER_ENABLED', 'yes'],
     ['GLOWLOOM_AGENT_HTTP_ADDR', 'host:70000'],
   ])('rejects invalid %s without printing the value', (key, value) => {
     expect(() => loadConfig({ ...env, [key!]: value! })).toThrow(key);

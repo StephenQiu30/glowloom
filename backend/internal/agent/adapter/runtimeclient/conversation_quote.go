@@ -14,7 +14,7 @@ import (
 )
 
 // ReadConversationQuote reads and verifies an authorized public message for quoting.
-func (c *Client) ReadConversationQuote(ctx context.Context, a identity.Principal, pid, sid uuid.UUID, ref app.QuoteRef) (app.ConversationQuote, error) {
+func (c *RuntimeClient) ReadConversationQuote(ctx context.Context, a identity.Principal, pid, sid uuid.UUID, ref app.QuoteRef) (app.ConversationQuote, error) {
 	var out app.ConversationQuote
 	query := url.Values{"actor_id": {a.ID.String()}, "project_id": {pid.String()}}
 	response, err := c.Request(ctx, "getAgentRun", map[string]string{"rid": ref.RunID.String()}, query, nil, "")
@@ -24,7 +24,7 @@ func (c *Client) ReadConversationQuote(ctx context.Context, a identity.Principal
 	raw, readErr := io.ReadAll(io.LimitReader(response.Body, 8<<20))
 	_ = response.Body.Close()
 	var run RunSnapshot
-	if readErr != nil || response.StatusCode != 200 || json.Unmarshal(raw, &run) != nil || run.SessionID != sid.String() {
+	if readErr != nil || response.StatusCode != 200 || json.Unmarshal(raw, &run) != nil || run.SessionId != sid.String() {
 		return out, domain.ErrNotFound
 	}
 	response, err = c.Request(ctx, "getAgentMessage", map[string]string{"rid": ref.RunID.String(), "messageId": ref.MessageID}, query, nil, "")
@@ -38,7 +38,7 @@ func (c *Client) ReadConversationQuote(ctx context.Context, a identity.Principal
 		return out, err
 	}
 	var message PublicMessage
-	if response.StatusCode != 200 || json.Unmarshal(raw, &message) != nil || message.RunID != ref.RunID.String() || message.MessageID != ref.MessageID || message.Kind != "assistant" || len(message.Content) > 65536 {
+	if response.StatusCode != 200 || json.Unmarshal(raw, &message) != nil || message.RunId != ref.RunID.String() || message.MessageId != ref.MessageID || message.Kind != "assistant" || len(message.Content) > 65536 {
 		return out, domain.ErrNotFound
 	}
 	return app.ConversationQuote{QuoteRef: ref, Text: message.Content, ContentHash: domain.Hash([]byte(message.Content))}, nil

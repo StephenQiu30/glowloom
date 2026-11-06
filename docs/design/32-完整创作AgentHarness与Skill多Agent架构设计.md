@@ -1,6 +1,6 @@
 # 完整创作 Agent Harness、Skill 与多 Agent 架构设计
 
-状态：按用户于 2026-11-04 确认的独立服务方案更新完整设计；具体接口与数据合同为本稿设计决策，不代表代码已实现或产品已验收。已确认：同仓库独立 Agent 服务、TypeScript、官方 Pi Durable、PostgreSQL、Docker Compose 统一启动、不使用 Temporal、不保留旧实现或兼容处理。来源：[需求19 SRC-AGH-12](../requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-12)。产品接受见 [PRD19](../prd/19-完整创作Agent与Skill多Agent.md)，执行步骤见 [Plan28](../plan/28-完整创作Agent与Skill多Agent实施计划.md)，状态只见 [BACKLOG](../../BACKLOG.md#pi-durable-migration)。
+状态：按用户于 2026-11-04 确认的独立服务方案更新完整设计；HTTP 框架目标按[需求22](../requirement/22-Agent服务目录与TypeScript规范需求.md)调整为 NestJS；具体接口与数据合同为本稿设计决策，不代表代码已实现或产品已验收。已确认：同仓库独立 Agent 服务、TypeScript、官方 Pi Durable、PostgreSQL、Docker Compose 统一启动、不使用 Temporal、不保留旧实现或兼容处理。来源：[需求19 SRC-AGH-12](../requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-12)。产品接受见 [PRD19](../prd/19-完整创作Agent与Skill多Agent.md)，执行步骤见 [Plan28](../plan/28-完整创作Agent与Skill多Agent实施计划.md)，状态只见 [BACKLOG](../../BACKLOG.md#pi-durable-migration)。
 
 ## 1. 摘要
 
@@ -41,7 +41,7 @@ Go 业务服务保留账号/团队权限、模型目录与调用网关、业务�
 
 SRC-AGH-12 确认独立 Agent 服务，替代纯 Go 引擎与 Go 托管 Node 子进程方案。原始确认保留在需求来源中，目标产品不保留这些实现。
 
-HTTP 层采用 Fastify，使用其 TypeScript 类型和 JSON Schema 校验；它负责网络边界，Agent 调度交给 Pi Durable。参考 [Fastify TypeScript 支持](https://fastify.dev/docs/latest/Reference/TypeScript/) 与 [校验/序列化文档](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/)。直接依赖版本按§7.1.2的已核验基线固定并写入 lockfile；依赖只经固定清单与 lockfile 安装，不使用用户提供的 schema 动态编译路由。
+HTTP 由 NestJS 承载，使用官方 Fastify 适配器。NestJS 负责路由、依赖装配、校验和生命周期，TypeBox 仅声明 Pi 工具参数。Agent 调度继续由 Pi Durable 负责。模块职责和迁移验收见[设计37](37-Agent服务目录与TypeScript规范设计.md)。
 
 ## 4. 目标
 
@@ -80,7 +80,7 @@ HTTP 层采用 Fastify，使用其 TypeScript 类型和 JSON Schema 校验；它
 | 仓库目录                     | agent/                                         |
 | Compose service / 内部 DNS   | agent / agent:4401                             |
 | Docker 镜像仓库              | glowloom/agent                                 |
-| 日志 service 字段 / CI job   | agent                                          |
+| 日志 | Pino 10.4.0，接入 Nest 和 HTTP 适配器 | 统一结构化日志、脱敏、请求与执行关联。 |
 | PostgreSQL schema / 专用角色 | agent / glowloom_agent                         |
 | 配置前缀                     | GLOWLOOM_AGENT_*                               |
 | 入口 / 生产启动文件          | agent/src/server.ts / agent/dist/src/server.js |
@@ -89,81 +89,45 @@ HTTP 层采用 Fastify，使用其 TypeScript 类型和 JSON Schema 校验；它
 
 #### 7.1.2 已确定的技术栈与版本基线
 
-以下为截至2026-11-04核验公开发布信息后选择的基线，实施直接固定这些直接依赖版本并提交 pnpm-lock.yaml；不使用 latest、星号或无界范围。已核验发布、engines、peerDependencies 和插件支持表，不等于已经完成安装、编译或集成验证。
+下表是实施目标。Node、TypeScript、Pi 等沿用现有包基线。NestJS 新依赖已核对官方发布元数据的 Node、TypeScript 与 peer 范围。安装、运行和生成结果由实施验收验证，最终版本写入锁文件。
 
-| 职责               | 选型 / 基线                                                                                                                       | 采用理由与边界                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| 运行时             | Node.js 24.22.2 LTS；node:24.22.2-bookworm-slim                                                                                   | 现有前端/协作服务同为 Node 24 主线；官方发布已为 LTS；镜像固定 digest sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c |
-| 语言 / 模块        | TypeScript 6.0.3；原生 ESM                                                                                                        | package type=module；NodeNext 模块/解析；strict、noUncheckedIndexedAccess、exactOptionalPropertyTypes、noEmitOnError                          |
-| 包管理             | pnpm 12.4.2                                                                                                                       | 与仓库现有 packageManager 一致；agent 独立 package/lockfile，CI frozen-lockfile                                                               |
-| Harness            | @earendil-works/pi-durable 1.5.0、@earendil-works/pi-ai 1.5.0、@earendil-works/chord 1.5.0、@earendil-works/pi-coding-agent 1.5.0 | 官方 Durable 执行内核；coding-agent 只复用受控资源 SDK，不启用 CLI/AgentSession；同系列严格同版                                               |
-| HTTP 框架          | Fastify 5.12.8                                                                                                                    | 路由、插件生命周期、schema 校验、关闭与请求日志；不是 Harness 调度器                                                                          |
-| HTTP schema / 类型 | typebox 1.4.3；@fastify/type-provider-typebox 6.3.0；ajv-formats 3.0.1                                                            | TypeBox 同一 schema 推导 TS 类型并供 Fastify 校验；使用该 provider 的 typebox peer，不混入旧 @sinclair/typebox 包                             |
-| API 规范           | @fastify/swagger 9.9.3；OpenAPI 3.0                                                                                               | 从上述路由 schema 生成规范，供 Go 客户端生成/核对；不另写第二份 OpenAPI 源，不部署在线 Swagger UI                                             |
-| PostgreSQL         | pg 8.23.1；@types/pg 8.23.1                                                                                                       | Pool + 参数化 SQL；同一事务始终使用同一个 Client；直接实现官方 Storage，不新增 ORM 或另一套迁移框架                                           |
-| 服务端 HTTP / SSE  | Node 原生 fetch、AbortController、Streams；Fastify response stream                                                                | Go 业务/模型请求与事件流背压、取消；SSE 只取消订阅，不取消 run                                                                                |
-| 认证               | Node crypto.timingSafeEqual + 两方向独立 Bearer 凭据                                                                              | 凭据用途绑定接收服务；run grant 与用户/项目授权由 Go 校验，不新建 Node 身份系统                                                               |
-| 日志               | Pino 10.4.0，经 Fastify loggerInstance 注入                                                                                       | JSON 结构化日志、redact、request/run/call ID 与 traceparent 关联；不记录正文、凭据或模型完整输入输出                                          |
-| 单元 / 集成测试    | Vitest 5.1.0；Fastify.inject；真实隔离 PostgreSQL                                                                                 | 复用官方 Storage conformance，另跑真实 HTTP/数据库故障测试；不以 inject 代替跨服务验收                                                        |
-| Lint / 格式        | ESLint 10.14.0、typescript-eslint 8.72.1、Prettier 3.9.9                                                                          | ESLint flat config；typescript-eslint 的声明支持范围为 TypeScript >=4.8.4 <6.1.0，因此采用6.0.3，不跟随 TypeScript 7 latest                   |
-| 构建 / 开发        | tsc；开发专用 tsx 4.23.15；@types/node 24.19.2                                                                                    | tsc 编译，Node 运行已输出 JS；tsx 仅用于开发，不作为生产启动器                                                                                |
+| 职责 | 技术选型与目标版本 |
+| --- | --- |
+| 运行时与镜像 | Node.js 24.22.2 LTS，`node:24.22.2-bookworm-slim`，固定镜像 digest。 |
+| 语言与构建 | TypeScript 6.0.3，严格模式，原生 ESM / NodeNext，`tsc` 输出生产 JavaScript 与 Nest 装饰器元数据。开发与合同测试也验证编译产物。 |
+| 包管理 | pnpm 12.4.2，Agent 独立 `pnpm-lock.yaml`，CI 冻结安装。 |
+| 应用框架 | NestJS 12.3.3，`@nestjs/common`、`@nestjs/core`、`@nestjs/platform-fastify` 同版。使用 Module、Controller、Provider、Pipe、Exception Filter 和生命周期钩子。 |
+| HTTP 传输 | 官方 `FastifyAdapter` 使用 Fastify 5.12.8。内部 JSON HTTP 与 SSE，使用 Node `fetch`、`AbortController`、`Readable`，保留背压与取消。 |
+| DTO 和运行时元数据 | Nest `ValidationPipe`，`class-validator` 0.15.1，`class-transformer` 0.5.1，`reflect-metadata` 0.2.2，`rxjs` 7.8.2。 |
+| Agent 执行 | 官方 Pi Durable 1.5.0，`@earendil-works/pi-durable`、`pi-ai`、`chord`、`pi-coding-agent` 同版。Pi 提供工具循环、子会话和持久化执行，宿主负责 Skill 装载与 PostgreSQL 租约，`pi-coding-agent` 仅使用受控资源 SDK。 |
+| 数据与恢复 | 复用既有 PostgreSQL，CI 隔离库使用 PostgreSQL 18。Node 端 `pg` 8.23.1 与参数化 SQL 实现官方 Storage，使用独立 `agent` schema 和受限角色。事务、owner/epoch fencing、事件与消息投影共用该边界。 |
+| Agent → Go 的接口生成 | Go 内部业务 Swagger 由 `swag` v1.16.6 从注解离线导出，`@umijs/openapi` 1.14.1 生成 Agent 的 TypeScript 请求与类型。 |
+| Go → Agent 的接口生成 | `@nestjs/swagger` 12.1.0 从 Controller/DTO 生成 OpenAPI 3.0，使用 `oapi-codegen` v2.8.2 生成 Go 请求/响应模型与普通 HTTP 客户端。SSE 保留逐段读取。若开启内部 Swagger UI，使用 `@fastify/static` 10.1.10。 |
+| 鉴权与业务出口 | 双向独立 Bearer token、audience、`node:crypto.timingSafeEqual`。Go 继续负责身份与 scope、run grant、审批、预算、计费、模型出站和业务工具。 |
+| 日志与健康 | Pino 10.4.0 结构化脱敏日志，关联 request/session/run ID。使用 `/healthz` 和 `/readyz`，由进程有界停止与排空。 |
+| 测试与代码规范 | Vitest 5.1.0、Fastify inject、真实 socket 与隔离 PostgreSQL、Pi 官方 Storage conformance。Google TypeScript Style Guide、ESLint 10.14.0、typescript-eslint 8.72.1、Prettier 3.9.9。 |
+| 部署 | 同仓库独立 Docker 镜像，非 root 运行，Docker Compose 内部监听 `agent:4401`。发布同一版本的调用方和 Agent，由 Compose 管理进程。 |
 
-Fastify 5 的 provider >=5 与 swagger >=9 支持关系已核对官方插件表；type-provider 6.3.0 的 peer 为 typebox ^1.1.14 与 ajv-formats ^3.0.1，上表选择满足声明。Fastify 的 Pino 依赖允许 ^10.1.0，选择10.4.0。测试/lint/runtime engines 满足 Node 24.22.2。此处的依赖支持范围核对不构成应用版本兼容层。
+版本依据见 [Nest Core 包元数据](https://registry.npmjs.org/@nestjs%2fcore/12.3.3)、[Fastify 适配器包元数据](https://registry.npmjs.org/@nestjs%2fplatform-fastify/12.3.3)、[Nest Swagger 包元数据](https://registry.npmjs.org/@nestjs%2fswagger/12.1.0)、[Pi 包元数据](https://registry.npmjs.org/@earendil-works%2fpi-durable/1.5.0)及 [oapi-codegen v2.8.2](https://github.com/oapi-codegen/oapi-codegen/releases/tag/v2.8.2)。
 
-主要依据：[Node LTS](https://nodejs.org/en/about/previous-releases)、[Node 发布索引](https://nodejs.org/dist/index.json)、[Pi 包元数据](https://registry.npmjs.org/@earendil-works%2fpi-durable/1.5.0)、[Fastify provider 支持表](https://github.com/fastify/fastify-type-provider-typebox#compatibility)、[Swagger 支持表](https://github.com/fastify/fastify-swagger#compatibility)、[typescript-eslint peer 范围](https://registry.npmjs.org/typescript-eslint/8.72.1)、[pg 事务合同](https://node-postgres.com/features/transactions)。其它版本同样以 npm 官方 registry 的对应版本元数据为依据。
-
-不采用 NestJS 的额外容器/装饰器层、Prisma/TypeORM、LangGraph/LangChain、Node 内部 Redis 任务队列或 WebSocket Agent 事件通道。业务依赖显式构造注入，Fastify 插件仅组织 HTTP 基础能力与路由，不建立全局 service locator。Pi 自带的传递依赖按锁文件保留，不自动开放代码执行/终端工具。
+Agent 部署只有一套 NestJS 实现。切换同时移除独立 Fastify 应用、TypeBox HTTP 合同、旧 Swagger 生成脚本及其专用依赖。Fastify 作为 Nest 的 HTTP 适配器保留。生产请求只使用当前配置、路由、DTO 与执行定义。
 
 #### 7.1.3 构建、合同与检查命令
 
-目标 package 脚本：dev=tsx watch src/server.ts；typecheck=tsc --noEmit；build=tsc -p tsconfig.build.json；start=node --enable-source-maps dist/src/server.js；lint=eslint .；format:check=prettier --check .；test=vitest run；api:schema/api:check 负责离线导出与规范/生成客户端一致性核对。
+保留 TypeScript 编译入口 `src/server.ts`、生产入口 `dist/src/server.js`、冻结锁文件及非 root 镜像。Controller 和 DTO 注解通过 `@nestjs/swagger` 导出内部 OpenAPI；独立测试装配可复用实际路由，无需监听端口或连接数据库和模型。双向客户端生成链见[设计37 §7.6](37-Agent服务目录与TypeScript规范设计.md#76-swagger-与-umi-接口生成)。
 
-tsconfig.build.json 的 rootDir 为当前 agent 包根目录，包含 src 与 contracts，outDir 为 dist；相对 ESM import 写 .js，构建不把 Pi 动态资源重新打包。生产镜像使用多阶段构建，只装已锁定的生产依赖和 dist，以非 root 运行；不在容器启动时下载依赖、编译或迁移数据库。
-
-agent/contracts/*.ts 的 TypeBox schema 与路由 operation 元数据为 HTTP 合同的唯一维护来源。Fastify 注册同一 schema，@fastify/swagger 动态导出 OpenAPI 3.0；导出的规范和生成客户端不手改。规范导出不监听端口、不连接数据库/模型，注册与实际依赖打开分离。Go→agent 客户端从该规范生成，Go→前端仍沿既有 Go 注解生成链，Agent 不导入 frontend 代码或请求拦截器。
-
-HTTP JSON Schema 只使用当前 Fastify 验证器与 OpenAPI 3.0 可表达的静态子集，显式 required/additionalProperties；不信任模型或 Skill 提供的动态路由 schema。SSE payload/cursor 也由相同 TypeBox 合同定义，流式传输按既定 HTTP/SSE 语义处理。
-
-嵌套对象沿相同 schema 生成命名 Go DTO，保留 required、optional 与显式 nullable 的区别，再经公共 Swagger 生成前端类型。只对 schema 已声明的 JSON null 生成联合类型，不以全局可空选项、手改生成文件或客户端强制断言掩盖合同漂移；运行快照无待审批提案时允许省略 proposal，pending_proposal 的 null 按声明传递。
-
-上述选型只约束 agent，不顺带升级 frontend/canvas-collab 的依赖或镜像。SRC-AGH-15 已授权实际实施；本设计定义合同，执行步骤与验证状态分别见 Plan28 和 BACKLOG。
+嵌套对象生成命名 Go DTO，保留 required、optional 与显式 nullable。只对明确允许 null 的字段生成可空类型。运行快照无待审批提案时允许省略 proposal，pending_proposal 的 null 按合同传递。生成文件由对应工具更新。
 
 #### 7.1.4 目录与拓扑
 
-已确认方向为同仓库独立服务。以下目录与职责用于当前实现：
-
-```text
-frontend/                 当前前端与生成客户端
-backend/                  Go 业务 API、模型网关、业务工具、数据库 worker
-agent/                     独立 TypeScript/Pi Durable 服务
-  src/server.ts            组合根：配置、依赖组装、服务启动与有界关闭
-  src/config.ts            环境变量解析与校验
-  src/transport/http/      Fastify 内部 HTTP/SSE、服务认证及合同校验
-  src/sessions/            会话/run 用例、控制、manifest、执行恢复
-    errors.ts              与 HTTP 无关的 Agent 错误代码
-    port.ts                HTTP 入站适配器消费的应用接口
-    persistence/           Agent 自有 session/run 元数据及消息/历史投影
-  src/runtime/pi-durable/  官方 Pi Durable Harness、工具/扩展/文档/事件适配
-  src/integrations/go-business-api/  调用 Go 权威 API 的客户端与转换
-  src/adapters/postgres/pi-durable/  官方 Storage 的 PostgreSQL 实现与 owner fencing
-  contracts/              TypeBox HTTP schema / operation 元数据（唯一来源）
-  tests/                  单元、HTTP、官方一致性、真实 PG、恢复/跨服务测试
-  package.json
-  pnpm-lock.yaml
-  tsconfig.json
-  Dockerfile
-canvas-collab/            现有私有协作运行时
-docker-compose.yml       统一构建/运行入口
-```
-
-目录遵循 [Agent 服务代码规范](../../agent/AGENTS.md)。职责按服务边界和现有模块划分，不机械照搬全局 Controller/Service/Repository 分层，也不预建未来层。`server.ts` 是进程组合根，装配配置、连接池、Go 客户端、会话模块和 Fastify；会话模块可在内部组合私有存储助手。`transport/http` 只负责入站认证、TypeBox 校验、协议传输和 HTTP 错误映射；`sessions` 接受会话/run、命令、读取和恢复用例；`sessions/persistence` 维护 Agent 自有 session/run 元数据及历史投影；`runtime/pi-durable` 适配官方 Pi Harness、工具、文档、事件及受信扩展；`integrations/go-business-api` 访问 Go 的权威业务能力；`adapters/postgres/pi-durable` 负责官方 Storage 与 owner/epoch fencing。应用/持久化代码不依赖 Fastify request/reply，预期服务错误由 `sessions/errors.ts` 表达，再由 HTTP 边界映射为状态码。
+Agent 是同仓库独立进程，由 Compose 管理。目标目录、模块所有权、HTTP/应用边界及文件迁移规则统一见[设计37 §7.2](37-Agent服务目录与TypeScript规范设计.md#72-目录与依赖)，代码风格见 [Agent 工程规范](../../agent/AGENTS.md)。
 
 Agent 拥有会话、运行、子会话、执行恢复与 Durable 记录；Go 拥有身份和授权、预算、审批、模型出站、业务工具及业务数据。Agent 仅通过正式 HTTP 合同调用 Go，不直接访问业务 schema，也不复制其业务模型。Agent 的 `sessions/persistence` 与 Pi Durable Storage 虽共用受限 PostgreSQL 实例，但职责、表和授权边界分开。
 
 ```mermaid
 flowchart LR
   UI[Next.js 前端] --> API[Go 业务 API]
-  API -->|当前 Agent HTTP / SSE| Agent[独立 Agent 服务<br/>TypeScript + Pi Durable]
+  API -->|当前 Agent HTTP / SSE| Agent[独立 Agent 服务<br/>NestJS + Pi Durable]
   Agent -->|模型 / 工具 / 审批查询| API
   Agent --> AR[(PostgreSQL<br/>agent schema)]
   API --> BR[(PostgreSQL<br/>业务 schema)]
@@ -199,7 +163,7 @@ Go 发给 Agent 的受理上下文包含 actor、org、project、canvas、reques
 | Agent→PostgreSQL   | 受限角色的官方 Storage 操作；无业务表访问                                                                                                                                                              |
 | Go→业务 PostgreSQL | 现有领域应用命令及授权/计费事务；无 runtime 表访问                                                                                                                                                     |
 
-Agent 内部合同由 agent/contracts/*.ts 的 TypeBox schema 与 operation 元数据唯一维护，直接推导 TypeScript 类型并供 Fastify 校验，@fastify/swagger 生成 OpenAPI 3.0，再生成 Go 客户端；CI 核对路由/规范/客户端一致性。Go 业务工具/模型合同仍由 Go 定义。公网 Go API 与内部 Agent API 是不同信任边界，分别生成，禁止维护互相冲突的手写副本。协议只接受当前版本，版本不符明确失败，不做旧版翻译。
+Agent 的目标 HTTP 合同由实际注册的 Nest Controller/DTO 维护并生成 OpenAPI 与 Go 客户端。CI 核对注册路由、规范、运行时校验和生成客户端的一致性。Go 继续定义业务工具、模型和公网 API 合同，分别维护各信任边界的规范。协议版本不符时返回明确错误。
 
 HTTP 边界限制 body/frame、并发和等待队列，配置超时、取消、背压及统一问题响应；错误保留 request/run/tool call ID，脱敏记录。不得在数据库事务中等待对方 RPC。连接断开表示交付结果未知，不等于业务未发生。
 
@@ -245,7 +209,7 @@ Pause 同样先在 Go 持久化禁止新动作，再投递 Agent，在安全边�
 
 | 边界      | 参考实现的实际做法                                                                | 本项目决定                                                                             |
 | --------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Node 宿主 | JavaScript ESM、node:http，Go 管理本机 Node 子进程                                | 独立 agent；TypeScript/Fastify 只负责服务边界                                          |
+| Node 宿主 | JavaScript ESM、node:http，Go 管理本机 Node 子进程                                | 独立 agent；NestJS 负责服务边界，Pi 负责执行                                          |
 | 执行内核  | 官方 Harness、registry、extension、tool、doc 与 owned conversation                | 直接复用同类官方能力，不再实现图引擎、SessionManager 或任务调度器                      |
 | Pi SDK    | pi-durable、pi-ai、chord、pi-coding-agent 同版；coding-agent 提供包与扩展加载能力 | 四个直接依赖固定1.5.0；coding-agent 仅作受控资源 SDK，不启动 CLI 或另一套 AgentSession |
 | 持久化    | 官方 SQLite Storage，本机会话锁                                                   | 自定义官方 Storage 的 PostgreSQL 实现，根 owner/epoch 及跨服务 grant                   |
@@ -266,7 +230,7 @@ Pause 同样先在 Go 持久化禁止新动作，再投递 Agent，在安全边�
 | 压缩与检查 | 官方 CompactionTask、GenerationTask/ToolTask hooks、onReport     | 业务上下文准备、诊断及正式结果投影；不改写官方检查点协议                            |
 | 存储       | 官方 Storage 接口与 registerStorageConformance                   | §7.4 PostgreSQL 实现及 fencing；不做 MemoryStorage 快照或 SQLite SQL 翻译           |
 
-Fastify route 只调用会话用例；Harness 扩展通过明确依赖使用业务客户端，不能直接持有 Fastify request/reply。不存在 Go→Node stdio 或通过 CLI/RPC 启动第二个执行内核。coding-agent 的 ModelRuntime、个人认证文件和 SessionManager 不作为本项目执行或凭据权威；pi-ai 的 Models/provider 适配直接经过 Go。
+Nest Controller 只调用会话用例。Harness 扩展通过明确依赖使用业务客户端，传输对象仅在 HTTP 边界使用。不存在 Go→Node stdio 或通过 CLI/RPC 启动第二个执行内核。coding-agent 的 ModelRuntime、个人认证文件和 SessionManager 不作为本项目执行或凭据权威；pi-ai 的 Models/provider 适配直接经过 Go。
 
 #### 7.6.3 扩展组合与冻结
 
@@ -294,7 +258,7 @@ Pi 的调度、任务图和睡眠继续采用官方语义；宿主只有 session
 
 GenerationTask.beforeRequest 负责从 Go 读取现场、检查采用版本并构造有界差异摘要；ToolTask hooks 用于提示和结果整理。官方部分 hook 抛错后会报告并跳过，因此权限、预算、版本与审批强制检查不得只写在 hook。模型 provider 适配器、业务工具 execute 和 Go 接收端各自在真正发起请求前校验当前 grant/epoch/授权 revision；检查失败不得继续出站。必要上下文读取失败同样由模型出口拒绝请求，不复用过期现场假装完成校验。不修改 globalThis.fetch，不通过全局拦截隐式追加服务凭据。
 
-工具由 Go descriptors 生成 defineTool，描述包含参数 schema、效果分类、合同版本与幂等能力。官方校验模型参数；适配器追加可信 scope、root_run、Pi task/call 身份，模型不能覆盖；Go 再执行业务校验。HTTP TypeBox schema 与 Go 工具 schema 分属网络合同和业务合同，不能人工维护同一工具规则的两个副本。
+工具由 Go descriptors 生成 defineTool，描述包含参数 schema、效果分类、合同版本与幂等能力。官方校验模型参数；适配器追加可信 scope、root_run、Pi task/call 身份，模型不能覆盖；Go 再执行业务校验。Agent HTTP DTO 与 Go 工具 schema 分属网络合同和业务合同，不能人工维护同一工具规则的两个副本。
 
 工具 intent 由 Pi 先提交，随后 Go 以稳定调用身份提交业务结果/幂等回执，最后 Agent 提交 Pi 结果。readOnly 不自动等于可安全重放：仍需核实调用是否收费/有外部效果。默认 replay:unsafe，只有经故障测试证明同一身份可查询/重放原结果的工具才设 safe；unsafe 中断转待核对，不能“重试一次”重新创建。写工具按 root_run 写链串行；并行只允许显式批准的独立读取/专业分析，并服从同一预算与围栏。
 
@@ -409,7 +373,7 @@ Go 的普通 readiness 不依赖 Agent；Agent 的基础 readiness 不依赖 Go�
 4. 删除 Go StateGraph/专业节点调度、旧单图 Agent 循环、Go→Node 子进程/stdio 桥、旧原型目录引用、Temporal SDK/连接/计划命令/配置/健康检查、废弃路由/DTO/别名/兼容分支及仅支撑它们的测试。
 5. 同次更新前后端与内部生成客户端，移除 engine 选择、双读双写、影子字段和旧 schema 分支。新版本遇到旧输入或格式明确失败。
 6. 被替代记录只在原库/经授权离线备份保留，不建设产品兼容读取器。旧表/列/文件/资源的物理删除独立列明审阅，不执行清库、重建或覆盖并行修改。
-7. 数据变更一次性离线执行并验证，两个应用均不自动 DDL。失败停止并修复当前新版本，不自动回退旧实现或其他存储；备份不变成状态互转层。
+7. 数据变更一次性离线执行并验证，两个应用均不自动 DDL。失败停止切换并修复当前目标版本，禁止回退旧实现或其他存储；备份不变成状态互转层。
 
 ### 7.10 用户故事与来源追踪
 
@@ -442,4 +406,4 @@ Go 的普通 readiness 不依赖 Agent；Agent 的基础 readiness 不依赖 Go�
 | 无兼容与数据保护     | 无旧引擎/历史读取/格式翻译/双轨/回退；旧任务清结；数据不擅删                                             |
 | 完整产品             | 长剧本至可编辑工程/成片；实际供应商、费用、媒体读取和完整创作另行接受，fixture 不替代真实接受            |
 
-直接依赖与 Node tag 已在§7.1.2固定；镜像 digest、锁文件、Storage SQL/index、HTTP schema 与资源限额随实现固定并验证；这些常规工程选择不重新打开已确认的独立服务、TypeScript/Pi Durable、PostgreSQL、Compose 与无兼容边界。用户已授权按该合同实施；工程验证、现有部署切换与真实供应商接受仍须分别留证，进度只记 BACKLOG。
+目标版本见 §7.1.2。镜像 digest、锁文件、Storage SQL/index、HTTP 合同与资源限额随实施验证；这些常规工程选择不重新打开已确认的独立服务、TypeScript/Pi Durable、PostgreSQL、Compose 与无兼容边界。用户已授权按该合同实施；工程验证、现有部署切换与真实供应商接受仍须分别留证，进度只记 BACKLOG。

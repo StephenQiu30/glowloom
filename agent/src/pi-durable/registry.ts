@@ -9,11 +9,8 @@ import {
   type ToolExecutionApi,
 } from '@earendil-works/pi-durable';
 import { Type } from 'typebox';
-import {
-  BusinessClient,
-  type CallIdentity,
-} from '../../integrations/go-business-api/client.js';
-import { canonicalHash, type FrozenManifest } from '../../sessions/manifest.js';
+import { BusinessClient, type CallIdentity } from '../business/client.js';
+import { canonicalHash, type FrozenManifest } from '../sessions/manifest.js';
 import { StateDoc } from './docs.js';
 import { completedReceipt, type ModelGate } from './model-provider.js';
 import { businessToolContent, readPinnedSkill } from './skills.js';

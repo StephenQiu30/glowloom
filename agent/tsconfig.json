@@ -10,7 +10,9 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "types": ["node"],
-    "sourceMap": true
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
-  "include": ["src", "contracts", "tests", "scripts", "vitest.config.ts"]
+  "include": ["src", "tests", "vitest.config.ts", "openapi2ts.config.ts"]
 }

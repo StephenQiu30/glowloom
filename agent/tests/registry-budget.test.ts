@@ -6,7 +6,7 @@ import {
   BusinessClient,
   type Grant,
   type CallReceipt,
-} from '../src/integrations/go-business-api/client.js';
+} from '../src/business/client.js';
 import { testPool } from './storage/database.js';
 
 it('persists one shared reserve for all 41 core plan tools and rejects the 41st before mutation', async () => {

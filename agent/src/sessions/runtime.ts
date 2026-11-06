@@ -1,6 +1,6 @@
 import { reconcileInterrupted } from './reconciliation.js';
 import { resolve } from 'node:path';
-import { loadTrustedExtensions } from '../runtime/pi-durable/trusted-extensions.js';
+import { loadTrustedExtensions } from '../pi-durable/trusted-extensions.js';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import {
@@ -11,31 +11,25 @@ import {
   type JsonObject,
 } from '@earendil-works/pi-durable';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { openPostgresStorage } from '../adapters/postgres/pi-durable/postgres.js';
+import { openPostgresStorage } from '../pi-durable/storage/postgres.js';
 import {
   claimSessionOwner,
   renewSessionOwner,
   releaseSessionOwner,
   type SessionOwner,
-} from '../adapters/postgres/pi-durable/ownership.js';
+} from '../pi-durable/storage/ownership.js';
 import {
   BusinessClient,
   BusinessError,
   type Grant,
   type CallIdentity,
-} from '../integrations/go-business-api/client.js';
+} from '../business/client.js';
 import type { RunRow } from './persistence/store.js';
-import {
-  StateDoc,
-  releaseOwnedAllocations,
-} from '../runtime/pi-durable/docs.js';
-import { PhaseTelemetry } from '../runtime/pi-durable/telemetry.js';
-import { createBusinessModels } from '../runtime/pi-durable/model-provider.js';
-import {
-  buildRegistry,
-  type HarnessGate,
-} from '../runtime/pi-durable/registry.js';
-import { eventProjection } from '../runtime/pi-durable/events.js';
+import { StateDoc, releaseOwnedAllocations } from '../pi-durable/docs.js';
+import { PhaseTelemetry } from '../pi-durable/telemetry.js';
+import { createBusinessModels } from '../pi-durable/model-provider.js';
+import { buildRegistry, type HarnessGate } from '../pi-durable/registry.js';
+import { eventProjection } from '../pi-durable/events.js';
 import { canonicalHash, hasCurrentDefinitions } from './manifest.js';
 import { resolveConversationContent } from './input.js';
 const context = BACKGROUND_CONTEXT;
@@ -285,7 +279,7 @@ export class SessionRuntime {
     // The official transcript may contain inputs from any prior accepted round.
     // Recheck authority without submitting or decoding those inputs again.
     const history = await this.pool.query<{
-      input: import('../../contracts/agent.js').AuthorizedInput;
+      input: import('./types.js').AuthorizedInput;
     }>(
       'SELECT input FROM agent.service_runs WHERE session_id=$1 AND accepted_revision<=$2 AND input IS NOT NULL ORDER BY accepted_revision',
       [this.run.session_id, this.run.accepted_revision],

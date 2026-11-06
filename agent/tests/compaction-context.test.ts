@@ -6,20 +6,17 @@ import {
   BusinessClient,
   type Grant,
   type CallReceipt,
-} from '../src/integrations/go-business-api/client.js';
-import {
-  buildRegistry,
-  type HarnessGate,
-} from '../src/runtime/pi-durable/registry.js';
-import { StateDoc } from '../src/runtime/pi-durable/docs.js';
-import { createBusinessModels } from '../src/runtime/pi-durable/model-provider.js';
-import { PhaseTelemetry } from '../src/runtime/pi-durable/telemetry.js';
+} from '../src/business/client.js';
+import { buildRegistry, type HarnessGate } from '../src/pi-durable/registry.js';
+import { StateDoc } from '../src/pi-durable/docs.js';
+import { createBusinessModels } from '../src/pi-durable/model-provider.js';
+import { PhaseTelemetry } from '../src/pi-durable/telemetry.js';
 import { freezeManifest } from '../src/sessions/manifest.js';
 import {
   claimSessionOwner,
   releaseSessionOwner,
-} from '../src/adapters/postgres/pi-durable/ownership.js';
-import { openPostgresStorage } from '../src/adapters/postgres/pi-durable/postgres.js';
+} from '../src/pi-durable/storage/ownership.js';
+import { openPostgresStorage } from '../src/pi-durable/storage/postgres.js';
 import { testPool } from './storage/database.js';
 
 it('uses actual official CompactionTask through the business model gate then reinjects typed goal, manifest, Skill, plan and adoption constraints', async () => {

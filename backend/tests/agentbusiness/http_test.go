@@ -141,7 +141,7 @@ func TestControlDeliveryLostConfirmationRetriesSameDecision(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		var input runtimeclient.ControlRequest
-		if json.Unmarshal(raw, &input) != nil || input.DecisionID != d.DecisionID.String() {
+		if json.Unmarshal(raw, &input) != nil || input.DecisionId != d.DecisionID.String() {
 			t.Error("decision identity changed")
 		}
 		if calls.Add(1) == 1 {

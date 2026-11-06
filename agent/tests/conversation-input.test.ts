@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { resolveConversationContent } from '../src/sessions/input.js';
-import type { AuthorizedInput } from '../contracts/agent.js';
+import type { AuthorizedInput } from '../src/sessions/types.js';
 const asset = '00000000-0000-4000-8000-000000000001';
 const input: AuthorizedInput = {
   schema_version: 1,

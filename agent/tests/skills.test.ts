@@ -3,11 +3,11 @@ import {
   BusinessClient,
   BusinessError,
   type Grant,
-} from '../src/integrations/go-business-api/client.js';
+} from '../src/business/client.js';
 import {
   readPinnedSkill,
   businessToolContent,
-} from '../src/runtime/pi-durable/skills.js';
+} from '../src/pi-durable/skills.js';
 import { freezeManifest } from '../src/sessions/manifest.js';
 const manifest = freezeManifest(
   {
@@ -133,8 +133,7 @@ it('rejects a response for a different Skill even when its version and resource 
   ).rejects.toThrow(/resource changed/);
 });
 it('allocates child budgets from the root remainder and refuses a fifth concurrently active allocation', async () => {
-  const { allocateBudget } =
-    await import('../src/runtime/pi-durable/delegation.js');
+  const { allocateBudget } = await import('../src/pi-durable/delegation.js');
   expect(
     allocateBudget({ model_steps: 38, tool_steps: 39, delegations: [] }),
   ).toEqual({ model_budget: 2, tool_budget: 1, model_used: 0, tool_used: 0 });

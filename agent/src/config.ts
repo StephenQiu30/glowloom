@@ -7,6 +7,7 @@ export interface Config {
   dbDsn: string;
   poolMax: number;
   leaseMs: number;
+  swagger: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -68,7 +69,12 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
   const serviceToken = token('SERVICE_TOKEN');
   const businessToken = token('BUSINESS_TOKEN');
   if (serviceToken === businessToken) invalid('BUSINESS_TOKEN');
+  const swagger = env.GLOWLOOM_AGENT_SWAGGER_ENABLED;
+  if (swagger !== undefined && swagger !== 'true' && swagger !== 'false') {
+    invalid('SWAGGER_ENABLED');
+  }
   return {
+    swagger: swagger === 'true',
     host: addr[1].replace(/^\[|\]$/g, ''),
     port,
     dbDsn,

@@ -3,7 +3,7 @@ import {
   type ConversationId,
 } from '@earendil-works/pi-durable';
 import { StateDoc } from './docs.js';
-import type { FrozenManifest } from '../../sessions/manifest.js';
+import type { FrozenManifest } from '../sessions/manifest.js';
 
 /** Official prompt sections reread the typed document after compaction; no synthetic summary/checkpoint. */
 export function contextExtension(

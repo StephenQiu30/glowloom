@@ -1,4 +1,4 @@
-import { publicState } from '../../runtime/pi-durable/events.js';
+import { publicState } from '../../pi-durable/events.js';
 import type { Pool, PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import type {
@@ -8,7 +8,7 @@ import type {
   Identity,
   Scope,
   AuthorizedInput,
-} from '../../../contracts/agent.js';
+} from '../types.js';
 import { AgentError } from '../errors.js';
 import {
   canonicalHash,
@@ -16,7 +16,7 @@ import {
   hasCurrentDefinitions,
   type FrozenManifest,
 } from '../manifest.js';
-import type { AgentState } from '../../runtime/pi-durable/docs.js';
+import type { AgentState } from '../../pi-durable/docs.js';
 import { ScopedCursors } from './pagination.js';
 import { readMessagePage } from './message-history.js';
 export interface SessionRow extends Scope {

@@ -1,5 +1,6 @@
-import { DEFINITION_HASH } from '../runtime/pi-durable/definitions.js';
+import { DEFINITION_HASH } from '../pi-durable/definitions.js';
 import { createHash } from 'node:crypto';
+import type { BusinessTool } from '../business/client.js';
 
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
@@ -42,15 +43,6 @@ export function stableId(namespace: string, name: string) {
   hash[8] = (hash[8]! & 63) | 128;
   const h = hash.toString('hex');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
-export interface BusinessTool {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  contract_version: string;
-  replay: 'safe' | 'unsafe';
-  effect: 'read' | 'write' | 'proposal';
-  roles?: string[];
 }
 export interface FrozenManifest {
   pi_version: '1.5.0';

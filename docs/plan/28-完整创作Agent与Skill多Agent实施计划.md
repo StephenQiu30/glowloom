@@ -1,6 +1,6 @@
 # 完整创作 Agent、Skill 与多 Agent 实施计划
 
-> 执行方式：使用 writing-plans、executing-plans；独立责任切片按 subagent-driven-development 执行，核心行为 Red → Green → Refactor。用户已授权补齐计划并直接实施，无需再次确认实施方向；不提交或推送。
+> 执行方式：使用 writing-plans、executing-plans；独立责任切片按 subagent-driven-development 执行，核心行为 Red → Green → Refactor。原 Pi Durable 主线的实施授权见需求19。2026-11-06 的 NestJS 请求先交付文档。
 
 **目标**：站内创作入口实际运行同仓库独立 agent 服务，以官方 Pi Durable 和 PostgreSQL 承载完整 Harness、Skill 与真实专业子会话；Docker Compose 为唯一启动入口，删除旧执行实现及兼容路径。
 
@@ -8,11 +8,11 @@
 
 ## 1. 全局约束与文件责任
 
-- 服务/目录/包/Compose/CI 名称统一 agent；TypeScript strict、原生 ESM、Node 24、官方 Pi 1.5.0 同版包、Fastify、TypeBox、pg、Pino、Vitest、pnpm/tsc；精确版本唯一见设计32 §7.1.2。
+- 服务/目录/包/Compose/CI 名称统一 agent；TypeScript strict、原生 ESM、Node 24、官方 Pi 1.5.0 同版包、NestJS（Fastify 适配器）、pg、Pino、Vitest、pnpm/tsc；版本与锁定条件见设计32 §7.1.2。
 - agent 独占会话、执行段、计划、owned conversation 与执行恢复；Go 独占身份/scope、审批、预算、模型/业务工具及业务回执。无跨 schema 写入，无 Go 启动 Node。
-- HTTP TypeBox schema/operation 元数据生成内部 OpenAPI 与 Go 客户端；公网 Go 注解仍生成前端 API，生成文件不得手改。
+- 目标从 Nest Controller/DTO 注解生成内部 OpenAPI 与 Go 客户端，继续由公网 Go 注解生成前端 API。Agent 消费 Go 内部接口的 Umi 生成链见设计37 §7.6。
 - 生产只用 PostgreSQL；正式空库来源 backend/db/schema.sql。独立增量 SQL 供离线审阅执行；应用启动不执行 DDL，不重建既有业务库。
-- 不保留旧图、旧单图 Agent 服务、stdio/launcher、旧路由、旧状态翻译、旧环境变量别名、旧任务接管、双轨或自动回退。Skill 产品自身的版本选择不等于旧运行时兼容。
+- NestJS 单版本切换。删除旧框架入口、旧 HTTP 合同和生成链，以及旧图、stdio/launcher、旧路由/配置别名、状态翻译、双轨和回退。
 - 普通业务后台任务保留原领域工作/供应商请求/财务回执，以数据库领取、租约、有限重试和到期补扫替代原工作流基础设施；不引入通用 DAG 引擎。
 - 改动前保存工作区路径清单，逐文件保留并行存储/模型/画布/探索页修改；用户未要求新分支或 Git 交付，沿当前工作区实施，禁止 reset/clean/广泛暂存。
 - 新服务及隔离验证可执行；现有在途任务、现有数据物理删除与真实收费调用须以精确目标和既有授权处理。旧任务未清结时阻止生产切换，不编写兼容接管器。
@@ -20,9 +20,9 @@
 | 文件范围                                                           | 唯一责任                                                           |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
 | agent/package.json、锁文件、tsconfig、Dockerfile                   | 独立构建与固定依赖                                                 |
-| agent/src/adapters/postgres/pi-durable、agent/tests/storage        | 官方 Storage PostgreSQL 实现、owner/fencing、完整一致性测试        |
-| agent/contracts、agent/src/transport/http、agent/src/server.ts     | TypeBox 单源合同、认证、HTTP/SSE、关闭                             |
-| agent/src/runtime/pi-durable、agent/src/sessions、agent/src/integrations/go-business-api | 官方执行组合、应用 doc、控制投递/回执、Go 客户端 |
+| agent/src/pi-durable/storage、agent/tests/storage        | 官方 Storage PostgreSQL 实现、owner/fencing、完整一致性测试        |
+| agent/src/http、agent/src/server.ts | 注解合同、认证、HTTP/SSE、关闭                             |
+| agent/src/pi-durable、agent/src/sessions、agent/src/business | 官方执行组合、应用 doc、控制投递/回执、Go 客户端 |
 | backend/internal/agent                                             | 当前公共代理及业务授权接口，删除旧 domain/graph 与执行 application |
 | backend/internal/platform/taskruntime                              | 领取/租约/续租/有界并发的窄运行时，无领域执行状态机                |
 | 各领域 adapter/task、application、postgres                         | 当前后台任务执行、结果及副作用幂等；业务模块保留本身权威           |
@@ -56,7 +56,7 @@
 
 ### Task 2：真实 PostgreSQL 官方 Storage
 
-文件：agent/src/adapters/postgres/pi-durable/postgres.ts、records.ts、ownership.ts；agent/tests/storage/conformance.test.ts、recovery.test.ts；backend/db/schema.sql。
+文件：agent/src/pi-durable/storage/postgres.ts、records.ts、ownership.ts；agent/tests/storage/conformance.test.ts、recovery.test.ts；backend/db/schema.sql。
 
 接口：openPostgresStorage(pool, sessionId, owner) 返回官方 Storage 及 close；owner={id,epoch,leaseUntil}。以 session 为 Storage 分区，包含根与全部 owned children；SQL 静态定义，不在 open 中建表。
 
@@ -69,16 +69,25 @@
 
 ### Task 3：当前服务合同与只读/事件接口
 
-文件：agent/contracts/*.ts、agent/src/transport/http/app.ts、agent/src/sessions/port.ts、agent/src/server.ts、agent/tests/http.test.ts；内部 OpenAPI 导出及生成 Go 客户端。
+文件：按设计37 §7.2 更新 Nest 组合模块、HTTP 边界、会话 Controller/DTO 与 agent/tests/http.test.ts。以当前 TypeBox 路由和 Go 生成物为迁移基准。
 
 接口：/internal/agent/sessions、/sessions/:sid/runs、/runs/:rid/commands、/runs/:rid/events；请求含 request_id/内容哈希/scope，输入 expected_execution_revision 与控制 authorization_revision 分开；snapshot 返回同一一致性点的 snapshot_cursor。
 
 - [ ] 先测认证失败、伪造 scope、同键异内容冲突、只读不启动任务、SSE 断线不 abort。
-- [ ] 仅从 TypeBox 路由 schema 生成验证/TS/OpenAPI；实现有界 body、流背压与脱敏错误。
+- [ ] 从实际 Nest Controller/DTO 导出 OpenAPI。以 HTTP 正反例核对校验、8 MiB 上限、脱敏错误和流背压。
 - [ ] 测同一事务状态/事件可见、游标过期 snapshot_required、快照接续无缺口、丢通知补读及慢订阅。
 - [ ] 执行 `pnpm typecheck && pnpm test -- tests/http.test.ts && pnpm api:check`。预期合同生成一致且行为通过，不需要模型/业务库启动来导出 schema。
 
 接受：AC-AH-12/18/19/20；ST-AH-21/26/27/35。
+
+### NestJS 框架切换顺序
+
+按[设计37 §8](../design/37-Agent服务目录与TypeScript规范设计.md#8-实施与验收)记录验收证据。
+
+1. 从待迁移基线导出 Agent OpenAPI，记录路由、响应和 SSE 行为，生成 Go 客户端并保存可重复比较的基线。记录现有测试清单及生产构建的执行定义指纹。
+2. 锁定 Nest 核心包、Fastify 适配器、Swagger 与 peer。用生产编译输出验证装饰器元数据、离线装配、开发入口和关停，再通过现有用例端口接入实际 HTTP。
+3. 对照基线运行 HTTP/SSE 与合同检查。在隔离装配中生成 OpenAPI 并重新生成 Go 客户端，同次更新 Go 调用方并移除旧路由注册、TypeBox 合同与生成脚本。按设计37 §7.6 补齐 Go 内部 Swagger 并独立验证 Umi 生成及请求层。
+4. 运行 Agent 全量门禁、Go 代理合同和真实隔离 PostgreSQL 恢复测试。核对启动、长连接关闭、进程故障、owner fencing 与冻结指纹。正式切换前从目标镜像读取 `dist/src/pi-durable/definitions.js` 的 `DEFINITION_HASH`，盘点全部可接续运行和未决控制，按设计37 §7.5 确认切换条件。验证未通过时暂停发布并修复目标版本。
 
 ### Task 4：Go 业务授权与公共代理
 
@@ -96,7 +105,7 @@
 
 ### Task 5：Go 模型网关、工具和原调用回执
 
-文件：backend/internal/agent 业务模型/工具适配，复用 catalog/operation/canvas/script/subject/media 的正式应用命令；agent/src/integrations/go-business-api/client.ts、agent/src/runtime/pi-durable/model-provider.ts、registry.ts；对应双方测试。
+文件：backend/internal/agent 业务模型/工具适配，复用 catalog/operation/canvas/script/subject/media 的正式应用命令；agent/src/business/client.ts、agent/src/pi-durable/model-provider.ts、registry.ts；对应双方测试。
 
 接口：/internal/agent-business 的 grants、snapshot、tools、skills、proposals、decisions、models 与 calls。调用键固定 run/执行段/Pi task/call/请求边界，并绑定不可变参数哈希；未知结果先查 calls，不换 ID。
 
@@ -109,7 +118,7 @@
 
 ### Task 6：官方 Harness 与执行段生命周期
 
-文件：agent/src/runtime/pi-durable/registry.ts、trusted-extensions.ts、model-provider.ts、docs.ts；agent/src/sessions/service.ts、runtime.ts、manifest.ts；agent/tests/controls.test.ts及相关Harness测试。
+文件：agent/src/pi-durable/registry.ts、trusted-extensions.ts、model-provider.ts、docs.ts；agent/src/sessions/service.ts、runtime.ts、manifest.ts；agent/tests/controls.test.ts及相关Harness测试。
 
 接口：SessionService 接受输入/控制但不自写模型循环；registry 显式选择工具/扩展，manifest 固定 SDK/定义/工具/模型/Skill/hash；每 session 同时只有一个活动业务 root_run。
 
@@ -123,7 +132,7 @@
 
 ### Task 7：真实专业 Agent、Skill 与压缩
 
-文件：agent/src/runtime/pi-durable/delegation.ts、skills.ts、context.ts、trusted-extensions.ts；agent/tests/delegation.test.ts、skills.test.ts及压缩上下文测试。
+文件：agent/src/pi-durable/delegation.ts、skills.ts、context.ts、trusted-extensions.ts；agent/tests/delegation.test.ts、skills.test.ts及压缩上下文测试。
 
 接口：委派工具在官方 api.commit 按 ownerTaskId 复用/创建 owned conversation，配置后再 submit。角色输入包含采用来源/目标/模型/工具/预算；根额度向子分配，不能复制总额度。
 

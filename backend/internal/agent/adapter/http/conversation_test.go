@@ -113,15 +113,15 @@ func TestConversationHistoryUpdateRequiresProjectWriteAndVerifiesReceipt(t *test
 		input := body.(runtimeclient.UpdateSessionRequest)
 		if op != "updateAgentSession" || params["sid"] != sid ||
 			input.Action != "rename" || input.Title == nil || *input.Title != "新标题" ||
-			input.ActorID != scope.ActorID.String() || input.ProjectID != scope.ProjectID.String() ||
-			input.OrgID != scope.OrgID.String() || input.ScopeID != scope.ScopeID.String() {
+			input.ActorId != scope.ActorID.String() || input.ProjectId != scope.ProjectID.String() ||
+			input.OrgId != scope.OrgID.String() || input.ScopeId != scope.ScopeID.String() {
 			t.Fatalf("incorrect trusted mutation: %s %v %+v", op, params, input)
 		}
 		id := sid
 		if mismatch {
 			id = uuid.NewString()
 		}
-		reply := `{"id":"` + id + `","actor_id":"` + input.ActorID + `","org_id":"` + input.OrgID + `","scope_id":"` + input.ScopeID + `","project_id":"` + input.ProjectID + `","title":"新标题","pinned":true}`
+		reply := `{"id":"` + id + `","actor_id":"` + input.ActorId + `","org_id":"` + input.OrgId + `","scope_id":"` + input.ScopeId + `","project_id":"` + input.ProjectId + `","title":"新标题","pinned":true}`
 		return &stdhttp.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(reply))}, nil
 	})
 	router := gin.New()

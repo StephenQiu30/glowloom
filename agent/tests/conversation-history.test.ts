@@ -10,8 +10,8 @@ import {
   type StorageWrite,
 } from '@earendil-works/pi-durable';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { claimSessionOwner } from '../src/adapters/postgres/pi-durable/ownership.js';
-import { openPostgresStorage } from '../src/adapters/postgres/pi-durable/postgres.js';
+import { claimSessionOwner } from '../src/pi-durable/storage/ownership.js';
+import { openPostgresStorage } from '../src/pi-durable/storage/postgres.js';
 const pool = testPool();
 afterAll(() => pool.end());
 const manifest = freezeManifest({ model_key: 'fixture', max_micros: 100 }, []);

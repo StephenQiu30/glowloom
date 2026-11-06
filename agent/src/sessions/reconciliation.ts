@@ -9,8 +9,8 @@ import {
   BusinessClient,
   type CallIdentity,
   type CallReceipt,
-} from '../integrations/go-business-api/client.js';
-import { StateDoc } from '../runtime/pi-durable/docs.js';
+} from '../business/client.js';
+import { StateDoc } from '../pi-durable/docs.js';
 
 function identity(value: unknown): CallIdentity | undefined {
   if (!value || typeof value !== 'object') return;

@@ -1,6 +1,6 @@
-import type { RuntimeEvent } from '../../adapters/postgres/pi-durable/postgres.js';
+import type { RuntimeEvent } from './storage/postgres.js';
 import { ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable';
-import { stableId } from '../../sessions/manifest.js';
+import { stableId } from '../sessions/manifest.js';
 export interface PublicMessagePart {
   message_id: string;
   run_id: string;

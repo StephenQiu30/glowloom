@@ -8,7 +8,7 @@
 
 目标在 agent 中使用 TypeScript 和官方 Pi Durable 独立运行；会话、run、计划及子 Agent 状态由 Agent 单独拥有，Go 只保留权限、模型出站、审批、计费、工具与业务数据权威。复用 PostgreSQL 实例，schema/角色隔离，内部 HTTP 通信；统一 Compose 启动，独立构建和重启。项目不再依赖 Temporal，普通业务任务有数据库驱动的 Go 执行器。减少运维依赖的同时，保留完整创作与真实恢复能力。
 
-服务统一命名 agent，目标技术基线由设计32 §7.1.2 唯一维护：Node 24 LTS、TypeScript 6 ESM、Fastify 5、TypeBox、pg、Pino、Vitest、pnpm/tsc。本文不复制另一份精确版本表。
+服务统一命名 agent，目标技术基线由设计32 §7.1.2 唯一维护。NestJS 迁移的接口注解和验收见[设计37](../design/37-Agent服务目录与TypeScript规范设计.md)。
 
 ## 2. 完整范围与非目标
 
@@ -67,7 +67,7 @@
 | AC-AH-17 | 新构建/启动只保留当前引擎、API、配置及状态合同；旧输入明确失败，无兼容/回退分支                                                           | AGH-021/026             |
 | AC-AH-18 | Agent 执行状态唯一归属；Go 仅存业务授权/回执；数据库角色隔离，跨服务控制和副作用有确定合同                                                | AGH-013/014/022/027     |
 | AC-AH-19 | 同仓库服务独立构建/重启，统一 Compose，内部 HTTP/SSE、无宿主端口或父子进程管理；故障隔离真实生效                                          | AGH-027                 |
-| AC-AH-20 | agent 命名与目录/包/Compose/schema 一致；依赖/Node/镜像基线固定，TypeBox→校验/类型/OpenAPI 单源一致，安装/构建与官方 Storage 测试真实执行 | AGH-028                 |
+| AC-AH-20 | agent 命名与目录/包/Compose/schema 一致；依赖/Node/镜像基线固定，Controller/DTO 注解与运行时校验、OpenAPI 一致，安装/构建与官方 Storage 测试真实执行 | AGH-028                 |
 | AC-AH-21 | 官方 Harness/registry/tool/doc/owned conversation 实际接线；固定 manifest、显式工具名单、受控加载，hook 失败仍无法越过业务授权            | AGH-002/009/012/029     |
 | AC-AH-22 | 整树审批收束后只创建唯一 continuation；崩溃复用未决 child，已终止 task 不复活；未知收费调用只查原回执                                     | AGH-003/005/006/014/029 |
 
@@ -100,7 +100,7 @@
 - ST-AH-25：Go 控制决定持久化后投递丢失、重复、乱序和 Agent 应用后确认丢失；迟到 approve/resume 不能越过后来的 Stop。
 - ST-AH-26：Pi 提交与事件生成间故障、snapshot/cursor 一致性、过期游标补快照及连续订阅不漏事件。
 - ST-AH-27：Go/Agent 数据库角色相互拒绝跨 schema 访问，内部接口拒绝外部身份/伪造 scope，合同生成一致。
-- ST-AH-28：扫描无旧服务/目录别名，包/锁文件/镜像与设计基线一致；完整安装、类型检查、构建、测试和合同生成，验证 TypeBox schema/运行校验/导出 OpenAPI 无分叉；不把仅核验 metadata 当作工程通过。
+- ST-AH-28：扫描无旧服务/目录别名，包/锁文件/镜像与设计基线一致；完整安装、类型检查、构建、测试和合同生成，验证 Controller/DTO 注解、运行校验与导出 OpenAPI 无分叉；不把仅核验 metadata 当作工程通过。
 
 - ST-AH-29：核对产品调用的官方 registry/tool/doc/owned conversation；根/子会话显式工具名单，同名覆盖、子级扩权及绕过嵌套工具入口均拒绝。
 - ST-AH-30：固定 manifest 后修改 Skill/工具/扩展版本、代码哈希或移除定义，活动 run 不热换；重开缺定义明确阻断，撤权立即阻断出站。

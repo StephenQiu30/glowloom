@@ -29,7 +29,7 @@ import (
 func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 	// Check the current source contract without restoring removed generated files
 	// or publishing the legacy Swagger endpoints.
-	parser := swag.New(swag.SetParseDependency(1), swag.ParseUsingGoList(true), swag.SetDebugger(log.New(io.Discard, "", 0)))
+	parser := swag.New(swag.SetParseDependency(1), swag.ParseUsingGoList(true), swag.SetTags("!business"), swag.SetDebugger(log.New(io.Discard, "", 0)))
 	parser.ParseInternal = true
 	if err := parser.ParseAPI("../..", "internal/app/public_api.go", 100); err != nil {
 		t.Fatalf("generate source contract: %v", err)
@@ -41,6 +41,50 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 	var schema map[string]any
 	if err := json.Unmarshal(encoded, &schema); err != nil {
 		t.Fatal(err)
+	}
+	definitions, ok := schema["definitions"].(map[string]any)
+	if !ok {
+		t.Fatal("missing Swagger definitions")
+	}
+	definition := func(suffix string) map[string]any {
+		for name, value := range definitions {
+			if strings.HasSuffix(name, "runtimeclient."+suffix) {
+				result, _ := value.(map[string]any)
+				return result
+			}
+		}
+		return nil
+	}
+	session := definition("SessionView")
+	if session == nil {
+		t.Fatal("missing Agent session Swagger definition")
+	}
+	required, ok := session["required"].([]any)
+	if !ok {
+		t.Fatal("Agent session fields are not required")
+	}
+	fields := make(map[string]bool)
+	for _, field := range required {
+		if name, ok := field.(string); ok {
+			fields[name] = true
+		}
+	}
+	for _, name := range []string{"actor_id", "org_id", "scope_id", "project_id", "id", "title", "execution_revision"} {
+		if !fields[name] {
+			t.Errorf("Agent session Swagger missing required %s", name)
+		}
+	}
+	state := definition("AgentState")
+	if state == nil {
+		t.Fatal("missing Agent state Swagger definition")
+	}
+	properties, ok := state["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("missing Agent state Swagger properties")
+	}
+	pending, ok := properties["pending_proposal"].(map[string]any)
+	if !ok || pending["x-nullable"] != true {
+		t.Fatal("pending_proposal must remain nullable in Swagger")
 	}
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{ObjectStorage: businessUnitStorage(t),
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t),

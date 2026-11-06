@@ -1,4 +1,4 @@
-import type { AuthorizedInput } from '../../contracts/agent.js';
+import type { AuthorizedInput } from './types.js';
 type Content =
   | { type: 'text'; text: string }
   | { type: 'image'; data: string; mimeType: string };

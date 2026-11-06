@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/transport/http/app.js';
+import { buildApp } from './helpers/agent-app.js';
 
 const actor = '00000000-0000-4000-8000-000000000001';
 const project = '00000000-0000-4000-8000-000000000002';
@@ -22,6 +22,7 @@ function service() {
     readRun: async () => undefined,
     command: async () => ({}),
     events: async () => [],
+    stopAccepting: () => {},
     close: async () => {},
     listRuns: async (
       _sid: string,

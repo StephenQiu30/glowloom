@@ -5,7 +5,7 @@ import {
   BusinessClient,
   type CallReceipt,
   type Grant,
-} from '../src/integrations/go-business-api/client.js';
+} from '../src/business/client.js';
 import { testPool } from './storage/database.js';
 const scope = {
   actor_id: randomUUID(),

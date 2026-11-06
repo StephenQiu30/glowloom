@@ -1,5 +1,5 @@
 import type { JsonObject } from '@earendil-works/pi-durable';
-import type { BusinessTool } from '../../sessions/manifest.js';
+import type { BusinessTool } from '../business/client.js';
 export const ROLES = [
   'script',
   'art',

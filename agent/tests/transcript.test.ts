@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { businessTranscript } from '../src/integrations/go-business-api/transcript.js';
+import { businessTranscript } from '../src/business/transcript.js';
 it('keeps the latest named context section and removes obsolete adopted constraints', () => {
   const context = {
     messages: [

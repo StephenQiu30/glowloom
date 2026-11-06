@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
-import { loadTrustedExtensions } from '../src/runtime/pi-durable/trusted-extensions.js';
+import { loadTrustedExtensions } from '../src/pi-durable/trusted-extensions.js';
 const source = `export default pi => pi.registerTool({name:'approved_echo',label:'Echo',description:'Reviewed echo',parameters:{type:'object',properties:{value:{type:'string'}},required:['value']},execute:async (_id,args)=>({content:[{type:'text',text:args.value}],details:{reviewed:true}})});`;
 async function fixture(content = source) {
   const root = await mkdtemp(join(tmpdir(), 'glowloom-trusted-test-'));

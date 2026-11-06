@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/transport/http/app.js';
+import { agentFixture, buildApp, createOpenApi } from './helpers/agent-app.js';
 
 const scope = {
   actor_id: '00000000-0000-4000-8000-000000000001',
@@ -44,6 +44,7 @@ const service = {
   async events() {
     return [];
   },
+  stopAccepting() {},
   async close() {},
   listRuns: async () => ({ items: [] }),
   readSubmission: async () => undefined,
@@ -65,6 +66,14 @@ describe('agent internal HTTP boundary', () => {
             authorization: `Bearer ${token}`,
             'x-agent-audience': 'agent-business',
           },
+        })
+      ).statusCode,
+    ).toBe(401);
+    expect(
+      (
+        await app.inject({
+          url: '/internal/agent/sessions',
+          headers: { ...headers, authorization: token },
         })
       ).statusCode,
     ).toBe(401);
@@ -95,6 +104,7 @@ describe('agent internal HTTP boundary', () => {
       },
     });
     expect(response.statusCode).toBe(201);
+    expect(response.json()).not.toHaveProperty('input');
     expect(
       (
         await app.inject({
@@ -106,9 +116,89 @@ describe('agent internal HTTP boundary', () => {
     ).toBe(404);
     await app.close();
   });
-  it('exports its TypeBox contract without opening a listener or database', async () => {
+  it('rejects invalid body shape, null, unknown keys and oversized input', async () => {
+    const app = await buildApp({
+      service: agentFixture(),
+      serviceToken: token,
+    });
+    const url = '/internal/agent/sessions';
+    const valid = {
+      ...scope,
+      request_id: '00000000-0000-4000-8000-000000000006',
+      content_hash: 'b'.repeat(64),
+      title: '创作',
+    };
+    try {
+      for (const payload of [
+        [valid],
+        { ...valid, canvas_id: null },
+        { ...valid, extra: true },
+      ]) {
+        const response = await app.inject({
+          method: 'POST',
+          url,
+          headers,
+          payload,
+        });
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toMatchObject({ code: 'invalid_request' });
+      }
+      const malformed = {
+        method: 'POST' as const,
+        url,
+        headers: { ...headers, 'content-type': 'application/json' },
+        payload: '{',
+      };
+      expect((await app.inject(malformed)).statusCode).toBe(400);
+      expect(
+        (
+          await app.inject({
+            ...malformed,
+            headers: { 'content-type': 'application/json' },
+          })
+        ).statusCode,
+      ).toBe(401);
+      const tooLarge = await app.inject({
+        ...malformed,
+        payload: JSON.stringify({
+          ...valid,
+          title: 'a'.repeat(8 * 1024 * 1024),
+        }),
+      });
+      expect(tooLarge.statusCode).toBe(413);
+    } finally {
+      await app.close();
+    }
+  });
+  it('exposes opt-in Swagger only behind the internal service credential', async () => {
+    const hidden = await buildApp({
+      service: agentFixture(),
+      serviceToken: token,
+    });
+    expect((await hidden.inject('/openapi.json')).statusCode).toBe(404);
+    await hidden.close();
+    const app = await buildApp({
+      service: agentFixture(),
+      serviceToken: token,
+      swagger: true,
+    });
+    try {
+      for (const url of ['/docs', '/docs/swagger-ui.css', '/openapi.json']) {
+        expect((await app.inject(url)).statusCode).toBe(401);
+      }
+      for (const url of ['/docs', '/docs/swagger-ui.css']) {
+        expect((await app.inject({ url, headers })).statusCode).toBe(200);
+      }
+      const response = await app.inject({ url: '/openapi.json', headers });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ openapi: '3.0.3' });
+    } finally {
+      await app.close();
+    }
+  });
+  it('exports its NestJS contract without opening a listener or database', async () => {
     const app = await buildApp({ service, serviceToken: token });
-    const spec = app.swagger();
+    const spec = createOpenApi(app);
     expect(spec.paths?.['/internal/agent/sessions']?.post?.operationId).toBe(
       'createAgentSession',
     );

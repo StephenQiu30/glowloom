@@ -47,7 +47,7 @@ func RegisterAgentBoundary(ctx context.Context, router *gin.Engine, protected *g
 	if options.CanvasRuntime != nil {
 		boundary.WithCanvasRuntime(options.CanvasRuntime)
 	}
-	var runtime *runtimeclient.Client
+	var runtime *runtimeclient.RuntimeClient
 	if options.Origin != "" && options.ServiceToken != "" {
 		var err error
 		runtime, err = runtimeclient.New(options.Origin, options.ServiceToken)

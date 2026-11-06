@@ -71,7 +71,7 @@
   },
   "packageManager": "pnpm@12.4.2",
   "scripts": {
-    "api:schema": "go -C ../backend run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g internal/app/public_api.go --parseInternal --parseDependency -ot json -o ../frontend/node_modules/.cache/openapi",
+    "api:schema": "go -C ../backend run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g internal/app/public_api.go --parseInternal --parseDependency --tags '!business' -ot json -o ../frontend/node_modules/.cache/openapi",
     "api:generate": "pnpm run api:schema && openapi2ts && prettier --write src/api",
     "api:check": "vitest run tests/unit/api-generation.test.ts"
   }

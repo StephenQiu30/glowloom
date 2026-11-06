@@ -3,7 +3,7 @@ import {
   ROOT_CONVERSATION_ID,
   type JsonObject as DurableJsonObject,
 } from '@earendil-works/pi-durable';
-import { businessTranscript } from '../../integrations/go-business-api/transcript.js';
+import { businessTranscript } from '../business/transcript.js';
 import {
   createModels,
   createProvider,
@@ -21,12 +21,12 @@ import {
   type Grant,
   type CallIdentity,
   type CallReceipt,
-} from '../../integrations/go-business-api/client.js';
+} from '../business/client.js';
 import {
   canonicalHash,
   stableId,
   type FrozenManifest,
-} from '../../sessions/manifest.js';
+} from '../sessions/manifest.js';
 import { modelPhase } from './telemetry.js';
 export interface ModelGate {
   harness: () => Harness;
