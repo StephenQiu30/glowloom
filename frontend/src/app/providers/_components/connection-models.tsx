@@ -143,7 +143,6 @@ export function ConnectionModels({
           adapter={adapter}
           id={id}
           revision={revision}
-          onSaved={onSaved}
           modelID={target.id}
           selector={selector}
           checks={checks}

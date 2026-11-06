@@ -273,7 +273,7 @@ function Fixture() {
                 onVerified={() => undefined}
               />
             ) : management ? (
-              <ConnectionOnboarding id={id} onSaved={() => setDone(true)} />
+              <ConnectionOnboarding id={id} />
             ) : (
               <PresetConnect
                 presets={presets}

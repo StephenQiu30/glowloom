@@ -2,11 +2,19 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { getProviderCheck, testAdminCredential } from "@/api/settings";
+import {
+  getProviderCheck,
+  readSavedProviderModelDirectory,
+  testAdminCredential,
+} from "@/api/settings";
 import { useSession } from "@/components/auth/session";
 import { useCatalogMutation } from "./mutation";
 
-export function useProviderCatalogProbe(provider: string, scope: string) {
+export function useProviderCatalogProbe(
+  provider: string,
+  scope: string,
+  directoryOnly = false,
+) {
   const { actor } = useSession();
   const [checkID, setCheckID] = useState("");
   const mutation = useCatalogMutation(
@@ -17,6 +25,7 @@ export function useProviderCatalogProbe(provider: string, scope: string) {
       return (
         result?.accepted === true &&
         result.provider_id === target &&
+        (!directoryOnly || result.kind === "discovery") &&
         !!result.check_id
       );
     },
@@ -41,7 +50,7 @@ export function useProviderCatalogProbe(provider: string, scope: string) {
   function run(credentialID: string) {
     setCheckID("");
     return mutation.run("credential.test", provider, (requestID) =>
-      testAdminCredential(
+      (directoryOnly ? readSavedProviderModelDirectory : testAdminCredential)(
         { id: provider, credential_id: credentialID },
         { headers: { "Idempotency-Key": requestID } },
       ),

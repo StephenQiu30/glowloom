@@ -480,7 +480,7 @@ const editorCatalogRoutes: typeof identityRoutes = [
     query: [],
   },
   {
-    pattern: `admin/providers/${identityUUID}/credentials/${identityUUID}/(disable|test)`,
+    pattern: `admin/providers/${identityUUID}/credentials/${identityUUID}/(disable|test|model-directory)`,
     methods: ["POST"],
     query: [],
   },
@@ -548,7 +548,7 @@ const editorCatalogRoutes: typeof identityRoutes = [
     query: [],
   },
   {
-    pattern: `admin/provider-presets/${identityUUID}/(versions|connections)`,
+    pattern: `admin/provider-presets/${identityUUID}/(versions|connections|model-directory)`,
     methods: ["POST"],
     query: [],
   },

@@ -38,6 +38,7 @@ declare namespace API {
   type ActivateOnboardingInput = {
     check_id?: string;
     expected_revision?: number;
+    release_ids?: string[];
     request_id?: string;
   };
 
@@ -80,7 +81,10 @@ declare namespace API {
     capability?: string;
     catalog_version?: string;
     config_id?: string;
+    credential_id?: string;
     custom_model_id?: string;
+    directory_check_id?: string;
+    draft_only?: boolean;
     request_id?: string;
   };
 
@@ -915,6 +919,7 @@ declare namespace API {
     key?: string;
     name?: string;
     request_id?: string;
+    selected_models_only?: boolean;
     version_id?: string;
   };
 
@@ -3930,6 +3935,23 @@ declare namespace API {
     version_id?: string;
   };
 
+  type OnboardingReleaseReview = {
+    batch_draft?: boolean;
+    config_version_id?: string;
+    created_at?: string;
+    display_name?: string;
+    id?: string;
+    model_id?: string;
+    model_version_id?: string;
+    onboarding_check_id?: string;
+    price_version_id?: string;
+    required_modes?: string[];
+    revision?: number;
+    status?: string;
+    upstream_cost?: UpstreamCost;
+    validated_modes?: string[];
+  };
+
   type OperationStatus =
     | "draft"
     | "quoted"
@@ -4318,6 +4340,15 @@ declare namespace API {
     config?: ConnectionConfig;
     model_ids?: string[];
     provider_id?: string;
+  };
+
+  type PresetDirectoryInput = {
+    api_key?: string;
+    version_id?: string;
+  };
+
+  type PresetDirectoryResult = {
+    model_ids?: string[];
   };
 
   type PresetDocument = {
@@ -4849,6 +4880,7 @@ declare namespace API {
     credential_id?: string;
     models?: OnboardingModel[];
     provider_id?: string;
+    release_reviews?: OnboardingReleaseReview[];
     revision?: number;
     status?: string;
   };
@@ -5125,11 +5157,23 @@ declare namespace API {
     token: string;
   };
 
+  type readPresetModelDirectoryParams = {
+    /** 预设ID */
+    id: string;
+  };
+
   type readPromptDraftParams = {
     /** 项目 */
     pid: string;
     /** 草稿 */
     id: string;
+  };
+
+  type readSavedProviderModelDirectoryParams = {
+    /** 连接 ID */
+    id: string;
+    /** 凭据 ID */
+    credential_id: string;
   };
 
   type ReauthenticationRequest = {
@@ -5554,6 +5598,17 @@ declare namespace API {
     provider_id?: string;
     status?: CredentialStatus;
     update_time?: string;
+  };
+
+  type savedDirectoryAccepted = {
+    accepted?: boolean;
+    check_id?: string;
+    credential_id?: string;
+    event_id?: string;
+    kind?: string;
+    model_id?: string;
+    provider_id?: string;
+    test_id?: string;
   };
 
   type SaveDirectorRecoveryInput = {

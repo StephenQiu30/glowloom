@@ -38,12 +38,15 @@ type ApplyConfigInput struct {
 
 // AddPresetModelInput pins the selected model to the current connection snapshot.
 type AddPresetModelInput struct {
-	ConfigID       uuid.UUID `json:"config_id"`
-	CatalogVersion string    `json:"catalog_version"`
-	CandidateKey   string    `json:"candidate_key,omitempty"`
-	CustomModelID  string    `json:"custom_model_id,omitempty"`
-	Capability     string    `json:"capability,omitempty"`
-	RequestID      uuid.UUID `json:"request_id"`
+	DirectoryCheckID *uuid.UUID `json:"directory_check_id,omitempty"`
+	CredentialID     *uuid.UUID `json:"credential_id,omitempty"`
+	DraftOnly        bool       `json:"draft_only,omitempty"`
+	ConfigID         uuid.UUID  `json:"config_id"`
+	CatalogVersion   string     `json:"catalog_version"`
+	CandidateKey     string     `json:"candidate_key,omitempty"`
+	CustomModelID    string     `json:"custom_model_id,omitempty"`
+	Capability       string     `json:"capability,omitempty"`
+	RequestID        uuid.UUID  `json:"request_id"`
 }
 
 // ConfigStore persists connection snapshots without changing active releases.

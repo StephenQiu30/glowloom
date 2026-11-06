@@ -43,12 +43,12 @@ func (c *RequestCredentialTestCommand) Execute(ctx context.Context, actor identi
 	if credentialID == uuid.Nil {
 		return CredentialTestAccepted{}, ErrInvalidCredentialTest
 	}
-	return c.execute(ctx, actor, providerID, credentialID, uuid.Nil, key)
+	return c.execute(ctx, actor, providerID, credentialID, uuid.Nil, key, "")
 }
 
 // ExecuteReachability schedules a key-free address probe.
 func (c *RequestCredentialTestCommand) ExecuteReachability(ctx context.Context, actor identityapp.Principal, providerID uuid.UUID, key string) (CredentialTestAccepted, error) {
-	return c.execute(ctx, actor, providerID, uuid.Nil, uuid.Nil, key)
+	return c.execute(ctx, actor, providerID, uuid.Nil, uuid.Nil, key, "reachability")
 }
 
 // ExecuteModel validates one selected model using a real provider request.
@@ -56,10 +56,18 @@ func (c *RequestCredentialTestCommand) ExecuteModel(ctx context.Context, actor i
 	if modelID == uuid.Nil || credentialID == uuid.Nil {
 		return CredentialTestAccepted{}, ErrInvalidCredentialTest
 	}
-	return c.execute(ctx, actor, providerID, credentialID, modelID, key)
+	return c.execute(ctx, actor, providerID, credentialID, modelID, key, "model_access")
 }
 
-func (c *RequestCredentialTestCommand) execute(ctx context.Context, actor identityapp.Principal, providerID, credentialID, modelID uuid.UUID, key string) (CredentialTestAccepted, error) {
+// ExecuteDiscovery schedules a directory-only read with the existing saved credential.
+func (c *RequestCredentialTestCommand) ExecuteDiscovery(ctx context.Context, actor identityapp.Principal, providerID, credentialID uuid.UUID, key string) (CredentialTestAccepted, error) {
+	if credentialID == uuid.Nil {
+		return CredentialTestAccepted{}, ErrInvalidCredentialTest
+	}
+	return c.execute(ctx, actor, providerID, credentialID, uuid.Nil, key, "discovery")
+}
+
+func (c *RequestCredentialTestCommand) execute(ctx context.Context, actor identityapp.Principal, providerID, credentialID, modelID uuid.UUID, key, kind string) (CredentialTestAccepted, error) {
 	if err := requireAdmin(actor); err != nil {
 		return CredentialTestAccepted{}, err
 	}
@@ -67,10 +75,7 @@ func (c *RequestCredentialTestCommand) execute(ctx context.Context, actor identi
 	if c == nil || c.store == nil || err != nil || requestID == uuid.Nil || requestID.String() != key || providerID == uuid.Nil {
 		return CredentialTestAccepted{}, ErrInvalidCredentialTest
 	}
-	request := CredentialTestRequest{ModelID: modelID, TestID: uuid.NewSHA1(requestID, []byte(actor.ID.String()+actor.OrgID.String()+providerID.String()+credentialID.String())), ProviderID: providerID, CredentialID: credentialID, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: key}
-	if credentialID == uuid.Nil {
-		request.Kind = "reachability"
-	}
+	request := CredentialTestRequest{Kind: kind, ModelID: modelID, TestID: uuid.NewSHA1(requestID, []byte(actor.ID.String()+actor.OrgID.String()+providerID.String()+credentialID.String())), ProviderID: providerID, CredentialID: credentialID, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: key}
 	result, err := c.store.RequestCredentialTest(ctx, actor, request)
 	if err != nil {
 		return CredentialTestAccepted{}, fmt.Errorf("request credential test: %w", err)

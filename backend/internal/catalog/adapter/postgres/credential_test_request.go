@@ -36,8 +36,8 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 	if request.ModelID != uuid.Nil {
 		identity += "/model/" + request.ModelID.String()
 	}
-	if request.Kind == "reachability" {
-		identity += "/reachability"
+	if request.Kind == "reachability" || request.Kind == "discovery" {
+		identity += "/" + request.Kind
 	}
 	if request.Kind == "model_query" {
 		identity += "/query/" + request.ParentCheckID.String()
@@ -85,6 +85,9 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 			if row.RowsAffected != 1 {
 				return application.ErrCredentialNotFound
 			}
+		}
+		if request.Kind == "discovery" {
+			kind = "discovery"
 		}
 		if request.ModelID != uuid.Nil {
 			kind = "model_access"

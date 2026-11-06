@@ -38,7 +38,11 @@ import { zeroID } from "@/components/catalog/mutation";
 import { AddModelForm } from "./add-model-form";
 import { ModelDetail } from "./model-detail";
 
-type ModelsPageProps = { initialProvider?: string };
+type ModelsPageProps = {
+  initialProvider?: string;
+  openAdd?: boolean;
+  initialReviewModel?: string;
+};
 export function ModelsPage(props: ModelsPageProps) {
   const session = useSession();
   if (session.actor.platform_role !== "platform_admin")
@@ -51,15 +55,19 @@ export function ModelsPage(props: ModelsPageProps) {
     );
   return (
     <ModelAdministration
-      key={`${session.actor.id}:${props.initialProvider ?? ""}`}
+      key={`${session.actor.id}:${props.initialProvider ?? ""}:${props.openAdd ?? false}:${props.initialReviewModel ?? ""}`}
       {...props}
     />
   );
 }
-function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
+function ModelAdministration({
+  initialProvider = "",
+  openAdd = false,
+  initialReviewModel = "",
+}: ModelsPageProps) {
   const mobile = useIsMobile();
   const [visibility, setVisibility] = useState<Record<string, boolean>>({});
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(openAdd && !initialReviewModel);
   const [selectedRows, setSelectedRows] = useState<API.CreatedModel[]>([]);
   const [pageSize, setPageSize] = useState(20);
   const [cursors, setCursors] = useState<string[]>([""]);
@@ -72,7 +80,7 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
   const [models, setModels] = useState<API.CreatedModel[]>([]);
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
   const [capabilities, setCapabilities] = useState<API.CapabilitySummary[]>([]);
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initialReviewModel);
   const [next, setNext] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -362,6 +370,9 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
             <ModelDetail
               key={selected}
               id={selected}
+              initialView={
+                selected === initialReviewModel ? "release" : undefined
+              }
               capabilities={capabilities}
               providers={providers}
               onSaved={saved}

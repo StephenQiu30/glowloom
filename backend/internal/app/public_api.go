@@ -55,6 +55,7 @@ import (
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	operationstaging "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -219,7 +220,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return nil, err
 	}
 	catalogStore := operationwire.NewCatalogStore(database)
-	cataloghttp.NewPresetHandler(catalogapp.NewDeclaredProviderPresets(catalogStore, catalogwire.InstalledProtocol)).Register(identityProtected)
+	presets := catalogapp.NewDeclaredProviderPresets(catalogStore, catalogwire.InstalledProtocol)
+	cataloghttp.NewPresetHandler(presets).Register(identityProtected)
+	cataloghttp.NewPresetDirectoryHandler(presets, providerhttp.NewClient(nil).ReadModelIDs).Register(identityProtected)
 	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(identityProtected)
 	cataloghttp.NewReleaseHandler(catalogapp.NewModelReleases(catalogStore)).Register(identityProtected)
 	cataloghttp.NewCheckHandler(catalogapp.NewProviderChecks(catalogStore)).Register(identityProtected)

@@ -1,5 +1,6 @@
 "use client";
 import { ConnectionTests } from "./connection-tests";
+import { ConnectionReleaseReview } from "./connection-release-review";
 import useSWR from "swr";
 import { useSession } from "@/components/auth/session";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -328,7 +329,15 @@ export function ConnectionDetail({
             </>
           ) : null}
           <Separator />
+          {!archived && <ConnectionReleaseReview id={id} onSaved={refresh} />}
           <Toolbar aria-label="连接操作" className="flex-wrap">
+            {!archived && (
+              <Button variant="outline" size="toolbar" asChild>
+                <Link href={`/models?provider=${encodeURIComponent(id)}&add=1`}>
+                  添加模型
+                </Link>
+              </Button>
+            )}
             <Button variant="outline" size="toolbar" asChild>
               <Link href={`/models?provider=${encodeURIComponent(id)}`}>
                 模型管理

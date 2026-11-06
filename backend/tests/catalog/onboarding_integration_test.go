@@ -27,7 +27,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
-func TestOnboardingOneModelEnablesSelectionForCreation(t *testing.T) {
+func TestOnboardingRequiresFormalEvidenceForEveryModelAndMode(t *testing.T) {
 	dsn := os.Getenv("GLOWLOOM_TEST_CATALOG_DB_DSN")
 	if dsn == "" {
 		t.Skip("requires disposable catalog database")
@@ -115,6 +115,30 @@ func TestOnboardingOneModelEnablesSelectionForCreation(t *testing.T) {
 	_, err = onboarding.Activate(t.Context(), actor, connection.ProviderID, activation)
 	require.Error(t, err)
 	require.NoError(t, conn.DB.Exec(`UPDATE catalog.provider_credential SET status='active' WHERE id=?`, credential).Error)
+	_, err = onboarding.Activate(t.Context(), actor, connection.ProviderID, activation)
+	require.ErrorIs(t, err, catalogapp.ErrReleaseUnverified)
+	require.Len(t, state.ReleaseReviews, 3)
+	for _, review := range state.ReleaseReviews[:2] {
+		for _, mode := range review.RequiredModes {
+			seedOnboardingModeEvidence(t, conn.DB, project, credential, review, mode)
+		}
+	}
+	last := state.ReleaseReviews[2]
+	require.NotEmpty(t, last.RequiredModes)
+	for _, mode := range last.RequiredModes[1:] {
+		seedOnboardingModeEvidence(t, conn.DB, project, credential, last, mode)
+	}
+	_, err = onboarding.Activate(t.Context(), actor, connection.ProviderID, activation)
+	require.ErrorIs(t, err, catalogapp.ErrReleaseUnverified)
+	seedOnboardingModeEvidence(t, conn.DB, project, credential, last, last.RequiredModes[0])
+	mismatched := activation
+	mismatched.ReleaseIDs = []uuid.UUID{last.ID}
+	_, err = onboarding.Activate(t.Context(), actor, connection.ProviderID, mismatched)
+	require.ErrorIs(t, err, catalogapp.ErrPresetConflict)
+	for _, review := range state.ReleaseReviews {
+		activation.ReleaseIDs = append(activation.ReleaseIDs, review.ID)
+	}
+
 	enabled, err := onboarding.Activate(t.Context(), actor, connection.ProviderID, activation)
 	require.NoError(t, err)
 	require.Equal(t, "active", enabled.Status)
@@ -127,7 +151,7 @@ func TestOnboardingOneModelEnablesSelectionForCreation(t *testing.T) {
 	require.JSONEq(t, string(firstJSON), string(replayJSON))
 	var evidenceCount int
 	require.NoError(t, conn.DB.Raw(`SELECT count(*) FROM catalog.model_validation validation JOIN catalog.model_release release ON release.id=validation.release_id WHERE release.model_id IN ?`, connection.ModelIDs).Scan(&evidenceCount).Error)
-	require.Zero(t, evidenceCount)
+	require.GreaterOrEqual(t, evidenceCount, 3)
 	// The shared catalog may exceed one page. Resolve this test's three
 	// connected model keys directly rather than relying on page order.
 	var keys []string
@@ -158,7 +182,7 @@ func TestOnboardingOneModelEnablesSelectionForCreation(t *testing.T) {
 	}
 	require.Equal(t, 3, found)
 	// Restoring the connection leaves it disabled until the current release
-	// is explicitly re-enabled using the still-current onboarding evidence.
+	// is explicitly re-enabled using current evidence for all of its modes.
 	updateProvider := catalogapp.NewUpdateProviderCommand(store, time.Now)
 	archivedStatus := domain.ProviderArchived
 	archivedProvider, err := updateProvider.Execute(t.Context(), actor, catalogapp.UpdateProviderInput{
@@ -188,6 +212,23 @@ func TestOnboardingOneModelEnablesSelectionForCreation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, disabledStatus, restored.Status)
+	require.NoError(t, conn.DB.Exec("UPDATE catalog.model_release SET onboarding_check_id=? WHERE id=?", accepted.CheckID, release.ID).Error)
+	require.NoError(t, conn.DB.Exec("UPDATE catalog.model_validation SET status='failed' WHERE release_id=? AND mode=?", release.ID, release.RequiredModes[0]).Error)
+	reviewed, err := onboarding.Read(t.Context(), actor, connection.ProviderID)
+	require.NoError(t, err)
+	require.Len(t, reviewed.ReleaseReviews, 1)
+	require.Equal(t, &accepted.CheckID, reviewed.ReleaseReviews[0].OnboardingCheckID)
+	require.NotContains(t, reviewed.ReleaseReviews[0].ValidatedModes, release.RequiredModes[0])
+	activeStatus := domain.ProviderActive
+	_, err = updateProvider.Execute(t.Context(), actor, catalogapp.UpdateProviderInput{
+		ProviderID: connection.ProviderID, ExpectedRevision: restored.Revision,
+		Status: &activeStatus, RequestID: uuid.NewString(),
+	})
+	require.ErrorIs(t, err, catalogapp.ErrReleaseUnverified)
+
+	_, err = store.ActivateModelRelease(t.Context(), actor, release.ID, activate)
+	require.ErrorIs(t, err, catalogapp.ErrReleaseUnverified)
+	require.NoError(t, conn.DB.Exec("UPDATE catalog.model_validation SET status='succeeded' WHERE release_id=?", release.ID).Error)
 	_, err = store.ActivateModelRelease(t.Context(), actor, release.ID, activate)
 	require.NoError(t, err)
 

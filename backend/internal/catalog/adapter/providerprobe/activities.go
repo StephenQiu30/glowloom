@@ -157,11 +157,12 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 	if isModel {
 		return unsupported, nil
 	}
-	claimed := a.db.WithContext(ctx).Exec(`UPDATE catalog.provider_check check_run SET dispatch_started_at=now()
+	var kind string
+	claimed := a.db.WithContext(ctx).Raw(`UPDATE catalog.provider_check check_run SET dispatch_started_at=now()
  FROM catalog.provider p,catalog.provider_credential key
  WHERE check_run.id=? AND check_run.provider_id=? AND check_run.credential_id=? AND check_run.kind IN ('connectivity','credential_auth','discovery') AND check_run.status='running' AND check_run.dispatch_started_at IS NULL
  AND p.id=check_run.provider_id AND (p.current_config_version_id=check_run.config_version_id OR check_run.kind='model_query') AND NOT p.is_delete
- AND key.id=check_run.credential_id AND (key.status='active' OR (check_run.kind='model_query' AND key.status='draining')) AND NOT key.is_delete`, input.TestID, input.ProviderID, input.Credential.ID)
+ AND key.id=check_run.credential_id AND (key.status='active' OR (check_run.kind='model_query' AND key.status='draining')) AND NOT key.is_delete RETURNING check_run.kind`, input.TestID, input.ProviderID, input.Credential.ID).Scan(&kind)
 	if claimed.Error != nil {
 		return unsupported, claimed.Error
 	}
@@ -171,6 +172,9 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 	bounded, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	started := time.Now()
+	if kind == "discovery" {
+		return a.readDirectory(bounded, configuration, providerKey, started), nil
+	}
 	result := a.client.Probe(bounded, configuration, providerKey)
 	if result.Auth == "unknown" && result.Discovery == "unsupported" {
 		result.Auth = "unsupported"

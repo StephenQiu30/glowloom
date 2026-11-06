@@ -41,7 +41,7 @@ func recordProviderCheck(tx *gorm.DB, observation application.CredentialTestObse
 		return err
 	}
 	for _, candidate := range observation.Candidates {
-		if candidate.ProviderModelID == "" || len(candidate.ProviderModelID) > 256 || len(candidate.DisplayName) > 300 || len(candidate.Metadata) > 2048 || !json.Valid(candidate.Metadata) || !slices.Contains([]string{"text.generate", "image.generate", "video.generate"}, candidate.Capability) {
+		if candidate.ProviderModelID == "" || len(candidate.ProviderModelID) > 256 || len(candidate.DisplayName) > 300 || len(candidate.Metadata) > 2048 || !json.Valid(candidate.Metadata) || (!slices.Contains([]string{"text.generate", "image.generate", "video.generate"}, candidate.Capability) && !(observation.Kind == "discovery" && candidate.Capability == "")) {
 			return application.ErrInvalidCredentialTest
 		}
 		if err := tx.Exec(`INSERT INTO catalog.model_candidate(id,check_id,provider_model_id,display_name,capability,metadata) VALUES(?,?,?,?,?,?::jsonb) ON CONFLICT(check_id,provider_model_id,capability) DO NOTHING`, uuid.New(), observation.TestID, candidate.ProviderModelID, candidate.DisplayName, candidate.Capability, string(candidate.Metadata)).Error; err != nil {

@@ -460,6 +460,28 @@ export async function exportProviderPreset(
   );
 }
 
+/** 读取新连接的模型目录 POST /api/admin/provider-presets/${param0}/model-directory */
+export async function readPresetModelDirectory(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.readPresetModelDirectoryParams,
+  body: API.PresetDirectoryInput,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.PresetDirectoryResult>(
+    `/api/admin/provider-presets/${param0}/model-directory`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
 /** 更新预设生命周期 PATCH /api/admin/provider-presets/${param0}/state */
 export async function updateProviderPresetState(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -718,6 +740,23 @@ export async function disableAdminCredential(
   const { id: param0, credential_id: param1, ...queryParams } = params;
   return request<API.SavedCredential>(
     `/api/admin/providers/${param0}/credentials/${param1}/disable`,
+    {
+      method: "POST",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 使用已保存凭据读取模型目录 POST /api/admin/providers/${param0}/credentials/${param1}/model-directory */
+export async function readSavedProviderModelDirectory(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.readSavedProviderModelDirectoryParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, credential_id: param1, ...queryParams } = params;
+  return request<any>(
+    `/api/admin/providers/${param0}/credentials/${param1}/model-directory`,
     {
       method: "POST",
       params: { ...queryParams },

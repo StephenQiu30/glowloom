@@ -21,14 +21,7 @@ import { useProviderCatalogProbe } from "@/components/catalog/provider-catalog-p
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+import { ModelCatalogChoices } from "@/components/catalog/model-catalog-choices";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,8 +33,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const capabilityLabels: Record<string, string> = {
   "text.generate": "文本生成",
@@ -74,7 +65,7 @@ export function AddModelForm({
   const [savedCredential, setSavedCredential] =
     useState<API.ProviderCredentialSummary>();
   const [candidateKey, setCandidateKey] = useState("");
-  const [requestingDirectory, setRequestingDirectory] = useState(false);
+  const [directorySelection, setDirectorySelection] = useState<string>();
   const [manual, setManual] = useState(false);
   const [customID, setCustomID] = useState("");
   const [capability, setCapability] = useState("");
@@ -103,14 +94,9 @@ export function AddModelForm({
   );
   const presets = config?.model_catalog?.models ?? [];
   const selected = presets.find((model) => model.key === candidateKey);
-  const capabilities = (config?.config?.capabilities ?? [])
-    .map((item) => `${item}.generate`)
-    .filter(
-      (item) =>
-        item === "text.generate" ||
-        item === "image.generate" ||
-        (item === "video.generate" && adapter === "volcengine_ark"),
-    );
+  const capabilities = (config?.config?.capabilities ?? []).map(
+    (item) => item + ".generate",
+  );
   const matchingModel = (modelID?: string, kind?: string) =>
     modelID &&
     config?.configured_models?.find(
@@ -140,18 +126,19 @@ export function AddModelForm({
   const probe = useProviderCatalogProbe(
     providerID,
     `add-model.catalog.${providerID}`,
+    true,
   );
   const check =
-    probe.data?.current &&
+    probe.data?.kind === "discovery" &&
+    probe.data.current &&
     probe.data.config_version_id === config?.id &&
     probe.data.credential_id === credentialID
       ? probe.data
       : undefined;
   const online = check?.candidates ?? [];
-  const readingDirectory = requestingDirectory || probe.running;
-  const savingModel =
-    addition.busy || (credential.busy && !requestingDirectory);
-  const busy = savingModel || probe.mutation.busy || readingDirectory;
+  const readingDirectory = probe.mutation.busy || probe.running;
+  const savingModel = addition.busy || credential.busy;
+  const busy = savingModel || readingDirectory;
   const locked =
     busy ||
     !!addition.pending ||
@@ -179,27 +166,21 @@ export function AddModelForm({
   }
 
   function choosePreset(model: API.ModelCandidatePreset) {
-    setCandidateKey(model.key ?? "");
+    setCandidateKey(
+      model.key === candidateKey && !manual ? "" : (model.key ?? ""),
+    );
+    setDirectorySelection(undefined);
     setManual(!!model.requires_model_selection);
     setCustomID("");
     setCapability(model.capability ?? "");
   }
 
-  function chooseManual(modelID = "") {
+  function chooseManual(modelID = "", directoryCheckID?: string) {
+    setDirectorySelection(directoryCheckID);
     setCandidateKey("");
     setManual(true);
     setCustomID(modelID);
     setCapability(capabilities.length === 1 ? capabilities[0] : "");
-  }
-
-  async function readDirectory() {
-    setRequestingDirectory(true);
-    try {
-      const id = await ensureCredential();
-      if (id) await probe.run(id);
-    } finally {
-      setRequestingDirectory(false);
-    }
   }
 
   const directoryMessage = readingDirectory
@@ -228,6 +209,7 @@ export function AddModelForm({
         if (
           locked ||
           !selectable ||
+          (!!directorySelection && directorySelection !== check?.id) ||
           !config?.id ||
           !config.model_catalog?.version
         )
@@ -236,7 +218,8 @@ export function AddModelForm({
           onAdded(existing.id);
           return;
         }
-        if (!(await ensureCredential())) return;
+        const savedID = await ensureCredential();
+        if (!savedID) return;
         await addition.run("model.preset.add", providerID, (requestID) =>
           addProviderPresetModel(
             { id: providerID },
@@ -245,6 +228,9 @@ export function AddModelForm({
                 ? { custom_model_id: customID.trim(), capability }
                 : { candidate_key: selected?.key }),
               config_id: config.id,
+              credential_id: savedID,
+              directory_check_id: directorySelection,
+              draft_only: true,
               catalog_version: config.model_catalog!.version,
               request_id: requestID,
             },
@@ -260,6 +246,7 @@ export function AddModelForm({
             disabled={locked}
             onValueChange={(value) => {
               setProviderID(value);
+              setDirectorySelection(undefined);
               setCandidateKey("");
               setManual(false);
               setCustomID("");
@@ -300,146 +287,51 @@ export function AddModelForm({
           </Select>
         </Field>
         <Field>
-          <Tabs defaultValue="presets" className="gap-3">
-            <TabsList aria-label="模型来源" className="w-full">
-              <TabsTrigger value="presets">推荐预设</TabsTrigger>
-              <TabsTrigger value="directory">在线目录</TabsTrigger>
-            </TabsList>
-            <TabsContent value="presets">
-              {isLoading ? (
-                <p role="status" className="text-sm text-muted-foreground">
-                  正在读取预设…
-                </p>
-              ) : !config ? (
-                <p className="text-sm text-muted-foreground">
-                  请先选择供应商连接。
-                </p>
-              ) : (
-                <Command label="搜索预设" className="border">
-                  <CommandInput placeholder="搜索预设名称或模型 ID" />
-                  <CommandList className="max-h-44">
-                    <CommandEmpty>没有匹配的预设</CommandEmpty>
-                    {[
-                      ...new Set(
-                        presets.map((model) => model.capability ?? ""),
-                      ),
-                    ].map((kind) => (
-                      <CommandGroup
-                        key={kind}
-                        heading={capabilityLabels[kind] ?? kind}
-                      >
-                        {presets
-                          .filter((model) => model.capability === kind)
-                          .map((model) => (
-                            <CommandItem
-                              key={model.key}
-                              value={model.key}
-                              keywords={[
-                                model.display_name ?? "",
-                                model.provider_model_id ?? "",
-                              ]}
-                              onSelect={() => choosePreset(model)}
-                              disabled={
-                                locked ||
-                                (model.requires_model_selection &&
-                                  !capabilities.includes(kind))
-                              }
-                            >
-                              <span className="min-w-0 flex-1 truncate">
-                                {model.display_name}
-                              </span>
-                              {model.key === candidateKey ? (
-                                <Badge variant="secondary">已选</Badge>
-                              ) : null}
-                              {matchingModel(
-                                model.provider_model_id,
-                                model.capability,
-                              ) ? (
-                                <Badge variant="secondary">已添加</Badge>
-                              ) : model.requires_model_selection ? (
-                                <Badge variant="outline">需填写接入点</Badge>
-                              ) : null}
-                            </CommandItem>
-                          ))}
-                      </CommandGroup>
-                    ))}
-                  </CommandList>
-                </Command>
+          {isLoading ? (
+            <p role="status">正在读取预设…</p>
+          ) : config ? (
+            <ModelCatalogChoices
+              key={config.id}
+              models={presets}
+              online={online.flatMap((item) =>
+                item.provider_model_id ? [item.provider_model_id] : [],
               )}
-            </TabsContent>
-            <TabsContent
-              value="directory"
-              className="flex flex-col items-start gap-2"
+              picked={candidateKey ? [candidateKey] : []}
+              disabled={locked}
+              canSelect={(model) =>
+                !model.requires_model_selection ||
+                capabilities.includes(model.capability ?? "")
+              }
+              isConfigured={(model) =>
+                !!matchingModel(model.provider_model_id, model.capability)
+              }
+              onPreset={choosePreset}
+              onOnline={(id) => chooseManual(id, check?.id)}
+            />
+          ) : (
+            <p>请先选择供应商连接。</p>
+          )}
+          {directoryAdapters.has(adapter) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              disabled={!config || locked || !credentialID}
+              onClick={() => credentialID && void probe.run(credentialID)}
             >
-              {directoryAdapters.has(adapter) ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!config || locked || (keyRequired && !hasKeyInput)}
-                  onClick={() => void readDirectory()}
-                >
-                  {readingDirectory ? (
-                    <Spinner data-icon="inline-start" />
-                  ) : null}
-                  {readingDirectory
-                    ? "正在读取目录…"
-                    : keyRequired
-                      ? "保存 Key 并读取目录"
-                      : "读取在线目录"}
-                </Button>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {connection
-                    ? "此连接未提供在线目录，可从推荐预设添加。"
-                    : "请先选择供应商连接。"}
-                </p>
-              )}
-              {directoryMessage ? (
-                <p className="text-xs text-muted-foreground" role="status">
-                  {directoryMessage}
-                </p>
-              ) : null}
-              {online.length ? (
-                <Command label="搜索在线目录" className="w-full border">
-                  <CommandInput placeholder="搜索在线模型" />
-                  <CommandList className="max-h-44">
-                    <CommandEmpty>没有匹配的在线模型</CommandEmpty>
-                    <CommandGroup heading="在线模型">
-                      {online.map((model) => (
-                        <CommandItem
-                          key={model.provider_model_id}
-                          value={model.provider_model_id}
-                          keywords={[model.display_name ?? ""]}
-                          disabled={locked}
-                          onSelect={() => {
-                            const preset = presets.find(
-                              (item) =>
-                                item.provider_model_id ===
-                                model.provider_model_id,
-                            );
-                            if (preset) choosePreset(preset);
-                            else chooseManual(model.provider_model_id);
-                          }}
-                        >
-                          <span className="min-w-0 flex-1 truncate">
-                            {model.display_name || model.provider_model_id}
-                          </span>
-                          {config?.configured_models?.some(
-                            (item) =>
-                              item.provider_model_id ===
-                              model.provider_model_id,
-                          ) ? (
-                            <Badge variant="secondary">已添加</Badge>
-                          ) : null}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              ) : null}
-            </TabsContent>
-          </Tabs>
+              {readingDirectory && <Spinner data-icon="inline-start" />}
+              {readingDirectory ? "正在读取目录…" : "读取在线目录"}
+            </Button>
+          )}
+          {directoryAdapters.has(adapter) && !credentialID && (
+            <p>请先在连接中保存凭据，再读取在线目录。</p>
+          )}
+          {directoryMessage && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {directoryMessage}
+            </p>
+          )}
           {capabilities.length ? (
             <Button
               type="button"
@@ -481,7 +373,10 @@ export function AddModelForm({
                 maxLength={200}
                 disabled={locked}
                 required
-                onChange={(e) => setCustomID(e.target.value)}
+                onChange={(e) => {
+                  setCustomID(e.target.value);
+                  setDirectorySelection(undefined);
+                }}
               />
             </Field>
             {capabilities.length > 1 ? (
@@ -556,7 +451,10 @@ export function AddModelForm({
         <Button
           className="w-fit"
           disabled={
-            locked || !selectable || (!existing && keyRequired && !hasKeyInput)
+            locked ||
+            !selectable ||
+            (!!directorySelection && directorySelection !== check?.id) ||
+            (!existing && keyRequired && !hasKeyInput)
           }
         >
           {savingModel ? <Spinner data-icon="inline-start" /> : null}

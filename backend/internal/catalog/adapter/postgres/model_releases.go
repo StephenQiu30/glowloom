@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -20,16 +21,22 @@ type releaseRow struct {
 	Cost                     []byte
 	Modes                    []byte
 	Validated                []byte
+	DisplayName              string
+	BatchDraft               bool
 }
 
-const releaseSelect = `SELECT r.onboarding_check_id,r.id,r.model_id,r.model_version_id,r.price_version_id,r.config_version_id,r.status,r.revision,r.upstream_cost AS cost,r.create_time AS created_at,
+const releaseFields = `r.onboarding_check_id,r.id,r.model_id,r.model_version_id,r.price_version_id,r.config_version_id,r.status,r.revision,r.upstream_cost AS cost,r.create_time AS created_at,
  to_jsonb(v.modes) AS modes,COALESCE((SELECT jsonb_agg(DISTINCT x.mode) FROM catalog.model_validation x
  JOIN catalog.provider_credential c ON c.id=x.credential_id AND c.status='active' AND NOT c.is_delete
+ JOIN catalog.provider_config_version cfg ON cfg.id=r.config_version_id AND cfg.provider_id=c.provider_id
+ JOIN catalog.provider p ON p.id=cfg.provider_id AND p.current_config_version_id=cfg.id AND NOT p.is_delete
  JOIN operation.operation op ON op.id=x.operation_id AND op.status='completed' AND NOT op.is_delete
  JOIN operation.provider_binding b ON b.operation_id=op.id AND b.release_id=x.release_id
  JOIN operation.provider_credential_binding k ON k.operation_id=op.id AND k.credential_id=x.credential_id
- WHERE op.mode=x.mode AND op.model_profile_version_id=r.model_version_id AND op.price_rule_version_id=r.price_version_id AND x.release_id=r.id AND x.status='succeeded' AND x.adapter_version='ai-provider-v1' AND x.evidence->>'kind'='real_provider'), '[]'::jsonb) AS validated
- FROM catalog.model_release r JOIN catalog.model_profile_version v ON v.id=r.model_version_id`
+ WHERE op.mode=x.mode AND op.model_profile_version_id=r.model_version_id AND op.price_rule_version_id=r.price_version_id AND x.release_id=r.id AND x.status='succeeded' AND x.adapter_version='ai-provider-v1' AND x.evidence->>'kind'='real_provider'), '[]'::jsonb) AS validated`
+
+const releaseFrom = ` FROM catalog.model_release r JOIN catalog.model_profile_version v ON v.id=r.model_version_id`
+const releaseSelect = `SELECT ` + releaseFields + releaseFrom
 
 func readRelease(tx *gorm.DB, id uuid.UUID) (application.ModelRelease, error) {
 	var row releaseRow
@@ -190,28 +197,27 @@ func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Prin
 		}
 		isCurrentRelease := model.ActiveReleaseID != nil && *model.ActiveReleaseID == id
 		resumeCurrent := isCurrentRelease && (model.Status == "disabled" || provider.Status == "disabled")
-		var ready bool
-		if err := tx.Raw(`SELECT (r.status IN ('draft','retired') OR (r.status='active' AND ?)) AND price.effective_from<=now() AND NOT price.is_delete AND NOT v.is_delete
- AND ((? AND EXISTS (
- SELECT 1 FROM catalog.provider_check check_run
- JOIN catalog.provider p ON p.id=check_run.provider_id AND p.current_config_version_id=check_run.config_version_id
- WHERE check_run.id=r.onboarding_check_id AND p.id=? AND check_run.config_version_id=r.config_version_id
- AND check_run.credential_id=? AND check_run.kind='model_access' AND check_run.status='completed'
- AND check_run.auth_result='ok' AND check_run.model_result IN ('completed','accepted') AND check_run.dispatch_started_at IS NOT NULL
- )) OR NOT EXISTS(SELECT 1 FROM unnest(v.modes) AS required(mode) WHERE NOT EXISTS(
- SELECT 1 FROM catalog.model_validation validation
- JOIN operation.operation op ON op.id=validation.operation_id AND op.status='completed' AND NOT op.is_delete
- JOIN operation.provider_binding execution ON execution.operation_id=op.id AND execution.release_id=validation.release_id
- JOIN operation.provider_credential_binding used_key ON used_key.operation_id=op.id AND used_key.credential_id=validation.credential_id
- WHERE validation.release_id=r.id AND validation.mode=required.mode AND validation.credential_id=? AND validation.status='succeeded'
- AND validation.adapter_version='ai-provider-v1' AND validation.evidence->>'kind'='real_provider'
- AND op.mode=validation.mode AND op.model_profile_version_id=r.model_version_id AND op.price_rule_version_id=r.price_version_id)))
+		var eligible bool
+		if err := tx.Raw(`SELECT (r.status IN ('draft','retired') OR (r.status='active' AND ?))
+ AND price.effective_from<=now() AND NOT price.is_delete AND NOT v.is_delete
  FROM catalog.model_release r JOIN catalog.model_profile_version v ON v.id=r.model_version_id
- JOIN catalog.price_rule_version price ON price.id=r.price_version_id WHERE r.id=?`, resumeCurrent, resumeCurrent, binding.ProviderID, credential.ID, credential.ID, id).Scan(&ready).Error; err != nil {
+ JOIN catalog.price_rule_version price ON price.id=r.price_version_id WHERE r.id=?`, resumeCurrent, id).Scan(&eligible).Error; err != nil {
 			return application.ModelRelease{}, err
 		}
-		if !ready {
+		if !eligible {
 			return application.ModelRelease{}, application.ErrReleaseUnverified
+		}
+		release, err := readRelease(tx, id)
+		if err != nil {
+			return application.ModelRelease{}, err
+		}
+		if !allReleaseModesVerified(release) {
+			return application.ModelRelease{}, application.ErrReleaseUnverified
+		}
+		if input.EnableProvider && provider.Status != "active" {
+			if err := requireReviewedLegacyReleases(tx, binding.ProviderID, binding.ModelID); err != nil {
+				return application.ModelRelease{}, err
+			}
 		}
 		// Replacing a default release requires an explicit concurrent default switch.
 		if !input.SetDefault && model.ActiveReleaseID != nil && !isCurrentRelease {
@@ -258,6 +264,32 @@ func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Prin
 		return readRelease(tx, id)
 	})
 }
+func allReleaseModesVerified(release application.ModelRelease) bool {
+	return len(release.RequiredModes) > 0 && !slices.ContainsFunc(release.RequiredModes, func(mode string) bool {
+		return !slices.Contains(release.ValidatedModes, mode)
+	})
+}
+
+// A disabled connection cannot restore unrelated historical releases via a verified sibling.
+func requireReviewedLegacyReleases(tx *gorm.DB, provider, replacingModel uuid.UUID) error {
+	var rows []releaseRow
+	if err := tx.Raw(releaseSelect+` JOIN catalog.model_profile m ON m.active_release_id=r.id
+ WHERE m.provider_id=? AND m.id<>? AND m.status='active' AND NOT m.is_delete
+ AND r.status='active' AND r.onboarding_check_id IS NOT NULL`, provider, replacingModel).Scan(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		release, err := decodeRelease(row)
+		if err != nil {
+			return err
+		}
+		if !allReleaseModesVerified(release) {
+			return application.ErrReleaseUnverified
+		}
+	}
+	return nil
+}
+
 func equalNullableUUID(a, b *uuid.UUID) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil

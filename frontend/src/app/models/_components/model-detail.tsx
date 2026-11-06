@@ -66,20 +66,24 @@ import {
 
 import { ModelConfigurationCheck } from "./model-configuration-check";
 
+export type ModelDetailView = "configuration" | "pricing" | "release";
+
 export function ModelDetail({
   id,
   capabilities,
   providers = [],
+  initialView = "configuration",
   onSaved,
 }: {
   id: string;
   capabilities: API.CapabilitySummary[];
   providers?: API.ProviderListItem[];
+  initialView?: ModelDetailView;
   onSaved: () => void;
 }) {
   const formFieldId = useId();
 
-  const [view, setView] = useState("configuration");
+  const [view, setView] = useState<string>(initialView);
   const [priceUnit, setPriceUnit] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState<boolean | null>(null);
   const [detail, setDetail] = useState<API.AdminModelDetail | null>(null);
@@ -716,8 +720,8 @@ export function ModelDetail({
                           providerStatus === "disabled")));
                   const ready =
                     canActivate &&
-                    ((r.status === "active" && !!r.onboarding_check_id) ||
-                      (!!r.required_modes?.length && !missing.length));
+                    !!r.required_modes?.length &&
+                    !missing.length;
                   return (
                     <article
                       key={r.id}
@@ -745,29 +749,14 @@ export function ModelDetail({
                           </p>
                         </CollapsibleContent>
                       </Collapsible>
-                      <p>
-                        {r.onboarding_check_id
-                          ? "本发布已通过连接的单模型接入验证。"
-                          : `已验证：${r.validated_modes?.join("、") || "无"}`}
-                      </p>
-                      {r.onboarding_check_id ? (
-                        <p className="text-muted-foreground">
-                          其他模型及模式未逐项验证，费用由服务商按实际用量计收。
-                        </p>
-                      ) : null}
-                      {missing.length &&
-                      !r.onboarding_check_id &&
-                      !onboardingDraft ? (
+                      <p>已验证：{r.validated_modes?.join("、") || "无"}</p>
+                      {missing.length > 0 && (
                         <p>尚需真实验证：{missing.join("、")}</p>
-                      ) : null}
-                      {onboardingDraft ? (
-                        <Button variant="outline" asChild>
-                          <a
-                            href={`/providers?connection=${model?.provider_id}&model=${model?.id}&release=${r.id}`}
-                          >
-                            前往连接验证并启用所选模型
-                          </a>
-                        </Button>
+                      )}
+                      {r.onboarding_check_id || onboardingDraft ? (
+                        <p className="text-muted-foreground">
+                          历史接入回执只用于追溯。缺少正式验证的旧发布需要使用审核后的价格及供应商费用上限建立新发布，再逐模式验证。
+                        </p>
                       ) : null}
                       {r.status === "draft" && !onboardingDraft ? (
                         <ProviderTrial

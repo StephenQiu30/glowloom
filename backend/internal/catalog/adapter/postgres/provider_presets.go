@@ -222,7 +222,7 @@ func (s *Store) SetPresetState(ctx context.Context, actor identityapp.Principal,
 func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input application.ConnectPresetInput) (application.PresetConnection, error) {
 	return catalogMutation(ctx, s.db, s.actors, actor, "preset.connect", id, input.RequestID, input, func(tx *gorm.DB) (application.PresetConnection, error) {
 		var row struct{ Payload []byte }
-		r := tx.Raw(`SELECT v.payload FROM catalog.provider_preset p JOIN catalog.provider_preset_version v ON v.preset_id=p.id WHERE p.id=? AND v.id=? AND NOT p.archived AND NOT p.emergency_disabled FOR SHARE OF p`, id, input.VersionID).Scan(&row)
+		r := tx.Raw(`SELECT v.payload FROM catalog.provider_preset p JOIN catalog.provider_preset_version v ON v.preset_id=p.id WHERE p.id=? AND v.id=? AND NOT p.archived AND NOT p.emergency_disabled AND (NOT ? OR v.version_no=(SELECT max(latest.version_no) FROM catalog.provider_preset_version latest WHERE latest.preset_id=p.id)) FOR SHARE OF p`, id, input.VersionID, input.SelectedModelsOnly).Scan(&row)
 		if r.Error != nil {
 			return application.PresetConnection{}, r.Error
 		}
@@ -300,6 +300,10 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 		}
 		if err := tx.Exec(`UPDATE catalog.provider SET current_config_version_id=? WHERE id=?`, configID, providerID).Error; err != nil {
 			return application.PresetConnection{}, err
+		}
+		if input.SelectedModelsOnly {
+			modelIDs, err := saveSelectedModelDrafts(tx, actor, providerID, catalog.Version, document.ModelTemplates, candidates)
+			return application.PresetConnection{ProviderID: providerID, ModelIDs: modelIDs, Config: application.ConnectionConfig{ID: configID, ProviderID: providerID, PresetVersionID: input.VersionID, Version: 1, Config: config}}, err
 		}
 		modelIDs, err := s.instantiatePresetModels(ctx, tx, actor, providerID, configID, document)
 		if err != nil {

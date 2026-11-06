@@ -46,14 +46,14 @@ func (h *OnboardingHandler) Read(c *gin.Context) {
 	c.JSON(200, result)
 }
 
-// Activate uses one successful model check to enable the selected model set.
+// Activate requires each release to have evidence for all of its required modes.
 // @Summary 验证后启用所选模型
 // @ID activateProviderOnboarding
 // @Tags settings
 // @Accept json
 // @Produce json
 // @Param id path string true "服务ID"
-// @Param body body application.ActivateOnboardingInput true "验证记录和预期修订号"
+// @Param body body application.ActivateOnboardingInput true "预期连接修订号"
 // @Success 200 {object} application.ProviderOnboardingState
 // @Router /api/admin/providers/{id}/onboarding/activate [post]
 func (h *OnboardingHandler) Activate(c *gin.Context) {

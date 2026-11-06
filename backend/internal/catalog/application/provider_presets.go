@@ -46,14 +46,15 @@ type PresetStateInput struct {
 
 // ConnectPresetInput creates a disabled connection from a pinned preset version.
 type ConnectPresetInput struct {
-	DirectUse        bool                          `json:"direct_use,omitempty"`
-	CatalogVersion   string                        `json:"catalog_version,omitempty"`
-	CandidateKeys    []string                      `json:"candidate_keys,omitempty"`
-	CustomCandidates []domain.ModelCandidatePreset `json:"custom_candidates,omitempty"`
-	VersionID        uuid.UUID                     `json:"version_id"`
-	Key              string                        `json:"key"`
-	Name             string                        `json:"name"`
-	RequestID        uuid.UUID                     `json:"request_id"`
+	SelectedModelsOnly bool                          `json:"selected_models_only,omitempty"`
+	DirectUse          bool                          `json:"direct_use,omitempty"`
+	CatalogVersion     string                        `json:"catalog_version,omitempty"`
+	CandidateKeys      []string                      `json:"candidate_keys,omitempty"`
+	CustomCandidates   []domain.ModelCandidatePreset `json:"custom_candidates,omitempty"`
+	VersionID          uuid.UUID                     `json:"version_id"`
+	Key                string                        `json:"key"`
+	Name               string                        `json:"name"`
+	RequestID          uuid.UUID                     `json:"request_id"`
 }
 
 // ConnectionConfig preserves the nonsecret settings used by a connection.
@@ -156,6 +157,9 @@ func (s *ProviderPresets) Connect(ctx context.Context, actor identityapp.Princip
 		return PresetConnection{}, identityapp.ErrForbidden
 	}
 	if id == uuid.Nil || input.VersionID == uuid.Nil || input.RequestID == uuid.Nil || (input.Key != "" && !validProviderKey(input.Key)) || (input.Name != "" && strings.TrimSpace(input.Name) == "") || len(input.Name) > 200 {
+		return PresetConnection{}, domain.ErrInvalidPreset
+	}
+	if input.SelectedModelsOnly && (input.DirectUse || len(input.CandidateKeys)+len(input.CustomCandidates) > domain.MaxPresetModels) {
 		return PresetConnection{}, domain.ErrInvalidPreset
 	}
 	if input.Key == "" {

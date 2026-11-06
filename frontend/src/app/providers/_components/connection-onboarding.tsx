@@ -8,7 +8,6 @@ import { providerConsoleURL } from "./provider-label";
 import { useSession } from "@/components/auth/session";
 import { Check } from "lucide-react";
 import {
-  activateProviderOnboarding,
   getProviderOnboarding,
   testProviderOnboardingModel,
   queryProviderModelCheck,
@@ -60,7 +59,6 @@ function accepted(value: unknown, provider: string) {
 
 export function ConnectionOnboarding({
   id,
-  onSaved,
   revision = 0,
   modelID,
   adapter,
@@ -69,7 +67,6 @@ export function ConnectionOnboarding({
   onChecked,
 }: {
   id: string;
-  onSaved: (id: string) => void;
   revision?: number;
   modelID?: string;
   adapter?: string;
@@ -122,22 +119,6 @@ export function ConnectionOnboarding({
     `provider.onboarding.test.${id}`,
     accepted,
   );
-  const activate = useCatalogMutation(
-    () => {
-      void mutate();
-      onSaved(id);
-    },
-    `provider.onboarding.activate.${id}`,
-    (value) => {
-      const result = value as API.ProviderOnboardingState | undefined;
-      return (
-        result?.provider_id === id &&
-        result.status === "active" &&
-        !!result.models?.length &&
-        result.models.every((m) => m.status === "active")
-      );
-    },
-  );
   const query = useCatalogMutation(
     () => {
       void mutate();
@@ -185,8 +166,7 @@ export function ConnectionOnboarding({
     (check?.model_result === "unknown" && !check.tracking_ended_at) ||
     (selectedCheck?.model_result === "unknown" &&
       !selectedCheck.tracking_ended_at);
-  const busy =
-    test.busy || activate.busy || query.busy || endTracking.busy || waiting;
+  const busy = test.busy || query.busy || endTracking.busy || waiting;
   if (isLoading)
     return (
       <p role="status" className="flex items-center gap-2 text-sm">
@@ -413,23 +393,11 @@ export function ConnectionOnboarding({
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {(typeof selector === "function"
-            ? selector(
-                busy ||
-                  unresolved ||
-                  !!test.pending ||
-                  !!query.pending ||
-                  !!activate.pending,
-              )
+            ? selector(busy || unresolved || !!test.pending || !!query.pending)
             : selector) ?? (
             <Select
               value={model}
-              disabled={
-                busy ||
-                unresolved ||
-                !!test.pending ||
-                !!query.pending ||
-                !!activate.pending
-              }
+              disabled={busy || unresolved || !!test.pending || !!query.pending}
               onValueChange={setSelected}
             >
               <SelectTrigger
@@ -502,9 +470,7 @@ export function ConnectionOnboarding({
             <Button
               type="button"
               variant="outline"
-              disabled={
-                busy || !data.credential_id || !model || !!activate.pending
-              }
+              disabled={busy || !data.credential_id || !model}
               className="shrink-0 max-md:h-11"
               ref={prepareTrigger}
               onClick={() => {
@@ -569,56 +535,15 @@ export function ConnectionOnboarding({
           <AlertDescription>{test.message}</AlertDescription>
         </Alert>
       ) : null}
-      {activate.pending ? (
-        <Alert>
-          <AlertTitle>启用结果待确认</AlertTitle>
-          <AlertDescription>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={activate.busy}
-              onClick={activate.recover}
-            >
-              查询回执
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : activate.message && !successMessages.includes(activate.message) ? (
-        <Alert variant="destructive">
-          <AlertDescription>{activate.message}</AlertDescription>
-        </Alert>
-      ) : null}
       {verified ? (
         <p className="text-xs text-muted-foreground">
-          仅当前模型有验证记录，其他模型未逐项验证。
+          此回执仅记录当前模型的接入检查。请在发布复核中查看逐模式证据。
         </p>
       ) : null}
       {query.message && query.message !== "已保存。" ? (
         <p role="status" className="text-sm">
           {query.message}
         </p>
-      ) : null}
-      {verified && data.status !== "active" ? (
-        <Button
-          type="button"
-          disabled={busy || !!test.pending || !!activate.pending}
-          className="self-end max-md:h-11"
-          onClick={() =>
-            void activate.run("provider.onboarding.activate", id, (requestID) =>
-              activateProviderOnboarding(
-                { id },
-                {
-                  request_id: requestID,
-                  check_id: selectedCheck!.id,
-                  expected_revision: data.revision,
-                },
-              ),
-            )
-          }
-        >
-          {activate.busy ? <Spinner data-icon="inline-start" /> : null}
-          启用 {data.models.length} 个模型
-        </Button>
       ) : null}
     </div>
   );

@@ -129,19 +129,16 @@ it("凭据输入使用安全字段，保存只建立连接与凭据", async () =
       onSaved={saved}
     />,
   );
-  fireEvent.keyDown(screen.getByRole("combobox", { name: "服务商" }), {
-    key: "ArrowDown",
-  });
-  fireEvent.click(screen.getByRole("option", { name: "我的文本服务" }));
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-secret-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
+  fireEvent.click(screen.getByRole("button", { name: "手动添加模型" }));
+  fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(api.test).not.toHaveBeenCalled();
   expect(api.credential).toHaveBeenCalledWith(
     { id: "connection" },
-    { label: "平台统一 Key", secret: { api_key: "fixture-secret-test" } },
+    { label: "平台凭据", secret: { api_key: "fixture-secret-test" } },
     expect.anything(),
   );
 });
@@ -162,14 +159,11 @@ it("离开原连接后，迟到的创建响应不保存 Key 或归属到新连�
       onSaved={oldSaved}
     />,
   );
-  fireEvent.keyDown(screen.getByRole("combobox", { name: "服务商" }), {
-    key: "ArrowDown",
-  });
-  fireEvent.click(screen.getByRole("option", { name: "我的文本服务" }));
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "old-key-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
+  fireEvent.click(screen.getByRole("button", { name: "手动添加模型" }));
+  fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
   await waitFor(() => expect(api.connect).toHaveBeenCalledOnce());
   old.unmount();
   const nextSaved = vi.fn();

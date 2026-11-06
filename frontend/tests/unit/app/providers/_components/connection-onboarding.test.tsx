@@ -10,6 +10,7 @@ import { SWRConfig } from "swr";
 import { render } from "../../../../feedback";
 import { pageBusinessMemory } from "@/lib/page-business-memory";
 import { ConnectionOnboarding } from "@/app/providers/_components/connection-onboarding";
+import { ConnectionReleaseReview } from "@/app/providers/_components/connection-release-review";
 import { RequestError } from "@/lib/request";
 const api = vi.hoisted(() => ({
   read: vi.fn(),
@@ -94,11 +95,11 @@ function setup() {
         errorRetryCount: 0,
       }}
     >
-      <ConnectionOnboarding id="provider" onSaved={saved} />
+      <ConnectionOnboarding id="provider" />
     </SWRConfig>,
   );
 }
-it("验证一次后启用所有所选模型，保存Key本身不能启用", async () => {
+it("单模型接入检查完成后也不能启用整个批次", async () => {
   setup();
   await screen.findByRole("button", { name: "验证" });
   expect(screen.queryByRole("button", { name: "启用 2 个模型" })).toBeNull();
@@ -113,12 +114,8 @@ it("验证一次后启用所有所选模型，保存Key本身不能启用", asyn
     }),
   );
   expect(saved).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "启用 2 个模型" }));
-  await waitFor(() => expect(saved).toHaveBeenCalledWith("provider"));
-  expect(api.activate).toHaveBeenCalledWith(
-    { id: "provider" },
-    expect.objectContaining({ check_id: "check", expected_revision: 1 }),
-  );
+  expect(screen.queryByRole("button", { name: "启用 2 个模型" })).toBeNull();
+  expect(api.activate).not.toHaveBeenCalled();
 });
 it("未知验证先查询原回执，不重新发起调用", async () => {
   api.test.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
@@ -168,7 +165,7 @@ it("视频受理不会被显示成生成完成", async () => {
   };
   setup();
   await screen.findByText(/仍在生成，可查询原任务/);
-  expect(screen.getByRole("button", { name: "启用 2 个模型" })).toBeDefined();
+  expect(screen.queryByRole("button", { name: "启用 2 个模型" })).toBeNull();
 });
 it("检查读取失败有重试入口，不显示可启用", async () => {
   api.read.mockRejectedValueOnce(
@@ -223,10 +220,7 @@ it("再次验证结果未知时冻结模型和启用，只查询原回执", asyn
   setup();
   fireEvent.click(await screen.findByRole("button", { name: "验证" }));
   await screen.findByRole("button", { name: "查询回执" });
-  expect(screen.getByRole("button", { name: "启用 2 个模型" })).toHaveProperty(
-    "disabled",
-    true,
-  );
+  expect(screen.queryByRole("button", { name: "启用 2 个模型" })).toBeNull();
   expect(screen.queryByRole("button", { name: "验证" })).toBeNull();
   expect(api.test).toHaveBeenCalledOnce();
   expect(api.activate).not.toHaveBeenCalled();
@@ -308,8 +302,58 @@ it("未知请求可复制脱敏标识并查看原凭据引用", async () => {
 it("管理页验证不依赖画布专用反馈上下文", async () => {
   renderWithoutFeedback(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      <ConnectionOnboarding id="provider" onSaved={saved} />
+      <ConnectionOnboarding id="provider" />
     </SWRConfig>,
   );
   await screen.findByRole("button", { name: "验证" });
 });
+
+it.each([false, true])(
+  "发布复核按逐模式证据决定批量启用（齐全 %s）",
+  async (complete) => {
+    state.release_reviews = [
+      {
+        id: "draft",
+        model_id: "image",
+        display_name: "双模式模型",
+        batch_draft: true,
+        status: "draft",
+        required_modes: ["text2image", "image2image"],
+        validated_modes: complete
+          ? ["text2image", "image2image"]
+          : ["text2image"],
+      },
+      {
+        id: "old",
+        model_id: "chat",
+        display_name: "旧发布",
+        onboarding_check_id: "shared",
+        status: "active",
+        required_modes: ["text_to_text"],
+        validated_modes: [],
+      },
+    ];
+    render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <ConnectionReleaseReview id="provider" onSaved={saved} />
+      </SWRConfig>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "发布复核" }));
+    await screen.findByText("text_to_text · 待复核");
+    if (!complete) {
+      expect(screen.getByText("image2image · 待复核")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /个已复核模型/ })).toBeNull();
+      expect(api.activate).not.toHaveBeenCalled();
+    } else {
+      fireEvent.click(
+        screen.getByRole("button", { name: "启用 1 个已复核模型" }),
+      );
+      await waitFor(() =>
+        expect(api.activate).toHaveBeenCalledWith(
+          { id: "provider" },
+          expect.objectContaining({ expected_revision: 1 }),
+        ),
+      );
+    }
+  },
+);

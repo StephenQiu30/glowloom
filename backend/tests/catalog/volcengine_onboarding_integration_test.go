@@ -111,8 +111,55 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 			require.Equal(t, "completed", result.ModelResult)
 			require.Equal(t, 1, calls)
 			require.NoError(t, service.Record(ctx, catalogapp.CredentialTestObservation{CredentialTestRequest: request, Result: result.Result, TestedAt: time.Now().UTC(), Last4: "-key", AuthResult: result.AuthResult, AdapterResult: result.AdapterResult, DiscoveryResult: result.DiscoveryResult, ModelResult: result.ModelResult}))
+			if slug == "openai" {
+				directoryRequest := uuid.NewString()
+				directory, err := catalogapp.NewRequestCredentialTestCommand(store).ExecuteDiscovery(ctx, actor, connected.ProviderID, credential, directoryRequest)
+				require.NoError(t, err)
+				require.Equal(t, "discovery", directory.Kind)
+				discovery := catalogapp.CredentialTestRequest{Kind: "discovery", TestID: directory.TestID, ProviderID: connected.ProviderID, CredentialID: credential, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: directoryRequest}
+				_, _, err = service.Load(ctx, discovery)
+				require.NoError(t, err)
+				discoveryWorker := providerprobe.NewScopedActivities(database, unsealer, providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
+					require.Equal(t, http.MethodGet, r.Method)
+					require.Equal(t, "/v1/models", r.URL.Path)
+					return providerResponse(200, `{"data":[{"id":"directory-fixture"}]}`), nil
+				})}), store)
+				observed, err := discoveryWorker.TestCredential(ctx, catalogflow.AgentTestInput{TestID: directory.TestID, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: directoryRequest, ProviderID: connected.ProviderID, AdapterKey: "openai", Credential: catalogflow.AgentCredential{ID: credential, KeyID: "volc-fixture", Ciphertext: base64.StdEncoding.EncodeToString(ciphertext)}})
+				require.NoError(t, err)
+				require.Len(t, observed.Candidates, 1)
+				require.Empty(t, observed.Candidates[0].Capability)
+				var before time.Time
+				require.NoError(t, database.Raw("SELECT last_tested_at FROM catalog.provider_credential WHERE id=?", credential).Scan(&before).Error)
+				require.NoError(t, service.Record(ctx, catalogapp.CredentialTestObservation{CredentialTestRequest: discovery, Result: observed.Result, TestedAt: time.Now().UTC(), Last4: "-key", AuthResult: observed.AuthResult, AdapterResult: observed.AdapterResult, DiscoveryResult: observed.DiscoveryResult, Candidates: observed.Candidates}))
+				check, err := store.ReadProviderCheck(ctx, actor, directory.CheckID)
+				require.NoError(t, err)
+				require.True(t, check.Current)
+				require.Len(t, check.Candidates, 1)
+				require.Equal(t, "directory-fixture", check.Candidates[0].ProviderModelID)
+				config, err := store.ReadConnectionConfig(ctx, actor, connected.ProviderID)
+				require.NoError(t, err)
+				add := catalogapp.AddPresetModelInput{ConfigID: config.ID, CredentialID: &credential, DirectoryCheckID: &directory.CheckID, DraftOnly: true, CatalogVersion: config.ModelCatalog.Version, CustomModelID: "directory-fixture", Capability: "text.generate", RequestID: uuid.New()}
+				model, err := catalogapp.NewProviderConfigs(store).AddModel(ctx, actor, connected.ProviderID, add)
+				require.NoError(t, err)
+				require.Equal(t, domain.ModelDisabled, model.Status)
+				require.Equal(t, uuid.Nil, model.CurrentVersionID)
+				add.CustomModelID = "not-returned-by-directory"
+				add.RequestID = uuid.New()
+				_, err = catalogapp.NewProviderConfigs(store).AddModel(ctx, actor, connected.ProviderID, add)
+				require.ErrorIs(t, err, catalogapp.ErrPresetConflict)
+
+				var after time.Time
+				require.NoError(t, database.Raw("SELECT last_tested_at FROM catalog.provider_credential WHERE id=?", credential).Scan(&after).Error)
+				require.True(t, before.Equal(after))
+			}
 			state, err = onboarding.Read(ctx, actor, connected.ProviderID)
 			require.NoError(t, err)
+			require.Len(t, state.ReleaseReviews, quickModels)
+			for _, review := range state.ReleaseReviews {
+				for _, mode := range review.RequiredModes {
+					seedOnboardingModeEvidence(t, database, project, credential, review, mode)
+				}
+			}
 			enabled, err := onboarding.Activate(ctx, actor, connected.ProviderID, catalogapp.ActivateOnboardingInput{RequestID: uuid.New(), CheckID: accepted.CheckID, ExpectedRevision: state.Revision})
 			require.NoError(t, err)
 			require.Len(t, enabled.Models, quickModels)

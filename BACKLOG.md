@@ -16,6 +16,18 @@
 
 生成 TypeScript 声明通过独立 `pnpm api:typecheck` 严格校验。全项目关闭 `skipLibCheck` 时，外部 Pi、Chord 和 Google GenAI 声明仍报错。Agent 相关 Go 包的 `govulncheck` 无可达结果。
 
+<a id="model-onboarding-alignment"></a>
+
+## 模型接入与预设对齐（SRC-AI-46，2026-11-06）
+
+[调研](docs/research/2026-11-06-BeefTV与竞品模型接入和预设对照.md)与[设计07](docs/design/07-AI平台接入市场调研与架构设计.md#src-ai-46)已对齐。新建连接入口已换成「连接服务 → 选择模型」，保存前可读预设注册端点的模型 ID。首批目录适配器为 OpenAI、DeepSeek、OpenRouter、Vercel。保存只实例化确认的草稿，未知结果先读取原回执。已有连接的「添加模型」直达模型管理的共用选模入口。目录工作器使用已保存凭据仅读取候选 ID，选中后核对目录回执、配置及凭据。连接详情新增「发布复核」，展示历史回执与逐模式正式证据，批量启用和恢复均执行逐项门禁。旧发布状态及冻结任务保留。
+
+验证使用模拟供应商响应和隔离 PostgreSQL，覆盖目录权限及出站边界、精确选择、空集合、请求重放与无价格或发布写入。前端全量 Vitest 300 文件、2141 用例通过。最终界面调整后，相关 15 文件、151 用例、ESLint、生产构建和 390px／1440px 浏览器验证通过。全 Catalog Race 检查的组合过滤失败属于并行变更范围。未使用真实凭据、调用生成或部署。
+
+续次验证：前端全量 Vitest 300 文件、2143 用例通过，生产构建、定向 ESLint、Go vet、接口生成一致性通过。隔离 PostgreSQL Race 验证已存凭据目录 GET、凭据状态不变、候选回执匹配、缺一模式拒绝及恢复门禁。受控浏览器验证 390px 读取目录并保存草稿、1440px 查看复核记录。全量 Catalog Race 仍只报告已有的供应商组合筛选用例失败。未使用真实供应商或改动业务数据库。
+
+提交前在独立工作树验收，前端 Vitest 298 文件、2134 用例通过，Next.js 生产构建、定向 ESLint 和 Prettier、Go vet、初始化独立 PostgreSQL 后的全量 Catalog Race 测试均通过。agent-browser 在 390px 和 1440px 使用模拟 API 验证两步接入、已存凭据目录、草稿保存与逐模式复核。
+
 <a id="official-model-contracts"></a>
 
 ## 官方模型接入、预设与参数计价（SRC-AI-40，2026-11-05）

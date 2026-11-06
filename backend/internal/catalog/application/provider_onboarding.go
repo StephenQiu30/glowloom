@@ -19,21 +19,30 @@ type OnboardingModel struct {
 	Status          string    `json:"status"`
 }
 
-// ProviderOnboardingState restores the flow from server-owned nonsecret state.
-type ProviderOnboardingState struct {
-	ProviderID   uuid.UUID         `json:"provider_id"`
-	Revision     int64             `json:"revision"`
-	Status       string            `json:"status"`
-	Models       []OnboardingModel `json:"models" gorm:"-"`
-	CredentialID *uuid.UUID        `json:"credential_id,omitempty"`
-	Check        *ProviderCheck    `json:"check,omitempty" gorm:"-"`
+// OnboardingReleaseReview reports exact release evidence, including legacy provenance.
+type OnboardingReleaseReview struct {
+	ModelRelease
+	DisplayName string `json:"display_name"`
+	BatchDraft  bool   `json:"batch_draft"`
 }
 
-// ActivateOnboardingInput binds explicit activation to a verified current check.
+// ProviderOnboardingState restores the flow from server-owned nonsecret state.
+type ProviderOnboardingState struct {
+	ProviderID     uuid.UUID                 `json:"provider_id"`
+	Revision       int64                     `json:"revision"`
+	Status         string                    `json:"status"`
+	Models         []OnboardingModel         `json:"models" gorm:"-"`
+	CredentialID   *uuid.UUID                `json:"credential_id,omitempty"`
+	ReleaseReviews []OnboardingReleaseReview `json:"release_reviews" gorm:"-"`
+	Check          *ProviderCheck            `json:"check,omitempty" gorm:"-"`
+}
+
+// ActivateOnboardingInput binds explicit activation to the current provider revision.
 type ActivateOnboardingInput struct {
-	RequestID        uuid.UUID `json:"request_id"`
-	CheckID          uuid.UUID `json:"check_id"`
-	ExpectedRevision int64     `json:"expected_revision"`
+	ReleaseIDs       []uuid.UUID `json:"release_ids,omitempty"`
+	RequestID        uuid.UUID   `json:"request_id"`
+	CheckID          uuid.UUID   `json:"check_id,omitempty"`
+	ExpectedRevision int64       `json:"expected_revision"`
 }
 
 // OnboardingStore owns live authorization and atomic selected-model activation.
@@ -61,12 +70,12 @@ func (s *ProviderOnboarding) Read(ctx context.Context, actor identityapp.Princip
 	return s.store.ReadProviderOnboarding(ctx, actor, id)
 }
 
-// Activate enables only the original selection under one successful model check.
+// Activate requires independent evidence for every required mode of every selected release.
 func (s *ProviderOnboarding) Activate(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input ActivateOnboardingInput) (ProviderOnboardingState, error) {
 	if !IsPlatformAdmin(actor) {
 		return ProviderOnboardingState{}, identityapp.ErrForbidden
 	}
-	if id == uuid.Nil || input.RequestID == uuid.Nil || input.CheckID == uuid.Nil || input.ExpectedRevision < 1 {
+	if id == uuid.Nil || input.RequestID == uuid.Nil || input.ExpectedRevision < 1 {
 		return ProviderOnboardingState{}, ErrInvalidProviderDetail
 	}
 	return s.store.ActivateProviderOnboarding(ctx, actor, id, input)

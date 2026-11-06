@@ -82,11 +82,25 @@ func (s *Store) AddPresetModel(ctx context.Context, actor identityapp.Principal,
 			return empty, application.ErrPresetConflict
 		}
 		var credential bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM catalog.provider_credential WHERE provider_id=? AND status='active' AND NOT is_delete)`, id).Row().Scan(&credential); err != nil {
+		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM catalog.provider_credential WHERE provider_id=? AND status='active' AND NOT is_delete AND (?::uuid IS NULL OR id=?))`, id, input.CredentialID, input.CredentialID).Row().Scan(&credential); err != nil {
 			return empty, err
 		}
 		if !credential {
 			return empty, application.ErrCredentialNotFound
+		}
+		if input.DirectoryCheckID != nil {
+			var current bool
+			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM catalog.provider_check check_run
+ JOIN catalog.provider_credential c ON c.id=check_run.credential_id AND c.provider_id=check_run.provider_id AND c.status='active' AND NOT c.is_delete
+ JOIN catalog.model_candidate candidate ON candidate.check_id=check_run.id
+ WHERE check_run.id=? AND check_run.provider_id=? AND check_run.config_version_id=? AND check_run.credential_id=?
+ AND check_run.kind='discovery' AND check_run.status='completed' AND check_run.discovery_result IN ('ok','partial')
+ AND candidate.provider_model_id=?)`, input.DirectoryCheckID, id, config.ID, input.CredentialID, strings.TrimSpace(input.CustomModelID)).Scan(&current).Error; err != nil {
+				return empty, err
+			}
+			if !current {
+				return empty, application.ErrPresetConflict
+			}
 		}
 		document, err := connectionPresetDocument(tx, config)
 		if err != nil {
@@ -109,8 +123,16 @@ func (s *Store) AddPresetModel(ctx context.Context, actor identityapp.Principal,
 		if r.Error != nil {
 			return empty, r.Error
 		}
-		if existing.CurrentVersionID != nil {
+		if existing.CurrentVersionID != nil || (input.DraftOnly && existing.ID != uuid.Nil) {
 			return createdModel(existing), nil
+		}
+		if input.DraftOnly {
+			ids, err := saveSelectedModelDrafts(tx, actor, id, catalog.Version, document.ModelTemplates, []domain.ModelCandidatePreset{candidate})
+			if err != nil {
+				return empty, err
+			}
+			row, err := lockModelProfile(tx, ids[0])
+			return createdModel(row), err
 		}
 		modelID := existing.ID
 		expectedRevision := existing.Revision
@@ -176,6 +198,14 @@ func resolveAddModelCandidate(config domain.ProviderConfig, catalog domain.Model
 		if model.ProviderModelID == id && model.Capability == input.Capability {
 			return model, nil
 		}
+	}
+
+	if input.DraftOnly {
+		return domain.ModelCandidatePreset{
+			Key: "custom-" + uuid.NewString(), AdapterKey: config.AdapterKey,
+			DisplayName: id, ProviderModelID: id, Capability: input.Capability,
+			SourceURL: "custom://admin", Lifecycle: "unknown",
+		}, nil
 	}
 
 	var mode string

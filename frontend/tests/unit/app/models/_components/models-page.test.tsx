@@ -24,7 +24,7 @@ vi.mock("@/api/settings", () => ({
   setAdminCredential: api.key,
   addProviderPresetModel: api.add,
   getConfigReceipt: vi.fn(),
-  testAdminCredential: api.probe,
+  readSavedProviderModelDirectory: api.probe,
   getProviderCheck: api.check,
 }));
 vi.mock("@/app/models/_components/model-detail", () => ({
@@ -106,9 +106,7 @@ it("连接详情跳转后预选连接，由服务端筛选模型并保留全部�
   });
   render(<ModelsPage initialProvider="connection" />);
   await screen.findByRole("button", { name: /当前连接模型/ });
-  expect(
-    screen.getByRole("cell", { name: "OpenAI" }),
-  ).toBeTruthy();
+  expect(screen.getByRole("cell", { name: "OpenAI" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: /其他连接模型/ })).toBeNull();
   expect(
     screen.getByRole("link", { name: "查看全部模型" }).getAttribute("href"),
@@ -166,13 +164,8 @@ it.each([true, false])(
     }
     render(<ModelsPage initialProvider="connection" />);
     fireEvent.click(await screen.findByRole("button", { name: "添加模型" }));
-    expect(
-      screen
-        .getByRole("tab", { name: "推荐预设" })
-        .getAttribute("aria-selected"),
-    ).toBe("true");
-    await screen.findByRole("option", { name: /账号专属模型/ });
-    fireEvent.click(screen.getByRole("option", { name: /预设模型/ }));
+    await screen.findByRole("checkbox", { name: /账号专属模型/ });
+    fireEvent.click(screen.getByRole("checkbox", { name: /预设模型/ }));
     expect(screen.queryByText("稳定标识")).toBeNull();
     expect(screen.queryByText("生成能力")).toBeNull();
     if (hasKey) expect(screen.queryByLabelText("API Key")).toBeNull();
@@ -187,6 +180,8 @@ it.each([true, false])(
       {
         candidate_key: "preset",
         config_id: "config",
+        credential_id: hasKey ? "existing-key" : "credential",
+        draft_only: true,
         catalog_version: "catalog",
         request_id: expect.any(String),
       },
@@ -228,6 +223,8 @@ it("读取只读目录后能搜索并添加候选模型", async () => {
     }),
   );
   api.check.mockResolvedValue({
+    id: "test-check",
+    kind: "discovery",
     current: true,
     config_version_id: "config",
     credential_id: "directory-key",
@@ -235,12 +232,8 @@ it("读取只读目录后能搜索并添加候选模型", async () => {
     discovery_result: "ok",
     candidates: [{ provider_model_id: "fixture/model" }],
   });
-  render(<ModelsPage initialProvider="connection" />);
-  fireEvent.click(await screen.findByRole("button", { name: "添加模型" }));
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "在线目录" }), {
-    button: 0,
-    ctrlKey: false,
-  });
+  render(<ModelsPage initialProvider="connection" openAdd />);
+  expect(await screen.findByRole("dialog", { name: "添加模型" })).toBeTruthy();
   const read = await screen.findByRole("button", { name: "读取在线目录" });
   expect(api.probe).not.toHaveBeenCalled();
   await waitFor(() => expect(read).toHaveProperty("disabled", false));
@@ -256,18 +249,20 @@ it("读取只读目录后能搜索并添加候选模型", async () => {
     accepted: true,
     provider_id: "connection",
     check_id: "test-check",
+    kind: "discovery",
   });
   await screen.findByText(/目录返回 1 个候选/);
-  fireEvent.change(screen.getByRole("combobox", { name: "搜索在线目录" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索模型" }), {
     target: { value: "fixture" },
   });
-  fireEvent.click(screen.getByRole("option", { name: /fixture\/model/ }));
+  fireEvent.click(screen.getByRole("button", { name: /fixture\/model/ }));
   fireEvent.click(screen.getByRole("button", { name: "保存模型" }));
   await waitFor(() =>
     expect(api.add).toHaveBeenCalledWith(
       { id: "connection" },
       expect.objectContaining({
         custom_model_id: "fixture/model",
+        directory_check_id: "test-check",
         capability: "text.generate",
       }),
     ),

@@ -145,10 +145,11 @@ func (s *Store) RecordCredentialTest(ctx context.Context, observation applicatio
 		if result.RowsAffected != 1 || credential.Last4 != observation.Last4 {
 			return ErrCredentialNotFound
 		}
-		if !query && credential.LastTestedAt != nil && !credential.LastTestedAt.Before(observation.TestedAt) {
+		updatesCredential := !query && observation.Kind != "discovery"
+		if updatesCredential && credential.LastTestedAt != nil && !credential.LastTestedAt.Before(observation.TestedAt) {
 			return ErrTestSuperseded
 		}
-		if !query {
+		if updatesCredential {
 			result = tx.Exec(`
 			UPDATE catalog.provider_credential
 			SET last_tested_at = ?, last_test_result = ?, update_time = now()

@@ -1,716 +1,713 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, Eye, EyeOff, Plus } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
+import { useEffect, useRef, useState } from "react";
+
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import {
-  InputGroup,
-  InputGroupInput,
-  InputGroupAddon,
-  InputGroupButton,
-} from "@/components/ui/input-group";
-import { connectProviderPreset, setAdminCredential } from "@/api/settings";
-import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
+  connectProviderPreset,
+  getConfigReceipt,
+  readPresetModelDirectory,
+  setAdminCredential,
+} from "@/api/settings";
+import { useSession } from "@/components/auth/session";
 import { RequestError } from "@/lib/request";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { getCandidateBrand } from "./provider-label";
+import { ModelCatalogChoices } from "@/components/catalog/model-catalog-choices";
 import {
   Field,
   FieldGroup,
   FieldLabel,
-  FieldDescription,
-  FieldSet,
   FieldLegend,
-  FieldTitle,
+  FieldSet,
 } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
-  MutationStatus,
-  useCatalogMutation,
-} from "@/components/catalog/mutation";
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 
-function connectionID(value: unknown) {
+type ConnectInput = Parameters<typeof connectProviderPreset>[1];
+type Model = API.ModelCandidatePreset;
+
+const capabilities: Record<string, string> = {
+  "text.generate": "文本",
+  "image.generate": "图片",
+  "video.generate": "视频",
+  "audio.generate": "音频",
+};
+const credentialLabels: Record<string, string> = {
+  api_key: "API Key",
+  access_key_id: "Access Key ID",
+  secret_access_key: "Secret Access Key",
+};
+
+function connectionID(result: unknown) {
   if (
-    value &&
-    typeof value === "object" &&
-    "provider_id" in value &&
-    typeof value.provider_id === "string"
-  )
-    return value.provider_id;
-  return "";
+    typeof result === "object" &&
+    result !== null &&
+    "provider_id" in result
+  ) {
+    const id = result.provider_id;
+    return typeof id === "string" && id ? id : null;
+  }
+  return null;
 }
 
-export function PresetConnect({
-  presets,
-  adapters,
-  initialPreset = "",
-  onCancel,
-  providers = [],
-  onCreated,
-  onSaved,
-}: {
+function savedCredential(result: unknown, provider: string) {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "id" in result &&
+    typeof result.id === "string" &&
+    !!result.id &&
+    "status" in result &&
+    result.status === "active" &&
+    connectionID(result) === provider
+  );
+}
+
+type Save = {
+  input: ConnectInput & { request_id: string };
+  presetID: string;
+  credentialRequest: string;
+  providerID?: string;
+};
+
+// Keep only the nonsecret request coordinates when the dialog is reopened.
+let outstanding: { session: string; save: Save } | undefined;
+
+function recordPending(session: string, save: Save | null, previous?: string) {
+  if (
+    previous &&
+    (outstanding?.session !== session ||
+      outstanding.save.input.request_id !== previous)
+  )
+    return;
+  outstanding = save ? { session, save } : undefined;
+}
+
+async function findReceipt(requestID: string, action: string, target: string) {
+  try {
+    const receipt = await getConfigReceipt({
+      id: requestID,
+      action,
+      target_id: target,
+    });
+    if (
+      receipt.request_id === requestID &&
+      receipt.action === action &&
+      receipt.target_id === target
+    ) {
+      return receipt.result;
+    }
+    throw new Error("receipt does not match the pending request");
+  } catch (error) {
+    if (error instanceof RequestError && error.status === 404) return undefined;
+    throw error;
+  }
+}
+
+type Props = {
   presets: API.Preset[];
   adapters?: API.AdapterMetadata[];
   initialPreset?: string;
-  onCancel?: () => void;
   providers?: API.ProviderListItem[];
+  onCancel?: () => void;
   onCreated: (id: string) => void;
   onSaved: (id: string) => void;
-}) {
-  const fieldID = useId();
-  const [presetID, setPresetID] = useState(initialPreset);
-  const [selection, setCandidateKeys] = useState<string[] | null>(null);
-  const [selectedBrand, setSelectedBrand] = useState<string>("all");
-  const [customCandidates, setCustomCandidates] = useState<
-    API.ModelCandidatePreset[]
-  >([]);
-  const [showAddCustom, setShowAddCustom] = useState(false);
-  const [customName, setCustomName] = useState("");
-  const [customID, setCustomID] = useState("");
-  const [visible, setVisible] = useState(false);
-  const mounted = useRef(true);
+};
+
+export function PresetConnect(props: Props) {
+  const session = useSession().session_id;
+  return <ConnectWizard key={session} session={session} {...props} />;
+}
+
+function ConnectWizard({
+  session,
+  presets,
+  adapters = [],
+  initialPreset,
+  onCancel,
+  onCreated,
+  onSaved,
+}: Props & { session: string }) {
+  const [pending, setPending] = useState<Save | null>(() =>
+    outstanding && outstanding.session === session ? outstanding.save : null,
+  );
+  const [step, setStep] = useState<1 | 2>(1);
+  const [presetID, setPresetID] = useState(initialPreset ?? "");
+  const [secret, setSecret] = useState<Record<string, string>>({});
+  const [picked, setPicked] = useState<string[]>([]);
+  const [custom, setCustom] = useState<Model[]>([]);
+  const [online, setOnline] = useState<string[]>([]);
+  const [manualID, setManualID] = useState("");
+  const [showManual, setShowManual] = useState(false);
+  const [manualCapability, setManualCapability] = useState("");
+  const [notice, setNotice] = useState(
+    pending ? "此接入有待确认的请求，可继续核对。" : "",
+  );
+  const [busy, setBusy] = useState<"read" | "save" | null>(null);
+  const inFlight = useRef(false);
+  const mounted = useRef(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
     };
   }, []);
-  const [apiKey, setAPIKey] = useState("");
-  const [accessKeyID, setAccessKeyID] = useState("");
-  const [category, setCategory] = useState(
-    () =>
-      presets.find((p) => p.id === initialPreset)?.model_catalog?.models?.[0]
-        ?.capability ?? "text.generate",
+  useEffect(() => {
+    if (step === 2) searchInput.current?.focus();
+  }, [step]);
+
+  function remember(save: Save | null, previous?: string) {
+    recordPending(session, save, previous);
+    if (mounted.current) setPending(save);
+  }
+
+  const available = presets.filter(
+    (item) =>
+      item.id && item.version_id && !item.archived && !item.emergency_disabled,
   );
-  const [createdID, setCreatedID] = useState("");
-  const [confirmed, setComplete] = useState(false);
-  const create = useCatalogMutation(
-    (result) => {
-      const id = connectionID(result);
-      if (id) {
-        setCreatedID(id);
-        if (mounted.current) onCreated(id);
-      }
-    },
-    "preset.onboarding.create",
-    (result) => !!connectionID(result),
+  const preset = pending
+    ? presets.find((item) => item.id === pending.presetID)
+    : (available.find((item) => item.id === presetID) ?? available[0]);
+  const config = preset?.document?.config;
+  const adapter = adapters.find(
+    (item) => item.adapter_key === config?.adapter_key,
   );
-  const credential = useCatalogMutation(
-    (result) => {
-      if (!mounted.current) return;
-      setComplete(true);
-      onSaved(connectionID(result));
-    },
-    "preset.onboarding.credential",
-    isCredentialReceipt,
+  const fields = adapter?.credential_fields?.length
+    ? adapter.credential_fields
+    : [{ name: "api_key", required: true }];
+  const canRead =
+    adapter?.check_capabilities?.includes("model_discovery") &&
+    fields.some((field) => field.name === "api_key");
+  const hasCredentials =
+    !!preset &&
+    fields.every(
+      (field) =>
+        !!field.name &&
+        (field.required === false || !!secret[field.name]?.trim()),
+    );
+  const modes = (config?.capabilities ?? []).map(
+    (capability) => capability + ".generate",
   );
-  const targetID =
-    createdID ||
-    (credential.pending?.action === "credential.set"
-      ? credential.pending.target
-      : "");
-  const selectedPreset =
-    create.pending?.action === "preset.connect"
-      ? create.pending.target
-      : presetID;
-  const preset = presets.find((p) => p.id === selectedPreset);
-  const metadata = adapters?.find(
-    (item) => item.adapter_key === preset?.document?.config?.adapter_key,
+  const mode =
+    modes.length === 1
+      ? modes[0]
+      : modes.includes(manualCapability)
+        ? manualCapability
+        : "";
+  const models = (preset?.model_catalog?.models ?? []).filter(
+    (model) =>
+      model.key &&
+      model.provider_model_id &&
+      model.capability &&
+      !model.requires_model_selection,
   );
-  const musicCredential = metadata
-    ? metadata.credential_fields?.some(
-        (field) => field.name === "secret_access_key",
+  const selectionCount = picked.length + custom.length;
+
+  function changeSupplier(id: string) {
+    setPresetID(id);
+    setSecret({});
+    setPicked([]);
+    setCustom([]);
+    setOnline([]);
+    setManualID("");
+    setShowManual(false);
+    setManualCapability("");
+    setNotice("");
+  }
+
+  function enterSelection() {
+    if (hasCredentials) {
+      if (!models.length) setShowManual(true);
+      setStep(2);
+      setNotice("");
+    }
+  }
+
+  async function readDirectory() {
+    if (
+      inFlight.current ||
+      !preset?.id ||
+      !preset.version_id ||
+      !canRead ||
+      !hasCredentials
+    )
+      return;
+    inFlight.current = true;
+    setBusy("read");
+    setNotice("");
+    try {
+      const result = await readPresetModelDirectory(
+        { id: preset.id },
+        { version_id: preset.version_id, api_key: secret.api_key },
+      );
+      const ids = result.model_ids ?? [];
+      setOnline(ids);
+      setStep(2);
+      if (!ids.length)
+        setNotice("目录没有返回模型，可以使用预置模型或手动添加。");
+    } catch {
+      setNotice(
+        "暂时无法读取目录。可核对凭据后重试，或继续使用预置模型和手动添加。",
+      );
+    } finally {
+      inFlight.current = false;
+      setBusy(null);
+    }
+  }
+
+  function addManualModel() {
+    const id = manualID.trim();
+    if (!id || !mode || /\s/u.test(id) || selectionCount >= 64) return;
+
+    const presetModel = models.find(
+      (model) => model.provider_model_id === id && model.capability === mode,
+    );
+    if (presetModel?.key) {
+      const key = presetModel.key;
+      setPicked((current) =>
+        current.includes(key) ? current : [...current, key],
+      );
+    } else if (
+      !custom.some(
+        (model) => model.provider_model_id === id && model.capability === mode,
       )
-    : preset?.document?.config?.adapter_key === "volcengine_music";
-  const complete =
-    confirmed ||
-    (!!targetID &&
-      !credential.pending &&
-      providers.some(
-        (p) => p.provider?.id === targetID && p.credential?.status === "active",
-      ));
-  const busy = create.busy || credential.busy;
-  const lockedStep =
-    busy || !!targetID || !!create.pending || !!credential.pending || complete;
-  const isMultiBrand =
-    preset?.document?.config?.adapter_key === "openrouter" ||
-    preset?.document?.config?.adapter_key === "vercel";
-  const allModels = [
-    ...(preset?.model_catalog?.models ?? []),
-    ...customCandidates,
-  ];
-  const models = isMultiBrand
-    ? allModels.filter((m) => getCandidateBrand(m) !== undefined)
-    : allModels;
-  const selectable = models.filter((m) => m.key && !m.requires_model_selection);
-  const candidateKeys = selection ?? selectable.map((m) => m.key!);
-  const selectedCustom = customCandidates.filter((model) =>
-    candidateKeys.includes(model.key!),
-  );
-  const catalogKeys = candidateKeys.filter(
-    (key) => !customCandidates.some((model) => model.key === key),
-  );
-  const direct =
-    candidateKeys.length > 0 && !preset?.document?.model_templates?.length;
-  const allSelected =
-    selectable.length > 0 &&
-    selectable.every((m) => candidateKeys.includes(m.key!));
+    ) {
+      setCustom((current) => [
+        ...current,
+        {
+          key: crypto.randomUUID(),
+          provider_model_id: id,
+          display_name: id,
+          capability: mode,
+        },
+      ]);
+    }
+    setManualID("");
+  }
+
+  async function saveConnection(onlyConnection: boolean) {
+    if (inFlight.current) return;
+    let attempt = pending;
+    if (!attempt) {
+      if (
+        !hasCredentials ||
+        !preset?.id ||
+        !preset.version_id ||
+        (!onlyConnection && selectionCount === 0)
+      )
+        return;
+      attempt = {
+        presetID: preset.id,
+        input: {
+          request_id: crypto.randomUUID(),
+          version_id: preset.version_id,
+          catalog_version: preset.model_catalog?.version,
+          candidate_keys: onlyConnection ? [] : picked,
+          custom_candidates: onlyConnection ? [] : custom,
+          selected_models_only: true,
+        },
+        credentialRequest: crypto.randomUUID(),
+      };
+    }
+
+    inFlight.current = true;
+    setBusy("save");
+    remember(attempt, pending?.input.request_id);
+    setNotice("");
+    let id = attempt.providerID;
+    let writingCredential = false;
+    try {
+      if (!id) {
+        const existing =
+          pending &&
+          (await findReceipt(
+            attempt.input.request_id,
+            "preset.connect",
+            attempt.presetID,
+          ));
+        id = connectionID(existing) ?? undefined;
+        if (!id && mounted.current) {
+          id =
+            connectionID(
+              await connectProviderPreset(
+                { id: attempt.presetID },
+                attempt.input,
+              ),
+            ) ?? undefined;
+        }
+        if (!id) throw new Error("connection receipt missing");
+        remember({ ...attempt, providerID: id }, attempt.input.request_id);
+      }
+      if (!mounted.current) return;
+
+      const existing =
+        pending &&
+        (await findReceipt(attempt.credentialRequest, "credential.set", id));
+      if (existing && !savedCredential(existing, id)) {
+        throw new Error(
+          "credential receipt does not match the pending connection",
+        );
+      }
+      if (!existing) {
+        if (!mounted.current) return;
+        if (!hasCredentials) {
+          setStep(1);
+          setNotice("连接和模型草稿已保存。请重新填写凭据以完成接入。");
+          return;
+        }
+        writingCredential = true;
+        const result = await setAdminCredential(
+          { id },
+          {
+            label: "平台凭据",
+            secret: Object.fromEntries(
+              fields.flatMap((field) => {
+                const name = field.name;
+                const value = name && secret[name]?.trim();
+                return name && value ? [[name, value]] : [];
+              }),
+            ),
+          },
+          { headers: { "Idempotency-Key": attempt.credentialRequest } },
+        );
+        if (!savedCredential(result, id))
+          throw new Error("credential receipt missing");
+      }
+      remember(null, attempt.input.request_id);
+    } catch (error) {
+      if (mounted.current) {
+        if (
+          writingCredential &&
+          id &&
+          error instanceof RequestError &&
+          error.status === 422
+        ) {
+          remember(
+            {
+              ...attempt,
+              providerID: id,
+              credentialRequest: crypto.randomUUID(),
+            },
+            attempt.input.request_id,
+          );
+          setSecret({});
+          setStep(1);
+          setNotice("连接和模型草稿已保存。凭据未通过校验，请重新填写。");
+        } else if (
+          !id &&
+          error instanceof RequestError &&
+          [
+            "revision_conflict",
+            "preset_unavailable",
+            "invalid_preset",
+          ].includes(error.code)
+        ) {
+          remember(null, attempt.input.request_id);
+          setOnline([]);
+          setStep(1);
+          setNotice("预设或选模已失效，请重新确认后保存。");
+        } else {
+          setNotice(
+            id
+              ? "连接和所选模型草稿已保存，凭据结果待确认。可核对原请求并继续。"
+              : "接入结果待确认。可核对原请求并继续。",
+          );
+        }
+      }
+      return;
+    } finally {
+      inFlight.current = false;
+      if (mounted.current) setBusy(null);
+    }
+    if (id && mounted.current) {
+      setSecret({});
+      onCreated(id);
+      onSaved(id);
+    }
+  }
+
   return (
     <form
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-4"
-      onSubmit={async (event) => {
+      className="flex min-h-0 min-w-0 flex-col gap-4"
+      onSubmit={(event) => {
         event.preventDefault();
-        if (
-          busy ||
-          complete ||
-          !apiKey ||
-          (!targetID && (!preset?.id || !preset.version_id))
-        )
-          return;
-        const connectionName = "";
-        setPresetID(selectedPreset);
-        const secret: Record<string, string> = musicCredential
-          ? { access_key_id: accessKeyID, secret_access_key: apiKey }
-          : { api_key: apiKey };
-        setAccessKeyID("");
-        setAPIKey("");
-        setVisible(false);
-        let id = targetID;
-        if (!id) {
-          if (!preset?.id || !preset.version_id) return;
-          const result = await create.run(
-            "preset.connect",
-            preset.id,
-            (requestID) =>
-              connectProviderPreset(
-                { id: preset.id! },
-                {
-                  request_id: requestID,
-                  version_id: preset.version_id,
-                  name: connectionName,
-                  catalog_version: preset.model_catalog?.version,
-                  candidate_keys: catalogKeys,
-                  custom_candidates: selectedCustom.length
-                    ? selectedCustom
-                    : undefined,
-                  direct_use: direct,
-                },
-              ),
-          );
-          id = connectionID(result);
-          if (!id || !mounted.current) return;
-        }
-        await credential.run("credential.set", id, (requestID) =>
-          setAdminCredential(
-            { id },
-            { label: "平台统一 Key", secret },
-            { headers: { "Idempotency-Key": requestID } },
-          ).then((result) => {
-            if (
-              !result.id ||
-              result.provider_id !== id ||
-              result.status !== "active" ||
-              result.last4?.length !== 4
-            )
-              throw new RequestError("request_unconfirmed");
-            return result;
-          }),
-        );
+        if (step === 1 && !pending) enterSelection();
+        else void saveConnection(false);
       }}
     >
-      <div className="flex min-h-0 flex-col gap-5 overflow-y-auto">
+      <ol aria-label="接入步骤" className="grid grid-cols-2 gap-2 text-sm">
+        <li
+          aria-current={step === 1 ? "step" : undefined}
+          className="rounded-md bg-muted px-3 py-2 aria-[current=step]:font-semibold"
+        >
+          1. 连接服务
+        </li>
+        <li
+          aria-current={step === 2 ? "step" : undefined}
+          className="rounded-md bg-muted px-3 py-2 aria-[current=step]:font-semibold"
+        >
+          2. 选择模型
+        </li>
+      </ol>
+      {notice && (
+        <Alert role="status">
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      )}
+      {step === 1 ? (
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor={`${fieldID}-provider`}>服务商</FieldLabel>
-            <Select
-              value={selectedPreset}
-              disabled={lockedStep}
-              onValueChange={(id) => {
-                setPresetID(id);
-                setCandidateKeys(null);
-                setCustomCandidates([]);
-                setShowAddCustom(false);
-                setCustomName("");
-                setCustomID("");
-                setAccessKeyID("");
-                setAPIKey("");
-                setVisible(false);
-                setSelectedBrand("all");
-                setCategory(
-                  presets.find((p) => p.id === id)?.model_catalog?.models?.[0]
-                    ?.capability ?? "text.generate",
-                );
-              }}
+            <FieldLabel htmlFor="connect-supplier">供应商</FieldLabel>
+            <NativeSelect
+              id="connect-supplier"
+              value={preset?.id ?? ""}
+              onChange={(event) => changeSupplier(event.target.value)}
+              disabled={!!busy || !!pending || available.length === 0}
             >
-              <SelectTrigger
-                id={`${fieldID}-provider`}
-                className="w-full max-md:min-h-11"
-              >
-                <SelectValue placeholder="选择服务商" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {presets
-                    .filter((p) => !p.archived && !p.emergency_disabled)
-                    .map((p) => (
-                      <SelectItem key={p.id} value={p.id!}>
-                        {p.document?.name}
-                      </SelectItem>
-                    ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+              {!available.length && (
+                <NativeSelectOption value="">
+                  暂无可用供应商预设
+                </NativeSelectOption>
+              )}
+              {available.map((item) => (
+                <NativeSelectOption key={item.id} value={item.id}>
+                  {item.document?.name ?? item.slug ?? item.id}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
           </Field>
-          {musicCredential && (
-            <Field>
-              <FieldLabel htmlFor={`${fieldID}-access-key`}>
-                Access Key ID
-              </FieldLabel>
-              <InputGroup>
-                <InputGroupInput
-                  id={`${fieldID}-access-key`}
-                  type="password"
-                  required
-                  autoComplete="off"
-                  value={accessKeyID}
-                  disabled={complete || busy}
-                  onChange={(event) => setAccessKeyID(event.target.value)}
-                />
-              </InputGroup>
-            </Field>
+          {config?.base_url && (
+            <p className="text-sm break-all text-muted-foreground">
+              {config.base_url}
+            </p>
           )}
-          <Field>
-            <FieldLabel variant="title" htmlFor={`${fieldID}-key`}>
-              {musicCredential ? "Secret Access Key" : "API Key"}
-            </FieldLabel>
-            <InputGroup className="h-10 max-md:h-11">
-              <InputGroupInput
-                className="h-full"
-                id={`${fieldID}-key`}
-                type={visible ? "text" : "password"}
-                required
-                value={apiKey}
-                onChange={(event) => setAPIKey(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                disabled={complete || busy || (!preset && !targetID)}
-                placeholder={
-                  musicCredential
-                    ? "输入 Secret Access Key"
-                    : preset?.document?.config?.adapter_key ===
-                        "volcengine_speech"
-                      ? "输入豆包语音 API Key"
-                      : "输入 API Key"
-                }
-              />
-              <InputGroupAddon
-                align="inline-end"
-                className="py-0 has-[>button]:mr-0"
-              >
-                <InputGroupButton
-                  type="button"
-                  size="icon-sm"
-                  className="max-md:size-11"
-                  aria-label={
-                    musicCredential
-                      ? visible
-                        ? "隐藏 Secret Access Key"
-                        : "显示 Secret Access Key"
-                      : visible
-                        ? "隐藏 API Key"
-                        : "显示 API Key"
-                  }
-                  aria-pressed={visible}
-                  disabled={complete || busy || (!preset && !targetID)}
-                  onClick={() => setVisible((v) => !v)}
-                >
-                  {visible ? (
-                    <EyeOff data-icon="inline-start" />
-                  ) : (
-                    <Eye data-icon="inline-start" />
-                  )}
-                </InputGroupButton>
-              </InputGroupAddon>
-            </InputGroup>
-            {preset?.document?.config?.adapter_key === "volcengine_speech" ? (
-              <FieldDescription>使用豆包语音 API Key</FieldDescription>
-            ) : null}
-          </Field>
-        </FieldGroup>
-        {models.length ? (
-          <Collapsible>
-            <CollapsibleTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className="group w-full justify-start px-0"
-              >
-                <span>接入模型</span>
-                <span className="ml-auto text-muted-foreground">
-                  {candidateKeys.length} 个
-                </span>
-                <ChevronDown
-                  data-icon="inline-end"
-                  className="transition-transform group-data-[state=open]:rotate-180"
+          {fields.map((field) => {
+            const name = field.name ?? "api_key";
+            return (
+              <Field key={name}>
+                <FieldLabel htmlFor={"connect-" + name}>
+                  {credentialLabels[name] ?? name}
+                </FieldLabel>
+                <Input
+                  id={"connect-" + name}
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={secret[name] ?? ""}
+                  disabled={!!busy || !preset}
+                  onChange={(event) => {
+                    setSecret({ ...secret, [name]: event.target.value });
+                    setCustom((current) =>
+                      current.filter(
+                        (model) =>
+                          !online.includes(model.provider_model_id ?? ""),
+                      ),
+                    );
+                    if (online.includes(manualID)) setManualID("");
+                    setOnline([]);
+                  }}
                 />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <FieldSet
-                disabled={busy || complete || !!targetID || !!create.pending}
-                className="min-w-0 gap-1"
-              >
-                <FieldLegend variant="label" className="sr-only">
-                  选择模型
-                </FieldLegend>
-                <div className="flex min-h-8 flex-wrap items-center gap-2">
-                  <FieldTitle aria-hidden="true">选择模型</FieldTitle>
-                  <span
-                    role="status"
-                    className="ml-auto text-xs text-muted-foreground"
+              </Field>
+            );
+          })}
+        </FieldGroup>
+      ) : (
+        <FieldSet
+          disabled={!!busy || !!pending}
+          className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto"
+        >
+          <FieldLegend className="sr-only">选择模型</FieldLegend>
+          <ModelCatalogChoices
+            models={models}
+            online={online}
+            picked={picked}
+            searchRef={searchInput}
+            canSelect={(model) =>
+              picked.includes(model.key!) || selectionCount < 64
+            }
+            onPreset={(model) => {
+              const key = model.key!;
+              setPicked((current) =>
+                current.includes(key)
+                  ? current.filter((item) => item !== key)
+                  : [...current, key],
+              );
+            }}
+            onOnline={(id) => {
+              setManualID(id);
+              setShowManual(true);
+            }}
+          />
+          {modes.length > 0 && !showManual && (
+            <Button
+              type="button"
+              variant="outline"
+              className="self-start"
+              onClick={() => setShowManual(true)}
+            >
+              手动添加模型
+            </Button>
+          )}
+          {modes.length > 0 && showManual && (
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="connect-manual-model">
+                  手动添加模型 ID
+                </FieldLabel>
+                <Input
+                  id="connect-manual-model"
+                  maxLength={200}
+                  value={manualID}
+                  onChange={(event) => setManualID(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addManualModel();
+                    }
+                  }}
+                />
+              </Field>
+              <div className="flex flex-wrap items-end gap-2">
+                <Field className="w-auto">
+                  <FieldLabel htmlFor="connect-capability">能力</FieldLabel>
+                  <NativeSelect
+                    id="connect-capability"
+                    value={mode}
+                    onChange={(event) =>
+                      setManualCapability(event.target.value)
+                    }
                   >
-                    已选 {candidateKeys.length}
+                    {modes.length > 1 && (
+                      <NativeSelectOption value="" disabled>
+                        选择能力
+                      </NativeSelectOption>
+                    )}
+                    {modes.map((value) => (
+                      <NativeSelectOption key={value} value={value}>
+                        {capabilities[value] ?? value}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    !mode ||
+                    !manualID.trim() ||
+                    /\s/u.test(manualID.trim()) ||
+                    selectionCount >= 64
+                  }
+                  onClick={addManualModel}
+                >
+                  加入所选
+                </Button>
+              </div>
+            </FieldGroup>
+          )}
+          {custom.length > 0 && (
+            <ul
+              className="flex flex-col gap-1 text-sm"
+              aria-label="手动添加的模型"
+            >
+              {custom.map((model) => (
+                <li
+                  key={model.key}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="min-w-0 break-all">
+                    {model.provider_model_id} ·{" "}
+                    {capabilities[model.capability ?? ""]} · 待配置
                   </span>
                   <Button
                     type="button"
-                    variant="ghost"
                     size="sm"
-                    className="max-md:h-11"
-                    disabled={
-                      busy ||
-                      complete ||
-                      !!targetID ||
-                      !!create.pending ||
-                      !selectable.length
-                    }
+                    variant="ghost"
+                    aria-label={"移除 " + model.provider_model_id}
                     onClick={() =>
-                      setCandidateKeys(
-                        allSelected ? [] : selectable.map((m) => m.key!),
+                      setCustom((current) =>
+                        current.filter((item) => item.key !== model.key),
                       )
                     }
                   >
-                    {allSelected ? "取消全选" : "全选"}
+                    移除
                   </Button>
-                </div>
-                <Tabs
-                  value={category}
-                  onValueChange={(val) => {
-                    setCategory(val);
-                    setSelectedBrand("all");
-                  }}
-                  className="min-w-0 gap-1"
-                >
-                  <TabsList
-                    variant="navigation"
-                    className="w-full group-data-horizontal/tabs:h-10 max-md:group-data-horizontal/tabs:h-12"
-                    aria-label="模型类型"
-                  >
-                    {[
-                      ["text.generate", "文本"],
-                      ["video.generate", "视频"],
-                      ["audio.generate", "音频"],
-                      ["image.generate", "图片"],
-                    ].map(([value, label]) => (
-                      <TabsTrigger key={value} value={value}>
-                        {label}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                  {[
-                    ["text.generate", "文本"],
-                    ["video.generate", "视频"],
-                    ["audio.generate", "音频"],
-                    ["image.generate", "图片"],
-                  ].map(([value, label]) => {
-                    const visibleModels = models.filter((m) =>
-                      value === "audio.generate"
-                        ? m.capability?.startsWith("audio.")
-                        : m.capability === value,
-                    );
-                    const availableBrands = (
-                      ["ChatGPT", "Anthropic", "Gemini", "Grok"] as const
-                    ).filter((b) =>
-                      visibleModels.some((m) => getCandidateBrand(m) === b),
-                    );
-                    const hasMultipleBrands = availableBrands.length > 1;
-                    const displayedModels =
-                      hasMultipleBrands && selectedBrand !== "all"
-                        ? visibleModels.filter(
-                            (m) => getCandidateBrand(m) === selectedBrand,
-                          )
-                        : visibleModels;
-                    return (
-                      <TabsContent
-                        key={value}
-                        value={value}
-                        className="max-h-60 overflow-y-auto py-1"
-                      >
-                        {isMultiBrand || hasMultipleBrands ? (
-                          <ToggleGroup
-                            type="single"
-                            value={selectedBrand}
-                            onValueChange={(value) => {
-                              if (value) setSelectedBrand(value);
-                            }}
-                            variant="pill"
-                            size="sm"
-                            aria-label="按模型品牌筛选"
-                            className="sticky top-0 z-10 mb-1.5 flex-wrap bg-background/95 px-2 py-1.5 backdrop-blur"
-                          >
-                            <ToggleGroupItem value="all">
-                              全部 ({visibleModels.length})
-                            </ToggleGroupItem>
-                            {availableBrands.map((brand) => (
-                              <ToggleGroupItem key={brand} value={brand}>
-                                {brand} (
-                                {
-                                  visibleModels.filter(
-                                    (model) =>
-                                      getCandidateBrand(model) === brand,
-                                  ).length
-                                }
-                                )
-                              </ToggleGroupItem>
-                            ))}
-                          </ToggleGroup>
-                        ) : null}
-                        {displayedModels.length ? (
-                          <FieldGroup className="gap-0">
-                            {displayedModels.map((candidate) => {
-                              const brand = getCandidateBrand(candidate);
-                              return (
-                                <Field
-                                  key={candidate.key}
-                                  orientation="horizontal"
-                                  data-disabled={
-                                    candidate.requires_model_selection ||
-                                    undefined
-                                  }
-                                  className="min-h-10 gap-2 px-2 max-md:min-h-11"
-                                >
-                                  <Checkbox
-                                    id={fieldID + "-candidate-" + candidate.key}
-                                    disabled={
-                                      candidate.requires_model_selection ||
-                                      busy ||
-                                      complete ||
-                                      !!targetID ||
-                                      !!create.pending
-                                    }
-                                    checked={candidateKeys.includes(
-                                      candidate.key!,
-                                    )}
-                                    onCheckedChange={(checked) =>
-                                      setCandidateKeys(
-                                        checked === true
-                                          ? [...candidateKeys, candidate.key!]
-                                          : candidateKeys.filter(
-                                              (key) => key !== candidate.key,
-                                            ),
-                                      )
-                                    }
-                                  />
-                                  <FieldLabel
-                                    htmlFor={
-                                      fieldID + "-candidate-" + candidate.key
-                                    }
-                                    className="min-h-10 min-w-0 flex-1 items-center py-2 max-md:min-h-11"
-                                  >
-                                    <FieldTitle className="flex min-w-0 items-center gap-1.5 break-words">
-                                      <span>{candidate.display_name}</span>
-                                      {brand ? (
-                                        <Badge
-                                          variant="secondary"
-                                          className="px-1.5 py-0 text-[10px] font-normal"
-                                        >
-                                          {brand}
-                                        </Badge>
-                                      ) : null}
-                                    </FieldTitle>
-                                    {candidate.requires_model_selection ? (
-                                      <span>需配置</span>
-                                    ) : null}
-                                    {candidate.lifecycle === "sunsetting" ? (
-                                      <Badge variant="outline">即将下线</Badge>
-                                    ) : null}
-                                  </FieldLabel>
-                                </Field>
-                              );
-                            })}
-                          </FieldGroup>
-                        ) : (
-                          <Empty className="min-h-24 p-4">
-                            <EmptyHeader>
-                              <EmptyDescription>
-                                暂无可接入的{label}模型
-                              </EmptyDescription>
-                            </EmptyHeader>
-                          </Empty>
-                        )}
-                      </TabsContent>
-                    );
-                  })}
-                </Tabs>
-                <div className="flex flex-col gap-3 pt-2">
-                  <Separator />
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    aria-expanded={showAddCustom}
-                    onClick={() => setShowAddCustom((value) => !value)}
-                  >
-                    <Plus data-icon="inline-start" />
-                    {showAddCustom ? "收起添加模型" : "添加自定义模型"}
-                  </Button>
-                  {showAddCustom ? (
-                    <div className="flex flex-col gap-3">
-                      <FieldGroup className="grid gap-3 sm:grid-cols-2">
-                        <Field>
-                          <FieldLabel htmlFor={`${fieldID}-custom-name`}>
-                            模型名称
-                          </FieldLabel>
-                          <Input
-                            id={`${fieldID}-custom-name`}
-                            placeholder="模型名称（如 Claude Sonnet 5.5）"
-                            value={customName}
-                            onChange={(e) => setCustomName(e.target.value)}
-                            className="max-md:h-11"
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor={`${fieldID}-custom-id`}>
-                            上游模型 ID
-                          </FieldLabel>
-                          <Input
-                            id={`${fieldID}-custom-id`}
-                            placeholder="上游标识（如 anthropic/claude-sonnet-5.5）"
-                            value={customID}
-                            onChange={(e) => setCustomID(e.target.value)}
-                            className="max-md:h-11"
-                          />
-                        </Field>
-                      </FieldGroup>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">
-                          分类：
-                          {category === "text.generate"
-                            ? "文本"
-                            : category === "image.generate"
-                              ? "图片"
-                              : category === "video.generate"
-                                ? "视频"
-                                : "音频"}
-                        </span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          className="max-md:h-11"
-                          disabled={!customName.trim() || !customID.trim()}
-                          onClick={() => {
-                            const key = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-                            const newModel: API.ModelCandidatePreset = {
-                              key,
-                              adapter_key:
-                                preset?.document?.config?.adapter_key,
-                              display_name: customName.trim(),
-                              provider_model_id: customID.trim(),
-                              capability: category,
-                              modes:
-                                category === "image.generate"
-                                  ? ["text2image"]
-                                  : category === "video.generate"
-                                    ? ["text2video"]
-                                    : ["text_to_text"],
-                              lifecycle: "active",
-                            };
-                            setCustomCandidates((prev) => [...prev, newModel]);
-                            setCandidateKeys([...candidateKeys, key]);
-                            setCustomName("");
-                            setCustomID("");
-                            setShowAddCustom(false);
-                          }}
-                        >
-                          添加模型
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </FieldSet>
-            </CollapsibleContent>
-          </Collapsible>
-        ) : null}
-        {targetID ? (
-          <p role="status" className="text-sm">
-            {complete
-              ? "服务已接入。"
-              : "连接已创建，请继续保存 Key；结果待确认时先查询回执。"}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            已选 {selectionCount} 个模型。保存后可在模型管理中配置和验证。
           </p>
-        ) : null}
-        {create.pending || (!targetID && create.message) ? (
-          <MutationStatus
-            inline
-            mutation={{
-              ...create,
-              message: targetID ? "" : create.message,
-              recover: async () => {
-                setPresetID(selectedPreset);
-                await create.recover();
-              },
-            }}
-          />
-        ) : null}
-        {credential.pending || (!complete && credential.message) ? (
-          <MutationStatus
-            inline
-            mutation={{
-              ...credential,
-              message: complete ? "" : credential.message,
-            }}
-          />
-        ) : null}
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-        {onCancel ? (
+        </FieldSet>
+      )}
+      <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
+        {pending ? (
           <Button
             type="button"
-            variant="ghost"
-            className="max-md:h-11"
-            onClick={onCancel}
+            disabled={!!busy}
+            onClick={() => void saveConnection(false)}
           >
-            取消
+            {busy === "save" ? "正在保存…" : "核对并继续保存"}
           </Button>
-        ) : null}
-        {!complete ? (
-          <Button
-            className="max-md:h-11"
-            disabled={busy || (!preset && !targetID) || !apiKey}
-          >
-            {busy ? <Spinner data-icon="inline-start" /> : null}
-            {busy ? "接入中…" : targetID ? "保存 API Key" : "接入服务"}
-          </Button>
-        ) : null}
+        ) : step === 1 ? (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={!!busy}
+              onClick={() => {
+                setSecret({});
+                onCancel?.();
+              }}
+            >
+              取消
+            </Button>
+            {canRead && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!hasCredentials || !!busy}
+                onClick={() => void readDirectory()}
+              >
+                {busy === "read" ? "正在读取…" : "读取模型"}
+              </Button>
+            )}
+            <Button type="submit" disabled={!hasCredentials || !!busy}>
+              {models.length ? "查看预置模型" : "手动添加模型"}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={!!busy}
+              onClick={() => {
+                setStep(1);
+                setNotice("");
+              }}
+            >
+              上一步
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!!busy || selectionCount > 0}
+              onClick={() => void saveConnection(true)}
+            >
+              仅保存连接
+            </Button>
+            <Button type="submit" disabled={!!busy || selectionCount === 0}>
+              保存接入
+            </Button>
+          </>
+        )}
       </div>
     </form>
   );

@@ -110,6 +110,11 @@ func (s *Store) updateProviderWithEvents(ctx context.Context, actor identityapp.
 			current.RateLimitPerMin != before.RateLimitPerMin {
 			return ErrRevisionConflict
 		}
+		if current.Status != domain.ProviderActive && after.Status == domain.ProviderActive {
+			if err := requireReviewedLegacyReleases(tx, after.ID, uuid.Nil); err != nil {
+				return err
+			}
+		}
 		if err := NewStore(tx).UpdateProvider(ctx, after, before.Revision); err != nil {
 			return err
 		}
