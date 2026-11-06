@@ -47,7 +47,7 @@ cd glowloom
 
 1. 可用的 PostgreSQL、Redis、Kafka 与对象存储。
 2. `.env` 中的依赖连接、身份与会话密钥、协作令牌、两个方向独立的 Agent 服务令牌与受限 PostgreSQL DSN；模型接入另需凭据加密与请求 MAC 密钥。
-3. 与运行版本匹配的业务库结构。空库预先创建受限 `glowloom_agent` 登录角色并加载当前 `schema.sql`；已有库先清结旧在途，离线审阅当前 Agent/业务任务 SQL。应用不执行 DDL，不对存量库重放空库结构。
+3. 与运行版本匹配的 PostgreSQL 结构。空库使用 [schema.sql](backend/db/schema.sql) 初始化。已有库在部署前核对实际结构。
 
 确认端口可用后，在仓库根目录启动：
 
@@ -81,21 +81,27 @@ docker compose up -d --build --no-deps --wait frontend
 已有可用镜像时，单独启动前端可用 `docker compose up -d --no-build --no-deps --wait frontend`。在当前服务上执行 `docker compose ps` 并访问两个端口的 `/healthz` 即可确认启动状态。
 
 <details>
-<summary>配置、存量数据库升级与运行注意事项</summary>
+<summary>配置、数据库初始化与运行注意事项</summary>
 
 两端的浏览器 Origin 同步固定为 `http://localhost:1122`，忽略 `.env` 中旧的 Origin，避免端口切换后登录或写入被 Origin 校验拒绝。worker/relay 健康检查在容器内执行，不额外开放宿主端口。
 
-现有 PostgreSQL、Redis、Kafka、COS、身份密钥及 `.env` 须提前准备。Compose 复用这些资源，数据库升级在部署前独立执行。已有业务库仍绑定旧存储时，先完成 [COS 切换检查](docs/COS配置说明.md#存量迁移与部署)，再重建或重启后端。
+现有 PostgreSQL、Redis、Kafka、COS、身份密钥及 `.env` 须提前准备。Compose 复用这些资源，数据库结构在部署前独立核对。
 
-Agent 启动前须由结构所有者创建专用 LOGIN 角色 `glowloom_agent`，使用独立密码，离线安装当前 SQL 与表级授权；空库只执行一次 `backend/db/schema.sql`，已有库按[一次性离线切换清单](backend/db/agent_cutover.md)盘点、备份、演练与核对权限，应用启动不运行 DDL。配置 `GLOWLOOM_AGENT_DB_DSN` 使用该受限角色，`GLOWLOOM_AGENT_SERVICE_TOKEN` 和 `GLOWLOOM_AGENT_BUSINESS_TOKEN` 为两个不同的至少32字节凭据；Go 不能把自己的业务库账号复用于 Agent。
+部署管理员预建 `glowloom_app NOLOGIN NOSUPERUSER` 和独立的受限 `glowloom_agent LOGIN NOSUPERUSER`，通过受保护的渠道配置登录凭据。由结构所有者执行一次空库初始化：
 
-旧画布库须先按[画布增量升级记录](docs/plan/17-画布数据库持久化与DAG实施计划.md#75-本地存量画布增量升级2026-10-23)核对、备份并演练，再由结构所有者执行 `backend/db/canvas_protocol_incremental.sql`。不得对存量库重放 `schema.sql`。容器健康不代表业务表已升级，仍需验证真实画布读取。
+```sh
+psql "$GLOWLOOM_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql
+```
+
+应用启动依赖已初始化的业务结构。配置 `GLOWLOOM_AGENT_DB_DSN` 使用该受限角色，`GLOWLOOM_AGENT_SERVICE_TOKEN` 和 `GLOWLOOM_AGENT_BUSINESS_TOKEN` 为两个不同的至少32字节凭据；Go 不能把自己的业务库账号复用于 Agent。
+
+已有业务库以 PostgreSQL 中的实际结构为准。部署前从相同版本的 `schema.sql` 建立隔离参考库，再用同版本的 PostgreSQL 18 客户端对两库分别执行 `pg_dump --schema-only --restrict-key=GlowloomSchemaCompare`，核对表、约束、索引、触发器和授权。按实际时间核对月分区，按环境核对所有者。发现结构差异时暂停部署并由数据库管理员处理。完整 schema 仅允许用于空库。详见 [PostgreSQL pg_dump 文档](https://www.postgresql.org/docs/18/app-pgdump.html)。
 
 启动前确认1122和1123未被占用：`lsof -nP -iTCP:1122 -iTCP:1123 -sTCP:LISTEN`。若被其他进程占用，应先协调端口冲突，再启动应用。启动后使用 `docker compose ps` 查看状态，使用 `docker compose logs --tail=100 backend` 排查启动错误；可分别请求前端、后端的 `/healthz` 检查访问链路。
 
 身份与会话密钥由 `.env` 直接注入，配置名及格式见 `.env.example`：`GLOWLOOM_IDENTITY_KEY`、`GLOWLOOM_IDENTITY_JWT_PRIVATE_KEY`、`GLOWLOOM_IDENTITY_JWT_VERIFY_KEYS`、`GLOWLOOM_IDENTITY_JWT_ACTIVE_KID`、`GLOWLOOM_IDENTITY_REFRESH_RECEIPT_KEY`。JWT 私钥使用 Base64 PEM，验证映射为 KID 到 Base64 公钥 PEM 的 JSON，回执密钥为独立32字节 Base64值；运行时不加载独立密钥文件或 Compose secret 挂载。已有密钥不得随启动重新生成，缺失密钥按恢复授权处理，身份主密钥必须保留。
 
-模型预设接入还需要独立的凭据加密 RSA 密钥对与请求 MAC 密钥，配置四个 `GLOWLOOM_CREDENTIAL_*` 项（见 `.env.example`）。采用 PEM 环境值，或由部署环境明确提供容器内只读密钥文件并配置对应 FILE 项；当前 Compose 不自动挂载宿主凭据目录。首次配置使用至少 2048 位 RSA 的 PKCS8 私钥及 PKIX 公钥；请求 MAC 密钥为随机 32 字节的十六进制编码。密钥文件和 `.env` 不进入 Git，已有加密凭据对应的密钥必须保留，不在启动时自动重新生成。配置私钥后 `--role=all` 会同时消费 `provider` 队列；独立部署仍通过 `--role=worker --queues=provider` 运行。旧库使用结构所有者执行 `backend/db/provider_onboarding_incremental.sql` 增量升级，不重放全库 schema。
+模型预设接入还需要独立的凭据加密 RSA 密钥对与请求 MAC 密钥，配置四个 `GLOWLOOM_CREDENTIAL_*` 项（见 `.env.example`）。采用 PEM 环境值，或由部署环境明确提供容器内只读密钥文件并配置对应 FILE 项；当前 Compose 不自动挂载宿主凭据目录。首次配置使用至少 2048 位 RSA 的 PKCS8 私钥及 PKIX 公钥；请求 MAC 密钥为随机 32 字节的十六进制编码。密钥文件和 `.env` 不进入 Git，已有加密凭据对应的密钥必须保留，不在启动时自动重新生成。配置私钥后 `--role=all` 会同时消费 `provider` 队列；独立部署仍通过 `--role=worker --queues=provider` 运行。
 
 Go 二进制和 Next.js 构建产物均在镜像构建阶段生成，容器启动时直接运行镜像内产物。变更代码、依赖、Dockerfile 或 Compose 配置后，使用上述带 `--build` 的命令更新对应服务。构建会纳入工作区当前源码，包括未提交修改。
 

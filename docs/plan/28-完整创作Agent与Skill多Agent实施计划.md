@@ -27,7 +27,7 @@
 | backend/internal/platform/taskruntime                              | 领取/租约/续租/有界并发的窄运行时，无领域执行状态机                |
 | 各领域 adapter/task、application、postgres                         | 当前后台任务执行、结果及副作用幂等；业务模块保留本身权威           |
 | backend/internal/app、cmd/glowloom、platform/config                | 删除旧连接/worker/schedule 接线并接入当前模块                      |
-| backend/db/agent_storage.sql、agent_business.sql、task_runtime.sql | 可独立审阅的当前结构片段，再同步至 schema.sql；离线切换另列        |
+| backend/db/schema.sql | 空库完整结构，覆盖 Agent 运行、业务授权与任务        |
 | frontend AgentWorkspace、backend 注解及生成 API                    | 当前交互/控制/事件合同，无旧分阶段入口                             |
 | docker-compose.yml、.env.example、CI、根文档与主题文档             | 单入口、角色隔离、工程门禁和失效描述清理                           |
 
@@ -56,7 +56,7 @@
 
 ### Task 2：真实 PostgreSQL 官方 Storage
 
-文件：agent/src/adapters/postgres/pi-durable/postgres.ts、records.ts、ownership.ts；agent/tests/storage/conformance.test.ts、recovery.test.ts；backend/db/agent_storage.sql。
+文件：agent/src/adapters/postgres/pi-durable/postgres.ts、records.ts、ownership.ts；agent/tests/storage/conformance.test.ts、recovery.test.ts；backend/db/schema.sql。
 
 接口：openPostgresStorage(pool, sessionId, owner) 返回官方 Storage 及 close；owner={id,epoch,leaseUntil}。以 session 为 Storage 分区，包含根与全部 owned children；SQL 静态定义，不在 open 中建表。
 
@@ -82,7 +82,7 @@
 
 ### Task 4：Go 业务授权与公共代理
 
-文件：backend/internal/agent/domain、application、adapter/http、adapter/postgres、adapter/runtimeclient（当前职责重建）；backend/internal/app/agent.go、public_api.go；backend/db/agent_business.sql；backend/tests/agentbusiness。
+文件：backend/internal/agent/domain、application、adapter/http、adapter/postgres、adapter/runtimeclient（当前职责重建）；backend/internal/app/agent.go、public_api.go；backend/db/schema.sql；backend/tests/agentbusiness。
 
 接口：公共 /api/projects/:pid/agent/sessions 与 session runs/commands/events；删除旧 agent-sessions/advance/confirm/turns。Go→agent 带经认证 actor/project/canvas 与服务 token；agent→Go 使用另一 token。
 
@@ -137,7 +137,7 @@
 
 ### Task 8：普通任务数据库领取运行时
 
-文件：backend/internal/platform/taskruntime、backend/db/task_runtime.sql；backend/tests/taskruntime。
+文件：backend/internal/platform/taskruntime、backend/db/schema.sql；backend/tests/taskruntime。
 
 接口：Handler(ctx, Job) 返回持久结果/next_run_at；Store Enqueue/Claim/Renew/Complete/Reschedule 检查 owner/epoch/lease。Enqueue 可绑定现有业务事务，业务 ID 唯一，队列只唤醒原任务。
 
@@ -194,7 +194,7 @@
 
 ### Task 13：统一 Compose、数据库角色与 CI
 
-文件：docker-compose.yml、.env.example、agent/Dockerfile、CI、SQL 空库汇总/离线增量及测试初始化；既有库切换使用 [离线清单](../../backend/db/agent_cutover.md) 与配套 inventory/blockers/cutover SQL。
+文件：docker-compose.yml、.env.example、agent/Dockerfile、CI、空库 SQL 与测试初始化统一使用 `backend/db/schema.sql`。已有库在部署前核对实际结构。
 
 - [ ] 先验证配置缺 token/受限 DSN 明确失败，当前四服务拓扑无相互 healthy 等待。
 - [ ] agent 仅 expose 4401、非 root/只读/资源限额，独立关闭/健康；backend 取消旧连接及7233转发，保留 frontend1122/backend1123。
@@ -218,6 +218,6 @@
 
 ## 4. 接口依赖与交付判定
 
-Task1→2/3；Task2/3→6；Task4/5与6共享 scope/grant/call/控制回执合同；Task6→7；Task8→9/10；Task4/9/10→11；Task3/4/6→12；Task1～12→13；全部→14。独立切片可并行，改同一文件必须单一写入者，SQL 先各自片段再汇总。
+Task1→2/3；Task2/3→6；Task4/5与6共享 scope/grant/call/控制回执合同；Task6→7；Task8→9/10；Task4/9/10→11；Task3/4/6→12；Task1～12→13；全部→14。独立切片可并行，改同一文件必须单一写入者，数据库定义直接维护在 `backend/db/schema.sql`。
 
 每项交付均须说明：实际文件、先失败后通过的测试、命令及输出、未覆盖外部条件。当前包能导入、旧测试通过、端口健康或文档完整均不等于该项完成。未完成项留在 BACKLOG 持续推进；不保留旧引擎作为临时完成替代。

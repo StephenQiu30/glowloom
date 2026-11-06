@@ -30,6 +30,7 @@ func personalHistoryPostgres(t *testing.T) *gorm.DB {
 	if err := database.Raw(`SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('workspace','operation','catalog','media')`).Scan(&existing).Error; err != nil || existing != 0 {
 		t.Fatalf("requires a fresh isolated DB: schemas=%d err=%v", existing, err)
 	}
+	// Minimal query fixture allows malformed receipt evidence and cross-scope rows.
 	const ddl = `CREATE SCHEMA workspace;CREATE SCHEMA operation;CREATE SCHEMA catalog;CREATE SCHEMA media;` + businessSQLLocationTables + `
  CREATE TABLE workspace.project(id uuid PRIMARY KEY,org_id uuid,owner_scope_id uuid,status text DEFAULT 'active',is_delete boolean DEFAULT false);
  CREATE TABLE catalog.model_profile(id uuid PRIMARY KEY,model_key text,display_name text);
@@ -41,15 +42,40 @@ func personalHistoryPostgres(t *testing.T) *gorm.DB {
  CREATE TABLE operation.operation_output(id uuid PRIMARY KEY,project_id uuid,operation_id uuid,seq_no int,kind text,media_asset_id uuid,json_payload jsonb,moderation_status text,create_time timestamptz,is_delete boolean DEFAULT false);
  CREATE TABLE operation.prompt_submission(operation_id uuid,actor_id uuid,project_id uuid);
  CREATE TABLE operation.quote_request(org_id uuid,actor_id uuid,result jsonb);
- CREATE TABLE media.media_asset(id uuid PRIMARY KEY,project_id uuid,object_key text NOT NULL,object_location_id uuid NOT NULL REFERENCES media.object_location(id),status text,moderation_status text,kind text DEFAULT 'image',width int,height int,duration_ms bigint,is_delete boolean DEFAULT false);`
+ CREATE TABLE media.media_asset(id uuid PRIMARY KEY,project_id uuid,object_key text NOT NULL,object_location_id uuid NOT NULL REFERENCES media.object_location(id),status text,moderation_status text,kind text DEFAULT 'image',width int,height int,duration_ms bigint,is_delete boolean DEFAULT false);
+CREATE TABLE operation.personal_history_record (
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ operation_id uuid NOT NULL REFERENCES operation.operation(id),
+ revision bigint NOT NULL DEFAULT 0 CHECK(revision>=0),
+ deleted_at timestamptz,
+ PRIMARY KEY(actor_id,org_id,scope_id,operation_id)
+);
+CREATE TABLE operation.personal_history_output (
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ operation_id uuid NOT NULL REFERENCES operation.operation(id),
+ output_id uuid NOT NULL REFERENCES operation.operation_output(id),
+ revision bigint NOT NULL DEFAULT 0 CHECK(revision>=0),
+ favorite boolean NOT NULL DEFAULT false,
+ deleted_at timestamptz,
+ PRIMARY KEY(actor_id,org_id,scope_id,operation_id,output_id)
+);
+CREATE INDEX personal_history_output_favorite_idx
+ ON operation.personal_history_output(actor_id,org_id,scope_id,operation_id) WHERE favorite AND deleted_at IS NULL;
+CREATE TABLE operation.personal_history_command_receipt (
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ request_id uuid NOT NULL,
+ request_hash text NOT NULL,
+ response jsonb NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(actor_id,org_id,scope_id,request_id)
+);`
 	if err := database.Exec(ddl).Error; err != nil {
-		t.Fatal(err)
-	}
-	migration, err := os.ReadFile("../../db/personal_history_incremental.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Exec(string(migration)).Error; err != nil {
 		t.Fatal(err)
 	}
 	return database

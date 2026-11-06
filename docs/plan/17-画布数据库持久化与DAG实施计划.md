@@ -58,7 +58,7 @@
 处理与验证：
 
 1. 对本地库执行完整custom-format备份，保存到权限0700的本机私有目录；没有打印DSN、密钥或备份数据。备份在无网络的隔离PostgreSQL 18 Docker容器中成功恢复。
-2. 另建空参考库，仅对空库执行schema.sql；比较全部canvas表的列、默认值、约束、索引与权限，依据差异编写[canvas_protocol_incremental.sql](../../backend/db/canvas_protocol_incremental.sql)。脚本只新增字段、扩展修订号类型、设置新文档默认值并保护回执。旧operation_version、历史client身份、业务节点和回执内容不重写。
+2. 另建空参考库，仅对空库执行schema.sql；比较全部canvas表的列、默认值、约束、索引与权限，依据差异编写[canvas_protocol_incremental.sql](https://github.com/StephenQiu30/glowloom/blob/4e41135a5fb5cf7c0ab53d617e599771d67ad607/backend/db/canvas_protocol_incremental.sql)。脚本只新增字段、扩展修订号类型、设置新文档默认值并保护回执。旧operation_version、历史client身份、业务节点和回执内容不重写。
 3. 在恢复副本执行增量并与参考结构核对；逐表行数和原有JSON值摘要一致，覆盖document/node/edge/command_log/node_input/save_receipt及两张复制表。事务ROLLBACK、重复执行、受限角色禁止改写回执均通过。
 4. 暂停Docker后端，在本地库以`psql --single-transaction -v ON_ERROR_STOP=1`执行增量；lock_timeout为5秒，statement_timeout为60秒，失败整笔回滚。随后通过Docker Compose启动后端并等待healthy。没有对存量库重放schema.sql。
 5. 用户原Chrome登录会话的目标画布已实际读取：项目素材、历史图片生成节点、正文引用与连线均显示。该画布含本轮编辑器未支持的业务节点，因此只读展示，不修改图、不启动写入会话。

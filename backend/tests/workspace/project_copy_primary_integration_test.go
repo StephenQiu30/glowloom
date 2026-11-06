@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -35,13 +34,6 @@ func primaryRepairStore(db *gorm.DB) *workspacepg.CopyPrimaryRepairStore {
 
 func historicalPrimaryCopy(ctx context.Context, t *testing.T, db *gorm.DB) (identityapp.Principal, domain.ProjectCopyJob, []uuid.UUID) {
 	t.Helper()
-	migration, err := os.ReadFile("../../db/project_copy_primary_repair_incremental.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 2 {
-		lifecycleFixtureSQL(t, db, string(migration))
-	}
 	actor, source := lifecycleActorProject(ctx, t, db)
 	canvas := canvasfixture.NewService(workspaceCanvasStore(db, nil))
 	var documents []uuid.UUID

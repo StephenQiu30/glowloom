@@ -19,7 +19,7 @@ import (
 func TestClaimRollbackDedupAndFence(t *testing.T) {
 	dsn := os.Getenv("GLOWLOOM_TEST_TASK_DB_DSN")
 	if dsn == "" {
-		t.Skip("requires isolated task DB with task_runtime.sql installed")
+		t.Skip("requires isolated task DB with db/schema.sql installed")
 	}
 	db, err := gorm.Open(postgres.Open(dsn))
 	if err != nil {

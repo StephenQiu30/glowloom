@@ -2,8 +2,6 @@ package media_test
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +13,7 @@ import (
 )
 
 func TestStorageEmptyDeploymentMeasuresDatabaseAndCannotInventLegacy(t *testing.T) {
-	tx := storageLedgerMigrationFixture(t, "canonical")
+	tx := storageSchemaFixture(t)
 	routes := pgmedia.NewStorageRoutes(tx)
 	sha := strings.Repeat("a", 64)
 	proof, err := routes.ProveEmptyStorageDeployment(t.Context(), sha)
@@ -42,7 +40,7 @@ func TestStorageEmptyDeploymentMeasuresDatabaseAndCannotInventLegacy(t *testing.
 }
 
 func TestStorageEmptyProofRejectsInvalidConfigAndWorkCreatedAfterMeasurement(t *testing.T) {
-	tx := storageLedgerMigrationFixture(t, "canonical")
+	tx := storageSchemaFixture(t)
 	routes := pgmedia.NewStorageRoutes(tx)
 	sha := strings.Repeat("d", 64)
 	if _, err := routes.ProveEmptyStorageDeployment(t.Context(), "invalid"); !errors.Is(err, media.ErrStorageNotReady) {
@@ -65,25 +63,8 @@ func TestStorageEmptyProofRejectsInvalidConfigAndWorkCreatedAfterMeasurement(t *
 	}
 }
 
-func TestStoragePipelineVerifierPreservesPhysicalScriptIntentRelationships(t *testing.T) {
-	tx := storageLedgerMigrationFixture(t, "canonical")
-	sql, err := os.ReadFile(filepath.Join("..", "..", "internal", "media", "adapter", "postgres", "storage_finalize.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Exec(string(sql)).Error; err != nil {
-		t.Fatal("canonical physical references rejected", err)
-	}
-	if err := tx.Exec(`ALTER TABLE script.object_state DROP CONSTRAINT object_state_object_location_id_fkey`).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Exec(string(sql)).Error; err == nil {
-		t.Fatal("missing exact script physical FK accepted")
-	}
-}
-
 func TestStorageNativeEmptyBootstrapAllowsLaterGuardedRevisionWithRealWork(t *testing.T) {
-	tx := storageLedgerMigrationFixture(t, "canonical")
+	tx := storageSchemaFixture(t)
 	routes := pgmedia.NewStorageRoutes(tx)
 	sha := strings.Repeat("8", 64)
 	if _, err := routes.ProveEmptyStorageDeployment(t.Context(), sha); err != nil {
@@ -124,27 +105,5 @@ func TestStorageNativeEmptyBootstrapAllowsLaterGuardedRevisionWithRealWork(t *te
 	var legacy int
 	if err := tx.Raw(`SELECT count(*) FROM information_schema.tables WHERE table_schema='media' AND table_name='storage_legacy_binding'`).Scan(&legacy).Error; err != nil || legacy != 0 {
 		t.Fatal("a fake original COS was manufactured", err)
-	}
-}
-
-func TestStorageFinalizationRejectsCompositeFKPointingAtWrongPhysicalFields(t *testing.T) {
-	tx := storageLedgerMigrationFixture(t, "canonical")
-	routes := pgmedia.NewStorageRoutes(tx)
-	sha := strings.Repeat("6", 64)
-	if _, err := routes.ProveEmptyStorageDeployment(t.Context(), sha); err != nil {
-		t.Fatal(err)
-	}
-	if err := routes.FinalizeStorageSchema(t.Context(), sha); err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Exec(`ALTER TABLE media.object_location ADD CONSTRAINT fixture_wrong_identity UNIQUE(id,bucket); ALTER TABLE media.package_object DROP CONSTRAINT package_object_object_location_id_fkey; ALTER TABLE media.package_object ADD CONSTRAINT package_object_wrong_identity FOREIGN KEY(object_location_id,object_key) REFERENCES media.object_location(id,bucket)`).Error; err != nil {
-		t.Fatal(err)
-	}
-	sql, err := os.ReadFile(filepath.Join("..", "..", "internal", "media", "adapter", "postgres", "storage_finalize.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Exec(string(sql)).Error; err == nil {
-		t.Fatal("pipeline verifier accepted FK to wrong physical fields")
 	}
 }

@@ -1,4 +1,4 @@
--- 空业务库的完整结构，只维护本文件。
+-- 当前 PostgreSQL 完整结构与基础数据。开发、CI 和部署使用同一空库定义。
 -- PostgreSQL 18。由结构所有者执行；预建 glowloom_app NOLOGIN NOSUPERUSER 与受限 glowloom_agent LOGIN（凭据离线设置）。
 -- psql "$GLOWLOOM_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql
 -- 禁止对已有业务库重放本文件。
@@ -2216,13 +2216,15 @@ CREATE TABLE mediatool.export_job (
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
     output_kind text DEFAULT 'video'::text NOT NULL,
+    artifact_id uuid,
     CONSTRAINT export_job_actor_role_check CHECK ((actor_role = ANY (ARRAY['admin'::text, 'producer'::text]))),
     CONSTRAINT export_job_attempt_check CHECK (((attempt >= 1) AND (attempt <= 100))),
-    CONSTRAINT export_job_check CHECK (((asset_id IS NULL) = (sha256 IS NULL))),
-    CONSTRAINT export_job_check1 CHECK (((status <> ALL (ARRAY['review_required'::text, 'succeeded'::text])) OR (asset_id IS NOT NULL))),
+    CONSTRAINT export_job_check CHECK((asset_id IS NULL AND artifact_id IS NULL AND sha256 IS NULL) OR (num_nonnulls(asset_id,artifact_id)=1 AND sha256 IS NOT NULL)),
+    CONSTRAINT export_job_check1 CHECK(status NOT IN ('review_required','succeeded') OR num_nonnulls(asset_id,artifact_id)=1),
     CONSTRAINT export_job_check2 CHECK (((status <> 'succeeded'::text) OR (progress = 100))),
     CONSTRAINT export_job_frozen_check CHECK (((jsonb_typeof(frozen) = 'object'::text) AND (octet_length((frozen)::text) <= 1048576))),
-    CONSTRAINT export_job_output_kind_check CHECK ((output_kind = ANY (ARRAY['video'::text, 'audio'::text]))),
+    CONSTRAINT export_job_output_kind_check CHECK(output_kind IN ('video','audio','media_bundle','fcpxml','xmeml','jianying')),
+    CONSTRAINT export_job_output_identity_check CHECK((output_kind IN ('video','audio') AND artifact_id IS NULL) OR (output_kind IN ('media_bundle','fcpxml','xmeml','jianying') AND asset_id IS NULL)),
     CONSTRAINT export_job_progress_check CHECK (((progress >= 0) AND (progress <= 100))),
     CONSTRAINT export_job_revision_check CHECK ((revision > 0)),
     CONSTRAINT export_job_sha256_check CHECK ((sha256 ~ '^[a-f0-9]{64}$'::text)),
@@ -6425,11 +6427,11 @@ INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,cont
 INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES
  ('6da07a12-0000-4000-8000-000000000001','text.generate','json',ARRAY['text_to_text'],ARRAY['prompt']),
  ('6da07a12-0000-4000-8000-000000000002','image.generate','image',ARRAY['text2image','image2image'],ARRAY['prompt','reference_image','subject']),
- ('6da07a12-0000-4000-8000-000000000003','video.generate','video',ARRAY['text2video','image2video','omni_reference'],ARRAY['prompt','first_frame','last_frame','reference_image','subject'])
-ON CONFLICT(key) DO UPDATE SET
- modes=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.modes || EXCLUDED.modes) AS value ORDER BY value),
- input_roles=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.input_roles || EXCLUDED.input_roles) AS value ORDER BY value);
-
+ ('6da07a12-0000-4000-8000-000000000003','video.generate','video',
+  ARRAY['omni_reference','image2video','motion','text2video','avatar'],
+  ARRAY['driving_video','character_image','last_frame','reference_audio','driving_audio','reference_image','prompt','subject','reference_video','first_frame']),
+ ('6da07a12-0000-4000-8000-000000000004','audio.generate','audio',
+  ARRAY['omni_audio','music_instrumental','text2audio','music_song'],ARRAY['reference_audio','reference_image','prompt']);
 
 -- Versioned cloud provider expansion; existing connection snapshots stay pinned.
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a12-0000-4000-8000-000000000001','6da07a10-0000-4000-8000-000000000001',2,'{"schema_version":1,"name":"火山方舟","config":{"adapter_key":"volcengine_ark","base_url":"https://ark.cn-beijing.volces.com/api/v3","region":"domestic","capabilities":["video","text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'77174ea84bdea57c6c3eef8fc352d2eb02a5c1db13645a3c801a05de33b7c94c');
@@ -6443,7 +6445,7 @@ INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-00000000000a','6da07a10-0000-4000-8000-00000000000a',1,'{"schema_version":1,"name":"Vercel","config":{"adapter_key":"vercel","base_url":"https://ai-gateway.vercel.sh/v1","region":"overseas","capabilities":["text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":60}}'::jsonb,'7d956200f9fdcf5c429faeb3abf459a45b09cfcb280366e98f478ef41842e2d2');
 
 -- Project recycle retention worker (metadata only until explicitly scheduled).
-CREATE TABLE IF NOT EXISTS workspace.project_retention_job (
+CREATE TABLE workspace.project_retention_job (
  project_id uuid NOT NULL REFERENCES workspace.project(id),
  org_id uuid NOT NULL,
  owner_scope_id uuid NOT NULL,
@@ -6456,8 +6458,8 @@ CREATE TABLE IF NOT EXISTS workspace.project_retention_job (
  completed_at timestamptz,
  PRIMARY KEY(project_id,deleted_revision)
 );
-CREATE INDEX IF NOT EXISTS project_retention_pending ON workspace.project_retention_job(purge_after,project_id) WHERE status='pending';
-CREATE INDEX IF NOT EXISTS project_recycle_expiry ON workspace.project(purge_after,id) WHERE is_delete;
+CREATE INDEX project_retention_pending ON workspace.project_retention_job(purge_after,project_id) WHERE status='pending';
+CREATE INDEX project_recycle_expiry ON workspace.project(purge_after,id) WHERE is_delete;
 GRANT SELECT,INSERT,UPDATE ON workspace.project_retention_job TO glowloom_app;
 -- Only the internal retention transaction uses these; media entities and blobs are retained.
 GRANT DELETE ON canvas.edge,canvas.node TO glowloom_app;
@@ -6466,7 +6468,7 @@ GRANT DELETE ON workspace.prompt_draft TO glowloom_app;
 GRANT UPDATE ON workspace.prompt_draft_receipt TO glowloom_app;
 
 -- Durable Yjs collaboration and legacy-writer fence.
-CREATE TABLE IF NOT EXISTS canvas.collab_document (
+CREATE TABLE canvas.collab_document (
  document_id uuid PRIMARY KEY REFERENCES canvas.document(id),
  epoch uuid NOT NULL,
  writer_term bigint NOT NULL DEFAULT 1 CHECK(writer_term>0),
@@ -6478,7 +6480,7 @@ CREATE TABLE IF NOT EXISTS canvas.collab_document (
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
-CREATE TABLE IF NOT EXISTS canvas.collab_update (
+CREATE TABLE canvas.collab_update (
  document_id uuid NOT NULL REFERENCES canvas.collab_document(document_id),
  epoch uuid NOT NULL,
  commit_seq bigint NOT NULL CHECK(commit_seq>0),
@@ -6491,7 +6493,7 @@ CREATE TABLE IF NOT EXISTS canvas.collab_update (
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  PRIMARY KEY(document_id,epoch,commit_seq)
 );
-CREATE TABLE IF NOT EXISTS canvas.collab_receipt (
+CREATE TABLE canvas.collab_receipt (
  document_id uuid NOT NULL REFERENCES canvas.document(id),
  epoch uuid NOT NULL,
  actor_id uuid NOT NULL,
@@ -6505,7 +6507,7 @@ CREATE TABLE IF NOT EXISTS canvas.collab_receipt (
 GRANT SELECT,INSERT,UPDATE ON canvas.collab_document TO glowloom_app;
 GRANT SELECT,INSERT ON canvas.collab_update,canvas.collab_receipt TO glowloom_app;
 
-CREATE OR REPLACE FUNCTION canvas.guard_collab_writer() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION canvas.guard_collab_writer() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE target uuid;
 BEGIN
  IF TG_TABLE_NAME='document' THEN target:=OLD.id;
@@ -6521,18 +6523,18 @@ BEGIN
  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
  RETURN NEW;
 END $$;
-CREATE OR REPLACE TRIGGER canvas_collab_document_writer BEFORE UPDATE OR DELETE ON canvas.document FOR EACH ROW EXECUTE FUNCTION canvas.guard_collab_writer();
-CREATE OR REPLACE TRIGGER canvas_collab_node_writer BEFORE INSERT OR UPDATE OR DELETE ON canvas.node FOR EACH ROW EXECUTE FUNCTION canvas.guard_collab_writer();
-CREATE OR REPLACE TRIGGER canvas_collab_edge_writer BEFORE INSERT OR UPDATE OR DELETE ON canvas.edge FOR EACH ROW EXECUTE FUNCTION canvas.guard_collab_writer();
+CREATE TRIGGER canvas_collab_document_writer BEFORE UPDATE OR DELETE ON canvas.document FOR EACH ROW EXECUTE FUNCTION canvas.guard_collab_writer();
+CREATE TRIGGER canvas_collab_node_writer BEFORE INSERT OR UPDATE OR DELETE ON canvas.node FOR EACH ROW EXECUTE FUNCTION canvas.guard_collab_writer();
+CREATE TRIGGER canvas_collab_edge_writer BEFORE INSERT OR UPDATE OR DELETE ON canvas.edge FOR EACH ROW EXECUTE FUNCTION canvas.guard_collab_writer();
 
-CREATE TABLE IF NOT EXISTS canvas.collab_version (
+CREATE TABLE canvas.collab_version (
  id uuid PRIMARY KEY, document_id uuid NOT NULL REFERENCES canvas.document(id),
  epoch uuid NOT NULL, revision bigint NOT NULL, document_json jsonb NOT NULL,
  writer_term bigint NOT NULL, commit_seq bigint NOT NULL, state bytea NOT NULL CHECK(octet_length(state)<=8388608), graph_hash text NOT NULL,
  actor_id uuid NOT NULL, reason text NOT NULL, created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  UNIQUE(document_id,revision), CHECK(octet_length(document_json::text)<=16777216)
 );
-CREATE TABLE IF NOT EXISTS canvas.collab_control_receipt (
+CREATE TABLE canvas.collab_control_receipt (
  document_id uuid NOT NULL REFERENCES canvas.document(id), actor_id uuid NOT NULL,
  session_id uuid NOT NULL, command_id uuid NOT NULL, request_hash text NOT NULL,
  response_body jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -6542,7 +6544,7 @@ GRANT SELECT,INSERT ON canvas.collab_version,canvas.collab_control_receipt TO gl
 
 -- Capability only: preview and explicitly select each historical job via the
 -- project-copy-primary operator command. Never infer primary IDs in bulk SQL.
-CREATE TABLE IF NOT EXISTS workspace.project_copy_primary_repair (
+CREATE TABLE workspace.project_copy_primary_repair (
  job_id uuid PRIMARY KEY REFERENCES workspace.project_copy_job(id),
  org_id uuid NOT NULL REFERENCES workspace.organization(id),
  target_project_id uuid NOT NULL REFERENCES workspace.project(id),
@@ -6563,7 +6565,7 @@ ALTER TABLE catalog.provider_check ADD CONSTRAINT provider_check_model_version_f
 
 -- Space-owned subjects are independent of the project Bible. Append-only
 -- versions and bindings retain source-media evidence after product deletion.
-CREATE SCHEMA IF NOT EXISTS subject;
+CREATE SCHEMA subject;
 CREATE TABLE subject.subject_head (
  id uuid PRIMARY KEY,
  owner_scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
@@ -6651,16 +6653,15 @@ ALTER TABLE subject.subject_head ADD CONSTRAINT subject_scope_physical_fk FOREIG
 ALTER TABLE subject.command ADD CONSTRAINT subject_command_scope_physical_fk FOREIGN KEY(owner_scope_id,physical_scope_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
 
 
--- Asset parity: canvas_asset_management_incremental.sql
--- Existing database only; additive metadata, no graph or execution rewrites.
+-- Canvas asset collections and preferences.
 ALTER TABLE canvas.document
- ADD COLUMN IF NOT EXISTS asset_collection text NOT NULL DEFAULT 'current';
+ ADD COLUMN asset_collection text NOT NULL DEFAULT 'current';
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='canvas.document'::regclass AND conname='document_asset_collection_check') THEN
   ALTER TABLE canvas.document ADD CONSTRAINT document_asset_collection_check CHECK(asset_collection IN ('current','legacy'));
  END IF;
 END $$;
-CREATE TABLE IF NOT EXISTS canvas.asset_preference (
+CREATE TABLE canvas.asset_preference (
  actor_id uuid NOT NULL REFERENCES identity."user"(id),
  scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
  document_id uuid NOT NULL REFERENCES canvas.document(id),
@@ -6670,12 +6671,11 @@ CREATE TABLE IF NOT EXISTS canvas.asset_preference (
  PRIMARY KEY(actor_id,scope_id,document_id)
 );
 GRANT SELECT,INSERT,UPDATE ON canvas.asset_preference TO glowloom_app;
-CREATE INDEX IF NOT EXISTS ix_canvas_asset_favorites ON canvas.asset_preference(actor_id,scope_id,document_id) WHERE favorite;
+CREATE INDEX ix_canvas_asset_favorites ON canvas.asset_preference(actor_id,scope_id,document_id) WHERE favorite;
 
 
--- Asset parity: personal_history_incremental.sql
 -- Personal views never alter operation execution or shared media ownership.
-CREATE TABLE IF NOT EXISTS operation.personal_history_record (
+CREATE TABLE operation.personal_history_record (
  actor_id uuid NOT NULL,
  org_id uuid NOT NULL,
  scope_id uuid NOT NULL,
@@ -6684,7 +6684,7 @@ CREATE TABLE IF NOT EXISTS operation.personal_history_record (
  deleted_at timestamptz,
  PRIMARY KEY(actor_id,org_id,scope_id,operation_id)
 );
-CREATE TABLE IF NOT EXISTS operation.personal_history_output (
+CREATE TABLE operation.personal_history_output (
  actor_id uuid NOT NULL,
  org_id uuid NOT NULL,
  scope_id uuid NOT NULL,
@@ -6695,9 +6695,9 @@ CREATE TABLE IF NOT EXISTS operation.personal_history_output (
  deleted_at timestamptz,
  PRIMARY KEY(actor_id,org_id,scope_id,operation_id,output_id)
 );
-CREATE INDEX IF NOT EXISTS personal_history_output_favorite_idx
+CREATE INDEX personal_history_output_favorite_idx
  ON operation.personal_history_output(actor_id,org_id,scope_id,operation_id) WHERE favorite AND deleted_at IS NULL;
-CREATE TABLE IF NOT EXISTS operation.personal_history_command_receipt (
+CREATE TABLE operation.personal_history_command_receipt (
  actor_id uuid NOT NULL,
  org_id uuid NOT NULL,
  scope_id uuid NOT NULL,
@@ -6711,9 +6711,8 @@ GRANT SELECT,INSERT,UPDATE ON operation.personal_history_record,operation.person
 GRANT SELECT,INSERT ON operation.personal_history_command_receipt TO glowloom_app;
 
 
--- Asset parity: history_publication_incremental.sql
 -- Explicitly selected public works; project and sibling results stay private.
-CREATE TABLE IF NOT EXISTS operation.published_work (
+CREATE TABLE operation.published_work (
  id uuid PRIMARY KEY,
  actor_id uuid NOT NULL,
  org_id uuid NOT NULL,
@@ -6729,7 +6728,7 @@ CREATE TABLE IF NOT EXISTS operation.published_work (
  withdrawn_at timestamptz,
  UNIQUE(actor_id,output_id)
 );
-CREATE TABLE IF NOT EXISTS operation.history_publication_receipt (
+CREATE TABLE operation.history_publication_receipt (
  actor_id uuid NOT NULL,
  org_id uuid NOT NULL,
  scope_id uuid NOT NULL,
@@ -6741,10 +6740,7 @@ CREATE TABLE IF NOT EXISTS operation.history_publication_receipt (
 );
 GRANT SELECT,INSERT ON operation.published_work,operation.history_publication_receipt TO glowloom_app;
 
--- SRC-AI-28: additive bootstrap for the separately authenticated Doubao speech service.
-INSERT INTO catalog.capability(id,key,output_type,modes,input_roles)
-VALUES('6da07a12-0000-4000-8000-000000000004','audio.generate','audio',ARRAY['text2audio'],ARRAY['prompt'])
-ON CONFLICT(key) DO NOTHING;
+-- SRC-AI-28: separately authenticated Doubao speech service.
 INSERT INTO catalog.provider_preset(id,slug,origin)
 VALUES('6da07a10-0000-4000-8000-000000000005','volcengine-speech','builtin')
 ON CONFLICT(slug) DO NOTHING;
@@ -6813,9 +6809,8 @@ GRANT UPDATE(status,revision,dispatch_started_at,execution_id,provider_log_id,er
 -- No DELETE or mutation of original actor/scope/intent/key/catalog/voice/cost.
 
 
--- Asset parity: canvas_asset_creation_incremental.sql
--- Additive asset-entry creation receipt. Never rewrites existing project/canvas data.
-CREATE TABLE IF NOT EXISTS canvas.asset_creation_receipt (
+-- Asset-entry creation receipt.
+CREATE TABLE canvas.asset_creation_receipt (
  actor_id uuid NOT NULL REFERENCES identity."user"(id),
  scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
  idem_key uuid NOT NULL,
@@ -6828,101 +6823,44 @@ CREATE TABLE IF NOT EXISTS canvas.asset_creation_receipt (
 );
 GRANT SELECT,INSERT ON canvas.asset_creation_receipt TO glowloom_app;
 
--- Seedance 2.5 can consume authorized video/audio references in omni mode.
-UPDATE catalog.capability SET input_roles=ARRAY(
- SELECT DISTINCT role FROM unnest(input_roles || ARRAY['reference_video','reference_audio']) AS role ORDER BY role
-) WHERE key='video.generate';
+-- Physical identities for script sources, versions and copied objects.
+ALTER TABLE script.script_source ADD COLUMN original_location_id uuid NOT NULL;
+ALTER TABLE script.script_source ADD CONSTRAINT script_source_original_location_id_fkey FOREIGN KEY(original_location_id,original_key) REFERENCES media.object_location(id,object_key);
+CREATE TRIGGER keep_original_location_id BEFORE UPDATE ON script.script_source FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('original_location_id');
 
--- Script physical identity expansion (nullable until verified migration).
--- Additive script physical identities. Execute explicitly in one transaction.
--- No guessed location backfill, no route activation or bare-key key removal.
+ALTER TABLE script.script_source ADD COLUMN rich_location_id uuid NOT NULL;
+ALTER TABLE script.script_source ADD CONSTRAINT script_source_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
+CREATE TRIGGER keep_rich_location_id BEFORE UPDATE ON script.script_source FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('rich_location_id');
 
-ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS original_location_id uuid NOT NULL;
-ALTER TABLE script.script_source ALTER COLUMN original_location_id SET NOT NULL;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_source'::regclass AND conname='script_source_original_location_id_fkey') THEN
- ALTER TABLE script.script_source ADD CONSTRAINT script_source_original_location_id_fkey FOREIGN KEY(original_location_id,original_key) REFERENCES media.object_location(id,object_key);
- END IF;
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.script_source'::regclass AND tgname='keep_original_location_id' AND NOT tgisinternal) THEN
- CREATE TRIGGER keep_original_location_id BEFORE UPDATE ON script.script_source FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('original_location_id');
- END IF;
-END $$;
+ALTER TABLE script.script_version ADD COLUMN text_location_id uuid NOT NULL;
+ALTER TABLE script.script_version ADD CONSTRAINT script_version_text_location_id_fkey FOREIGN KEY(text_location_id,text_key) REFERENCES media.object_location(id,object_key);
+CREATE TRIGGER keep_text_location_id BEFORE UPDATE ON script.script_version FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('text_location_id');
 
-ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS rich_location_id uuid NOT NULL;
-ALTER TABLE script.script_source ALTER COLUMN rich_location_id SET NOT NULL;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_source'::regclass AND conname='script_source_rich_location_id_fkey') THEN
- ALTER TABLE script.script_source ADD CONSTRAINT script_source_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
- END IF;
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.script_source'::regclass AND tgname='keep_rich_location_id' AND NOT tgisinternal) THEN
- CREATE TRIGGER keep_rich_location_id BEFORE UPDATE ON script.script_source FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('rich_location_id');
- END IF;
-END $$;
+ALTER TABLE script.script_version ADD COLUMN rich_location_id uuid NOT NULL;
+ALTER TABLE script.script_version ADD CONSTRAINT script_version_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
+CREATE TRIGGER keep_rich_location_id BEFORE UPDATE ON script.script_version FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('rich_location_id');
 
-ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS text_location_id uuid NOT NULL;
-ALTER TABLE script.script_version ALTER COLUMN text_location_id SET NOT NULL;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_version'::regclass AND conname='script_version_text_location_id_fkey') THEN
- ALTER TABLE script.script_version ADD CONSTRAINT script_version_text_location_id_fkey FOREIGN KEY(text_location_id,text_key) REFERENCES media.object_location(id,object_key);
- END IF;
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.script_version'::regclass AND tgname='keep_text_location_id' AND NOT tgisinternal) THEN
- CREATE TRIGGER keep_text_location_id BEFORE UPDATE ON script.script_version FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('text_location_id');
- END IF;
-END $$;
+ALTER TABLE script.copy_object_intent ADD COLUMN source_location_id uuid NOT NULL;
+ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_source_location_id_fkey FOREIGN KEY(source_location_id,source_key) REFERENCES media.object_location(id,object_key);
+CREATE TRIGGER keep_source_location_id BEFORE UPDATE ON script.copy_object_intent FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('source_location_id');
 
-ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS rich_location_id uuid NOT NULL;
-ALTER TABLE script.script_version ALTER COLUMN rich_location_id SET NOT NULL;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_version'::regclass AND conname='script_version_rich_location_id_fkey') THEN
- ALTER TABLE script.script_version ADD CONSTRAINT script_version_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
- END IF;
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.script_version'::regclass AND tgname='keep_rich_location_id' AND NOT tgisinternal) THEN
- CREATE TRIGGER keep_rich_location_id BEFORE UPDATE ON script.script_version FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('rich_location_id');
- END IF;
-END $$;
+ALTER TABLE script.copy_object_intent ADD COLUMN target_location_id uuid NOT NULL;
+ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);
+CREATE TRIGGER keep_target_location_id BEFORE UPDATE ON script.copy_object_intent FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('target_location_id');
 
-ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS source_location_id uuid NOT NULL;
-ALTER TABLE script.copy_object_intent ALTER COLUMN source_location_id SET NOT NULL;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_intent'::regclass AND conname='copy_object_intent_source_location_id_fkey') THEN
- ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_source_location_id_fkey FOREIGN KEY(source_location_id,source_key) REFERENCES media.object_location(id,object_key);
- END IF;
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.copy_object_intent'::regclass AND tgname='keep_source_location_id' AND NOT tgisinternal) THEN
- CREATE TRIGGER keep_source_location_id BEFORE UPDATE ON script.copy_object_intent FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('source_location_id');
- END IF;
-END $$;
+ALTER TABLE script.copy_object_state ADD COLUMN target_location_id uuid NOT NULL;
+ALTER TABLE script.copy_object_state ADD CONSTRAINT copy_object_state_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);
+CREATE TRIGGER keep_target_location_id BEFORE UPDATE ON script.copy_object_state FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('target_location_id');
 
-ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS target_location_id uuid NOT NULL;
-ALTER TABLE script.copy_object_intent ALTER COLUMN target_location_id SET NOT NULL;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_intent'::regclass AND conname='copy_object_intent_target_location_id_fkey') THEN
- ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);
- END IF;
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.copy_object_intent'::regclass AND tgname='keep_target_location_id' AND NOT tgisinternal) THEN
- CREATE TRIGGER keep_target_location_id BEFORE UPDATE ON script.copy_object_intent FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('target_location_id');
- END IF;
-END $$;
-
-ALTER TABLE script.copy_object_state ADD COLUMN IF NOT EXISTS target_location_id uuid NOT NULL;
-ALTER TABLE script.copy_object_state ALTER COLUMN target_location_id SET NOT NULL;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_state'::regclass AND conname='copy_object_state_target_location_id_fkey') THEN
- ALTER TABLE script.copy_object_state ADD CONSTRAINT copy_object_state_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);
- END IF;
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.copy_object_state'::regclass AND tgname='keep_target_location_id' AND NOT tgisinternal) THEN
- CREATE TRIGGER keep_target_location_id BEFORE UPDATE ON script.copy_object_state FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('target_location_id');
- END IF;
-END $$;
-
--- Final object location migration marker; the runtime checks it through GORM.
-CREATE TABLE IF NOT EXISTS media.storage_schema_version (
+-- Storage schema version checked at runtime.
+CREATE TABLE media.storage_schema_version (
  version integer PRIMARY KEY,
  applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 INSERT INTO media.storage_schema_version(version) VALUES (2) ON CONFLICT (version) DO NOTHING;
 GRANT SELECT ON TABLE media.storage_schema_version TO glowloom_app;
 
-CREATE TABLE IF NOT EXISTS media.storage_idempotency_lock (
+CREATE TABLE media.storage_idempotency_lock (
  namespace text NOT NULL CHECK (namespace IN ('purge','package','transfer','upload','personal_upload','library')),
  actor_id uuid NOT NULL,
  request_key uuid NOT NULL,
@@ -6934,24 +6872,20 @@ GRANT SELECT, INSERT, UPDATE ON TABLE media.storage_idempotency_lock TO glowloom
 -- Measured empty deployment proof (no invented legacy profile).
 -- Empty deployment proof contains a measured closed inventory, not a provider claim.
 -- Execute explicitly in one transaction. It does not prove a live cloud bucket.
-CREATE TABLE IF NOT EXISTS media.storage_empty_deployment_evidence (
+CREATE TABLE media.storage_empty_deployment_evidence (
  config_sha256 text PRIMARY KEY CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
  evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
  inventory jsonb NOT NULL CHECK(jsonb_typeof(inventory)='object'),
  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_empty_deployment_evidence'::regclass AND tgname='keep_storage_evidence' AND NOT tgisinternal) THEN
- CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.storage_empty_deployment_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
- END IF;
-END $$;
+CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.storage_empty_deployment_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
 GRANT SELECT ON media.storage_empty_deployment_evidence TO glowloom_app;
 
 -- Script copy admission freezes its own output work in the caller transaction.
-ALTER TABLE script.copy_snapshot ADD COLUMN IF NOT EXISTS storage_intent_id uuid REFERENCES media.storage_work_intent(id);
+ALTER TABLE script.copy_snapshot ADD COLUMN storage_intent_id uuid REFERENCES media.storage_work_intent(id);
 
 -- Private canvas assistant history; generation drafts and tasks keep their owners.
-CREATE TABLE IF NOT EXISTS canvas.assistant_session (
+CREATE TABLE canvas.assistant_session (
  id uuid PRIMARY KEY,
  canvas_id uuid NOT NULL REFERENCES canvas.document(id),
  project_id uuid NOT NULL REFERENCES workspace.project(id),
@@ -6961,14 +6895,11 @@ CREATE TABLE IF NOT EXISTS canvas.assistant_session (
  turns jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(turns)='array' AND jsonb_array_length(turns)<=64 AND octet_length(turns::text)<=65536),
  updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS assistant_session_owner ON canvas.assistant_session(canvas_id,actor_id,updated_at DESC,id);
+CREATE INDEX assistant_session_owner ON canvas.assistant_session(canvas_id,actor_id,updated_at DESC,id);
 GRANT SELECT,INSERT,UPDATE ON canvas.assistant_session TO glowloom_app;
 
--- Portable timeline artifacts (additive schema contract).
--- Add portable timeline artifacts without changing existing playable media outputs.
--- Apply with the schema owner. No rows or original assets are deleted.
-ALTER TABLE mediatool.export_job ADD COLUMN IF NOT EXISTS artifact_id uuid;
-CREATE TABLE IF NOT EXISTS mediatool.export_artifact (
+-- Portable timeline artifacts, including native draft ZIPs.
+CREATE TABLE mediatool.export_artifact (
  id uuid PRIMARY KEY,
  job_id uuid NOT NULL REFERENCES mediatool.export_job(id),
  project_id uuid NOT NULL,
@@ -6987,23 +6918,11 @@ CREATE TABLE IF NOT EXISTS mediatool.export_artifact (
  CHECK((format='media_bundle' AND format_version='1') OR (format='fcpxml' AND format_version='1.10') OR (format='xmeml' AND format_version='5') OR (format='jianying' AND format_version='134.0.0')),
  CHECK(object_key ~ '^projects/[a-f0-9-]{36}/exports/[0-9]{4}/[0-9]{2}/[a-f0-9-]{36}\.zip$')
 );
-ALTER TABLE mediatool.export_job DROP CONSTRAINT IF EXISTS export_job_output_kind_check;
-ALTER TABLE mediatool.export_job ADD CONSTRAINT export_job_output_kind_check CHECK(output_kind IN ('video','audio','media_bundle','fcpxml','xmeml','jianying'));
-ALTER TABLE mediatool.export_job DROP CONSTRAINT IF EXISTS export_job_check;
-ALTER TABLE mediatool.export_job ADD CONSTRAINT export_job_check CHECK((asset_id IS NULL AND artifact_id IS NULL AND sha256 IS NULL) OR (num_nonnulls(asset_id,artifact_id)=1 AND sha256 IS NOT NULL));
-ALTER TABLE mediatool.export_job DROP CONSTRAINT IF EXISTS export_job_check1;
-ALTER TABLE mediatool.export_job ADD CONSTRAINT export_job_check1 CHECK(status NOT IN ('review_required','succeeded') OR num_nonnulls(asset_id,artifact_id)=1);
-ALTER TABLE mediatool.export_job DROP CONSTRAINT IF EXISTS export_job_output_identity_check;
-ALTER TABLE mediatool.export_job ADD CONSTRAINT export_job_output_identity_check CHECK((output_kind IN ('video','audio') AND artifact_id IS NULL) OR (output_kind IN ('media_bundle','fcpxml','xmeml','jianying') AND asset_id IS NULL));
-ALTER TABLE mediatool.export_job DROP CONSTRAINT IF EXISTS export_job_artifact_identity_fkey;
 ALTER TABLE mediatool.export_job ADD CONSTRAINT export_job_artifact_identity_fkey FOREIGN KEY(artifact_id,id,project_id,attempt) REFERENCES mediatool.export_artifact(id,job_id,project_id,attempt);
 GRANT SELECT,INSERT ON mediatool.export_artifact TO glowloom_app;
 GRANT UPDATE(artifact_id) ON mediatool.export_job TO glowloom_app;
 
--- Volcengine creation adapters: volcengine_creation_incremental.sql
--- Additive capability catalog; preserve other modes/roles installed in parallel.
-UPDATE catalog.capability SET modes=ARRAY(SELECT DISTINCT x FROM unnest(modes || ARRAY['music_song','music_instrumental']) x) WHERE key='audio.generate';
-UPDATE catalog.capability SET modes=ARRAY(SELECT DISTINCT x FROM unnest(modes || ARRAY['avatar','motion']) x), input_roles=ARRAY(SELECT DISTINCT x FROM unnest(input_roles || ARRAY['character_image','driving_audio','driving_video']) x) WHERE key='video.generate';
+-- Volcengine creation presets.
 INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000006','volcengine-music','builtin') ON CONFLICT(slug) DO NOTHING;
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
 SELECT '6da07a11-0000-4000-8000-000000000006',id,1,'{"schema_version":1,"name":"火山音乐","config":{"adapter_key":"volcengine_music","base_url":"https://open.volcengineapi.com","region":"domestic","capabilities":["audio"],"timeout_seconds":120,"concurrency_limit":1,"rate_limit_per_min":60}}'::jsonb,'8af0295bcce95bb3160c92bce6a4dda84ed9f66959b53f389d6501c1f1f83ad3' FROM catalog.provider_preset WHERE slug='volcengine-music' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
@@ -7015,9 +6934,9 @@ INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,cont
 SELECT '6da07a11-0000-4000-8000-000000000008',id,1,'{"schema_version":1,"name":"即梦动作模仿","config":{"adapter_key":"volcengine_motion","base_url":"https://openapi.cv.volces.com","region":"domestic","capabilities":["video"],"timeout_seconds":120,"concurrency_limit":1,"rate_limit_per_min":30}}'::jsonb,'7df763c7f974d3654c6ef0de51c17e95ee6bb50737cd7101ef4afb7919e243a5' FROM catalog.provider_preset WHERE slug='volcengine-motion' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
 
 -- Private director recovery does not alter the authoritative Yjs document.
-CREATE SEQUENCE IF NOT EXISTS canvas.director_recovery_revision AS integer NO CYCLE;
+CREATE SEQUENCE canvas.director_recovery_revision AS integer NO CYCLE;
 GRANT USAGE ON SEQUENCE canvas.director_recovery_revision TO glowloom_app;
-CREATE TABLE IF NOT EXISTS canvas.director_recovery (
+CREATE TABLE canvas.director_recovery (
  actor_id uuid NOT NULL,
  document_id uuid NOT NULL REFERENCES canvas.document(id) ON DELETE CASCADE,
  node_id uuid NOT NULL,
@@ -7030,22 +6949,19 @@ CREATE TABLE IF NOT EXISTS canvas.director_recovery (
 );
 GRANT SELECT,INSERT,UPDATE,DELETE ON canvas.director_recovery TO glowloom_app;
 
--- Seed-Audio adds a distinct mode; keep all existing capability contracts.
-UPDATE catalog.capability SET modes=ARRAY(SELECT DISTINCT x FROM unnest(modes || ARRAY['omni_audio']) x), input_roles=ARRAY(SELECT DISTINCT x FROM unnest(input_roles || ARRAY['reference_audio','reference_image']) x) WHERE key='audio.generate';
-
 -- A new immutable preset version; existing connection snapshots stay unchanged.
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
 SELECT '6da07a12-0000-4000-8000-000000000005',id,2,'{"schema_version":1,"name":"豆包语音","config":{"adapter_key":"volcengine_speech","base_url":"https://openspeech.bytedance.com/api/v3","region":"domestic","capabilities":["audio"],"timeout_seconds":300,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'76c0029f543321dec270d711133d523c3ad91eb8819eab84eca7459780986682' FROM catalog.provider_preset WHERE slug='volcengine-speech' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
 
 -- Private reference voices; supplier training is a separate, explicit operation.
-CREATE TABLE IF NOT EXISTS media.voice_profile (
+CREATE TABLE media.voice_profile (
  id uuid PRIMARY KEY,
- project_id uuid NOT NULL REFERENCES workspace.project(id),
- actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ project_id uuid NOT NULL REFERENCES workspace.project(id) ON DELETE CASCADE,
+ actor_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE CASCADE,
  request_id uuid NOT NULL,
  name text NOT NULL CHECK(length(name) BETWEEN 1 AND 60),
  request_name text NOT NULL CHECK(length(request_name) BETWEEN 1 AND 60),
- asset_id uuid NOT NULL REFERENCES media.media_asset(id),
+ asset_id uuid NOT NULL REFERENCES media.media_asset(id) ON DELETE CASCADE,
  asset_revision bigint NOT NULL CHECK(asset_revision>0),
  consent_at timestamptz NOT NULL,
  revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),
@@ -7055,47 +6971,25 @@ CREATE TABLE IF NOT EXISTS media.voice_profile (
  updated_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(project_id,actor_id,request_id)
 );
-CREATE INDEX IF NOT EXISTS voice_profile_owner ON media.voice_profile(project_id,actor_id,id) WHERE NOT is_delete;
+CREATE INDEX voice_profile_owner ON media.voice_profile(project_id,actor_id,id) WHERE NOT is_delete;
 GRANT SELECT,INSERT,UPDATE ON media.voice_profile TO glowloom_app;
 
-CREATE TABLE IF NOT EXISTS media.voice_favorite (
- project_id uuid NOT NULL REFERENCES workspace.project(id),
- actor_id uuid NOT NULL REFERENCES identity."user"(id),
+CREATE TABLE media.voice_favorite (
+ project_id uuid NOT NULL REFERENCES workspace.project(id) ON DELETE CASCADE,
+ actor_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE CASCADE,
  speaker text NOT NULL CHECK(length(speaker) BETWEEN 1 AND 128),
  favorite boolean NOT NULL,
  PRIMARY KEY(project_id,actor_id,speaker)
 );
 GRANT SELECT,INSERT,UPDATE ON media.voice_favorite TO glowloom_app;
 
-ALTER TABLE media.voice_profile ADD COLUMN IF NOT EXISTS gender text NOT NULL DEFAULT '未标注' CHECK(gender IN ('未标注','男声','女声'));
-ALTER TABLE media.voice_profile ADD COLUMN IF NOT EXISTS age text NOT NULL DEFAULT '未标注' CHECK(age IN ('未标注','儿童','青年','中年','老年'));
-ALTER TABLE media.voice_profile ADD COLUMN IF NOT EXISTS language text NOT NULL DEFAULT '未标注' CHECK(language IN ('未标注','中文','英文','日文','其他'));
-ALTER TABLE media.voice_profile ADD COLUMN IF NOT EXISTS style text NOT NULL DEFAULT '未标注' CHECK(style IN ('未标注','自然','温柔','活泼','沉稳','旁白'));
-
--- Voice library metadata expires with its owning project, account or source asset.
-ALTER TABLE media.voice_profile DROP CONSTRAINT IF EXISTS voice_profile_project_id_fkey;
-ALTER TABLE media.voice_profile ADD CONSTRAINT voice_profile_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id) ON DELETE CASCADE;
-ALTER TABLE media.voice_profile DROP CONSTRAINT IF EXISTS voice_profile_actor_id_fkey;
-ALTER TABLE media.voice_profile ADD CONSTRAINT voice_profile_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id) ON DELETE CASCADE;
-ALTER TABLE media.voice_profile DROP CONSTRAINT IF EXISTS voice_profile_asset_id_fkey;
-ALTER TABLE media.voice_profile ADD CONSTRAINT voice_profile_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES media.media_asset(id) ON DELETE CASCADE;
-ALTER TABLE media.voice_favorite DROP CONSTRAINT IF EXISTS voice_favorite_project_id_fkey;
-ALTER TABLE media.voice_favorite ADD CONSTRAINT voice_favorite_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id) ON DELETE CASCADE;
-ALTER TABLE media.voice_favorite DROP CONSTRAINT IF EXISTS voice_favorite_actor_id_fkey;
-ALTER TABLE media.voice_favorite ADD CONSTRAINT voice_favorite_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id) ON DELETE CASCADE;
-
--- Native timeline draft ZIPs use a distinct serializer, never a renamed XML archive.
-ALTER TABLE mediatool.export_artifact DROP CONSTRAINT IF EXISTS export_artifact_format_check;
-ALTER TABLE mediatool.export_artifact ADD CONSTRAINT export_artifact_format_check CHECK(format IN ('media_bundle','fcpxml','xmeml','jianying'));
-ALTER TABLE mediatool.export_artifact DROP CONSTRAINT IF EXISTS export_artifact_check;
-ALTER TABLE mediatool.export_artifact ADD CONSTRAINT export_artifact_check CHECK((format='media_bundle' AND format_version='1') OR (format='fcpxml' AND format_version='1.10') OR (format='xmeml' AND format_version='5') OR (format='jianying' AND format_version='134.0.0'));
-ALTER TABLE mediatool.export_job DROP CONSTRAINT IF EXISTS export_job_output_kind_check;
-ALTER TABLE mediatool.export_job ADD CONSTRAINT export_job_output_kind_check CHECK(output_kind IN ('video','audio','media_bundle','fcpxml','xmeml','jianying'));
-ALTER TABLE mediatool.export_job DROP CONSTRAINT IF EXISTS export_job_output_identity_check;
-ALTER TABLE mediatool.export_job ADD CONSTRAINT export_job_output_identity_check CHECK((output_kind IN ('video','audio') AND artifact_id IS NULL) OR (output_kind IN ('media_bundle','fcpxml','xmeml','jianying') AND asset_id IS NULL));
+ALTER TABLE media.voice_profile ADD COLUMN gender text NOT NULL DEFAULT '未标注' CHECK(gender IN ('未标注','男声','女声'));
+ALTER TABLE media.voice_profile ADD COLUMN age text NOT NULL DEFAULT '未标注' CHECK(age IN ('未标注','儿童','青年','中年','老年'));
+ALTER TABLE media.voice_profile ADD COLUMN language text NOT NULL DEFAULT '未标注' CHECK(language IN ('未标注','中文','英文','日文','其他'));
+ALTER TABLE media.voice_profile ADD COLUMN style text NOT NULL DEFAULT '未标注' CHECK(style IN ('未标注','自然','温柔','活泼','沉稳','旁白'));
 
 -- Native-app capability: private signed envelope, fixed expiry and no re-signing.
-CREATE TABLE IF NOT EXISTS mediatool.export_launch (
+CREATE TABLE mediatool.export_launch (
  token_hash text PRIMARY KEY CHECK(token_hash ~ '^[a-f0-9]{64}$'),
  job_id uuid NOT NULL REFERENCES mediatool.export_job(id) ON DELETE CASCADE,
  artifact_id uuid NOT NULL REFERENCES mediatool.export_artifact(id) ON DELETE CASCADE,
@@ -7104,14 +6998,12 @@ CREATE TABLE IF NOT EXISTS mediatool.export_launch (
  expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
  CHECK(expires_at>created_at AND expires_at<=created_at+interval '10 minutes')
 );
-CREATE INDEX IF NOT EXISTS export_launch_expiry_idx ON mediatool.export_launch(expires_at);
+CREATE INDEX export_launch_expiry_idx ON mediatool.export_launch(expires_at);
 GRANT SELECT,INSERT,DELETE ON mediatool.export_launch TO glowloom_app;
 
 
--- Current independent Agent and database tasks: agent_storage.sql
--- Offline migration. A deployment administrator provisions the restricted login
--- glowloom_agent beforehand; the service never creates roles, schemas or tables.
-CREATE SCHEMA IF NOT EXISTS agent;
+-- Agent runtime storage.
+CREATE SCHEMA agent;
 CREATE TABLE agent.runtime_sessions (
     session_id text PRIMARY KEY,
     owner_id text NOT NULL,
@@ -7180,8 +7072,7 @@ GRANT USAGE ON SCHEMA agent TO glowloom_agent;
 GRANT SELECT,INSERT,UPDATE ON agent.runtime_sessions, agent.runtime_records TO glowloom_agent;
 GRANT SELECT,INSERT,DELETE ON agent.runtime_document_versions, agent.runtime_events TO glowloom_agent;
 
--- Current independent Agent and database tasks: agent_service.sql
--- Current independent Agent admission metadata. Apply offline after agent_storage.sql.
+-- Agent admission metadata.
 CREATE TABLE agent.service_sessions (
  id uuid PRIMARY KEY, actor_id uuid NOT NULL, org_id uuid NOT NULL, scope_id uuid NOT NULL,
  project_id uuid NOT NULL, canvas_id uuid, title text NOT NULL,
@@ -7210,11 +7101,9 @@ REVOKE ALL ON agent.service_sessions,agent.service_runs,agent.service_control_in
 GRANT SELECT,INSERT,UPDATE ON agent.service_sessions,agent.service_control_inbox TO glowloom_agent;
 GRANT SELECT,INSERT ON agent.service_runs TO glowloom_agent;
 
--- Current independent Agent and database tasks: agent_business.sql
--- Offline, reviewed business authority migration. Neither service runs DDL at startup.
--- No references to agent runtime tables. Apply as migration administrator.
-CREATE SCHEMA IF NOT EXISTS agent_business;
-CREATE TABLE IF NOT EXISTS agent_business.run_authorization (
+-- Agent business authorization.
+CREATE SCHEMA agent_business;
+CREATE TABLE agent_business.run_authorization (
  root_run_id uuid PRIMARY KEY, session_id uuid NOT NULL, submission_id uuid NOT NULL,
  request_id uuid NOT NULL, content_hash text NOT NULL, scope jsonb NOT NULL,
  budget_micros bigint NOT NULL CHECK(budget_micros>=0), reserved_micros bigint NOT NULL DEFAULT 0 CHECK(reserved_micros>=0),
@@ -7223,12 +7112,12 @@ CREATE TABLE IF NOT EXISTS agent_business.run_authorization (
  current_decision_id uuid, current_proposal_id uuid, created_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(session_id,request_id)
 );
-CREATE TABLE IF NOT EXISTS agent_business.execution_grant (
+CREATE TABLE agent_business.execution_grant (
  grant_id uuid PRIMARY KEY,root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),
  submission_id uuid NOT NULL,owner_epoch bigint NOT NULL,authorization_revision bigint NOT NULL,expires_at timestamptz NOT NULL,
  UNIQUE(root_run_id,submission_id,owner_epoch,authorization_revision)
 );
-CREATE TABLE IF NOT EXISTS agent_business.control_decision (
+CREATE TABLE agent_business.control_decision (
  decision_id uuid PRIMARY KEY, root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),
  request_id uuid NOT NULL,input_hash text NOT NULL,authorization_revision bigint NOT NULL,
  action text NOT NULL CHECK(action IN ('approve','reject','pause','resume','stop')),body jsonb NOT NULL,
@@ -7236,19 +7125,19 @@ CREATE TABLE IF NOT EXISTS agent_business.control_decision (
  attempts integer NOT NULL DEFAULT 0,next_attempt_at timestamptz NOT NULL DEFAULT now(),lease_until timestamptz,
  applied_receipt jsonb,UNIQUE(root_run_id,request_id),UNIQUE(root_run_id,authorization_revision)
 );
-CREATE INDEX IF NOT EXISTS agent_business_decision_delivery ON agent_business.control_decision(next_attempt_at) WHERE delivery_state IN ('pending','leased');
-CREATE TABLE IF NOT EXISTS agent_business.quiesced_receipt (
+CREATE INDEX agent_business_decision_delivery ON agent_business.control_decision(next_attempt_at) WHERE delivery_state IN ('pending','leased');
+CREATE TABLE agent_business.quiesced_receipt (
  decision_id uuid PRIMARY KEY REFERENCES agent_business.control_decision(decision_id),receipt_id uuid NOT NULL UNIQUE,
  root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),continuation_id uuid NOT NULL,
  owner_epoch bigint NOT NULL,authorization_revision bigint NOT NULL,grant_id uuid NOT NULL REFERENCES agent_business.execution_grant(grant_id),
  UNIQUE(root_run_id,continuation_id)
 );
-CREATE TABLE IF NOT EXISTS agent_business.proposal (
+CREATE TABLE agent_business.proposal (
  proposal_id uuid PRIMARY KEY,root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),
  request_id uuid NOT NULL,input_hash text NOT NULL,candidate_hash text NOT NULL,body jsonb NOT NULL,
  authorization_revision bigint NOT NULL, UNIQUE(root_run_id,request_id)
 );
-CREATE TABLE IF NOT EXISTS agent_business.call_receipt (
+CREATE TABLE agent_business.call_receipt (
  receipt_id uuid PRIMARY KEY,root_run_id uuid NOT NULL REFERENCES agent_business.run_authorization(root_run_id),submission_id uuid NOT NULL,
  task_id text NOT NULL,call_id text NOT NULL,checkpoint_id text NOT NULL,attempt bigint NOT NULL CHECK(attempt>0),contract_version text NOT NULL,
  input_hash text NOT NULL,kind text NOT NULL,name text NOT NULL,max_micros bigint NOT NULL CHECK(max_micros>=0),
@@ -7256,12 +7145,12 @@ CREATE TABLE IF NOT EXISTS agent_business.call_receipt (
  created_at timestamptz NOT NULL DEFAULT now(),UNIQUE(root_run_id,submission_id,task_id,call_id,checkpoint_id,attempt,contract_version)
 );
 -- A source publication retains its original call/grant identity across I/O and restarts.
-CREATE TABLE IF NOT EXISTS agent_business.source_authorization (
+CREATE TABLE agent_business.source_authorization (
  receipt_id uuid PRIMARY KEY REFERENCES agent_business.call_receipt(receipt_id) ON DELETE CASCADE,
  grant_id uuid NOT NULL REFERENCES agent_business.execution_grant(grant_id),
  source_hash text NOT NULL CHECK(source_hash ~ '^[a-f0-9]{64}$')
 );
-CREATE TABLE IF NOT EXISTS agent_business.skill_version (
+CREATE TABLE agent_business.skill_version (
  skill_id uuid NOT NULL,version text NOT NULL,resource_hash text NOT NULL,owner_actor_id uuid NOT NULL,org_id uuid NOT NULL,scope_id uuid NOT NULL,
  name text NOT NULL,description text NOT NULL,body text NOT NULL,resources jsonb NOT NULL DEFAULT '{}',enabled boolean NOT NULL DEFAULT true,
  PRIMARY KEY(skill_id,version),CHECK(length(body)<=262144)
@@ -7280,15 +7169,14 @@ DO $$ BEGIN
  END IF;
 END $$;
 -- Durable import identity is separate from immutable resource identity.
-ALTER TABLE agent_business.skill_version ADD COLUMN IF NOT EXISTS request_id uuid;
-CREATE UNIQUE INDEX IF NOT EXISTS agent_business_skill_import_request ON agent_business.skill_version(owner_actor_id,org_id,scope_id,request_id);
+ALTER TABLE agent_business.skill_version ADD COLUMN request_id uuid;
+CREATE UNIQUE INDEX agent_business_skill_import_request ON agent_business.skill_version(owner_actor_id,org_id,scope_id,request_id);
 -- Immutable authorized Skill pins are business scope, not Harness execution state.
-ALTER TABLE agent_business.run_authorization ADD COLUMN IF NOT EXISTS skill_pins jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE agent_business.run_authorization ADD COLUMN skill_pins jsonb NOT NULL DEFAULT '[]';
 -- Go freezes the admitted model selection independently of Node's manifest.
-ALTER TABLE agent_business.run_authorization ADD COLUMN IF NOT EXISTS model_selection jsonb NOT NULL DEFAULT '{}';
+ALTER TABLE agent_business.run_authorization ADD COLUMN model_selection jsonb NOT NULL DEFAULT '{}';
 
--- Current independent Agent and database tasks: task_runtime.sql
--- Install in an empty or explicitly migrated business database.
+-- Durable business tasks.
 CREATE TABLE infra.task_work (
     kind text NOT NULL,
     business_id text NOT NULL,
@@ -7332,19 +7220,17 @@ CREATE TABLE operation.development_trial (
 
 GRANT SELECT, INSERT, UPDATE ON infra.task_work, operation.development_trial TO glowloom_app;
 
--- Current independent Agent and database tasks: operation_task.sql
 -- A resumed batch acknowledges failures observed before the operator reopened admission.
 ALTER TABLE operation.batch ADD COLUMN resumed_at timestamptz;
 GRANT SELECT(resumed_at), UPDATE(resumed_at) ON operation.batch TO glowloom_app;
 
--- Current independent Agent and database tasks: agent_conversation.sql
--- Additive conversation data only. Apply offline; never replay service initialization.
-ALTER TABLE agent.service_runs ADD COLUMN IF NOT EXISTS input jsonb;
-ALTER TABLE agent.service_runs ADD COLUMN IF NOT EXISTS retry_of_run_id uuid REFERENCES agent.service_runs(id);
-ALTER TABLE agent.service_sessions ADD COLUMN IF NOT EXISTS last_input_at timestamptz;
-CREATE INDEX IF NOT EXISTS service_runs_history ON agent.service_runs(session_id,accepted_revision DESC,id);
-CREATE INDEX IF NOT EXISTS service_sessions_input ON agent.service_sessions(actor_id,project_id,last_input_at DESC,id);
-CREATE TABLE IF NOT EXISTS agent.public_messages (
+-- Agent conversation history.
+ALTER TABLE agent.service_runs ADD COLUMN input jsonb;
+ALTER TABLE agent.service_runs ADD COLUMN retry_of_run_id uuid REFERENCES agent.service_runs(id);
+ALTER TABLE agent.service_sessions ADD COLUMN last_input_at timestamptz;
+CREATE INDEX service_runs_history ON agent.service_runs(session_id,accepted_revision DESC,id);
+CREATE INDEX service_sessions_input ON agent.service_sessions(actor_id,project_id,last_input_at DESC,id);
+CREATE TABLE agent.public_messages (
  session_id text NOT NULL REFERENCES agent.runtime_sessions(session_id),
  run_id uuid NOT NULL,
  commit_seq bigint NOT NULL,
@@ -7357,12 +7243,12 @@ CREATE TABLE IF NOT EXISTS agent.public_messages (
  content text NOT NULL,
  PRIMARY KEY(session_id,commit_seq,event_ordinal,part_index)
 );
-CREATE INDEX IF NOT EXISTS public_messages_history ON agent.public_messages(run_id,commit_seq DESC,event_ordinal DESC,part_index DESC);
-CREATE INDEX IF NOT EXISTS public_messages_identity ON agent.public_messages(run_id,message_id,part_index);
+CREATE INDEX public_messages_history ON agent.public_messages(run_id,commit_seq DESC,event_ordinal DESC,part_index DESC);
+CREATE INDEX public_messages_identity ON agent.public_messages(run_id,message_id,part_index);
 REVOKE ALL ON agent.public_messages FROM PUBLIC;
 GRANT SELECT,INSERT ON agent.public_messages TO glowloom_agent;
 
--- Current transfer output attempt facts: media_transfer_attempt.sql
+-- Transfer output attempt facts.
 CREATE TABLE media.transfer_output_attempt (
   job_id uuid NOT NULL,
   item_index integer NOT NULL,
@@ -7407,24 +7293,22 @@ CREATE TRIGGER transfer_object_attempt_immutable BEFORE UPDATE ON media.transfer
 FOR EACH ROW EXECUTE FUNCTION media.protect_transfer_object_attempt();
 
 GRANT SELECT, INSERT ON media.transfer_output_attempt TO glowloom_app;
--- Existing transfer_object SELECT/INSERT and column grants remain sufficient.
 -- No UPDATE is granted on output_attempt, frozen physical identity or work IDs.
--- Run as schema owner. Existing reservations retain their original charging policy.
-ALTER TABLE billing.reservation ADD COLUMN IF NOT EXISTS cap_at_quote boolean NOT NULL DEFAULT false;
-ALTER TABLE operation.provider_call ADD COLUMN IF NOT EXISTS procurement_cost_micros bigint CHECK (procurement_cost_micros >= 0);
+ALTER TABLE billing.reservation ADD COLUMN cap_at_quote boolean NOT NULL DEFAULT false;
+ALTER TABLE operation.provider_call ADD COLUMN procurement_cost_micros bigint CHECK (procurement_cost_micros >= 0);
 GRANT UPDATE (procurement_cost_micros) ON operation.provider_call TO glowloom_app;
 
-CREATE TABLE IF NOT EXISTS billing.wallet_account (
+CREATE TABLE billing.wallet_account (
     scope_id uuid PRIMARY KEY REFERENCES workspace.creation_scope(id),
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS billing.project_wallet (
+CREATE TABLE billing.project_wallet (
     project_id uuid PRIMARY KEY REFERENCES workspace.project(id),
     scope_id uuid NOT NULL REFERENCES billing.wallet_account(scope_id)
 );
 
-CREATE TABLE IF NOT EXISTS billing.wallet_lot (
+CREATE TABLE billing.wallet_lot (
     id uuid PRIMARY KEY,
     scope_id uuid NOT NULL REFERENCES billing.wallet_account(scope_id),
     source_kind text NOT NULL CHECK (source_kind IN ('promotional', 'paid', 'subscription', 'expiry_return')),
@@ -7442,16 +7326,16 @@ CREATE TABLE IF NOT EXISTS billing.wallet_lot (
     CHECK ((source_kind = 'paid') = (expires_at IS NULL))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS wallet_lot_source_root ON billing.wallet_lot(source_kind, source_id) WHERE root_lot_id IS NULL;
-CREATE INDEX IF NOT EXISTS wallet_lot_scope_available ON billing.wallet_lot(scope_id, expires_at, id) WHERE available_micros > 0;
+CREATE UNIQUE INDEX wallet_lot_source_root ON billing.wallet_lot(source_kind, source_id) WHERE root_lot_id IS NULL;
+CREATE INDEX wallet_lot_scope_available ON billing.wallet_lot(scope_id, expires_at, id) WHERE available_micros > 0;
 
-CREATE TABLE IF NOT EXISTS billing.wallet_hold (
+CREATE TABLE billing.wallet_hold (
     reservation_id uuid PRIMARY KEY REFERENCES billing.reservation(id),
     scope_id uuid NOT NULL REFERENCES billing.wallet_account(scope_id),
     UNIQUE (reservation_id, scope_id)
 );
 
-CREATE TABLE IF NOT EXISTS billing.wallet_allocation (
+CREATE TABLE billing.wallet_allocation (
     reservation_id uuid NOT NULL,
     scope_id uuid NOT NULL,
     lot_id uuid NOT NULL,
@@ -7463,7 +7347,7 @@ CREATE TABLE IF NOT EXISTS billing.wallet_allocation (
     FOREIGN KEY (scope_id, lot_id) REFERENCES billing.wallet_lot(scope_id, id)
 );
 
-CREATE TABLE IF NOT EXISTS billing.wallet_entry (
+CREATE TABLE billing.wallet_entry (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     scope_id uuid NOT NULL,
     lot_id uuid NOT NULL,
@@ -7474,11 +7358,11 @@ CREATE TABLE IF NOT EXISTS billing.wallet_entry (
     FOREIGN KEY (scope_id, lot_id) REFERENCES billing.wallet_lot(scope_id, id)
 );
 
-CREATE INDEX IF NOT EXISTS wallet_entry_scope_time ON billing.wallet_entry(scope_id, created_at DESC, id DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS wallet_entry_per_reservation ON billing.wallet_entry(reservation_id, lot_id, kind) WHERE reservation_id IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS wallet_entry_issue ON billing.wallet_entry(lot_id) WHERE kind IN ('issue', 'restore');
+CREATE INDEX wallet_entry_scope_time ON billing.wallet_entry(scope_id, created_at DESC, id DESC);
+CREATE UNIQUE INDEX wallet_entry_per_reservation ON billing.wallet_entry(reservation_id, lot_id, kind) WHERE reservation_id IS NOT NULL;
+CREATE UNIQUE INDEX wallet_entry_issue ON billing.wallet_entry(lot_id) WHERE kind IN ('issue', 'restore');
 
-CREATE TABLE IF NOT EXISTS billing.wallet_expiry_grace (
+CREATE TABLE billing.wallet_expiry_grace (
     root_lot_id uuid PRIMARY KEY REFERENCES billing.wallet_lot(id),
     expires_at timestamptz NOT NULL
 );
@@ -7491,7 +7375,7 @@ GRANT SELECT, INSERT ON billing.wallet_hold, billing.wallet_allocation, billing.
 GRANT SELECT ON billing.wallet_lot TO glowloom_app;
 GRANT UPDATE (available_micros) ON billing.wallet_lot TO glowloom_app;
 -- Only a return lot may be inserted by the runtime; root issuance is separately controlled.
-CREATE OR REPLACE FUNCTION billing.insert_wallet_return_lot(
+CREATE FUNCTION billing.insert_wallet_return_lot(
     lot uuid, scope uuid, reservation uuid, amount bigint, deadline timestamptz, root uuid, at_time timestamptz
 ) RETURNS uuid
 LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog
@@ -7512,7 +7396,7 @@ $$;
 REVOKE ALL ON FUNCTION billing.insert_wallet_return_lot(uuid,uuid,uuid,bigint,timestamptz,uuid,timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION billing.insert_wallet_return_lot(uuid,uuid,uuid,bigint,timestamptz,uuid,timestamptz) TO glowloom_app;
 
-CREATE OR REPLACE FUNCTION billing.bind_project_wallet(project uuid) RETURNS uuid
+CREATE FUNCTION billing.bind_project_wallet(project uuid) RETURNS uuid
 LANGUAGE plpgsql SET search_path = pg_catalog AS $$
 DECLARE payer uuid;
 BEGIN
@@ -7528,7 +7412,7 @@ END
 $$;
 REVOKE ALL ON FUNCTION billing.bind_project_wallet(uuid) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION billing.issue_promotional_credit(
+CREATE FUNCTION billing.issue_promotional_credit(
     scope uuid, source uuid, amount bigint, deadline timestamptz, model text, justification text
 ) RETURNS uuid
 LANGUAGE plpgsql SET search_path = pg_catalog AS $$
@@ -7560,7 +7444,7 @@ END
 $$;
 REVOKE ALL ON FUNCTION billing.issue_promotional_credit(uuid,uuid,bigint,timestamptz,text,text) FROM PUBLIC;
 
-CREATE TABLE IF NOT EXISTS billing.wallet_compensation (
+CREATE TABLE billing.wallet_compensation (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     reservation_id uuid NOT NULL UNIQUE REFERENCES billing.wallet_hold(reservation_id),
     reason text NOT NULL CHECK (length(reason) BETWEEN 1 AND 500),
@@ -7570,7 +7454,7 @@ CREATE TABLE IF NOT EXISTS billing.wallet_compensation (
 
 -- Finance approves compensation using the original reservation. It leaves
 -- project consumption and supplier liabilities available for reconciliation.
-CREATE OR REPLACE FUNCTION billing.compensate_wallet_consumption(reservation uuid, justification text) RETURNS uuid
+CREATE FUNCTION billing.compensate_wallet_consumption(reservation uuid, justification text) RETURNS uuid
 LANGUAGE plpgsql SET search_path = pg_catalog AS $$
 DECLARE payer uuid;
 DECLARE correction billing.wallet_compensation%ROWTYPE;
@@ -7628,7 +7512,7 @@ $$;
 REVOKE ALL ON FUNCTION billing.compensate_wallet_consumption(uuid,text) FROM PUBLIC;
 
 -- Require funding for every new capped reservation and any wallet-bound project.
-CREATE OR REPLACE FUNCTION billing.check_wallet_reservation() RETURNS trigger
+CREATE FUNCTION billing.check_wallet_reservation() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog AS $$
 BEGIN
     IF TG_OP='INSERT' AND NEW.amount_micros>0 AND
@@ -7648,7 +7532,6 @@ BEGIN
     RETURN NEW;
 END
 $$;
-DROP TRIGGER IF EXISTS wallet_reservation_consistency ON billing.reservation;
 CREATE CONSTRAINT TRIGGER wallet_reservation_consistency
 AFTER INSERT OR UPDATE ON billing.reservation DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION billing.check_wallet_reservation();

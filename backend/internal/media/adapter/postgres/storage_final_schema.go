@@ -9,8 +9,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
-// CheckStorageFinalSchema verifies the versioned storage migration using ORM
-// metadata. Schema changes belong to the database migration pipeline.
+// CheckStorageFinalSchema verifies the storage schema version recorded by db/schema.sql.
 func (s *StorageRoutes) CheckStorageFinalSchema(ctx context.Context) error {
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable

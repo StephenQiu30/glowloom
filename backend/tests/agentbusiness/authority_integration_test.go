@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,7 +35,7 @@ func fixture(t *testing.T) (*pg.Store, domain.Admission, domain.Grant) {
 	t.Helper()
 	dsn := os.Getenv("GLOWLOOM_TEST_AGENT_BUSINESS_DB_DSN")
 	if dsn == "" {
-		t.Skip("isolated PostgreSQL required: GLOWLOOM_TEST_AGENT_BUSINESS_DB_DSN")
+		t.Skip("set GLOWLOOM_TEST_AGENT_BUSINESS_DB_DSN to an isolated PostgreSQL database initialized from db/schema.sql")
 	}
 	parsed, err := url.Parse(dsn)
 	if err != nil || !strings.HasSuffix(parsed.Path, "_test") || (parsed.Hostname() != "127.0.0.1" && parsed.Hostname() != "localhost") {
@@ -51,13 +50,6 @@ func fixture(t *testing.T) (*pg.Store, domain.Admission, domain.Grant) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	sql, err := os.ReadFile(filepath.Join("..", "..", "db", "agent_business.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = db.Exec(string(sql)).Error; err != nil {
-		t.Fatal(err)
-	}
 	reset.Do(func() {
 		if err := db.Exec(`TRUNCATE agent_business.run_authorization CASCADE`).Error; err != nil {
 			t.Fatal(err)
@@ -398,19 +390,6 @@ func TestDatabaseRolesCannotCrossBusinessAndRuntimeTables(t *testing.T) {
 			t.Error("close database connection:", err)
 		}
 	})
-	var runtimeExists bool
-	if err = db.Raw(`SELECT to_regclass('agent.runtime_sessions') IS NOT NULL`).Scan(&runtimeExists).Error; err != nil {
-		t.Fatal(err)
-	}
-	if !runtimeExists {
-		source, err := os.ReadFile(filepath.Join("..", "..", "db", "agent_storage.sql"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err = db.Exec(string(source)).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
 	for _, tc := range []struct{ role, query string }{{"glowloom_agent", `SELECT root_run_id FROM agent_business.run_authorization LIMIT 1`}, {"glowloom_app", `SELECT session_id FROM agent.runtime_sessions LIMIT 1`}} {
 		err := db.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Exec("SET LOCAL ROLE " + tc.role).Error; err != nil {

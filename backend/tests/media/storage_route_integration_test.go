@@ -3,7 +3,6 @@ package media_test
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -22,7 +21,7 @@ func storageRouteDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := os.Getenv("GLOWLOOM_TEST_STORAGE_ROUTE_DSN")
 	if dsn == "" {
-		t.Skip("set disposable GLOWLOOM_TEST_STORAGE_ROUTE_DSN; no deployment configuration is read")
+		t.Skip("set disposable GLOWLOOM_TEST_STORAGE_ROUTE_DSN initialized from db/schema.sql")
 	}
 	conn, err := db.Open(t.Context(), dsn, noop.NewTracerProvider())
 	if err != nil {
@@ -44,17 +43,9 @@ func storageProfiles(t *testing.T, store *pgmedia.StorageRoutes) []application.S
 	return profiles
 }
 
-func TestStorageMigrationIsRepeatable(t *testing.T) {
-	database := storageRouteDB(t)
-	raw, err := os.ReadFile(filepath.Join("..", "..", "db", "storage_ledger_expand_incremental.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 2 {
-		if err := database.Exec(string(raw)).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
+func TestStorageProfileRegistrationIsRepeatable(t *testing.T) {
+	database := storageRouteDB(t).Begin()
+	t.Cleanup(func() { _ = database.Rollback().Error })
 	store := pgmedia.NewStorageRoutes(database)
 	profiles := storageProfiles(t, store)
 	if err := store.RegisterProfiles(t.Context(), profiles); err != nil {
@@ -129,7 +120,7 @@ func TestStorageLocationIdentityAndAlias(t *testing.T) {
 	}
 }
 
-func TestStorageMigrationRejectsCOSPhysicalAlias(t *testing.T) {
+func TestStorageProfileRegistrationRejectsCOSPhysicalAlias(t *testing.T) {
 	store := pgmedia.NewStorageRoutes(storageRouteDB(t))
 	profiles := storageProfiles(t, store)
 	wrong := profiles[1]

@@ -49,7 +49,7 @@ jobs:
       GLOWLOOM_TEST_GOVERNANCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_governance?sslmode=disable
       GLOWLOOM_TEST_CATALOG_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable
       GLOWLOOM_TEST_MODEL_CATALOG_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable
-      GLOWLOOM_TEST_STORAGE_MIGRATION_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_storage_ci?sslmode=disable
+      GLOWLOOM_TEST_STORAGE_SCHEMA_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_storage_ci?sslmode=disable
       GLOWLOOM_TEST_PACKAGE_LOCATION_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_storage_package_ci?sslmode=disable
       GLOWLOOM_TEST_SCRIPT_LOCATION_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_storage_script_ci?sslmode=disable
       GLOWLOOM_TEST_SUBJECT_SOURCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_source_ci?sslmode=disable
@@ -150,9 +150,7 @@ jobs:
         run: |
           psql postgres://postgres@127.0.0.1:5432/glowloom_agent_test -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE glowloom_agent LOGIN NOSUPERUSER' -c 'CREATE DATABASE glowloom_agent_recovery_test'
           for database in glowloom_agent_test glowloom_agent_recovery_test; do
-            for fragment in agent_storage agent_service agent_business agent_conversation; do
-              psql "postgres://postgres@127.0.0.1:5432/$database" -X -v ON_ERROR_STOP=1 -f "db/$fragment.sql"
-            done
+            psql "postgres://postgres@127.0.0.1:5432/$database" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           done
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck

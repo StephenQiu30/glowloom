@@ -144,7 +144,7 @@ Yjs共享画布、Tiptap协作正文、稳定引用、个人撤销、在线状�
 2. 历史夹具用真实冻结和复制owner完成未带主关联的旧结构任务；运行增量DDL两次确认可重入，`review`前后核对零写入。多画布时显式选择源快照候选；源项目当前主画布变化不能影响候选判断。正常项目查询能打开修复后的独立目标。
 3. 在预览后改变项目或画布版本，或删除目标、破坏快照、移除回执、选择错误来源/组织、已有主关联，提交必须拒绝；审计写入故障必须回滚关联。并发重复命令只产生一次修复、一次版本增长和一条审计，冲突选择不覆盖。运行应用数据库角色不得调用修复写入口。
 4. 副本后续内容保留：对目标实际启用Yjs，先产生页面内存中的待发更新，再修复关联。核对Yjs二进制、epoch、commitSeq、hash均未被迁移改写；重建服务读取后按原update/session身份提交及重试，只有一次接受，继续内容可回读。测试服务级断线恢复与浏览器三页断线证据分别标注。
-5. 运维操作使用显式`GLOWLOOM_COPY_REPAIR_DB_DSN`；先在事务内应用`backend/db/project_copy_primary_repair_incremental.sql`，再运行`glowloom project-copy-primary review --org UUID --job UUID`。审阅候选后执行`apply --org UUID --job UUID --source-canvas UUID --review-hash SHA256 --reason TEXT`，保存JSON回执。DDL只安装能力，不自动批量补数据；主关联修复依赖现有Yjs增量schema。正式数据须逐任务审阅，不以isolated fixture的选择替代。
+5. 运维操作使用显式`GLOWLOOM_COPY_REPAIR_DB_DSN`；先核对数据库包含 `backend/db/schema.sql` 中的主关联修复结构，再运行`glowloom project-copy-primary review --org UUID --job UUID`。审阅候选后执行`apply --org UUID --job UUID --source-canvas UUID --review-hash SHA256 --reason TEXT`，保存JSON回执。DDL只安装能力，不自动批量补数据；主关联修复依赖现有Yjs增量schema。正式数据须逐任务审阅，不以isolated fixture的选择替代。
 6. 自动保存仍由完整编辑事务经WS提交、心跳协助查证；Kafka消费和维护CLI不成为前端正文保存轮询。运行页面内存/存储政策/协作恢复回归，未修改的客户端业务存储边界不得放宽。记录格式、imports、vet、lint、race和漏洞门禁；失败与环境版本差异如实保留。
 
 ## 素材同步与算法复核专项

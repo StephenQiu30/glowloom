@@ -16,9 +16,9 @@ GLOWLOOM_OBJECT_STORAGE_CONFIG='{"schema_version":1,"revision":"1","default_writ
 - 使用私有桶，或者在已批准复用的混合桶中为应用前缀确认独立的私有访问权限。用于不可变写入的桶必须从未开启版本控制。COS 的 `X-Cos-Forbid-Overwrite` 依赖这个条件。[腾讯云 PUT Object 文档](https://cloud.tencent.com/document/product/436/7749)
 - 按角色授予目标桶和应用前缀所需的 HeadBucket、GetBucket、HeadObject、GetObject、PutObject 和 DeleteObject 权限。工作节点使用现有代理上传与预签名读取流程。
 
-## 存量迁移与部署
+## 数据库结构与部署
 
 1. 在旧版本仍能访问源桶时，按完整物理位置盘点存量对象、待清理对象及未完成的上传和任务。停止旧版本接单，等待工作完成或按原业务流程取消和对账。
 2. 将仍需保留的对象复制到 COS，逐项核对原始字节、长度、SHA-256 和类型。使用经审阅的映射更新业务位置和关联记录。新位置必须使用独立 COS profile，既有 profile ID 和原始资源身份保持一致。
-3. 确认旧存储上没有活跃对象位置、开放的工作意图或未过期的上传后，在停写窗口用 `psql --single-transaction -v ON_ERROR_STOP=1 -f backend/db/storage_cos_only_incremental.sql` 应用增量。脚本拒绝活跃的非 COS 引用，并保留历史 profile 记录。新库直接使用 `backend/db/schema.sql`。
+3. 确认旧存储上没有活跃对象位置、开放的工作意图或未过期的上传后，由数据库管理员核对实际结构与 [schema.sql](../backend/db/schema.sql) 一致，再继续部署。新空库直接使用该文件初始化。
 4. 配置所有仍被引用的 COS profile，提高 revision 后再部署。检查真实 COS 的读取、上传、签名访问和历史素材恢复。项目的 CI 使用本地 COS 协议测试服务。真实桶探针需要专用测试桶并显式设置 `GLOWLOOM_TEST_LIVE_COS=1`。

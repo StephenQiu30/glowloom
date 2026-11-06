@@ -203,7 +203,7 @@ EX-REQ-10核查完成：侧栏已采用官方Sidebar体系并继续复用；共�
 | 普通任务与旧实现删除         | PG任务/租约/取消/恢复和FFmpeg验证通过；无Temporal SDK/连接/命令/旧Go图/旧阶段接口兼容                                                                    | Task8～11；AC-AH-14/17     |
 | 当前前端合同                 | 当前会话工作台、rich draft与消息分页；295文件2099项通过，strict/lint/格式/官方API生成核对/Next生产构建全部通过                                           | Task12；AC-AH-12/19        |
 | Compose与当前SQL             | 单一四服务Compose；Agent镜像非root/只读/限额，实际Harness完成、health/ready200、SIGTERM0/租约0；空库8运行/8业务表权限及6份冻结SQL一致性通过              | Task13；AC-AH-18～20       |
-| 既有库离线切换               | [清单与脚本](backend/db/agent_cutover.md)交付；历史隔离演练保留其日期与范围；本轮未在现有业务库执行DDL或实际切换                                         | Task13/14                  |
+| 既有库离线切换               | [清单与脚本](https://github.com/StephenQiu30/glowloom/blob/4e41135a5fb5cf7c0ab53d617e599771d67ad607/backend/db/agent_cutover.md)交付；历史隔离演练保留其日期与范围；本轮未在现有业务库执行DDL或实际切换                                         | Task13/14                  |
 | 文档与历史错误描述           | 设计、计划、PROJECT、BACKLOG及验证记录更新为当前合同与终验结果；原始需求/有效历史证据保留，不再作为当前失败状态                                          | Task14                     |
 | 全量联合检查                 | Go176包完成，4478测试/子测试通过、0失败；57项既有外部条件测试跳过并逐项列明；Go build/vet/lint/格式均通过，govulncheck0可达/0导入包漏洞                  | Task14                     |
 | 现有部署与真实创作接受       | 真实供应商、费用清结、长剧本至可编辑成片、完整浏览器与线上CI未由fixture代替；Docker Desktop恢复引发已有restart策略自动运行容器，未改其配置，详见环境记录 | AC-AH-01～22               |

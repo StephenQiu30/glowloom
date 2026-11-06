@@ -36,25 +36,43 @@ func TestHistoryPublicationPostgresSelectionReplayAndRevocation(t *testing.T) {
 	if err := db.Raw(`SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('workspace','operation','media')`).Scan(&existing).Error; err != nil || existing != 0 {
 		t.Fatalf("fresh disposable DB required: schemas=%d err=%v", existing, err)
 	}
-	ddl := `DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='glowloom_app') THEN CREATE ROLE glowloom_app NOLOGIN; END IF; END $$; CREATE SCHEMA workspace;CREATE SCHEMA operation;CREATE SCHEMA media;` + businessSQLLocationTables + `
+	// Minimal query fixture allows negative provenance cases without a full operation admission.
+	const ddl = `CREATE SCHEMA workspace;CREATE SCHEMA operation;CREATE SCHEMA media;` + businessSQLLocationTables + `
  CREATE TABLE workspace.project(id uuid PRIMARY KEY,org_id uuid,owner_scope_id uuid,status text DEFAULT 'active',is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation(id uuid PRIMARY KEY,project_id uuid,capability text DEFAULT 'image.generate',mode text DEFAULT 'text_to_image',status text DEFAULT 'completed',is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation_input(id uuid,operation_id uuid,seq_no int,role text,text_value text,is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation_output(id uuid PRIMARY KEY,project_id uuid,operation_id uuid,media_asset_id uuid,moderation_status text,is_delete boolean DEFAULT false);
  CREATE TABLE operation.prompt_submission(operation_id uuid,actor_id uuid,project_id uuid);
  CREATE TABLE operation.quote_request(org_id uuid,actor_id uuid,result jsonb);
- CREATE TABLE media.media_asset(id uuid PRIMARY KEY,object_location_id uuid NOT NULL REFERENCES media.object_location(id),project_id uuid,kind text,status text,moderation_status text,is_delete boolean DEFAULT false,contains_real_person boolean DEFAULT false,consent_record_id uuid,object_key text,revision bigint DEFAULT 1);`
+ CREATE TABLE media.media_asset(id uuid PRIMARY KEY,object_location_id uuid NOT NULL REFERENCES media.object_location(id),project_id uuid,kind text,status text,moderation_status text,is_delete boolean DEFAULT false,contains_real_person boolean DEFAULT false,consent_record_id uuid,object_key text,revision bigint DEFAULT 1);
+CREATE TABLE operation.published_work (
+ id uuid PRIMARY KEY,
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ operation_id uuid NOT NULL REFERENCES operation.operation(id),
+ output_id uuid NOT NULL REFERENCES operation.operation_output(id),
+ media_asset_id uuid NOT NULL REFERENCES media.media_asset(id),
+ title text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 120),
+ description text NOT NULL DEFAULT '' CHECK (char_length(description)<=2000),
+ prompt text,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ withdrawn_at timestamptz,
+ UNIQUE(actor_id,output_id)
+);
+CREATE TABLE operation.history_publication_receipt (
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ request_key uuid NOT NULL,
+ request_hash text NOT NULL,
+ response jsonb NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(actor_id,org_id,scope_id,request_key)
+);`
 	if err := db.Exec(ddl).Error; err != nil {
 		t.Fatal(err)
-	}
-	migration, err := os.ReadFile("../../db/history_publication_incremental.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 2 {
-		if err := db.Exec(string(migration)).Error; err != nil {
-			t.Fatal(err)
-		}
 	}
 	actor := identity.Principal{ID: uuid.New(), OrgID: uuid.New(), ScopeID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1}
 	project, operation, output, sibling, media, foreignOperation, foreignOutput := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
