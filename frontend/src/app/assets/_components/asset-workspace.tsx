@@ -62,7 +62,7 @@ const ReferenceAssetsPage = dynamic(
 const sources = [
   { id: "history", label: "生成历史" },
   { id: "canvas", label: "画布" },
-  { id: "short_drama", label: "短剧" },
+  { id: "short_drama", label: "短剧工作室" },
 ] as const;
 
 export function AssetWorkspace({

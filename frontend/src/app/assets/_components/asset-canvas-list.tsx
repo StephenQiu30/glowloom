@@ -66,6 +66,7 @@ export function AssetCanvasList({
   onLock,
   onBatchMode,
   toolbarTarget,
+  recent = false,
 }: {
   kind: "canvas" | "short_drama";
   collection: "current" | "legacy";
@@ -74,6 +75,7 @@ export function AssetCanvasList({
   onLock: (locked: boolean) => void;
   onBatchMode: (batch: boolean) => void;
   toolbarTarget: HTMLElement | null;
+  recent?: boolean;
 }) {
   const [page, setPage] = useState<ReturnType<
     typeof requireAssetCanvases
@@ -132,7 +134,7 @@ export function AssetCanvasList({
         ...assetDateRange(filters.from, filters.through),
         sort: filters.sort,
         order: filters.order,
-        limit: 24,
+        limit: recent ? 2 : 24,
         cursor,
       },
       { signal: controller.signal },
@@ -170,7 +172,7 @@ export function AssetCanvasList({
         if (!controller.signal.aborted) setPending(false);
       });
     return () => controller.abort();
-  }, [kind, collection, filters, cursor, retry]);
+  }, [kind, collection, filters, cursor, retry, recent]);
   function reload() {
     setPending(true);
     setCursor(undefined);
@@ -396,7 +398,8 @@ export function AssetCanvasList({
   );
   return (
     <div className="grid min-w-0 gap-6">
-      {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
+      {!recent &&
+        (toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar)}
       {intent && !deleting && !renaming && (
         <Button
           className="justify-self-start"
@@ -455,7 +458,7 @@ export function AssetCanvasList({
           />
         )}
       <div className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-3 xl:grid-cols-4">
-        {!!page && !error && !hasAssetFilters(filters) && (
+        {!recent && !!page && !error && !hasAssetFilters(filters) && (
           <Button
             variant="asset-card"
             size="asset-card"
@@ -591,6 +594,7 @@ export function AssetCanvasList({
           !hasAssetFilters(filters) && (
             <AssetTemplateList
               kind={kind}
+              limit={recent ? 2 : undefined}
               disabled={locked || !writable || pending}
               onUse={(value) => {
                 setTemplate(value);
@@ -599,7 +603,7 @@ export function AssetCanvasList({
             />
           )}
       </div>
-      {page?.next_cursor && (
+      {!recent && page?.next_cursor && (
         <Button
           variant="ghost"
           className="justify-self-center"

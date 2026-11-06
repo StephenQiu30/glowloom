@@ -7,6 +7,7 @@ export const screens = [
   { id: "canvas", name: "画布", node: "271:3302", group: "创作" },
   { id: "assets", name: "资产", node: "1446:4949", group: "创作" },
   { id: "subjects", name: "主体", node: "1446:3086", group: "创作" },
+  { id: "short-drama", name: "短剧工作室", node: "3541:96354", group: "创作" },
   { id: "login", name: "登录", node: "9:2", group: "账号" },
   { id: "register", name: "注册", node: "354:13103", group: "账号" },
   { id: "reset-password", name: "修改密码", node: "339:6455", group: "账号" },

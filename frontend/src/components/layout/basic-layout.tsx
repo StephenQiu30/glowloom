@@ -265,6 +265,7 @@ export function BasicLayout({
         (screen === "home" ||
           screen === "explore" ||
           screen === "invitations" ||
+          screen === "short-drama" ||
           screen === "assets")
       }
     >

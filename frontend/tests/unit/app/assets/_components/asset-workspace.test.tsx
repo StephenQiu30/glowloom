@@ -12,6 +12,7 @@ import { render, findFeedback } from "../../../../feedback";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PageToolbarContext } from "@/components/layout/page-toolbar";
 import { AssetWorkspace } from "@/app/assets/_components/asset-workspace";
+import { ShortDramaStudio } from "@/app/short-drama/studio";
 import { assetDateRange } from "@/app/assets/_components/asset-query";
 import { readAssetLocation } from "@/app/assets/_components/asset-location";
 import { RequestError } from "@/lib/request";
@@ -253,7 +254,7 @@ it("默认读取本人图片生成历史，原上传素材不冒充历史", asyn
   expect(screen.getAllByRole("tab").map((n) => n.textContent)).toEqual([
     "生成历史",
     "画布",
-    "短剧",
+    "短剧工作室",
   ]);
   expect(screen.queryByRole("button", { name: "参考素材" })).toBeNull();
   expect(state.canvases).not.toHaveBeenCalled();
@@ -312,7 +313,7 @@ it("错误与空账户分开，重试读取真实接口", async () => {
 it("切到短剧只查询显式短剧分类，不用项目或视频列表冒充", async () => {
   render(<AssetWorkspace />);
   await screen.findByText("暂无相关资产");
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "短剧" }), {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "短剧工作室" }), {
     button: 0,
     ctrlKey: false,
   });
@@ -1021,6 +1022,59 @@ it("默认新建直接创建当前空间项目与主画布，不依赖已有项�
   );
   expect(state.pickProject).toBeNull();
   expect(state.create).not.toHaveBeenCalled();
+});
+
+it("短剧工作室仅读取最近短剧，并使用真实短剧画布创建合同", async () => {
+  state.createAsset.mockResolvedValue({
+    id: task.id,
+    project_id: task.project_id,
+    kind: "short_drama",
+    name: "新短剧",
+    revision: "1",
+    project_revision: 1,
+    collection: "current",
+    is_template: false,
+  });
+  render(<ShortDramaStudio />);
+  await waitFor(() => {
+    expect(state.canvases).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "short_drama", limit: 2 }),
+      expect.anything(),
+    );
+    expect(state.templates).toHaveBeenCalled();
+  });
+  expect(screen.getByRole("link", { name: "全部" }).getAttribute("href")).toBe(
+    "/assets?view=short_drama",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "短剧画布" }));
+  await waitFor(() =>
+    expect(state.push).toHaveBeenCalledWith(
+      `/canvas?project_id=${task.project_id}&canvas_id=${task.id}`,
+    ),
+  );
+  expect(state.createAsset).toHaveBeenCalledWith(
+    { kind: "short_drama", template_key: undefined },
+    expect.objectContaining({
+      headers: { "Idempotency-Key": expect.any(String) },
+    }),
+  );
+});
+
+it("游客可切换短剧入口，打开登录时不查询或创建私人项目", async () => {
+  state.actor = null;
+  render(<ShortDramaStudio />);
+  expect(
+    screen.getByRole("tab", { name: "剧本创作" }).getAttribute("aria-selected"),
+  ).toBe("true");
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "转绘" }), {
+    button: 0,
+  });
+  expect(await screen.findByText("视频转绘暂未开放")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "短剧画布" }));
+  expect(state.login).toHaveBeenCalledOnce();
+  expect(state.canvases).not.toHaveBeenCalled();
+  expect(state.templates).not.toHaveBeenCalled();
+  expect(state.createAsset).not.toHaveBeenCalled();
 });
 it("系统模板有明确标记，使用时创建真实预填副本而不执行生成", async () => {
   state.templates.mockResolvedValue({

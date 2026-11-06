@@ -19,10 +19,12 @@ export type AssetTemplate = {
 };
 export function AssetTemplateList({
   kind,
+  limit,
   disabled,
   onUse,
 }: {
   kind: "canvas" | "short_drama";
+  limit?: number;
   disabled: boolean;
   onUse: (template: AssetTemplate) => void;
 }) {
@@ -87,7 +89,7 @@ export function AssetTemplateList({
     );
   return (
     <>
-      {items.map((item) => (
+      {items.slice(0, limit).map((item) => (
         <Button
           key={item.key}
           variant="asset-card"

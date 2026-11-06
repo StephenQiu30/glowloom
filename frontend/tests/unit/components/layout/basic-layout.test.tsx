@@ -211,6 +211,9 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
     "/assets",
   );
   expect(
+    screen.getByRole("link", { name: "短剧工作室" }).getAttribute("href"),
+  ).toBe("/short-drama");
+  expect(
     screen.getByRole("link", { name: "查看我的画布" }).getAttribute("href"),
   ).toBe("/assets?view=canvas");
   fireEvent.click(screen.getByRole("button", { name: "收起导航" }));
@@ -671,7 +674,7 @@ it("asset header options stay stable under the shared login context", async () =
   expect(within(tools).getByRole("button", { name: "批量操作" })).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "生成历史" })).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "画布" })).toBeTruthy();
-  expect(within(header).getByRole("tab", { name: "短剧" })).toBeTruthy();
+  expect(within(header).getByRole("tab", { name: "短剧工作室" })).toBeTruthy();
   const account = within(header).getByRole("group", { name: "通知与账号" });
   expect(
     within(account).getByRole("button", { name: "账号菜单" }),

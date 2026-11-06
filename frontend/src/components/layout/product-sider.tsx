@@ -15,6 +15,7 @@ import { useId, useState, type ComponentProps, type ReactNode } from "react";
 import { cn } from "cn";
 import {
   ChevronDown,
+  Clapperboard,
   Compass,
   ContactRound,
   FolderClosed,
@@ -54,6 +55,12 @@ const links = [
   { id: "explore", label: "探索", icon: Compass, href: "/explore" },
   { id: "assets", label: "资产", icon: FolderClosed, href: "/assets" },
   { id: "subjects", label: "主体", icon: ContactRound, href: "/subjects" },
+  {
+    id: "short-drama",
+    label: "短剧工作室",
+    icon: Clapperboard,
+    href: "/short-drama",
+  },
 ] as const;
 
 function PrimaryNavigation({ screen }: { screen: Screen }) {
