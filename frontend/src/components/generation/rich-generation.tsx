@@ -1587,7 +1587,9 @@ function EditorWorkspace({
             <p>
               提交 {current.submission.id?.slice(0, 8)} · 代次 {current.epoch}
             </p>
-            {quote && <p>可用项目预算：{money(quote.available_micros)}</p>}
+            {quote && quote.available_micros < Number.MAX_SAFE_INTEGER / 2 && (
+              <p>可用项目预算：{money(quote.available_micros)}</p>
+            )}
             <pre className="max-h-36 overflow-auto text-xs whitespace-pre-wrap">
               {quote?.final_prompt ?? current.submission.quote?.final_prompt}
             </pre>

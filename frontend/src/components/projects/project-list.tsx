@@ -116,6 +116,7 @@ export function ProjectList({
     active.current = controller;
     listProjects(
       {
+        include_independent_canvases: true,
         q: query,
         limit: pageSize,
         ...(sort === "recent_content"

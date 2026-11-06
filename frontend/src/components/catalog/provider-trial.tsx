@@ -544,7 +544,9 @@ export function ProviderTrial({
                 : budgetError
                   ? "项目预算暂时无法读取，请重新选择或刷新后再试。"
                   : budget
-                    ? `平台可用预算 ¥${((budget.available_micros ?? 0) / 1e6).toFixed(6)} / 总预算 ¥${((budget.limit_micros ?? 0) / 1e6).toFixed(6)}。供应商预算单独确认，后台会重新核验。`
+                    ? (budget.limit_micros ?? 0) > Number.MAX_SAFE_INTEGER / 2
+                      ? "按报价冻结空间钱包积分。"
+                      : `平台可用预算 ¥${((budget.available_micros ?? 0) / 1e6).toFixed(6)} / 总预算 ¥${((budget.limit_micros ?? 0) / 1e6).toFixed(6)}。供应商预算单独确认，后台会重新核验。`
                     : "请选择扣费项目。"}
             </p>
           </Field>

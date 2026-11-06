@@ -80,8 +80,11 @@ func walletPayer(tx *gorm.DB, projectID uuid.UUID) (uuid.UUID, error) {
 	var payer struct {
 		ScopeID, OwnerScopeID uuid.UUID
 	}
-	read := tx.Raw(`SELECT w.scope_id,p.owner_scope_id FROM billing.project_wallet w
-		JOIN workspace.project p ON p.id=w.project_id WHERE w.project_id=?`, projectID).Scan(&payer)
+	read := tx.Raw(`SELECT coalesce(w.scope_id, a.scope_id) AS scope_id, p.owner_scope_id
+        FROM workspace.project p
+        LEFT JOIN billing.project_wallet w ON w.project_id=p.id
+        LEFT JOIN billing.wallet_account a ON a.scope_id=p.owner_scope_id
+        WHERE p.id=? AND NOT p.is_delete AND coalesce(w.scope_id, a.scope_id) IS NOT NULL`, projectID).Scan(&payer)
 	if read.Error != nil || read.RowsAffected == 0 {
 		return uuid.Nil, read.Error
 	}

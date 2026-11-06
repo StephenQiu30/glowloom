@@ -26,10 +26,10 @@ func createProjectRowsInTx(tx *gorm.DB, project domain.Project, ownerScope uuid.
 	inserted := tx.Exec(`
 			INSERT INTO workspace.project
 			  (id, org_id, name, description, aspect_ratio, style_type,
-			   style_subtype, style_preset_id, resolution, owner_id, initial_canvas_id, style_key, owner_scope_id)
-			VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?::uuid, ?, ?::uuid, ?::uuid, ?, ?::uuid)
+			   style_subtype, style_preset_id, resolution, owner_id, initial_canvas_id, style_key, owner_scope_id, independent_canvas, independent_media)
+			VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?::uuid, ?, ?::uuid, ?::uuid, ?, ?::uuid, ?, ?)
 		`, project.ID.String(), project.OrgID.String(), project.Name, project.Description,
-		project.AspectRatio, project.StyleType, subtype, presetID, project.Resolution, ownerID, canvasID, project.StyleKey, ownerScope)
+		project.AspectRatio, project.StyleType, subtype, presetID, project.Resolution, ownerID, canvasID, project.StyleKey, ownerScope, project.IndependentCanvas, project.IndependentMedia)
 	if inserted.Error != nil {
 		return fmt.Errorf("insert project: %w", inserted.Error)
 	}
@@ -48,15 +48,21 @@ func createProjectRowsInTx(tx *gorm.DB, project domain.Project, ownerScope uuid.
 	if err := tx.Exec(`INSERT INTO workspace.project_activity(project_id,modified_at,basis) SELECT id,create_time,'created' FROM workspace.project WHERE id=?`, project.ID).Error; err != nil {
 		return fmt.Errorf("insert initial project activity: %w", err)
 	}
+	// Keep the storage budget ledger while projects without an explicit cap
+	// are constrained by their wallet. The sentinel is JSON-safe.
+	const unconfiguredLimit = int64(9_007_199_254_740_991)
+	if err := tx.Exec("SELECT billing.ensure_creation_wallet(?)", ownerScope).Error; err != nil {
+		return fmt.Errorf("ensure project owner's wallet: %w", err)
+	}
 	budget := tx.Exec(`
 			INSERT INTO billing.budget (id, project_id, limit_micros)
-			VALUES (?::uuid, ?::uuid, 0)
-		`, uuid.NewString(), project.ID.String())
+			VALUES (?::uuid, ?::uuid, ?)
+		`, uuid.NewString(), project.ID.String(), unconfiguredLimit)
 	if budget.Error != nil {
-		return fmt.Errorf("insert zero project budget: %w", budget.Error)
+		return fmt.Errorf("insert initial project budget: %w", budget.Error)
 	}
 	if budget.RowsAffected != 1 {
-		return fmt.Errorf("insert zero project budget: inserted %d rows", budget.RowsAffected)
+		return fmt.Errorf("insert initial project budget: inserted %d rows", budget.RowsAffected)
 	}
 	return nil
 }

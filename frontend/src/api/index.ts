@@ -8,6 +8,7 @@ import * as operations from "./operations";
 import * as billing from "./billing";
 import * as canvases from "./canvases";
 import * as canvasAssistant from "./canvasAssistant";
+import * as projects from "./projects";
 import * as script from "./script";
 import * as media from "./media";
 import * as mediaDepths from "./mediaDepths";
@@ -15,7 +16,6 @@ import * as mediaExports from "./mediaExports";
 import * as mediaTranscriptions from "./mediaTranscriptions";
 import * as models from "./models";
 import * as projectCopies from "./projectCopies";
-import * as projects from "./projects";
 import * as agent from "./agent";
 import * as bible from "./bible";
 import * as promptEditor from "./promptEditor";
@@ -30,6 +30,7 @@ export default {
   billing,
   canvases,
   canvasAssistant,
+  projects,
   script,
   media,
   mediaDepths,
@@ -37,7 +38,6 @@ export default {
   mediaTranscriptions,
   models,
   projectCopies,
-  projects,
   agent,
   bible,
   promptEditor,

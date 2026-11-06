@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
@@ -23,6 +24,7 @@ type ReserveInput struct {
 	ActorID              uuid.UUID
 	AmountMicros         int64
 	CommercialPriceReady bool
+	WholeCredits         bool
 	ReusedResult         bool
 	EpisodeID            *uuid.UUID
 	ShotID               *uuid.UUID
@@ -35,6 +37,7 @@ type ReserveInput struct {
 func (i ReserveInput) Validate() error {
 	if i.ProjectID == uuid.Nil || i.OperationID == uuid.Nil || i.ActorID == uuid.Nil ||
 		i.AmountMicros < 0 || i.OccurredAt.IsZero() ||
+		(i.WholeCredits && i.AmountMicros%billingdomain.MicrosPerCredit != 0) ||
 		(i.EpisodeID != nil && *i.EpisodeID == uuid.Nil) ||
 		(i.ShotID != nil && *i.ShotID == uuid.Nil) ||
 		(i.ModelKey != nil && (strings.TrimSpace(*i.ModelKey) == "" || len(*i.ModelKey) > 256)) ||

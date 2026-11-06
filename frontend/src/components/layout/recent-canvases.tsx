@@ -46,7 +46,12 @@ export function RecentCanvases({
   useEffect(() => {
     const controller = new AbortController();
     void listProjects(
-      { limit: 20, status: "active", order: "recent_content" },
+      {
+        include_independent_canvases: true,
+        limit: 20,
+        status: "active",
+        order: "recent_content",
+      },
       { signal: controller.signal },
     )
       .then(requireProjectList)

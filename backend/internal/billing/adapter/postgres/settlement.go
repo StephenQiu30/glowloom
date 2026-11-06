@@ -45,9 +45,10 @@ func (s *Store) SettleInTransaction(ctx context.Context, tx *gorm.DB, input appl
 	var stored struct {
 		domain.Reservation `gorm:"embedded"`
 		CapAtQuote         bool
+		WholeCredits       bool
 	}
 	row := tx.Raw(`
-		SELECT id, project_id, operation_id, amount_micros, status, create_time, closed_at, cap_at_quote
+		SELECT id, project_id, operation_id, amount_micros, status, create_time, closed_at, cap_at_quote, whole_credits
 		FROM billing.reservation
 		WHERE project_id = ?::uuid AND operation_id = ?::uuid AND NOT is_delete
 		FOR UPDATE
@@ -63,13 +64,27 @@ func (s *Store) SettleInTransaction(ctx context.Context, tx *gorm.DB, input appl
 	if err := reservation.Validate(); err != nil {
 		return application.SettleResult{}, fmt.Errorf("validate operation reservation: %w", err)
 	}
+	chargeBasis := input.ActualCostMicros
+	if stored.WholeCredits {
+		if !input.CapAtReservation || reservation.AmountMicros%domain.MicrosPerCredit != 0 {
+			return application.SettleResult{}, ErrSettlementConflict
+		}
+		var err error
+		chargeBasis, err = domain.WholeCreditMicros(min(chargeBasis, reservation.AmountMicros))
+		if err != nil {
+			return application.SettleResult{}, err
+		}
+	}
 	if reservation.Status != domain.ReservationHeld {
-		return replaySettlement(tx, input, reservation)
+		return replaySettlement(tx, input, reservation, chargeBasis)
 	}
 	before := reservation
-	settlement, err := reservation.Settle(input.ActualCostMicros, input.CapAtReservation, input.OccurredAt)
+	settlement, err := reservation.Settle(chargeBasis, input.CapAtReservation, input.OccurredAt)
 	if err != nil {
 		return application.SettleResult{}, fmt.Errorf("calculate operation settlement: %w", err)
+	}
+	if stored.WholeCredits {
+		settlement.ProviderOverageMicros = max(input.ActualCostMicros-reservation.AmountMicros, 0)
 	}
 	var budget domain.Budget
 	row = tx.Raw(`
@@ -286,7 +301,7 @@ func writeBillingEvent(tx *gorm.DB, topic string, orgID, projectID uuid.UUID, ag
 	return nil
 }
 
-func replaySettlement(tx *gorm.DB, input application.SettleInput, reservation domain.Reservation) (application.SettleResult, error) {
+func replaySettlement(tx *gorm.DB, input application.SettleInput, reservation domain.Reservation, chargeBasis int64) (application.SettleResult, error) {
 	var ledger []struct {
 		EntryType    string
 		AmountMicros int64
@@ -304,7 +319,7 @@ func replaySettlement(tx *gorm.DB, input application.SettleInput, reservation do
 	`, input.ProjectID.String(), input.OperationID.String()).Scan(&ledger).Error; err != nil {
 		return application.SettleResult{}, fmt.Errorf("read closed reservation ledger: %w", err)
 	}
-	expected := application.SettleResult{ChargeMicros: input.ActualCostMicros}
+	expected := application.SettleResult{ChargeMicros: chargeBasis}
 	if input.CapAtReservation && input.ActualCostMicros > reservation.AmountMicros {
 		expected.ChargeMicros = reservation.AmountMicros
 		expected.ProviderOverageMicros = input.ActualCostMicros - reservation.AmountMicros

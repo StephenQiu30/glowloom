@@ -1,8 +1,8 @@
+import { listProjects } from "@/api/projects";
 import {
   archiveProject,
   deleteProject,
   getProject,
-  listProjects,
   restoreProject,
   unarchiveProject,
 } from "@/api/projects";
@@ -92,6 +92,7 @@ async function reconcile(p: Project, action: ProjectAction, guard: () => void) {
     guard();
     const page = requireProjectList(
       await listProjects({
+        include_independent_canvases: true,
         deleted: true,
         include_expired: true,
         limit: 50,

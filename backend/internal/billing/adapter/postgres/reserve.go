@@ -56,10 +56,10 @@ func (s *Store) ReserveInTransaction(ctx context.Context, tx *gorm.DB, input app
 	reservationID := uuid.New()
 	row = tx.Exec(`
 		INSERT INTO billing.reservation
-		  (id, project_id, operation_id, amount_micros, status, create_time, cap_at_quote)
-		VALUES (?::uuid, ?::uuid, ?::uuid, ?, 'held', ?, true)
+		  (id, project_id, operation_id, amount_micros, status, create_time, cap_at_quote, whole_credits)
+		VALUES (?::uuid, ?::uuid, ?::uuid, ?, 'held', ?, true, ?)
 	`, reservationID.String(), input.ProjectID.String(), input.OperationID.String(),
-		input.AmountMicros, input.OccurredAt.UTC())
+		input.AmountMicros, input.OccurredAt.UTC(), input.WholeCredits)
 	if row.Error != nil {
 		return application.ReserveResult{}, fmt.Errorf("insert confirmation reservation: %w", row.Error)
 	}

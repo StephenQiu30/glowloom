@@ -84,9 +84,9 @@ func TestCreateProjectCommandCommitsProjectBudgetAndSafeEvents(t *testing.T) {
 	if row.OrgID != actor.OrgID || row.StylePresetID != presetID ||
 		row.AspectRatio != "16:9" || row.StyleType != "stylized" || row.StyleSubtype != "guofeng_xianxia" ||
 		row.Resolution != "1080p" || row.Status != "active" || row.AllowOverseasModels ||
-		row.Revision != 1 || row.LimitMicros != 0 || row.ReservedMicros != 0 ||
+		row.Revision != 1 || row.LimitMicros != 9_007_199_254_740_991 || row.ReservedMicros != 0 ||
 		row.SettledMicros != 0 || row.IsOverrun || row.BudgetRevision != 1 {
-		t.Fatalf("created project or zero budget did not match the command: %+v", row)
+		t.Fatalf("created project or initial uncapped budget did not match the command: %+v", row)
 	}
 
 	var events []struct {

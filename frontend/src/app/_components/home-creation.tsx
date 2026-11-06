@@ -4,7 +4,14 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConversationContext } from "@/components/conversations/conversation-context";
-import { useRef, useState, type ReactElement } from "react";
+import {
+  cloneElement,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import {
   ArrowUp,
   AtSign,
@@ -21,7 +28,8 @@ import { RecentCanvases } from "@/components/layout/recent-canvases";
 import { useSpace } from "@/components/spaces/space-context";
 import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { ProjectPicker } from "@/components/projects/project-picker";
-import type { Project } from "@/components/projects/project";
+import { requireProject, type Project } from "@/components/projects/project";
+import { ensureIndependentCreation } from "@/api/projects";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
 import { ModelPicker } from "@/components/generation/model-picker";
 import { ReferenceStack } from "@/components/generation/reference-stack";
@@ -98,6 +106,8 @@ function ScopedHomeCreation() {
   const [type, setType] = useState<CreationType>("image");
   const [project, setProject] = useState<Project | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [independent, setIndependent] = useState<Project | null>(null);
+  const [contextAttempt, retryContext] = useState(0);
   const [projectOpen, setProjectOpen] = useState(false);
   const [locked, setLocked] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -148,6 +158,26 @@ function ScopedHomeCreation() {
     homeEditor?.key === inputKey ? homeEditor.session : null;
   const activeType = creationTypes.find((item) => item.id === type)!;
   const supported = true;
+  const independentType = type === "image" || type === "video";
+  const openIndependent = useEffectEvent((context: Project) => {
+    setIndependent(context);
+    if (type === "image" || type === "video") {
+      void select(type, project, context);
+    }
+  });
+  useEffect(() => {
+    if (!canRecover || !independentType || independent) return;
+    const controller = new AbortController();
+    void ensureIndependentCreation({ signal: controller.signal })
+      .then((value) => requireProject(value))
+      .then((context) => {
+        if (!controller.signal.aborted) openIndependent(context);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError("创作空间暂不可用，请重试。");
+      });
+    return () => controller.abort();
+  }, [canRecover, independentType, independent, contextAttempt]);
   const acceptsReferences =
     type === "image" ||
     type === "video" ||
@@ -160,7 +190,13 @@ function ScopedHomeCreation() {
   function rememberDraft(projectID: string, kind: CreationType, id: string) {
     drafts.current.set(`${subjectScope}/${projectID}/${kind}`, id);
   }
-  async function select(nextType: CreationType, nextProject = project) {
+  async function select(
+    nextType: CreationType,
+    nextProject = project,
+    context = independent,
+  ) {
+    const execution =
+      nextType === "image" || nextType === "video" ? context : nextProject;
     if (locked || switchFlight.current) return;
     switchFlight.current = true;
     setSwitching(true);
@@ -190,18 +226,18 @@ function ScopedHomeCreation() {
       setType(nextType);
       setProject(nextProject);
       setWorkspace(
-        nextProject && executableCreationType(nextType)
+        execution && executableCreationType(nextType)
           ? {
-              project: nextProject,
+              project: execution,
               type: nextType,
               seed: {
-                project: nextProject,
+                project: execution,
                 capability: creationCapability(nextType),
                 creationType: nextType,
                 prompt: "",
                 composer: creationComposer(nextType, inputs[nextType] ?? empty),
               },
-              draftID: rememberedDraft(nextProject.id, nextType),
+              draftID: rememberedDraft(execution.id, nextType),
             }
           : null,
       );
@@ -221,26 +257,38 @@ function ScopedHomeCreation() {
       login();
       return;
     }
+    if (independentType) {
+      setError("");
+      if (independent) void select(type);
+      else retryContext((attempt) => attempt + 1);
+      return;
+    }
     setProjectOpen(true);
   }
-  const projectControl = session ? (
-    <ProjectPicker
-      compact
-      value={project}
-      disabled={locked || switching}
-      open={projectOpen}
-      onOpenChange={setProjectOpen}
-      onChange={(next) => {
-        conversationMemory?.selectProject(next);
-        void select(type, next);
-      }}
-    />
-  ) : null;
+  const projectControl =
+    session && !independentType ? (
+      <ProjectPicker
+        compact
+        value={project}
+        disabled={locked || switching}
+        open={projectOpen}
+        onOpenChange={setProjectOpen}
+        onChange={(next) => {
+          conversationMemory?.selectProject(next);
+          void select(type, next);
+        }}
+      />
+    ) : null;
   function projectEntry(
     trigger: ReactElement,
     title: string,
     description: string,
   ) {
+    if (independentType) {
+      return cloneElement(trigger as ReactElement<{ onClick?: () => void }>, {
+        onClick: prepare,
+      });
+    }
     return supported ? (
       <ProjectRequiredPopover
         title={title}
@@ -314,9 +362,11 @@ function ScopedHomeCreation() {
                   presentation="home"
                   headerActions={typeControl}
                   projectControl={
-                    <div className="creation-project-control">
-                      {projectControl}
-                    </div>
+                    projectControl && (
+                      <div className="creation-project-control">
+                        {projectControl}
+                      </div>
+                    )
                   }
                   onLock={setLocked}
                   onDraftReady={(id) =>
@@ -418,7 +468,7 @@ function ScopedHomeCreation() {
                         >
                           <div className="creation-primary-tools">
                             {typeControl}
-                            {supported ? (
+                            {supported && !independentType ? (
                               <ModelPicker
                                 models={[]}
                                 value={null}

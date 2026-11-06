@@ -63,13 +63,14 @@ type ProjectListPage struct {
 
 // ListProjectsInput selects current or deleted projects in an organization.
 type ListProjectsInput struct {
-	IncludeExpired bool
-	Order          string
-	Status         string
-	Deleted        bool
-	Query          string
-	Limit          int
-	After          *ProjectListCursor
+	IncludeIndependentCanvases bool
+	IncludeExpired             bool
+	Order                      string
+	Status                     string
+	Deleted                    bool
+	Query                      string
+	Limit                      int
+	After                      *ProjectListCursor
 	// FolderID is nil for all projects, uuid.Nil for root, or a personal folder.
 	FolderID *uuid.UUID
 }

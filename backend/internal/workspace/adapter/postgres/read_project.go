@@ -48,6 +48,8 @@ func (s *Store) FindProject(ctx context.Context, actor identityapp.Principal, pr
 
 func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, error) {
 	var row struct {
+		IndependentCanvas   bool
+		IndependentMedia    bool
 		ID                  uuid.UUID
 		OrgID               uuid.UUID
 		OwnerID             *uuid.UUID
@@ -74,7 +76,7 @@ func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, e
 		SELECT id, org_id, owner_id, initial_canvas_id AS canvas_id, style_key, name, description, aspect_ratio, style_type,
 		       style_subtype, style_preset_id, cover_asset_id, resolution, allow_overseas_models,
 		       status, archived_at, delete_time, purge_after, revision,
-		       create_time, update_time
+		       create_time, update_time, independent_canvas, independent_media
 		FROM workspace.project
 		WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete AND status IN ('active','archived')
 	`, projectID.String(), orgID.String()).Scan(&row)
@@ -85,6 +87,7 @@ func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, e
 		return domain.Project{}, ErrProjectNotFound
 	}
 	project := domain.Project{
+		IndependentCanvas: row.IndependentCanvas, IndependentMedia: row.IndependentMedia,
 		ID: row.ID, OrgID: row.OrgID, Name: row.Name, Description: row.Description,
 		AspectRatio: row.AspectRatio, StyleType: row.StyleType, Resolution: row.Resolution,
 		AllowOverseasModels: row.AllowOverseasModels, Status: row.Status,

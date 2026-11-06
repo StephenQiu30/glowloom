@@ -90,6 +90,7 @@ type QuoteCostDetail struct {
 	Outputs               int64                   `json:"outputs"`
 	Multipliers           map[string]json.Number  `json:"multipliers,omitempty"`
 	MarkupMultiplier      json.Number             `json:"markup_multiplier,omitempty"`
+	WholeCredits          bool                    `json:"whole_credits,omitempty"`
 	ExactQuoteMicros      string                  `json:"exact_quote_micros,omitempty"`
 	MaxChargeCredits      string                  `json:"max_charge_credits,omitempty"`
 	ExactCredits          string                  `json:"exact_credits,omitempty"`

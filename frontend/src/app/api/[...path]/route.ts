@@ -573,6 +573,8 @@ const editorCatalogRoutes: typeof identityRoutes = [
 // The browser cannot choose an upstream host or use this slice as a general proxy.
 const resources: Record<string, readonly string[]> = {
   projects: ["GET", "POST"],
+  "creation-context": ["POST"],
+  "independent-canvases": ["POST"],
   "media/library": ["GET"],
   "media/library/commands": ["POST"],
   "media/library/uploads": ["POST"],
@@ -881,6 +883,7 @@ async function proxy(
         "status",
         "deleted",
         "include_expired",
+        "include_independent_canvases",
       ])
         if (incoming.searchParams.has(key))
           upstream.searchParams.set(key, incoming.searchParams.get(key)!);

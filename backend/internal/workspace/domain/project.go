@@ -37,6 +37,8 @@ const (
 
 // Project is the identity and mutable settings of one production project.
 type Project struct {
+	IndependentCanvas   bool `json:",omitempty"`
+	IndependentMedia    bool `json:",omitempty"`
 	ID                  uuid.UUID
 	OrgID               uuid.UUID
 	OwnerID             uuid.UUID `json:",omitzero"`

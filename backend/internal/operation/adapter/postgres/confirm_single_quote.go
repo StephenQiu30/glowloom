@@ -162,9 +162,15 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 				return err
 			}
 		}
+		var costs application.QuoteCostDetail
+		if len(quoted.QuoteDetail) != 0 {
+			if err := json.Unmarshal(quoted.QuoteDetail, &costs); err != nil {
+				return fmt.Errorf("decode frozen billing strategy: %w", err)
+			}
+		}
 		reserve, err := s.billingStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{Actor: actor,
 			ProjectID: quoted.ProjectID, OperationID: quoted.ID, ActorID: actor.ID,
-			AmountMicros: *quoted.QuoteMicros, CommercialPriceReady: commercial, ReusedResult: quoted.ReusedFromID != nil, ModelKey: &model.ModelKey,
+			AmountMicros: *quoted.QuoteMicros, WholeCredits: costs.WholeCredits, CommercialPriceReady: commercial, ReusedResult: quoted.ReusedFromID != nil, ModelKey: &model.ModelKey,
 			Region: quoted.Region, OccurredAt: confirmedAt,
 		})
 		if err != nil {

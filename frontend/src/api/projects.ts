@@ -3,6 +3,29 @@
 import { request } from "@/lib/request";
 import type { RequestOptions } from "@/lib/request";
 
+/** 解析当前空间的独立创作上下文 POST /api/creation-context */
+export async function ensureIndependentCreation(options?: RequestOptions) {
+  return request<API.ProjectResponse>("/api/creation-context", {
+    method: "POST",
+    ...(options || {}),
+  });
+}
+
+/** 新建独立画布 POST /api/independent-canvases */
+export async function createIndependentCanvas(
+  body: API.CreateProjectRequest,
+  options?: RequestOptions,
+) {
+  return request<API.CreatedProject>("/api/independent-canvases", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 查询画布创建结果 GET /api/project-creations/${param0} */
 export async function getProjectCreation(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

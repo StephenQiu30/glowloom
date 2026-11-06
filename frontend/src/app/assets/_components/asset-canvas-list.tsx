@@ -459,7 +459,7 @@ export function AssetCanvasList({
           <Button
             variant="asset-card"
             size="asset-card"
-            aria-label={kind === "short_drama" ? "新建短剧画布" : "新建画布"}
+            aria-label={kind === "short_drama" ? "新建短剧画布" : "新建项目"}
             disabled={locked || !writable || pending}
             onClick={() => {
               setTemplate(undefined);

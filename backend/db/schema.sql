@@ -7299,6 +7299,7 @@ FOR EACH ROW EXECUTE FUNCTION media.protect_transfer_object_attempt();
 GRANT SELECT, INSERT ON media.transfer_output_attempt TO glowloom_app;
 -- No UPDATE is granted on output_attempt, frozen physical identity or work IDs.
 ALTER TABLE billing.reservation ADD COLUMN cap_at_quote boolean NOT NULL DEFAULT false;
+ALTER TABLE billing.reservation ADD COLUMN whole_credits boolean NOT NULL DEFAULT false;
 ALTER TABLE operation.provider_call ADD COLUMN procurement_cost_micros bigint CHECK (procurement_cost_micros >= 0);
 GRANT UPDATE (procurement_cost_micros) ON operation.provider_call TO glowloom_app;
 
@@ -7539,3 +7540,18 @@ $$;
 CREATE CONSTRAINT TRIGGER wallet_reservation_consistency
 AFTER INSERT OR UPDATE ON billing.reservation DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION billing.check_wallet_reservation();
+
+-- Independent creation keeps project-scoped foreign keys without exposing a
+-- business project. Old projects retain the existing visibility and identity.
+ALTER TABLE workspace.project ADD COLUMN independent_canvas boolean NOT NULL DEFAULT false;
+ALTER TABLE workspace.project ADD COLUMN independent_media boolean NOT NULL DEFAULT false;
+ALTER TABLE workspace.project ADD CONSTRAINT independent_project_kind CHECK (NOT (independent_canvas AND independent_media));
+CREATE UNIQUE INDEX project_independent_media_scope ON workspace.project(owner_scope_id)
+    WHERE independent_media;
+
+CREATE FUNCTION billing.ensure_creation_wallet(scope uuid) RETURNS void
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog AS $$
+    INSERT INTO billing.wallet_account(scope_id) VALUES (scope) ON CONFLICT DO NOTHING
+$$;
+REVOKE ALL ON FUNCTION billing.ensure_creation_wallet(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION billing.ensure_creation_wallet(uuid) TO glowloom_app;

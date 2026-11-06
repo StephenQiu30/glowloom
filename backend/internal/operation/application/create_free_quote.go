@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
@@ -311,6 +313,23 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 		costs.ExactQuoteMicros, costs.ExactCredits, costs.MaxChargeCredits = "0", "0", "0"
 		zero := int64(0)
 		costs.EstimatedCredits = &zero
+	}
+	if candidate == nil {
+		procurement, err := catalog.Price.ProcurementVersion()
+		if err != nil {
+			return PreparedFreeQuote{}, err
+		}
+		if procurement != uuid.Nil {
+			amount, err = billingdomain.WholeCreditMicros(amount)
+			if err != nil {
+				return PreparedFreeQuote{}, fmt.Errorf("round quote credits: %w", err)
+			}
+			credits := amount / billingdomain.MicrosPerCredit
+			costs.WholeCredits = true
+			costs.EstimatedCredits = &credits
+			costs.ExactCredits = strconv.FormatInt(credits, 10)
+			costs.MaxChargeCredits = costs.ExactCredits
+		}
 	}
 	quoteDetail, err := json.Marshal(struct {
 		QuoteCostDetail

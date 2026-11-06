@@ -71,6 +71,7 @@ type cursor struct {
 func (h *Handler) Register(group *gin.RouterGroup) {
 	group.GET("/projects", h.List)
 	group.POST("/projects", h.Create)
+	group.POST("/independent-canvases", h.CreateIndependentCanvas)
 	group.GET("/style-presets", h.ListPresets)
 }
 
@@ -80,6 +81,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @ID listProjects
 // @Produce json
 // @Param limit query int false "分页大小，上限200"
+// @Param include_independent_canvases query bool false "画布列表包含独立画布"
 // @Param cursor query string false "不透明游标"
 // @Param q query string false "名称检索"
 // @Param status query string false "active或archived"
@@ -95,6 +97,13 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Router /api/projects [get]
 func (h *Handler) List(c *gin.Context) {
 	input := application.ListProjectsInput{Query: strings.TrimSpace(c.Query("q")), Status: c.Query("status"), Order: c.Query("order"), Limit: 50}
+	if values, present := c.Request.URL.Query()["include_independent_canvases"]; present {
+		if len(values) != 1 || values[0] != "true" {
+			httpapi.WriteProblem(c, 422, "invalid_request", nil)
+			return
+		}
+		input.IncludeIndependentCanvases = true
+	}
 	if raw := c.Query("folder_id"); raw != "" {
 		id := uuid.Nil
 		if raw != "root" {
@@ -160,6 +169,10 @@ func (h *Handler) List(c *gin.Context) {
 			IncludeExpired               bool
 			Limit                        int
 		}{input.Query, input.Status, c.Query("folder_id"), input.Order, input.IncludeExpired, input.Limit})
+	}
+	if input.IncludeIndependentCanvases {
+		version = 4
+		binding = cursorBinding(actor, "recent-canvases-v4", binding)
 	}
 	if raw := c.Query("cursor"); raw != "" {
 		if len(raw) > base64.RawURLEncoding.EncodedLen(512) {

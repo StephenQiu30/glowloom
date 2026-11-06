@@ -44,6 +44,25 @@ type CreateProjectRequest struct {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects [post]
 func (h *Handler) Create(c *gin.Context) {
+	h.createProject(c, false)
+}
+
+// CreateIndependentCanvas preserves the project creation receipt while hiding
+// the backing container from the project picker.
+// @Summary 新建独立画布
+// @Tags projects
+// @ID createIndependentCanvas
+// @Accept json
+// @Produce json
+// @Param Idempotency-Key header string true "创建命令 UUID"
+// @Param body body CreateProjectRequest true "画布初始规格"
+// @Success 201 {object} application.CreatedProject
+// @Router /api/independent-canvases [post]
+func (h *Handler) CreateIndependentCanvas(c *gin.Context) {
+	h.createProject(c, true)
+}
+
+func (h *Handler) createProject(c *gin.Context, independent bool) {
 	var body CreateProjectRequest
 	if !httpapi.Decode(c, &body) {
 		return
@@ -53,7 +72,7 @@ func (h *Handler) Create(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
 		return
 	}
-	input := application.CreateProjectInput{StyleKey: body.StyleKey, Name: body.Name, Description: body.Description, AspectRatio: body.AspectRatio, StyleType: body.StyleType, StyleSubtype: body.StyleSubtype, RequestID: c.GetString("request_id")}
+	input := application.CreateProjectInput{IndependentCanvas: independent, StyleKey: body.StyleKey, Name: body.Name, Description: body.Description, AspectRatio: body.AspectRatio, StyleType: body.StyleType, StyleSubtype: body.StyleSubtype, RequestID: c.GetString("request_id")}
 	if body.StylePresetID != nil {
 		if *body.StylePresetID == uuid.Nil {
 			httpapi.WriteProblem(c, 422, "invalid_request", nil)

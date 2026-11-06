@@ -42,7 +42,12 @@ it("routes to the server canvas and requests active projects in content order", 
     ),
   ).toBe(`/canvas?project_id=${project.id}&canvas_id=${project.canvas_id}`);
   expect(listProjects).toHaveBeenCalledWith(
-    { limit: 20, status: "active", order: "recent_content" },
+    {
+      limit: 20,
+      status: "active",
+      order: "recent_content",
+      include_independent_canvases: true,
+    },
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
 });

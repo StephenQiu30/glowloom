@@ -11,7 +11,11 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createProject, getProject, getProjectCreation } from "@/api/projects";
+import {
+  createIndependentCanvas,
+  getProject,
+  getProjectCreation,
+} from "@/api/projects";
 import { getCanvas } from "@/api/canvases";
 import { AuthDialog } from "@/components/auth/auth-dialog";
 import {
@@ -104,7 +108,7 @@ export function ProjectCreationProvider({ children }: { children: ReactNode }) {
         resolve: (key) => getProjectCreation({ key }),
         create: (body, key) => {
           if (!writable) throw new RequestError("forbidden", 403);
-          return createProject(body, {
+          return createIndependentCanvas(body, {
             headers: { "Idempotency-Key": key },
             sessionRecovery: "never",
           });

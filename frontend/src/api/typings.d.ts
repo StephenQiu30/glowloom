@@ -3457,6 +3457,8 @@ declare namespace API {
   type listProjectsParams = {
     /** 分页大小，上限200 */
     limit?: number;
+    /** 画布列表包含独立画布 */
+    include_independent_canvases?: boolean;
     /** 不透明游标 */
     cursor?: string;
     /** 名称检索 */

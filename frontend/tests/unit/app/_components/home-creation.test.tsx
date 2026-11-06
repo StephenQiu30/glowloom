@@ -24,6 +24,22 @@ const state = vi.hoisted(() => ({
 vi.mock("@/components/auth/session", () => ({
   useOptionalSession: () => state.session,
 }));
+vi.mock("@/components/spaces/space-context", () => ({
+  useSpace: () => ({
+    selected: { id: "22222222-2222-4222-8222-222222222222", writable: true },
+  }),
+}));
+vi.mock("@/api/projects", () => ({
+  ensureIndependentCreation: vi.fn(async () => ({
+    id: "33333333-3333-4333-8333-333333333333",
+    canvas_id: null,
+    name: "独立创作",
+    aspect_ratio: "16:9",
+    style_key: null,
+    revision: 1,
+    update_time: "2026-11-06T00:00:00Z",
+  })),
+}));
 vi.mock("@/components/layout/basic-layout", () => ({
   useLoginDialog: () => state.login,
 }));
@@ -96,29 +112,23 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it("未选项目时模型入口打开模型说明，仅显式选择项目才打开项目弹层", async () => {
+it("登录后直接进入生图和生视频，不显示项目选择器", async () => {
   state.session = { actor: { id: "test-actor" } };
   render(<Page />);
-  fireEvent.click(screen.getByRole("button", { name: /选择模型|生成模型/ }));
-  expect(await screen.findByText("选择生成模型")).toBeTruthy();
-  expect(
-    screen
-      .getByRole("button", { name: "选择验证项目" })
-      .getAttribute("aria-expanded"),
-  ).toBe("false");
-  fireEvent.click(screen.getByRole("button", { name: "选择项目" }));
-  await waitFor(() =>
-    expect(
-      screen
-        .getByRole("button", { name: "选择验证项目" })
-        .getAttribute("aria-expanded"),
-    ).toBe("true"),
-  );
-  expect(screen.queryByText("选择生成模型")).toBeNull();
-  expect(state.opened).toEqual([]);
+  await screen.findByText("image 富文本编辑器");
+  expect(screen.queryByRole("button", { name: /选择.*项目/ })).toBeNull();
+  await tab("视频生成");
+  await screen.findByText("video 富文本编辑器");
+  expect(screen.queryByRole("button", { name: /选择.*项目/ })).toBeNull();
 });
 
 async function tab(name: string) {
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name: "创作类型" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
   fireEvent.keyDown(screen.getByRole("combobox", { name: "创作类型" }), {
     key: "ArrowDown",
   });
@@ -126,33 +136,6 @@ async function tab(name: string) {
     await screen.findByRole("option", { name: new RegExp(name) }),
   );
 }
-
-it.each([
-  ["参数", "生成参数"],
-  ["添加参考素材", "添加参考素材"],
-])(
-  "未选项目时%s只打开对应内容，显式选择项目后才打开项目弹层",
-  async (trigger, title) => {
-    state.session = { actor: { id: "test-actor" } };
-    render(<Page />);
-    fireEvent.click(screen.getByRole("button", { name: trigger }));
-    expect(await screen.findByText(title)).toBeTruthy();
-    expect(
-      screen
-        .getByRole("button", { name: "选择验证项目" })
-        .getAttribute("aria-expanded"),
-    ).toBe("false");
-    fireEvent.click(screen.getByRole("button", { name: "选择项目" }));
-    await waitFor(() =>
-      expect(
-        screen
-          .getByRole("button", { name: "选择验证项目" })
-          .getAttribute("aria-expanded"),
-      ).toBe("true"),
-    );
-    expect(state.opened).toEqual([]);
-  },
-);
 
 it("使用紧凑类型菜单，游客切换输入不丢失且没有推荐技能行", async () => {
   render(<Page />);
@@ -189,7 +172,6 @@ it("Agent 入口先登录和选择项目，不再显示暂未开放", async () =
 it("保存未确认禁止切换，确认后按类型恢复原草稿指针", async () => {
   state.session = { actor: { id: "test-actor" } };
   render(<Page />);
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
   await screen.findByText("image 富文本编辑器");
   state.save.mockResolvedValue(false);
   await tab("视频生成");
@@ -207,16 +189,11 @@ it("保存未确认禁止切换，确认后按类型恢复原草稿指针", asyn
   });
 });
 
-it("报价冻结期间不能切换类型、项目或工作模式", async () => {
+it("报价冻结期间不能切换类型或工作模式", async () => {
   state.session = { actor: { id: "test-actor" } };
   render(<Page />);
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
   fireEvent.click(await screen.findByRole("button", { name: "冻结报价" }));
   expect(screen.getByRole("combobox", { name: "创作类型" })).toHaveProperty(
-    "disabled",
-    true,
-  );
-  expect(screen.getByRole("button", { name: "选择验证项目" })).toHaveProperty(
     "disabled",
     true,
   );
@@ -287,16 +264,18 @@ it("六类文字草稿往返隔离，首次选择目标类型为空", async () =
   }
 });
 
-it("账号切换立即隔离所有类型文字和项目指针", async () => {
+it("账号切换立即隔离独立创作的草稿指针", async () => {
   state.session = { actor: { id: "account-a" } };
   const page = render(<Page />);
-  fireEvent.paste(await screen.findByLabelText("创作提示词"), {
-    clipboardData: { files: [], getData: () => "A的私有内容" },
-  });
+  await screen.findByText("image 富文本编辑器");
+  await screen.findByText("image 富文本编辑器");
+  await tab("视频生成");
+  await screen.findByText("video 富文本编辑器");
+  await tab("图片生成");
+  await screen.findByText("image 富文本编辑器");
+  expect(state.opened.at(-1)?.draftID).toBe("image-draft");
   state.session = { actor: { id: "account-b" } };
   page.rerender(<Page />);
-  expect(screen.getByLabelText("创作提示词").textContent).toBe("");
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
   await screen.findByText("image 富文本编辑器");
   expect(state.opened.at(-1)?.draftID).toBeUndefined();
 });
@@ -304,13 +283,14 @@ it("账号切换立即隔离所有类型文字和项目指针", async () => {
 it("音频独立进入 audio 工作区且未选项目时没有素材引用入口", async () => {
   state.session = { actor: { id: "test-actor" } };
   render(<Page />);
+  await screen.findByText("image 富文本编辑器");
   await tab("音频生成");
   expect(screen.queryByRole("button", { name: "添加参考素材" })).toBeNull();
   expect(
     screen.queryByRole("button", { name: "添加主体或素材引用" }),
   ).toBeNull();
-  expect(screen.getByText("文本朗读")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  expect(await screen.findByText("文本朗读")).toBeTruthy();
+  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
   await screen.findByText("audio 富文本编辑器");
   await tab("视频生成");
   await screen.findByText("video 富文本编辑器");
@@ -325,10 +305,13 @@ it("音频独立进入 audio 工作区且未选项目时没有素材引用入口
 it("动作模仿未选项目时解释双参考要求，选择项目后进入视频工作区", async () => {
   state.session = { actor: { id: "test-actor" } };
   render(<Page />);
+  await screen.findByText("image 富文本编辑器");
   await tab("动作模仿");
   expect(screen.queryByRole("textbox", { name: "创作提示词" })).toBeNull();
-  expect(screen.getByText(/选择项目后添加角色图片与动作视频/)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  expect(
+    await screen.findByText(/选择项目后添加角色图片与动作视频/),
+  ).toBeTruthy();
+  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
   await screen.findByText("video 富文本编辑器");
   expect(state.opened.at(-1)?.capability).toBe("video");
 });
@@ -358,8 +341,9 @@ it("项目音频草稿页面内复用，重新打开不复用本机指针", asyn
   state.session = { actor: { id: "voice-owner" } };
   state.generatedID = "47b69106-3c3e-44ca-a50a-a89108d1c6c1";
   let view = render(<Page />);
+  await screen.findByText("image 富文本编辑器");
   await tab("音频生成");
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
   await screen.findByText("audio 富文本编辑器");
   await tab("视频生成");
   await screen.findByText("video 富文本编辑器");
@@ -368,15 +352,17 @@ it("项目音频草稿页面内复用，重新打开不复用本机指针", asyn
   expect(state.opened.at(-1)?.draftID).toBe(state.generatedID);
   view.unmount();
   view = render(<Page />);
+  await screen.findByText("image 富文本编辑器");
   await tab("音频生成");
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
   await screen.findByText("audio 富文本编辑器");
   expect(state.opened.at(-1)?.draftID).toBeUndefined();
   view.unmount();
   state.session = { actor: { id: "other-owner" } };
   render(<Page />);
+  await screen.findByText("image 富文本编辑器");
   await tab("音频生成");
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
   await screen.findByText("audio 富文本编辑器");
   expect(state.opened.at(-1)?.draftID).toBeUndefined();
 });
@@ -397,6 +383,7 @@ it("keeps a guest Agent draft through login and first project selection", async 
       <Page />
     </ConversationProvider>,
   );
+  await screen.findByText("image 富文本编辑器");
   await tab("Agent 模式");
   expect((await screen.findByLabelText("对话创作输入")).textContent).toBe(
     "访客尚未发送的正文",
@@ -414,13 +401,14 @@ it("keeps Agent drafts separate when switching projects", async () => {
       <Page />
     </ConversationProvider>,
   );
+  await screen.findByText("image 富文本编辑器");
   await tab("Agent 模式");
   fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
   fireEvent.paste(await screen.findByLabelText("对话创作输入"), {
     clipboardData: { files: [], getData: () => "项目A草稿" },
   });
   state.projectID = "second-project";
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
   await waitFor(() =>
     expect(screen.getByLabelText("对话创作输入").textContent).toBe(""),
   );
@@ -428,7 +416,7 @@ it("keeps Agent drafts separate when switching projects", async () => {
     clipboardData: { files: [], getData: () => "项目B草稿" },
   });
   state.projectID = "test-project";
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
   await waitFor(() =>
     expect(screen.getByLabelText("对话创作输入").textContent).toBe("项目A草稿"),
   );

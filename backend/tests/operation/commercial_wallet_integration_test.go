@@ -57,7 +57,7 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	input.RequestID = uuid.NewString()
 	var scope, lot uuid.UUID
 	require.NoError(t, db.Raw(`SELECT billing.bind_project_wallet(?)`, project).Row().Scan(&scope))
-	require.NoError(t, db.Raw(`SELECT billing.issue_promotional_credit(?,?,130000,now()+interval '1 hour',?,?)`,
+	require.NoError(t, db.Raw(`SELECT billing.issue_promotional_credit(?,?,210000,now()+interval '1 hour',?,?)`,
 		scope, uuid.New(), modelKey, "isolated model wallet test").Row().Scan(&lot))
 	blocked, err := store.CreateFreeQuote(t.Context(), actor, input)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, batch.BatchID)
-	require.EqualValues(t, 240_000, batch.TotalMicros)
+	require.EqualValues(t, 400_000, batch.TotalMicros)
 	require.False(t, batch.Confirmable)
 	_, err = store.ConfirmBatchQuote(t.Context(), actor, op.ConfirmBatchQuoteInput{
 		ProjectID: project, BatchID: *batch.BatchID, RequestID: uuid.NewString(),
@@ -92,7 +92,10 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	require.True(t, quote.Confirmable)
 	var detail op.QuoteCostDetail
 	require.NoError(t, json.Unmarshal(quote.QuoteDetail, &detail))
-	require.Equal(t, "1.2", detail.MaxChargeCredits)
+	require.Equal(t, "2", detail.MaxChargeCredits)
+	require.Equal(t, "120000", detail.ExactQuoteMicros)
+	require.True(t, detail.WholeCredits)
+	require.EqualValues(t, 200_000, quote.QuoteMicros)
 	confirmed, err := store.ConfirmSingleQuote(t.Context(), actor, op.ConfirmSingleQuoteInput{
 		ProjectID: project, OperationID: quote.OperationID, RequestID: uuid.NewString(),
 	})
@@ -108,7 +111,7 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	require.ErrorIs(t, err, op.ErrProviderCostUnknown)
 	wallet, err := billingpg.NewStore(db).ReadWallet(t.Context(), scope, true, nil)
 	require.NoError(t, err)
-	require.Equal(t, "1.2", wallet.HeldCredits)
+	require.Equal(t, "2", wallet.HeldCredits)
 
 	network := &fixtureGeneration{}
 	results := op.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
@@ -133,7 +136,7 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	wallet, err = billingpg.NewStore(db).ReadWallet(t.Context(), scope, true, nil)
 	require.NoError(t, err)
 	require.Equal(t, "0", wallet.HeldCredits)
-	require.Equal(t, "1.2", wallet.RedeemedToday)
+	require.Equal(t, "2", wallet.RedeemedToday)
 	require.Equal(t, "0.1", wallet.RestrictedCredits)
 	require.Equal(t, 1, network.calls)
 	var supplierMicros int64

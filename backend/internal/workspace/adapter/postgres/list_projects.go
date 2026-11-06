@@ -58,9 +58,12 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 			LEFT JOIN workspace.project_activity a ON a.project_id=p.id
 			LEFT JOIN workspace.project_folder_placement m ON m.project_id=p.id AND m.org_id=p.org_id AND m.owner_scope_id=p.owner_scope_id AND m.actor_id=?::uuid
 			LEFT JOIN workspace.project_folder f ON f.id=m.folder_id AND f.org_id=m.org_id AND f.actor_id=m.actor_id AND f.owner_scope_id=m.owner_scope_id AND NOT f.is_delete
-			WHERE p.org_id = ?::uuid AND p.owner_scope_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived')
+			WHERE p.org_id = ?::uuid AND p.owner_scope_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived') AND NOT p.independent_media
 		`
 		args := []any{actor.ID.String(), actor.OrgID.String(), actor.ScopeID.String(), input.Deleted}
+		if !input.IncludeIndependentCanvases {
+			query += " AND NOT p.independent_canvas"
+		}
 		if input.FolderID != nil {
 			if *input.FolderID == uuid.Nil {
 				query += ` AND f.id IS NULL`

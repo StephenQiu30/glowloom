@@ -44,14 +44,15 @@ type ProjectCreationRequest struct {
 
 // CreateProjectInput contains the specifications chosen for a new project.
 type CreateProjectInput struct {
-	StyleKey      *string
-	Name          string
-	Description   string
-	AspectRatio   string
-	StyleType     string
-	StyleSubtype  string
-	StylePresetID uuid.UUID
-	RequestID     string
+	IndependentCanvas bool
+	StyleKey          *string
+	Name              string
+	Description       string
+	AspectRatio       string
+	StyleType         string
+	StyleSubtype      string
+	StylePresetID     uuid.UUID
+	RequestID         string
 }
 
 // CreatedProject is the safe application result of project registration.
@@ -111,7 +112,11 @@ func (c *CreateProjectCommand) ExecuteIdempotent(ctx context.Context, actor iden
 	if err != nil {
 		return CreatedProject{}, fmt.Errorf("encode project creation request: %w", err)
 	}
-	hash := sha256.Sum256(append([]byte("POST /api/projects\x00"), body...))
+	contract := "POST /api/projects\x00"
+	if input.IndependentCanvas {
+		contract = "POST /api/independent-canvases\x00"
+	}
+	hash := sha256.Sum256(append([]byte(contract), body...))
 	return c.execute(ctx, actor, input, &ProjectCreationRequest{Key: key, Hash: hex.EncodeToString(hash[:])})
 }
 
@@ -133,7 +138,8 @@ func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Pr
 		input.StyleType = "realistic"
 	}
 	project := domain.Project{
-		ID: uuid.New(), OrgID: actor.OrgID, OwnerID: actor.ID, CanvasID: uuid.New(), StyleKey: input.StyleKey, Name: name, Description: input.Description,
+		IndependentCanvas: input.IndependentCanvas,
+		ID:                uuid.New(), OrgID: actor.OrgID, OwnerID: actor.ID, CanvasID: uuid.New(), StyleKey: input.StyleKey, Name: name, Description: input.Description,
 		AspectRatio: input.AspectRatio, StyleType: input.StyleType,
 		StyleSubtype: input.StyleSubtype, StylePresetID: input.StylePresetID,
 		Resolution: "1080p", Status: "active", Revision: 1,
@@ -158,7 +164,7 @@ func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Pr
 	if err != nil {
 		return CreatedProject{}, fmt.Errorf("create project with events: %w", err)
 	}
-	if saved.OwnerID != actor.ID || saved.CanvasID == uuid.Nil || (request == nil && saved.CanvasID != project.CanvasID) || !equalStyleKey(saved.StyleKey, project.StyleKey) || saved.ID == uuid.Nil || (request == nil && saved.ID != project.ID) || saved.OrgID != project.OrgID || saved.Name != project.Name ||
+	if saved.IndependentCanvas != project.IndependentCanvas || saved.OwnerID != actor.ID || saved.CanvasID == uuid.Nil || (request == nil && saved.CanvasID != project.CanvasID) || !equalStyleKey(saved.StyleKey, project.StyleKey) || saved.ID == uuid.Nil || (request == nil && saved.ID != project.ID) || saved.OrgID != project.OrgID || saved.Name != project.Name ||
 		saved.Description != project.Description || saved.AspectRatio != project.AspectRatio ||
 		saved.StyleType != project.StyleType || saved.StyleSubtype != project.StyleSubtype ||
 		saved.StylePresetID != project.StylePresetID || saved.Resolution != "1080p" ||

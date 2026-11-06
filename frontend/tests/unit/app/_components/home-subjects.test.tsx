@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -14,13 +15,14 @@ const state = vi.hoisted(() => ({
   scope: "22222222-2222-4222-8222-222222222222",
   list: vi.fn(),
   validate: vi.fn(),
+  ensure: vi.fn(),
   seed: undefined as GenerationSeed | undefined,
 }));
 vi.mock("@/components/auth/session", () => ({
   useOptionalSession: () => ({ actor: { id: state.actor } }),
 }));
 vi.mock("@/components/spaces/space-context", () => ({
-  useSpace: () => ({ selected: { id: state.scope } }),
+  useSpace: () => ({ selected: { id: state.scope, writable: true } }),
 }));
 vi.mock("@/components/layout/basic-layout", () => ({
   useLoginDialog: () => vi.fn(),
@@ -32,17 +34,7 @@ vi.mock("@/api/promptEditor", () => ({
 vi.mock("@/components/subjects/unified-media", () => ({
   UnifiedSubjectMedia: () => <span>缩略图</span>,
 }));
-vi.mock("@/components/projects/project-picker", () => ({
-  ProjectPicker: ({
-    onChange,
-  }: {
-    onChange: (value: { id: string; name: string }) => void;
-  }) => (
-    <button onClick={() => onChange({ id: "project", name: "验证项目" })}>
-      选择验证项目
-    </button>
-  ),
-}));
+vi.mock("@/api/projects", () => ({ ensureIndependentCreation: state.ensure }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("next/dynamic", () => ({
   default: (loader: () => Promise<unknown>) =>
@@ -78,7 +70,29 @@ const subject = {
   created_at: "2026-10-28T00:00:00Z",
   updated_at: "2026-10-28T00:00:00Z",
 };
+let finishContext: (project: unknown) => void;
+
+async function resolveContext() {
+  await act(async () =>
+    finishContext({
+      id: "88888888-8888-4888-8888-888888888888",
+      canvas_id: null,
+      name: "独立创作",
+      aspect_ratio: "16:9",
+      style_key: null,
+      revision: 1,
+      update_time: "2026-11-06T00:00:00Z",
+    }),
+  );
+}
+
 beforeEach(() => {
+  state.ensure.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishContext = resolve;
+      }),
+  );
   state.scope = "22222222-2222-4222-8222-222222222222";
   state.seed = undefined;
   state.list.mockResolvedValue({
@@ -92,12 +106,11 @@ beforeEach(() => {
   });
 });
 
-it("无项目的参考堆叠入口先选择项目，不伪造已授权素材", async () => {
+it("参考入口重试准备独立上下文，不展示项目选择或未授权素材", async () => {
   render(<Page />);
   fireEvent.click(await screen.findByRole("button", { name: "添加参考" }));
-  expect(
-    await screen.findByRole("button", { name: "选择验证项目" }),
-  ).toBeTruthy();
+  await waitFor(() => expect(state.ensure).toHaveBeenCalledTimes(2));
+  expect(screen.queryByRole("button", { name: /选择.*项目/ })).toBeNull();
   expect(screen.queryByRole("option", { name: "上传参考内容" })).toBeNull();
   expect(screen.queryByRole("option", { name: "从参考素材添加" })).toBeNull();
   expect(state.validate).not.toHaveBeenCalled();
@@ -121,7 +134,7 @@ it("切换空间不会将原空间的未提交主体身份带入新项目", asyn
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "添加参考" })).toBeTruthy(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await resolveContext();
   await screen.findByText("项目创作编辑器");
   expect(state.seed?.composer?.references ?? []).toHaveLength(0);
   expect(JSON.stringify(state.seed)).not.toContain(subject.id);
@@ -152,7 +165,7 @@ it.each(["创建主体", "全部主体"])(
   },
 );
 
-it("未选项目工具栏可引用当前空间主体，选项目时完整绑定随草稿传入", async () => {
+it("可引用当前空间主体，独立上下文就绪时完整绑定随草稿传入", async () => {
   render(<Page />);
   await waitFor(() =>
     expect(
@@ -170,7 +183,7 @@ it("未选项目工具栏可引用当前空间主体，选项目时完整绑定�
   );
   expect(state.seed).toBeUndefined();
   expect(state.validate).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await resolveContext();
   await screen.findByText("项目创作编辑器");
   expect(state.seed?.composer?.references[0].source).toMatchObject({
     kind: "subject",
@@ -209,7 +222,7 @@ it("图片主体引用切至视频不泄漏，返回图片仍有同一引用", a
   await waitFor(() =>
     expect(screen.getByLabelText("创作提示词").textContent).toBe("主体1"),
   );
-  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await resolveContext();
   await screen.findByText("项目创作编辑器");
   expect(state.seed?.composer?.references).toHaveLength(1);
   expect(JSON.stringify(state.seed?.composer?.references)).toContain(

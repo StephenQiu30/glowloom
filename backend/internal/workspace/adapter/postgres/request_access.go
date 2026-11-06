@@ -49,7 +49,7 @@ func (s *Store) authorizeProject(ctx context.Context, tx *gorm.DB, actor identit
 	// shared lock here then upgrading in the command allows concurrent writers
 	// to deadlock while each retains the other's shared lock.
 	if write {
-		query += ` FOR UPDATE`
+		query += ` AND NOT independent_media FOR UPDATE`
 	} else {
 		query += ` FOR SHARE`
 	}
