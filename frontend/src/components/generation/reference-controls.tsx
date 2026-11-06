@@ -108,6 +108,7 @@ import { validateUpload } from "@/components/media/library";
 import { ReferenceSearch } from "./reference-search";
 import { ReferenceMentionMenu } from "./reference-mention-menu";
 import { ReferenceStack } from "./reference-stack";
+import { ReferenceThumbnail } from "./reference-thumbnail";
 import { ComposerSession } from "./composer-session";
 import {
   referenceLabel,
@@ -115,6 +116,10 @@ import {
   type PromptDraft,
   type ReferenceBinding,
 } from "./prompt-document";
+const referencePopoverClass =
+  "max-h-[min(32rem,var(--radix-popover-content-available-height))] w-80 max-w-[calc(100vw-32px)] overflow-y-auto";
+const referenceTileClass = "relative flex-col overflow-hidden border-0 p-0";
+
 const UnifiedSubjectLibrary = dynamic(() =>
   import("@/components/subjects/unified-library").then(
     (module) => module.UnifiedSubjectLibrary,
@@ -964,11 +969,19 @@ export function ReferenceControls({
               </span>
             </div>
             {authorized && ref.source.kind === "media" && (
-              <div className="relative h-24 overflow-hidden rounded">
+              <div
+                className={cn(
+                  "relative overflow-hidden rounded-md bg-muted",
+                  ref.mediaKind === "audio"
+                    ? "flex min-h-14 items-center px-2 [&_audio]:w-full"
+                    : "aspect-video",
+                )}
+              >
                 <ProjectMediaPreview
                   projectID={projectID}
                   id={ref.source.sourceId}
                   kind={ref.mediaKind}
+                  fit="contain"
                   interactive
                 />
               </div>
@@ -1497,9 +1510,9 @@ export function ReferenceControls({
                     : assistant
                       ? "flex items-center"
                       : cn(
-                          "flex min-w-0 items-center gap-2 pb-1",
+                          "flex min-w-0 items-center gap-3 pb-1",
                           incomingSources
-                            ? "min-h-14 w-max"
+                            ? "min-h-16 w-max"
                             : "w-full overflow-x-auto",
                         )
                 }
@@ -1562,45 +1575,40 @@ export function ReferenceControls({
                       <PopoverTrigger asChild>
                         <Button
                           type="button"
-                          variant="outline"
-                          className={
-                            assistant
-                              ? "sr-only"
-                              : "relative h-16 w-16 shrink-0 flex-col gap-1 overflow-hidden"
-                          }
+                          variant="reference"
+                          size="reference"
+                          className={assistant ? "sr-only" : referenceTileClass}
                           aria-label={`查看${displayLabel(ref.id)}详情`}
                           tabIndex={assistant ? -1 : undefined}
                         >
-                          {authorized && subjectPreview && !home ? (
-                            <span className="absolute inset-0">
+                          <ReferenceThumbnail className="absolute inset-0">
+                            {authorized && subjectPreview && !home ? (
                               <UnifiedSubjectMedia
                                 media={subjectPreview}
                                 label={displayLabel(ref.id)}
                               />
-                            </span>
-                          ) : authorized &&
-                            !home &&
-                            ref.source.kind === "media" &&
-                            ref.mediaKind !== "audio" ? (
-                            <span className="absolute inset-0">
+                            ) : authorized &&
+                              !home &&
+                              ref.source.kind === "media" &&
+                              ref.mediaKind !== "audio" ? (
                               <ProjectMediaPreview
                                 projectID={projectID}
                                 id={ref.source.sourceId}
                                 kind={ref.mediaKind}
                                 compact
                               />
-                            </span>
-                          ) : (
-                            <Icon data-icon="inline-start" />
-                          )}
-                          <Badge variant="secondary" className="relative">
-                            {displayLabel(ref.id)}
-                          </Badge>
-                          {ref.source.kind === "pending_upload" ? (
-                            <span className="relative text-[10px] text-muted-foreground">
-                              待上传
-                            </span>
-                          ) : null}
+                            ) : (
+                              <Icon
+                                data-icon="inline-start"
+                                className="-translate-y-2"
+                              />
+                            )}
+                          </ReferenceThumbnail>
+                          <ReferenceTileLabel>
+                            {ref.source.kind === "pending_upload"
+                              ? "待上传"
+                              : displayLabel(ref.id)}
+                          </ReferenceTileLabel>
                           {linked ? (
                             <Badge
                               variant="secondary"
@@ -1618,7 +1626,7 @@ export function ReferenceControls({
                         side="top"
                         align="start"
                         collisionPadding={16}
-                        className="max-h-[min(32rem,var(--radix-popover-content-available-height))] w-80 overflow-y-auto"
+                        className={referencePopoverClass}
                         aria-label="参考详情"
                         onClick={(event) => event.stopPropagation()}
                         onCloseAutoFocus={(event) => {
@@ -1697,23 +1705,13 @@ export function ReferenceControls({
                   <PopoverTrigger asChild>
                     <Button
                       type="button"
-                      variant={
-                        assistant ? "ghost" : home ? "reference" : "outline"
-                      }
-                      size={assistant ? "icon-sm" : home ? "reference" : "icon"}
+                      variant={assistant ? "ghost" : "reference"}
+                      size={assistant ? "icon-sm" : "reference"}
                       disabled={disabled}
                       aria-label={
                         assistant ? "从本地、画布或资产库添加" : "添加参考"
                       }
-                      className={
-                        incomingSources
-                          ? "order-first shrink-0"
-                          : assistant
-                            ? "shrink-0"
-                            : home
-                              ? "shrink-0"
-                              : "size-14 shrink-0"
-                      }
+                      className={incomingSources ? "order-first" : undefined}
                     >
                       <Plus />
                       {assistant && draft.references.length > 0 ? (
@@ -2063,6 +2061,17 @@ function ReferenceRow({
   );
 }
 
+function ReferenceTileLabel({ children }: { children: string }) {
+  return (
+    <Badge
+      variant="secondary"
+      className="absolute inset-x-0.5 bottom-1 w-auto min-w-0 px-0.5"
+    >
+      <span className="truncate">{children}</span>
+    </Badge>
+  );
+}
+
 function ConnectedReference({
   source,
   projectID,
@@ -2089,8 +2098,10 @@ function ConnectedReference({
           : ImageIcon;
   const tile = (
     <Button
-      variant="secondary"
-      className="h-14 w-29 shrink-0 justify-start gap-1.5 px-1.5"
+      variant="reference"
+      size="reference"
+      className={referenceTileClass}
+      title={`${source.title} · ${status}`}
       aria-label={`${source.title}：${text ? "预览文本" : assetID ? "未引用" : "内容为空"}`}
       disabled={!text && (disabled || !assetID)}
       onClick={
@@ -2099,7 +2110,7 @@ function ConnectedReference({
           : undefined
       }
     >
-      <span className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-sm">
+      <ReferenceThumbnail className="absolute inset-0">
         {authorized &&
         assetID &&
         (source.kind === "image" || source.kind === "video") ? (
@@ -2110,13 +2121,16 @@ function ConnectedReference({
             compact
           />
         ) : (
-          <Icon data-icon="inline-start" />
+          <Icon data-icon="inline-start" className="-translate-y-2" />
         )}
-      </span>
-      <span className="flex min-w-0 flex-col items-start gap-0.5">
-        <span className="w-full truncate text-xs">{source.title}</span>
-        <span className="text-[10px] text-muted-foreground">{status}</span>
-      </span>
+      </ReferenceThumbnail>
+      <ReferenceTileLabel>
+        {source.kind === "text" && text
+          ? "文本"
+          : assetID
+            ? "未引用"
+            : "待补内容"}
+      </ReferenceTileLabel>
     </Button>
   );
   return text ? (
@@ -2127,8 +2141,11 @@ function ConnectedReference({
         align="start"
         collisionPadding={16}
         aria-label="参考文本"
+        className={referencePopoverClass}
       >
-        <PopoverTitle>{source.title}</PopoverTitle>
+        <PopoverHeader>
+          <PopoverTitle>{source.title}</PopoverTitle>
+        </PopoverHeader>
         <ScrollArea className="max-h-48 break-words whitespace-pre-wrap [&_[data-slot=scroll-area-viewport]]:max-h-48">
           {text}
         </ScrollArea>

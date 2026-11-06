@@ -1590,6 +1590,30 @@ html:has(.canvas-controls-layout) {
       transparent
     );
   }
+  .node-element {
+    --canvas-node-selection-stroke: color-mix(
+      in srgb,
+      var(--canvas-reference-foreground) 42%,
+      transparent
+    );
+  }
+  .node-element:focus-visible {
+    outline: none;
+  }
+  .node-element:focus-visible,
+  .node-element > .canvas-node-body:focus-visible {
+    --canvas-node-selection-stroke: var(--ring);
+  }
+  .node-element > .canvas-node-body:focus-visible,
+  .node-element:is(
+      [data-node-type="text"][data-node-selected="true"],
+      :focus-visible:not([data-node-selected="true"])
+    )
+    > .canvas-node-body {
+    outline: var(--canvas-node-indicator-width) solid
+      var(--canvas-node-selection-stroke);
+    outline-offset: calc(-1 * var(--canvas-node-indicator-width));
+  }
   .node-element[data-node-type="text"] .canvas-node-body {
     border-radius: 8px;
   }

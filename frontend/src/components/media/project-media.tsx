@@ -101,7 +101,11 @@ function MediaPreview({
         controls={interactive}
         playsInline
         preload="metadata"
-        className="size-full object-contain"
+        className={
+          compact && fit === "cover"
+            ? "size-full object-cover"
+            : "size-full object-contain"
+        }
         onPointerDown={(event) => {
           if (interactive) event.stopPropagation();
         }}

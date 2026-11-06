@@ -37,6 +37,7 @@ import {
   type ReferenceBinding,
 } from "./prompt-document";
 import type { CanvasReferenceSource } from "./reference-source";
+import { ReferenceThumbnail } from "./reference-thumbnail";
 
 const categories = [
   { kind: "subject", label: "主体", icon: UserRound },
@@ -196,12 +197,12 @@ export function ReferenceMentionMenu({
               className={rowClass}
               onSelect={() => onSubject(subject)}
             >
-              <span className="relative size-8 shrink-0 overflow-hidden rounded-md bg-muted">
+              <ReferenceThumbnail aria-hidden="true">
                 <UnifiedSubjectMedia
                   media={selectedSubjectMedia(subject, subject.primary)}
                   label={subject.name}
                 />
-              </span>
+              </ReferenceThumbnail>
               <span className="truncate">{subject.name}</span>
             </CommandItem>
           ))}
@@ -230,20 +231,22 @@ export function ReferenceMentionMenu({
     );
   }
   function thumbnail(kind: Category, Icon: typeof ImageIcon, asset?: string) {
-    return canvas &&
-      projectID &&
-      asset &&
-      (kind === "image" || kind === "video") ? (
-      <span className="relative size-8 shrink-0 overflow-hidden rounded-md">
-        <ProjectMediaPreview
-          projectID={projectID}
-          id={asset}
-          kind={kind}
-          compact
-        />
-      </span>
-    ) : (
-      <Icon />
+    return (
+      <ReferenceThumbnail aria-hidden="true">
+        {canvas &&
+        projectID &&
+        asset &&
+        (kind === "image" || kind === "video") ? (
+          <ProjectMediaPreview
+            projectID={projectID}
+            id={asset}
+            kind={kind}
+            compact
+          />
+        ) : (
+          <Icon />
+        )}
+      </ReferenceThumbnail>
     );
   }
   function resourceRows(kind?: Category, readyOnly = false) {

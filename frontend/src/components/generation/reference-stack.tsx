@@ -8,6 +8,8 @@ import {
 } from "react";
 import { Plus, X, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "cn";
+import { ReferenceThumbnail } from "./reference-thumbnail";
 export interface ReferenceStackEntry {
   id: string;
   label: string;
@@ -45,7 +47,7 @@ export function ReferenceStack({
   }
   const expanded = entries.length > 0 && (open || hovered);
   const card =
-    "absolute top-2 left-2 h-16 w-12 overflow-hidden rounded-[2px] border-[0.8px] border-foreground/80 bg-muted";
+    "pointer-events-none absolute top-2 left-2 border-[0.8px] border-foreground/80";
   const trigger = (
     <Button
       ref={entries.length ? main : addButtonRef}
@@ -59,8 +61,13 @@ export function ReferenceStack({
       aria-expanded={entries.length ? expanded : undefined}
       onClick={() => (entries.length ? setOpen((value) => !value) : onAdd())}
     >
-      <span
-        className={`${card} pointer-events-none -rotate-[8deg] ${entries.length ? "" : "reference-stack-empty flex items-center justify-center border-0 bg-foreground/8 group-hover/reference:bg-foreground/12"}`}
+      <ReferenceThumbnail
+        className={cn(
+          card,
+          "-rotate-[8deg]",
+          !entries.length &&
+            "reference-stack-empty border-0 bg-foreground/8 group-hover/reference:bg-foreground/12",
+        )}
       >
         {entries[0]?.preview ??
           (entries.length ? (
@@ -68,7 +75,7 @@ export function ReferenceStack({
           ) : (
             <Plus className="size-4" />
           ))}
-      </span>
+      </ReferenceThumbnail>
     </Button>
   );
   return (
@@ -94,12 +101,11 @@ export function ReferenceStack({
       }}
     >
       {entries.length > 1 ? (
-        <span
-          aria-hidden
-          className={`${card} pointer-events-none translate-x-1.5 rotate-[6deg]`}
+        <ReferenceThumbnail
+          className={cn(card, "translate-x-1.5 rotate-[6deg]")}
         >
           {entries[1]?.preview}
-        </span>
+        </ReferenceThumbnail>
       ) : null}
       {renderAdd && !entries.length ? renderAdd(trigger) : trigger}
       {entries.length > 0 ? (
@@ -143,11 +149,11 @@ export function ReferenceStack({
                 onClick={() => onSelect(entry.id)}
                 className="h-24 w-16 flex-col gap-1 p-0"
               >
-                <span className="relative block h-16 w-12 shrink-0 overflow-hidden rounded-[2px] border-[0.8px] border-foreground/80 bg-muted">
+                <ReferenceThumbnail className="border-[0.8px] border-foreground/80">
                   {entry.preview ?? (
                     <ImageIcon className="m-auto mt-5 size-4" />
                   )}
-                </span>
+                </ReferenceThumbnail>
                 <span className="w-full truncate text-[10px]">
                   {entry.status ?? entry.label}
                 </span>

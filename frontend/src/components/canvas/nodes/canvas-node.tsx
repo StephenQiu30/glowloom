@@ -298,10 +298,13 @@ export const CanvasNode = React.memo(function CanvasNode({
   // Media selection stays neutral; blue is reserved for connection targets.
   const transparentBg = Boolean(definition?.transparentBackground);
   const isActive = isConnectionTarget || isSelected || isFocusRelated;
+  const selectionStroke = isSelected
+    ? "var(--canvas-node-selection-stroke)"
+    : theme.node.muted;
   const imageBorderColor = isConnectionTarget
     ? selectionBlue
     : isSelected || isFocusRelated
-      ? theme.node.muted
+      ? selectionStroke
       : "transparent";
   const textareaRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -529,13 +532,16 @@ export const CanvasNode = React.memo(function CanvasNode({
                   ? "cursor-not-allowed"
                   : "",
             )}
-            style={{
-              transform: `translate(${data.position.x}px, ${data.position.y}px)`,
-              width: data.width,
-              height: data.height,
-              transition: "box-shadow 200ms ease",
-              contain: "layout style",
-            }}
+            style={
+              {
+                "--canvas-node-indicator-width": `${1 / scale}px`,
+                transform: `translate(${data.position.x}px, ${data.position.y}px)`,
+                width: data.width,
+                height: data.height,
+                transition: "box-shadow 200ms ease",
+                contain: "layout style",
+              } as React.CSSProperties
+            }
             onMouseEnter={() => {
               setHovered(true);
               onHoverStart(data.id);
@@ -669,7 +675,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     : isConnectionTarget
                       ? selectionBlue
                       : isSelected || isFocusRelated
-                        ? theme.node.muted
+                        ? selectionStroke
                         : transparentBg
                           ? "transparent"
                           : theme.node.stroke,
@@ -678,12 +684,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                     ? "dashed"
                     : "solid",
                 borderWidth: data.type === CanvasNodeType.Text ? 0 : undefined,
-                outline:
-                  data.type === CanvasNodeType.Text && isSelected
-                    ? `${1 / scale}px solid color-mix(in srgb, var(--canvas-reference-foreground) 50%, transparent)`
-                    : undefined,
-                outlineOffset:
-                  data.type === CanvasNodeType.Text ? 3 / scale : undefined,
                 boxShadow: isGroupDropTarget
                   ? `0 0 0 2px color-mix(in srgb, ${selectionBlue} 40%, transparent), inset 0 0 0 999px color-mix(in srgb, ${selectionBlue} 6%, transparent)`
                   : isConnectionTarget
