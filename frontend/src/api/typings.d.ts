@@ -105,6 +105,7 @@ declare namespace API {
   type AdminModelDetail = {
     candidate?: ModelCandidateSelection;
     model?: CreatedModel;
+    price_preset?: ModelPricePreset;
     prices?: AdminPrice[];
     versions?: AdminModelVersion[];
   };
@@ -3860,6 +3861,14 @@ declare namespace API {
     source_url?: string | null;
     unit?: string;
     version_no?: number;
+  };
+
+  type ModelPricePreset = {
+    currency?: string;
+    reference_lines?: string[];
+    rule?: Record<string, any>;
+    source_url?: string;
+    unit?: string;
   };
 
   type ModelRelease = {

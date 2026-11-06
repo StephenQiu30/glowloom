@@ -1,6 +1,6 @@
 -- 当前 PostgreSQL 完整结构与基础数据。开发、CI 和部署使用同一空库定义。
 -- PostgreSQL 18。由结构所有者执行；预建 glowloom_app NOLOGIN NOSUPERUSER 与受限 glowloom_agent LOGIN（凭据离线设置）。
--- psql "$GLOWLOOM_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql
+-- psql "$GLOWLOOM_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql -f backend/db/data.sql
 -- 禁止对已有业务库重放本文件。
 
 DO $$
@@ -7555,3 +7555,20 @@ LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog AS $$
 $$;
 REVOKE ALL ON FUNCTION billing.ensure_creation_wallet(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION billing.ensure_creation_wallet(uuid) TO glowloom_app;
+
+-- Public supplier rate references. Executable price versions remain reviewed per model.
+CREATE TABLE catalog.model_price_preset (
+    adapter_key text NOT NULL,
+    provider_model_id text NOT NULL,
+    currency text NOT NULL CHECK (currency IN ('CNY', 'USD')),
+    source_url text NOT NULL CHECK (source_url LIKE 'https://%'),
+    reference_lines jsonb NOT NULL CHECK (jsonb_typeof(reference_lines) = 'array' AND jsonb_array_length(reference_lines) > 0),
+    unit text,
+    rule jsonb,
+    executable_until date,
+    PRIMARY KEY (adapter_key, provider_model_id),
+    CHECK (executable_until IS NULL OR unit IS NOT NULL),
+    CHECK ((unit IS NULL AND rule IS NULL) OR
+           (unit IN ('per_image', 'per_1k_tokens') AND unit IS NOT NULL AND rule IS NOT NULL AND jsonb_typeof(rule) = 'object'))
+);
+GRANT SELECT ON catalog.model_price_preset TO glowloom_app;

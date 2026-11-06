@@ -251,3 +251,51 @@ it("通过当前 Key 的只读验证后使用已保存的配置和价格发布",
     },
   );
 });
+
+it.each([
+  { unit: "per_image", rule: { base_micros: 120000 }, canSave: true },
+  { unit: undefined, rule: undefined, canSave: false },
+])(
+  "展示内置价目，只对已支持的计量预填保存表单",
+  async ({ unit, rule, canSave }) => {
+    api.model.mockResolvedValue({
+      model: { id: "model-a", display_name: "预设模型" },
+      versions: [{ id: "version-a" }],
+      prices: [],
+      price_preset: {
+        currency: "CNY",
+        source_url: "https://example.com/pricing",
+        reference_lines: ["供应商计量和费率"],
+        unit,
+        rule,
+      },
+    });
+    render(
+      <ModelDetail
+        id="model-a"
+        capabilities={[]}
+        initialView="pricing"
+        onSaved={vi.fn()}
+      />,
+    );
+    await screen.findByText("官方计价预设");
+    expect(
+      screen.getByRole("link", { name: "查看官方价目" }).getAttribute("href"),
+    ).toBe("https://example.com/pricing");
+    if (canSave) {
+      expect(screen.getByLabelText<HTMLInputElement>("价格（CNY）").value).toBe(
+        "0.12",
+      );
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "核验并保存",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false);
+    } else {
+      expect(screen.getByText(/计量规则尚未接入/)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "核验并保存" })).toBeNull();
+    }
+  },
+);

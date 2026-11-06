@@ -118,6 +118,12 @@ func TestPresetCandidatesCreateOnlyDraftProfilesAndReplayExactly(t *testing.T) {
 		require.NoError(t, json.Unmarshal(row.Candidate, &snapshot))
 		require.Equal(t, input.CandidateKeys[i], snapshot.Model.Key)
 		require.Equal(t, catalog.Version, snapshot.CatalogVersion)
+		detail, err := app.NewCatalogStore(conn.DB).ReadAdminModel(t.Context(), actor, id)
+		require.NoError(t, err)
+		require.NotNil(t, detail.PricePreset)
+		require.Equal(t, "CNY", detail.PricePreset.Currency)
+		require.NotEmpty(t, detail.PricePreset.ReferenceLines)
+		require.Empty(t, detail.Prices)
 	}
 	input.RequestID = uuid.New()
 	input.CandidateKeys = []string{"or-gpt-chat"}

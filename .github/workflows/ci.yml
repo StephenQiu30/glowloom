@@ -96,10 +96,10 @@ jobs:
           for database in schema_probe glowloom_subject_source_ci glowloom_subject_storage_ci glowloom_subject_storage_package_ci; do
             psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
           done
-          psql "$admin_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+          psql "$admin_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
           for database in glowloom_governance glowloom_catalog glowloom_subject_alignment_ci glowloom_subject_storage_script_ci glowloom_app_scope_test glowloom_business_test glowloom_agent_canvas_test glowloom_boundary_test glowloom_tasks_test glowloom_maintenance_test glowloom_receipt glowloom_gateway_test; do
             psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
-            psql "postgres://postgres@127.0.0.1:5432/$database?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+            psql "postgres://postgres@127.0.0.1:5432/$database?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
           done
       - name: Install the production Agent used by boundary tests
         working-directory: agent
@@ -155,7 +155,7 @@ jobs:
         run: |
           psql postgres://postgres@127.0.0.1:5432/glowloom_agent_test -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE glowloom_agent LOGIN NOSUPERUSER' -c 'CREATE DATABASE glowloom_agent_recovery_test'
           for database in glowloom_agent_test glowloom_agent_recovery_test; do
-            psql "postgres://postgres@127.0.0.1:5432/$database" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+            psql "postgres://postgres@127.0.0.1:5432/$database" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
           done
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck

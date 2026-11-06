@@ -7,10 +7,12 @@ import (
 	"testing"
 )
 
-func TestSchemaSQLIsTheOnlyBackendSQL(t *testing.T) {
+func TestBackendSQLHasCanonicalSchemaAndPresetData(t *testing.T) {
 	backend := filepath.Join("..", "..")
-	schema := filepath.Join(backend, "db", "schema.sql")
-	found := false
+	allowed := map[string]bool{
+		filepath.Join(backend, "db", "schema.sql"): false,
+		filepath.Join(backend, "db", "data.sql"):   false,
+	}
 	err := filepath.WalkDir(backend, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -18,17 +20,19 @@ func TestSchemaSQLIsTheOnlyBackendSQL(t *testing.T) {
 		if entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".sql") {
 			return nil
 		}
-		if path != schema {
-			t.Errorf("unexpected SQL file %s; the backend maintains only db/schema.sql", path)
+		if _, ok := allowed[path]; !ok {
+			t.Errorf("unexpected SQL file %s; expected schema.sql or data.sql", path)
 		} else {
-			found = entry.Type().IsRegular()
+			allowed[path] = entry.Type().IsRegular()
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !found {
-		t.Fatalf("missing canonical schema file: %s", schema)
+	for path, found := range allowed {
+		if !found {
+			t.Errorf("missing canonical SQL file: %s", path)
+		}
 	}
 }

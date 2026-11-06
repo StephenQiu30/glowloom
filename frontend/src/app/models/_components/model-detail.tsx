@@ -48,6 +48,7 @@ import {
 } from "./model-setup";
 import { useProviderCatalogProbe } from "@/components/catalog/provider-catalog-probe";
 import { testErrorMessage } from "@/app/providers/_components/testing-status";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -161,7 +162,12 @@ export function ModelDetail({
   const sale = detail?.prices?.find(
     (price) => typeof price.rule?.procurement_price_version_id === "string",
   );
-  const editablePrice = procurement ?? latestPrice;
+  const pricePreset = detail?.price_preset;
+  const editablePrice = procurement ?? (pricePreset ? undefined : latestPrice);
+  const referenceOnly = !!pricePreset && !pricePreset.unit && !procurement;
+  const currency =
+    priceCurrency ?? editablePrice?.currency ?? pricePreset?.currency ?? "CNY";
+  const unit = priceUnit ?? editablePrice?.unit ?? pricePreset?.unit ?? "";
   const officialRule = editablePrice?.rule
     ? Object.fromEntries(
         Object.entries(editablePrice.rule).filter(
@@ -173,9 +179,9 @@ export function ModelDetail({
             ].includes(key),
         ),
       )
-    : undefined;
-  const currency = priceCurrency ?? editablePrice?.currency ?? "CNY";
-  const unit = priceUnit ?? editablePrice?.unit ?? "";
+    : pricePreset?.unit === unit && pricePreset.currency === currency
+      ? pricePreset?.rule
+      : undefined;
   const active = releases.find((r) => r.status === "active");
   const currentDefault = defaults.find(
     (d) => d.capability === model?.capability,
@@ -313,89 +319,120 @@ export function ModelDetail({
       setError(catalogMessage(e));
     }
   }
-  const priceForm = detail ? (
-    <form key={editablePrice?.id ?? "official"} onSubmit={savePrice}>
-      <FieldGroup className="gap-3">
-        <div>
-          <Badge variant="secondary">
-            {priceID
-              ? active?.price_version_id === priceID
-                ? "已发布"
-                : "待发布"
-              : procurement
-                ? "待保存同价"
-                : "待核验"}
-          </Badge>
-        </div>
-        <Field>
-          <FieldLabel htmlFor={`${formFieldId}-field-4`}>
-            <span>计费方式</span>
-          </FieldLabel>
-          <Select
-            name="unit"
-            required
-            value={unit}
-            onValueChange={setPriceUnit}
-          >
-            <SelectTrigger
-              id={`${formFieldId}-field-4`}
-              className="h-10 w-full"
-            >
-              <SelectValue placeholder="选择计费方式" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {Object.entries(pricingUnits).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </Field>
-        <FieldGroup className="grid gap-3 sm:grid-cols-2">
+  const priceReference = pricePreset ? (
+    <Alert>
+      <AlertTitle>官方计价预设</AlertTitle>
+      <AlertDescription>
+        <ul className="grid gap-1">
+          {pricePreset.reference_lines?.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        <a href={pricePreset.source_url} target="_blank" rel="noreferrer">
+          查看官方价目
+        </a>
+        {referenceOnly ? (
+          <p>该模型的计量规则尚未接入，暂不能保存价格。</p>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  ) : null;
+  const priceForm =
+    detail && !referenceOnly ? (
+      <form key={editablePrice?.id ?? "official"} onSubmit={savePrice}>
+        <FieldGroup className="gap-3">
+          <div>
+            <Badge variant="secondary">
+              {priceID
+                ? active?.price_version_id === priceID
+                  ? "已发布"
+                  : "待发布"
+                : procurement
+                  ? "待保存同价"
+                  : "待核验"}
+            </Badge>
+          </div>
+          {!pricePreset && !editablePrice ? (
+            <p className="text-sm text-muted-foreground">
+              按供应商价目填写计费单位、费率和来源。
+            </p>
+          ) : null}
           <Field>
-            <FieldLabel htmlFor={`${formFieldId}-currency`}>币种</FieldLabel>
-            <Select value={currency} onValueChange={setPriceCurrency}>
-              <SelectTrigger id={`${formFieldId}-currency`}>
-                <SelectValue />
+            <FieldLabel htmlFor={`${formFieldId}-field-4`}>
+              <span>计费方式</span>
+            </FieldLabel>
+            <Select
+              name="unit"
+              required
+              value={unit}
+              onValueChange={setPriceUnit}
+            >
+              <SelectTrigger
+                id={`${formFieldId}-field-4`}
+                className="h-10 w-full"
+              >
+                <SelectValue placeholder="选择计费方式" />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="CNY">CNY</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
+                  {Object.entries(pricingUnits).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
-          {currency !== "CNY" && (
+          <FieldGroup className="grid gap-3 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor={`${formFieldId}-fx`}>
-                兑人民币汇率
-              </FieldLabel>
-              <Input
-                id={`${formFieldId}-fx`}
-                name="fx_rate"
-                required
-                type="number"
-                min="0.000001"
-                step="0.000001"
-                defaultValue={editablePrice?.fx_rate_to_cny ?? undefined}
-              />
+              <FieldLabel htmlFor={`${formFieldId}-currency`}>币种</FieldLabel>
+              <Select value={currency} onValueChange={setPriceCurrency}>
+                <SelectTrigger id={`${formFieldId}-currency`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="CNY">CNY</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </Field>
-          )}
+            {currency !== "CNY" && (
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-fx`}>
+                  兑人民币汇率
+                </FieldLabel>
+                <Input
+                  id={`${formFieldId}-fx`}
+                  name="fx_rate"
+                  required
+                  type="number"
+                  min="0.000001"
+                  step="0.000001"
+                  defaultValue={editablePrice?.fx_rate_to_cny ?? undefined}
+                />
+              </Field>
+            )}
+          </FieldGroup>
+          {unit ? (
+            <PriceSetup
+              key={`${unit}:${currency}`}
+              unit={unit}
+              rule={officialRule}
+              currency={currency}
+            />
+          ) : null}
+          <PriceEvidenceFields
+            sourceURL={editablePrice?.source_url ?? pricePreset?.source_url}
+          />
+          <Button disabled={archived || mutation.busy || !latest || !unit}>
+            核验并保存
+          </Button>
         </FieldGroup>
-        {unit ? (
-          <PriceSetup unit={unit} rule={officialRule} currency={currency} />
-        ) : null}
-        <PriceEvidenceFields sourceURL={editablePrice?.source_url} />
-        <Button disabled={archived || mutation.busy || !latest || !unit}>
-          核验并保存
-        </Button>
-      </FieldGroup>
-    </form>
-  ) : null;
+      </form>
+    ) : null;
   return (
     <section className="flex min-w-0 flex-col gap-3" aria-label="模型详情">
       <h2 className="text-lg font-medium">
@@ -631,6 +668,7 @@ export function ModelDetail({
               </form>
             </TabsContent>
             <TabsContent value="pricing" forceMount hidden={view !== "pricing"}>
+              {priceReference}
               {priceForm}
             </TabsContent>
             <TabsContent

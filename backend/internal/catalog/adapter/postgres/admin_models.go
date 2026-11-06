@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -158,6 +159,37 @@ WHERE model_profile_id=?::uuid AND NOT is_delete ORDER BY version_no DESC LIMIT 
 				return fmt.Errorf("decode model version modes: %w", err)
 			}
 			result.Versions = append(result.Versions, application.AdminModelVersion{ID: v.ID, VersionNo: v.VersionNo, ProviderModelID: v.ProviderModelID, Modes: modes, Limits: json.RawMessage(v.Limits), ParamSchema: json.RawMessage(v.ParamSchema), SupportsQuery: v.SupportsQuery, SupportsCancel: v.SupportsCancel, SupportsCallback: v.SupportsCallback, ExpectedMaxMS: v.ExpectedMaxMS, Moderation: v.Moderation, Queue: v.Queue, CreateTime: v.CreateTime})
+		}
+		if selection := result.Candidate; selection != nil && !strings.HasPrefix(selection.Model.Key, "custom-") {
+			providerModelID := selection.Model.ProviderModelID
+			if len(versions) > 0 {
+				providerModelID = versions[0].ProviderModelID
+			}
+			if providerModelID == selection.Model.ProviderModelID {
+				var preset struct {
+					Currency, SourceURL, ReferenceLines string
+					Unit                                *string
+					Rule                                []byte
+				}
+				read := tx.Raw(`SELECT currency, source_url, reference_lines::text AS reference_lines,
+  CASE WHEN available THEN rule END AS rule, CASE WHEN available THEN unit END AS unit
+FROM (SELECT *, executable_until IS NULL OR executable_until > (now() AT TIME ZONE 'Asia/Shanghai')::date AS available
+      FROM catalog.model_price_preset) AS pricing WHERE adapter_key=? AND provider_model_id=?`,
+					selection.Model.AdapterKey, providerModelID).Scan(&preset)
+				if read.Error != nil {
+					return fmt.Errorf("read model price preset: %w", read.Error)
+				}
+				if read.RowsAffected == 1 {
+					item := &application.ModelPricePreset{
+						Currency: preset.Currency, SourceURL: preset.SourceURL,
+						Unit: preset.Unit, Rule: json.RawMessage(preset.Rule),
+					}
+					if err := json.Unmarshal([]byte(preset.ReferenceLines), &item.ReferenceLines); err != nil {
+						return fmt.Errorf("decode model price preset: %w", err)
+					}
+					result.PricePreset = item
+				}
+			}
 		}
 		var prices []adminPriceRow
 		if err := tx.Raw(`SELECT id,version_no,unit,rule::text AS rule,currency::text AS currency,

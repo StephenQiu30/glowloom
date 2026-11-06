@@ -48,12 +48,22 @@ type AdminPrice struct {
 	CreateTime    time.Time       `json:"create_time"`
 }
 
+// ModelPricePreset describes the supplier's public reference and an optional supported default.
+type ModelPricePreset struct {
+	Currency       string          `json:"currency"`
+	SourceURL      string          `json:"source_url"`
+	ReferenceLines []string        `json:"reference_lines"`
+	Unit           *string         `json:"unit,omitempty"`
+	Rule           json.RawMessage `json:"rule,omitempty" swaggertype:"object"`
+}
+
 // AdminModelDetail combines the current identity and its real version history.
 type AdminModelDetail struct {
-	Candidate *domain.ModelCandidateSelection `json:"candidate,omitempty"`
-	Model     CreatedModel                    `json:"model"`
-	Versions  []AdminModelVersion             `json:"versions"`
-	Prices    []AdminPrice                    `json:"prices"`
+	PricePreset *ModelPricePreset               `json:"price_preset,omitempty"`
+	Candidate   *domain.ModelCandidateSelection `json:"candidate,omitempty"`
+	Model       CreatedModel                    `json:"model"`
+	Versions    []AdminModelVersion             `json:"versions"`
+	Prices      []AdminPrice                    `json:"prices"`
 }
 
 // CapabilitySummary declares the modes and ordered reference roles for forms.
