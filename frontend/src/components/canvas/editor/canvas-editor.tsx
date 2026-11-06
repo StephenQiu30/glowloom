@@ -3802,7 +3802,7 @@ function InfiniteCanvasPage({
             fontSize: 14,
           },
         ),
-        title: "反推提示词",
+        title: "提示词反推",
       };
       const configNode = {
         ...createCanvasNode(
@@ -3822,7 +3822,7 @@ function InfiniteCanvasPage({
             composerContent: `参考图片：@[node:${node.id}]\n任务说明：@[node:${textNode.id}]`,
           },
         ),
-        title: "反推提示词配置",
+        title: "提示词反推配置",
       };
 
       setNodes((prev) => [...prev, textNode, configNode]);
@@ -3990,7 +3990,7 @@ function InfiniteCanvasPage({
         {
           id: childId,
           type: CanvasNodeType.Image,
-          title: userPrompt.slice(0, 32) || "局部编辑结果",
+          title: userPrompt.slice(0, 32) || "局部重绘结果",
           position: {
             x: node.position.x + node.width + 96,
             y: node.position.y,
@@ -7202,9 +7202,9 @@ function InfiniteCanvasPage({
         >
           <DialogContent className={"max-h-dialog overflow-y-auto"}>
             <DialogHeader>
-              <DialogTitle>{"AI 超分"}</DialogTitle>
+              <DialogTitle>{"智能超清"}</DialogTitle>
               <DialogDescription className="sr-only">
-                超分服务尚未接入。
+                智能超清服务尚未接入。
               </DialogDescription>
             </DialogHeader>
             <div>

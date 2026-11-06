@@ -222,3 +222,31 @@ func TestCanvasAssetCreationReceiptFailureRollsBackSeedGraph(t *testing.T) {
 		}
 	}
 }
+
+func TestCanvasAssetCreationPersistsDirectorTemplateIdempotently(t *testing.T) {
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
+	actor, _ := seedCanvasActor(t, db)
+	creator := application.NewAssetCreator(pgcanvas.NewAssetCreationStore(db, canvaswire.AssetCreationAuthority))
+	key := uuid.New()
+	input := application.AssetCreationInput{TemplateKey: "director-stage-v1"}
+	created, err := creator.Create(t.Context(), actor, key, input)
+	if err != nil || created.Name != "3D导演台" || created.IsTemplate || created.TemplateKey != input.TemplateKey {
+		t.Fatal(created, err)
+	}
+	replayed, err := creator.Create(t.Context(), actor, key, input)
+	if err != nil || !reflect.DeepEqual(created, replayed) {
+		t.Fatal("same creation key duplicated director project", created, replayed, err)
+	}
+	doc, err := application.NewService(canvasStore(db)).Get(t.Context(), actor, created.ID)
+	if err != nil || doc.ProjectID != created.ProjectID || len(doc.Nodes) != 1 || len(doc.Edges) != 0 {
+		t.Fatal("director template graph was not persisted", doc, err)
+	}
+	node := doc.Nodes[0]
+	if node.NodeType != "director" || node.Config.Director == nil || node.LastOperationID != nil || node.RefID != nil {
+		t.Fatal("missing editable director node", node)
+	}
+	var executions int64
+	if err := db.Raw("SELECT count(*) FROM operation.operation WHERE project_id = ?", created.ProjectID).Scan(&executions).Error; err != nil || executions != 0 {
+		t.Fatal("director template started generation", executions, err)
+	}
+}

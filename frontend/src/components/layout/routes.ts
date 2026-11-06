@@ -3,6 +3,7 @@ export const screens = [
   { id: "conversations", name: "对话", node: "3468:96528", group: "创作" },
   { id: "home", name: "创作", node: "1361:26", group: "创作" },
   { id: "explore", name: "探索", node: "1361:272", group: "创作" },
+  { id: "ai-tools", name: "AI工具", node: "3547:98726", group: "创作" },
   { id: "projects", name: "我的画布", node: "347:6984", group: "创作" },
   { id: "canvas", name: "画布", node: "271:3302", group: "创作" },
   { id: "assets", name: "资产", node: "1446:4949", group: "创作" },

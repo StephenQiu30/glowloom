@@ -24,6 +24,7 @@ func SystemAssetTemplates(kind string) ([]SystemAssetTemplate, error) {
 	}
 	catalog := []SystemAssetTemplate{
 		{Key: "text-to-image-v1", Kind: "canvas", Name: "文生图工作流", Description: "从可编辑创作说明连接到图片生成节点，选择可用模型后再手动生成。", IsTemplate: true, NodeCount: 2, RequiresModel: true},
+		{Key: "director-stage-v1", Kind: "canvas", Name: "3D导演台", Description: "从示例白模、机位和镜头开始预演构图与动作。", IsTemplate: true, NodeCount: 1},
 		{Key: "storyboard-three-shots-v1", Kind: "short_drama", Name: "三镜头分镜", Description: "为开场、冲突、转折预填三组可编辑分镜与图片生成节点，选择模型后手动生成。", IsTemplate: true, NodeCount: 6, RequiresModel: true},
 	}
 	result := make([]SystemAssetTemplate, 0, len(catalog))
@@ -57,6 +58,10 @@ func ApplySystemAssetTemplate(base Document, key string) (OperationOutcome, erro
 	if err != nil || kind != template.Kind {
 		return OperationOutcome{}, ErrInvalidCommand
 	}
+	if template.Key == "director-stage-v1" {
+		node := directorStageNode(base.ID, template)
+		return ApplyOperations(base, []Operation{{Type: "create_node", Node: &node}})
+	}
 	prompts := []string{"描述画面主体、动作、场景、构图与光线，例如：清晨的咖啡馆，一杯热咖啡置于木桌中央，窗外柔和晨光，温暖写实风格。"}
 	titles := []string{"创作说明"}
 	if template.Kind == "short_drama" {
@@ -79,4 +84,39 @@ func ApplySystemAssetTemplate(base Document, key string) (OperationOutcome, erro
 		operations = append(operations, Operation{Type: "create_node", Node: &text}, Operation{Type: "create_node", Node: &image}, Operation{Type: "connect", Edge: &edge})
 	}
 	return ApplyOperations(base, operations)
+}
+
+func directorStageNode(documentID uuid.UUID, template SystemAssetTemplate) Node {
+	id := func(role string) uuid.UUID {
+		return uuid.NewSHA1(documentID, []byte("template/"+template.Key+"/"+role))
+	}
+	cameraID, shotID := id("camera"), id("shot")
+	width, height := 480.0, 402.0
+	pose := func(x, y, z float64) DirectorTransform {
+		return DirectorTransform{Position: []float64{x, y, z}, Rotation: []float64{0, 0, 0}, Scale: []float64{1, 1, 1}}
+	}
+	scene := DirectorConfig{
+		ID: id("scene"), Version: 1, Title: "构图预演", Mode: "static",
+		Background: "#171717", EnvironmentIntensity: 1, GridVisible: true, AspectRatio: "16:9",
+		Objects: []DirectorObject{{
+			ID: id("box"), Name: "白模占位", Kind: "primitive", Primitive: "box",
+			Transform: pose(0, 0.5, 0), Color: "#d4d4d8", Visible: true, CastShadow: true,
+			Keyframes: []DirectorKeyframe{},
+		}},
+		Cameras: []DirectorCamera{{
+			ID: cameraID, Name: "机位", Transform: pose(5, 3, 7), Target: []float64{0, 1, 0},
+			LookAtMode: "coordinates", FocalLength: 35, FOV: 50, Aperture: 2.8,
+			FocusDistance: 8, Near: 0.1, Far: 1000, Keyframes: []DirectorKeyframe{},
+		}},
+		Lights: []DirectorLight{},
+		Shots: []DirectorShot{{
+			ID: shotID, Name: "构图预演", CameraID: cameraID, Duration: 15, FPS: 30,
+			ShotSize: "medium", CameraMove: "static",
+		}},
+		ActiveShotID: shotID,
+	}
+	return Node{
+		ID: id("node"), Title: template.Name, NodeType: "director", NodeAction: "tool",
+		Width: &width, Height: &height, Config: NodeConfig{Director: &scene},
+	}
 }

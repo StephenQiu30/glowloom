@@ -135,7 +135,7 @@ export function registerBuiltinNodes() {
       },
       {
         type: "director",
-        title: "导演台",
+        title: "3D导演台",
         icon: <Box className={iconClass} />,
         defaultSize: { width: 480, height: 320 },
         defaultMetadata: {},

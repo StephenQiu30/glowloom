@@ -31,6 +31,7 @@ export function ApplicationLayout({
           "home",
           "conversations",
           "explore",
+          "ai-tools",
           "assets",
           "invitations",
           "short-drama",

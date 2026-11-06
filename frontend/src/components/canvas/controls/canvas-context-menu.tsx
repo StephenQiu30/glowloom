@@ -114,7 +114,7 @@ export function CanvasNodeContextMenu({
                   ["audio", "音频"],
                   ["timeline", "时间线"],
                   ["subject", "主体"],
-                  ["director", "导演台"],
+                  ["director", "3D导演台"],
                 ].map(([type, label]) => (
                   <DropdownMenuItem
                     key={type}

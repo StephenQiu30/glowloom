@@ -334,7 +334,7 @@ export function CanvasNodeMaskEditDialog({
         className={"dialog-assets max-h-dialog w-full overflow-y-auto"}
       >
         <DialogHeader>
-          <DialogTitle className="sr-only">局部编辑</DialogTitle>
+          <DialogTitle className="sr-only">局部重绘</DialogTitle>
           <DialogDescription className="sr-only">
             绘制需要修改的区域并填写修改要求，生成服务尚未接入。
           </DialogDescription>

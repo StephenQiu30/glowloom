@@ -70,7 +70,7 @@ export function CanvasNodeAngleDialog({
         <div>
           <div className="flex flex-col gap-5">
             <div>
-              <h2 className="text-xl font-semibold">{"AI 多角度"}</h2>
+              <h2 className="text-xl font-semibold">{"图片多角度"}</h2>
               <p className="mt-1 text-sm opacity-60">
                 {"左侧只预览方向，结果会基于原图重新生成"}
               </p>

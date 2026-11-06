@@ -14,7 +14,7 @@ import {
   Video,
 } from "lucide-react";
 import { AssetCanvasList } from "@/app/assets/_components/asset-canvas-list";
-import { AssetCreateProject } from "@/app/assets/_components/asset-create-project";
+import { AssetCreateProject } from "@/components/projects/asset-create-project";
 import { defaultAssetFilters } from "@/app/assets/_components/asset-query";
 import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";

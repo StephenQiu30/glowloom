@@ -19,6 +19,7 @@ import {
   Compass,
   ContactRound,
   FolderClosed,
+  Grid2x2Plus,
   Plus,
   Sparkles,
   SquarePen,
@@ -53,6 +54,7 @@ import {
 const links = [
   { id: "home", label: "创作", icon: Sparkles, href: "/" },
   { id: "explore", label: "探索", icon: Compass, href: "/explore" },
+  { id: "ai-tools", label: "AI工具", icon: Grid2x2Plus, href: "/ai-tools" },
   { id: "assets", label: "资产", icon: FolderClosed, href: "/assets" },
   { id: "subjects", label: "主体", icon: ContactRound, href: "/subjects" },
   {

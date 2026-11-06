@@ -13,14 +13,25 @@ import (
 
 func TestCanvasAssetSystemTemplatesCreateEditableNonExecutingGraphs(t *testing.T) {
 	catalog, err := domain.SystemAssetTemplates("")
-	if err != nil || len(catalog) != 2 {
+	if err != nil || len(catalog) != 3 {
 		t.Fatal(catalog, err)
 	}
 	for _, template := range catalog {
 		base := domain.Document{ID: uuid.New(), ProjectID: uuid.New(), Name: template.Name, Kind: template.Kind, Revision: 1, SchemaVersion: 1, OperationVersion: 1, Scope: json.RawMessage(`{}`), Viewport: domain.Viewport{Zoom: 1}, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
 		result, err := domain.ApplySystemAssetTemplate(base, template.Key)
-		if err != nil || len(result.Document.Nodes) != template.NodeCount || len(result.Document.Edges) != template.NodeCount/2 || !template.IsTemplate || !template.RequiresModel {
+		isDirector := template.Key == "director-stage-v1"
+		if err != nil || len(result.Document.Nodes) != template.NodeCount || len(result.Document.Edges) != template.NodeCount/2 || !template.IsTemplate || template.RequiresModel == isDirector {
 			t.Fatal(template, result, err)
+		}
+		if isDirector {
+			node := result.Document.Nodes[0]
+			if node.NodeType != "director" || node.NodeAction != "tool" || node.Config.Director == nil {
+				t.Fatal("missing editable director template", node)
+			}
+			scene := node.Config.Director
+			if len(scene.Objects) != 1 || len(scene.Cameras) != 1 || len(scene.Shots) != 1 || scene.ActiveShotID != scene.Shots[0].ID || scene.Shots[0].CameraID != scene.Cameras[0].ID {
+				t.Fatal("missing director sample scene", scene)
+			}
 		}
 		for _, node := range result.Document.Nodes {
 			if node.LastOperationID != nil || node.RefID != nil {
@@ -54,7 +65,7 @@ func TestCanvasAssetCreationNormalizesAndRejectsMismatchedTemplate(t *testing.T)
 	if err != nil || input.Name != "三镜头分镜" {
 		t.Fatal(input, err)
 	}
-	for _, bad := range []application.AssetCreationInput{{Kind: "video"}, {TemplateKey: "unknown"}, {Kind: "short_drama", TemplateKey: "text-to-image-v1"}, {Name: "  "}, {Name: "名\x00称"}} {
+	for _, bad := range []application.AssetCreationInput{{Kind: "video"}, {TemplateKey: "unknown"}, {Kind: "short_drama", TemplateKey: "text-to-image-v1"}, {Kind: "short_drama", TemplateKey: "director-stage-v1"}, {Name: "  "}, {Name: "名\x00称"}} {
 		if _, err := application.NormalizeAssetCreation(bad); !errors.Is(err, domain.ErrInvalidCommand) {
 			t.Fatal("invalid seed admitted", bad, err)
 		}

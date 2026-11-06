@@ -86,24 +86,29 @@ type Workspace = {
 };
 
 /** Page-owned entry; generation, references and pricing remain owned by RichGeneration. */
-export function HomeCreation() {
+export function HomeCreation({
+  initialType = "image",
+}: {
+  initialType?: CreationType;
+}) {
   const session = useOptionalSession();
   const { selected: space } = useSpace();
   return (
     <ScopedHomeCreation
-      key={`${session?.actor.id ?? "guest"}/${space?.id ?? "none"}/${space?.writable !== false}`}
+      initialType={initialType}
+      key={`${session?.actor.id ?? "guest"}/${space?.id ?? "none"}/${space?.writable !== false}/${initialType}`}
     />
   );
 }
 
-function ScopedHomeCreation() {
+function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
   const session = useOptionalSession();
   const login = useLoginDialog();
   const router = useRouter();
   const conversationMemory = useConversationContext();
   const { selected: space } = useSpace();
   const [mode, setMode] = useState("generate");
-  const [type, setType] = useState<CreationType>("image");
+  const [type, setType] = useState<CreationType>(initialType);
   const [project, setProject] = useState<Project | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [independent, setIndependent] = useState<Project | null>(null);

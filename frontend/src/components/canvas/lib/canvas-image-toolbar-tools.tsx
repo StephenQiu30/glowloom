@@ -79,7 +79,7 @@ export const imageToolDefinitions: ImageToolDefinition[] = [
   {
     id: "reversePrompt",
     defaultVisible: true,
-    label: () => "反推提示词",
+    label: () => "提示词反推",
     title: () => "创建反推提示词的文本和配置节点",
     icon: () => <FileText className="size-4" />,
     run: (node, handlers) => handlers.onReversePrompt(node),
@@ -110,7 +110,7 @@ export const imageToolDefinitions: ImageToolDefinition[] = [
   {
     id: "maskEdit",
     defaultVisible: true,
-    label: () => "局部编辑",
+    label: () => "局部重绘",
     title: () => "添加蒙版遮罩后局部修改",
     icon: () => <Brush className="size-4" />,
     run: (node, handlers) => handlers.onMaskEdit(node),
@@ -142,15 +142,15 @@ export const imageToolDefinitions: ImageToolDefinition[] = [
   {
     id: "superResolve",
     defaultVisible: false,
-    label: () => "超分",
-    title: () => "AI 超分",
+    label: () => "智能超清",
+    title: () => "智能超清",
     icon: () => <Sparkles className="size-4" />,
     run: (node, handlers) => handlers.onSuperResolve(node),
   },
   {
     id: "angle",
     defaultVisible: false,
-    label: () => "多角度",
+    label: () => "图片多角度",
     title: () => "生成角度",
     icon: () => <Camera className="size-4" />,
     run: (node, handlers) => handlers.onAngle(node),

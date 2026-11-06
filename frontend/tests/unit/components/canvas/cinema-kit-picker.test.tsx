@@ -91,7 +91,7 @@ it("keeps all seven connection choices visible and explains camera video restric
     "音频",
     "时间线",
     "主体",
-    "导演台",
+    "3D导演台",
   ])
     expect(screen.getByText(name)).toBeTruthy();
   expect(screen.getByText("暂不支持这些设置的模型")).toBeTruthy();

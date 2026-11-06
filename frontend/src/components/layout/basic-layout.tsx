@@ -264,6 +264,7 @@ export function BasicLayout({
         allowGuest &&
         (screen === "home" ||
           screen === "explore" ||
+          screen === "ai-tools" ||
           screen === "invitations" ||
           screen === "short-drama" ||
           screen === "assets")

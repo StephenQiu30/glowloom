@@ -43,7 +43,7 @@ import {
   type AssetFilters,
   type AssetCanvasItem,
 } from "./asset-query";
-import { AssetCreateProject } from "./asset-create-project";
+import { AssetCreateProject } from "@/components/projects/asset-create-project";
 import { AssetTemplateList, type AssetTemplate } from "./asset-template-list";
 import {
   AssetCardCover,

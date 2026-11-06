@@ -82,7 +82,7 @@ export function ConnectionCreateMenu({
     { type: CanvasNodeType.Audio, title: "音频", icon: <AudioLines /> },
     { type: "timeline", title: "时间线", icon: <Clapperboard /> },
     { type: "subject", title: "主体", icon: <Contact /> },
-    { type: "director", title: "导演台", icon: <Box /> },
+    { type: "director", title: "3D导演台", icon: <Box /> },
   ] as const;
   return (
     <CanvasCreateMenu
