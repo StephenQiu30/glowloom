@@ -7,13 +7,7 @@ import { Input } from "@/components/ui/input";
 import type { PageSearch } from "./product-search";
 
 /** Page-owned results, inline input in the existing common header search slot. */
-export function ProductInlineSearch({
-  search,
-  isMobile,
-}: {
-  search: PageSearch;
-  isMobile: boolean;
-}) {
+export function ProductInlineSearch({ search }: { search: PageSearch }) {
   const [expanded, setExpanded] = useState(false);
   const [composing, setComposing] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -64,8 +58,7 @@ export function ProductInlineSearch({
       <Button
         ref={trigger}
         variant="ghost"
-        size="icon-lg"
-        className={isMobile ? "size-11" : undefined}
+        size="toolbar-icon"
         aria-label={search.label}
         aria-keyshortcuts="Meta+K Control+K"
         disabled={search.disabled}
@@ -79,7 +72,7 @@ export function ProductInlineSearch({
       role="search"
       data-inline-page-search
       aria-label={search.label}
-      className="flex h-11 w-[min(240px,45vw)] min-w-0 items-center gap-1 rounded-md bg-secondary px-2 max-[360px]:w-[calc(100vw-180px)] min-[361px]:max-md:w-[min(240px,calc(100vw-224px))]"
+      className="flex h-(--toolbar-control-size) w-[min(240px,45vw)] min-w-0 items-center gap-1 rounded-md bg-secondary px-2 max-[360px]:w-[calc(100vw-180px)] min-[361px]:max-md:w-[min(240px,calc(100vw-224px))]"
     >
       <Search
         className="size-4 shrink-0 text-muted-foreground"
@@ -124,9 +117,8 @@ export function ProductInlineSearch({
       {search.value ? (
         <Button
           type="button"
-          size="icon"
+          size="toolbar-icon"
           variant="ghost"
-          className="size-9 shrink-0 max-sm:size-11"
           aria-label="清空搜索"
           disabled={search.disabled}
           onClick={() => {

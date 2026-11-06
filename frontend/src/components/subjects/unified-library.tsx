@@ -60,6 +60,7 @@ import {
 } from "./unified-contracts";
 import "./unified-subjects.css";
 import { useSubjectList } from "./use-subject-list";
+import { ToolbarGroup } from "@/components/ui/toolbar";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 const Editor = dynamic(() =>
   import("./unified-editor").then((m) => m.UnifiedSubjectEditor),
@@ -344,14 +345,16 @@ export function UnifiedSubjectLibrary({
         presentation={batch ? "replace-base" : "adjacent"}
       >
         {batch ? (
-          <div
-            className="unified-subject-toolbar flex min-w-0 flex-1 flex-wrap items-center gap-2"
+          <ToolbarGroup
+            appearance="plain"
+            className="unified-subject-toolbar w-full flex-wrap"
             aria-label="主体批量操作"
           >
             <span className="mr-auto text-sm" aria-live="polite">
               已选择 {selected.length} 项内容
             </span>
             <Button
+              size="toolbar"
               variant="ghost"
               disabled={locked || !selected.length}
               onClick={() => openDelete(selected)}
@@ -360,6 +363,7 @@ export function UnifiedSubjectLibrary({
               删除
             </Button>
             <Button
+              size="toolbar"
               variant="ghost"
               disabled={locked || !selected.length}
               onClick={() => void download(selected)}
@@ -368,6 +372,7 @@ export function UnifiedSubjectLibrary({
               下载
             </Button>
             <Button
+              size="toolbar"
               variant="ghost"
               disabled={locked || !selected.length}
               onClick={() =>
@@ -378,6 +383,7 @@ export function UnifiedSubjectLibrary({
               {allFavorites ? "取消收藏" : "收藏"}
             </Button>
             <Button
+              size="toolbar"
               variant="ghost"
               disabled={locked}
               ref={cancelBatchTrigger}
@@ -389,9 +395,10 @@ export function UnifiedSubjectLibrary({
             >
               取消选择
             </Button>
-          </div>
+          </ToolbarGroup>
         ) : toolbarInHeader ? (
           <Button
+            size="toolbar"
             ref={batchTrigger}
             variant="ghost"
             disabled={locked}

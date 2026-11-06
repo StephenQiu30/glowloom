@@ -120,7 +120,7 @@ export function ThemeMenuItems({
   );
 }
 
-export function ThemeToggle() {
+export function ThemeToggle({ toolbar = false }: { toolbar?: boolean } = {}) {
   const selection = useThemeMenuSelection();
   const { theme, hydrated, pending } = selection;
   const Icon =
@@ -130,8 +130,8 @@ export function ThemeToggle() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-lg"
-          className="max-md:size-11"
+          size={toolbar ? "toolbar-icon" : "icon-lg"}
+          className={toolbar ? undefined : "max-md:size-11"}
           data-theme-trigger
           aria-label="切换主题"
           title="切换主题"

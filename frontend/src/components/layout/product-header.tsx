@@ -31,6 +31,7 @@ export function ProductHeader({
   toolbarRef?: Ref<HTMLDivElement>;
   pageActionsRef?: Ref<HTMLDivElement>;
   replaceBase?: boolean;
+  isMobile: boolean;
   navigationOpen: boolean;
   navigationTriggerRef?: Ref<HTMLButtonElement>;
   onOpenNavigation: () => void;
@@ -54,7 +55,6 @@ export function ProductHeader({
       showSearch={showSearch}
       showUtilities={showUtilities}
       actor={actor}
-      isMobile={isMobile}
       onLogin={onLogin}
       onLogout={onLogout}
       onFeature={onFeature}
@@ -72,7 +72,7 @@ export function ProductHeader({
           <>
             <Button
               variant="ghost"
-              size="icon-lg"
+              size="toolbar-icon"
               ref={navigationTriggerRef}
               className="mobile-navigation-trigger"
               aria-label="打开导航"

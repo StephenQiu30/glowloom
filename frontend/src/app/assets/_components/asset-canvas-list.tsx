@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ListChecks } from "lucide-react";
 import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
+import { Toolbar } from "@/components/ui/toolbar";
 import { AssetToolbarButton } from "./asset-toolbar-button";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -314,10 +315,10 @@ export function AssetCanvasList({
     }
   }
   const toolbar = (
-    <div
+    <Toolbar
       ref={batchToolbar}
       data-asset-batch={batch || undefined}
-      className="flex flex-wrap items-center gap-2"
+      className="flex-wrap"
       aria-label="画布操作"
     >
       {batch ? (
@@ -329,6 +330,7 @@ export function AssetCanvasList({
             已选择{chosen.length}项内容
           </span>
           <Button
+            size="toolbar"
             onPointerDown={rememberDialogTrigger}
             onFocus={rememberDialogTrigger}
             variant="ghost"
@@ -344,6 +346,7 @@ export function AssetCanvasList({
             删除
           </Button>
           <Button
+            size="toolbar"
             variant="ghost"
             disabled={locked || !chosen.length || chosen.length > 100}
             onClick={() =>
@@ -360,6 +363,7 @@ export function AssetCanvasList({
               : "收藏"}
           </Button>
           <Button
+            size="toolbar"
             data-batch-focus
             variant="ghost"
             disabled={locked}
@@ -388,7 +392,7 @@ export function AssetCanvasList({
           />
         </>
       )}
-    </div>
+    </Toolbar>
   );
   return (
     <div className="grid min-w-0 gap-6">

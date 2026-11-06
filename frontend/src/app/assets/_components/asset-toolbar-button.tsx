@@ -22,8 +22,7 @@ export function AssetToolbarButton({
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-lg"
-          className="max-md:size-11"
+          size="toolbar-icon"
           aria-label={label}
           {...props}
         >

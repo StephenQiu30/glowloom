@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ButtonGroup } from "@/components/ui/button-group";
+import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import {
   ProductAccountActions,
   type ProductAccountActionsProps,
@@ -13,7 +13,6 @@ export type ProductHeaderActionsProps = ProductAccountActionsProps & {
   search?: PageSearch;
   assetLayout?: boolean;
   pageActions?: ReactNode;
-  isMobile: boolean;
   showSearch?: boolean;
   showUtilities?: boolean;
 };
@@ -23,38 +22,34 @@ export function ProductHeaderActions({
   assetLayout = false,
   pageActions,
   search,
-  isMobile,
   showSearch = true,
   showUtilities = false,
   ...accountProps
 }: ProductHeaderActionsProps) {
   return (
-    <div
+    <Toolbar
       className="product-header-actions"
       data-asset-header-actions={assetLayout || undefined}
     >
       {assetLayout ? (
-        <ButtonGroup
+        <ToolbarGroup
           key="tools"
-          variant="asset-tools"
           data-asset-tool-group
           aria-label="资产工具"
           className="max-w-full flex-wrap"
         >
           {showSearch && (
             <div data-asset-search className="contents">
-              <ProductSearch search={search} isMobile={isMobile} />
+              <ProductSearch search={search} />
             </div>
           )}
           {pageActions}
-        </ButtonGroup>
+        </ToolbarGroup>
       ) : (
-        showSearch && (
-          <ProductSearch key="search" search={search} isMobile={isMobile} />
-        )
+        showSearch && <ProductSearch key="search" search={search} />
       )}
       {showUtilities && <ProductUtilityNavigation />}
       <ProductAccountActions key="account" {...accountProps} />
-    </div>
+    </Toolbar>
   );
 }

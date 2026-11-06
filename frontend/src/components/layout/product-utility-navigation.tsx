@@ -6,12 +6,22 @@ import { ArrowUpRight, Store } from "lucide-react";
 export function ProductUtilityNavigation() {
   return (
     <nav aria-label="快捷导航" className="product-utility-navigation">
-      <Button asChild variant="ghost" className="product-history-action">
+      <Button
+        asChild
+        size="toolbar"
+        variant="ghost"
+        className="product-history-action"
+      >
         <Link href="/assets?view=canvas&collection=legacy">
           历史画布 <ArrowUpRight aria-hidden="true" data-icon="inline-end" />
         </Link>
       </Button>
-      <Button asChild variant="outline" className="product-utility-action">
+      <Button
+        asChild
+        size="toolbar"
+        variant="outline"
+        className="product-utility-action"
+      >
         <Link href="/billing/recharge">
           <Store aria-hidden="true" data-icon="inline-start" />
           积分超市

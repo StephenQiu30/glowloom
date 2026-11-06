@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ToolbarGroup } from "@/components/ui/toolbar";
 import {
   Dialog,
   DialogContent,
@@ -141,7 +142,7 @@ export function ConversationPage({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
+        size="toolbar"
         aria-label="选择所属项目"
         disabled={switching || directLocked}
         onClick={chooseProject}
@@ -159,12 +160,19 @@ export function ConversationPage({
     >
       {!sessionID && (
         <PageToolbar inHeader slot="actions">
-          <Button asChild variant="outline" aria-label="资产库">
-            <Link href="/assets?view=reference">
-              <Folder aria-hidden="true" data-icon="inline-start" />
-              <span className="max-md:sr-only">资产库</span>
-            </Link>
-          </Button>
+          <ToolbarGroup aria-label="对话工具">
+            <Button
+              asChild
+              variant="ghost"
+              size="toolbar-adaptive"
+              aria-label="资产库"
+            >
+              <Link href="/assets?view=reference">
+                <Folder aria-hidden="true" data-icon="inline-start" />
+                <span className="max-md:sr-only">资产库</span>
+              </Link>
+            </Button>
+          </ToolbarGroup>
         </PageToolbar>
       )}
       {sessionID && (

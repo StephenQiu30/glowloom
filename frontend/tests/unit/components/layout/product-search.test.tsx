@@ -34,16 +34,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 function SearchFixture({
-  mobile = false,
   onSearch = vi.fn(),
 }: {
-  mobile?: boolean;
   onSearch?: (value: string) => void;
 }) {
   const [value, setValue] = useState("");
   return (
     <ProductSearch
-      isMobile={mobile}
       search={{ value, onValueChange: setValue, onSearch, label: "搜索画布" }}
     />
   );
@@ -52,16 +49,14 @@ async function openSearch() {
   fireEvent.click(screen.getByRole("button", { name: "搜索画布" }));
   return await screen.findByRole("combobox");
 }
-it.each([false, true])(
-  "搜索入口只显示官方图标，保留可访问名称（手机=%s）",
-  (mobile) => {
-    render(<SearchFixture mobile={mobile} />);
-    const trigger = screen.getByRole("button", { name: "搜索画布" });
-    expect(trigger.textContent).toBe("");
-    expect(trigger.querySelector("svg.lucide-search")).toBeTruthy();
-    expect(trigger.getAttribute("aria-keyshortcuts")).toBe("Meta+K Control+K");
-  },
-);
+it("搜索入口使用共享图标按钮，保留可访问名称", () => {
+  render(<SearchFixture />);
+  const trigger = screen.getByRole("button", { name: "搜索画布" });
+  expect(trigger.textContent).toBe("");
+  expect(trigger.querySelector("svg.lucide-search")).toBeTruthy();
+  expect(trigger.getAttribute("data-size")).toBe("toolbar-icon");
+  expect(trigger.getAttribute("aria-keyshortcuts")).toBe("Meta+K Control+K");
+});
 it("官方 Command 输入不请求，选择搜索去除空白，清除恢复列表", async () => {
   const onSearch = vi.fn();
   render(<SearchFixture onSearch={onSearch} />);
@@ -76,7 +71,7 @@ it("官方 Command 输入不请求，选择搜索去除空白，清除恢复列�
 });
 it("手机弹窗提交后返回按钮焦点，再打开保留输入，Escape 关闭", async () => {
   const onSearch = vi.fn();
-  render(<SearchFixture mobile onSearch={onSearch} />);
+  render(<SearchFixture onSearch={onSearch} />);
   const trigger = screen.getByRole("button", { name: "搜索画布" });
   trigger.focus();
   const input = await openSearch();

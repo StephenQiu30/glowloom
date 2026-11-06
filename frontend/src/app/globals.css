@@ -393,10 +393,35 @@ button:not(:disabled),
   padding: 8px 12px;
   background: var(--background);
 }
+:root {
+  --toolbar-control-size: 28px;
+  --toolbar-group-padding: 3px;
+  --toolbar-group-height: calc(
+    var(--toolbar-control-size) + 2 * var(--toolbar-group-padding) + 2px
+  );
+}
+.toolbar-group {
+  display: inline-flex;
+  flex: none;
+  min-width: 0;
+  min-height: var(--toolbar-control-size);
+  align-items: center;
+  gap: 2px;
+}
+.toolbar-group[data-appearance="framed"] {
+  min-height: var(--toolbar-group-height);
+  padding: var(--toolbar-group-padding);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 8px;
+  background: var(--background);
+}
+@media (width < 768px) {
+  :root {
+    --toolbar-control-size: 44px;
+    --toolbar-group-padding: 2px;
+  }
+}
 .product-header {
-  --header-control-size: 28px;
-  --header-group-height: 36px;
-  --header-group-padding: 3px;
   border: 0;
   box-shadow: none;
   height: var(--layout-header);
@@ -573,11 +598,6 @@ button:not(:disabled),
   gap: 8px;
 }
 
-.product-header-actions > button svg {
-  width: 20px;
-  height: 20px;
-}
-
 /* Shared navigation: Figma 3280:64554, measured against the 2026-10-30 source. */
 .product-shell {
   --layout-header: 80px;
@@ -663,28 +683,7 @@ button:not(:disabled),
 .product-history-action {
   color: var(--muted-foreground);
 }
-.product-account-actions {
-  display: flex;
-  height: var(--header-group-height, 36px);
-  flex-shrink: 0;
-  align-items: center;
-  gap: 2px;
-  padding: var(--header-group-padding, 3px) 6px var(--header-group-padding, 3px)
-    4px;
-  border: 1px solid var(--sidebar-border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--background) 60%, transparent);
-}
-.product-account-actions .product-notification-action,
-.product-account-actions [data-theme-trigger],
-.product-account-actions [aria-label="账号菜单"] {
-  width: var(--header-control-size, 28px);
-  height: var(--header-control-size, 28px);
-  min-width: var(--header-control-size, 28px);
-  padding: 0;
-  border-radius: 6px;
-}
-.product-account-actions [data-slot="avatar"] {
+[data-account-actions] [data-slot="avatar"] {
   width: 24px;
   height: 24px;
 }
@@ -694,20 +693,9 @@ button:not(:disabled),
   margin-inline: 4px;
   background: var(--sidebar-border);
 }
-.product-account-actions .product-credit-action,
-.product-account-actions .product-membership-action {
-  height: var(--header-control-size, 28px);
-  gap: 6px;
-  padding: 0 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 18px;
+.product-credit-action,
+.product-membership-action {
   color: var(--navigation-accent);
-}
-.product-account-actions .product-login-action {
-  height: var(--header-control-size, 28px);
-  min-width: var(--header-control-size, 28px);
-  padding-block: 0;
 }
 @media (width < 1280px) {
   .product-utility-navigation {
@@ -715,26 +703,8 @@ button:not(:disabled),
   }
 }
 @media (width < 768px) {
-  .product-header {
-    --header-control-size: 44px;
-    --header-group-height: 50px;
-    --header-group-padding: 2px;
-  }
   .product-shell {
     --layout-header: 64px;
-  }
-  .product-account-actions {
-    height: var(--header-group-height, 50px);
-    padding-block: var(--header-group-padding, 2px);
-  }
-  .product-account-actions .product-notification-action,
-  .product-account-actions [data-theme-trigger],
-  .product-account-actions [aria-label="账号菜单"],
-  .product-account-actions .product-credit-action {
-    width: var(--header-control-size, 44px);
-    height: var(--header-control-size, 44px);
-    min-width: var(--header-control-size, 44px);
-    padding: 0;
   }
   .product-membership-action,
   .product-account-divider {
@@ -749,7 +719,7 @@ button:not(:disabled),
   }
 }
 @media (width < 360px) {
-  .product-account-actions .product-credit-action {
+  [data-account-actions] .product-credit-action {
     display: none;
   }
 }
@@ -1616,9 +1586,6 @@ button:not(:disabled),
   .product-header {
     padding-inline: 16px;
   }
-  .product-header-actions {
-    gap: 0;
-  }
   .product-header:has(.product-header-toolbar:not(:empty)) {
     grid-template-columns: minmax(0, 1fr) auto;
     row-gap: 0;
@@ -1643,8 +1610,11 @@ button:not(:disabled),
   .product-header-page-actions:not(:empty) {
     grid-column: 2;
     grid-row: 2;
-    padding-bottom: 8px;
     justify-content: flex-end;
+  }
+  .product-header:has(.product-header-toolbar:not(:empty))
+    > .product-header-page-actions:not(:empty) {
+    padding-bottom: 8px;
   }
   .product-header[data-replace-base] .product-header-toolbar {
     grid-column: 1 / -1;
@@ -1681,7 +1651,6 @@ button:not(:disabled),
   .product-header:has([data-inline-page-search]) .product-account-slot {
     flex-basis: 44px;
   }
-  .mobile-navigation-trigger,
   [data-mobile="true"] .sidebar-toggle {
     width: 44px;
     height: 44px;
@@ -3248,22 +3217,11 @@ button:not(:disabled),
   }
 }
 
-/* Asset header uses shadcn surfaces; these rules only arrange their slots. */
-.product-header [data-asset-tool-group]:not(:has([data-asset-batch])) {
-  min-height: var(--header-group-height);
-  padding: var(--header-group-padding) 4px;
-}
-.product-header [data-asset-tool-group]:not(:has([data-asset-batch])) button {
-  width: var(--header-control-size);
-  height: var(--header-control-size);
-  min-width: var(--header-control-size);
-  min-height: var(--header-control-size);
+/* Batch tools share the toolbar controls and use the existing open layout. */
+[data-asset-tool-group][data-appearance="framed"]:has([data-asset-batch]) {
   padding: 0;
-}
-.product-header
-  [data-asset-tool-group]:not(:has([data-asset-batch]))
-  [data-inline-page-search] {
-  height: var(--header-control-size);
+  border-color: transparent;
+  background: transparent;
 }
 .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) {
   grid-template-columns: minmax(0, 1fr) minmax(0, auto);
@@ -3396,14 +3354,14 @@ button:not(:disabled),
   display: flex;
   min-width: 0;
   width: 100%;
-  min-height: var(--header-group-height, 36px);
+  min-height: var(--toolbar-group-height);
   align-items: center;
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 .admin-navigation-link[data-slot="button"] {
-  height: var(--header-control-size, 28px);
+  height: var(--toolbar-control-size);
   flex-shrink: 0;
   padding-inline: 12px;
   border-radius: 999px;

@@ -24,6 +24,7 @@ export function CreditPopover({
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
+          size={navigation ? "toolbar-adaptive" : "default"}
           aria-label="积分余额"
           className={
             navigation

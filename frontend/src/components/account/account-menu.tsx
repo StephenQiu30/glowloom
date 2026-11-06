@@ -55,8 +55,7 @@ export function AccountMenu({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-lg"
-          className="rounded-full max-md:size-11"
+          size="toolbar-icon"
           aria-label="账号菜单"
           title={name}
         >

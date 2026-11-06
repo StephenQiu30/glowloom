@@ -33,6 +33,11 @@ const buttonVariants = cva(
       size: {
         "asset-card":
           "h-auto w-full min-w-0 flex-col items-stretch justify-start gap-0 rounded-lg border-0 p-0 text-left text-xs leading-5 font-medium [&_svg:not([class*='size-'])]:size-6",
+        toolbar:
+          "h-(--toolbar-control-size) min-w-(--toolbar-control-size) gap-1.5 px-2 text-xs",
+        "toolbar-icon": "size-(--toolbar-control-size) p-0",
+        "toolbar-adaptive":
+          "h-(--toolbar-control-size) min-w-(--toolbar-control-size) gap-1.5 px-2 text-xs max-md:w-(--toolbar-control-size) max-md:p-0",
         workspace:
           "h-9 gap-2 px-3 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium max-md:min-h-11 pointer-coarse:min-h-11",
         reference: "h-16 w-12 rounded-md",

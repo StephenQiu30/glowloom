@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { cn } from "cn";
 import { Search, X, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,27 +40,15 @@ const getPlatformKey = () =>
 const getServerPlatformKey = () => "Ctrl";
 
 /** One command palette per BasicLayout; result data stays in its owning page. */
-export function ProductSearch({
-  search,
-  isMobile = false,
-}: {
-  search?: PageSearch;
-  isMobile?: boolean;
-}) {
+export function ProductSearch({ search }: { search?: PageSearch }) {
   return search?.mode === "inline" ? (
-    <ProductInlineSearch search={search} isMobile={isMobile} />
+    <ProductInlineSearch search={search} />
   ) : (
-    <ProductCommandSearch search={search} isMobile={isMobile} />
+    <ProductCommandSearch search={search} />
   );
 }
 
-function ProductCommandSearch({
-  search,
-  isMobile = false,
-}: {
-  search?: PageSearch;
-  isMobile?: boolean;
-}) {
+function ProductCommandSearch({ search }: { search?: PageSearch }) {
   const router = useRouter();
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
@@ -128,8 +115,7 @@ function ProductCommandSearch({
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="icon-lg"
-              className={cn(isMobile && "size-11")}
+              size="toolbar-icon"
               aria-label={current.label}
               aria-haspopup="dialog"
               aria-expanded={open}

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ListChecks } from "lucide-react";
 import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
+import { Toolbar } from "@/components/ui/toolbar";
 import { AssetToolbarButton } from "./asset-toolbar-button";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
@@ -416,7 +417,7 @@ export function PersonalHistoryList({
   const canChooseFormat =
     kind === "document" && formatTargets.some(hasDocumentBody);
   const toolbar = (
-    <div
+    <Toolbar
       ref={batchToolbar}
       data-asset-batch={batch || undefined}
       className="flex min-w-0 flex-wrap items-center gap-2"
@@ -431,6 +432,7 @@ export function PersonalHistoryList({
             已选择{selected.length}项内容
           </span>
           <Button
+            size="toolbar"
             variant="ghost"
             disabled={
               locked || !selected.length || selected.length > smallActionLimit
@@ -446,6 +448,7 @@ export function PersonalHistoryList({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
+                  size="toolbar"
                   variant="ghost"
                   disabled={locked || !canBatchDownload(selected, kind)}
                 >
@@ -467,6 +470,7 @@ export function PersonalHistoryList({
             </DropdownMenu>
           ) : (
             <Button
+              size="toolbar"
               variant="ghost"
               disabled={locked || !canBatchDownload(selected, kind)}
               onClick={() => void download(selected)}
@@ -476,6 +480,7 @@ export function PersonalHistoryList({
           )}
           {(kind === "image" || kind === "video") && (
             <Button
+              size="toolbar"
               variant="ghost"
               disabled={locked || !canPublish}
               title={
@@ -489,6 +494,7 @@ export function PersonalHistoryList({
             </Button>
           )}
           <Button
+            size="toolbar"
             variant="ghost"
             disabled={locked || !canFavorite}
             title={
@@ -509,6 +515,7 @@ export function PersonalHistoryList({
               : "收藏"}
           </Button>
           <Button
+            size="toolbar"
             data-batch-focus
             variant="ghost"
             disabled={locked}
@@ -534,7 +541,7 @@ export function PersonalHistoryList({
           }}
         />
       )}
-    </div>
+    </Toolbar>
   );
   return (
     <div className="grid min-w-0 gap-6">
