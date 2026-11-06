@@ -1,11 +1,11 @@
-import type { CanvasGraphShape, CanvasSnapshot } from "./model.mjs";
+import type { CanvasGraphShape, CanvasSnapshot } from "./model.js";
 import type {
   CommittedState,
   RecoveryRecord,
   RecoverySource,
   RecoverySelection,
   SemanticIntent,
-} from "./session.mjs";
+} from "./session.js";
 export type RecoveryField = SemanticIntent & {
   key: string;
   targetId: string;

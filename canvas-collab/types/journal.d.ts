@@ -1,9 +1,9 @@
-import type { CanvasGraphShape } from "./model.mjs";
+import type { CanvasGraphShape } from "./model.js";
 import type {
   CollaborationScope,
   JournalWriter,
   RecoveryRecord,
-} from "./session.mjs";
+} from "./session.js";
 
 export type JournalAccount = Pick<CollaborationScope, "origin" | "actorKey">;
 export type JournalCanvas = JournalAccount &

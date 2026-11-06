@@ -1,36 +1,79 @@
+import type {
+  CollaborationScope,
+  CommittedState,
+  FrozenUpdate,
+  DurableReceipt,
+  SemanticIntent,
+  RecoverySelection,
+  RecoverySource,
+  RecoveryRecord,
+  ControlCommand,
+  SessionTransport,
+  JournalWriter,
+} from "../types/session.js";
+import type { CanvasRestoration, CanvasTextDraft } from "../types/model.js";
 import * as Y from "yjs";
 import {
   applyCanvasChanges,
   applyRecoveredCanvasChanges,
   readCanvasDocument,
-} from "./model.mjs";
+} from "./model.js";
 import {
   archiveRecovery,
   planRecovery,
   settleRecovery,
   recoveryFields,
-} from "./recovery.mjs";
+} from "./recovery.js";
 import {
   trackIntents,
   acknowledgeIntents,
   applyReadableIntents,
-} from "./intents.mjs";
+} from "./intents.js";
 import {
   base64 as binary,
   unbase64 as decode,
   sha256 as hash,
-} from "./binary.mjs";
+} from "./binary.js";
 
 const REMOTE = Symbol("committed");
 const problem = (code) => Object.assign(new Error(code), { code });
 
 /** One optimistic document and one committed document; no unaccepted cross-tab channel. */
 export class CollaborationSession {
+  declare readonly scope: CollaborationScope;
+  declare private storage: "journal" | "memory";
+  declare private journal: Pick<JournalWriter, "put">;
+  declare private transport: SessionTransport;
+  declare private changed: (session: CollaborationSession) => void;
+  declare confirmed: CommittedState;
+  declare pending: Uint8Array[];
+  declare inFlight: FrozenUpdate | null;
+  declare acceptedReceipt: DurableReceipt | null;
+  declare recoverySources: RecoverySource[];
+  declare recoverySelection: RecoverySelection | null;
+  declare private intents: SemanticIntent[];
+  declare private inFlightIntents: SemanticIntent[];
+  declare automaticReplayAttempts: number;
+  declare sealed: RecoveryRecord["sealed"];
+  declare forms: Record<string, unknown>;
+  declare textDrafts: Record<string, CanvasTextDraft>;
+  declare control: ControlCommand | null;
+  declare status: "CLEAN" | "DIRTY" | "SAVING" | "UNKNOWN" | "REJECTED";
+  declare protected: boolean;
+  declare closed: boolean;
+  declare generation: number;
+  declare private persistence: Promise<void>;
+  declare private committed: Y.Doc;
+  declare doc: Y.Doc;
+  declare private observedSnapshot: ReturnType<typeof readCanvasDocument>;
+  declare private flushing: Promise<DurableReceipt | null> | null;
+  declare journalError: unknown;
+
   constructor({
     scope,
     initial,
     journal,
-    storage = "journal",
+    storage = "journal" as "journal" | "memory",
     transport,
     changed = () => {},
     recovery,
@@ -132,8 +175,9 @@ export class CollaborationSession {
     applyCanvasChanges(this.doc, before, after);
   }
 
-  record() {
-    const preparing = this.inFlight && !this.inFlight.payloadHash;
+  record(): RecoveryRecord {
+    const preparing =
+      this.inFlight && !this.inFlight.payloadHash ? this.inFlight : null;
     return structuredClone({
       version: 2,
       generation: this.generation,
@@ -162,7 +206,7 @@ export class CollaborationSession {
       inFlightIntents: preparing ? [] : this.inFlightIntents,
       automaticReplayAttempts: this.automaticReplayAttempts,
       pending: [
-        ...(preparing ? [this.inFlight.update] : []),
+        ...(preparing ? [preparing.update] : []),
         ...this.pending.map(binary),
       ],
       snapshot: this.snapshot,
@@ -326,7 +370,7 @@ export class CollaborationSession {
     this.changed(this);
   }
 
-  retainSourceText(scope, nodeId, document, sourceNode, sourceId) {
+  retainSourceText(scope, nodeId, document, sourceNode, sourceId?) {
     if (this.closed || !document) return false;
     const source = this.recoverySources.find(
       (value) =>
@@ -412,7 +456,7 @@ export class CollaborationSession {
     this.changed(this);
   }
 
-  releaseResolvedSources(retainedIds = []) {
+  releaseResolvedSources(retainedIds: string[] = []) {
     const retained = new Set(retainedIds);
     const next = this.recoverySources.filter(
       (source) =>
@@ -543,7 +587,8 @@ export class CollaborationSession {
           "local-restoration",
         );
       }
-      let projection = this.committedSnapshot,
+      let projection: import("../types/model.js").CanvasSnapshot | undefined =
+          this.committedSnapshot,
         verified = true;
       if (
         this.inFlightIntents.length &&
@@ -639,13 +684,18 @@ export class CollaborationSession {
         this.changed(this);
         throw error;
       }
+      const rejection = error as {
+        definitive?: boolean;
+        code?: string;
+        originalOutcome?: string;
+      };
       if (
-        error.definitive &&
-        (phase === "SUBMIT" || error.originalOutcome === "REJECTED")
+        rejection.definitive &&
+        (phase === "SUBMIT" || rejection.originalOutcome === "REJECTED")
       ) {
         // Persist the entire dependent chain before discarding its CRDT client identity.
         this.sealed ??= {
-          reason: error.code ?? "REJECTED_UPDATE",
+          reason: rejection.code ?? "REJECTED_UPDATE",
           snapshot: applyReadableIntents(this.snapshot, [
             ...this.inFlightIntents,
             ...this.intents,
@@ -654,9 +704,9 @@ export class CollaborationSession {
           inFlight: this.inFlight,
           pending: this.pending.map(binary),
         };
-        this.sealed.failureReason = error.code ?? "REJECTED_UPDATE";
+        this.sealed.failureReason = rejection.code ?? "REJECTED_UPDATE";
         this.sealed.originalRejected =
-          !unknown || error.originalOutcome === "REJECTED";
+          !unknown || rejection.originalOutcome === "REJECTED";
         this.status = this.sealed.originalRejected ? "REJECTED" : "UNKNOWN";
         if (await this.protect()) {
           this.doc.destroy();
@@ -760,8 +810,12 @@ export class CollaborationSession {
     this.committed.destroy();
   }
   pendingRestoration() {
-    const current = this.doc.getMap("canvas").get("restoration"),
-      committed = this.committed.getMap("canvas").get("restoration");
+    const current = this.doc
+        .getMap<CanvasRestoration>("canvas")
+        .get("restoration"),
+      committed = this.committed
+        .getMap<CanvasRestoration>("canvas")
+        .get("restoration");
     return current && current.id !== committed?.id ? current : null;
   }
 }

@@ -79,6 +79,7 @@ jobs:
         working-directory: canvas-collab
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
+          pnpm typecheck
           pnpm test
       - name: Install media probe tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
@@ -183,6 +184,11 @@ jobs:
           cache_dependency_path: |
             frontend/pnpm-lock.yaml
             canvas-collab/pnpm-lock.yaml
+      - name: Build the shared canvas package
+        working-directory: canvas-collab
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm build
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Run frontend business tests
         run: pnpm exec vitest run --maxWorkers=2

@@ -3,7 +3,7 @@ import type {
   CanvasGraphShape,
   CanvasSnapshot,
   CanvasTextDraft,
-} from "./model.mjs";
+} from "./model.js";
 
 export type CollaborationScope = {
   origin: string;
@@ -169,7 +169,7 @@ export class CollaborationSession<
   setControl(control: ControlCommand | null): void;
   applyRecovery(
     sourceId: string,
-    selected: import("./recovery.mjs").RecoveryField[],
+    selected: import("./recovery.js").RecoveryField[],
   ): Promise<void>;
   retainSourceText(
     scope: CollaborationScope,

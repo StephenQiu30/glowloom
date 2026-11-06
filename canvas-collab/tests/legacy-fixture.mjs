@@ -1,8 +1,8 @@
 // Isolated acceptance helper: reproduce the experimental missing-container model.
 import * as Y from "yjs";
-import { digest } from "../src/admission.mjs";
-import { canonicalJson } from "../src/canonical.mjs";
-import { readCanvasDocument, applyCanvasChanges } from "../src/model.mjs";
+import { digest } from "../dist/admission.js";
+import { canonicalJson } from "../dist/canonical.js";
+import { readCanvasDocument, applyCanvasChanges } from "../dist/model.js";
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
 const input = JSON.parse(Buffer.concat(chunks)),

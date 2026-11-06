@@ -6,7 +6,7 @@ import {
   richTextSchema,
   normalizeRichText,
   persistentRichText,
-} from "../src/rich-text-schema.mjs";
+} from "../dist/rich-text-schema.js";
 
 test("three alignments survive normalized Yjs bytes and reopen without changing content", () => {
   const input = {

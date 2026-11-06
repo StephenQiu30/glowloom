@@ -1,8 +1,8 @@
 import * as Y from "yjs";
-import { digest } from "./admission.mjs";
-import { canonicalJson } from "./canonical.mjs";
-import { serviceSnapshot, serviceProjection } from "./service-document.mjs";
-import { readCanvasDocument, applyCommandCanvasChanges } from "./model.mjs";
+import { digest } from "./admission.js";
+import { canonicalJson } from "./canonical.js";
+import { serviceSnapshot, serviceProjection } from "./service-document.js";
+import { readCanvasDocument, applyCommandCanvasChanges } from "./model.js";
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 const fail = (code) =>
   Object.assign(new Error(code), { code, definitive: true });
@@ -70,7 +70,7 @@ export function prepareCommands(request, state) {
     const target = serviceSnapshot(request.projection);
     // A sorted SQL read does not request changes to committed shared order.
     for (const collection of ["nodes", "connections"]) {
-      const order = new Map(
+      const order = new Map<string, number>(
         before.graph[collection].map((item, index) => [item.id, index]),
       );
       target.graph[collection].sort(

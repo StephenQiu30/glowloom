@@ -5,7 +5,7 @@ import {
   acknowledgeIntents,
   readIntent,
   applyReadableIntents,
-} from "../src/intents.mjs";
+} from "../dist/intents.js";
 
 const snapshot = () => ({
   title: "canvas",

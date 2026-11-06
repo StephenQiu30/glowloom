@@ -4,7 +4,7 @@ import {
   canonicalJson,
   canonicalGraphJson,
   parseStoredGraph,
-} from "../src/canonical.mjs";
+} from "../dist/canonical.js";
 
 test("business hashes use Unicode code points, decimal expansion and lexicographic numeric keys", () => {
   assert.equal(

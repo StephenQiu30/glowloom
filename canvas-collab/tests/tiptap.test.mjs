@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Window } from "happy-dom";
 import * as Y from "yjs";
-import { AdmissionGate } from "../src/admission.mjs";
+import { AdmissionGate } from "../dist/admission.js";
 import { MemoryStore, scope } from "./fixtures.mjs";
 
 test("actual Tiptap bindings preserve simultaneous text, marks, mentions and personal undo", async () => {

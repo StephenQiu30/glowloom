@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
 import test from "node:test";
 import * as Y from "yjs";
-import { serviceSnapshot } from "../src/service-document.mjs";
+import { serviceSnapshot } from "../dist/service-document.js";
 import {
   createCanvasDocument,
   readCanvasDocument,
   applyCanvasChanges,
-} from "../src/model.mjs";
-import { computeCandidate } from "../src/service-runtime.mjs";
+} from "../dist/model.js";
+import { computeCandidate } from "../dist/service-runtime.js";
 
 const transform = () => ({
   position: [0, 0, 0],

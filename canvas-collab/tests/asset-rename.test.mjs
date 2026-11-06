@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
-import { computeCandidate } from "../src/service-runtime.mjs";
-import { readCanvasDocument } from "../src/model.mjs";
+import { computeCandidate } from "../dist/service-runtime.js";
+import { readCanvasDocument } from "../dist/model.js";
 
 test("asset rename uses a title delta without resetting graph or existing Yjs identity", async () => {
   const document = {

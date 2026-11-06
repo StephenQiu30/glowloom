@@ -1,4 +1,4 @@
-import { base64, unbase64, sha256 } from "./binary.mjs";
+import { base64, unbase64, sha256 } from "./binary.js";
 
 const CHUNK_BYTES = 384 * 1024;
 const MAX_BYTES = 16 * 1024 * 1024;
@@ -27,6 +27,17 @@ export async function wireFrames(message, maxBytes = MAX_BYTES) {
 
 /** Ordered, bounded transfer; callers serialize accept() and clear on connection change. */
 export class WireAssembler {
+  declare private maxBytes: number;
+  declare private now: () => number;
+  declare private transfer: {
+    id: string;
+    total: number;
+    hash: string;
+    count: number;
+    parts: Uint8Array[];
+    started: number;
+  } | null;
+
   constructor({ maxBytes = MAX_BYTES, now = Date.now } = {}) {
     this.maxBytes = maxBytes;
     this.now = now;

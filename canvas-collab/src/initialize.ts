@@ -1,9 +1,9 @@
 import * as Y from "yjs";
-import { createCanvasDocument, readCanvasDocument } from "./model.mjs";
-import { canonicalGraphJson, parseStoredGraph } from "./canonical.mjs";
-import { digest } from "./admission.mjs";
-import { base64 } from "./binary.mjs";
-import { normalizeRichText } from "./rich-text-schema.mjs";
+import { createCanvasDocument, readCanvasDocument } from "./model.js";
+import { canonicalGraphJson, parseStoredGraph } from "./canonical.js";
+import { digest } from "./admission.js";
+import { base64 } from "./binary.js";
+import { normalizeRichText } from "./rich-text-schema.js";
 
 /** Pure initialization for explicit create/restore/maintenance commands, never a lazy connection migration. */
 export function initializeDocument({ title, graphJson }) {

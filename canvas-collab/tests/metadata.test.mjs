@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
-import { prepareTitle } from "../src/metadata.mjs";
-import { createCanvasDocument, readCanvasDocument } from "../src/model.mjs";
-import { canonicalGraphJson } from "../src/canonical.mjs";
-import { digest } from "../src/admission.mjs";
+import { prepareTitle } from "../dist/metadata.js";
+import { createCanvasDocument, readCanvasDocument } from "../dist/model.js";
+import { canonicalGraphJson } from "../dist/canonical.js";
+import { digest } from "../dist/admission.js";
 
 test("resource rename prepares deterministic same-epoch increments without seeding or replacing nodes", () => {
   const doc = createCanvasDocument({

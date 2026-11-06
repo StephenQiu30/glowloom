@@ -1,4 +1,4 @@
-import { canonicalJson } from "./canonical.mjs";
+import { canonicalJson } from "./canonical.js";
 
 const copy = (value) => structuredClone(value);
 const cell = (value, exists = value !== undefined) =>
@@ -24,9 +24,11 @@ const fields = [
   "native",
 ];
 const nodeMap = (snapshot) =>
-  new Map(snapshot.graph.nodes.map((node) => [node.id, node]));
+  new Map<string, any>(snapshot.graph.nodes.map((node) => [node.id, node]));
 const edgeMap = (snapshot) =>
-  new Map(snapshot.graph.connections.map((edge) => [edge.id, edge]));
+  new Map<string, any>(
+    snapshot.graph.connections.map((edge) => [edge.id, edge]),
+  );
 
 function nodeCell(node, field) {
   if (!node) return cell(undefined);
@@ -115,7 +117,7 @@ export function applyReadableIntents(snapshot, intents) {
 
 /** Coalesces semantic local changes independently of the immutable binary queue and remote rendering. */
 export function trackIntents(previous, before, after, generation) {
-  const pending = new Map(
+  const pending = new Map<string, import("../types/session.js").SemanticIntent>(
     previous.map((intent) => [key(intent), copy(intent)]),
   );
   const track = (collection, id, field, prior, next) => {
@@ -137,7 +139,7 @@ export function trackIntents(previous, before, after, generation) {
   for (const id of new Set([...oldNodes.keys(), ...newNodes.keys()])) {
     const old = oldNodes.get(id),
       next = newNodes.get(id);
-    const identity = { collection: "nodes", id, field: "entity" },
+    const identity = { collection: "nodes" as const, id, field: "entity" },
       entity = pending.get(key(identity));
     if (!old || !next || entity) {
       if (equal(cell(old), cell(next))) continue;
@@ -197,8 +199,13 @@ export function trackIntents(previous, before, after, generation) {
 
 /** Exact ACK prefix bookkeeping. Acceptance of bytes is not proof a competing single-value intent prevailed. */
 export function acknowledgeIntents(pending, frozen, confirmed) {
-  const accepted = new Map(frozen.map((intent) => [key(intent), intent]));
-  const latest = new Map(pending.map((intent) => [key(intent), intent]));
+  const accepted = new Map<
+    string,
+    import("../types/session.js").SemanticIntent
+  >(frozen.map((intent) => [key(intent), intent]));
+  const latest = new Map<string, import("../types/session.js").SemanticIntent>(
+    pending.map((intent) => [key(intent), intent]),
+  );
   const unapplied = frozen
     .filter((intent) => {
       const newer = latest.get(key(intent));

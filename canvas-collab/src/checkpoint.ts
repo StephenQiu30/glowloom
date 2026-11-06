@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import { digest } from "./admission.mjs";
+import { digest } from "./admission.js";
 
 export function createCheckpoint(doc, { epoch, commitSeq }) {
   const update = Y.encodeStateAsUpdate(doc);

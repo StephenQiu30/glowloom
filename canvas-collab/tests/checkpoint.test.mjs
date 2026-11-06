@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
-import { createCheckpoint, restoreCheckpoint } from "../src/checkpoint.mjs";
+import { createCheckpoint, restoreCheckpoint } from "../dist/checkpoint.js";
 import { change, documentFrom } from "./fixtures.mjs";
 
 test("binary checkpoint preserves delete-only changes and later offline merge", () => {

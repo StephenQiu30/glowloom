@@ -6,8 +6,8 @@ import {
   readCanvasDocument,
   nodeTextBinding,
   applyCanvasChanges,
-} from "../src/model.mjs";
-import { canonicalGraphJson, parseStoredGraph } from "../src/canonical.mjs";
+} from "../dist/model.js";
+import { canonicalGraphJson, parseStoredGraph } from "../dist/canonical.js";
 
 const id = "10000000-0000-4000-8000-000000000001";
 const modelID = "20000000-0000-4000-8000-000000000001";

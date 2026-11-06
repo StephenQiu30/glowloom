@@ -58,7 +58,7 @@ func commandRuntime(t *testing.T) *yjsruntime.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.CommandContext(t.Context(), "node", "--input-type=module", "-e", `import {runtimeServer}from'./src/server.mjs';const s=runtimeServer({token:'isolated-agent-command-runtime-token'});s.listen(0,'127.0.0.1',()=>console.log(s.address().port));`)
+	cmd := exec.CommandContext(t.Context(), "node", "--input-type=module", "-e", `import {createRuntime}from'./dist/server.js';const s=await createRuntime({token:'isolated-agent-command-runtime-token'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`)
 	cmd.Dir = root
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {

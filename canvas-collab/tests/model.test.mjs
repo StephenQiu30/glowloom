@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCanvasDocument, readCanvasDocument } from "../src/model.mjs";
-import * as model from "../src/model.mjs";
+import { createCanvasDocument, readCanvasDocument } from "../dist/model.js";
+import * as model from "../dist/model.js";
 import * as Y from "yjs";
-import { AdmissionGate } from "../src/admission.mjs";
+import { AdmissionGate } from "../dist/admission.js";
 import { change, MemoryStore, scope } from "./fixtures.mjs";
 
 export const canvas = {

@@ -8,54 +8,66 @@
   },
   "packageManager": "pnpm@12.4.2",
   "scripts": {
-    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
-    "check": "prettier --check src tests package.json"
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node --enable-source-maps dist/server.js",
+    "test": "pnpm build && node --test --test-concurrency=1 tests/*.test.mjs",
+    "check": "prettier --check src types tests package.json tsconfig.json"
   },
   "dependencies": {
+    "@nestjs/common": "12.3.3",
+    "@nestjs/core": "12.3.3",
+    "@nestjs/platform-fastify": "12.3.3",
     "@tiptap/core": "3.32.0",
     "@tiptap/extension-mention": "3.32.0",
     "@tiptap/extension-text-align": "3.32.0",
     "@tiptap/pm": "3.32.0",
     "@tiptap/starter-kit": "3.32.0",
     "@tiptap/y-tiptap": "3.0.10",
+    "fastify": "5.12.8",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
     "yjs": "13.6.33"
   },
   "devDependencies": {
     "@tiptap/extension-collaboration": "3.32.0",
+    "@types/node": "24.19.2",
     "happy-dom": "20.14.5",
-    "prettier": "3.9.9"
+    "prettier": "3.9.9",
+    "typescript": "6.0.3"
   },
   "exports": {
     "./recovery": {
-      "types": "./src/recovery.d.mts",
-      "default": "./src/recovery.mjs"
+      "types": "./types/recovery.d.ts",
+      "default": "./dist/recovery.js"
     },
     "./session": {
-      "types": "./src/session.d.mts",
-      "default": "./src/session.mjs"
+      "types": "./types/session.d.ts",
+      "default": "./dist/session.js"
     },
     "./journal": {
-      "types": "./src/journal.d.mts",
-      "default": "./src/journal.mjs"
+      "types": "./types/journal.d.ts",
+      "default": "./dist/journal.js"
     },
     "./wire": {
-      "types": "./src/wire.d.mts",
-      "default": "./src/wire.mjs"
+      "types": "./types/wire.d.ts",
+      "default": "./dist/wire.js"
     },
     "./model": {
-      "types": "./src/model.d.mts",
-      "default": "./src/model.mjs"
+      "types": "./types/model.d.ts",
+      "default": "./dist/model.js"
     },
     "./rich-text": {
-      "types": "./src/rich-text-schema.d.mts",
-      "default": "./src/rich-text-schema.mjs"
+      "types": "./types/rich-text-schema.d.ts",
+      "default": "./dist/rich-text-schema.js"
     },
     "./service-document": {
-      "types": "./src/service-document.d.mts",
-      "default": "./src/service-document.mjs"
+      "types": "./types/service-document.d.ts",
+      "default": "./dist/service-document.js"
     }
   },
   "files": [
-    "src"
+    "dist",
+    "types"
   ]
 }

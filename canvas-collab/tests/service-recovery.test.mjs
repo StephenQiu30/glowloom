@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
-import { createCanvasDocument, readCanvasDocument } from "../src/model.mjs";
+import { createCanvasDocument, readCanvasDocument } from "../dist/model.js";
 import {
   serviceSnapshot,
   serviceProjection,
-} from "../src/service-document.mjs";
-import { CollaborationSession } from "../src/session.mjs";
-import { archiveRecovery, recoveryFields } from "../src/recovery.mjs";
+} from "../dist/service-document.js";
+import { CollaborationSession } from "../dist/session.js";
+import { archiveRecovery, recoveryFields } from "../dist/recovery.js";
 
 const id = (suffix) => "00000000-0000-4000-8000-" + suffix.padStart(12, "0");
 const original = id("11"),

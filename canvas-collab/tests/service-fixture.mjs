@@ -5,7 +5,7 @@ import {
   nodeTextBinding,
   readCanvasDocument,
   applyCanvasChanges,
-} from "../src/model.mjs";
+} from "../dist/model.js";
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
 const { state, nodeId, text, evil, edge, title, reference } = JSON.parse(

@@ -4,14 +4,14 @@ import * as Y from "yjs";
 import {
   serviceSnapshot,
   serviceProjection,
-} from "../src/service-document.mjs";
+} from "../dist/service-document.js";
 import {
   createCanvasDocument,
   canvasGraphHash,
   readCanvasDocument,
   nodeTextBinding,
   applyCanvasChanges,
-} from "../src/model.mjs";
+} from "../dist/model.js";
 const source = () => ({
   id: "00000000-0000-4000-8000-000000000001",
   project_id: "00000000-0000-4000-8000-000000000002",

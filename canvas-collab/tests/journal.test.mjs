@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CollaborationJournal } from "../src/journal.mjs";
+import { CollaborationJournal } from "../dist/journal.js";
 
 function database() {
   let metadata = new Map(),

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
-import { validateCanvasRoots } from "../src/canvas-roots.mjs";
-import { AdmissionGate } from "../src/admission.mjs";
-import { createCanvasDocument, readCanvasDocument } from "../src/model.mjs";
+import { validateCanvasRoots } from "../dist/canvas-roots.js";
+import { AdmissionGate } from "../dist/admission.js";
+import { createCanvasDocument, readCanvasDocument } from "../dist/model.js";
 import { MemoryStore, scope } from "./fixtures.mjs";
 
 const empty = () =>

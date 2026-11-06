@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WireAssembler, wireFrames } from "../src/wire.mjs";
+import { WireAssembler, wireFrames } from "../dist/wire.js";
 
 test("binary bootstrap travels within the existing frame budget and is exposed only when complete", async () => {
   const message = { type: "SYNC_STATE", update: "原文😀".repeat(140000) };

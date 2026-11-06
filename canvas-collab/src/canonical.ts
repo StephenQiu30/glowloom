@@ -1,6 +1,13 @@
-const compareCodePoints = (a, b) => {
-  const left = Array.from(a, (c) => c.codePointAt(0)),
-    right = Array.from(b, (c) => c.codePointAt(0));
+declare global {
+  interface JSON {
+    rawJSON(text: string): { readonly rawJSON: string };
+    isRawJSON(value: unknown): value is { readonly rawJSON: string };
+  }
+}
+
+const compareCodePoints = (a: string, b: string) => {
+  const left = Array.from(a, (c) => c.codePointAt(0)!),
+    right = Array.from(b, (c) => c.codePointAt(0)!);
   for (let i = 0; i < Math.min(left.length, right.length); i++)
     if (left[i] !== right[i]) return left[i] - right[i];
   return left.length - right.length;
@@ -74,7 +81,7 @@ export function canonicalGraphJson(graph) {
 
 function decimalLiteral(text) {
   const [, sign, integer, fraction = "", exponent = "0"] =
-    /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text);
+    /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text)!;
   const digits = integer + fraction,
     point = integer.length + Number(exponent);
   if (Math.abs(point) > 1024 * 1024) throw new Error("UNREPRESENTABLE_NUMBER");
@@ -93,7 +100,7 @@ function decimalLiteral(text) {
 /** Parse authoritative stored JSON before IEEE-754 conversion; unknown precision loss blocks conversion. */
 export function parseStoredGraph(input) {
   const token = Symbol("number");
-  const parsed = JSON.parse(input, (_key, value, context) =>
+  const parsed = JSON.parse(input, (_key, value, context?) =>
     typeof value === "number" ? { [token]: context.source } : value,
   );
   for (const node of parsed.nodes ?? []) {

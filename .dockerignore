@@ -3,6 +3,10 @@
 !frontend/**
 !canvas-collab/
 !canvas-collab/package.json
+!canvas-collab/pnpm-lock.yaml
+!canvas-collab/tsconfig.json
+!canvas-collab/types/
+!canvas-collab/types/**
 !canvas-collab/src/
 !canvas-collab/src/**
 !backend/

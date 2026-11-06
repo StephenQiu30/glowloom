@@ -6,12 +6,12 @@ import {
   createCanvasDocument,
   readCanvasDocument,
   nodeTextBinding,
-} from "../src/model.mjs";
-import { CollaborationHub } from "../src/hub.mjs";
+} from "../dist/model.js";
+import { CollaborationHub } from "../dist/hub.js";
 import { MemoryStore, scope, change } from "./fixtures.mjs";
-import { digest } from "../src/admission.mjs";
-import { canonicalGraphJson } from "../src/canonical.mjs";
-import { committedDocument } from "../src/committed-state.mjs";
+import { digest } from "../dist/admission.js";
+import { canonicalGraphJson } from "../dist/canonical.js";
+import { committedDocument } from "../dist/committed-state.js";
 
 test("real nested Tiptap structural edits pass the live Hub gate and bootstrap the durable head", async () => {
   const browser = new Window({ url: "http://localhost" });

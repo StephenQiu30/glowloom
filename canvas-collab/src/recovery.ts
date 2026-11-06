@@ -1,8 +1,8 @@
 import * as Y from "yjs";
-import { canonicalJson } from "./canonical.mjs";
-import { unbase64 } from "./binary.mjs";
-import { readCanvasDocument } from "./model.mjs";
-import { trackIntents, readIntent, applyReadableIntents } from "./intents.mjs";
+import { canonicalJson } from "./canonical.js";
+import { unbase64 } from "./binary.js";
+import { readCanvasDocument } from "./model.js";
+import { trackIntents, readIntent, applyReadableIntents } from "./intents.js";
 
 const copy = structuredClone;
 const equal = (a, b) => canonicalJson(a) === canonicalJson(b);
@@ -113,14 +113,20 @@ export function archiveRecovery(record, initial) {
 
 /** Immutable review values are compared again immediately before applying a selection. */
 export function recoveryFields(source, current) {
-  const intents = new Map(
+  const intents = new Map<string, import("../types/session.js").SemanticIntent>(
     (source.sealed.intents ?? []).map((intent) => [
       intentKey(intent),
       copy(intent),
     ]),
   );
-  for (const [id, document] of Object.entries(source.textDrafts)) {
-    const identity = { collection: "nodes", id, field: "textDocument" };
+  for (const [id, document] of Object.entries(
+    source.textDrafts as import("../types/session.js").RecoverySource["textDrafts"],
+  )) {
+    const identity = {
+      collection: "nodes" as const,
+      id,
+      field: "textDocument",
+    };
     intents.set(intentKey(identity), {
       ...identity,
       generation: source.textGenerations?.[id] ?? source.generation,
@@ -129,7 +135,7 @@ export function recoveryFields(source, current) {
     });
   }
   for (const [id, form] of Object.entries(source.forms)) {
-    const identity = { collection: "nodes", id, field: "form" };
+    const identity = { collection: "nodes" as const, id, field: "form" };
     intents.set(intentKey(identity), {
       ...identity,
       generation: source.generation,
@@ -179,7 +185,7 @@ function remapNode(node, locations, alive) {
 
 export function planRecovery(source, current, selected, allocations = {}) {
   if (!selected.length) throw fail("RECOVERY_SELECTION_EMPTY");
-  const actual = new Map(
+  const actual = new Map<string, import("../types/recovery.js").RecoveryField>(
     recoveryFields(source, current).map((field) => [field.key, field]),
   );
   const keys = new Set();
@@ -201,12 +207,15 @@ export function planRecovery(source, current, selected, allocations = {}) {
   }
   const snapshot = copy(current),
     locations = copy(source.locations),
-    mappings = [],
+    mappings: import("../types/session.js").RecoverySelection["mappings"] = [],
     forms = {};
   const copied = new Set(),
-    retainedNodes = [];
+    retainedNodes: ({ id: string; textDocument?: unknown } & Record<
+      string,
+      unknown
+    >)[] = [];
   for (const chosen of selected) {
-    const field = actual.get(chosen.key);
+    const field = actual.get(chosen.key)!;
     if (field.copyRequired && !copied.has(field.id)) {
       const node = source.sealed.snapshot.graph.nodes.find(
         (value) => value.id === field.id,
@@ -227,9 +236,9 @@ export function planRecovery(source, current, selected, allocations = {}) {
   snapshot.graph.nodes.push(
     ...retainedNodes.map((node) => remapNode(node, locations, alive)),
   );
-  const changes = [];
+  const changes: import("../types/session.js").SemanticIntent[] = [];
   for (const chosen of selected) {
-    const field = actual.get(chosen.key),
+    const field = actual.get(chosen.key)!,
       targetId = locations[field.id] ?? field.id;
     let targetKey;
     if (field.field === "form") {
@@ -249,12 +258,12 @@ export function planRecovery(source, current, selected, allocations = {}) {
           allocations["connection:" + field.id] ?? crypto.randomUUID();
         locations["connection:" + field.id] = intent.id;
         intent.after = copy(field.after);
-        intent.after.value.id = intent.id;
+        const edge = intent.after.value as Record<string, string>;
+        edge.id = intent.id;
         for (const name of ["fromNodeId", "toNodeId"]) {
-          const id =
-            locations[intent.after.value[name]] ?? intent.after.value[name];
+          const id = locations[edge[name]] ?? edge[name];
           if (!alive.has(id)) throw fail("RECOVERY_TARGET_DELETED");
-          intent.after.value[name] = id;
+          edge[name] = id;
         }
       }
       changes.push(intent);

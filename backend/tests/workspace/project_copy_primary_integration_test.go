@@ -260,7 +260,7 @@ func TestHistoricalCopyPrimaryRepairPreservesYjsRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := exec.CommandContext(ctx, "node", "--input-type=module", "-e", `import {runtimeServer} from './src/server.mjs';const s=runtimeServer({token:'isolated-copy-runtime-token-32-bytes'});s.listen(0,'127.0.0.1',()=>console.log(s.address().port));`)
+	command := exec.CommandContext(ctx, "node", "--input-type=module", "-e", `import {createRuntime} from './dist/server.js';const s=await createRuntime({token:'isolated-copy-runtime-token-32-bytes'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`)
 	command.Dir = root
 	pipe, err := command.StdoutPipe()
 	if err != nil {

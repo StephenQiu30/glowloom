@@ -1,11 +1,11 @@
 import * as Y from "yjs";
-import { digest } from "../src/admission.mjs";
+import { digest } from "../dist/admission.js";
 import {
   readCanvasDocument,
   applyCanvasChanges,
   canvasUndoManager,
   applyCanvasHistory,
-} from "../src/model.mjs";
+} from "../dist/model.js";
 const chunks = [];
 for await (const c of process.stdin) chunks.push(c);
 const input = JSON.parse(Buffer.concat(chunks)),

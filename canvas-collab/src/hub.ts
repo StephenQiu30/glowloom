@@ -1,18 +1,42 @@
-import { AdmissionGate, digest } from "./admission.mjs";
-import { base64, unbase64 } from "./binary.mjs";
-import { validateCanvasRoots } from "./canvas-roots.mjs";
+import { AdmissionGate, digest } from "./admission.js";
+import { base64, unbase64 } from "./binary.js";
+import { validateCanvasRoots } from "./canvas-roots.js";
 import {
   readCanvasDocument,
   inspectCanvasDocument,
   validateCanvasTransition,
-} from "./model.mjs";
+} from "./model.js";
 
 const fail = (code) => Object.assign(new Error(code), { code });
 const sameRoom = (left, right) =>
   left.canvasId === right.canvasId && left.epoch === right.epoch;
 
 /** Thin committed-delivery coordinator. Java remains the authority for every read and write. */
+type HubSession = {
+  scope: any;
+  send: (message: unknown) => unknown;
+  drop: () => unknown;
+  closed: boolean;
+  seen: bigint;
+  queue: Promise<void>;
+  accepting?: boolean;
+  seenEpoch?: string;
+  bindingRevision?: string;
+  modelVersion?: number;
+  lifecycle?: string;
+  edit?: boolean;
+};
+
 export class CollaborationHub {
+  declare private store: any;
+  declare private maxConnections: number;
+  declare private maxAdmissions: number;
+  declare private admissions: number;
+  declare private reads: number;
+  declare private readWaiters: (() => void)[];
+  declare private sessions: Set<HubSession>;
+  declare private gate: AdmissionGate;
+
   constructor({ store, maxConnections = 128, maxAdmissions = 4 }) {
     this.store = store;
     this.maxConnections = maxConnections;
@@ -98,7 +122,7 @@ export class CollaborationHub {
     });
   }
 
-  async deliver(session, loaded, hint) {
+  async deliver(session, loaded, hint?) {
     const seq = BigInt(loaded.commitSeq);
     if (seq <= session.seen) {
       if (
@@ -138,7 +162,7 @@ export class CollaborationHub {
     session.edit = loaded.metadata.edit;
   }
 
-  refresh(session, hint) {
+  refresh(session, hint?) {
     if (session.refreshing) {
       session.refreshNeeded = true;
       return session.refreshing;
@@ -241,7 +265,7 @@ export class CollaborationHub {
     else {
       if (this.readWaiters.length >= this.maxConnections)
         throw fail("READ_BUDGET");
-      await new Promise((resolve) => this.readWaiters.push(resolve));
+      await new Promise<void>((resolve) => this.readWaiters.push(resolve));
     }
     try {
       return await action();

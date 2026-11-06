@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
-import { AdmissionGate } from "../src/admission.mjs";
+import { AdmissionGate } from "../dist/admission.js";
 import {
   change,
   documentFrom,

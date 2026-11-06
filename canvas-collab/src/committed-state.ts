@@ -1,9 +1,9 @@
 import * as Y from "yjs";
-import { digest } from "./admission.mjs";
-import { unbase64 } from "./binary.mjs";
-import { canonicalGraphJson } from "./canonical.mjs";
-import { readCanvasDocument } from "./model.mjs";
-import { validateCanvasRoots } from "./canvas-roots.mjs";
+import { digest } from "./admission.js";
+import { unbase64 } from "./binary.js";
+import { canonicalGraphJson } from "./canonical.js";
+import { readCanvasDocument } from "./model.js";
+import { validateCanvasRoots } from "./canvas-roots.js";
 
 const fail = (code) => Object.assign(new Error(code), { code });
 

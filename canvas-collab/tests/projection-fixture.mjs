@@ -1,14 +1,14 @@
 // Test-only stdin/stdout bridge. Uses the production Yjs candidate runtime; no OT.
 import * as Y from "yjs";
 import { createHash } from "node:crypto";
-import { computeCandidate } from "../src/service-runtime.mjs";
-import { serviceSnapshot } from "../src/service-document.mjs";
+import { computeCandidate } from "../dist/service-runtime.js";
+import { serviceSnapshot } from "../dist/service-document.js";
 import {
   readCanvasDocument,
   applyRecoveredCanvasChanges,
   canvasUndoManager,
   applyCanvasHistory,
-} from "../src/model.mjs";
+} from "../dist/model.js";
 const chunks = [];
 for await (const c of process.stdin) chunks.push(c);
 const { action, input } = JSON.parse(Buffer.concat(chunks).toString());

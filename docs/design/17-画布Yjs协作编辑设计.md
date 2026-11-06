@@ -32,13 +32,13 @@
 
 2026-10-24 已确认全面采用 Yjs：正式入口及 WebSocket 只使用 protocol 4，移除 `NEXT_PUBLIC_CANVAS_YJS` 双轨开关和 protocol 3 写入入口。Go 接受 Yjs 隔离候选后直接执行领域投影校验与数据库事务，不再调用 OT 提交、变换或贡献撤销。有限的领域字段赋值、图验证与输入版本推进属于投影校验，不承担客户端并发合并。删除恢复改用已接受删除事实、当前 epoch/commitSeq 和最新图验证授权身份复用；已有历史记录保留，不批量销毁。
 
-复用现有前端、Go应用和`canvas-collab` JavaScript核心。增加承担实际Y.Doc运行的内部协作进程是现有方案的接线需要；先按单协作实例、按画布隔离房间落地，不为起步部署引入Redis、Kafka或跨区域架构。所有应用进程由Docker运行，复用现有PostgreSQL与对象存储。业务模块仍遵循adapter → application → domain。
+复用现有前端、Go应用和`canvas-collab` TypeScript 核心。增加承担实际Y.Doc运行的内部协作进程是现有方案的接线需要；先按单协作实例、按画布隔离房间落地，不为起步部署引入Redis、Kafka或跨区域架构。所有应用进程由Docker运行，复用现有PostgreSQL与对象存储。业务模块仍遵循adapter → application → domain。
 
 ```mermaid
 flowchart LR
   A[浏览器编辑器与Tiptap] --> B[内存Y.Doc与唯一提交队列]
   B <-->|唯一外部WebSocket| C[Go连接层与身份授权]
-  C <-->|受信内部合同| D[JS协作运行时与隔离候选]
+  C <-->|受信内部合同| D[NestJS 协作运行时与隔离候选]
   C --> E[Go接受用例与领域校验]
   D -->|候选二进制与规范投影| E
   E --> F[(PostgreSQL: 增量 投影 回执 Outbox)]
@@ -51,11 +51,13 @@ flowchart LR
 | ---------------------------------------- | --------------------------------------------------------- | ---------------------------------------------- |
 | 前端编辑器/会话                          | 即时反馈、Yjs/Tiptap绑定、意图与未确认队列、保存呈现      | 自证权限、把本地变化当持久成功、业务IDB恢复    |
 | Go WebSocket adapter                     | `coder/websocket`连接、统一身份、协议分发、限流及授权投递 | 用连接成功代替保存确认                         |
-| JS协作运行时                             | 每画布已接受Y.Doc缓存、候选解码/合并、规范投影和同步差量  | 直接信任客户端JSON、直接改Go业务表、接受前广播 |
+| NestJS 协作运行时                             | 隔离 Y.Doc 内的候选解码、合并与规范投影  | 直接信任客户端JSON、直接改Go业务表、接受前广播 |
 | Go application/domain + postgres adapter | 当前权限、合法图/素材/系统字段、幂等与数据库事务          | 在Go另写一套Yjs算法或将临时JSON当独立权威文档  |
 | 提交事件投递器                           | 重试已提交事件、按版本补齐有权客户端                      | 决定一次编辑是否被接受、依赖内存通知保证正确性 |
 
-外部仍只有一条画布编辑WS；Go与JS的内部调用不是第二条客户端保存通道。建议顺序为Go接收→JS prepare→Go事务commit→JS安装已提交候选→Go投递；中间失败沿原提交查证。内部调用绑定文档、epoch、writerTerm、基线commitSeq、原提交身份与hash，不能接受浏览器直传“已验证候选”。具体RPC路径与版本由共享合同生成，本文不伪称这些内部接口已存在。
+画布编辑由外部 WebSocket 进入 Go。Go 调用协作运行时计算候选，在事务中接受后再投递。失败时沿原提交身份查证。内部调用绑定文档、epoch、writerTerm、基线 commitSeq、原提交身份和哈希。
+
+协作运行时在原 `canvas-collab/` 目录使用 NestJS 和 Fastify，由 TypeScript 编译后独立运行。前端继续消费 `@glowloom/canvas-collab` 的共享模块，服务端路由与认证留在私有入口。Go 与协作运行时沿用现有 HTTP 契约。
 
 #### 7.0.1 首次接线合同
 

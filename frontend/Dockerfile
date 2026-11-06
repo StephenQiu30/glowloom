@@ -4,10 +4,19 @@ ENV PNPM_HOME=/pnpm PATH="/pnpm:$PATH" NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 WORKDIR /app
 
+FROM base AS collaboration
+WORKDIR /canvas-collab
+COPY canvas-collab/package.json canvas-collab/pnpm-lock.yaml canvas-collab/tsconfig.json ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
+COPY canvas-collab/src ./src
+COPY canvas-collab/types ./types
+RUN pnpm build
+
 FROM base AS deps
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 COPY canvas-collab/package.json /canvas-collab/package.json
-COPY canvas-collab/src /canvas-collab/src
+COPY --from=collaboration /canvas-collab/dist /canvas-collab/dist
+COPY --from=collaboration /canvas-collab/types /canvas-collab/types
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS dev

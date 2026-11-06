@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import * as Y from "yjs";
-import { canonicalJson } from "./canonical.mjs";
+import { canonicalJson } from "./canonical.js";
 
 const failure = (code, message = code) =>
   Object.assign(new Error(message), {
@@ -26,6 +26,25 @@ function requireIntegrated(doc, decoded) {
 
 /** Admission primitive only. The durable adapter owns authorization, CAS and Outbox. */
 export class AdmissionGate {
+  declare private store: {
+    receipt(scope, updateId): Promise<any>;
+    load(scope): Promise<any>;
+    commit(scope, candidate): Promise<any>;
+  };
+  declare private project: (doc: Y.Doc) => unknown;
+  declare private validate: (candidate, context) => unknown;
+  declare private authorize: (scope) => boolean | Promise<boolean>;
+  declare private broadcast: (scope, result) => void | Promise<void>;
+  declare private onPublishError: (error: unknown, receipt: unknown) => void;
+  declare private maxUpdateBytes: number;
+  declare private maxStructs: number;
+  declare private maxStateBytes: number;
+  declare private maxRetries: number;
+  declare private inspectDocument?: (doc: Y.Doc) => unknown;
+  declare private validateTransition?: (inspection, doc: Y.Doc) => unknown;
+  declare private validateRoots?: (doc: Y.Doc) => void;
+  declare private allowedRoots: Set<string>;
+
   constructor({
     store,
     project,
@@ -41,6 +60,21 @@ export class AdmissionGate {
     inspectDocument,
     validateTransition,
     validateRoots,
+  }: {
+    store: AdmissionGate["store"];
+    project: AdmissionGate["project"];
+    validate: AdmissionGate["validate"];
+    authorize: AdmissionGate["authorize"];
+    broadcast?: AdmissionGate["broadcast"];
+    onPublishError?: AdmissionGate["onPublishError"];
+    maxUpdateBytes?: number;
+    maxStructs?: number;
+    maxStateBytes?: number;
+    maxRetries?: number;
+    allowedRoots?: string[];
+    inspectDocument?: AdmissionGate["inspectDocument"];
+    validateTransition?: AdmissionGate["validateTransition"];
+    validateRoots?: AdmissionGate["validateRoots"];
   }) {
     Object.assign(this, {
       store,
@@ -123,7 +157,7 @@ export class AdmissionGate {
             previousGraph: JSON.parse(previousGraph),
           });
         } catch (error) {
-          error.definitive = true;
+          (error as { definitive?: boolean }).definitive = true;
           throw error;
         }
         const state = Y.encodeStateAsUpdate(candidate);

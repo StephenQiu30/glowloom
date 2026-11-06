@@ -1,13 +1,13 @@
 import * as Y from "yjs";
-import { committedDocument } from "./committed-state.mjs";
-import { digest } from "./admission.mjs";
-import { canonicalGraphJson } from "./canonical.mjs";
+import { committedDocument } from "./committed-state.js";
+import { digest } from "./admission.js";
+import { canonicalGraphJson } from "./canonical.js";
 import {
   readCanvasDocument,
   inspectCanvasDocument,
   validateCanvasTransition,
-} from "./model.mjs";
-import { base64 } from "./binary.mjs";
+} from "./model.js";
+import { base64 } from "./binary.js";
 
 /** Pure preparation for an explicit Java-owned resource command. There is no database or broadcast here. */
 export function prepareTitle({ state, title, commandId }) {

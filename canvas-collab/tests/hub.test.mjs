@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
-import { createCanvasDocument, readCanvasDocument } from "../src/model.mjs";
-import { CollaborationHub } from "../src/hub.mjs";
+import { createCanvasDocument, readCanvasDocument } from "../dist/model.js";
+import { CollaborationHub } from "../dist/hub.js";
 import { MemoryStore, scope, change } from "./fixtures.mjs";
-import { digest } from "../src/admission.mjs";
-import { canonicalGraphJson } from "../src/canonical.mjs";
+import { digest } from "../dist/admission.js";
+import { canonicalGraphJson } from "../dist/canonical.js";
 
 async function fixture() {
   const initial = createCanvasDocument({

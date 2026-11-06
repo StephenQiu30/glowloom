@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
-import { CollaborationSession } from "../src/session.mjs";
+import { CollaborationSession } from "../dist/session.js";
 import {
   createCanvasDocument,
   readCanvasDocument,
   nodeTextBinding,
-} from "../src/model.mjs";
-import { trackIntents } from "../src/intents.mjs";
+} from "../dist/model.js";
+import { trackIntents } from "../dist/intents.js";
 import {
   archiveRecovery,
   recoveryFields,
   planRecovery,
-} from "../src/recovery.mjs";
+} from "../dist/recovery.js";
 
 const clone = structuredClone;
 const value = () => ({

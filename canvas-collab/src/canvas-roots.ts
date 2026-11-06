@@ -2,10 +2,10 @@ import * as Y from "yjs";
 
 const prefix = "__tiptap_position_migrations:item:";
 const number = (value) => Number.isSafeInteger(value) && value >= 0;
-const invalid = (code = "INVALID_EDITOR_METADATA") => {
+const invalid = (code = "INVALID_EDITOR_METADATA"): never => {
   throw Object.assign(new Error(code), { code, definitive: true });
 };
-const shape = (value, required, optional = []) =>
+const shape = (value, required: string[], optional: string[] = []) =>
   value !== null &&
   typeof value === "object" &&
   Object.getPrototypeOf(value) === Object.prototype &&
@@ -30,14 +30,13 @@ export function validateCanvasRoots(doc) {
     shape(id, ["client", "clock"], ["length", "boundary"]) &&
     number(id.client) &&
     number(id.clock) &&
-    clocks.has(id.client) &&
-    id.clock + length <= clocks.get(id.client);
+    id.clock + length <= (clocks.get(id.client) ?? -1);
   for (const name of roots) {
     const match =
       /^__tiptap_position_migrations:item:(0|[1-9]\d*):(0|[1-9]\d*)$/.exec(
         name,
       );
-    if (!match) invalid("INVALID_ROOT");
+    if (!match) return invalid("INVALID_ROOT");
     const client = Number(match[1]),
       clock = Number(match[2]);
     if (!number(client) || !number(clock) || !integrated({ client, clock }, 1))
@@ -46,9 +45,12 @@ export function validateCanvasRoots(doc) {
   }
   // A sequence under a metadata name must not become invisible when read as a map.
   for (const item of Y.decodeUpdate(Y.encodeStateAsUpdate(doc)).structs) {
+    if (!(item instanceof Y.Item)) continue;
+    // Decoded updates can identify a root by name before Yjs resolves the parent.
+    const parent: unknown = item.parent;
     if (
-      typeof item.parent === "string" &&
-      item.parent.startsWith(prefix) &&
+      typeof parent === "string" &&
+      parent.startsWith(prefix) &&
       item.parentSub === null
     )
       invalid();
@@ -81,8 +83,7 @@ export function validateCanvasRoots(doc) {
           !number(pair[0]) ||
           !number(pair[1]) ||
           seen.has(pair[0]) ||
-          !clocks.has(pair[0]) ||
-          pair[1] > clocks.get(pair[0])
+          pair[1] > (clocks.get(pair[0]) ?? -1)
         )
           invalid();
         seen.add(pair[0]);

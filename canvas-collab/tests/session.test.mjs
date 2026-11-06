@@ -6,8 +6,8 @@ import {
   readCanvasDocument,
   canvasUndoManager,
   applyCanvasHistory,
-} from "../src/model.mjs";
-import { CollaborationSession } from "../src/session.mjs";
+} from "../dist/model.js";
+import { CollaborationSession } from "../dist/session.js";
 
 const value = {
   title: "画布",

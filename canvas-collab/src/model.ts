@@ -3,14 +3,14 @@ import {
   modelIdentity,
   canonicalGraphJson,
   canonicalJson,
-} from "./canonical.mjs";
-import { sha256 } from "./binary.mjs";
+} from "./canonical.js";
+import { sha256 } from "./binary.js";
 
 import {
   prosemirrorJSONToYXmlFragment,
   yXmlFragmentToProsemirrorJSON,
 } from "@tiptap/y-tiptap";
-import { normalizeRichText, richTextSchema } from "./rich-text-schema.mjs";
+import { normalizeRichText, richTextSchema } from "./rich-text-schema.js";
 
 export function canvasGraphHash(graph) {
   return sha256(new TextEncoder().encode(canonicalGraphJson(graph)));
@@ -67,7 +67,7 @@ function validateRestoration(value) {
   for (const [name, limit] of [
     ["nodes", 500],
     ["connections", 1000],
-  ]) {
+  ] as const) {
     const ids = value[name];
     if (
       !Array.isArray(ids) ||
@@ -95,7 +95,7 @@ export function inspectCanvasDocument(doc) {
     Object.fromEntries(
       [...collection.entries()].map(([id, value]) => {
         if (!(value instanceof Y.Map)) throw fail("INVALID_CANVAS_MODEL");
-        const entry = { self: anchor(value) };
+        const entry: Record<string, unknown> = { self: anchor(value) };
         if (nodes) {
           for (const field of value.keys())
             if (!nodeFields.has(field)) throw fail("UNREGISTERED_FIELD");
@@ -141,7 +141,9 @@ export function validateCanvasTransition(before, doc) {
   if (!equal(before.containers, after.containers))
     throw fail("REPLACED_SHARED_TYPE");
   for (const name of ["nodes", "connections"])
-    for (const [id, previous] of Object.entries(before[name])) {
+    for (const [id, previous] of Object.entries<Record<string, unknown>>(
+      before[name],
+    )) {
       const next = after[name][id];
       if (!next) continue;
       for (const field of [
@@ -185,7 +187,7 @@ const equal = (a, b) =>
     b !== undefined &&
     canonicalJson(jsonValue(a)) === canonicalJson(jsonValue(b)));
 
-function updateFields(target, before, after, immutable = []) {
+function updateFields(target, before, after, immutable: string[] = []) {
   for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
     if (equal(before[key], after[key])) continue;
     if (immutable.includes(key)) throw fail("IMMUTABLE_FIELD");
@@ -295,7 +297,7 @@ export function applyCanvasChanges(
     const collection = canvas.get(name),
       old = new Map(previous.map((item) => [item.id, item]));
     const ids = new Set(next.map((item) => item.id));
-    const actions = [];
+    const actions: (() => void)[] = [];
     for (const item of previous)
       if (!ids.has(item.id)) actions.push(() => collection.delete(item.id));
     next.forEach((item, order) => {
@@ -381,7 +383,11 @@ function applyExplicitCanvasReplacement(doc, before, after) {
   const probe = createCanvasDocument(after);
   probe.destroy();
   const graphOnly = copy(after),
-    texts = [];
+    texts: {
+      shared: Y.Map<any>;
+      content: ReturnType<typeof normalizeRichText>;
+      present: boolean;
+    }[] = [];
   for (const node of graphOnly.graph.nodes) {
     const old = before.graph.nodes.find((value) => value.id === node.id);
     if (!old || equal(old.textDocument, node.textDocument)) continue;
@@ -437,7 +443,7 @@ export function applyCanvasHistory(doc, manager, direction, scope) {
   manager.stopCapturing();
   manager[direction]();
   const after = readCanvasDocument(doc),
-    restored = {};
+    restored = { nodes: [] as string[], connections: [] as string[] };
   for (const name of ["nodes", "connections"]) {
     const previous = new Set(before.graph[name].map((value) => value.id));
     restored[name] = after.graph[name]
@@ -557,9 +563,9 @@ export function readCanvasDocument(doc) {
       ...copy(canvas.get("properties").toJSON()),
       nodes: ordered(canvas.get("nodes")).map((node) => {
         const data = copy(node.get("data").toJSON());
-        const references = Object.entries(data).filter(([key]) =>
-          key.startsWith("reference:"),
-        );
+        const references = Object.entries<{ id: string; order: number }>(
+          data,
+        ).filter(([key]) => key.startsWith("reference:"));
         if (data.referencesPresent) {
           data.references = references
             .map(([, value]) => value)

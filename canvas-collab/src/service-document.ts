@@ -1,5 +1,5 @@
-import { canonicalJson } from "./canonical.mjs";
-import { normalizeRichText } from "./rich-text-schema.mjs";
+import { canonicalJson } from "./canonical.js";
+import { normalizeRichText } from "./rich-text-schema.js";
 
 // In-memory editor DTOs include absent optional properties as undefined. Match
 // the wire JSON representation before entering the canonical shared graph.
@@ -116,7 +116,7 @@ export function serviceSnapshot(dto) {
     },
   };
 }
-function composerProjection(content, original) {
+function composerProjection(content, original?) {
   // The shared native config intentionally omits the derived document/registry.
   // A newly materialized shell must still project a complete service composer.
   const composer = {
@@ -132,8 +132,8 @@ function composerProjection(content, original) {
     },
     ...clone(original ?? {}),
   };
-  const paragraphs = [];
-  let inline = [];
+  const paragraphs: import("@tiptap/core").JSONContent[] = [];
+  let inline: import("@tiptap/core").JSONContent[] = [];
   const flush = () => {
     if (inline.length) {
       paragraphs.push({ type: "paragraph", content: inline });
@@ -178,7 +178,7 @@ export function serviceProjection(snapshot, base) {
     snapshot.graph.projectId !== base.project_id
   )
     throw new Error("DOCUMENT_IDENTITY_MISMATCH");
-  const previous = new Map(base.nodes.map((n) => [n.id, n]));
+  const previous = new Map<string, any>(base.nodes.map((n) => [n.id, n]));
   const nodes = snapshot.graph.nodes.map((node) => {
     const original = previous.get(node.id),
       native = clone(node.native),

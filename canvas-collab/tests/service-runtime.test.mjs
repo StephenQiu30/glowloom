@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
 import { randomUUID } from "node:crypto";
-import { computeCandidate, decodeBinary } from "../src/service-runtime.mjs";
-import { runtimeServer } from "../src/server.mjs";
-import { digest } from "../src/admission.mjs";
-import { applyCanvasChanges, readCanvasDocument } from "../src/model.mjs";
+import { computeCandidate, decodeBinary } from "../dist/service-runtime.js";
+import { createRuntime } from "../dist/server.js";
+import { digest } from "../dist/admission.js";
+import { applyCanvasChanges, readCanvasDocument } from "../dist/model.js";
 const dto = () => ({
   id: randomUUID(),
   project_id: randomUUID(),
@@ -86,23 +86,53 @@ test("stateless prepare binds isolated candidate to exact authority, rejects unk
 });
 test("runtime is inaccessible without internal bearer, accepts bounded authenticated compute calls", async () => {
   const token = "x".repeat(32),
-    server = runtimeServer({ token });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    app = await createRuntime({ token });
+  await app.listen(0, "127.0.0.1");
   try {
-    const url = `http://127.0.0.1:${server.address().port}/v1/initialize`;
+    const origin = `http://127.0.0.1:${app.getHttpServer().address().port}`;
+    const url = `${origin}/v1/initialize`;
+    const headers = { authorization: `Bearer ${token}` };
+    const health = await fetch(`${origin}/healthz`);
+    assert.equal(health.status, 200);
+    assert.equal(health.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await health.json(), { status: "ok" });
     assert.equal(
       (await fetch(url, { method: "POST", body: "{}" })).status,
       401,
     );
+    for (const [path, body, status, error] of [
+      ["/v1/missing", "{}", 404, { code: "NOT_FOUND" }],
+      ["/v1/initialize", "{", 400, { code: "INVALID_JSON", definitive: false }],
+      [
+        "/v1/initialize",
+        "{}",
+        422,
+        { code: "INVALID_BINDING", definitive: true },
+      ],
+      [
+        "/v1/initialize",
+        " ".repeat(16 * 1024 * 1024 + 1),
+        413,
+        { code: "REQUEST_TOO_LARGE", definitive: false },
+      ],
+    ]) {
+      const rejected = await fetch(origin + path, {
+        method: "POST",
+        headers,
+        body,
+      });
+      assert.equal(rejected.status, status);
+      assert.deepEqual(await rejected.json(), error);
+    }
     const response = await fetch(url, {
       method: "POST",
-      headers: { authorization: `Bearer ${token}` },
+      headers,
       body: JSON.stringify(request()),
     });
     assert.equal(response.status, 200);
     assert.ok((await response.json()).state);
   } finally {
-    await new Promise((resolve) => server.close(resolve));
+    await app.close();
   }
 });
 
@@ -370,7 +400,7 @@ test("concurrent references retain both identities and receive distinct durable 
 
 test("explicit undo creates a new shared lifetime; late edits cannot touch restored content", async () => {
   const { canvasUndoManager, applyCanvasHistory, nodeTextBinding } =
-    await import("../src/model.mjs");
+    await import("../dist/model.js");
   const req = request(),
     id = randomUUID();
   req.document.nodes = [

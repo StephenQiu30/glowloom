@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
-import { initializeDocument } from "../src/initialize.mjs";
-import { readCanvasDocument } from "../src/model.mjs";
+import { initializeDocument } from "../dist/initialize.js";
+import { readCanvasDocument } from "../dist/model.js";
 
 test("one-time initializer preserves authoritative long identities and returns validated binary rather than mutating a room", () => {
   const graphJson =

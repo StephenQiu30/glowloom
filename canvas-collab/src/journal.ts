@@ -121,6 +121,7 @@ class MemoryJournalDatabase {
 }
 
 export class CollaborationJournal {
+  declare private database: MemoryJournalDatabase;
   constructor(database = new MemoryJournalDatabase()) {
     this.database = database;
   }

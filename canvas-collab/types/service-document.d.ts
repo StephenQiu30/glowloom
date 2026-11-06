@@ -1,4 +1,4 @@
-import type { CanvasSnapshot, CanvasGraphShape } from "./model.mjs";
+import type { CanvasSnapshot, CanvasGraphShape } from "./model.js";
 export type ServiceDocument = {
   id: string;
   project_id: string;
@@ -27,7 +27,7 @@ export type ServiceGraph = CanvasGraphShape & {
     references?: Record<string, unknown>[];
     labelState?: Record<string, unknown>;
     parameters?: Record<string, unknown>;
-    textDocument?: import("./model.mjs").CanvasTextDraft;
+    textDocument?: import("./model.js").CanvasTextDraft;
   }[];
   connections: {
     id: string;

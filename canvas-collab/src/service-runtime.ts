@@ -1,16 +1,16 @@
 import * as Y from "yjs";
-import { prepareCommands } from "./commands.mjs";
-import { AdmissionGate, digest } from "./admission.mjs";
-import { canonicalJson, canonicalGraphJson } from "./canonical.mjs";
-import { prepareTitle } from "./metadata.mjs";
+import { prepareCommands } from "./commands.js";
+import { AdmissionGate, digest } from "./admission.js";
+import { canonicalJson, canonicalGraphJson } from "./canonical.js";
+import { prepareTitle } from "./metadata.js";
 import {
   createCanvasDocument,
   readCanvasDocument,
   inspectCanvasDocument,
   validateCanvasTransition,
-} from "./model.mjs";
-import { validateCanvasRoots } from "./canvas-roots.mjs";
-import { serviceSnapshot, serviceProjection } from "./service-document.mjs";
+} from "./model.js";
+import { validateCanvasRoots } from "./canvas-roots.js";
+import { serviceSnapshot, serviceProjection } from "./service-document.js";
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 const decimal = /^(0|[1-9][0-9]{0,18})$/;
 const failure = (code) =>
@@ -265,9 +265,13 @@ export async function computeCandidate(action, request) {
 
 // Authority is the committed DTO under Go's CAS fence, never a client's counter.
 function normalizeReferenceLabels(doc, base, transition) {
-  const previous = new Map(
-    base.nodes.map((n) => [n.id, n.config?.composer?.labelState]),
-  );
+  const previous = new Map<
+    string,
+    {
+      highWater: Record<string, number>;
+      allocations: Record<string, { labelKind: string; ordinal: number }>;
+    }
+  >(base.nodes.map((n) => [n.id, n.config?.composer?.labelState]));
   for (const node of readCanvasDocument(doc).graph.nodes) {
     if (transition?.nodes.includes(node.id)) continue;
     if (!node.references) {
@@ -324,14 +328,15 @@ function normalizeReferenceLabels(doc, base, transition) {
 // registries. Both public editor paths receive server-assigned display numbers.
 function normalizeNodeReferenceLabels(doc, base, transition) {
   const graph = readCanvasDocument(doc).graph,
-    byId = new Map(graph.nodes.map((n) => [n.id, n]));
+    byId = new Map<string, { type: string }>(graph.nodes.map((n) => [n.id, n]));
   for (const target of graph.nodes) {
     // The trusted inverse owns every restored field, including legacy nodes
     // whose pre-deletion version did not yet allocate display labels.
     if (transition?.nodes.includes(target.id)) continue;
     const previous = base.nodes.find((n) => n.id === target.id)?.config?.editor
       ?.metadata?.referenceLabels;
-    const labels = structuredClone(previous ?? {}),
+    const labels: Record<string, { kind: string; ordinal: number }> =
+        structuredClone(previous ?? {}),
       high = { image: 0, video: 0, audio: 0, text: 0 };
     for (const value of Object.values(labels))
       high[value.kind] = Math.max(high[value.kind] ?? 0, value.ordinal);
@@ -347,7 +352,7 @@ function normalizeNodeReferenceLabels(doc, base, transition) {
       .sort();
     for (const id of sourceIDs) {
       const kind = byId.get(id)?.type;
-      if (!Object.hasOwn(high, kind)) continue;
+      if (kind === undefined || !Object.hasOwn(high, kind)) continue;
       if (!Object.hasOwn(labels, id)) {
         if (high[kind] >= Number.MAX_SAFE_INTEGER)
           throw failure("REFERENCE_LABEL_LIMIT");
@@ -357,17 +362,17 @@ function normalizeNodeReferenceLabels(doc, base, transition) {
     if (Object.keys(labels).length > 10000)
       throw failure("REFERENCE_LABEL_LIMIT");
     const shared = doc.getMap("canvas").get("nodes").get(target.id);
+    const labelPrefix: Record<string, string> = {
+      image: "图片",
+      video: "参考视频",
+      audio: "参考音频",
+      text: "文本",
+    };
     const walk = (element) => {
       if (element instanceof Y.XmlElement && element.nodeName === "mention") {
         const allocation = labels[element.getAttribute("id")];
         if (allocation) {
-          const label =
-            {
-              image: "图片",
-              video: "参考视频",
-              audio: "参考音频",
-              text: "文本",
-            }[allocation.kind] + allocation.ordinal;
+          const label = labelPrefix[allocation.kind] + allocation.ordinal;
           if (element.getAttribute("label") !== label)
             element.setAttribute("label", label);
           if (element.getAttribute("token") !== label)
