@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -95,7 +96,7 @@ type adminCursor struct {
 	Binding    string    `json:"binding"`
 }
 
-func adminPage(c *gin.Context, kind string) (int, *adminCursor, string, bool) {
+func adminPage(c *gin.Context, kind string, extraFilters ...string) (int, *adminCursor, string, bool) {
 	limit := 50
 	if raw := c.Query("limit"); raw != "" {
 		value, err := strconv.Atoi(raw)
@@ -106,7 +107,11 @@ func adminPage(c *gin.Context, kind string) (int, *adminCursor, string, bool) {
 		limit = value
 	}
 	actor := identityhttp.Principal(c)
-	digest := sha256.Sum256([]byte(actor.ID.String() + "/" + actor.OrgID.String() + "/" + kind + "/" + c.Query("provider_id") + "/" + strconv.Itoa(limit)))
+	key := actor.ID.String() + "/" + actor.OrgID.String() + "/" + kind + "/" + c.Query("provider_id") + "/" + strconv.Itoa(limit)
+	for _, filter := range extraFilters {
+		key += "/" + url.QueryEscape(c.Query(filter))
+	}
+	digest := sha256.Sum256([]byte(key))
 	binding := hex.EncodeToString(digest[:])
 	if raw := c.Query("cursor"); raw != "" {
 		body, err := base64.RawURLEncoding.DecodeString(raw)
@@ -415,15 +420,24 @@ func (h *AdminHandler) Capabilities(c *gin.Context) {
 // @Param limit query integer false "1..200"
 // @Param cursor query string false "分页游标"
 // @Param provider_id query string false "供应商连接 ID"
+// @Param pricing_review query boolean false "仅查看已安装预设的计价审核"
+// @Param billing_status query string false "billable、price_pending、usage_pending 或 inactive"
 // @Success 200 {object} AdminModelPage
 // @Failure 403 {object} httpapi.Problem
+// @Failure 422 {object} httpapi.Problem
 // @Router /api/admin/models [get]
 func (h *AdminHandler) ListModels(c *gin.Context) {
-	limit, cursor, binding, ok := adminPage(c, "models")
+	limit, cursor, binding, ok := adminPage(c, "models", "pricing_review", "billing_status")
 	if !ok {
 		return
 	}
-	input := application.AdminModelListInput{Limit: limit}
+	review := c.Query("pricing_review")
+	if review != "" && review != "true" && review != "false" {
+		httpapi.WriteProblem(c, 422, "invalid_request", nil)
+		return
+	}
+	input := application.AdminModelListInput{Limit: limit,
+		PricingReview: review == "true", BillingStatus: c.Query("billing_status")}
 	if raw := c.Query("provider_id"); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil || id == uuid.Nil {

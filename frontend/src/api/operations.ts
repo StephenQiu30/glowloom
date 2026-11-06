@@ -219,6 +219,28 @@ export async function createFreeQuote(
   });
 }
 
+/** 预估生成积分 POST /api/projects/${param0}/generation-estimate */
+export async function estimateGeneration(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.estimateGenerationParams,
+  body: API.GenerationEstimateRequest,
+  options?: RequestOptions,
+) {
+  const { pid: param0, ...queryParams } = params;
+  return request<API.GenerationEstimate>(
+    `/api/projects/${param0}/generation-estimate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
 /** 项目任务中心 GET /api/projects/${param0}/operations */
 export async function listProjectOperations(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

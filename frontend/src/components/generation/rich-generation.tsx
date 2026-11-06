@@ -1,5 +1,6 @@
 "use client";
 import { QuoteCostDetail } from "./quote-cost-detail";
+import { GenerationCredits, useGenerationCredits } from "./generation-credits";
 import dynamic from "next/dynamic";
 import { modelsForCreation, creationModeLabel } from "./creation-contract";
 import { ContentState } from "@/components/layout/content-state";
@@ -672,7 +673,34 @@ function EditorWorkspace({
     (m) => m.current_version?.id === draft.modelVersion,
   );
   const issues = editorIssues(draft, model);
+  const estimateIssues =
+    seed.capability === "image"
+      ? editorIssues(draft, model, { allowEmptyPrompt: true })
+      : issues;
+
   const pendingMode = session?.pendingTarget;
+  const creditPreview = useGenerationCredits({
+    projectID,
+    draft,
+    enabled:
+      !!model &&
+      !estimateIssues.length &&
+      !pendingMode &&
+      sourceReady &&
+      !current.submission,
+    regenerate: !!seed.reuse,
+  });
+  const creditDisplay =
+    model && !current.submission ? (
+      <GenerationCredits preview={creditPreview} />
+    ) : null;
+  const canvasCanGenerate =
+    !!session &&
+    !frozen &&
+    !issues.length &&
+    !pendingMode &&
+    sourceReady &&
+    creditPreview.status !== "unavailable";
   const updateStatus = useCallback(() => {
     const s = saver.current;
     if (!s || !alive.current) return;
@@ -1914,52 +1942,51 @@ function EditorWorkspace({
                     }}
                   />
                   {parameterControls}
-                  {!activeQuote && (
-                    <QuoteCostDetail preview={model?.pricing_preview} />
-                  )}
                 </PopoverContent>
               </Popover>
-              <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                费用待确认
-              </span>
-              <InputGroupButton
-                className="ml-auto rounded-full"
-                size="toolbar-icon"
-                variant="default"
-                aria-label={
-                  current.submission
-                    ? current.submission.state === "accepted"
-                      ? "查看任务"
-                      : "查看报价"
-                    : "发送消息"
-                }
-                title={current.submission ? "查看费用与任务" : "检查费用并发送"}
-                disabled={
-                  pending ||
-                  confirmUnknown ||
-                  (!current.submission &&
-                    (!session ||
-                      frozen ||
-                      !draft.document.content.some((p) =>
-                        p.content?.some(
-                          (n) =>
-                            n.type === "reference" ||
-                            (n.type === "text" && n.text.trim()),
-                        ),
-                      )))
-                }
-                onClick={() =>
-                  current.submission
-                    ? setQuoteReviewOpen(true)
-                    : void getQuote()
-                }
-              >
-                {pending ? (
-                  <LoaderCircle className="animate-spin" />
-                ) : (
-                  <ArrowUp />
-                )}
-              </InputGroupButton>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                {creditDisplay}
+                <InputGroupButton
+                  className="rounded-full max-md:size-11"
+                  size="toolbar-icon"
+                  variant="default"
+                  aria-label={
+                    current.submission
+                      ? current.submission.state === "accepted"
+                        ? "查看任务"
+                        : "查看报价"
+                      : "发送消息"
+                  }
+                  title={
+                    current.submission ? "查看费用与任务" : "检查费用并发送"
+                  }
+                  disabled={
+                    pending ||
+                    confirmUnknown ||
+                    (!current.submission &&
+                      (!session ||
+                        frozen ||
+                        !draft.document.content.some((p) =>
+                          p.content?.some(
+                            (n) =>
+                              n.type === "reference" ||
+                              (n.type === "text" && n.text.trim()),
+                          ),
+                        )))
+                  }
+                  onClick={() =>
+                    current.submission
+                      ? setQuoteReviewOpen(true)
+                      : void getQuote()
+                  }
+                >
+                  {pending ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <ArrowUp />
+                  )}
+                </InputGroupButton>
+              </div>
             </InputGroupAddon>
           </InputGroup>
         ) : compact ? (
@@ -1973,7 +2000,9 @@ function EditorWorkspace({
           >
             <div
               className={
-                presentation === "home" ? "creation-ready-body" : "contents"
+                presentation === "home"
+                  ? "creation-ready-body"
+                  : "mx-3 mt-3 min-w-0 rounded-xl bg-muted/40"
               }
             >
               <InputGroupAddon
@@ -2015,7 +2044,7 @@ function EditorWorkspace({
               className={
                 presentation === "home"
                   ? "creation-tools"
-                  : "flex-wrap gap-1 px-4 pb-4"
+                  : "flex-wrap gap-1 px-3 pt-1 pb-3"
               }
             >
               {presentation === "home" && (
@@ -2098,6 +2127,7 @@ function EditorWorkspace({
                         .filter((value) => typeof value === "string" && value)
                         .join(" · ") || "参数"}{" "}
                       · {Number(draft.params.output_count ?? 1)}
+                      {seed.capability === "image" ? " 张" : null}
                       <ChevronDown data-icon="inline-end" />
                     </InputGroupButton>
                   </PopoverTrigger>
@@ -2153,7 +2183,8 @@ function EditorWorkspace({
                     {creationModeLabel(draft.mode ?? "text2audio")}
                   </span>
                 ) : (
-                  presentation !== "home" && (
+                  presentation !== "home" &&
+                  draft.mode === "omni_reference" && (
                     <span className="shrink-0 px-2 text-xs text-muted-foreground">
                       全能参考
                     </span>
@@ -2178,39 +2209,41 @@ function EditorWorkspace({
                   )}
                 {presentation === "home" && projectControl}
               </div>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {current.submission?.state === "accepted"
-                  ? "已提交"
-                  : "费用待确认"}
-              </span>
-              {current.submission ? (
-                <InputGroupButton
-                  size="toolbar"
-                  className="ml-auto"
-                  variant="default"
-                  onClick={() => setQuoteReviewOpen(true)}
-                >
-                  {current.submission.state === "accepted"
-                    ? "查看任务"
-                    : "查看报价"}
-                </InputGroupButton>
-              ) : (
-                <InputGroupButton
-                  className="ml-auto rounded-full"
-                  size="toolbar-icon"
-                  variant="default"
-                  aria-label="检查费用"
-                  title="检查费用并继续"
-                  disabled={pending || confirmUnknown}
-                  onClick={() => void getQuote()}
-                >
-                  {pending ? (
-                    <LoaderCircle className="animate-spin" />
-                  ) : (
-                    <ArrowUp className="size-5" />
-                  )}
-                </InputGroupButton>
-              )}
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                {creditDisplay}
+                {current.submission ? (
+                  <InputGroupButton
+                    size="toolbar"
+                    className="shrink-0"
+                    variant="default"
+                    onClick={() => setQuoteReviewOpen(true)}
+                  >
+                    {current.submission.state === "accepted"
+                      ? "查看任务"
+                      : "查看报价"}
+                  </InputGroupButton>
+                ) : (
+                  <InputGroupButton
+                    className="rounded-full max-md:size-11"
+                    size="toolbar-icon"
+                    variant="default"
+                    aria-label="检查费用"
+                    title="检查费用并继续"
+                    disabled={
+                      pending ||
+                      confirmUnknown ||
+                      (presentation === "canvas" && !canvasCanGenerate)
+                    }
+                    onClick={() => void getQuote()}
+                  >
+                    {pending ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <ArrowUp className="size-5" />
+                    )}
+                  </InputGroupButton>
+                )}
+              </div>
             </InputGroupAddon>
           </InputGroup>
         ) : (
@@ -2506,18 +2539,21 @@ function EditorWorkspace({
           </div>
         )}
         {!compact && !current.submission && (
-          <Button
-            disabled={
-              pending ||
-              issues.length > 0 ||
-              !!pendingMode ||
-              confirmUnknown ||
-              !sourceReady
-            }
-            onClick={() => void getQuote()}
-          >
-            {pending ? "正在保存并检查…" : "检查费用"}
-          </Button>
+          <div className="flex items-center justify-end gap-2">
+            {creditDisplay}
+            <Button
+              disabled={
+                pending ||
+                issues.length > 0 ||
+                !!pendingMode ||
+                confirmUnknown ||
+                !sourceReady
+              }
+              onClick={() => void getQuote()}
+            >
+              {pending ? "正在保存并检查…" : "检查费用"}
+            </Button>
+          </div>
         )}
         {!compact && task && (
           <TaskDetail

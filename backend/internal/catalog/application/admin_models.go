@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,11 +65,22 @@ type CapabilitySummary struct {
 	InputRoles []string  `json:"input_roles"`
 }
 
+// AdminModelBilling describes price readiness for an installed preset.
+type AdminModelBilling struct {
+	Unit             string `json:"unit,omitempty"`
+	ProcurementReady bool   `json:"procurement_ready"`
+	SaleReady        bool   `json:"sale_ready"`
+	SalePublished    bool   `json:"sale_published"`
+	Status           string `json:"status"`
+}
+
 // AdminModelListInput selects a bounded stable model page.
 type AdminModelListInput struct {
-	Limit      int
-	ProviderID uuid.UUID
-	After      *ModelCatalogCursor
+	Limit         int
+	ProviderID    uuid.UUID
+	PricingReview bool
+	BillingStatus string
+	After         *ModelCatalogCursor
 }
 
 // AdminModelPage returns model identities and one internal keyset position.
@@ -104,7 +116,9 @@ func (q *AdminModelsQuery) List(ctx context.Context, actor identityapp.Principal
 	if err := requireAdmin(actor); err != nil {
 		return AdminModelPage{}, err
 	}
-	if q == nil || q.store == nil || input.Limit < 0 || input.Limit > 200 || (input.After != nil && (input.After.ID == uuid.Nil || input.After.Key == "" || len(input.After.Key) > 128)) {
+	if q == nil || q.store == nil ||
+		(input.BillingStatus != "" && (!input.PricingReview || !slices.Contains([]string{"billable", "price_pending", "usage_pending", "inactive"}, input.BillingStatus))) ||
+		input.Limit < 0 || input.Limit > 200 || (input.After != nil && (input.After.ID == uuid.Nil || input.After.Key == "" || len(input.After.Key) > 128)) {
 		return AdminModelPage{}, ErrInvalidAdminModels
 	}
 	if input.Limit == 0 {

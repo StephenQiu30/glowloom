@@ -420,7 +420,13 @@ const editorCatalogRoutes: typeof identityRoutes = [
   {
     pattern: "admin/models",
     methods: ["GET", "POST"],
-    query: ["limit", "cursor", "provider_id"],
+    query: [
+      "limit",
+      "cursor",
+      "provider_id",
+      "pricing_review",
+      "billing_status",
+    ],
   },
   {
     pattern: `admin/providers/${identityUUID}`,
@@ -586,7 +592,9 @@ async function proxy(
       ? ["GET"]
       : matches(`projects/${uuid}/(operations|media)`)
         ? ["GET"]
-        : matches(`projects/${uuid}/(free-operations|media/uploads)`)
+        : matches(
+              `projects/${uuid}/(free-operations|generation-estimate|media/uploads)`,
+            )
           ? ["POST"]
           : matches(`projects/${uuid}/media/${uuid}/preview`)
             ? ["GET"]

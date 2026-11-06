@@ -14,6 +14,7 @@ import type { CanvasReferenceSource } from "@/components/generation/reference-so
 const api = vi.hoisted(() => ({
   models: vi.fn(),
   quote: vi.fn(),
+  estimate: vi.fn(),
   confirm: vi.fn(),
   get: vi.fn(),
   list: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock("@/api/identity", () => ({
 vi.mock("@/api/models", () => ({ listProjectModels: api.models }));
 vi.mock("@/api/operations", () => ({
   createFreeQuote: api.quote,
+  estimateGeneration: api.estimate,
   confirmOperationQuote: api.confirm,
   getOperation: api.get,
   listProjectOperations: api.list,
@@ -111,6 +113,12 @@ beforeEach(() => {
   api.branchList.mockResolvedValue([]);
   api.branchWrite.mockResolvedValue(undefined);
   api.validate.mockResolvedValue({});
+  api.estimate.mockResolvedValue({
+    credits: "2.4",
+    kind: "estimate",
+    basis: "per_image",
+    quantity: "2",
+  });
   api.uploadResult.mockResolvedValue({ found: false });
   current = { epoch: 0 };
   quote = {
@@ -397,7 +405,7 @@ it("画布紧凑呈现等新节点保存但不物化空输入，重渲染不重�
     screen.getByRole("combobox", { name: "生成模型" }).textContent,
   ).toContain("真实模型");
   expect(screen.queryByRole("combobox", { name: "生成模式" })).toBeNull();
-  expect(screen.getByText("全能参考")).toBeTruthy();
+  expect(screen.queryByText("全能参考")).toBeNull();
   expect(canvas.flush).not.toHaveBeenCalled();
   expect(canvas.waitForNode).toHaveBeenCalledOnce();
   expect(canvas.waitForNode.mock.invocationCallOrder[0]).toBeLessThan(
@@ -1683,7 +1691,12 @@ it("报价确认只展示消耗和授权，技术快照默认折叠", async () =
   quote.final_prompt = "冻结的原提示词";
   quote.compiler_version = "compiler-v3";
   await compactWorkspace();
-  expect(screen.getByText("费用待确认")).toBeTruthy();
+  const estimate = await screen.findByRole("button", {
+    name: "预计消耗 2.4 积分",
+  });
+  expect(estimate.textContent).toBe("2.4");
+  expect(estimate.querySelector("svg")).toBeTruthy();
+  expect(screen.queryByText("计量 2 张")).toBeNull();
   expect(api.quote).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
   await screen.findByRole("button", { name: "确认生成" });

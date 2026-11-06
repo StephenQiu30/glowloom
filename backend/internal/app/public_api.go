@@ -309,6 +309,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	operationhttp.NewProviderTrialHandler(operations).Register(protected)
 	operationhttp.NewHandler(operationhttp.Dependencies{
 		FreeQuote:    operationapp.NewCreateFreeQuoteCommand(operations),
+		Estimate:     operations,
 		BatchQuote:   operationapp.NewCreateBatchFreeQuoteCommand(operations),
 		Confirm:      operationapp.NewConfirmSingleQuoteCommand(operations),
 		ConfirmBatch: operationapp.NewConfirmBatchQuoteCommand(operations),

@@ -269,3 +269,38 @@ it("读取只读目录后能搜索并添加候选模型", async () => {
   );
   expect(api.key).not.toHaveBeenCalled();
 });
+
+it("在独立计价视图显示发布状态并打开行内审核", async () => {
+  api.models.mockResolvedValue({
+    items: [
+      {
+        id: "a",
+        provider_id: "connection",
+        display_name: "计价样本",
+        billing: {
+          unit: "per_image",
+          status: "usage_pending",
+          procurement_ready: true,
+          sale_ready: true,
+        },
+      },
+    ],
+  });
+  render(<ModelsPage />);
+  await screen.findByRole("button", { name: "查看 计价样本" });
+  fireEvent.click(screen.getByRole("button", { name: "计价审核" }));
+  const review = await screen.findByRole("button", {
+    name: "审核计价 计价样本",
+  });
+  expect(api.models.mock.lastCall?.[0]).toMatchObject({ pricing_review: true });
+  expect(screen.getByText("待验证或发布")).toBeTruthy();
+  fireEvent.click(review);
+  expect(screen.getByRole("region", { name: "审核价目" })).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "关闭计价审核" }));
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "审核计价 计价样本" }),
+    ),
+  );
+});

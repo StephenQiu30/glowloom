@@ -4,6 +4,7 @@ import { referenceRoleLabel } from "./reference-source";
 export function editorIssues(
   draft: PromptDraft,
   model?: API.ModelResponse,
+  { allowEmptyPrompt = false } = {},
 ): string[] {
   const issues: string[] = [];
   if (
@@ -110,6 +111,7 @@ export function editorIssues(
   )
     issues.push("候选数量超出当前模型范围。");
   if (
+    !allowEmptyPrompt &&
     !["avatar", "motion"].includes(draft.mode ?? "") &&
     !draft.document.content.some((p) =>
       p.content?.some(

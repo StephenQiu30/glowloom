@@ -390,10 +390,16 @@ export function PriceSetup({
   rule,
   unit = "per_request",
   prices = [],
+  procurementOnly = false,
+  requireProcurement = false,
+  currency = "元",
 }: {
   rule?: Record<string, unknown>;
   unit?: string;
   prices?: API.AdminPrice[];
+  procurementOnly?: boolean;
+  requireProcurement?: boolean;
+  currency?: string;
 }) {
   const formFieldId = useId();
   const simple =
@@ -467,7 +473,7 @@ export function PriceSetup({
           <>
             <Field>
               <FieldLabel htmlFor={formFieldId + "-input"}>
-                每千输入 Token（元）
+                每千输入 Token（{currency}）
               </FieldLabel>
               <Input
                 id={formFieldId + "-input"}
@@ -482,7 +488,7 @@ export function PriceSetup({
             </Field>
             <Field>
               <FieldLabel htmlFor={formFieldId + "-output"}>
-                每千输出 Token（元）
+                每千输出 Token（{currency}）
               </FieldLabel>
               <Input
                 id={formFieldId + "-output"}
@@ -498,7 +504,9 @@ export function PriceSetup({
           </>
         ) : (
           <Field>
-            <FieldLabel htmlFor={formFieldId + "-base"}>价格（元）</FieldLabel>
+            <FieldLabel htmlFor={formFieldId + "-base"}>
+              价格（{currency}）
+            </FieldLabel>
             <Input
               id={formFieldId + "-base"}
               name="base_rate"
@@ -515,35 +523,39 @@ export function PriceSetup({
       ) : (
         <p className="text-xs text-muted-foreground">已保留当前高级规则。</p>
       )}
-      <Field>
-        <FieldLabel htmlFor={formFieldId + "-procurement"}>
-          采购费率版本
-        </FieldLabel>
-        <Select
-          name="procurement_price"
-          value={
-            supplierRates.some((price) => price.id === procurement)
-              ? procurement
-              : "none"
-          }
-          onValueChange={setProcurement}
-        >
-          <SelectTrigger id={formFieldId + "-procurement"} className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">暂不绑定</SelectItem>
-            {supplierRates.map((price) => (
-              <SelectItem key={price.id} value={price.id!}>
-                版本 {price.version_no} · {price.currency}
+      {!procurementOnly && (
+        <Field>
+          <FieldLabel htmlFor={formFieldId + "-procurement"}>
+            采购费率版本
+          </FieldLabel>
+          <Select
+            name="procurement_price"
+            value={
+              supplierRates.some((price) => price.id === procurement)
+                ? procurement
+                : "none"
+            }
+            onValueChange={setProcurement}
+          >
+            <SelectTrigger id={formFieldId + "-procurement"} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">
+                {requireProcurement ? "选择采购费率" : "暂不绑定"}
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          先保存有来源和审核时间的采购费率，再发布绑定该版本的用户售价。
-        </p>
-      </Field>
+              {supplierRates.map((price) => (
+                <SelectItem key={price.id} value={price.id!}>
+                  版本 {price.version_no} · {price.currency}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            先保存有来源和审核时间的采购费率，再发布绑定该版本的用户售价。
+          </p>
+        </Field>
+      )}
       <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <CollapsibleTrigger asChild>
           <Button

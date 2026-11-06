@@ -93,6 +93,14 @@ declare namespace API {
     id: string;
   };
 
+  type AdminModelBilling = {
+    procurement_ready?: boolean;
+    sale_published?: boolean;
+    sale_ready?: boolean;
+    status?: string;
+    unit?: string;
+  };
+
   type AdminModelDetail = {
     candidate?: ModelCandidateSelection;
     model?: CreatedModel;
@@ -1033,6 +1041,7 @@ declare namespace API {
   };
 
   type CreatedModel = {
+    billing?: AdminModelBilling;
     capability?: string;
     create_time?: string;
     current_version_id?: string;
@@ -2058,6 +2067,11 @@ declare namespace API {
     version_id?: string;
   };
 
+  type estimateGenerationParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
   type ExportInput = {
     items?: ExportItem[];
   };
@@ -2205,6 +2219,19 @@ declare namespace API {
     params?: Record<string, any>;
     prompt?: string;
     version?: number;
+  };
+
+  type GenerationEstimate = {
+    basis?: string;
+    credits?: string;
+    kind?: string;
+    quantity?: string;
+    reused?: boolean;
+  };
+
+  type GenerationEstimateRequest = {
+    draft?: PromptDraft;
+    force_regenerate?: boolean;
   };
 
   type GenerationReference = {
@@ -3063,6 +3090,10 @@ declare namespace API {
     cursor?: string;
     /** 供应商连接 ID */
     provider_id?: string;
+    /** 仅查看已安装预设的计价审核 */
+    pricing_review?: boolean;
+    /** billable、price_pending、usage_pending 或 inactive */
+    billing_status?: string;
   };
 
   type listAdminProvidersParams = {

@@ -6,7 +6,19 @@ import { ContentState } from "@/components/layout/content-state";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ColumnMenu } from "@/components/governance/column-menu";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
+import {
+  billingStates,
+  PricingSources,
+  pricingUnits,
+} from "./preset-pricing-review";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AdminHeading,
   SelectionBar,
@@ -69,6 +81,19 @@ function ModelAdministration({
   const [visibility, setVisibility] = useState<Record<string, boolean>>({});
   const [createOpen, setCreateOpen] = useState(openAdd && !initialReviewModel);
   const addTrigger = useRef<HTMLButtonElement>(null);
+  const [pricingReview, setPricingReview] = useState(false);
+  const [billingStatus, setBillingStatus] = useState("");
+  const [pricingModel, setPricingModel] = useState("");
+  const pricingPanel = useRef<HTMLElement>(null);
+  const pricingTrigger = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pricingReview) return;
+    if (pricingModel) pricingPanel.current?.focus();
+    else if (pricingTrigger.current) {
+      document.getElementById(pricingTrigger.current)?.focus();
+      pricingTrigger.current = null;
+    }
+  }, [pricingReview, pricingModel]);
   const [selectedRows, setSelectedRows] = useState<API.CreatedModel[]>([]);
   const [pageSize, setPageSize] = useState(20);
   const [cursors, setCursors] = useState<string[]>([""]);
@@ -91,6 +116,12 @@ function ModelAdministration({
     Promise.all([
       listAdminModels(
         {
+          ...(pricingReview
+            ? {
+                pricing_review: true,
+                billing_status: billingStatus || undefined,
+              }
+            : {}),
           limit: pageSize,
           cursor: cursors.at(-1) || undefined,
           provider_id: initialProvider || undefined,
@@ -117,7 +148,14 @@ function ModelAdministration({
         }
       });
     return () => abort.abort();
-  }, [refresh, cursors, pageSize, initialProvider]);
+  }, [
+    refresh,
+    cursors,
+    pageSize,
+    initialProvider,
+    pricingReview,
+    billingStatus,
+  ]);
   const visible = models;
   const archivedConnection = providers.some(
     (item) =>
@@ -194,6 +232,82 @@ function ModelAdministration({
       ),
     },
   ];
+  const pricingColumns: DataTableColumn<API.CreatedModel>[] = [
+    {
+      id: "model",
+      header: "模型 / 服务",
+      cell: ({ row }) => {
+        const provider = providers.find(
+          (item) => item.provider?.id === row.original.provider_id,
+        )?.provider;
+        return (
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="break-words">{row.original.display_name}</span>
+            <span className="text-xs text-muted-foreground">
+              {providerConnectionName(provider)}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      id: "unit",
+      header: "计量方式",
+      cell: ({ row }) =>
+        pricingUnits[row.original.billing?.unit ?? ""] ?? "待确认",
+    },
+    {
+      id: "procurement",
+      header: "采购价",
+      cell: ({ row }) =>
+        row.original.billing?.procurement_ready ? "已审核" : "待核验",
+    },
+    {
+      id: "sales",
+      header: "销售价",
+      cell: ({ row }) =>
+        row.original.billing?.sale_published
+          ? "已发布"
+          : row.original.billing?.sale_ready
+            ? "已保存"
+            : "缺失",
+    },
+    {
+      id: "billing",
+      header: "发布状态",
+      cell: ({ row }) => (
+        <Badge
+          variant={
+            row.original.billing?.status === "billable"
+              ? "secondary"
+              : "outline"
+          }
+        >
+          {billingStates[row.original.billing?.status ?? ""] ?? "待核验"}
+        </Badge>
+      ),
+    },
+    {
+      id: "actions",
+      header: "操作",
+      cell: ({ row }) => (
+        <Button
+          variant="outline"
+          size="sm"
+          className="max-md:h-11"
+          disabled={locked || !row.original.id}
+          id={`model-price-review-${row.original.id}`}
+          aria-label={`审核计价 ${row.original.display_name}`}
+          onClick={(event) => {
+            pricingTrigger.current = event.currentTarget.id;
+            setPricingModel(row.original.id!);
+          }}
+        >
+          {row.original.billing?.status === "billable" ? "查看" : "审核"}
+        </Button>
+      ),
+    },
+  ];
   if (batch.denied)
     return (
       <ContentState
@@ -204,7 +318,7 @@ function ModelAdministration({
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading title="模型管理" />
+      <AdminHeading title={pricingReview ? "预设计价审核" : "模型管理"} />
       <div className="flex flex-wrap items-center justify-end gap-2">
         {!loading && !error && initialProvider ? (
           <div className="mr-auto flex flex-wrap items-center gap-2 text-sm">
@@ -216,7 +330,7 @@ function ModelAdministration({
             </Button>
           </div>
         ) : null}
-        {!loading && !error && !mobile ? (
+        {!pricingReview && !loading && !error && !mobile ? (
           <ColumnMenu
             columns={[
               { id: "provider", label: "服务连接" },
@@ -226,15 +340,63 @@ function ModelAdministration({
             onChange={setVisibility}
           />
         ) : null}
+        {pricingReview && (
+          <>
+            <Select
+              value={billingStatus || "all"}
+              disabled={locked}
+              onValueChange={(value) => {
+                setCursors([""]);
+                setLoading(true);
+                setPricingModel("");
+                setBillingStatus(value === "all" ? "" : value);
+              }}
+            >
+              <SelectTrigger aria-label="计价状态" size="toolbar">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部计价状态</SelectItem>
+                {Object.entries(billingStates).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <PricingSources
+              adapters={providers.flatMap(({ provider }) =>
+                provider?.adapter_key ? [provider.adapter_key] : [],
+              )}
+            />
+          </>
+        )}
         <Button
+          variant="outline"
           size="toolbar"
-          disabled={locked || archivedConnection}
-          ref={addTrigger}
-          onClick={() => setCreateOpen(true)}
+          disabled={locked}
+          onClick={() => {
+            setSelectedRows([]);
+            setCursors([""]);
+            setPricingModel("");
+            setBillingStatus("");
+            setLoading(true);
+            setPricingReview((value) => !value);
+          }}
         >
-          <Plus data-icon="inline-start" />
-          添加模型
+          {pricingReview ? "返回模型管理" : "计价审核"}
         </Button>
+        {!pricingReview && (
+          <Button
+            size="toolbar"
+            disabled={locked || archivedConnection}
+            ref={addTrigger}
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus data-icon="inline-start" />
+            添加模型
+          </Button>
+        )}
       </div>
       {error ? (
         <ContentState
@@ -289,7 +451,7 @@ function ModelAdministration({
       {loading ? <ContentState state="loading" title="正在读取模型" /> : null}
       {!loading && !error ? (
         <>
-          {selectedRows.length ? (
+          {!pricingReview && selectedRows.length ? (
             <SelectionBar
               count={selectedRows.length}
               total={visible.length}
@@ -310,21 +472,37 @@ function ModelAdministration({
           ) : null}
           <DataTable
             density="comfortable"
-            label="模型列表"
-            columns={columns}
+            label={pricingReview ? "预设计价列表" : "模型列表"}
+            columns={pricingReview ? pricingColumns : columns}
             data={visible}
-            emptyTitle={initialProvider ? "本页没有此连接的模型" : "还没有模型"}
-            columnVisibility={{
-              provider: !mobile && visibility.provider !== false,
-              capability: !mobile && visibility.capability !== false,
-            }}
-            selection={{
-              selected: selectedRows,
-              onChange: setSelectedRows,
-              getLabel: (r) => r.display_name ?? r.id ?? "模型",
-              pageLabel: "选择当前页全部模型",
-              disabled: locked,
-            }}
+            emptyTitle={
+              pricingReview
+                ? billingStatus
+                  ? "没有匹配的预设"
+                  : "暂无已接入的预设"
+                : initialProvider
+                  ? "本页没有此连接的模型"
+                  : "还没有模型"
+            }
+            columnVisibility={
+              pricingReview
+                ? { unit: !mobile, procurement: !mobile, sales: !mobile }
+                : {
+                    provider: !mobile && visibility.provider !== false,
+                    capability: !mobile && visibility.capability !== false,
+                  }
+            }
+            selection={
+              pricingReview
+                ? undefined
+                : {
+                    selected: selectedRows,
+                    onChange: setSelectedRows,
+                    getLabel: (r) => r.display_name ?? r.id ?? "模型",
+                    pageLabel: "选择当前页全部模型",
+                    disabled: locked,
+                  }
+            }
           />
           <ListPagination
             mode="cursor"
@@ -351,6 +529,34 @@ function ModelAdministration({
           />
         </>
       ) : null}
+      {pricingReview && pricingModel && (
+        <section
+          ref={pricingPanel}
+          tabIndex={-1}
+          aria-label="审核价目"
+          className="relative scroll-m-4 rounded-lg border border-border bg-popover p-4 outline-none sm:p-5"
+        >
+          <Button
+            type="button"
+            aria-label="关闭计价审核"
+            variant="ghost"
+            size="icon"
+            className="absolute top-3 right-3 max-md:size-11"
+            onClick={() => setPricingModel("")}
+          >
+            <X />
+          </Button>
+          <ModelDetail
+            key={pricingModel}
+            id={pricingModel}
+            initialView="pricing"
+            pricingReview
+            capabilities={capabilities}
+            providers={providers}
+            onSaved={saved}
+          />
+        </section>
+      )}
       {batch.action ? (
         <Button
           variant="outline"

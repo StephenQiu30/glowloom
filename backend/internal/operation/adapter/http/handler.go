@@ -28,6 +28,7 @@ import (
 
 // Dependencies are the commands and queries consumed by the public workbench.
 type Dependencies struct {
+	Estimate     GenerationEstimator
 	FreeQuote    *application.CreateFreeQuoteCommand
 	BatchQuote   *application.CreateBatchFreeQuoteCommand
 	Confirm      *application.ConfirmSingleQuoteCommand
@@ -45,6 +46,9 @@ func NewHandler(dependencies Dependencies) *Handler { return &Handler{dependenci
 // Register installs project-scoped task and quote routes.
 func (h *Handler) Register(group *gin.RouterGroup) {
 	group.POST("/projects/:pid/free-operations", h.FreeQuote)
+	if h.dependencies.Estimate != nil {
+		group.POST("/projects/:pid/generation-estimate", h.EstimateGeneration)
+	}
 	group.POST("/projects/:pid/quotes", h.Quotes)
 	group.GET("/projects/:pid/operations", h.List)
 	group.GET("/operations/:id", h.Task)

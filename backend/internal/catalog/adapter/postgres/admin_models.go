@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
@@ -37,6 +38,14 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 			EXISTS(SELECT 1 FROM catalog.price_rule_version p WHERE p.model_profile_id=m.id AND NOT p.is_delete) AS has_price
 			FROM catalog.model_profile m WHERE NOT m.is_delete`
 		args := []any{}
+		if input.PricingReview {
+			query = adminPresetPricingQuery
+			args = append(args, domain.ManagedCloudAdapters())
+		}
+		if input.BillingStatus != "" {
+			query += ` AND m.billing_status=?`
+			args = append(args, input.BillingStatus)
+		}
 		if input.ProviderID != uuid.Nil {
 			query += ` AND m.provider_id=?`
 			args = append(args, input.ProviderID)
@@ -48,9 +57,14 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 		query += ` ORDER BY model_key,id LIMIT ?`
 		args = append(args, input.Limit+1)
 		var rows []struct {
-			Model          modelProfileRow `gorm:"embedded"`
-			HasPublication bool
-			HasPrice       bool
+			Model            modelProfileRow `gorm:"embedded"`
+			HasPublication   bool
+			HasPrice         bool
+			BillingUnit      string
+			ProcurementReady bool
+			SaleReady        bool
+			SalePublished    bool
+			BillingStatus    string
 		}
 		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
 			return fmt.Errorf("read admin models: %w", err)
@@ -63,6 +77,12 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 			item := createdModel(row.Model)
 			item.HasPublication = row.HasPublication
 			item.HasPrice = row.HasPrice
+			if input.PricingReview {
+				item.Billing = &application.AdminModelBilling{
+					Unit: row.BillingUnit, ProcurementReady: row.ProcurementReady, SaleReady: row.SaleReady,
+					SalePublished: row.SalePublished, Status: row.BillingStatus,
+				}
+			}
 			page.Items = append(page.Items, item)
 		}
 		if more {

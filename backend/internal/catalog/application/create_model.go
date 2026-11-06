@@ -43,6 +43,7 @@ type CreatedModel struct {
 	CurrentVersionID uuid.UUID          `json:"current_version_id"`
 	HasPublication   bool               `json:"has_publication,omitempty"`
 	HasPrice         bool               `json:"has_price,omitempty"`
+	Billing          *AdminModelBilling `json:"billing,omitempty"`
 	Revision         int64              `json:"revision"`
 	CreateTime       time.Time          `json:"create_time"`
 	UpdateTime       time.Time          `json:"update_time"`

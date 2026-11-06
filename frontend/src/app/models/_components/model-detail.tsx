@@ -1,5 +1,6 @@
 "use client";
 import { PriceEvidenceFields } from "./price-evidence-fields";
+import { isProcurementPrice } from "./preset-pricing-review";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
 import { ContentState } from "@/components/layout/content-state";
@@ -73,18 +74,22 @@ export function ModelDetail({
   capabilities,
   providers = [],
   initialView = "configuration",
+  pricingReview = false,
   onSaved,
 }: {
   id: string;
   capabilities: API.CapabilitySummary[];
   providers?: API.ProviderListItem[];
   initialView?: ModelDetailView;
+  pricingReview?: boolean;
   onSaved: () => void;
 }) {
   const formFieldId = useId();
 
   const [view, setView] = useState<string>(initialView);
   const [priceUnit, setPriceUnit] = useState<string | null>(null);
+  const [priceCurrency, setPriceCurrency] = useState<string | null>(null);
+  const [pricePurpose, setPricePurpose] = useState<"procurement" | "sale">();
   const [advancedOpen, setAdvancedOpen] = useState<boolean | null>(null);
   const [detail, setDetail] = useState<API.AdminModelDetail | null>(null);
   const [config, setConfig] = useState<API.ConnectionConfig | null>(null);
@@ -139,6 +144,29 @@ export function ModelDetail({
   )?.provider?.status;
   const latest = detail?.versions?.[0];
   const latestPrice = detail?.prices?.[0];
+  const procurement = detail?.prices?.find(isProcurementPrice);
+  const sale = detail?.prices?.find(
+    (price) => typeof price.rule?.procurement_price_version_id === "string",
+  );
+  const purpose = pricePurpose ?? (procurement ? "sale" : "procurement");
+  const editablePrice = pricingReview
+    ? purpose === "procurement"
+      ? procurement
+      : sale
+    : latestPrice;
+  const currency = pricingReview
+    ? (priceCurrency ?? editablePrice?.currency ?? "CNY")
+    : "CNY";
+  const unit =
+    priceUnit ??
+    editablePrice?.unit ??
+    (pricingReview ? procurement?.unit : undefined) ??
+    "per_request";
+  function choosePricePurpose(value: "procurement" | "sale") {
+    setPricePurpose(value);
+    setPriceCurrency(null);
+    setPriceUnit(null);
+  }
   const active = releases.find((r) => r.status === "active");
   const currentDefault = defaults.find(
     (d) => d.capability === model?.capability,
@@ -158,6 +186,7 @@ export function ModelDetail({
   return (
     <section className="flex min-w-0 flex-col gap-5" aria-label="模型详情">
       <h2 className="text-lg font-medium">
+        {pricingReview && "审核价目 · "}
         {model?.display_name ?? "模型详情"}
       </h2>
       {error && detail ? <FeedbackToast message={error} /> : null}
@@ -184,75 +213,79 @@ export function ModelDetail({
         <LoadingState>正在加载配置…</LoadingState>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
-            {archived
-              ? "已归档"
-              : model?.status === "active"
-                ? "已启用"
-                : releases.some((release) => release.status === "retired")
-                  ? "已停用"
-                  : latestPrice
-                    ? "待验证"
-                    : "价格待审核"}{" "}
-            · 当前发布：
-            {active
-              ? `配置 ${detail.versions?.find((v) => v.id === active.model_version_id)?.version_no ?? "—"} / 价格 ${detail.prices?.find((p) => p.id === active.price_version_id)?.version_no ?? "—"}`
-              : "尚未发布"}
-          </p>
-          {model ? (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="self-start"
-                  disabled={mutation.busy || !!mutation.pending}
-                >
-                  {archived ? "恢复模型" : "归档模型"}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    {archived ? "恢复模型？" : "归档模型？"}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {archived
-                      ? "模型将恢复为未启用，发布后才能接收新任务。"
-                      : "归档后从创作模型列表移除，保留版本、价格和任务记录。"}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>取消</AlertDialogCancel>
-                  <AlertDialogAction
-                    variant={archived ? "default" : "destructive"}
-                    onClick={() =>
-                      void mutation.run("model.status", id, (requestID) =>
-                        setAdminModelStatus(
-                          { id },
-                          {
-                            status: archived ? "disabled" : "archived",
-                            expected_revision: model.revision,
-                          },
-                          { headers: { "Idempotency-Key": requestID } },
-                        ),
-                      )
-                    }
-                  >
-                    {archived ? "确认恢复" : "确认归档"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          ) : null}
-          {!archived && model?.provider_id && latest?.id && config?.id ? (
-            <ModelConfigurationCheck
-              key={`${latest.id}:${config.id}`}
-              id={id}
-              provider={model.provider_id}
-              version={latest.id}
-              config={config.id}
-            />
-          ) : null}
+          {(!pricingReview || view !== "pricing") && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {archived
+                  ? "已归档"
+                  : model?.status === "active"
+                    ? "已启用"
+                    : releases.some((release) => release.status === "retired")
+                      ? "已停用"
+                      : latestPrice
+                        ? "待验证"
+                        : "价格待审核"}{" "}
+                · 当前发布：
+                {active
+                  ? `配置 ${detail.versions?.find((v) => v.id === active.model_version_id)?.version_no ?? "—"} / 价格 ${detail.prices?.find((p) => p.id === active.price_version_id)?.version_no ?? "—"}`
+                  : "尚未发布"}
+              </p>
+              {model ? (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="self-start"
+                      disabled={mutation.busy || !!mutation.pending}
+                    >
+                      {archived ? "恢复模型" : "归档模型"}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {archived ? "恢复模型？" : "归档模型？"}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {archived
+                          ? "模型将恢复为未启用，发布后才能接收新任务。"
+                          : "归档后从创作模型列表移除，保留版本、价格和任务记录。"}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>取消</AlertDialogCancel>
+                      <AlertDialogAction
+                        variant={archived ? "default" : "destructive"}
+                        onClick={() =>
+                          void mutation.run("model.status", id, (requestID) =>
+                            setAdminModelStatus(
+                              { id },
+                              {
+                                status: archived ? "disabled" : "archived",
+                                expected_revision: model.revision,
+                              },
+                              { headers: { "Idempotency-Key": requestID } },
+                            ),
+                          )
+                        }
+                      >
+                        {archived ? "确认恢复" : "确认归档"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ) : null}
+              {!archived && model?.provider_id && latest?.id && config?.id ? (
+                <ModelConfigurationCheck
+                  key={`${latest.id}:${config.id}`}
+                  id={id}
+                  provider={model.provider_id}
+                  version={latest.id}
+                  config={config.id}
+                />
+              ) : null}
+            </>
+          )}
           {!archived && detail.candidate && !latest ? (
             <p className="text-sm text-muted-foreground">
               来自通用模型目录 {detail.candidate.catalog_version}。
@@ -428,12 +461,68 @@ export function ModelDetail({
               </form>
             </TabsContent>
             <TabsContent value="pricing" forceMount hidden={view !== "pricing"}>
+              {pricingReview && (
+                <div
+                  className="grid gap-2 sm:grid-cols-2"
+                  aria-label="价格审核"
+                >
+                  <Button
+                    type="button"
+                    variant={
+                      purpose === "procurement" ? "secondary" : "outline"
+                    }
+                    className="h-auto flex-col items-start gap-1 px-3 py-2"
+                    aria-pressed={purpose === "procurement"}
+                    onClick={() => choosePricePurpose("procurement")}
+                  >
+                    采购价
+                    <span className="text-xs text-muted-foreground">
+                      {procurement
+                        ? `v${procurement.version_no} · ${procurement.currency}`
+                        : "待核验"}
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={purpose === "sale" ? "secondary" : "outline"}
+                    className="h-auto flex-col items-start gap-1 px-3 py-2"
+                    aria-pressed={purpose === "sale"}
+                    onClick={() => choosePricePurpose("sale")}
+                  >
+                    销售价
+                    <span className="text-xs text-muted-foreground">
+                      {sale
+                        ? `v${sale.version_no} · ${active?.price_version_id === sale.id ? "已发布" : "已保存"}`
+                        : "缺失"}
+                    </span>
+                  </Button>
+                </div>
+              )}
               <form
+                key={pricingReview ? purpose : "price"}
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const f = new FormData(e.currentTarget);
                   try {
                     const rule = priceRule(f);
+                    if (
+                      pricingReview &&
+                      purpose === "procurement" &&
+                      (rule.markup_multiplier !== undefined ||
+                        rule.procurement_price_version_id !== undefined)
+                    )
+                      throw new Error("采购价不能关联其他价目或包含销售加价。");
+                    if (
+                      pricingReview &&
+                      purpose === "sale" &&
+                      !detail.prices?.some(
+                        (price) =>
+                          price.id === rule.procurement_price_version_id &&
+                          price.unit === unit &&
+                          isProcurementPrice(price),
+                      )
+                    )
+                      throw new Error("请选择同一计量方式的已审核采购价。");
                     await mutation.run("model.price", id, (request) =>
                       publishAdminModelPrice(
                         { id },
@@ -446,7 +535,11 @@ export function ModelDetail({
                             String(f.get("reviewed_at")),
                           ).toISOString(),
                           rule,
-                          currency: "CNY",
+                          currency,
+                          fx_rate_to_cny:
+                            currency === "CNY"
+                              ? undefined
+                              : String(f.get("fx_rate") ?? ""),
                           effective_from: new Date(
                             String(f.get("effective")),
                           ).toISOString(),
@@ -466,7 +559,7 @@ export function ModelDetail({
                     </FieldLabel>
                     <Select
                       name="unit"
-                      value={priceUnit ?? latestPrice?.unit ?? "per_request"}
+                      value={unit}
                       onValueChange={setPriceUnit}
                     >
                       <SelectTrigger
@@ -480,6 +573,11 @@ export function ModelDetail({
                           <SelectItem value="per_request">每次请求</SelectItem>
                           <SelectItem value="per_image">每张图片</SelectItem>
                           <SelectItem value="per_second">每秒</SelectItem>
+                          {pricingReview && (
+                            <SelectItem value="per_1k_chars">
+                              每千字符
+                            </SelectItem>
+                          )}
                           <SelectItem value="per_1k_tokens">
                             每千 Token
                           </SelectItem>
@@ -487,13 +585,58 @@ export function ModelDetail({
                       </SelectContent>
                     </Select>
                   </Field>
+                  {pricingReview && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel htmlFor={`${formFieldId}-currency`}>
+                          币种
+                        </FieldLabel>
+                        <Select
+                          value={currency}
+                          onValueChange={setPriceCurrency}
+                        >
+                          <SelectTrigger id={`${formFieldId}-currency`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="CNY">CNY</SelectItem>
+                            <SelectItem value="USD">USD</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      {currency !== "CNY" && (
+                        <Field>
+                          <FieldLabel htmlFor={`${formFieldId}-fx`}>
+                            兑人民币汇率
+                          </FieldLabel>
+                          <Input
+                            id={`${formFieldId}-fx`}
+                            name="fx_rate"
+                            required
+                            type="number"
+                            min="0.000001"
+                            step="0.000001"
+                            defaultValue={
+                              editablePrice?.fx_rate_to_cny ?? undefined
+                            }
+                          />
+                        </Field>
+                      )}
+                    </div>
+                  )}
                   <PriceSetup
-                    key={latestPrice?.id ?? "new"}
-                    unit={priceUnit ?? latestPrice?.unit ?? "per_request"}
-                    rule={latestPrice?.rule}
+                    key={editablePrice?.id ?? "new"}
+                    unit={unit}
+                    rule={editablePrice?.rule}
                     prices={detail?.prices}
+                    currency={pricingReview ? currency : undefined}
+                    procurementOnly={pricingReview && purpose === "procurement"}
+                    requireProcurement={pricingReview && purpose === "sale"}
                   />
-                  <PriceEvidenceFields price={latestPrice} />
+                  <PriceEvidenceFields
+                    price={editablePrice}
+                    compact={pricingReview}
+                  />
                   <Field>
                     <FieldLabel htmlFor={`${formFieldId}-field-5`}>
                       <span>生效时间</span>
@@ -505,10 +648,25 @@ export function ModelDetail({
                       required
                     />
                   </Field>
-                  <p className="text-xs text-muted-foreground">
-                    这是平台向用户收取的价格；上游成本单独审核。零价格表示平台不向用户收费。
-                  </p>
-                  <Button disabled={mutation.busy || !latest}>保存价格</Button>
+                  {!pricingReview && (
+                    <p className="text-xs text-muted-foreground">
+                      这是平台向用户收取的价格；上游成本单独审核。零价格表示平台不向用户收费。
+                    </p>
+                  )}
+                  <Button
+                    disabled={
+                      archived ||
+                      mutation.busy ||
+                      !latest ||
+                      (pricingReview && purpose === "sale" && !procurement)
+                    }
+                  >
+                    {pricingReview
+                      ? purpose === "procurement"
+                        ? "保存采购价"
+                        : "保存销售价"
+                      : "保存价格"}
+                  </Button>
                 </FieldGroup>
               </form>
             </TabsContent>
@@ -597,7 +755,9 @@ export function ModelDetail({
                         <Select
                           name="price"
                           required
-                          defaultValue={detail.prices?.[0]?.id}
+                          defaultValue={
+                            pricingReview ? sale?.id : detail.prices?.[0]?.id
+                          }
                         >
                           <SelectTrigger
                             id={`${formFieldId}-field-7`}
@@ -607,21 +767,30 @@ export function ModelDetail({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
-                              {detail.prices?.map((p) =>
-                                p.id ? (
-                                  <SelectItem key={p.id} value={p.id}>
-                                    v{p.version_no} ·{" "}
-                                    {(
-                                      {
-                                        per_request: "每次请求",
-                                        per_image: "每张图片",
-                                        per_second: "每秒",
-                                        per_1k_tokens: "每千 Token",
-                                      } as Record<string, string>
-                                    )[p.unit ?? ""] ?? p.unit}
-                                  </SelectItem>
-                                ) : null,
-                              )}
+                              {detail.prices
+                                ?.filter(
+                                  (p) =>
+                                    !pricingReview ||
+                                    typeof p.rule
+                                      ?.procurement_price_version_id ===
+                                      "string",
+                                )
+                                .map((p) =>
+                                  p.id ? (
+                                    <SelectItem key={p.id} value={p.id}>
+                                      v{p.version_no} ·{" "}
+                                      {(
+                                        {
+                                          per_request: "每次请求",
+                                          per_image: "每张图片",
+                                          per_second: "每秒",
+                                          per_1k_tokens: "每千 Token",
+                                          per_1k_chars: "每千字符",
+                                        } as Record<string, string>
+                                      )[p.unit ?? ""] ?? p.unit}
+                                    </SelectItem>
+                                  ) : null,
+                                )}
                             </SelectGroup>
                           </SelectContent>
                         </Select>

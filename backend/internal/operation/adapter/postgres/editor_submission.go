@@ -181,7 +181,7 @@ func compileEditorInput(tx *gorm.DB, input application.CreateFreeQuoteInput, d p
 		prepared.MediaInputs = append(prepared.MediaInputs, media)
 	}
 	input.FreeQuoteItemInput = prepared
-	return input, input.Validate()
+	return input, nil
 }
 
 // lockEditorConfirmation serializes confirmation with discard and validates the current saved intent.
