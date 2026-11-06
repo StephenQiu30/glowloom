@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,11 +37,13 @@ const starters = [
 
 export function ConversationWelcome({
   skills,
+  showStarters = true,
   selected,
   disabled,
   onSelect,
 }: {
   skills: API.SkillVersion[];
+  showStarters?: boolean;
   selected: ConversationSkillPin[];
   disabled: boolean;
   onSelect: (prompt: string, skill?: ConversationSkillPin) => void;
@@ -53,73 +56,82 @@ export function ConversationWelcome({
       className="min-h-0 flex-1 overflow-y-auto"
       aria-labelledby="conversation-welcome-title"
     >
-      <div className="mx-auto flex w-full max-w-[800px] flex-col gap-7 pt-8 pb-4 md:gap-10 md:pt-[clamp(2rem,calc(18dvh-3.375rem),9rem)]">
+      <div
+        className={cn(
+          "mx-auto flex w-full max-w-[800px] flex-col gap-7 pt-8 pb-4 md:gap-10",
+          showStarters
+            ? "md:pt-[clamp(2rem,calc(18dvh-3.375rem),9rem)]"
+            : "md:pt-[clamp(4rem,calc(30dvh-2.5rem),18rem)]",
+        )}
+      >
         <h1
           id="conversation-welcome-title"
           className="text-center text-2xl leading-8 font-normal"
         >
           你好，想创作什么？
         </h1>
-        <ul
-          className="grid snap-x snap-mandatory auto-cols-[min(86%,16.5rem)] grid-flow-col gap-2 overflow-x-auto pb-2 md:grid-flow-row md:grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))] md:overflow-visible"
-          aria-label="推荐技能"
-        >
-          {starters.map(({ name, cover, description, prompt }) => {
-            const matches = available.filter((skill) => skill.name === name);
-            const chosen = matches.find((skill) =>
-              selected.some((pin) => isSameSkillVersion(pin, skill)),
-            );
-            const skill = chosen ?? matches[0];
-            const action = chosen ? "已选用" : "试一试";
-            return (
-              <li key={name} className="min-w-0 snap-start">
-                <Card size="sm" className="h-full gap-0 p-0 ring-0">
-                  <div className="relative isolate flex h-[188px] flex-col justify-end bg-muted">
-                    <Image
-                      src={cover}
-                      alt=""
-                      fill
-                      sizes="264px"
-                      className="object-cover"
-                    />
-                    <CardHeader className="relative flex flex-col items-start gap-1 bg-linear-to-t from-black/70 to-transparent px-3.5 pt-7 pb-3 text-white">
-                      <Badge
-                        variant="ghost"
-                        className="h-auto px-0 text-[10px] font-normal"
-                      >
-                        {skill ? "热门技能" : "创作灵感"}
-                      </Badge>
-                      <div className="flex w-full items-center justify-between gap-2">
-                        <CardTitle title={name} className="truncate">
-                          {name}
-                        </CardTitle>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="xs"
-                          className="border-white/35 bg-black/50 text-white hover:bg-black/75 hover:text-white pointer-coarse:min-h-11"
-                          disabled={disabled}
-                          aria-label={`${action}：${name}`}
-                          onClick={() => onSelect(prompt, skill)}
+        {showStarters && (
+          <ul
+            className="grid snap-x snap-mandatory auto-cols-[min(86%,16.5rem)] grid-flow-col gap-2 overflow-x-auto pb-2 md:grid-flow-row md:grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))] md:overflow-visible"
+            aria-label="推荐技能"
+          >
+            {starters.map(({ name, cover, description, prompt }) => {
+              const matches = available.filter((skill) => skill.name === name);
+              const chosen = matches.find((skill) =>
+                selected.some((pin) => isSameSkillVersion(pin, skill)),
+              );
+              const skill = chosen ?? matches[0];
+              const action = chosen ? "已选用" : "试一试";
+              return (
+                <li key={name} className="min-w-0 snap-start">
+                  <Card size="sm" className="h-full gap-0 p-0 ring-0">
+                    <div className="relative isolate flex h-[188px] flex-col justify-end bg-muted">
+                      <Image
+                        src={cover}
+                        alt=""
+                        fill
+                        sizes="264px"
+                        className="object-cover"
+                      />
+                      <CardHeader className="relative flex flex-col items-start gap-1 bg-linear-to-t from-black/70 to-transparent px-3.5 pt-7 pb-3 text-white">
+                        <Badge
+                          variant="ghost"
+                          className="h-auto px-0 text-[10px] font-normal"
                         >
-                          {action}
-                        </Button>
-                      </div>
-                    </CardHeader>
-                  </div>
-                  <div className="min-h-[68px] px-3.5 py-3">
-                    <CardDescription
-                      title={skill?.description || description}
-                      className="line-clamp-2 text-xs leading-5"
-                    >
-                      {skill?.description || description}
-                    </CardDescription>
-                  </div>
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
+                          {skill ? "热门技能" : "创作灵感"}
+                        </Badge>
+                        <div className="flex w-full items-center justify-between gap-2">
+                          <CardTitle title={name} className="truncate">
+                            {name}
+                          </CardTitle>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            className="border-white/35 bg-black/50 text-white hover:bg-black/75 hover:text-white pointer-coarse:min-h-11"
+                            disabled={disabled}
+                            aria-label={`${action}：${name}`}
+                            onClick={() => onSelect(prompt, skill)}
+                          >
+                            {action}
+                          </Button>
+                        </div>
+                      </CardHeader>
+                    </div>
+                    <div className="min-h-[68px] px-3.5 py-3">
+                      <CardDescription
+                        title={skill?.description || description}
+                        className="line-clamp-2 text-xs leading-5"
+                      >
+                        {skill?.description || description}
+                      </CardDescription>
+                    </div>
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </section>
   );

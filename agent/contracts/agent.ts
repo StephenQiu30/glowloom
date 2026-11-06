@@ -76,6 +76,20 @@ export const CreateSessionSchema = Type.Object(
   { additionalProperties: false },
 );
 export type CreateSessionInput = Static<typeof CreateSessionSchema>;
+export const UpdateSessionSchema = Type.Object(
+  {
+    ...fields,
+    action: Type.Union([
+      Type.Literal('pin'),
+      Type.Literal('unpin'),
+      Type.Literal('rename'),
+      Type.Literal('delete'),
+    ]),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: 240 })),
+  },
+  { additionalProperties: false },
+);
+export type UpdateSessionInput = Static<typeof UpdateSessionSchema>;
 export const CreateRunSchema = Type.Object(
   {
     ...fields,
@@ -119,6 +133,7 @@ export const operationIds = {
   createSession: 'createAgentSession',
   listSessions: 'listAgentSessions',
   readSession: 'getAgentSession',
+  updateSession: 'updateAgentSession',
   createRun: 'createAgentRun',
   readRun: 'getAgentRun',
   command: 'applyAgentDecision',
@@ -215,6 +230,7 @@ export const SessionViewSchema = Type.Object({
   ...fields,
   id: Id,
   title: Type.String(),
+  pinned: Type.Optional(Type.Boolean()),
   execution_revision: Type.Integer(),
   created_at: Type.Optional(Type.String({ format: 'date-time' })),
   run: Type.Optional(RunSnapshotSchema),

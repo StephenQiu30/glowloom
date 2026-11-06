@@ -404,14 +404,17 @@ export function RichGeneration(props: Props) {
         title="编辑器暂时无法加载"
         description={error}
         actions={
-          <Button
-            onClick={() => {
-              setError("");
-              setRetry((n) => n + 1);
-            }}
-          >
-            重试
-          </Button>
+          <>
+            {props.headerActions}
+            <Button
+              onClick={() => {
+                setError("");
+                setRetry((n) => n + 1);
+              }}
+            >
+              重试
+            </Button>
+          </>
         }
       />
     ) : (

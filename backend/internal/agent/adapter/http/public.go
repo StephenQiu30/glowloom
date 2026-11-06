@@ -71,6 +71,7 @@ func (h *PublicHandler) Register(g *gin.RouterGroup) {
 	g.GET("/projects/:pid/agent/sessions", h.List)
 	g.POST("/projects/:pid/agent/sessions", h.Create)
 	g.GET("/projects/:pid/agent/sessions/:sid", h.Read)
+	g.PATCH("/projects/:pid/agent/sessions/:sid", h.Update)
 	g.POST("/projects/:pid/agent/sessions/:sid/runs", h.Start)
 	g.GET("/projects/:pid/agent/sessions/:sid/runs/:rid", h.Run)
 	g.POST("/projects/:pid/agent/sessions/:sid/runs/:rid/commands", h.Command)
@@ -115,11 +116,12 @@ func (h *PublicHandler) proxy(c *gin.Context, operation string, scope domain.Sco
 	}
 	params := map[string]string{}
 	if sid := c.Param("sid"); sid != "" {
-		if _, err := uuid.Parse(sid); err != nil {
+		parsed, err := uuid.Parse(sid)
+		if err != nil {
 			send(c, nil, domain.ErrInvalid)
 			return
 		}
-		params["sid"] = sid
+		params["sid"] = parsed.String()
 	}
 	if rid := c.Param("rid"); rid != "" {
 		if _, err := uuid.Parse(rid); err != nil {
@@ -160,9 +162,9 @@ func (h *PublicHandler) proxy(c *gin.Context, operation string, scope domain.Sco
 		send(c, nil, domain.ErrUnavailable)
 		return
 	}
-	if response.StatusCode >= 200 && response.StatusCode < 300 && (operation == "getAgentSession" || operation == "createAgentSession") {
+	if response.StatusCode >= 200 && response.StatusCode < 300 && (operation == "getAgentSession" || operation == "createAgentSession" || operation == "updateAgentSession") {
 		var session runtimeclient.SessionView
-		if json.Unmarshal(data, &session) != nil || session.ActorID != scope.ActorID.String() || session.OrgID != scope.OrgID.String() || session.ScopeID != scope.ScopeID.String() || session.ProjectID != scope.ProjectID.String() {
+		if json.Unmarshal(data, &session) != nil || session.ActorID != scope.ActorID.String() || session.OrgID != scope.OrgID.String() || session.ScopeID != scope.ScopeID.String() || session.ProjectID != scope.ProjectID.String() || (params["sid"] != "" && session.ID != params["sid"]) {
 			send(c, nil, domain.ErrNotFound)
 			return
 		}
@@ -337,6 +339,61 @@ func (h *PublicHandler) Read(c *gin.Context) {
 	if ok {
 		h.proxy(c, "getAgentSession", scope, nil)
 	}
+}
+
+// UpdateSessionRequest describes a single history operation.
+type UpdateSessionRequest struct {
+	Action string  `json:"action" binding:"required" enums:"pin,unpin,rename,delete"`
+	Title  *string `json:"title,omitempty" maxLength:"240"`
+}
+
+// Update pins, unpins, renames, or removes an owned conversation from history.
+// @Summary 管理 Agent 对话历史
+// @ID updateAgentSession
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param pid path string true "项目UUID"
+// @Param sid path string true "会话UUID"
+// @Param input body UpdateSessionRequest true "历史操作"
+// @Success 200 {object} runtimeclient.SessionView
+// @Router /api/projects/{pid}/agent/sessions/{sid} [patch]
+func (h *PublicHandler) Update(c *gin.Context) {
+	scope, ok := h.scope(c, true)
+	if !ok {
+		return
+	}
+	var input UpdateSessionRequest
+	if c.ShouldBindJSON(&input) != nil {
+		send(c, nil, domain.ErrInvalid)
+		return
+	}
+	switch input.Action {
+	case "rename":
+		if input.Title == nil {
+			send(c, nil, domain.ErrInvalid)
+			return
+		}
+		title := strings.TrimSpace(*input.Title)
+		if title == "" || utf8.RuneCountInString(title) > 240 {
+			send(c, nil, domain.ErrInvalid)
+			return
+		}
+		input.Title = &title
+	case "pin", "unpin", "delete":
+		if input.Title != nil {
+			send(c, nil, domain.ErrInvalid)
+			return
+		}
+	default:
+		send(c, nil, domain.ErrInvalid)
+		return
+	}
+	h.proxy(c, "updateAgentSession", scope, runtimeclient.UpdateSessionRequest{
+		ActorID: scope.ActorID.String(), OrgID: scope.OrgID.String(),
+		ScopeID: scope.ScopeID.String(), ProjectID: scope.ProjectID.String(),
+		Action: input.Action, Title: input.Title,
+	})
 }
 
 // StartRequest contains the full draft, model manifest and expected execution revision.

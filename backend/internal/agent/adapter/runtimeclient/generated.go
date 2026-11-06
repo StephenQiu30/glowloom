@@ -35,6 +35,16 @@ type CreateSessionRequest struct {
 	Title       string  `json:"title" binding:"required"`
 }
 
+type UpdateSessionRequest struct {
+	ActorID   string  `json:"actor_id" binding:"required"`
+	OrgID     string  `json:"org_id" binding:"required"`
+	ScopeID   string  `json:"scope_id" binding:"required"`
+	ProjectID string  `json:"project_id" binding:"required"`
+	CanvasID  *string `json:"canvas_id,omitempty"`
+	Action    string  `json:"action" binding:"required"`
+	Title     *string `json:"title,omitempty"`
+}
+
 type CreateRunRequest struct {
 	ActorID                   string          `json:"actor_id" binding:"required"`
 	OrgID                     string          `json:"org_id" binding:"required"`
@@ -72,6 +82,7 @@ type SessionView struct {
 	CanvasID          *string      `json:"canvas_id,omitempty"`
 	ID                string       `json:"id" binding:"required"`
 	Title             string       `json:"title" binding:"required"`
+	Pinned            *bool        `json:"pinned,omitempty"`
 	ExecutionRevision int64        `json:"execution_revision" binding:"required"`
 	CreatedAt         *string      `json:"created_at,omitempty"`
 	Run               *RunSnapshot `json:"run,omitempty"`
@@ -213,6 +224,7 @@ var OperationPaths = map[string]string{
 	"listAgentSessions":         "GET /internal/agent/sessions",
 	"createAgentSession":        "POST /internal/agent/sessions",
 	"getAgentSession":           "GET /internal/agent/sessions/{sid}",
+	"updateAgentSession":        "PATCH /internal/agent/sessions/{sid}",
 	"listAgentRuns":             "GET /internal/agent/sessions/{sid}/runs",
 	"createAgentRun":            "POST /internal/agent/sessions/{sid}/runs",
 	"getCurrentAgentSubmission": "GET /internal/agent/sessions/{sid}/submissions/current",

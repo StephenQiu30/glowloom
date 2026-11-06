@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
@@ -13,6 +13,7 @@ export function SidebarNavLink({
   variant,
   size,
   onNavigate,
+  actions,
 }: {
   href: ComponentProps<typeof Link>["href"];
   label: string;
@@ -21,6 +22,7 @@ export function SidebarNavLink({
   variant?: MenuButtonProps["variant"];
   size?: MenuButtonProps["size"];
   onNavigate?: () => void;
+  actions?: ReactNode;
 }) {
   return (
     <SidebarMenuItem>
@@ -30,6 +32,7 @@ export function SidebarNavLink({
         size={size}
         isActive={active}
         tooltip={label}
+        className={actions ? "pr-8" : undefined}
       >
         <Link
           href={href}
@@ -42,6 +45,7 @@ export function SidebarNavLink({
           <span>{label}</span>
         </Link>
       </SidebarMenuButton>
+      {actions}
     </SidebarMenuItem>
   );
 }

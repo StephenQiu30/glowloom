@@ -7,7 +7,7 @@ import type { ComposerSession } from "@/components/generation/composer-session";
 import { type PromptDraft } from "@/components/generation/prompt-document";
 
 /** The page can retain space-owned subjects before choosing a generation project. */
-export function HomePrompt({
+export function CreationEntryPrompt({
   draft,
   contextKey,
   onChange,

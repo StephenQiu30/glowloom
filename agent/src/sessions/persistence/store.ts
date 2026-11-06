@@ -22,6 +22,8 @@ import { readMessagePage } from './message-history.js';
 export interface SessionRow extends Scope {
   id: string;
   title: string;
+  pinned: boolean;
+  archived_at: Date | null;
   execution_revision: string;
   created_at: Date;
 }
@@ -82,6 +84,7 @@ export class SessionStore {
     const row = result.rows[0]!;
     if (row.content_hash !== hash)
       throw new AgentError('request_identity_conflict');
+    if (row.archived_at) throw new AgentError('session_not_found');
     return this.sessionDTO(row);
   }
   sessionDTO(row: SessionRow) {
@@ -92,6 +95,7 @@ export class SessionStore {
       scope_id: row.scope_id,
       project_id: row.project_id,
       title: row.title,
+      pinned: row.pinned,
       created_at: row.created_at,
       ...(row.canvas_id
         ? { canvas_id: row.canvas_id }
@@ -106,7 +110,7 @@ export class SessionStore {
   ) {
     return (
       await client.query<SessionRow>(
-        'SELECT * FROM agent.service_sessions WHERE id=$1 AND actor_id=$2 AND project_id=$3',
+        'SELECT * FROM agent.service_sessions WHERE id=$1 AND actor_id=$2 AND project_id=$3 AND archived_at IS NULL',
         [id, who.actor_id, who.project_id],
       )
     ).rows[0];
@@ -114,7 +118,7 @@ export class SessionStore {
   async list(who: Identity) {
     return (
       await this.pool.query<SessionRow>(
-        'SELECT * FROM agent.service_sessions WHERE actor_id=$1 AND project_id=$2 ORDER BY created_at DESC,id DESC LIMIT 100',
+        'SELECT * FROM agent.service_sessions WHERE actor_id=$1 AND project_id=$2 AND archived_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 100',
         [who.actor_id, who.project_id],
       )
     ).rows.map((r) => this.sessionDTO(r));
@@ -127,7 +131,7 @@ export class SessionStore {
     return inTransaction(this.pool, async (client) => {
       const session = (
         await client.query<SessionRow>(
-          'SELECT * FROM agent.service_sessions WHERE id=$1 AND actor_id=$2 AND project_id=$3 FOR UPDATE',
+          'SELECT * FROM agent.service_sessions WHERE id=$1 AND actor_id=$2 AND project_id=$3 AND archived_at IS NULL FOR UPDATE',
           [id, input.actor_id, input.project_id],
         )
       ).rows[0];
@@ -209,7 +213,7 @@ export class SessionStore {
   async run(id: string, who: Identity, client: Pool | PoolClient = this.pool) {
     return (
       await client.query<RunRow>(
-        'SELECT r.* FROM agent.service_runs r JOIN agent.service_sessions s ON s.id=r.session_id WHERE r.id=$1 AND s.actor_id=$2 AND s.project_id=$3',
+        'SELECT r.* FROM agent.service_runs r JOIN agent.service_sessions s ON s.id=r.session_id WHERE r.id=$1 AND s.actor_id=$2 AND s.project_id=$3 AND s.archived_at IS NULL',
         [id, who.actor_id, who.project_id],
       )
     ).rows[0];

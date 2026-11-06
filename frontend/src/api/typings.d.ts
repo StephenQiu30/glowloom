@@ -5664,6 +5664,7 @@ declare namespace API {
     execution_revision: number;
     id: string;
     org_id: string;
+    pinned?: boolean;
     project_id: string;
     run?: RunSnapshot;
     scope_id: string;
@@ -6861,6 +6862,13 @@ declare namespace API {
     id: string;
   };
 
+  type updateAgentSessionParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+  };
+
   type updateBibleEntryParams = {
     /** Project UUID */
     pid: string;
@@ -6921,6 +6929,11 @@ declare namespace API {
     pid: string;
     /** 稳定来源UUID */
     lineage: string;
+  };
+
+  type UpdateSessionRequest = {
+    action: "pin" | "unpin" | "rename" | "delete";
+    title?: string;
   };
 
   type updateSubjectParams = {

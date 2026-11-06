@@ -1,4 +1,5 @@
 export type AgentErrorCode =
+  | 'invalid_session_update'
   | 'invalid_cursor'
   | 'invalid_event_cursor'
   | 'invalid_snapshot_watermark'

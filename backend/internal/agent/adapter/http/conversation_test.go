@@ -2,7 +2,10 @@ package http
 
 import (
 	"context"
+	"io"
+	stdhttp "net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -73,5 +77,77 @@ func TestConversationModelSourceCheckUsesCurrentGrantAuthority(t *testing.T) {
 	router.ServeHTTP(out, request)
 	if out.Code != 422 || !source.called || !strings.Contains(out.Body.String(), "conversation_reference_unavailable") {
 		t.Fatalf("revoked source allowed at model boundary: %d %s", out.Code, out.Body.String())
+	}
+}
+
+type historyProjectAccess func(context.Context, identity.Principal, uuid.UUID, bool) error
+
+func (f historyProjectAccess) AuthorizeProject(ctx context.Context, principal identity.Principal, project uuid.UUID, write bool) error {
+	return f(ctx, principal, project, write)
+}
+
+type historyRuntime func(context.Context, string, map[string]string, url.Values, any, string) (*stdhttp.Response, error)
+
+func (f historyRuntime) Request(ctx context.Context, op string, params map[string]string, query url.Values, body any, cursor string) (*stdhttp.Response, error) {
+	return f(ctx, op, params, query, body, cursor)
+}
+
+func TestConversationHistoryUpdateRequiresProjectWriteAndVerifiesReceipt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	scope := domain.Scope{ActorID: uuid.New(), OrgID: uuid.New(), ScopeID: uuid.New(), ProjectID: uuid.New()}
+	sid := uuid.NewString()
+	writable := false
+	mismatch := false
+	calls := 0
+	access := historyProjectAccess(func(_ context.Context, actor identity.Principal, project uuid.UUID, write bool) error {
+		if actor.ID != scope.ActorID || project != scope.ProjectID || !write {
+			t.Fatalf("incorrect project write authorization: %v %v %v", actor.ID, project, write)
+		}
+		if !writable {
+			return identity.ErrForbidden
+		}
+		return nil
+	})
+	runtime := historyRuntime(func(_ context.Context, op string, params map[string]string, _ url.Values, body any, _ string) (*stdhttp.Response, error) {
+		calls++
+		input := body.(runtimeclient.UpdateSessionRequest)
+		if op != "updateAgentSession" || params["sid"] != sid ||
+			input.Action != "rename" || input.Title == nil || *input.Title != "新标题" ||
+			input.ActorID != scope.ActorID.String() || input.ProjectID != scope.ProjectID.String() ||
+			input.OrgID != scope.OrgID.String() || input.ScopeID != scope.ScopeID.String() {
+			t.Fatalf("incorrect trusted mutation: %s %v %+v", op, params, input)
+		}
+		id := sid
+		if mismatch {
+			id = uuid.NewString()
+		}
+		reply := `{"id":"` + id + `","actor_id":"` + input.ActorID + `","org_id":"` + input.OrgID + `","scope_id":"` + input.ScopeID + `","project_id":"` + input.ProjectID + `","title":"新标题","pinned":true}`
+		return &stdhttp.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(reply))}, nil
+	})
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set("principal", scope.Principal()) })
+	NewPublicHandler(nil, access, runtime).Register(router.Group("/api"))
+	path := "/api/projects/" + scope.ProjectID.String() + "/agent/sessions/" + strings.ToUpper(sid)
+	send := func(body string) *httptest.ResponseRecorder {
+		request := httptest.NewRequestWithContext(t.Context(), "PATCH", path, strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		out := httptest.NewRecorder()
+		router.ServeHTTP(out, request)
+		return out
+	}
+	rename := `{"action":"rename","title":" 新标题 "}`
+	if out := send(rename); out.Code != 403 || calls != 0 {
+		t.Fatalf("read-only actor can mutate history: %d %s", out.Code, out.Body)
+	}
+	writable = true
+	if out := send(`{"action":"delete","title":"同时改名"}`); out.Code != 422 || calls != 0 {
+		t.Fatalf("mixed mutation accepted: %d %s", out.Code, out.Body)
+	}
+	if out := send(rename); out.Code != 200 || calls != 1 || !strings.Contains(out.Body.String(), "新标题") {
+		t.Fatalf("rename receipt not returned: %d %s", out.Code, out.Body)
+	}
+	mismatch = true
+	if out := send(rename); out.Code != 404 || calls != 2 {
+		t.Fatalf("unexpected session receipt exposed: %d %s", out.Code, out.Body)
 	}
 }

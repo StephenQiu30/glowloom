@@ -15,7 +15,8 @@ function service() {
   return {
     ready: async () => true,
     createSession: async () => ({}),
-    listSessions: async () => ({ items: [] }),
+    updateSession: async () => ({}),
+  listSessions: async () => ({ items: [] }),
     readSession: async () => undefined,
     createRun: async () => ({}),
     readRun: async () => undefined,

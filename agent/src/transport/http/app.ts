@@ -11,6 +11,7 @@ import { AgentError, type AgentErrorCode } from '../../sessions/errors.js';
 import type { AgentApplication } from '../../sessions/port.js';
 import {
   CreateSessionSchema,
+  UpdateSessionSchema,
   CreateRunSchema,
   ControlSchema,
   SessionViewSchema,
@@ -40,6 +41,7 @@ function checked<S extends TSchema>(schema: S, value: unknown): Static<S> {
 }
 const statusByErrorCode: Record<AgentErrorCode, number> = {
   invalid_cursor: 400,
+  invalid_session_update: 400,
   invalid_event_cursor: 400,
   invalid_snapshot_watermark: 400,
   cursor_snapshot_mismatch: 400,
@@ -177,6 +179,23 @@ export async function buildApp(options: {
       if (result === undefined) throw new AgentError('session_not_found');
       return checked(SessionViewSchema, result);
     },
+  );
+  app.patch(
+    '/internal/agent/sessions/:sid',
+    {
+      schema: {
+        ...secure,
+        operationId: operationIds.updateSession,
+        params: SessionParams,
+        body: UpdateSessionSchema,
+        response: { 200: SessionViewSchema },
+      },
+    },
+    async (req) =>
+      checked(
+        SessionViewSchema,
+        await service.updateSession(req.params.sid, req.body),
+      ),
   );
   app.get(
     '/internal/agent/sessions/:sid/runs',

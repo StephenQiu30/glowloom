@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type {
   CreateSessionInput,
+  UpdateSessionInput,
   CreateRunInput,
   ControlInput,
   Identity,
@@ -45,7 +46,7 @@ export class SessionService implements AgentApplication {
   async ready() {
     try {
       await this.pool.query(
-        'SELECT s.id,r.input,r.retry_of_run_id,m.message_id FROM agent.service_sessions s LEFT JOIN agent.service_runs r ON r.session_id=s.id LEFT JOIN agent.public_messages m ON m.run_id=r.id LIMIT 0',
+        'SELECT s.id,s.pinned,s.archived_at,r.input,r.retry_of_run_id,m.message_id FROM agent.service_sessions s LEFT JOIN agent.service_runs r ON r.session_id=s.id LEFT JOIN agent.public_messages m ON m.run_id=r.id LIMIT 0',
       );
       return !this.stopping;
     } catch {
@@ -55,6 +56,10 @@ export class SessionService implements AgentApplication {
   createSession(input: CreateSessionInput) {
     if (this.stopping) throw new AgentError('shutting_down');
     return this.store.createSession(input);
+  }
+  updateSession(id: string, input: UpdateSessionInput) {
+    if (this.stopping) throw new AgentError('shutting_down');
+    return this.conversations.updateSession(id, input);
   }
   listSessions(who: HistoryInput) {
     return this.conversations.sessions(who);

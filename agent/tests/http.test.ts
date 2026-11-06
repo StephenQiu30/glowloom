@@ -25,6 +25,7 @@ const service = {
       input,
     };
   },
+  updateSession: async () => ({}),
   async listSessions() {
     return [];
   },

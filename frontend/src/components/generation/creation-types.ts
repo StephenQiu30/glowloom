@@ -1,3 +1,5 @@
+import type { PromptDraft } from "@/components/generation/prompt-document";
+
 export const creationTypes = [
   {
     id: "agent",
@@ -47,4 +49,36 @@ export function creationCapability(
     : type === "avatar" || type === "motion"
       ? "video"
       : type;
+}
+
+export function creationComposer(
+  type: CreationType,
+  value: PromptDraft,
+): PromptDraft {
+  const draft = structuredClone(value);
+  if (type === "music") {
+    draft.mode =
+      draft.params.music_mode === "instrumental"
+        ? "music_instrumental"
+        : "music_song";
+    delete draft.params.music_mode;
+    delete draft.params.music_auto_duration;
+    draft.params.duration_ms ??= 60000;
+  }
+  if (type === "avatar" || type === "motion") {
+    draft.mode = type;
+    if (
+      type === "avatar" &&
+      typeof draft.params.avatar_action === "string" &&
+      draft.params.avatar_action
+    )
+      draft.document.content = [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: draft.params.avatar_action }],
+        },
+      ];
+    delete draft.params.avatar_action;
+  }
+  return draft;
 }

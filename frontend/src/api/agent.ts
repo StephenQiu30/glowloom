@@ -55,6 +55,28 @@ export async function getAgentSession(
   );
 }
 
+/** 管理 Agent 对话历史 PATCH /api/projects/${param0}/agent/sessions/${param1} */
+export async function updateAgentSession(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.updateAgentSessionParams,
+  body: API.UpdateSessionRequest,
+  options?: RequestOptions,
+) {
+  const { pid: param0, sid: param1, ...queryParams } = params;
+  return request<API.SessionView>(
+    `/api/projects/${param0}/agent/sessions/${param1}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
 /** 分页读取 Agent 会话全部尝试摘要 GET /api/projects/${param0}/agent/sessions/${param1}/runs */
 export async function listAgentRuns(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

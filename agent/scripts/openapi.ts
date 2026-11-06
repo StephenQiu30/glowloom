@@ -7,6 +7,7 @@ import {
   AuthorizedInputSchema,
   CreateRunSchema,
   CreateSessionSchema,
+  UpdateSessionSchema,
   ControlSchema,
   SessionViewSchema,
   RunSnapshotSchema,
@@ -30,6 +31,7 @@ const service: AgentApplication = {
   createSession: unavailable,
   listSessions: unavailable,
   readSession: unavailable,
+  updateSession: unavailable,
   createRun: unavailable,
   readRun: unavailable,
   command: unavailable,
@@ -71,6 +73,7 @@ type Schema = {
 const goSchemas = {
   AuthorizedInput: AuthorizedInputSchema,
   CreateSessionRequest: CreateSessionSchema,
+  UpdateSessionRequest: UpdateSessionSchema,
   CreateRunRequest: CreateRunSchema,
   ControlRequest: ControlSchema,
   SessionView: SessionViewSchema,

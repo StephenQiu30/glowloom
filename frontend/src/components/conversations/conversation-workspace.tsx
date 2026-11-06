@@ -15,6 +15,7 @@ export function ConversationWorkspace({
   headerActions,
   projectControl,
   projectSetting,
+  alternateComposer,
   onLock,
   embedded = false,
   ...options
@@ -23,6 +24,7 @@ export function ConversationWorkspace({
   headerActions?: ReactNode;
   projectControl?: ReactNode;
   projectSetting?: ReactNode;
+  alternateComposer?: ReactNode;
   onLock?: (locked: boolean) => void;
   embedded?: boolean;
 }) {
@@ -53,7 +55,10 @@ export function ConversationWorkspace({
         <ConversationThread conversation={c} projectID={options.projectID} />
       ) : welcome ? (
         <ConversationWelcome
-          skills={authorized && !c.loading ? c.skills : []}
+          skills={
+            authorized && !c.loading && !alternateComposer ? c.skills : []
+          }
+          showStarters={!alternateComposer}
           selected={c.settings.skills}
           disabled={c.active || c.phase !== "idle"}
           onSelect={(prompt, skill) => {
@@ -124,22 +129,25 @@ export function ConversationWorkspace({
       <div
         className={cn(
           "mx-auto w-full shrink-0",
+          alternateComposer && "conversation-direct-surface",
           welcome ? "max-w-[800px]" : "max-w-[960px]",
         )}
       >
-        <ConversationComposer
-          key={identity}
-          ref={composer}
-          conversation={c}
-          contextKey={identity}
-          projectID={options.projectID}
-          authorized={authorized}
-          onChooseProject={onChooseProject}
-          headerActions={headerActions}
-          projectControl={projectControl}
-          projectSetting={projectSetting}
-          welcome={welcome}
-        />
+        {alternateComposer ?? (
+          <ConversationComposer
+            key={identity}
+            ref={composer}
+            conversation={c}
+            contextKey={identity}
+            projectID={options.projectID}
+            authorized={authorized}
+            onChooseProject={onChooseProject}
+            headerActions={headerActions}
+            projectControl={projectControl}
+            projectSetting={projectSetting}
+            welcome={welcome}
+          />
+        )}
       </div>
     </div>
   );

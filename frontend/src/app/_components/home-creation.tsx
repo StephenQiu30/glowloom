@@ -30,17 +30,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Field, FieldGroup } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectGroup,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useHomeDraftRecovery } from "./home-draft-recovery";
-import { HomePrompt } from "./home-prompt";
+import { CreationEntryPrompt } from "@/components/generation/creation-entry-prompt";
 import { ReferenceControls } from "@/components/generation/reference-controls";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import {
@@ -71,10 +63,12 @@ const RichGeneration = dynamic(
 import {
   creationTypes,
   creationCapability,
+  creationComposer,
   executableCreationType,
   type CreationType,
-} from "./creation-types";
-import { CreationTypeFields } from "./creation-type-fields";
+} from "@/components/generation/creation-types";
+import { CreationTypeSelect } from "@/components/generation/creation-type-select";
+import { CreationTypeFields } from "@/components/generation/creation-type-fields";
 
 type Workspace = {
   project: Project;
@@ -260,28 +254,11 @@ function ScopedHomeCreation() {
     );
   }
   const typeControl = (
-    <Select
+    <CreationTypeSelect
       value={type}
       disabled={locked || switching}
-      onValueChange={(value) => void select(value as CreationType)}
-    >
-      <SelectTrigger
-        aria-label="创作类型"
-        variant="quiet"
-        className="w-auto max-md:min-h-11"
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {creationTypes.map((item) => (
-            <SelectItem key={item.id} value={item.id}>
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+      onChange={(value) => void select(value)}
+    />
   );
 
   return (
@@ -406,7 +383,7 @@ function ScopedHomeCreation() {
                             </InputGroupAddon>
                           )}
                           {type !== "motion" && (
-                            <HomePrompt
+                            <CreationEntryPrompt
                               key={inputKey}
                               contextKey={inputKey}
                               draft={homeDraft}
@@ -562,7 +539,7 @@ function ScopedHomeCreation() {
             }}
           >
             <InputGroup variant="composer" className="canvas-idea">
-              <HomePrompt
+              <CreationEntryPrompt
                 label="画布创作想法"
                 contextKey={`${subjectScope}/home-input:canvas`}
                 draft={canvasDraft}
@@ -592,33 +569,4 @@ function ScopedHomeCreation() {
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
     </section>
   );
-}
-
-function creationComposer(type: CreationType, value: PromptDraft): PromptDraft {
-  const draft = structuredClone(value);
-  if (type === "music") {
-    draft.mode =
-      draft.params.music_mode === "instrumental"
-        ? "music_instrumental"
-        : "music_song";
-    delete draft.params.music_mode;
-    delete draft.params.music_auto_duration;
-    draft.params.duration_ms ??= 60000;
-  }
-  if (type === "avatar" || type === "motion") {
-    draft.mode = type;
-    if (
-      type === "avatar" &&
-      typeof draft.params.avatar_action === "string" &&
-      draft.params.avatar_action
-    )
-      draft.document.content = [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: draft.params.avatar_action }],
-        },
-      ];
-    delete draft.params.avatar_action;
-  }
-  return draft;
 }

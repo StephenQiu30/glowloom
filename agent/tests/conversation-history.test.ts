@@ -339,3 +339,134 @@ it('rejects a message watermark newer than the committed session', async () => {
     history.messages(run.id, { ...who, through: '999999:1' }),
   ).rejects.toThrow(/invalid_snapshot_watermark/);
 });
+
+it('persists scoped history updates, pages pinned items first, and archives only terminal sessions', async () => {
+  const { store, who, session, history } = await fixture();
+  const newest = await store.createSession({
+    ...who,
+    request_id: randomUUID(),
+    content_hash: 'a'.repeat(64),
+    title: '最近',
+  });
+  const admit = (id: string) =>
+    store.admitRun(
+      id,
+      {
+        ...who,
+        request_id: randomUUID(),
+        content_hash: 'a'.repeat(64),
+        goal: '隔离历史测试',
+        expected_execution_revision: 0,
+        input: authorizedText('隔离历史测试'),
+        manifest: {},
+      },
+      manifest,
+    );
+  const run = await admit(session.id);
+  await admit(newest.id);
+  expect((await history.sessions(who)).items.map((r) => r.id)).toEqual([
+    newest.id,
+    session.id,
+  ]);
+  await expect(
+    history.updateSession(session.id, {
+      ...who,
+      scope_id: randomUUID(),
+      action: 'pin',
+    }),
+  ).rejects.toThrow('session_not_found');
+  await expect(
+    history.updateSession(session.id, {
+      ...who,
+      action: 'rename',
+      title: '   ',
+    }),
+  ).rejects.toThrow('invalid_session_update');
+  await history.updateSession(session.id, { ...who, action: 'pin' });
+  await history.updateSession(session.id, { ...who, action: 'pin' });
+  await history.updateSession(session.id, {
+    ...who,
+    action: 'rename',
+    title: '  改名后  ',
+  });
+  const first = await history.sessions({ ...who, limit: 1 });
+  expect(first.items).toMatchObject([
+    { id: session.id, pinned: true, title: '改名后' },
+  ]);
+  expect(
+    (await history.sessions({ ...who, cursor: first.next_cursor! })).items,
+  ).toMatchObject([{ id: newest.id, pinned: false }]);
+  await history.updateSession(session.id, { ...who, action: 'unpin' });
+  expect((await history.sessions(who)).items[0]?.id).toBe(newest.id);
+
+  await expect(
+    history.updateSession(session.id, { ...who, action: 'delete' }),
+  ).rejects.toThrow('session_has_active_run');
+  const owner = await claimSessionOwner(pool, session.id, randomUUID(), 60000);
+  const storage = await openPostgresStorage(pool, session.id, owner, {
+    projectEvents: () => [
+      {
+        type: 'agent.state',
+        payload: { root_run_id: run.id, status: 'completed' },
+      },
+    ],
+  });
+  try {
+    await storage.commit(
+      [[{ type: 'conversation', value: { id: ROOT_CONVERSATION_ID } }]],
+      () => {},
+      BACKGROUND_CONTEXT,
+    );
+  } finally {
+    await storage.close(BACKGROUND_CONTEXT);
+  }
+  await history.updateSession(session.id, { ...who, action: 'delete' });
+  await history.updateSession(session.id, { ...who, action: 'delete' });
+  expect((await history.sessions(who)).items.map((r) => r.id)).toEqual([
+    newest.id,
+  ]);
+  expect(await store.session(session.id, who)).toBeUndefined();
+  expect(await store.run(run.id, who)).toBeUndefined();
+  await expect(admit(session.id)).rejects.toThrow('session_not_found');
+  await expect(
+    history.updateSession(session.id, { ...who, action: 'pin' }),
+  ).rejects.toThrow('session_not_found');
+  expect(
+    (
+      await pool.query('SELECT id FROM agent.service_runs WHERE id=$1', [
+        run.id,
+      ])
+    ).rowCount,
+  ).toBe(1);
+});
+
+it('serializes history deletion with admission on the same session', async () => {
+  const { store, who, session, history } = await fixture();
+  const [admission, removal] = await Promise.allSettled([
+    store.admitRun(
+      session.id,
+      {
+        ...who,
+        request_id: randomUUID(),
+        content_hash: 'a'.repeat(64),
+        goal: '同时受理',
+        expected_execution_revision: 0,
+        input: authorizedText('同时受理'),
+        manifest: {},
+      },
+      manifest,
+    ),
+    history.updateSession(session.id, { ...who, action: 'delete' }),
+  ]);
+  if (admission.status === 'fulfilled') {
+    expect(removal).toMatchObject({
+      status: 'rejected',
+      reason: { code: 'session_has_active_run' },
+    });
+    expect(await store.session(session.id, who)).toBeDefined();
+  } else {
+    expect(admission.reason).toMatchObject({ code: 'session_not_found' });
+    expect(removal.status).toBe('fulfilled');
+    expect(await store.session(session.id, who)).toBeUndefined();
+  }
+});

@@ -5,6 +5,7 @@ export interface PageCursor {
   upper: string;
   before: string;
   id?: string;
+  pinned?: boolean;
 }
 export class ScopedCursors {
   private readonly key = randomBytes(32);

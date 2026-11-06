@@ -1,6 +1,7 @@
 import type {
   CreateRunInput,
   CreateSessionInput,
+  UpdateSessionInput,
   ControlInput,
   HistoryInput,
   Identity,
@@ -16,6 +17,7 @@ export interface RuntimeEvent {
 export interface AgentApplication {
   ready(): Promise<boolean>;
   createSession(input: CreateSessionInput): Promise<unknown>;
+  updateSession(id: string, input: UpdateSessionInput): Promise<unknown>;
   listSessions(identity: HistoryInput): Promise<unknown>;
   readSession(id: string, identity: Identity): Promise<unknown>;
   createRun(sessionId: string, input: CreateRunInput): Promise<unknown>;

@@ -7228,6 +7228,10 @@ GRANT SELECT(resumed_at), UPDATE(resumed_at) ON operation.batch TO glowloom_app;
 ALTER TABLE agent.service_runs ADD COLUMN input jsonb;
 ALTER TABLE agent.service_runs ADD COLUMN retry_of_run_id uuid REFERENCES agent.service_runs(id);
 ALTER TABLE agent.service_sessions ADD COLUMN last_input_at timestamptz;
+-- Additive Agent conversation history metadata.
+ALTER TABLE agent.service_sessions
+ ADD COLUMN pinned boolean NOT NULL DEFAULT false,
+ ADD COLUMN archived_at timestamptz;
 CREATE INDEX service_runs_history ON agent.service_runs(session_id,accepted_revision DESC,id);
 CREATE INDEX service_sessions_input ON agent.service_sessions(actor_id,project_id,last_input_at DESC,id);
 CREATE TABLE agent.public_messages (

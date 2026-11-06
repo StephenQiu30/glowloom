@@ -1083,6 +1083,7 @@ button:not(:disabled),
 .creation-hero[data-mode="canvas"] .creation-toggle {
   margin-bottom: 0;
 }
+.conversation-direct-surface .creation-composer[data-slot="input-group"],
 .creation-hero .creation-composer[data-slot="input-group"],
 .creation-hero .canvas-idea[data-slot="input-group"] {
   background: var(--creation-surface);

@@ -298,7 +298,7 @@ const editorCatalogRoutes: typeof identityRoutes = [
   },
   {
     pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}`,
-    methods: ["GET"],
+    methods: ["GET", "PATCH"],
     query: [],
   },
   {

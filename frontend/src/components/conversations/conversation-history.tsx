@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { listAgentSessions } from "@/api/agent";
 import { useOptionalSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
 import { SidebarMenu } from "@/components/ui/sidebar";
 import { SidebarEmpty } from "@/components/layout/sidebar-empty";
-import { SidebarNavLink } from "@/components/layout/sidebar-nav-link";
+import { useSpace } from "@/components/spaces/space-context";
+import { ConversationHistoryItem } from "./conversation-history-actions";
 import { readErrorMessage } from "@/lib/read-error";
 import { useConversationContext } from "./conversation-context";
 export function ConversationHistory({
@@ -18,6 +19,8 @@ export function ConversationHistory({
   const memory = useConversationContext(),
     session = useOptionalSession(),
     path = usePathname(),
+    router = useRouter(),
+    space = useSpace(),
     [refresh, setRefresh] = useState(0);
   const identity = `${memory?.ownerKey}/${memory?.project?.id ?? "none"}`,
     pid = memory?.project?.id;
@@ -29,6 +32,10 @@ export function ConversationHistory({
     error: string;
   }>({ identity: "", items: [], loading: false, error: "" });
   const generation = useRef<AbortController | null>(null);
+  const location = useRef({ identity, path });
+  useEffect(() => {
+    location.current = { identity, path };
+  }, [identity, path]);
   const current =
     view.identity === identity
       ? view
@@ -37,7 +44,12 @@ export function ConversationHistory({
     const controller = new AbortController();
     generation.current = controller;
     if (!pid || !session) return () => controller.abort();
-    setView({ identity, items: [], loading: true, error: "" });
+    setView((v) => ({
+      identity,
+      items: v.identity === identity ? v.items : [],
+      loading: true,
+      error: "",
+    }));
     void listAgentSessions({ pid }, { signal: controller.signal })
       .then((page) => {
         if (!controller.signal.aborted)
@@ -51,12 +63,12 @@ export function ConversationHistory({
       })
       .catch((error) => {
         if (!controller.signal.aborted)
-          setView({
+          setView((v) => ({
             identity,
-            items: [],
+            items: v.identity === identity ? v.items : [],
             loading: false,
             error: readErrorMessage(error),
-          });
+          }));
       });
     return () => controller.abort();
   }, [identity, pid, session, memory?.listRevision, refresh]);
@@ -101,14 +113,36 @@ export function ConversationHistory({
     <>
       <SidebarMenu>
         {current.items.map((item) => (
-          <SidebarNavLink
-            key={item.id}
-            href={`/conversations/${item.id}?projectId=${pid}`}
-            label={item.title}
+          <ConversationHistoryItem
+            key={`${identity}/${item.id}`}
+            item={item}
+            projectID={pid}
             active={path === `/conversations/${item.id}`}
-            variant="history"
-            size="history"
+            writable={!!space.selected?.writable}
             onNavigate={onNavigate}
+            onChange={(action, updated) => {
+              if (location.current.identity !== identity) return;
+              setView((v) =>
+                v.identity === identity
+                  ? {
+                      ...v,
+                      cursor: undefined,
+                      items:
+                        action === "delete"
+                          ? v.items.filter((row) => row.id !== item.id)
+                          : v.items.map((row) =>
+                              row.id === item.id ? { ...row, ...updated } : row,
+                            ),
+                    }
+                  : v,
+              );
+              memory?.changed();
+              if (
+                action === "delete" &&
+                location.current.path === `/conversations/${item.id}`
+              )
+                router.replace(`/conversations?projectId=${pid}`);
+            }}
           />
         ))}
       </SidebarMenu>

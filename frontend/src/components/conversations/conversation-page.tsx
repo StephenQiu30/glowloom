@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Folder } from "lucide-react";
@@ -19,6 +19,13 @@ import { ProjectPicker } from "@/components/projects/project-picker";
 import { getProject } from "@/api/projects";
 import { requireProject } from "@/components/projects/project";
 import { readErrorMessage } from "@/lib/read-error";
+import { CreationTypeSelect } from "@/components/generation/creation-type-select";
+import {
+  creationTypes,
+  type CreationType,
+} from "@/components/generation/creation-types";
+import type { PromptDraft } from "@/components/generation/prompt-document";
+import { ConversationDirectComposer } from "./conversation-direct-composer";
 import { ConversationWorkspace } from "./conversation-workspace";
 import { useConversationContext } from "./conversation-context";
 export function ConversationPage({
@@ -38,6 +45,21 @@ export function ConversationPage({
       null,
     );
   const owner = `${session?.actor.id ?? "guest"}/${space.selected?.id ?? "none"}`;
+  const [selection, setSelection] = useState<{
+    key: string;
+    type: CreationType;
+  }>({
+    key: "",
+    type: "agent",
+  });
+  const [agentLocked, setAgentLocked] = useState(false);
+  const [directLocked, setDirectLocked] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState("");
+  const switchFlight = useRef(false);
+  const guard = useRef<(() => Promise<boolean>) | null>(null);
+  const [drafts, setDrafts] = useState(() => new Map<string, PromptDraft>());
+  const [draftIDs, setDraftIDs] = useState(() => new Map<string, string>());
   const project = memory?.project;
   const selectProject = memory?.selectProject;
   useEffect(() => {
@@ -61,6 +83,73 @@ export function ConversationPage({
   const selectedID = projectID ?? project?.id ?? "",
     writable = !!session && !!space.selected?.writable;
   const selectedProject = project?.id === selectedID ? project : null;
+  const scopeKey = `${owner}/${sessionID ?? "new"}`;
+  const type = selection.key === scopeKey ? selection.type : "agent";
+  const modeKey = `${scopeKey}/${selectedID}/${type}`;
+  async function chooseProject() {
+    if (!session) {
+      login();
+      return;
+    }
+    if (sessionID || agentLocked || directLocked || switchFlight.current)
+      return;
+    switchFlight.current = true;
+    setSwitching(true);
+    try {
+      if (guard.current && !(await guard.current())) {
+        setSwitchError(
+          "当前草稿尚未确认保存，请处理保存或未决生成后再切换项目。",
+        );
+        return;
+      }
+      setOpen(true);
+    } catch {
+      setSwitchError("草稿保存尚未确认，当前输入已保留，请重试。");
+    } finally {
+      switchFlight.current = false;
+      setSwitching(false);
+    }
+  }
+  async function changeType(next: CreationType) {
+    if (next === type || agentLocked || directLocked || switchFlight.current)
+      return;
+    switchFlight.current = true;
+    setSwitching(true);
+    setSwitchError("");
+    try {
+      if (guard.current && !(await guard.current())) {
+        setSwitchError("当前草稿尚未确认保存，请处理保存或未决生成后再切换。");
+        return;
+      }
+      setSelection({ key: scopeKey, type: next });
+    } catch {
+      setSwitchError("草稿保存尚未确认，当前输入已保留，请重试。");
+    } finally {
+      switchFlight.current = false;
+      setSwitching(false);
+    }
+  }
+  const typeControl = (
+    <CreationTypeSelect
+      value={type}
+      disabled={agentLocked || directLocked || switching}
+      onChange={(next) => void changeType(next)}
+    />
+  );
+  const projectSetting =
+    !sessionID && session ? (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-label="选择所属项目"
+        disabled={switching || directLocked}
+        onClick={chooseProject}
+      >
+        <Folder data-icon="inline-start" />
+        <span className="truncate">{selectedProject?.name ?? "选择项目"}</span>
+      </Button>
+    ) : null;
   return (
     <div
       className={cn(
@@ -105,6 +194,19 @@ export function ConversationPage({
                   !memory?.readDraft(`${next.id}/new`)
                 )
                   memory?.saveDraft(`${next.id}/new`, draft);
+                if (!selectedID)
+                  setDrafts((current) => {
+                    const updated = new Map(current);
+                    for (const kind of creationTypes) {
+                      const source = `${scopeKey}//${kind.id}`;
+                      const target = `${scopeKey}/${next.id}/${kind.id}`;
+                      const value = current.get(source);
+                      if (value && !current.has(target))
+                        updated.set(target, value);
+                      updated.delete(source);
+                    }
+                    return updated;
+                  });
                 memory?.selectProject(next);
                 setOpen(false);
                 router.push(`/conversations?projectId=${next.id}`);
@@ -118,32 +220,50 @@ export function ConversationPage({
           {failure.text}
         </p>
       ) : null}
+      {switchError && (
+        <p className="mx-auto mb-2 text-sm" role="alert">
+          {switchError}
+        </p>
+      )}
       <ConversationWorkspace
         key={`${owner}/${selectedID}/${sessionID ?? "new"}`}
         ownerKey={owner}
         projectID={selectedID}
         sessionID={sessionID}
         enabled={writable && !!selectedID && !(failure?.owner === owner)}
-        projectSetting={
-          !sessionID && session ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label="选择所属项目"
-              onClick={() => setOpen(true)}
-            >
-              <Folder data-icon="inline-start" />
-              <span className="truncate">
-                {selectedProject?.name ?? "选择项目"}
-              </span>
-            </Button>
-          ) : null
+        projectSetting={projectSetting}
+        headerActions={typeControl}
+        onLock={setAgentLocked}
+        alternateComposer={
+          type === "agent" ? undefined : (
+            <ConversationDirectComposer
+              key={`${modeKey}/${writable && selectedProject ? "project" : "prepare"}`}
+              type={type}
+              contextKey={modeKey}
+              project={writable ? selectedProject : null}
+              draft={drafts.get(modeKey)}
+              draftID={draftIDs.get(modeKey)}
+              onChange={(draft) => {
+                setDrafts((current) => new Map(current).set(modeKey, draft));
+              }}
+              onDraftReady={(id) => {
+                setDraftIDs((current) =>
+                  current.get(modeKey) === id
+                    ? current
+                    : new Map(current).set(modeKey, id),
+                );
+              }}
+              onLock={setDirectLocked}
+              onCloseGuard={(next) => {
+                guard.current = next;
+              }}
+              onChooseProject={chooseProject}
+              typeControl={typeControl}
+              projectSetting={projectSetting}
+            />
+          )
         }
-        onChooseProject={() => {
-          if (!session) login();
-          else setOpen(true);
-        }}
+        onChooseProject={chooseProject}
         onAccepted={(id) => {
           if (!sessionID)
             router.replace(`/conversations/${id}?projectId=${selectedID}`);
