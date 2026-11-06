@@ -258,13 +258,9 @@ function ConnectWizard({
       );
       const ids = result.model_ids ?? [];
       setOnline(ids);
-      setStep(2);
-      if (!ids.length)
-        setNotice("目录没有返回模型，可以使用预置模型或手动添加。");
+      if (!ids.length) setNotice("在线目录暂无模型。");
     } catch {
-      setNotice(
-        "暂时无法读取目录。可核对凭据后重试，或继续使用预置模型和手动添加。",
-      );
+      setNotice("在线目录读取失败，请检查 Key 后重试。");
     } finally {
       inFlight.current = false;
       setBusy(null);
@@ -539,9 +535,23 @@ function ConnectWizard({
             className="flex min-h-0 min-w-0 flex-col gap-4"
           >
             <FieldLegend className="sr-only">选择模型</FieldLegend>
-            <p className="min-w-0 font-medium wrap-anywhere">
-              {preset?.document?.name ?? preset?.slug}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="min-w-0 font-medium wrap-anywhere">
+                {preset?.document?.name ?? preset?.slug}
+              </p>
+              {canRead ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void readDirectory()}
+                >
+                  {busy === "read" ? (
+                    <Spinner data-icon="inline-start" />
+                  ) : null}
+                  {busy === "read" ? "正在读取…" : "读取在线目录"}
+                </Button>
+              ) : null}
+            </div>
             <ModelCatalogChoices
               models={models}
               online={online}
@@ -691,23 +701,9 @@ function ConnectWizard({
             >
               取消
             </Button>
-            <Button
-              type="submit"
-              variant={canRead ? "outline" : "default"}
-              disabled={!hasCredentials || !!busy}
-            >
-              {models.length ? "查看预置模型" : "手动添加模型"}
+            <Button type="submit" disabled={!hasCredentials || !!busy}>
+              选择模型
             </Button>
-            {canRead && (
-              <Button
-                type="button"
-                disabled={!hasCredentials || !!busy}
-                onClick={() => void readDirectory()}
-              >
-                {busy === "read" && <Spinner data-icon="inline-start" />}
-                {busy === "read" ? "正在读取…" : "读取模型"}
-              </Button>
-            )}
           </>
         ) : (
           <>

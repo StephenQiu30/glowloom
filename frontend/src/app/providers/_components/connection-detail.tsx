@@ -147,6 +147,52 @@ export function ConnectionDetail({
   const config = settings?.config;
   const credentials = settings?.credentials ?? [];
 
+  const archiveAction = provider ? (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant={archived ? "outline" : "ghost"}
+          size="toolbar"
+          disabled={keyBusy}
+        >
+          {archived ? "恢复连接" : "归档连接"}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {archived ? "恢复连接？" : "归档连接？"}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {archived
+              ? "连接将恢复为未启用。启用后才能接收新任务。"
+              : "归档后停止接收新任务，保留模型、凭据和任务记录。"}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogAction
+            variant={archived ? "default" : "destructive"}
+            disabled={keyBusy}
+            onClick={() =>
+              void mutation.run("provider.update", id, (requestID) =>
+                updateAdminProvider(
+                  { id },
+                  {
+                    expected_revision: provider.revision,
+                    status: archived ? "disabled" : "archived",
+                  },
+                  { headers: { "Idempotency-Key": requestID } },
+                ),
+              )
+            }
+          >
+            {archived ? "确认恢复" : "确认归档"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  ) : null;
   return (
     <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
       <header className="flex flex-col gap-2 pr-8">
@@ -158,13 +204,15 @@ export function ConnectionDetail({
           {providerConnectionName(provider) ?? "连接详情"}
         </Title>
         {provider ? (
-          <Badge variant="secondary">
-            {archived
-              ? "已归档"
-              : provider.status === "active"
-                ? "已启用"
-                : "未启用"}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">
+              {archived
+                ? "已归档"
+                : provider.status === "active"
+                  ? "已启用"
+                  : "未启用"}
+            </Badge>
+          </div>
         ) : null}
       </header>
       {detailError ? (
@@ -304,7 +352,9 @@ export function ConnectionDetail({
             </form>
           ) : (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">API Key</span>
+              <span className="text-sm font-medium">
+                {musicCredential ? "密钥已配置" : "API Key 已配置"}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
@@ -314,6 +364,21 @@ export function ConnectionDetail({
               </Button>
             </div>
           )}
+          <Toolbar aria-label="连接操作" className="flex-wrap">
+            <Button variant="outline" size="toolbar" asChild>
+              <Link href={`/models?provider=${encodeURIComponent(id)}`}>
+                模型管理
+              </Link>
+            </Button>
+            {!archived ? (
+              <Button variant="outline" size="toolbar" asChild>
+                <Link href={`/models?provider=${encodeURIComponent(id)}&add=1`}>
+                  添加模型
+                </Link>
+              </Button>
+            ) : null}
+            {archived ? archiveAction : null}
+          </Toolbar>
           {credentialID && !archived ? (
             <>
               <Separator />
@@ -329,113 +394,6 @@ export function ConnectionDetail({
               />
             </>
           ) : null}
-          <Separator />
-          {!archived && onReview && (
-            <Button
-              variant="outline"
-              type="button"
-              className="max-md:min-h-11"
-              onClick={(event) => onReview(event.currentTarget)}
-            >
-              发布复核
-            </Button>
-          )}
-          <Toolbar aria-label="连接操作" className="flex-wrap">
-            {!archived && (
-              <Button variant="outline" size="toolbar" asChild>
-                <Link href={`/models?provider=${encodeURIComponent(id)}&add=1`}>
-                  添加模型
-                </Link>
-              </Button>
-            )}
-            <Button variant="outline" size="toolbar" asChild>
-              <Link href={`/models?provider=${encodeURIComponent(id)}`}>
-                模型管理
-              </Link>
-            </Button>
-            {provider?.status === "active" ? (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="toolbar">
-                    停用连接
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>停用连接？</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      停用后不能创建新任务，已有任务仍可恢复。
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>取消</AlertDialogCancel>
-                    <AlertDialogAction
-                      variant="outline"
-                      disabled={mutation.busy}
-                      onClick={() =>
-                        void mutation.run("provider.update", id, (requestID) =>
-                          updateAdminProvider(
-                            { id },
-                            {
-                              expected_revision: provider.revision,
-                              status: "disabled",
-                            },
-                            { headers: { "Idempotency-Key": requestID } },
-                          ),
-                        )
-                      }
-                    >
-                      停用连接（停止新任务）
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            ) : null}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant={archived ? "outline" : "ghost"}
-                  size="toolbar"
-                  disabled={keyBusy}
-                >
-                  {archived ? "恢复连接" : "归档连接"}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    {archived ? "恢复连接？" : "归档连接？"}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {archived
-                      ? "连接将恢复为未启用。启用后才能接收新任务。"
-                      : "归档后停止接收新任务，保留模型、凭据和任务记录。"}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>取消</AlertDialogCancel>
-                  <AlertDialogAction
-                    variant={archived ? "default" : "destructive"}
-                    disabled={keyBusy}
-                    onClick={() =>
-                      void mutation.run("provider.update", id, (requestID) =>
-                        updateAdminProvider(
-                          { id },
-                          {
-                            expected_revision: provider.revision,
-                            status: archived ? "disabled" : "archived",
-                          },
-                          { headers: { "Idempotency-Key": requestID } },
-                        ),
-                      )
-                    }
-                  >
-                    {archived ? "确认恢复" : "确认归档"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </Toolbar>
           <Collapsible open={advanced} onOpenChange={setAdvanced}>
             <CollapsibleTrigger asChild>
               <Button
@@ -450,6 +408,60 @@ export function ConnectionDetail({
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-col gap-4">
+              <Toolbar aria-label="连接维护" className="flex-wrap">
+                {!archived && onReview && (
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="max-md:min-h-11"
+                    onClick={(event) => onReview(event.currentTarget)}
+                  >
+                    发布复核
+                  </Button>
+                )}
+                {provider?.status === "active" ? (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="toolbar">
+                        停用连接
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>停用连接？</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          停用后不能创建新任务，已有任务仍可恢复。
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>取消</AlertDialogCancel>
+                        <AlertDialogAction
+                          variant="outline"
+                          disabled={mutation.busy}
+                          onClick={() =>
+                            void mutation.run(
+                              "provider.update",
+                              id,
+                              (requestID) =>
+                                updateAdminProvider(
+                                  { id },
+                                  {
+                                    expected_revision: provider.revision,
+                                    status: "disabled",
+                                  },
+                                  { headers: { "Idempotency-Key": requestID } },
+                                ),
+                            )
+                          }
+                        >
+                          停用连接（停止新任务）
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : null}
+                {!archived ? archiveAction : null}
+              </Toolbar>
               <form
                 key={provider.revision}
                 className="flex flex-col gap-2"
@@ -510,14 +522,11 @@ export function ConnectionDetail({
                 <div className="flex flex-col gap-4">
                   <FieldGroup>
                     <Field>
-                      <FieldLabel>绑定预设版本</FieldLabel>
+                      <FieldLabel>当前预设</FieldLabel>
                       <p className="text-sm break-all">
                         {presets.find(
                           (p) => p.version_id === config.preset_version_id,
-                        )?.document?.name ??
-                          config.preset_version_id ??
-                          "未知"}{" "}
-                        · 配置 v{config.version ?? "未知"}
+                        )?.document?.name ?? "当前预设不可用"}
                       </p>
                     </Field>
                     <Field>
@@ -529,14 +538,11 @@ export function ConnectionDetail({
                   </FieldGroup>
                   <h3 className="font-medium">配置升级</h3>
                   <p className="text-xs text-muted-foreground">
-                    仅升级连接配置。模型模板用于新建连接，已有模型的参数和价格需单独发布。
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    保存配置只更新候选快照。现有模型发布和任务继续使用原快照。
+                    已发布模型和历史任务继续使用原配置。
                   </p>
                   <Field>
                     <FieldLabel htmlFor={`${formFieldId}-field-2`}>
-                      <span>目标预设版本</span>
+                      <span>更新为</span>
                     </FieldLabel>
                     <Select
                       value={target}
@@ -549,7 +555,7 @@ export function ConnectionDetail({
                         id={`${formFieldId}-field-2`}
                         className="mt-1 h-10 w-full"
                       >
-                        <SelectValue placeholder={"选择同一预设的新版本"} />
+                        <SelectValue placeholder="选择预设" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
@@ -567,7 +573,10 @@ export function ConnectionDetail({
                                   key={p.version_id}
                                   value={p.version_id}
                                 >
-                                  {p.document?.name} v{p.version}
+                                  {p.document?.name ?? p.slug}
+                                  {p.updated_at
+                                    ? ` · ${new Date(p.updated_at).toLocaleDateString("zh-CN")}`
+                                    : ""}
                                 </SelectItem>
                               ) : null,
                             )}

@@ -284,17 +284,12 @@ export function ConnectionOnboarding({
             </DialogDescription>
           </DialogHeader>
           <p className="text-xs break-all text-muted-foreground">
-            检查标识：{investigationCheck?.id}
-            <br />
             请求标识：{investigationCheck?.request_id ?? "历史记录未提供"}
             <br />
             发起时间：
             {investigationCheck?.created_at
               ? new Date(investigationCheck.created_at).toLocaleString()
               : "未知"}
-          </p>
-          <p className="text-xs break-all text-muted-foreground">
-            原凭据引用：{investigationCheck?.credential_id ?? "历史记录未提供"}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button

@@ -107,10 +107,18 @@ export function PresetModels({
       .then(([d, r]) => {
         if (!controller.signal.aborted) {
           setDetail(d);
-          setReleases(
-            r.items?.filter(
-              (r) => r.status === "active" || r.status === "draft",
-            ) ?? [],
+          const available = (r.items ?? []).filter(
+            (release) =>
+              release.id &&
+              release.upstream_cost?.source &&
+              (release.status === "active" || release.status === "draft"),
+          );
+          setReleases(available);
+          setReleaseID(
+            (
+              available.find((release) => release.status === "active") ??
+              (available.length === 1 ? available[0] : undefined)
+            )?.id ?? "",
           );
           setLoading(false);
         }
@@ -201,10 +209,10 @@ export function PresetModels({
               </SelectContent>
             </Select>
           </Field>
-          {source ? (
+          {releases.length > 1 ? (
             <Field>
               <FieldLabel htmlFor={`${fieldID}-release`}>
-                来源发布组合
+                复制哪次发布
               </FieldLabel>
               <Select
                 value={releaseID}
@@ -212,18 +220,17 @@ export function PresetModels({
                 onValueChange={(value) => setReleaseID(value)}
               >
                 <SelectTrigger id={`${fieldID}-release`} className="w-full">
-                  <SelectValue
-                    placeholder={
-                      loading ? "正在读取发布…" : "选择明确的模型与价格版本"
-                    }
-                  />
+                  <SelectValue placeholder={"选择发布记录"} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     {releases.map((r) =>
                       r.id ? (
                         <SelectItem key={r.id} value={r.id}>
-                          {r.status === "active" ? "已上线" : "待验证"} · {r.id}
+                          {r.status === "active" ? "当前发布" : "待发布"}
+                          {r.created_at
+                            ? ` · ${new Date(r.created_at).toLocaleString("zh-CN")}`
+                            : ""}
                         </SelectItem>
                       ) : null,
                     )}
@@ -234,7 +241,7 @@ export function PresetModels({
           ) : null}
           {source && !loading && !releases.length ? (
             <p className="text-sm text-muted-foreground">
-              此模型尚无发布组合，请先在模型配置中补齐参数、价格与上游成本。
+              此模型暂无可复制的发布。
             </p>
           ) : null}
           <Button

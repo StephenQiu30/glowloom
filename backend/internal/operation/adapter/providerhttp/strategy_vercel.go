@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -97,42 +96,26 @@ func (s *VercelStrategy) Probe(ctx context.Context, c *Client, config catalogdom
 		return result
 	}
 
-	authData, status, err := c.request(ctx, config, key, http.MethodGet, "/models", nil, 1<<20)
+	// The public model catalog does not authenticate the key.
+	body, status, err := c.request(ctx, config, key, http.MethodGet, "/credits", nil, 16<<10)
 	if err != nil {
 		result.Auth = "unreachable"
 		return result
 	}
 	result.HTTPStatus = status
-	if status != 200 {
-		result.Auth = safeHTTPErrorBody(status, authData)
+	if status != http.StatusOK {
+		result.Auth = safeHTTPErrorBody(status, body)
 		return result
 	}
-	var response struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
+	var credits struct {
+		Balance   string `json:"balance"`
+		TotalUsed string `json:"total_used"`
 	}
-	if json.Unmarshal(authData, &response) != nil || response.Data == nil || len(response.Data) > 500 {
-		result.Auth, result.Discovery = "invalid_response", "invalid_response"
+	if json.Unmarshal(body, &credits) != nil || credits.Balance == "" || credits.TotalUsed == "" {
+		result.Auth = "invalid_response"
 		return result
 	}
-	for _, model := range response.Data {
-		if model.ID == "" || len(model.ID) > 256 {
-			result.Auth, result.Discovery = "invalid_response", "invalid_response"
-			return result
-		}
-		capability := "text.generate"
-		if strings.HasPrefix(model.ID, "gpt-image-") || model.ID == "chatgpt-image-latest" || model.ID == "dall-e-3" || model.ID == "dall-e-2" {
-			capability = "image.generate"
-		}
-		result.Candidates = append(result.Candidates, catalogapp.ModelCandidate{
-			ProviderModelID: model.ID,
-			DisplayName:     model.ID,
-			Capability:      capability,
-			Metadata:        json.RawMessage(`{"verified":false}`),
-		})
-	}
-	result.Auth, result.Discovery = "ok", "ok"
+	result.Auth = "ok"
 	return result
 }
 

@@ -50,6 +50,10 @@ func (s *publishPriceStore) PublishPriceRuleWithAudit(_ context.Context, actor i
 	return price, nil
 }
 
+func (s *publishPriceStore) PublishOfficialPriceWithAudit(ctx context.Context, actor identityapp.Principal, _, sale domain.PriceRuleVersion, revision int64, events [2]identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
+	return s.PublishPriceRuleWithAudit(ctx, actor, sale, revision+1, events[1])
+}
+
 func validPublishPriceRuleInput(modelID uuid.UUID) catalogapp.PublishPriceRuleInput {
 	return catalogapp.PublishPriceRuleInput{
 		SourceURL: "https://example.invalid/prices", ReviewedAt: priceReviewedFixtureTime(),

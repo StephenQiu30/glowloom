@@ -112,9 +112,9 @@ it("连接详情跳转后预选连接，由服务端筛选模型并保留全部�
     screen.getByRole("link", { name: "查看全部模型" }).getAttribute("href"),
   ).toBe("/models");
   fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
-  expect(screen.getByRole("combobox", { name: "供应商" }).textContent).toBe(
-    "OpenAI",
-  );
+  const dialog = screen.getByRole("dialog", { name: "添加模型" });
+  expect(dialog.textContent).toContain("OpenAI");
+  expect(screen.queryByRole("combobox", { name: "供应商" })).toBeNull();
   expect(api.models.mock.calls[0][0]).toHaveProperty(
     "provider_id",
     "connection",

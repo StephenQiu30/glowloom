@@ -39,14 +39,17 @@ import {
   FieldLabel,
   FieldGroup,
 } from "@/components/ui/field";
-import { useEffect, useState, useId } from "react";
+import { useEffect, useState, useId, useRef, type FormEvent } from "react";
 import {
   ModelSetup,
   PriceSetup,
   modelConfiguration,
   priceRule,
 } from "./model-setup";
-import { ProviderTrial } from "@/components/catalog/provider-trial";
+import { useProviderCatalogProbe } from "@/components/catalog/provider-catalog-probe";
+import { testErrorMessage } from "@/app/providers/_components/testing-status";
+import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -88,7 +91,9 @@ export function ModelDetail({
   const [view, setView] = useState<string>(initialView);
   const [priceUnit, setPriceUnit] = useState<string | null>(null);
   const [priceCurrency, setPriceCurrency] = useState<string | null>(null);
-  const [pricePurpose, setPricePurpose] = useState<"procurement" | "sale">();
+  const priceStart = useRef<{ request: string; effectiveFrom: string } | null>(
+    null,
+  );
   const [advancedOpen, setAdvancedOpen] = useState<boolean | null>(null);
   const [detail, setDetail] = useState<API.AdminModelDetail | null>(null);
   const [config, setConfig] = useState<API.ConnectionConfig | null>(null);
@@ -138,41 +143,130 @@ export function ModelDetail({
   }, [id, readAttempt]);
   const model = detail?.model;
   const archived = model?.status === "archived";
-  const providerStatus = providers.find(
+  const connection = providers.find(
     (item) => item.provider?.id === model?.provider_id,
-  )?.provider?.status;
+  );
+  const providerStatus = connection?.provider?.status;
+  const credentialID =
+    connection?.credential?.status === "active"
+      ? connection.credential.id
+      : undefined;
+  const probe = useProviderCatalogProbe(
+    model?.provider_id ?? "",
+    `model.release.check.${id}`,
+  );
   const latest = detail?.versions?.[0];
   const latestPrice = detail?.prices?.[0];
-  const procurementPrices = detail?.prices?.filter(isProcurementPrice) ?? [];
-  const procurement = procurementPrices[0];
+  const procurement = detail?.prices?.find(isProcurementPrice);
   const sale = detail?.prices?.find(
     (price) => typeof price.rule?.procurement_price_version_id === "string",
   );
-  const hasSeparatePrices =
-    pricingReview || !!detail?.candidate?.model || !!sale;
-  const purpose = pricePurpose ?? (procurement ? "sale" : "procurement");
-  const editablePrice = hasSeparatePrices
-    ? purpose === "procurement"
-      ? procurement
-      : sale
-    : latestPrice;
-  const currency = hasSeparatePrices
-    ? (priceCurrency ?? editablePrice?.currency ?? "CNY")
-    : "CNY";
-  const unit =
-    priceUnit ??
-    editablePrice?.unit ??
-    (hasSeparatePrices ? (procurement?.unit ?? "") : "per_request");
-  function choosePricePurpose(value: string) {
-    if (value !== "procurement" && value !== "sale") return;
-    setPricePurpose(value);
-    setPriceCurrency(null);
-    setPriceUnit(null);
-  }
+  const editablePrice = procurement ?? latestPrice;
+  const officialRule = editablePrice?.rule
+    ? Object.fromEntries(
+        Object.entries(editablePrice.rule).filter(
+          ([key]) =>
+            ![
+              "procurement_price_version_id",
+              "markup_multiplier",
+              "credit_ratio",
+            ].includes(key),
+        ),
+      )
+    : undefined;
+  const currency = priceCurrency ?? editablePrice?.currency ?? "CNY";
+  const unit = priceUnit ?? editablePrice?.unit ?? "";
   const active = releases.find((r) => r.status === "active");
   const currentDefault = defaults.find(
     (d) => d.capability === model?.capability,
   );
+  const versionID = model?.current_version_id ?? latest?.id;
+  const priceID =
+    sale?.id ??
+    (!detail?.candidate?.model && !pricingReview ? latestPrice?.id : undefined);
+  const configID = config?.id;
+  const check = probe.data;
+  const checkID =
+    check?.current &&
+    check.status === "completed" &&
+    check.kind === "credential_auth" &&
+    check.auth_result === "ok" &&
+    check.adapter_result === "ok" &&
+    check.config_version_id === configID &&
+    check.credential_id === credentialID
+      ? check.id
+      : undefined;
+  const matchesSavedSettings = (release: API.ModelRelease) =>
+    release.model_version_id === versionID &&
+    release.price_version_id === priceID &&
+    release.config_version_id === configID;
+  const published = model?.status === "active" && providerStatus === "active";
+  const upToDate = published && !!active && matchesSavedSettings(active);
+  const checking = probe.running || probe.mutation.busy;
+  let checkMessage = "发布前请验证 Key 和服务可用性。";
+  if (providerStatus === "archived") {
+    checkMessage = "请先恢复服务连接。";
+  } else if (!credentialID) {
+    checkMessage = "请先在 AI 服务中保存 Key。";
+  } else if (checking) {
+    checkMessage = "正在验证 Key 和服务…";
+  } else if (probe.error) {
+    checkMessage = catalogMessage(probe.error);
+  } else if (checkID) {
+    checkMessage = "Key 有效，服务可访问。";
+  } else if (check && !check.current) {
+    checkMessage = "连接配置或 Key 已变更，请重新验证。";
+  } else if (check?.auth_result === "unsupported") {
+    checkMessage = "该服务暂不支持只读鉴权。";
+  } else if (check) {
+    checkMessage = testErrorMessage(
+      check.error_code ?? check.auth_result ?? "",
+    );
+  }
+
+  async function publish() {
+    if (!versionID || !priceID || !configID || !checkID) return;
+    const existing =
+      active && matchesSavedSettings(active)
+        ? active
+        : releases.find(
+            (release) =>
+              release.status === "draft" && matchesSavedSettings(release),
+          );
+    const release =
+      existing ??
+      (await mutation.run("release.create", id, (request) =>
+        createModelRelease(
+          { id },
+          {
+            request_id: request,
+            model_version_id: versionID,
+            price_version_id: priceID,
+            config_version_id: configID,
+          },
+        ),
+      ));
+    if (!release?.id) return;
+    const releaseID = release.id;
+    const keepDefault =
+      !!active?.id && currentDefault?.release_id === active.id;
+    await mutation.run("release.activate", releaseID, (request) =>
+      activateModelRelease(
+        { id: releaseID },
+        {
+          request_id: request,
+          credential_check_id: checkID,
+          expected_revision: release.revision,
+          expected_model_revision: model?.revision,
+          expected_active_release_id: active?.id,
+          enable_provider: providerStatus === "disabled",
+          set_default: keepDefault && active?.id !== releaseID,
+          expected_default_revision: currentDefault?.revision ?? 0,
+        },
+      ),
+    );
+  }
+
   const modes = (
     capabilities.find((c) => c.key === model?.capability)?.modes ?? []
   ).filter((mode) =>
@@ -185,68 +279,54 @@ export function ModelDetail({
       "omni_reference",
     ].includes(mode),
   );
-  const priceForm = detail ? (
-    <form
-      key={hasSeparatePrices ? purpose : "price"}
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const f = new FormData(e.currentTarget);
-        try {
-          const rule = priceRule(f);
-          if (
-            hasSeparatePrices &&
-            purpose === "procurement" &&
-            (rule.markup_multiplier !== undefined ||
-              rule.procurement_price_version_id !== undefined)
-          )
-            throw new Error("采购价不能关联其他价目或包含销售加价。");
-          if (
-            hasSeparatePrices &&
-            purpose === "sale" &&
-            !procurementPrices.some(
-              (price) =>
-                price.id === rule.procurement_price_version_id &&
-                price.unit === unit,
-            )
-          )
-            throw new Error("请选择同一计量方式的已审核采购价。");
-          await mutation.run("model.price", id, (request) =>
-            publishAdminModelPrice(
-              { id },
-              {
-                expected_revision: model?.revision,
-                version_no: (latestPrice?.version_no ?? 0) + 1,
-                unit: String(f.get("unit")) as API.PriceUnit,
-                source_url: String(f.get("source_url")),
-                reviewed_at: new Date(
-                  String(f.get("reviewed_at")),
-                ).toISOString(),
-                rule,
-                currency,
-                fx_rate_to_cny:
-                  currency === "CNY"
-                    ? undefined
-                    : String(f.get("fx_rate") ?? ""),
-                effective_from: new Date(
-                  String(f.get("effective")),
-                ).toISOString(),
-              },
-              { headers: { "Idempotency-Key": request } },
-            ),
-          );
-        } catch (e) {
-          setError(catalogMessage(e));
+  async function savePrice(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    try {
+      const rule = priceRule(f);
+      await mutation.run("model.price", id, (request) => {
+        if (priceStart.current?.request !== request) {
+          priceStart.current = {
+            request,
+            effectiveFrom: new Date().toISOString(),
+          };
         }
-      }}
-    >
+        return publishAdminModelPrice(
+          { id },
+          {
+            use_official_rate: true,
+            expected_revision: model?.revision,
+            version_no: (latestPrice?.version_no ?? 0) + 1,
+            unit: String(f.get("unit")) as API.PriceUnit,
+            source_url: String(f.get("source_url")),
+            reviewed_at: priceStart.current.effectiveFrom,
+            rule,
+            currency,
+            fx_rate_to_cny:
+              currency === "CNY" ? undefined : String(f.get("fx_rate") ?? ""),
+            effective_from: priceStart.current.effectiveFrom,
+          },
+          { headers: { "Idempotency-Key": request } },
+        );
+      });
+    } catch (e) {
+      setError(catalogMessage(e));
+    }
+  }
+  const priceForm = detail ? (
+    <form key={editablePrice?.id ?? "official"} onSubmit={savePrice}>
       <FieldGroup className="gap-3">
-        {hasSeparatePrices && (
-          <p className="text-sm text-muted-foreground">
-            {editablePrice
-              ? `v${editablePrice.version_no} · ${purpose === "procurement" ? "已核验" : active?.price_version_id === editablePrice.id ? "已发布" : "已保存"}`
-              : "待补价"}
-          </p>
-        )}
+        <div>
+          <Badge variant="secondary">
+            {priceID
+              ? active?.price_version_id === priceID
+                ? "已发布"
+                : "待发布"
+              : procurement
+                ? "待保存同价"
+                : "待核验"}
+          </Badge>
+        </div>
         <Field>
           <FieldLabel htmlFor={`${formFieldId}-field-4`}>
             <span>计费方式</span>
@@ -265,83 +345,53 @@ export function ModelDetail({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {Object.entries(pricingUnits)
-                  .filter(
-                    ([key]) =>
-                      !hasSeparatePrices ||
-                      purpose !== "sale" ||
-                      procurementPrices.some((price) => price.unit === key),
-                  )
-                  .map(([key, label]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
-                    </SelectItem>
-                  ))}
+                {Object.entries(pricingUnits).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
               </SelectGroup>
             </SelectContent>
           </Select>
         </Field>
-        {hasSeparatePrices && (
-          <FieldGroup className="grid gap-3 sm:grid-cols-2">
+        <FieldGroup className="grid gap-3 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-currency`}>币种</FieldLabel>
+            <Select value={currency} onValueChange={setPriceCurrency}>
+              <SelectTrigger id={`${formFieldId}-currency`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="CNY">CNY</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          {currency !== "CNY" && (
             <Field>
-              <FieldLabel htmlFor={`${formFieldId}-currency`}>币种</FieldLabel>
-              <Select value={currency} onValueChange={setPriceCurrency}>
-                <SelectTrigger id={`${formFieldId}-currency`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="CNY">CNY</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              <FieldLabel htmlFor={`${formFieldId}-fx`}>
+                兑人民币汇率
+              </FieldLabel>
+              <Input
+                id={`${formFieldId}-fx`}
+                name="fx_rate"
+                required
+                type="number"
+                min="0.000001"
+                step="0.000001"
+                defaultValue={editablePrice?.fx_rate_to_cny ?? undefined}
+              />
             </Field>
-            {currency !== "CNY" && (
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-fx`}>
-                  兑人民币汇率
-                </FieldLabel>
-                <Input
-                  id={`${formFieldId}-fx`}
-                  name="fx_rate"
-                  required
-                  type="number"
-                  min="0.000001"
-                  step="0.000001"
-                  defaultValue={editablePrice?.fx_rate_to_cny ?? undefined}
-                />
-              </Field>
-            )}
-          </FieldGroup>
-        )}
-        <PriceSetup
-          key={editablePrice?.id ?? "new"}
-          unit={unit}
-          rule={editablePrice?.rule}
-          prices={detail?.prices}
-          currency={hasSeparatePrices ? currency : undefined}
-          procurementOnly={hasSeparatePrices && purpose === "procurement"}
-          requireProcurement={hasSeparatePrices && purpose === "sale"}
-        />
-        <PriceEvidenceFields price={editablePrice} />
-        <Field>
-          <FieldLabel htmlFor={`${formFieldId}-field-5`}>
-            <span>生效时间</span>
-          </FieldLabel>
-          <Input
-            id={`${formFieldId}-field-5`}
-            type="datetime-local"
-            name="effective"
-            required
-          />
-        </Field>
+          )}
+        </FieldGroup>
+        {unit ? (
+          <PriceSetup unit={unit} rule={officialRule} currency={currency} />
+        ) : null}
+        <PriceEvidenceFields sourceURL={editablePrice?.source_url} />
         <Button disabled={archived || mutation.busy || !latest || !unit}>
-          {hasSeparatePrices
-            ? purpose === "procurement"
-              ? "保存采购价"
-              : "保存销售价"
-            : "保存价格"}
+          核验并保存
         </Button>
       </FieldGroup>
     </form>
@@ -581,37 +631,7 @@ export function ModelDetail({
               </form>
             </TabsContent>
             <TabsContent value="pricing" forceMount hidden={view !== "pricing"}>
-              {hasSeparatePrices ? (
-                <Tabs
-                  value={purpose}
-                  onValueChange={choosePricePurpose}
-                  className="gap-3"
-                >
-                  <TabsList
-                    variant="line"
-                    aria-label="价目类型"
-                    className="max-md:min-h-11"
-                  >
-                    <TabsTrigger value="procurement">采购价</TabsTrigger>
-                    <TabsTrigger value="sale">销售价</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="procurement">
-                    {purpose === "procurement" && priceForm}
-                  </TabsContent>
-                  <TabsContent value="sale">
-                    {purpose === "sale" &&
-                      (procurement ? (
-                        priceForm
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          请先核验采购价
-                        </p>
-                      ))}
-                  </TabsContent>
-                </Tabs>
-              ) : (
-                priceForm
-              )}
+              {priceForm}
             </TabsContent>
             <TabsContent
               value="release"
@@ -619,319 +639,67 @@ export function ModelDetail({
               hidden={view !== "release"}
               className="flex flex-col gap-5 data-[state=inactive]:hidden"
             >
-              <Collapsible className="flex flex-col gap-3">
-                <CollapsibleTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="group/collapsible h-auto w-full justify-between whitespace-normal"
-                  >
-                    <span>创建新发布</span>
-                    <ChevronDown
-                      data-icon="inline-end"
-                      className="transition-transform group-data-[state=open]/collapsible:rotate-180"
-                    />
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent
-                  forceMount
-                  className="pt-3 data-[state=closed]:hidden"
-                >
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      const f = new FormData(e.currentTarget);
-                      await mutation.run("release.create", id, (request) =>
-                        createModelRelease(
-                          { id },
-                          {
-                            request_id: request,
-                            model_version_id: String(f.get("version")),
-                            price_version_id: String(f.get("price")),
-                            config_version_id: config?.id,
-                            upstream_cost: {
-                              currency: String(f.get("currency")),
-                              max_micros: Number(f.get("cost")),
-                              source: String(f.get("source")),
-                              reviewed_at: new Date(
-                                String(f.get("reviewed")),
-                              ).toISOString(),
-                            },
-                          },
-                        ),
-                      );
-                    }}
-                  >
-                    <FieldGroup className="mt-4 gap-3">
-                      <Field>
-                        <FieldLabel htmlFor={`${formFieldId}-field-6`}>
-                          <span>配置版本</span>
-                        </FieldLabel>
-                        <Select
-                          name="version"
-                          required
-                          defaultValue={detail.versions?.[0]?.id}
-                        >
-                          <SelectTrigger
-                            id={`${formFieldId}-field-6`}
-                            className="h-10 w-full"
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {detail.versions?.map((v) =>
-                                v.id ? (
-                                  <SelectItem key={v.id} value={v.id}>
-                                    v{v.version_no} · {v.provider_model_id}
-                                  </SelectItem>
-                                ) : null,
-                              )}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor={`${formFieldId}-field-7`}>
-                          <span>价格版本</span>
-                        </FieldLabel>
-                        <Select
-                          key={(hasSeparatePrices ? sale : latestPrice)?.id}
-                          name="price"
-                          required
-                          defaultValue={
-                            hasSeparatePrices ? sale?.id : latestPrice?.id
-                          }
-                        >
-                          <SelectTrigger
-                            id={`${formFieldId}-field-7`}
-                            className="h-10 w-full"
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {detail.prices
-                                ?.filter(
-                                  (p) =>
-                                    !hasSeparatePrices ||
-                                    typeof p.rule
-                                      ?.procurement_price_version_id ===
-                                      "string",
-                                )
-                                .map((p) =>
-                                  p.id ? (
-                                    <SelectItem key={p.id} value={p.id}>
-                                      v{p.version_no} ·{" "}
-                                      {pricingUnits[p.unit ?? ""] ?? p.unit}
-                                    </SelectItem>
-                                  ) : null,
-                                )}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <p className="text-sm">
-                        绑定连接配置：v{config?.version ?? "—"}
-                      </p>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <Field>
-                          <FieldLabel htmlFor={`${formFieldId}-field-8`}>
-                            <span>上游币种</span>
-                          </FieldLabel>
-                          <Select name="currency" defaultValue="CNY">
-                            <SelectTrigger
-                              id={`${formFieldId}-field-8`}
-                              className="h-10 w-full"
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                <SelectItem value="CNY">人民币</SelectItem>
-                                <SelectItem value="USD">美元</SelectItem>
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor={`${formFieldId}-field-9`}>
-                            <span>单次成本上限（微元）</span>
-                          </FieldLabel>
-                          <Input
-                            id={`${formFieldId}-field-9`}
-                            name="cost"
-                            type="number"
-                            min={0}
-                            max={1000000000}
-                            required
-                            placeholder="填写已审核上限"
-                          />
-                        </Field>
-                      </div>
-                      <Field>
-                        <FieldLabel htmlFor={`${formFieldId}-field-10`}>
-                          <span>成本来源</span>
-                        </FieldLabel>
-                        <Input
-                          id={`${formFieldId}-field-10`}
-                          name="source"
-                          required
-                          maxLength={500}
-                          placeholder="官方定价页面或合同说明"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor={`${formFieldId}-field-11`}>
-                          <span>成本审核时间</span>
-                        </FieldLabel>
-                        <Input
-                          id={`${formFieldId}-field-11`}
-                          name="reviewed"
-                          type="datetime-local"
-                          required
-                        />
-                      </Field>
-                      <Button
-                        disabled={
-                          mutation.busy ||
-                          !config ||
-                          !(hasSeparatePrices ? sale : latestPrice)
-                        }
-                      >
-                        创建待验证发布
-                      </Button>
-                    </FieldGroup>
-                  </form>
-                </CollapsibleContent>
-              </Collapsible>
-              <section className="flex flex-col gap-3" aria-label="发布历史">
-                <h3 className="font-medium">发布记录</h3>
-                {!releases.length ? (
-                  <p className="text-sm text-muted-foreground">尚未发布</p>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">
+                  {published ? "已发布" : active ? "已停用" : "未发布"}
+                </Badge>
+                {published && !upToDate ? (
+                  <span className="text-sm text-muted-foreground">
+                    有待发布的配置
+                  </span>
                 ) : null}
-                {releases.map((r, fieldIndex1) => {
-                  const onboardingDraft =
-                    r.status === "draft" &&
-                    !Object.keys(r.upstream_cost ?? {}).length;
-                  const missing =
-                    r.required_modes?.filter(
-                      (mode) => !r.validated_modes?.includes(mode),
-                    ) ?? [];
-                  const canActivate =
-                    providerStatus !== "archived" &&
-                    (r.status === "draft" ||
-                      r.status === "retired" ||
-                      (r.status === "active" &&
-                        (model?.status === "disabled" ||
-                          providerStatus === "disabled")));
-                  const ready =
-                    canActivate &&
-                    !!r.required_modes?.length &&
-                    !missing.length;
-                  return (
-                    <article
-                      key={r.id}
-                      className="space-y-2 rounded-lg border p-3 text-sm"
+              </div>
+              {!upToDate ? (
+                <>
+                  {!checking &&
+                  (probe.mutation.pending ||
+                    (!check && probe.mutation.message)) ? (
+                    <MutationStatus mutation={probe.mutation} />
+                  ) : null}
+                  <div role="status" className="text-sm text-muted-foreground">
+                    {checkMessage}
+                  </div>
+                  {!versionID || !priceID ? (
+                    <p className="text-sm text-muted-foreground">
+                      {!versionID
+                        ? "请先在「模型设置」保存配置。"
+                        : "请先在「价格」保存可发布的价格。"}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant={checkID ? "outline" : "default"}
+                      disabled={
+                        checking ||
+                        mutation.busy ||
+                        !credentialID ||
+                        !configID ||
+                        providerStatus === "archived"
+                      }
+                      onClick={() => {
+                        if (credentialID) void probe.run(credentialID);
+                      }}
                     >
-                      <p className="font-medium">
-                        {r.status === "active"
-                          ? "当前发布"
-                          : r.status === "retired"
-                            ? "历史发布"
-                            : "待验证发布"}
-                        {currentDefault?.release_id === r.id
-                          ? " · 平台默认"
-                          : ""}
-                      </p>
-                      {r.validated_modes?.length ? (
-                        <p>
-                          已验证：
-                          {r.validated_modes.map(creationModeLabel).join("、")}
-                        </p>
-                      ) : null}
-                      {missing.length > 0 && (
-                        <p>
-                          待验证：{missing.map(creationModeLabel).join("、")}
-                        </p>
-                      )}
-                      {r.onboarding_check_id || onboardingDraft ? (
-                        <p className="text-muted-foreground">
-                          历史接入记录需重新创建发布并逐模式验证。
-                        </p>
-                      ) : null}
-                      {r.status === "draft" && !onboardingDraft ? (
-                        <ProviderTrial
-                          release={r}
-                          version={detail.versions?.find(
-                            (v) => v.id === r.model_version_id,
-                          )}
-                          onVerified={reloadDetail}
-                        />
-                      ) : null}
-                      {canActivate && !onboardingDraft ? (
-                        <form
-                          onSubmit={async (e) => {
-                            e.preventDefault();
-                            const f = new FormData(e.currentTarget);
-                            await mutation.run(
-                              "release.activate",
-                              r.id!,
-                              (request) =>
-                                activateModelRelease(
-                                  { id: r.id! },
-                                  {
-                                    request_id: request,
-                                    expected_revision: r.revision,
-                                    expected_model_revision: model?.revision,
-                                    expected_active_release_id: active?.id,
-                                    enable_provider: f.has("enable"),
-                                    set_default: f.has("default"),
-                                    expected_default_revision:
-                                      currentDefault?.revision ?? 0,
-                                  },
-                                ),
-                            );
-                          }}
-                        >
-                          <FieldGroup className="gap-2">
-                            <Field orientation="horizontal">
-                              <Checkbox
-                                id={`${formFieldId}-field-12-${fieldIndex1}`}
-                                name="enable"
-                                defaultChecked={providerStatus === "disabled"}
-                              />
-                              <FieldLabel
-                                htmlFor={`${formFieldId}-field-12-${fieldIndex1}`}
-                              >
-                                <span>同时启用平台连接</span>
-                              </FieldLabel>
-                            </Field>
-                            <Field orientation="horizontal">
-                              <Checkbox
-                                id={`${formFieldId}-field-13-${fieldIndex1}`}
-                                name="default"
-                              />
-                              <FieldLabel
-                                htmlFor={`${formFieldId}-field-13-${fieldIndex1}`}
-                              >
-                                <span>同时设为此能力的平台默认</span>
-                              </FieldLabel>
-                            </Field>
-                            <Button disabled={!ready || mutation.busy}>
-                              {r.status === "active"
-                                ? "重新启用此发布"
-                                : r.status === "retired"
-                                  ? "恢复此历史发布"
-                                  : "激活已验证发布"}
-                            </Button>
-                          </FieldGroup>
-                        </form>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </section>
+                      {checking ? <Spinner data-icon="inline-start" /> : null}
+                      {checkID ? "重新验证" : "验证 Key 和服务"}
+                    </Button>
+                    <Button
+                      variant={checkID ? "default" : "outline"}
+                      disabled={
+                        !checkID ||
+                        checking ||
+                        mutation.busy ||
+                        !priceID ||
+                        !versionID ||
+                        providerStatus === "archived"
+                      }
+                      onClick={() => void publish()}
+                    >
+                      发布模型
+                    </Button>
+                  </div>
+                </>
+              ) : null}
               {model?.status === "active" ? (
                 <Button
                   variant="outline"

@@ -102,7 +102,7 @@ it("表单能力及 schema-v1 声明来自安全目录，预览和保存不触�
   expect(screen.queryByLabelText("视频")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "校验并预览" }));
   const save = screen.getByRole("button", {
-    name: "保存新版本",
+    name: "保存预设",
   }) as HTMLButtonElement;
   await waitFor(() => expect(save.disabled).toBe(false));
   const document = JSON.parse(api.preview.mock.calls[0][0].document_json);
@@ -132,7 +132,7 @@ it("凭据输入使用安全字段，保存只建立连接与凭据", async () =
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-secret-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "手动添加模型" }));
+  fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
   fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(api.test).not.toHaveBeenCalled();
@@ -162,7 +162,7 @@ it("离开原连接后，迟到的创建响应不保存 Key 或归属到新连�
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "old-key-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "手动添加模型" }));
+  fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
   fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
   await waitFor(() => expect(api.connect).toHaveBeenCalledOnce());
   old.unmount();

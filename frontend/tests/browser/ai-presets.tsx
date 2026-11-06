@@ -244,7 +244,16 @@ axios.defaults.adapter = async (config) => {
     data = state;
   } else if (path === "/api/admin/provider-presets" && config.method === "get")
     data = { items: presets };
-  else if (path === "/api/admin/provider-adapters") data = [];
+  else if (path === "/api/admin/provider-adapters")
+    data = [
+      { adapter_key: "deepseek", check_capabilities: ["model_discovery"] },
+      { adapter_key: "openrouter", check_capabilities: ["model_discovery"] },
+    ];
+  else if (path.endsWith("/model-directory"))
+    data = { model_ids: ["fixture-online-model"] };
+  else if (path.endsWith("/checks"))
+    data = { items: [], current_checks: [], has_more: false };
+  else if (path.endsWith("/test-models")) data = [];
   else if (path === "/api/admin/providers") data = { items: providers };
   else if (path === "/api/admin/models") data = { items: [model] };
   else if (path === `/api/admin/models/${modelID}`)

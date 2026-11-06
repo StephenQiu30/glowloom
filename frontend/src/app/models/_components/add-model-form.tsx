@@ -20,7 +20,6 @@ import {
 import { useProviderCatalogProbe } from "@/components/catalog/provider-catalog-probe";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -243,84 +242,84 @@ export function AddModelForm({
       }}
     >
       <FieldGroup className="min-h-0 gap-4 overflow-y-auto p-px">
-        <Field orientation="horizontal" className="justify-between">
-          <FieldLabel htmlFor={`${field}-provider`} className="sr-only">
-            供应商
-          </FieldLabel>
-          <Select
-            value={providerID}
-            disabled={locked}
-            onValueChange={(value) => {
-              setProviderID(value);
-              setDirectorySelection(undefined);
-              setCandidateKey("");
-              setManual(false);
-              setCustomID("");
-              setCapability("");
-              setAPIKey("");
-              setAccessKey("");
-            }}
-          >
-            <SelectTrigger
-              id={`${field}-provider`}
-              className="w-full max-w-[220px]"
+        {initialProvider && connection ? (
+          <p className="text-sm font-medium">
+            {providerConnectionName(connection.provider)}
+          </p>
+        ) : (
+          <Field orientation="horizontal" className="justify-between">
+            <FieldLabel htmlFor={`${field}-provider`} className="sr-only">
+              供应商
+            </FieldLabel>
+            <Select
+              value={providerID}
+              disabled={locked}
+              onValueChange={(value) => {
+                setProviderID(value);
+                setDirectorySelection(undefined);
+                setCandidateKey("");
+                setManual(false);
+                setCustomID("");
+                setCapability("");
+                setAPIKey("");
+                setAccessKey("");
+              }}
             >
-              <SelectValue placeholder="选择供应商连接">
-                {providerConnectionName(connection?.provider)}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {adapters.map((group) => {
-                const items = providers.filter(
-                  ({ provider }) =>
-                    provider?.id && (provider.adapter_key ?? "") === group,
-                );
-                return (
-                  <SelectGroup key={group}>
-                    <SelectPrimitive.Label className="px-2 py-1.5 text-xs text-muted-foreground">
-                      {providerLabel(group)}
-                    </SelectPrimitive.Label>
-                    {items.map(({ provider, credential }) => (
-                      <SelectItem key={provider!.id} value={provider!.id!}>
-                        {providerConnectionName(provider)}
-                        {credential?.status === "active" ||
-                        savedCredential?.provider_id === provider?.id
-                          ? " · 已配置 Key"
-                          : " · 未配置 Key"}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                );
-              })}
-            </SelectContent>
-          </Select>
-          {credentialID && <Badge variant="outline">已保存凭据</Badge>}
-        </Field>
+              <SelectTrigger
+                id={`${field}-provider`}
+                className="w-full max-w-[220px]"
+              >
+                <SelectValue placeholder="选择供应商连接">
+                  {providerConnectionName(connection?.provider)}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {adapters.map((group) => {
+                  const items = providers.filter(
+                    ({ provider }) =>
+                      provider?.id && (provider.adapter_key ?? "") === group,
+                  );
+                  return (
+                    <SelectGroup key={group}>
+                      <SelectPrimitive.Label className="px-2 py-1.5 text-xs text-muted-foreground">
+                        {providerLabel(group)}
+                      </SelectPrimitive.Label>
+                      {items.map(({ provider, credential }) => (
+                        <SelectItem key={provider!.id} value={provider!.id!}>
+                          {providerConnectionName(provider)}
+                          {credential?.status === "active" ||
+                          savedCredential?.provider_id === provider?.id
+                            ? " · 已配置 Key"
+                            : " · 未配置 Key"}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
         <div className="flex min-w-0 flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {directoryAdapters.has(adapter) && (
+          {directoryAdapters.has(adapter) && credentialID ? (
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
-                className="self-start max-md:min-h-11"
-                disabled={!config || locked || !credentialID}
-                onClick={() => credentialID && void probe.run(credentialID)}
+                className="max-md:min-h-11"
+                disabled={!config || locked}
+                onClick={() => void probe.run(credentialID)}
               >
                 {readingDirectory && <Spinner data-icon="inline-start" />}
                 {readingDirectory ? "正在读取目录…" : "读取在线目录"}
               </Button>
-            )}
-            {directoryAdapters.has(adapter) && !credentialID && (
-              <p className="text-sm text-muted-foreground">
-                保存凭据后可读取目录。
-              </p>
-            )}
-            {directoryMessage && (
-              <p role="status" className="text-xs text-muted-foreground">
-                {directoryMessage}
-              </p>
-            )}
-          </div>
+              {directoryMessage && (
+                <p role="status" className="text-xs text-muted-foreground">
+                  {directoryMessage}
+                </p>
+              )}
+            </div>
+          ) : null}
           {isLoading ? (
             <p role="status">正在读取预设…</p>
           ) : config ? (
@@ -342,9 +341,7 @@ export function AddModelForm({
               onPreset={choosePreset}
               onOnline={(id) => chooseManual(id, check?.id)}
             />
-          ) : (
-            <p>请先选择供应商连接。</p>
-          )}
+          ) : null}
           {capabilities.length ? (
             <Button
               type="button"

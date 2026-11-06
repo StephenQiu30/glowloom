@@ -135,7 +135,7 @@ export function PresetEditor({
       >
         <SheetHeader className="p-6">
           <SheetTitle>
-            {editing ? "创建预设新版本" : preset ? "复制预设" : "新建预设"}
+            {editing ? "编辑预设" : preset ? "复制预设" : "新建预设"}
           </SheetTitle>
           <SheetDescription>预设不包含 API Key。</SheetDescription>
         </SheetHeader>
@@ -381,7 +381,7 @@ export function PresetEditor({
               </p>
               <p>
                 {preview.document?.model_templates?.length ?? 0} 个模型模板 ·
-                已有连接保持原版本
+                已有连接可手动更新
               </p>
             </div>
           ) : null}
@@ -444,7 +444,7 @@ export function PresetEditor({
               );
             }}
           >
-            保存新版本
+            保存预设
           </Button>
         </SheetFooter>
       </SheetContent>

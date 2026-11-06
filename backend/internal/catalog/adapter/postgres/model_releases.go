@@ -128,9 +128,13 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
 			return application.ModelRelease{}, err
 		}
 		releaseID := uuid.New()
-		cost, err := json.Marshal(input.UpstreamCost)
-		if err != nil {
-			return application.ModelRelease{}, err
+		cost := []byte("{}")
+		if input.UpstreamCost != (application.UpstreamCost{}) {
+			var err error
+			cost, err = json.Marshal(input.UpstreamCost)
+			if err != nil {
+				return application.ModelRelease{}, err
+			}
 		}
 		if err := tx.Exec(`INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,upstream_cost) VALUES(?,?,?,?,?,?::jsonb)`, releaseID, id, input.ModelVersionID, input.PriceVersionID, input.ConfigVersionID, string(cost)).Error; err != nil {
 			return application.ModelRelease{}, err
@@ -159,8 +163,11 @@ func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Prin
 		if r.RowsAffected != 1 {
 			return application.ModelRelease{}, application.ErrPresetUnavailable
 		}
-		var provider struct{ Status string }
-		r = tx.Raw(`SELECT status FROM catalog.provider WHERE id=? AND NOT is_delete FOR UPDATE`, binding.ProviderID).Scan(&provider)
+		var provider struct {
+			Status, AdapterKey     string
+			CurrentConfigVersionID uuid.UUID
+		}
+		r = tx.Raw(`SELECT status,adapter_key,current_config_version_id FROM catalog.provider WHERE id=? AND NOT is_delete FOR UPDATE`, binding.ProviderID).Scan(&provider)
 		if r.Error != nil {
 			return application.ModelRelease{}, r.Error
 		}
@@ -211,8 +218,30 @@ func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Prin
 		if err != nil {
 			return application.ModelRelease{}, err
 		}
-		if !allReleaseModesVerified(release) {
-			return application.ModelRelease{}, application.ErrReleaseUnverified
+		if input.CredentialCheckID == nil {
+			if !allReleaseModesVerified(release) {
+				return application.ModelRelease{}, application.ErrReleaseUnverified
+			}
+		} else {
+			// Older Vercel checks used the public model catalog. Only the
+			// newer auth-only probe completes without directory discovery.
+			vercel := provider.AdapterKey == "vercel"
+			var verified bool
+			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM catalog.provider_check
+ WHERE id=? AND provider_id=? AND config_version_id=? AND credential_id=?
+ AND kind='credential_auth' AND status='completed' AND auth_result='ok' AND adapter_result='ok'
+ AND completed_at IS NOT NULL AND (NOT ? OR discovery_result='unsupported'))`,
+				*input.CredentialCheckID, binding.ProviderID, binding.ConfigID, credential.ID, vercel).Scan(&verified).Error; err != nil {
+				return application.ModelRelease{}, err
+			}
+			if !verified || provider.CurrentConfigVersionID != binding.ConfigID {
+				return application.ModelRelease{}, application.ErrReleaseUnverified
+			}
+			if err := validateReleaseContract(tx, binding.ModelID, application.CreateReleaseInput{
+				ModelVersionID: release.ModelVersionID, PriceVersionID: release.PriceVersionID, ConfigVersionID: release.ConfigVersionID,
+			}); err != nil {
+				return application.ModelRelease{}, err
+			}
 		}
 		if input.EnableProvider && provider.Status != "active" {
 			if err := requireReviewedLegacyReleases(tx, binding.ProviderID, binding.ModelID); err != nil {

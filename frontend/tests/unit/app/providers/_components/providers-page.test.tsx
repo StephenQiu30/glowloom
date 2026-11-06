@@ -232,7 +232,7 @@ it("页头打开独立供应商预设列表并可返回连接", async () => {
   expect(
     screen.getByRole("button", { name: "BytePlus预设的操作" }),
   ).toBeTruthy();
-  expect(screen.getByText("v9")).toBeTruthy();
+  expect(screen.queryByText("v9")).toBeNull();
   expect(screen.queryByRole("button", { name: "接入服务" })).toBeNull();
   expect(screen.queryByRole("button", { name: "预设管理" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "返回 AI 服务接入" }));

@@ -68,7 +68,7 @@ it("管理员通过表单维护预设，无需手写 JSON 或标识；修改使�
   });
   // Query semantics once; waiting on state must not rescan the whole sheet.
   const saveButton = screen.getByRole("button", {
-    name: "保存新版本",
+    name: "保存预设",
   }) as HTMLButtonElement;
   fireEvent.click(screen.getByRole("button", { name: "校验并预览" }));
   await waitFor(() => expect(api.preview).toHaveBeenCalledOnce());
@@ -97,7 +97,7 @@ it("复制内置预设创建派生副本，不写回内置版本", async () => {
     />,
   );
   const saveButton = screen.getByRole("button", {
-    name: "保存新版本",
+    name: "保存预设",
   }) as HTMLButtonElement;
   fireEvent.click(screen.getByRole("button", { name: "校验并预览" }));
   await waitFor(() => expect(saveButton.disabled).toBe(false));

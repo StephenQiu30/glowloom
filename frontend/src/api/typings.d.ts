@@ -48,6 +48,7 @@ declare namespace API {
   };
 
   type ActivateReleaseInput = {
+    credential_check_id?: string;
     enable_provider?: boolean;
     expected_active_release_id?: string;
     expected_default_revision?: number;
@@ -5023,6 +5024,7 @@ declare namespace API {
     rule?: Record<string, any>;
     source_url?: string;
     unit?: PriceUnit;
+    use_official_rate?: boolean;
     version_no?: number;
   };
 

@@ -216,6 +216,28 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 	if err := conn.DB.WithContext(ctx).Exec(`DROP FUNCTION reject_price_audit()`).Error; err != nil {
 		t.Fatal(err)
 	}
+	official := effective
+	official.ExpectedRevision, official.VersionNo = 4, 3
+	official.UseOfficialRate = true
+	official.RequestID = uuid.NewString()
+	got, err := publishPrice.Execute(ctx, actor, official)
+	if err != nil || got.VersionNo != 4 || got.Revision != 6 {
+		t.Fatalf("official price pair: %+v, %v", got, err)
+	}
+	replayed, err := publishPrice.Execute(ctx, actor, official)
+	if err != nil || replayed.ID != got.ID || replayed.Revision != got.Revision || !replayed.CreateTime.Equal(got.CreateTime) {
+		t.Fatalf("official price replay changed result: %+v, %v", replayed, err)
+	}
+	var sameRate bool
+	if err := conn.DB.WithContext(ctx).Raw(`SELECT (sale.rule - 'procurement_price_version_id') = procurement.rule
+ AND sale.unit = procurement.unit AND sale.currency = procurement.currency
+ AND sale.fx_rate_to_cny = procurement.fx_rate_to_cny AND sale.reviewed_at = procurement.reviewed_at
+ AND sale.source_url = procurement.source_url AND sale.effective_from = procurement.effective_from
+ FROM catalog.price_rule_version sale JOIN catalog.price_rule_version procurement
+ ON procurement.id::text = sale.rule->>'procurement_price_version_id'
+ WHERE sale.id=? AND procurement.version_no=3`, got.ID).Scan(&sameRate).Error; err != nil || !sameRate {
+		t.Fatalf("official rate was not preserved: %v", err)
+	}
 	if err := conn.DB.WithContext(ctx).Exec(`UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}

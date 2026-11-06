@@ -55,7 +55,6 @@ export function ProviderPresetList({
             <TableHead>预设名称</TableHead>
             <TableHead className="hidden sm:table-cell">供应商</TableHead>
             <TableHead className="hidden sm:table-cell">来源</TableHead>
-            <TableHead className="hidden sm:table-cell">版本</TableHead>
             <TableHead>状态</TableHead>
             <TableHead className="text-right">操作</TableHead>
           </TableRow>
@@ -66,7 +65,6 @@ export function ProviderPresetList({
             const supplier = providerLabel(adapter, adapters);
             const name = preset.document?.name ?? supplier;
             const source = preset.origin === "builtin" ? "内置" : "自定义";
-            const version = `v${preset.version}`;
             return (
               <TableRow key={preset.id}>
                 <TableCell className="min-w-0 whitespace-normal">
@@ -80,7 +78,7 @@ export function ProviderPresetList({
                     <div className="min-w-0 break-words">
                       <div>{name}</div>
                       <div className="text-xs text-muted-foreground sm:hidden">
-                        {supplier} · {source} · {version}
+                        {supplier} · {source}
                       </div>
                     </div>
                   </div>
@@ -89,9 +87,6 @@ export function ProviderPresetList({
                   {supplier}
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">{source}</TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  {version}
-                </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {preset.archived ? (
@@ -125,7 +120,7 @@ export function ProviderPresetList({
                         <DropdownMenuItem onSelect={() => onEdit(preset)}>
                           {preset.origin === "builtin"
                             ? "复制并编辑"
-                            : "编辑新版本"}
+                            : "编辑预设"}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={() => {

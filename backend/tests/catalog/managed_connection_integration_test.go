@@ -89,14 +89,14 @@ func TestManagedConnectionKeyRotationAndReleaseGate(t *testing.T) {
 	priceValidator, err := pricevalidation.NewValidator()
 	require.NoError(t, err)
 	prices := catalogapp.NewPublishPriceRuleCommand(store, priceValidator, time.Now)
-	priceInput := catalogapp.PublishPriceRuleInput{SourceURL: "https://example.invalid/prices", ReviewedAt: priceReviewedFixtureTime(), ModelID: model.ID, ExpectedRevision: version.Revision, VersionNo: 1, Unit: domain.PricePerRequest, Rule: json.RawMessage(`{"base_micros":1000}`), Currency: "CNY", EffectiveFrom: time.Now().Add(-time.Hour), RequestID: uuid.NewString()}
+	priceInput := catalogapp.PublishPriceRuleInput{UseOfficialRate: true, SourceURL: "https://example.invalid/prices", ReviewedAt: priceReviewedFixtureTime(), ModelID: model.ID, ExpectedRevision: version.Revision, VersionNo: 1, Unit: domain.PricePerRequest, Rule: json.RawMessage(`{"base_micros":1000}`), Currency: "CNY", EffectiveFrom: time.Now().Add(-time.Hour), RequestID: uuid.NewString()}
 	price, err := prices.Execute(t.Context(), actor, priceInput)
 	require.NoError(t, err)
 	repeatedPrice, err := prices.Execute(t.Context(), actor, priceInput)
 	require.NoError(t, err)
 	sameReceipt(t, price, repeatedPrice)
 	releases := catalogapp.NewModelReleases(store)
-	release, err := releases.Create(t.Context(), actor, model.ID, catalogapp.CreateReleaseInput{ModelVersionID: version.ID, PriceVersionID: price.ID, ConfigVersionID: connection.Config.ID, RequestID: uuid.New(), UpstreamCost: catalogapp.UpstreamCost{Currency: "USD", MaxMicros: 100000, Source: "fixture only", ReviewedAt: time.Now()}})
+	release, err := releases.Create(t.Context(), actor, model.ID, catalogapp.CreateReleaseInput{ModelVersionID: version.ID, PriceVersionID: price.ID, ConfigVersionID: connection.Config.ID, RequestID: uuid.New()})
 	require.NoError(t, err)
 	require.Equal(t, []string{"text2video"}, release.RequiredModes)
 	require.Empty(t, release.ValidatedModes)
@@ -107,20 +107,40 @@ func TestManagedConnectionKeyRotationAndReleaseGate(t *testing.T) {
 	var providerStatus string
 	require.NoError(t, conn.DB.Raw(`SELECT status FROM catalog.provider WHERE id=?`, connection.ProviderID).Scan(&providerStatus).Error)
 	require.Equal(t, "disabled", providerStatus)
-	// A database fixture pins a published release to test consumer isolation;
-	// this is not supplier evidence and never goes through the activation API.
-	require.NoError(t, conn.DB.Exec(`UPDATE catalog.provider SET status='active' WHERE id=?`, connection.ProviderID).Error)
-	require.NoError(t, conn.DB.Exec(`UPDATE catalog.model_release SET status='active' WHERE id=?`, release.ID).Error)
-	require.NoError(t, conn.DB.Exec(`UPDATE catalog.model_profile SET status='active',active_release_id=? WHERE id=?`, release.ID, model.ID).Error)
+	activate := catalogapp.ActivateReleaseInput{
+		ExpectedRevision: release.Revision, ExpectedModelRevision: price.Revision,
+		EnableProvider: true, CredentialCheckID: &check.CheckID, RequestID: uuid.New(),
+	}
+	_, err = releases.Activate(t.Context(), actor, release.ID, activate)
+	require.ErrorIs(t, err, catalogapp.ErrReleaseUnverified)
+
+	// A read-only probe fixture pins evidence to the credential and configuration.
+	// Activation must not treat a successful check against the old key as current.
+	checkID := uuid.New()
+	require.NoError(t, conn.DB.Exec(`INSERT INTO catalog.provider_check
+ (id,actor_id,provider_id,config_version_id,credential_id,kind,status,auth_result,adapter_result,completed_at)
+ VALUES(?,?,?,?,?,'credential_auth','completed','ok','ok',now())`,
+		checkID, actor.ID, connection.ProviderID, connection.Config.ID, first.ID).Error)
+	activate.CredentialCheckID = &checkID
+	_, err = releases.Activate(t.Context(), actor, release.ID, activate)
+	require.ErrorIs(t, err, catalogapp.ErrReleaseUnverified)
+	require.NoError(t, conn.DB.Exec(`UPDATE catalog.provider_check SET credential_id=? WHERE id=?`, second.ID, checkID).Error)
+	published, err := releases.Activate(t.Context(), actor, release.ID, activate)
+	require.NoError(t, err)
+	require.Equal(t, "active", published.Status)
+	require.Empty(t, published.ValidatedModes)
+	replayed, err := releases.Activate(t.Context(), actor, release.ID, activate)
+	require.NoError(t, err)
+	sameReceipt(t, published, replayed)
 	versionInput.RequestID = uuid.NewString()
-	versionInput.ExpectedRevision = price.Revision
+	versionInput.ExpectedRevision = price.Revision + 1
 	versionInput.VersionNo = 2
 	versionInput.ProviderModelID = "fixture/next-video"
 	draftVersion, err := versions.Execute(t.Context(), actor, versionInput)
 	require.NoError(t, err)
 	priceInput.RequestID = uuid.NewString()
 	priceInput.ExpectedRevision = draftVersion.Revision
-	priceInput.VersionNo = 2
+	priceInput.VersionNo = 3
 	priceInput.Rule = json.RawMessage(`{"base_micros":9000}`)
 	_, err = prices.Execute(t.Context(), actor, priceInput)
 	require.NoError(t, err)

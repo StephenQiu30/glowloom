@@ -73,6 +73,31 @@ func (s *Store) PublishPriceRuleWithAudit(ctx context.Context, actor identityapp
 	return saved, err
 }
 
+// PublishOfficialPriceWithAudit saves both rates and their audits in one replayable transaction.
+func (s *Store) PublishOfficialPriceWithAudit(ctx context.Context, actor identityapp.Principal, procurement, sale domain.PriceRuleVersion, revision int64, events [2]identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
+	request := catalogEventRequest(events[0])
+	if s == nil || s.db == nil || request == uuid.Nil || request != catalogEventRequest(events[1]) ||
+		!validPriceRulePublishedAudit(actor.ID, actor.OrgID, procurement, revision, events[0]) ||
+		!validPriceRulePublishedAudit(actor.ID, actor.OrgID, sale, revision+1, events[1]) {
+		return domain.PriceRuleVersion{}, application.ErrInvalidPublishPriceRule
+	}
+	input := struct {
+		Procurement, Sale domain.PriceRuleVersion
+		Revision          int64
+	}{procurement, sale, revision}
+	saved, err := catalogRequest(ctx, s.db, s.actors, actor, "model.price", procurement.ModelID, request, input, false, func(tx *gorm.DB) (domain.PriceRuleVersion, error) {
+		store := s.withDB(tx)
+		if _, err := store.publishPriceRuleWithAuditOnce(ctx, actor, procurement, revision, events[0]); err != nil {
+			return domain.PriceRuleVersion{}, err
+		}
+		return store.publishPriceRuleWithAuditOnce(ctx, actor, sale, revision+1, events[1])
+	})
+	if err == nil {
+		saved.Rule = append([]byte(nil), sale.Rule...)
+	}
+	return saved, err
+}
+
 // DisableCredentialWithEvents makes exact revocation safe to retry, including draining keys.
 func (s *Store) DisableCredentialWithEvents(ctx context.Context, actor identityapp.Principal, target application.CredentialToDisable, events []identityapp.OutboxEvent) (application.SavedCredential, error) {
 	if s == nil || s.db == nil || len(events) != 2 {

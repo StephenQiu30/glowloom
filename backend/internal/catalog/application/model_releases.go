@@ -10,7 +10,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
-// ErrReleaseUnverified prevents publication without matching execution evidence.
+// ErrReleaseUnverified prevents publication without matching verification evidence.
 var ErrReleaseUnverified = errors.New("model release lacks verified execution evidence")
 
 // UpstreamCost records a reviewed supplier cost bound, separate from user pricing.
@@ -21,7 +21,7 @@ type UpstreamCost struct {
 	ReviewedAt time.Time `json:"reviewed_at"`
 }
 
-// CreateReleaseInput pins the exact version/configuration/price to validate.
+// CreateReleaseInput pins the exact version/configuration/price. A supplier cost ceiling is optional for read-only publication.
 type CreateReleaseInput struct {
 	ModelVersionID  uuid.UUID    `json:"model_version_id"`
 	PriceVersionID  uuid.UUID    `json:"price_version_id"`
@@ -48,6 +48,7 @@ type ModelRelease struct {
 
 // ActivateReleaseInput performs an explicit atomic release/default switch.
 type ActivateReleaseInput struct {
+	CredentialCheckID       *uuid.UUID `json:"credential_check_id,omitempty"`
 	ExpectedModelRevision   int64      `json:"expected_model_revision"`
 	ExpectedActiveReleaseID *uuid.UUID `json:"expected_active_release_id"`
 	ExpectedRevision        int64      `json:"expected_revision"`
@@ -86,19 +87,22 @@ func (s *ModelReleases) List(ctx context.Context, actor identityapp.Principal, i
 	return s.store.ListModelReleases(ctx, actor, id)
 }
 
-// Create freezes the reviewed supplier cost ceiling and configuration bindings.
+// Create freezes configuration, pricing and any supplied trial cost ceiling.
 func (s *ModelReleases) Create(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input CreateReleaseInput) (ModelRelease, error) {
 	if !IsPlatformAdmin(actor) {
 		return ModelRelease{}, identityapp.ErrForbidden
 	}
 	cost := input.UpstreamCost
-	if id == uuid.Nil || input.ModelVersionID == uuid.Nil || input.PriceVersionID == uuid.Nil || input.ConfigVersionID == uuid.Nil || input.RequestID == uuid.Nil || cost.MaxMicros < 0 || cost.MaxMicros > 1_000_000_000 || cost.Source == "" || len(cost.Source) > 500 || cost.ReviewedAt.IsZero() || (cost.Currency != "CNY" && cost.Currency != "USD") {
+	if id == uuid.Nil || input.ModelVersionID == uuid.Nil || input.PriceVersionID == uuid.Nil || input.ConfigVersionID == uuid.Nil || input.RequestID == uuid.Nil {
+		return ModelRelease{}, ErrInvalidAdminModels
+	}
+	if cost != (UpstreamCost{}) && (cost.MaxMicros < 0 || cost.MaxMicros > 1_000_000_000 || cost.Source == "" || len(cost.Source) > 500 || cost.ReviewedAt.IsZero() || (cost.Currency != "CNY" && cost.Currency != "USD")) {
 		return ModelRelease{}, ErrInvalidAdminModels
 	}
 	return s.store.CreateModelRelease(ctx, actor, id, input)
 }
 
-// Activate publishes only after every advertised mode has matching real evidence.
+// Activate accepts a current read-only credential check or existing execution evidence.
 func (s *ModelReleases) Activate(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input ActivateReleaseInput) (ModelRelease, error) {
 	if !IsPlatformAdmin(actor) {
 		return ModelRelease{}, identityapp.ErrForbidden

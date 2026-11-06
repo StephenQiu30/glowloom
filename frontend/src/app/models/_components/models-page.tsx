@@ -257,24 +257,8 @@ function ModelAdministration({
         pricingUnits[row.original.billing?.unit ?? ""] ?? "待确认",
     },
     {
-      id: "procurement",
-      header: "采购价",
-      cell: ({ row }) =>
-        row.original.billing?.procurement_ready ? "已审核" : "待核验",
-    },
-    {
-      id: "sales",
-      header: "销售价",
-      cell: ({ row }) =>
-        row.original.billing?.sale_published
-          ? "已发布"
-          : row.original.billing?.sale_ready
-            ? "已保存"
-            : "缺失",
-    },
-    {
       id: "billing",
-      header: "发布状态",
+      header: "价格状态",
       cell: ({ row }) => (
         <Badge
           variant={

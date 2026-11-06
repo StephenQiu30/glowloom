@@ -93,3 +93,27 @@ func TestReachabilityRetriesOnlyTimeoutAndRejectsUnapprovedURL(t *testing.T) {
 		require.Equal(t, tc.wantCalls, calls)
 	}
 }
+
+func TestVercelCredentialCheckUsesAuthenticatedEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, want string
+		status           int
+	}{
+		{"valid key", `{"balance":"0.00","total_used":"0.00"}`, "ok", http.StatusOK},
+		{"invalid key", `{"error":{"type":"authentication_error"}}`, "auth_failed", http.StatusUnauthorized},
+		{"public directory", `{"data":[]}`, "invalid_response", http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := NewClient(&http.Client{Transport: serviceCheckTransport(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, "GET", r.Method)
+				require.Equal(t, "/v1/credits", r.URL.Path)
+				require.Equal(t, "Bearer fixture-key", r.Header.Get("Authorization"))
+				return &http.Response{StatusCode: tc.status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(tc.body))}, nil
+			})})
+			result := client.Probe(t.Context(), checkConfig("vercel"), "fixture-key")
+			require.Equal(t, tc.want, result.Auth)
+			require.Equal(t, "unsupported", result.Discovery)
+			require.Empty(t, result.Candidates)
+		})
+	}
+}

@@ -84,7 +84,9 @@ it("打开不调用上游；检测网络收到401仅显示网络可达", async (
     return { accepted: true, provider_id: "provider", check_id: "check" };
   });
   setup();
+  expect(screen.getByRole("button", { name: "验证 Key 和服务" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "检测连通" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "检测详情" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "连接诊断" }));
   const network = await screen.findByRole("button", { name: "检测连通" });
   expect(api.network).not.toHaveBeenCalled();
@@ -112,17 +114,17 @@ it("旧凭据的通过只能作为历史记录，不冒充当前状态", async (
   });
   setup();
   fireEvent.click(screen.getByRole("button", { name: "连接诊断" }));
-  await screen.findByRole("button", { name: "检查凭据" });
+  await screen.findByRole("button", { name: "验证 Key 和服务" });
   expect(screen.queryByText("鉴权通过")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "检测详情" }));
-  await screen.findByText("历史版本");
+  await screen.findByText("历史记录");
   expect(api.auth).not.toHaveBeenCalled();
 });
 it("语音与音乐不把不支持只读鉴权显示为失败或发起假验证", async () => {
   setup("volcengine_music");
   fireEvent.click(screen.getByRole("button", { name: "连接诊断" }));
-  await screen.findByText("需模型验证");
-  expect(screen.queryByRole("button", { name: "检查凭据" })).toBeNull();
+  await screen.findByText("暂不支持只读验证");
+  expect(screen.queryByRole("button", { name: "验证 Key 和服务" })).toBeNull();
   expect(api.auth).not.toHaveBeenCalled();
 });
 

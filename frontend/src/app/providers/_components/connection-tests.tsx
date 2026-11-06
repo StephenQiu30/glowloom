@@ -77,6 +77,10 @@ export function ConnectionTests({
   const { actor } = useSession();
   const fieldID = useId();
   const [offset, setOffset] = useState(0);
+  const [diagnostics, setDiagnostics] = useState(() => {
+    const open = !!(initialModel || initialRelease || initialMode);
+    return { open, visited: open };
+  });
   const [expanded, setExpanded] = useState(false);
   const { data, error, isLoading, mutate } = useSWR(
     ["provider-tests", actor.id, id, revision, offset],
@@ -100,8 +104,10 @@ export function ConnectionTests({
   const current =
     data?.current_checks ?? data?.items?.filter((c) => c.current) ?? [];
   const network = current.find((c) => c.kind === "reachability");
-  const auth = current.find((c) =>
-    ["credential_auth", "connectivity", "discovery"].includes(c.kind ?? ""),
+  const auth = current.find(
+    (check) =>
+      check.kind === "credential_auth" &&
+      (adapter !== "vercel" || check.discovery_result === "unsupported"),
   );
   const unsupported = [
     "volcengine_speech",
@@ -132,21 +138,59 @@ export function ConnectionTests({
           </AlertDescription>
         </Alert>
       ) : null}
-      <ConnectionModels
-        adapter={adapter}
-        id={id}
-        revision={revision}
-        onSaved={() => {
-          onSaved();
-          void mutate();
-        }}
-        checks={current}
-        onChecked={() => void mutate()}
-        initialModel={initialModel}
-        initialRelease={initialRelease}
-        initialMode={initialMode}
-      />
-      <Collapsible>
+      <section
+        className="flex min-w-0 flex-col gap-2 py-2"
+        aria-labelledby={`${fieldID}-auth`}
+      >
+        <div className="flex items-center gap-2">
+          <h3
+            id={`${fieldID}-auth`}
+            className="min-w-0 flex-1 text-sm font-medium"
+          >
+            Key 和服务
+          </h3>
+          <Badge variant="secondary" role="status">
+            {unsupported
+              ? "暂不支持只读验证"
+              : auth
+                ? resultLabel(auth)
+                : "未检查"}
+          </Badge>
+          {!unsupported ? (
+            <Button
+              variant="outline"
+              className="h-11 shrink-0"
+              disabled={
+                mutation.busy || !!mutation.pending || checkRunning(auth)
+              }
+              onClick={() =>
+                void mutation.run("credential.test", id, (requestID) =>
+                  testAdminCredential(
+                    { id, credential_id: credentialID },
+                    { headers: { "Idempotency-Key": requestID } },
+                  ),
+                )
+              }
+            >
+              验证 Key 和服务
+            </Button>
+          ) : null}
+        </div>
+        {auth &&
+        auth.auth_result !== "ok" &&
+        !checkRunning(auth) &&
+        !unsupported ? (
+          <p className="text-xs text-destructive">
+            {testErrorMessage(auth.auth_result ?? "")}
+          </p>
+        ) : null}
+      </section>
+      <Collapsible
+        open={diagnostics.open}
+        onOpenChange={(open) =>
+          setDiagnostics(({ visited }) => ({ open, visited: visited || open }))
+        }
+      >
         <CollapsibleTrigger asChild>
           <Button variant="ghost" className="group w-full justify-between px-0">
             连接诊断
@@ -156,7 +200,27 @@ export function ConnectionTests({
             />
           </Button>
         </CollapsibleTrigger>
-        <CollapsibleContent>
+        <CollapsibleContent
+          forceMount
+          hidden={!diagnostics.open}
+          className="flex flex-col gap-3 data-[state=closed]:hidden"
+        >
+          {diagnostics.visited ? (
+            <ConnectionModels
+              adapter={adapter}
+              id={id}
+              revision={revision}
+              onSaved={() => {
+                onSaved();
+                void mutate();
+              }}
+              checks={current}
+              onChecked={() => void mutate()}
+              initialModel={initialModel}
+              initialRelease={initialRelease}
+              initialMode={initialMode}
+            />
+          ) : null}
           <section
             className="flex min-w-0 flex-col gap-2 py-2"
             aria-labelledby={`${fieldID}-network`}
@@ -197,58 +261,6 @@ export function ConnectionTests({
                 {testErrorMessage(
                   network.error_code ?? network.network_result ?? "",
                 )}
-              </p>
-            ) : null}
-          </section>
-          <section
-            className="flex min-w-0 flex-col gap-2 py-2"
-            aria-labelledby={`${fieldID}-auth`}
-          >
-            <div className="flex items-center gap-2">
-              <h3
-                id={`${fieldID}-auth`}
-                className="min-w-0 flex-1 text-sm font-medium"
-              >
-                凭据检查
-              </h3>
-              <Badge variant="secondary" role="status">
-                {unsupported
-                  ? "需模型验证"
-                  : auth
-                    ? resultLabel(auth)
-                    : "未检查"}
-              </Badge>
-              {!unsupported ? (
-                <Button
-                  variant="outline"
-                  className="h-11 shrink-0"
-                  disabled={
-                    mutation.busy || !!mutation.pending || checkRunning(auth)
-                  }
-                  onClick={() =>
-                    void mutation.run("credential.test", id, (requestID) =>
-                      testAdminCredential(
-                        { id, credential_id: credentialID },
-                        { headers: { "Idempotency-Key": requestID } },
-                      ),
-                    )
-                  }
-                >
-                  检查凭据
-                </Button>
-              ) : null}
-            </div>
-            {auth &&
-            auth.auth_result !== "ok" &&
-            !checkRunning(auth) &&
-            !unsupported ? (
-              <p className="text-xs text-destructive">
-                {testErrorMessage(auth.auth_result ?? "")}
-              </p>
-            ) : null}
-            {adapter === "volcengine_ark" && auth?.auth_result === "ok" ? (
-              <p className="text-xs text-muted-foreground">
-                仅检查视频任务权限
               </p>
             ) : null}
           </section>
@@ -321,7 +333,7 @@ export function ConnectionTests({
                                 {checkKind(check.kind)} · {resultLabel(check)}
                               </span>
                               <Badge variant="secondary">
-                                {check.current ? "当前版本" : "历史版本"}
+                                {check.current ? "当前检查" : "历史记录"}
                               </Badge>
                             </span>
                             <span className="mt-1 block text-muted-foreground">
@@ -330,17 +342,6 @@ export function ConnectionTests({
                           </Button>
                         </CollapsibleTrigger>
                         <CollapsibleContent className="mt-2 space-y-1 break-all text-muted-foreground">
-                          <p>检查标识：{check.id}</p>
-                          <p>配置版本：{check.config_version_id ?? "未知"}</p>
-                          {check.model_id ? (
-                            <p>模型版本：{check.model_version_id ?? "未知"}</p>
-                          ) : null}
-                          <p>
-                            结果：
-                            {check.current
-                              ? "当前证据"
-                              : "历史证据，不参与当前启用判定"}
-                          </p>
                           {check.kind === "model_access" &&
                           check.task_id &&
                           ["accepted", "unknown"].includes(

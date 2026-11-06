@@ -18,7 +18,7 @@ export function catalogMessage(error: unknown) {
       forbidden: "仅平台管理员可以管理平台连接和模型。",
       revision_conflict: "配置已变化或请求标识已使用，请刷新并核对回执。",
       preset_unavailable: "预设已归档或被紧急停用，请重新选择。",
-      release_unverified: "发布尚未完成全部模式的真实验证，暂不能激活。",
+      release_unverified: "发布验证未通过，请刷新后重新验证。",
       catalog_unavailable: "连接、模型或价格条件未满足，请检查配置。",
       invalid_preset: "预设格式不正确，或包含不允许的字段及端点。",
       invalid_request: "请检查必填项、参数类型和版本号。",

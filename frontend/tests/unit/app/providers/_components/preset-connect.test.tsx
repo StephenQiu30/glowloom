@@ -98,7 +98,7 @@ describe("two-step provider connection", () => {
     });
     const { saved } = openWizard();
 
-    fireEvent.click(screen.getByRole("button", { name: "查看预置模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "基础模型" }));
     fireEvent.click(screen.getByRole("button", { name: "上一步" }));
     expect((screen.getByLabelText("API Key") as HTMLInputElement).value).toBe(
@@ -107,7 +107,7 @@ describe("two-step provider connection", () => {
     expect(connect).not.toHaveBeenCalled();
     expect(credential).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "查看预置模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
     fireEvent.click(screen.getByRole("button", { name: "保存接入" }));
 
     await waitFor(() => expect(saved).toHaveBeenCalledWith("connection-one"));
@@ -141,7 +141,7 @@ describe("two-step provider connection", () => {
     credential.mockRejectedValueOnce(new Error("response lost"));
     const { saved } = openWizard();
 
-    fireEvent.click(screen.getByRole("button", { name: "查看预置模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
     fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
     const retry = await screen.findByRole("button", { name: "核对并继续保存" });
     const requestID =
@@ -178,7 +178,10 @@ describe("two-step provider connection", () => {
     });
     const { saved } = openWizard();
 
-    fireEvent.click(screen.getByRole("button", { name: "读取模型" }));
+    expect(screen.queryByRole("button", { name: "读取在线目录" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
+    expect(directory).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "读取在线目录" }));
     fireEvent.click(await screen.findByRole("button", { name: "fresh-model" }));
     fireEvent.click(screen.getByRole("button", { name: "加入所选" }));
 
@@ -207,9 +210,11 @@ describe("two-step provider connection", () => {
       new RequestError("model_directory_credential_rejected", 422),
     );
     openWizard();
-    fireEvent.click(screen.getByRole("button", { name: "读取模型" }));
-    await screen.findByText(/暂时无法读取目录/);
-    fireEvent.click(screen.getByRole("button", { name: "查看预置模型" }));
+    expect(screen.queryByRole("button", { name: "读取在线目录" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
+    expect(directory).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "读取在线目录" }));
+    await screen.findByText(/在线目录读取失败/);
     expect(
       screen
         .getByRole("checkbox", { name: "基础模型" })
@@ -226,7 +231,7 @@ describe("two-step provider connection", () => {
       status: "active",
     });
     const { saved } = openWizard();
-    fireEvent.click(screen.getByRole("button", { name: "查看预置模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
     fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
     await screen.findByText(/接入结果待确认/);
 
@@ -261,7 +266,7 @@ describe("two-step provider connection", () => {
       status: "active",
     });
     const previous = openWizard();
-    fireEvent.click(screen.getByRole("button", { name: "查看预置模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
     fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
     cleanup();
     await act(async () => complete({ provider_id: "connection-one" }));
@@ -324,14 +329,14 @@ describe("two-step provider connection", () => {
         onSaved={saved}
       />,
     );
-    expect(screen.queryByRole("button", { name: "读取模型" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "读取在线目录" })).toBeNull();
     fireEvent.change(screen.getByLabelText("Access Key ID"), {
       target: { value: "fixture-ak" },
     });
     fireEvent.change(screen.getByLabelText("Secret Access Key"), {
       target: { value: "fixture-sk" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "手动添加模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
     fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
     await waitFor(() => expect(saved).toHaveBeenCalledWith("music-connection"));
     expect(credential.mock.calls[0]?.[1]?.secret).toEqual({

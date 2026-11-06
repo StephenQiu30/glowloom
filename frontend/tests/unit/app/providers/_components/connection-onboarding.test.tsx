@@ -283,7 +283,7 @@ it("结束追踪后仍显示结果未知，新验证仍须再次确认费用", a
   expect(api.test).not.toHaveBeenCalled();
 });
 
-it("未知请求可复制脱敏标识并查看原凭据引用", async () => {
+it("未知请求保留可复制的请求标识", async () => {
   state.check = {
     id: "unknown",
     request_id: "request-original",
@@ -298,7 +298,7 @@ it("未知请求可复制脱敏标识并查看原凭据引用", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "查看核查说明" }));
   fireEvent.click(await screen.findByRole("button", { name: "复制请求标识" }));
   expect(api.copy).toHaveBeenCalledWith("request-original");
-  expect(screen.getByText(/credential-original/)).toBeDefined();
+  expect(screen.queryByText(/credential-original/)).toBeNull();
 });
 
 it("管理页验证不依赖画布专用反馈上下文", async () => {

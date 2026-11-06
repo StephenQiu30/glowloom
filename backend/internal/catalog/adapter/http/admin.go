@@ -570,6 +570,7 @@ func (h *AdminHandler) PublishVersion(c *gin.Context) {
 
 // PublishPriceRequest publishes the exact price coefficients and effective date.
 type PublishPriceRequest struct {
+	UseOfficialRate  bool             `json:"use_official_rate,omitempty"`
 	SourceURL        string           `json:"source_url"`
 	ReviewedAt       *time.Time       `json:"reviewed_at"`
 	ExpectedRevision int64            `json:"expected_revision"`
@@ -604,7 +605,7 @@ func (h *AdminHandler) PublishPrice(c *gin.Context) {
 	if !httpapi.Decode(c, &b) {
 		return
 	}
-	result, err := h.deps.PublishPrice.Execute(c.Request.Context(), identityhttp.Principal(c), application.PublishPriceRuleInput{SourceURL: b.SourceURL, ReviewedAt: b.ReviewedAt, ModelID: id, ExpectedRevision: b.ExpectedRevision, VersionNo: b.VersionNo, Unit: b.Unit, Rule: b.Rule, Currency: b.Currency, FXRateToCNY: b.FXRateToCNY, EffectiveFrom: b.EffectiveFrom, RequestID: c.GetHeader("Idempotency-Key")})
+	result, err := h.deps.PublishPrice.Execute(c.Request.Context(), identityhttp.Principal(c), application.PublishPriceRuleInput{UseOfficialRate: b.UseOfficialRate, SourceURL: b.SourceURL, ReviewedAt: b.ReviewedAt, ModelID: id, ExpectedRevision: b.ExpectedRevision, VersionNo: b.VersionNo, Unit: b.Unit, Rule: b.Rule, Currency: b.Currency, FXRateToCNY: b.FXRateToCNY, EffectiveFrom: b.EffectiveFrom, RequestID: c.GetHeader("Idempotency-Key")})
 	if err != nil {
 		adminError(c, err)
 		return
