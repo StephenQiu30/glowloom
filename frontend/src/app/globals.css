@@ -56,6 +56,8 @@
 }
 
 :root {
+  --toolbar-control-size: 28px;
+  --toolbar-group-padding: 3px;
   --confirmation-background: #fff;
   --confirmation-secondary: rgb(0 0 0 / 6%);
   --confirmation-primary: #1a1a1a;
@@ -392,10 +394,6 @@ button:not(:disabled),
   z-index: 50;
   padding: 8px 12px;
   background: var(--background);
-}
-:root {
-  --toolbar-control-size: 28px;
-  --toolbar-group-padding: 3px;
 }
 :root,
 [data-toolbar-density="roomy"] {
