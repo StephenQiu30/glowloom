@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ConversationWorkspace } from "@/components/conversations/conversation-workspace";
+import { emptyPromptDraft } from "@/components/generation/prompt-document";
+import { draftText } from "@/components/conversations/conversation-state";
 import type { ConversationController } from "@/components/conversations/use-conversation";
 
 const { useConversation } = vi.hoisted(() => ({ useConversation: vi.fn() }));
@@ -35,6 +37,7 @@ const existing = {
 
 function setup(overrides: Partial<ConversationController> = {}) {
   const conversation = {
+    draft: emptyPromptDraft(),
     summaries: [],
     loading: false,
     denied: false,
@@ -97,11 +100,32 @@ it("selects the exact enabled skill version without changing the draft or sendin
   expect(c.send).not.toHaveBeenCalled();
 });
 
-it("keeps the empty composer available without showing recommendations from an unavailable project", () => {
-  setup();
+it("shows all three starters without a project and fills a real prompt without selecting a skill or sending", () => {
+  const c = setup();
   render(<ConversationWorkspace {...props} enabled={false} />);
   expect(screen.getByText("创作输入")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: /试一试/ })).toBeNull();
+  expect(screen.getAllByRole("button", { name: /试一试/ })).toHaveLength(3);
+  fireEvent.click(
+    screen.getByRole("button", { name: "试一试：叙事短片导演分镜" }),
+  );
+  const draft = vi.mocked(c.changeDraft).mock.calls[0]![0];
+  expect(draftText(draft)).toContain("分镜");
+  expect(c.changeSettings).not.toHaveBeenCalled();
+  expect(c.send).not.toHaveBeenCalled();
+});
+
+it("keeps existing input intact when trying a starter", () => {
+  const draft = emptyPromptDraft();
+  draft.document.content = [
+    { type: "paragraph", content: [{ type: "text", text: "原有创作草稿" }] },
+  ];
+  const c = setup({ draft, skills: [] });
+  render(<ConversationWorkspace {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "试一试：系列套图生成" }));
+  expect(draftText(vi.mocked(c.changeDraft).mock.calls[0]![0])).toMatch(
+    /^原有创作草稿\n请根据/,
+  );
+  expect(c.send).not.toHaveBeenCalled();
 });
 
 it("keeps history pages separate from the new conversation landing", () => {

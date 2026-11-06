@@ -14,6 +14,7 @@ export function ConversationWorkspace({
   onChooseProject,
   headerActions,
   projectControl,
+  projectSetting,
   onLock,
   embedded = false,
   ...options
@@ -21,6 +22,7 @@ export function ConversationWorkspace({
   onChooseProject: () => void;
   headerActions?: ReactNode;
   projectControl?: ReactNode;
+  projectSetting?: ReactNode;
   onLock?: (locked: boolean) => void;
   embedded?: boolean;
 }) {
@@ -54,14 +56,41 @@ export function ConversationWorkspace({
           skills={authorized && !c.loading ? c.skills : []}
           selected={c.settings.skills}
           disabled={c.active || c.phase !== "idle"}
-          onSelect={(skill) => {
-            if (
-              !c.settings.skills.some((pin) => isSameSkillVersion(pin, skill))
-            ) {
-              c.changeSettings({
-                ...c.settings,
-                skills: selectSkillVersion(c.settings.skills, skill),
-              });
+          onSelect={(prompt, skill) => {
+            if (skill) {
+              if (
+                !c.settings.skills.some((pin) => isSameSkillVersion(pin, skill))
+              ) {
+                c.changeSettings({
+                  ...c.settings,
+                  skills: selectSkillVersion(c.settings.skills, skill),
+                });
+              }
+            } else {
+              const content = c.draft.document.content;
+              const hasStarter = content.some(
+                (paragraph) =>
+                  paragraph.content?.length === 1 &&
+                  paragraph.content[0]?.type === "text" &&
+                  paragraph.content[0].text === prompt,
+              );
+              if (!hasStarter) {
+                c.changeDraft({
+                  ...c.draft,
+                  document: {
+                    ...c.draft.document,
+                    content: [
+                      ...(content.some((paragraph) => paragraph.content?.length)
+                        ? content
+                        : []),
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: prompt }],
+                      },
+                    ],
+                  },
+                });
+              }
             }
             composer.current?.focusPrompt();
           }}
@@ -108,6 +137,8 @@ export function ConversationWorkspace({
           onChooseProject={onChooseProject}
           headerActions={headerActions}
           projectControl={projectControl}
+          projectSetting={projectSetting}
+          welcome={welcome}
         />
       </div>
     </div>

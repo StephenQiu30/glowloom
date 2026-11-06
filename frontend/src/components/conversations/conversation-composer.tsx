@@ -56,6 +56,8 @@ export function ConversationComposer({
   onChooseProject,
   headerActions,
   projectControl,
+  projectSetting,
+  welcome = false,
 }: {
   ref?: Ref<ConversationComposerHandle>;
   conversation: ConversationController;
@@ -65,6 +67,8 @@ export function ConversationComposer({
   onChooseProject: () => void;
   headerActions?: ReactNode;
   projectControl?: ReactNode;
+  projectSetting?: ReactNode;
+  welcome?: boolean;
 }) {
   const [session, setSession] = useState<ComposerSession | null>(null),
     [expanded, setExpanded] = useState(false);
@@ -125,7 +129,8 @@ export function ConversationComposer({
         : !hasInput;
   return (
     <div
-      className="conversation-composer relative w-full rounded-[24px] border bg-card p-4 text-left"
+      className="conversation-composer relative w-full rounded-[24px] border bg-card p-4 text-left data-[welcome=true]:md:py-[15px]"
+      data-welcome={welcome}
       aria-label="创作输入"
       onKeyDown={(event) => {
         if (
@@ -155,7 +160,11 @@ export function ConversationComposer({
           </Button>
         </div>
       ) : null}
-      <div className="flex min-h-[84px] min-w-0 items-start gap-3">
+      <div
+        data-slot="conversation-reference-input"
+        data-expanded={expanded}
+        className="flex min-h-[84px] min-w-0 items-start gap-3"
+      >
         {session ? (
           <ReferenceControls
             session={session}
@@ -176,6 +185,7 @@ export function ConversationComposer({
           />
         )}
         <div
+          data-slot="conversation-prompt"
           className={`min-w-0 flex-1 overflow-y-auto ${expanded ? "h-[min(50dvh,24rem)]" : "h-[84px]"}`}
           onKeyDownCapture={(event) => {
             const selection = session?.editor.state.selection;
@@ -218,7 +228,10 @@ export function ConversationComposer({
       </div>
       <div className="mt-3 flex min-w-0 flex-wrap items-center gap-1">
         {headerActions ?? (
-          <span className="flex h-9 items-center gap-1.5 px-2 text-sm">
+          <span
+            className="flex h-9 items-center gap-1.5 px-2 text-sm data-[welcome=true]:text-[var(--navigation-accent)]"
+            data-welcome={welcome}
+          >
             <Sparkles className="size-4" />
             Agent 模式
           </span>
@@ -242,6 +255,17 @@ export function ConversationComposer({
             className="w-72 space-y-3 p-4"
           >
             <PopoverTitle>创作设置</PopoverTitle>
+            {projectSetting}
+            {welcome && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded((value) => !value)}
+              >
+                {expanded ? "收起输入" : "展开输入"}
+              </Button>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor={budgetID}>本轮预算上限（元）</Label>
               <Input
@@ -382,20 +406,22 @@ export function ConversationComposer({
         >
           <AtSign className="size-4" />
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="max-md:size-11"
-          aria-label={expanded ? "收起输入" : "展开输入"}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded ? (
-            <Minimize2 className="size-4" />
-          ) : (
-            <Maximize2 className="size-4" />
-          )}
-        </Button>
+        {!welcome && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="max-md:size-11"
+            aria-label={expanded ? "收起输入" : "展开输入"}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? (
+              <Minimize2 className="size-4" />
+            ) : (
+              <Maximize2 className="size-4" />
+            )}
+          </Button>
+        )}
         <div className="ml-auto flex min-w-0 items-center gap-1">
           <span className="sr-only">对话模型</span>
           <ModelPicker

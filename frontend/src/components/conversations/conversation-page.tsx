@@ -4,6 +4,13 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from "cn";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
@@ -53,21 +60,14 @@ export function ConversationPage({
   }, [projectID, owner, session, space.selected, project?.id, selectProject]);
   const selectedID = projectID ?? project?.id ?? "",
     writable = !!session && !!space.selected?.writable;
-  const projectControl = session ? (
-    <ProjectPicker
-      compact
-      value={project?.id === selectedID ? project : null}
-      open={open}
-      onOpenChange={setOpen}
-      disabled={!!sessionID}
-      onChange={(p) => {
-        memory?.selectProject(p);
-        router.push(`/conversations?projectId=${p.id}`);
-      }}
-    />
-  ) : null;
+  const selectedProject = project?.id === selectedID ? project : null;
   return (
-    <div className="flex h-[calc(100dvh-var(--layout-header))] min-h-[22rem] min-w-0 flex-col px-3 pt-3 pb-5 md:px-6">
+    <div
+      className={cn(
+        "flex h-[calc(100dvh-var(--layout-header))] min-h-[22rem] min-w-0 flex-col px-3 pb-5 md:px-6",
+        sessionID ? "pt-3" : "pt-2 md:pt-11 md:pb-[21px]",
+      )}
+    >
       {!sessionID && (
         <PageToolbar inHeader slot="actions">
           <Button asChild variant="outline" aria-label="资产库">
@@ -78,14 +78,41 @@ export function ConversationPage({
           </Button>
         </PageToolbar>
       )}
-      <header className="mx-auto mb-2 flex h-9 w-full max-w-[960px] shrink-0 items-center justify-between gap-3">
-        {sessionID ? (
+      {sessionID && (
+        <header className="mx-auto mb-2 flex h-9 w-full max-w-[960px] shrink-0 items-center justify-between gap-3">
           <h1 className="truncate text-sm font-medium">对话</h1>
-        ) : (
-          <p className="sr-only">新建对话</p>
-        )}
-        <div className="ml-auto">{projectControl}</div>
-      </header>
+          {selectedProject && (
+            <span className="truncate text-sm text-muted-foreground">
+              {selectedProject.name}
+            </span>
+          )}
+        </header>
+      )}
+      {session && !sessionID && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent>
+            <DialogTitle>选择所属项目</DialogTitle>
+            <DialogDescription>
+              对话历史、素材和生成权限归属所选项目。
+            </DialogDescription>
+            <ProjectPicker
+              value={selectedProject}
+              onChange={(next) => {
+                const draft = memory?.readDraft("/new");
+                if (
+                  !selectedID &&
+                  draft &&
+                  !memory?.readDraft(`${next.id}/new`)
+                )
+                  memory?.saveDraft(`${next.id}/new`, draft);
+                memory?.selectProject(next);
+                setOpen(false);
+                router.push(`/conversations?projectId=${next.id}`);
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
       {failure?.owner === owner ? (
         <p role="alert" className="mb-3 text-sm">
           {failure.text}
@@ -97,6 +124,22 @@ export function ConversationPage({
         projectID={selectedID}
         sessionID={sessionID}
         enabled={writable && !!selectedID && !(failure?.owner === owner)}
+        projectSetting={
+          !sessionID && session ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="选择所属项目"
+              onClick={() => setOpen(true)}
+            >
+              <Folder data-icon="inline-start" />
+              <span className="truncate">
+                {selectedProject?.name ?? "选择项目"}
+              </span>
+            </Button>
+          ) : null
+        }
         onChooseProject={() => {
           if (!session) login();
           else setOpen(true);
