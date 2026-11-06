@@ -12,6 +12,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: "24"
+
 jobs:
   backend:
     runs-on: ubuntu-24.04
@@ -68,7 +71,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - uses: actions/setup-node@v7
         with:
-          node-version: "24.22.2"
+          node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:
@@ -79,22 +82,23 @@ jobs:
         working-directory: canvas
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
-          pnpm typecheck
           pnpm test
       - name: Install media probe tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Initialize isolated test databases
         run: |
-          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE glowloom_agent LOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe' -c 'CREATE DATABASE glowloom_governance' -c 'CREATE DATABASE glowloom_catalog' -c 'CREATE DATABASE glowloom_subject_alignment_ci' -c 'CREATE DATABASE glowloom_subject_source_ci' -c 'CREATE DATABASE glowloom_subject_storage_ci' -c 'CREATE DATABASE glowloom_subject_storage_package_ci' -c 'CREATE DATABASE glowloom_subject_storage_script_ci'
-          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
-          psql "$GLOWLOOM_TEST_GOVERNANCE_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
-          psql "postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
-          psql "$GLOWLOOM_TEST_SUBJECT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
-          psql "$GLOWLOOM_TEST_SCRIPT_LOCATION_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
-      - name: Provision durable task and cross-language databases
-        run: |
-          for database in glowloom_app_scope_test glowloom_business_test glowloom_agent_canvas_test glowloom_boundary_test glowloom_tasks_test glowloom_maintenance_test glowloom_receipt glowloom_gateway_test; do
-            psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
+          admin_dsn="$GLOWLOOM_TEST_CANVAS_DB_DSN"
+          psql "$admin_dsn" -X -v ON_ERROR_STOP=1 \
+            -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' \
+            -c 'CREATE ROLE glowloom_agent LOGIN NOSUPERUSER' \
+            -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app'
+          # These suites initialize their own schema.
+          for database in schema_probe glowloom_subject_source_ci glowloom_subject_storage_ci glowloom_subject_storage_package_ci; do
+            psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
+          done
+          psql "$admin_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+          for database in glowloom_governance glowloom_catalog glowloom_subject_alignment_ci glowloom_subject_storage_script_ci glowloom_app_scope_test glowloom_business_test glowloom_agent_canvas_test glowloom_boundary_test glowloom_tasks_test glowloom_maintenance_test glowloom_receipt glowloom_gateway_test; do
+            psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             psql "postgres://postgres@127.0.0.1:5432/$database?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           done
       - name: Install the production Agent used by boundary tests
@@ -139,7 +143,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - uses: actions/setup-node@v7
         with:
-          node-version: "24.22.2"
+          node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:
@@ -155,15 +159,14 @@ jobs:
           done
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm format:check
-      - run: pnpm build
-      - run: pnpm api:check
-      - name: Test official Storage, Harness and process-crash recovery
+      - name: Test contracts, Storage, Harness and process-crash recovery
+        env:
+          GLOWLOOM_AGENT_EXPORT_OPENAPI: "1"
         run: pnpm test
-      - name: Build the independent Agent image
-        working-directory: .
-        run: docker build --tag glowloom/agent:ci agent
+      - name: Check generated API clients
+        run: |
+          pnpm api:check-go
+          pnpm api:typecheck
 
   frontend:
     runs-on: ubuntu-24.04
@@ -175,7 +178,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:

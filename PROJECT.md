@@ -57,9 +57,13 @@ Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 AP
 | Canvas 服务 | 在 `canvas/` 执行 `pnpm typecheck`、`pnpm check` 和 `pnpm test`，并验证 Go 内部 HTTP 和前端共享包导出。 |
 | 文档       | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                                      |
 
-当前 CI 为 backend、frontend、agent 三个独立任务，各服务独立验证，以业务测试和可构建性为底线：后端运行私有协作包与 Agent 全量测试（使用隔离 PostgreSQL），及一次 `go test -race -count=1 ./...`，保留 Go 默认 vet、编译和 Race 检查；前端运行全量 `pnpm exec vitest run --maxWorkers=2` 及一次 Next.js 生产构建，由构建执行 TypeScript 检查，不启用跳过类型错误。Vitest 最多两个 worker，控制 jsdom 并发资源开销，不放宽测试超时或业务断言。继续使用锁文件安装，并缓存 Go 依赖/构建和 pnpm store。默认 CI 不再安装或运行 golangci-lint、govulncheck、Wire/goimports 生成检查、ESLint、测试目录布局检查，也不重复执行 next typegen/tsc；这些工具仍按改动风险在本地使用，接口或接线变更仍需相应生成一致性验证。不增加测试矩阵、覆盖率阈值、定时扫描或应用镜像构建。
+默认 CI 并行运行 backend、agent、frontend 三个任务。Go 版本来自 `backend/go.mod`，Node.js 使用统一的 24 主版本，pnpm 版本来自各包清单，依赖使用冻结锁文件及缓存。
 
-后端 CI 继续使用隔离 PostgreSQL 和 FFmpeg 覆盖对应 Go 业务；Agent CI 使用同一 PostgreSQL 服务的独立测试库/受限角色执行官方 Storage 与故障恢复测试，不以缺配置跳过代替通过。Agent 新增独立检查任务，不把 TypeScript 服务测试塞入 Go 或前端构建；不增加矩阵/覆盖率阈值或额外基础设施。Redis、Kafka、对象存储及跨服务专项验证按变更风险执行；默认 CI 通过不代表实际供应商、费用或完整产品接受。
+- Backend 运行一次 `go test -race -count=1 ./...`，覆盖 Go 默认 vet、编译、竞态和跨服务协议。Canvas 的 `pnpm test` 同时构建生产入口，供后续 Go 测试直接使用。隔离 PostgreSQL、COS 协议夹具和 FFmpeg 提供实际集成依赖。
+- Agent 在独立 PostgreSQL 测试库和受限角色下做严格类型检查及一次生产编译和全量测试，覆盖官方 Storage、进程恢复与双向 API 合同。全量测试同时导出 Agent OpenAPI，随后核对 Go 客户端产物和生成声明。
+- Frontend 构建共享 Canvas 包后运行全量 Vitest，最多两个 worker。一次 Next.js 生产构建完成 TypeScript 检查，并用 standalone 产物验证协作代理。
+
+格式、lint、专项安全扫描和容器镜像检查按改动范围执行。部署与真实供应商验收单独验证。
 
 验证范围与修改风险匹配。文档变更不需要重跑无关业务测试；UI/工程检查、隔离存储、真实邮件、实际数据库迁移和产品接受分别记录。缺少外部条件或未执行的检查不得报告通过。
 

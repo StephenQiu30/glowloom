@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@12.4.2",
   "engines": {
-    "node": "24.22.2"
+    "node": ">=24 <25"
   },
   "scripts": {
     "dev": "pnpm run build && sh -c 'node_modules/.bin/tsc --watch -p tsconfig.build.json & compiler=$!; trap \"kill $compiler 2>/dev/null || true\" EXIT; node --watch --enable-source-maps dist/src/server.js'",

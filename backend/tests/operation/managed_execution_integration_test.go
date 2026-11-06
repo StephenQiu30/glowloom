@@ -43,6 +43,7 @@ func TestManagedTextDispatchRecoveryAndSettlement(t *testing.T) {
 	database := operationStoreDB(t)
 	fixture := seedManagedFixture(t, database)
 	i, store := fixture.identity, fixture.store
+	require.NoError(t, database.Exec(`UPDATE catalog.provider SET current_config_version_id=? WHERE id=?`, fixture.config, fixture.provider).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":10}' WHERE id=?`, i.PriceRuleVersionID).Error)
