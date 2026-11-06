@@ -195,7 +195,7 @@ func (nodeRuntime) Prepare(ctx context.Context, state application.YjsState, upda
 }
 func fixtureCall(ctx context.Context, action string, input, output any) error {
 	_, file, _, _ := runtime.Caller(0)
-	script := filepath.Join(filepath.Dir(file), "../../../canvas-collab/tests/projection-fixture.mjs")
+	script := filepath.Join(filepath.Dir(file), "../../../canvas/tests/projection-fixture.mjs")
 	body, err := json.Marshal(map[string]any{"action": action, "input": input})
 	if err != nil {
 		return err

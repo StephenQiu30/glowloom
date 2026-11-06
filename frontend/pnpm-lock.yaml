@@ -166,9 +166,9 @@ importers:
 
   .:
     dependencies:
-      '@glowloom/canvas-collab':
-        specifier: file:../canvas-collab
-        version: file:../canvas-collab(@tiptap/suggestion@3.32.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0))(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.6)(supports-color@7.2.0)(y-protocols@1.0.7(yjs@13.6.33))
+      '@glowloom/canvas':
+        specifier: file:../canvas
+        version: file:../canvas(@tiptap/suggestion@3.32.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0))(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.6)(supports-color@7.2.0)(y-protocols@1.0.7(yjs@13.6.33))
       '@pdf-lib/fontkit':
         specifier: ^1.1.1
         version: 1.1.1
@@ -670,8 +670,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@glowloom/canvas-collab@file:../canvas-collab':
-    resolution: {directory: ../canvas-collab, type: directory}
+  '@glowloom/canvas@file:../canvas':
+    resolution: {directory: ../canvas, type: directory}
     engines: {node: '>=24 <25'}
 
   '@hono/node-server@2.1.1':
@@ -6014,7 +6014,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@glowloom/canvas-collab@file:../canvas-collab(@tiptap/suggestion@3.32.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0))(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.6)(supports-color@7.2.0)(y-protocols@1.0.7(yjs@13.6.33))':
+  '@glowloom/canvas@file:../canvas(@tiptap/suggestion@3.32.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0))(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.6)(supports-color@7.2.0)(y-protocols@1.0.7(yjs@13.6.33))':
     dependencies:
       '@nestjs/common': 12.3.3(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0)
       '@nestjs/core': 12.3.3(@nestjs/common@12.3.3(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(reflect-metadata@0.2.2)(rxjs@7.8.2)

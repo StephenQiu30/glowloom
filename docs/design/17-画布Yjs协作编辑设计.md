@@ -32,7 +32,7 @@
 
 2026-10-24 已确认全面采用 Yjs：正式入口及 WebSocket 只使用 protocol 4，移除 `NEXT_PUBLIC_CANVAS_YJS` 双轨开关和 protocol 3 写入入口。Go 接受 Yjs 隔离候选后直接执行领域投影校验与数据库事务，不再调用 OT 提交、变换或贡献撤销。有限的领域字段赋值、图验证与输入版本推进属于投影校验，不承担客户端并发合并。删除恢复改用已接受删除事实、当前 epoch/commitSeq 和最新图验证授权身份复用；已有历史记录保留，不批量销毁。
 
-复用现有前端、Go应用和`canvas-collab` TypeScript 核心。增加承担实际Y.Doc运行的内部协作进程是现有方案的接线需要；先按单协作实例、按画布隔离房间落地，不为起步部署引入Redis、Kafka或跨区域架构。所有应用进程由Docker运行，复用现有PostgreSQL与对象存储。业务模块仍遵循adapter → application → domain。
+复用现有前端、Go应用和`canvas` TypeScript 核心。增加承担实际Y.Doc运行的内部协作进程是现有方案的接线需要；先按单协作实例、按画布隔离房间落地，不为起步部署引入Redis、Kafka或跨区域架构。所有应用进程由Docker运行，复用现有PostgreSQL与对象存储。业务模块仍遵循adapter → application → domain。
 
 ```mermaid
 flowchart LR
@@ -57,7 +57,19 @@ flowchart LR
 
 画布编辑由外部 WebSocket 进入 Go。Go 调用协作运行时计算候选，在事务中接受后再投递。失败时沿原提交身份查证。内部调用绑定文档、epoch、writerTerm、基线 commitSeq、原提交身份和哈希。
 
-协作运行时在原 `canvas-collab/` 目录使用 NestJS 和 Fastify，由 TypeScript 编译后独立运行。前端继续消费 `@glowloom/canvas-collab` 的共享模块，服务端路由与认证留在私有入口。Go 与协作运行时沿用现有 HTTP 契约。
+协作运行时位于 `canvas/`，使用 TypeScript、NestJS 与 Fastify。Compose 服务名为 `canvas`，Go 通过内部地址 `http://canvas:4400` 调用。前端从 `@glowloom/canvas` 的明确子路径消费共享模块，使用现有 HTTP、WebSocket 和 Yjs 数据合同。
+
+| 位置 | 职责 |
+| --- | --- |
+| `canvas/src/server.ts` | 进程入口，读取配置、监听并响应关闭信号 |
+| `canvas/src/http/` | Nest 装配、服务身份、请求限额与路由 |
+| `canvas/src/runtime/` | 候选计算、更新准入、提交状态和内部命令 |
+| `canvas/src/document/` | Yjs 文档模型、共享根、富文本 Schema 和投影 |
+| `canvas/src/collaboration/` | 会话、日志、意图和重连恢复 |
+| `canvas/src/protocol/` | 二进制和分帧编解码 |
+| `canvas/types/` | 包导出所用的共享 TypeScript 声明 |
+
+私有 HTTP 依赖运行时。运行时和浏览器会话分别复用文档与编解码。共享包导出只包含浏览器可用的模块。目录规范见 [Canvas 工程规范](../../canvas/AGENTS.md)。
 
 #### 7.0.1 首次接线合同
 
@@ -83,7 +95,7 @@ flowchart LR
 | 资产与任务     | 共享图保存稳定身份/版本和必要显示投影             | 媒体字节不进Y.Doc；任务状态和费用等系统事实来自Go，不允许普通客户端改写 |
 | 在线与视图     | presence与个人偏好独立                            | 游标/选择/预览不进持久图；不通过同步他人viewport控制当前用户视图        |
 
-前端共享schema、投影器、协议编解码、候选校验由`canvas-collab`承担可复用核心；运行服务和数据库适配各自拥有I/O。字段清单和数据合同由设计14维护。`schemaVersion`、`epoch`、`writerTerm`、`commitSeq`属于服务端控制面，不因出现在客户端信封就可信。
+前端共享schema、投影器、协议编解码、候选校验由`canvas`承担可复用核心；运行服务和数据库适配各自拥有I/O。字段清单和数据合同由设计14维护。`schemaVersion`、`epoch`、`writerTerm`、`commitSeq`属于服务端控制面，不因出现在客户端信封就可信。
 
 参考显示编号不是绑定身份：共享提示词的labelState及编号墓碑继续保留，但不能让各端独立highWater + 1后直接合并成重复编号。建议由受信接受路径为新bindingId分配尚未使用的编号，与正文引用/分配记录同事务持久化；客户端未确认编号只是预览。已有绑定/编号不因他人新增而重排，撤销不回收给其他绑定。服务端分配产生的派生Yjs更新须纳入同一候选二进制、投影和回执版本并返回客户端，不能只改JSON。并发新增、重复提及、删除/恢复及失权引用需在真实schema下验证；此前独立草稿的整份CAS改号不直接复用于共享画布。
 
@@ -232,7 +244,7 @@ Go 在画布行锁内复核权限、writerTerm、epoch、commitSeq 和业务修�
 
 当前独立画布的 `annotation` 是视觉注释连线，领域合同允许视觉环。计划中的“合并成环拒绝”专指业务依赖图；工作流/任务结果接线前不能以注释环制造不符合领域合同的限制。重复关系、失效目标、越权素材与不支持字段仍需拒绝，并保证拒绝的Yjs结构不污染已接受状态。
 
-默认开发和生产 Compose 均包含私有 `canvas-collaboration` 服务，Go 依赖其健康检查，双方使用至少32字符的内部 token。原 collaboration overlay 仅保留空兼容文件。先用 `backend/db/schema.sql` 初始化隔离空库并验证 Yjs 持久化，不再传前端 Yjs 构建开关。运行时不可用时明确报依赖故障，不回退旧编辑服务。每个文档独立转换；不能对已有新接受记录直接删除协作状态或回退旧快照。各项业务能力仍须满足计划退出条件后声明验收。
+默认开发和生产 Compose 均包含私有 `canvas` 服务，Go 依赖其健康检查，双方使用至少32字符的内部 token。先用 `backend/db/schema.sql` 初始化隔离空库并验证 Yjs 持久化，不再传前端 Yjs 构建开关。运行时不可用时明确报依赖故障，不回退旧编辑服务。每个文档独立转换；不能对已有新接受记录直接删除协作状态或回退旧快照。各项业务能力仍须满足计划退出条件后声明验收。
 
 ### 10.5 引用与生命周期恢复的正式接受合同
 

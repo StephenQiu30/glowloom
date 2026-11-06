@@ -3,8 +3,8 @@ import {
   openCanvasPendingJournal,
   type CanvasPendingStore,
 } from "@/components/canvas/lib/canvas-yjs-pending-journal";
-import type { RecoveryRecord } from "@glowloom/canvas-collab/session";
-import type { ServiceGraph } from "@glowloom/canvas-collab/service-document";
+import type { RecoveryRecord } from "@glowloom/canvas/session";
+import type { ServiceGraph } from "@glowloom/canvas/service-document";
 
 const identity = () => ({
   origin: "https://canvas.example",

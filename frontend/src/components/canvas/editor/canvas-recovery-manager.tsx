@@ -21,7 +21,7 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
-import { collaborationJournal } from "@glowloom/canvas-collab/journal";
+import { collaborationJournal } from "@glowloom/canvas/journal";
 type CanvasRecoveryUsage = Awaited<
   ReturnType<typeof collaborationJournal.summarizeActor>
 >[number];

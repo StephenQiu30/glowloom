@@ -41,9 +41,9 @@
 7. 保持 TypeScript 严格类型和组件单一职责，外部数据在边界校验；复用项目组件体系及其官方语义，保证键盘操作、焦点、可访问名称与响应式布局。
 8. 修改后运行 PROJECT.md 中适用的前端质量门禁，交互变化补充对应浏览器验证；代码审查须覆盖本节规则。lint、类型检查或构建通过不等于完成最佳实践审查或产品验收。
 
-## Agent 服务工程规范
+## Node.js 服务工程规范
 
-`agent/` 下的 Node.js / TypeScript 服务遵循 [Agent 服务规范](agent/AGENTS.md)，其中以 Google TypeScript Style Guide 为代码风格基线，并明确 Node.js、NestJS 装饰器及模块边界的项目约定。该规则只适用于独立 Agent 服务，不把 React / Next.js 的前端规范套用到服务端。
+独立 NestJS 服务遵循 [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)。进程入口负责配置、监听和关闭。Nest 装配及入站协议集中在 HTTP 边界，业务逻辑按职责组织并使用普通 TypeScript 模块。各服务的依赖边界与门禁分别见 [Agent 规范](agent/AGENTS.md)和 [Canvas 规范](canvas/AGENTS.md)。
 
 ## 验证与 Git
 

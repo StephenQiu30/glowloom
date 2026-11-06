@@ -5,18 +5,18 @@ RUN corepack enable
 WORKDIR /app
 
 FROM base AS collaboration
-WORKDIR /canvas-collab
-COPY canvas-collab/package.json canvas-collab/pnpm-lock.yaml canvas-collab/tsconfig.json ./
+WORKDIR /canvas
+COPY canvas/package.json canvas/pnpm-lock.yaml canvas/tsconfig.json ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
-COPY canvas-collab/src ./src
-COPY canvas-collab/types ./types
+COPY canvas/src ./src
+COPY canvas/types ./types
 RUN pnpm build
 
 FROM base AS deps
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
-COPY canvas-collab/package.json /canvas-collab/package.json
-COPY --from=collaboration /canvas-collab/dist /canvas-collab/dist
-COPY --from=collaboration /canvas-collab/types /canvas-collab/types
+COPY canvas/package.json /canvas/package.json
+COPY --from=collaboration /canvas/dist /canvas/dist
+COPY --from=collaboration /canvas/types /canvas/types
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS dev
@@ -31,7 +31,7 @@ FROM base AS build
 # Next persists external Upgrade rewrites in its build manifest.
 ARG GLOWLOOM_BACKEND_ORIGIN
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /canvas-collab /canvas-collab
+COPY --from=deps /canvas /canvas
 COPY frontend/ .
 # Type checking includes the test that compares the frontend and backend catalogs.
 COPY backend/internal/prompt/domain/cinema_catalog.json /backend/internal/prompt/domain/cinema_catalog.json

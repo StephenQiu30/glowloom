@@ -153,13 +153,13 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           ? `USER:${store.getState().account.account!.id}`
           : null;
         let log:
-          | typeof import("@glowloom/canvas-collab/journal").collaborationJournal
+          | typeof import("@glowloom/canvas/journal").collaborationJournal
           | null = null;
         let count = 0;
         let cleanupUnavailable = false;
         try {
           if (actorKey) {
-            log = (await import("@glowloom/canvas-collab/journal"))
+            log = (await import("@glowloom/canvas/journal"))
               .collaborationJournal;
             count = await log.countActor(window.location.origin, actorKey);
           }

@@ -42,10 +42,11 @@ services:
       retries: 3
     mem_limit: 1g
     cpus: 1
-  canvas-collaboration:
-    container_name: glowloom-canvas-collaboration
+  canvas:
+    container_name: glowloom-canvas
+    image: glowloom/canvas:current
     build:
-      context: ./canvas-collab
+      context: ./canvas
     init: true
     restart: unless-stopped
     read_only: true
@@ -102,7 +103,7 @@ services:
 
   backend:
     depends_on:
-      canvas-collaboration:
+      canvas:
         condition: service_healthy
     container_name: glowloom-backend
     build:
@@ -128,7 +129,7 @@ services:
     tmpfs:
       - /work:rw,noexec,nosuid,size=8g,uid=65532,gid=65532,mode=0700
     environment:
-      GLOWLOOM_CANVAS_RUNTIME_URL: http://canvas-collaboration:4400
+      GLOWLOOM_CANVAS_RUNTIME_URL: http://canvas:4400
       GLOWLOOM_AGENT_ORIGIN: http://agent:4401
       GLOWLOOM_AGENT_SERVICE_TOKEN: ${GLOWLOOM_AGENT_SERVICE_TOKEN:?Set a separate Go-to-Agent token}
       GLOWLOOM_AGENT_BUSINESS_TOKEN: ${GLOWLOOM_AGENT_BUSINESS_TOKEN:?Set a separate Agent-to-Go token}

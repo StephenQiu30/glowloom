@@ -101,7 +101,7 @@ const selectionBlue = "var(--ring)";
 type CanvasNodeProps = {
   readOnly?: boolean;
   acceptContent?: (value: string, document: RichTextDocument) => boolean;
-  collaboration?: import("@glowloom/canvas-collab/model").NodeTextBinding;
+  collaboration?: import("@glowloom/canvas/model").NodeTextBinding;
   data: CanvasNodeData;
   scale: number;
   isSelected: boolean;
@@ -168,7 +168,7 @@ type CanvasNodeProps = {
 type NodeContentRendererProps = {
   readOnly?: boolean;
   acceptContent?: (value: string, document: RichTextDocument) => boolean;
-  collaboration?: import("@glowloom/canvas-collab/model").NodeTextBinding;
+  collaboration?: import("@glowloom/canvas/model").NodeTextBinding;
   node: CanvasNodeData;
   theme: (typeof canvasThemes)[keyof typeof canvasThemes];
   isEditingContent: boolean;

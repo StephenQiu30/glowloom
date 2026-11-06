@@ -9,16 +9,16 @@ import {
   type RecoveryRecord,
   type RecoverySource,
   type SessionTransport,
-} from "@glowloom/canvas-collab/session";
+} from "@glowloom/canvas/session";
 import {
   archiveRecovery,
   recoveryFields,
   type RecoveryField,
-} from "@glowloom/canvas-collab/recovery";
+} from "@glowloom/canvas/recovery";
 import {
   collaborationJournal,
   type CollaborationJournal,
-} from "@glowloom/canvas-collab/journal";
+} from "@glowloom/canvas/journal";
 import {
   canvasUndoManager,
   applyCanvasHistory,
@@ -26,7 +26,7 @@ import {
   nodeTextBinding,
   type CanvasTextDraft,
   type NodeTextBinding,
-} from "@glowloom/canvas-collab/model";
+} from "@glowloom/canvas/model";
 import * as api from "@/components/canvas/runtime/api/canvas-document-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 import {

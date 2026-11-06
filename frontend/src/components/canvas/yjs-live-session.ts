@@ -11,25 +11,25 @@ import {
   type DurableReceipt,
   type FrozenUpdate,
   type RecoveryRecord,
-} from "@glowloom/canvas-collab/session";
+} from "@glowloom/canvas/session";
 import {
   archiveRecovery,
   recoveryFields,
   type RecoveryField,
-} from "@glowloom/canvas-collab/recovery";
+} from "@glowloom/canvas/recovery";
 import {
   nodeTextBinding,
   canvasUndoManager,
   applyCanvasHistory,
   type NodeTextBinding,
   type CanvasTextDraft,
-} from "@glowloom/canvas-collab/model";
+} from "@glowloom/canvas/model";
 import {
   serviceSnapshot,
   serviceProjection,
   type ServiceDocument,
   type ServiceGraph,
-} from "@glowloom/canvas-collab/service-document";
+} from "@glowloom/canvas/service-document";
 import type * as Y from "yjs";
 import { DOMParser as PromptDOMParser } from "@tiptap/pm/model";
 import type { ComposerSession } from "@/components/generation/composer-session";

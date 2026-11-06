@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { CanvasEditorState } from "../lib/canvas-document-adapter";
 import type { CanvasGenerationProjection } from "../lib/canvas-generation-projection";
 import type { CanvasPendingForms } from "./canvas-recovery";
-import type { NodeTextBinding } from "@glowloom/canvas-collab/model";
+import type { NodeTextBinding } from "@glowloom/canvas/model";
 
 export type CanvasPreparedDocument = CanvasContract.CanvasVO & {
   epoch: string;

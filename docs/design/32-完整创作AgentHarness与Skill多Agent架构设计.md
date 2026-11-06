@@ -25,7 +25,7 @@ Go 业务服务保留账号/团队权限、模型目录与调用网关、业务�
 
 1. 当前公开 Agent 入口由 Go 鉴权并代理独立 agent；会话、模型循环、专业子任务与恢复使用官方 Harness。
 2. 普通生成/媒体/导出/复制/导入/声音与维护采用 PostgreSQL 工作记录和 Go taskruntime；旧工作流连接、SDK、schedule 命令与旧 Go 图不属于当前实现。
-3. Compose 统一声明 frontend、backend、agent 与 canvas-collaboration；agent 仅内部监听，Go 不启停 Node。
+3. Compose 统一声明 frontend、backend、agent 与 canvas；agent 仅内部监听，Go 不启停 Node。
 4. 当前空库结构为 schema.sql，已有库采用离线审阅 SQL，服务不自动 DDL；历史数据/在途任务不由源码迁移自动接管或删除。
 5. 本文定义技术合同，实施与实际验证证据在 Plan28/BACKLOG 分别维护；不以历史测试或旧部署健康状态证明新架构接受。
 
@@ -348,7 +348,7 @@ Go SSE 代理只鉴权和转发，游标由 Agent 解释。重连携带 Last-Eve
 
 ### 7.8 Compose、健康与资源
 
-目标 Compose 服务为 frontend、backend、agent、canvas-collaboration；复用现有 PostgreSQL、Redis、Kafka和对象存储，不增建数据库容器。只使用当前 docker-compose.yml，命令仍为 docker compose up -d --build。agent 独立 Dockerfile/锁文件/构建缓存，以非 root 运行并设置 CPU/内存/连接池限制；准确值在隔离负载验证后确定。
+目标 Compose 服务为 frontend、backend、agent、canvas；复用现有 PostgreSQL、Redis、Kafka和对象存储，不增建数据库容器。只使用当前 docker-compose.yml，命令仍为 docker compose up -d --build。agent 独立 Dockerfile/锁文件/构建缓存，以非 root 运行并设置 CPU/内存/连接池限制；准确值在隔离负载验证后确定。
 
 | 配置/接口                      | 责任                                               |
 | ------------------------------ | -------------------------------------------------- |

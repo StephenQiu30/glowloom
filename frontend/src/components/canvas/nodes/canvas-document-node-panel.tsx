@@ -61,7 +61,7 @@ export function CanvasDocumentNodePanel({
   onGenerate?: () => void;
   pendingForm?: CanvasPendingForms[string];
   onPendingForm?: (form: CanvasPendingForms[string] | undefined) => void;
-  collaboration?: import("@glowloom/canvas-collab/model").NodeTextBinding;
+  collaboration?: import("@glowloom/canvas/model").NodeTextBinding;
 }) {
   const previews = useCanvasReferencePreviews(mentionReferences);
   const copyText = useCopyText();

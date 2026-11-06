@@ -1,4 +1,4 @@
-import type { CollaborationScope } from "@glowloom/canvas-collab/session";
+import type { CollaborationScope } from "@glowloom/canvas/session";
 
 /** Epoch changes must not let another window take the same live editing session. */
 export function claimCanvasJournal(

@@ -25,11 +25,11 @@ func yjsRuntime(t *testing.T) *yjsruntime.Client {
 }
 func yjsRuntimeAddress(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs("../../../canvas-collab")
+	root, err := filepath.Abs("../../../canvas")
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := `import {createRuntime} from './dist/server.js'; const s=await createRuntime({token:'isolated-test-runtime-token-32-bytes'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`
+	script := `import {buildApp} from './dist/http/app.js'; const s=await buildApp({token:'isolated-test-runtime-token-32-bytes'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`
 	command := exec.CommandContext(t.Context(), "node", "--input-type=module", "-e", script)
 	command.Dir = root
 	pipe, err := command.StdoutPipe()
@@ -51,7 +51,7 @@ func yjsRuntimeAddress(t *testing.T) string {
 func yjsEdit(t *testing.T, state canvas.YjsState, node uuid.UUID, text string, evil bool) canvas.YjsUpdate {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{"state": state.State, "nodeId": node, "text": text, "evil": evil})
-	command := exec.CommandContext(t.Context(), "node", "../../../canvas-collab/tests/service-fixture.mjs")
+	command := exec.CommandContext(t.Context(), "node", "../../../canvas/tests/service-fixture.mjs")
 	command.Stdin = bytes.NewReader(body)
 	output, err := command.Output()
 	if err != nil {
@@ -296,7 +296,7 @@ func TestYjsConcurrentDuplicateEdgesRejectWithoutBinaryContamination(t *testing.
 	}
 	edit := func(edge domain.Edge) canvas.YjsUpdate {
 		body, _ := json.Marshal(map[string]any{"state": initial.State, "edge": edge})
-		command := exec.CommandContext(t.Context(), "node", "../../../canvas-collab/tests/service-fixture.mjs")
+		command := exec.CommandContext(t.Context(), "node", "../../../canvas/tests/service-fixture.mjs")
 		command.Stdin = bytes.NewReader(body)
 		output, err := command.Output()
 		if err != nil {
@@ -356,7 +356,7 @@ func TestYjsStableIdentityRestorationAuthorAndOldLifetimeFence(t *testing.T) {
 	}
 	late := yjsEdit(t, initial, node.ID, "late", false)
 	body, _ := json.Marshal(initial)
-	cmd := exec.CommandContext(t.Context(), "node", "../../../canvas-collab/tests/service-lifecycle-fixture.mjs")
+	cmd := exec.CommandContext(t.Context(), "node", "../../../canvas/tests/service-lifecycle-fixture.mjs")
 	cmd.Stdin = bytes.NewReader(body)
 	data, err := cmd.CombinedOutput()
 	if err != nil {
@@ -515,7 +515,7 @@ func TestYjsConcurrentReferenceAllocationsSurviveHistoryRestore(t *testing.T) {
 	for _, id := range []string{"ref-a", "ref-b"} {
 		asset := seedCanvasMedia(t, database, project, "image")
 		body, _ := json.Marshal(map[string]any{"state": initial.State, "nodeId": node.ID, "reference": map[string]any{"id": id, "source": map[string]any{"kind": "media", "sourceId": asset, "sourceVersion": "1"}, "bindingGeneration": 1, "mediaKind": "image", "role": "reference_image", "order": 0}})
-		cmd := exec.CommandContext(t.Context(), "node", "../../../canvas-collab/tests/service-fixture.mjs")
+		cmd := exec.CommandContext(t.Context(), "node", "../../../canvas/tests/service-fixture.mjs")
 		cmd.Stdin = bytes.NewReader(body)
 		data, err := cmd.CombinedOutput()
 		if err != nil {
@@ -567,7 +567,7 @@ func TestYjsRestorationCannotReplayAnotherActorsDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ := json.Marshal(initial)
-	cmd := exec.CommandContext(t.Context(), "node", "../../../canvas-collab/tests/service-lifecycle-fixture.mjs")
+	cmd := exec.CommandContext(t.Context(), "node", "../../../canvas/tests/service-lifecycle-fixture.mjs")
 	cmd.Stdin = bytes.NewReader(body)
 	data, err := cmd.CombinedOutput()
 	if err != nil {
@@ -610,7 +610,7 @@ func TestYjsRestorationCannotReplayAnotherActorsDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ = json.Marshal(restoredState)
-	cmd = exec.CommandContext(t.Context(), "node", "../../../canvas-collab/tests/service-lifecycle-fixture.mjs")
+	cmd = exec.CommandContext(t.Context(), "node", "../../../canvas/tests/service-lifecycle-fixture.mjs")
 	cmd.Stdin = bytes.NewReader(body)
 	data, err = cmd.CombinedOutput()
 	if err != nil {
@@ -658,7 +658,7 @@ func TestYjsExperimentalStateUpgradeAndConcurrentFirstParameters(t *testing.T) {
 	run := func(input map[string]any) []byte {
 		t.Helper()
 		body, _ := json.Marshal(input)
-		cmd := exec.CommandContext(t.Context(), "node", "../../../canvas-collab/tests/legacy-fixture.mjs")
+		cmd := exec.CommandContext(t.Context(), "node", "../../../canvas/tests/legacy-fixture.mjs")
 		cmd.Stdin = bytes.NewReader(body)
 		out, err := cmd.CombinedOutput()
 		if err != nil {

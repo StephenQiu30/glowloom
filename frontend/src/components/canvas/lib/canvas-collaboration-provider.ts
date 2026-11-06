@@ -1,9 +1,9 @@
-import { WireAssembler, wireFrames } from "@glowloom/canvas-collab/wire";
+import { WireAssembler, wireFrames } from "@glowloom/canvas/wire";
 import type {
   DurableReceipt,
   FrozenUpdate,
   SessionTransport,
-} from "@glowloom/canvas-collab/session";
+} from "@glowloom/canvas/session";
 import {
   ApiError,
   browserConnectionCsrf,
@@ -14,7 +14,7 @@ import {
   canvasGraphHash,
   createCanvasDocument,
   readCanvasDocument,
-} from "@glowloom/canvas-collab/model";
+} from "@glowloom/canvas/model";
 import { canvasConnectionContract as contract } from "../constants/canvas-connection";
 
 export type CollaborationConnectionStatus =

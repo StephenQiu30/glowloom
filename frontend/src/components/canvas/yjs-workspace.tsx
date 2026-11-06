@@ -47,7 +47,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import type { RecoveryField } from "@glowloom/canvas-collab/recovery";
+import type { RecoveryField } from "@glowloom/canvas/recovery";
 import { getProject } from "@/api/projects";
 import { requireProject, type Project } from "@/components/projects/project";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";

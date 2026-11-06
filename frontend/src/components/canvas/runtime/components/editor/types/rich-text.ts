@@ -1,6 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import type { CSSProperties, ReactNode, Ref } from "react";
-import type { NodeTextBinding } from "@glowloom/canvas-collab/model";
+import type { NodeTextBinding } from "@glowloom/canvas/model";
 
 export type RichTextDocument = {
   schemaVersion: 1;

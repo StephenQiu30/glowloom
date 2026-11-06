@@ -3,8 +3,8 @@ import {
   openCanvasPendingJournal,
   type CanvasPendingStore,
 } from "@/components/canvas/lib/canvas-yjs-pending-journal";
-import type { RecoveryRecord } from "@glowloom/canvas-collab/session";
-import type { ServiceGraph } from "@glowloom/canvas-collab/service-document";
+import type { RecoveryRecord } from "@glowloom/canvas/session";
+import type { ServiceGraph } from "@glowloom/canvas/service-document";
 import { connectCanvasDocumentSources } from "@/components/canvas/lib/canvas-document-connections";
 import { serviceDocumentFromEditor } from "@/components/canvas/service-graph";
 import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
@@ -32,12 +32,12 @@ import * as Y from "yjs";
 import {
   createCanvasDocument,
   readCanvasDocument,
-} from "@glowloom/canvas-collab/model";
+} from "@glowloom/canvas/model";
 import {
   serviceSnapshot,
   serviceProjection,
   type ServiceDocument,
-} from "@glowloom/canvas-collab/service-document";
+} from "@glowloom/canvas/service-document";
 import { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 import { RequestError } from "@/lib/request";
 import { emptyPromptDraft } from "@/components/generation/prompt-document";

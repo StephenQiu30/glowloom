@@ -1,8 +1,8 @@
 import type {
   CollaborationScope,
   RecoveryRecord,
-} from "@glowloom/canvas-collab/session";
-import type { ServiceGraph } from "@glowloom/canvas-collab/service-document";
+} from "@glowloom/canvas/session";
+import type { ServiceGraph } from "@glowloom/canvas/service-document";
 import { claimCanvasJournal } from "./canvas-journal-lease";
 
 type Record = RecoveryRecord<ServiceGraph>;

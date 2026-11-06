@@ -72,11 +72,11 @@ jobs:
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:
-          package_json_file: canvas-collab/package.json
+          package_json_file: canvas/package.json
           cache: true
-          cache_dependency_path: canvas-collab/pnpm-lock.yaml
-      - name: Install and test the private collaboration runtime
-        working-directory: canvas-collab
+          cache_dependency_path: canvas/pnpm-lock.yaml
+      - name: Install and test Canvas
+        working-directory: canvas
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm typecheck
@@ -183,9 +183,9 @@ jobs:
           cache: true
           cache_dependency_path: |
             frontend/pnpm-lock.yaml
-            canvas-collab/pnpm-lock.yaml
+            canvas/pnpm-lock.yaml
       - name: Build the shared canvas package
-        working-directory: canvas-collab
+        working-directory: canvas
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm build

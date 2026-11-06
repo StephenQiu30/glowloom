@@ -256,11 +256,11 @@ func TestHistoricalCopyPrimaryRepairPreservesYjsRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	candidate := review.Candidates[0]
-	root, err := filepath.Abs("../../../canvas-collab")
+	root, err := filepath.Abs("../../../canvas")
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := exec.CommandContext(ctx, "node", "--input-type=module", "-e", `import {createRuntime} from './dist/server.js';const s=await createRuntime({token:'isolated-copy-runtime-token-32-bytes'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`)
+	command := exec.CommandContext(ctx, "node", "--input-type=module", "-e", `import {buildApp} from './dist/http/app.js';const s=await buildApp({token:'isolated-copy-runtime-token-32-bytes'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`)
 	command.Dir = root
 	pipe, err := command.StdoutPipe()
 	if err != nil {

@@ -1,8 +1,8 @@
 "use client";
 
 import { useId, useState } from "react";
-import type { RecoveryField } from "@glowloom/canvas-collab/recovery";
-import type { RecoverySource } from "@glowloom/canvas-collab/session";
+import type { RecoveryField } from "@glowloom/canvas/recovery";
+import type { RecoverySource } from "@glowloom/canvas/session";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldLabel } from "@/components/ui/field";

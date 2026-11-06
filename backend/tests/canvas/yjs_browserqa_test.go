@@ -106,7 +106,7 @@ func TestYjsBrowserFixture(t *testing.T) {
 			t.Fatal(err)
 		}
 		payload, _ := json.Marshal(map[string]any{"state": state.State, "legacy": true})
-		command := exec.CommandContext(t.Context(), "node", "../../../canvas-collab/tests/legacy-fixture.mjs")
+		command := exec.CommandContext(t.Context(), "node", "../../../canvas/tests/legacy-fixture.mjs")
 		command.Stdin = bytes.NewReader(payload)
 		output, err := command.CombinedOutput()
 		if err != nil {

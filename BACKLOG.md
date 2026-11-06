@@ -1,5 +1,9 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+## Canvas 服务命名与目录整理（2026-11-06）
+
+`canvas/`、Compose `canvas:4400` 和 `@glowloom/canvas` 已同步，目录与依赖见[设计 17](docs/design/17-画布Yjs协作编辑设计.md)。Canvas 106 项测试、前端画布目录 949 项测试和类型检查、Go 画布/Agent 命令/项目复制相关 race 集成、Compose 配置及独立镜像健康和鉴权验证通过。现有计算和协作模块沿用 `noImplicitAny` 例外。
+
 <a id="agent-nestjs-migration"></a>
 
 ## Agent 服务 NestJS 迁移（2026-11-06）

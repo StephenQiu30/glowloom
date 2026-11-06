@@ -65,7 +65,7 @@ docker compose ps
 
 首次启动成功后，打开工作台；需要私人素材、主体、画布或生成时，使用有效账号登录，并按对象权限访问。容器健康不等于真实生成能力已验收。
 
-`docker-compose.yml` 是应用唯一启动入口，包含 `frontend`、`backend`、`agent` 和 `canvas-collaboration`。前端运行镜像内的 Next.js standalone 构建，完整启动时等待后端健康。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动。仅更新后端时执行：
+`docker-compose.yml` 是应用唯一启动入口，包含 `frontend`、`backend`、`agent` 和 `canvas`。前端运行镜像内的 Next.js standalone 构建，完整启动时等待后端健康。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动。仅更新后端时执行：
 
 ```sh
 docker compose up -d --build --wait backend
@@ -113,7 +113,7 @@ Go 二进制和 Next.js 构建产物均在镜像构建阶段生成，容器启�
 frontend/      Next.js 工作台与交互界面
 backend/       Go API、worker、relay 与数据库定义
 agent/         独立 TypeScript/Pi Durable 服务与 PostgreSQL Storage
-canvas-collab/ 私有 Yjs 协作运行时
+canvas/ 私有 Yjs 协作运行时
 docs/          原始需求、设计、PRD、实施计划与验证证据
 ```
 

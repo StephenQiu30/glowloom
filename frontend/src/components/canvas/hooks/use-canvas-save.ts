@@ -7,7 +7,7 @@ import {
   type CanvasYjsRecovery,
 } from "../lib/canvas-collaboration-controller";
 import type { CanvasScope } from "./use-canvas-document";
-import type { RecoveryField } from "@glowloom/canvas-collab/recovery";
+import type { RecoveryField } from "@glowloom/canvas/recovery";
 import { useCanvasLeaveGuard } from "./use-canvas-leave-guard";
 
 /** React subscribes to one Yjs session; it never owns another graph save queue. */

@@ -24,7 +24,7 @@ import type {
   ViewportTransform,
 } from "../types/canvas";
 import type { RichTextDocument } from "../runtime/components/editor/types/rich-text";
-import type { NodeTextBinding } from "@glowloom/canvas-collab/model";
+import type { NodeTextBinding } from "@glowloom/canvas/model";
 import { useBoundReferences } from "../hooks/use-bound-references";
 
 export function CanvasTextActions({

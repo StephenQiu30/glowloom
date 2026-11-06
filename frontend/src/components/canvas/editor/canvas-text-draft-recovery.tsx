@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import type { CanvasTextDraft } from "@glowloom/canvas-collab/model";
+import type { CanvasTextDraft } from "@glowloom/canvas/model";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldLabel } from "@/components/ui/field";

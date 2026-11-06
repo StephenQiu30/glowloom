@@ -7,7 +7,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { history } from "@tiptap/pm/history";
 import { DOMParser as ProseMirrorDOMParser } from "@tiptap/pm/model";
-import type { NodeTextBinding } from "@glowloom/canvas-collab/model";
+import type { NodeTextBinding } from "@glowloom/canvas/model";
 import {
   EditorContent,
   NodeViewWrapper,
@@ -20,7 +20,7 @@ import StarterKit from "@tiptap/starter-kit";
 import TextAlign from "@tiptap/extension-text-align";
 import Collaboration from "@tiptap/extension-collaboration";
 import { ySyncPluginKey } from "@tiptap/y-tiptap";
-import { persistentRichText } from "@glowloom/canvas-collab/rich-text";
+import { persistentRichText } from "@glowloom/canvas/rich-text";
 import type { XmlFragment } from "yjs";
 import { exitSuggestion, type SuggestionProps } from "@tiptap/suggestion";
 import {

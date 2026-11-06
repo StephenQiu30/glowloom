@@ -31,7 +31,7 @@ Yjs共享画布、Tiptap协作正文、稳定引用、个人撤销、在线状�
 
 | 现有位置/模块                         | 工作责任                                                     | 前置与退出条件                                                    |
 | ------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `canvas-collab/src`                   | 共享schema、候选解码/投影/因果校验、受控origin及拒绝重建原语 | 复用已有AdmissionGate；不得把内存store测试当正式服务              |
+| `canvas/src`                   | 共享schema、候选解码/投影/因果校验、受控origin及拒绝重建原语 | 复用已有AdmissionGate；不得把内存store测试当正式服务              |
 | 内部JS协作运行宿主                    | room生命周期、prepare/finalize、受信Go合同、重载和有界资源   | 运行宿主路径在实现时按现有工程明确；只承担Yjs运行，不复制业务服务 |
 | `backend/internal/canvas`及数据库适配 | GoWS路由、身份、原子接受、writerTerm、回执/Outbox/补齐       | 数据接线依赖T-DATA-01/02；真实数据库跨进程提交通过                |
 | `frontend/src/components/canvas`      | 正式入口改接单会话、自动事务队列、Tiptap/presence、内存恢复  | 显式退出正式路由的手动保存依赖和业务journal调用；断线不断输入     |
@@ -101,7 +101,7 @@ Yjs共享画布、Tiptap协作正文、稳定引用、个人撤销、在线状�
 ## 6. 第二阶段可复现检查入口
 
 1. 在隔离 PostgreSQL 应用增量脚本；应用账号须具备协作表授权，禁止将schema重建命令指向既有业务库。
-2. 安装 `canvas-collab` 的锁定依赖，执行 `pnpm test`；该命令先编译 TypeScript，Go 的真实运行时集成测试依赖 Node 24 和 `canvas-collab/dist`。前端通过本地包依赖消费编译产物，安装前端依赖前先构建该包。
+2. 安装 `canvas` 的锁定依赖，执行 `pnpm test`；该命令先编译 TypeScript，Go 的真实运行时集成测试依赖 Node 24 和 `canvas/dist`。前端通过本地包依赖消费编译产物，安装前端依赖前先构建该包。
 3. 配置隔离测试DSN，执行 `go test -race ./tests/canvas -run TestYjs -count=1`，覆盖并发、回执、writerTerm、审阅失效、事务回滚、非法候选和运行时重载。完整画布回归使用 `./tests/canvas/...`，包含子目录otvectors。
 4. 正式前端固定使用Yjs，删除协议构建开关，运行 `yjs-live-session.test.ts` 及全量类型/lint/测试/生产构建。存储断言区分控制器与整个应用；源码不调用存储不替代浏览器全应用缓存审计。
 5. 隔离Docker浏览器夹具使用 `browserqa` 构建标签，登录辅助路由不能进入应用二进制。两个账号三个页面记录同段内容/格式、断线、拒绝预览和重开；页签数量与独立Cookie上下文数量分别记录，不混称三个浏览器身份。
