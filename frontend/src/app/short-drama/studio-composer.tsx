@@ -64,12 +64,10 @@ const starters = [
 export function StudioComposer({
   mode,
   disabled,
-  signedIn,
   onStart,
 }: {
   mode: StudioInput["kind"];
   disabled: boolean;
-  signedIn: boolean;
   onStart: (input: StudioInput) => void;
 }) {
   const id = useId();
@@ -252,7 +250,6 @@ export function StudioComposer({
               ref={editor}
               aria-label={creative ? "剧本创作要求" : "剧本文本"}
               className="h-full min-h-28 resize-y rounded-xl bg-muted/40 p-3 md:min-h-40"
-              maxLength={creative ? 500 : undefined}
               value={text}
               placeholder={
                 creative
@@ -323,15 +320,15 @@ export function StudioComposer({
           <div className="ml-auto flex items-center gap-3">
             {creative && (
               <span className="text-xs text-muted-foreground tabular-nums">
-                {text.length} / 500
+                {Array.from(text).length} 字
               </span>
             )}
             <Button
               disabled={
                 disabled ||
-                (signedIn &&
-                  ((creative && !text.trim()) ||
-                    (uploading && !file && !text.trim())))
+                (creative && !text.trim()) ||
+                (uploading && !file && !text.trim()) ||
+                (mode === "redraw" && !file)
               }
               onClick={start}
             >
@@ -354,10 +351,7 @@ export function StudioComposer({
               className="rounded-full"
               onClick={() => {
                 setText((previous) =>
-                  [previous.trim(), starter]
-                    .filter(Boolean)
-                    .join("\n")
-                    .slice(0, 500),
+                  [previous.trim(), starter].filter(Boolean).join("\n"),
                 );
                 editor.current?.focus();
               }}

@@ -125,7 +125,6 @@ function StudioWorkspace() {
               <StudioComposer
                 mode={id}
                 disabled={createDisabled}
-                signedIn={Boolean(session)}
                 onStart={(input) => (session ? setCreating(input) : login())}
               />
             </TabsContent>

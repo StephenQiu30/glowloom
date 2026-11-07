@@ -136,7 +136,7 @@ vi.mock("@/components/layout/page-layout", async () => {
   };
 });
 vi.mock("@/api/projects", () => ({
-  createProject: api.create,
+  createIndependentCanvas: api.create,
   listProjects: api.list,
   getProject: api.project,
   getProjectCreation: api.recover,
@@ -286,6 +286,7 @@ it("列表加载失败不显示示例项目，名称搜索与真实最近修改�
   expect(api.list.mock.calls.at(-1)?.[0]).toEqual({
     q: "真实",
     limit: 12,
+    include_independent_canvases: true,
     order: "recent_content",
     status: "active",
   });
@@ -652,6 +653,7 @@ it("修改画布搜索保留项目更新排序且可从URL恢复", async () => {
     expect(api.list.mock.calls.at(-1)?.[0]).toEqual({
       q: "原画布",
       limit: 12,
+      include_independent_canvases: true,
       status: "active",
     });
   });

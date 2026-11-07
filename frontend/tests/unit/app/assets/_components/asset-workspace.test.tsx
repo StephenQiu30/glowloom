@@ -180,7 +180,7 @@ it("media and legacy-canvas state survive URL navigation back to the asset sourc
     button: 0,
     ctrlKey: false,
   });
-  await screen.findByRole("button", { name: "新建画布" });
+  await screen.findByRole("button", { name: "新建项目" });
   fireEvent.click(screen.getByRole("radio", { name: "历史画布" }));
   await waitFor(() =>
     expect(new URLSearchParams(location.search).get("collection")).toBe(
@@ -738,8 +738,19 @@ it("高级筛选按组发CSV，切换媒体清理不兼容条件", async () => {
   );
 });
 it("历史画布查询绑定legacy，新建入口仍创建current", async () => {
+  state.createAsset.mockResolvedValueOnce({
+    id: task.id,
+    project_id: task.project_id,
+    kind: "canvas",
+    collection: "current",
+    name: "created",
+    revision: "1",
+    project_revision: 1,
+    template_key: "",
+    is_template: false,
+  });
   render(<AssetWorkspace initialView="canvas" />);
-  await screen.findByRole("button", { name: "新建画布" });
+  await screen.findByRole("button", { name: "新建项目" });
   fireEvent.click(screen.getByRole("radio", { name: "历史画布" }));
   await waitFor(() =>
     expect(state.canvases).toHaveBeenLastCalledWith(
@@ -747,7 +758,20 @@ it("历史画布查询绑定legacy，新建入口仍创建current", async () => 
       expect.anything(),
     ),
   );
-  expect(screen.getByRole("button", { name: "新建画布" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "新建项目" }));
+  await waitFor(() =>
+    expect(state.push).toHaveBeenCalledWith(
+      `/canvas?project_id=${task.project_id}&canvas_id=${task.id}`,
+    ),
+  );
+  expect(state.createAsset).toHaveBeenCalledExactlyOnceWith(
+    { kind: "canvas", template_key: undefined },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal),
+      headers: { "Idempotency-Key": expect.any(String) },
+    }),
+  );
+  expect(state.create).not.toHaveBeenCalled();
 });
 it("主画布删除明确项目影响，并通过统一命令携带项目CAS", async () => {
   state.canvases.mockResolvedValue({
@@ -1069,7 +1093,21 @@ it("游客可切换短剧入口，打开登录时不查询或创建私人项目"
   fireEvent.mouseDown(screen.getByRole("tab", { name: "转绘" }), {
     button: 0,
   });
-  fireEvent.click(await screen.findByRole("button", { name: "开始转绘" }));
+  const redraw = await screen.findByRole("button", { name: "开始转绘" });
+  expect(redraw.hasAttribute("disabled")).toBe(true);
+  fireEvent.click(redraw);
+  expect(state.login).not.toHaveBeenCalled();
+  const source = screen
+    .getByRole("tabpanel", { name: "转绘" })
+    .querySelector<HTMLInputElement>('input[type="file"]');
+  expect(source).not.toBeNull();
+  fireEvent.change(source!, {
+    target: {
+      files: [new File(["fixture video"], "source.mp4", { type: "video/mp4" })],
+    },
+  });
+  expect(redraw.hasAttribute("disabled")).toBe(false);
+  fireEvent.click(redraw);
   expect(state.login).toHaveBeenCalledOnce();
   expect(state.canvases).not.toHaveBeenCalled();
   expect(state.templates).not.toHaveBeenCalled();
@@ -1154,8 +1192,8 @@ it("direct creation aborts its old-scope request and never navigates from a late
       }),
   );
   const view = render(<AssetWorkspace initialView="canvas" />);
-  await screen.findByRole("button", { name: "新建画布" });
-  fireEvent.click(screen.getByRole("button", { name: "新建画布" }));
+  await screen.findByRole("button", { name: "新建项目" });
+  fireEvent.click(screen.getByRole("button", { name: "新建项目" }));
   await waitFor(() => expect(state.createAsset).toHaveBeenCalledOnce());
   const signal = state.createAsset.mock.calls[0][1].signal as AbortSignal;
   state.scope = "55555555-5555-4555-8555-555555555555";
@@ -1304,7 +1342,7 @@ it("默认画布只在网格提供新建和模板，不在工具栏叠加辅助�
     ],
   });
   render(<AssetWorkspace initialView="canvas" />);
-  const create = await screen.findByRole("button", { name: "新建画布" });
+  const create = await screen.findByRole("button", { name: "新建项目" });
   const template = await screen.findByRole("button", {
     name: "使用模板 · 文生图工作流",
   });
@@ -1343,6 +1381,6 @@ it("收藏筛选不混入创建卡片和模板目录", async () => {
     />,
   );
   await screen.findByText("当前已开启筛选，部分内容可能被隐藏");
-  expect(screen.queryByRole("button", { name: "新建画布" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "新建项目" })).toBeNull();
   expect(state.templates).not.toHaveBeenCalled();
 });

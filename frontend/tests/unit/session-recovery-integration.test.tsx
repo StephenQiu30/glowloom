@@ -247,7 +247,14 @@ let current: API.EmailSessionView | null;
 let allowed: boolean;
 let spaces: API.SpaceView[];
 let records: Map<string, unknown>;
-let calls: { url: string; method: string; csrf: unknown }[];
+let calls: {
+  url: string;
+  method: string;
+  csrf: unknown;
+  scope?: unknown;
+  data?: unknown;
+  contextAuthorized?: boolean;
+}[];
 let refresh: ((config: InternalAxiosRequestConfig) => Promise<any>) | undefined;
 function response(
   config: InternalAxiosRequestConfig,
@@ -339,7 +346,25 @@ beforeEach(async () => {
   transport.send = async (config) => {
     const url = config.url!;
     const method = config.method!;
-    calls.push({ url, method, csrf: config.headers.get("X-CSRF-Token") });
+    calls.push({
+      url,
+      method,
+      csrf: config.headers.get("X-CSRF-Token"),
+      scope: config.headers.get("X-Creation-Scope"),
+      data: config.data,
+      contextAuthorized:
+        url === "/api/creation-context"
+          ? Boolean(
+              current &&
+              config.headers.get("X-CSRF-Token") === current.csrf_token &&
+              spaces.some(
+                (space) =>
+                  space.id === config.headers.get("X-Creation-Scope") &&
+                  space.writable,
+              ),
+            )
+          : undefined,
+    });
     if (url === "/api/session/refresh" && refresh) return refresh(config);
     if (method === "delete") return response(config, undefined, 204);
     if (url === "/api/me/preferences")
@@ -352,6 +377,11 @@ beforeEach(async () => {
     if (url === "/api/session") return response(config, current);
     if (url === "/api/me") return response(config, current.actor);
     if (url === "/api/me/spaces") return response(config, { items: spaces });
+    if (url === "/api/creation-context") {
+      // Home may resolve its independent context before generation. Keep these
+      // home-input recovery scenarios on the explicit unavailable-context path.
+      return reject(config, "dependency_unavailable", 503);
+    }
     if (url === "/api/me/sessions")
       return response(config, {
         items: [
@@ -751,6 +781,27 @@ it("a stale logout callback cannot clear or revoke the newly confirmed session",
   expect(screen.queryByText(`private ${uid}`)).toBeTruthy();
 });
 
+function expectOnlyHomeContextWrites(logout = false) {
+  const writes = calls.filter((call) => !["get", "head"].includes(call.method));
+  expect(writes.filter((call) => call.method === "delete")).toHaveLength(
+    logout ? 1 : 0,
+  );
+  const contexts = writes.filter((call) => call.method !== "delete");
+  expect(contexts.length).toBeGreaterThan(0);
+  // Only this bodyless, authorized context resolution is permitted. Draft
+  // saves, submissions, quotes and paid execution must still be absent.
+  for (const call of contexts) {
+    expect(call).toEqual({
+      url: "/api/creation-context",
+      method: "post",
+      csrf: "synthetic-proof",
+      scope: expect.any(String),
+      data: undefined,
+      contextAuthorized: true,
+    });
+  }
+}
+
 it("the actual home prompt restores text only after same-account new-sid and writable-space confirmation", async () => {
   render(
     <SessionProvider>
@@ -781,7 +832,7 @@ it("the actual home prompt restores text only after same-account new-sid and wri
       "home unfinished idea",
     ),
   );
-  expect(calls.filter((c) => !["get", "head"].includes(c.method))).toEqual([]);
+  expectOnlyHomeContextWrites();
 });
 
 it("authorized scope cache clearing keeps the current identity able to save new local input", async () => {
@@ -894,9 +945,7 @@ it.each(["different account", "different scope", "explicit logout"])(
       "textContent",
       "",
     );
-    expect(
-      calls.filter((c) => ["post", "put", "patch"].includes(c.method)),
-    ).toEqual([]);
+    expectOnlyHomeContextWrites(reason === "explicit logout");
   },
 );
 
@@ -939,9 +988,7 @@ it.each(["revoked", "read-only"])(
     expect(JSON.stringify([...records.values()])).not.toContain(
       "sensitive home input",
     );
-    expect(calls.filter((c) => !["get", "head"].includes(c.method))).toEqual(
-      [],
-    );
+    expectOnlyHomeContextWrites();
   },
 );
 
