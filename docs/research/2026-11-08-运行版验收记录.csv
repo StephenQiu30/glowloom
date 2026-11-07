@@ -1,0 +1,17 @@
+编号,页面或模块,场景,结果,URL,证据,边界
+LIVE-001,重启,四服务固定313097be、healthy且restart_count=0,通过,http://localhost:1122/healthz,/tmp/glowloom-313097be-restart.log,已备份；仅glowloom增量结构升级，原条目计数一致
+LIVE-002,短剧首页,空创作输入禁用立即生成,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/short-drama-initial.png,新运行版，真实登录态
+LIVE-003,风格库,官方目录无数据的空态和分页禁用,通过,http://localhost:1122/short-drama,浏览器快照,没有伪造官方预设
+LIVE-004,风格创建,空名称/描述禁用保存和空图禁用分析,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/style-create-empty-ready.png,不提交付费分析
+LIVE-005,风格创建,21码点名称拒绝；有效名称和描述可保存,通过,http://localhost:1122/short-drama,浏览器快照,真实表单观察
+LIVE-006,风格创建,创建2D风格并采用返回详情,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/style-created-adopted.png,仅自建验收条目，未发起生成
+LIVE-007,风格持久化,重开页面后我的风格读取已保存条目,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/style-reload-mine.png,名称/分类/描述编辑回读一致
+LIVE-008,风格参考图,实际PNG上传、服务确认后进入封面与参考卡,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/reference-upload-progress.png,第一和第二张自有合成图已入个人库；四图边界仍在验收
+LIVE-009,风格编辑,名称20/21与描述2000/2001边界,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/style-field-boundaries.json,字段保持完整、不截断
+LIVE-010,风格参考图,四图后隐藏添加入口；第三图设封面并保存回读,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/style-third-cover.png; /Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/style-four-reloaded.png,真实个人媒资与持久化
+LIVE-011,风格分析,准备四图到分析项目,失败,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/videos/issue-001-repro.webm,ISSUE-001；未选择模型、未发送
+LIVE-012,多媒体参考,空TXT被拒绝，上传保持禁用,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/reference-empty-file-rejected.png,未发出上传
+LIVE-013,视频参考,自有MP4实际上传入库、选择和预览,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/reference-video-preview.png,duration=2;320x180;readyState=4;error=null
+LIVE-014,文档参考,DOCX实际上传并进入参考卡，打开原件下载入口,通过,http://localhost:1122/short-drama,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/reference-docx-dialog.png,下载内容及全文模型承接尚未验收
+LIVE-015,文档参考,TXT实际上传进入卡片，与视频和DOCX同时保留,通过,http://localhost:1122/short-drama,浏览器快照,项目承接另列
+LIVE-016,项目参考复制,三类参考创建项目后冻结原复制并提供重试,失败,http://localhost:1122/short-drama/2ac3174c-e5d9-4ed4-939c-9a957d9c6374?tab=create,/Users/stephenqiu/.codex/visualizations/2026/11/07/01a1b3e3-8e01-7d11-830b-0fc7ccbd72aa/live-acceptance-20261108/screenshots/reference-project-copy-before-fix.png,同ISSUE-001的BFF缺路由；个人源详情200、transfer404，无模型调用
