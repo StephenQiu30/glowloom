@@ -1111,13 +1111,16 @@ async function proxy(
         : AbortSignal.any([
             request.signal,
             AbortSignal.timeout(
-              new RegExp(
-                `^projects/${identityUUID}/media/${identityUUID}/original$`,
-                "i",
-              ).test(resource) ||
-                matches(`media-exports/${identityUUID}/download`)
-                ? 120000
-                : 10000,
+              resource === "media/library/video-links" &&
+                request.method === "POST"
+                ? 310000
+                : new RegExp(
+                      `^projects/${identityUUID}/media/${identityUUID}/original$`,
+                      "i",
+                    ).test(resource) ||
+                    matches(`media-exports/${identityUUID}/download`)
+                  ? 120000
+                  : 10000,
             ),
           ]),
     });

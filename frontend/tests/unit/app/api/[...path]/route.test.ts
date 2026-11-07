@@ -2,6 +2,35 @@ import { afterEach, expect, it, vi } from "vitest";
 import { GET, POST, PUT } from "@/app/api/[...path]/route";
 afterEach(() => vi.unstubAllGlobals());
 
+it("视频链接导入等待后端五分钟有界处理，普通读取仍保持短超时", async () => {
+  const timeout = vi
+    .spyOn(AbortSignal, "timeout")
+    .mockImplementation(() => new AbortController().signal);
+  try {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => Promise.resolve(new Response("{}"))),
+    );
+    const path = "media/library/video-links";
+    await POST(
+      new Request(`http://localhost/api/${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+      context(path),
+    );
+    expect(timeout).toHaveBeenLastCalledWith(310000);
+    await GET(
+      new Request("http://localhost/api/style-library"),
+      context("style-library"),
+    );
+    expect(timeout).toHaveBeenLastCalledWith(10000);
+  } finally {
+    timeout.mockRestore();
+  }
+});
+
 it("风格筛选与个人库超清条件透传，视频链接写入保留原幂等键且拒绝额外查询", async () => {
   const fetcher = vi
     .fn()
