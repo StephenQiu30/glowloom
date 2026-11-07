@@ -97,13 +97,23 @@ jobs:
             psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
           done
           psql "$admin_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
-          for database in glowloom_governance glowloom_catalog glowloom_subject_alignment_ci glowloom_subject_storage_script_ci glowloom_app_scope_test glowloom_business_test glowloom_agent_canvas_test glowloom_boundary_test glowloom_tasks_test glowloom_maintenance_test glowloom_receipt glowloom_gateway_test; do
+          for database in glowloom_governance glowloom_catalog glowloom_subject_alignment_ci glowloom_subject_storage_script_ci glowloom_app_scope_test glowloom_business_test glowloom_agent_canvas_test glowloom_boundary_test glowloom_tasks_test glowloom_maintenance_test glowloom_receipt glowloom_gateway_test glowloom_studio_inputs_test; do
             psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             psql "postgres://postgres@127.0.0.1:5432/$database?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
           done
       - name: Install the production Agent used by boundary tests
         working-directory: agent
         run: pnpm install --frozen-lockfile
+      - name: Verify multimedia references and style library
+        env:
+          GLOWLOOM_TEST_WORKSPACE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_studio_inputs_test?sslmode=disable
+          GLOWLOOM_TEST_MEDIA_STORE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_studio_inputs_test?sslmode=disable
+          GLOWLOOM_TEST_AGENT_BUSINESS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_studio_inputs_test?sslmode=disable
+          GLOWLOOM_TEST_AGENT_CANVAS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_studio_inputs_test?sslmode=disable
+        run: >-
+          go test -race -count=1
+          ./tests/workspace ./tests/media ./tests/agentbusiness ./tests/agent/modelgateway ./tests/prompt
+          -run 'TestStyleLibrary|TestMediaReference|TestConversationAdmission|TestVideoLink|TestPublicVideo|TestReferenceVisual|TestChatAllows|TestConversationDocument|TestPersonalUploadNilRequest|TestUploadPublishes|TestPersonalUploadPublishes'
       - name: Run backend Race tests
         run: |
           go build -o "$RUNNER_TEMP/cos-fixture" ./tests/storagefixture/cmd/cosfixture
