@@ -1,0 +1,45 @@
+:global(.workspace-page):has(> .studio) {
+  padding-inline: clamp(32px, 4cqi, 40px);
+  background-image: radial-gradient(
+    ellipse 48% 19rem at 50% 0,
+    color-mix(in srgb, var(--studio-ambient) 17%, transparent),
+    transparent 100%
+  );
+  background-position: center top;
+  background-size: min(100%, 80rem) 19rem;
+  background-repeat: no-repeat;
+}
+
+.hero {
+  position: relative;
+  isolation: isolate;
+}
+
+.hero::before {
+  position: absolute;
+  z-index: -1;
+  inset: -24px 0 auto;
+  height: 240px;
+  background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--foreground) 12%, transparent) 0.8px,
+      transparent 1.2px
+    )
+    center top / 16px 16px;
+  mask-image: radial-gradient(ellipse at 50% 20%, black, transparent 73%);
+  pointer-events: none;
+  content: "";
+}
+
+.panel {
+  background-image: linear-gradient(
+    transparent,
+    color-mix(in srgb, var(--foreground) 4%, transparent)
+  );
+}
+
+@media (width < 768px) {
+  :global(.workspace-page):has(> .studio) {
+    padding-inline: clamp(16px, 5cqi, 24px);
+  }
+}

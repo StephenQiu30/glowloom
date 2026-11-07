@@ -57,12 +57,6 @@ const links = [
   { id: "ai-tools", label: "AI工具", icon: Grid2x2Plus, href: "/ai-tools" },
   { id: "assets", label: "资产", icon: FolderClosed, href: "/assets" },
   { id: "subjects", label: "主体", icon: ContactRound, href: "/subjects" },
-  {
-    id: "short-drama",
-    label: "短剧工作室",
-    icon: Clapperboard,
-    href: "/short-drama",
-  },
 ] as const;
 
 function PrimaryNavigation({ screen }: { screen: Screen }) {
@@ -200,7 +194,24 @@ export function ProductSider({
         className="product-sidebar-content"
       >
         <PrimaryNavigation screen={screen === "projects" ? "assets" : screen} />
-        {!compact && <SidebarSeparator className="mx-5 my-2" />}
+        <SidebarSeparator className={compact ? "mx-3 my-1" : "mx-5 my-1"} />
+        <SidebarGroup
+          role="navigation"
+          aria-label="工作室"
+          className="primary-navigation"
+        >
+          <SidebarMenu>
+            <SidebarNavLink
+              href="/short-drama"
+              label="短剧工作室"
+              icon={Clapperboard}
+              active={screen === "short-drama"}
+              variant="workspace"
+              size="workspace"
+              onNavigate={closeMobile}
+            />
+          </SidebarMenu>
+        </SidebarGroup>
         {compact ? (
           <SidebarGroup className="sidebar-compact-actions">
             <SidebarMenu>

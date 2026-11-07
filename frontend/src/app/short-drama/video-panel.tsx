@@ -21,6 +21,7 @@ import {
 } from "@/components/generation/prompt-document";
 import { mediaBinding } from "@/components/generation/reference-controls";
 import { useScriptWrite } from "./use-script-write";
+import { redrawMarkets } from "./studio-input";
 
 const RichGeneration = dynamic(
   () =>
@@ -53,6 +54,7 @@ export function VideoPanel({
   canvas,
   writable,
   initialPrompt,
+  initialInput,
   onLock,
 }: {
   project: Project;
@@ -60,12 +62,14 @@ export function VideoPanel({
   canvas: string;
   writable: boolean;
   initialPrompt?: string;
+  initialInput?: { file?: File; style: string; market: string };
   onLock: (locked: boolean) => void;
 }) {
   const [selected, setSelected] = useState("");
-  const [style, setStyle] = useState("");
-  const [market, setMarket] = useState("原片语言");
-  const [upload, setUpload] = useState(false);
+  const [style, setStyle] = useState(initialInput?.style ?? "");
+  const [market, setMarket] = useState(initialInput?.market || "原片语言");
+  const [upload, setUpload] = useState(Boolean(writable && initialInput?.file));
+  const [initialFile, setInitialFile] = useState(initialInput?.file);
   const [draft, setDraft] = useState<PromptDraft | null>(() =>
     initialPrompt ? prompt(initialPrompt) : null,
   );
@@ -150,9 +154,11 @@ export function VideoPanel({
               disabled={locked || change.pending}
               onChange={(event) => setMarket(event.target.value)}
             >
-              <NativeSelectOption value="原片语言">沿用原片</NativeSelectOption>
-              <NativeSelectOption value="中国大陆">中国大陆</NativeSelectOption>
-              <NativeSelectOption value="海外">海外</NativeSelectOption>
+              {redrawMarkets.map(([value, label]) => (
+                <NativeSelectOption key={value} value={value}>
+                  {label}
+                </NativeSelectOption>
+              ))}
             </NativeSelect>
           </Field>
           <Field className="max-w-sm">
@@ -244,7 +250,11 @@ export function VideoPanel({
       {upload && (
         <UploadDialog
           projectID={project.id}
-          onClose={() => setUpload(false)}
+          initialFile={initialFile}
+          onClose={() => {
+            setUpload(false);
+            setInitialFile(undefined);
+          }}
           onUploaded={async (asset) => {
             await media.mutate();
             if (asset && eligibleVideo(asset, project.id))

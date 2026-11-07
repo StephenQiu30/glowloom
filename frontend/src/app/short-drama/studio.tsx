@@ -3,13 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import {
-  Aperture,
   ArrowUpRight,
   Clapperboard,
   FileText,
-  Film,
-  PanelsTopLeft,
-  ScanLine,
   Sparkles,
   Video,
 } from "lucide-react";
@@ -18,7 +14,6 @@ import { AssetCreateProject } from "@/components/projects/asset-create-project";
 import { defaultAssetFilters } from "@/app/assets/_components/asset-query";
 import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
-import { ContentState } from "@/components/layout/content-state";
 import { useSpace } from "@/components/spaces/space-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,61 +24,66 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+import { StudioComposer } from "./studio-composer";
+import { saveStudioInput, type StudioInput } from "./studio-input";
+import styles from "./studio.module.css";
+
 const modes = [
-  {
-    id: "upload",
-    label: "上传剧本",
-    title: "从已有剧本开始",
-    description: "上传剧本文件或粘贴文本，整理为可继续创作的剧集。",
-    icon: FileText,
-  },
-  {
-    id: "create",
-    label: "剧本创作",
-    title: "从创作想法开始",
-    description: "用创作要求、小说或参考素材构思短剧剧本。",
-    icon: Sparkles,
-  },
-  {
-    id: "redraw",
-    label: "转绘",
-    title: "从现有视频开始",
-    description: "基于源视频，按风格、目标地区和画面比例制作新版本。",
-    icon: Video,
-  },
+  { id: "upload", label: "上传剧本", icon: FileText },
+  { id: "create", label: "剧本创作", icon: Sparkles },
+  { id: "redraw", label: "转绘", icon: Video },
 ] as const;
 
 const features = [
-  { label: "剧本创作", description: "从灵感到故事", icon: FileText },
-  { label: "短剧画布", description: "在无限画布自由编排", icon: PanelsTopLeft },
-  { label: "短剧导演台", description: "排演布景、动作与机位", icon: Aperture },
-  { label: "智能预演", description: "串联关键镜头", icon: Film },
-  { label: "片段重拍", description: "局部修改视频", icon: Clapperboard },
-  { label: "重制转绘", description: "从源片制作新版本", icon: Video },
-  { label: "超分工作流", description: "提升成片画质", icon: Sparkles },
-  { label: "视频拉片", description: "拆解画面与镜头语言", icon: ScanLine },
+  { label: "剧本创作", description: "从灵感到故事" },
+  { label: "短剧画布", description: "在无限画布自由编排" },
+  { label: "短剧导演台", description: "排演布景、动作与机位" },
+  { label: "智能预演", description: "串联关键镜头" },
+  { label: "片段重拍", description: "局部修改视频" },
+  { label: "重制转绘", description: "从源片制作新版本" },
+  { label: "超分工作流", description: "提升成片画质" },
+  { label: "视频拉片", description: "拆解画面与镜头语言" },
 ];
+
+const projectTabs = {
+  upload: "script",
+  create: "create",
+  redraw: "video",
+} as const;
 
 const allDramas = "/assets?view=short_drama";
 const noop = () => {};
 
 export function ShortDramaStudio() {
   const session = useOptionalSession();
+  const { selected } = useSpace();
+  return (
+    <StudioWorkspace
+      key={`${session?.actor.id ?? "guest"}/${selected?.id ?? ""}`}
+    />
+  );
+}
+
+function StudioWorkspace() {
+  const session = useOptionalSession();
   const { selected, pending } = useSpace();
   const login = useLoginDialog();
-  const [creating, setCreating] = useState<
-    "canvas" | "upload" | "create" | "redraw" | null
-  >(null);
+  const [creating, setCreating] = useState<"canvas" | StudioInput | null>(null);
+  const [mode, setMode] = useState<string>("create");
   const [locked, setLocked] = useState(false);
 
+  const owner =
+    session && selected ? `${session.actor.id}/${selected.id}` : undefined;
   const createDisabled =
     locked || Boolean(session && (pending || !selected?.writable));
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-8">
+    <div
+      className={`${styles.studio} mx-auto flex w-full max-w-6xl flex-col gap-8 pb-8 md:gap-10`}
+    >
       <section
         aria-labelledby="short-drama-title"
-        className="mx-auto flex w-full max-w-5xl flex-col gap-5"
+        className={`${styles.hero} mx-auto flex w-full max-w-[1000px] flex-col gap-4 md:gap-6`}
       >
         <h1
           id="short-drama-title"
@@ -91,18 +91,19 @@ export function ShortDramaStudio() {
         >
           和短剧 Agent 聊聊创作想法
         </h1>
-        <Tabs
-          defaultValue="create"
-          className="gap-0 overflow-hidden rounded-xl bg-card"
-        >
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-1 bg-muted p-2">
-            <TabsList aria-label="短剧创作方式" className="grow md:grow-0">
-              {modes.map(({ id, label }) => (
+        <Tabs value={mode} onValueChange={setMode} className="min-w-0 gap-0">
+          <div className="flex min-w-0 items-center justify-between gap-1 rounded-t-2xl border bg-muted px-1.5 py-1 md:px-3">
+            <TabsList
+              aria-label="短剧创作方式"
+              className="min-w-0 shrink-0 bg-transparent"
+            >
+              {modes.map(({ id, label, icon: Icon }) => (
                 <TabsTrigger
                   key={id}
                   value={id}
-                  className="min-h-9 md:min-w-28"
+                  className="px-1.5 text-xs sm:px-3 sm:text-sm"
                 >
+                  <Icon aria-hidden="true" className="hidden sm:block" />
                   {label}
                 </TabsTrigger>
               ))}
@@ -110,6 +111,8 @@ export function ShortDramaStudio() {
             <Button
               type="button"
               variant="ghost"
+              size="sm"
+              className="gap-1 px-1.5 text-xs sm:px-3 sm:text-sm"
               disabled={createDisabled}
               onClick={() => (session ? setCreating("canvas") : login())}
             >
@@ -117,24 +120,13 @@ export function ShortDramaStudio() {
               短剧画布
             </Button>
           </div>
-          {modes.map(({ id, title, description, icon }) => (
-            <TabsContent key={id} value={id} className="px-4 py-6 md:px-6">
-              <ContentState
-                icon={icon}
-                title={title}
-                description={description}
-                actions={
-                  <Button
-                    disabled={createDisabled}
-                    onClick={() => (session ? setCreating(id) : login())}
-                  >
-                    {id === "upload"
-                      ? "开始导入"
-                      : id === "redraw"
-                        ? "开始转绘"
-                        : "开始创作"}
-                  </Button>
-                }
+          {modes.map(({ id }) => (
+            <TabsContent key={id} value={id} forceMount hidden={mode !== id}>
+              <StudioComposer
+                mode={id}
+                disabled={createDisabled}
+                signedIn={Boolean(session)}
+                onStart={(input) => (session ? setCreating(input) : login())}
               />
             </TabsContent>
           ))}
@@ -149,13 +141,13 @@ export function ShortDramaStudio() {
           亮点功能
         </h2>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          {features.map(({ label, description, icon: Icon }) => (
-            <Card key={label} size="sm">
+          {features.map(({ label, description }) => (
+            <Card
+              key={label}
+              size="sm"
+              className="rounded-xl bg-muted/50 ring-0"
+            >
               <CardHeader>
-                <Icon
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
                 <CardTitle>{label}</CardTitle>
                 <CardDescription>{description}</CardDescription>
               </CardHeader>
@@ -189,12 +181,32 @@ export function ShortDramaStudio() {
             toolbarTarget={null}
           />
         ) : (
-          <ContentState
-            icon={Clapperboard}
-            title="登录查看你的短剧"
-            actions={<Button onClick={login}>登录 / 注册</Button>}
-          />
+          <div className="flex flex-wrap items-center gap-3 rounded-xl bg-muted/50 p-3">
+            <Clapperboard
+              className="size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <p className="flex-1 text-sm text-muted-foreground">
+              登录查看你的短剧
+            </p>
+            <Button size="sm" variant="outline" onClick={login}>
+              登录 / 注册
+            </Button>
+          </div>
         )}
+      </section>
+      <section
+        aria-labelledby="short-drama-featured"
+        className="flex flex-wrap items-center justify-between gap-2"
+      >
+        <h2 id="short-drama-featured" className="text-base font-semibold">
+          精选作品
+        </h2>
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/explore">
+            前往探索 <ArrowUpRight data-icon="inline-end" aria-hidden="true" />
+          </Link>
+        </Button>
       </section>
       {creating && (
         <AssetCreateProject
@@ -202,10 +214,12 @@ export function ShortDramaStudio() {
           onClose={() => setCreating(null)}
           onLock={setLocked}
           destination={
-            creating === "canvas"
+            creating === "canvas" || !owner
               ? undefined
-              : (projectID) =>
-                  `/short-drama/${projectID}?tab=${creating === "upload" ? "script" : creating === "redraw" ? "video" : "create"}`
+              : (projectID) => {
+                  saveStudioInput(owner, projectID, creating);
+                  return `/short-drama/${projectID}?tab=${projectTabs[creating.kind]}`;
+                }
           }
         />
       )}

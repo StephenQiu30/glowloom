@@ -62,6 +62,7 @@ export function ScriptPanel({
   head,
   writable,
   generatedText,
+  initialInput,
   onChange,
   onLock,
 }: {
@@ -70,12 +71,13 @@ export function ScriptPanel({
   head: API.ProjectState;
   writable: boolean;
   generatedText?: string;
+  initialInput?: { text: string; file?: File };
   onLock: (locked: boolean) => void;
   onChange: () => Promise<unknown>;
 }) {
   const id = useId();
-  const [text, setText] = useState("");
-  const [file, setFile] = useState<File>();
+  const [text, setText] = useState(initialInput?.text ?? "");
+  const [file, setFile] = useState(initialInput?.file);
   const [title, setTitle] = useState("");
   const [rights, setRights] = useState(false);
   const [selected, setSelected] = useState<string>();

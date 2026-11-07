@@ -211,7 +211,9 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
     "/assets",
   );
   expect(
-    screen.getByRole("link", { name: "短剧工作室" }).getAttribute("href"),
+    within(screen.getByRole("navigation", { name: "工作室" }))
+      .getByRole("link", { name: "短剧工作室" })
+      .getAttribute("href"),
   ).toBe("/short-drama");
   expect(
     screen.getByRole("link", { name: "查看我的画布" }).getAttribute("href"),

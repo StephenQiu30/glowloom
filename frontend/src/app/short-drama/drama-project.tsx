@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import useSWR from "swr";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getProject } from "@/api/projects";
 import { getScriptWorkspace } from "@/api/script";
 import { useOptionalSession } from "@/components/auth/session";
@@ -22,6 +22,7 @@ import { ScriptPanel } from "./script-panel";
 import { EpisodePanel } from "./episode-panel";
 import { ProductionAssets } from "./production-assets";
 import { VideoPanel } from "./video-panel";
+import { clearStudioInput, readStudioInput } from "./studio-input";
 
 const ConversationWorkspace = dynamic(
   () =>
@@ -76,6 +77,10 @@ function ProjectWorkspace({
   owner: string;
   writable: boolean;
 }) {
+  const [studioInput] = useState(() => readStudioInput(owner, projectID));
+  useEffect(() => {
+    if (studioInput) clearStudioInput(studioInput);
+  }, [studioInput]);
   const [tab, setTab] = useState(initialTab);
   const [sessionID, setSessionID] = useState(initialSession);
   const [generated, setGenerated] = useState("");
@@ -118,7 +123,8 @@ function ProjectWorkspace({
   });
   const [draft, setDraft] = useState(() =>
     promptDraft(
-      "请根据我的创作想法写一部短剧。请按「第1集」这样的标题分集，并为每集写出场景、动作和对白。\n\n我的创作想法：",
+      "请根据我的创作想法写一部短剧。请按「第1集」这样的标题分集，并为每集写出场景、动作和对白。\n\n我的创作想法：" +
+        (studioInput?.kind === "create" ? studioInput.prompt : ""),
     ),
   );
   const [assistantDraft, setAssistantDraft] = useState<PromptDraft>();
@@ -229,6 +235,9 @@ function ProjectWorkspace({
             head={script.data}
             writable={canWrite}
             generatedText={generated}
+            initialInput={
+              studioInput?.kind === "upload" ? studioInput : undefined
+            }
             onChange={script.mutate}
             onLock={setScriptLocked}
           />
@@ -283,6 +292,11 @@ function ProjectWorkspace({
             writable={canWrite}
             canvas={canvas}
             initialPrompt={shotPrompt}
+            initialInput={
+              !shotPrompt && studioInput?.kind === "redraw"
+                ? studioInput
+                : undefined
+            }
             onLock={setVideoLocked}
           />
         </TabsContent>
