@@ -34,7 +34,7 @@ COPY --from=deps /canvas /canvas
 COPY frontend/ .
 # Type checking includes the test that compares the frontend and backend catalogs.
 COPY backend/internal/prompt/domain/cinema_catalog.json /backend/internal/prompt/domain/cinema_catalog.json
-RUN test -n "$GLOWLOOM_BACKEND_ORIGIN" && pnpm exec next build
+RUN test -n "$GLOWLOOM_BACKEND_ORIGIN" && node node_modules/next/dist/bin/next build
 
 FROM node:24.21.0-bookworm-slim
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
