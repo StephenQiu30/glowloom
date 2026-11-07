@@ -21,6 +21,7 @@ import {
   type PromptDraft,
 } from "@/components/generation/prompt-document";
 import { mediaBinding } from "@/components/generation/reference-controls";
+import { mediaError } from "@/components/media/library";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ContentState } from "@/components/layout/content-state";
 import { RequestError } from "@/lib/request";
-import { styleError, type StyleDetail } from "./style-api";
+import { type StyleDetail } from "./style-api";
 import { parseStyleAnalysisReply } from "./style-analysis-result";
 import type { StyleOwner } from "./style-library-popover";
 const Workspace = dynamic(() =>
@@ -172,7 +173,7 @@ function Analysis({
         if (!controller.signal.aborted)
           setError(
             cause instanceof RequestError
-              ? styleError(cause)
+              ? mediaError(cause)
               : cause instanceof Error
                 ? cause.message
                 : "参考图准备失败，当前图片已保留。",

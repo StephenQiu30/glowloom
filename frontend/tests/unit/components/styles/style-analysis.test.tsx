@@ -6,6 +6,7 @@ import {
   StyleAnalysisDialog,
 } from "@/components/styles/style-analysis-dialog";
 import { validatePromptDraft } from "@/components/generation/prompt-document";
+import { RequestError } from "@/lib/request";
 import { emptyPromptDraft } from "@/components/generation/prompt-document";
 import {
   ConversationProvider,
@@ -107,6 +108,25 @@ beforeEach(() => {
   data.execute.mockResolvedValue([asset]);
 });
 afterEach(cleanup);
+it("reports reference preparation errors in the media domain and keeps the original copy retry", async () => {
+  data.execute.mockRejectedValueOnce(new RequestError("not_found", 404));
+  render(
+    <StyleAnalysisDialog
+      owner={{ actorId, scopeId }}
+      references={references}
+      onUse={() => {}}
+      onClose={() => {}}
+    />,
+  );
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "资产已不存在或无法访问",
+  );
+  expect(screen.queryByText(/风格已不存在/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "重试原复制" }));
+  await screen.findByRole("region", { name: "正常 Agent 分析" });
+  expect(data.createCopy).toHaveBeenCalledTimes(1);
+  expect(data.execute.mock.calls[0][0]).toBe(data.execute.mock.calls[1][0]);
+});
 it("prepares only copied project images and waits for manual Agent reply adoption", async () => {
   const use = vi.fn();
   render(

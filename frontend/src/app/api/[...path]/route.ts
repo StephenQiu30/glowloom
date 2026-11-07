@@ -639,6 +639,21 @@ async function proxy(
     },
     { pattern: "media/library/video-links", methods: ["POST"], query: [] },
     {
+      pattern: "media/library/transfers",
+      methods: ["GET", "POST"],
+      query: ["scope", "project_id", "page", "page_size"],
+    },
+    {
+      pattern: `media/library/transfers/${identityUUID}`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: `media/library/transfers/${identityUUID}/(cancel|retry|reconcile)`,
+      methods: ["POST"],
+      query: [],
+    },
+    {
       pattern: `projects/${identityUUID}/script-workspace`,
       methods: ["GET"],
       query: [],
@@ -979,7 +994,11 @@ async function proxy(
       ])
         if (incoming.searchParams.has(key))
           upstream.searchParams.set(key, incoming.searchParams.get(key)!);
-    if (resource.startsWith("media/library") && request.method === "GET") {
+    if (
+      (resource === "media/library" ||
+        matches(`media/library/items/${identityUUID}(/(preview|download))?`)) &&
+      request.method === "GET"
+    ) {
       const scope = incoming.searchParams.get("scope") ?? "personal";
       const projectID = incoming.searchParams.get("project_id");
       if (

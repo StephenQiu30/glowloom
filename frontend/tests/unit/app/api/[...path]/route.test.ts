@@ -2,6 +2,98 @@ import { afterEach, expect, it, vi } from "vitest";
 import { GET, POST, PUT } from "@/app/api/[...path]/route";
 afterEach(() => vi.unstubAllGlobals());
 
+it("素材复制提交、状态和控制保留原始契约，不向状态读取注入库作用域", async () => {
+  const fetcher = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(new Response("{}")));
+  vi.stubGlobal("fetch", fetcher);
+  const collection = "media/library/transfers";
+  const job = `${collection}/11111111-1111-4111-8111-111111111111`;
+  const body = '{"revision":2}';
+  for (const path of [
+    collection,
+    ...["cancel", "retry", "reconcile"].map((action) => `${job}/${action}`),
+  ]) {
+    const response = await POST(
+      new Request(`http://localhost/api/${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "frozen-copy-key",
+          "X-CSRF-Token": "csrf-proof",
+          "X-Creation-Scope": "scope-proof",
+        },
+        body,
+      }),
+      context(path),
+    );
+    expect(response.status).toBe(200);
+    const [url, init] = fetcher.mock.calls.at(-1)!;
+    expect((url as URL).pathname).toBe(`/api/${path}`);
+    expect((url as URL).search).toBe("");
+    expect(await new Response(init.body).text()).toBe(body);
+    expect(init.headers.get("Idempotency-Key")).toBe("frozen-copy-key");
+    expect(init.headers.get("X-CSRF-Token")).toBe("csrf-proof");
+    expect(init.headers.get("X-Creation-Scope")).toBe("scope-proof");
+  }
+  expect(
+    (await GET(new Request(`http://localhost/api/${job}`), context(job)))
+      .status,
+  ).toBe(200);
+  expect((fetcher.mock.calls.at(-1)![0] as URL).search).toBe("");
+  const query =
+    "scope=project&project_id=22222222-2222-4222-8222-222222222222&page=2&page_size=10";
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${collection}?${query}`),
+        context(collection),
+      )
+    ).status,
+  ).toBe(200);
+  expect((fetcher.mock.calls.at(-1)![0] as URL).searchParams.toString()).toBe(
+    query,
+  );
+  fetcher.mockClear();
+  for (const [path, extra] of [
+    [job, "scope=personal"],
+    [collection, "actor_id=foreign"],
+    [collection, "page=1&page=2"],
+  ]) {
+    expect(
+      (
+        await GET(
+          new Request(`http://localhost/api/${path}?${extra}`),
+          context(path),
+        )
+      ).status,
+    ).toBe(422);
+  }
+  expect(
+    (
+      await POST(
+        new Request(`http://localhost/api/${collection}?scope=personal`, {
+          method: "POST",
+          body: "{}",
+        }),
+        context(collection),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await PUT(
+        new Request(`http://localhost/api/${job}`, {
+          method: "PUT",
+          body: "{}",
+        }),
+        context(job),
+      )
+    ).status,
+  ).toBe(405);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
 it("视频链接导入等待后端五分钟有界处理，普通读取仍保持短超时", async () => {
   const timeout = vi
     .spyOn(AbortSignal, "timeout")
