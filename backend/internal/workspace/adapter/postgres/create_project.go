@@ -78,7 +78,7 @@ func requireUsablePreset(tx *gorm.DB, project domain.Project, scope uuid.UUID) e
 	result := tx.Raw(`
 		SELECT style_type, style_subtype
 		FROM workspace.style_preset
-		WHERE id = ?::uuid AND org_id = ?::uuid AND owner_scope_id = ?::uuid AND NOT is_delete
+		WHERE owner_user_id IS NULL AND id = ?::uuid AND org_id = ?::uuid AND owner_scope_id = ?::uuid AND NOT is_delete
 		  AND (project_id IS NULL OR project_id = ?::uuid)
 		FOR SHARE
 	`, project.StylePresetID.String(), project.OrgID.String(), scope, project.ID.String()).Scan(&row)

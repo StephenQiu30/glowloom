@@ -628,6 +628,17 @@ async function proxy(
                           : undefined;
   const boundedRoute = [
     {
+      pattern: "style-library",
+      methods: ["GET", "POST"],
+      query: ["q", "category", "mine", "limit", "cursor"],
+    },
+    {
+      pattern: `style-library/${identityUUID}`,
+      methods: ["GET", "PATCH", "DELETE"],
+      query: [],
+    },
+    { pattern: "media/library/video-links", methods: ["POST"], query: [] },
+    {
       pattern: `projects/${identityUUID}/script-workspace`,
       methods: ["GET"],
       query: [],
@@ -996,6 +1007,7 @@ async function proxy(
               "root_only",
               "favorite_only",
               "recent_only",
+              "resolutions",
               "catalog_state",
               "search",
               "order",

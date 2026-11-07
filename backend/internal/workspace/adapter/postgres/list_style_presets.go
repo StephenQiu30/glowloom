@@ -24,7 +24,7 @@ func (s *Store) ListStylePresetSummaries(ctx context.Context, actor identityapp.
 			return err
 		}
 		query := `SELECT id,name,style_type,COALESCE(style_subtype,'') AS style_subtype
-		 FROM workspace.style_preset WHERE org_id=? AND owner_scope_id=? AND project_id IS NULL AND NOT is_delete`
+		 FROM workspace.style_preset WHERE owner_user_id IS NULL AND org_id=? AND owner_scope_id=? AND project_id IS NULL AND NOT is_delete`
 		args := []any{actor.OrgID, actor.ScopeID}
 		if input.StyleType != "" {
 			query += ` AND style_type=?`

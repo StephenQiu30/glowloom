@@ -31,12 +31,14 @@ export function UploadDialog({
   projectID,
   initialFile,
   destinationLabel,
+  acceptedExtensions,
 }: {
   onClose: () => void;
   onUploaded: (asset?: API.AssetSummary) => void | Promise<void>;
   projectID?: string;
   initialFile?: File;
   destinationLabel?: string;
+  acceptedExtensions?: readonly string[];
 }) {
   const formFieldId = useId();
 
@@ -56,7 +58,7 @@ export function UploadDialog({
   function choose(f?: File) {
     if (pending || unconfirmed) return;
     if (!f) return;
-    setError(validateUpload(f));
+    setError(fileError(f));
     setFile(f);
     setUploaded(null);
     setConfirmed(false);
@@ -64,8 +66,17 @@ export function UploadDialog({
     setDone(false);
     key.current = crypto.randomUUID();
   }
+  function fileError(candidate: File) {
+    const extension = candidate.name.split(".").at(-1)?.toLowerCase();
+    return (
+      validateUpload(candidate) ||
+      (acceptedExtensions && !acceptedExtensions.includes(extension ?? "")
+        ? "文件类型不符合本次参考要求。"
+        : "")
+    );
+  }
   async function upload() {
-    if (!file || busy.current || !confirmed || validateUpload(file)) return;
+    if (!file || busy.current || !confirmed || fileError(file)) return;
     busy.current = true;
     setPending(true);
     setProgress(null);
@@ -158,6 +169,9 @@ export function UploadDialog({
                 id={`${formFieldId}-file`}
                 ref={input}
                 type="file"
+                accept={acceptedExtensions
+                  ?.map((extension) => `.${extension}`)
+                  .join(",")}
                 tabIndex={-1}
                 aria-label="选择素材文件"
                 disabled={pending || unconfirmed}
@@ -230,10 +244,7 @@ export function UploadDialog({
             <Button
               className="h-11 min-w-28"
               disabled={
-                !file ||
-                !confirmed ||
-                !!(file && validateUpload(file)) ||
-                pending
+                !file || !confirmed || !!(file && fileError(file)) || pending
               }
               onClick={() => void upload()}
             >

@@ -29,6 +29,40 @@ function ready(draft = emptyPromptDraft()) {
     active: false,
   };
 }
+it("以视频实际抽帧数量校验视觉模型，小说文档不伪装成图片", () => {
+  const draft = emptyPromptDraft();
+  draft.references = [
+    {
+      id: "video",
+      bindingGeneration: 1,
+      mediaKind: "video",
+      role: "reference_video",
+      order: 0,
+      source: { kind: "media", sourceId: "asset", sourceVersion: "1" },
+    },
+  ];
+  const enough = structuredClone(model);
+  (
+    enough.current_version!.limits!.roles as Record<
+      string,
+      { max_count: number }
+    >
+  ).reference_image!.max_count = 3;
+  expect(
+    canSubmitConversation({ ...ready(draft), planningModel: enough }).allowed,
+  ).toBe(true);
+  expect(canSubmitConversation(ready(draft)).allowed).toBe(false);
+  draft.references[0]!.mediaKind = "document";
+  draft.references[0]!.role = "reference_document";
+  const textOnly = {
+    ...model,
+    input_roles: ["prompt"],
+    current_version: { ...model.current_version, limits: {} },
+  } as API.ModelResponse;
+  expect(
+    canSubmitConversation({ ...ready(draft), planningModel: textOnly }).allowed,
+  ).toBe(true);
+});
 it("distinguishes empty, image-only and new text from quoted context", () => {
   const draft = emptyPromptDraft();
   expect(canSubmitConversation(ready(draft)).allowed).toBe(false);

@@ -10,7 +10,12 @@ export function unifiedReferencePreview(
   if (source.kind !== "subject") return null;
   const primary = source.media[0];
   const revision = Number(primary?.sourceVersion);
-  if (!primary?.bindingId || !Number.isSafeInteger(revision) || revision < 1)
+  if (
+    !primary?.bindingId ||
+    primary.mediaKind === "document" ||
+    !Number.isSafeInteger(revision) ||
+    revision < 1
+  )
     return null;
   return {
     asset_id: primary.sourceId,

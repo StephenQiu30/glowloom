@@ -13,6 +13,7 @@ type uploadRequestRecord struct {
 	RequestKey    uuid.UUID
 	SHA256        string
 	FileName      string
+	SourceKind    string
 	ByteSize      int64
 	AssetID       uuid.UUID
 	Response      jsonDocument

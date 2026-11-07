@@ -79,7 +79,7 @@ func replayPersonalUpload(tx *gorm.DB, actor identityapp.Principal, r applicatio
 	if read.Error != nil {
 		return application.PersonalUploadResult{}, false, fmt.Errorf("read personal upload receipt: %w", read.Error)
 	}
-	if row.SHA256 != r.SHA256 || row.FileName != r.FileName || row.ByteSize != r.ByteSize {
+	if row.SHA256 != r.SHA256 || row.FileName != r.FileName || row.ByteSize != r.ByteSize || row.SourceKind != r.SourceKind() {
 		return application.PersonalUploadResult{}, false, application.ErrUploadConflict
 	}
 	var result application.PersonalUploadResult
@@ -179,7 +179,7 @@ func (s *Store) CommitPersonalUpload(ctx context.Context, actor identityapp.Prin
 			return err
 		}
 		personalOrgID := actor.OrgID
-		receipt := uploadRequestRecord{PersonalOrgID: &personalOrgID, PrincipalID: actor.ID, RequestKey: r.Key, SHA256: r.SHA256, FileName: r.FileName, ByteSize: r.ByteSize, AssetID: result.Asset.ID, Response: jsonDocument(body)}
+		receipt := uploadRequestRecord{PersonalOrgID: &personalOrgID, PrincipalID: actor.ID, RequestKey: r.Key, SHA256: r.SHA256, FileName: r.FileName, SourceKind: r.SourceKind(), ByteSize: r.ByteSize, AssetID: result.Asset.ID, Response: jsonDocument(body)}
 		if err := requireOne(tx.Create(&receipt), application.ErrUnavailable); err != nil {
 			return err
 		}

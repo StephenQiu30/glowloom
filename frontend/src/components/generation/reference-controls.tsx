@@ -7,6 +7,7 @@ import {
   ImageIcon,
   Video,
   AudioLines,
+  FileText,
   UserRound,
   Upload,
   FolderOpen,
@@ -137,7 +138,7 @@ export function mediaBinding(
   if (
     !asset.id ||
     !Number.isSafeInteger(asset.revision) ||
-    !["image", "video", "audio"].includes(asset.kind ?? "")
+    !["image", "video", "audio", "document"].includes(asset.kind ?? "")
   )
     throw new Error("素材身份或版本不完整");
   return {
@@ -614,9 +615,21 @@ export function ReferenceControls({
       setError(error);
       return;
     }
-    const kind = file.type.split("/")[0] as MediaKind;
-    if (!["image", "video", "audio"].includes(kind)) {
-      setError("请选择图片、视频或音频文件。");
+    const kind = (
+      assistant && /\.(txt|docx)$/i.test(file.name)
+        ? "document"
+        : file.type.split("/")[0]
+    ) as MediaKind;
+    if (
+      !(
+        assistant ? ["image", "video", "document"] : ["image", "video", "audio"]
+      ).includes(kind)
+    ) {
+      setError(
+        assistant
+          ? "请选择图片、视频或TXT/DOCX小说文档。"
+          : "请选择图片、视频或音频文件。",
+      );
       return;
     }
     const pending: ReferenceBinding = {
@@ -852,14 +865,24 @@ export function ReferenceControls({
         >
           ＠ 引用
         </Button>
-        {(["image", "video", "audio"] as const).map((kind) => (
+        {(assistant
+          ? (["image", "video", "document"] as const)
+          : (["image", "video", "audio"] as const)
+        ).map((kind) => (
           <Button
             key={kind}
             variant="outline"
             disabled={disabled}
             onClick={() => setPicker({ kind })}
           >
-            添加{kind === "image" ? "图片" : kind === "video" ? "视频" : "音频"}
+            添加
+            {kind === "image"
+              ? "图片"
+              : kind === "video"
+                ? "视频"
+                : kind === "document"
+                  ? "小说文档"
+                  : "音频"}
           </Button>
         ))}
         <Button
@@ -1167,7 +1190,9 @@ export function ReferenceControls({
   const kinds = [
     { kind: "image" as const, label: "图片", icon: ImageIcon },
     { kind: "video" as const, label: "视频", icon: Video },
-    { kind: "audio" as const, label: "音频", icon: AudioLines },
+    ...(assistant
+      ? [{ kind: "document" as const, label: "小说文档", icon: FileText }]
+      : [{ kind: "audio" as const, label: "音频", icon: AudioLines }]),
   ];
   const matchingReferences = draft.references.filter((ref) =>
     displayLabel(ref.id).includes(search),
@@ -1898,7 +1923,11 @@ export function ReferenceControls({
             ref={referenceUploadInput}
             aria-label="上传参考文件"
             type="file"
-            accept="image/*,video/*,audio/*"
+            accept={
+              assistant
+                ? "image/*,video/*,.txt,.docx"
+                : "image/*,video/*,audio/*"
+            }
             className="hidden"
             disabled={disabled}
             onChange={(e) => {

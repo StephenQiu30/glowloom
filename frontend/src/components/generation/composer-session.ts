@@ -882,7 +882,7 @@ export class ComposerSession {
       if (s.labels.allocations[binding.id])
         throw new Error("reference_id_already_allocated");
       const kind = labelKind(binding);
-      const ordinal = s.labels.highWater[kind] + 1;
+      const ordinal = (s.labels.highWater[kind] ?? 0) + 1;
       if (
         !Number.isSafeInteger(ordinal) ||
         Object.keys(s.labels.allocations).length >= MAX_LABEL_ALLOCATIONS
@@ -1083,12 +1083,13 @@ export class ComposerSession {
         throw new Error("label_allocation_conflict");
       labels.allocations[id] = allocation;
     }
-    for (const kind of Object.keys(
-      labels.highWater,
-    ) as (keyof LabelState["highWater"])[])
+    for (const kind of new Set([
+      ...Object.keys(labels.highWater),
+      ...Object.keys(state.labels.highWater),
+    ]) as Set<keyof LabelState["highWater"]>)
       labels.highWater[kind] = Math.max(
-        labels.highWater[kind],
-        state.labels.highWater[kind],
+        labels.highWater[kind] ?? 0,
+        state.labels.highWater[kind] ?? 0,
       );
     const { document, labelState: _labels, ...intent } = structuredClone(draft);
     void _labels;
@@ -1118,7 +1119,8 @@ export class ComposerSession {
       const kind = labelKind(ref);
       fragment.labelState.allocations[ref.id] = {
         labelKind: kind,
-        ordinal: ++fragment.labelState.highWater[kind],
+        ordinal: (fragment.labelState.highWater[kind] =
+          (fragment.labelState.highWater[kind] ?? 0) + 1),
       };
     }
     fragment.document.content[0].content = inputs.map((input) => ({
@@ -1159,7 +1161,7 @@ export class ComposerSession {
       const kind = labelKind(ref);
       labels.allocations[ref.id] = {
         labelKind: kind,
-        ordinal: ++labels.highWater[kind],
+        ordinal: (labels.highWater[kind] = (labels.highWater[kind] ?? 0) + 1),
       };
       references.push(ref);
       mapping.set(old.id, ref.id);

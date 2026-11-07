@@ -3,7 +3,7 @@ import {
   type CinemaKit,
 } from "@/components/canvas/cinema-kit/cinema-kit-model";
 /** E0 client contract. Resource authorization and server hashes belong to E1/E4. */
-export type MediaKind = "image" | "video" | "audio";
+export type MediaKind = "image" | "video" | "audio" | "document";
 export type LabelKind = MediaKind | "subject";
 export type PromptInline =
   | { type: "text"; text: string }
@@ -42,7 +42,9 @@ export type ReferenceBinding = {
   order: number;
 };
 export type LabelState = {
-  highWater: Record<LabelKind, number>;
+  highWater: Record<Exclude<LabelKind, "document">, number> & {
+    document?: number;
+  };
   allocations: Record<string, { labelKind: LabelKind; ordinal: number }>;
 };
 export type PromptDraft = {
@@ -60,6 +62,7 @@ export const labelNames: Record<LabelKind, string> = {
   video: "视频",
   audio: "音频",
   subject: "主体",
+  document: "文档",
 };
 const labelKinds = Object.keys(labelNames);
 // Bounded tombstones, not a provider's reference limit. Exhaustion must be explicit.
@@ -120,7 +123,9 @@ export function validateReference(
   id(value.role);
   integer(value.bindingGeneration, 1);
   integer(value.order);
-  requireValue(["image", "video", "audio"].includes(value.mediaKind as string));
+  requireValue(
+    ["image", "video", "audio", "document"].includes(value.mediaKind as string),
+  );
   const s = value.source;
   record(s);
   if (s.kind === "pending_upload") {
@@ -195,7 +200,10 @@ export function validatePromptDraft(
   keys(labels, ["highWater", "allocations"]);
   record(labels.highWater);
   keys(labels.highWater, labelKinds);
-  for (const kind of labelKinds) integer(labels.highWater[kind]);
+  for (const kind of labelKinds) {
+    if (kind === "document" && labels.highWater[kind] === undefined) continue;
+    integer(labels.highWater[kind]);
+  }
   record(labels.allocations);
   requireValue(Object.keys(labels.allocations).length <= MAX_LABEL_ALLOCATIONS);
   const used = new Set<string>();

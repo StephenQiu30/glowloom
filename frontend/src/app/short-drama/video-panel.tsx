@@ -55,6 +55,7 @@ export function VideoPanel({
   writable,
   initialPrompt,
   initialInput,
+  styleAssets = [],
   onLock,
 }: {
   project: Project;
@@ -63,6 +64,7 @@ export function VideoPanel({
   writable: boolean;
   initialPrompt?: string;
   initialInput?: { file?: File; style: string; market: string };
+  styleAssets?: readonly API.AssetSummary[];
   onLock: (locked: boolean) => void;
 }) {
   const [selected, setSelected] = useState("");
@@ -105,12 +107,24 @@ export function VideoPanel({
       );
       const binding = mediaBinding(asset, "reference_video");
       next.mode = "omni_reference";
-      next.references = [binding];
+      const images = styleAssets
+        .filter(
+          (image) => image.project_id === project.id && image.kind === "image",
+        )
+        .map((image) => mediaBinding(image, "reference_image"));
+      next.references = [binding, ...images].map((reference, order) => ({
+        ...reference,
+        order,
+      }));
       next.labelState.highWater.video = 1;
       next.labelState.allocations[binding.id] = {
         labelKind: "video",
         ordinal: 1,
       };
+      for (const image of images) {
+        const ordinal = ++next.labelState.highWater.image;
+        next.labelState.allocations[image.id] = { labelKind: "image", ordinal };
+      }
       setDraftID(undefined);
       setDraft(next);
     });

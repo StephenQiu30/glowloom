@@ -48,6 +48,7 @@ export class SessionRuntime {
   private controlLine: Promise<unknown> = Promise.resolve();
   private proposalLine: Promise<void> | undefined;
   private segment: string;
+  private inputRead: AbortController | undefined;
   private constructor(
     readonly pool: Pool,
     readonly business: BusinessClient,
@@ -403,39 +404,69 @@ export class SessionRuntime {
     }, context);
     const initialContent =
       this.segment === this.run.submission_id && this.run.input
-        ? await resolveConversationContent(this.run.input, async (pin) => {
-            await this.assertActive();
-            const input = {
-              asset_id: pin.sourceId,
-              revision: Number(pin.sourceVersion),
-            };
-            const identity: CallIdentity = {
-              task_id: 'user-input',
-              call_id: pin.sourceId,
-              checkpoint_id: this.run.input!.input_hash,
-              attempt: 1,
-              contract_version: 'v1',
-              input_hash: canonicalHash(input),
-            };
-            // Always execute the authorized read endpoint: it revalidates cached
-            // image receipts too. A generic receipt lookup would skip that check.
-            const receipt = await this.business.execute(
-              'tool',
-              'media_image_inspect',
-              this.grant(),
-              identity,
-              input,
-              0,
-            );
-            if (
-              receipt.status !== 'completed' ||
-              receipt.root_run_id !== this.run.id ||
-              receipt.submission_id !== this.segment ||
-              receipt.call.input_hash !== identity.input_hash
-            )
-              throw new Error('Input image requires reconciliation');
-            return receipt.result;
-          })
+        ? await resolveConversationContent(
+            this.run.input,
+            async (pin) => {
+              await this.assertActive();
+              const input = {
+                asset_id: pin.sourceId,
+                revision: Number(pin.sourceVersion),
+                ...(this.run.manifest.tools.some(
+                  (tool) => tool.name === 'media_reference_inspect',
+                )
+                  ? { media_kind: pin.mediaKind }
+                  : {}),
+              };
+              const multimedia = 'media_kind' in input;
+              if (!multimedia && pin.mediaKind !== 'image')
+                throw new Error(
+                  'Pinned media inspection capability is unavailable',
+                );
+              const identity: CallIdentity = {
+                task_id: 'user-input',
+                call_id: pin.sourceId,
+                checkpoint_id: this.run.input!.input_hash,
+                attempt: 1,
+                contract_version: 'v1',
+                input_hash: canonicalHash(input),
+              };
+              // Always execute the authorized read endpoint: it revalidates cached
+              // image receipts too. A generic receipt lookup would skip that check.
+              const controller = new AbortController();
+              this.inputRead = controller;
+              let receipt: Awaited<ReturnType<BusinessClient['execute']>>;
+              try {
+                receipt = await this.business.execute(
+                  'tool',
+                  multimedia
+                    ? 'media_reference_inspect'
+                    : 'media_image_inspect',
+                  this.grant(),
+                  identity,
+                  input,
+                  0,
+                  controller.signal,
+                );
+                await this.assertActive();
+              } finally {
+                if (this.inputRead === controller) this.inputRead = undefined;
+              }
+              if (
+                receipt.status !== 'completed' ||
+                receipt.root_run_id !== this.run.id ||
+                receipt.submission_id !== this.segment ||
+                receipt.call.input_hash !== identity.input_hash
+              )
+                throw new Error('Input image requires reconciliation');
+              return receipt.result;
+            },
+            Math.max(
+              1,
+              this.run.manifest.context_window -
+                this.run.manifest.max_tokens -
+                4096,
+            ),
+          )
         : this.run.goal;
     const submission = await this.root.submit(
       {
@@ -528,6 +559,7 @@ export class SessionRuntime {
   }
   block() {
     this.activeGrant = undefined;
+    this.inputRead?.abort();
   }
   private sealFailure() {
     this.stopping = true;
@@ -540,6 +572,7 @@ export class SessionRuntime {
   async close() {
     if (this.closing) return this.closing;
     this.stopping = true;
+    this.inputRead?.abort();
     if (this.renewal) clearInterval(this.renewal);
     this.activeGrant = undefined;
     this.closing = (async () => {

@@ -2,6 +2,81 @@ import { afterEach, expect, it, vi } from "vitest";
 import { GET, POST, PUT } from "@/app/api/[...path]/route";
 afterEach(() => vi.unstubAllGlobals());
 
+it("风格筛选与个人库超清条件透传，视频链接写入保留原幂等键且拒绝额外查询", async () => {
+  const fetcher = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(new Response("{}")));
+  vi.stubGlobal("fetch", fetcher);
+  const styles = "style-library";
+  expect(
+    (
+      await GET(
+        new Request(
+          `http://localhost/api/${styles}?q=水墨&category=2d&mine=true&limit=24`,
+        ),
+        context(styles),
+      )
+    ).status,
+  ).toBe(200);
+  expect((fetcher.mock.calls.at(-1)![0] as URL).searchParams.get("mine")).toBe(
+    "true",
+  );
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${styles}?actor_id=foreign`),
+        context(styles),
+      )
+    ).status,
+  ).toBe(422);
+  const library = "media/library";
+  expect(
+    (
+      await GET(
+        new Request(
+          `http://localhost/api/${library}?scope=personal&resolutions=2K%2C4K&actor_id=foreign`,
+        ),
+        context(library),
+      )
+    ).status,
+  ).toBe(200);
+  const upstream = fetcher.mock.calls.at(-1)![0] as URL;
+  expect(upstream.searchParams.get("resolutions")).toBe("2K,4K");
+  expect(upstream.searchParams.has("actor_id")).toBe(false);
+  const links = "media/library/video-links";
+  expect(
+    (
+      await POST(
+        new Request(`http://localhost/api/${links}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": "original-key",
+          },
+          body: '{"url":"https://v.douyin.com/test","local_review_confirmed":true}',
+        }),
+        context(links),
+      )
+    ).status,
+  ).toBe(200);
+  expect(fetcher.mock.calls.at(-1)![1].headers.get("Idempotency-Key")).toBe(
+    "original-key",
+  );
+  fetcher.mockClear();
+  expect(
+    (
+      await POST(
+        new Request(`http://localhost/api/${links}?actor_id=foreign`, {
+          method: "POST",
+          body: "{}",
+        }),
+        context(links),
+      )
+    ).status,
+  ).toBe(422);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
 it("短剧剧本接口保留版本与幂等键，并拒绝未声明的权限查询", async () => {
   const upstream = vi.fn(() => Promise.resolve(new Response("{}")));
   vi.stubGlobal("fetch", upstream);

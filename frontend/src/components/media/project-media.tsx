@@ -1,8 +1,9 @@
 "use client";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { ImageIcon, RotateCw } from "lucide-react";
-import { getMediaPreview } from "@/api/media";
+import { FileText, ImageIcon, RotateCw } from "lucide-react";
+import { getMediaPreview, downloadDocumentAsset } from "@/api/media";
+import { DownloadButton } from "./download-button";
 import { RequestError } from "@/lib/request";
 import { developmentMediaURL } from "@/lib/development-transport";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ function MediaPreview({
     [failed, setFailed] = useState(false),
     [retry, setRetry] = useState(0);
   useEffect(() => {
+    if (kind === "document") return;
     const c = new AbortController();
     getMediaPreview({ pid: projectID, asset_id: id }, { signal: c.signal })
       .then((r) => {
@@ -58,7 +60,22 @@ function MediaPreview({
         if (!c.signal.aborted) setFailed(true);
       });
     return () => c.abort();
-  }, [projectID, id, retry]);
+  }, [projectID, id, kind, retry]);
+  if (kind === "document")
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
+        <FileText className="size-5" />
+        <span>小说文档</span>
+        {large && (
+          <DownloadButton
+            load={() => downloadDocumentAsset({ pid: projectID, asset_id: id })}
+            filename="参考文档"
+          >
+            下载原件
+          </DownloadButton>
+        )}
+      </div>
+    );
   if (failed)
     return (
       <span

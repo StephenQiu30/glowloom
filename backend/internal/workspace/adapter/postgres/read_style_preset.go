@@ -31,7 +31,7 @@ func (s *Store) ListStylePresets(ctx context.Context, actor identityapp.Principa
 			       prompt_fragment, negative_prompt,
 			       array_to_json(reference_asset_ids)::text AS reference_asset_ids_json
 			FROM workspace.style_preset
-			WHERE org_id = ?::uuid AND owner_scope_id = ?::uuid AND project_id IS NULL AND NOT is_delete
+			WHERE owner_user_id IS NULL AND org_id = ?::uuid AND owner_scope_id = ?::uuid AND project_id IS NULL AND NOT is_delete
 			ORDER BY name, id
 		`
 		args := []any{actor.OrgID.String(), actor.ScopeID.String()}
@@ -56,7 +56,7 @@ func (s *Store) ListStylePresets(ctx context.Context, actor identityapp.Principa
 				       prompt_fragment, negative_prompt,
 				       array_to_json(reference_asset_ids)::text AS reference_asset_ids_json
 				FROM workspace.style_preset
-				WHERE org_id = ?::uuid AND owner_scope_id = ?::uuid AND (project_id IS NULL OR project_id = ?::uuid)
+				WHERE owner_user_id IS NULL AND org_id = ?::uuid AND owner_scope_id = ?::uuid AND (project_id IS NULL OR project_id = ?::uuid)
 				  AND NOT is_delete
 				ORDER BY name, id
 			`

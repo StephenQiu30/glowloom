@@ -1400,6 +1400,11 @@ declare namespace API {
     id: string;
   };
 
+  type deleteStyleLibraryItemParams = {
+    /** 风格ID */
+    id: string;
+  };
+
   type deleteSubjectParams = {
     /** 主体UUID */
     id: string;
@@ -2605,6 +2610,11 @@ declare namespace API {
     pid: string;
   };
 
+  type getStyleLibraryItemParams = {
+    /** 风格ID */
+    id: string;
+  };
+
   type getSubjectCommandParams = {
     /** 原永久命令UUID */
     key: string;
@@ -3596,6 +3606,19 @@ declare namespace API {
     limit?: number;
   };
 
+  type listStyleLibraryParams = {
+    /** 名称搜索，最多100字 */
+    q?: string;
+    /** 分类 */
+    category?: "realistic" | "2d" | "3d";
+    /** true仅本人，false仅官方，省略全部可见 */
+    mine?: boolean;
+    /** 默认24，最多100 */
+    limit?: number;
+    /** 绑定身份、归属和筛选的游标 */
+    cursor?: string;
+  };
+
   type listStylePresetsParams = {
     /** 风格类型 */
     style_type?: "realistic" | "stylized";
@@ -3739,7 +3762,7 @@ declare namespace API {
     sourceVersion: string;
   };
 
-  type MediaPinMediaKind = "audio" | "image" | "video";
+  type MediaPinMediaKind = "audio" | "document" | "image" | "video";
 
   type MediaRef = {
     asset_id?: string;
@@ -6252,6 +6275,75 @@ declare namespace API {
     version_no?: number;
   };
 
+  type StyleLibraryChangeResult = {
+    action?: string;
+    deleted?: boolean;
+    preset?: StyleLibraryDetail;
+    request_id?: string;
+  };
+
+  type StyleLibraryDeleteRequest = {
+    expected_revision?: number;
+  };
+
+  type StyleLibraryDetail = {
+    can_edit?: boolean;
+    category?: string;
+    cover_asset_id?: string | null;
+    cover_item_id?: string;
+    id?: string;
+    name?: string;
+    negative_prompt?: string;
+    owned?: boolean;
+    prompt_fragment?: string;
+    reference_asset_ids?: string[];
+    reference_items?: StyleLibraryReference[];
+    references_available?: boolean;
+    revision?: number;
+  };
+
+  type StyleLibraryEntry = {
+    can_edit?: boolean;
+    category?: string;
+    cover_asset_id?: string | null;
+    cover_item_id?: string;
+    id?: string;
+    name?: string;
+    owned?: boolean;
+    reference_asset_ids?: string[];
+    reference_items?: StyleLibraryReference[];
+    references_available?: boolean;
+    revision?: number;
+  };
+
+  type StyleLibraryListResponse = {
+    items?: StyleLibraryEntry[];
+    next_cursor?: string | null;
+  };
+
+  type StyleLibraryReference = {
+    asset_id?: string;
+    asset_revision?: number;
+    id?: string;
+    revision?: number;
+    title?: string;
+  };
+
+  type StyleLibrarySaveRequest = {
+    category?: "realistic" | "2d" | "3d";
+    name?: string;
+    prompt_fragment?: string;
+    reference_asset_ids?: string[];
+  };
+
+  type StyleLibraryUpdateRequest = {
+    category?: "realistic" | "2d" | "3d";
+    expected_revision?: number;
+    name?: string;
+    prompt_fragment?: string;
+    reference_asset_ids?: string[];
+  };
+
   type StylePresetListResponse = {
     items?: StylePresetSummary[];
     next_cursor?: string | null;
@@ -7056,6 +7148,11 @@ declare namespace API {
     title?: string;
   };
 
+  type updateStyleLibraryItemParams = {
+    /** 风格ID */
+    id: string;
+  };
+
   type updateSubjectParams = {
     /** 主体UUID */
     id: string;
@@ -7164,6 +7261,11 @@ declare namespace API {
     span_end?: number;
     span_start?: number;
     text?: string;
+  };
+
+  type VideoLinkRequest = {
+    local_review_confirmed?: boolean;
+    url?: string;
   };
 
   type Voice = {

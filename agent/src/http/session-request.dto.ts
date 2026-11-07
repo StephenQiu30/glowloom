@@ -154,10 +154,13 @@ export class MediaPin {
   @MaxLength(256)
   sourceVersion!: string;
 
-  @ApiProperty({ enum: ['image', 'video', 'audio'], type: 'string' })
+  @ApiProperty({
+    enum: ['image', 'video', 'audio', 'document'],
+    type: 'string',
+  })
   @Expose()
-  @IsIn(['image', 'video', 'audio'])
-  mediaKind!: 'image' | 'video' | 'audio';
+  @IsIn(['image', 'video', 'audio', 'document'])
+  mediaKind!: 'image' | 'video' | 'audio' | 'document';
 
   @ApiProperty({ required: false, type: 'string' })
   @Expose()
@@ -229,10 +232,10 @@ export class AuthorizedInput {
   @MaxLength(1048576)
   prompt!: string;
 
-  @ApiProperty({ type: () => MediaPin, isArray: true, maxItems: 4 })
+  @ApiProperty({ type: () => MediaPin, isArray: true, maxItems: 90 })
   @Expose()
   @IsArray()
-  @ArrayMaxSize(4)
+  @ArrayMaxSize(90)
   @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => MediaPin)

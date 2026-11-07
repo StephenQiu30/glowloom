@@ -93,7 +93,7 @@ func (s *ConversationInputService) Prepare(ctx context.Context, a identity.Princ
 	if model.Key != modelKey || model.Status != "active" || model.ProviderStatus != "active" || !model.CredentialPresent || model.CurrentVersion == nil || model.CurrentPrice == nil || model.ReleaseID == uuid.Nil {
 		return out, selected, domain.ErrUnavailable
 	}
-	if len(frozen.MediaPins) > 4 {
+	if len(frozen.MediaPins) > 90 {
 		return out, selected, prompt.ErrReferenceUnavailable
 	}
 	var limits struct {
@@ -106,16 +106,27 @@ func (s *ConversationInputService) Prepare(ctx context.Context, a identity.Princ
 		return out, selected, domain.ErrInvalid
 	}
 	counts := map[string]int{}
+	visuals := 0
 	for _, pin := range frozen.MediaPins {
-		// Current Go media reader supports authorized image bytes only. Unknown
-		// capabilities fail closed instead of dropping a video/audio reference.
-		if pin.MediaKind != "image" {
+		counts[pin.MediaKind]++
+		if counts[pin.MediaKind] > 30 {
 			return out, selected, prompt.ErrReferenceUnavailable
 		}
-		role := "reference_" + pin.MediaKind
-		limit, ok := limits.Roles[role]
-		counts[role]++
-		if !ok || !slices.Contains(model.InputRoles, role) || !slices.Contains(limit.Types, pin.MediaKind) || counts[role] > limit.MaxCount {
+		switch pin.MediaKind {
+		case "image":
+			visuals++
+		case "video":
+			visuals += 3
+		case "document": // Native TXT/DOCX extraction supplies actual text.
+		default:
+			return out, selected, prompt.ErrReferenceUnavailable
+		}
+	}
+	if visuals > 0 {
+		// Videos are sampled to real images, never passed as fictitious native
+		// video support. The selected model must support the complete projection.
+		limit, ok := limits.Roles["reference_image"]
+		if !ok || !slices.Contains(model.InputRoles, "reference_image") || !slices.Contains(limit.Types, "image") || visuals > limit.MaxCount {
 			return out, selected, prompt.ErrReferenceUnavailable
 		}
 	}

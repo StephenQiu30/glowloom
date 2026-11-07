@@ -2070,6 +2070,7 @@ CREATE TABLE media.upload_request (
     request_key uuid NOT NULL,
     sha256 text NOT NULL,
     file_name text NOT NULL,
+    source_kind text DEFAULT 'local'::text NOT NULL,
     byte_size bigint NOT NULL,
     asset_id uuid NOT NULL,
     response jsonb NOT NULL,
@@ -2077,6 +2078,7 @@ CREATE TABLE media.upload_request (
     personal_org_id uuid,
     CONSTRAINT upload_request_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= 524288000))),
     CONSTRAINT upload_request_file_name_check CHECK (((octet_length(file_name) >= 1) AND (octet_length(file_name) <= 255))),
+    CONSTRAINT upload_request_source_kind_check CHECK ((source_kind IN ('local','video_link')) AND (source_kind <> 'video_link' OR project_id IS NULL)),
     CONSTRAINT upload_request_request_key_check CHECK ((request_key <> '00000000-0000-0000-0000-000000000000'::uuid)),
     CONSTRAINT upload_request_response_check CHECK (((jsonb_typeof(response) = 'object'::text) AND (octet_length((response)::text) <= 4096))),
     CONSTRAINT upload_request_scope_check CHECK ((((project_id IS NOT NULL) AND (project_id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (personal_org_id IS NULL)) OR ((project_id IS NULL) AND (personal_org_id IS NOT NULL) AND (personal_org_id <> '00000000-0000-0000-0000-000000000000'::uuid)))),
@@ -3304,6 +3306,9 @@ CREATE TABLE workspace.style_preset (
     id uuid NOT NULL,
     org_id uuid NOT NULL,
     project_id uuid,
+    owner_user_id uuid,
+    library_category text CHECK (library_category IN ('realistic','2d','3d')),
+    revision bigint DEFAULT 1 NOT NULL CHECK (revision BETWEEN 1 AND 2147483647),
     name text NOT NULL,
     style_type text NOT NULL,
     style_subtype text,
@@ -3317,6 +3322,30 @@ CREATE TABLE workspace.style_preset (
     CONSTRAINT style_preset_style_subtype_check CHECK ((style_subtype = ANY (ARRAY['anime_jp'::text, 'guofeng_xianxia'::text, 'cartoon_3d'::text, 'manhwa'::text]))),
     CONSTRAINT style_preset_style_type_check CHECK ((style_type = ANY (ARRAY['realistic'::text, 'stylized'::text])))
 );
+
+CREATE TABLE workspace.style_preset_command (
+    actor_id uuid NOT NULL,
+    idem_key uuid NOT NULL,
+    org_id uuid NOT NULL,
+    owner_scope_id uuid NOT NULL,
+    preset_id uuid NOT NULL,
+    action text NOT NULL CHECK (action IN ('create','patch','delete')),
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    response_body jsonb NOT NULL CHECK (jsonb_typeof(response_body)='object'),
+    create_time timestamptz DEFAULT now() NOT NULL,
+    PRIMARY KEY (actor_id,idem_key)
+);
+
+-- Keep every adopted image pinned after edits and soft deletion.
+CREATE TABLE workspace.style_preset_reference (
+    preset_id uuid NOT NULL,
+    asset_id uuid NOT NULL,
+    PRIMARY KEY(preset_id,asset_id)
+);
+CREATE INDEX style_preset_library_idx ON workspace.style_preset(owner_scope_id,owner_user_id,name,id) WHERE NOT is_delete AND project_id IS NULL;
+CREATE INDEX style_preset_reference_asset_idx ON workspace.style_preset_reference(asset_id);
+CREATE INDEX style_preset_media_refs_idx ON workspace.style_preset USING gin(reference_asset_ids);
+
 
 CREATE TABLE workspace.team (
     id uuid NOT NULL,
@@ -6388,7 +6417,17 @@ GRANT SELECT,INSERT,UPDATE ON TABLE workspace.prompt_draft TO glowloom_app;
 
 GRANT SELECT,INSERT ON TABLE workspace.prompt_draft_receipt TO glowloom_app;
 
+ALTER TABLE ONLY workspace.style_preset ADD CONSTRAINT style_preset_owner_user_fk FOREIGN KEY(owner_user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+ALTER TABLE ONLY workspace.style_preset_command ADD CONSTRAINT style_preset_command_actor_fk FOREIGN KEY(actor_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+ALTER TABLE ONLY workspace.style_preset_command ADD CONSTRAINT style_preset_command_preset_fk FOREIGN KEY(preset_id) REFERENCES workspace.style_preset(id) ON DELETE RESTRICT;
+ALTER TABLE ONLY workspace.style_preset_command ADD CONSTRAINT style_preset_command_scope_fk FOREIGN KEY(owner_scope_id,org_id) REFERENCES workspace.creation_scope(id,physical_scope_id) ON DELETE RESTRICT;
+ALTER TABLE ONLY workspace.style_preset_reference ADD CONSTRAINT style_preset_reference_preset_fk FOREIGN KEY(preset_id) REFERENCES workspace.style_preset(id) ON DELETE RESTRICT;
+ALTER TABLE ONLY workspace.style_preset_reference ADD CONSTRAINT style_preset_reference_asset_fk FOREIGN KEY(asset_id) REFERENCES media.media_asset(id) ON DELETE RESTRICT;
+
 GRANT SELECT,INSERT ON TABLE workspace.style_preset TO glowloom_app;
+GRANT UPDATE(name,library_category,prompt_fragment,reference_asset_ids,is_delete,revision) ON TABLE workspace.style_preset TO glowloom_app;
+GRANT SELECT,INSERT ON TABLE workspace.style_preset_command TO glowloom_app;
+GRANT SELECT,INSERT ON TABLE workspace.style_preset_reference TO glowloom_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE workspace.team TO glowloom_app;
 

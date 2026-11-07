@@ -1,6 +1,5 @@
 import { useId, useRef, useState } from "react";
 import {
-  AtSign,
   FileText,
   Film,
   Frame,
@@ -23,11 +22,17 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { redrawMarkets, type StudioInput } from "./studio-input";
+import { studioStyleText, validateStudioInputReferences } from "./studio-input";
+import { StudioReferences } from "./studio-references";
+import type {
+  PersonalReferenceItem,
+  ReferenceOwner,
+} from "@/components/media/personal-reference-picker";
+import { StyleLibraryPopover } from "@/components/styles/style-library-popover";
+import type { StyleDetail } from "@/components/styles/style-api";
 import styles from "./studio.module.css";
 
 const settings = [
-  { key: "reference", label: "参考素材", field: "参考链接", icon: AtSign },
-  { key: "style", label: "风格", field: "剧本风格", icon: Paintbrush },
   { key: "topic", label: "选题", field: "题材或主题", icon: PenLine },
   { key: "ratio", label: "比例", field: "画面比例", icon: Frame },
   {
@@ -65,10 +70,14 @@ export function StudioComposer({
   mode,
   disabled,
   onStart,
+  owner,
+  onAuthenticate,
 }: {
   mode: StudioInput["kind"];
   disabled: boolean;
   onStart: (input: StudioInput) => void;
+  owner?: ReferenceOwner;
+  onAuthenticate?: () => void;
 }) {
   const id = useId();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -76,6 +85,11 @@ export function StudioComposer({
   const [text, setText] = useState("");
   const [file, setFile] = useState<File>();
   const [fileError, setFileError] = useState("");
+  const [referenceError, setReferenceError] = useState("");
+  const [references, setReferences] = useState<PersonalReferenceItem[]>([]);
+  const [stylePreset, setStylePreset] = useState<Readonly<StyleDetail> | null>(
+    null,
+  );
   const [values, setValues] = useState<
     Partial<Record<(typeof settings)[number]["key"] | "market", string>>
   >({});
@@ -104,6 +118,20 @@ export function StudioComposer({
   }
 
   function start() {
+    const shared = {
+      ...(references.length ? { references } : {}),
+      ...(stylePreset ? { stylePreset } : {}),
+    };
+    const problem = validateStudioInputReferences({
+      kind: "create",
+      prompt: "",
+      ...shared,
+    });
+    if (problem) {
+      setReferenceError(problem);
+      return;
+    }
+    setReferenceError("");
     if (creative) {
       const notes = settings.flatMap(({ key, field }) => {
         const value = values[key]?.trim();
@@ -112,34 +140,43 @@ export function StudioComposer({
       onStart({
         kind: "create",
         prompt: [text.trim(), ...notes].filter(Boolean).join("\n"),
+        ...shared,
       });
     } else if (uploading) {
-      onStart({ kind: "upload", text, file });
+      onStart({ kind: "upload", text, file, ...shared });
     } else {
       onStart({
         kind: "redraw",
         file,
-        style: values.style ?? "",
+        style: studioStyleText(stylePreset ?? undefined),
         market: values.market ?? "",
+        ...shared,
       });
     }
   }
 
-  const reference = (
-    <Field>
-      <FieldLabel htmlFor={`${id}-reference`}>参考链接</FieldLabel>
-      <Input
-        id={`${id}-reference`}
-        type="url"
-        value={values.reference ?? ""}
-        maxLength={500}
-        placeholder="https://"
-        onChange={(event) => update("reference", event.target.value)}
-      />
-      <p className="text-xs text-muted-foreground">
-        链接会随创作要求带入项目。
-      </p>
-    </Field>
+  const stylePicker = owner ? (
+    <StyleLibraryPopover
+      owner={owner}
+      value={stylePreset}
+      onChange={setStylePreset}
+      disabled={disabled}
+    >
+      <Button variant="ghost" size="sm" className="px-2">
+        <Paintbrush aria-hidden="true" />
+        {stylePreset?.name ?? "风格"}
+      </Button>
+    </StyleLibraryPopover>
+  ) : (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={onAuthenticate}
+      disabled={disabled}
+    >
+      <Paintbrush aria-hidden="true" />
+      风格
+    </Button>
   );
 
   const tile = (
@@ -165,14 +202,11 @@ export function StudioComposer({
         <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,3fr)] md:p-4">
           <div className="min-w-0">
             {creative ? (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" className={tileClass}>
-                    {tile}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start">{reference}</PopoverContent>
-              </Popover>
+              <StudioReferences
+                {...{ owner, disabled, onAuthenticate }}
+                value={references}
+                onChange={setReferences}
+              />
             ) : (
               <>
                 <Input
@@ -220,13 +254,7 @@ export function StudioComposer({
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor={`${id}-style`}>转绘风格</FieldLabel>
-                  <Input
-                    id={`${id}-style`}
-                    value={values.style ?? ""}
-                    maxLength={200}
-                    onChange={(event) => update("style", event.target.value)}
-                    placeholder="如水墨、写实"
-                  />
+                  {stylePicker}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`${id}-market`}>目标市场</FieldLabel>
@@ -263,6 +291,20 @@ export function StudioComposer({
         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2.5 md:px-4">
           {creative && (
             <div className="flex flex-wrap items-center gap-0.5">
+              <StudioReferences
+                {...{ owner, disabled, onAuthenticate }}
+                value={references}
+                onChange={setReferences}
+                compact
+              />
+              <StudioReferences
+                {...{ owner, disabled, onAuthenticate }}
+                value={references}
+                onChange={setReferences}
+                compact
+                libraryOnly
+              />
+              {stylePicker}
               {settings.map(({ key, label, field, icon: Icon }) => (
                 <Popover key={key}>
                   <PopoverTrigger asChild>
@@ -272,51 +314,42 @@ export function StudioComposer({
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="start">
-                    {key === "reference" ? (
-                      reference
-                    ) : (
-                      <Field>
-                        <FieldLabel htmlFor={`${id}-${key}`}>
-                          {field}
-                        </FieldLabel>
-                        {key === "ratio" ? (
-                          <NativeSelect
-                            id={`${id}-${key}`}
-                            value={values[key] ?? ""}
-                            onChange={(event) =>
-                              update(key, event.target.value)
-                            }
-                          >
-                            <NativeSelectOption value="">
-                              由 Agent 建议
-                            </NativeSelectOption>
-                            {["9:16", "16:9", "1:1", "4:3", "3:4"].map(
-                              (ratio) => (
-                                <NativeSelectOption key={ratio} value={ratio}>
-                                  {ratio}
-                                </NativeSelectOption>
-                              ),
-                            )}
-                          </NativeSelect>
-                        ) : (
-                          <Input
-                            id={`${id}-${key}`}
-                            type={key === "episodes" ? "number" : "text"}
-                            min={key === "episodes" ? 1 : undefined}
-                            maxLength={200}
-                            value={values[key] ?? ""}
-                            onChange={(event) =>
-                              update(key, event.target.value)
-                            }
-                          />
-                        )}
-                      </Field>
-                    )}
+                    <Field>
+                      <FieldLabel htmlFor={`${id}-${key}`}>{field}</FieldLabel>
+                      {key === "ratio" ? (
+                        <NativeSelect
+                          id={`${id}-${key}`}
+                          value={values[key] ?? ""}
+                          onChange={(event) => update(key, event.target.value)}
+                        >
+                          <NativeSelectOption value="">
+                            由 Agent 建议
+                          </NativeSelectOption>
+                          {["9:16", "16:9", "1:1", "4:3", "3:4"].map(
+                            (ratio) => (
+                              <NativeSelectOption key={ratio} value={ratio}>
+                                {ratio}
+                              </NativeSelectOption>
+                            ),
+                          )}
+                        </NativeSelect>
+                      ) : (
+                        <Input
+                          id={`${id}-${key}`}
+                          type={key === "episodes" ? "number" : "text"}
+                          min={key === "episodes" ? 1 : undefined}
+                          maxLength={200}
+                          value={values[key] ?? ""}
+                          onChange={(event) => update(key, event.target.value)}
+                        />
+                      )}
+                    </Field>
                   </PopoverContent>
                 </Popover>
               ))}
             </div>
           )}
+          {uploading && stylePicker}
           <div className="ml-auto flex items-center gap-3">
             {creative && (
               <span className="text-xs text-muted-foreground tabular-nums">
@@ -326,7 +359,10 @@ export function StudioComposer({
             <Button
               disabled={
                 disabled ||
-                (creative && !text.trim()) ||
+                (creative &&
+                  !text.trim() &&
+                  !references.length &&
+                  !stylePreset) ||
                 (uploading && !file && !text.trim()) ||
                 (mode === "redraw" && !file)
               }
@@ -337,6 +373,11 @@ export function StudioComposer({
           </div>
         </div>
       </div>
+      {referenceError && (
+        <p role="alert" className="text-sm text-destructive">
+          {referenceError}
+        </p>
+      )}
       {creative && (
         <div
           role="group"

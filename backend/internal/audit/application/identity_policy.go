@@ -36,6 +36,9 @@ func NewRecordedActionParser() *Parser {
 	for _, action := range []string{"project_folder.created", "project_folder.updated", "project_folder.moved", "project_folder.recycled"} {
 		fields[action] = []string{"folder_id", "project_id", "revision", "placement_revision", "recycled_count", "name_updated", "cover_updated"}
 	}
+	for _, action := range []string{"style_preset.created", "style_preset.updated", "style_preset.deleted"} {
+		fields[action] = []string{"revision", "category", "reference_count", "is_delete"}
+	}
 	fields["prompt.customization_saved"] = []string{"operation", "mode", "revision", "content_sha256", "base_template_id"}
 	fields["budget.changed"] = []string{"limit_micros", "revision", "is_overrun"}
 	fields["operation.confirmed"] = []string{"quote_micros", "model_key", "region", "origin", "reused_from"}

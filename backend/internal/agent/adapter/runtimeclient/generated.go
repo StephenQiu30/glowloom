@@ -60,15 +60,18 @@ func (e ControlRequestAction) Valid() bool {
 
 // Defines values for MediaPinMediaKind.
 const (
-	Audio MediaPinMediaKind = "audio"
-	Image MediaPinMediaKind = "image"
-	Video MediaPinMediaKind = "video"
+	Audio    MediaPinMediaKind = "audio"
+	Document MediaPinMediaKind = "document"
+	Image    MediaPinMediaKind = "image"
+	Video    MediaPinMediaKind = "video"
 )
 
 // Valid indicates whether the value is a known member of the MediaPinMediaKind enum.
 func (e MediaPinMediaKind) Valid() bool {
 	switch e {
 	case Audio:
+		return true
+	case Document:
 		return true
 	case Image:
 		return true

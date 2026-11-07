@@ -32,7 +32,7 @@ export interface AuthorizedInput {
   media_pins: Array<{
     sourceId: string;
     sourceVersion: string;
-    mediaKind: 'image' | 'video' | 'audio';
+    mediaKind: 'image' | 'video' | 'audio' | 'document';
     bindingId?: string;
   }>;
   quote?: {

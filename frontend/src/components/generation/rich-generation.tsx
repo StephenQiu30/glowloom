@@ -321,7 +321,8 @@ export function RichGeneration(props: Props) {
                   : ref.mediaKind;
               draft.labelState.allocations[ref.id] = {
                 labelKind: kind,
-                ordinal: ++draft.labelState.highWater[kind],
+                ordinal: (draft.labelState.highWater[kind] =
+                  (draft.labelState.highWater[kind] ?? 0) + 1),
               };
               draft.document.content[0].content ??= [];
               draft.document.content[0].content.push({

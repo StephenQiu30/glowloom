@@ -141,6 +141,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	protected.Use(workspacehttp.RequireProjectAccess(workspaceStore))
 	billinghttp.NewWalletHandler(walletReader(database)).Register(protected)
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
+	workspacehttp.NewStyleLibraryHandler(workspaceapp.NewStyleLibrary(workspacewire.ProvideStyleLibraryStore(database))).Register(protected)
 	workspacehttp.RegisterIndependentCreation(protected, workspaceStore.EnsureIndependentCreation)
 	workspacehttp.NewProjectBudgetHandler(workspaceapp.NewProjectBudgetQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
@@ -197,6 +198,11 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	scopedUpload := mediaapp.NewRoutedUploadService(uploadStore, uploadStore, pgmedia.NewUploadAdmission(uploadStore), mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(registry, pgmedia.NewStorageRoutes(database)), time.Now)
 	uploadHandler := mediahttp.NewUploadHandler(scopedUpload)
 	uploadHandler.Register(protected)
+	videoLinks, err := mediaflow.NewPublicVideoLinkResolver(mediaflow.VideoLinkResolverOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("configure public video links: %w", err)
+	}
+	mediahttp.NewVideoLinkHandler(mediaapp.NewVideoLinkService(scopedUpload, videoLinks)).Register(protected)
 	packages := mediawire.ProvideRoutedMediaPackages(database, registry, scopedUpload)
 	mediahttp.NewPackageHandler(packages).Register(protected)
 	exports := mediawire.ProvideRoutedMediaExportStore(database, mediawire.NewMediaScopeAccess)

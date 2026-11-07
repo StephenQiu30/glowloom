@@ -23,6 +23,8 @@ import { EpisodePanel } from "./episode-panel";
 import { ProductionAssets } from "./production-assets";
 import { VideoPanel } from "./video-panel";
 import { clearStudioInput, readStudioInput } from "./studio-input";
+import { createStudioDraft } from "./studio-draft";
+import { useStudioReferenceCopy } from "./use-studio-reference-copy";
 
 const ConversationWorkspace = dynamic(
   () =>
@@ -121,11 +123,13 @@ function ProjectWorkspace({
       throw new RequestError("invalid_receipt");
     return response.state;
   });
-  const [draft, setDraft] = useState(() =>
-    promptDraft(
-      "请根据我的创作想法写一部短剧。请按「第1集」这样的标题分集，并为每集写出场景、动作和对白。\n\n我的创作想法：" +
-        (studioInput?.kind === "create" ? studioInput.prompt : ""),
-    ),
+  const [draft, setDraft] = useState(() => createStudioDraft(studioInput));
+  const referenceCopy = useStudioReferenceCopy(
+    studioInput,
+    projectID,
+    owner,
+    writable && Boolean(project.data) && project.data?.status !== "archived",
+    (assets) => setDraft(createStudioDraft(studioInput, assets)),
   );
   const [assistantDraft, setAssistantDraft] = useState<PromptDraft>();
   const [episodeScope, setEpisodeScope] = useState<string>();
@@ -185,6 +189,30 @@ function ProjectWorkspace({
     );
   if (!project.data || !script.data)
     return <ContentState state="loading" title="正在读取短剧项目" />;
+  if (
+    !referenceCopy.assets &&
+    (!writable || project.data.status === "archived")
+  )
+    return (
+      <ContentState state="error" title="当前项目不可写，无法接收参考素材" />
+    );
+  if (!referenceCopy.assets)
+    return (
+      <ContentState
+        state={referenceCopy.error ? "error" : "loading"}
+        title={referenceCopy.error || "正在把参考素材保存到本项目"}
+        actions={
+          referenceCopy.error ? (
+            <>
+              <Button onClick={referenceCopy.retry}>重试原复制</Button>
+              <Button asChild variant="outline">
+                <Link href="/assets?view=reference">查看资产转移记录</Link>
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
+    );
 
   const canvas = canvasHref(project.data);
   const canWrite = writable && project.data.status !== "archived";
@@ -246,6 +274,9 @@ function ProjectWorkspace({
           <h2 className="mb-2 font-semibold">剧本创作</h2>
           <p className="mb-3 text-sm text-muted-foreground">
             写下创作想法，选择模型与预算。回复完成后可以带入剧本草稿审阅。
+            {draft.references.some(
+              (reference) => reference.mediaKind === "video",
+            ) && " 视频参考将读取带时间戳的采样画面，不包含完整音轨理解。"}
           </p>
           <ConversationWorkspace
             embedded
@@ -297,6 +328,9 @@ function ProjectWorkspace({
                 ? studioInput
                 : undefined
             }
+            styleAssets={referenceCopy.assets.filter(
+              (asset) => asset.kind === "image",
+            )}
             onLock={setVideoLocked}
           />
         </TabsContent>

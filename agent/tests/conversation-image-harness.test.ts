@@ -28,7 +28,7 @@ class ImageBusiness extends BusinessClient {
   constructor() {
     super('http://127.0.0.1:1', 'offline-fixture');
   }
-  override async tools() {
+  override async tools(): ReturnType<BusinessClient['tools']> {
     return [];
   }
   override async decisions() {
@@ -91,8 +91,104 @@ class ImageBusiness extends BusinessClient {
     };
   }
 }
+
+class MultimediaBusiness extends ImageBusiness {
+  override async tools() {
+    return [
+      {
+        name: 'media_reference_inspect',
+        description: 'Read actual media',
+        contract_version: 'v1',
+        replay: 'safe' as const,
+        effect: 'read' as const,
+        parameters: { type: 'object', properties: {} },
+      },
+    ];
+  }
+  override async execute(
+    ...args: Parameters<BusinessClient['execute']>
+  ): Promise<CallReceipt> {
+    const [kind, , grant, call, input] = args;
+    if (kind !== 'tool') return super.execute(...args);
+    this.reads++;
+    if (
+      !input ||
+      typeof input !== 'object' ||
+      !('media_kind' in input) ||
+      !('asset_id' in input)
+    )
+      throw new Error('Missing pinned media input');
+    const content =
+      input.media_kind === 'document'
+        ? [{ type: 'text', text: '小说真实正文以及完整结尾' }]
+        : [0, 1000, 2000].flatMap((time) => [
+            {
+              type: 'text',
+              text: `Sample at ${time} ms, sampled frames only; audio not inspected`,
+            },
+            { type: 'image', mimeType: 'image/png', data: png },
+          ]);
+    return {
+      receipt_id: randomUUID(),
+      root_run_id: grant.root_run_id,
+      submission_id: grant.submission_id,
+      call,
+      status: 'completed',
+      result: {
+        asset_id: input.asset_id,
+        revision: 2,
+        media_kind: input.media_kind,
+        content,
+      },
+      cost_micros: 0,
+    };
+  }
+}
 const pool = testPool();
 afterAll(() => pool.end());
+it('passes sampled video frames and complete document text through the official Harness transcript', async () => {
+  const business = new MultimediaBusiness();
+  const service = new SessionService(pool, business, { leaseMs: 30000 });
+  try {
+    const session = await service.createSession({
+      ...scope,
+      request_id: randomUUID(),
+      content_hash: 'a'.repeat(64),
+      title: '视频和小说',
+    });
+    const run = await service.createRun(session.id, {
+      ...scope,
+      request_id: randomUUID(),
+      content_hash: 'b'.repeat(64),
+      expected_execution_revision: 0,
+      goal: 'inspect references',
+      manifest: { model_key: 'fixture' },
+      input: {
+        schema_version: 1,
+        draft: {},
+        input_hash: 'c'.repeat(64),
+        plain_text: '',
+        prompt: '',
+        media_pins: [
+          { sourceId: asset, sourceVersion: '2', mediaKind: 'video' },
+          { sourceId: randomUUID(), sourceVersion: '2', mediaKind: 'document' },
+        ],
+      },
+    });
+    await service.waitForRun(run.root_run_id);
+    const snapshot = await service.readRun(run.root_run_id, scope);
+    expect(snapshot?.state.status).toBe('completed');
+    expect(business.reads).toBe(2);
+    const transcript = JSON.stringify(business.modelInput);
+    expect(transcript).toContain('小说真实正文以及完整结尾');
+    expect(transcript).toContain('1000 ms');
+    expect(transcript).toContain('audio not inspected');
+    expect(transcript.match(/data:image\/png;base64/g)).toHaveLength(3);
+    expect(JSON.stringify(snapshot?.input)).not.toContain(png);
+  } finally {
+    await service.close();
+  }
+});
 it('passes real image content through the official Harness transcript and retains only reference identities in the accepted input', async () => {
   const business = new ImageBusiness();
   const service = new SessionService(pool, business, { leaseMs: 30000 });

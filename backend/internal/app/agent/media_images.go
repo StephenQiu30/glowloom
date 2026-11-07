@@ -51,6 +51,7 @@ func (b *Boundary) WithMediaObjects(objects media.ObjectReader) *Boundary {
 		return b
 	}
 	b.mediaObjects = objects
+	b.registerMediaReferences()
 	binding := tool("media_image_inspect", "读取项目正式图片原始字节以进行视觉检查，返回Pi图像内容。仅支持2MiB以内PNG/JPEG，最多4百万像素；需真实已归档物理位置，不能凭文件名描述图片。", "read", `{"type":"object","properties":{"asset_id":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1}},"required":["asset_id"],"additionalProperties":false}`, nil)
 	b.bindings = append(b.bindings, binding)
 	b.Capabilities.Tools = append(b.Capabilities.Tools, app.Tool{Descriptor: binding.descriptor})

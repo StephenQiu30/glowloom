@@ -67,6 +67,9 @@ func (b *Boundary) AtomicTool(c *gin.Context, name string, in domain.CallInput) 
 	if name == "media_image_inspect" {
 		return b.executeMediaImage(c.Request.Context(), in)
 	}
+	if name == "media_reference_inspect" {
+		return b.executeMediaReference(c.Request.Context(), in)
+	}
 	if name == "canvas_commands" {
 		return b.executeCanvasCommands(c.Request.Context(), in)
 	}

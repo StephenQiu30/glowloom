@@ -130,7 +130,7 @@ func parseChat(raw json.RawMessage) (chatInput, error) {
 						Detail string `json:"detail,omitempty"`
 					} `json:"image_url,omitempty"`
 				}
-				if m.Role != "user" || json.Unmarshal(m.Content, &parts) != nil || len(parts) == 0 || len(parts) > 64 {
+				if m.Role != "user" || json.Unmarshal(m.Content, &parts) != nil || len(parts) == 0 || len(parts) > 256 {
 					return in, errInput
 				}
 				for _, part := range parts {

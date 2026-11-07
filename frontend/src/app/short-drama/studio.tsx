@@ -125,6 +125,12 @@ function StudioWorkspace() {
               <StudioComposer
                 mode={id}
                 disabled={createDisabled}
+                owner={
+                  session && selected
+                    ? { actorId: session.actor.id, scopeId: selected.id }
+                    : undefined
+                }
+                onAuthenticate={login}
                 onStart={(input) => (session ? setCreating(input) : login())}
               />
             </TabsContent>

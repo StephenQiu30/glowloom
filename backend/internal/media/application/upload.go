@@ -34,6 +34,7 @@ type UploadResult struct {
 // UploadRequest is the immutable, server-hashed local upload command.
 type UploadRequest struct {
 	Target    *UploadTarget `json:"-"`
+	VideoLink bool          `json:"-"`
 	ProjectID uuid.UUID
 	Key       uuid.UUID
 	SHA256    string
@@ -41,6 +42,14 @@ type UploadRequest struct {
 	ByteSize  int64
 	RequestID uuid.UUID
 	Personal  *domain.PersonalOwnership `json:"personal,omitempty"`
+}
+
+// SourceKind is assigned by the owning use case, never by an HTTP upload field.
+func (r UploadRequest) SourceKind() string {
+	if r.VideoLink {
+		return "video_link"
+	}
+	return "local"
 }
 
 // UploadRepository authorizes before reading and atomically commits reviewed media.
@@ -367,7 +376,7 @@ func UploadSummary(asset domain.MediaAsset) AssetSummary { return summary(asset)
 // ValidateUploadRequest enforces the durable receipt's bounded identity.
 func ValidateUploadRequest(r UploadRequest) error {
 	name, err := SafeUploadFileName(r.FileName)
-	if err != nil || name != r.FileName || !validUploadOwnership(r) || r.Key == uuid.Nil || r.RequestID == uuid.Nil || r.ByteSize < 1 || r.ByteSize > MaxUploadVideoBytes || len(r.SHA256) != 64 {
+	if err != nil || name != r.FileName || !validUploadOwnership(r) || r.VideoLink && r.Personal == nil || r.Key == uuid.Nil || r.RequestID == uuid.Nil || r.ByteSize < 1 || r.ByteSize > MaxUploadVideoBytes || len(r.SHA256) != 64 {
 		return ErrInvalidUpload
 	}
 	for _, c := range r.SHA256 {

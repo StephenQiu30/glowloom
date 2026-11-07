@@ -97,7 +97,7 @@ func replayUpload(tx *gorm.DB, actor identityapp.Principal, r application.Upload
 	if read.Error != nil {
 		return application.UploadResult{}, false, fmt.Errorf("read upload receipt: %w", read.Error)
 	}
-	if row.SHA256 != r.SHA256 || row.FileName != r.FileName || row.ByteSize != r.ByteSize {
+	if row.SHA256 != r.SHA256 || row.FileName != r.FileName || row.ByteSize != r.ByteSize || row.SourceKind != r.SourceKind() {
 		return application.UploadResult{}, false, application.ErrUploadConflict
 	}
 	var result application.UploadResult
@@ -174,7 +174,7 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 		if err != nil {
 			return err
 		}
-		receipt := uploadRequestRecord{ProjectID: &r.ProjectID, PrincipalID: actor.ID, RequestKey: r.Key, SHA256: r.SHA256, FileName: r.FileName, ByteSize: r.ByteSize, AssetID: result.Asset.ID, Response: jsonDocument(body)}
+		receipt := uploadRequestRecord{ProjectID: &r.ProjectID, PrincipalID: actor.ID, RequestKey: r.Key, SHA256: r.SHA256, FileName: r.FileName, SourceKind: r.SourceKind(), ByteSize: r.ByteSize, AssetID: result.Asset.ID, Response: jsonDocument(body)}
 		if err := tx.Create(&receipt).Error; err != nil {
 			return fmt.Errorf("insert upload receipt: %w", err)
 		}

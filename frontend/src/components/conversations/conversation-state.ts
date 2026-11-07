@@ -87,6 +87,7 @@ export function canSubmitConversation({
   if (budgetMicros(budget) === undefined)
     return blocked("请输入有效的预算上限");
   let media = 0,
+    visuals = 0,
     subjectText = false;
   const counts: Record<string, number> = {};
   const roles: unknown = model.current_version.limits?.roles;
@@ -100,30 +101,37 @@ export function canSubmitConversation({
     if (ref.source.kind !== "media" && ref.source.description.trim())
       subjectText = true;
     for (const pin of pins) {
-      const role = `reference_${pin.mediaKind}`;
-      const raw =
-        roles && typeof roles === "object"
-          ? (roles as Record<string, unknown>)[role]
-          : undefined;
-      const limit =
-        raw && typeof raw === "object"
-          ? (raw as { types?: unknown; max_count?: unknown })
-          : null;
-      counts[role] = (counts[role] ?? 0) + 1;
+      counts[pin.mediaKind] = (counts[pin.mediaKind] ?? 0) + 1;
       media++;
-      if (
-        pin.mediaKind !== "image" ||
-        !model.input_roles?.includes(role) ||
-        !limit ||
-        !Array.isArray(limit.types) ||
-        !limit.types.includes(pin.mediaKind) ||
-        typeof limit.max_count !== "number" ||
-        counts[role]! > limit.max_count
-      )
+      if (!["image", "video", "document"].includes(pin.mediaKind))
         return blocked("当前规划模型不支持这份参考，请更换模型或调整素材");
+      if (counts[pin.mediaKind]! > 30)
+        return blocked("每次最多读取30张图片、30个视频和30份文档");
+      visuals +=
+        pin.mediaKind === "video" ? 3 : pin.mediaKind === "image" ? 1 : 0;
     }
   }
-  if (media > 4) return blocked("本次最多读取4张参考图片");
+  if (visuals > 0) {
+    const raw =
+      roles && typeof roles === "object"
+        ? (roles as Record<string, unknown>).reference_image
+        : undefined;
+    const limit =
+      raw && typeof raw === "object"
+        ? (raw as { types?: unknown; max_count?: unknown })
+        : undefined;
+    if (
+      !model.input_roles?.includes("reference_image") ||
+      !limit ||
+      !Array.isArray(limit.types) ||
+      !limit.types.includes("image") ||
+      typeof limit.max_count !== "number" ||
+      visuals > limit.max_count
+    )
+      return blocked(
+        "当前规划模型不能读取全部参考画面（每视频抽取3帧），请减少素材或更换模型",
+      );
+  }
   if (!draftText(draft).trim() && !media && !subjectText)
     return blocked("输入新要求，或添加可用的参考素材");
   return { allowed: true };

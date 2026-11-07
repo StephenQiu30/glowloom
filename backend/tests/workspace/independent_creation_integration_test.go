@@ -86,7 +86,7 @@ func TestIndependentCreationReturnsNavigableContext(t *testing.T) {
 		return project, nil
 	})
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/creation-context", nil))
+	router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/creation-context", nil))
 	require.Equal(t, http.StatusOK, response.Code)
 	var body workspacehttp.ProjectResponse
 	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))

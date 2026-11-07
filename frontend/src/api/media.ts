@@ -501,6 +501,21 @@ export async function uploadPersonalMediaAsset(
   });
 }
 
+/** 读取公共视频分享链接并存入个人素材库 POST /api/media/library/video-links */
+export async function importPersonalVideoLink(
+  body: API.VideoLinkRequest,
+  options?: RequestOptions,
+) {
+  return request<API.PersonalUploadResult>("/api/media/library/video-links", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 项目可用媒体列表 GET /api/projects/${param0}/media */
 export async function listMediaAssets(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

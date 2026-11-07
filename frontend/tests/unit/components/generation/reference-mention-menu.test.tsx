@@ -22,6 +22,35 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("Agent紧凑参考菜单提供小说文档而不显示未接入的音频", async () => {
+  const editor = new Editor(
+    composerEditorOptions({
+      contextKey: "assistant/doc-menu",
+      replicaId: "test",
+      draft: emptyPromptDraft(),
+    }),
+  );
+  editors.push(editor);
+  const session = new ComposerSession(editor);
+  render(
+    <ReferenceControls
+      session={session}
+      draft={session.snapshot().draft}
+      projectID="project"
+      compact
+      assistant
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "从本地、画布或资产库添加" }),
+  );
+  fireEvent.click(
+    await screen.findByRole("option", { name: "从参考素材添加" }),
+  );
+  expect(await screen.findByRole("option", { name: "小说文档" })).toBeTruthy();
+  expect(screen.queryByRole("option", { name: "音频" })).toBeNull();
+});
+
 it("窄屏鼠标经过分类不重排，点击仅展开候选并保留@正文", async () => {
   const media = window.matchMedia("(max-width: 639px)");
   vi.spyOn(window, "matchMedia").mockReturnValue({ ...media, matches: true });

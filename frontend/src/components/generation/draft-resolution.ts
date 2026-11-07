@@ -14,10 +14,13 @@ export function reconcileLabels(
     changes: string[] = [];
   const labels = structuredClone(server.labelState);
   const active = new Set(draft.references.map((r) => r.id));
-  for (const kind of Object.keys(labels.highWater) as LabelKind[])
+  for (const kind of new Set([
+    ...Object.keys(labels.highWater),
+    ...Object.keys(known.labelState.highWater),
+  ]) as Set<LabelKind>)
     labels.highWater[kind] = Math.max(
-      labels.highWater[kind],
-      known.labelState.highWater[kind],
+      labels.highWater[kind] ?? 0,
+      known.labelState.highWater[kind] ?? 0,
     );
   for (const [id, allocation] of Object.entries(known.labelState.allocations)) {
     if (labels.allocations[id]) continue;
@@ -28,7 +31,11 @@ export function reconcileLabels(
     );
     if (collision && !active.has(id)) continue; // Original recovery branch retains the colliding tombstone.
     const next = collision
-      ? { ...allocation, ordinal: ++labels.highWater[allocation.labelKind] }
+      ? {
+          ...allocation,
+          ordinal: (labels.highWater[allocation.labelKind] =
+            (labels.highWater[allocation.labelKind] ?? 0) + 1),
+        }
       : allocation;
     labels.allocations[id] = next;
     if (collision)

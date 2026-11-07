@@ -126,7 +126,7 @@ func DecodeDraft(body []byte) (Draft, error) {
 func identifier(s string) bool {
 	return len(s) > 0 && len(s) <= 256 && utf8.ValidString(s) && s != "__proto__" && s != "constructor" && s != "prototype"
 }
-func mediaKind(s string) bool { return s == "image" || s == "video" || s == "audio" }
+func mediaKind(s string) bool { return s == "image" || s == "video" || s == "audio" || s == "document" }
 func labelKind(s string) bool { return mediaKind(s) || s == "subject" }
 
 // Validate checks complete draft shape and cross-reference invariants.
@@ -159,8 +159,15 @@ func (d Draft) Validate() error {
 		}
 	}
 	l := d.LabelState
-	if len(l.HighWater) != 4 || l.Allocations == nil || len(l.Allocations) > 10000 {
+	if (len(l.HighWater) != 4 && len(l.HighWater) != 5) || l.Allocations == nil || len(l.Allocations) > 10000 {
 		return ErrInvalidDraft
+	}
+	// Old four-counter drafts remain valid; document allocation is optional until
+	// a document is attached. Unknown fifth counters must not bypass validation.
+	if len(l.HighWater) == 5 {
+		if n, ok := l.HighWater["document"]; !ok || n < 0 || n > 9007199254740991 {
+			return ErrInvalidDraft
+		}
 	}
 	for _, k := range []string{"image", "video", "audio", "subject"} {
 		n, ok := l.HighWater[k]
@@ -389,7 +396,7 @@ func (d Draft) Compile() (CompiledDraft, error) {
 // Label derives the display name from persistent allocation metadata.
 func (d Draft) Label(id string) string {
 	a := d.LabelState.Allocations[id]
-	name := map[string]string{"image": "图片", "video": "视频", "audio": "音频", "subject": "主体"}[a.LabelKind]
+	name := map[string]string{"image": "图片", "video": "视频", "audio": "音频", "document": "文档", "subject": "主体"}[a.LabelKind]
 	n, _ := json.Marshal(a.Ordinal)
 	return name + string(n)
 }

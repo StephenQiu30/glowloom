@@ -92,7 +92,7 @@ func provideMediaReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 // their caller. Workers must not inherit request-session factories indirectly
 // through Bible, script, or unpublished package reference readers.
 func provideMediaReferenceOwnersWithAccess(tx *gorm.DB, access *pgworkspace.ProjectContentAccessStore, project pgmedia.LibraryProjectAccessFactory, scopes pgmedia.ScopeAccessFactory) mediaapp.LibraryReferences {
-	return mediaReferenceOwners{retained: []retainedMediaOwner{pgsubject.NewMediaGuard(tx)}, avatars: []avatarReferenceOwner{pgidentity.NewAvatarReferences(tx), pgworkspace.NewTeamAvatarReferences(tx)}, owners: []mediaapp.LibraryReferences{
+	return mediaReferenceOwners{retained: []retainedMediaOwner{pgsubject.NewMediaGuard(tx), pgworkspace.NewStyleMediaGuard(tx)}, avatars: []avatarReferenceOwner{pgidentity.NewAvatarReferences(tx), pgworkspace.NewTeamAvatarReferences(tx)}, owners: []mediaapp.LibraryReferences{
 		pgworkspace.NewScopedMediaReferenceGuard(tx, access),
 		pgcanvas.NewScopedMediaReferenceGuard(tx, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }),
 		pgoperation.NewScopedMediaReferenceGuard(tx, func(*gorm.DB) operationapp.ProjectAccess { return operationwire.ContentProjectAccess(access) }),

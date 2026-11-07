@@ -275,3 +275,47 @@ func supportedMIME(value string) bool {
 		return false
 	}
 }
+
+// ReadPublicPage uses the same pinned HTTPS transport and redirect checks as
+// media downloads, with a separate 2MiB HTML envelope and no cookies.
+func (d *SecureDownloader) ReadPublicPage(ctx context.Context, rawURL string) ([]byte, *url.URL, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil || d.validateURL(u) != nil {
+		return nil, nil, ErrUnsafeResultURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, nil, ErrUnsafeResultURL
+	}
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	resp, err := d.client.Do(req)
+	if err != nil {
+		if errors.Is(err, ErrUnsafeResultURL) {
+			return nil, nil, ErrUnsafeResultURL
+		}
+		return nil, nil, ErrResultUnavailable
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 || resp.StatusCode == 410 {
+			return nil, nil, ErrResultExpired
+		}
+		return nil, nil, ErrResultUnavailable
+	}
+	limit := min(d.maxBytes, int64(2<<20))
+	if resp.ContentLength > limit {
+		return nil, nil, ErrResultTooLarge
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, nil, ErrResultUnavailable
+	}
+	if len(body) == 0 || int64(len(body)) > limit {
+		return nil, nil, ErrResultTooLarge
+	}
+	declared, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if declared != "" && declared != "text/html" && declared != "application/xhtml+xml" {
+		return nil, nil, ErrUnsupportedMedia
+	}
+	return body, resp.Request.URL, nil
+}
