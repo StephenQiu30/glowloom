@@ -32,6 +32,9 @@ import (
 	biblehttp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/http"
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	billinghttp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/http"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	billingredis "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/redis"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	canvashttp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/http"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvaslive "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/websocket"
@@ -135,11 +138,19 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	identityhttp.NewAuthPolicyHandler(identityapp.NewAuthPolicyQuery(pgidentity.NewStore(database), identityhttp.AcceptedLegalVersion(cfg.IdentityTermsVersion), identityhttp.LegalPackageVersion(), cfg.SMTPEnabled && cfg.IdentityMailSourceHourlyLimit > 0 && cfg.IdentityMailGlobalHourlyLimit > 0)).Register(api)
 	protected.Use(auth.RequireSession())
 	registerSelf(protected)
+	platform := protected.Group("/platform")
+	creditLimiter := billingredis.NewCreditCommandLimiter(sessions.RedisClient, cfg.CreditCommandRequestsPerMinute, cfg.CreditCommandMaxAmountMicros)
+	creditCommands := billingapp.NewCreditCommands(
+		pgbilling.NewStore(database),
+		creditLimiter,
+		time.Now,
+	)
+	billinghttp.NewCreditCommandHandler(creditCommands).Register(platform)
 	identityProtected := protected.Group("")
 	workspaceStore := workspacewire.ProvideWorkspaceLifecycleStore(database)
 	protected.Use(workspacehttp.RequireCreationScope(scopewire.ProvideRequestScopeAccess(database)))
 	protected.Use(workspacehttp.RequireProjectAccess(workspaceStore))
-	billinghttp.NewWalletHandler(walletReader(database)).Register(protected)
+	billinghttp.NewWalletHandler(walletReader(database, sessions.RedisClient), creditLimiter).Register(protected)
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewStyleLibraryHandler(workspaceapp.NewStyleLibrary(workspacewire.ProvideStyleLibraryStore(database))).Register(protected)
 	workspacehttp.RegisterIndependentCreation(protected, workspaceStore.EnsureIndependentCreation)

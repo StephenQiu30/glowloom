@@ -45,17 +45,20 @@ func TestPostgresOutboxAcknowledgesOnlyAfterDelivery(t *testing.T) {
 
 	publisher := &recordingPublisher{err: errors.New("temporary broker failure")}
 	relay := application.NewRelay(pgoutbox.NewStore(conn.DB), publisher)
-	if sent, err := relay.RunOnce(ctx); sent || !errors.Is(err, publisher.err) {
-		t.Fatalf("failed delivery = (%t, %v)", sent, err)
+	if sent, err := relay.RunOnce(ctx); sent || err != nil {
+		t.Fatalf("failed delivery = (%t, %v), want durable retry", sent, err)
 	}
 	var pending bool
 	if err := conn.DB.WithContext(ctx).Raw(
-		"SELECT published_at IS NULL FROM infra.outbox WHERE id = ?::uuid", id,
+		"SELECT published_at IS NULL AND attempt_count = 1 AND last_error_class = 'broker_publish_failed' FROM infra.outbox WHERE id = ?::uuid", id,
 	).Scan(&pending).Error; err != nil || !pending {
-		t.Fatalf("failed delivery pending = %t, error = %v", pending, err)
+		t.Fatalf("failed delivery retry state = %t, error = %v", pending, err)
 	}
 
 	publisher.err = nil
+	if err := conn.DB.WithContext(ctx).Exec("UPDATE infra.outbox SET next_attempt_at=now() WHERE id=?::uuid", id).Error; err != nil {
+		t.Fatalf("make retry due: %v", err)
+	}
 	if sent, err := relay.RunOnce(ctx); !sent || err != nil {
 		t.Fatalf("successful delivery = (%t, %v)", sent, err)
 	}

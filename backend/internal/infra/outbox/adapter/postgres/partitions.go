@@ -181,14 +181,20 @@ func ensureMonth(tx *gorm.DB, month time.Time) error {
 			DELETE FROM infra.outbox_default
 			WHERE create_time >= ? AND create_time < ?
 			RETURNING id, topic, partition_key, payload, headers,
-			          create_time, published_at, update_time, is_delete
+			          create_time, published_at, attempt_count, next_attempt_at,
+			          claim_token, lease_until, last_error_class, dead_lettered_at,
+			          update_time, is_delete
 		)
 		INSERT INTO infra.` + name + ` (
 			id, topic, partition_key, payload, headers,
-			create_time, published_at, update_time, is_delete
+			create_time, published_at, attempt_count, next_attempt_at,
+			claim_token, lease_until, last_error_class, dead_lettered_at,
+			update_time, is_delete
 		)
 		SELECT id, topic, partition_key, payload, headers,
-		       create_time, published_at, update_time, is_delete FROM moved
+		       create_time, published_at, attempt_count, next_attempt_at,
+		       claim_token, lease_until, last_error_class, dead_lettered_at,
+		       update_time, is_delete FROM moved
 	`
 	if err := tx.Exec(move, month, end).Error; err != nil {
 		return fmt.Errorf("move overflow events into %s: %w", name, err)

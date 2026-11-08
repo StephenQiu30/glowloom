@@ -20,11 +20,12 @@ type SessionDependencies struct {
 	Tokens      application.AccessTokenCodec
 	Receipts    application.RefreshReceiptProtector
 	Coordinator application.RefreshCoordinator
+	RedisClient *redis.Client
 }
 
 // NewSessionDependencies loads configured security and reuses the API Redis client.
 func NewSessionDependencies(cfg config.Config, client *redis.Client) (SessionDependencies, error) {
-	var deps SessionDependencies
+	deps := SessionDependencies{RedisClient: client}
 	if err := cfg.ValidateIdentitySessionV2(); err != nil {
 		return deps, err
 	}

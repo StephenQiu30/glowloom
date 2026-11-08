@@ -25,8 +25,19 @@ func TestEnsurePartitionsMovesDefaultRowsBeforeAttach(t *testing.T) {
 		t.Fatalf("open PostgreSQL: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	current := time.Now().UTC()
-	month := time.Date(current.Year(), current.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, 4, 0)
+	var latestPartition string
+	if err := conn.DB.WithContext(ctx).Raw(`SELECT c.relname FROM pg_inherits AS i
+		JOIN pg_class AS c ON c.oid=i.inhrelid
+		JOIN pg_namespace AS n ON n.oid=c.relnamespace
+		WHERE i.inhparent='infra.outbox'::regclass AND n.nspname='infra' AND c.relname ~ '^outbox_[0-9]{6}$'
+		ORDER BY c.relname DESC LIMIT 1`).Scan(&latestPartition).Error; err != nil || latestPartition == "" {
+		t.Fatalf("read latest Outbox month partition %q: %v", latestPartition, err)
+	}
+	lastMonth, err := time.Parse("outbox_200601", latestPartition)
+	if err != nil {
+		t.Fatalf("parse latest Outbox month partition %q: %v", latestPartition, err)
+	}
+	month := lastMonth.AddDate(0, 1, 0)
 	rowTime := month.Add(24 * time.Hour)
 	partitionName := "outbox_" + month.Format("200601")
 	id := uuid.NewString()

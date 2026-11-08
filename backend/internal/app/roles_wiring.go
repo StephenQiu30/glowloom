@@ -28,7 +28,9 @@ import (
 
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	billingevent "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/event"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	billingredis "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/redis"
 	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
 	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	maintenanceapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/application"
@@ -194,16 +196,30 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		realtimeConsumer.Close()
 		return nil, nil, fmt.Errorf("configure relay audit consumer: %w", err)
 	}
+	creditConsumer, err := kafkainbox.NewRetryingConsumer(cfg.KafkaBrokers, creditConsumerGroup,
+		[]string{billingevent.CreditCommandTopic, billingevent.CreditBalanceChangedTopic},
+		billingevent.NewCreditEventHandler(pgbilling.NewStore(dbConn.DB), billingredis.NewWalletBalanceCache(redisConn.Client)),
+		kafkainbox.FailurePolicy{
+			MaxAttempts: 12, DeadLetterTopic: billingevent.CreditDeadLetterTopic,
+			RetryBase: 250 * time.Millisecond, RetryCap: 5 * time.Second,
+		})
+	if err != nil {
+		auditConsumer.Close()
+		realtimeConsumer.Close()
+		return nil, nil, fmt.Errorf("configure relay credit consumer: %w", err)
+	}
 	relay := outboxapp.NewRelay(pgoutbox.NewStore(dbConn.DB), kafkaoutbox.NewPublisher(kafkaConn.Client))
-	runtime := &relayRuntime{outbox: relay, realtime: realtimeConsumer, audit: auditConsumer}
+	runtime := &relayRuntime{outbox: relay, realtime: realtimeConsumer, audit: auditConsumer, credit: creditConsumer}
 	stopStorageRuntime, err := startStorageRuntime(ctx, cfg, false, dbConn.DB)
 	if err != nil {
+		creditConsumer.Close()
 		auditConsumer.Close()
 		realtimeConsumer.Close()
 		return nil, nil, err
 	}
 	return runtime, func() {
 		stopStorageRuntime()
+		creditConsumer.Close()
 		auditConsumer.Close()
 		realtimeConsumer.Close()
 	}, nil

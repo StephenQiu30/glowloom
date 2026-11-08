@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	pgaudit "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/postgres"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	pgoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -70,6 +71,9 @@ func EnsurePartitions(ctx context.Context, cfg config.Config, logger *zap.Logger
 		if err := pgoutbox.NewPartitionStore(tx).EnsurePartitions(ctx, now); err != nil {
 			return fmt.Errorf("prepare Outbox partitions: %w", err)
 		}
+		if err := pgbilling.NewPartitionStore(tx).EnsurePartitions(ctx, now); err != nil {
+			return fmt.Errorf("prepare wallet ledger partitions: %w", err)
+		}
 		if err := pgaudit.NewPartitionStore(tx).EnsurePartitions(ctx, now); err != nil {
 			return fmt.Errorf("prepare audit partitions: %w", err)
 		}
@@ -97,7 +101,7 @@ func checkPartitionRoles(ctx context.Context, appDB, maintenanceDB *gorm.DB) err
 		appRole.Superuser || appRole.SessionIsSuper {
 		return fmt.Errorf("%w: application login must be a separate non-superuser without a switched role", ErrInvalidPartitionMaintenanceRole)
 	}
-	for _, table := range []string{"infra.outbox", "audit.audit_log"} {
+	for _, table := range []string{"infra.outbox", "billing.wallet_entry", "audit.audit_log"} {
 		var ownership struct {
 			Owner       string
 			AppIsMember bool

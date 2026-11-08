@@ -10,28 +10,38 @@ import (
 )
 
 type queuedStore struct {
-	events []application.Event
-	idle   chan struct{}
-	err    error
+	events  []application.Event
+	idle    chan struct{}
+	err     error
+	attempt int
 }
 
-func (s *queuedStore) WithNext(_ context.Context, deliver func(application.Event) error) (bool, error) {
+func (s *queuedStore) ClaimNext(_ context.Context, _ time.Time, _ time.Duration) (application.Event, bool, error) {
 	if s.err != nil {
-		return false, s.err
+		return application.Event{}, false, s.err
 	}
 	if len(s.events) == 0 {
 		select {
 		case s.idle <- struct{}{}:
 		default:
 		}
-		return false, nil
+		return application.Event{}, false, nil
 	}
 	event := s.events[0]
-	if err := deliver(event); err != nil {
-		return false, err
-	}
+	s.attempt++
+	event.ClaimToken = "lease"
+	event.AttemptCount = s.attempt
+	return event, true, nil
+}
+
+func (s *queuedStore) Acknowledge(_ context.Context, _ application.Event, _ time.Time) error {
 	s.events = s.events[1:]
-	return true, nil
+	s.attempt = 0
+	return nil
+}
+
+func (s *queuedStore) Retry(_ context.Context, _ application.Event, _ string, _ int, _ time.Time, _ time.Time) (bool, error) {
+	return false, nil
 }
 
 func TestRelayRunDrainsBacklogAndStopsOnCancellation(t *testing.T) {

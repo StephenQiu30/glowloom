@@ -18,58 +18,60 @@ var ErrInvalid = errors.New("invalid configuration")
 
 // Config is the validated configuration shared by every backend role.
 type Config struct {
-	AgentOrigin                   string
-	AgentServiceToken             string
-	AgentBusinessToken            string
-	CanvasRuntimeURL              string
-	CanvasRuntimeToken            string
-	CodexBinary                   string
-	CodexHome                     string
-	CodexWorkRoot                 string
-	Env                           string
-	HTTPAddr                      string
-	PublicOrigin                  string
-	WorkerHealthAddr              string
-	RelayHealthAddr               string
-	LogLevel                      string
-	DBDSN                         string
-	PartitionMaintenanceDBDSN     string
-	StorageMaintenanceDSN         string
-	RedisURL                      string
-	KafkaBrokers                  string
-	ObjectStorage                 *ObjectStorageConfig
-	CredentialPublicKeyPEM        string `json:"-" yaml:"-"`
-	CredentialPrivateKeyPEM       string `json:"-" yaml:"-"`
-	CredentialPublicKeyFile       string
-	CredentialKeyID               string
-	CredentialRequestMACKey       string
-	CredentialPrivateKeyFile      string
-	MediaResultAllowedOrigins     string
-	MediaAllowTestLoopbackTLS     bool
-	WhisperEndpoint               string
-	VideoDepthPythonPath          string
-	VideoDepthSourceDir           string
-	VideoDepthModelPath           string
-	VideoDepthDevice              string
-	OTelEndpoint                  string
-	SMTPEnabled                   bool
-	SMTPHost                      string
-	SMTPPort                      int
-	SMTPTLSMode                   string
-	SMTPUsername                  string
-	SMTPPassword                  string
-	SMTPFromEmail                 string
-	SMTPFromName                  string
-	IdentitySessionV2Enabled      bool
-	IdentityLegacyUpgradeUntil    time.Time
-	IdentityJWTPrivateKey         string
-	IdentityJWTVerifyKeys         string
-	IdentityJWTActiveKID          string
-	IdentityRefreshReceiptKey     string
-	IdentityKey                   string
-	IdentityTermsVersion          string
-	IdentityMailSourceHourlyLimit int
-	IdentityMailGlobalHourlyLimit int
+	AgentOrigin                    string
+	AgentServiceToken              string
+	AgentBusinessToken             string
+	CanvasRuntimeURL               string
+	CanvasRuntimeToken             string
+	CodexBinary                    string
+	CodexHome                      string
+	CodexWorkRoot                  string
+	Env                            string
+	HTTPAddr                       string
+	PublicOrigin                   string
+	WorkerHealthAddr               string
+	RelayHealthAddr                string
+	LogLevel                       string
+	DBDSN                          string
+	PartitionMaintenanceDBDSN      string
+	StorageMaintenanceDSN          string
+	RedisURL                       string
+	KafkaBrokers                   string
+	ObjectStorage                  *ObjectStorageConfig
+	CredentialPublicKeyPEM         string `json:"-" yaml:"-"`
+	CredentialPrivateKeyPEM        string `json:"-" yaml:"-"`
+	CredentialPublicKeyFile        string
+	CredentialKeyID                string
+	CredentialRequestMACKey        string
+	CredentialPrivateKeyFile       string
+	MediaResultAllowedOrigins      string
+	MediaAllowTestLoopbackTLS      bool
+	WhisperEndpoint                string
+	VideoDepthPythonPath           string
+	VideoDepthSourceDir            string
+	VideoDepthModelPath            string
+	VideoDepthDevice               string
+	OTelEndpoint                   string
+	SMTPEnabled                    bool
+	SMTPHost                       string
+	SMTPPort                       int
+	SMTPTLSMode                    string
+	SMTPUsername                   string
+	SMTPPassword                   string
+	SMTPFromEmail                  string
+	SMTPFromName                   string
+	IdentitySessionV2Enabled       bool
+	IdentityLegacyUpgradeUntil     time.Time
+	IdentityJWTPrivateKey          string
+	IdentityJWTVerifyKeys          string
+	IdentityJWTActiveKID           string
+	IdentityRefreshReceiptKey      string
+	IdentityKey                    string
+	IdentityTermsVersion           string
+	IdentityMailSourceHourlyLimit  int
+	IdentityMailGlobalHourlyLimit  int
+	CreditCommandRequestsPerMinute int
+	CreditCommandMaxAmountMicros   int64
 }
 
 var (
@@ -88,6 +90,7 @@ func Load() (Config, error) {
 	v.SetDefault("GLOWLOOM_WORKER_HEALTH_ADDR", ":8081")
 	v.SetDefault("GLOWLOOM_RELAY_HEALTH_ADDR", ":8082")
 	v.SetDefault("GLOWLOOM_LOG_LEVEL", "info")
+	v.SetDefault("GLOWLOOM_CREDIT_COMMANDS_PER_MINUTE", 120)
 	if path := os.Getenv("GLOWLOOM_ENV_FILE"); path != "" {
 		v.SetConfigFile(path)
 		v.SetConfigType("env")
@@ -97,57 +100,59 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		AgentOrigin:                   strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_ORIGIN")),
-		AgentServiceToken:             strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_SERVICE_TOKEN")),
-		AgentBusinessToken:            strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_BUSINESS_TOKEN")),
-		CanvasRuntimeURL:              strings.TrimSpace(v.GetString("GLOWLOOM_CANVAS_RUNTIME_URL")),
-		CanvasRuntimeToken:            v.GetString("GLOWLOOM_COLLAB_RUNTIME_TOKEN"),
-		CodexBinary:                   strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_BINARY")),
-		CodexHome:                     strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_HOME")),
-		CodexWorkRoot:                 strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_WORK_ROOT")),
-		Env:                           strings.TrimSpace(v.GetString("GLOWLOOM_ENV")),
-		HTTPAddr:                      strings.TrimSpace(v.GetString("GLOWLOOM_HTTP_ADDR")),
-		PublicOrigin:                  strings.TrimSpace(v.GetString("GLOWLOOM_PUBLIC_ORIGIN")),
-		WorkerHealthAddr:              strings.TrimSpace(v.GetString("GLOWLOOM_WORKER_HEALTH_ADDR")),
-		RelayHealthAddr:               strings.TrimSpace(v.GetString("GLOWLOOM_RELAY_HEALTH_ADDR")),
-		LogLevel:                      strings.TrimSpace(v.GetString("GLOWLOOM_LOG_LEVEL")),
-		DBDSN:                         strings.TrimSpace(v.GetString("GLOWLOOM_DB_DSN")),
-		PartitionMaintenanceDBDSN:     strings.TrimSpace(v.GetString("GLOWLOOM_PARTITION_MAINTENANCE_DB_DSN")),
-		StorageMaintenanceDSN:         strings.TrimSpace(v.GetString("GLOWLOOM_STORAGE_MAINTENANCE_DSN")),
-		RedisURL:                      strings.TrimSpace(v.GetString("GLOWLOOM_REDIS_URL")),
-		KafkaBrokers:                  strings.TrimSpace(v.GetString("GLOWLOOM_KAFKA_BROKERS")),
-		CredentialPublicKeyPEM:        v.GetString("GLOWLOOM_CREDENTIAL_PUBLIC_KEY_PEM"),
-		CredentialPrivateKeyPEM:       v.GetString("GLOWLOOM_CREDENTIAL_PRIVATE_KEY_PEM"),
-		CredentialPublicKeyFile:       strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_PUBLIC_KEY_FILE")),
-		CredentialKeyID:               strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_KEY_ID")),
-		CredentialRequestMACKey:       strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_REQUEST_MAC_KEY")),
-		CredentialPrivateKeyFile:      strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_PRIVATE_KEY_FILE")),
-		MediaResultAllowedOrigins:     strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_RESULT_ALLOWED_ORIGINS")),
-		MediaAllowTestLoopbackTLS:     v.GetBool("GLOWLOOM_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
-		WhisperEndpoint:               strings.TrimSpace(v.GetString("GLOWLOOM_WHISPER_ENDPOINT")),
-		VideoDepthPythonPath:          strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_PYTHON_PATH")),
-		VideoDepthSourceDir:           strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_SOURCE_DIR")),
-		VideoDepthModelPath:           strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_MODEL_PATH")),
-		VideoDepthDevice:              strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_DEVICE")),
-		OTelEndpoint:                  strings.TrimSpace(v.GetString("GLOWLOOM_OTEL_ENDPOINT")),
-		SMTPEnabled:                   v.GetBool("SMTP_ENABLED"),
-		SMTPHost:                      strings.TrimSpace(v.GetString("SMTP_HOST")),
-		SMTPPort:                      v.GetInt("SMTP_PORT"),
-		SMTPTLSMode:                   strings.TrimSpace(v.GetString("SMTP_TLS_MODE")),
-		SMTPUsername:                  v.GetString("SMTP_USERNAME"),
-		SMTPPassword:                  v.GetString("SMTP_PASSWORD"),
-		SMTPFromEmail:                 strings.TrimSpace(v.GetString("SMTP_FROM_EMAIL")),
-		SMTPFromName:                  strings.TrimSpace(v.GetString("SMTP_FROM_NAME")),
-		IdentitySessionV2Enabled:      v.GetBool("GLOWLOOM_IDENTITY_SESSION_V2_ENABLED"),
-		IdentityLegacyUpgradeUntil:    v.GetTime("GLOWLOOM_IDENTITY_LEGACY_UPGRADE_UNTIL"),
-		IdentityJWTPrivateKey:         strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_JWT_PRIVATE_KEY")),
-		IdentityJWTVerifyKeys:         strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_JWT_VERIFY_KEYS")),
-		IdentityJWTActiveKID:          strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_JWT_ACTIVE_KID")),
-		IdentityRefreshReceiptKey:     strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_REFRESH_RECEIPT_KEY")),
-		IdentityKey:                   strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_KEY")),
-		IdentityTermsVersion:          strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_TERMS_VERSION")),
-		IdentityMailSourceHourlyLimit: v.GetInt("GLOWLOOM_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT"),
-		IdentityMailGlobalHourlyLimit: v.GetInt("GLOWLOOM_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT"),
+		AgentOrigin:                    strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_ORIGIN")),
+		AgentServiceToken:              strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_SERVICE_TOKEN")),
+		AgentBusinessToken:             strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_BUSINESS_TOKEN")),
+		CanvasRuntimeURL:               strings.TrimSpace(v.GetString("GLOWLOOM_CANVAS_RUNTIME_URL")),
+		CanvasRuntimeToken:             v.GetString("GLOWLOOM_COLLAB_RUNTIME_TOKEN"),
+		CodexBinary:                    strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_BINARY")),
+		CodexHome:                      strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_HOME")),
+		CodexWorkRoot:                  strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_WORK_ROOT")),
+		Env:                            strings.TrimSpace(v.GetString("GLOWLOOM_ENV")),
+		HTTPAddr:                       strings.TrimSpace(v.GetString("GLOWLOOM_HTTP_ADDR")),
+		PublicOrigin:                   strings.TrimSpace(v.GetString("GLOWLOOM_PUBLIC_ORIGIN")),
+		WorkerHealthAddr:               strings.TrimSpace(v.GetString("GLOWLOOM_WORKER_HEALTH_ADDR")),
+		RelayHealthAddr:                strings.TrimSpace(v.GetString("GLOWLOOM_RELAY_HEALTH_ADDR")),
+		LogLevel:                       strings.TrimSpace(v.GetString("GLOWLOOM_LOG_LEVEL")),
+		DBDSN:                          strings.TrimSpace(v.GetString("GLOWLOOM_DB_DSN")),
+		PartitionMaintenanceDBDSN:      strings.TrimSpace(v.GetString("GLOWLOOM_PARTITION_MAINTENANCE_DB_DSN")),
+		StorageMaintenanceDSN:          strings.TrimSpace(v.GetString("GLOWLOOM_STORAGE_MAINTENANCE_DSN")),
+		RedisURL:                       strings.TrimSpace(v.GetString("GLOWLOOM_REDIS_URL")),
+		KafkaBrokers:                   strings.TrimSpace(v.GetString("GLOWLOOM_KAFKA_BROKERS")),
+		CredentialPublicKeyPEM:         v.GetString("GLOWLOOM_CREDENTIAL_PUBLIC_KEY_PEM"),
+		CredentialPrivateKeyPEM:        v.GetString("GLOWLOOM_CREDENTIAL_PRIVATE_KEY_PEM"),
+		CredentialPublicKeyFile:        strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_PUBLIC_KEY_FILE")),
+		CredentialKeyID:                strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_KEY_ID")),
+		CredentialRequestMACKey:        strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_REQUEST_MAC_KEY")),
+		CredentialPrivateKeyFile:       strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_PRIVATE_KEY_FILE")),
+		MediaResultAllowedOrigins:      strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_RESULT_ALLOWED_ORIGINS")),
+		MediaAllowTestLoopbackTLS:      v.GetBool("GLOWLOOM_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
+		WhisperEndpoint:                strings.TrimSpace(v.GetString("GLOWLOOM_WHISPER_ENDPOINT")),
+		VideoDepthPythonPath:           strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_PYTHON_PATH")),
+		VideoDepthSourceDir:            strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_SOURCE_DIR")),
+		VideoDepthModelPath:            strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_MODEL_PATH")),
+		VideoDepthDevice:               strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_DEVICE")),
+		OTelEndpoint:                   strings.TrimSpace(v.GetString("GLOWLOOM_OTEL_ENDPOINT")),
+		SMTPEnabled:                    v.GetBool("SMTP_ENABLED"),
+		SMTPHost:                       strings.TrimSpace(v.GetString("SMTP_HOST")),
+		SMTPPort:                       v.GetInt("SMTP_PORT"),
+		SMTPTLSMode:                    strings.TrimSpace(v.GetString("SMTP_TLS_MODE")),
+		SMTPUsername:                   v.GetString("SMTP_USERNAME"),
+		SMTPPassword:                   v.GetString("SMTP_PASSWORD"),
+		SMTPFromEmail:                  strings.TrimSpace(v.GetString("SMTP_FROM_EMAIL")),
+		SMTPFromName:                   strings.TrimSpace(v.GetString("SMTP_FROM_NAME")),
+		IdentitySessionV2Enabled:       v.GetBool("GLOWLOOM_IDENTITY_SESSION_V2_ENABLED"),
+		IdentityLegacyUpgradeUntil:     v.GetTime("GLOWLOOM_IDENTITY_LEGACY_UPGRADE_UNTIL"),
+		IdentityJWTPrivateKey:          strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_JWT_PRIVATE_KEY")),
+		IdentityJWTVerifyKeys:          strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_JWT_VERIFY_KEYS")),
+		IdentityJWTActiveKID:           strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_JWT_ACTIVE_KID")),
+		IdentityRefreshReceiptKey:      strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_REFRESH_RECEIPT_KEY")),
+		IdentityKey:                    strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_KEY")),
+		IdentityTermsVersion:           strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_TERMS_VERSION")),
+		IdentityMailSourceHourlyLimit:  v.GetInt("GLOWLOOM_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT"),
+		IdentityMailGlobalHourlyLimit:  v.GetInt("GLOWLOOM_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT"),
+		CreditCommandRequestsPerMinute: v.GetInt("GLOWLOOM_CREDIT_COMMANDS_PER_MINUTE"),
+		CreditCommandMaxAmountMicros:   v.GetInt64("GLOWLOOM_CREDIT_MAX_AMOUNT_MICROS"),
 	}
 	if raw := strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_LEGACY_UPGRADE_UNTIL")); raw != "" {
 		deadline, err := time.Parse(time.RFC3339, raw)
@@ -187,6 +192,9 @@ func (c Config) validate() error {
 		if limit < 0 || limit > 1000000 {
 			return fmt.Errorf("%w: identity mail limit outside 0..1000000", ErrInvalid)
 		}
+	}
+	if c.CreditCommandRequestsPerMinute < 0 || c.CreditCommandRequestsPerMinute > 1000000 || c.CreditCommandMaxAmountMicros < 0 {
+		return fmt.Errorf("%w: credit command limits must be nonnegative and within supported range", ErrInvalid)
 	}
 	if c.SMTPEnabled && (c.SMTPHost == "" || c.SMTPPort < 1 || c.SMTPPort > 65535 || (c.SMTPTLSMode != "tls" && c.SMTPTLSMode != "starttls") || c.SMTPFromEmail == "" || (c.SMTPUsername == "") != (c.SMTPPassword == "")) {
 		return fmt.Errorf("%w: SMTP requires host, port, TLS, sender and paired credentials", ErrInvalid)
