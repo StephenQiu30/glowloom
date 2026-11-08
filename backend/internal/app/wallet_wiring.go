@@ -53,3 +53,36 @@ func walletReader(db *gorm.DB, redisClient *redis.Client) billinghttp.WalletRead
 		return view, err
 	}
 }
+
+func creditServiceWalletReader(db *gorm.DB, redisClient *redis.Client) billinghttp.CreditServiceWalletReader {
+	cache := billingredis.NewWalletBalanceCache(redisClient)
+	return func(ctx context.Context, scopeID uuid.UUID, cursor *uuid.UUID) (billingapp.WalletView, error) {
+		var view billingapp.WalletView
+		err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var kind string
+			result := tx.Raw(`SELECT kind FROM workspace.creation_scope WHERE id=?::uuid`, scopeID).Scan(&kind)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return identityapp.ErrForbidden
+			}
+			var cached *billingapp.WalletBalance
+			if balance, ok, cacheErr := cache.Get(ctx, scopeID); cacheErr == nil && ok {
+				cached = &balance
+			}
+			var balance billingapp.WalletBalance
+			var err error
+			view, balance, err = billingpg.NewStore(tx).ReadWalletWithBalance(ctx, scopeID, true, cursor, cached)
+			if err != nil {
+				return err
+			}
+			if cached == nil {
+				_ = cache.Put(ctx, scopeID, balance)
+			}
+			view.Payer = kind
+			return nil
+		}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+		return view, err
+	}
+}

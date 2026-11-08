@@ -2,8 +2,11 @@
 package config
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -72,6 +75,23 @@ type Config struct {
 	IdentityMailGlobalHourlyLimit  int
 	CreditCommandRequestsPerMinute int
 	CreditCommandMaxAmountMicros   int64
+	CreditCommandMaxDailyMicros    int64
+	CreditServiceCallers           []CreditServiceCaller
+}
+
+// CreditServiceCaller binds an internal service identity to explicit wallet
+// scopes and command actions. Secrets are accepted only from runtime config.
+type CreditServiceCaller struct {
+	ID      string                   `json:"id"`
+	Scopes  []string                 `json:"scopes"`
+	Actions []string                 `json:"actions"`
+	Keys    []CreditServiceCallerKey `json:"keys"`
+}
+
+// CreditServiceCallerKey supports overlap during HMAC key rotation.
+type CreditServiceCallerKey struct {
+	ID     string `json:"id"`
+	Secret string `json:"secret" yaml:"-"`
 }
 
 var (
@@ -153,7 +173,13 @@ func Load() (Config, error) {
 		IdentityMailGlobalHourlyLimit:  v.GetInt("GLOWLOOM_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT"),
 		CreditCommandRequestsPerMinute: v.GetInt("GLOWLOOM_CREDIT_COMMANDS_PER_MINUTE"),
 		CreditCommandMaxAmountMicros:   v.GetInt64("GLOWLOOM_CREDIT_MAX_AMOUNT_MICROS"),
+		CreditCommandMaxDailyMicros:    v.GetInt64("GLOWLOOM_CREDIT_MAX_DAILY_AMOUNT_MICROS"),
 	}
+	callers, err := parseCreditServiceCallers(v.GetString("GLOWLOOM_CREDIT_SERVICE_CALLERS_JSON"))
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.CreditServiceCallers = callers
 	if raw := strings.TrimSpace(v.GetString("GLOWLOOM_IDENTITY_LEGACY_UPGRADE_UNTIL")); raw != "" {
 		deadline, err := time.Parse(time.RFC3339, raw)
 		if err != nil {
@@ -193,8 +219,21 @@ func (c Config) validate() error {
 			return fmt.Errorf("%w: identity mail limit outside 0..1000000", ErrInvalid)
 		}
 	}
-	if c.CreditCommandRequestsPerMinute < 0 || c.CreditCommandRequestsPerMinute > 1000000 || c.CreditCommandMaxAmountMicros < 0 {
+	if c.CreditCommandRequestsPerMinute < 0 || c.CreditCommandRequestsPerMinute > 1000000 || c.CreditCommandMaxAmountMicros < 0 || c.CreditCommandMaxDailyMicros < 0 {
 		return fmt.Errorf("%w: credit command limits must be nonnegative and within supported range", ErrInvalid)
+	}
+	creditLimitsConfigured := c.CreditCommandMaxAmountMicros > 0 || c.CreditCommandMaxDailyMicros > 0
+	if creditLimitsConfigured && (c.CreditCommandMaxAmountMicros == 0 || c.CreditCommandMaxDailyMicros == 0) {
+		return fmt.Errorf("%w: credit command single and daily amount limits must be configured together", ErrInvalid)
+	}
+	if c.CreditCommandMaxAmountMicros > c.CreditCommandMaxDailyMicros {
+		return fmt.Errorf("%w: credit command single amount limit cannot exceed the daily amount limit", ErrInvalid)
+	}
+	if len(c.CreditServiceCallers) > 0 && (c.CreditCommandRequestsPerMinute < 1 || !creditLimitsConfigured) {
+		return fmt.Errorf("%w: credit command callers require request and amount limits", ErrInvalid)
+	}
+	if err := validateCreditServiceCallers(c.CreditServiceCallers); err != nil {
+		return err
 	}
 	if c.SMTPEnabled && (c.SMTPHost == "" || c.SMTPPort < 1 || c.SMTPPort > 65535 || (c.SMTPTLSMode != "tls" && c.SMTPTLSMode != "starttls") || c.SMTPFromEmail == "" || (c.SMTPUsername == "") != (c.SMTPPassword == "")) {
 		return fmt.Errorf("%w: SMTP requires host, port, TLS, sender and paired credentials", ErrInvalid)
@@ -241,6 +280,106 @@ func (c Config) validate() error {
 		return fmt.Errorf("%w: GLOWLOOM_RELAY_HEALTH_ADDR is empty", ErrInvalid)
 	}
 	return nil
+}
+
+func parseCreditServiceCallers(raw string) ([]CreditServiceCaller, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	if len(raw) > 16384 {
+		return nil, fmt.Errorf("%w: credit service caller configuration too large", ErrInvalid)
+	}
+	decoder := json.NewDecoder(bytes.NewBufferString(raw))
+	decoder.DisallowUnknownFields()
+	var callers []CreditServiceCaller
+	if err := decoder.Decode(&callers); err != nil {
+		return nil, fmt.Errorf("%w: invalid credit service caller configuration", ErrInvalid)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, fmt.Errorf("%w: trailing credit service caller configuration", ErrInvalid)
+	}
+	if err := validateCreditServiceCallers(callers); err != nil {
+		return nil, err
+	}
+	return callers, nil
+}
+
+func validateCreditServiceCallers(callers []CreditServiceCaller) error {
+	if len(callers) > 64 {
+		return fmt.Errorf("%w: too many credit service callers", ErrInvalid)
+	}
+	callerIDs := make(map[string]struct{}, len(callers))
+	for _, caller := range callers {
+		if !validCreditCallerToken(caller.ID, 80) || len(caller.Scopes) == 0 || len(caller.Scopes) > 256 || len(caller.Actions) == 0 || len(caller.Actions) > 6 || len(caller.Keys) == 0 || len(caller.Keys) > 4 {
+			return fmt.Errorf("%w: incomplete credit service caller", ErrInvalid)
+		}
+		if _, exists := callerIDs[caller.ID]; exists {
+			return fmt.Errorf("%w: duplicate credit service caller", ErrInvalid)
+		}
+		callerIDs[caller.ID] = struct{}{}
+		scopes := make(map[string]struct{}, len(caller.Scopes))
+		for _, scope := range caller.Scopes {
+			if !validUUID(scope) {
+				return fmt.Errorf("%w: invalid credit service scope mapping", ErrInvalid)
+			}
+			if _, exists := scopes[scope]; exists {
+				return fmt.Errorf("%w: duplicate credit service scope mapping", ErrInvalid)
+			}
+			scopes[scope] = struct{}{}
+		}
+		actions := make(map[string]struct{}, len(caller.Actions))
+		for _, action := range caller.Actions {
+			switch action {
+			case "read", "grant", "debit", "freeze", "commit", "release":
+			default:
+				return fmt.Errorf("%w: invalid credit service action mapping", ErrInvalid)
+			}
+			if _, exists := actions[action]; exists {
+				return fmt.Errorf("%w: duplicate credit service action mapping", ErrInvalid)
+			}
+			actions[action] = struct{}{}
+		}
+		keys := make(map[string]struct{}, len(caller.Keys))
+		for _, key := range caller.Keys {
+			if !validCreditCallerToken(key.ID, 80) || len(key.Secret) < 32 || len(key.Secret) > 256 || strings.TrimSpace(key.Secret) != key.Secret || strings.ContainsAny(key.Secret, "\r\n\t ") {
+				return fmt.Errorf("%w: invalid credit service key", ErrInvalid)
+			}
+			if _, exists := keys[key.ID]; exists {
+				return fmt.Errorf("%w: duplicate credit service key ID", ErrInvalid)
+			}
+			keys[key.ID] = struct{}{}
+		}
+	}
+	return nil
+}
+
+func validCreditCallerToken(value string, max int) bool {
+	if value == "" || len(value) > max {
+		return false
+	}
+	for _, r := range value {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func validUUID(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
+		return false
+	}
+	for index, r := range value {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			continue
+		}
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidatePublicOrigin requires a configured browser origin, HTTPS outside local development.

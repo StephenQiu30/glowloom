@@ -92,21 +92,36 @@ func (c *WalletBalanceCache) Invalidate(ctx context.Context, scopeID uuid.UUID, 
 	return nil
 }
 
+// Claim records a signed-request nonce once for its caller and key rotation window.
+func (c *WalletBalanceCache) Claim(ctx context.Context, callerID, keyID, nonce string, ttl time.Duration) (bool, error) {
+	if c == nil || c.client == nil || callerID == "" || keyID == "" || nonce == "" || ttl <= 0 {
+		return false, fmt.Errorf("credit service nonce store unavailable")
+	}
+	identity := sha256.Sum256([]byte(callerID + "\n" + keyID + "\n" + nonce))
+	key := "credit:nonce:" + hex.EncodeToString(identity[:])
+	claimed, err := c.client.SetNX(ctx, key, "1", ttl).Result()
+	if err != nil {
+		return false, fmt.Errorf("claim credit service nonce: %w", err)
+	}
+	return claimed, nil
+}
+
 // CreditCommandLimiter enforces caller, scope, IP, and amount limits.
 type CreditCommandLimiter struct {
 	client            *redisclient.Client
 	requestsPerMinute int
 	maxAmountMicros   int64
+	maxDailyMicros    int64
 }
 
 // NewCreditCommandLimiter constructs the billing limiter with reviewed limits.
-func NewCreditCommandLimiter(client *redisclient.Client, requestsPerMinute int, maxAmountMicros int64) *CreditCommandLimiter {
-	return &CreditCommandLimiter{client: client, requestsPerMinute: requestsPerMinute, maxAmountMicros: maxAmountMicros}
+func NewCreditCommandLimiter(client *redisclient.Client, requestsPerMinute int, maxAmountMicros, maxDailyMicros int64) *CreditCommandLimiter {
+	return &CreditCommandLimiter{client: client, requestsPerMinute: requestsPerMinute, maxAmountMicros: maxAmountMicros, maxDailyMicros: maxDailyMicros}
 }
 
 // AllowCreditCommand checks a write request against configured rate and amount caps.
 func (l *CreditCommandLimiter) AllowCreditCommand(ctx context.Context, callerID string, scopeID uuid.UUID, requestIP string, amountMicros int64, now time.Time) (time.Duration, error) {
-	if l == nil || l.client == nil || l.requestsPerMinute < 1 || l.maxAmountMicros < 1 {
+	if l == nil || l.client == nil || l.requestsPerMinute < 1 || l.maxAmountMicros < 1 || l.maxDailyMicros < 1 {
 		return 0, ErrCreditLimiterUnconfigured
 	}
 	if amountMicros < 1 {
@@ -115,7 +130,7 @@ func (l *CreditCommandLimiter) AllowCreditCommand(ctx context.Context, callerID 
 	if amountMicros > l.maxAmountMicros {
 		return time.Minute, nil
 	}
-	return l.allow(ctx, "command", callerID, scopeID, requestIP, now)
+	return l.allowCommand(ctx, callerID, scopeID, requestIP, amountMicros, now)
 }
 
 // AllowWalletRead checks a balance read against the read request budget.
@@ -124,6 +139,16 @@ func (l *CreditCommandLimiter) AllowWalletRead(ctx context.Context, callerID str
 }
 
 func (l *CreditCommandLimiter) allow(ctx context.Context, category, callerID string, scopeID uuid.UUID, requestIP string, now time.Time) (time.Duration, error) {
+	return l.runLimitScript(ctx, category, callerID, scopeID, requestIP, 0, 0, 0, now)
+}
+
+func (l *CreditCommandLimiter) allowCommand(ctx context.Context, callerID string, scopeID uuid.UUID, requestIP string, amountMicros int64, now time.Time) (time.Duration, error) {
+	utc := now.UTC()
+	nextDay := time.Date(utc.Year(), utc.Month(), utc.Day()+1, 0, 0, 0, 0, time.UTC)
+	return l.runLimitScript(ctx, "command", callerID, scopeID, requestIP, amountMicros, l.maxDailyMicros, nextDay.Sub(utc), utc)
+}
+
+func (l *CreditCommandLimiter) runLimitScript(ctx context.Context, category, callerID string, scopeID uuid.UUID, requestIP string, amountMicros, dailyLimitMicros int64, dailyTTL time.Duration, now time.Time) (time.Duration, error) {
 	if l == nil || l.client == nil || l.requestsPerMinute < 1 {
 		return 0, ErrCreditLimiterUnconfigured
 	}
@@ -133,7 +158,19 @@ func (l *CreditCommandLimiter) allow(ctx context.Context, category, callerID str
 		"credit:limit:" + category + ":scope:" + digest(scopeID.String()) + ":" + window,
 		"credit:limit:" + category + ":ip:" + digest(requestIP) + ":" + window,
 	}
-	wait, err := creditRateLimitScript.Run(ctx, l.client, keys, l.requestsPerMinute, time.Minute.Milliseconds()).Int64()
+	args := []any{l.requestsPerMinute, time.Minute.Milliseconds()}
+	if amountMicros > 0 {
+		if dailyLimitMicros < 1 || dailyTTL <= 0 {
+			return 0, ErrCreditLimiterUnconfigured
+		}
+		day := now.UTC().Format("20060102")
+		keys = append(keys,
+			"credit:limit:command:daily:caller:"+digest(callerID)+":"+day,
+			"credit:limit:command:daily:scope:"+digest(scopeID.String())+":"+day,
+		)
+		args = append(args, amountMicros, dailyLimitMicros, dailyTTL.Milliseconds())
+	}
+	wait, err := creditRateLimitScript.Run(ctx, l.client, keys, args...).Int64()
 	if err != nil {
 		return 0, fmt.Errorf("check credit command rate limit: %w", err)
 	}
@@ -192,12 +229,73 @@ var creditRateLimitScript = redisclient.NewScript(`
 local limit = tonumber(ARGV[1])
 local ttl = tonumber(ARGV[2])
 local wait = 0
-for i,key in ipairs(KEYS) do
+for i=1,3 do
+  local key = KEYS[i]
   local count = redis.call('INCR', key)
   if count == 1 then redis.call('PEXPIRE', key, ttl) end
   if count > limit then
     local remaining = redis.call('PTTL', key)
     if remaining > wait then wait = remaining end
+  end
+end
+local amountText = ARGV[3] or '0'
+if amountText ~= '0' then
+  local dailyLimit = ARGV[4]
+  local dailyTTL = tonumber(ARGV[5])
+  local function normalizeDecimal(value)
+    value = string.gsub(value, '^0+', '')
+    if value == '' then return '0' end
+    return value
+  end
+  local function compareDecimal(left, right)
+    left = normalizeDecimal(left)
+    right = normalizeDecimal(right)
+    if string.len(left) < string.len(right) then return -1 end
+    if string.len(left) > string.len(right) then return 1 end
+    if left == right then return 0 end
+    if left < right then return -1 end
+    return 1
+  end
+  local function addDecimal(left, right)
+    local carry = 0
+    local result = ''
+    local leftIndex = string.len(left)
+    local rightIndex = string.len(right)
+    while leftIndex > 0 or rightIndex > 0 or carry > 0 do
+      local leftDigit = 0
+      local rightDigit = 0
+      if leftIndex > 0 then
+        leftDigit = tonumber(string.sub(left, leftIndex, leftIndex))
+        leftIndex = leftIndex - 1
+      end
+      if rightIndex > 0 then
+        rightDigit = tonumber(string.sub(right, rightIndex, rightIndex))
+        rightIndex = rightIndex - 1
+      end
+      local sum = leftDigit + rightDigit + carry
+      carry = math.floor(sum / 10)
+      result = tostring(sum % 10) .. result
+    end
+    return normalizeDecimal(result)
+  end
+  local exceedsDailyLimit = false
+  for i=4,5 do
+    local current = redis.call('GET', KEYS[i]) or '0'
+    if compareDecimal(addDecimal(current, amountText), dailyLimit) > 0 then
+      exceedsDailyLimit = true
+      local remaining = redis.call('PTTL', KEYS[i])
+      if remaining <= 0 then remaining = dailyTTL end
+      if remaining > wait then wait = remaining end
+    end
+  end
+  if wait == 0 and not exceedsDailyLimit then
+    local callerCounterIsNew = redis.call('EXISTS', KEYS[4]) == 0
+    local scopeCounterIsNew = redis.call('EXISTS', KEYS[5]) == 0
+    for i=4,5 do
+      redis.call('INCRBY', KEYS[i], amountText)
+    end
+    if callerCounterIsNew then redis.call('PEXPIRE', KEYS[4], dailyTTL) end
+    if scopeCounterIsNew then redis.call('PEXPIRE', KEYS[5], dailyTTL) end
   end
 end
 return wait

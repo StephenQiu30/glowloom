@@ -14,6 +14,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
@@ -23,18 +24,26 @@ type CreditCommandService interface {
 	Read(context.Context, string, uuid.UUID, uuid.UUID) (application.CreditCommandReceipt, error)
 }
 
+// CreditServiceWalletReader reads one caller-authorized wallet scope.
+type CreditServiceWalletReader func(context.Context, uuid.UUID, *uuid.UUID) (application.WalletView, error)
+
 // CreditCommandHandler exposes the platform-admin credit command API.
-type CreditCommandHandler struct{ service CreditCommandService }
+type CreditCommandHandler struct {
+	service     CreditCommandService
+	wallet      CreditServiceWalletReader
+	readLimiter WalletReadLimiter
+}
 
 // NewCreditCommandHandler constructs the credit command HTTP adapter.
-func NewCreditCommandHandler(service CreditCommandService) *CreditCommandHandler {
-	return &CreditCommandHandler{service: service}
+func NewCreditCommandHandler(service CreditCommandService, wallet CreditServiceWalletReader, readLimiter WalletReadLimiter) *CreditCommandHandler {
+	return &CreditCommandHandler{service: service, wallet: wallet, readLimiter: readLimiter}
 }
 
 // Register mounts command submission and receipt routes on a protected group.
 func (h *CreditCommandHandler) Register(group *gin.RouterGroup) {
 	group.POST("/billing/scopes/:scopeID/credit-commands", h.Submit)
 	group.GET("/billing/scopes/:scopeID/credit-commands/:commandID", h.Read)
+	group.GET("/billing/scopes/:scopeID/wallet", h.ReadWallet)
 }
 
 type creditCommandRequest struct {
@@ -49,11 +58,6 @@ type creditCommandRequest struct {
 
 // Submit validates and durably accepts one idempotent credit command.
 func (h *CreditCommandHandler) Submit(c *gin.Context) {
-	actor := identityhttp.Principal(c)
-	if actor.PlatformRole != "platform_admin" {
-		httpapi.WriteProblem(c, http.StatusNotFound, "not_found", nil)
-		return
-	}
 	scopeID, ok := parseCreditUUID(c, "scopeID", "invalid_scope")
 	if !ok {
 		return
@@ -69,6 +73,11 @@ func (h *CreditCommandHandler) Submit(c *gin.Context) {
 	}
 	if body.AmountCredits > math.MaxInt64/domain.MicrosPerCredit {
 		httpapi.WriteProblem(c, http.StatusUnprocessableEntity, "invalid_credit_amount", nil)
+		return
+	}
+	callerID, authorized := creditCommandCaller(c, scopeID, body.Action)
+	if !authorized {
+		httpapi.WriteProblem(c, http.StatusNotFound, "not_found", nil)
 		return
 	}
 	var sourceID uuid.UUID
@@ -100,7 +109,7 @@ func (h *CreditCommandHandler) Submit(c *gin.Context) {
 		}
 	}
 	command := application.CreditCommand{
-		CallerID: actor.ID.String(), IdempotencyKey: c.GetHeader("Idempotency-Key"), ScopeID: scopeID,
+		CallerID: callerID, IdempotencyKey: c.GetHeader("Idempotency-Key"), ScopeID: scopeID,
 		Action: body.Action, SourceID: sourceID, ReferenceID: referenceID,
 		AmountMicros: body.AmountCredits * domain.MicrosPerCredit, ExpiresAt: body.ExpiresAt, ModelKey: body.ModelKey, Reason: body.Reason,
 	}
@@ -109,19 +118,19 @@ func (h *CreditCommandHandler) Submit(c *gin.Context) {
 		writeCreditCommandError(c, err)
 		return
 	}
-	c.Header("Location", "/api/platform/billing/scopes/"+scopeID.String()+"/credit-commands/"+receipt.ID.String())
+	c.Header("Location", c.Request.URL.Path+"/"+receipt.ID.String())
 	c.JSON(http.StatusAccepted, receipt)
 }
 
 // Read returns the caller's receipt for one accepted command.
 func (h *CreditCommandHandler) Read(c *gin.Context) {
-	actor := identityhttp.Principal(c)
-	if actor.PlatformRole != "platform_admin" {
-		httpapi.WriteProblem(c, http.StatusNotFound, "not_found", nil)
-		return
-	}
 	scopeID, ok := parseCreditUUID(c, "scopeID", "invalid_scope")
 	if !ok {
+		return
+	}
+	callerID, authorized := creditCommandCaller(c, scopeID, "")
+	if !authorized {
+		httpapi.WriteProblem(c, http.StatusNotFound, "not_found", nil)
 		return
 	}
 	commandID, ok := parseCreditUUID(c, "commandID", "invalid_command_id")
@@ -132,12 +141,80 @@ func (h *CreditCommandHandler) Read(c *gin.Context) {
 		httpapi.WriteProblem(c, http.StatusServiceUnavailable, "dependency_unavailable", nil)
 		return
 	}
-	receipt, err := h.service.Read(c.Request.Context(), actor.ID.String(), scopeID, commandID)
+	receipt, err := h.service.Read(c.Request.Context(), callerID, scopeID, commandID)
 	if err != nil {
 		writeCreditCommandError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, receipt)
+}
+
+// ReadWallet returns the balance projection and ledger page for one authorized service scope.
+func (h *CreditCommandHandler) ReadWallet(c *gin.Context) {
+	scopeID, ok := parseCreditUUID(c, "scopeID", "invalid_scope")
+	if !ok {
+		return
+	}
+	callerID, authorized := creditCommandCaller(c, scopeID, application.CreditRead)
+	if !authorized {
+		httpapi.WriteProblem(c, http.StatusNotFound, "not_found", nil)
+		return
+	}
+	if h.wallet == nil {
+		httpapi.WriteProblem(c, http.StatusServiceUnavailable, "dependency_unavailable", nil)
+		return
+	}
+	if h.readLimiter != nil {
+		wait, err := h.readLimiter.AllowWalletRead(c.Request.Context(), callerID, scopeID, c.ClientIP(), time.Now().UTC())
+		if err != nil {
+			httpapi.LogDependencyError(c, err)
+			httpapi.WriteProblem(c, http.StatusServiceUnavailable, "dependency_unavailable", nil)
+			return
+		}
+		if wait > 0 {
+			seconds := int(math.Ceil(wait.Seconds()))
+			if seconds < 1 {
+				seconds = 1
+			}
+			c.Header("Retry-After", strconv.Itoa(seconds))
+			httpapi.WriteProblem(c, http.StatusTooManyRequests, "credit_rate_limited", nil)
+			return
+		}
+	}
+	var cursor *uuid.UUID
+	if raw := c.Query("cursor"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil || id == uuid.Nil || id.String() != raw {
+			httpapi.WriteProblem(c, http.StatusUnprocessableEntity, "invalid_cursor", nil)
+			return
+		}
+		cursor = &id
+	}
+	result, err := h.wallet(c.Request.Context(), scopeID, cursor)
+	if err != nil {
+		if errors.Is(err, identityapp.ErrForbidden) || errors.Is(err, application.ErrCreditCommandNotFound) {
+			httpapi.WriteProblem(c, http.StatusNotFound, "not_found", nil)
+			return
+		}
+		httpapi.LogDependencyError(c, err)
+		httpapi.WriteProblem(c, http.StatusServiceUnavailable, "dependency_unavailable", nil)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func creditCommandCaller(c *gin.Context, scopeID uuid.UUID, action application.CreditAction) (string, bool) {
+	if service, ok := creditServicePrincipalFrom(c); ok {
+		if !service.allowsScope(scopeID) || action != "" && !service.allowsAction(action) {
+			return "", false
+		}
+		return service.callerID, true
+	}
+	actor := identityhttp.Principal(c)
+	if actor.PlatformRole != "platform_admin" {
+		return "", false
+	}
+	return actor.ID.String(), true
 }
 
 func parseCreditUUID(c *gin.Context, name, code string) (uuid.UUID, bool) {

@@ -96,17 +96,17 @@
 | T-CREDIT-05 批量短剧与Agent预算 | 单次、批量和Agent复用钱包预留，Agent冻结服务端计算价 | 实际短剧的供应商费用验收待明确测试范围 |
 | T-CREDIT-06 界面与会员周期 | 积分总览、流水分页、付款方及采购版本选择已接入 | 正式渠道、商品和周期权益待评审 |
 | T-CREDIT-07 独立创作与整数积分 | 2026-11-06 用户要求及即梦证据已记录，尚未实施 | [独立创作](docs/requirement/07-项目与画布创建原始需求.md#src-pc-08)和[付款准入](docs/requirement/21-模型商业计费与积分系统需求.md#src-credit-04)待联合设计。先做存量库钱包增量迁移与历史回执保护，统一新报价的整数积分预估、冻结与实扣，再完成首模试点。 |
-| T-CREDIT-08 异步命令与接入方幂等 | grant/debit/freeze/commit/release及稳定command_id已实现；本机合成DB集成验证通过。HTTP入口当前只授权platform_admin会话 | 上线业务接入前补service caller身份及scope授权映射，并评审幂等凭据保留策略 |
+| T-CREDIT-08 异步命令与接入方幂等 | grant/debit/freeze/commit/release、稳定command_id、HMAC服务身份、key ID轮换、scope/action映射、服务余额/流水与回执查询已实现；配置/HMAC单测和本机Redis nonce集成通过 | 配置并演练真实caller的密钥轮换；评审幂等凭据保留策略；operation冻结屏障仍依T-CREDIT-10 |
 | T-CREDIT-09 CAS与不可变账本 | 账户/批次版本CAS、不可变有符号流水、来源去重及账户安全初始化函数已实现；本机应用角色测试通过 | 对账本全量重建和跨账户恢复流程做演练；财务保留策略评审后再配置归档 |
 | T-CREDIT-10 Outbox、Kafka与SAGA | Outbox事务投递、退避/DLQ、Kafka有界重试与死信已实现；新增终态事件驱动的SAGA，成功自动commit、明确失败自动release、未知保留冻结、命令结果更新状态；两条本机PostgreSQL应用角色集成用例通过 | operation尚未发布终态事件，旧钱包路径尚未切换；完成冻结成功后派发屏障、真实事件生产、切换/回退及跨路径锁顺序演练，封闭绕过命令队列的旧写路径 |
 | T-CREDIT-11 Redis余额投影 | 5秒TTL、版本闸门、事件失效及数据库回源已实现；本机Redis缓存一致性测试通过 | 观测命中率、缓存年龄及回源；根据业务SLO评审TTL |
 | T-CREDIT-12 月分区与全局去重 | UTC月分区、跨分区流水身份登记及动态分区边界测试已实现；本机PostgreSQL billing/outbox测试通过 | 评审财务保留期、归档和分区告警；持续观察分区维护与历史查询 |
-| T-CREDIT-13 限流与防滥用 | caller/scope/IP分钟限流、单笔金额上限及Redis故障fail-closed已实现；当前max amount未配置时写命令默认fail-closed | 评审并配置QPM/单笔金额阈值；服务到服务签名/nonce、每日额度、审批和异常行为审计仍未完成 |
+| T-CREDIT-13 限流与防滥用 | caller/scope/IP分钟限流、单笔上限、caller/scope UTC日累计额度、HMAC签名/时戳/nonce防重放及Redis故障fail-closed已实现；本机Redis日额度与nonce集成通过 | 评审并配置QPM/单笔/日额度；用户维度控制、grant双人审批/风险暂挂及异常行为审计告警仍未完成 |
 | T-CREDIT-14 压力与性能验收 | 可执行负载和故障场景已写入Plan32；本轮未做容量验收 | 责任人先确认吞吐/延迟/积压SLO，再用本机已启动服务记录基线；不因无阈值而报告容量通过 |
 
 本轮验收使用独立PostgreSQL、MinIO与模拟供应商回执。余额、冻结、扣减、补偿和双价格均可在隔离环境追溯。
 
-2026-11-08 SRC-CREDIT-05仅复用用户已启动的本机服务，使用合成数据和任务临时数据库；未启动额外容器，未连接或改写Glowloom业务数据库。命令账本与SAGA事件消费范围和测试见Plan32 §11；operation派发接入、服务调用方签名授权和性能容量验收仍待完成。
+2026-11-08 SRC-CREDIT-05仅复用用户已启动的本机服务，使用合成数据和任务临时数据库；未启动额外容器，未连接或改写Glowloom业务数据库。命令账本、SAGA事件消费与服务caller安全证据见Plan32 §11；operation派发屏障/终态生产、用户维度防滥用、审批审计和性能容量验收仍待完成。金额/日额度缺少评审值时写命令fail-closed，不据此推断生产服务已启用。
 
 > **当前聚焦里程碑**：完整创作 Agent Harness、多 Agent 协作系统与 Skill 沙箱体系
 > **已确认技术方向（2026-11-04）**：同仓库独立 TypeScript/Pi Durable Agent 服务；Go 保留业务权威，Agent 独占执行状态；PostgreSQL 分 schema/角色；Docker Compose 统一启动；无 Temporal、旧实现或兼容。完整设计见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，状态见[本轮迁移](#pi-durable-migration)。

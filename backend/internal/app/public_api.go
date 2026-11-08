@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/yjsruntime"
+	"github.com/google/uuid"
 
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
@@ -139,13 +140,26 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	protected.Use(auth.RequireSession())
 	registerSelf(protected)
 	platform := protected.Group("/platform")
-	creditLimiter := billingredis.NewCreditCommandLimiter(sessions.RedisClient, cfg.CreditCommandRequestsPerMinute, cfg.CreditCommandMaxAmountMicros)
+	creditLimiter := billingredis.NewCreditCommandLimiter(sessions.RedisClient, cfg.CreditCommandRequestsPerMinute, cfg.CreditCommandMaxAmountMicros, cfg.CreditCommandMaxDailyMicros)
 	creditCommands := billingapp.NewCreditCommands(
 		pgbilling.NewStore(database),
 		creditLimiter,
 		time.Now,
 	)
-	billinghttp.NewCreditCommandHandler(creditCommands).Register(platform)
+	creditCommandHandler := billinghttp.NewCreditCommandHandler(creditCommands, creditServiceWalletReader(database, sessions.RedisClient), creditLimiter)
+	creditCommandHandler.Register(platform)
+	if len(cfg.CreditServiceCallers) > 0 {
+		callers, err := creditServiceCallers(cfg.CreditServiceCallers)
+		if err != nil {
+			return nil, err
+		}
+		auth, err := billinghttp.NewCreditServiceAuthenticator(callers, billingredis.NewWalletBalanceCache(sessions.RedisClient), time.Now)
+		if err != nil {
+			return nil, fmt.Errorf("configure credit service caller authentication: %w", err)
+		}
+		internal := api.Group("/internal", auth)
+		creditCommandHandler.Register(internal)
+	}
 	identityProtected := protected.Group("")
 	workspaceStore := workspacewire.ProvideWorkspaceLifecycleStore(database)
 	protected.Use(workspacehttp.RequireCreationScope(scopewire.ProvideRequestScopeAccess(database)))
@@ -339,4 +353,26 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		context.AfterFunc(socketLifetime, stopLaunchCleanup)
 	}
 	return router, nil
+}
+
+func creditServiceCallers(configured []config.CreditServiceCaller) ([]billinghttp.CreditServiceCaller, error) {
+	callers := make([]billinghttp.CreditServiceCaller, 0, len(configured))
+	for _, caller := range configured {
+		entry := billinghttp.CreditServiceCaller{ID: caller.ID}
+		for _, rawScope := range caller.Scopes {
+			scopeID, err := uuid.Parse(rawScope)
+			if err != nil {
+				return nil, fmt.Errorf("configure credit service scope mapping: %w", err)
+			}
+			entry.Scopes = append(entry.Scopes, scopeID)
+		}
+		for _, rawAction := range caller.Actions {
+			entry.Actions = append(entry.Actions, billingapp.CreditAction(rawAction))
+		}
+		for _, key := range caller.Keys {
+			entry.Keys = append(entry.Keys, billinghttp.CreditServiceKey{ID: key.ID, Secret: key.Secret})
+		}
+		callers = append(callers, entry)
+	}
+	return callers, nil
 }

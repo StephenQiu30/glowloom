@@ -40,6 +40,8 @@ const (
 	CreditCommit CreditAction = "commit"
 	// CreditRelease returns an uncommitted hold to available balance.
 	CreditRelease CreditAction = "release"
+	// CreditRead authorizes a service caller to read one mapped wallet scope.
+	CreditRead CreditAction = "read"
 )
 
 // CreditCommand is an authorized server-side write request. ScopeID and
