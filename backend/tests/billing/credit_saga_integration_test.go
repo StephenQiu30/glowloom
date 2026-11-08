@@ -32,7 +32,7 @@ func TestCreditSagaUnknownOutcomeHoldsThenFailureAutomaticallyReleases(t *testin
 		t.Fatalf("unknown saga state = %q, error = %v", saga.Status, err)
 	}
 	var queued int64
-	if err := database.Raw(`SELECT count(*) FROM billing.credit_command WHERE caller_id='billing-credit-saga' AND reference_id=?::uuid`, holdID).Scan(&queued).Error; err != nil || queued != 0 {
+	if err := database.Raw(`SELECT count(*) FROM billing.credit_command WHERE caller_id=? AND reference_id=?::uuid`, billingapp.CreditSagaCallerID, holdID).Scan(&queued).Error; err != nil || queued != 0 {
 		t.Fatalf("unknown outcome queued %d settlement commands, error = %v", queued, err)
 	}
 
@@ -145,7 +145,7 @@ func sendCreditOutcomeAsApp(t *testing.T, ctx context.Context, database *gorm.DB
 			return err
 		}
 		store := pgbilling.NewStore(tx)
-		return sendCreditOutcome(ctx, billingevent.NewCreditEventHandler(store, nil, store), outcome)
+		return sendCreditOutcome(ctx, billingevent.NewCreditEventHandler(store, nil, store, nil), outcome)
 	})
 }
 
@@ -165,7 +165,7 @@ func readCreditSagaCommand(t *testing.T, database *gorm.DB, holdID uuid.UUID) cr
 	t.Helper()
 	var command creditSagaCommand
 	if err := database.Raw(`SELECT id,action,amount_micros,status FROM billing.credit_command
-		WHERE caller_id='billing-credit-saga' AND reference_id=?::uuid`, holdID).Scan(&command).Error; err != nil {
+		WHERE caller_id=? AND reference_id=?::uuid`, billingapp.CreditSagaCallerID, holdID).Scan(&command).Error; err != nil {
 		t.Fatalf("read automatic credit saga command: %v", err)
 	}
 	if command.ID == uuid.Nil {
@@ -192,7 +192,7 @@ func consumeCreditCommandResultAsApp(t *testing.T, ctx context.Context, database
 			return err
 		}
 		store := pgbilling.NewStore(tx)
-		handler := billingevent.NewCreditEventHandler(store, nil, store)
+		handler := billingevent.NewCreditEventHandler(store, nil, store, nil)
 		return handler.Handle(ctx, inboxapp.Record{Topic: billingevent.CreditCommandResultTopic, Key: []byte(record.ScopeID.String()), Value: record.Payload})
 	}); err != nil {
 		t.Fatalf("consume credit command result as app role: %v", err)

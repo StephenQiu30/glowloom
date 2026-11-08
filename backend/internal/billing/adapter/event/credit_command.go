@@ -22,7 +22,7 @@ const (
 	// CreditCommandResultTopic carries command completion events from the ledger.
 	CreditCommandResultTopic = "glowloom.billing.command_result.v1"
 	// CreditSettlementOutcomeTopic carries a trusted operation settlement fact.
-	CreditSettlementOutcomeTopic = "glowloom.billing.settlement_outcome.v1"
+	CreditSettlementOutcomeTopic = billingapp.CreditSettlementOutcomeTopic
 )
 
 // CreditCommandProcessor applies an accepted command to the wallet ledger.
@@ -42,16 +42,23 @@ type CreditSagaProcessor interface {
 	ApplyCreditCommandResult(context.Context, billingapp.CreditCommandResult) error
 }
 
+// CreditOperationFreezeResultProcessor releases pre-dispatch reservations when
+// their asynchronous wallet freeze fails.
+type CreditOperationFreezeResultProcessor interface {
+	ApplyCreditFreezeCommandResult(context.Context, billingapp.CreditCommandResult) error
+}
+
 // CreditEventHandler routes commands, settlement outcomes, command results, and balance changes.
 type CreditEventHandler struct {
-	commands CreditCommandProcessor
-	balances WalletBalanceInvalidator
-	sagas    CreditSagaProcessor
+	commands   CreditCommandProcessor
+	balances   WalletBalanceInvalidator
+	sagas      CreditSagaProcessor
+	operations CreditOperationFreezeResultProcessor
 }
 
 // NewCreditEventHandler builds a handler for command and cache events.
-func NewCreditEventHandler(commands CreditCommandProcessor, balances WalletBalanceInvalidator, sagas CreditSagaProcessor) *CreditEventHandler {
-	return &CreditEventHandler{commands: commands, balances: balances, sagas: sagas}
+func NewCreditEventHandler(commands CreditCommandProcessor, balances WalletBalanceInvalidator, sagas CreditSagaProcessor, operations CreditOperationFreezeResultProcessor) *CreditEventHandler {
+	return &CreditEventHandler{commands: commands, balances: balances, sagas: sagas, operations: operations}
 }
 
 // Handle validates an event envelope and applies its idempotent effect.
@@ -122,7 +129,13 @@ func (h *CreditEventHandler) Handle(ctx context.Context, record application.Reco
 		if result.EventID == uuid.Nil || event.EventType != record.Topic || result.CommandID == uuid.Nil || result.ScopeID == uuid.Nil || result.Status == "" || result.OccurredAt.IsZero() || string(record.Key) != result.ScopeID.String() {
 			return fmt.Errorf("invalid credit command result")
 		}
-		return h.sagas.ApplyCreditCommandResult(ctx, result)
+		if err := h.sagas.ApplyCreditCommandResult(ctx, result); err != nil {
+			return err
+		}
+		if h.operations != nil {
+			return h.operations.ApplyCreditFreezeCommandResult(ctx, result)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported credit event topic %s", record.Topic)
 	}

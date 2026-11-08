@@ -27,6 +27,7 @@ type AgentBoundaryOptions struct {
 	ModelRecover                        agentapp.RecoverCapability
 	CanvasRuntime                       canvas.YjsCommandRuntime
 	MediaObjects                        media.ObjectReader
+	CreditOperationSagaEnabled          bool
 }
 
 // RegisterAgentBoundary installs current routes. Go never starts or supervises
@@ -37,6 +38,7 @@ func RegisterAgentBoundary(ctx context.Context, router *gin.Engine, protected *g
 		return fmt.Errorf("agent boundary requires origin and independent direction credentials")
 	}
 	boundary := agentwire.NewBoundary(database, options.Model)
+	boundary.WithCreditOperationSaga(options.CreditOperationSagaEnabled)
 	boundary.Capabilities.ModelRecover = options.ModelRecover
 	if options.SourceObjects != nil {
 		boundary.WithSourceObjects(options.SourceObjects)

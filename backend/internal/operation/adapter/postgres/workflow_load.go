@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
@@ -52,6 +53,40 @@ func (s *Store) LoadWorkflowOperation(ctx context.Context, operationID uuid.UUID
 		loaded.Operation = row.domain()
 		if err := loaded.Operation.Validate(); err != nil {
 			return fmt.Errorf("validate workflow operation: %w", err)
+		}
+		if !loaded.Operation.Status.IsTerminal() {
+			var freezeStatuses []struct {
+				HoldID  *uuid.UUID
+				ScopeID uuid.UUID
+				Status  string
+			}
+			freeze := tx.Raw(`SELECT NULLIF(result->>'hold_id','')::uuid AS hold_id,scope_id,status FROM billing.credit_command
+				WHERE caller_id=? AND action='freeze' AND source_id=?::uuid`,
+				billingapp.CreditOperationCallerID, operationID).Scan(&freezeStatuses)
+			if freeze.Error != nil {
+				return fmt.Errorf("read operation freeze barrier: %w", freeze.Error)
+			}
+			if len(freezeStatuses) > 1 {
+				return billingapp.ErrCreditOutcomeConflict
+			}
+			if len(freezeStatuses) == 1 {
+				freeze := freezeStatuses[0]
+				if freeze.Status != "succeeded" {
+					return application.ErrCreditFreezePending
+				}
+				if freeze.HoldID == nil || *freeze.HoldID == uuid.Nil {
+					return billingapp.ErrCreditOutcomeConflict
+				}
+				var holdStatus string
+				hold := tx.Raw(`SELECT status FROM billing.credit_hold WHERE id=?::uuid AND scope_id=?::uuid`,
+					*freeze.HoldID, freeze.ScopeID).Scan(&holdStatus)
+				if hold.Error != nil {
+					return fmt.Errorf("read operation credit hold barrier: %w", hold.Error)
+				}
+				if hold.RowsAffected != 1 || holdStatus != "held" {
+					return billingapp.ErrCreditOutcomeConflict
+				}
+			}
 		}
 		var metadata struct{ ProviderRequestKey *string }
 		result = tx.Raw(`SELECT provider_request_key FROM operation.operation WHERE id = ?::uuid`, operationID.String()).Scan(&metadata)

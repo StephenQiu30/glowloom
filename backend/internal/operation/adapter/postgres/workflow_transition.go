@@ -132,6 +132,13 @@ func (s *Store) TransitionWorkflowOperation(ctx context.Context, input applicati
 		if err := appendWorkflowTransition(tx, row, current, input, detail); err != nil {
 			return err
 		}
+		if input.To == domain.StatusUnknown {
+			if err := s.billingStore(tx).QueueOperationCreditSettlementOutcomeInTransaction(
+				ctx, tx, input.OperationID, "unknown", 0, time.Now().UTC(),
+			); err != nil {
+				return fmt.Errorf("queue unknown operation credit outcome: %w", err)
+			}
+		}
 		status = input.To
 		return nil
 	})

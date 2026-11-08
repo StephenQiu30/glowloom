@@ -78,6 +78,13 @@ func (s *Store) SettleInTransaction(ctx context.Context, tx *gorm.DB, input appl
 	if reservation.Status != domain.ReservationHeld {
 		return replaySettlement(tx, input, reservation, chargeBasis)
 	}
+	creditFreeze, hasCreditFreeze, err := findOperationCreditFreeze(tx, input.OperationID)
+	if err != nil {
+		return application.SettleResult{}, err
+	}
+	if hasCreditFreeze && creditFreeze.Status != "succeeded" && creditFreeze.Status != "insufficient" && creditFreeze.Status != "failed" {
+		return application.SettleResult{}, application.ErrCreditFreezePending
+	}
 	before := reservation
 	settlement, err := reservation.Settle(chargeBasis, input.CapAtReservation, input.OccurredAt)
 	if err != nil {
@@ -100,8 +107,22 @@ func (s *Store) SettleInTransaction(ctx context.Context, tx *gorm.DB, input appl
 	if row.RowsAffected != 1 {
 		return application.SettleResult{}, ErrNotFound
 	}
-	if err := settleWallet(tx, before, settlement.ChargeMicros, input.OccurredAt); err != nil {
-		return application.SettleResult{}, fmt.Errorf("settle wallet: %w", err)
+	if !hasCreditFreeze {
+		if err := settleWallet(tx, before, settlement.ChargeMicros, input.OccurredAt); err != nil {
+			return application.SettleResult{}, fmt.Errorf("settle wallet: %w", err)
+		}
+	} else if creditFreeze.Status == "succeeded" {
+		if creditFreeze.HoldID == nil || *creditFreeze.HoldID == uuid.Nil {
+			return application.SettleResult{}, application.ErrCreditOutcomeConflict
+		}
+		var holdStatus string
+		hold := tx.Raw(`SELECT status FROM billing.credit_hold WHERE id=?::uuid AND scope_id=?::uuid`, *creditFreeze.HoldID, creditFreeze.ScopeID).Scan(&holdStatus)
+		if hold.Error != nil {
+			return application.SettleResult{}, fmt.Errorf("read operation credit hold: %w", hold.Error)
+		}
+		if hold.RowsAffected != 1 || holdStatus != "held" {
+			return application.SettleResult{}, ErrSettlementConflict
+		}
 	}
 	wasLow, err := budget.LowBalance()
 	if err != nil {
@@ -180,6 +201,14 @@ func (s *Store) SettleInTransaction(ctx context.Context, tx *gorm.DB, input appl
 	}
 	if err := insertSettlementEvent(tx, input, result, budget, availableMicros, !wasLow && isLow, wasOverrun); err != nil {
 		return application.SettleResult{}, err
+	}
+	if hasCreditFreeze && creditFreeze.Status == "succeeded" {
+		if creditFreeze.HoldID == nil || *creditFreeze.HoldID == uuid.Nil {
+			return application.SettleResult{}, application.ErrCreditOutcomeConflict
+		}
+		if err := queueCreditSettlementOutcomeTx(tx, creditFreeze.ScopeID, *creditFreeze.HoldID, "succeeded", result.ChargeMicros, input.OccurredAt); err != nil {
+			return application.SettleResult{}, err
+		}
 	}
 	return result, nil
 }

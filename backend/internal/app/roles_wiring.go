@@ -199,7 +199,7 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 	creditStore := pgbilling.NewStore(dbConn.DB)
 	creditConsumer, err := kafkainbox.NewRetryingConsumer(cfg.KafkaBrokers, creditConsumerGroup,
 		[]string{billingevent.CreditCommandTopic, billingevent.CreditBalanceChangedTopic, billingevent.CreditCommandResultTopic, billingevent.CreditSettlementOutcomeTopic},
-		billingevent.NewCreditEventHandler(creditStore, billingredis.NewWalletBalanceCache(redisConn.Client), creditStore),
+		billingevent.NewCreditEventHandler(creditStore, billingredis.NewWalletBalanceCache(redisConn.Client), creditStore, operationwire.ProvideOperationStore(dbConn.DB)),
 		kafkainbox.FailurePolicy{
 			MaxAttempts: 12, DeadLetterTopic: billingevent.CreditDeadLetterTopic,
 			RetryBase: 250 * time.Millisecond, RetryCap: 5 * time.Second,

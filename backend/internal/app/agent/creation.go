@@ -312,7 +312,7 @@ func (b *Boundary) confirmOperation(ctx context.Context, tx *gorm.DB, s domain.S
 	if quoted.QuoteMicros == nil || *quoted.QuoteMicros > in.MaxMicros {
 		return domain.CallResult{}, domain.ErrBudget
 	}
-	result, err := operation.NewConfirmSingleQuoteCommand(operationStore(tx)).Execute(ctx, s.Principal(), operation.ConfirmSingleQuoteInput{ProjectID: s.ProjectID, OperationID: requested.OperationID, RequestID: key.String()})
+	result, err := operation.NewConfirmSingleQuoteCommand(operationStoreWithCreditSaga(tx, b.creditOperationSagaEnabled)).Execute(ctx, s.Principal(), operation.ConfirmSingleQuoteInput{ProjectID: s.ProjectID, OperationID: requested.OperationID, RequestID: key.String()})
 	if err != nil {
 		return domain.CallResult{}, err
 	}

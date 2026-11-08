@@ -85,6 +85,21 @@ func TestCreditServiceAuthenticatorSignsBodyAndRejectsReplay(t *testing.T) {
 	}
 }
 
+func TestCreditServiceAuthenticatorRejectsReservedInternalCaller(t *testing.T) {
+	for _, callerID := range []string{application.CreditOperationCallerID, application.CreditSagaCallerID} {
+		t.Run(callerID, func(t *testing.T) {
+			_, err := NewCreditServiceAuthenticator([]CreditServiceCaller{{
+				ID: callerID, Scopes: []uuid.UUID{uuid.New()},
+				Actions: []application.CreditAction{application.CreditFreeze},
+				Keys:    []CreditServiceKey{{ID: "key-1", Secret: strings.Repeat("k", 40)}},
+			}}, &creditNonceStoreStub{claimed: make(map[string]bool)}, time.Now)
+			if err == nil {
+				t.Fatal("registered reserved internal caller")
+			}
+		})
+	}
+}
+
 func TestCreditServiceAuthenticatorRejectsTamperingAndExpiredTimestamp(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	now := time.Date(2026, 11, 8, 3, 4, 5, 0, time.UTC)

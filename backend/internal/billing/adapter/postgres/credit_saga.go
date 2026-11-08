@@ -14,8 +14,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 )
 
-const creditSagaCallerID = "billing-credit-saga"
-
 type creditSagaRow struct {
 	HoldID       uuid.UUID
 	ScopeID      uuid.UUID
@@ -133,7 +131,7 @@ func (s *Store) ApplyCreditSettlementOutcome(ctx context.Context, outcome applic
 		}
 		holdID := outcome.HoldID
 		command := application.CreditCommand{
-			CallerID: creditSagaCallerID, IdempotencyKey: "credit-saga/" + holdID.String() + "/settle",
+			CallerID: application.CreditSagaCallerID, IdempotencyKey: "credit-saga/" + holdID.String() + "/settle",
 			ScopeID: outcome.ScopeID, Action: action, SourceID: holdID, ReferenceID: &holdID,
 			AmountMicros: amount, Reason: "automatic credit saga settlement: " + outcome.Outcome,
 		}

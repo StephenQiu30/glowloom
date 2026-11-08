@@ -87,7 +87,7 @@ func (a billingAccess) AuthorizeBilling(ctx context.Context, actor identity.Prin
 	return a.store.requireProject(a.tx.WithContext(ctx), actor, project, write)
 }
 func (s *Store) billingStore(tx *gorm.DB) *pgbilling.Store {
-	return pgbilling.NewScopedStore(tx, func(db *gorm.DB) billing.ProjectAccess { return billingAccess{s, db} })
+	return pgbilling.NewScopedStore(tx, func(db *gorm.DB) billing.ProjectAccess { return billingAccess{s, db} }).WithCreditOperationSaga(s.creditOperationSagaEnabled)
 }
 
 func (s *Store) requireBatchWorker(tx *gorm.DB, batch uuid.UUID, write bool) error {

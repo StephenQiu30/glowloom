@@ -22,14 +22,23 @@ import (
 
 // Boundary owns the business services and formal command adapters.
 type Boundary struct {
-	Store         *pg.Store
-	Capabilities  app.Capabilities
-	bindings      []toolBinding
-	db            *gorm.DB
-	canvasRuntime canvas.YjsCommandRuntime
-	mediaObjects  media.ObjectReader
-	sourceObjects script.PrivateObjects
-	sourceOwner   *script.SourceService
+	Store                      *pg.Store
+	Capabilities               app.Capabilities
+	bindings                   []toolBinding
+	db                         *gorm.DB
+	canvasRuntime              canvas.YjsCommandRuntime
+	mediaObjects               media.ObjectReader
+	sourceObjects              script.PrivateObjects
+	sourceOwner                *script.SourceService
+	creditOperationSagaEnabled bool
+}
+
+// WithCreditOperationSaga enables event-driven freezes for Agent confirmations.
+func (b *Boundary) WithCreditOperationSaga(enabled bool) *Boundary {
+	if b != nil {
+		b.creditOperationSagaEnabled = enabled
+	}
+	return b
 }
 
 // NewBoundary injects the owning business adapters for the Agent boundary.

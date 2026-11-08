@@ -12,6 +12,10 @@ import (
 )
 
 var (
+	// ErrCreditFreezePending asks the task worker to wait for the accepted
+	// wallet freeze command before dispatching this operation.
+	ErrCreditFreezePending = errors.New("operation credit freeze is not confirmed")
+
 	// ErrInvalidTransitionInput means the requested persisted state write is unsafe.
 	ErrInvalidTransitionInput = errors.New("invalid workflow transition input")
 	// ErrTransitionConflict means the stored state differs from the expected state.

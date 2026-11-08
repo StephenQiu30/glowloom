@@ -319,7 +319,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return promptapp.NewCompiler(operationwire.ProvidePromptPreferenceStore(tx))
 	}, func(tx *gorm.DB) operationapp.EditorSnapshots {
 		return pgprompt.NewDraftStore(tx, promptwire.DraftAccess).WithSubjectSources(subjectwire.NewPromptSources)
-	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithSubjectMedia(func(tx *gorm.DB) operationapp.SubjectMediaAccess {
+	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithCreditOperationSaga(cfg.CreditOperationSagaEnabled).WithSubjectMedia(func(tx *gorm.DB) operationapp.SubjectMediaAccess {
 		return subjectwire.NewGenerationAccess(tx, subjectObjects)
 	})
 	if registry := subjectObjects.Registry(); registry != nil {
@@ -331,7 +331,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure agent model gateway: %w", err)
 	}
-	if err := RegisterAgentBoundary(socketLifetime, router, protected, database, AgentBoundaryOptions{Origin: cfg.AgentOrigin, ServiceToken: cfg.AgentServiceToken, BusinessToken: cfg.AgentBusinessToken, Model: agentModel, ModelRecover: agentRecover, MediaObjects: subjectObjects.Routed, SourceObjects: scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)), CanvasRuntime: yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken)}, logger); err != nil {
+	if err := RegisterAgentBoundary(socketLifetime, router, protected, database, AgentBoundaryOptions{Origin: cfg.AgentOrigin, ServiceToken: cfg.AgentServiceToken, BusinessToken: cfg.AgentBusinessToken, Model: agentModel, ModelRecover: agentRecover, MediaObjects: subjectObjects.Routed, SourceObjects: scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)), CanvasRuntime: yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken), CreditOperationSagaEnabled: cfg.CreditOperationSagaEnabled}, logger); err != nil {
 		return nil, fmt.Errorf("configure agent boundary: %w", err)
 	}
 	operationhttp.NewSubmissionHandler(operations).Register(protected)

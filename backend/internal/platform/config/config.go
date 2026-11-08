@@ -76,6 +76,7 @@ type Config struct {
 	CreditCommandRequestsPerMinute int
 	CreditCommandMaxAmountMicros   int64
 	CreditCommandMaxDailyMicros    int64
+	CreditOperationSagaEnabled     bool
 	CreditServiceCallers           []CreditServiceCaller
 }
 
@@ -174,6 +175,7 @@ func Load() (Config, error) {
 		CreditCommandRequestsPerMinute: v.GetInt("GLOWLOOM_CREDIT_COMMANDS_PER_MINUTE"),
 		CreditCommandMaxAmountMicros:   v.GetInt64("GLOWLOOM_CREDIT_MAX_AMOUNT_MICROS"),
 		CreditCommandMaxDailyMicros:    v.GetInt64("GLOWLOOM_CREDIT_MAX_DAILY_AMOUNT_MICROS"),
+		CreditOperationSagaEnabled:     v.GetBool("GLOWLOOM_CREDIT_OPERATION_SAGA_ENABLED"),
 	}
 	callers, err := parseCreditServiceCallers(v.GetString("GLOWLOOM_CREDIT_SERVICE_CALLERS_JSON"))
 	if err != nil {

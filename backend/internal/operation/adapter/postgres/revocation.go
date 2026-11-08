@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -69,7 +70,10 @@ func (s *Store) RecordRevocationUnknownInTransaction(ctx context.Context, tx *go
 	if err := tx.Exec(`UPDATE operation.operation SET status='unknown',update_time=now() WHERE id=?`, id).Error; err != nil {
 		return err
 	}
-	return appendWorkflowTransition(tx, row, facts.Status, application.TransitionInput{OperationID: id, From: []domain.Status{facts.Status}, To: domain.StatusUnknown, Reason: "execution_authority_revoked"}, map[string]any{"provider_cost": "unresolved"})
+	if err := appendWorkflowTransition(tx, row, facts.Status, application.TransitionInput{OperationID: id, From: []domain.Status{facts.Status}, To: domain.StatusUnknown, Reason: "execution_authority_revoked"}, map[string]any{"provider_cost": "unresolved"}); err != nil {
+		return err
+	}
+	return s.billingStore(tx).QueueOperationCreditSettlementOutcomeInTransaction(ctx, tx, id, "unknown", 0, time.Now().UTC())
 }
 
 func revocationFinalization(input application.FinalizeInput, from domain.Status) bool {

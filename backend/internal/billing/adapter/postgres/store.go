@@ -22,12 +22,22 @@ var (
 
 // Store keeps the database handle injected by the application composition root.
 type Store struct {
-	db     *gorm.DB
-	access ProjectAccessFactory
+	db                        *gorm.DB
+	access                    ProjectAccessFactory
+	creditOperationSagaEnable bool
 }
 
 // NewStore injects the caller's database handle.
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
+
+// WithCreditOperationSaga routes new operation reservations through the
+// asynchronous credit command ledger.
+func (s *Store) WithCreditOperationSaga(enabled bool) *Store {
+	if s != nil {
+		s.creditOperationSagaEnable = enabled
+	}
+	return s
+}
 
 // FindBudget checks the current account and project owner in the database.
 func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (domain.Budget, error) {

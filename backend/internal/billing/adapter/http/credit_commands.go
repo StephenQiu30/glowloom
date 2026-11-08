@@ -141,6 +141,9 @@ func (h *CreditCommandHandler) Read(c *gin.Context) {
 		httpapi.WriteProblem(c, http.StatusServiceUnavailable, "dependency_unavailable", nil)
 		return
 	}
+	if !h.allowWalletRead(c, callerID, scopeID) {
+		return
+	}
 	receipt, err := h.service.Read(c.Request.Context(), callerID, scopeID, commandID)
 	if err != nil {
 		writeCreditCommandError(c, err)
@@ -164,22 +167,8 @@ func (h *CreditCommandHandler) ReadWallet(c *gin.Context) {
 		httpapi.WriteProblem(c, http.StatusServiceUnavailable, "dependency_unavailable", nil)
 		return
 	}
-	if h.readLimiter != nil {
-		wait, err := h.readLimiter.AllowWalletRead(c.Request.Context(), callerID, scopeID, c.ClientIP(), time.Now().UTC())
-		if err != nil {
-			httpapi.LogDependencyError(c, err)
-			httpapi.WriteProblem(c, http.StatusServiceUnavailable, "dependency_unavailable", nil)
-			return
-		}
-		if wait > 0 {
-			seconds := int(math.Ceil(wait.Seconds()))
-			if seconds < 1 {
-				seconds = 1
-			}
-			c.Header("Retry-After", strconv.Itoa(seconds))
-			httpapi.WriteProblem(c, http.StatusTooManyRequests, "credit_rate_limited", nil)
-			return
-		}
+	if !h.allowWalletRead(c, callerID, scopeID) {
+		return
 	}
 	var cursor *uuid.UUID
 	if raw := c.Query("cursor"); raw != "" {
@@ -201,6 +190,28 @@ func (h *CreditCommandHandler) ReadWallet(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+func (h *CreditCommandHandler) allowWalletRead(c *gin.Context, callerID string, scopeID uuid.UUID) bool {
+	if h.readLimiter == nil {
+		return true
+	}
+	wait, err := h.readLimiter.AllowWalletRead(c.Request.Context(), callerID, scopeID, c.ClientIP(), time.Now().UTC())
+	if err != nil {
+		httpapi.LogDependencyError(c, err)
+		httpapi.WriteProblem(c, http.StatusServiceUnavailable, "dependency_unavailable", nil)
+		return false
+	}
+	if wait <= 0 {
+		return true
+	}
+	seconds := int(math.Ceil(wait.Seconds()))
+	if seconds < 1 {
+		seconds = 1
+	}
+	c.Header("Retry-After", strconv.Itoa(seconds))
+	httpapi.WriteProblem(c, http.StatusTooManyRequests, "credit_rate_limited", nil)
+	return false
 }
 
 func creditCommandCaller(c *gin.Context, scopeID uuid.UUID, action application.CreditAction) (string, bool) {

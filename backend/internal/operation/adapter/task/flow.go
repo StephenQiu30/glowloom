@@ -53,6 +53,9 @@ func operationHandler(store OperationStore, run operationStep, finalizer Operati
 		}()
 		l, err := store.LoadWorkflowOperation(ctx, id)
 		if err != nil {
+			if errors.Is(err, app.ErrCreditFreezePending) {
+				return time.Now().Add(2 * time.Second), nil
+			}
 			return next, err
 		}
 		if l.Operation.ID != id || l.Operation.Validate() != nil {

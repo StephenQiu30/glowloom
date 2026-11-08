@@ -66,7 +66,11 @@ func (s *Store) ReserveInTransaction(ctx context.Context, tx *gorm.DB, input app
 	if row.RowsAffected != 1 {
 		return application.ReserveResult{}, fmt.Errorf("insert confirmation reservation: wrote %d rows", row.RowsAffected)
 	}
-	if err := holdWallet(tx, input, reservationID); err != nil {
+	if s.creditOperationSagaEnable {
+		if err := queueOperationCreditFreeze(tx, input); err != nil {
+			return application.ReserveResult{}, fmt.Errorf("queue operation credit freeze: %w", err)
+		}
+	} else if err := holdWallet(tx, input, reservationID); err != nil {
 		return application.ReserveResult{}, fmt.Errorf("reserve wallet: %w", err)
 	}
 	row = tx.Exec(`
@@ -99,4 +103,43 @@ func (s *Store) ReserveInTransaction(ctx context.Context, tx *gorm.DB, input app
 		ReservationID: reservationID, AvailableMicros: availableMicros,
 		BudgetRevision: budget.Revision,
 	}, nil
+}
+
+func queueOperationCreditFreeze(tx *gorm.DB, input application.ReserveInput) error {
+	if input.AmountMicros == 0 && input.ReusedResult {
+		return nil
+	}
+	payer, err := walletPayer(tx, input.ProjectID)
+	if err != nil {
+		return err
+	}
+	if payer == uuid.Nil {
+		if input.AmountMicros > 0 {
+			return domain.ErrWalletInsufficient
+		}
+		return nil
+	}
+	if payer != input.Actor.ScopeID {
+		return domain.ErrWalletPayerChanged
+	}
+	if !input.CommercialPriceReady {
+		return domain.ErrWalletPriceUnavailable
+	}
+	if input.AmountMicros == 0 {
+		return nil
+	}
+	command := application.CreditCommand{
+		CallerID:       application.CreditOperationCallerID,
+		IdempotencyKey: "operation/" + input.OperationID.String() + "/freeze",
+		ScopeID:        payer,
+		Action:         application.CreditFreeze,
+		SourceID:       input.OperationID,
+		AmountMicros:   input.AmountMicros,
+		ModelKey:       input.ModelKey,
+		Reason:         "operation reservation " + input.OperationID.String(),
+	}
+	if _, err := submitCreditCommandTx(tx, command, input.OccurredAt.UTC()); err != nil {
+		return err
+	}
+	return nil
 }

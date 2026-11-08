@@ -73,6 +73,10 @@ func canvasService(tx *gorm.DB) *canvas.Service { return canvas.NewService(canva
 func operationStore(tx *gorm.DB) *pgoperation.Store {
 	return pgoperation.NewScopedStore(tx, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess)
 }
+
+func operationStoreWithCreditSaga(tx *gorm.DB, enabled bool) *pgoperation.Store {
+	return operationStore(tx).WithCreditOperationSaga(enabled)
+}
 func scriptService(tx *gorm.DB) *script.SourceService {
 	return script.NewSourceService(pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(inner) }), nil, time.Now)
 }

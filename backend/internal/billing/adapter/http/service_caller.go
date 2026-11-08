@@ -74,7 +74,7 @@ func NewCreditServiceAuthenticator(callers []CreditServiceCaller, nonces CreditS
 	}
 	configured := make(map[string]creditServiceCaller, len(callers))
 	for _, caller := range callers {
-		if strings.TrimSpace(caller.ID) != caller.ID || caller.ID == "" || len(caller.ID) > 80 || len(caller.Scopes) == 0 || len(caller.Actions) == 0 || len(caller.Keys) == 0 {
+		if strings.TrimSpace(caller.ID) != caller.ID || caller.ID == "" || caller.ID == application.CreditOperationCallerID || caller.ID == application.CreditSagaCallerID || len(caller.ID) > 80 || len(caller.Scopes) == 0 || len(caller.Actions) == 0 || len(caller.Keys) == 0 {
 			return nil, fmt.Errorf("invalid credit service caller configuration")
 		}
 		if _, exists := configured[caller.ID]; exists {

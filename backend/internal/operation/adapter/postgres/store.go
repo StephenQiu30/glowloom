@@ -25,15 +25,24 @@ var (
 
 // Store keeps the database handle injected by the composition root.
 type Store struct {
-	projectMedia     func(*gorm.DB) application.ProjectMediaSigner
-	storageAdmission OperationStorageFactory
-	db               *gorm.DB
-	requestAccess    ProjectAccessFactory
-	workerAccess     ProjectAccessFactory
-	platformAccess   PlatformAccessFactory
-	editorSnapshots  func(*gorm.DB) application.EditorSnapshots
-	promptCompiler   func(*gorm.DB) application.QuotePromptCompiler
-	subjectMedia     func(*gorm.DB) application.SubjectMediaAccess
+	projectMedia               func(*gorm.DB) application.ProjectMediaSigner
+	storageAdmission           OperationStorageFactory
+	db                         *gorm.DB
+	requestAccess              ProjectAccessFactory
+	workerAccess               ProjectAccessFactory
+	platformAccess             PlatformAccessFactory
+	editorSnapshots            func(*gorm.DB) application.EditorSnapshots
+	promptCompiler             func(*gorm.DB) application.QuotePromptCompiler
+	subjectMedia               func(*gorm.DB) application.SubjectMediaAccess
+	creditOperationSagaEnabled bool
+}
+
+// WithCreditOperationSaga queues wallet freezes for newly confirmed operations.
+func (s *Store) WithCreditOperationSaga(enabled bool) *Store {
+	if s != nil {
+		s.creditOperationSagaEnabled = enabled
+	}
+	return s
 }
 
 // WithSubjectMedia injects formal binding checks without changing ordinary

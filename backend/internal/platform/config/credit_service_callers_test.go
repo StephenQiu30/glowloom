@@ -24,6 +24,8 @@ func TestParseCreditServiceCallersRejectsUnsafeConfiguration(t *testing.T) {
 		{name: "short key", raw: `[{"id":"svc","scopes":["00000000-0000-4000-8000-000000000001"],"actions":["freeze"],"keys":[{"id":"k","secret":"short"}]}]`},
 		{name: "unknown action", raw: `[{"id":"svc","scopes":["00000000-0000-4000-8000-000000000001"],"actions":["admin"],"keys":[{"id":"k","secret":"` + strings.Repeat("k", 40) + `"}]}]`},
 		{name: "noncanonical scope", raw: `[{"id":"svc","scopes":["00000000-0000-4000-8000-00000000000A"],"actions":["freeze"],"keys":[{"id":"k","secret":"` + strings.Repeat("k", 40) + `"}]}]`},
+		{name: "reserved internal caller", raw: `[{"id":"system:billing-operation","scopes":["00000000-0000-4000-8000-000000000001"],"actions":["freeze"],"keys":[{"id":"k","secret":"` + strings.Repeat("k", 40) + `"}]}]`},
+		{name: "reserved saga caller", raw: `[{"id":"system:billing-saga","scopes":["00000000-0000-4000-8000-000000000001"],"actions":["release"],"keys":[{"id":"k","secret":"` + strings.Repeat("k", 40) + `"}]}]`},
 		{name: "unknown field", raw: `[{"id":"svc","scopes":["00000000-0000-4000-8000-000000000001"],"actions":["freeze"],"keys":[{"id":"k","secret":"` + strings.Repeat("k", 40) + `"}],"allow_all":true}]`},
 		{name: "trailing value", raw: `[] []`},
 	}

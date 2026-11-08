@@ -11,6 +11,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// CreditSettlementOutcomeTopic carries the trusted terminal fact for a frozen hold.
+const CreditSettlementOutcomeTopic = "glowloom.billing.settlement_outcome.v1"
+
 var (
 	// ErrInvalidCreditCommand means the command is incomplete or malformed.
 	ErrInvalidCreditCommand = errors.New("invalid credit command")
@@ -24,12 +27,19 @@ var (
 	ErrCreditCommandConflict = errors.New("credit command conflicts with an existing source")
 	// ErrCreditOutcomeConflict means a hold received conflicting terminal outcomes.
 	ErrCreditOutcomeConflict = errors.New("credit settlement outcome conflicts with the existing saga")
+	// ErrCreditFreezePending prevents operation dispatch before its queued freeze succeeds.
+	ErrCreditFreezePending = errors.New("operation credit freeze is not confirmed")
 )
 
 // CreditAction names one supported credit ledger command.
 type CreditAction string
 
 const (
+	// CreditOperationCallerID identifies trusted operation confirmations.
+	CreditOperationCallerID = "system:billing-operation"
+	// CreditSagaCallerID identifies trusted automatic hold settlement commands.
+	CreditSagaCallerID = "system:billing-saga"
+
 	// CreditGrant adds a source-backed credit lot to an account.
 	CreditGrant CreditAction = "grant"
 	// CreditDebit consumes available credits immediately.
