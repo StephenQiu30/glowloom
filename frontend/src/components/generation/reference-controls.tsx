@@ -193,6 +193,7 @@ export function ReferenceControls({
   compact = false,
   home = false,
   assistant = false,
+  allowDocuments = assistant,
   canvasSources,
   canvasSubjectSources,
   incomingSources,
@@ -208,6 +209,7 @@ export function ReferenceControls({
   compact?: boolean;
   home?: boolean;
   assistant?: boolean;
+  allowDocuments?: boolean;
   canvasSources?: CanvasReferenceSource[];
   canvasSubjectSources?: CanvasSubjectReferenceSource[];
   incomingSources?: CanvasLinkedReferenceSource[];
@@ -616,18 +618,23 @@ export function ReferenceControls({
       return;
     }
     const kind = (
-      assistant && /\.(txt|docx)$/i.test(file.name)
+      allowDocuments && /\.(txt|docx)$/i.test(file.name)
         ? "document"
         : file.type.split("/")[0]
     ) as MediaKind;
     if (
-      !(
-        assistant ? ["image", "video", "document"] : ["image", "video", "audio"]
-      ).includes(kind)
+      ![
+        "image",
+        "video",
+        ...(!assistant ? ["audio"] : []),
+        ...(allowDocuments ? ["document"] : []),
+      ].includes(kind)
     ) {
       setError(
-        assistant
-          ? "请选择图片、视频或TXT/DOCX小说文档。"
+        allowDocuments
+          ? assistant
+            ? "请选择图片、视频或TXT/DOCX小说文档。"
+            : "请选择图片、视频、音频或TXT/DOCX小说文档。"
           : "请选择图片、视频或音频文件。",
       );
       return;
@@ -1062,7 +1069,11 @@ export function ReferenceControls({
                 <Input
                   aria-label={`重选${displayLabel(ref.id)}`}
                   type="file"
-                  accept={`${ref.mediaKind}/*`}
+                  accept={
+                    ref.mediaKind === "document"
+                      ? ".txt,.docx"
+                      : `${ref.mediaKind}/*`
+                  }
                   disabled={disabled}
                   onChange={(e) => {
                     if (e.target.files?.[0]) choose(e.target.files[0], ref);
@@ -1190,9 +1201,12 @@ export function ReferenceControls({
   const kinds = [
     { kind: "image" as const, label: "图片", icon: ImageIcon },
     { kind: "video" as const, label: "视频", icon: Video },
-    ...(assistant
+    ...(!assistant
+      ? [{ kind: "audio" as const, label: "音频", icon: AudioLines }]
+      : []),
+    ...(allowDocuments
       ? [{ kind: "document" as const, label: "小说文档", icon: FileText }]
-      : [{ kind: "audio" as const, label: "音频", icon: AudioLines }]),
+      : []),
   ];
   const matchingReferences = draft.references.filter((ref) =>
     displayLabel(ref.id).includes(search),
@@ -1926,7 +1940,9 @@ export function ReferenceControls({
             accept={
               assistant
                 ? "image/*,video/*,.txt,.docx"
-                : "image/*,video/*,audio/*"
+                : allowDocuments
+                  ? "image/*,video/*,audio/*,.txt,.docx"
+                  : "image/*,video/*,audio/*"
             }
             className="hidden"
             disabled={disabled}

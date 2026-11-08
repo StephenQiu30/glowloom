@@ -183,6 +183,7 @@ export function ConversationComposer({
             model={c.model}
             compact
             home
+            allowDocuments
             authorized={authorized && !c.denied}
             onChooseProject={authorized ? undefined : onChooseProject}
           />

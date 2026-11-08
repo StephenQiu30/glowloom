@@ -22,6 +22,70 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("对话补充TXT保留真实文档类型、角色和待上传身份，不误判为text", () => {
+  const editor = new Editor(
+    composerEditorOptions({
+      contextKey: "conversation/document",
+      replicaId: "test",
+      draft: emptyPromptDraft(),
+    }),
+  );
+  editors.push(editor);
+  const session = new ComposerSession(editor);
+  render(
+    <ReferenceControls
+      session={session}
+      draft={session.snapshot().draft}
+      projectID="project"
+      compact
+      home
+      allowDocuments
+    />,
+  );
+  const input = screen.getByLabelText("上传参考文件");
+  expect(input.getAttribute("accept")).toContain(".txt,.docx");
+  fireEvent.change(input, {
+    target: {
+      files: [new File(["完整小说正文"], "novel.txt", { type: "text/plain" })],
+    },
+  });
+  expect(session.snapshot().draft.references).toEqual([
+    expect.objectContaining({
+      mediaKind: "document",
+      role: "reference_document",
+      source: expect.objectContaining({ kind: "pending_upload" }),
+    }),
+  ]);
+});
+
+it("普通生成入口继续拒绝文档，不因对话能力扩展而放宽", () => {
+  const editor = new Editor(
+    composerEditorOptions({
+      contextKey: "generation/no-document",
+      replicaId: "test",
+      draft: emptyPromptDraft(),
+    }),
+  );
+  editors.push(editor);
+  const session = new ComposerSession(editor);
+  render(
+    <ReferenceControls
+      session={session}
+      draft={session.snapshot().draft}
+      projectID="project"
+      compact
+    />,
+  );
+  const input = screen.getByLabelText("上传参考文件");
+  expect(input.getAttribute("accept")).not.toContain(".txt");
+  fireEvent.change(input, {
+    target: {
+      files: [new File(["正文"], "novel.txt", { type: "text/plain" })],
+    },
+  });
+  expect(session.snapshot().draft.references).toHaveLength(0);
+});
+
 it("Agent紧凑参考菜单提供小说文档而不显示未接入的音频", async () => {
   const editor = new Editor(
     composerEditorOptions({
