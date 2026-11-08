@@ -74,6 +74,7 @@ describe("project picker formal query", () => {
           revision: 3,
           file_name: "真实图片",
           project_id: id,
+          libraryItemID: response.items[0].id,
         },
       ],
       total: 45,

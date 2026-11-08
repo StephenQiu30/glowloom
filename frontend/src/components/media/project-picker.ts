@@ -1,5 +1,8 @@
 import { isProjectID } from "@/components/projects/project";
 import { RequestError } from "@/lib/request";
+export type ProjectPickerAsset = API.AssetSummary & {
+  libraryItemID?: string;
+};
 export type ProjectPickerFilter = {
   from: string;
   through: string;
@@ -107,7 +110,12 @@ export function requireProjectPickerPage(
     throw new RequestError("invalid_receipt");
   return {
     items: page.items.map(
-      (item) => ({ ...item.media!, project_id: projectID }) as API.AssetSummary,
+      (item) =>
+        ({
+          ...item.media!,
+          project_id: projectID,
+          libraryItemID: item.id,
+        }) as ProjectPickerAsset,
     ),
     total: page.total!,
     page: index,

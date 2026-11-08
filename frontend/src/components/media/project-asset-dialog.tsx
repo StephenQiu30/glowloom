@@ -48,12 +48,20 @@ import {
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { getMediaPreview, listMediaLibrary } from "@/api/media";
+import {
+  getMediaPreview,
+  getMediaLibraryItem,
+  listMediaLibrary,
+} from "@/api/media";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { UploadDialog } from "@/components/media/upload-dialog";
 import { SubjectList } from "@/components/subjects/subject-list";
 import { subjectText, type Subject } from "@/components/subjects/contracts";
-import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
+import {
+  getScopeGeneration,
+  getSessionGeneration,
+  RequestError,
+} from "@/lib/request";
 import "./project-asset-dialog.css";
 import {
   defaultProjectPickerFilter,
@@ -61,6 +69,7 @@ import {
   projectPickerQuery,
   requireProjectPickerPage,
   type ProjectPickerFilter,
+  type ProjectPickerAsset,
 } from "./project-picker";
 import { ProjectPickerFilters } from "./project-picker-filters";
 
@@ -125,12 +134,12 @@ export function ProjectAssetDialog({
   );
   const [kind, setKind] = useState(initialKind);
   const [subjectKind, setSubjectKind] = useState<API.Kind>("character");
-  const [selected, setSelected] = useState<API.AssetSummary[]>([]);
+  const [selected, setSelected] = useState<ProjectPickerAsset[]>([]);
   const [subject, setSubject] = useState<Subject | null>(null);
   const [upload, setUpload] = useState(initialUpload);
   const [revision, setRevision] = useState(0);
   const allowDocuments = reference && allowDocumentSelection;
-  function toggle(asset: API.AssetSummary) {
+  function toggle(asset: ProjectPickerAsset) {
     if (asset.kind === "document" && !allowDocuments) return;
     setSelected((items) =>
       items.some((i) => i.id === asset.id)
@@ -396,6 +405,41 @@ export function ProjectAssetDialog({
                       throw new Error("文档暂不可用于本次操作。");
                     const verified = await Promise.all(
                       selected.map(async (asset) => {
+                        if (asset.kind === "document") {
+                          if (!asset.libraryItemID)
+                            throw new Error("请从项目文档列表重新选择。");
+                          const detail = await getMediaLibraryItem(
+                            {
+                              scope: "project",
+                              project_id: projectID,
+                              item_id: asset.libraryItemID,
+                            },
+                            { signal: controller.signal },
+                          );
+                          const current = detail.media;
+                          if (
+                            detail.id !== asset.libraryItemID ||
+                            detail.asset_id !== asset.id ||
+                            detail.catalog_state !== "active" ||
+                            detail.kind !== "document" ||
+                            !current ||
+                            current.id !== asset.id ||
+                            current.kind !== "document" ||
+                            !Number.isSafeInteger(current.revision) ||
+                            current.revision! < 1 ||
+                            current.revision !== asset.revision
+                          )
+                            throw new Error(
+                              "素材权限或版本已变化，请重新选择。",
+                            );
+                          return {
+                            ...current,
+                            project_id: projectID,
+                            width: current.width ?? undefined,
+                            height: current.height ?? undefined,
+                            duration_ms: current.duration_ms ?? undefined,
+                          };
+                        }
                         const result = await getMediaPreview(
                           { pid: projectID, asset_id: asset.id! },
                           { signal: controller.signal },
@@ -450,9 +494,11 @@ export function ProjectAssetDialog({
                 } catch (error) {
                   if (!controller.signal.aborted)
                     setConfirmError(
-                      error instanceof Error
-                        ? error.message
-                        : "素材暂不可用，请重试。",
+                      error instanceof RequestError
+                        ? readErrorMessage(error)
+                        : error instanceof Error
+                          ? error.message
+                          : "素材暂不可用，请重试。",
                     );
                 } finally {
                   confirmLock.current = false;
@@ -507,6 +553,11 @@ export function ProjectAssetDialog({
               setFilter((previous) =>
                 projectPickerFilterForKind(previous, asset.kind!),
               );
+              if (asset.kind === "document") {
+                // Only a catalogue row carries the identity needed for document revalidation.
+                setSelected([]);
+                return;
+              }
               setSelected((items) =>
                 limit === 1
                   ? [asset]
@@ -539,16 +590,16 @@ function MaterialList({
   projectID: string;
   actorID?: string;
   kind: string;
-  selected: API.AssetSummary[];
-  onToggle: (asset: API.AssetSummary) => void;
+  selected: ProjectPickerAsset[];
+  onToggle: (asset: ProjectPickerAsset) => void;
   query: string;
   filter: ProjectPickerFilter;
   limit: number;
   canvasPresentation?: boolean;
   allowDocuments: boolean;
-  onSelectPage: (assets: API.AssetSummary[]) => void;
+  onSelectPage: (assets: ProjectPickerAsset[]) => void;
 }) {
-  const [items, setItems] = useState<API.AssetSummary[]>([]);
+  const [items, setItems] = useState<ProjectPickerAsset[]>([]);
   const [pageIndex, setPageIndex] = useState(1);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);

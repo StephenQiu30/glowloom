@@ -12,10 +12,12 @@ const api = vi.hoisted(() => ({
   list: vi.fn(),
   preview: vi.fn(),
   upload: vi.fn(),
+  detail: vi.fn(),
 }));
 vi.mock("@/api/media", () => ({
   listMediaLibrary: api.list,
   getMediaPreview: api.preview,
+  getMediaLibraryItem: api.detail,
 }));
 vi.mock("@/components/media/project-media", () => ({
   ProjectMediaPreview: () => null,
@@ -70,8 +72,13 @@ beforeEach(() => {
 afterEach(cleanup);
 it("对话文档选择在确认时重新核验当前项目身份和版本", async () => {
   const document = { ...a, kind: "document", file_name: "小说.txt" };
-  api.list.mockResolvedValue(library([document]));
-  api.preview.mockResolvedValue({ asset: document });
+  const page = library([document]);
+  page.items[0].id = b.id;
+  api.list.mockResolvedValue(page);
+  api.detail.mockResolvedValue({
+    ...page.items[0],
+    media: { ...document, project_id: undefined },
+  });
   const add = vi.fn();
   render(
     <ProjectAssetDialog
@@ -93,12 +100,16 @@ it("对话文档选择在确认时重新核验当前项目身份和版本", asyn
   expect(add).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "添加为参考" }));
   await waitFor(() => expect(add).toHaveBeenCalledWith([document]));
-  expect(api.preview).toHaveBeenCalledWith(
-    { pid, asset_id: document.id },
+  expect(api.detail).toHaveBeenCalledWith(
+    { scope: "project", project_id: pid, item_id: b.id },
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
+  expect(api.preview).not.toHaveBeenCalled();
   add.mockClear();
-  api.preview.mockResolvedValue({ asset: { ...document, revision: 2 } });
+  api.detail.mockResolvedValue({
+    ...page.items[0],
+    media: { ...document, revision: 2, project_id: undefined },
+  });
   fireEvent.click(screen.getByRole("button", { name: "添加为参考" }));
   await screen.findByText("素材权限或版本已变化，请重新选择。");
   expect(add).not.toHaveBeenCalled();
