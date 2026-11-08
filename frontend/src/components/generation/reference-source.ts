@@ -29,6 +29,7 @@ export function referenceRoleLabel(role: string) {
         driving_video: "动作视频",
         reference_video: "参考视频",
         reference_audio: "参考音频",
+        reference_document: "参考文档",
         first_frame: "首帧",
         last_frame: "尾帧",
         subject: "主体",
