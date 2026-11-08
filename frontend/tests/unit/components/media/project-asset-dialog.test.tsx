@@ -68,6 +68,66 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+it("对话文档选择在确认时重新核验当前项目身份和版本", async () => {
+  const document = { ...a, kind: "document", file_name: "小说.txt" };
+  api.list.mockResolvedValue(library([document]));
+  api.preview.mockResolvedValue({ asset: document });
+  const add = vi.fn();
+  render(
+    <ProjectAssetDialog
+      projectID={pid}
+      reference
+      initialKind="document"
+      allowDocumentSelection
+      onClose={vi.fn()}
+      onAdd={add}
+    />,
+  );
+  const choice = await screen.findByRole("button", {
+    name: "选择素材 小说.txt",
+  });
+  expect(choice.hasAttribute("disabled")).toBe(false);
+  expect(screen.getByText("小说文档")).toBeTruthy();
+  expect(screen.queryByText("音频素材")).toBeNull();
+  fireEvent.click(choice);
+  expect(add).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "添加为参考" }));
+  await waitFor(() => expect(add).toHaveBeenCalledWith([document]));
+  expect(api.preview).toHaveBeenCalledWith(
+    { pid, asset_id: document.id },
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  add.mockClear();
+  api.preview.mockResolvedValue({ asset: { ...document, revision: 2 } });
+  fireEvent.click(screen.getByRole("button", { name: "添加为参考" }));
+  await screen.findByText("素材权限或版本已变化，请重新选择。");
+  expect(add).not.toHaveBeenCalled();
+});
+
+it("普通画布文档保持只读，未开放文档选择能力时上传也不自动选择", async () => {
+  const document = { ...a, kind: "document", file_name: "小说.txt" };
+  api.list.mockResolvedValue(library([document]));
+  const add = vi.fn();
+  render(
+    <ProjectAssetDialog
+      projectID={pid}
+      initialKind="document"
+      onClose={vi.fn()}
+      onAdd={add}
+    />,
+  );
+  expect(
+    (
+      await screen.findByRole("button", { name: "选择素材 小说.txt" })
+    ).hasAttribute("disabled"),
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "上传素材" }));
+  act(() => api.upload.mock.lastCall![0].onUploaded(document));
+  expect(
+    screen.getByRole("button", { name: "添加到画布" }).hasAttribute("disabled"),
+  ).toBe(true);
+  expect(add).not.toHaveBeenCalled();
+});
 it("单选参考上传同类素材时替换原选择，异类上传不改变参考类型", async () => {
   api.list.mockResolvedValue(library([a, b]));
   const add = vi.fn();

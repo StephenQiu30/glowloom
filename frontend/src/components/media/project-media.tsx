@@ -162,9 +162,11 @@ export function ProjectMediaPicker({
   onSelect,
   onClose,
   kind = "image",
+  allowDocuments = false,
 }: {
   projectID: string;
   kind?: string;
+  allowDocuments?: boolean;
   onSelect: (asset: API.AssetSummary) => void;
   onClose: () => void;
 }) {
@@ -173,6 +175,7 @@ export function ProjectMediaPicker({
       projectID={projectID}
       initialKind={kind}
       reference
+      allowDocumentSelection={allowDocuments}
       onClose={onClose}
       onAdd={(assets) => {
         for (const asset of assets) onSelect(asset);

@@ -82,6 +82,7 @@ export function ProjectAssetDialog({
   onUnifiedSubject,
   browseSources = false,
   reference = false,
+  allowDocumentSelection = false,
   allowedKinds,
   selectionLimit,
   confirmLabel,
@@ -95,6 +96,7 @@ export function ProjectAssetDialog({
   onClose: () => void;
   onAdd: (assets: API.AssetSummary[]) => void | Promise<void>;
   reference?: boolean;
+  allowDocumentSelection?: boolean;
   allowedKinds?: readonly string[];
   selectionLimit?: number;
   confirmLabel?: string;
@@ -127,7 +129,9 @@ export function ProjectAssetDialog({
   const [subject, setSubject] = useState<Subject | null>(null);
   const [upload, setUpload] = useState(initialUpload);
   const [revision, setRevision] = useState(0);
+  const allowDocuments = reference && allowDocumentSelection;
   function toggle(asset: API.AssetSummary) {
+    if (asset.kind === "document" && !allowDocuments) return;
     setSelected((items) =>
       items.some((i) => i.id === asset.id)
         ? items.filter((i) => i.id !== asset.id)
@@ -262,6 +266,7 @@ export function ProjectAssetDialog({
                 filter={filter}
                 limit={limit}
                 canvasPresentation={canvasPresentation}
+                allowDocuments={allowDocuments}
                 onSelectPage={(items) =>
                   setSelected((previous) =>
                     [
@@ -384,6 +389,11 @@ export function ProjectAssetDialog({
                   session = getSessionGeneration();
                 try {
                   if (tab === "assets") {
+                    if (
+                      !allowDocuments &&
+                      selected.some((asset) => asset.kind === "document")
+                    )
+                      throw new Error("文档暂不可用于本次操作。");
                     const verified = await Promise.all(
                       selected.map(async (asset) => {
                         const result = await getMediaPreview(
@@ -474,7 +484,13 @@ export function ProjectAssetDialog({
             setRevision((v) => v + 1);
             if (
               asset &&
-              ["image", "video", "audio", "model"].includes(asset.kind ?? "")
+              [
+                "image",
+                "video",
+                "audio",
+                "model",
+                ...(allowDocuments ? ["document"] : []),
+              ].includes(asset.kind ?? "")
             ) {
               if (
                 (reference && asset.kind !== initialKind) ||
@@ -518,6 +534,7 @@ function MaterialList({
   onSelectPage,
   limit,
   canvasPresentation,
+  allowDocuments,
 }: {
   projectID: string;
   actorID?: string;
@@ -528,6 +545,7 @@ function MaterialList({
   filter: ProjectPickerFilter;
   limit: number;
   canvasPresentation?: boolean;
+  allowDocuments: boolean;
   onSelectPage: (assets: API.AssetSummary[]) => void;
 }) {
   const [items, setItems] = useState<API.AssetSummary[]>([]);
@@ -638,7 +656,7 @@ function MaterialList({
             variant="ghost"
             size="sm"
             disabled={
-              kind === "document" ||
+              (kind === "document" && !allowDocuments) ||
               loading ||
               !filtered.length ||
               selected.length >= limit
@@ -649,7 +667,7 @@ function MaterialList({
           </Button>
         )}
       </div>
-      {kind === "document" && (
+      {kind === "document" && !allowDocuments && (
         <p className="text-xs text-muted-foreground">
           可浏览项目文档；文档解析与添加到画布尚未接入。
         </p>
@@ -685,7 +703,7 @@ function MaterialList({
                 aria-label={`选择素材 ${a.file_name || "未命名素材"}`}
                 aria-pressed={chosen}
                 disabled={
-                  kind === "document" ||
+                  (kind === "document" && !allowDocuments) ||
                   (limit > 1 && !chosen && selected.length >= limit)
                 }
                 onClick={() => onToggle(a)}
@@ -717,7 +735,9 @@ function MaterialList({
                         ? `${a.width ?? "—"} × ${a.height ?? "—"}`
                         : kind === "model"
                           ? "GLB 模型"
-                          : "音频素材"}
+                          : kind === "document"
+                            ? "小说文档"
+                            : "音频素材"}
                     </CardDescription>
                   </CardHeader>
                 </Card>

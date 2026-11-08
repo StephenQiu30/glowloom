@@ -1986,6 +1986,7 @@ export function ReferenceControls({
             <ProjectMediaPicker
               projectID={projectID}
               kind={picker.kind}
+              allowDocuments={allowDocuments}
               onClose={() => setPicker(null)}
               onSelect={(asset) => {
                 try {
