@@ -23,12 +23,14 @@ class HealthController {
   ) {}
 
   @Get('healthz')
-  health() {
+  health(): { status: string; service: string } {
     return { status: 'ok', service: 'agent' };
   }
 
   @Get('readyz')
-  async ready(@Res({ passthrough: true }) reply: FastifyReply) {
+  async ready(
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<{ ready: boolean }> {
     const ready = !this.lifecycle.draining && (await this.service.ready());
     reply.status(ready ? 200 : 503);
     return { ready };

@@ -7,8 +7,8 @@ import {
   validateCanvasTransition,
 } from "../document/model.js";
 
-const fail = (code) => Object.assign(new Error(code), { code });
-const sameRoom = (left, right) =>
+const fail = (code: string) => Object.assign(new Error(code), { code });
+const sameRoom = (left: any, right: any) =>
   left.canvasId === right.canvasId && left.epoch === right.epoch;
 
 /** Thin committed-delivery coordinator. Java remains the authority for every read and write. */
@@ -37,7 +37,7 @@ export class CollaborationHub {
   declare private sessions: Set<HubSession>;
   declare private gate: AdmissionGate;
 
-  constructor({ store, maxConnections = 128, maxAdmissions = 4 }) {
+  constructor({ store, maxConnections = 128, maxAdmissions = 4 }: { store: any; maxConnections?: number; maxAdmissions?: number }) {
     this.store = store;
     this.maxConnections = maxConnections;
     this.maxAdmissions = maxAdmissions;
@@ -53,17 +53,17 @@ export class CollaborationHub {
       inspectDocument: inspectCanvasDocument,
       validateTransition: validateCanvasTransition,
       validate: () => {},
-      authorize: (scope) =>
+      authorize: (scope: any) =>
         [...this.sessions].some(
           (session) => session.scope === scope && !session.closed,
         ),
     });
   }
 
-  async join(scope, send, drop) {
+  async join(scope: any, send: any, drop: any) {
     if (this.sessions.size >= this.maxConnections)
       throw fail("CONNECTION_BUDGET");
-    const session = {
+    const session: any = {
       scope: Object.freeze({ ...scope }),
       send,
       drop,
@@ -74,7 +74,7 @@ export class CollaborationHub {
       refreshing: null,
       refreshNeeded: false,
     };
-    session.send = (message) =>
+    session.send = (message: any) =>
       send({
         ...message,
         actorKey: session.scope.actorKey,
@@ -93,7 +93,7 @@ export class CollaborationHub {
     }
   }
 
-  renew(session, binding) {
+  renew(session: any, binding: any) {
     for (const name of [
       "actorKey",
       "canvasId",
@@ -106,7 +106,7 @@ export class CollaborationHub {
     session.scope = Object.freeze({ ...binding });
   }
 
-  enqueue(session, action) {
+  enqueue(session: any, action: () => Promise<any> | any) {
     if (session.closed) return Promise.reject(fail("CONNECTION_CLOSED"));
     if (session.queued >= 2) return Promise.reject(fail("DELIVERY_BUDGET"));
     session.queued++;
@@ -122,7 +122,7 @@ export class CollaborationHub {
     });
   }
 
-  async deliver(session, loaded, hint?) {
+  async deliver(session: any, loaded: any, hint?: any) {
     const seq = BigInt(loaded.commitSeq);
     if (seq <= session.seen) {
       if (
@@ -162,7 +162,7 @@ export class CollaborationHub {
     session.edit = loaded.metadata.edit;
   }
 
-  refresh(session, hint?) {
+  refresh(session: any, hint?: any) {
     if (session.refreshing) {
       session.refreshNeeded = true;
       return session.refreshing;
@@ -187,7 +187,7 @@ export class CollaborationHub {
     return operation;
   }
 
-  async message(session, message) {
+  async message(session: any, message: any) {
     if (session.closed || !this.sessions.has(session))
       throw fail("CONNECTION_CLOSED");
     if (!/^[0-9a-f-]{36}$/.test(message.requestId))
@@ -250,7 +250,7 @@ export class CollaborationHub {
     }
   }
 
-  async wake(canvasId, epoch) {
+  async wake(canvasId: string, epoch?: string) {
     await Promise.allSettled(
       [...this.sessions]
         .filter((session) => session.scope.canvasId === canvasId)
@@ -260,7 +260,7 @@ export class CollaborationHub {
     );
   }
 
-  async withRead(action) {
+  async withRead(action: () => Promise<any> | any) {
     if (this.reads < this.maxAdmissions) this.reads++;
     else {
       if (this.readWaiters.length >= this.maxConnections)
@@ -281,7 +281,7 @@ export class CollaborationHub {
       [...this.sessions].map((session) => session.queue),
     );
   }
-  leave(session) {
+  leave(session: any) {
     if (session.closed) return;
     session.closed = true;
     this.sessions.delete(session);

@@ -101,7 +101,7 @@ func ValidatePassword(password, currentHash string) error {
 
 // CanLogin rejects disabled or currently locked accounts. The returned duration
 // is meaningful only with ErrAccountLocked.
-func (u User) CanLogin(now time.Time) (time.Duration, error) {
+func (u *User) CanLogin(now time.Time) (time.Duration, error) {
 	if u.Status != StatusActive {
 		return 0, ErrAccountDisabled
 	}
@@ -139,6 +139,6 @@ func (u *User) RegisterLoginSuccess(now time.Time) {
 }
 
 // SessionMatches checks the durable epoch and account availability.
-func (u User) SessionMatches(epoch int64) bool {
+func (u *User) SessionMatches(epoch int64) bool {
 	return u.Status == StatusActive && epoch > 0 && epoch == u.SessionEpoch
 }

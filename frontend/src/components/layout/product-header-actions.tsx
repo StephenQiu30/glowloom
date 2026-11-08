@@ -2,12 +2,9 @@
 
 import type { ReactNode } from "react";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
-import {
-  ProductAccountActions,
-  type ProductAccountActionsProps,
-} from "./product-account-actions";
+import type { ProductAccountActionsProps } from "./product-account-actions";
+import { ProductGlobalActions } from "./product-global-actions";
 import { ProductSearch, type PageSearch } from "./product-search";
-import { ProductUtilityNavigation } from "./product-utility-navigation";
 
 export type ProductHeaderActionsProps = ProductAccountActionsProps & {
   search?: PageSearch;
@@ -48,8 +45,11 @@ export function ProductHeaderActions({
       ) : (
         showSearch && <ProductSearch key="search" search={search} />
       )}
-      {showUtilities && <ProductUtilityNavigation />}
-      <ProductAccountActions key="account" {...accountProps} />
+      <ProductGlobalActions
+        key="account"
+        showUtilities={showUtilities}
+        {...accountProps}
+      />
     </Toolbar>
   );
 }

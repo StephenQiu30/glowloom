@@ -34,6 +34,7 @@ export function ProductNavigation({
         <div className="product-content" data-product-navigation={screen}>
           <ProductHeader
             {...header}
+            floating={screen === "home" && !header.isMobile}
             assetLayout={screen === "assets"}
             showSearch={
               !hideSearch &&

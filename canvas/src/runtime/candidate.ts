@@ -13,11 +13,11 @@ import { validateCanvasRoots } from "../document/canvas-roots.js";
 import { serviceSnapshot, serviceProjection } from "../document/projection.js";
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 const decimal = /^(0|[1-9][0-9]{0,18})$/;
-const failure = (code) =>
+const failure = (code: string) =>
   Object.assign(new Error(code), { code, definitive: true });
 // The transport carries the binary as base64 together with its public projection.
 // Reserve 1 MiB for bindings, the accepted delta and control envelopes.
-function requireSnapshotCapacity(state, projection) {
+function requireSnapshotCapacity(state: Uint8Array, projection: any) {
   if (
     state.byteLength > 8 * 1024 * 1024 ||
     Math.ceil(state.byteLength / 3) * 4 +
@@ -26,7 +26,7 @@ function requireSnapshotCapacity(state, projection) {
   )
     throw failure("STATE_TOO_LARGE");
 }
-export function decodeBinary(value, limit) {
+export function decodeBinary(value: any, limit: number) {
   if (
     typeof value !== "string" ||
     value.length > Math.ceil(limit / 3) * 4 ||
@@ -38,7 +38,7 @@ export function decodeBinary(value, limit) {
     throw failure("INVALID_UPDATE");
   return bytes;
 }
-function binding(request) {
+function binding(request: any) {
   const { documentId, epoch, writerTerm, commitSeq } = request;
   if (
     !uuid.test(documentId) ||
@@ -53,7 +53,7 @@ function binding(request) {
 // Garbage-collected subtrees identify deleted container lifetimes in the public
 // update encoding. Deleted characters within a live XmlText remain Items and
 // continue to support concurrent insertion/deletion; never inspect doc.store.
-function rejectDeletedTargets(state, update) {
+function rejectDeletedTargets(state: Uint8Array, update: Uint8Array) {
   const baseline = Y.decodeUpdate(state);
   let incoming;
   try {
@@ -80,7 +80,7 @@ function rejectDeletedTargets(state, update) {
     )
       removedParents.add(`${item.id.client}:${item.id.clock}`);
   }
-  const overlaps = (client, start, end) => {
+  const overlaps = (client: any, start: number, end: number) => {
     const ranges = garbage.get(client) ?? [];
     let low = 0,
       high = ranges.length;
@@ -91,27 +91,29 @@ function rejectDeletedTargets(state, update) {
     }
     return low < ranges.length && ranges[low][0] < end;
   };
-  const deleted = (id) =>
+  const deleted = (id: any) =>
     id && typeof id === "object" && overlaps(id.client, id.clock, id.clock + 1);
   const known = Y.decodeStateVector(Y.encodeStateVectorFromUpdate(state));
-  for (const item of incoming.structs)
+  for (const item of incoming.structs) {
+    const it = item as any;
     if (
-      item.id.clock + item.length > (known.get(item.id.client) ?? 0) &&
-      (deleted(item.parent) ||
-        (item.parent &&
-          typeof item.parent === "object" &&
-          removedParents.has(`${item.parent.client}:${item.parent.clock}`)) ||
-        deleted(item.origin) ||
-        deleted(item.rightOrigin))
+      it.id.clock + it.length > (known.get(it.id.client) ?? 0) &&
+      (deleted(it.parent) ||
+        (it.parent &&
+          typeof it.parent === "object" &&
+          removedParents.has(`${it.parent.client}:${it.parent.clock}`)) ||
+        deleted(it.origin) ||
+        deleted(it.rightOrigin))
     )
       throw failure("TARGET_DELETED");
+  }
   // Delete sets in state-vector deltas are cumulative. Already committed
   // tombstones are idempotent, not evidence of a new stale edit. Missing clocks
   // are separately rejected by AdmissionGate.requireIntegrated.
 }
 
 /** No database, mutable room, or pre-acceptance broadcast is owned by this process. */
-export async function computeCandidate(action, request) {
+export async function computeCandidate(action: string, request: any): Promise<any> {
   const bound = binding(request);
   if (action === "initialize") {
     const doc = createCanvasDocument(serviceSnapshot(request.document));
@@ -207,9 +209,9 @@ export async function computeCandidate(action, request) {
           nodes: [
             ...request.document.nodes,
             ...(request.restorationNodes ?? []).filter(
-              (n) =>
+              (n: any) =>
                 transition.nodes.includes(n.id) &&
-                !request.document.nodes.some((live) => live.id === n.id),
+                !request.document.nodes.some((live: any) => live.id === n.id),
             ),
           ],
         };
@@ -264,23 +266,23 @@ export async function computeCandidate(action, request) {
 }
 
 // Authority is the committed DTO under Go's CAS fence, never a client's counter.
-function normalizeReferenceLabels(doc, base, transition) {
+function normalizeReferenceLabels(doc: Y.Doc, base: any, transition: any) {
   const previous = new Map<
     string,
     {
       highWater: Record<string, number>;
       allocations: Record<string, { labelKind: string; ordinal: number }>;
     }
-  >(base.nodes.map((n) => [n.id, n.config?.composer?.labelState]));
+  >(base.nodes.map((n: any) => [n.id, n.config?.composer?.labelState]));
   for (const node of readCanvasDocument(doc).graph.nodes) {
     if (transition?.nodes.includes(node.id)) continue;
     if (!node.references) {
       if (!previous.has(node.id) || !previous.get(node.id)) continue;
       // Undoing the first promotion may remove the registry container marker.
       // Keep an empty registry and its accepted label tombstones in Yjs itself.
-      doc
+      (doc
         .getMap("canvas")
-        .get("nodes")
+        .get("nodes") as any)
         .get(node.id)
         .get("data")
         .set("referencesPresent", true);
@@ -315,9 +317,9 @@ function normalizeReferenceLabels(doc, base, transition) {
       }
     }
     if (canonicalJson(labels) !== canonicalJson(node.labelState ?? {}))
-      doc
+      (doc
         .getMap("canvas")
-        .get("nodes")
+        .get("nodes") as any)
         .get(node.id)
         .get("data")
         .set("labelState", labels);
@@ -326,27 +328,27 @@ function normalizeReferenceLabels(doc, base, transition) {
 
 // Node mentions use stable source-node identities, independently of media binding
 // registries. Both public editor paths receive server-assigned display numbers.
-function normalizeNodeReferenceLabels(doc, base, transition) {
+function normalizeNodeReferenceLabels(doc: Y.Doc, base: any, transition: any) {
   const graph = readCanvasDocument(doc).graph,
-    byId = new Map<string, { type: string }>(graph.nodes.map((n) => [n.id, n]));
+    byId = new Map<string, { type: string }>(graph.nodes.map((n: any) => [n.id, n]));
   for (const target of graph.nodes) {
     // The trusted inverse owns every restored field, including legacy nodes
     // whose pre-deletion version did not yet allocate display labels.
     if (transition?.nodes.includes(target.id)) continue;
-    const previous = base.nodes.find((n) => n.id === target.id)?.config?.editor
+    const previous = base.nodes.find((n: any) => n.id === target.id)?.config?.editor
       ?.metadata?.referenceLabels;
     const labels: Record<string, { kind: string; ordinal: number }> =
         structuredClone(previous ?? {}),
-      high = { image: 0, video: 0, audio: 0, text: 0 };
+      high: Record<string, number> = { image: 0, video: 0, audio: 0, text: 0 };
     for (const value of Object.values(labels))
       high[value.kind] = Math.max(high[value.kind] ?? 0, value.ordinal);
     const sourceIDs = graph.connections
-      .filter((e) => e.toNodeId === target.id)
-      .flatMap((e) =>
+      .filter((e: any) => e.toNodeId === target.id)
+      .flatMap((e: any) =>
         byId.get(e.fromNodeId)?.type === "group"
           ? graph.nodes
-              .filter((n) => n.parentId === e.fromNodeId)
-              .map((n) => n.id)
+              .filter((n: any) => n.parentId === e.fromNodeId)
+              .map((n: any) => n.id)
           : [e.fromNodeId],
       )
       .sort();
@@ -361,14 +363,14 @@ function normalizeNodeReferenceLabels(doc, base, transition) {
     }
     if (Object.keys(labels).length > 10000)
       throw failure("REFERENCE_LABEL_LIMIT");
-    const shared = doc.getMap("canvas").get("nodes").get(target.id);
+    const shared: any = (doc.getMap("canvas").get("nodes") as any)?.get(target.id);
     const labelPrefix: Record<string, string> = {
       image: "图片",
       video: "参考视频",
       audio: "参考音频",
       text: "文本",
     };
-    const walk = (element) => {
+    const walk = (element: any) => {
       if (element instanceof Y.XmlElement && element.nodeName === "mention") {
         const allocation = labels[element.getAttribute("id")];
         if (allocation) {
@@ -382,16 +384,16 @@ function normalizeNodeReferenceLabels(doc, base, transition) {
       if (element instanceof Y.XmlElement || element instanceof Y.XmlFragment)
         for (const child of element.toArray()) walk(child);
     };
-    if (shared.get("body")) walk(shared.get("body"));
+    if (shared?.get("body")) walk(shared.get("body"));
     if (
       (Object.keys(labels).length || target.referenceLabels) &&
       canonicalJson(labels) !== canonicalJson(target.referenceLabels ?? {})
     )
-      doc
+      (doc
         .getMap("canvas")
-        .get("nodes")
-        .get(target.id)
-        .get("data")
-        .set("referenceLabels", labels);
+        .get("nodes") as any)
+        ?.get(target.id)
+        ?.get("data")
+        ?.set("referenceLabels", labels);
   }
 }

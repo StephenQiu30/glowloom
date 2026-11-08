@@ -1,11 +1,12 @@
 import * as Y from "yjs";
 
 const prefix = "__tiptap_position_migrations:item:";
-const number = (value) => Number.isSafeInteger(value) && value >= 0;
+const number = (value: unknown): value is number =>
+  Number.isSafeInteger(value) && (value as number) >= 0;
 const invalid = (code = "INVALID_EDITOR_METADATA"): never => {
   throw Object.assign(new Error(code), { code, definitive: true });
 };
-const shape = (value, required: string[], optional: string[] = []) =>
+const shape = (value: any, required: string[], optional: string[] = []): boolean =>
   value !== null &&
   typeof value === "object" &&
   Object.getPrototypeOf(value) === Object.prototype &&
@@ -13,11 +14,11 @@ const shape = (value, required: string[], optional: string[] = []) =>
   Object.keys(value).every(
     (key) => required.includes(key) || optional.includes(key),
   );
-const boundary = (value) =>
+const boundary = (value: unknown) =>
   value === undefined || value === "start" || value === "end";
 
 /** The pinned y-tiptap plugin stores position transfers outside the business root. */
-export function validateCanvasRoots(doc) {
+export function validateCanvasRoots(doc: Y.Doc) {
   const roots = [...doc.share.keys()].filter((name) => name !== "canvas");
   if (!roots.length) return;
   const clocks = Y.decodeStateVector(Y.encodeStateVector(doc));
@@ -26,7 +27,7 @@ export function validateCanvasRoots(doc) {
     budget -= amount;
     if (budget < 0) invalid();
   };
-  const integrated = (id, length = 0) =>
+  const integrated = (id: any, length = 0) =>
     shape(id, ["client", "clock"], ["length", "boundary"]) &&
     number(id.client) &&
     number(id.clock) &&
@@ -56,9 +57,9 @@ export function validateCanvasRoots(doc) {
       invalid();
   }
   for (const name of roots) {
-    let store;
+    let store: Y.Map<any> = null as any;
     try {
-      store = doc.getMap(name);
+      store = doc.getMap(name) as Y.Map<any>;
     } catch {
       invalid();
     }

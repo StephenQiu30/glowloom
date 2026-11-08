@@ -3,7 +3,7 @@ import { normalizeRichText } from "./rich-text-schema.js";
 
 // In-memory editor DTOs include absent optional properties as undefined. Match
 // the wire JSON representation before entering the canonical shared graph.
-const clone = (v) => {
+const clone = (v: any): any => {
   if (Array.isArray(v)) return v.map((item) => clone(item ?? null));
   if (v && typeof v === "object")
     return Object.fromEntries(
@@ -13,10 +13,10 @@ const clone = (v) => {
     );
   return v;
 };
-const equal = (a, b) => canonicalJson(a) === canonicalJson(b);
+const equal = (a: any, b: any) => canonicalJson(a) === canonicalJson(b);
 const serverFields = ["content_version", "input_revision", "last_operation_id"];
 const emptyDocument = () => ({ type: "doc", content: [{ type: "paragraph" }] });
-function textDocument(node) {
+function textDocument(node: any) {
   const stored = node.config?.rich_text ?? node.config?.editor?.document;
   if (stored)
     return { schemaVersion: 1, content: normalizeRichText(stored.content) };
@@ -33,7 +33,7 @@ function textDocument(node) {
   return { schemaVersion: 1, content: normalizeRichText(content) };
 }
 /** Go controls authorization/revisions; only graph fields enter the shared document. */
-export function serviceSnapshot(dto) {
+export function serviceSnapshot(dto: any) {
   if (
     dto.schema_version !== 1 ||
     dto.operation_version !== 1 ||
@@ -48,7 +48,7 @@ export function serviceSnapshot(dto) {
       serviceVersion: 1,
       documentId: dto.id,
       projectId: dto.project_id,
-      nodes: dto.nodes.map((source) => {
+      nodes: dto.nodes.map((source: any) => {
         const native = clone(source),
           config = native.config ?? {},
           editor = config.editor;
@@ -107,7 +107,7 @@ export function serviceSnapshot(dto) {
           ...(body ? { textDocument: body } : {}),
         };
       }),
-      connections: dto.edges.map((edge) => ({
+      connections: dto.edges.map((edge: any) => ({
         id: edge.id,
         fromNodeId: edge.source_node_id,
         toNodeId: edge.target_node_id,
@@ -116,7 +116,7 @@ export function serviceSnapshot(dto) {
     },
   };
 }
-function composerProjection(content, original?) {
+function composerProjection(content: any, original?: any) {
   // The shared native config intentionally omits the derived document/registry.
   // A newly materialized shell must still project a complete service composer.
   const composer = {
@@ -140,7 +140,7 @@ function composerProjection(content, original?) {
       inline = [];
     }
   };
-  const visit = (part) => {
+  const visit = (part: any) => {
     if (part.type === "text" && part.text)
       inline.push({ type: "text", text: part.text });
     else if (part.type === "hardBreak") inline.push({ type: "hardBreak" });
@@ -171,15 +171,15 @@ function composerProjection(content, original?) {
   return composer;
 }
 /** Projection uses the current authorized DTO for server-owned versions, never client claims. */
-export function serviceProjection(snapshot, base) {
+export function serviceProjection(snapshot: any, base: any) {
   if (
     snapshot.graph.serviceVersion !== 1 ||
     snapshot.graph.documentId !== base.id ||
     snapshot.graph.projectId !== base.project_id
   )
     throw new Error("DOCUMENT_IDENTITY_MISMATCH");
-  const previous = new Map<string, any>(base.nodes.map((n) => [n.id, n]));
-  const nodes = snapshot.graph.nodes.map((node) => {
+  const previous = new Map<string, any>(base.nodes.map((n: any) => [n.id, n]));
+  const nodes = snapshot.graph.nodes.map((node: any) => {
     const original = previous.get(node.id),
       native = clone(node.native),
       config = native.config ?? {};
@@ -259,7 +259,7 @@ export function serviceProjection(snapshot, base) {
     ...clone(base),
     name: snapshot.title,
     nodes,
-    edges: snapshot.graph.connections.map((edge) => ({
+    edges: snapshot.graph.connections.map((edge: any) => ({
       ...clone(edge.native),
       id: edge.id,
       source_node_id: edge.fromNodeId,

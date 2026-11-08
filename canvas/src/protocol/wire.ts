@@ -3,10 +3,10 @@ import { base64, unbase64, sha256 } from "./binary.js";
 const CHUNK_BYTES = 384 * 1024;
 const MAX_BYTES = 16 * 1024 * 1024;
 const MAX_DURATION = 30000;
-const fail = (message) => new Error(message);
+const fail = (message: string) => new Error(message);
 
 /** The logical message budget is independent of the existing 1MiB Netty frame budget. */
-export async function wireFrames(message, maxBytes = MAX_BYTES) {
+export async function wireFrames(message: unknown, maxBytes = MAX_BYTES) {
   const bytes = new TextEncoder().encode(JSON.stringify(message));
   if (!bytes.length || bytes.length > maxBytes) throw fail("WIRE_BUDGET");
   const id = crypto.randomUUID(),
@@ -51,7 +51,7 @@ export class WireAssembler {
     this.transfer = null;
   }
 
-  async accept(frame) {
+  async accept(frame: any) {
     if (this.transfer && this.now() - this.transfer.started > MAX_DURATION)
       this.clear();
     try {

@@ -36,7 +36,7 @@ type Reservation struct {
 }
 
 // Validate checks project scope, amount, and closure timestamps.
-func (r Reservation) Validate() error {
+func (r *Reservation) Validate() error {
 	if r.ID == uuid.Nil || r.ProjectID == uuid.Nil || r.OperationID == uuid.Nil ||
 		r.AmountMicros < 0 || r.CreateTime.IsZero() {
 		return ErrInvalidReservation

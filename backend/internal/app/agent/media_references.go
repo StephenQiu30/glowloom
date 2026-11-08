@@ -161,12 +161,12 @@ func (b *Boundary) executeMediaReference(ctx context.Context, in domain.CallInpu
 }
 
 type referenceReader struct {
-	context context.Context
-	reader  io.Reader
+	ctx    context.Context
+	reader io.Reader
 }
 
 func (r referenceReader) Read(p []byte) (int, error) {
-	if err := r.context.Err(); err != nil {
+	if err := r.ctx.Err(); err != nil {
 		return 0, err
 	}
 	return r.reader.Read(p)

@@ -2,16 +2,16 @@ import { createHash } from "node:crypto";
 import * as Y from "yjs";
 import { canonicalJson } from "../document/canonical.js";
 
-const failure = (code, message = code) =>
+const failure = (code: string, message = code) =>
   Object.assign(new Error(message), {
     code,
     definitive: !["CONTENTION_LIMIT", "STATE_TOO_LARGE"].includes(code),
   });
-export const digest = (bytes) =>
+export const digest = (bytes: Uint8Array | string) =>
   createHash("sha256").update(bytes).digest("hex");
 
 /** Public update decoding plus integrated clocks; no private Yjs store fields. */
-function requireIntegrated(doc, decoded) {
+function requireIntegrated(doc: Y.Doc, decoded: any) {
   const clocks = Y.decodeStateVector(Y.encodeStateVector(doc));
   for (const item of decoded.structs) {
     if ((clocks.get(item.id.client) ?? 0) < item.id.clock + item.length)
@@ -27,21 +27,21 @@ function requireIntegrated(doc, decoded) {
 /** Admission primitive only. The durable adapter owns authorization, CAS and Outbox. */
 export class AdmissionGate {
   declare private store: {
-    receipt(scope, updateId): Promise<any>;
-    load(scope): Promise<any>;
-    commit(scope, candidate): Promise<any>;
+    receipt(scope: any, updateId: string): Promise<any>;
+    load(scope: any): Promise<any>;
+    commit(scope: any, candidate: any): Promise<any>;
   };
   declare private project: (doc: Y.Doc) => unknown;
-  declare private validate: (candidate, context) => unknown;
-  declare private authorize: (scope) => boolean | Promise<boolean>;
-  declare private broadcast: (scope, result) => void | Promise<void>;
+  declare private validate: (candidate: any, context: any) => unknown;
+  declare private authorize: (scope: any) => boolean | Promise<boolean>;
+  declare private broadcast: (scope: any, result: any) => void | Promise<void>;
   declare private onPublishError: (error: unknown, receipt: unknown) => void;
   declare private maxUpdateBytes: number;
   declare private maxStructs: number;
   declare private maxStateBytes: number;
   declare private maxRetries: number;
   declare private inspectDocument?: (doc: Y.Doc) => unknown;
-  declare private validateTransition?: (inspection, doc: Y.Doc) => unknown;
+  declare private validateTransition?: (inspection: any, doc: Y.Doc) => unknown;
   declare private validateRoots?: (doc: Y.Doc) => void;
   declare private allowedRoots: Set<string>;
 
@@ -94,7 +94,7 @@ export class AdmissionGate {
     this.allowedRoots = new Set(allowedRoots);
   }
 
-  async submit(scope, request) {
+  async submit(scope: any, request: any) {
     if (!(await this.authorize(scope))) throw failure("FORBIDDEN");
     if (request.epoch !== scope.epoch) throw failure("EPOCH_CHANGED");
     if (

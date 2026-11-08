@@ -361,6 +361,8 @@ button:not(:disabled),
   overflow: hidden;
 }
 .product-content {
+  position: relative;
+  isolation: isolate;
   container: product-content / inline-size;
   min-width: 0;
   min-height: 0;
@@ -603,6 +605,16 @@ button:not(:disabled),
   flex-shrink: 0;
   align-items: center;
   gap: 8px;
+}
+.product-global-actions {
+  position: absolute;
+  inset-block-start: 20px;
+  inset-inline-end: 20px;
+  z-index: 10;
+  width: max-content;
+}
+.product-global-actions .product-header-location {
+  display: none;
 }
 
 /* Shared navigation: Figma 3280:64554, measured against the 2026-10-30 source. */
@@ -1018,7 +1030,9 @@ button:not(:disabled),
 }
 
 .home-page {
-  padding: 0 var(--layout-content-x) var(--layout-content-y);
+  --home-hero-padding-top: 68px;
+  padding: var(--home-hero-padding-top) var(--layout-content-x)
+    var(--layout-content-y);
 }
 .creation-hero {
   max-width: 1014px;

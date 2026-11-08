@@ -12,12 +12,12 @@ import {
 } from "@tiptap/y-tiptap";
 import { normalizeRichText, richTextSchema } from "./rich-text-schema.js";
 
-export function canvasGraphHash(graph) {
+export function canvasGraphHash(graph: any) {
   return sha256(new TextEncoder().encode(canonicalGraphJson(graph)));
 }
 
-const copy = (value) => structuredClone(value);
-const fail = (code) => Object.assign(new Error(code), { code });
+const copy = (value: any) => structuredClone(value);
+const fail = (code: string) => Object.assign(new Error(code), { code });
 const emptyText = { type: "doc", content: [{ type: "paragraph" }] };
 const rootFields = new Set([
   "modelVersion",
@@ -37,10 +37,10 @@ const nodeFields = new Set([
   "parameters",
 ]);
 
-function map(value) {
+function map(value: any) {
   return new Y.Map(Object.entries(copy(value)));
 }
-function root(doc) {
+function root(doc: Y.Doc) {
   const value = doc.getMap("canvas");
   for (const key of value.keys())
     if (!rootFields.has(key)) throw fail("UNREGISTERED_FIELD");
@@ -52,7 +52,7 @@ function root(doc) {
   return value;
 }
 
-function validateRestoration(value) {
+function validateRestoration(value: any) {
   if (value === null) return;
   if (
     !value ||
@@ -83,17 +83,17 @@ function validateRestoration(value) {
     throw fail("INVALID_RESTORATION");
 }
 
-function anchor(type) {
+function anchor(type: any) {
   const position = Y.createRelativePositionFromTypeIndex(type, 0);
   return JSON.stringify(position.type ?? position.tname);
 }
 
 /** Stable container identity through the public relative-position API. */
-export function inspectCanvasDocument(doc) {
+export function inspectCanvasDocument(doc: Y.Doc) {
   const canvas = root(doc);
-  const inspect = (collection, nodes) =>
+  const inspect = (collection: any, nodes: boolean) =>
     Object.fromEntries(
-      [...collection.entries()].map(([id, value]) => {
+      [...collection.entries()].map(([id, value]: [string, any]) => {
         if (!(value instanceof Y.Map)) throw fail("INVALID_CANVAS_MODEL");
         const entry: Record<string, unknown> = { self: anchor(value) };
         if (nodes) {
@@ -124,14 +124,14 @@ export function inspectCanvasDocument(doc) {
         anchor(canvas.get(name)),
       ]),
     ),
-    properties: copy(canvas.get("properties").toJSON()),
+    properties: copy((canvas.get("properties") as any).toJSON()),
     restoration: copy(canvas.get("restoration")),
     nodes: inspect(canvas.get("nodes"), true),
     connections: inspect(canvas.get("connections"), false),
   };
 }
 
-export function validateCanvasTransition(before, doc) {
+export function validateCanvasTransition(before: any, doc: Y.Doc) {
   const after = inspectCanvasDocument(doc);
   const restoration = equal(before.restoration, after.restoration)
     ? null
@@ -140,11 +140,11 @@ export function validateCanvasTransition(before, doc) {
     throw fail("READ_ONLY_PROPERTY");
   if (!equal(before.containers, after.containers))
     throw fail("REPLACED_SHARED_TYPE");
-  for (const name of ["nodes", "connections"])
+  for (const name of ["nodes", "connections"] as const)
     for (const [id, previous] of Object.entries<Record<string, unknown>>(
       before[name],
     )) {
-      const next = after[name][id];
+      const next: any = (after as any)[name][id];
       if (!next) continue;
       for (const field of [
         "self",
@@ -170,24 +170,24 @@ export function validateCanvasTransition(before, doc) {
 }
 
 // DTOs may omit optional fields with undefined; compare their JSON value, independent of key order.
-const jsonValue = (value) => {
-  if (!value || typeof value !== "object" || JSON.isRawJSON(value))
+const jsonValue = (value: any): any => {
+  if (!value || typeof value !== "object" || (JSON as any).isRawJSON?.(value))
     return value;
   if (Array.isArray(value))
-    return value.map((item) => (item === undefined ? null : jsonValue(item)));
+    return value.map((item: any) => (item === undefined ? null : jsonValue(item)));
   return Object.fromEntries(
     Object.entries(value)
       .filter(([, item]) => item !== undefined)
       .map(([key, item]) => [key, jsonValue(item)]),
   );
 };
-const equal = (a, b) =>
+const equal = (a: any, b: any) =>
   a === b ||
   (a !== undefined &&
     b !== undefined &&
     canonicalJson(jsonValue(a)) === canonicalJson(jsonValue(b)));
 
-function updateFields(target, before, after, immutable: string[] = []) {
+function updateFields(target: any, before: any, after: any, immutable: string[] = []) {
   for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
     if (equal(before[key], after[key])) continue;
     if (immutable.includes(key)) throw fail("IMMUTABLE_FIELD");
@@ -196,24 +196,24 @@ function updateFields(target, before, after, immutable: string[] = []) {
   }
 }
 
-function referenceData(data, references) {
+function referenceData(data: any, references: any) {
   if (!references) return data;
   if (
     !Array.isArray(references) ||
     references.length > 255 ||
-    new Set(references.map((r) => r.id)).size !== references.length
+    new Set(references.map((r: any) => r.id)).size !== references.length
   )
     throw fail("INVALID_REFERENCES");
   return {
     ...data,
     referencesPresent: true,
     ...Object.fromEntries(
-      references.map((r) => ["reference:" + r.id, copy(r)]),
+      references.map((r: any) => ["reference:" + r.id, copy(r)]),
     ),
   };
 }
 
-function nodeParts(source) {
+function nodeParts(source: any) {
   const {
     position,
     parentId,
@@ -239,7 +239,7 @@ function nodeParts(source) {
   };
 }
 
-function addParameters(node, source, present = true) {
+function addParameters(node: any, source: any, present = true) {
   if (source.modelSelection) modelIdentity(source.modelSelection.connectionId);
   const { values, ...config } = copy(source);
   const parameters = new Y.Map();
@@ -250,7 +250,7 @@ function addParameters(node, source, present = true) {
   parameters.set("values", map(values ?? {}));
 }
 
-function patchParameters(node, before, after) {
+function patchParameters(node: any, before: any, after: any) {
   if (equal(before, after)) return;
   if (!before) {
     if (!node.get("parameters")) {
@@ -272,9 +272,9 @@ function patchParameters(node, before, after) {
 
 /** Apply only explicit local differences against the last rendered projection. */
 export function applyCanvasChanges(
-  doc,
-  before,
-  after,
+  doc: Y.Doc,
+  before: any,
+  after: any,
   origin = "local-canvas",
 ) {
   after = copy(after);
@@ -291,16 +291,16 @@ export function applyCanvasChanges(
   } = after.graph;
   if (!equal(previousProperties, nextProperties))
     throw fail("READ_ONLY_PROPERTY");
-  const prepare = (previous, next, name) => {
-    if (new Set(next.map((n) => n.id)).size !== next.length)
+  const prepare = (previous: any[], next: any[], name: "nodes" | "connections") => {
+    if (new Set(next.map((n: any) => n.id)).size !== next.length)
       throw fail("DUPLICATE_IDENTITY");
-    const collection = canvas.get(name),
-      old = new Map(previous.map((item) => [item.id, item]));
-    const ids = new Set(next.map((item) => item.id));
+    const collection = canvas.get(name) as any,
+      old = new Map(previous.map((item: any) => [item.id, item]));
+    const ids = new Set(next.map((item: any) => item.id));
     const actions: (() => void)[] = [];
     for (const item of previous)
       if (!ids.has(item.id)) actions.push(() => collection.delete(item.id));
-    next.forEach((item, order) => {
+    next.forEach((item: any, order: number) => {
       if (item.parameters?.modelSelection)
         modelIdentity(item.parameters.modelSelection.connectionId);
       const baseline = old.get(item.id),
@@ -317,7 +317,7 @@ export function applyCanvasChanges(
       }
       if (
         equal(baseline, item) &&
-        previous.findIndex((p) => p.id === item.id) === order
+        previous.findIndex((p: any) => p.id === item.id) === order
       )
         return;
       if (!current) throw fail("TARGET_DELETED");
@@ -329,7 +329,7 @@ export function applyCanvasChanges(
           if (!equal(a.data[key], b.data[key])) throw fail("IMMUTABLE_FIELD");
         if (!equal(a.textDocument, b.textDocument)) {
           const actual = readCanvasDocument(doc).graph.nodes.find(
-            (n) => n.id === item.id,
+            (n: any) => n.id === item.id,
           )?.textDocument;
           if (!equal(actual, b.textDocument)) throw fail("USE_TEXT_BINDING");
         }
@@ -346,7 +346,7 @@ export function applyCanvasChanges(
         });
       } else if (!equal(baseline, item))
         actions.push(() => current.set("data", copy(item)));
-      if (previous.findIndex((p) => p.id === item.id) !== order)
+      if (previous.findIndex((p: any) => p.id === item.id) !== order)
         actions.push(() => current.set("order", order));
     });
     return actions;
@@ -362,15 +362,15 @@ export function applyCanvasChanges(
   }, origin);
 }
 
-export function nodeTextBinding(doc, nodeId) {
-  const node = root(doc).get("nodes").get(nodeId);
+export function nodeTextBinding(doc: Y.Doc, nodeId: string) {
+  const node = (root(doc).get("nodes") as any).get(nodeId);
   if (!node) throw fail("TARGET_DELETED");
   const fragment = node.get("body");
   if (!(fragment instanceof Y.XmlFragment)) throw fail("NO_TEXT_FIELD");
   return {
     fragment,
     markChanged: () => {
-      if (root(doc).get("nodes").get(nodeId) !== node)
+      if ((root(doc).get("nodes") as any).get(nodeId) !== node)
         throw fail("TARGET_DELETED");
       if (!node.get("documentPresent"))
         doc.transact(() => node.set("documentPresent", true), "local-text");
@@ -379,7 +379,7 @@ export function nodeTextBinding(doc, nodeId) {
 }
 
 /** Explicitly chosen private recovery only. Ordinary graph rendering must use the text binding. */
-function applyExplicitCanvasReplacement(doc, before, after) {
+function applyExplicitCanvasReplacement(doc: Y.Doc, before: any, after: any) {
   const probe = createCanvasDocument(after);
   probe.destroy();
   const graphOnly = copy(after),
@@ -389,10 +389,10 @@ function applyExplicitCanvasReplacement(doc, before, after) {
       present: boolean;
     }[] = [];
   for (const node of graphOnly.graph.nodes) {
-    const old = before.graph.nodes.find((value) => value.id === node.id);
+    const old = before.graph.nodes.find((value: any) => value.id === node.id);
     if (!old || equal(old.textDocument, node.textDocument)) continue;
     const content = normalizeRichText(node.textDocument?.content ?? emptyText);
-    const shared = root(doc).get("nodes").get(node.id);
+    const shared = (root(doc).get("nodes") as any).get(node.id);
     if (!(shared?.get("body") instanceof Y.XmlFragment))
       throw fail("NO_TEXT_FIELD");
     texts.push({ shared, content, present: !!node.textDocument });
@@ -419,16 +419,16 @@ function applyExplicitCanvasReplacement(doc, before, after) {
 }
 
 /** Private recovery applies an explicitly selected complete baseline. */
-export function applyRecoveredCanvasChanges(doc, before, after) {
+export function applyRecoveredCanvasChanges(doc: Y.Doc, before: any, after: any) {
   return applyExplicitCanvasReplacement(doc, before, after);
 }
 /** A Go-authorized semantic command has strict revision/CAS acceptance. */
-export function applyCommandCanvasChanges(doc, before, after) {
+export function applyCommandCanvasChanges(doc: Y.Doc, before: any, after: any) {
   return applyExplicitCanvasReplacement(doc, before, after);
 }
 
 /** Graph commands have a separate history from Tiptap's ySyncPluginKey transactions. */
-export function canvasUndoManager(doc) {
+export function canvasUndoManager(doc: Y.Doc) {
   return new Y.UndoManager(root(doc), {
     trackedOrigins: new Set(["local-canvas"]),
     captureTimeout: 500,
@@ -436,19 +436,19 @@ export function canvasUndoManager(doc) {
 }
 
 /** Explicit entity restoration is a protocol fact inside the same frozen binary batch. */
-export function applyCanvasHistory(doc, manager, direction, scope) {
+export function applyCanvasHistory(doc: Y.Doc, manager: Y.UndoManager, direction: "undo" | "redo", scope: any) {
   if (!["undo", "redo"].includes(direction))
     throw fail("INVALID_HISTORY_ACTION");
   const before = readCanvasDocument(doc);
   manager.stopCapturing();
   manager[direction]();
   const after = readCanvasDocument(doc),
-    restored = { nodes: [] as string[], connections: [] as string[] };
-  for (const name of ["nodes", "connections"]) {
-    const previous = new Set(before.graph[name].map((value) => value.id));
+    restored: { nodes: string[]; connections: string[] } = { nodes: [], connections: [] };
+  for (const name of ["nodes", "connections"] as const) {
+    const previous = new Set(before.graph[name].map((value: any) => value.id));
     restored[name] = after.graph[name]
-      .filter((value) => !previous.has(value.id))
-      .map((value) => value.id)
+      .filter((value: any) => !previous.has(value.id))
+      .map((value: any) => value.id)
       .sort();
   }
   if (restored.nodes.length || restored.connections.length) {
@@ -467,7 +467,7 @@ export function applyCanvasHistory(doc, manager, direction, scope) {
   return restored;
 }
 
-function addNode(collection, source, order) {
+function addNode(collection: any, source: any, order: number) {
   const {
     position,
     parentId,
@@ -508,7 +508,7 @@ function addNode(collection, source, order) {
 }
 
 /** One-time creation only. A browser must hydrate committed binary state instead. */
-export function createCanvasDocument({ title, graph }) {
+export function createCanvasDocument({ title, graph }: { title: string; graph: any }) {
   if (
     graph.schemaVersion !== 2 ||
     !Array.isArray(graph.nodes) ||
@@ -516,8 +516,8 @@ export function createCanvasDocument({ title, graph }) {
   )
     throw fail("INVALID_GRAPH");
   if (
-    new Set(graph.nodes.map((n) => n.id)).size !== graph.nodes.length ||
-    new Set(graph.connections.map((e) => e.id)).size !==
+    new Set(graph.nodes.map((n: any) => n.id)).size !== graph.nodes.length ||
+    new Set(graph.connections.map((e: any) => e.id)).size !==
       graph.connections.length
   )
     throw fail("DUPLICATE_IDENTITY");
@@ -534,8 +534,8 @@ export function createCanvasDocument({ title, graph }) {
         edgeMap = new Y.Map();
       canvas.set("nodes", nodeMap);
       canvas.set("connections", edgeMap);
-      nodes.forEach((node, index) => addNode(nodeMap, node, index));
-      connections.forEach((edge, order) =>
+      nodes.forEach((node: any, index: number) => addNode(nodeMap, node, index));
+      connections.forEach((edge: any, order: number) =>
         edgeMap.set(edge.id, map({ data: edge, order })),
       );
     }, "initialize");
@@ -546,22 +546,22 @@ export function createCanvasDocument({ title, graph }) {
   }
 }
 
-function ordered(collection) {
+function ordered(collection: any) {
   return [...collection.entries()]
     .sort(
-      ([aid, a], [bid, b]) =>
+      ([aid, a]: [string, any], [bid, b]: [string, any]) =>
         a.get("order") - b.get("order") || (aid < bid ? -1 : aid > bid ? 1 : 0),
     )
     .map(([, item]) => item);
 }
 
-export function readCanvasDocument(doc) {
+export function readCanvasDocument(doc: Y.Doc) {
   const canvas = root(doc);
   return {
-    title: canvas.get("title"),
+    title: canvas.get("title") as string,
     graph: {
-      ...copy(canvas.get("properties").toJSON()),
-      nodes: ordered(canvas.get("nodes")).map((node) => {
+      ...copy((canvas.get("properties") as any).toJSON()),
+      nodes: ordered(canvas.get("nodes")).map((node: any) => {
         const data = copy(node.get("data").toJSON());
         const references = Object.entries<{ id: string; order: number }>(
           data,
@@ -606,7 +606,7 @@ export function readCanvasDocument(doc) {
           ...text,
         };
       }),
-      connections: ordered(canvas.get("connections")).map((edge) =>
+      connections: ordered(canvas.get("connections")).map((edge: any) =>
         copy(edge.get("data")),
       ),
     },

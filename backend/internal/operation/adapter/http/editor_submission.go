@@ -52,11 +52,32 @@ func (h *SubmissionHandler) Current(c *gin.Context) {
 	}
 	source := promptdomain.InputSource{Kind: c.Query("owner_kind")}
 	if source.Kind == "prompt_draft" {
-		source.DraftID, _ = uuid.Parse(c.Query("draft_id"))
+		if raw := c.Query("draft_id"); raw != "" {
+			draftID, err := uuid.Parse(raw)
+			if err != nil {
+				httpapi.WriteProblem(c, 400, "invalid_draft_id", nil)
+				return
+			}
+			source.DraftID = draftID
+		}
 		source.Revision = 1
 	} else {
-		source.CanvasID, _ = uuid.Parse(c.Query("canvas_id"))
-		source.NodeID, _ = uuid.Parse(c.Query("node_id"))
+		if raw := c.Query("canvas_id"); raw != "" {
+			canvasID, err := uuid.Parse(raw)
+			if err != nil {
+				httpapi.WriteProblem(c, 400, "invalid_canvas_id", nil)
+				return
+			}
+			source.CanvasID = canvasID
+		}
+		if raw := c.Query("node_id"); raw != "" {
+			nodeID, err := uuid.Parse(raw)
+			if err != nil {
+				httpapi.WriteProblem(c, 400, "invalid_node_id", nil)
+				return
+			}
+			source.NodeID = nodeID
+		}
 		source.CanvasRevision = 1
 		source.InputRevision = 1
 	}

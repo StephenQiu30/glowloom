@@ -29,7 +29,7 @@ export const richTextSchema = getSchema([
   mention,
   reference,
 ]);
-const attrs = {
+const attrs: Record<string, string[]> = {
   paragraph: ["textAlign"],
   heading: ["level", "textAlign"],
   orderedList: ["start"],
@@ -40,9 +40,9 @@ const attrs = {
 };
 
 /** Remove editor-only attributes, never silently discard unknown business data. */
-export function persistentRichText(value) {
+export function persistentRichText(value: any) {
   const node = structuredClone(value);
-  const walk = (item, depth = 0) => {
+  const walk = (item: any, depth = 0) => {
     if (depth > 32 || !item || typeof item !== "object")
       throw new Error("INVALID_RICH_TEXT");
     if (
@@ -78,14 +78,14 @@ export function persistentRichText(value) {
       }
       if (!Object.keys(item.attrs).length) delete item.attrs;
     }
-    if (item.content) item.content.forEach((child) => walk(child, depth + 1));
-    if (item.marks) item.marks.forEach((mark) => walk(mark, depth + 1));
+    if (item.content) item.content.forEach((child: any) => walk(child, depth + 1));
+    if (item.marks) item.marks.forEach((mark: any) => walk(mark, depth + 1));
   };
   walk(node);
   return node;
 }
 
-export function normalizeRichText(value) {
+export function normalizeRichText(value: any) {
   const input = persistentRichText(value);
   const node = richTextSchema.nodeFromJSON(input);
   node.check();

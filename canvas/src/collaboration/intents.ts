@@ -1,12 +1,12 @@
 import { canonicalJson } from "../document/canonical.js";
 
-const copy = (value) => structuredClone(value);
-const cell = (value, exists = value !== undefined) =>
+const copy = (value: any) => structuredClone(value);
+const cell = (value: any, exists = value !== undefined) =>
   exists ? { exists: true, value: copy(value) } : { exists: false };
-const equal = (left, right) => canonicalJson(left) === canonicalJson(right);
-const key = (value) =>
+const equal = (left: any, right: any) => canonicalJson(left) === canonicalJson(right);
+const key = (value: any) =>
   JSON.stringify([value.collection, value.id, value.field]);
-const pairs = {
+const pairs: Record<string, string[]> = {
   placement: ["position", "parentId"],
   size: ["width", "height"],
 };
@@ -23,14 +23,14 @@ const fields = [
   // value. Keep its semantic intent at the same atomic boundary for recovery.
   "native",
 ];
-const nodeMap = (snapshot) =>
-  new Map<string, any>(snapshot.graph.nodes.map((node) => [node.id, node]));
-const edgeMap = (snapshot) =>
+const nodeMap = (snapshot: any) =>
+  new Map<string, any>(snapshot.graph.nodes.map((node: any) => [node.id, node]));
+const edgeMap = (snapshot: any) =>
   new Map<string, any>(
-    snapshot.graph.connections.map((edge) => [edge.id, edge]),
+    snapshot.graph.connections.map((edge: any) => [edge.id, edge]),
   );
 
-function nodeCell(node, field) {
+function nodeCell(node: any, field: string) {
   if (!node) return cell(undefined);
   if (field === "entity") return cell(node);
   if (field.startsWith("value:")) {
@@ -42,15 +42,15 @@ function nodeCell(node, field) {
     return cell(
       Object.fromEntries(
         pairs[field]
-          .filter((name) => Object.hasOwn(node, name))
-          .map((name) => [name, node[name]]),
+          .filter((name: string) => Object.hasOwn(node, name))
+          .map((name: string) => [name, node[name]]),
       ),
     );
   if (!fields.includes(field)) throw new Error("INVALID_SEMANTIC_FIELD");
   return cell(node[field], Object.hasOwn(node, field));
 }
 
-export function readIntent(snapshot, intent) {
+export function readIntent(snapshot: any, intent: any) {
   if (intent.collection === "canvas" && intent.field === "title")
     return cell(snapshot.title);
   if (intent.collection === "nodes")
@@ -60,7 +60,7 @@ export function readIntent(snapshot, intent) {
   throw new Error("INVALID_SEMANTIC_FIELD");
 }
 
-function setOwn(target, field, value) {
+function setOwn(target: any, field: string, value: any) {
   if (value.exists)
     Object.defineProperty(target, field, {
       value: copy(value.value),
@@ -70,7 +70,7 @@ function setOwn(target, field, value) {
     });
   else delete target[field];
 }
-function writeNode(node, field, value) {
+function writeNode(node: any, field: string, value: any) {
   if (pairs[field]) {
     for (const name of pairs[field])
       setOwn(
@@ -91,7 +91,7 @@ function writeNode(node, field, value) {
 }
 
 /** Readable private intent only; the live editor must separately validate and explicitly choose what to submit. */
-export function applyReadableIntents(snapshot, intents) {
+export function applyReadableIntents(snapshot: any, intents: any[]) {
   const result = copy(snapshot);
   for (const intent of intents) {
     if (intent.collection === "canvas" && intent.field === "title") {
@@ -101,7 +101,7 @@ export function applyReadableIntents(snapshot, intents) {
     if (!["nodes", "connections"].includes(intent.collection))
       throw new Error("INVALID_SEMANTIC_FIELD");
     const values = result.graph[intent.collection],
-      index = values.findIndex((value) => value.id === intent.id);
+      index = values.findIndex((value: any) => value.id === intent.id);
     if (intent.field === "entity") {
       if (!intent.after.exists) {
         if (index >= 0) values.splice(index, 1);
@@ -116,12 +116,12 @@ export function applyReadableIntents(snapshot, intents) {
 }
 
 /** Coalesces semantic local changes independently of the immutable binary queue and remote rendering. */
-export function trackIntents(previous, before, after, generation) {
+export function trackIntents(previous: any[], before: any, after: any, generation: number) {
   const pending = new Map<
     string,
     import("../../types/session.js").SemanticIntent
-  >(previous.map((intent) => [key(intent), copy(intent)]));
-  const track = (collection, id, field, prior, next) => {
+  >(previous.map((intent: any) => [key(intent), copy(intent)]));
+  const track = (collection: any, id: string, field: string, prior: any, next: any) => {
     if (equal(prior, next)) return;
     const identity = { collection, id, field },
       old = pending.get(key(identity));
@@ -199,17 +199,17 @@ export function trackIntents(previous, before, after, generation) {
 }
 
 /** Exact ACK prefix bookkeeping. Acceptance of bytes is not proof a competing single-value intent prevailed. */
-export function acknowledgeIntents(pending, frozen, confirmed) {
+export function acknowledgeIntents(pending: any[], frozen: any[], confirmed: any) {
   const accepted = new Map<
     string,
     import("../../types/session.js").SemanticIntent
-  >(frozen.map((intent) => [key(intent), intent]));
+  >(frozen.map((intent: any) => [key(intent), intent]));
   const latest = new Map<
     string,
     import("../../types/session.js").SemanticIntent
-  >(pending.map((intent) => [key(intent), intent]));
+  >(pending.map((intent: any) => [key(intent), intent]));
   const unapplied = frozen
-    .filter((intent) => {
+    .filter((intent: any) => {
       const newer = latest.get(key(intent));
       const actual = readIntent(confirmed, intent);
       if (
@@ -230,16 +230,16 @@ export function acknowledgeIntents(pending, frozen, confirmed) {
         !equal(actual, intent.after)
       );
     })
-    .map((intent) => ({
+    .map((intent: any) => ({
       ...copy(intent),
       actual: readIntent(confirmed, intent),
     }));
   const remaining = pending
-    .filter((intent) => {
+    .filter((intent: any) => {
       const prefix = accepted.get(key(intent));
       return !prefix || intent.generation > prefix.generation;
     })
-    .map((intent) =>
+    .map((intent: any) =>
       accepted.has(key(intent))
         ? { ...copy(intent), before: readIntent(confirmed, intent) }
         : copy(intent),

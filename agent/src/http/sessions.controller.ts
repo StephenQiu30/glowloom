@@ -72,7 +72,9 @@ export class SessionsController {
   @Post('sessions')
   @ApiOperation({ operationId: 'createAgentSession' })
   @ApiResponse({ status: 201, type: SessionView })
-  async createSession(@Body() input: CreateSessionRequest) {
+  async createSession(
+    @Body() input: CreateSessionRequest,
+  ): Promise<SessionView> {
     return checkedResponse(
       SessionView,
       await this.service.createSession(input),
@@ -82,7 +84,7 @@ export class SessionsController {
   @Get('sessions')
   @ApiOperation({ operationId: 'listAgentSessions' })
   @ApiResponse({ status: 200, type: SessionPage })
-  async listSessions(@Query() query: HistoryQuery) {
+  async listSessions(@Query() query: HistoryQuery): Promise<SessionPage> {
     return checkedResponse(SessionPage, await this.service.listSessions(query));
   }
 
@@ -92,7 +94,7 @@ export class SessionsController {
   async readSession(
     @Param() { sid }: SessionParams,
     @Query() identity: IdentityQuery,
-  ) {
+  ): Promise<SessionView> {
     const session = await this.service.readSession(sid, identity);
     if (session === undefined) throw new AgentError('session_not_found');
     return checkedResponse(SessionView, session);
@@ -104,7 +106,7 @@ export class SessionsController {
   async updateSession(
     @Param() { sid }: SessionParams,
     @Body() input: UpdateSessionRequest,
-  ) {
+  ): Promise<SessionView> {
     return checkedResponse(
       SessionView,
       await this.service.updateSession(sid, input),
@@ -117,7 +119,7 @@ export class SessionsController {
   async listRuns(
     @Param() { sid }: SessionParams,
     @Query() query: HistoryQuery,
-  ) {
+  ): Promise<RunPage> {
     return checkedResponse(RunPage, await this.service.listRuns(sid, query));
   }
 
@@ -127,7 +129,7 @@ export class SessionsController {
   async currentSubmission(
     @Param() { sid }: SessionParams,
     @Query() identity: IdentityQuery,
-  ) {
+  ): Promise<CurrentSubmission> {
     return checkedResponse(
       CurrentSubmission,
       await this.service.currentSubmission(sid, identity),
@@ -140,7 +142,7 @@ export class SessionsController {
   async readSubmission(
     @Param() { sid, requestId }: SubmissionParams,
     @Query() identity: IdentityQuery,
-  ) {
+  ): Promise<AcceptedRun> {
     const submission = await this.service.readSubmission(
       sid,
       requestId,
@@ -156,7 +158,7 @@ export class SessionsController {
   async listMessages(
     @Param() { rid }: RunParams,
     @Query() query: MessageQuery,
-  ) {
+  ): Promise<MessagePage> {
     return checkedResponse(
       MessagePage,
       await this.service.listMessages(rid, query),
@@ -169,7 +171,7 @@ export class SessionsController {
   async readMessage(
     @Param() { rid, messageId }: MessageParams,
     @Query() identity: IdentityQuery,
-  ) {
+  ): Promise<PublicMessage> {
     const message = await this.service.readPublicMessage(
       rid,
       messageId,
@@ -186,7 +188,7 @@ export class SessionsController {
   async createRun(
     @Param() { sid }: SessionParams,
     @Body() input: CreateRunRequest,
-  ) {
+  ): Promise<AcceptedRun> {
     return checkedResponse(
       AcceptedRun,
       await this.service.createRun(sid, input),
@@ -196,7 +198,10 @@ export class SessionsController {
   @Get('runs/:rid')
   @ApiOperation({ operationId: 'getAgentRun' })
   @ApiResponse({ status: 200, type: RunSnapshot })
-  async readRun(@Param() { rid }: RunParams, @Query() identity: IdentityQuery) {
+  async readRun(
+    @Param() { rid }: RunParams,
+    @Query() identity: IdentityQuery,
+  ): Promise<RunSnapshot> {
     const run = await this.service.readRun(rid, identity);
     if (run === undefined) throw new AgentError('run_not_found');
     return checkedResponse(RunSnapshot, run);
@@ -206,7 +211,10 @@ export class SessionsController {
   @HttpCode(200)
   @ApiOperation({ operationId: 'applyAgentDecision' })
   @ApiResponse({ status: 200, type: ControlReceipt })
-  async command(@Param() { rid }: RunParams, @Body() input: ControlRequest) {
+  async command(
+    @Param() { rid }: RunParams,
+    @Body() input: ControlRequest,
+  ): Promise<ControlReceipt> {
     return checkedResponse(
       ControlReceipt,
       await this.service.command(rid, input),
@@ -229,7 +237,7 @@ export class SessionsController {
     @Query() identity: IdentityQuery,
     @Headers('last-event-id') lastEventId: string | string[] | undefined,
     @Res() reply: FastifyReply,
-  ) {
+  ): Promise<void> {
     await streamEvents(
       reply,
       this.lifecycle,

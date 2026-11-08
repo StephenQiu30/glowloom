@@ -64,7 +64,7 @@ type Project struct {
 }
 
 // Validate checks the core project specifications before persistence.
-func (p Project) Validate() error {
+func (p *Project) Validate() error {
 	name := strings.TrimSpace(p.Name)
 	if p.ID == uuid.Nil || p.OrgID == uuid.Nil || name == "" ||
 		!utf8.ValidString(p.Name) || utf8.RuneCountInString(p.Name) > 50 ||
@@ -96,7 +96,7 @@ func (p Project) Validate() error {
 }
 
 // CanWrite rejects mutations before publication, during archival, or in the recycle bin.
-func (p Project) CanWrite() error {
+func (p *Project) CanWrite() error {
 	if p.IsDelete || p.Status == ProjectStatusArchived || p.Status == ProjectStatusCopying {
 		return ErrProjectStateConflict
 	}

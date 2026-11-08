@@ -7,20 +7,20 @@ import {
   applyCommandCanvasChanges,
 } from "../document/model.js";
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
-const fail = (code) =>
+const fail = (code: string) =>
   Object.assign(new Error(code), { code, definitive: true });
 // Go persists these identity-addressed collections ordered by UUID; the shared
 // model retains insertion order. Order is not a business field (z_index is).
-function comparableProjection(value) {
+function comparableProjection(value: any) {
   return {
     ...value,
-    nodes: [...value.nodes].sort((a, b) => a.id.localeCompare(b.id)),
-    edges: [...value.edges].sort((a, b) => a.id.localeCompare(b.id)),
+    nodes: [...value.nodes].sort((a: any, b: any) => a.id.localeCompare(b.id)),
+    edges: [...value.edges].sort((a: any, b: any) => a.id.localeCompare(b.id)),
   };
 }
 // Go supplies a domain-validated target at an exact durable prefix. This module
 // applies native shared operations; it never constructs or patches opaque bytes.
-export function prepareCommands(request, state) {
+export function prepareCommands(request: any, state: Uint8Array) {
   if (
     !uuid.test(request.updateId) ||
     !request.projection ||
@@ -72,12 +72,12 @@ export function prepareCommands(request, state) {
     doc.clientID = Number(identity);
     const target = serviceSnapshot(request.projection);
     // A sorted SQL read does not request changes to committed shared order.
-    for (const collection of ["nodes", "connections"]) {
+    for (const collection of ["nodes", "connections"] as const) {
       const order = new Map<string, number>(
-        before.graph[collection].map((item, index) => [item.id, index]),
+        (before.graph as any)[collection].map((item: any, index: number) => [item.id, index]),
       );
-      target.graph[collection].sort(
-        (a, b) =>
+      (target.graph as any)[collection].sort(
+        (a: any, b: any) =>
           (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
           (order.get(b.id) ?? Number.MAX_SAFE_INTEGER),
       );

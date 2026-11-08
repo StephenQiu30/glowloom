@@ -6,7 +6,13 @@ import { base64 } from "../protocol/binary.js";
 import { normalizeRichText } from "../document/rich-text-schema.js";
 
 /** Pure initialization for explicit create/restore/maintenance commands, never a lazy connection migration. */
-export function initializeDocument({ title, graphJson }) {
+export function initializeDocument({
+  title,
+  graphJson,
+}: {
+  title: string;
+  graphJson: string;
+}) {
   if (
     typeof title !== "string" ||
     !title.length ||

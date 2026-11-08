@@ -29,7 +29,7 @@ type LoginGuard struct {
 }
 
 // Locked checks the exclusive end of the temporary lock.
-func (g LoginGuard) Locked(now time.Time) bool { return now.Before(g.LockedUntil) }
+func (g *LoginGuard) Locked(now time.Time) bool { return now.Before(g.LockedUntil) }
 
 // Fail records an allowed attempt without extending an existing lock.
 func (g *LoginGuard) Fail(now time.Time) {

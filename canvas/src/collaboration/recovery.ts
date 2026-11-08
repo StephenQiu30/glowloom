@@ -5,16 +5,16 @@ import { readCanvasDocument } from "../document/model.js";
 import { trackIntents, readIntent, applyReadableIntents } from "./intents.js";
 
 const copy = structuredClone;
-const equal = (a, b) => canonicalJson(a) === canonicalJson(b);
-export const intentKey = (intent) =>
+const equal = (a: any, b: any) => canonicalJson(a) === canonicalJson(b);
+export const intentKey = (intent: any) =>
   JSON.stringify([intent.collection, intent.id, intent.field]);
-const fail = (code) => new Error(code);
-const cell = (value) =>
+const fail = (code: string) => new Error(code);
+const cell = (value: any) =>
   value === undefined
     ? { exists: false }
     : { exists: true, value: copy(value) };
 
-function snapshotOf(initial) {
+function snapshotOf(initial: any) {
   const doc = new Y.Doc();
   try {
     Y.applyUpdate(doc, unbase64(initial.update));
@@ -25,7 +25,7 @@ function snapshotOf(initial) {
 }
 
 /** A device-local atomic handoff, never a binary replay into a different epoch. */
-export function archiveRecovery(record, initial) {
+export function archiveRecovery(record: any, initial: any) {
   if (record.inFlight || record.control) throw fail("ORIGINAL_UNCONFIRMED");
   const sources = copy(record.recoverySources ?? []);
   const privateInput =
@@ -35,10 +35,10 @@ export function archiveRecovery(record, initial) {
     Object.keys(record.forms).length ||
     Object.keys(record.textDrafts).length;
   const attemptSource = sources.find(
-    (source) => source.id === record.recoverySelection?.sourceId,
+    (source: any) => source.id === record.recoverySelection?.sourceId,
   );
   const selectedKeys = new Set(
-    record.recoverySelection?.mappings.map((mapping) => mapping.targetKey) ??
+    record.recoverySelection?.mappings.map((mapping: any) => mapping.targetKey) ??
       [],
   );
   const onlySelectedAttempt =
@@ -46,7 +46,7 @@ export function archiveRecovery(record, initial) {
     record.sealed &&
     !Object.keys(record.forms).length &&
     !Object.keys(record.textDrafts).length &&
-    (record.sealed.intents ?? []).every((intent) =>
+    (record.sealed.intents ?? []).every((intent: any) =>
       selectedKeys.has(intentKey(intent)),
     );
   if (onlySelectedAttempt) {
@@ -112,12 +112,12 @@ export function archiveRecovery(record, initial) {
 }
 
 /** Immutable review values are compared again immediately before applying a selection. */
-export function recoveryFields(source, current) {
+export function recoveryFields(source: any, current: any) {
   const intents = new Map<
     string,
     import("../../types/session.js").SemanticIntent
   >(
-    (source.sealed.intents ?? []).map((intent) => [
+    (source.sealed.intents ?? []).map((intent: any) => [
       intentKey(intent),
       copy(intent),
     ]),
@@ -146,10 +146,10 @@ export function recoveryFields(source, current) {
       after: cell(form),
     });
   }
-  return [...intents.values()].map((intent) => {
+  return [...intents.values()].map((intent: any) => {
     const targetId = source.locations[intent.id] ?? intent.id;
     const target = { ...intent, id: targetId };
-    const alive = current.graph.nodes.some((node) => node.id === targetId);
+    const alive = current.graph.nodes.some((node: any) => node.id === targetId);
     return {
       ...intent,
       key: intentKey(intent),
@@ -164,7 +164,7 @@ export function recoveryFields(source, current) {
   });
 }
 
-function remapNode(node, locations, alive) {
+function remapNode(node: any, locations: any, alive: any) {
   const result = copy(node);
   result.id = locations[node.id] ?? node.id;
   if (result.parentId) {
@@ -172,7 +172,7 @@ function remapNode(node, locations, alive) {
     if (!alive.has(parent)) delete result.parentId;
     else result.parentId = parent;
   }
-  const visit = (value) => {
+  const visit = (value: any) => {
     if (!value || typeof value !== "object") return;
     if (value.type === "mention" && typeof value.attrs?.id === "string") {
       const old = value.attrs.id;
@@ -186,12 +186,12 @@ function remapNode(node, locations, alive) {
   return result;
 }
 
-export function planRecovery(source, current, selected, allocations = {}) {
+export function planRecovery(source: any, current: any, selected: any[], allocations: any = {}) {
   if (!selected.length) throw fail("RECOVERY_SELECTION_EMPTY");
   const actual = new Map<
     string,
     import("../../types/recovery.js").RecoveryField
-  >(recoveryFields(source, current).map((field) => [field.key, field]));
+  >(recoveryFields(source, current).map((field: any) => [field.key, field]));
   const keys = new Set();
   for (const chosen of selected) {
     const field = actual.get(chosen.key);
@@ -213,7 +213,7 @@ export function planRecovery(source, current, selected, allocations = {}) {
     locations = copy(source.locations),
     mappings: import("../../types/session.js").RecoverySelection["mappings"] =
       [],
-    forms = {};
+    forms: Record<string, any> = {};
   const copied = new Set(),
     retainedNodes: ({ id: string; textDocument?: unknown } & Record<
       string,
@@ -223,7 +223,7 @@ export function planRecovery(source, current, selected, allocations = {}) {
     const field = actual.get(chosen.key)!;
     if (field.copyRequired && !copied.has(field.id)) {
       const node = source.sealed.snapshot.graph.nodes.find(
-        (value) => value.id === field.id,
+        (value: any) => value.id === field.id,
       );
       if (!node) throw fail("RECOVERY_NODE_UNAVAILABLE");
       locations[field.id] = allocations[field.id] ?? crypto.randomUUID();
@@ -235,11 +235,11 @@ export function planRecovery(source, current, selected, allocations = {}) {
     }
   }
   const alive = new Set([
-    ...snapshot.graph.nodes.map((node) => node.id),
-    ...retainedNodes.map((node) => locations[node.id] ?? node.id),
+    ...snapshot.graph.nodes.map((node: any) => node.id),
+    ...retainedNodes.map((node: any) => locations[node.id] ?? node.id),
   ]);
   snapshot.graph.nodes.push(
-    ...retainedNodes.map((node) => remapNode(node, locations, alive)),
+    ...retainedNodes.map((node: any) => remapNode(node, locations, alive)),
   );
   const changes: import("../../types/session.js").SemanticIntent[] = [];
   for (const chosen of selected) {
@@ -287,9 +287,9 @@ export function planRecovery(source, current, selected, allocations = {}) {
 }
 
 /** Only the original accepted batch can release its selected generations. */
-export function settleRecovery(sources, selection, unapplied, verified) {
+export function settleRecovery(sources: any, selection: any, unapplied: any[], verified: any) {
   const result = copy(sources),
-    source = result.find((value) => value.id === selection.sourceId);
+    source = result.find((value: any) => value.id === selection.sourceId);
   if (!source || !verified) return result;
   const lost = new Set(unapplied.map(intentKey));
   const clear = new Set();
@@ -297,13 +297,13 @@ export function settleRecovery(sources, selection, unapplied, verified) {
     if (lost.has(mapping.targetKey)) continue;
     for (const original of mapping.sourceKeys) {
       const field = recoveryFields(source, source.sealed.snapshot).find(
-        (value) => value.key === original.key,
+        (value: any) => value.key === original.key,
       );
       if (field?.generation === original.generation) clear.add(original.key);
     }
   }
   source.sealed.intents = (source.sealed.intents ?? []).filter(
-    (intent) => !clear.has(intentKey(intent)),
+    (intent: any) => !clear.has(intentKey(intent)),
   );
   for (const id of Object.keys(source.textDrafts))
     if (clear.has(JSON.stringify(["nodes", id, "textDocument"])))

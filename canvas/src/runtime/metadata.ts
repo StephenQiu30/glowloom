@@ -10,7 +10,15 @@ import {
 import { base64 } from "../protocol/binary.js";
 
 /** Pure preparation for an explicit Java-owned resource command. There is no database or broadcast here. */
-export function prepareTitle({ state, title, commandId }) {
+export function prepareTitle({
+  state,
+  title,
+  commandId,
+}: {
+  state: Record<string, any>;
+  title: string;
+  commandId: string;
+}) {
   if (
     typeof title !== "string" ||
     !title.length ||

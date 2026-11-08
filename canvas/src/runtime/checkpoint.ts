@@ -1,12 +1,19 @@
 import * as Y from "yjs";
 import { digest } from "./admission.js";
 
-export function createCheckpoint(doc, { epoch, commitSeq }) {
+export function createCheckpoint(
+  doc: Y.Doc,
+  { epoch, commitSeq }: { epoch: string; commitSeq: string },
+) {
   const update = Y.encodeStateAsUpdate(doc);
   return { format: "yjs-v1", epoch, commitSeq, update, hash: digest(update) };
 }
 
-export function restoreCheckpoint(checkpoint) {
+export function restoreCheckpoint(checkpoint: {
+  format?: string;
+  update?: unknown;
+  hash?: string;
+}) {
   const fail = () =>
     Object.assign(new Error("Invalid binary checkpoint"), {
       code: "CORRUPT_CHECKPOINT",

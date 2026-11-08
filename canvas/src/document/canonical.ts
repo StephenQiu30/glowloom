@@ -14,7 +14,7 @@ const compareCodePoints = (a: string, b: string) => {
 };
 
 /** Same canonical JSON contract as Java CanvasGraphCanonicalizer. */
-export function canonicalJson(value) {
+export function canonicalJson(value: any): string {
   if (JSON.isRawJSON(value)) return value.rawJSON;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) throw new Error("INVALID_JSON_NUMBER");
@@ -50,7 +50,7 @@ export function canonicalJson(value) {
   throw new Error("INVALID_JSON_VALUE");
 }
 
-export function modelIdentity(value) {
+export function modelIdentity(value: any): string {
   if (
     typeof value === "string" &&
     /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(value) &&
@@ -67,7 +67,7 @@ export function modelIdentity(value) {
 }
 
 /** Typed Java Long identity is a string in the shared model, a numeric token in persisted v2 JSON. */
-export function canonicalGraphJson(graph) {
+export function canonicalGraphJson(graph: any): string {
   const copy = structuredClone(graph);
   for (const node of copy.nodes) {
     const selection = node.parameters?.modelSelection;
@@ -79,7 +79,7 @@ export function canonicalGraphJson(graph) {
   return canonicalJson(copy);
 }
 
-function decimalLiteral(text) {
+function decimalLiteral(text: string): string {
   const [, sign, integer, fraction = "", exponent = "0"] =
     /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text)!;
   const digits = integer + fraction,
@@ -98,9 +98,9 @@ function decimalLiteral(text) {
 }
 
 /** Parse authoritative stored JSON before IEEE-754 conversion; unknown precision loss blocks conversion. */
-export function parseStoredGraph(input) {
+export function parseStoredGraph(input: string): any {
   const token = Symbol("number");
-  const parsed = JSON.parse(input, (_key, value, context?) =>
+  const parsed = JSON.parse(input, (_key: string, value: any, context?: any) =>
     typeof value === "number" ? { [token]: context.source } : value,
   );
   for (const node of parsed.nodes ?? []) {
@@ -110,7 +110,7 @@ export function parseStoredGraph(input) {
         selection.connectionId?.[token] ?? selection.connectionId,
       );
   }
-  const convert = (value) => {
+  const convert = (value: any): any => {
     if (value && typeof value === "object" && value[token] !== undefined) {
       const number = Number(value[token]);
       if (
@@ -123,7 +123,7 @@ export function parseStoredGraph(input) {
     if (Array.isArray(value)) return value.map(convert);
     if (value && typeof value === "object")
       return Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [key, convert(item)]),
+        Object.entries(value).map(([key, item]: [string, any]) => [key, convert(item)]),
       );
     return value;
   };

@@ -1,4 +1,23 @@
-const key = (scope) =>
+import type {
+  CollaborationScope,
+  JournalWriter,
+  RecoveryRecord,
+} from "../../types/session.js";
+
+export type JournalAccount = Pick<CollaborationScope, "origin" | "actorKey">;
+export type JournalCanvas = JournalAccount & Pick<CollaborationScope, "canvasId">;
+
+interface JournalTx {
+  meta: (id: string) => Promise<any>;
+  rows: (owner: string) => Promise<any[]>;
+  read: (id: string) => Promise<any>;
+  writeMeta: (row: any) => void;
+  write: (id: string, record: any) => void;
+  remove: (id: string) => void;
+  removeMeta: (id: string) => void;
+}
+
+const key = (scope: any) =>
   JSON.stringify([
     scope.origin,
     scope.actorKey,
@@ -6,12 +25,12 @@ const key = (scope) =>
     scope.epoch,
     scope.sessionId,
   ]);
-const owner = (scope) => JSON.stringify([scope.origin, scope.actorKey]);
-const bytes = (value) =>
+const owner = (scope: any) => JSON.stringify([scope.origin, scope.actorKey]);
+const bytes = (value: any) =>
   new TextEncoder().encode(JSON.stringify(value)).byteLength;
-const fail = (code) => new Error(code);
+const fail = (code: string) => new Error(code);
 
-function validate(record) {
+function validate(record: any) {
   if (
     Object.keys(record).some(
       (name) =>
@@ -59,7 +78,7 @@ function validate(record) {
     !/^[a-f0-9-]{36}$/.test(record.scope.sessionId)
   )
     throw fail("JOURNAL_FORMAT");
-  const visit = (value) => {
+  const visit = (value: any) => {
     if (
       value === null ||
       ["string", "boolean"].includes(typeof value) ||
@@ -94,22 +113,22 @@ function validate(record) {
 class MemoryJournalDatabase {
   metadata = new Map();
   records = new Map();
-  queue = Promise.resolve();
-  run(action) {
+  queue: Promise<any> = Promise.resolve();
+  run<T>(action: (tx: JournalTx) => Promise<T>): Promise<T> {
     const operation = this.queue
       .catch(() => {})
       .then(async () => {
         const meta = structuredClone(this.metadata),
           data = structuredClone(this.records);
         const result = await action({
-          meta: async (id) => meta.get(id),
-          rows: async (owner) =>
-            [...meta.values()].filter((row) => row.owner === owner),
-          read: async (id) => data.get(id),
-          writeMeta: (row) => meta.set(row.id, structuredClone(row)),
-          write: (id, record) => data.set(id, structuredClone(record)),
-          remove: (id) => data.delete(id),
-          removeMeta: (id) => meta.delete(id),
+          meta: async (id: string) => meta.get(id),
+          rows: async (owner: string) =>
+            [...meta.values()].filter((row: any) => row.owner === owner),
+          read: async (id: string) => data.get(id),
+          writeMeta: (row: any) => meta.set(row.id, structuredClone(row)),
+          write: (id: string, record: any) => data.set(id, structuredClone(record)),
+          remove: (id: string) => data.delete(id),
+          removeMeta: (id: string) => meta.delete(id),
         });
         this.metadata = meta;
         this.records = data;
@@ -126,12 +145,12 @@ export class CollaborationJournal {
     this.database = database;
   }
 
-  async open(scope) {
+  async open(scope: CollaborationScope): Promise<JournalWriter> {
     const id = key(scope),
       account = owner(scope),
       marker = "actor:" + account;
     const writer = crypto.randomUUID();
-    const actorGeneration = await this.database.run(async (tx) => {
+    const actorGeneration = await this.database.run(async (tx: JournalTx) => {
       const previous = await tx.meta(id),
         actor = await tx.meta(marker);
       tx.writeMeta({
@@ -151,7 +170,7 @@ export class CollaborationJournal {
   }
 
   /** One local transaction retains the source inside the new record and never needs a seventeenth slot. */
-  async transplant(source, target) {
+  async transplant(source: any, target: any): Promise<JournalWriter> {
     validate(source);
     validate(target);
     for (const field of ["origin", "actorKey", "canvasId", "sessionId"])
@@ -165,21 +184,21 @@ export class CollaborationJournal {
       replacement = structuredClone(target),
       size = bytes(target);
     const writer = crypto.randomUUID();
-    const actorGeneration = await this.database.run(async (tx) => {
+    const actorGeneration = await this.database.run(async (tx: JournalTx) => {
       const previous = await tx.meta(from),
         current = await tx.read(from);
       if (!previous?.present || JSON.stringify(current) !== expected)
         throw fail("JOURNAL_SOURCE_CHANGED");
       if (previous.writer != null) throw fail("JOURNAL_SOURCE_BUSY");
       const retained = replacement.recoverySources;
-      const same = (left, right) =>
+      const same = (left: any, right: any) =>
         JSON.stringify(left) === JSON.stringify(right);
       if (
         !retained.length ||
         source.recoverySources.some(
-          (old) =>
+          (old: any) =>
             !retained.some(
-              (next) =>
+              (next: any) =>
                 next.id === old.id &&
                 same(next.sealed, old.sealed) &&
                 same(next.forms, old.forms) &&
@@ -198,7 +217,7 @@ export class CollaborationJournal {
         privateRoot &&
         !source.recoverySelection &&
         !retained.some(
-          (next) =>
+          (next: any) =>
             same(next.scope, source.scope) &&
             same(
               next.sealed.snapshot,
@@ -211,11 +230,11 @@ export class CollaborationJournal {
         throw fail("JOURNAL_SOURCE_RETENTION");
       if (from !== to && (await tx.meta(to))) throw fail("JOURNAL_TARGET_BUSY");
       const others = (await tx.rows(account)).filter(
-        (row) => row.present && row.id !== from && row.id !== to,
+        (row: any) => row.present && row.id !== from && row.id !== to,
       );
       if (
         others.length >= 16 ||
-        others.reduce((sum, row) => sum + row.bytes, size) > 64 * 1024 * 1024
+        others.reduce((sum: number, row: any) => sum + row.bytes, size) > 64 * 1024 * 1024
       )
         throw fail("JOURNAL_BUDGET");
       const actor = await tx.meta("actor:" + account);
@@ -238,16 +257,16 @@ export class CollaborationJournal {
     return this.#writer(target.scope, writer, actorGeneration);
   }
 
-  #writer(scope, writer, actorGeneration) {
+  #writer(scope: any, writer: string, actorGeneration: number): JournalWriter {
     const id = key(scope),
       account = owner(scope),
       marker = "actor:" + account;
     return {
-      put: async (input) => {
+      put: async (input: any) => {
         const record = structuredClone(input);
         validate(record);
         if (key(record.scope) !== id) throw fail("JOURNAL_SCOPE");
-        await this.database.run(async (tx) => {
+        await this.database.run(async (tx: JournalTx) => {
           const previous = await tx.meta(id),
             actor = await tx.meta(marker);
           if (
@@ -271,12 +290,12 @@ export class CollaborationJournal {
             !Object.keys(record.forms ?? {}).length;
           const size = clean ? 0 : bytes(record),
             others = (await tx.rows(account)).filter(
-              (row) => row.present && row.id !== id,
+              (row: any) => row.present && row.id !== id,
             );
           if (
             !clean &&
             (others.length >= 16 ||
-              others.reduce((sum, row) => sum + row.bytes, size) >
+              others.reduce((sum: number, row: any) => sum + row.bytes, size) >
                 64 * 1024 * 1024)
           )
             throw fail("JOURNAL_BUDGET");
@@ -296,7 +315,7 @@ export class CollaborationJournal {
         });
       },
       close: () =>
-        this.database.run(async (tx) => {
+        this.database.run(async (tx: JournalTx) => {
           const current = await tx.meta(id);
           if (current?.writer === writer) {
             if (!current.present) tx.removeMeta(id);
@@ -306,21 +325,21 @@ export class CollaborationJournal {
     };
   }
 
-  list(scope) {
-    return this.database.run(async (tx) => {
+  list(scope: JournalCanvas): Promise<RecoveryRecord[]> {
+    return this.database.run(async (tx: JournalTx) => {
       const rows = (await tx.rows(owner(scope))).filter(
-        (row) => row.present && row.canvasId === scope.canvasId,
+        (row: any) => row.present && row.canvasId === scope.canvasId,
       );
-      const records = await Promise.all(rows.map((row) => tx.read(row.id)));
+      const records = await Promise.all(rows.map((row: any) => tx.read(row.id)));
       records.forEach(validate);
       return structuredClone(records);
     });
   }
 
-  summarizeActor(origin, actorKey) {
-    return this.database.run(async (tx) => {
+  summarizeActor(origin: string, actorKey: string) {
+    return this.database.run(async (tx: JournalTx) => {
       const rows = (await tx.rows(owner({ origin, actorKey }))).filter(
-        (row) => row.present,
+        (row: any) => row.present,
       );
       const summaries = new Map();
       for (const row of rows) {
@@ -339,26 +358,26 @@ export class CollaborationJournal {
     });
   }
 
-  removeCanvas(scope) {
+  removeCanvas(scope: JournalCanvas) {
     return this.discard(scope, false);
   }
-  removeRecord(scope) {
-    return this.database.run(async (tx) => {
+  removeRecord(scope: CollaborationScope) {
+    return this.database.run(async (tx: JournalTx) => {
       tx.removeMeta(key(scope));
       tx.remove(key(scope));
     });
   }
-  removeActor(origin, actorKey) {
+  removeActor(origin: string, actorKey: string) {
     return this.discard({ origin, actorKey }, true);
   }
-  countActor(origin, actorKey) {
+  countActor(origin: string, actorKey: string) {
     return this.summarizeActor(origin, actorKey).then((rows) =>
-      rows.reduce((sum, row) => sum + row.count, 0),
+      rows.reduce((sum: number, row: any) => sum + row.count, 0),
     );
   }
 
-  discard(scope, all) {
-    return this.database.run(async (tx) => {
+  discard(scope: any, all: boolean) {
+    return this.database.run(async (tx: JournalTx) => {
       const account = owner(scope);
       if (all) {
         const id = "actor:" + account,

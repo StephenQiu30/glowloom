@@ -36,7 +36,7 @@ import {
 } from "../protocol/binary.js";
 
 const REMOTE = Symbol("committed");
-const problem = (code) => Object.assign(new Error(code), { code });
+const problem = (code: string) => Object.assign(new Error(code), { code });
 
 /** One optimistic document and one committed document; no unaccepted cross-tab channel. */
 export class CollaborationSession {
@@ -77,11 +77,19 @@ export class CollaborationSession {
     transport,
     changed = () => {},
     recovery,
+  }: {
+    scope: CollaborationScope;
+    initial: CommittedState;
+    journal?: Pick<JournalWriter, "put">;
+    storage?: "journal" | "memory";
+    transport: SessionTransport;
+    changed?: (session: CollaborationSession) => void;
+    recovery?: RecoveryRecord | null;
   }) {
     this.scope = Object.freeze({ ...scope, epoch: initial.epoch });
     if (storage !== "memory" && !journal) throw problem("JOURNAL_REQUIRED");
     this.storage = storage;
-    this.journal = journal;
+    this.journal = journal as Pick<JournalWriter, "put">;
     this.transport = transport;
     this.changed = changed;
     this.confirmed = { ...initial };
@@ -111,7 +119,7 @@ export class CollaborationSession {
       if (
         recovery.version !== 2 ||
         ["origin", "actorKey", "canvasId", "sessionId", "epoch"].some(
-          (key) => recovery.scope[key] !== this.scope[key],
+          (key) => (recovery.scope as any)[key] !== (this.scope as any)[key],
         ) ||
         recovery.confirmed.epoch !== initial.epoch
       )
@@ -169,7 +177,7 @@ export class CollaborationSession {
     return readCanvasDocument(this.committed);
   }
 
-  change(after, before = this.snapshot) {
+  change(after: any, before = this.snapshot) {
     if (this.closed || this.sealed || this.status === "REJECTED")
       throw problem("RECOVERY_REQUIRED");
     applyCanvasChanges(this.doc, before, after);
@@ -218,17 +226,17 @@ export class CollaborationSession {
     });
   }
 
-  setForms(forms) {
+  setForms(forms: Record<string, unknown>) {
     this.forms = structuredClone(forms);
     this.generation++;
     this.protected = false;
     this.changed(this);
   }
 
-  setTextDraft(nodeId, document, source) {
+  setTextDraft(nodeId: string, document: any, source?: any) {
     if (this.closed) return;
     const snapshot = this.snapshot;
-    const exists = snapshot.graph.nodes.some((node) => node.id === nodeId);
+    const exists = snapshot.graph.nodes.some((node: any) => node.id === nodeId);
     if (!document && !exists && !Object.hasOwn(this.textDrafts, nodeId)) return;
     if (
       JSON.stringify(this.textDrafts[nodeId] ?? null) ===
@@ -284,14 +292,14 @@ export class CollaborationSession {
     return record;
   }
 
-  setControl(control) {
+  setControl(control: any) {
     this.control = structuredClone(control);
     this.generation++;
     this.protected = false;
     this.changed(this);
   }
 
-  async applyRecovery(sourceId, selected) {
+  async applyRecovery(sourceId: string, selected: any) {
     if (
       this.closed ||
       this.sealed ||
@@ -303,10 +311,10 @@ export class CollaborationSession {
     ) {
       throw problem("RECOVERY_REQUIRED");
     }
-    const source = this.recoverySources.find((value) => value.id === sourceId);
+    const source = this.recoverySources.find((value: any) => value.id === sourceId);
     if (!source) throw problem("RECOVERY_SOURCE_MISSING");
     const before = this.snapshot,
-      allocations = {};
+      allocations: Record<string, string> = {};
     // A rejected creation never allocated its ID on the server. Rebuild a new
     // causal update, retaining identity only inside that same epoch.
     if (
@@ -320,7 +328,7 @@ export class CollaborationSession {
           !intent.after.exists ||
           !["nodes", "connections"].includes(intent.collection) ||
           before.graph[intent.collection].some(
-            (entity) => entity.id === intent.id,
+            (entity: any) => entity.id === intent.id,
           )
         )
           continue;
@@ -370,13 +378,13 @@ export class CollaborationSession {
     this.changed(this);
   }
 
-  retainSourceText(scope, nodeId, document, sourceNode, sourceId?) {
+  retainSourceText(scope: any, nodeId: string, document: any, sourceNode?: any, sourceId?: string) {
     if (this.closed || !document) return false;
     const source = this.recoverySources.find(
-      (value) =>
+      (value: any) =>
         (!sourceId || value.id === sourceId) &&
         ["origin", "actorKey", "canvasId", "epoch", "sessionId"].every(
-          (key) => value.scope[key] === scope[key],
+          (key) => (value.scope as any)[key] === (scope as any)[key],
         ),
     );
     if (!source) return false;
@@ -386,7 +394,7 @@ export class CollaborationSession {
     source.textGenerations ??= {};
     source.textGenerations[nodeId] = ++this.generation;
     if (
-      !source.sealed.snapshot.graph.nodes.some((node) => node.id === nodeId) &&
+      !source.sealed.snapshot.graph.nodes.some((node: any) => node.id === nodeId) &&
       sourceNode
     ) {
       source.sealed.snapshot.graph.nodes.push(structuredClone(sourceNode));
@@ -396,20 +404,20 @@ export class CollaborationSession {
     return true;
   }
 
-  retainDetachedText(record, nodeId, document, sourceNode) {
+  retainDetachedText(record: any, nodeId: string, document: any, sourceNode?: any) {
     if (
       this.closed ||
       !document ||
       record.inFlight ||
       record.control ||
       !["origin", "actorKey", "canvasId"].every(
-        (key) => record.scope[key] === this.scope[key],
+        (key) => (record.scope as any)[key] === (this.scope as any)[key],
       )
     )
       return;
-    const existing = this.recoverySources.find((source) =>
+    const existing = this.recoverySources.find((source: any) =>
       ["origin", "actorKey", "canvasId", "epoch", "sessionId"].every(
-        (key) => source.scope[key] === record.scope[key],
+        (key) => (source.scope as any)[key] === (record.scope as any)[key],
       ),
     );
     if (existing) {
@@ -429,7 +437,7 @@ export class CollaborationSession {
     detached.textDrafts[nodeId] = structuredClone(document);
     if (
       sourceNode &&
-      !detached.snapshot.graph.nodes.some((node) => node.id === nodeId)
+      !detached.snapshot.graph.nodes.some((node: any) => node.id === nodeId)
     )
       detached.snapshot.graph.nodes.push(structuredClone(sourceNode));
     const source = archiveRecovery(detached, this.confirmed).recoverySources[0];
@@ -441,11 +449,11 @@ export class CollaborationSession {
     return source.id;
   }
 
-  async discardRecoverySource(sourceId) {
+  async discardRecoverySource(sourceId: string) {
     if (this.closed || this.recoverySelection?.sourceId === sourceId)
       throw problem("ORIGINAL_UNCONFIRMED");
     const previous = this.recoverySources;
-    this.recoverySources = previous.filter((value) => value.id !== sourceId);
+    this.recoverySources = previous.filter((value: any) => value.id !== sourceId);
     this.generation++;
     try {
       await this.persist();
@@ -724,7 +732,7 @@ export class CollaborationSession {
     }
   }
 
-  async receive(message, persist = true) {
+  async receive(message: any, persist = true) {
     if (this.closed) return;
     if (message.epoch !== this.confirmed.epoch) throw problem("EPOCH_CHANGED");
     const incoming = BigInt(message.commitSeq),
@@ -747,10 +755,10 @@ export class CollaborationSession {
     } else this.confirmed = { ...this.confirmed, update: committedUpdate };
     this.generation++;
     const alive = new Set(
-      readCanvasDocument(this.committed).graph.nodes.map((node) => node.id),
+      readCanvasDocument(this.committed).graph.nodes.map((node: any) => node.id),
     );
     const previousNodes = new Map(
-      previous.graph.nodes.map((node) => [node.id, node]),
+      previous.graph.nodes.map((node: any) => [node.id, node]),
     );
     const restoration = this.pendingRestoration();
     const privateIntents = [...this.inFlightIntents, ...this.intents];
@@ -764,7 +772,7 @@ export class CollaborationSession {
         .map((intent) => intent.id),
     );
     const lost = local.graph.nodes.filter(
-      (node) =>
+      (node: any) =>
         previousNodes.has(node.id) &&
         !alive.has(node.id) &&
         !restoration?.nodes.includes(node.id) &&
@@ -780,7 +788,7 @@ export class CollaborationSession {
           ...readable,
           graph: {
             ...readable.graph,
-            nodes: readable.graph.nodes.map((node) =>
+            nodes: readable.graph.nodes.map((node: any) =>
               this.textDrafts[node.id]
                 ? {
                     ...node,
@@ -793,7 +801,7 @@ export class CollaborationSession {
         intents: structuredClone(privateIntents),
         inFlight: this.inFlight,
         pending: this.pending.map(binary),
-        nodeIds: lost.map((node) => node.id),
+        nodeIds: lost.map((node: any) => node.id),
       };
       if (!this.inFlight) this.status = "REJECTED";
       // Keep the readable preimage before Yjs is allowed to GC a deleted shared subtree.

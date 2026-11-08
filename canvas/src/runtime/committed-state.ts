@@ -5,10 +5,10 @@ import { canonicalGraphJson } from "../document/canonical.js";
 import { readCanvasDocument } from "../document/model.js";
 import { validateCanvasRoots } from "../document/canvas-roots.js";
 
-const fail = (code) => Object.assign(new Error(code), { code });
+const fail = (code: string) => Object.assign(new Error(code), { code });
 
 /** Rebuilds only verified durable state. The caller owns and destroys the returned document. */
-export function committedDocument(state) {
+export function committedDocument(state: Record<string, any>) {
   if (state.modelVersion !== 1) throw fail("INVALID_CANVAS_MODEL");
   const checkpoint = unbase64(state.checkpoint);
   if (checkpoint.byteLength > 8 * 1024 * 1024) throw fail("STATE_TOO_LARGE");

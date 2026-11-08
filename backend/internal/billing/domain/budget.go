@@ -35,7 +35,7 @@ type Budget struct {
 
 // Validate checks the persisted balance without performing arithmetic that
 // could overflow when reservation and settlement are both large.
-func (b Budget) Validate() error {
+func (b *Budget) Validate() error {
 	if b.ID == uuid.Nil || b.ProjectID == uuid.Nil || b.LimitMicros < 0 ||
 		b.ReservedMicros < 0 || b.SettledMicros < 0 ||
 		b.Revision < 1 || b.Revision > math.MaxInt32 ||
@@ -50,7 +50,7 @@ func (b Budget) Validate() error {
 }
 
 // AvailableMicros may be negative after an actual settlement overrun.
-func (b Budget) AvailableMicros() (int64, error) {
+func (b *Budget) AvailableMicros() (int64, error) {
 	if err := b.Validate(); err != nil {
 		return 0, err
 	}
@@ -60,7 +60,7 @@ func (b Budget) AvailableMicros() (int64, error) {
 // LowBalance reports whether the remaining amount is strictly below 20% of
 // a positive limit. Comparing against the largest integer below the threshold
 // avoids multiplying money values that may approach MaxInt64.
-func (b Budget) LowBalance() (bool, error) {
+func (b *Budget) LowBalance() (bool, error) {
 	available, err := b.AvailableMicros()
 	if err != nil {
 		return false, err

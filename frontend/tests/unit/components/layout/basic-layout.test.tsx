@@ -205,7 +205,7 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   ).toBe("/");
   expect(screen.getByRole("main").id).toBe("main-content");
   expect(
-    screen.getByRole("banner", { name: "页面顶栏" }).closest("main"),
+    screen.getByRole("group", { name: "全局操作" }).closest("main"),
   ).toBeNull();
   expect(screen.getByRole("link", { name: "资产" }).getAttribute("href")).toBe(
     "/assets",
@@ -222,7 +222,9 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   expect(screen.getByRole("button", { name: "展开导航" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "展开导航" }));
   expect(screen.queryByRole("button", { name: "展开导航" })).toBeNull();
-  const header = screen.getByRole("banner", { name: "页面顶栏" });
+  const header = screen.getByRole("group", { name: "全局操作" });
+  expect(screen.queryByRole("banner")).toBeNull();
+  expect(header.parentElement).toBe(screen.getByRole("main").parentElement);
   expect(within(header).queryByRole("button", { name: "搜索灵感" })).toBeNull();
   fireEvent.keyDown(document, { key: "k", metaKey: true });
   expect(screen.queryByRole("combobox")).toBeNull();
@@ -292,7 +294,7 @@ it("四页共用导航和账号节点，分组状态独立并在切页和收起�
   const sidebar = await screen.findByRole("complementary", {
     name: "侧栏导航",
   });
-  const header = screen.getByRole("banner", { name: "页面顶栏" });
+  const header = screen.getByRole("group", { name: "全局操作" });
   const account = within(header).getByRole("button", { name: "账号菜单" });
   const chat = within(sidebar).getByRole("button", {
     name: "对话",
@@ -324,9 +326,11 @@ it("四页共用导航和账号节点，分组状态独立并在切页和收起�
     expect(screen.getByRole("complementary", { name: "侧栏导航" })).toBe(
       sidebar,
     );
-    expect(screen.getAllByRole("banner", { name: "页面顶栏" })).toEqual([
-      header,
-    ]);
+    expect(
+      pathname === "/"
+        ? screen.getByRole("group", { name: "全局操作" })
+        : screen.getByRole("banner", { name: "页面顶栏" }),
+    ).toBe(header);
     expect(within(header).getByRole("button", { name: "账号菜单" })).toBe(
       account,
     );
@@ -552,7 +556,7 @@ it("首页不挂载搜索，切页保留外壳并启用探索搜索", async () =
   );
   const toggle = await screen.findByRole("button", { name: "收起导航" });
   fireEvent.click(toggle);
-  const header = screen.getByRole("banner", { name: "页面顶栏" });
+  const header = screen.getByRole("group", { name: "全局操作" });
   const navigation = screen.getByRole("navigation", { name: "主导航" });
   expect(screen.queryByRole("button", { name: "搜索首页" })).toBeNull();
   fireEvent.keyDown(document, { key: "k", metaKey: true });
