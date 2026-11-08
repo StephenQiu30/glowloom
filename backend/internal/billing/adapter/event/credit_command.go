@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
@@ -18,6 +19,10 @@ const (
 	CreditBalanceChangedTopic = "glowloom.billing.wallet_balance_changed.v1"
 	// CreditDeadLetterTopic stores credit events that exhausted consumer retries.
 	CreditDeadLetterTopic = "glowloom.billing.dlq.v1"
+	// CreditCommandResultTopic carries command completion events from the ledger.
+	CreditCommandResultTopic = "glowloom.billing.command_result.v1"
+	// CreditSettlementOutcomeTopic carries a trusted operation settlement fact.
+	CreditSettlementOutcomeTopic = "glowloom.billing.settlement_outcome.v1"
 )
 
 // CreditCommandProcessor applies an accepted command to the wallet ledger.
@@ -30,15 +35,23 @@ type WalletBalanceInvalidator interface {
 	Invalidate(context.Context, uuid.UUID, int64) error
 }
 
-// CreditEventHandler routes credit command and balance-change events.
+// CreditSagaProcessor turns settlement facts into ledger commands and tracks
+// their durable results.
+type CreditSagaProcessor interface {
+	ApplyCreditSettlementOutcome(context.Context, billingapp.CreditSettlementOutcome) error
+	ApplyCreditCommandResult(context.Context, billingapp.CreditCommandResult) error
+}
+
+// CreditEventHandler routes commands, settlement outcomes, command results, and balance changes.
 type CreditEventHandler struct {
 	commands CreditCommandProcessor
 	balances WalletBalanceInvalidator
+	sagas    CreditSagaProcessor
 }
 
 // NewCreditEventHandler builds a handler for command and cache events.
-func NewCreditEventHandler(commands CreditCommandProcessor, balances WalletBalanceInvalidator) *CreditEventHandler {
-	return &CreditEventHandler{commands: commands, balances: balances}
+func NewCreditEventHandler(commands CreditCommandProcessor, balances WalletBalanceInvalidator, sagas CreditSagaProcessor) *CreditEventHandler {
+	return &CreditEventHandler{commands: commands, balances: balances, sagas: sagas}
 }
 
 // Handle validates an event envelope and applies its idempotent effect.
@@ -78,6 +91,38 @@ func (h *CreditEventHandler) Handle(ctx context.Context, record application.Reco
 			return fmt.Errorf("invalid wallet balance event")
 		}
 		return h.balances.Invalidate(ctx, event.ScopeID, event.AccountVersion)
+	case CreditSettlementOutcomeTopic:
+		if h.sagas == nil {
+			return fmt.Errorf("credit saga processor unavailable")
+		}
+		var event struct {
+			EventType string `json:"event_type"`
+			billingapp.CreditSettlementOutcome
+		}
+		if err := json.Unmarshal(record.Value, &event); err != nil {
+			return fmt.Errorf("decode credit settlement outcome: %w", err)
+		}
+		outcome := event.CreditSettlementOutcome
+		if outcome.EventID == uuid.Nil || event.EventType != record.Topic || outcome.ScopeID == uuid.Nil || outcome.HoldID == uuid.Nil || outcome.OccurredAt.IsZero() || string(record.Key) != outcome.ScopeID.String() {
+			return fmt.Errorf("invalid credit settlement outcome")
+		}
+		return h.sagas.ApplyCreditSettlementOutcome(ctx, outcome)
+	case CreditCommandResultTopic:
+		if h.sagas == nil {
+			return fmt.Errorf("credit saga processor unavailable")
+		}
+		var event struct {
+			EventType string `json:"event_type"`
+			billingapp.CreditCommandResult
+		}
+		if err := json.Unmarshal(record.Value, &event); err != nil {
+			return fmt.Errorf("decode credit command result: %w", err)
+		}
+		result := event.CreditCommandResult
+		if result.EventID == uuid.Nil || event.EventType != record.Topic || result.CommandID == uuid.Nil || result.ScopeID == uuid.Nil || result.Status == "" || result.OccurredAt.IsZero() || string(record.Key) != result.ScopeID.String() {
+			return fmt.Errorf("invalid credit command result")
+		}
+		return h.sagas.ApplyCreditCommandResult(ctx, result)
 	default:
 		return fmt.Errorf("unsupported credit event topic %s", record.Topic)
 	}

@@ -65,6 +65,22 @@ func (s *Store) SubmitCreditCommand(ctx context.Context, command application.Cre
 	if err := command.Validate(now); err != nil {
 		return application.CreditCommandReceipt{}, err
 	}
+	var receipt application.CreditCommandReceipt
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		receipt, err = submitCreditCommandTx(tx, command, now)
+		return err
+	})
+	if err != nil {
+		return application.CreditCommandReceipt{}, err
+	}
+	return receipt, nil
+}
+
+func submitCreditCommandTx(tx *gorm.DB, command application.CreditCommand, now time.Time) (application.CreditCommandReceipt, error) {
+	if err := command.Validate(now); err != nil {
+		return application.CreditCommandReceipt{}, err
+	}
 	keyDigest := sha256.Sum256([]byte(command.IdempotencyKey))
 	keyHash := hex.EncodeToString(keyDigest[:])
 	requestData, err := json.Marshal(struct {
@@ -90,79 +106,70 @@ func (s *Store) SubmitCreditCommand(ctx context.Context, command application.Cre
 	if err != nil {
 		return application.CreditCommandReceipt{}, fmt.Errorf("create credit command event ID: %w", err)
 	}
-	var receipt application.CreditCommandReceipt
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var walletScope uuid.UUID
-		if err := tx.Raw(`SELECT billing.ensure_wallet_account(?::uuid)`, command.ScopeID).Row().Scan(&walletScope); err != nil {
-			return fmt.Errorf("ensure credit account: %w", err)
-		}
-		if walletScope != command.ScopeID {
-			return application.ErrInvalidCreditCommand
-		}
-		inserted := tx.Exec(`
+	var walletScope uuid.UUID
+	if err := tx.Raw(`SELECT billing.ensure_wallet_account(?::uuid)`, command.ScopeID).Row().Scan(&walletScope); err != nil {
+		return application.CreditCommandReceipt{}, fmt.Errorf("ensure credit account: %w", err)
+	}
+	if walletScope != command.ScopeID {
+		return application.CreditCommandReceipt{}, application.ErrInvalidCreditCommand
+	}
+	inserted := tx.Exec(`
 			INSERT INTO billing.credit_command
 			  (id, scope_id, caller_id, idempotency_key_hash, request_hash, action, source_id,
 			   reference_id, amount_micros, expires_at, model_key, reason, status)
 			VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?::uuid, ?::uuid, ?, ?, ?, ?, 'accepted')
 			ON CONFLICT DO NOTHING
 		`, commandID, command.ScopeID, command.CallerID, keyHash, requestHash, string(command.Action), command.SourceID,
-			command.ReferenceID, command.AmountMicros, command.ExpiresAt, command.ModelKey, command.Reason)
-		if inserted.Error != nil {
-			return fmt.Errorf("accept credit command: %w", inserted.Error)
-		}
-		if inserted.RowsAffected == 0 {
-			var existing creditCommandRow
-			query := tx.Raw(`SELECT id,scope_id,caller_id,idempotency_key_hash,request_hash,action,source_id,
+		command.ReferenceID, command.AmountMicros, command.ExpiresAt, command.ModelKey, command.Reason)
+	if inserted.Error != nil {
+		return application.CreditCommandReceipt{}, fmt.Errorf("accept credit command: %w", inserted.Error)
+	}
+	if inserted.RowsAffected == 0 {
+		var existing creditCommandRow
+		query := tx.Raw(`SELECT id,scope_id,caller_id,idempotency_key_hash,request_hash,action,source_id,
 				reference_id,amount_micros,expires_at,model_key,reason,status,result,created_at,updated_at
-				FROM billing.credit_command WHERE caller_id=? AND idempotency_key_hash=?`, command.CallerID, keyHash).Scan(&existing)
-			if query.Error != nil {
-				return fmt.Errorf("read credit command idempotency receipt: %w", query.Error)
-			}
-			if query.RowsAffected == 0 {
-				if command.Action == application.CreditCommit || command.Action == application.CreditRelease {
-					query = tx.Raw(`SELECT id,scope_id,caller_id,idempotency_key_hash,request_hash,action,source_id,
+			FROM billing.credit_command WHERE caller_id=? AND idempotency_key_hash=?`, command.CallerID, keyHash).Scan(&existing)
+		if query.Error != nil {
+			return application.CreditCommandReceipt{}, fmt.Errorf("read credit command idempotency receipt: %w", query.Error)
+		}
+		if query.RowsAffected == 0 {
+			if command.Action == application.CreditCommit || command.Action == application.CreditRelease {
+				query = tx.Raw(`SELECT id,scope_id,caller_id,idempotency_key_hash,request_hash,action,source_id,
 						reference_id,amount_micros,expires_at,model_key,reason,status,result,created_at,updated_at
-						FROM billing.credit_command WHERE scope_id=? AND action=? AND reference_id=?::uuid
-						ORDER BY created_at LIMIT 1`, command.ScopeID, string(command.Action), command.ReferenceID).Scan(&existing)
-				} else {
-					query = tx.Raw(`SELECT id,scope_id,caller_id,idempotency_key_hash,request_hash,action,source_id,
+					FROM billing.credit_command WHERE scope_id=? AND action=? AND reference_id=?::uuid
+					ORDER BY created_at LIMIT 1`, command.ScopeID, string(command.Action), command.ReferenceID).Scan(&existing)
+			} else {
+				query = tx.Raw(`SELECT id,scope_id,caller_id,idempotency_key_hash,request_hash,action,source_id,
 					reference_id,amount_micros,expires_at,model_key,reason,status,result,created_at,updated_at
 					FROM billing.credit_command WHERE scope_id=? AND action=? AND source_id=?
 					ORDER BY created_at LIMIT 1`, command.ScopeID, string(command.Action), command.SourceID).Scan(&existing)
-				}
-				if query.Error != nil {
-					return fmt.Errorf("read credit source receipt: %w", query.Error)
-				}
 			}
-			if query.RowsAffected == 0 {
-				return application.ErrCreditCommandConflict
+			if query.Error != nil {
+				return application.CreditCommandReceipt{}, fmt.Errorf("read credit source receipt: %w", query.Error)
 			}
-			if existing.ScopeID != command.ScopeID || existing.RequestHash != requestHash || existing.CallerID != command.CallerID {
-				if existing.CallerID == command.CallerID && existing.IdempotencyKeyHash == keyHash {
-					return application.ErrCreditIdempotencyConflict
-				}
-				return application.ErrCreditCommandConflict
+		}
+		if query.RowsAffected == 0 {
+			return application.CreditCommandReceipt{}, application.ErrCreditCommandConflict
+		}
+		if existing.ScopeID != command.ScopeID || existing.RequestHash != requestHash || existing.CallerID != command.CallerID {
+			if existing.CallerID == command.CallerID && existing.IdempotencyKeyHash == keyHash {
+				return application.CreditCommandReceipt{}, application.ErrCreditIdempotencyConflict
 			}
-			receipt = commandReceipt(existing)
-			return nil
+			return application.CreditCommandReceipt{}, application.ErrCreditCommandConflict
 		}
-		event := creditCommandEvent{EventID: eventID, EventType: creditCommandTopic, CommandID: commandID, ScopeID: command.ScopeID, OccurredAt: now}
-		payload, err := json.Marshal(event)
-		if err != nil {
-			return fmt.Errorf("encode credit command event: %w", err)
-		}
-		if err := exactlyOne(tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, eventID, creditCommandTopic, command.ScopeID, string(payload))); err != nil {
-			return fmt.Errorf("queue accepted credit command: %w", err)
-		}
-		receipt = application.CreditCommandReceipt{ID: commandID, ScopeID: command.ScopeID, Action: command.Action,
-			Status: "accepted", SourceID: command.SourceID, ReferenceID: command.ReferenceID,
-			AmountMicros: command.AmountMicros, CreatedAt: now, UpdatedAt: now}
-		return nil
-	})
-	if err != nil {
-		return application.CreditCommandReceipt{}, err
+		return commandReceipt(existing), nil
 	}
-	return receipt, nil
+	event := creditCommandEvent{EventID: eventID, EventType: creditCommandTopic, CommandID: commandID, ScopeID: command.ScopeID, OccurredAt: now}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return application.CreditCommandReceipt{}, fmt.Errorf("encode credit command event: %w", err)
+	}
+	if err := exactlyOne(tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, eventID, creditCommandTopic, command.ScopeID, string(payload))); err != nil {
+		return application.CreditCommandReceipt{}, fmt.Errorf("queue accepted credit command: %w", err)
+	}
+	return application.CreditCommandReceipt{ID: commandID, ScopeID: command.ScopeID, Action: command.Action,
+		Status: "accepted", SourceID: command.SourceID, ReferenceID: command.ReferenceID,
+		AmountMicros: command.AmountMicros, CreatedAt: now, UpdatedAt: now}, nil
 }
 
 // ReadCreditCommand returns the receipt owned by the caller within one scope.

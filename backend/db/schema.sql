@@ -7494,6 +7494,35 @@ CREATE TABLE billing.credit_hold_allocation (
     FOREIGN KEY (scope_id, lot_id) REFERENCES billing.wallet_lot(scope_id, id)
 );
 
+CREATE TABLE billing.credit_saga (
+    hold_id uuid PRIMARY KEY,
+    scope_id uuid NOT NULL,
+    outcome text NOT NULL CHECK (outcome IN ('unknown', 'succeeded', 'failed')),
+    amount_micros bigint NOT NULL CHECK (amount_micros >= 0),
+    status text NOT NULL CHECK (status IN ('unknown', 'command_accepted', 'committed', 'released', 'reconcile_required')),
+    command_id uuid UNIQUE REFERENCES billing.credit_command(id),
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    FOREIGN KEY (scope_id, hold_id) REFERENCES billing.credit_hold(scope_id, id),
+    CHECK ((outcome='unknown' AND status='unknown' AND amount_micros=0 AND command_id IS NULL) OR
+        (outcome IN ('succeeded','failed') AND status<>'unknown' AND command_id IS NOT NULL)),
+    CHECK (outcome<>'failed' OR amount_micros=0)
+);
+
+CREATE TABLE billing.credit_saga_event (
+    event_id uuid PRIMARY KEY,
+    event_type text NOT NULL CHECK (event_type IN ('settlement_outcome', 'command_result')),
+    scope_id uuid NOT NULL,
+    hold_id uuid NOT NULL,
+    command_id uuid REFERENCES billing.credit_command(id),
+    request_hash character(64) NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
+    created_at timestamptz NOT NULL,
+    FOREIGN KEY (scope_id, hold_id) REFERENCES billing.credit_hold(scope_id, id),
+    CHECK ((event_type='settlement_outcome' AND command_id IS NULL) OR
+        (event_type='command_result' AND command_id IS NOT NULL))
+);
+CREATE INDEX credit_saga_scope_time ON billing.credit_saga(scope_id, updated_at DESC, hold_id);
+
 CREATE TABLE billing.wallet_entry (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     scope_id uuid NOT NULL,
@@ -7629,6 +7658,9 @@ GRANT UPDATE (available_micros, version) ON billing.wallet_lot TO glowloom_app;
 GRANT SELECT, INSERT ON billing.credit_command, billing.credit_hold, billing.credit_hold_allocation TO glowloom_app;
 GRANT UPDATE (status, result, updated_at) ON billing.credit_command TO glowloom_app;
 GRANT UPDATE (status, closed_at) ON billing.credit_hold TO glowloom_app;
+GRANT SELECT, INSERT ON billing.credit_saga_event TO glowloom_app;
+GRANT SELECT, INSERT ON billing.credit_saga TO glowloom_app;
+GRANT UPDATE (outcome, amount_micros, status, command_id, updated_at) ON billing.credit_saga TO glowloom_app;
 
 CREATE FUNCTION billing.insert_credit_return_lot(
     lot uuid, scope uuid, hold uuid, amount bigint, deadline timestamptz, root uuid, model text, at_time timestamptz

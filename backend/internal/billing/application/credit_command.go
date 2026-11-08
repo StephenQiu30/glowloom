@@ -22,6 +22,8 @@ var (
 	ErrCreditVersionConflict = errors.New("credit account version conflict")
 	// ErrCreditCommandConflict means the source or hold already has an incompatible command.
 	ErrCreditCommandConflict = errors.New("credit command conflicts with an existing source")
+	// ErrCreditOutcomeConflict means a hold received conflicting terminal outcomes.
+	ErrCreditOutcomeConflict = errors.New("credit settlement outcome conflicts with the existing saga")
 )
 
 // CreditAction names one supported credit ledger command.
@@ -67,6 +69,34 @@ type CreditCommandReceipt struct {
 	Result       json.RawMessage `json:"result,omitempty"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
+}
+
+// CreditSettlementOutcome is the trusted internal fact that closes a frozen hold.
+// Unknown outcomes deliberately leave the hold open for later reconciliation.
+type CreditSettlementOutcome struct {
+	EventID      uuid.UUID `json:"event_id"`
+	ScopeID      uuid.UUID `json:"scope_id"`
+	HoldID       uuid.UUID `json:"hold_id"`
+	Outcome      string    `json:"outcome"`
+	AmountMicros int64     `json:"amount_micros"`
+	OccurredAt   time.Time `json:"occurred_at"`
+}
+
+// CreditCommandResult is emitted after the ledger command reaches a terminal status.
+type CreditCommandResult struct {
+	EventID    uuid.UUID       `json:"event_id"`
+	CommandID  uuid.UUID       `json:"command_id"`
+	ScopeID    uuid.UUID       `json:"scope_id"`
+	Status     string          `json:"status"`
+	Result     json.RawMessage `json:"result,omitempty"`
+	OccurredAt time.Time       `json:"occurred_at"`
+}
+
+// CreditSagaStore atomically turns trusted settlement outcomes into idempotent
+// commit/release commands and tracks their ledger result.
+type CreditSagaStore interface {
+	ApplyCreditSettlementOutcome(context.Context, CreditSettlementOutcome) error
+	ApplyCreditCommandResult(context.Context, CreditCommandResult) error
 }
 
 // CreditCommandStore persists accepted commands and applies their ledger effects.
