@@ -1451,10 +1451,39 @@ CREATE TABLE infra.outbox (
     headers jsonb DEFAULT '{}'::jsonb NOT NULL,
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     published_at timestamp with time zone,
+    attempt_count integer DEFAULT 0 NOT NULL CHECK (attempt_count >= 0),
+    next_attempt_at timestamp with time zone DEFAULT now() NOT NULL,
+    claim_token uuid,
+    lease_until timestamp with time zone,
+    last_error_class text,
+    dead_lettered_at timestamp with time zone,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL
 )
 PARTITION BY RANGE (create_time);
+
+CREATE TABLE infra.outbox_dead_letter (
+    event_id uuid NOT NULL,
+    event_create_time timestamptz NOT NULL,
+    topic text NOT NULL,
+    partition_key text NOT NULL,
+    payload jsonb NOT NULL,
+    headers jsonb NOT NULL DEFAULT '{}'::jsonb,
+    attempt_count integer NOT NULL CHECK (attempt_count > 0),
+    error_class text NOT NULL,
+    failed_at timestamptz NOT NULL,
+    replayed_at timestamptz,
+    PRIMARY KEY (event_id, event_create_time)
+);
+
+CREATE TABLE infra.outbox_dead_letter_audit (
+    id uuid PRIMARY KEY,
+    event_id uuid NOT NULL,
+    event_create_time timestamptz NOT NULL,
+    operator_id uuid NOT NULL,
+    reason text NOT NULL CHECK (length(reason) BETWEEN 1 AND 500),
+    created_at timestamptz NOT NULL DEFAULT now()
+);
 
 CREATE TABLE infra.processed_event (
     id uuid NOT NULL,
@@ -4381,7 +4410,8 @@ CREATE INDEX user_session_activity_idx ON identity.user_session USING btree (acc
 
 CREATE INDEX user_session_live_idx ON identity.user_session USING btree (account_id, id) WHERE (revoked_at IS NULL);
 
-CREATE INDEX ix_outbox_pending ON ONLY infra.outbox USING btree (create_time) WHERE (published_at IS NULL);
+CREATE INDEX ix_outbox_pending ON ONLY infra.outbox USING btree (next_attempt_at, create_time, id)
+    WHERE (published_at IS NULL AND dead_lettered_at IS NULL);
 
 CREATE INDEX ix_outbox_published_retention ON ONLY infra.outbox USING btree (published_at, create_time, id) WHERE (published_at IS NOT NULL);
 
@@ -5731,7 +5761,10 @@ GRANT SELECT,INSERT,DELETE ON TABLE infra.outbox TO glowloom_app;
 
 GRANT UPDATE(published_at) ON TABLE infra.outbox TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE infra.outbox TO glowloom_app;
+GRANT UPDATE(published_at, attempt_count, next_attempt_at, claim_token, lease_until, last_error_class, dead_lettered_at, update_time) ON TABLE infra.outbox TO glowloom_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE infra.outbox_dead_letter TO glowloom_app;
+GRANT SELECT,INSERT ON TABLE infra.outbox_dead_letter_audit TO glowloom_app;
 
 GRANT SELECT,INSERT,DELETE ON TABLE infra.processed_event TO glowloom_app;
 
@@ -7344,8 +7377,22 @@ GRANT UPDATE (procurement_cost_micros) ON operation.provider_call TO glowloom_ap
 
 CREATE TABLE billing.wallet_account (
     scope_id uuid PRIMARY KEY REFERENCES workspace.creation_scope(id),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
     created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE FUNCTION billing.ensure_wallet_account(scope uuid) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM workspace.creation_scope WHERE id=scope) THEN
+        RAISE EXCEPTION 'creation scope required' USING ERRCODE='23503';
+    END IF;
+    INSERT INTO billing.wallet_account(scope_id) VALUES (scope) ON CONFLICT (scope_id) DO NOTHING;
+    RETURN scope;
+END
+$$;
+REVOKE ALL ON FUNCTION billing.ensure_wallet_account(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION billing.ensure_wallet_account(uuid) TO glowloom_app;
 
 CREATE TABLE billing.project_wallet (
     project_id uuid PRIMARY KEY REFERENCES workspace.project(id),
@@ -7359,6 +7406,7 @@ CREATE TABLE billing.wallet_lot (
     source_id uuid NOT NULL,
     issued_micros bigint NOT NULL CHECK (issued_micros > 0),
     available_micros bigint NOT NULL CHECK (available_micros BETWEEN 0 AND issued_micros),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
     expires_at timestamptz,
     model_key text CHECK (length(model_key) BETWEEN 1 AND 256),
     root_lot_id uuid REFERENCES billing.wallet_lot(id),
@@ -7391,20 +7439,180 @@ CREATE TABLE billing.wallet_allocation (
     FOREIGN KEY (scope_id, lot_id) REFERENCES billing.wallet_lot(scope_id, id)
 );
 
-CREATE TABLE billing.wallet_entry (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE billing.credit_command (
+    id uuid PRIMARY KEY,
+    scope_id uuid NOT NULL REFERENCES billing.wallet_account(scope_id),
+    caller_id text NOT NULL CHECK (length(caller_id) BETWEEN 1 AND 200),
+    idempotency_key_hash character(64) NOT NULL CHECK (idempotency_key_hash ~ '^[0-9a-f]{64}$'),
+    request_hash character(64) NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
+    action text NOT NULL CHECK (action IN ('grant', 'debit', 'freeze', 'commit', 'release')),
+    source_id uuid NOT NULL,
+    reference_id uuid,
+    amount_micros bigint NOT NULL CHECK (amount_micros > 0),
+    expires_at timestamptz,
+    model_key text CHECK (length(model_key) BETWEEN 1 AND 256),
+    reason text NOT NULL CHECK (length(reason) BETWEEN 1 AND 500),
+    status text NOT NULL CHECK (status IN ('accepted', 'succeeded', 'insufficient', 'failed', 'reconcile_required')),
+    result jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (caller_id, idempotency_key_hash),
+    CHECK ((action IN ('commit', 'release')) = (reference_id IS NOT NULL)),
+    CHECK ((action = 'grant') = (expires_at IS NOT NULL))
+);
+
+CREATE UNIQUE INDEX credit_command_grant_source ON billing.credit_command(scope_id, source_id) WHERE action='grant';
+CREATE UNIQUE INDEX credit_command_source_action ON billing.credit_command(scope_id, action, source_id)
+    WHERE action IN ('debit', 'freeze');
+CREATE UNIQUE INDEX credit_command_hold_terminal ON billing.credit_command(scope_id, action, reference_id)
+    WHERE action IN ('commit', 'release') AND status IN ('accepted', 'succeeded');
+CREATE INDEX credit_command_scope_time ON billing.credit_command(scope_id, created_at DESC, id DESC);
+
+CREATE TABLE billing.credit_hold (
+    id uuid PRIMARY KEY,
+    scope_id uuid NOT NULL REFERENCES billing.wallet_account(scope_id),
+    source_id uuid NOT NULL,
+    command_id uuid NOT NULL UNIQUE REFERENCES billing.credit_command(id),
+    amount_micros bigint NOT NULL CHECK (amount_micros > 0),
+    status text NOT NULL CHECK (status IN ('held', 'committed', 'released')),
+    created_at timestamptz NOT NULL,
+    closed_at timestamptz,
+    UNIQUE (scope_id, source_id),
+    UNIQUE (scope_id, id),
+    CHECK ((status = 'held') = (closed_at IS NULL))
+);
+
+CREATE TABLE billing.credit_hold_allocation (
+    hold_id uuid NOT NULL,
     scope_id uuid NOT NULL,
     lot_id uuid NOT NULL,
-    reservation_id uuid REFERENCES billing.reservation(id),
-    kind text NOT NULL CHECK (kind IN ('issue', 'hold', 'redeem', 'release', 'expire', 'restore', 'compensate')),
+    ordinal integer NOT NULL CHECK (ordinal > 0),
     amount_micros bigint NOT NULL CHECK (amount_micros > 0),
-    created_at timestamptz NOT NULL,
+    PRIMARY KEY (hold_id, lot_id),
+    UNIQUE (hold_id, ordinal),
+    FOREIGN KEY (scope_id, hold_id) REFERENCES billing.credit_hold(scope_id, id),
     FOREIGN KEY (scope_id, lot_id) REFERENCES billing.wallet_lot(scope_id, id)
 );
 
+CREATE TABLE billing.wallet_entry (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    scope_id uuid NOT NULL,
+    lot_id uuid NOT NULL,
+    reservation_id uuid REFERENCES billing.reservation(id),
+    command_id uuid REFERENCES billing.credit_command(id),
+    hold_id uuid REFERENCES billing.credit_hold(id),
+    kind text NOT NULL CHECK (kind IN ('issue', 'hold', 'redeem', 'release', 'expire', 'restore', 'compensate')),
+    amount_micros bigint NOT NULL CHECK (amount_micros > 0),
+    available_delta_micros bigint NOT NULL DEFAULT 0,
+    held_delta_micros bigint NOT NULL DEFAULT 0,
+    redeemed_delta_micros bigint NOT NULL DEFAULT 0,
+    expired_delta_micros bigint NOT NULL DEFAULT 0,
+    funding_delta_micros bigint NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (created_at, id),
+    FOREIGN KEY (scope_id, lot_id) REFERENCES billing.wallet_lot(scope_id, id),
+    CHECK (reservation_id IS NULL OR command_id IS NULL),
+    CHECK (available_delta_micros::numeric + held_delta_micros::numeric + redeemed_delta_micros::numeric +
+        expired_delta_micros::numeric + funding_delta_micros::numeric = 0)
+) PARTITION BY RANGE (created_at);
+
+CREATE TABLE billing.wallet_entry_default PARTITION OF billing.wallet_entry DEFAULT;
 CREATE INDEX wallet_entry_scope_time ON billing.wallet_entry(scope_id, created_at DESC, id DESC);
-CREATE UNIQUE INDEX wallet_entry_per_reservation ON billing.wallet_entry(reservation_id, lot_id, kind) WHERE reservation_id IS NOT NULL;
-CREATE UNIQUE INDEX wallet_entry_issue ON billing.wallet_entry(lot_id) WHERE kind IN ('issue', 'restore');
+
+CREATE FUNCTION billing.set_wallet_entry_deltas() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+DECLARE lot_expiry timestamptz;
+BEGIN
+    NEW.available_delta_micros := 0;
+    NEW.held_delta_micros := 0;
+    NEW.redeemed_delta_micros := 0;
+    NEW.expired_delta_micros := 0;
+    NEW.funding_delta_micros := 0;
+    CASE NEW.kind
+      WHEN 'issue' THEN
+        NEW.available_delta_micros := NEW.amount_micros;
+        NEW.funding_delta_micros := -NEW.amount_micros;
+      WHEN 'hold' THEN
+        NEW.available_delta_micros := -NEW.amount_micros;
+        NEW.held_delta_micros := NEW.amount_micros;
+      WHEN 'redeem' THEN
+        IF NEW.hold_id IS NOT NULL OR NEW.reservation_id IS NOT NULL THEN
+          NEW.held_delta_micros := -NEW.amount_micros;
+        ELSE
+          NEW.available_delta_micros := -NEW.amount_micros;
+        END IF;
+        NEW.redeemed_delta_micros := NEW.amount_micros;
+      WHEN 'release' THEN
+        NEW.available_delta_micros := NEW.amount_micros;
+        NEW.held_delta_micros := -NEW.amount_micros;
+      WHEN 'expire' THEN
+        NEW.held_delta_micros := -NEW.amount_micros;
+        NEW.expired_delta_micros := NEW.amount_micros;
+      WHEN 'restore' THEN
+        NEW.available_delta_micros := NEW.amount_micros;
+        NEW.expired_delta_micros := -NEW.amount_micros;
+      WHEN 'compensate' THEN
+        NEW.redeemed_delta_micros := -NEW.amount_micros;
+        SELECT expires_at INTO lot_expiry FROM billing.wallet_lot WHERE id=NEW.lot_id;
+        IF lot_expiry IS NULL OR lot_expiry>NEW.created_at THEN
+          NEW.available_delta_micros := NEW.amount_micros;
+        ELSE
+          NEW.expired_delta_micros := NEW.amount_micros;
+        END IF;
+      ELSE
+        RAISE EXCEPTION 'unsupported wallet entry kind %', NEW.kind USING ERRCODE='23514';
+    END CASE;
+    RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION billing.set_wallet_entry_deltas() FROM PUBLIC;
+CREATE TRIGGER wallet_entry_set_deltas BEFORE INSERT ON billing.wallet_entry
+FOR EACH ROW EXECUTE FUNCTION billing.set_wallet_entry_deltas();
+
+-- Global identity stays unpartitioned because PostgreSQL cannot enforce a
+-- unique wallet entry ID or business source key across monthly partitions.
+CREATE TABLE billing.wallet_entry_identity (
+    id uuid PRIMARY KEY,
+    identity_key text NOT NULL UNIQUE,
+    created_at timestamptz NOT NULL
+);
+
+CREATE FUNCTION billing.register_wallet_entry_identity() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
+DECLARE identity text;
+BEGIN
+    IF NEW.command_id IS NOT NULL THEN
+        identity := 'command:' || NEW.command_id::text || ':' || NEW.lot_id::text || ':' || NEW.kind;
+    ELSIF NEW.reservation_id IS NOT NULL THEN
+        identity := 'reservation:' || NEW.reservation_id::text || ':' || NEW.lot_id::text || ':' || NEW.kind;
+    ELSIF NEW.kind = 'issue' THEN
+        identity := 'issue:' || NEW.lot_id::text;
+    ELSIF NEW.kind = 'restore' THEN
+        identity := 'restore:' || NEW.lot_id::text;
+    ELSE
+        identity := 'entry:' || NEW.id::text;
+    END IF;
+    INSERT INTO billing.wallet_entry_identity(id, identity_key, created_at)
+    VALUES (NEW.id, identity, NEW.created_at);
+    RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION billing.register_wallet_entry_identity() FROM PUBLIC;
+CREATE TRIGGER wallet_entry_identity_before_insert BEFORE INSERT ON billing.wallet_entry
+FOR EACH ROW EXECUTE FUNCTION billing.register_wallet_entry_identity();
+
+CREATE FUNCTION billing.reject_wallet_entry_mutation() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+    IF current_user = pg_get_userbyid((SELECT relowner FROM pg_class WHERE oid='billing.wallet_entry'::regclass)) THEN
+        IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+        RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'wallet entries are append only';
+END
+$$;
+CREATE TRIGGER wallet_entry_append_only BEFORE UPDATE OR DELETE ON billing.wallet_entry
+FOR EACH ROW EXECUTE FUNCTION billing.reject_wallet_entry_mutation();
 
 CREATE TABLE billing.wallet_expiry_grace (
     root_lot_id uuid PRIMARY KEY REFERENCES billing.wallet_lot(id),
@@ -7414,10 +7622,51 @@ CREATE TABLE billing.wallet_expiry_grace (
 -- Only the schema owner/finance role may bind projects or issue initial lots.
 GRANT SELECT ON billing.wallet_account, billing.project_wallet TO glowloom_app;
 -- PostgreSQL requires an UPDATE privilege to take a row lock.
-GRANT UPDATE (created_at) ON billing.wallet_account TO glowloom_app;
+GRANT UPDATE (created_at, version) ON billing.wallet_account TO glowloom_app;
 GRANT SELECT, INSERT ON billing.wallet_hold, billing.wallet_allocation, billing.wallet_entry, billing.wallet_expiry_grace TO glowloom_app;
 GRANT SELECT ON billing.wallet_lot TO glowloom_app;
-GRANT UPDATE (available_micros) ON billing.wallet_lot TO glowloom_app;
+GRANT UPDATE (available_micros, version) ON billing.wallet_lot TO glowloom_app;
+GRANT SELECT, INSERT ON billing.credit_command, billing.credit_hold, billing.credit_hold_allocation TO glowloom_app;
+GRANT UPDATE (status, result, updated_at) ON billing.credit_command TO glowloom_app;
+GRANT UPDATE (status, closed_at) ON billing.credit_hold TO glowloom_app;
+
+CREATE FUNCTION billing.insert_credit_return_lot(
+    lot uuid, scope uuid, hold uuid, amount bigint, deadline timestamptz, root uuid, model text, at_time timestamptz
+) RETURNS uuid
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog
+AS $$
+    INSERT INTO billing.wallet_lot
+        (id,scope_id,source_kind,source_id,issued_micros,available_micros,version,expires_at,model_key,root_lot_id,reason,created_at)
+    SELECT lot,scope,'expiry_return',hold,amount,amount,1,deadline,source.model_key,root,'expired hold return',at_time
+    FROM billing.wallet_lot source
+    JOIN billing.wallet_expiry_grace grace ON grace.root_lot_id=root AND grace.expires_at=deadline
+    JOIN billing.credit_hold h ON h.id=hold AND h.scope_id=scope
+    JOIN billing.credit_hold_allocation allocation ON allocation.hold_id=hold AND allocation.scope_id=scope
+    WHERE source.id=root AND source.scope_id=scope AND source.root_lot_id IS NULL AND deadline>at_time
+      AND amount<=allocation.amount_micros
+      AND amount<=COALESCE((SELECT sum(e.amount_micros) FROM billing.wallet_entry e
+        JOIN billing.wallet_lot original ON original.id=e.lot_id
+        WHERE e.hold_id=hold AND e.kind IN ('expire','compensate')
+          AND COALESCE(original.root_lot_id,original.id)=root),0)
+    RETURNING id
+$$;
+REVOKE ALL ON FUNCTION billing.insert_credit_return_lot(uuid,uuid,uuid,bigint,timestamptz,uuid,text,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION billing.insert_credit_return_lot(uuid,uuid,uuid,bigint,timestamptz,uuid,text,timestamptz) TO glowloom_app;
+
+CREATE FUNCTION billing.insert_credit_grant_lot(lot uuid, command uuid, at_time timestamptz) RETURNS uuid
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog
+AS $$
+    INSERT INTO billing.wallet_lot
+        (id,scope_id,source_kind,source_id,issued_micros,available_micros,version,expires_at,model_key,reason,created_at)
+    SELECT lot,c.scope_id,'promotional',c.source_id,c.amount_micros,c.amount_micros,1,c.expires_at,c.model_key,c.reason,at_time
+    FROM billing.credit_command c
+    WHERE c.id=command AND c.action='grant' AND c.status='accepted' AND c.expires_at>at_time
+    ON CONFLICT DO NOTHING
+    RETURNING id
+$$;
+REVOKE ALL ON FUNCTION billing.insert_credit_grant_lot(uuid,uuid,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION billing.insert_credit_grant_lot(uuid,uuid,timestamptz) TO glowloom_app;
+
 -- Only a return lot may be inserted by the runtime; root issuance is separately controlled.
 CREATE FUNCTION billing.insert_wallet_return_lot(
     lot uuid, scope uuid, reservation uuid, amount bigint, deadline timestamptz, root uuid, at_time timestamptz
@@ -7461,9 +7710,11 @@ CREATE FUNCTION billing.issue_promotional_credit(
 ) RETURNS uuid
 LANGUAGE plpgsql SET search_path = pg_catalog AS $$
 DECLARE lot billing.wallet_lot%ROWTYPE;
+DECLARE account_version bigint;
+DECLARE event_id uuid;
 DECLARE current_timepoint timestamptz := clock_timestamp();
 BEGIN
-    PERFORM scope_id FROM billing.wallet_account WHERE scope_id=scope FOR UPDATE;
+    SELECT version INTO account_version FROM billing.wallet_account WHERE scope_id=scope;
     IF NOT FOUND THEN RAISE EXCEPTION 'wallet account required'; END IF;
     SELECT * INTO lot FROM billing.wallet_lot
         WHERE source_kind='promotional' AND source_id=source AND root_lot_id IS NULL;
@@ -7477,12 +7728,20 @@ BEGIN
     IF amount IS NULL OR amount<=0 OR deadline IS NULL OR deadline<=current_timepoint THEN
         RAISE EXCEPTION 'positive credit and future expiry required';
     END IF;
+    UPDATE billing.wallet_account SET version=version+1
+        WHERE scope_id=scope AND version=account_version RETURNING version INTO account_version;
+    IF NOT FOUND THEN RAISE EXCEPTION 'wallet account version conflict'; END IF;
     INSERT INTO billing.wallet_lot
-        (id,scope_id,source_kind,source_id,issued_micros,available_micros,expires_at,model_key,reason,created_at)
-    VALUES (gen_random_uuid(),scope,'promotional',source,amount,amount,deadline,model,justification,current_timepoint)
+        (id,scope_id,source_kind,source_id,issued_micros,available_micros,version,expires_at,model_key,reason,created_at)
+    VALUES (gen_random_uuid(),scope,'promotional',source,amount,amount,1,deadline,model,justification,current_timepoint)
     RETURNING * INTO lot;
     INSERT INTO billing.wallet_entry(scope_id,lot_id,kind,amount_micros,created_at)
         VALUES (scope,lot.id,'issue',amount,current_timepoint);
+    event_id := gen_random_uuid();
+    INSERT INTO infra.outbox(id,topic,partition_key,payload)
+        VALUES (event_id,'glowloom.billing.wallet_balance_changed.v1',scope,
+            jsonb_build_object('event_id',event_id,'event_type','glowloom.billing.wallet_balance_changed.v1',
+                'scope_id',scope,'account_version',account_version,'occurred_at',current_timepoint));
     RETURN lot.id;
 END
 $$;
@@ -7506,12 +7765,16 @@ DECLARE allocation record;
 DECLARE root uuid;
 DECLARE returned_lot uuid;
 DECLARE deadline timestamptz;
+DECLARE account_version bigint;
+DECLARE new_available bigint;
+DECLARE lot_version bigint;
+DECLARE event_id uuid;
 DECLARE current_timepoint timestamptz := clock_timestamp();
 BEGIN
     SELECT h.scope_id INTO STRICT payer
         FROM billing.reservation r JOIN billing.wallet_hold h ON h.reservation_id=r.id
         WHERE r.id=$1 AND r.status='settled' AND NOT r.is_delete FOR UPDATE OF r;
-    PERFORM scope_id FROM billing.wallet_account WHERE scope_id=payer FOR UPDATE;
+    SELECT version INTO account_version FROM billing.wallet_account WHERE scope_id=payer;
     SELECT * INTO correction FROM billing.wallet_compensation WHERE reservation_id=$1;
     IF FOUND THEN
         IF correction.reason IS DISTINCT FROM justification THEN
@@ -7519,6 +7782,9 @@ BEGIN
         END IF;
         RETURN correction.id;
     END IF;
+    UPDATE billing.wallet_account SET version=version+1
+        WHERE scope_id=payer AND version=account_version RETURNING version INTO account_version;
+    IF NOT FOUND THEN RAISE EXCEPTION 'wallet account version conflict'; END IF;
     INSERT INTO billing.wallet_compensation(reservation_id,reason,reviewed_by,created_at)
         VALUES ($1,justification,current_user,current_timepoint) RETURNING * INTO correction;
     FOR allocation IN
@@ -7530,8 +7796,13 @@ BEGIN
         INSERT INTO billing.wallet_entry(scope_id,lot_id,reservation_id,kind,amount_micros,created_at)
             VALUES (payer,allocation.id,$1,'compensate',allocation.amount_micros,current_timepoint);
         IF allocation.expires_at IS NULL OR allocation.expires_at>current_timepoint THEN
-            UPDATE billing.wallet_lot SET available_micros=available_micros+allocation.amount_micros
-                WHERE id=allocation.id;
+            SELECT available_micros,version INTO new_available,lot_version FROM billing.wallet_lot WHERE id=allocation.id;
+            IF new_available > 9223372036854775807-allocation.amount_micros THEN
+                RAISE EXCEPTION 'credit compensation balance overflow';
+            END IF;
+            UPDATE billing.wallet_lot SET available_micros=new_available+allocation.amount_micros,version=lot_version+1
+                WHERE id=allocation.id AND version=lot_version;
+            IF NOT FOUND THEN RAISE EXCEPTION 'wallet lot version conflict'; END IF;
         ELSE
             root := coalesce(allocation.root_lot_id,allocation.id);
             INSERT INTO billing.wallet_expiry_grace(root_lot_id,expires_at)
@@ -7541,15 +7812,20 @@ BEGIN
                 RAISE EXCEPTION 'credit compensation requires expiry review';
             END IF;
             INSERT INTO billing.wallet_lot
-                (id,scope_id,source_kind,source_id,issued_micros,available_micros,expires_at,model_key,root_lot_id,reason,created_at)
+                (id,scope_id,source_kind,source_id,issued_micros,available_micros,version,expires_at,model_key,root_lot_id,reason,created_at)
             VALUES (gen_random_uuid(),payer,'expiry_return',gen_random_uuid(),allocation.amount_micros,
-                allocation.amount_micros,deadline,allocation.model_key,root,'reviewed compensation',current_timepoint)
+                allocation.amount_micros,1,deadline,allocation.model_key,root,'reviewed compensation',current_timepoint)
             RETURNING id INTO returned_lot;
             INSERT INTO billing.wallet_entry(scope_id,lot_id,reservation_id,kind,amount_micros,created_at)
                 VALUES (payer,returned_lot,$1,'restore',allocation.amount_micros,current_timepoint);
         END IF;
     END LOOP;
     IF NOT FOUND THEN RAISE EXCEPTION 'wallet redemption evidence required'; END IF;
+    event_id := gen_random_uuid();
+    INSERT INTO infra.outbox(id,topic,partition_key,payload)
+        VALUES (event_id,'glowloom.billing.wallet_balance_changed.v1',payer,
+            jsonb_build_object('event_id',event_id,'event_type','glowloom.billing.wallet_balance_changed.v1',
+                'scope_id',payer,'account_version',account_version,'occurred_at',current_timepoint));
     RETURN correction.id;
 END
 $$;

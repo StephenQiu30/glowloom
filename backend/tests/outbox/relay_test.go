@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
 )
@@ -11,17 +12,30 @@ import (
 type memoryStore struct {
 	event   application.Event
 	pending bool
+	dead    bool
+	class   string
 }
 
-func (s *memoryStore) WithNext(_ context.Context, deliver func(application.Event) error) (bool, error) {
+func (s *memoryStore) ClaimNext(_ context.Context, _ time.Time, _ time.Duration) (application.Event, bool, error) {
 	if !s.pending {
-		return false, nil
+		return application.Event{}, false, nil
 	}
-	if err := deliver(s.event); err != nil {
-		return false, err
-	}
+	s.event.AttemptCount++
+	s.event.ClaimToken = "lease"
+	return s.event, true, nil
+}
+
+func (s *memoryStore) Acknowledge(_ context.Context, _ application.Event, _ time.Time) error {
 	s.pending = false
-	return true, nil
+	return nil
+}
+
+func (s *memoryStore) Retry(_ context.Context, event application.Event, class string, max int, _, _ time.Time) (bool, error) {
+	s.class = class
+	if event.AttemptCount >= max {
+		s.dead, s.pending = true, false
+	}
+	return s.dead, nil
 }
 
 type recordingPublisher struct {
@@ -45,15 +59,14 @@ func TestRelayRetriesAfterPublishFailure(t *testing.T) {
 		Payload:      []byte(`{"event_id":"event-1","event_type":"glowloom.operation.status_changed.v1"}`),
 	}
 	store := &memoryStore{event: event, pending: true}
-	wantErr := errors.New("broker unavailable")
-	publisher := &recordingPublisher{err: wantErr}
+	publisher := &recordingPublisher{err: errors.New("broker unavailable")}
 	relay := application.NewRelay(store, publisher)
 
-	if sent, err := relay.RunOnce(t.Context()); sent || !errors.Is(err, wantErr) {
-		t.Fatalf("first delivery = (%t, %v), want failure", sent, err)
+	if sent, err := relay.RunOnce(t.Context()); sent || err != nil {
+		t.Fatalf("first delivery = (%t, %v), want durable retry", sent, err)
 	}
-	if !store.pending {
-		t.Fatal("failed publish acknowledged the event")
+	if !store.pending || store.class != "broker_publish_failed" {
+		t.Fatal("failed publish was not kept pending with a retry class")
 	}
 
 	publisher.err = nil
@@ -80,10 +93,10 @@ func TestRelayRejectsMismatchedEventEnvelope(t *testing.T) {
 	}
 	publisher := &recordingPublisher{}
 	sent, err := application.NewRelay(store, publisher).RunOnce(t.Context())
-	if sent || !errors.Is(err, application.ErrInvalidEnvelope) {
+	if sent || err != nil {
 		t.Fatalf("invalid envelope delivery = (%t, %v)", sent, err)
 	}
-	if !store.pending || len(publisher.events) != 0 {
-		t.Fatal("invalid envelope was acknowledged or published")
+	if store.pending || !store.dead || store.class != "invalid_envelope" || len(publisher.events) != 0 {
+		t.Fatal("invalid envelope was not dead-lettered immediately or was published")
 	}
 }

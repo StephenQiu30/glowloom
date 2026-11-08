@@ -9,6 +9,7 @@ import (
 // WalletView is the authenticated creation scope's balance and movement page.
 type WalletView struct {
 	Enabled           bool          `json:"enabled"`
+	Version           int64         `json:"version"`
 	Payer             string        `json:"payer"`
 	GeneralCredits    string        `json:"general_credits"`
 	RestrictedCredits string        `json:"restricted_credits"`
@@ -17,6 +18,16 @@ type WalletView struct {
 	HistoryAvailable  bool          `json:"history_available"`
 	Entries           []WalletEntry `json:"entries"`
 	NextCursor        *uuid.UUID    `json:"next_cursor,omitempty"`
+}
+
+// WalletBalance is the versioned, cacheable balance projection for a scope.
+type WalletBalance struct {
+	Enabled           bool   `json:"enabled"`
+	Version           int64  `json:"version"`
+	GeneralCredits    string `json:"general_credits"`
+	RestrictedCredits string `json:"restricted_credits"`
+	HeldCredits       string `json:"held_credits"`
+	RedeemedToday     string `json:"redeemed_today"`
 }
 
 // WalletEntry is one immutable movement attributed to a funding lot.

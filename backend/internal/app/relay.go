@@ -15,12 +15,14 @@ import (
 const (
 	realtimeConsumerGroup = "glowloom-realtime"
 	auditConsumerGroup    = "glowloom-audit"
+	creditConsumerGroup   = "glowloom-billing"
 )
 
 type relayRuntime struct {
 	outbox   *outboxapp.Relay
 	realtime *kafkainbox.Consumer
 	audit    *kafkainbox.Consumer
+	credit   *kafkainbox.Consumer
 }
 
 // RunRelay publishes Outbox rows, consumes projections, and starts confirmed workflows.
@@ -30,13 +32,14 @@ func RunRelay(ctx context.Context, cfg config.Config, logger *zap.Logger) error 
 		return fmt.Errorf("initialize relay: %w", err)
 	}
 	defer cleanup()
-	groups := []string{realtimeConsumerGroup, auditConsumerGroup}
+	groups := []string{realtimeConsumerGroup, auditConsumerGroup, creditConsumerGroup}
 	logger.Info("relay running", zap.Strings("consumer_groups", groups))
 	return RunWithHealth(ctx, "relay", cfg.RelayHealthAddr, logger, func(runCtx context.Context) error {
 		loops := []relayLoop{
 			{"outbox", runtime.outbox.Run},
 			{"realtime", runtime.realtime.Run},
 			{"audit", runtime.audit.Run},
+			{"credit", runtime.credit.Run},
 		}
 		return runRelayLoops(runCtx, loops)
 	})

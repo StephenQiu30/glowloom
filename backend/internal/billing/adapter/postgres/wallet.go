@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ type walletLot struct {
 	ID              uuid.UUID
 	ModelKey        *string
 	AvailableMicros int64
+	Version         int64
 }
 
 // holdWallet follows the existing project budget lock. Every writer of a
@@ -96,7 +98,7 @@ func walletPayer(tx *gorm.DB, projectID uuid.UUID) (uuid.UUID, error) {
 
 func availableWalletLots(tx *gorm.DB, scope uuid.UUID) ([]walletLot, error) {
 	var lots []walletLot
-	err := tx.Raw(`SELECT id,available_micros,model_key FROM billing.wallet_lot
+	err := tx.Raw(`SELECT id,available_micros,model_key,version FROM billing.wallet_lot
 		WHERE scope_id=? AND available_micros>0 AND (expires_at IS NULL OR expires_at>clock_timestamp())
 		ORDER BY expires_at NULLS LAST,
 		  CASE source_kind WHEN 'promotional' THEN 0 WHEN 'expiry_return' THEN 0 WHEN 'subscription' THEN 1 ELSE 2 END,id`,
@@ -150,26 +152,19 @@ func (s *Store) CheckWalletQuoteInTransaction(tx *gorm.DB, projectID uuid.UUID, 
 }
 
 func lockWallet(tx *gorm.DB, scope uuid.UUID) error {
-	var account struct{ ScopeID uuid.UUID }
-	row := tx.Raw(`SELECT scope_id FROM billing.wallet_account WHERE scope_id=? FOR UPDATE`, scope).Scan(&account)
-	if row.Error != nil {
-		return row.Error
-	}
-	if row.RowsAffected != 1 {
-		return ErrNotFound
-	}
-	return nil
+	_, err := advanceWalletVersion(tx, scope)
+	return err
 }
 
 func changeLotBalance(tx *gorm.DB, lot uuid.UUID, delta int64) error {
-	row := tx.Exec(`UPDATE billing.wallet_lot SET available_micros=available_micros+? WHERE id=?`, delta, lot)
-	if row.Error != nil {
-		return row.Error
+	var current walletLot
+	if err := tx.Raw(`SELECT id,available_micros,version FROM billing.wallet_lot WHERE id=?::uuid`, lot).Scan(&current).Error; err != nil {
+		return err
 	}
-	if row.RowsAffected != 1 {
+	if current.ID == uuid.Nil || delta > 0 && current.AvailableMicros > math.MaxInt64-delta || delta < 0 && (delta == math.MinInt64 || current.AvailableMicros < -delta) {
 		return ErrSettlementConflict
 	}
-	return nil
+	return setLotAvailableCAS(tx, current, current.AvailableMicros+delta)
 }
 
 func walletEntry(tx *gorm.DB, scope, lot, reservation uuid.UUID, kind string, amount int64, at time.Time) error {

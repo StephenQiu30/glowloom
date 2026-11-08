@@ -4,6 +4,10 @@ package http
 import (
 	"context"
 	"errors"
+	"math"
+	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -17,11 +21,25 @@ import (
 // WalletReader reads only the payer selected by the authenticated scope.
 type WalletReader func(context.Context, identityapp.Principal, *uuid.UUID) (application.WalletView, error)
 
+// WalletReadLimiter controls authenticated balance and history reads.
+type WalletReadLimiter interface {
+	AllowWalletRead(context.Context, string, uuid.UUID, string, time.Time) (time.Duration, error)
+}
+
 // WalletHandler serves account balances and ledger pages.
-type WalletHandler struct{ read WalletReader }
+type WalletHandler struct {
+	read    WalletReader
+	limiter WalletReadLimiter
+}
 
 // NewWalletHandler injects the transaction-scoped reader.
-func NewWalletHandler(read WalletReader) *WalletHandler { return &WalletHandler{read: read} }
+func NewWalletHandler(read WalletReader, limiters ...WalletReadLimiter) *WalletHandler {
+	handler := &WalletHandler{read: read}
+	if len(limiters) > 0 {
+		handler.limiter = limiters[0]
+	}
+	return handler
+}
 
 // Register mounts the read endpoint after creation-scope authorization.
 func (h *WalletHandler) Register(group *gin.RouterGroup) { group.GET("/billing/wallet", h.Read) }
@@ -44,7 +62,25 @@ func (h *WalletHandler) Read(c *gin.Context) {
 		}
 		cursor = &id
 	}
-	result, err := h.read(c.Request.Context(), identityhttp.Principal(c), cursor)
+	actor := identityhttp.Principal(c)
+	if h.limiter != nil {
+		wait, err := h.limiter.AllowWalletRead(c.Request.Context(), actor.ID.String(), actor.ScopeID, c.ClientIP(), time.Now().UTC())
+		if err != nil {
+			httpapi.LogDependencyError(c, err)
+			httpapi.WriteProblem(c, http.StatusServiceUnavailable, "dependency_unavailable", nil)
+			return
+		}
+		if wait > 0 {
+			seconds := int(math.Ceil(wait.Seconds()))
+			if seconds < 1 {
+				seconds = 1
+			}
+			c.Header("Retry-After", strconv.Itoa(seconds))
+			httpapi.WriteProblem(c, http.StatusTooManyRequests, "credit_rate_limited", nil)
+			return
+		}
+	}
+	result, err := h.read(c.Request.Context(), actor, cursor)
 	switch {
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
