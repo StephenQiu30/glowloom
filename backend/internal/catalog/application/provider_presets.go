@@ -123,9 +123,6 @@ func (s *ProviderPresets) List(ctx context.Context, actor identityapp.Principal)
 	if err != nil {
 		return nil, err
 	}
-	for i := range presets {
-		presets[i].ModelCatalog = domain.ModelCatalogForPreset(presets[i].Document)
-	}
 	return presets, nil
 }
 

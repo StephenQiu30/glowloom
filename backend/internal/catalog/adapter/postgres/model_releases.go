@@ -88,42 +88,6 @@ func (s *Store) ListModelReleases(ctx context.Context, actor identityapp.Princip
 // CreateModelRelease accepts only versions belonging to the same provider/model.
 func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input application.CreateReleaseInput) (application.ModelRelease, error) {
 	return catalogMutation(ctx, s.db, s.actors, actor, "release.create", id, input.RequestID, input, func(tx *gorm.DB) (application.ModelRelease, error) {
-		var found int
-		r := tx.Raw(`SELECT 1 FROM catalog.model_profile m
- JOIN catalog.model_profile_version v ON v.model_profile_id=m.id AND NOT v.is_delete
- JOIN catalog.price_rule_version price ON price.model_profile_id=m.id AND NOT price.is_delete
- JOIN catalog.provider_config_version config ON config.provider_id=m.provider_id
- JOIN catalog.provider_preset_version pv ON pv.id=config.preset_version_id
- JOIN catalog.provider_preset preset ON preset.id=pv.preset_id AND NOT preset.emergency_disabled
- WHERE m.id=? AND v.id=? AND price.id=? AND config.id=? AND NOT m.is_delete
- AND ((m.capability='text.generate' AND price.unit IN ('per_request','per_1k_tokens') AND v.modes <@ ARRAY['text_to_text']::text[])
- OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech' AND v.provider_model_id='seed-tts-2.0' AND v.modes=ARRAY['text2audio']::text[] AND price.unit IN ('per_request','per_1k_chars') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('speaker','speech_rate','loudness_rate')))
- OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech' AND v.provider_model_id='seed-audio-1.0' AND v.modes=ARRAY['omni_audio']::text[] AND price.unit IN ('per_request','per_second') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('speech_rate','loudness_rate','pitch_rate','enable_subtitle')))
- OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_music' AND v.provider_model_id='v5.0' AND v.modes <@ ARRAY['music_song','music_instrumental']::text[] AND price.unit IN ('per_request','per_second') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('duration_ms','music_input')))
- OR (m.capability='image.generate' AND price.unit IN ('per_request','per_image') AND v.modes <@ ARRAY['text2image','image2image']::text[])
- OR (m.capability='video.generate' AND
-   (price.unit IN ('per_request','per_second') OR
-    (price.unit='per_1k_tokens' AND config.config->>'adapter_key'='volcengine_ark'
-     AND v.provider_model_id LIKE 'doubao-seedance-2-%' AND price.rule->>'input_micros_per_1k'='0'))
-   AND v.modes <@ ARRAY['text2video','image2video','omni_reference','avatar','motion']::text[]))
- AND (m.capability='image.generate' OR (v.limits->>'max_outputs')::int=1)
- AND v.supports_query=(m.capability='video.generate' OR config.config->>'adapter_key'='volcengine_music')
- AND (NOT v.limits ? 'provider_endpoint' OR (config.config->>'adapter_key'='openrouter' AND m.capability IN ('text.generate','image.generate')))
- AND v.queue='provider' AND v.moderation='provider' AND NOT v.supports_cancel AND NOT v.supports_callback
- AND ((m.capability='video.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark'))
- OR (m.capability='video.generate' AND config.config->>'adapter_key'='volcengine_avatar' AND v.provider_model_id='jimeng_realman_avatar_picture_omni_v15' AND v.modes=ARRAY['avatar']::text[] AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('output_resolution','pe_fast_mode')))
- OR (m.capability='video.generate' AND config.config->>'adapter_key'='volcengine_motion' AND v.provider_model_id='jimeng_dreamactor_m20_gen_video' AND v.modes=ARRAY['motion']::text[] AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('cut_result_first_second_switch')))
- OR (m.capability='text.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark','byteplus','deepseek','openai','vercel'))
- OR (m.capability='audio.generate' AND config.config->>'adapter_key' IN ('volcengine_speech','volcengine_music'))
- OR (m.capability='image.generate' AND config.config->>'adapter_key' IN ('openai','vercel') AND v.modes=ARRAY['text2image']::text[] AND (v.limits->>'max_outputs')::int=1 AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('size','quality')))
- OR (m.capability='image.generate' AND (config.config->>'adapter_key'='openrouter' OR (config.config->>'adapter_key' IN ('volcengine_ark','byteplus') AND (v.limits->>'max_outputs')::int=1))))
- FOR SHARE OF preset,m`, id, input.ModelVersionID, input.PriceVersionID, input.ConfigVersionID).Scan(&found)
-		if r.Error != nil {
-			return application.ModelRelease{}, r.Error
-		}
-		if r.RowsAffected != 1 {
-			return application.ModelRelease{}, application.ErrModelSourceUnavailable
-		}
 		if err := validateReleaseContract(tx, id, input); err != nil {
 			return application.ModelRelease{}, err
 		}
@@ -341,9 +305,53 @@ func (s *Store) ListCapabilityDefaults(ctx context.Context, actor identityapp.Pr
 	return items, nil
 }
 
+// validateInstalledReleaseContract is shared by publication and availability.
+func validateInstalledReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.CreateReleaseInput) error {
+	var found int
+	r := tx.Raw(`SELECT 1 FROM catalog.model_profile m
+ JOIN catalog.model_profile_version v ON v.model_profile_id=m.id AND NOT v.is_delete
+ JOIN catalog.price_rule_version price ON price.model_profile_id=m.id AND NOT price.is_delete
+ JOIN catalog.provider_config_version config ON config.provider_id=m.provider_id
+ JOIN catalog.provider_preset_version pv ON pv.id=config.preset_version_id
+ JOIN catalog.provider_preset preset ON preset.id=pv.preset_id AND NOT preset.emergency_disabled
+ WHERE m.id=? AND v.id=? AND price.id=? AND config.id=? AND NOT m.is_delete
+ AND ((m.capability='text.generate' AND price.unit IN ('per_request','per_1k_tokens') AND v.modes <@ ARRAY['text_to_text']::text[])
+ OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech' AND v.provider_model_id='seed-tts-2.0' AND v.modes=ARRAY['text2audio']::text[] AND price.unit IN ('per_request','per_1k_chars') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('speaker','speech_rate','loudness_rate')))
+ OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech' AND v.provider_model_id='seed-audio-1.0' AND v.modes=ARRAY['omni_audio']::text[] AND price.unit IN ('per_request','per_second') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('speech_rate','loudness_rate','pitch_rate','enable_subtitle')))
+ OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_music' AND v.provider_model_id='v5.0' AND v.modes <@ ARRAY['music_song','music_instrumental']::text[] AND price.unit IN ('per_request','per_second') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('duration_ms','music_input')))
+ OR (m.capability='image.generate' AND price.unit IN ('per_request','per_image') AND v.modes <@ ARRAY['text2image','image2image']::text[])
+ OR (m.capability='video.generate' AND
+   (price.unit IN ('per_request','per_second') OR
+    (price.unit='per_1k_tokens' AND config.config->>'adapter_key'='volcengine_ark'
+     AND v.provider_model_id LIKE 'doubao-seedance-2-%' AND price.rule->>'input_micros_per_1k'='0'))
+   AND v.modes <@ ARRAY['text2video','image2video','omni_reference','avatar','motion']::text[]))
+ AND (m.capability='image.generate' OR (v.limits->>'max_outputs')::int=1)
+ AND v.supports_query=(m.capability='video.generate' OR config.config->>'adapter_key'='volcengine_music')
+ AND (NOT v.limits ? 'provider_endpoint' OR (config.config->>'adapter_key'='openrouter' AND m.capability IN ('text.generate','image.generate')))
+ AND v.queue='provider' AND v.moderation='provider' AND NOT v.supports_cancel AND NOT v.supports_callback
+ AND ((m.capability='video.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark'))
+ OR (m.capability='video.generate' AND config.config->>'adapter_key'='volcengine_avatar' AND v.provider_model_id='jimeng_realman_avatar_picture_omni_v15' AND v.modes=ARRAY['avatar']::text[] AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('output_resolution','pe_fast_mode')))
+ OR (m.capability='video.generate' AND config.config->>'adapter_key'='volcengine_motion' AND v.provider_model_id='jimeng_dreamactor_m20_gen_video' AND v.modes=ARRAY['motion']::text[] AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('cut_result_first_second_switch')))
+ OR (m.capability='text.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark','byteplus','deepseek','openai','vercel'))
+ OR (m.capability='audio.generate' AND config.config->>'adapter_key' IN ('volcengine_speech','volcengine_music'))
+ OR (m.capability='image.generate' AND config.config->>'adapter_key' IN ('openai','vercel') AND v.modes=ARRAY['text2image']::text[] AND (v.limits->>'max_outputs')::int=1 AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('size','quality')))
+ OR (m.capability='image.generate' AND (config.config->>'adapter_key'='openrouter' OR (config.config->>'adapter_key' IN ('volcengine_ark','byteplus') AND (v.limits->>'max_outputs')::int=1))))
+ FOR SHARE OF preset,m`, modelID, input.ModelVersionID, input.PriceVersionID, input.ConfigVersionID).Scan(&found)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected != 1 {
+		return application.ErrModelSourceUnavailable
+	}
+	return nil
+}
+
 // validateReleaseContract shares portable-template checks with releases assembled
-// from separately published versions. It runs inside the release transaction.
+// from separately published versions. It runs inside the caller transaction.
 func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.CreateReleaseInput) error {
+	if err := validateInstalledReleaseContract(tx, modelID, input); err != nil {
+		return err
+	}
 	var row struct {
 		ID, ModelID                                     uuid.UUID
 		VersionNo                                       int
@@ -374,6 +382,9 @@ func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.C
 	}
 	var config domain.ProviderConfig
 	if json.Unmarshal(row.ModesJSON, &version.Modes) != nil || json.Unmarshal(row.ConfigJSON, &config) != nil {
+		return application.ErrModelSourceUnavailable
+	}
+	if err := validatePinnedModelVersion(tx, version); err != nil {
 		return application.ErrModelSourceUnavailable
 	}
 	price, err := readReleasePrice(tx, modelID, input.PriceVersionID)

@@ -59,6 +59,7 @@ func (d *VolcengineSpeechDriver) ProbeModelDefaultParams(capability string) map[
 // submitSpeech is deliberately separate from Ark's Bearer/JSON protocol. A speech
 // Key is sent only to the pinned speech origin, never to a discovered endpoint.
 func (c *Client) submitSpeech(ctx context.Context, input application.GenerationRequest, key string) (application.GenerationResult, error) {
+	strictTerminal := input.StrictSpeechTerminal || input.RequireSpeechTerminalUsage
 	rejected := application.GenerationResult{Outcome: application.ProviderOutcomeNotSubmitted, ErrorCode: "invalid_provider_request"}
 	if input.Config.Validate() != nil || !validKey(key) || input.ModelID != "seed-tts-2.0" || input.Capability != "audio.generate" || input.Mode != "text2audio" || input.OutputCount != 1 || len(input.References) != 0 || input.EndpointTag != "" || strings.TrimSpace(input.Prompt) == "" || len(input.Prompt) > 16384 {
 		return rejected, nil
@@ -103,7 +104,7 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 	timeout, cancel := context.WithTimeout(ctx, time.Duration(input.Config.TimeoutSeconds)*time.Second)
 	defer cancel()
 	endpoint := input.Config.BaseURL + "/tts/unidirectional"
-	if input.StrictSpeechTerminal {
+	if strictTerminal {
 		endpoint += "/sse"
 	}
 	request, err := http.NewRequestWithContext(timeout, http.MethodPost, endpoint, bytes.NewReader(payload))
@@ -127,7 +128,7 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 	if err != nil || len(data) > 64<<20 {
 		return unknownResult(), nil
 	}
-	if input.StrictSpeechTerminal {
+	if strictTerminal {
 		if !strings.HasPrefix(strings.ToLower(response.Header.Get("Content-Type")), "text/event-stream") {
 			return unknownResult(), nil
 		}
@@ -147,9 +148,18 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 			Data  string          `json:"data"`
 			Usage json.RawMessage `json:"usage"`
 		}
-		err := decoder.Decode(&chunk)
-		if err == io.EOF {
+		var raw json.RawMessage
+		err := decoder.Decode(&raw)
+		if errors.Is(err, io.EOF) {
 			break
+		}
+		if input.RequireSpeechTerminalUsage {
+			if _, err := audioReceiptObject(raw); err != nil {
+				return unknownResult(), nil
+			}
+		}
+		if err == nil {
+			err = json.Unmarshal(raw, &chunk)
 		}
 		if err != nil || chunk.Code == nil || finished {
 			return unknownResult(), nil
@@ -160,6 +170,9 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 			}
 			if len(chunk.Usage) > 0 {
 				usage = safeSpeechUsage(chunk.Usage)
+			}
+			if input.RequireSpeechTerminalUsage && (len(chunk.Usage) == 0 || len(usage) == 0 || string(usage) == `{"text_words":0}`) {
+				return unknownResult(), nil
 			}
 			finished = true
 			continue
@@ -181,9 +194,9 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 			usage = safeSpeechUsage(chunk.Usage)
 		}
 	}
-	// Current HTTP documentation completes with code=0 and a clean HTTP EOF.
-	// The legacy 20000000 terminal marker is accepted but is not mandatory.
-	if input.StrictSpeechTerminal && !finished {
+	// Historical HTTP receipts allow code=0 plus a clean EOF. The versioned
+	// character contract requires an explicit complete SSE terminal and usage.
+	if strictTerminal && !finished {
 		return unknownResult(), nil
 	}
 	if len(output) == 0 || http.DetectContentType(output) != "audio/mpeg" {
@@ -201,6 +214,9 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 }
 
 func safeSpeechUsage(raw json.RawMessage) json.RawMessage {
+	if _, err := audioReceiptObject(raw); err != nil {
+		return nil
+	}
 	var value struct {
 		TextWords *int64 `json:"text_words"`
 	}

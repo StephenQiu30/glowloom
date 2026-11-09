@@ -161,6 +161,12 @@ func TestOnboardingRequiresFormalEvidenceForEveryModelAndMode(t *testing.T) {
 	for _, key := range keys {
 		catalog, err := store.ListModelsForProject(t.Context(), actor, catalogapp.ListModelsInput{ProjectID: project, ModelKey: key, Limit: 1})
 		require.NoError(t, err)
+		if len(catalog.Models) == 0 {
+			var found struct{ ID uuid.UUID }
+			require.NoError(t, conn.DB.Raw(`SELECT id FROM catalog.model_profile WHERE model_key=?`, key).Scan(&found).Error)
+			detail, readErr := store.ReadAdminModel(t.Context(), actor, found.ID)
+			t.Logf("missing catalog model %s availability=%+v readErr=%v", key, detail.Model.ModelAvailability, readErr)
+		}
 		require.Len(t, catalog.Models, 1)
 		model := catalog.Models[0]
 		require.Equal(t, connection.ProviderID, model.ProviderID)

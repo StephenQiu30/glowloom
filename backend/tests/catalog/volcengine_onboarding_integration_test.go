@@ -111,7 +111,7 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 			require.Equal(t, "completed", result.ModelResult)
 			require.Equal(t, 1, calls)
 			require.NoError(t, service.Record(ctx, catalogapp.CredentialTestObservation{CredentialTestRequest: request, Result: result.Result, TestedAt: time.Now().UTC(), Last4: "-key", AuthResult: result.AuthResult, AdapterResult: result.AdapterResult, DiscoveryResult: result.DiscoveryResult, ModelResult: result.ModelResult}))
-			if slug == "openai" {
+			if slug == "openai" || slug == "volcengine-ark" {
 				directoryRequest := uuid.NewString()
 				directory, err := catalogapp.NewRequestCredentialTestCommand(store).ExecuteDiscovery(ctx, actor, connected.ProviderID, credential, directoryRequest)
 				require.NoError(t, err)
@@ -121,10 +121,14 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 				require.NoError(t, err)
 				discoveryWorker := providerprobe.NewScopedActivities(database, unsealer, providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
 					require.Equal(t, http.MethodGet, r.Method)
-					require.Equal(t, "/v1/models", r.URL.Path)
+					if slug == "volcengine-ark" {
+						require.Equal(t, "/api/v3/models", r.URL.Path)
+					} else {
+						require.Equal(t, "/v1/models", r.URL.Path)
+					}
 					return providerResponse(200, `{"data":[{"id":"directory-fixture"}]}`), nil
 				})}), store)
-				observed, err := discoveryWorker.TestCredential(ctx, catalogflow.AgentTestInput{TestID: directory.TestID, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: directoryRequest, ProviderID: connected.ProviderID, AdapterKey: "openai", Credential: catalogflow.AgentCredential{ID: credential, KeyID: "volc-fixture", Ciphertext: base64.StdEncoding.EncodeToString(ciphertext)}})
+				observed, err := discoveryWorker.TestCredential(ctx, catalogflow.AgentTestInput{TestID: directory.TestID, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: directoryRequest, ProviderID: connected.ProviderID, AdapterKey: preset.Document.Config.AdapterKey, Credential: catalogflow.AgentCredential{ID: credential, KeyID: "volc-fixture", Ciphertext: base64.StdEncoding.EncodeToString(ciphertext)}})
 				require.NoError(t, err)
 				require.Len(t, observed.Candidates, 1)
 				require.Empty(t, observed.Candidates[0].Capability)
@@ -142,6 +146,12 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 				model, err := catalogapp.NewProviderConfigs(store).AddModel(ctx, actor, connected.ProviderID, add)
 				require.NoError(t, err)
 				require.Equal(t, domain.ModelDisabled, model.Status)
+				detail, err := catalogapp.NewAdminModelsQuery(store).Detail(ctx, actor, model.ID)
+				require.NoError(t, err)
+				require.False(t, detail.Model.Available, "directory visibility must not grant execution availability")
+				var validations int64
+				require.NoError(t, database.Raw(`SELECT count(*) FROM catalog.model_validation x JOIN catalog.model_release r ON r.id=x.release_id JOIN catalog.model_profile m ON m.id=r.model_id WHERE m.provider_id=?`, connected.ProviderID).Row().Scan(&validations))
+				require.Zero(t, validations, "read-only directory must not create real-provider mode evidence")
 				require.Equal(t, uuid.Nil, model.CurrentVersionID)
 				add.CustomModelID = "not-returned-by-directory"
 				add.RequestID = uuid.New()

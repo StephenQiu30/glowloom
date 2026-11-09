@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -14,7 +16,7 @@ import (
 )
 
 func TestCloudTextProtocolsKeepProviderRoutingIndependent(t *testing.T) {
-	for _, preset := range domain.BuiltinPresets() {
+	for _, preset := range catalogfixture.BuiltinPresets() {
 		if !slices.Contains(preset.Config.Capabilities, "text") {
 			continue
 		}
@@ -51,7 +53,7 @@ func TestCloudTextProtocolsKeepProviderRoutingIndependent(t *testing.T) {
 }
 
 func TestArkImageRequestsUseOneImageWithoutOpenRouterFields(t *testing.T) {
-	for _, preset := range domain.BuiltinPresets() {
+	for _, preset := range catalogfixture.BuiltinPresets() {
 		if preset.Config.AdapterKey != "volcengine_ark" && preset.Config.AdapterKey != "byteplus" {
 			continue
 		}
@@ -86,7 +88,7 @@ func TestArkImageRequestsUseOneImageWithoutOpenRouterFields(t *testing.T) {
 }
 
 func TestCloudDiscoveryDoesNotInventImageOrAccountPermissions(t *testing.T) {
-	for _, preset := range domain.BuiltinPresets() {
+	for _, preset := range catalogfixture.BuiltinPresets() {
 		if preset.Config.AdapterKey == "openrouter" || !slices.Contains(preset.Config.Capabilities, "text") {
 			continue
 		}
@@ -127,7 +129,7 @@ func TestCloudDiscoveryDoesNotInventImageOrAccountPermissions(t *testing.T) {
 
 func TestSeedreamProAndFlashOmitUnsupportedGroupAndStreamParameters(t *testing.T) {
 	var config domain.ProviderConfig
-	for _, preset := range domain.BuiltinPresets() {
+	for _, preset := range catalogfixture.BuiltinPresets() {
 		if preset.Config.AdapterKey == "volcengine_ark" {
 			config = preset.Config
 			break
@@ -161,7 +163,7 @@ func TestTextProtocolsKeepCanonicalCachedTokenEvidence(t *testing.T) {
 	for _, adapter := range []string{"deepseek", "volcengine_ark"} {
 		for _, raw := range []string{`{"prompt_tokens":1000,"completion_tokens":3,"prompt_cache_hit_tokens":800}`, `{"prompt_tokens":1000,"completion_tokens":3,"prompt_tokens_details":{"cached_tokens":800}}`} {
 			var config domain.ProviderConfig
-			for _, preset := range domain.BuiltinPresets() {
+			for _, preset := range catalogfixture.BuiltinPresets() {
 				if preset.Config.AdapterKey == adapter {
 					config = preset.Config
 					break

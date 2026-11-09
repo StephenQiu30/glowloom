@@ -12,6 +12,7 @@ const unitLabels: Record<string, string> = {
   per_image: "每张图片",
   per_second: "每秒",
   per_1k_tokens: "每千 Token",
+  per_1k_chars: "每千字符",
 };
 
 /** Renders server-calculated factors. It never calculates or authorizes a quote. */
@@ -69,11 +70,15 @@ export function QuoteCostDetail({
       aria-label="本次费用"
     >
       <p>
-        {exactCredits !== null
-          ? `预计消耗 ${exactCredits} 积分`
-          : knownCredits
-            ? `预计消耗 ${credits} 积分`
-            : `预计预留 ${formatBillingMicros(amount)}`}
+        {capped &&
+        !knownCredits &&
+        detail?.pricing_strategy === "original_duration_v1"
+          ? `最多扣 ${exactCredits} 积分`
+          : exactCredits !== null
+            ? `预计消耗 ${exactCredits} 积分`
+            : knownCredits
+              ? `预计消耗 ${credits} 积分`
+              : `预计预留 ${formatBillingMicros(amount)}`}
       </p>
       <Collapsible className="min-w-0">
         <CollapsibleTrigger asChild>
@@ -108,7 +113,11 @@ export function QuoteCostDetail({
                 价格版本: detail?.price_version_no,
                 计费单位:
                   typeof detail?.unit === "string"
-                    ? (unitLabels[detail.unit] ?? detail.unit)
+                    ? detail.unit === "per_second" &&
+                      typeof detail.unit_quantity === "number" &&
+                      detail.unit_quantity > 1
+                      ? `每${detail.unit_quantity}秒`
+                      : (unitLabels[detail.unit] ?? detail.unit)
                     : undefined,
                 "单价（原币微单位）": detail?.unit_price_micros,
                 数量: detail?.quantity,

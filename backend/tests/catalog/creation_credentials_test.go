@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 func TestMusicCredentialRequiresSeparateSigningKeys(t *testing.T) {
@@ -30,7 +31,7 @@ func TestCreationCandidatesHavePublishableSchemas(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, adapter := range []string{"volcengine_music", "volcengine_avatar", "volcengine_motion"} {
-		for _, candidate := range domain.BuiltinModelCatalog(adapter).Models {
+		for _, candidate := range catalogfixture.BuiltinModelCatalog(adapter).Models {
 			version, err := candidate.OnboardingVersion(uuid.New(), uuid.New())
 			if err != nil {
 				t.Fatal(err)

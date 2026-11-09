@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -103,7 +105,7 @@ func TestDoubaoTTSRejectsMalformedResponsesAndAuthenticatedRedirects(t *testing.
 func TestSeedance25FirstFrameAlwaysUsesAdaptiveRatio(t *testing.T) {
 	for _, mode := range []string{"text2video", "image2video"} {
 		t.Run(mode, func(t *testing.T) {
-			config := domain.BuiltinPresets()[0].Config
+			config := catalogfixture.BuiltinPresets()[0].Config
 			client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
 				var body map[string]any
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
@@ -180,7 +182,7 @@ func TestSeedance25OmniUsesTypedReferenceObjects(t *testing.T) {
 				return providerResponse(200, `{"id":"controlled-seedance-task"}`), nil
 			})})
 			var config domain.ProviderConfig
-			for _, preset := range domain.BuiltinPresets() {
+			for _, preset := range catalogfixture.BuiltinPresets() {
 				if preset.Config.AdapterKey == "volcengine_ark" {
 					config = preset.Config
 				}

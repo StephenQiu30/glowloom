@@ -103,6 +103,20 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 			return fmt.Errorf("read current quote model and price: %w", result.Error)
 		}
 		if result.RowsAffected == 1 && (current.ReleaseID == nil || (frozen.ReleaseID != uuid.Nil && *current.ReleaseID == frozen.ReleaseID)) {
+			if current.ModelVersionID == nil {
+				return nil
+			}
+			releaseID := uuid.Nil
+			if current.ReleaseID != nil {
+				releaseID = *current.ReleaseID
+			}
+			available, err := s.availableForExecution(tx, *current.ModelVersionID, releaseID, quoted.Mode)
+			if err != nil {
+				return err
+			}
+			if !available {
+				return nil
+			}
 			modelID, priceID = current.ModelVersionID, current.PriceVersionID
 		}
 		return nil

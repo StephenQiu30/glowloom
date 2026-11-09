@@ -45,8 +45,8 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 		return ErrInvalidConfiguration
 	}
 	delete(fields, domain.ProcurementVersionField)
+	var strategy string
 	if raw, present := fields["pricing_strategy"]; present {
-		var strategy string
 		if string(raw) == "null" || json.Unmarshal(raw, &strategy) != nil || strategy == "" || !domain.CompatiblePricingStrategy(strategy, price.Unit) {
 			return ErrInvalidConfiguration
 		}
@@ -54,6 +54,9 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 			return ErrInvalidConfiguration
 		}
 		delete(fields, "pricing_strategy")
+	}
+	if strategy == domain.PricingOriginalDurationV1 && fields["unit_quantity"] == nil {
+		return ErrInvalidConfiguration
 	}
 	switch price.Unit {
 	case domain.PricePer1KTokens:
@@ -120,6 +123,11 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 					return ErrInvalidConfiguration
 				}
 			case "base_micros":
+			case "unit_quantity":
+				quantity, ok := nonnegativeMicros(raw)
+				if !ok || quantity == 0 || strategy != domain.PricingOriginalDurationV1 {
+					return ErrInvalidConfiguration
+				}
 			case "by_mode", "by_resolution":
 				if !validCoefficients(raw) {
 					return ErrInvalidConfiguration

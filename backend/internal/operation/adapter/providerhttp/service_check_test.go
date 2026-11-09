@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/stretchr/testify/require"
 
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -16,7 +18,7 @@ type serviceCheckTransport func(*http.Request) (*http.Response, error)
 
 func (f serviceCheckTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 func checkConfig(adapter string) catalog.ProviderConfig {
-	for _, p := range catalog.BuiltinPresets() {
+	for _, p := range catalogfixture.BuiltinPresets() {
 		if p.Config.AdapterKey == adapter {
 			return p.Config
 		}

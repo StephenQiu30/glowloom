@@ -14,6 +14,11 @@ import {
 } from "@/components/generation/composer-session";
 
 const model: API.ModelResponse = {
+  available: true,
+  mode_availability: ["words", "reference", "omni_reference"].map((mode) => ({
+    mode,
+    available: true,
+  })),
   current_version: {
     id: "v1",
     modes: ["words", "reference"],
@@ -117,6 +122,8 @@ it("模式所需参考数量按实际素材去重，同一素材重复引用不�
 
 it("模型参数随合同替换，移除不可编辑的旧字段，并与模型一起撤销重做", () => {
   const next: API.ModelResponse = {
+    available: true,
+    mode_availability: [{ mode: "omni_reference", available: true }],
     current_version: {
       id: "v2",
       modes: ["omni_reference"],
@@ -188,4 +195,20 @@ it("模型参数随合同替换，移除不可编辑的旧字段，并与模型�
   } finally {
     editor.destroy();
   }
+});
+it("does not infer an unverified mode from declared capability modes", () => {
+  const current = {
+    ...model,
+    available: true,
+    mode_availability: [
+      { mode: "words", available: true },
+      { mode: "reference", available: false },
+    ],
+  };
+  expect(
+    referenceMode(
+      { ...emptyPromptDraft(), modelVersion: "v1", references: [binding] },
+      current,
+    ),
+  ).toBeNull();
 });

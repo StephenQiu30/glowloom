@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -37,7 +39,7 @@ func TestProviderHTTPRoutesAndDoesNotRetryUnknownSubmission(t *testing.T) {
 				require.Equal(t, "test/model", payload["model"])
 				return nil, errors.New("transport interrupted with secret fixture-key")
 			})})
-			result, err := client.Submit(context.Background(), operationapp.GenerationRequest{Config: domain.BuiltinPresets()[1].Config, ModelID: "test/model", Capability: capability, Mode: map[string]string{"text.generate": "text_to_text", "image.generate": "text2image", "video.generate": "text2video"}[capability], Prompt: "test", OutputCount: 1}, "fixture-key")
+			result, err := client.Submit(context.Background(), operationapp.GenerationRequest{Config: catalogfixture.BuiltinPresets()[1].Config, ModelID: "test/model", Capability: capability, Mode: map[string]string{"text.generate": "text_to_text", "image.generate": "text2image", "video.generate": "text2video"}[capability], Prompt: "test", OutputCount: 1}, "fixture-key")
 			require.NoError(t, err)
 			require.Equal(t, operationapp.ProviderOutcome("unknown"), result.Outcome)
 			require.Equal(t, 1, calls)
@@ -47,7 +49,7 @@ func TestProviderHTTPRoutesAndDoesNotRetryUnknownSubmission(t *testing.T) {
 }
 func TestProviderHTTPRejectsUnknownParametersBeforeNetwork(t *testing.T) {
 	client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(*http.Request) (*http.Response, error) { t.Fatal("unexpected network request"); return nil, nil })})
-	result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: domain.BuiltinPresets()[1].Config, ModelID: "test/model", Capability: "image.generate", Mode: "text2image", Prompt: "test", OutputCount: 1, Params: map[string]any{"callback_url": "https://evil.test"}}, "key")
+	result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: catalogfixture.BuiltinPresets()[1].Config, ModelID: "test/model", Capability: "image.generate", Mode: "text2image", Prompt: "test", OutputCount: 1, Params: map[string]any{"callback_url": "https://evil.test"}}, "key")
 	require.NoError(t, err)
 	require.Equal(t, operationapp.ProviderOutcome("not_submitted"), result.Outcome)
 }
@@ -55,7 +57,7 @@ func TestProviderHTTPRejectsForeignAuthenticatedVideoURL(t *testing.T) {
 	client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(_ *http.Request) (*http.Response, error) {
 		return providerResponse(200, `{"id":"task-1","status":"completed","unsigned_urls":["https://evil.test/video"],"usage":{"cost":0.25}}`), nil
 	})})
-	result, err := client.Query(t.Context(), domain.BuiltinPresets()[1].Config, "task-1", "key")
+	result, err := client.Query(t.Context(), catalogfixture.BuiltinPresets()[1].Config, "task-1", "key")
 	require.NoError(t, err)
 	require.Equal(t, operationapp.ProviderTaskState("unknown"), result.State)
 	require.Empty(t, result.URLs)
@@ -69,7 +71,7 @@ func TestProviderModesRejectMismatchedReferencesBeforeDispatch(t *testing.T) {
 		{Capability: "video.generate", Mode: "text2video", References: []operationapp.ProviderReference{{Role: "first_frame", URL: "https://assets.example/image.png"}}},
 		{Capability: "text.generate", Mode: "invented"},
 	} {
-		input.Config = domain.BuiltinPresets()[1].Config
+		input.Config = catalogfixture.BuiltinPresets()[1].Config
 		input.ModelID = "fixture/model"
 		input.Prompt = "test"
 		input.OutputCount = 1
@@ -80,7 +82,7 @@ func TestProviderModesRejectMismatchedReferencesBeforeDispatch(t *testing.T) {
 }
 
 func TestProviderVideoMapsInternalDurationWithoutChangingFrozenInput(t *testing.T) {
-	for _, config := range domain.BuiltinPresets() {
+	for _, config := range catalogfixture.BuiltinPresets() {
 		if config.Config.AdapterKey != "volcengine_ark" && config.Config.AdapterKey != "openrouter" {
 			continue
 		}
@@ -135,7 +137,7 @@ func TestOnboardingProbeUsesOneBoundedRequestAndDistinguishesVideoAcceptance(t *
 				return providerResponse(tc.status, tc.body), nil
 			})})
 			var config domain.ProviderConfig
-			for _, preset := range domain.BuiltinPresets() {
+			for _, preset := range catalogfixture.BuiltinPresets() {
 				if preset.Config.AdapterKey == "volcengine_ark" {
 					config = preset.Config
 				}

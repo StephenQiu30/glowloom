@@ -1,3 +1,7 @@
+import {
+  modelAvailableForMode,
+  availableModelModes,
+} from "./model-availability";
 import type { GenerationSeed } from "./generation-dialog";
 
 const modes: Record<string, string[]> = {
@@ -14,9 +18,9 @@ export function modelsForCreation(
   models: API.ModelResponse[],
   type?: GenerationSeed["creationType"],
 ) {
-  if (!type) return models;
+  if (!type) return models.filter((model) => modelAvailableForMode(model));
   return models.filter((model) =>
-    model.current_version?.modes?.some((mode) => modes[type].includes(mode)),
+    availableModelModes(model).some((mode) => modes[type].includes(mode)),
   );
 }
 

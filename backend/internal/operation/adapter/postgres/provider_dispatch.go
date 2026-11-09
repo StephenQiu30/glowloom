@@ -103,9 +103,23 @@ func (s *Store) ClaimProviderDispatch(ctx context.Context, identity application.
 			WHERE o.id=? AND greatest(coalesce(o.quote_micros,0),coalesce(r.amount_micros,0))>0
 			  AND (r.cap_at_quote OR EXISTS(SELECT 1 FROM billing.project_wallet WHERE project_id=o.project_id))
 			  AND (r.id IS NULL OR r.status<>'held' OR r.amount_micros<coalesce(o.quote_micros,0)
-			    OR coalesce((SELECT sum(a.amount_micros) FROM billing.wallet_allocation a
-			                 WHERE a.reservation_id=r.id),0)<>r.amount_micros
-			    OR NOT EXISTS (SELECT 1 FROM billing.wallet_hold h WHERE h.reservation_id=r.id))
+			    OR ((coalesce((SELECT sum(a.amount_micros) FROM billing.wallet_allocation a
+			                  WHERE a.reservation_id=r.id),0)<>r.amount_micros
+			      OR NOT EXISTS (SELECT 1 FROM billing.wallet_hold h WHERE h.reservation_id=r.id))
+			      AND NOT EXISTS (
+			        SELECT 1 FROM billing.credit_command c
+			        JOIN billing.credit_hold h ON h.command_id=c.id AND h.id::text=c.result->>'hold_id'
+			        JOIN workspace.project p ON p.id=o.project_id AND NOT p.is_delete
+			        LEFT JOIN billing.project_wallet w ON w.project_id=p.id
+			        WHERE c.caller_id='system:billing-operation' AND c.action='freeze' AND c.status='succeeded'
+			          AND c.source_id=o.id AND c.scope_id=p.owner_scope_id
+			          AND COALESCE(w.scope_id,p.owner_scope_id)=p.owner_scope_id
+			          AND c.amount_micros=r.amount_micros AND h.amount_micros=c.amount_micros
+			          AND h.scope_id=c.scope_id AND h.source_id=o.id AND h.status='held'
+			          AND c.idempotency_key_hash=encode(sha256(convert_to('operation/'||o.id::text||'/freeze','UTF8')),'hex')
+			          AND (SELECT COALESCE(sum(a.amount_micros),0) FROM billing.credit_hold_allocation a
+			               WHERE a.hold_id=h.id AND a.scope_id=h.scope_id)=h.amount_micros
+			      )))
 		)`, identity.OperationID).Row().Scan(&unfunded); err != nil {
 			return fmt.Errorf("verify dispatch funding: %w", err)
 		}

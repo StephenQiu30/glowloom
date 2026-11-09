@@ -1044,6 +1044,12 @@ declare namespace API {
   };
 
   type CreatedModel = {
+    availability_config_version_id?: string;
+    availability_credential_id?: string;
+    availability_model_version_id?: string;
+    availability_price_version_id?: string;
+    availability_release_id?: string;
+    available?: boolean;
     billing?: AdminModelBilling;
     capability?: string;
     create_time?: string;
@@ -1052,10 +1058,12 @@ declare namespace API {
     has_price?: boolean;
     has_publication?: boolean;
     id?: string;
+    mode_availability?: ModeAvailability[];
     model_key?: string;
     provider_id?: string;
     revision?: number;
     status?: ModelStatus;
+    unavailable_reasons?: string[];
     update_time?: string;
   };
 
@@ -3107,7 +3115,7 @@ declare namespace API {
     name?: string;
     /** 模型能力标识 */
     capability?: string;
-    /** active、archived、disabled、unconfigured、unverified 或 price_pending */
+    /** available 或 unavailable */
     status?: string;
     /** 仅查看已安装预设的计价审核 */
     pricing_review?: boolean;
@@ -3124,7 +3132,7 @@ declare namespace API {
     name?: string;
     /** 供应商标识 */
     adapter_key?: string;
-    /** active、disabled 或 archived */
+    /** available 或 unavailable */
     status?: string;
   };
 
@@ -3831,6 +3839,12 @@ declare namespace API {
 
   type Mode = "inherit" | "append" | "rewrite";
 
+  type ModeAvailability = {
+    available?: boolean;
+    mode?: string;
+    unavailable_reasons?: string[];
+  };
+
   type ModelCandidate = {
     capability?: string;
     display_name?: string;
@@ -3843,13 +3857,22 @@ declare namespace API {
     version?: string;
   };
 
+  type ModelCandidateExecution = {
+    expected_max_ms?: number;
+    limits?: number[];
+    param_schema?: number[];
+    supports_query?: boolean;
+  };
+
   type ModelCandidatePreset = {
     adapter_key?: string;
     capability?: string;
     display_name?: string;
+    execution?: ModelCandidateExecution;
     key?: string;
     lifecycle?: string;
     max_outputs?: number;
+    metering_strategy?: string;
     modes?: string[];
     provider_model_id?: string;
     requires_model_selection?: boolean;
@@ -3937,6 +3960,12 @@ declare namespace API {
   };
 
   type ModelResponse = {
+    availability_config_version_id?: string;
+    availability_credential_id?: string;
+    availability_model_version_id?: string;
+    availability_price_version_id?: string;
+    availability_release_id?: string;
+    available?: boolean;
     capability?: string;
     credential_present?: boolean;
     credential_test_result?: string | null;
@@ -3946,12 +3975,14 @@ declare namespace API {
     id?: string;
     input_roles?: string[];
     key?: string;
+    mode_availability?: ModeAvailability[];
     pricing_preview?: PricingPreview;
     provider_id?: string;
     provider_name?: string;
     provider_status?: string;
     region?: string;
     status?: string;
+    unavailable_reasons?: string[];
   };
 
   type ModelStatus = "active" | "disabled" | "archived";
@@ -4963,9 +4994,12 @@ declare namespace API {
   };
 
   type ProviderListItem = {
+    available?: boolean;
+    available_model_count?: number;
     credential?: ProviderCredentialSummary;
     model_count?: number;
     provider?: CreatedProvider;
+    unavailable_reasons?: string[];
   };
 
   type ProviderOnboardingState = {

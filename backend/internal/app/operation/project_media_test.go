@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -54,7 +56,7 @@ func TestLocalProjectImageReachesArkAsVerifiedBytes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, reads)
 	var config catalog.ProviderConfig
-	for _, p := range catalog.BuiltinPresets() {
+	for _, p := range catalogfixture.BuiltinPresets() {
 		if p.Config.AdapterKey == "volcengine_ark" {
 			config = p.Config
 		}

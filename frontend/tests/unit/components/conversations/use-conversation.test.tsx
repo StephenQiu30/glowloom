@@ -57,6 +57,8 @@ const model = {
   status: "active",
   provider_status: "active",
   credential_present: true,
+  available: true,
+  mode_availability: [{ mode: "text_to_text", available: true }],
   capability: "text.generate",
   input_roles: ["prompt"],
   current_version: { id: "version", limits: {} },

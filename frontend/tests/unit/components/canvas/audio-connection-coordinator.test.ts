@@ -26,6 +26,8 @@ function fixture() {
     status: "active",
     provider_status: "active",
     credential_present: true,
+    available: true,
+    mode_availability: [{ mode: "omni_audio", available: true }],
     input_roles: ["reference_audio"],
     current_version: {
       id: crypto.randomUUID(),

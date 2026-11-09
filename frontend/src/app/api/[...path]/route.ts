@@ -71,6 +71,21 @@ const identityRoutes: {
     query: ["cursor", "limit", "action", "from", "to"],
   },
   {
+    pattern: `platform/billing/scopes/${identityUUID}/credit-commands`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `platform/billing/scopes/${identityUUID}/credit-commands/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `platform/billing/scopes/${identityUUID}/wallet`,
+    methods: ["GET"],
+    query: ["cursor"],
+  },
+  {
     pattern: `platform/user-statistics`,
     methods: ["GET"],
     query: [

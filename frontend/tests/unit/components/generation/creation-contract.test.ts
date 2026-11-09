@@ -11,7 +11,12 @@ const catalog = [
   "avatar",
   "motion",
   "text2video",
-].map((mode) => ({ id: mode, current_version: { id: mode, modes: [mode] } }));
+].map((mode) => ({
+  id: mode,
+  available: true,
+  mode_availability: [{ mode, available: true }],
+  current_version: { id: mode, modes: [mode] },
+}));
 it("相同媒体类型的语音和音乐、视频和数字人不会混入对方模型选择", () => {
   expect(modelsForCreation(catalog, "audio").map((m) => m.id)).toEqual([
     "text2audio",
@@ -37,6 +42,8 @@ it("必填素材未添加时保留动作模式，并显示素材问题而不是�
     mode: "motion",
   };
   const model: API.ModelResponse = {
+    available: true,
+    mode_availability: [{ mode: "motion", available: true }],
     status: "active",
     provider_status: "active",
     credential_present: true,
@@ -68,6 +75,11 @@ it("纯音乐模式不会被无素材模式推断重置为歌曲", () => {
   };
   expect(
     referenceMode(draft, {
+      available: true,
+      mode_availability: ["music_song", "music_instrumental"].map((mode) => ({
+        mode,
+        available: true,
+      })),
       current_version: {
         id: "music",
         modes: ["music_song", "music_instrumental"],

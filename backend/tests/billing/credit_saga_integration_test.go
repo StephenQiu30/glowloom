@@ -22,7 +22,7 @@ func TestCreditSagaUnknownOutcomeHoldsThenFailureAutomaticallyReleases(t *testin
 	unknown := billingapp.CreditSettlementOutcome{
 		EventID: uuid.New(), ScopeID: scopeID, HoldID: holdID, Outcome: "unknown", OccurredAt: time.Now().UTC(),
 	}
-	if err := sendCreditOutcomeAsApp(t, ctx, database, unknown); err != nil {
+	if err := sendCreditOutcomeAsApp(ctx, t, database, unknown); err != nil {
 		t.Fatalf("apply unknown settlement outcome: %v", err)
 	}
 	var saga struct {
@@ -39,19 +39,19 @@ func TestCreditSagaUnknownOutcomeHoldsThenFailureAutomaticallyReleases(t *testin
 	failure := billingapp.CreditSettlementOutcome{
 		EventID: uuid.New(), ScopeID: scopeID, HoldID: holdID, Outcome: "failed", OccurredAt: time.Now().UTC(),
 	}
-	if err := sendCreditOutcomeAsApp(t, ctx, database, failure); err != nil {
+	if err := sendCreditOutcomeAsApp(ctx, t, database, failure); err != nil {
 		t.Fatalf("apply failure settlement outcome: %v", err)
 	}
 	command := readCreditSagaCommand(t, database, holdID)
 	if command.Action != string(billingapp.CreditRelease) || command.AmountMicros != 5*billingdomain.MicrosPerCredit || command.Status != "accepted" {
 		t.Fatalf("automatic compensation = %+v", command)
 	}
-	processCreditCommandAsApp(t, ctx, database, command.ID)
-	consumeCreditCommandResultAsApp(t, ctx, database, command.ID)
-	if err := sendCreditOutcomeAsApp(t, ctx, database, failure); err != nil {
+	processCreditCommandAsApp(ctx, t, database, command.ID)
+	consumeCreditCommandResultAsApp(ctx, t, database, command.ID)
+	if err := sendCreditOutcomeAsApp(ctx, t, database, failure); err != nil {
 		t.Fatalf("replay failure outcome: %v", err)
 	}
-	if err := sendCreditOutcomeAsApp(t, ctx, database, billingapp.CreditSettlementOutcome{
+	if err := sendCreditOutcomeAsApp(ctx, t, database, billingapp.CreditSettlementOutcome{
 		EventID: uuid.New(), ScopeID: scopeID, HoldID: holdID, Outcome: "succeeded",
 		AmountMicros: 3 * billingdomain.MicrosPerCredit, OccurredAt: time.Now().UTC(),
 	}); !errors.Is(err, billingapp.ErrCreditOutcomeConflict) {
@@ -77,15 +77,15 @@ func TestCreditSagaSuccessCommitsActualChargeAndReleasesRemainder(t *testing.T) 
 		EventID: uuid.New(), ScopeID: scopeID, HoldID: holdID, Outcome: "succeeded",
 		AmountMicros: 3 * billingdomain.MicrosPerCredit, OccurredAt: time.Now().UTC(),
 	}
-	if err := sendCreditOutcomeAsApp(t, ctx, database, outcome); err != nil {
+	if err := sendCreditOutcomeAsApp(ctx, t, database, outcome); err != nil {
 		t.Fatalf("apply success settlement outcome: %v", err)
 	}
 	command := readCreditSagaCommand(t, database, holdID)
 	if command.Action != string(billingapp.CreditCommit) || command.AmountMicros != 3*billingdomain.MicrosPerCredit {
 		t.Fatalf("automatic commit = %+v", command)
 	}
-	processCreditCommandAsApp(t, ctx, database, command.ID)
-	consumeCreditCommandResultAsApp(t, ctx, database, command.ID)
+	processCreditCommandAsApp(ctx, t, database, command.ID)
+	consumeCreditCommandResultAsApp(ctx, t, database, command.ID)
 	var status string
 	if err := database.Raw(`SELECT status FROM billing.credit_saga WHERE hold_id=?::uuid`, holdID).Scan(&status).Error; err != nil || status != "committed" {
 		t.Fatalf("final saga status = %q, error = %v", status, err)
@@ -115,9 +115,9 @@ func newCreditSagaFixture(t *testing.T) (context.Context, *gorm.DB, uuid.UUID, *
 	callerID := "credit-saga-test-" + uuid.NewString()
 	grant := testCreditCommand(callerID, actor.ScopeID, billingapp.CreditGrant, uuid.New(), uuid.New(), 8*billingdomain.MicrosPerCredit)
 	grant.ExpiresAt = timePointer(time.Now().UTC().Add(30 * 24 * time.Hour))
-	acceptAndProcessCreditCommand(t, ctx, store, grant)
+	acceptAndProcessCreditCommand(ctx, t, store, grant)
 	freeze := testCreditCommand(callerID, actor.ScopeID, billingapp.CreditFreeze, uuid.New(), uuid.New(), 5*billingdomain.MicrosPerCredit)
-	freezeReceipt := acceptAndProcessCreditCommand(t, ctx, store, freeze)
+	freezeReceipt := acceptAndProcessCreditCommand(ctx, t, store, freeze)
 	var freezeResult struct {
 		HoldID uuid.UUID `json:"hold_id"`
 	}
@@ -138,7 +138,7 @@ func sendCreditOutcome(ctx context.Context, handler *billingevent.CreditEventHan
 	return handler.Handle(ctx, inboxapp.Record{Topic: billingevent.CreditSettlementOutcomeTopic, Key: []byte(outcome.ScopeID.String()), Value: payload})
 }
 
-func sendCreditOutcomeAsApp(t *testing.T, ctx context.Context, database *gorm.DB, outcome billingapp.CreditSettlementOutcome) error {
+func sendCreditOutcomeAsApp(ctx context.Context, t *testing.T, database *gorm.DB, outcome billingapp.CreditSettlementOutcome) error {
 	t.Helper()
 	return database.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
@@ -149,7 +149,7 @@ func sendCreditOutcomeAsApp(t *testing.T, ctx context.Context, database *gorm.DB
 	})
 }
 
-func processCreditCommandAsApp(t *testing.T, ctx context.Context, database *gorm.DB, commandID uuid.UUID) {
+func processCreditCommandAsApp(ctx context.Context, t *testing.T, database *gorm.DB, commandID uuid.UUID) {
 	t.Helper()
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
@@ -174,7 +174,7 @@ func readCreditSagaCommand(t *testing.T, database *gorm.DB, holdID uuid.UUID) cr
 	return command
 }
 
-func consumeCreditCommandResultAsApp(t *testing.T, ctx context.Context, database *gorm.DB, commandID uuid.UUID) {
+func consumeCreditCommandResultAsApp(ctx context.Context, t *testing.T, database *gorm.DB, commandID uuid.UUID) {
 	t.Helper()
 	var record struct {
 		ScopeID uuid.UUID

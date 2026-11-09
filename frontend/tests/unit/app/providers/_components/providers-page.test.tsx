@@ -220,7 +220,7 @@ it("连接筛选条件提交给服务端，切换预设后仍然保留", async (
     target: { value: "OpenAI" },
   });
   fireEvent.change(filter.getByLabelText("状态"), {
-    target: { value: "active" },
+    target: { value: "available" },
   });
   fireEvent.click(filter.getByRole("button", { name: "筛选" }));
   await screen.findByText("没有匹配的连接");
@@ -228,7 +228,7 @@ it("连接筛选条件提交给服务端，切换预设后仍然保留", async (
     limit: 20,
     cursor: undefined,
     name: "OpenAI",
-    status: "active",
+    status: "available",
   });
   fireEvent.click(screen.getByRole("button", { name: "供应商预设" }));
   expect(screen.queryByRole("form", { name: "服务连接筛选" })).toBeNull();
@@ -389,9 +389,9 @@ it("连接列表显示品牌名称和模型数，不将未启用连接称为已�
   expect(screen.queryByText(/••••|1234/)).toBeNull();
   expect(screen.getByRole("columnheader", { name: "供应商" })).toBeTruthy();
   expect(screen.getByRole("columnheader", { name: "接入模型" })).toBeTruthy();
-  expect(screen.getByRole("columnheader", { name: "配置状态" })).toBeTruthy();
+  expect(screen.queryByRole("columnheader", { name: "配置状态" })).toBeNull();
   expect(
-    screen.getByRole("link", { name: "8 个模型" }).getAttribute("href"),
+    screen.getByRole("link", { name: "0/8 个模型" }).getAttribute("href"),
   ).toBe("/models?provider=connection");
   expect(screen.queryByRole("columnheader", { name: "最近检查" })).toBeNull();
   fireEvent.pointerDown(screen.getByRole("button", { name: "显示列" }), {
@@ -402,8 +402,8 @@ it("连接列表显示品牌名称和模型数，不将未启用连接称为已�
     await screen.findByRole("menuitemcheckbox", { name: "配置状态" }),
   );
   fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
-  expect(screen.queryByRole("columnheader", { name: "配置状态" })).toBeNull();
-  expect(screen.getByRole("cell", { name: "未启用" })).toBeTruthy();
+  expect(screen.getByRole("columnheader", { name: "配置状态" })).toBeTruthy();
+  expect(screen.getByRole("cell", { name: "不可用" })).toBeTruthy();
   expect(screen.queryByText("已停用")).toBeNull();
 });
 

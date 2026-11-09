@@ -150,7 +150,7 @@ func (q *AdminModelsQuery) List(ctx context.Context, actor identityapp.Principal
 	input.Capability = strings.TrimSpace(input.Capability)
 	if q == nil || q.store == nil || len(input.Name) > 400 || strings.ContainsRune(input.Name, 0) ||
 		len(input.Capability) > 128 || strings.ContainsRune(input.Capability, 0) ||
-		(input.Status != "" && !slices.Contains([]string{"active", "archived", "disabled", "unconfigured", "unverified", "price_pending"}, input.Status)) ||
+		(input.Status != "" && !slices.Contains([]string{"available", "unavailable"}, input.Status)) ||
 		(input.BillingStatus != "" && (!input.PricingReview || !slices.Contains([]string{"billable", "price_pending", "usage_pending", "inactive"}, input.BillingStatus))) ||
 		input.Limit < 0 || input.Limit > 200 || (input.After != nil && (input.After.ID == uuid.Nil || input.After.Key == "" || len(input.After.Key) > 128)) {
 		return AdminModelPage{}, ErrInvalidAdminModels

@@ -1,5 +1,7 @@
 "use client";
 
+import { modelAvailableForMode } from "./model-availability";
+
 import { useState, type ComponentProps } from "react";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Box, ChevronDown } from "lucide-react";
@@ -100,6 +102,7 @@ export function ModelSelectOption({
 /** Selection updates the owning editor and leaves submission to its separate action. */
 export function ModelPicker({
   models,
+  mode,
   value,
   disabled,
   onSelect,
@@ -109,6 +112,7 @@ export function ModelPicker({
 }: {
   label?: string;
   models: API.ModelResponse[];
+  mode?: string | null;
   value: string | null | undefined;
   disabled: boolean;
   onSelect: (model: API.ModelResponse) => void;
@@ -118,16 +122,13 @@ export function ModelPicker({
   const [projectPromptOpen, setProjectPromptOpen] = useState(false);
   const choices = models.flatMap((model) => {
     const id = model.current_version?.id;
-    if (!id) return [];
+    if (!id || !modelAvailableForMode(model, mode)) return [];
     return [
       {
         id,
         model,
         name: model.display_name || model.key || "未命名模型",
-        unavailable:
-          model.status !== "active" ||
-          model.provider_status !== "active" ||
-          !model.credential_present,
+        unavailable: false,
       },
     ];
   });

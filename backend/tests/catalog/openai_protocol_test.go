@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -15,7 +17,7 @@ import (
 
 func openAIConfig(t *testing.T) domain.ProviderConfig {
 	t.Helper()
-	for _, p := range domain.BuiltinPresets() {
+	for _, p := range catalogfixture.BuiltinPresets() {
 		if p.Config.AdapterKey == "openai" {
 			return p.Config
 		}
@@ -59,7 +61,7 @@ func TestOpenAIResponsesProtocol(t *testing.T) {
 }
 
 func TestOpenAICandidatesCanCreateConservativeVersions(t *testing.T) {
-	catalog := domain.BuiltinModelCatalog("openai")
+	catalog := catalogfixture.BuiltinModelCatalog("openai")
 	require.NotEmpty(t, catalog.Models)
 	for _, candidate := range catalog.Models {
 		require.NotContains(t, []string{"o1", "o1-mini", "o3-mini", "dall-e-3", "gpt-4-turbo"}, candidate.ProviderModelID)

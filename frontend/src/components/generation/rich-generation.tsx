@@ -104,6 +104,10 @@ import {
 import { reconcileLabels } from "./draft-resolution";
 import { canonical } from "./draft-save";
 import { PromptEditor } from "./prompt-editor";
+import {
+  availableModelModes,
+  modelAvailableForMode,
+} from "./model-availability";
 import { ModelPicker } from "./model-picker";
 import { GenerationParameters } from "./generation-parameters";
 import { AvatarTextDrive } from "./avatar-text-drive";
@@ -1116,21 +1120,24 @@ function EditorWorkspace({
       setModels((values) =>
         values.map((value) =>
           value.current_version?.id === version
-            ? (found ?? { ...value, status: "disabled" })
+            ? (found ?? {
+                ...value,
+                available: false,
+                mode_availability: [],
+                status: "disabled",
+              })
             : value,
         ),
       );
-      if (!found?.current_version?.modes?.includes(mode))
-        throw new Error("该模型模式已不可用");
-      if (
-        found.status !== "active" ||
-        found.provider_status !== "active" ||
-        !found.credential_present
-      )
-        throw new Error("该模型当前不可用");
       catalog.current = catalog.current.map((item) =>
-        item.current_version?.id === version ? found! : item,
+        item.current_version?.id === version
+          ? (found ?? { ...item, available: false, mode_availability: [] })
+          : item,
       );
+      if (!found || !modelAvailableForMode(found))
+        throw new Error("该模型当前不可用");
+      if (!modelAvailableForMode(found, mode))
+        throw new Error("该模型模式已不可用");
       session.resolveModeSelection(request);
     } catch (error) {
       if (session.pendingTarget?.selectionEpoch !== request.selectionEpoch)
@@ -1337,7 +1344,7 @@ function EditorWorkspace({
       // The server still requires a verified release before quoting generation.
       session.adoptDraft({ ...before, mode });
     } else if (before.mode && before.mode !== mode) {
-      const next = models.find((m) => m.current_version?.modes?.includes(mode));
+      const next = models.find((m) => modelAvailableForMode(m, mode));
       if (!next?.current_version?.id)
         throw new Error(
           mode === "omni_audio"
@@ -1931,6 +1938,7 @@ function EditorWorkspace({
                     {saveState} · r{revision}
                   </p>
                   <ModelPicker
+                    mode={draft.mode}
                     models={models}
                     value={draft.modelVersion}
                     disabled={frozen || !session}
@@ -2106,6 +2114,7 @@ function EditorWorkspace({
                 >
                   {presentation === "home" && headerActions}
                   <ModelPicker
+                    mode={draft.mode}
                     models={models}
                     value={draft.modelVersion}
                     disabled={frozen || !session}
@@ -2173,7 +2182,7 @@ function EditorWorkspace({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {model.current_version?.modes?.map((mode) => (
+                        {availableModelModes(model).map((mode) => (
                           <SelectItem key={mode} value={mode}>
                             {creationModeLabel(mode)}
                           </SelectItem>
@@ -2270,7 +2279,7 @@ function EditorWorkspace({
                     if (m?.current_version?.id)
                       selectMode(
                         m.current_version.id,
-                        m.current_version.modes?.[0] ?? "",
+                        availableModelModes(m)[0] ?? "",
                       );
                   }}
                 >
@@ -2283,24 +2292,22 @@ function EditorWorkspace({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {models.map((m) =>
-                        m.current_version?.id ? (
-                          <SelectItem
-                            key={m.id}
-                            value={m.current_version?.id}
-                            disabled={
-                              m.status !== "active" ||
-                              m.provider_status !== "active" ||
-                              !m.credential_present
-                            }
-                          >
-                            {m.display_name}
-                            {m.status !== "active" || !m.credential_present
-                              ? " · 当前不可用"
-                              : ""}
-                          </SelectItem>
-                        ) : null,
-                      )}
+                      {models
+                        .filter((m) => modelAvailableForMode(m, draft.mode))
+                        .map((m) =>
+                          m.current_version?.id ? (
+                            <SelectItem
+                              key={m.id}
+                              value={m.current_version?.id}
+                              disabled={!modelAvailableForMode(m, draft.mode)}
+                            >
+                              {m.display_name}
+                              {!modelAvailableForMode(m, draft.mode)
+                                ? " · 当前不可用"
+                                : ""}
+                            </SelectItem>
+                          ) : null,
+                        )}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
@@ -2327,7 +2334,7 @@ function EditorWorkspace({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {model?.current_version?.modes?.map((m) => (
+                      {availableModelModes(model).map((m) => (
                         <SelectItem key={m} value={m}>
                           {creationModeLabel(m)}
                         </SelectItem>

@@ -132,7 +132,12 @@ func readPreset(tx *gorm.DB, id uuid.UUID) (domain.Preset, error) {
 	if r.RowsAffected != 1 {
 		return domain.Preset{}, application.ErrPresetNotFound
 	}
-	return row.preset()
+	preset, err := row.preset()
+	if err != nil {
+		return domain.Preset{}, err
+	}
+	preset.ModelCatalog, err = readModelCatalog(tx, preset.VersionID, preset.Document)
+	return preset, err
 }
 
 // ListPresets reads an authorized bounded registry, including archived entries.
@@ -148,6 +153,10 @@ func (s *Store) ListPresets(ctx context.Context, actor identityapp.Principal) ([
 		}
 		for _, row := range rows {
 			preset, err := row.preset()
+			if err != nil {
+				return err
+			}
+			preset.ModelCatalog, err = readModelCatalog(tx, preset.VersionID, preset.Document)
 			if err != nil {
 				return err
 			}
@@ -197,7 +206,11 @@ func (s *Store) SavePreset(ctx context.Context, actor identityapp.Principal, inp
 		if err != nil {
 			return domain.Preset{}, err
 		}
-		if err := tx.Exec(`INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES(?,?,?,?::jsonb,?)`, uuid.New(), id, version, string(payload), input.Document.Digest()).Error; err != nil {
+		versionID := uuid.New()
+		if err := tx.Exec(`INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES(?,?,?,?::jsonb,?)`, versionID, id, version, string(payload), input.Document.Digest()).Error; err != nil {
+			return domain.Preset{}, err
+		}
+		if err := copyModelPresets(tx, id, versionID, input.Document); err != nil {
 			return domain.Preset{}, err
 		}
 		return readPreset(tx, id)
@@ -243,7 +256,10 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 			return application.PresetConnection{}, domain.ErrInvalidPreset
 		}
 		config := document.Config
-		catalog := domain.ModelCatalogForPreset(document)
+		catalog, err := readModelCatalog(tx, input.VersionID, document)
+		if err != nil {
+			return application.PresetConnection{}, err
+		}
 		candidates, err := catalog.Select(input.CatalogVersion, input.CandidateKeys)
 		if err != nil {
 			return application.PresetConnection{}, err
@@ -259,10 +275,12 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 			if custom.Key == "" {
 				custom.Key = "custom-" + uuid.New().String()[:8]
 			}
+			custom.Execution = nil
+			custom.MeteringStrategy = ""
 			custom.AdapterKey = config.AdapterKey
 			custom.SourceURL = "custom://admin"
-			custom.ReviewedAt = time.Now().Format("2006-01-02")
-			custom.Lifecycle = "active"
+			custom.ReviewedAt = ""
+			custom.Lifecycle = "unknown"
 			if len(custom.Modes) == 0 {
 				switch custom.Capability {
 				case "text.generate":

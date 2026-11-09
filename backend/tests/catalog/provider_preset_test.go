@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 func TestBuiltinPresetsAreIsolatedAndContainNoCredentials(t *testing.T) {
-	presets := domain.BuiltinPresets()
+	presets := catalogfixture.BuiltinPresets()
 	require.Len(t, presets, 10)
 	slugs := make(map[string]bool)
 	for _, p := range presets {
@@ -21,7 +23,7 @@ func TestBuiltinPresetsAreIsolatedAndContainNoCredentials(t *testing.T) {
 		require.NoError(t, p.Config.Validate())
 	}
 	presets[0].Config.Capabilities[0] = "tampered"
-	require.Equal(t, "video", domain.BuiltinPresets()[0].Config.Capabilities[0])
+	require.Equal(t, "video", catalogfixture.BuiltinPresets()[0].Config.Capabilities[0])
 }
 
 func TestPresetImportRejectsUnknownFieldsAndUnsafeEndpoints(t *testing.T) {
@@ -40,7 +42,7 @@ func TestPresetImportRejectsUnknownFieldsAndUnsafeEndpoints(t *testing.T) {
 }
 
 func TestPresetUpgradePreservesOverridesAndReportsConflicts(t *testing.T) {
-	old := domain.BuiltinPresets()[1].Config
+	old := catalogfixture.BuiltinPresets()[1].Config
 	next := old
 	next.TimeoutSeconds = 180
 	next.RateLimitPerMin = 60

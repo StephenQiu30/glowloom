@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -18,8 +20,8 @@ func TestAdminCandidateDoesNotInventReviewFacts(t *testing.T) {
 	template := presetTextTemplate()
 	template.UpstreamCost.Source = ""
 	template.UpstreamCost.ReviewedAt = time.Time{}
-	doc := domain.PresetDocument{SchemaVersion: 1, Name: "custom", Config: domain.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{template}}
-	for _, candidate := range domain.ModelCatalogForPreset(doc).Models {
+	doc := domain.PresetDocument{SchemaVersion: 1, Name: "custom", Config: catalogfixture.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{template}}
+	for _, candidate := range catalogfixture.ModelCatalogForPreset(doc).Models {
 		if candidate.Key == template.Key {
 			require.Empty(t, candidate.SourceURL)
 			require.Empty(t, candidate.ReviewedAt)
@@ -31,8 +33,8 @@ func TestAdminCandidateDoesNotInventReviewFacts(t *testing.T) {
 }
 
 func TestReviewedSeedanceTokenTemplateIsPortable(t *testing.T) {
-	config := domain.BuiltinPresets()[0].Config
-	candidate := domain.BuiltinModelCatalog("volcengine_ark").Models
+	config := catalogfixture.BuiltinPresets()[0].Config
+	candidate := catalogfixture.LegacyBuiltinModelCatalog("volcengine_ark").Models
 	var selected domain.ModelCandidatePreset
 	for _, c := range candidate {
 		if c.Key == "ark-video-fast" {
@@ -70,7 +72,7 @@ func TestKnownModelsRejectUnsupportedParameterContracts(t *testing.T) {
 	} {
 		t.Run(tc.key+"/"+tc.field, func(t *testing.T) {
 			var candidate domain.ModelCandidatePreset
-			for _, c := range domain.BuiltinModelCatalog(tc.adapter).Models {
+			for _, c := range catalogfixture.LegacyBuiltinModelCatalog(tc.adapter).Models {
 				if c.Key == tc.key {
 					candidate = c
 				}
@@ -85,9 +87,9 @@ func TestKnownModelsRejectUnsupportedParameterContracts(t *testing.T) {
 }
 
 func TestPresetTariffsCoverEveryPublishedDimension(t *testing.T) {
-	config := domain.BuiltinPresets()[0].Config
+	config := catalogfixture.BuiltinPresets()[0].Config
 	var selected domain.ModelCandidatePreset
-	for _, c := range domain.BuiltinModelCatalog(config.AdapterKey).Models {
+	for _, c := range catalogfixture.LegacyBuiltinModelCatalog(config.AdapterKey).Models {
 		if c.Key == "ark-video-fast" {
 			selected = c
 		}
@@ -110,7 +112,7 @@ func TestPresetTariffsCoverEveryPublishedDimension(t *testing.T) {
 }
 
 func TestBytePlusAPProvidesExactRegionalImageCandidates(t *testing.T) {
-	catalog := domain.BuiltinModelCatalog("byteplus")
+	catalog := catalogfixture.LegacyBuiltinModelCatalog("byteplus")
 	count := 0
 	for _, c := range catalog.Models {
 		if c.RequiresModelSelection {

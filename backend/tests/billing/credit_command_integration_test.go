@@ -39,16 +39,16 @@ func TestCreditCommandsGrantDebitFreezeCommitAndRelease(t *testing.T) {
 	if _, err := store.SubmitCreditCommand(ctx, changed); !errors.Is(err, billingapp.ErrCreditIdempotencyConflict) {
 		t.Fatalf("reuse idempotency key with changed request = %v", err)
 	}
-	processCreditCommand(t, ctx, store, accepted.ID)
-	processCreditCommand(t, ctx, store, accepted.ID)
-	assertCreditCommandStatus(t, ctx, store, callerID, actor.ScopeID, accepted.ID, "succeeded")
+	processCreditCommand(ctx, t, store, accepted.ID)
+	processCreditCommand(ctx, t, store, accepted.ID)
+	assertCreditCommandStatus(ctx, t, store, callerID, actor.ScopeID, accepted.ID, "succeeded")
 
 	debit := testCreditCommand(callerID, actor.ScopeID, billingapp.CreditDebit, uuid.New(), uuid.New(), 2*billingdomain.MicrosPerCredit)
-	debitReceipt := acceptAndProcessCreditCommand(t, ctx, store, debit)
-	assertCreditCommandStatus(t, ctx, store, callerID, actor.ScopeID, debitReceipt.ID, "succeeded")
+	debitReceipt := acceptAndProcessCreditCommand(ctx, t, store, debit)
+	assertCreditCommandStatus(ctx, t, store, callerID, actor.ScopeID, debitReceipt.ID, "succeeded")
 
 	freeze := testCreditCommand(callerID, actor.ScopeID, billingapp.CreditFreeze, uuid.New(), uuid.New(), 4*billingdomain.MicrosPerCredit)
-	freezeReceipt := acceptAndProcessCreditCommand(t, ctx, store, freeze)
+	freezeReceipt := acceptAndProcessCreditCommand(ctx, t, store, freeze)
 	var freezeResult struct {
 		HoldID uuid.UUID `json:"hold_id"`
 	}
@@ -62,11 +62,11 @@ func TestCreditCommandsGrantDebitFreezeCommitAndRelease(t *testing.T) {
 
 	commit := testCreditCommand(callerID, actor.ScopeID, billingapp.CreditCommit, freezeResult.HoldID, uuid.New(), 3*billingdomain.MicrosPerCredit)
 	commit.ReferenceID = &freezeResult.HoldID
-	commitReceipt := acceptAndProcessCreditCommand(t, ctx, store, commit)
-	assertCreditCommandStatus(t, ctx, store, callerID, actor.ScopeID, commitReceipt.ID, "succeeded")
+	commitReceipt := acceptAndProcessCreditCommand(ctx, t, store, commit)
+	assertCreditCommandStatus(ctx, t, store, callerID, actor.ScopeID, commitReceipt.ID, "succeeded")
 
 	secondFreeze := testCreditCommand(callerID, actor.ScopeID, billingapp.CreditFreeze, uuid.New(), uuid.New(), 2*billingdomain.MicrosPerCredit)
-	secondFreezeReceipt := acceptAndProcessCreditCommand(t, ctx, store, secondFreeze)
+	secondFreezeReceipt := acceptAndProcessCreditCommand(ctx, t, store, secondFreeze)
 	var secondFreezeResult struct {
 		HoldID uuid.UUID `json:"hold_id"`
 	}
@@ -75,8 +75,8 @@ func TestCreditCommandsGrantDebitFreezeCommitAndRelease(t *testing.T) {
 	}
 	release := testCreditCommand(callerID, actor.ScopeID, billingapp.CreditRelease, secondFreezeResult.HoldID, uuid.New(), 2*billingdomain.MicrosPerCredit)
 	release.ReferenceID = &secondFreezeResult.HoldID
-	releaseReceipt := acceptAndProcessCreditCommand(t, ctx, store, release)
-	assertCreditCommandStatus(t, ctx, store, callerID, actor.ScopeID, releaseReceipt.ID, "succeeded")
+	releaseReceipt := acceptAndProcessCreditCommand(ctx, t, store, release)
+	assertCreditCommandStatus(ctx, t, store, callerID, actor.ScopeID, releaseReceipt.ID, "succeeded")
 
 	view, _, err = store.ReadWalletWithBalance(ctx, actor.ScopeID, true, nil, nil)
 	if err != nil || view.GeneralCredits != "5" || view.HeldCredits != "0" || view.RedeemedToday != "5" {
@@ -115,8 +115,8 @@ func TestConcurrentCreditCommandsCannotOverdrawOneAccount(t *testing.T) {
 	callerID := "credit-race-" + uuid.NewString()
 	grant := testCreditCommand(callerID, actor.ScopeID, billingapp.CreditGrant, uuid.New(), uuid.New(), 10*billingdomain.MicrosPerCredit)
 	grant.ExpiresAt = timePointer(time.Now().UTC().Add(30 * 24 * time.Hour))
-	grantReceipt := acceptAndProcessCreditCommand(t, ctx, store, grant)
-	assertCreditCommandStatus(t, ctx, store, callerID, actor.ScopeID, grantReceipt.ID, "succeeded")
+	grantReceipt := acceptAndProcessCreditCommand(ctx, t, store, grant)
+	assertCreditCommandStatus(ctx, t, store, callerID, actor.ScopeID, grantReceipt.ID, "succeeded")
 
 	commands := []billingapp.CreditCommand{
 		testCreditCommand(callerID, actor.ScopeID, billingapp.CreditDebit, uuid.New(), uuid.New(), 8*billingdomain.MicrosPerCredit),
@@ -176,13 +176,13 @@ func TestConcurrentCreditCommandsCannotOverdrawOneAccount(t *testing.T) {
 	}
 }
 
-func acceptAndProcessCreditCommand(t *testing.T, ctx context.Context, store *pgbilling.Store, command billingapp.CreditCommand) billingapp.CreditCommandReceipt {
+func acceptAndProcessCreditCommand(ctx context.Context, t *testing.T, store *pgbilling.Store, command billingapp.CreditCommand) billingapp.CreditCommandReceipt {
 	t.Helper()
 	receipt, err := store.SubmitCreditCommand(ctx, command)
 	if err != nil {
 		t.Fatalf("accept %s command: %v", command.Action, err)
 	}
-	processCreditCommand(t, ctx, store, receipt.ID)
+	processCreditCommand(ctx, t, store, receipt.ID)
 	updated, err := store.ReadCreditCommand(ctx, command.CallerID, command.ScopeID, receipt.ID)
 	if err != nil {
 		t.Fatalf("read %s command: %v", command.Action, err)
@@ -190,14 +190,14 @@ func acceptAndProcessCreditCommand(t *testing.T, ctx context.Context, store *pgb
 	return updated
 }
 
-func processCreditCommand(t *testing.T, ctx context.Context, store *pgbilling.Store, commandID uuid.UUID) {
+func processCreditCommand(ctx context.Context, t *testing.T, store *pgbilling.Store, commandID uuid.UUID) {
 	t.Helper()
 	if err := store.ProcessCreditCommand(ctx, commandID); err != nil {
 		t.Fatalf("process command %s: %v", commandID, err)
 	}
 }
 
-func assertCreditCommandStatus(t *testing.T, ctx context.Context, store *pgbilling.Store, callerID string, scopeID, commandID uuid.UUID, status string) {
+func assertCreditCommandStatus(ctx context.Context, t *testing.T, store *pgbilling.Store, callerID string, scopeID, commandID uuid.UUID, status string) {
 	t.Helper()
 	current, err := store.ReadCreditCommand(ctx, callerID, scopeID, commandID)
 	if err != nil || current.Status != status {

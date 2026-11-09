@@ -1,3 +1,4 @@
+import { modelAvailableForMode } from "./model-availability";
 import { fieldsForMode, initialParams } from "./contracts";
 import { referenceLabel, type PromptDraft } from "./prompt-document";
 import { referenceRoleLabel } from "./reference-source";
@@ -9,13 +10,11 @@ export function editorIssues(
   const issues: string[] = [];
   if (
     !model ||
-    model.status !== "active" ||
-    model.provider_status !== "active" ||
-    !model.credential_present ||
+    !modelAvailableForMode(model) ||
     model.current_version?.id !== draft.modelVersion
   )
     return ["请选择可用模型。"];
-  if (!draft.mode || !model.current_version.modes?.includes(draft.mode))
+  if (!draft.mode || !modelAvailableForMode(model, draft.mode))
     issues.push("该模式当前不可用。");
   const limits = model.current_version.limits as
     | {

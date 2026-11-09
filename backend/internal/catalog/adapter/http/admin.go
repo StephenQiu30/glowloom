@@ -169,7 +169,7 @@ func adminError(c *gin.Context, err error) {
 // @Param cursor query string false "绑定管理员与筛选条件的不透明游标"
 // @Param name query string false "连接名称关键词"
 // @Param adapter_key query string false "供应商标识"
-// @Param status query string false "active、disabled 或 archived"
+// @Param status query string false "available 或 unavailable"
 // @Success 200 {object} ProviderPage
 // @Failure 403 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -179,7 +179,7 @@ func (h *AdminHandler) ListProviders(c *gin.Context) {
 	if !ok {
 		return
 	}
-	input := application.ListProvidersInput{Limit: limit, Name: c.Query("name"), AdapterKey: c.Query("adapter_key"), Status: domain.ProviderStatus(c.Query("status"))}
+	input := application.ListProvidersInput{Limit: limit, Name: c.Query("name"), AdapterKey: c.Query("adapter_key"), Status: c.Query("status")}
 	if cursor != nil {
 		input.After = &application.ProviderListCursor{ID: cursor.ID, CreateTime: cursor.CreateTime}
 	}
@@ -425,7 +425,7 @@ func (h *AdminHandler) Capabilities(c *gin.Context) {
 // @Param provider_id query string false "供应商连接 ID"
 // @Param name query string false "模型名称或标识关键词"
 // @Param capability query string false "模型能力标识"
-// @Param status query string false "active、archived、disabled、unconfigured、unverified 或 price_pending"
+// @Param status query string false "available 或 unavailable"
 // @Param pricing_review query boolean false "仅查看已安装预设的计价审核"
 // @Param billing_status query string false "billable、price_pending、usage_pending 或 inactive"
 // @Success 200 {object} AdminModelPage

@@ -24,13 +24,22 @@ func seedReviewedOnboardingPrices(t *testing.T, db *gorm.DB, actor identityapp.P
 	require.NoError(t, err)
 	command := catalogapp.NewPublishPriceRuleCommand(app.NewCatalogStore(db), validator, time.Now)
 	for _, id := range connection.ModelIDs {
+		// These tests deliberately exercise historical portable onboarding contracts.
+		// They do not claim acceptance for newly seeded pricing/metering contracts.
+		require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET candidate_snapshot=candidate_snapshot #- '{model,execution}' #- '{model,metering_strategy}' WHERE id=?`, id).Error)
+		require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET limits=limits-'metering_strategy' WHERE model_profile_id=?`, id).Error)
 		var version struct {
 			ID              uuid.UUID
 			ProviderModelID string
 		}
 		require.NoError(t, db.Raw(`SELECT v.id,v.provider_model_id FROM catalog.model_profile m JOIN catalog.model_profile_version v ON v.id=m.current_version_id WHERE m.id=?`, id).Scan(&version).Error)
-		price, err := command.Execute(t.Context(), actor, catalogapp.PublishPriceRuleInput{ModelID: id, ExpectedRevision: 2, VersionNo: 1, Unit: domain.PricePerRequest, Rule: json.RawMessage(`{"base_micros":0}`), Currency: "CNY", EffectiveFrom: time.Now().Add(-time.Minute), RequestID: uuid.NewString(), SourceURL: "https://example.invalid/explicit-zero-sales-fixture", ReviewedAt: priceReviewedFixtureTime()})
+		procurement := uuid.New()
+		require.NoError(t, db.Exec(`INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,currency,effective_from,source_url,reviewed_at)
+        VALUES(?,?,1,'per_request','{"base_micros":0}','CNY',now()-interval '2 minute','https://example.invalid/explicit-zero-procurement-fixture',now()-interval '1 hour')`, procurement, id).Error)
+		rule := json.RawMessage(`{"base_micros":0,"procurement_price_version_id":"` + procurement.String() + `"}`)
+		price, err := command.Execute(t.Context(), actor, catalogapp.PublishPriceRuleInput{ModelID: id, ExpectedRevision: 2, VersionNo: 2, Unit: domain.PricePerRequest, Rule: rule, Currency: "CNY", EffectiveFrom: time.Now().Add(-time.Minute), RequestID: uuid.NewString(), SourceURL: "https://example.invalid/explicit-zero-sales-fixture", ReviewedAt: priceReviewedFixtureTime()})
 		require.NoError(t, err)
+
 		cost := "{}"
 		if paid || version.ProviderModelID == "seed-audio-1.0" {
 			cost = `{"currency":"CNY","max_micros":100000,"source":"explicit synthetic fixture bound","reviewed_at":"2026-09-26T00:00:00Z"}`

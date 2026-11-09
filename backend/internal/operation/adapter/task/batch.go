@@ -113,6 +113,11 @@ func (f flow) control(ctx context.Context, j taskruntime.Job, d app.WorkflowCont
 		if required {
 			return f.store.ScheduleOriginalDelivery(ctx, d)
 		}
+		err = f.store.RecoverOperationTasks(ctx, d)
+		if errors.Is(err, app.ErrExecutionAuthorityRevoked) {
+			return nil
+		}
+		return err
 	}
 	return f.store.ScheduleOperationStep(ctx, "operation.run", d.TargetID)
 }

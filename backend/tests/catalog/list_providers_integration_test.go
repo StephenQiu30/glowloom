@@ -56,6 +56,7 @@ func TestListProvidersPagesSafeSummariesAndRealModelCountsOnLocalPostgres(t *tes
 	for index := range providers {
 		provider := validProvider()
 		provider.Key = "list-" + provider.ID.String()
+		provider.Name = "List " + provider.ID.String()
 		if err := store.CreateProvider(ctx, provider); err != nil {
 			t.Fatal(err)
 		}
@@ -121,16 +122,16 @@ func TestListProvidersPagesSafeSummariesAndRealModelCountsOnLocalPostgres(t *tes
 	}
 	// The matching disabled provider lies beyond the first unfiltered row.
 	filtered, err := query.Execute(ctx, actor, catalogapp.ListProvidersInput{
-		Limit: 1, Name: strings.ToUpper(providers[1].Name), AdapterKey: providers[1].AdapterKey, Status: domain.ProviderDisabled,
+		Limit: 1, Name: strings.ToUpper(providers[1].Name), AdapterKey: providers[1].AdapterKey, Status: "unavailable",
 	})
 	if err != nil || len(filtered.Providers) != 1 || filtered.Next != nil || filtered.Providers[0].Provider.ID != providers[1].ID {
 		t.Fatalf("combined provider filters %+v: %v", filtered, err)
 	}
 	models := catalogapp.NewAdminModelsQuery(store)
 	modelPage, err := models.List(ctx, actor, catalogapp.AdminModelListInput{
-		Limit: 1, ProviderID: providers[0].ID, Name: "test model", Capability: capabilityKey, Status: "unconfigured",
+		Limit: 1, ProviderID: providers[0].ID, Name: "test model", Capability: capabilityKey, Status: "unavailable",
 	})
-	if err != nil || len(modelPage.Items) != 1 || modelPage.Next != nil || modelPage.Items[0].Status != domain.ModelDisabled {
+	if err != nil || len(modelPage.Items) != 1 || modelPage.Next == nil || modelPage.Items[0].Available {
 		t.Fatalf("combined model filters %+v: %v", modelPage, err)
 	}
 	encoded, err := json.Marshal(first)

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -11,7 +13,7 @@ import (
 )
 
 func TestVolcengineCatalogCoversCurrentGenerationFamilies(t *testing.T) {
-	catalog := domain.BuiltinModelCatalog("volcengine_ark")
+	catalog := catalogfixture.BuiltinModelCatalog("volcengine_ark")
 	require.Greater(t, len(catalog.Models), 16, "the full current generation catalog must not be truncated to the old selection limit")
 	ids := map[string]domain.ModelCandidatePreset{}
 	keys := []string{}
@@ -58,7 +60,7 @@ func TestVolcengineCatalogCoversCurrentGenerationFamilies(t *testing.T) {
 }
 
 func TestSeedreamProAndFlashDoNotOfferUnsupportedFourK(t *testing.T) {
-	for _, candidate := range domain.BuiltinModelCatalog("volcengine_ark").Models {
+	for _, candidate := range catalogfixture.BuiltinModelCatalog("volcengine_ark").Models {
 		if candidate.Key != "ark-image-pro-50" && candidate.Key != "ark-image-flash-50" {
 			continue
 		}
@@ -79,7 +81,7 @@ func TestSeedreamProAndFlashDoNotOfferUnsupportedFourK(t *testing.T) {
 
 func TestDoubaoSpeechPresetUsesItsOwnAudioProtocol(t *testing.T) {
 	var config domain.ProviderConfig
-	for _, preset := range domain.BuiltinPresets() {
+	for _, preset := range catalogfixture.BuiltinPresets() {
 		if preset.Slug == "volcengine-speech" {
 			config = preset.Config
 		}
@@ -88,7 +90,7 @@ func TestDoubaoSpeechPresetUsesItsOwnAudioProtocol(t *testing.T) {
 	require.Equal(t, "https://openspeech.bytedance.com/api/v3", config.BaseURL)
 	require.NoError(t, config.Validate())
 	require.Equal(t, []string{"audio"}, config.Capabilities)
-	models := domain.ModelCatalogForConfig(config)
+	models := catalogfixture.ModelCatalogForConfig(config)
 	require.NotEmpty(t, models.Models)
 	for _, candidate := range models.Models {
 		require.Equal(t, "audio.generate", candidate.Capability)
@@ -102,7 +104,7 @@ func TestDoubaoSpeechPresetUsesItsOwnAudioProtocol(t *testing.T) {
 }
 
 func TestVolcengineVideoPresetsDoNotAdvertiseUnsupportedLegacyOptions(t *testing.T) {
-	for _, candidate := range domain.BuiltinModelCatalog("volcengine_ark").Models {
+	for _, candidate := range catalogfixture.BuiltinModelCatalog("volcengine_ark").Models {
 		if candidate.Capability != "video.generate" {
 			continue
 		}

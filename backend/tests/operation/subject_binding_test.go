@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -26,7 +28,7 @@ func (s subjectNoDispatchTransport) RoundTrip(*http.Request) (*http.Response, er
 func TestProviderRejectsUnsupportedSubjectMediaBeforeDispatch(t *testing.T) {
 	client := providerhttp.NewClient(&http.Client{Transport: subjectNoDispatchTransport{t}})
 	for _, kind := range []string{"audio", "video"} {
-		result, err := client.Submit(context.Background(), operationapp.GenerationRequest{Config: catalogdomain.BuiltinPresets()[1].Config, ModelID: "fixture/model", Capability: "image.generate", Mode: "image2image", Prompt: "主体", OutputCount: 1, References: []operationapp.ProviderReference{{Role: "subject", URL: "https://assets.example/media", MediaKind: kind}}}, "fixture-key")
+		result, err := client.Submit(context.Background(), operationapp.GenerationRequest{Config: catalogfixture.BuiltinPresets()[1].Config, ModelID: "fixture/model", Capability: "image.generate", Mode: "image2image", Prompt: "主体", OutputCount: 1, References: []operationapp.ProviderReference{{Role: "subject", URL: "https://assets.example/media", MediaKind: kind}}}, "fixture-key")
 		if err != nil || result.Outcome != "not_submitted" {
 			t.Fatalf("unsupported %s: %+v, %v", kind, result, err)
 		}

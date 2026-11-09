@@ -23,6 +23,13 @@ func (s *Store) ListOpenRouterModelIDs(ctx context.Context) ([]string, error) {
 	var modelIDs []string
 	result := s.db.WithContext(ctx).Raw(`
 		SELECT provider_model_id FROM (
+   SELECT model.payload->>'provider_model_id' AS provider_model_id
+   FROM catalog.model_preset model
+   JOIN catalog.provider_preset_version version ON version.id=model.preset_version_id
+   JOIN catalog.provider_preset preset ON preset.id=version.preset_id AND preset.origin='builtin'
+   WHERE version.payload->'config'->>'adapter_key'='openrouter' AND model.payload->>'capability'='text.generate'
+   AND version.version_no=(SELECT max(version_no) FROM catalog.provider_preset_version WHERE preset_id=preset.id)
+   UNION
 			SELECT version.provider_model_id
 			FROM catalog.provider provider
 			JOIN catalog.model_profile model ON model.provider_id=provider.id AND model.capability='text.generate' AND NOT model.is_delete
@@ -49,16 +56,6 @@ func (s *Store) ListOpenRouterModelIDs(ctx context.Context) ([]string, error) {
 	for _, modelID := range modelIDs {
 		seen[modelID] = struct{}{}
 		allowlist = append(allowlist, modelID)
-	}
-	for _, preset := range domain.BuiltinModelCatalog("openrouter").Models {
-		if preset.Capability != "text.generate" || preset.ProviderModelID == "" {
-			continue
-		}
-		if _, exists := seen[preset.ProviderModelID]; exists {
-			continue
-		}
-		seen[preset.ProviderModelID] = struct{}{}
-		allowlist = append(allowlist, preset.ProviderModelID)
 	}
 	if len(allowlist) > maxPriceCandidateBatch {
 		return nil, fmt.Errorf("OpenRouter price sync model allowlist exceeds limit")

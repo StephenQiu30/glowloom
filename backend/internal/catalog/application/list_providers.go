@@ -24,9 +24,12 @@ type ProviderListCursor struct {
 
 // ProviderListItem exposes only display metadata and a real model count.
 type ProviderListItem struct {
-	Provider   CreatedProvider            `json:"provider"`
-	Credential *ProviderCredentialSummary `json:"credential"`
-	ModelCount int                        `json:"model_count"`
+	Available           bool                       `json:"available"`
+	AvailableModelCount int                        `json:"available_model_count"`
+	UnavailableReasons  []string                   `json:"unavailable_reasons"`
+	Provider            CreatedProvider            `json:"provider"`
+	Credential          *ProviderCredentialSummary `json:"credential"`
+	ModelCount          int                        `json:"model_count"`
 }
 
 // ProviderListPage contains one bounded page and its next keyset position.
@@ -45,7 +48,7 @@ type ListProvidersInput struct {
 	Limit      int
 	Name       string
 	AdapterKey string
-	Status     domain.ProviderStatus
+	Status     string
 	After      *ProviderListCursor
 }
 
@@ -69,7 +72,7 @@ func (q *ListProvidersQuery) Execute(ctx context.Context, actor identityapp.Prin
 	input.AdapterKey = strings.TrimSpace(input.AdapterKey)
 	if len(input.Name) > 400 || strings.ContainsRune(input.Name, 0) ||
 		len(input.AdapterKey) > 128 || strings.ContainsRune(input.AdapterKey, 0) ||
-		(input.Status != "" && input.Status != domain.ProviderActive && input.Status != domain.ProviderDisabled && input.Status != domain.ProviderArchived) ||
+		(input.Status != "" && input.Status != "available" && input.Status != "unavailable") ||
 		input.Limit < 0 || input.Limit > 200 ||
 		(input.After != nil && (input.After.ID == uuid.Nil || input.After.CreateTime.IsZero())) {
 		return ProviderListPage{}, ErrInvalidProviderList

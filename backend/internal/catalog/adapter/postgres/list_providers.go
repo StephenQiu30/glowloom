@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -45,45 +46,88 @@ func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Pri
 		`
 		args := []any{}
 		if input.Name != "" {
-			query += ` AND strpos(lower(p.name), lower(?)) > 0`
-			args = append(args, input.Name)
+			query += ` AND (strpos(lower(p.name), lower(?)) > 0 OR p.id::text=lower(?) OR p.key=?)`
+			args = append(args, input.Name, input.Name, input.Name)
 		}
 		if input.AdapterKey != "" {
 			query += ` AND p.adapter_key = ?`
 			args = append(args, input.AdapterKey)
 		}
-		if input.Status != "" {
-			query += ` AND p.status = ?`
-			args = append(args, input.Status)
-		}
 		if after != nil {
 			query += ` AND (p.create_time, p.id) < (?::timestamptz, ?::uuid)`
 			args = append(args, after.CreateTime.UTC(), after.ID)
 		}
-		query += ` ORDER BY p.create_time DESC, p.id DESC LIMIT ?`
-		args = append(args, limit+1)
-		var rows []providerListRow
-		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
-			return fmt.Errorf("read provider list: %w", err)
-		}
-		more := len(rows) > limit
-		if more {
-			rows = rows[:limit]
-		}
-		page.Providers = make([]application.ProviderListItem, 0, len(rows))
-		for _, row := range rows {
-			item, err := row.item()
-			if err != nil {
-				return err
+		baseQuery, baseArgs := query, append([]any{}, args...)
+		var scanAfter *application.ProviderListCursor
+		more := false
+		page.Providers = []application.ProviderListItem{}
+		for {
+			batchQuery, batchArgs := baseQuery, append([]any{}, baseArgs...)
+			if scanAfter != nil {
+				batchQuery += ` AND (p.create_time,p.id)<(?::timestamptz,?::uuid)`
+				batchArgs = append(batchArgs, scanAfter.CreateTime.UTC(), scanAfter.ID)
 			}
-			page.Providers = append(page.Providers, item)
+			batchQuery += ` ORDER BY p.create_time DESC,p.id DESC LIMIT 200`
+			var rows []providerListRow
+			if err := tx.Raw(batchQuery, batchArgs...).Scan(&rows).Error; err != nil {
+				return fmt.Errorf("read provider list: %w", err)
+			}
+			for _, row := range rows {
+				item, err := row.item()
+				if err != nil {
+					return err
+				}
+				item.UnavailableReasons = []string{}
+				// Bound model fact reads while aggregating a whole connection.
+				var modelAfter uuid.UUID
+				for {
+					var ids []uuid.UUID
+					if err := tx.Raw(`SELECT id FROM catalog.model_profile WHERE provider_id=? AND NOT is_delete AND id>?::uuid ORDER BY id LIMIT 200`, item.Provider.ID, modelAfter).Scan(&ids).Error; err != nil {
+						return err
+					}
+					availability, err := readModelAvailability(tx, ids)
+					if err != nil {
+						return err
+					}
+					for _, state := range availability {
+						if state.Available {
+							item.AvailableModelCount++
+						}
+					}
+					if len(ids) < 200 {
+						break
+					}
+					modelAfter = ids[len(ids)-1]
+				}
+				item.Available = item.AvailableModelCount > 0
+				if !item.Available {
+					item.UnavailableReasons = append(item.UnavailableReasons, "no_available_model")
+				}
+				if input.Status != "" && item.Available != (input.Status == "available") {
+					continue
+				}
+				page.Providers = append(page.Providers, item)
+				if len(page.Providers) > limit {
+					more = true
+					break
+				}
+			}
+			if more || len(rows) < 200 {
+				break
+			}
+			last := rows[len(rows)-1]
+			scanAfter = &application.ProviderListCursor{CreateTime: last.ProviderCreateTime, ID: last.ProviderID}
 		}
+		if more {
+			page.Providers = page.Providers[:limit]
+		}
+
 		if more {
 			last := page.Providers[len(page.Providers)-1].Provider
 			page.Next = &application.ProviderListCursor{CreateTime: last.CreateTime, ID: last.ID}
 		}
 		return nil
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return application.ProviderListPage{}, fmt.Errorf("list providers transaction: %w", err)
 	}

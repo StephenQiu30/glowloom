@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -16,7 +18,7 @@ import (
 // without authenticating or submitting a paid request to a provider.
 func TestSubjectMultimodalReferencesKeepKindsInArkVideoWire(t *testing.T) {
 	var config catalog.ProviderConfig
-	for _, preset := range catalog.BuiltinPresets() {
+	for _, preset := range catalogfixture.BuiltinPresets() {
 		if preset.Config.AdapterKey == "volcengine_ark" {
 			config = preset.Config
 			break

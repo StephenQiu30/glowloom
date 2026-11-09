@@ -59,7 +59,6 @@ export function useConnectionColumns({
   adapters,
   onSelect,
   onDelete,
-  pendingCredential,
   disabled,
 }: {
   adapters?: API.AdapterMetadata[];
@@ -109,14 +108,15 @@ export function useConnectionColumns({
               {mobile ? (
                 <>
                   {" "}
-                  · <KeySummary credential={row.original.credential} /> ·{" "}
+                  ·{" "}
                   {disabled ? (
-                    `${row.original.model_count ?? 0} 个模型`
+                    `${row.original.available_model_count ?? 0}/${row.original.model_count ?? 0} 个模型`
                   ) : (
                     <Link
                       className="underline underline-offset-2"
                       href={`/models?provider=${encodeURIComponent(row.original.id)}`}
                     >
+                      {row.original.available_model_count ?? 0}/
                       {row.original.model_count ?? 0} 个模型
                     </Link>
                   )}
@@ -165,12 +165,13 @@ export function useConnectionColumns({
       settings: { hideOnMobile: true },
       cell: ({ row }) =>
         disabled ? (
-          `${row.original.model_count ?? 0} 个模型`
+          `${row.original.available_model_count ?? 0}/${row.original.model_count ?? 0} 个模型`
         ) : (
           <Button asChild variant="link" className="h-auto p-0">
             <Link
               href={`/models?provider=${encodeURIComponent(row.original.id)}`}
             >
+              {row.original.available_model_count ?? 0}/
               {row.original.model_count ?? 0} 个模型
             </Link>
           </Button>
@@ -183,27 +184,20 @@ export function useConnectionColumns({
         name: "status",
         type: "select",
         options: [
-          { value: "active", label: "已启用" },
-          { value: "disabled", label: "未启用" },
-          { value: "archived", label: "已归档" },
+          { value: "available", label: "可用" },
+          { value: "unavailable", label: "不可用" },
         ],
       },
       cell: ({ row }) => (
         <Badge variant="secondary">
-          {pendingCredential === row.original.id
-            ? "保存待确认"
-            : row.original.provider?.status === "archived"
-              ? "已归档"
-              : row.original.provider?.status === "active"
-                ? "已启用"
-                : "未启用"}
+          {row.original.available === true ? "可用" : "不可用"}
         </Badge>
       ),
     },
     {
       id: "credential",
       header: "配置状态",
-      settings: { hideOnMobile: true },
+      settings: { defaultVisible: false, hideOnMobile: true },
       cell: ({ row }) => <KeySummary credential={row.original.credential} />,
     },
     {

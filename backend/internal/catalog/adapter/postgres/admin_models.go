@@ -52,55 +52,74 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 			args = append(args, input.ProviderID)
 		}
 		if input.Name != "" {
-			query += ` AND (strpos(lower(m.display_name), lower(?)) > 0 OR strpos(lower(m.model_key), lower(?)) > 0)`
-			args = append(args, input.Name, input.Name)
+			query += ` AND (strpos(lower(m.display_name), lower(?)) > 0 OR strpos(lower(m.model_key), lower(?)) > 0 OR m.id::text=lower(?) OR EXISTS(SELECT 1 FROM catalog.model_profile_version search_version WHERE search_version.id=m.current_version_id AND search_version.provider_model_id=? AND NOT search_version.is_delete))`
+			args = append(args, input.Name, input.Name, input.Name, input.Name)
 		}
 		if input.Capability != "" {
 			query += ` AND m.capability = ?`
 			args = append(args, input.Capability)
 		}
-		if input.Status != "" {
-			query += ` AND (CASE WHEN m.status <> 'disabled' OR m.has_publication THEN m.status
-    WHEN m.current_version_id IS NULL THEN 'unconfigured'
-    WHEN m.has_price THEN 'unverified'
-    ELSE 'price_pending' END) = ?`
-			args = append(args, input.Status)
-		}
 		if input.After != nil {
 			query += ` AND (model_key,id)>(?,?::uuid)`
 			args = append(args, input.After.Key, input.After.ID)
 		}
-		query += ` ORDER BY model_key,id LIMIT ?`
-		args = append(args, input.Limit+1)
-		var rows []struct {
-			Model            modelProfileRow `gorm:"embedded"`
-			HasPublication   bool
-			HasPrice         bool
-			BillingUnit      string
-			ProcurementReady bool
-			SaleReady        bool
-			SalePublished    bool
-			BillingStatus    string
-		}
-		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
-			return fmt.Errorf("read admin models: %w", err)
-		}
-		more := len(rows) > input.Limit
-		if more {
-			rows = rows[:input.Limit]
-		}
-		for _, row := range rows {
-			item := createdModel(row.Model)
-			item.HasPublication = row.HasPublication
-			item.HasPrice = row.HasPrice
-			if input.PricingReview {
-				item.Billing = &application.AdminModelBilling{
-					Unit: row.BillingUnit, ProcurementReady: row.ProcurementReady, SaleReady: row.SaleReady,
-					SalePublished: row.SalePublished, Status: row.BillingStatus,
+		// Scan stable bounded candidate batches until the filtered page is full.
+		// Filtering is before page truncation; no unavailable row consumes a slot.
+		baseQuery, baseArgs := query, append([]any{}, args...)
+		var scanAfter *application.ModelCatalogCursor
+		more := false
+		for {
+			batchQuery, batchArgs := baseQuery, append([]any{}, baseArgs...)
+			if scanAfter != nil {
+				batchQuery += ` AND (model_key,id)>(?,?::uuid)`
+				batchArgs = append(batchArgs, scanAfter.Key, scanAfter.ID)
+			}
+			batchQuery += ` ORDER BY model_key,id LIMIT 200`
+			var rows []struct {
+				Model                                      modelProfileRow `gorm:"embedded"`
+				HasPublication, HasPrice                   bool
+				BillingUnit                                string
+				ProcurementReady, SaleReady, SalePublished bool
+				BillingStatus                              string
+			}
+			if err := tx.Raw(batchQuery, batchArgs...).Scan(&rows).Error; err != nil {
+				return fmt.Errorf("read admin models: %w", err)
+			}
+			ids := make([]uuid.UUID, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.Model.ID)
+			}
+			availability, err := readModelAvailability(tx, ids)
+			if err != nil {
+				return err
+			}
+			for _, row := range rows {
+				item := createdModel(row.Model)
+				item.ModelAvailability = availability[item.ID]
+				if input.Status != "" && item.Available != (input.Status == "available") {
+					continue
+				}
+				item.HasPublication = row.HasPublication
+				item.HasPrice = row.HasPrice
+				if input.PricingReview {
+					item.Billing = &application.AdminModelBilling{Unit: row.BillingUnit, ProcurementReady: row.ProcurementReady, SaleReady: row.SaleReady, SalePublished: row.SalePublished, Status: row.BillingStatus}
+				}
+				page.Items = append(page.Items, item)
+				if len(page.Items) > input.Limit {
+					more = true
+					break
 				}
 			}
-			page.Items = append(page.Items, item)
+			if more || len(rows) < 200 {
+				break
+			}
+			last := rows[len(rows)-1].Model
+			scanAfter = &application.ModelCatalogCursor{Key: last.ModelKey, ID: last.ID}
 		}
+		if more {
+			page.Items = page.Items[:input.Limit]
+		}
+
 		if more {
 			last := page.Items[len(page.Items)-1]
 			page.Next = &application.ModelCatalogCursor{Key: last.Key, ID: last.ID}
@@ -157,6 +176,11 @@ func (s *Store) ReadAdminModel(ctx context.Context, actor identityapp.Principal,
 			return application.ErrModelNotFound
 		}
 		result.Model = createdModel(model)
+		availability, err := readModelAvailability(tx, []uuid.UUID{id})
+		if err != nil {
+			return err
+		}
+		result.Model.ModelAvailability = availability[id]
 		var candidate struct{ Snapshot []byte }
 		if err := tx.Raw(`SELECT candidate_snapshot AS snapshot FROM catalog.model_profile WHERE id=?`, id).Scan(&candidate).Error; err != nil {
 			return fmt.Errorf("read model candidate: %w", err)

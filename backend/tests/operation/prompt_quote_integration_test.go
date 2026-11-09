@@ -22,7 +22,7 @@ import (
 func templateQuoteStore(database *gorm.DB) *pgoperation.Store {
 	return pgoperation.NewScopedStoreWithEditor(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
 		return promptapp.NewCompiler(operationPromptStore(tx))
-	}, nil, operationRequestAccess, operationWorkerAccess, operationPlatformAccess)
+	}, nil, operationRequestAccess, operationWorkerAccess, operationPlatformAccess).WithExecutionAvailability(fixtureExecutionAvailability)
 }
 
 func seedTemplateQuoteCatalog(t *testing.T, database *gorm.DB, projectID uuid.UUID) string {

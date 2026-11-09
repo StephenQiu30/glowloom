@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"testing"
 
 	"github.com/google/uuid"
@@ -30,7 +32,7 @@ func TestPresetModelsInstantiateAtomicallyWithoutCopyingPublication(t *testing.T
 	require.NoError(t, conn.DB.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password,platform_role) VALUES(?,?,?,'Preset Admin','producer','synthetic',false,'platform_admin')`, actor.ID, actor.OrgID, "preset-"+actor.ID.String()).Error)
 	actor = identityfixture.Session(t, conn.DB, actor)
 	service := catalogapp.NewProviderPresets(app.NewCatalogStore(conn.DB))
-	doc := domain.PresetDocument{SchemaVersion: 1, Name: "Complete OpenRouter", Config: domain.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
+	doc := domain.PresetDocument{SchemaVersion: 1, Name: "Complete OpenRouter", Config: catalogfixture.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
 	preset, err := service.Save(t.Context(), actor, catalogapp.SavePresetInput{Slug: "models-" + uuid.NewString(), RequestID: uuid.New(), Document: doc, PreviewHash: doc.Digest()})
 	require.NoError(t, err)
 	input := catalogapp.ConnectPresetInput{VersionID: preset.VersionID, RequestID: uuid.New()}
@@ -94,7 +96,7 @@ func TestPresetCandidatesCreateOnlyDraftProfilesAndReplayExactly(t *testing.T) {
 	require.NoError(t, conn.DB.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password,platform_role) VALUES(?,?,?,'Candidate Admin','producer','synthetic',false,'platform_admin')`, actor.ID, actor.OrgID, "candidate-"+actor.ID.String()).Error)
 	actor = identityfixture.Session(t, conn.DB, actor)
 	service := catalogapp.NewProviderPresets(app.NewCatalogStore(conn.DB))
-	catalog := domain.BuiltinModelCatalog("deepseek")
+	catalog := catalogfixture.BuiltinModelCatalog("deepseek")
 	input := catalogapp.ConnectPresetInput{VersionID: uuid.MustParse("6da07a11-0000-4000-8000-000000000004"), RequestID: uuid.New(), CatalogVersion: catalog.Version, CandidateKeys: []string{"ds-pro", "ds-flash"}}
 	presetID := uuid.MustParse("6da07a10-0000-4000-8000-000000000004")
 	receipt, err := service.Connect(t.Context(), actor, presetID, input)
@@ -195,6 +197,7 @@ func TestAddModelFromConnectedPreset(t *testing.T) {
 	manual, err := configs.AddModel(t.Context(), actor, connection.ProviderID, custom)
 	require.NoError(t, err)
 	require.NotEqual(t, model.ID, manual.ID)
+	require.Equal(t, uuid.Nil, manual.CurrentVersionID, "unknown manual ID remains a draft until its parameters are supplied")
 	config, err = configs.Read(t.Context(), actor, connection.ProviderID)
 	require.NoError(t, err)
 	require.Len(t, config.ConfiguredModels, 2)
@@ -208,15 +211,19 @@ func TestAddModelFromConnectedPreset(t *testing.T) {
 		(id, model_profile_id, version_no, unit, rule, effective_from)
 		VALUES (?, ?, 1, 'per_request', '{}'::jsonb, now())`, uuid.New(), manual.ID).Error)
 	query := catalogapp.NewAdminModelsQuery(store)
-	inputPage := catalogapp.AdminModelListInput{Limit: 1, ProviderID: connection.ProviderID, Capability: "text.generate", Status: "unverified"}
-	priced, err := query.List(t.Context(), actor, inputPage)
+	inputPage := catalogapp.AdminModelListInput{Limit: 10, ProviderID: connection.ProviderID, Capability: "text.generate", Status: "unavailable"}
+	unavailable, err := query.List(t.Context(), actor, inputPage)
 	require.NoError(t, err)
-	require.Len(t, priced.Items, 1)
-	require.Equal(t, manual.ID, priced.Items[0].ID)
-	require.Nil(t, priced.Next)
-	inputPage.Status = "price_pending"
-	unpriced, err := query.List(t.Context(), actor, inputPage)
+	require.Len(t, unavailable.Items, 2)
+	ids := []uuid.UUID{}
+	for _, item := range unavailable.Items {
+		require.False(t, item.Available)
+		ids = append(ids, item.ID)
+	}
+	require.ElementsMatch(t, []uuid.UUID{model.ID, manual.ID}, ids)
+	inputPage.Status = "available"
+	available, err := query.List(t.Context(), actor, inputPage)
 	require.NoError(t, err)
-	require.Len(t, unpriced.Items, 1)
-	require.Equal(t, model.ID, unpriced.Items[0].ID)
+	require.Empty(t, available.Items)
+
 }

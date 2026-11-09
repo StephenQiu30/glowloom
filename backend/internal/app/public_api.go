@@ -44,6 +44,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
 	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
 	catalogredis "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/redis"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
@@ -320,7 +321,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return promptapp.NewCompiler(operationwire.ProvidePromptPreferenceStore(tx))
 	}, func(tx *gorm.DB) operationapp.EditorSnapshots {
 		return pgprompt.NewDraftStore(tx, promptwire.DraftAccess).WithSubjectSources(subjectwire.NewPromptSources)
-	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithCreditOperationSaga(cfg.CreditOperationSagaEnabled).WithSubjectMedia(func(tx *gorm.DB) operationapp.SubjectMediaAccess {
+	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(tx *gorm.DB) operationapp.ExecutionAvailability {
+		return pgcatalog.NewStore(tx)
+	}).WithCreditOperationSaga(cfg.CreditOperationSagaEnabled).WithSubjectMedia(func(tx *gorm.DB) operationapp.SubjectMediaAccess {
 		return subjectwire.NewGenerationAccess(tx, subjectObjects)
 	})
 	if registry := subjectObjects.Registry(); registry != nil {

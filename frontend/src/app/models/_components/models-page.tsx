@@ -41,7 +41,6 @@ import {
   listAdminModels,
   listAdminProviders,
 } from "@/api/settings";
-import { zeroID } from "@/components/catalog/mutation";
 import { AddModelForm } from "./add-model-form";
 import { ModelDetail, type ModelDetailView } from "./model-detail";
 
@@ -149,25 +148,10 @@ const capabilityLabels: Record<string, string> = {
   "audio.generate": "音频生成",
 };
 
-const modelStatusLabels = {
-  active: "已启用",
-  disabled: "已停用",
-  archived: "已归档",
-  unconfigured: "待配置",
-  unverified: "待验证",
-  price_pending: "价格待审核",
-};
+const modelStatusLabels = { available: "可用", unavailable: "不可用" };
 
-function modelStatus(
-  model: API.CreatedModel,
-): keyof typeof modelStatusLabels | undefined {
-  if (model.status === "active" || model.status === "archived")
-    return model.status;
-  if (model.status !== "disabled") return;
-  if (model.has_publication) return "disabled";
-  if (!model.current_version_id || model.current_version_id === zeroID)
-    return "unconfigured";
-  return model.has_price ? "unverified" : "price_pending";
+function modelStatus(model: API.CreatedModel): keyof typeof modelStatusLabels {
+  return model.available === true ? "available" : "unavailable";
 }
 
 async function listModelConnections(signal: AbortSignal) {
@@ -317,6 +301,13 @@ function ModelAdministration({
             >
               {row.original.display_name}
             </Button>
+            {mobile ? (
+              <span className="text-xs text-muted-foreground">
+                {capabilityLabels[row.original.capability ?? ""] ??
+                  row.original.capability}{" "}
+                · 按用量计费
+              </span>
+            ) : null}
             {provider?.id ? (
               locked ? (
                 <span className="text-xs text-muted-foreground">
@@ -388,6 +379,12 @@ function ModelAdministration({
       cell: ({ row }) =>
         capabilityLabels[row.original.capability ?? ""] ??
         row.original.capability,
+    },
+    {
+      id: "price",
+      header: "积分",
+      settings: { hideOnMobile: true },
+      cell: () => <span className="text-muted-foreground">按用量计费</span>,
     },
     {
       id: "status",

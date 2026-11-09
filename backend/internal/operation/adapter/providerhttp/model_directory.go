@@ -18,7 +18,7 @@ func (c *Client) ReadModelIDs(ctx context.Context, config catalogdomain.Provider
 		return nil, catalogapp.ErrModelDirectoryUnsupported
 	}
 	switch config.AdapterKey {
-	case "openai", "deepseek", "openrouter", "vercel":
+	case "openai", "deepseek", "openrouter", "vercel", "volcengine_ark":
 	default:
 		return nil, catalogapp.ErrModelDirectoryUnsupported
 	}

@@ -27,6 +27,21 @@ func ValidateModel(config domain.ProviderConfig, capability string, version doma
 			return ErrInvalidConfiguration
 		}
 	}
+	var limits struct {
+		MeteringStrategy string `json:"metering_strategy"`
+	}
+	if json.Unmarshal(version.Limits, &limits) != nil {
+		return ErrInvalidConfiguration
+	}
+	if limits.MeteringStrategy != "" && (limits.MeteringStrategy != strategy || !domain.CompatiblePricingStrategy(strategy, price.Unit)) {
+		return ErrInvalidConfiguration
+	}
+	if strategy == domain.PricingCharacterCountV1 && (config.AdapterKey != "volcengine_speech" || capability != "audio.generate" || version.ProviderModelID != "seed-tts-2.0" || !slices.Equal(version.Modes, []string{"text2audio"})) {
+		return ErrInvalidConfiguration
+	}
+	if strategy == domain.PricingOriginalDurationV1 && (config.AdapterKey != "volcengine_speech" || capability != "audio.generate" || version.ProviderModelID != "seed-audio-1.0" || !slices.Equal(version.Modes, []string{"omni_audio"})) {
+		return ErrInvalidConfiguration
+	}
 	if capability == "video.generate" && price.Unit == domain.PricePer1KTokens {
 		if config.AdapterKey != "volcengine_ark" || !domain.IsSeedanceTokenModel(version.ProviderModelID) ||
 			string(fields["input_micros_per_1k"]) != "0" || fields["cached_input_micros_per_1k"] != nil || fields["time_pricing"] != nil ||
@@ -114,6 +129,18 @@ func ValidateProcurement(sale, supplier domain.PriceRuleVersion) error {
 		return err
 	}
 	if supplierFields[domain.ProcurementVersionField] != nil || supplierFields["markup_multiplier"] != nil {
+		return ErrInvalidConfiguration
+	}
+	var saleStrategy, supplierStrategy string
+	for _, pair := range []struct {
+		raw    json.RawMessage
+		target *string
+	}{{saleFields["pricing_strategy"], &saleStrategy}, {supplierFields["pricing_strategy"], &supplierStrategy}} {
+		if pair.raw != nil && json.Unmarshal(pair.raw, pair.target) != nil {
+			return ErrInvalidConfiguration
+		}
+	}
+	if saleStrategy != supplierStrategy && (saleStrategy == domain.PricingCharacterCountV1 || saleStrategy == domain.PricingOriginalDurationV1 || supplierStrategy == domain.PricingCharacterCountV1 || supplierStrategy == domain.PricingOriginalDurationV1) {
 		return ErrInvalidConfiguration
 	}
 	for _, key := range []string{"cached_input_micros_per_1k", "reference_scope"} {

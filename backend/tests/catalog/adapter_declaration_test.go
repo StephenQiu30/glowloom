@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
@@ -17,7 +19,7 @@ import (
 
 func declarationPreset(t *testing.T) domain.PresetDocument {
 	t.Helper()
-	doc := domain.PresetDocument{SchemaVersion: 1, Name: "Restricted declaration", Config: domain.BuiltinPresets()[1].Config}
+	doc := domain.PresetDocument{SchemaVersion: 1, Name: "Restricted declaration", Config: catalogfixture.BuiltinPresets()[1].Config}
 	doc.AdapterDeclaration = &domain.AdapterDeclaration{SchemaVersion: 1, AdapterKey: "openrouter", ProtocolID: "openrouter", BaseURL: doc.Config.BaseURL, Region: doc.Config.Region, Capabilities: []string{"text", "image", "video"}}
 	return doc
 }

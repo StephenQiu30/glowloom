@@ -159,7 +159,7 @@ func TestManagedConnectionKeyRotationAndReleaseGate(t *testing.T) {
 			require.Equal(t, price.ID, item.CurrentPrice.ID)
 		}
 	}
-	require.True(t, found, "published model missing from creator catalog")
+	require.False(t, found, "read-only credential checks and an outdated model version cannot make a mode consumable")
 }
 
 func sameReceipt(t *testing.T, a, b any) {

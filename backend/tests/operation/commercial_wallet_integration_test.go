@@ -1,12 +1,14 @@
 package operation_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
@@ -41,7 +43,12 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 		VALUES(?,?,?,?,?,'{}','active')`, release, model, version, price, config).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET active_release_id=? WHERE id=?`, release, model).Error)
 
-	store := operationStore(db)
+	// This wallet test owns synthetic catalog acceptance; the real projection is
+	// exercised by catalog availability integration tests. Keep its intentional
+	// pre-review tariffs available to test the independent wallet rejection.
+	store := operationStore(db).WithExecutionAvailability(func(*gorm.DB) op.ExecutionAvailability {
+		return approvedWalletFixtureExecution{version: version, release: release}
+	})
 	input := op.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: op.FreeQuoteItemInput{
 		ModelKey: modelKey, Capability: "text.generate", Mode: "text_to_text", Prompt: "测试分镜", OutputCount: 1,
 	}}
@@ -143,4 +150,10 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	require.NoError(t, db.Raw(`SELECT procurement_cost_micros FROM operation.provider_call
 		WHERE operation_id=? AND action='submit'`, id).Row().Scan(&supplierMicros))
 	require.Equal(t, int64(50_000), supplierMicros)
+}
+
+type approvedWalletFixtureExecution struct{ version, release uuid.UUID }
+
+func (r approvedWalletFixtureExecution) AvailableForNewExecution(_ context.Context, version, release uuid.UUID, mode string) (bool, error) {
+	return version == r.version && release == r.release && mode == "text_to_text", nil
 }

@@ -25,6 +25,7 @@ var (
 
 // Store keeps the database handle injected by the composition root.
 type Store struct {
+	executionAvailability      func(*gorm.DB) application.ExecutionAvailability
 	projectMedia               func(*gorm.DB) application.ProjectMediaSigner
 	storageAdmission           OperationStorageFactory
 	db                         *gorm.DB
@@ -35,6 +36,35 @@ type Store struct {
 	promptCompiler             func(*gorm.DB) application.QuotePromptCompiler
 	subjectMedia               func(*gorm.DB) application.SubjectMediaAccess
 	creditOperationSagaEnabled bool
+}
+
+// WithExecutionAvailability injects the catalog's transaction-bound execution gate.
+func (s *Store) WithExecutionAvailability(factory func(*gorm.DB) application.ExecutionAvailability) *Store {
+	s.executionAvailability = factory
+	return s
+}
+
+func (s *Store) availableForExecution(tx *gorm.DB, versionID, releaseID uuid.UUID, mode string) (bool, error) {
+	if s.executionAvailability == nil {
+		return false, nil
+	}
+	reader := s.executionAvailability(tx)
+	if reader == nil {
+		return false, nil
+	}
+	return reader.AvailableForNewExecution(tx.Statement.Context, versionID, releaseID, mode)
+}
+
+// AvailableForNewExecution reuses the injected catalog projection only inside
+// a caller-owned transaction. The caller owns project or execution authority.
+func (s *Store) AvailableForNewExecution(ctx context.Context, versionID, releaseID uuid.UUID, mode string) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, nil
+	}
+	if _, ok := s.db.Statement.ConnPool.(gorm.TxCommitter); !ok {
+		return false, nil
+	}
+	return s.availableForExecution(s.db.WithContext(ctx), versionID, releaseID, mode)
 }
 
 // WithCreditOperationSaga queues wallet freezes for newly confirmed operations.

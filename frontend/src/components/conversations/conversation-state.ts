@@ -1,3 +1,4 @@
+import { modelAvailableForMode } from "@/components/generation/model-availability";
 import type { PromptDraft } from "@/components/generation/prompt-document";
 import type { ConversationSkillPin } from "./conversation-context";
 
@@ -77,9 +78,7 @@ export function canSubmitConversation({
   if (
     !model ||
     model.capability !== "text.generate" ||
-    model.status !== "active" ||
-    model.provider_status !== "active" ||
-    !model.credential_present ||
+    !modelAvailableForMode(model, "text_to_text") ||
     !model.current_version?.id ||
     !model.current_price?.id
   )

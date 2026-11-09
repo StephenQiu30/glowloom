@@ -1,8 +1,13 @@
 package domain
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"math/big"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -11,17 +16,19 @@ import (
 // ModelCandidatePreset is public configuration guidance, never account access,
 // a price, a release, or evidence that inference succeeded.
 type ModelCandidatePreset struct {
-	Key                    string   `json:"key"`
-	AdapterKey             string   `json:"adapter_key"`
-	DisplayName            string   `json:"display_name"`
-	ProviderModelID        string   `json:"provider_model_id"`
-	Capability             string   `json:"capability"`
-	Modes                  []string `json:"modes"`
-	SourceURL              string   `json:"source_url"`
-	ReviewedAt             string   `json:"reviewed_at"`
-	Lifecycle              string   `json:"lifecycle"`
-	RequiresModelSelection bool     `json:"requires_model_selection"`
-	MaxOutputs             *int     `json:"max_outputs,omitempty"`
+	Key                    string                   `json:"key"`
+	AdapterKey             string                   `json:"adapter_key"`
+	DisplayName            string                   `json:"display_name"`
+	ProviderModelID        string                   `json:"provider_model_id"`
+	Capability             string                   `json:"capability"`
+	Modes                  []string                 `json:"modes"`
+	SourceURL              string                   `json:"source_url"`
+	ReviewedAt             string                   `json:"reviewed_at"`
+	Lifecycle              string                   `json:"lifecycle"`
+	RequiresModelSelection bool                     `json:"requires_model_selection"`
+	MaxOutputs             *int                     `json:"max_outputs,omitempty"`
+	Execution              *ModelCandidateExecution `json:"execution,omitempty"`
+	MeteringStrategy       string                   `json:"metering_strategy,omitempty"`
 }
 
 // MaxPresetModels bounds atomic onboarding selections and management readback.
@@ -38,15 +45,6 @@ type ModelCandidateCatalog struct {
 type ModelCandidateSelection struct {
 	CatalogVersion string               `json:"catalog_version"`
 	Model          ModelCandidatePreset `json:"model"`
-}
-
-// BuiltinModelCatalog returns new slices on every call. Account-specific slots
-// intentionally have no request model ID; they cannot be dispatched.
-func BuiltinModelCatalog(adapter string) ModelCandidateCatalog {
-	if spec, ok := GetAdapterSpec(adapter); ok && spec.CandidateCatalog != nil {
-		return spec.CandidateCatalog()
-	}
-	return ModelCandidateCatalog{Version: "2026-10-26.1", Models: []ModelCandidatePreset{}}
 }
 
 // Select resolves an ordered selection against one exact catalog snapshot.
@@ -76,106 +74,236 @@ func (c ModelCandidateCatalog) Select(version string, keys []string) ([]ModelCan
 	return selected, nil
 }
 
-// ModelCatalogForConfig only suggests capabilities declared by this immutable
-// connection snapshot. Historical video-only presets do not acquire text access.
-func ModelCatalogForConfig(config ProviderConfig) ModelCandidateCatalog {
-	catalog := BuiltinModelCatalog(config.AdapterKey)
-	models := make([]ModelCandidatePreset, 0, len(catalog.Models))
-	for _, candidate := range catalog.Models {
-		if slices.Contains(config.Capabilities, strings.TrimSuffix(candidate.Capability, ".generate")) {
-			models = append(models, candidate)
+// ModelCatalogForPreset returns candidate models matching the config's capabilities,
+// merging a persisted snapshot with explicit administrator model templates.
+func ModelCatalogForPreset(document PresetDocument, source ModelCandidateCatalog) ModelCandidateCatalog {
+	catalog := ModelCandidateCatalog{Version: source.Version, Models: []ModelCandidatePreset{}}
+	for _, model := range source.Models {
+		if model.AdapterKey == document.Config.AdapterKey && slices.Contains(document.Config.Capabilities, strings.TrimSuffix(model.Capability, ".generate")) {
+			catalog.Models = append(catalog.Models, model)
 		}
 	}
-	catalog.Models = models
-	return catalog
-}
 
-// ModelCatalogForPreset returns candidate models matching the config's capabilities,
-// combining builtin candidates with any administrator-configured model templates.
-// This ensures model catalogs are dynamic and administrator-manageable without hardcoding.
-func ModelCatalogForPreset(document PresetDocument) ModelCandidateCatalog {
-	catalog := ModelCatalogForConfig(document.Config)
-	if catalog.Version == "" {
-		catalog.Version = "preset-custom.1"
-	}
-	existingKeys := make(map[string]bool, len(catalog.Models))
-	for _, m := range catalog.Models {
-		existingKeys[m.Key] = true
+	existingKeys := make(map[string]int, len(catalog.Models))
+	for index, model := range catalog.Models {
+		existingKeys[model.Key] = index
 	}
 	for _, template := range document.ModelTemplates {
-		if !existingKeys[template.Key] {
-			reviewedAt := ""
-			if !template.UpstreamCost.ReviewedAt.IsZero() {
-				reviewedAt = template.UpstreamCost.ReviewedAt.Format("2006-01-02")
-			}
-			source := template.UpstreamCost.Source
-			catalog.Models = append(catalog.Models, ModelCandidatePreset{
-				Key:             template.Key,
-				AdapterKey:      document.Config.AdapterKey,
-				DisplayName:     template.Name,
-				ProviderModelID: template.ProviderModelID,
-				Capability:      template.Capability,
-				Modes:           slices.Clone(template.Modes),
-				SourceURL:       source,
-				ReviewedAt:      reviewedAt,
-				Lifecycle:       "unknown",
-			})
-			existingKeys[template.Key] = true
+		reviewedAt := ""
+		if !template.UpstreamCost.ReviewedAt.IsZero() {
+			reviewedAt = template.UpstreamCost.ReviewedAt.Format("2006-01-02")
 		}
+		candidate := ModelCandidatePreset{
+			Key:             template.Key,
+			AdapterKey:      document.Config.AdapterKey,
+			DisplayName:     template.Name,
+			ProviderModelID: template.ProviderModelID,
+			Capability:      template.Capability,
+			Modes:           slices.Clone(template.Modes),
+			SourceURL:       template.UpstreamCost.Source,
+			ReviewedAt:      reviewedAt,
+			Lifecycle:       "unknown",
+		}
+		// An explicit v1 template supplies its own version contract. Combining
+		// its configuration with a same-key SQL meter changes legacy semantics.
+		if index, exists := existingKeys[template.Key]; exists {
+			catalog.Models[index] = candidate
+			continue
+		}
+		existingKeys[template.Key] = len(catalog.Models)
+		catalog.Models = append(catalog.Models, candidate)
 	}
+	raw, _ := json.Marshal(struct {
+		Source   string
+		Document PresetDocument
+		Models   []ModelCandidatePreset
+	}{source.Version, document, catalog.Models})
+	// jsonb may reorder object fields; selection identity follows semantic JSON.
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&value) == nil {
+		raw, _ = json.Marshal(value)
+	}
+	digest := sha256.Sum256(raw)
+	catalog.Version = "catalog:" + hex.EncodeToString(digest[:])
 	return catalog
 }
 
-// OnboardingVersion supplies conservative parameters supported by the deployed
-// adapter. A candidate with an account-specific placeholder cannot be enabled.
+// ModelCandidateExecution carries public, conservative parameters without account identities or a price.
+type ModelCandidateExecution struct {
+	Limits        json.RawMessage `json:"limits"`
+	ParamSchema   json.RawMessage `json:"param_schema"`
+	ExpectedMaxMS int             `json:"expected_max_ms"`
+	SupportsQuery bool            `json:"supports_query"`
+}
+
+// OnboardingVersion instantiates a pinned public contract without copying prices or evidence.
 func (m ModelCandidatePreset) OnboardingVersion(modelID, actorID uuid.UUID) (ModelVersion, error) {
-	if m.RequiresModelSelection || m.ProviderModelID == "" || !IsManagedCloud(m.AdapterKey) {
+	if m.RequiresModelSelection || m.ProviderModelID == "" || !IsManagedCloud(m.AdapterKey) || m.Execution == nil {
 		return ModelVersion{}, ErrInvalidPreset
 	}
-	version := ModelVersion{ID: uuid.New(), ModelID: modelID, VersionNo: 1, ProviderModelID: m.ProviderModelID, Modes: slices.Clone(m.Modes), Limits: json.RawMessage(`{"max_outputs":1}`), ParamSchema: json.RawMessage(`[]`), ExpectedMaxMS: 120000, Moderation: ModerationProvider, Queue: "provider", CreateBy: actorID}
-	if configureOmniAudioVersion(m, &version) || configureCreationVersion(m, &version) {
-		return version, version.Validate()
-	}
-	switch m.Capability {
-	case "text.generate":
-		version.ParamSchema = json.RawMessage(`[{"field":"max_tokens","label":"最大输出 Token","component":"input","type":"integer","min":1,"max":32768,"default":4096}]`)
-	case "image.generate":
-		if m.AdapterKey == "openai" || m.AdapterKey == "vercel" {
-			version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["1024x1024","1536x1024","1024x1536"],"default":"1024x1024"},{"field":"quality","label":"画质","component":"select","type":"string","enum":["low","medium","high"],"default":"medium"}]`)
-			return version, version.Validate()
-		}
-		if m.AdapterKey != "volcengine_ark" && m.AdapterKey != "openrouter" && m.AdapterKey != "byteplus" {
-			return ModelVersion{}, ErrInvalidPreset
-		}
-		version.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"_total_images":8,"reference_image":{"max_count":8,"types":["image"],"for_modes":["image2image"]},"subject":{"max_count":8,"types":["image"],"for_modes":["image2image"]}}}`)
-		version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["2K","4K"],"default":"2K"}]`)
-		if slices.Contains([]string{"doubao-seedream-5-0-pro-260628", "doubao-seedream-5-0-flash-260915", "dola-seedream-5-0-pro-260628", "dola-seedream-5-0-flash-260915"}, m.ProviderModelID) {
-			version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["1K","1.5K","2K"],"default":"2K"}]`)
-		}
-	case "audio.generate":
-		if m.AdapterKey != "volcengine_speech" {
-			return ModelVersion{}, ErrInvalidPreset
-		}
-		version.ParamSchema = json.RawMessage(`[{"field":"speaker","label":"音色","component":"input","type":"string","required":true,"default":"zh_female_vv_uranus_bigtts"},{"field":"speech_rate","label":"语速","component":"input","type":"integer","min":-50,"max":100,"default":0},{"field":"loudness_rate","label":"音量","component":"input","type":"integer","min":-50,"max":100,"default":0}]`)
-	case "video.generate":
-		version.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"_total_images":9,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]},"reference_image":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]},"subject":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]}}}`)
-		if !slices.Contains(m.Modes, "omni_reference") {
-			version.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"_total_images":2,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]}}}`)
-		}
-		if m.AdapterKey != "volcengine_ark" {
-			return ModelVersion{}, ErrInvalidPreset
-		}
-		version.SupportsQuery = true
-		version.ExpectedMaxMS = 600000
-		version.ParamSchema = json.RawMessage(`[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":4000,"max":15000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p","1080p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}]`)
-	default:
+	contract := m.Execution
+	var limits map[string]json.RawMessage
+	if json.Unmarshal(contract.Limits, &limits) != nil || limits == nil {
 		return ModelVersion{}, ErrInvalidPreset
 	}
-	if m.AdapterKey == "openrouter" && m.Capability == "image.generate" {
-		version.ParamSchema = json.RawMessage(`[]`)
+	if m.MeteringStrategy != "" {
+		raw, _ := json.Marshal(m.MeteringStrategy)
+		limits["metering_strategy"] = raw
 	}
-	if m.AdapterKey == "volcengine_ark" && m.Capability == "video.generate" {
-		configureSeedanceGeneration(&version)
+	normalized, err := json.Marshal(limits)
+	if err != nil {
+		return ModelVersion{}, ErrInvalidPreset
 	}
+	version := ModelVersion{ID: uuid.New(), ModelID: modelID, VersionNo: 1, ProviderModelID: m.ProviderModelID, Modes: slices.Clone(m.Modes), Limits: normalized, ParamSchema: slices.Clone(contract.ParamSchema), ExpectedMaxMS: contract.ExpectedMaxMS, SupportsQuery: contract.SupportsQuery, Moderation: ModerationProvider, Queue: "provider", CreateBy: actorID}
 	return version, version.Validate()
+}
+
+// ValidatePinnedVersion prevents settings edits from dropping a SQL candidate's immutable identity and meter.
+// Snapshots predating public execution contracts retain their historical semantics.
+func (m ModelCandidatePreset) ValidatePinnedVersion(version ModelVersion) error {
+	if m.Execution == nil && m.MeteringStrategy == "" {
+		return nil
+	}
+	if version.ProviderModelID != m.ProviderModelID {
+		return ErrInvalidModelVersion
+	}
+	for _, mode := range version.Modes {
+		if !slices.Contains(m.Modes, mode) {
+			return ErrInvalidModelVersion
+		}
+	}
+	var limits struct {
+		MeteringStrategy string `json:"metering_strategy"`
+	}
+	if json.Unmarshal(version.Limits, &limits) != nil || m.MeteringStrategy != "" && limits.MeteringStrategy != m.MeteringStrategy {
+		return ErrInvalidModelVersion
+	}
+	if m.Execution != nil && !pinnedParametersWithin(m.Execution.ParamSchema, version.ParamSchema, version.Modes) {
+		return ErrInvalidModelVersion
+	}
+	return nil
+}
+
+type pinnedParameter struct {
+	Field    string            `json:"field"`
+	Type     string            `json:"type"`
+	Required bool              `json:"required"`
+	Default  json.RawMessage   `json:"default"`
+	Enum     []json.RawMessage `json:"enum"`
+	Min      json.RawMessage   `json:"min"`
+	Max      json.RawMessage   `json:"max"`
+	ForModes []string          `json:"for_modes"`
+}
+
+func pinnedParametersWithin(source, proposed json.RawMessage, modes []string) bool {
+	parse := func(raw json.RawMessage) (map[string]pinnedParameter, bool) {
+		var fields []pinnedParameter
+		if json.Unmarshal(raw, &fields) != nil || fields == nil {
+			return nil, false
+		}
+		result := make(map[string]pinnedParameter, len(fields))
+		for _, field := range fields {
+			if field.Field == "" {
+				return nil, false
+			}
+			if _, exists := result[field.Field]; exists {
+				return nil, false
+			}
+			result[field.Field] = field
+		}
+		return result, true
+	}
+	baseline, sourceOK := parse(source)
+	fields, proposedOK := parse(proposed)
+	if !sourceOK || !proposedOK {
+		return false
+	}
+	active := func(field pinnedParameter, mode string) bool {
+		return len(field.ForModes) == 0 || slices.Contains(field.ForModes, mode)
+	}
+	for name, field := range fields {
+		original, exists := baseline[name]
+		if !exists || field.Type != original.Type {
+			return false
+		}
+		retained := false
+		for _, mode := range modes {
+			if active(field, mode) {
+				retained = true
+				if !active(original, mode) {
+					return false
+				}
+			}
+		}
+		if !retained {
+			continue
+		}
+		if original.Required && !field.Required {
+			return false
+		}
+		if !pinnedBoundWithin(original.Min, field.Min, true) || !pinnedBoundWithin(original.Max, field.Max, false) {
+			return false
+		}
+		if len(original.Enum) > 0 {
+			if len(field.Enum) == 0 {
+				return false
+			}
+			for _, option := range field.Enum {
+				if !slices.ContainsFunc(original.Enum, func(value json.RawMessage) bool { return pinnedOptionEqual(option, value, field.Type) }) {
+					return false
+				}
+			}
+		}
+	}
+	for name, original := range baseline {
+		if !original.Required && len(original.Default) == 0 {
+			continue
+		}
+		field, exists := fields[name]
+		for _, mode := range modes {
+			if active(original, mode) && (!exists || !active(field, mode) || !field.Required && len(field.Default) == 0) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func pinnedBoundWithin(source, proposed json.RawMessage, minimum bool) bool {
+	if len(source) == 0 {
+		return true
+	}
+	base, baseOK := pinnedNumber(source)
+	value, valueOK := pinnedNumber(proposed)
+	if !baseOK || !valueOK {
+		return false
+	}
+	comparison := value.Cmp(base)
+	return minimum && comparison >= 0 || !minimum && comparison <= 0
+}
+
+func pinnedOptionEqual(left, right json.RawMessage, fieldType string) bool {
+	if fieldType == "integer" || fieldType == "number" {
+		a, aOK := pinnedNumber(left)
+		b, bOK := pinnedNumber(right)
+		return aOK && bOK && a.Cmp(b) == 0
+	}
+	var a, b string
+	return json.Unmarshal(left, &a) == nil && json.Unmarshal(right, &b) == nil && a == b
+}
+
+func pinnedNumber(raw json.RawMessage) (*big.Rat, bool) {
+	text := string(bytes.TrimSpace(raw))
+	if len(text) == 0 || len(text) > 512 || !json.Valid([]byte(text)) || text[0] != '-' && (text[0] < '0' || text[0] > '9') {
+		return nil, false
+	}
+	if at := strings.IndexAny(text, "eE"); at >= 0 {
+		exponent, err := strconv.Atoi(text[at+1:])
+		if err != nil || exponent < -512 || exponent > 512 {
+			return nil, false
+		}
+	}
+	return new(big.Rat).SetString(text)
 }

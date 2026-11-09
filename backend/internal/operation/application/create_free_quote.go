@@ -177,7 +177,7 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 	if !supported {
 		return PreparedFreeQuote{}, ErrFreeQuoteModelMissing
 	}
-	params, err := validateQuoteParams(input.Params, catalog.ParamSchema, input.Mode)
+	params, err := NormalizeQuoteParams(input.Params, catalog.ParamSchema, input.Mode)
 	if err != nil {
 		return PreparedFreeQuote{}, err
 	}
@@ -185,10 +185,11 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 		return PreparedFreeQuote{}, ErrFreeQuoteInputNotReady
 	}
 	var limits struct {
-		MaxOutputs   int64    `json:"max_outputs"`
-		DurationsMS  []int64  `json:"durations_ms"`
-		Resolutions  []string `json:"resolutions"`
-		AspectRatios []string `json:"aspect_ratios"`
+		MaxOutputs       int64    `json:"max_outputs"`
+		DurationsMS      []int64  `json:"durations_ms"`
+		Resolutions      []string `json:"resolutions"`
+		AspectRatios     []string `json:"aspect_ratios"`
+		MeteringStrategy string   `json:"metering_strategy"`
 	}
 	if err := json.Unmarshal(catalog.Limits, &limits); err != nil ||
 		limits.MaxOutputs < int64(input.OutputCount) {
@@ -239,6 +240,12 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 	var priceFields map[string]json.RawMessage
 	if json.Unmarshal(catalog.Price.Rule, &priceFields) != nil {
 		return PreparedFreeQuote{}, ErrFreeQuoteModelMissing
+	}
+	if limits.MeteringStrategy != "" {
+		var strategy string
+		if json.Unmarshal(priceFields["pricing_strategy"], &strategy) != nil || strategy != limits.MeteringStrategy || !catalogdomain.CompatiblePricingStrategy(strategy, catalog.Price.Unit) {
+			return PreparedFreeQuote{}, ErrFreeQuoteModelMissing
+		}
 	}
 	pricing := PricingInput{OutputCount: int64(input.OutputCount), Mode: input.Mode,
 		CharacterCount:     int64(utf8.RuneCountInString(input.Prompt)),
@@ -327,6 +334,9 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 			credits := amount / billingdomain.MicrosPerCredit
 			costs.WholeCredits = true
 			costs.EstimatedCredits = &credits
+			if costs.PricingStrategy == catalogdomain.PricingOriginalDurationV1 {
+				costs.EstimatedCredits = nil
+			}
 			costs.ExactCredits = strconv.FormatInt(credits, 10)
 			costs.MaxChargeCredits = costs.ExactCredits
 		}

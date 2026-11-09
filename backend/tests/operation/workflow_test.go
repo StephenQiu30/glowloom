@@ -177,6 +177,9 @@ func (s *stateStore) OriginalDeliveryRecoveryRequired(context.Context, applicati
 func (s *stateStore) CanDeliverWorkflowControl(context.Context, application.WorkflowControlDelivery) (bool, error) {
 	return s.controlErr == nil, s.controlErr
 }
+func (s *stateStore) RecoverOperationTasks(ctx context.Context, d application.WorkflowControlDelivery) error {
+	return s.ScheduleOperationStep(ctx, "operation.run", d.TargetID)
+}
 func (s *stateStore) ScheduleOriginalDelivery(context.Context, application.WorkflowControlDelivery) error {
 	s.scheduled = append(s.scheduled, "operation.original")
 	return nil

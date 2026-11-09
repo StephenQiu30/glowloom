@@ -14,6 +14,8 @@ function model(types = ["image", "audio"], id = "one"): API.ModelResponse {
     status: "active",
     provider_status: "active",
     credential_present: true,
+    available: true,
+    mode_availability: [{ mode: "omni_audio", available: true }],
     input_roles: types.map((kind) => `reference_${kind}`),
     current_version: {
       id: `${id}-v1`,
@@ -93,8 +95,9 @@ describe("formal audio connected creation capabilities", () => {
   it("selects the first eligible omni model without choosing another to accommodate sources", () => {
     const speech = model();
     speech.current_version!.modes = ["text2audio"];
+    speech.mode_availability = [{ mode: "text2audio", available: true }];
     const choices = catalog([
-      { ...model(), status: "disabled" },
+      { ...model(), available: false, status: "disabled" },
       speech,
       model(["audio"], "default"),
       model(["audio", "video"], "later"),
@@ -130,9 +133,9 @@ describe("formal audio connected creation capabilities", () => {
     ).not.toThrow();
   });
   it.each([
-    { status: "disabled" },
-    { provider_status: "disabled" },
-    { credential_present: false },
+    { available: false, status: "disabled" },
+    { available: false, provider_status: "disabled" },
+    { available: false, credential_present: false },
     { current_version: undefined },
     { id: undefined },
   ])("fails closed for unavailable model %j", (patch) => {

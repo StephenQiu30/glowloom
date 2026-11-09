@@ -125,6 +125,13 @@ func (d *VolcengineArkDriver) Submit(ctx context.Context, c *Client, input appli
 	if !applyAllowedParameters(input, payload, input.Capability == "video.generate") {
 		return invalidSubmissionResult(), nil
 	}
+	if value, present := input.Params["thinking"]; present {
+		mode, ok := value.(string)
+		if input.Config.AdapterKey != "volcengine_ark" || input.Capability != "text.generate" || !ok || mode != "disabled" {
+			return invalidSubmissionResult(), nil
+		}
+		payload["thinking"] = map[string]string{"type": mode}
+	}
 	if strings.HasPrefix(input.ModelID, "doubao-seedance-2-5-") && input.Mode == "image2video" && input.Capability == "video.generate" {
 		payload["ratio"] = "adaptive"
 	}

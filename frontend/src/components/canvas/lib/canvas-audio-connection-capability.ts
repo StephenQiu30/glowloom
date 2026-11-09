@@ -1,3 +1,4 @@
+import { modelAvailableForMode } from "@/components/generation/model-availability";
 import {
   fieldsForMode,
   initialParams,
@@ -45,9 +46,7 @@ function activeAudioModel(model: API.ModelResponse) {
   return (
     !!model.id &&
     model.capability === "audio.generate" &&
-    model.status === "active" &&
-    model.provider_status === "active" &&
-    model.credential_present === true &&
+    modelAvailableForMode(model) &&
     !!model.current_version?.id &&
     modelsForCreation([model], "audio").length === 1
   );
@@ -128,7 +127,7 @@ export function createCanvasAudioConnectionDraft(
   for (const model of readyModels(catalog, identity)) {
     if (
       !activeAudioModel(model) ||
-      !model.current_version!.modes?.includes(audioReferenceMode) ||
+      !modelAvailableForMode(model, audioReferenceMode) ||
       !model.input_roles?.some(
         (role) => roleTypes(model, audioReferenceMode, role).length > 0,
       )
@@ -172,7 +171,7 @@ export function assertCanvasAudioConnectionCapability(
     !model ||
     !activeAudioModel(model) ||
     draft.mode !== audioReferenceMode ||
-    !model.current_version!.modes?.includes(draft.mode)
+    !modelAvailableForMode(model, draft.mode)
   )
     throw new Error("请先为音频节点选择有效的模型和模式");
   validateParameters(draft, model);
@@ -207,7 +206,7 @@ export function canvasAudioCatalogAcceptsSubjects(
     return readyModels(catalog, identity).some(
       (model) =>
         activeAudioModel(model) &&
-        model.current_version!.modes?.includes(audioReferenceMode) &&
+        modelAvailableForMode(model, audioReferenceMode) &&
         roleTypes(model, audioReferenceMode, "subject").length > 0,
     );
   } catch {

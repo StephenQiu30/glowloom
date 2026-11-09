@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/stretchr/testify/require"
 
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -37,7 +39,7 @@ func TestAdapterCompatibilityRegistryRejectsDuplicateProtocols(t *testing.T) {
 }
 
 func TestAdapterCompatibilityInstalledTextProtocols(t *testing.T) {
-	for _, preset := range catalog.BuiltinPresets() {
+	for _, preset := range catalogfixture.BuiltinPresets() {
 		if !strings.Contains(strings.Join(preset.Config.Capabilities, ","), "text") {
 			continue
 		}
@@ -91,7 +93,7 @@ func TestAdapterCompatibilityInstalledTextProtocols(t *testing.T) {
 }
 
 func TestAdapterUnknownNeverResubmits(t *testing.T) {
-	config := catalog.BuiltinPresets()[0].Config
+	config := catalogfixture.BuiltinPresets()[0].Config
 	posts, gets := 0, 0
 	client := providerhttp.NewClient(&http.Client{Transport: adapterTransport(func(r *http.Request) (*http.Response, error) {
 		if r.Method == http.MethodPost {
@@ -127,12 +129,12 @@ func TestAdapterUnknownNeverResubmits(t *testing.T) {
 
 func TestBytePlusAPImagePresetUsesExistingArkProtocol(t *testing.T) {
 	var config catalog.ProviderConfig
-	for _, p := range catalog.BuiltinPresets() {
+	for _, p := range catalogfixture.BuiltinPresets() {
 		if p.Config.AdapterKey == "byteplus" {
 			config = p.Config
 		}
 	}
-	for _, candidate := range catalog.BuiltinModelCatalog("byteplus").Models {
+	for _, candidate := range catalogfixture.BuiltinModelCatalog("byteplus").Models {
 		if candidate.RequiresModelSelection {
 			continue
 		}

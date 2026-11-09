@@ -44,6 +44,7 @@ func NewRecordedActionParser() *Parser {
 	fields["operation.confirmed"] = []string{"quote_micros", "model_key", "region", "origin", "reused_from"}
 	fields["batch.confirmed"] = []string{"quote_total_micros", "total_count", "expired_count"}
 	fields["operation.cancel_requested"] = []string{"status"}
+	fields["operation.recover_requested"] = []string{"status"}
 	fields["batch.cancel_requested"] = []string{"status"}
 	fields["batch.resume_requested"] = []string{"status"}
 	fields["media.uploaded"] = []string{"kind", "byte_size", "sha256", "review_method", "reused"}

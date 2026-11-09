@@ -73,7 +73,7 @@ func TestCreditOperationSagaFreezesBeforeDispatchAndReleasesOnZeroCostTerminal(t
 		ID uuid.UUID `json:"hold_id"`
 	}
 	var result []byte
-	require.NoError(t, database.Raw(`SELECT result FROM billing.credit_command WHERE id=?::uuid`, freeze.ID).Scan(&result).Error)
+	require.NoError(t, database.Raw(`SELECT result FROM billing.credit_command WHERE id=?::uuid`, freeze.ID).Row().Scan(&result))
 	require.NoError(t, json.Unmarshal(result, &hold))
 	require.NotEqual(t, uuid.Nil, hold.ID)
 	consumeOperationCreditEvent(t, database, billingevent.CreditSettlementOutcomeTopic, "hold_id", hold.ID, store)
@@ -102,7 +102,7 @@ func TestCreditOperationSagaFreezeFailureReleasesProjectReservation(t *testing.T
 	quoted, _, _ := seedUnfundedQuoteCatalog(t, database, projectID, time.Now().UTC())
 	seedFixtureProcurement(t, database, *quoted.PriceRuleVersionID, *quoted.ModelProfileVersionID)
 	var scopeID uuid.UUID
-	require.NoError(t, database.Raw(`SELECT billing.bind_project_wallet(?::uuid)`, projectID).Scan(&scopeID).Error)
+	require.NoError(t, database.Raw(`SELECT billing.bind_project_wallet(?::uuid)`, projectID).Row().Scan(&scopeID))
 	require.NotEqual(t, uuid.Nil, scopeID)
 
 	item := quotedSnapshotItem(projectID, 20)
@@ -144,6 +144,67 @@ func TestCreditOperationSagaFreezeFailureReleasesProjectReservation(t *testing.T
 	var reservedMicros int64
 	require.NoError(t, database.Raw(`SELECT reserved_micros FROM billing.budget WHERE project_id=?::uuid`, projectID).Scan(&reservedMicros).Error)
 	require.Zero(t, reservedMicros)
+}
+
+func TestCreditOperationSagaDispatchRequiresCompleteSucceededFreeze(t *testing.T) {
+	for _, scenario := range []string{"funded", "accepted", "released_hold", "partial_allocation", "wrong_amount", "wrong_caller", "wrong_source"} {
+		t.Run(scenario, func(t *testing.T) {
+			database := operationStoreDB(t)
+			actor, projectID := operationStoreProject(t, database)
+			quoted, _, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+			item := quotedSnapshotItem(projectID, 20)
+			item.Operation.Capability = quoted.Capability
+			item.Operation.ModelProfileVersionID = quoted.ModelProfileVersionID
+			item.Operation.PriceRuleVersionID = quoted.PriceRuleVersionID
+			store := operationStore(database).WithCreditOperationSaga(true)
+			require.NoError(t, store.CreateQuoteSnapshot(t.Context(), actor, nil, []operationpg.QuoteItem{item}))
+			_, err := store.ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{ProjectID: projectID, OperationID: item.Operation.ID, RequestID: uuid.NewString()})
+			require.NoError(t, err)
+			var commandID uuid.UUID
+			require.NoError(t, database.Raw(`SELECT id FROM billing.credit_command WHERE caller_id=? AND action='freeze' AND source_id=?`, billingapp.CreditOperationCallerID, item.Operation.ID).Row().Scan(&commandID))
+			if scenario != "accepted" {
+				processOperationCreditCommand(t, database, commandID)
+			}
+			switch scenario {
+			case "released_hold":
+				require.NoError(t, database.Exec(`UPDATE billing.credit_hold SET status='released',closed_at=now() WHERE command_id=?`, commandID).Error)
+			case "partial_allocation":
+				require.NoError(t, database.Exec(`UPDATE billing.credit_hold_allocation SET amount_micros=amount_micros-1 WHERE hold_id=(SELECT id FROM billing.credit_hold WHERE command_id=?)`, commandID).Error)
+			case "wrong_amount":
+				require.NoError(t, database.Exec(`UPDATE billing.credit_hold SET amount_micros=amount_micros+1 WHERE command_id=?`, commandID).Error)
+			case "wrong_caller":
+				require.NoError(t, database.Exec(`UPDATE billing.credit_command SET caller_id='fixture:other' WHERE id=?`, commandID).Error)
+			case "wrong_source":
+				require.NoError(t, database.Exec(`UPDATE billing.credit_command SET source_id=? WHERE id=?`, uuid.New(), commandID).Error)
+			}
+			var requestKey string
+			require.NoError(t, database.Raw(`SELECT provider_request_key FROM operation.operation WHERE id=?`, item.Operation.ID).Row().Scan(&requestKey))
+			require.NotEmpty(t, requestKey)
+			_, err = store.TransitionWorkflowOperation(t.Context(), operationapp.TransitionInput{OperationID: item.Operation.ID, From: []domain.Status{domain.StatusConfirmed}, To: domain.StatusSubmitting, ProviderRequestKey: &requestKey})
+			require.NoError(t, err)
+			require.NoError(t, store.BeginProviderCall(t.Context(), operationapp.BeginProviderCallInput{OperationID: item.Operation.ID, Action: "submit", Attempt: 1, DispatchRequired: true}))
+			identity := operationapp.ProviderDispatchIdentity{OperationID: item.Operation.ID, ProjectID: projectID, ModelProfileVersionID: *quoted.ModelProfileVersionID, PriceRuleVersionID: *quoted.PriceRuleVersionID, RequestKey: requestKey, Action: "submit", Attempt: 1}
+			var result operationapp.ProviderDispatchResult
+			err = withOperationCreditAppRole(database, func(tx *gorm.DB) error {
+				var claimErr error
+				result, claimErr = store.BindTransaction(tx).ClaimProviderDispatch(t.Context(), identity)
+				return claimErr
+			})
+			if scenario == "funded" {
+				require.NoError(t, err)
+				require.True(t, result.Claimed)
+				replay, err := store.ClaimProviderDispatch(t.Context(), identity)
+				require.NoError(t, err)
+				require.False(t, replay.Claimed, "a funded request still receives only one send permission")
+			} else {
+				require.Error(t, err)
+				require.False(t, result.Claimed)
+				var started bool
+				require.NoError(t, database.Raw(`SELECT dispatch_started_at IS NOT NULL FROM operation.provider_call WHERE operation_id=? AND action='submit' AND attempt=1`, item.Operation.ID).Row().Scan(&started))
+				require.False(t, started)
+			}
+		})
+	}
 }
 
 func operationSettlementInput(operationID uuid.UUID) operationflow.SettlementInput {

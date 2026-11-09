@@ -1,4 +1,6 @@
 "use client";
+
+import { modelAvailableForMode } from "@/components/generation/model-availability";
 import {
   useCallback,
   useEffect,
@@ -342,7 +344,12 @@ export function useConversation({
     const options = { signal: controller.signal };
     void Promise.allSettled([
       listProjectModels(
-        { project_id: projectID, capability: "text.generate", limit: 200 },
+        {
+          project_id: projectID,
+          capability: "text.generate",
+          mode: "text_to_text",
+          limit: 200,
+        },
         options,
       ),
       listAgentSkills({ pid: projectID }, options),
@@ -366,9 +373,7 @@ export function useConversation({
               ? (catalog.value.items ?? []).filter(
                   (item) =>
                     item.capability === "text.generate" &&
-                    item.status === "active" &&
-                    item.provider_status === "active" &&
-                    item.credential_present,
+                    modelAvailableForMode(item, "text_to_text"),
                 )
               : [],
           skills: skills.status === "fulfilled" ? skills.value : [],

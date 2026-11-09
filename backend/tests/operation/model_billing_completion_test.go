@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -42,7 +44,7 @@ func TestSeedanceQuoteUsesOutputTokensAndActualUsage(t *testing.T) {
 	} {
 		t.Run(tc.key, func(t *testing.T) {
 			var candidate catalogdomain.ModelCandidatePreset
-			for _, item := range catalogdomain.BuiltinModelCatalog("volcengine_ark").Models {
+			for _, item := range catalogfixture.LegacyBuiltinModelCatalog("volcengine_ark").Models {
 				if item.Key == tc.key {
 					candidate = item
 				}
@@ -75,7 +77,7 @@ func jsonNumber(n int64) string { data, _ := json.Marshal(n); return string(data
 
 func TestProImageQuoteCountsFrozenReferencesAndSizeTier(t *testing.T) {
 	var candidate catalogdomain.ModelCandidatePreset
-	for _, item := range catalogdomain.BuiltinModelCatalog("volcengine_ark").Models {
+	for _, item := range catalogfixture.LegacyBuiltinModelCatalog("volcengine_ark").Models {
 		if item.Key == "ark-image-pro-50" {
 			candidate = item
 		}

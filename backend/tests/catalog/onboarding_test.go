@@ -3,6 +3,8 @@ package catalog_test
 import (
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -11,7 +13,7 @@ import (
 )
 
 func TestArkOnboardingPresetsHaveExecutablePinnedVersions(t *testing.T) {
-	catalog := domain.BuiltinModelCatalog("volcengine_ark")
+	catalog := catalogfixture.BuiltinModelCatalog("volcengine_ark")
 	validator, err := paramvalidation.NewValidator()
 	require.NoError(t, err)
 	capabilities := map[string]bool{}

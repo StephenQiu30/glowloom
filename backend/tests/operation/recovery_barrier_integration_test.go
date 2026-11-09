@@ -147,7 +147,7 @@ func TestBillingBarrierTerminalEvidenceAndNormalCompletedCounterexample(t *testi
 	require.NoError(t, err)
 }
 
-func TestCatalogPricingPreviewKeepsMissingPriceUnknownWithoutCreatingOperation(t *testing.T) {
+func TestCatalogHidesUnsupportedAndMissingPriceModelsWithoutCreatingOperation(t *testing.T) {
 	db := operationStoreDB(t)
 	actor, pid := operationStoreProject(t, db)
 	quoted, model, _ := seedQuoteCatalog(t, db, pid, time.Now().UTC())
@@ -156,13 +156,11 @@ func TestCatalogPricingPreviewKeepsMissingPriceUnknownWithoutCreatingOperation(t
 	path := "/api/models?project_id=" + pid.String() + "&capability=" + quoted.Capability
 	known := publicOperationRequest(t, router, "GET", path, "", "")
 	require.Equal(t, 200, known.Code)
-	require.Contains(t, known.Body.String(), `"amount_kind":"unit_only"`)
-	require.Contains(t, known.Body.String(), `"amount_micros":null`)
-	require.Contains(t, known.Body.String(), `"confirmable":false`)
+	require.Contains(t, known.Body.String(), `"items":[]`, "an uninstalled synthetic adapter must not appear usable")
 	require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET is_delete=true WHERE id=?`, quoted.PriceRuleVersionID).Error)
 	missing := publicOperationRequest(t, router, "GET", path, "", "")
 	require.Equal(t, 200, missing.Code)
-	require.Contains(t, missing.Body.String(), `"amount_kind":"unknown"`)
+	require.Contains(t, missing.Body.String(), `"items":[]`)
 	require.NotContains(t, missing.Body.String(), `"amount_micros":0`)
 	body := fmt.Sprintf(`{"model_key":"quote-model-%s","capability":%q,"mode":"text_to_image","prompt":"fixture prompt","params":{},"output_count":1}`, model, quoted.Capability)
 	rejected := publicOperationRequest(t, router, "POST", "/api/projects/"+pid.String()+"/free-operations", body, uuid.NewString())

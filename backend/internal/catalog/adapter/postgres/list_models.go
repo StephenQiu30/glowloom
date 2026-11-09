@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -92,32 +93,65 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 			query += ` AND (m.model_key, m.id) > (?, ?::uuid)`
 			args = append(args, input.After.Key, input.After.ID.String())
 		}
-		query += ` ORDER BY m.model_key, m.id LIMIT ?`
-		args = append(args, input.Limit+1)
-		var rows []modelCatalogRow
-		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
-			return fmt.Errorf("read project model catalog: %w", err)
-		}
-		more := len(rows) > input.Limit
-		if more {
-			rows = rows[:input.Limit]
-		}
-		if err := s.loadModelCatalogPriceRules(ctx, tx, rows); err != nil {
-			return err
-		}
-		for _, row := range rows {
-			item, err := row.item()
+		baseQuery, baseArgs := query, append([]any{}, args...)
+		var scanAfter *application.ModelCatalogCursor
+		more := false
+		for {
+			batchQuery, batchArgs := baseQuery, append([]any{}, baseArgs...)
+			if scanAfter != nil {
+				batchQuery += ` AND (m.model_key,m.id)>(?,?::uuid)`
+				batchArgs = append(batchArgs, scanAfter.Key, scanAfter.ID)
+			}
+			batchQuery += ` ORDER BY m.model_key,m.id LIMIT 200`
+			var rows []modelCatalogRow
+			if err := tx.Raw(batchQuery, batchArgs...).Scan(&rows).Error; err != nil {
+				return fmt.Errorf("read project model catalog: %w", err)
+			}
+			ids := make([]uuid.UUID, 0, len(rows))
+			for _, row := range rows {
+				ids = append(ids, row.ID)
+			}
+			availability, err := readModelAvailability(tx, ids)
 			if err != nil {
 				return err
 			}
-			page.Models = append(page.Models, item)
+			availableRows := make([]modelCatalogRow, 0, len(rows))
+			for _, row := range rows {
+				if availability[row.ID].AvailableForMode(input.Mode) {
+					availableRows = append(availableRows, row)
+				}
+			}
+			if err := s.loadModelCatalogPriceRules(ctx, tx, availableRows); err != nil {
+				return err
+			}
+			for _, row := range availableRows {
+				item, err := row.item()
+				if err != nil {
+					return err
+				}
+				item.ModelAvailability = availability[row.ID]
+				page.Models = append(page.Models, item)
+				if len(page.Models) > input.Limit {
+					more = true
+					break
+				}
+			}
+			if more || len(rows) < 200 {
+				break
+			}
+			last := rows[len(rows)-1]
+			scanAfter = &application.ModelCatalogCursor{Key: last.ModelKey, ID: last.ID}
 		}
+		if more {
+			page.Models = page.Models[:input.Limit]
+		}
+
 		if more {
 			last := page.Models[len(page.Models)-1]
 			page.Next = &application.ModelCatalogCursor{Key: last.Key, ID: last.ID}
 		}
 		return nil
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return application.ModelCatalogPage{}, fmt.Errorf("list models for project: %w", err)
 	}

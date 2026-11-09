@@ -44,7 +44,7 @@ func TestPriceCandidateStorePersistsAndRefreshesOnlyPendingSnapshots(t *testing.
 		Rule            string
 	}
 	require.NoError(t, conn.DB.Raw(`SELECT source_fetched_at,status,rule::text AS rule FROM catalog.model_price_candidate WHERE id=?::uuid`, candidate.ID.String()).Scan(&row).Error)
-	require.Equal(t, candidate.SourceFetchedAt, row.SourceFetchedAt)
+	require.True(t, candidate.SourceFetchedAt.Equal(row.SourceFetchedAt))
 	require.Equal(t, "pending_review", row.Status)
 	require.JSONEq(t, string(candidate.Rule), row.Rule)
 }

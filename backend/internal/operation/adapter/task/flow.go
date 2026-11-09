@@ -36,6 +36,7 @@ type FlowStore interface {
 	BatchStore
 	CanDeliverWorkflowControl(context.Context, app.WorkflowControlDelivery) (bool, error)
 	ScheduleOriginalDelivery(context.Context, app.WorkflowControlDelivery) error
+	RecoverOperationTasks(context.Context, app.WorkflowControlDelivery) error
 }
 type operationStep func(context.Context, app.WorkflowOperation, app.TaskEvidence) (time.Time, error)
 

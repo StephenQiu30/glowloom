@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
@@ -15,6 +16,11 @@ import (
 func TestManagedPlatformDefaultOnlyFillsAbsentProjectChoice(t *testing.T) {
 	db := operationStoreDB(t)
 	f := seedManagedFixture(t, db)
+	// Default resolution is independent of the catalog acceptance projection.
+	// This synthetic release supplies that decision explicitly.
+	f.store.WithExecutionAvailability(func(*gorm.DB) application.ExecutionAvailability {
+		return approvedWalletFixtureExecution{version: f.identity.ModelProfileVersionID, release: f.release}
+	})
 	actor, project := operationStoreProject(t, db)
 	require.NoError(t, db.Exec(`UPDATE workspace.project SET allow_overseas_models=true,default_models='{}' WHERE id=?`, project).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, f.identity.ModelProfileVersionID).Error)

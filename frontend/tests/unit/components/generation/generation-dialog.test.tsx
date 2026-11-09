@@ -187,6 +187,11 @@ beforeEach(() => {
         status: "active",
         provider_status: "active",
         credential_present: true,
+        available: true,
+        mode_availability: [
+          { mode: "text_to_image", available: true },
+          { mode: "text2audio", available: true },
+        ],
         current_version: {
           id: version,
           modes: ["text_to_image"],
@@ -478,6 +483,10 @@ it("已选项目但没有可用模型时，参数入口显示模型前提且不�
 it("默认全能参考来自真实目录合同，无模式切换且不重建正文或触发生成", async () => {
   const models = await api.models();
   models.items[0].current_version.modes.push("omni_reference");
+  models.items[0].mode_availability.push({
+    mode: "omni_reference",
+    available: true,
+  });
   api.models.mockResolvedValue(models);
   const { canvas } = await compactWorkspace();
   const editor = screen.getByRole("textbox", { name: "创作提示词" });
@@ -932,6 +941,10 @@ it("画布参考保留版本与模型角色，选择图生图模式后先保存�
   const models = await api.models();
   models.items[0].input_roles = ["reference_image"];
   models.items[0].current_version.modes = ["text_to_image", "image_to_image"];
+  models.items[0].mode_availability = [
+    { mode: "text_to_image", available: true },
+    { mode: "image_to_image", available: true },
+  ];
   models.items[0].current_version.limits.roles = {
     reference_image: { types: ["image"], for_modes: ["image_to_image"] },
   };
@@ -1009,9 +1022,13 @@ it("确认结果未知时锁定编辑并使用原确认键重试", async () => {
 it("模式查询发现当前模型停用后保留输入并禁用报价", async () => {
   const page = await api.models();
   page.items[0].current_version.modes = ["text_to_image", "image_to_image"];
+  page.items[0].mode_availability = [
+    { mode: "text_to_image", available: true },
+    { mode: "image_to_image", available: true },
+  ];
   await open();
   api.models.mockResolvedValue({
-    items: [{ ...page.items[0], status: "disabled" }],
+    items: [{ ...page.items[0], available: false, status: "disabled" }],
   });
   fireEvent.keyDown(screen.getByRole("combobox", { name: "生成模式" }), {
     key: "ArrowDown",
@@ -1336,6 +1353,11 @@ it("音频草稿保存后按来源指针报价，正文引用为空且不自动�
         status: "active",
         provider_status: "active",
         credential_present: true,
+        available: true,
+        mode_availability: [
+          { mode: "text_to_image", available: true },
+          { mode: "text2audio", available: true },
+        ],
         current_version: {
           id: version,
           modes: ["text2audio"],

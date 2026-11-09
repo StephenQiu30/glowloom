@@ -229,9 +229,10 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 		t.Fatalf("official price replay changed result: %+v, %v", replayed, err)
 	}
 	var sameRate bool
-	if err := conn.DB.WithContext(ctx).Raw(`SELECT (sale.rule - 'procurement_price_version_id') = procurement.rule
+	if err := conn.DB.WithContext(ctx).Raw(`SELECT (sale.rule - 'procurement_price_version_id' - 'markup_multiplier') = procurement.rule
+ AND sale.rule->>'markup_multiplier'='1'
  AND sale.unit = procurement.unit AND sale.currency = procurement.currency
- AND sale.fx_rate_to_cny = procurement.fx_rate_to_cny AND sale.reviewed_at = procurement.reviewed_at
+ AND sale.fx_rate_to_cny IS NOT DISTINCT FROM procurement.fx_rate_to_cny AND sale.reviewed_at = procurement.reviewed_at
  AND sale.source_url = procurement.source_url AND sale.effective_from = procurement.effective_from
  FROM catalog.price_rule_version sale JOIN catalog.price_rule_version procurement
  ON procurement.id::text = sale.rule->>'procurement_price_version_id'

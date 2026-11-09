@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 
 	"github.com/stretchr/testify/require"
@@ -53,7 +55,7 @@ func TestSeedanceVersionedTariffUsesOnlyOutputEvidence(t *testing.T) {
 
 func TestKnownModelRuntimeRejectsLegacyOverbroadSchema(t *testing.T) {
 	var candidate catalogdomain.ModelCandidatePreset
-	for _, c := range catalogdomain.BuiltinModelCatalog("volcengine_ark").Models {
+	for _, c := range catalogfixture.LegacyBuiltinModelCatalog("volcengine_ark").Models {
 		if c.Key == "ark-image-flash-50" {
 			candidate = c
 		}

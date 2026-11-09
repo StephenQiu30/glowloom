@@ -24,11 +24,18 @@ func (s *Store) CheckModelConfiguration(ctx context.Context, actor identityapp.P
 			return err
 		}
 		var row struct {
-			domain.ModelVersion
-			ProviderID, ConfigVersionID uuid.UUID
-			CredentialID                *uuid.UUID
-			Capability                  string
-			ModesJSON, ConfigJSON       []byte
+			ID, ModelID                                     uuid.UUID
+			VersionNo                                       int
+			ProviderModelID                                 string
+			Limits, ParamSchema                             json.RawMessage
+			ExpectedMaxMS                                   int
+			Moderation                                      domain.Moderation
+			Queue                                           string
+			SupportsQuery, SupportsCancel, SupportsCallback bool
+			ProviderID, ConfigVersionID                     uuid.UUID
+			CredentialID                                    *uuid.UUID
+			Capability                                      string
+			ModesJSON, ConfigJSON                           []byte
 		}
 		r := tx.Raw(`SELECT v.id,v.model_profile_id AS model_id,v.version_no,v.provider_model_id,
 			to_jsonb(v.modes) AS modes_json,v.limits,v.param_schema,v.expected_max_ms,v.moderation,v.queue,
@@ -54,16 +61,18 @@ func (s *Store) CheckModelConfiguration(ctx context.Context, actor identityapp.P
 		if err := json.Unmarshal(row.ConfigJSON, &config); err != nil {
 			return err
 		}
-		if err := json.Unmarshal(row.ModesJSON, &row.Modes); err != nil {
+		var modes []string
+		if err := json.Unmarshal(row.ModesJSON, &modes); err != nil {
 			return err
 		}
+		version := domain.ModelVersion{ID: row.ID, ModelID: row.ModelID, VersionNo: row.VersionNo, ProviderModelID: row.ProviderModelID, Modes: modes, Limits: row.Limits, ParamSchema: row.ParamSchema, ExpectedMaxMS: row.ExpectedMaxMS, Moderation: row.Moderation, Queue: row.Queue, SupportsQuery: row.SupportsQuery, SupportsCancel: row.SupportsCancel, SupportsCallback: row.SupportsCallback}
 		validator, err := paramvalidation.NewValidator()
 		if err != nil {
 			return err
 		}
 		if config.Validate() != nil ||
 			!slices.Contains(config.Capabilities, strings.TrimSuffix(row.Capability, ".generate")) ||
-			validator.Validate(row.ModelVersion) != nil {
+			validator.Validate(version) != nil {
 			return nil
 		}
 		var fields []struct {

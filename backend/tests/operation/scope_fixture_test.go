@@ -11,6 +11,7 @@ import (
 
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
@@ -60,7 +61,7 @@ func operationWorkerAccess(tx *gorm.DB) operationapp.ProjectAccess {
 func operationPlatformAccess(tx *gorm.DB) operationapp.PlatformAccess { return pgidentity.NewStore(tx) }
 
 func operationStore(database *gorm.DB) *pgoperation.Store {
-	return pgoperation.NewScopedStore(database, operationRequestAccess, operationWorkerAccess, operationPlatformAccess)
+	return pgoperation.NewScopedStore(database, operationRequestAccess, operationWorkerAccess, operationPlatformAccess).WithExecutionAvailability(fixtureExecutionAvailability)
 }
 
 func operationBillingStore(database *gorm.DB) *pgbilling.Store {
@@ -108,4 +109,24 @@ func operationReviewerSession(t *testing.T, database *gorm.DB, operation, review
 	actor := identityfixture.Session(t, database, identityapp.Principal{ID: reviewer, OrgID: row.OrgID})
 	actor.ScopeID = row.OwnerScopeID
 	return actor
+}
+
+// fixtureExecutionAvailability isolates historical transaction tests that use a
+// deliberately uninstalled quote-test adapter. Real cloud fixtures always use
+// the production reader; no runtime code accepts this synthetic adapter.
+func fixtureExecutionAvailability(tx *gorm.DB) operationapp.ExecutionAvailability {
+	return legacyQuoteExecutionReader{tx: tx}
+}
+
+type legacyQuoteExecutionReader struct{ tx *gorm.DB }
+
+func (r legacyQuoteExecutionReader) AvailableForNewExecution(ctx context.Context, version, release uuid.UUID, mode string) (bool, error) {
+	var synthetic bool
+	err := r.tx.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM catalog.model_profile_version v
+ JOIN catalog.model_profile m ON m.id=v.model_profile_id JOIN catalog.provider p ON p.id=m.provider_id
+ WHERE v.id=? AND p.adapter_key='quote-test')`, version).Row().Scan(&synthetic)
+	if err != nil || synthetic {
+		return synthetic, err
+	}
+	return pgcatalog.NewStore(r.tx).AvailableForNewExecution(ctx, version, release, mode)
 }

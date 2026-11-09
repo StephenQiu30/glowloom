@@ -1143,6 +1143,7 @@ CREATE TABLE catalog.provider_preset_version (
     CONSTRAINT provider_preset_version_version_no_check CHECK ((version_no > 0))
 );
 
+
 CREATE TABLE identity.auth_challenge (
     id uuid NOT NULL,
     operation_id uuid NOT NULL,
@@ -6491,30 +6492,9 @@ END $$;
 
 INSERT INTO identity.platform_settings(singleton) VALUES(true);
 
-INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000001','volcengine-ark','builtin');
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000001','6da07a10-0000-4000-8000-000000000001',1,'{"schema_version":1,"name":"火山方舟","config":{"adapter_key":"volcengine_ark","base_url":"https://ark.cn-beijing.volces.com/api/v3","region":"domestic","capabilities":["video"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'a357018c3c198f6d58123c99cca6978fe6068a44e48b3794a0bcef2dbf9ed078');
-INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000002','openrouter','builtin');
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000002','6da07a10-0000-4000-8000-000000000002',1,'{"schema_version":1,"name":"OpenRouter","config":{"adapter_key":"openrouter","base_url":"https://openrouter.ai/api/v1","region":"overseas","capabilities":["text","image","video"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'621b784416c935788a8fe5a39a9775a3eed7651307db4c2f14c646cab165b765');
 
-INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES
- ('6da07a12-0000-4000-8000-000000000001','text.generate','json',ARRAY['text_to_text'],ARRAY['prompt']),
- ('6da07a12-0000-4000-8000-000000000002','image.generate','image',ARRAY['text2image','image2image'],ARRAY['prompt','reference_image','subject']),
- ('6da07a12-0000-4000-8000-000000000003','video.generate','video',
-  ARRAY['omni_reference','image2video','motion','text2video','avatar'],
-  ARRAY['driving_video','character_image','last_frame','reference_audio','driving_audio','reference_image','prompt','subject','reference_video','first_frame']),
- ('6da07a12-0000-4000-8000-000000000004','audio.generate','audio',
-  ARRAY['omni_audio','music_instrumental','text2audio','music_song'],ARRAY['reference_audio','reference_image','prompt']);
 
 -- Versioned cloud provider expansion; existing connection snapshots stay pinned.
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a12-0000-4000-8000-000000000001','6da07a10-0000-4000-8000-000000000001',2,'{"schema_version":1,"name":"火山方舟","config":{"adapter_key":"volcengine_ark","base_url":"https://ark.cn-beijing.volces.com/api/v3","region":"domestic","capabilities":["video","text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'77174ea84bdea57c6c3eef8fc352d2eb02a5c1db13645a3c801a05de33b7c94c');
-INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000003','byteplus','builtin');
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000003','6da07a10-0000-4000-8000-000000000003',1,'{"schema_version":1,"name":"BytePlus","config":{"adapter_key":"byteplus","base_url":"https://ark.ap-southeast.bytepluses.com/api/v3","region":"overseas","capabilities":["text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'fc1f34a321b3e757a5dce883b5e6bf8cb964844f37f4b5c09c1f5e9a917aedcc');
-INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000004','deepseek','builtin');
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000004','6da07a10-0000-4000-8000-000000000004',1,'{"schema_version":1,"name":"DeepSeek","config":{"adapter_key":"deepseek","base_url":"https://api.deepseek.com","region":"domestic","capabilities":["text"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'da870135adccd6c8d3f5ab3073ed31876fcef9c6b654c90286f5cdc2290c8f79');
-INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000009','openai','builtin');
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000009','6da07a10-0000-4000-8000-000000000009',1,'{"schema_version":1,"name":"OpenAI","config":{"adapter_key":"openai","base_url":"https://api.openai.com/v1","region":"overseas","capabilities":["text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'adf7b0f4aafb3fcf51928c275d6e501d509f0b0009a576bb56570e8fdae66be5');
-INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-00000000000a','vercel','builtin');
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-00000000000a','6da07a10-0000-4000-8000-00000000000a',1,'{"schema_version":1,"name":"Vercel","config":{"adapter_key":"vercel","base_url":"https://ai-gateway.vercel.sh/v1","region":"overseas","capabilities":["text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":60}}'::jsonb,'7d956200f9fdcf5c429faeb3abf459a45b09cfcb280366e98f478ef41842e2d2');
 
 -- Project recycle retention worker (metadata only until explicitly scheduled).
 CREATE TABLE workspace.project_retention_job (
@@ -6813,13 +6793,6 @@ CREATE TABLE operation.history_publication_receipt (
 GRANT SELECT,INSERT ON operation.published_work,operation.history_publication_receipt TO glowloom_app;
 
 -- SRC-AI-28: separately authenticated Doubao speech service.
-INSERT INTO catalog.provider_preset(id,slug,origin)
-VALUES('6da07a10-0000-4000-8000-000000000005','volcengine-speech','builtin')
-ON CONFLICT(slug) DO NOTHING;
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
-SELECT '6da07a11-0000-4000-8000-000000000005',id,1,'{"schema_version":1,"name":"豆包语音","config":{"adapter_key":"volcengine_speech","base_url":"https://openspeech.bytedance.com/api/v3","region":"domestic","capabilities":["audio"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'eab8b04b9e1de10b21827a6c2603ffed795f326f9b617d801bc99f275f196b0c'
-FROM catalog.provider_preset WHERE slug='volcengine-speech' AND origin='builtin'
-ON CONFLICT(preset_id,version_no) DO NOTHING;
 
 -- Subject-owned Doubao speech sample jobs; no synthetic project identities.
 CREATE TABLE subject.voice_job (
@@ -6995,15 +6968,6 @@ GRANT SELECT,INSERT ON mediatool.export_artifact TO glowloom_app;
 GRANT UPDATE(artifact_id) ON mediatool.export_job TO glowloom_app;
 
 -- Volcengine creation presets.
-INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000006','volcengine-music','builtin') ON CONFLICT(slug) DO NOTHING;
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
-SELECT '6da07a11-0000-4000-8000-000000000006',id,1,'{"schema_version":1,"name":"火山音乐","config":{"adapter_key":"volcengine_music","base_url":"https://open.volcengineapi.com","region":"domestic","capabilities":["audio"],"timeout_seconds":120,"concurrency_limit":1,"rate_limit_per_min":60}}'::jsonb,'8af0295bcce95bb3160c92bce6a4dda84ed9f66959b53f389d6501c1f1f83ad3' FROM catalog.provider_preset WHERE slug='volcengine-music' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
-INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000007','volcengine-avatar','builtin') ON CONFLICT(slug) DO NOTHING;
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
-SELECT '6da07a11-0000-4000-8000-000000000007',id,1,'{"schema_version":1,"name":"即梦数字人","config":{"adapter_key":"volcengine_avatar","base_url":"https://openapi.cv.volces.com","region":"domestic","capabilities":["video"],"timeout_seconds":120,"concurrency_limit":1,"rate_limit_per_min":30}}'::jsonb,'2bd16ed1469e578935a2de777add2d627c799db26d84d4202bb1d01919ac95e2' FROM catalog.provider_preset WHERE slug='volcengine-avatar' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
-INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000008','volcengine-motion','builtin') ON CONFLICT(slug) DO NOTHING;
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
-SELECT '6da07a11-0000-4000-8000-000000000008',id,1,'{"schema_version":1,"name":"即梦动作模仿","config":{"adapter_key":"volcengine_motion","base_url":"https://openapi.cv.volces.com","region":"domestic","capabilities":["video"],"timeout_seconds":120,"concurrency_limit":1,"rate_limit_per_min":30}}'::jsonb,'7df763c7f974d3654c6ef0de51c17e95ee6bb50737cd7101ef4afb7919e243a5' FROM catalog.provider_preset WHERE slug='volcengine-motion' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
 
 -- Private director recovery does not alter the authoritative Yjs document.
 CREATE SEQUENCE canvas.director_recovery_revision AS integer NO CYCLE;
@@ -7022,8 +6986,6 @@ CREATE TABLE canvas.director_recovery (
 GRANT SELECT,INSERT,UPDATE,DELETE ON canvas.director_recovery TO glowloom_app;
 
 -- A new immutable preset version; existing connection snapshots stay unchanged.
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
-SELECT '6da07a12-0000-4000-8000-000000000005',id,2,'{"schema_version":1,"name":"豆包语音","config":{"adapter_key":"volcengine_speech","base_url":"https://openspeech.bytedance.com/api/v3","region":"domestic","capabilities":["audio"],"timeout_seconds":300,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'76c0029f543321dec270d711133d523c3ad91eb8819eab84eca7459780986682' FROM catalog.provider_preset WHERE slug='volcengine-speech' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
 
 -- Private reference voices; supplier training is a separate, explicit operation.
 CREATE TABLE media.voice_profile (
@@ -7870,6 +7832,31 @@ LANGUAGE plpgsql SET search_path = pg_catalog AS $$
 BEGIN
     IF TG_OP='INSERT' AND NEW.amount_micros>0 AND
        (NEW.cap_at_quote OR EXISTS(SELECT 1 FROM billing.project_wallet WHERE project_id=NEW.project_id)) THEN
+        -- SAGA confirmation records a pending freeze instead of a synchronous
+        -- wallet hold. Only the exact internal operation command plus its
+        -- durable dispatch event may defer funding; workers still await success.
+        IF NEW.cap_at_quote AND NEW.status='held' AND
+           NOT EXISTS(SELECT 1 FROM billing.wallet_hold WHERE reservation_id=NEW.id) AND
+           EXISTS (
+             SELECT 1 FROM operation.operation o
+             JOIN workspace.project p ON p.id=o.project_id AND p.status='active' AND NOT p.is_delete
+             LEFT JOIN billing.project_wallet w ON w.project_id=p.id
+             JOIN billing.credit_command c ON c.source_id=o.id
+             JOIN infra.outbox event ON event.topic='glowloom.billing.command.v1' AND NOT event.is_delete
+               AND event.partition_key=c.scope_id::text
+               AND event.payload->>'event_id'=event.id::text
+               AND event.payload->>'event_type'=event.topic
+               AND event.payload->>'command_id'=c.id::text
+               AND event.payload->>'scope_id'=c.scope_id::text
+             WHERE o.id=NEW.operation_id AND o.project_id=NEW.project_id AND o.reservation_id=NEW.id
+               AND NOT o.is_delete AND o.status IN ('confirmed','cancelling') AND o.quote_micros=NEW.amount_micros
+               AND c.scope_id=p.owner_scope_id AND COALESCE(w.scope_id,p.owner_scope_id)=p.owner_scope_id
+               AND c.caller_id='system:billing-operation' AND c.action='freeze' AND c.status='accepted'
+               AND c.amount_micros=NEW.amount_micros
+               AND c.idempotency_key_hash=encode(sha256(convert_to('operation/'||o.id::text||'/freeze','UTF8')),'hex')
+           ) THEN
+            RETURN NEW;
+        END IF;
         IF NOT NEW.cap_at_quote OR
            NOT EXISTS(SELECT 1 FROM billing.wallet_hold WHERE reservation_id=NEW.id) OR
            coalesce((SELECT sum(amount_micros) FROM billing.wallet_allocation WHERE reservation_id=NEW.id),0)<>NEW.amount_micros THEN
@@ -7917,7 +7904,7 @@ CREATE TABLE catalog.model_price_preset (
     PRIMARY KEY (adapter_key, provider_model_id),
     CHECK (executable_until IS NULL OR unit IS NOT NULL),
     CHECK ((unit IS NULL AND rule IS NULL) OR
-           (unit IN ('per_image', 'per_1k_tokens') AND unit IS NOT NULL AND rule IS NOT NULL AND jsonb_typeof(rule) = 'object'))
+           (unit IN ('per_image', 'per_1k_tokens', 'per_1k_chars', 'per_second') AND unit IS NOT NULL AND rule IS NOT NULL AND jsonb_typeof(rule) = 'object'))
 );
 GRANT SELECT ON catalog.model_price_preset TO glowloom_app;
 
@@ -7956,3 +7943,25 @@ CREATE INDEX model_price_candidate_review_queue
     ON catalog.model_price_candidate (source_fetched_at DESC, id DESC)
     WHERE status IN ('pending_review', 'needs_review');
 GRANT SELECT, INSERT, UPDATE ON catalog.model_price_candidate TO glowloom_app;
+
+-- Public model candidates are immutable snapshots of a provider preset version.
+CREATE TABLE catalog.model_preset (
+    preset_version_id uuid NOT NULL REFERENCES catalog.provider_preset_version(id),
+    model_key text NOT NULL,
+    ordinal integer NOT NULL CHECK (ordinal >= 0),
+    payload jsonb NOT NULL,
+    content_hash text NOT NULL,
+    PRIMARY KEY (preset_version_id, model_key),
+    UNIQUE (preset_version_id, ordinal),
+    CHECK (jsonb_typeof(payload)='object' AND octet_length(payload::text)<=65536),
+    CHECK (payload->>'key'=model_key AND length(model_key) BETWEEN 1 AND 64),
+    CHECK (content_hash=encode(sha256(convert_to(payload::text,'UTF8')),'hex'))
+);
+CREATE FUNCTION catalog.guard_model_preset() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='UPDATE' AND NEW IS NOT DISTINCT FROM OLD THEN RETURN NEW; END IF;
+    RAISE EXCEPTION 'model preset snapshots are immutable' USING ERRCODE='23514';
+END $$;
+CREATE TRIGGER model_preset_immutable BEFORE UPDATE OR DELETE ON catalog.model_preset
+FOR EACH ROW EXECUTE FUNCTION catalog.guard_model_preset();
+GRANT SELECT,INSERT ON catalog.model_preset TO glowloom_app;

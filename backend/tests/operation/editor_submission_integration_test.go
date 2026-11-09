@@ -27,7 +27,7 @@ func editorDraftStore(db *gorm.DB) *pgprompt.DraftStore {
 	return pgprompt.NewDraftStore(db, func(tx *gorm.DB) promptapp.DraftAccess { return editorAccess{tx} })
 }
 func editorOperationStore(db *gorm.DB) *pgoperation.Store {
-	return pgoperation.NewScopedStoreWithEditor(db, nil, func(tx *gorm.DB) operationapp.EditorSnapshots { return editorDraftStore(tx) }, operationRequestAccess, operationWorkerAccess, operationPlatformAccess)
+	return pgoperation.NewScopedStoreWithEditor(db, nil, func(tx *gorm.DB) operationapp.EditorSnapshots { return editorDraftStore(tx) }, operationRequestAccess, operationWorkerAccess, operationPlatformAccess).WithExecutionAvailability(fixtureExecutionAvailability)
 }
 func TestEditorSubmissionRecoveryDiscardAndLateEpoch(t *testing.T) {
 	db := operationStoreDB(t)

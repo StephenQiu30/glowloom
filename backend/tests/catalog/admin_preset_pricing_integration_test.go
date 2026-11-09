@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -31,7 +33,7 @@ func TestPresetPricingReviewUsesEffectiveSalesRelease(t *testing.T) {
 	store := app.NewCatalogStore(conn.DB)
 	presets := catalogapp.NewProviderPresets(store)
 	document := domain.PresetDocument{SchemaVersion: 1, Name: "Pricing fixture",
-		Config: domain.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
+		Config: catalogfixture.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
 	preset, err := presets.Save(t.Context(), actor, catalogapp.SavePresetInput{
 		Slug: "pricing-" + uuid.NewString(), RequestID: uuid.New(), Document: document, PreviewHash: document.Digest(),
 	})

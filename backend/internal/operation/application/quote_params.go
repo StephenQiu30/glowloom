@@ -20,9 +20,9 @@ type quoteParamField struct {
 	Step     json.RawMessage   `json:"step"`
 }
 
-// validateQuoteParams repeats the published field constraints at the server
-// boundary. A browser form is never the authority for price or provider input.
-func validateQuoteParams(raw, schema json.RawMessage, mode string) (map[string]any, error) {
+// NormalizeQuoteParams applies frozen defaults and published field constraints.
+// Creation and Agent dispatch share this server boundary before pricing or sending.
+func NormalizeQuoteParams(raw, schema json.RawMessage, mode string) (map[string]any, error) {
 	provided, err := fingerprintObject(raw)
 	if err != nil || len(schema) > 64*1024 {
 		return nil, ErrFreeQuoteInputNotReady

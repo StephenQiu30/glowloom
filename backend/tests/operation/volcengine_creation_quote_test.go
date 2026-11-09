@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -21,7 +23,7 @@ func TestVisualQuoteUsesFrozenDrivingDurationWithoutPrompt(t *testing.T) {
 		{"volcengine_motion", "motion", "driving_video", "video", 29500},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
-			candidate := catalog.BuiltinModelCatalog(tc.adapter).Models[0]
+			candidate := catalogfixture.LegacyBuiltinModelCatalog(tc.adapter).Models[0]
 			version, err := candidate.OnboardingVersion(uuid.New(), uuid.New())
 			if err != nil {
 				t.Fatal(err)

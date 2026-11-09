@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
@@ -49,7 +51,7 @@ type creationTransport func(*http.Request) (*http.Response, error)
 func (f creationTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func creationConfig(adapter string) catalog.ProviderConfig {
-	for _, p := range catalog.BuiltinPresets() {
+	for _, p := range catalogfixture.BuiltinPresets() {
 		if p.Config.AdapterKey == adapter {
 			return p.Config
 		}

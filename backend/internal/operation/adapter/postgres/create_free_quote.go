@@ -211,7 +211,7 @@ func (s *Store) prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor ide
 		}
 		compilation = &preparedPrompt
 	}
-	catalog, err := readFreeQuoteCatalog(tx, input, project.AllowOverseasModels, now)
+	catalog, err := s.readFreeQuoteCatalog(tx, input, project.AllowOverseasModels, now)
 	if err != nil {
 		return QuoteItem{}, "", err
 	}
@@ -301,7 +301,7 @@ type freeQuoteCatalogRow struct {
 	PriceEffectiveFrom time.Time
 }
 
-func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, allowOverseas bool, now time.Time) (application.FreeQuoteCatalog, error) {
+func (s *Store) readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, allowOverseas bool, now time.Time) (application.FreeQuoteCatalog, error) {
 	var row freeQuoteCatalogRow
 	read := tx.Raw(fmt.Sprintf(`
 		SELECT published.id AS release_id, m.id AS model_id, v.id AS version_id,
@@ -341,6 +341,13 @@ func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, a
 		return application.FreeQuoteCatalog{}, fmt.Errorf("read current free quote model: %w", read.Error)
 	}
 	if read.RowsAffected != 1 {
+		return application.FreeQuoteCatalog{}, application.ErrFreeQuoteModelMissing
+	}
+	available, err := s.availableForExecution(tx, row.VersionID, row.ReleaseID, input.Mode)
+	if err != nil {
+		return application.FreeQuoteCatalog{}, err
+	}
+	if !available {
 		return application.FreeQuoteCatalog{}, application.ErrFreeQuoteModelMissing
 	}
 	return freeCatalogFromRow(row)

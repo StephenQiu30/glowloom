@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -113,9 +112,12 @@ func (c *Client) submitOmniAudio(ctx context.Context, in application.GenerationR
 	var result struct {
 		Code             *int                       `json:"code"`
 		Audio            string                     `json:"audio"`
-		Duration         float64                    `json:"duration"`
-		OriginalDuration float64                    `json:"original_duration"`
+		Duration         json.RawMessage            `json:"duration"`
+		OriginalDuration json.RawMessage            `json:"original_duration"`
 		Subtitle         *application.AudioSubtitle `json:"subtitle"`
+	}
+	if _, err := audioReceiptObject(data); err != nil {
+		return unknown, nil
 	}
 	if json.Unmarshal(data, &result) != nil {
 		return unknown, nil
@@ -124,13 +126,16 @@ func (c *Client) submitOmniAudio(ctx context.Context, in application.GenerationR
 		unknown.ProviderTerminalCode = *result.Code
 		return unknown, nil
 	}
-	if result.Duration <= 0 || result.Duration > 240 || result.OriginalDuration <= 0 || result.OriginalDuration > 120 || !result.Subtitle.Valid(int64(math.Ceil(result.Duration*1000))) {
+	duration, durationErr := application.ParseAudioDurationSeconds(result.Duration, 240)
+	original, originalErr := application.ParseAudioDurationSeconds(result.OriginalDuration, 120)
+	ms, msErr := application.AudioDurationMillisCeiling(duration)
+	if durationErr != nil || originalErr != nil || msErr != nil || !result.Subtitle.Valid(ms) {
 		return unknown, nil
 	}
 	audio, err := base64.StdEncoding.DecodeString(result.Audio)
 	if err != nil || len(audio) == 0 || len(audio) > 32<<20 || http.DetectContentType(audio) != "audio/mpeg" {
 		return unknown, nil
 	}
-	usage, _ := json.Marshal(map[string]float64{"original_duration": result.OriginalDuration, "duration": result.Duration})
+	usage, _ := json.Marshal(map[string]json.Number{"original_duration": original, "duration": duration})
 	return application.GenerationResult{Outcome: application.ProviderOutcomeCompleted, State: application.ProviderTaskSucceeded, Audio: []application.GeneratedAudio{{Bytes: audio, MediaType: "audio/mpeg"}}, Usage: usage, Subtitle: result.Subtitle}, nil
 }

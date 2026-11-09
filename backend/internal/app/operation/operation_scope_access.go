@@ -76,7 +76,7 @@ func ProvideOperationWorkerAccess(tx *gorm.DB) operation.ProjectAccess {
 
 // ProvideOperationStore assembles operation persistence and cross-module dependencies.
 func ProvideOperationStore(db *gorm.DB) *pgoperation.Store {
-	return pgoperation.NewScopedStore(db, ProvideOperationProjectAccess, ProvideOperationWorkerAccess, ProvideOperationPlatformAccess).WithSubjectMedia(func(tx *gorm.DB) operation.SubjectMediaAccess {
+	return pgoperation.NewScopedStore(db, ProvideOperationProjectAccess, ProvideOperationWorkerAccess, ProvideOperationPlatformAccess).WithExecutionAvailability(func(tx *gorm.DB) operation.ExecutionAvailability { return pgcatalog.NewStore(tx) }).WithSubjectMedia(func(tx *gorm.DB) operation.SubjectMediaAccess {
 		return subjectwire.NewGenerationAccess(tx, subjectwire.Objects{})
 	})
 }

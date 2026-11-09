@@ -136,6 +136,9 @@ func (s *Store) FindModelForAdmin(ctx context.Context, actor identityapp.Princip
 
 // appendModelVersionInTx is only called by the audited publication transaction.
 func appendModelVersionInTx(tx *gorm.DB, version domain.ModelVersion, expectedRevision int64) error {
+	if err := validatePinnedModelVersion(tx, version); err != nil {
+		return err
+	}
 	modes, err := json.Marshal(version.Modes)
 	if err != nil {
 		return fmt.Errorf("encode model modes: %w", err)

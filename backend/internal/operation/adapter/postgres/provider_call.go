@@ -631,15 +631,43 @@ func readProviderCost(ctx context.Context, tx *gorm.DB, operationID uuid.UUID, o
 		Outcome        application.ProviderCallOutcome
 		State          application.ProviderCallState
 		MockFree       bool
+		CoveredRead    bool
 		CostMicros     *int64
 		ProviderTaskID *string
 	}
 	if err := tx.WithContext(ctx).Raw(`
-		SELECT action, outcome, COALESCE(response_summary ->> 'state', '') AS state,response_summary->>'price_contract'='mock_free' AS mock_free,
-		       cost_micros, provider_task_id
-		FROM operation.provider_call
-		WHERE project_id = ?::uuid AND operation_id = ?::uuid AND NOT is_delete
-		ORDER BY create_time, attempt
+		SELECT c.action, c.outcome, COALESCE(c.response_summary ->> 'state', '') AS state,
+               c.response_summary->>'price_contract'='mock_free' AS mock_free,
+               c.cost_micros, c.provider_task_id,
+               c.action='query' AND c.outcome='unknown' AND c.cost_micros IS NULL
+               AND COALESCE(c.response_summary->>'state','') IN ('','unknown') AND EXISTS (
+                 SELECT 1 FROM operation.operation o
+                 JOIN operation.provider_call s ON s.operation_id=o.id AND s.project_id=o.project_id
+                   AND s.action='submit' AND s.attempt=1 AND NOT s.is_delete
+                 JOIN operation.provider_result pr ON pr.operation_id=o.id
+                 JOIN operation.provider_call terminal ON terminal.operation_id=o.id AND terminal.project_id=o.project_id
+                   AND terminal.action='query' AND terminal.outcome='ok' AND NOT terminal.is_delete
+                   AND terminal.response_summary->>'state'='succeeded' AND terminal.cost_micros>=0
+                 WHERE o.id=c.operation_id AND NOT o.is_delete
+                   AND s.dispatch_started_at IS NOT NULL AND s.request_summary->>'dispatch_contract'='v1'
+                   AND s.outcome='ok' AND s.response_summary->>'state'='accepted' AND s.cost_micros=0
+                   AND s.request_key=o.provider_request_key AND c.request_key=s.request_key AND terminal.request_key=s.request_key
+                   AND s.model_profile_version_id=o.model_profile_version_id
+                   AND c.model_profile_version_id=s.model_profile_version_id AND terminal.model_profile_version_id=s.model_profile_version_id
+                   AND s.price_rule_version_id=o.price_rule_version_id
+                   AND c.price_rule_version_id=s.price_rule_version_id AND terminal.price_rule_version_id=s.price_rule_version_id
+                   AND c.provider_task_id=s.provider_task_id AND terminal.provider_task_id=s.provider_task_id
+                   AND s.provider_task_id<>'' AND terminal.attempt>c.attempt AND terminal.create_time>=c.create_time
+                   AND pr.result->>'state'='succeeded' AND pr.result->>'task_id'=s.provider_task_id
+                   AND pr.result->'identity'->>'operation_id'=o.id::text AND pr.result->'identity'->>'project_id'=o.project_id::text
+                   AND pr.result->'identity'->>'request_key'=s.request_key
+                   AND pr.result->'identity'->>'model_profile_version_id'=s.model_profile_version_id::text
+                   AND pr.result->'identity'->>'price_rule_version_id'=s.price_rule_version_id::text
+                   AND pr.result->'identity'->>'action'='submit' AND pr.result->'identity'->>'attempt'='1'
+               ) AS covered_read
+        FROM operation.provider_call c
+        WHERE c.project_id = ?::uuid AND c.operation_id = ?::uuid AND NOT c.is_delete
+        ORDER BY c.create_time, c.attempt
 	`, op.ProjectID.String(), operationID.String()).Scan(&calls).Error; err != nil {
 		return application.ProviderCost{}, fmt.Errorf("read provider charge evidence: %w", err)
 	}
@@ -658,6 +686,12 @@ func readProviderCost(ctx context.Context, tx *gorm.DB, operationID uuid.UUID, o
 			conclusiveResolution = true
 		}
 		if call.CostMicros == nil {
+			// A later trusted terminal result can establish the original task's
+			// charge after an interrupted read. It cannot resolve another task,
+			// a later read, an unknown submit, or an uncertain cancellation.
+			if call.CoveredRead {
+				continue
+			}
 			if call.Action != "submit" || call.State != application.ProviderCallStateUnknown && call.State != application.ProviderCallStateRejected {
 				unknownCost = true
 			}
@@ -747,6 +781,20 @@ func managedBillableUsage(tx *gorm.DB, operationID, priceID uuid.UUID, raw []byt
 		return nil, err
 	}
 	keys := map[string][]string{"per_request": {"billable_requests"}, "per_image": {"output_count"}, "per_second": {"billed_duration_ms"}, "per_1k_tokens": {"input_tokens", "output_tokens"}, "per_1k_chars": {"character_count"}}[price.Unit]
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(price.Rule, &fields) != nil {
+		return nil, application.ErrProviderCostUnknown
+	}
+	var strategy string
+	if raw := fields["pricing_strategy"]; raw != nil && json.Unmarshal(raw, &strategy) != nil {
+		return nil, application.ErrProviderCostUnknown
+	}
+	if strategy == catalogdomain.PricingOriginalDurationV1 {
+		if price.Unit != string(catalogdomain.PricePerSecond) {
+			return nil, application.ErrProviderCostUnknown
+		}
+		keys = []string{"original_duration_seconds"}
+	}
 	var original map[string]json.RawMessage
 	if len(keys) == 0 || json.Unmarshal(raw, &original) != nil {
 		return nil, application.ErrProviderCostUnknown
@@ -758,10 +806,6 @@ func managedBillableUsage(tx *gorm.DB, operationID, priceID uuid.UUID, raw []byt
 			return nil, application.ErrProviderCostUnknown
 		}
 		selected[key] = value
-	}
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(price.Rule, &fields) != nil {
-		return nil, application.ErrProviderCostUnknown
 	}
 	if fields["cached_input_micros_per_1k"] != nil {
 		value, ok := original["cached_input_tokens"]

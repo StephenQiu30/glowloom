@@ -106,7 +106,10 @@ func (s *Store) AddPresetModel(ctx context.Context, actor identityapp.Principal,
 		if err != nil {
 			return empty, err
 		}
-		catalog := domain.ModelCatalogForPreset(document)
+		catalog, err := readModelCatalog(tx, config.PresetVersionID, document)
+		if err != nil {
+			return empty, err
+		}
 		candidate, err := resolveAddModelCandidate(config.Config, catalog, input)
 		if err != nil {
 			return empty, err
@@ -153,6 +156,12 @@ func (s *Store) AddPresetModel(ctx context.Context, actor identityapp.Principal,
 			if err != nil {
 				return empty, err
 			}
+		}
+		// A hand-entered ID without a persisted execution contract remains configurable,
+		// but cannot acquire guessed model-specific defaults or an executable version.
+		if candidate.Execution == nil {
+			row, err := lockModelProfile(tx, modelID)
+			return createdModel(row), err
 		}
 		if err := instantiateOnboardingModel(tx, actor, modelID, expectedRevision, candidate); err != nil {
 			return empty, err

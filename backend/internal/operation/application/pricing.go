@@ -60,6 +60,7 @@ type parsedPriceRule struct {
 	referenceMicros   uint64
 	referenceScope    string
 	baseMicros        uint64
+	unitQuantity      uint64
 	cachedInputMicros *uint64
 	inputMicros       uint64
 	outputMicros      uint64
@@ -87,6 +88,7 @@ type QuoteCostDetail struct {
 	Unit                  catalogdomain.PriceUnit `json:"unit"`
 	Quantity              json.Number             `json:"quantity,omitempty"`
 	UnitPriceMicros       *uint64                 `json:"unit_price_micros,omitempty"`
+	UnitQuantity          uint64                  `json:"unit_quantity,omitempty"`
 	Outputs               int64                   `json:"outputs"`
 	Multipliers           map[string]json.Number  `json:"multipliers,omitempty"`
 	MarkupMultiplier      json.Number             `json:"markup_multiplier,omitempty"`
@@ -107,18 +109,19 @@ type QuoteCostDetail struct {
 // Pointer fields distinguish an explicit zero charge from missing evidence.
 // BilledDurationMS is the total billed duration across all generated outputs.
 type BillableUsage struct {
-	ReferenceImageCount *int64 `json:"reference_image_count,omitempty"`
-	OutputCount         *int64 `json:"output_count,omitempty"`
-	BilledDurationMS    *int64 `json:"billed_duration_ms,omitempty"`
-	BillableRequests    *int64 `json:"billable_requests,omitempty"`
-	CharacterCount      *int64 `json:"character_count,omitempty"`
-	CachedInputTokens   *int64 `json:"cached_input_tokens,omitempty"`
-	InputTokens         *int64 `json:"input_tokens,omitempty"`
-	OutputTokens        *int64 `json:"output_tokens,omitempty"`
+	ReferenceImageCount     *int64       `json:"reference_image_count,omitempty"`
+	OutputCount             *int64       `json:"output_count,omitempty"`
+	BilledDurationMS        *int64       `json:"billed_duration_ms,omitempty"`
+	OriginalDurationSeconds *json.Number `json:"original_duration_seconds,omitempty"`
+	BillableRequests        *int64       `json:"billable_requests,omitempty"`
+	CharacterCount          *int64       `json:"character_count,omitempty"`
+	CachedInputTokens       *int64       `json:"cached_input_tokens,omitempty"`
+	InputTokens             *int64       `json:"input_tokens,omitempty"`
+	OutputTokens            *int64       `json:"output_tokens,omitempty"`
 }
 
-// ParseBillableUsage accepts only exact integer quantities. A missing field is
-// not equivalent to an explicit zero, and unknown or repeated keys are unsafe.
+// ParseBillableUsage accepts exact integer counts and original decimal seconds.
+// A missing field is not equivalent to zero; unknown or repeated keys are unsafe.
 func ParseBillableUsage(raw json.RawMessage) (BillableUsage, error) {
 	fields, err := pricingObject(raw)
 	if err != nil || len(fields) == 0 {
@@ -126,6 +129,14 @@ func ParseBillableUsage(raw json.RawMessage) (BillableUsage, error) {
 	}
 	var usage BillableUsage
 	for name, encoded := range fields {
+		if name == "original_duration_seconds" {
+			value, err := ParseAudioDurationSeconds(encoded, 120)
+			if err != nil {
+				return BillableUsage{}, err
+			}
+			usage.OriginalDurationSeconds = &value
+			continue
+		}
 		if string(bytes.TrimSpace(encoded)) == "null" {
 			return BillableUsage{}, ErrInvalidPricingInput
 		}
@@ -211,6 +222,9 @@ func CalculateQuoteDetailed(price catalogdomain.PriceRuleVersion, input PricingI
 	}
 	credits := calculateCredits(result, rule.creditRatio)
 	detail.EstimatedCredits = &credits
+	if rule.strategy == catalogdomain.PricingOriginalDurationV1 {
+		detail.EstimatedCredits = nil
+	}
 	detail.ExactQuoteMicros = strconv.FormatInt(result, 10)
 	detail.ExactCredits = billingdomain.Credits(result)
 	detail.MaxChargeCredits = detail.ExactCredits
@@ -295,6 +309,9 @@ func finishPriceAmount(amount, fx *big.Rat) (int64, error) {
 
 func actualPriceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, usage BillableUsage) (*big.Rat, error) {
 	fields := 0
+	if usage.OriginalDurationSeconds != nil {
+		fields++
+	}
 	for _, value := range []*int64{usage.OutputCount, usage.BilledDurationMS, usage.BillableRequests,
 		usage.CharacterCount, usage.InputTokens, usage.OutputTokens} {
 		if value != nil {
@@ -345,10 +362,22 @@ func actualPriceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, usage
 		}
 		quantity.SetInt64(*usage.OutputCount)
 	case catalogdomain.PricePerSecond:
-		if usage.BilledDurationMS == nil {
+		switch {
+		case rule.strategy == catalogdomain.PricingOriginalDurationV1:
+			if usage.OriginalDurationSeconds == nil {
+				return nil, ErrInvalidPricingInput
+			}
+			seconds, err := ParseAudioDurationSeconds(json.RawMessage(usage.OriginalDurationSeconds.String()), 120)
+			if err != nil {
+				return nil, err
+			}
+			quantity.SetString(seconds.String())
+			quantity.Quo(quantity, new(big.Rat).SetUint64(rule.unitQuantity))
+		case usage.BilledDurationMS == nil:
 			return nil, ErrInvalidPricingInput
+		default:
+			quantity.SetFrac(big.NewInt(*usage.BilledDurationMS), big.NewInt(1_000))
 		}
-		quantity.SetFrac(big.NewInt(*usage.BilledDurationMS), big.NewInt(1_000))
 	case catalogdomain.PricePerRequest:
 		if usage.BillableRequests == nil || *usage.BillableRequests > 1 {
 			return nil, ErrInvalidPricingInput
@@ -357,6 +386,10 @@ func actualPriceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, usage
 	case catalogdomain.PricePer1KChars:
 		if usage.CharacterCount == nil {
 			return nil, ErrInvalidPricingInput
+		}
+		if rule.strategy == catalogdomain.PricingCharacterCountV1 {
+			quantity.SetFrac(big.NewInt(*usage.CharacterCount), big.NewInt(1000))
+			break
 		}
 		blocks := *usage.CharacterCount / 1_000
 		if *usage.CharacterCount%1_000 != 0 {
@@ -389,6 +422,7 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 		return parsedPriceRule{}, nil, err
 	}
 	rule := parsedPriceRule{
+		unitQuantity:     1,
 		markupMultiplier: big.NewRat(1, 1),
 		creditRatio:      big.NewRat(10, 1),
 	}
@@ -404,6 +438,9 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 			return parsedPriceRule{}, nil, ErrInvalidPricingRule
 		}
 		delete(fields, "pricing_strategy")
+	}
+	if rule.strategy == catalogdomain.PricingOriginalDurationV1 && fields["unit_quantity"] == nil {
+		return parsedPriceRule{}, nil, ErrInvalidPricingRule
 	}
 	if price.Unit == catalogdomain.PricePer1KTokens {
 		inputRaw, hasInput := fields["input_micros_per_1k"]
@@ -491,6 +528,11 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 	for name, raw := range fields {
 		switch name {
 		case "base_micros", "free_reference_images", "reference_image_micros", "reference_scope":
+		case "unit_quantity":
+			rule.unitQuantity, ok = priceMicros(raw)
+			if !ok || rule.unitQuantity == 0 || rule.strategy != catalogdomain.PricingOriginalDurationV1 {
+				return parsedPriceRule{}, nil, ErrInvalidPricingRule
+			}
 		case "by_mode":
 			rule.byMode, err = pricingCoefficients(raw)
 		case "by_resolution":
@@ -543,6 +585,14 @@ func priceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, input Prici
 		quantity.SetInt64(input.OutputCount)
 		displayQuantity.SetInt64(1)
 	case catalogdomain.PricePerSecond:
+		if rule.strategy == catalogdomain.PricingOriginalDurationV1 {
+			if input.OutputCount != 1 || input.Mode != "omni_audio" {
+				return nil, QuoteCostDetail{}, ErrInvalidPricingInput
+			}
+			quantity.SetFrac(big.NewInt(120), new(big.Int).SetUint64(rule.unitQuantity))
+			displayQuantity.SetInt64(120)
+			break
+		}
 		if input.OutputCount <= 0 || input.TargetDurationMS <= 0 || len(input.AllowedDurationsMS) == 0 {
 			return nil, QuoteCostDetail{}, ErrInvalidPricingInput
 		}
@@ -567,6 +617,11 @@ func priceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, input Prici
 		if input.CharacterCount < 0 {
 			return nil, QuoteCostDetail{}, ErrInvalidPricingInput
 		}
+		if rule.strategy == catalogdomain.PricingCharacterCountV1 {
+			quantity.SetFrac(big.NewInt(input.CharacterCount), big.NewInt(1000))
+			displayQuantity.Set(quantity)
+			break
+		}
 		blocks := input.CharacterCount / 1_000
 		if input.CharacterCount%1_000 != 0 {
 			blocks++
@@ -578,6 +633,9 @@ func priceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, input Prici
 	}
 	unitPrice := rule.baseMicros
 	detail.UnitPriceMicros = &unitPrice
+	if rule.strategy == catalogdomain.PricingOriginalDurationV1 {
+		detail.UnitQuantity = rule.unitQuantity
+	}
 	detail.Quantity = decimalNumber(displayQuantity, 3)
 	amount := quantity.Mul(quantity, new(big.Rat).SetInt(new(big.Int).SetUint64(rule.baseMicros)))
 	if err := applyPriceFactors(amount, rule, input.Mode, input.Resolution, &detail); err != nil {

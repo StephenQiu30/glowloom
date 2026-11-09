@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -13,7 +15,7 @@ import (
 )
 
 func TestOmniAudioQuoteReservesMaximumAndValidatesFrozenMedia(t *testing.T) {
-	candidate := catalog.BuiltinModelCatalog("volcengine_speech").Models[1]
+	candidate := catalogfixture.LegacyBuiltinModelCatalog("volcengine_speech").Models[1]
 	v, err := candidate.OnboardingVersion(uuid.New(), uuid.New())
 	if err != nil {
 		t.Fatal(err)

@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -13,7 +15,7 @@ import (
 func TestCommonCandidatesAreNotPublishableTemplates(t *testing.T) {
 	for _, adapter := range []string{"volcengine_ark", "openrouter", "byteplus", "deepseek", "codex", "volcengine_speech", "vercel"} {
 		t.Run(adapter, func(t *testing.T) {
-			catalog := domain.BuiltinModelCatalog(adapter)
+			catalog := catalogfixture.BuiltinModelCatalog(adapter)
 			require.NotEmpty(t, catalog.Version)
 			require.NotEmpty(t, catalog.Models)
 			for _, model := range catalog.Models {
@@ -30,16 +32,16 @@ func TestCommonCandidatesAreNotPublishableTemplates(t *testing.T) {
 				require.Error(t, err, "a public candidate must not be accepted as a complete preset")
 			}
 			catalog.Models[0].Modes[0] = "tampered"
-			require.NotEqual(t, "tampered", domain.BuiltinModelCatalog(adapter).Models[0].Modes[0])
+			require.NotEqual(t, "tampered", catalogfixture.BuiltinModelCatalog(adapter).Models[0].Modes[0])
 		})
 	}
-	require.Empty(t, domain.BuiltinModelCatalog("unregistered").Models)
+	require.Empty(t, catalogfixture.BuiltinModelCatalog("unregistered").Models)
 }
 
 func TestCloudRegistryRejectsCrossProviderHostsAndCapabilities(t *testing.T) {
 	for _, key := range []string{"byteplus", "deepseek"} {
 		var config domain.ProviderConfig
-		for _, preset := range domain.BuiltinPresets() {
+		for _, preset := range catalogfixture.BuiltinPresets() {
 			if preset.Config.AdapterKey == key {
 				config = preset.Config
 			}
@@ -52,7 +54,7 @@ func TestCloudRegistryRejectsCrossProviderHostsAndCapabilities(t *testing.T) {
 }
 
 func TestCandidateSelectionRequiresExactCatalogAndProvider(t *testing.T) {
-	catalog := domain.BuiltinModelCatalog("deepseek")
+	catalog := catalogfixture.BuiltinModelCatalog("deepseek")
 	selected, err := catalog.Select(catalog.Version, []string{"ds-pro", "ds-flash"})
 	require.NoError(t, err)
 	require.Equal(t, "ds-pro", selected[0].Key)
@@ -71,9 +73,9 @@ func TestCandidateSelectionRequiresExactCatalogAndProvider(t *testing.T) {
 }
 
 func TestHistoricalArkConfigDoesNotAcquireTextCandidates(t *testing.T) {
-	config := domain.BuiltinPresets()[0].Config
+	config := catalogfixture.BuiltinPresets()[0].Config
 	config.Capabilities = []string{"video"}
-	catalog := domain.ModelCatalogForConfig(config)
+	catalog := catalogfixture.ModelCatalogForConfig(config)
 	require.NotEmpty(t, catalog.Models)
 	for _, model := range catalog.Models {
 		require.Equal(t, "video.generate", model.Capability)
@@ -83,7 +85,7 @@ func TestHistoricalArkConfigDoesNotAcquireTextCandidates(t *testing.T) {
 }
 
 func TestEachCloudPresetAcceptsAnExplicitPricedTextTemplate(t *testing.T) {
-	for _, preset := range domain.BuiltinPresets() {
+	for _, preset := range catalogfixture.BuiltinPresets() {
 		doc := domain.PresetDocument{SchemaVersion: 1, Name: preset.Name, Config: preset.Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
 		if slices.Contains(preset.Config.Capabilities, "text") {
 			require.NoError(t, doc.Validate(), preset.Slug)

@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -285,7 +287,7 @@ func TestSubjectSpeechReleaseDraftUsesExistingPublicationGate(t *testing.T) {
 	}
 	preset, presetVersion := uuid.New(), uuid.New()
 	var speechConfig catalogdomain.ProviderConfig
-	for _, p := range catalogdomain.BuiltinPresets() {
+	for _, p := range catalogfixture.BuiltinPresets() {
 		if p.Slug == "volcengine-speech" {
 			speechConfig = p.Config
 		}

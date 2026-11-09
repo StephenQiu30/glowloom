@@ -41,7 +41,7 @@ type tool struct {
 }
 type chatInput struct {
 	ModelKey  string                     `json:"model_key"`
-	ReleaseID string                     `json:"model_release_id,omitempty"`
+	ReleaseID string                     `json:"release_id,omitempty"`
 	Messages  []message                  `json:"messages"`
 	Tools     []tool                     `json:"tools"`
 	MaxTokens int                        `json:"max_tokens"`
@@ -158,12 +158,35 @@ func parseChat(raw json.RawMessage) (chatInput, error) {
 			}
 		}
 	}
-	for k := range in.Params {
-		if !slices.Contains([]string{"temperature", "top_p", "frequency_penalty", "presence_penalty", "seed", "reasoning_effort"}, k) {
-			return in, errInput
+	if !validChatParams(in.Params) {
+		return in, errInput
+	}
+
+	return in, nil
+}
+
+// Thinking can only be disabled until its usage and budget policy is explicit.
+func validChatParams(params map[string]json.RawMessage) bool {
+	for k, v := range params {
+		if !slices.Contains([]string{"temperature", "top_p", "frequency_penalty", "presence_penalty", "seed", "reasoning_effort", "thinking"}, k) {
+			return false
+		}
+		if k == "thinking" {
+			var mode string
+			if json.Unmarshal(v, &mode) != nil || mode != "disabled" {
+				return false
+			}
 		}
 	}
-	return in, nil
+	return true
+}
+
+func validProviderChatParams(adapter string, params map[string]json.RawMessage) bool {
+	if !validChatParams(params) {
+		return false
+	}
+	_, thinking := params["thinking"]
+	return !thinking || adapter == "volcengine_ark"
 }
 
 // Complete validates the transcript and sends the selected model request.
@@ -175,12 +198,15 @@ func (c *ChatClient) Complete(ctx context.Context, config catalog.ProviderConfig
 	return c.complete(ctx, config, key, model, in)
 }
 func (c *ChatClient) complete(ctx context.Context, config catalog.ProviderConfig, key, model string, in chatInput) (Result, error) {
-	if config.Validate() != nil || !slices.Contains(config.Capabilities, "text") || model == "" || key == "" || !slices.Contains([]string{"deepseek", "openrouter", "openai", "vercel", "byteplus", "volcengine_ark"}, config.AdapterKey) {
+	if !validProviderChatParams(config.AdapterKey, in.Params) || config.Validate() != nil || !slices.Contains(config.Capabilities, "text") || model == "" || key == "" || !slices.Contains([]string{"deepseek", "openrouter", "openai", "vercel", "byteplus", "volcengine_ark"}, config.AdapterKey) {
 		return Result{}, errInput
 	}
 	payload := map[string]any{"messages": in.Messages, "model": model, "stream": false}
 	for k, v := range in.Params {
 		payload[k] = v
+	}
+	if _, present := in.Params["thinking"]; present {
+		payload["thinking"] = map[string]string{"type": "disabled"}
 	}
 	if config.AdapterKey == "openai" {
 		payload["max_completion_tokens"] = in.MaxTokens

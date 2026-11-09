@@ -222,7 +222,14 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	if count != int64(op.OutputCount) {
 		return unknown, application.ErrInvalidProviderCall
 	}
-	usage := map[string]int64{"billable_requests": 1, "output_count": count}
+	usage := map[string]any{"billable_requests": 1, "output_count": count}
+	strategy, strategyErr := frozenAudioStrategy(op.QuoteDetail)
+	if strategyErr != nil {
+		return unknown, strategyErr
+	}
+	if err := normalizeVersionedAudioUsage(strategy, result, usage); err != nil {
+		return unknown, err
+	}
 	if config.AdapterKey == "volcengine_music" {
 		var receipt struct {
 			Duration float64 `json:"duration_seconds"`
@@ -232,14 +239,21 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		}
 		duration = int64(math.Ceil(receipt.Duration * 1000))
 	}
-	if config.AdapterKey == "volcengine_speech" && op.Mode == "omni_audio" {
+	if config.AdapterKey == "volcengine_speech" && op.Mode == "omni_audio" && strategy != catalogdomain.PricingOriginalDurationV1 {
 		var receipt struct {
-			Duration float64 `json:"original_duration"`
+			Duration json.RawMessage `json:"original_duration"`
 		}
-		if json.Unmarshal(result.Usage, &receipt) != nil || receipt.Duration <= 0 || receipt.Duration > 120 {
+		if json.Unmarshal(result.Usage, &receipt) != nil {
 			return unknown, application.ErrInvalidProviderCall
 		}
-		duration = int64(math.Ceil(receipt.Duration * 1000))
+		seconds, err := application.ParseAudioDurationSeconds(receipt.Duration, 120)
+		if err != nil {
+			return unknown, application.ErrInvalidProviderCall
+		}
+		duration, err = application.AudioDurationMillisCeiling(seconds)
+		if err != nil {
+			return unknown, application.ErrInvalidProviderCall
+		}
 	}
 	if duration > 0 {
 		usage["billed_duration_ms"] = duration
@@ -252,23 +266,13 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 				usage["character_count"] = characters
 			}
 		}
-		for _, pair := range [][2]string{{"prompt_tokens", "input_tokens"}, {"completion_tokens", "output_tokens"}, {"input_tokens", "input_tokens"}, {"output_tokens", "output_tokens"}} {
-			var value int64
-			if raw, ok := tokens[pair[0]]; ok && json.Unmarshal(raw, &value) == nil && value >= 0 {
-				usage[pair[1]] = value
-			}
-		}
+	}
+	if err := normalizeTokenUsage(result.Usage, usage); err != nil {
+		return unknown, err
 	}
 	if config.AdapterKey == "volcengine_ark" && op.Capability == "video.generate" {
 		if _, present := usage["output_tokens"]; present {
 			usage["input_tokens"] = 0
-		}
-	}
-	var supplier map[string]json.RawMessage
-	if json.Unmarshal(result.Usage, &supplier) == nil {
-		var cached int64
-		if raw, present := supplier["cached_input_tokens"]; present && json.Unmarshal(raw, &cached) == nil && cached >= 0 {
-			usage["cached_input_tokens"] = cached
 		}
 	}
 	evidence.Usage, err = json.Marshal(usage)
@@ -291,6 +295,14 @@ func progress(r application.ManagedResult) application.ManagedProgress {
 func (a *Activities) request(ctx context.Context, loaded application.WorkflowOperation, config catalogdomain.ProviderConfig) (application.GenerationRequest, error) {
 	op := loaded.Operation
 	request := application.GenerationRequest{Config: config, ModelID: loaded.Provider.ProviderModelID, EndpointTag: loaded.Provider.EndpointTag, Capability: op.Capability, Mode: op.Mode, OutputCount: int(op.OutputCount)}
+	strategy, err := frozenAudioStrategy(op.QuoteDetail)
+	if err != nil {
+		return request, err
+	}
+	if strategy == catalogdomain.PricingCharacterCountV1 {
+		request.StrictSpeechTerminal = true
+		request.RequireSpeechTerminalUsage = true
+	}
 	if json.Unmarshal(op.Params, &request.Params) != nil {
 		return request, application.ErrInvalidProviderCall
 	}

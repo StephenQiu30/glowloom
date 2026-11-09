@@ -80,3 +80,36 @@ it("shows exact fractional credits and the approved cap", () => {
   fireEvent.click(screen.getByRole("button", { name: "费用说明" }));
   expect(screen.getByText(/最多扣 1.2 积分/)).toBeTruthy();
 });
+it("shows the supplier's 60 second unit without labeling it as a per-second price", () => {
+  render(
+    <QuoteCostDetail
+      amount={2000000}
+      detail={{
+        unit: "per_second",
+        unit_quantity: 60,
+        unit_price_micros: 1000000,
+        quantity: 120,
+        exact_credits: "20",
+        max_charge_credits: "20",
+      }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "费用说明" }));
+  expect(screen.getByText("每60秒")).toBeTruthy();
+  expect(screen.queryByText("每秒")).toBeNull();
+});
+
+it("shows only the spending cap when original audio duration is unknown", () => {
+  render(
+    <QuoteCostDetail
+      amount={2000000}
+      detail={{
+        pricing_strategy: "original_duration_v1",
+        exact_credits: "20",
+        max_charge_credits: "20",
+      }}
+    />,
+  );
+  expect(screen.getByText("最多扣 20 积分")).toBeTruthy();
+  expect(screen.queryByText(/预计消耗/)).toBeNull();
+});

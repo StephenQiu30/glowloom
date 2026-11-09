@@ -1,3 +1,4 @@
+import { modelAvailableForMode } from "./model-availability";
 import { fieldsForMode } from "./contracts";
 import type { PromptDraft } from "./prompt-document";
 
@@ -17,7 +18,10 @@ export function referenceMode(
         { types?: string[]; for_modes?: string[]; min_count?: number }
       >
     | undefined;
-  const modes = model.current_version.modes ?? [];
+  const modes =
+    model.current_version.modes?.filter((mode) =>
+      modelAvailableForMode(model, mode),
+    ) ?? [];
   const inputs = new Map<string, Set<string>>();
   for (const ref of draft.references) {
     const sources = inputs.get(ref.role) ?? new Set<string>();

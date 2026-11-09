@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,7 +45,7 @@ func New(db *gorm.DB, operations *opstore.Store, budget *billingpg.Store, keys U
 type release struct {
 	ReleaseID, ModelID, VersionID, PriceID              uuid.UUID
 	ProviderModelID, ModelKey, Region, Unit, AdapterKey string
-	Limits, Rule                                        []byte
+	ParamSchema, Rule                                   []byte
 	VersionNo                                           int
 	Currency, FX                                        string
 	EffectiveFrom                                       time.Time
@@ -105,7 +106,18 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 			return agent.ErrGrant
 		}
 
-		row := tx.Raw(`SELECT r.id AS release_id,m.id AS model_id,v.id AS version_id,p.id AS price_id,m.model_key,v.provider_model_id,v.limits,
+		// A committed dispatch belongs to its original receipt even if the
+		// current catalog changed. Recovery owns its outcome; never admit a
+		// second send or turn an unknown supplier result into a new rejection.
+		var dispatched bool
+		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM operation.operation WHERE id=? AND project_id=? AND input_hash=? AND origin='agent' AND capability='text.generate' AND mode='text_to_text' AND NOT is_delete)`, id, scope.ProjectID, agent.Hash(raw)).Row().Scan(&dispatched); err != nil {
+			return err
+		}
+		if dispatched {
+			return agent.ErrConflict
+		}
+
+		row := tx.Raw(`SELECT r.id AS release_id,m.id AS model_id,v.id AS version_id,p.id AS price_id,m.model_key,v.provider_model_id,v.param_schema,
    c.adapter_key,c.region,p.unit,p.rule,p.version_no,p.currency,coalesce(p.fx_rate_to_cny::text,'') AS fx,p.effective_from
    FROM catalog.model_profile m JOIN catalog.provider c ON c.id=m.provider_id AND c.status='active' AND NOT c.is_delete
    JOIN catalog.model_release r ON r.id=m.active_release_id AND r.model_id=m.id AND r.status='active'
@@ -115,26 +127,81 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
    AND p.unit IN ('per_request','per_1k_tokens') AND p.effective_from<=clock_timestamp()
    AND NOT EXISTS (SELECT FROM agent_business.call_receipt past JOIN operation.provider_binding b ON b.operation_id=past.receipt_id
       WHERE past.kind='model' AND past.root_run_id=? AND b.release_id<>r.id)
-   FOR SHARE OF m,r,v,p`, in.ModelKey, authority.RootRunID).Scan(&r)
+   FOR SHARE OF c,m,r`, in.ModelKey, authority.RootRunID).Scan(&r)
 		if row.Error != nil {
 			return row.Error
 		}
 		if row.RowsAffected != 1 || in.ReleaseID != "" && in.ReleaseID != r.ReleaseID.String() {
 			return op.ErrWorkflowModelUnavailable
 		}
+		store := g.operations.BindTransaction(tx)
+		if store == nil {
+			return op.ErrWorkflowModelUnavailable
+		}
+		available, err := store.AvailableForNewExecution(ctx, r.VersionID, r.ReleaseID, "text_to_text")
+		if err != nil {
+			return err
+		}
+		if !available {
+			return op.ErrWorkflowModelUnavailable
+		}
 		if !slices.Contains([]string{"openai", "openrouter", "vercel", "deepseek", "byteplus", "volcengine_ark"}, r.AdapterKey) {
 			return op.ErrWorkflowModelUnavailable
 		}
-		var limits struct {
-			MaxTokens     int `json:"max_tokens"`
-			ContextWindow int `json:"context_window"`
+		// Validate authorization against the original input above, then apply
+		// only defaults from this immutable, pinned release's parameter schema.
+		requested := make(map[string]json.RawMessage, len(in.Params)+1)
+		for name, value := range in.Params {
+			requested[name] = value
 		}
-		if json.Unmarshal(r.Limits, &limits) != nil || limits.MaxTokens > 0 && in.MaxTokens > limits.MaxTokens {
+		requested["max_tokens"], _ = json.Marshal(in.MaxTokens)
+		requestedJSON, err := json.Marshal(requested)
+		if err != nil {
 			return errInput
 		}
+		normalized, err := op.NormalizeQuoteParams(requestedJSON, r.ParamSchema, "text_to_text")
+		if err != nil || catalog.ValidateModelParameters(r.ProviderModelID, normalized) != nil {
+			return errInput
+		}
+		providerParams := make(map[string]json.RawMessage, len(normalized))
+		for name, value := range normalized {
+			if name == "max_tokens" {
+				continue
+			}
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return errInput
+			}
+			providerParams[name] = encoded
+		}
+		if !validProviderChatParams(r.AdapterKey, providerParams) {
+			return errInput
+		}
+		in.Params = providerParams
+
 		price := catalog.PriceRuleVersion{ID: r.PriceID, ModelID: r.ModelID, VersionNo: r.VersionNo, Unit: catalog.PriceUnit(r.Unit), Rule: r.Rule, Currency: r.Currency, FXRateToCNY: r.FX, EffectiveFrom: r.EffectiveFrom}
 		estimate := int64(len(raw))
-		quote, err := op.CalculateQuote(price, op.PricingInput{QuotedAt: time.Now(), EstimatedInputTokens: estimate, MaxOutputTokens: int64(in.MaxTokens), OutputCount: 1, Mode: "text_to_text"})
+		quote, costs, err := op.CalculateQuoteDetailed(price, op.PricingInput{QuotedAt: time.Now(), EstimatedInputTokens: estimate, MaxOutputTokens: int64(in.MaxTokens), OutputCount: 1, Mode: "text_to_text"})
+		if err != nil {
+			return err
+		}
+		procurement, err := price.ProcurementVersion()
+		if err != nil {
+			return err
+		}
+		wholeCredits := procurement != uuid.Nil
+		if wholeCredits {
+			quote, err = billingdomain.WholeCreditMicros(quote)
+			if err != nil {
+				return err
+			}
+			credits := quote / billingdomain.MicrosPerCredit
+			costs.WholeCredits = true
+			costs.EstimatedCredits = &credits
+			costs.ExactCredits = strconv.FormatInt(credits, 10)
+			costs.MaxChargeCredits = costs.ExactCredits
+		}
+		quoteDetail, err := json.Marshal(costs)
 		if err != nil {
 			return err
 		}
@@ -151,8 +218,8 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 		if err != nil {
 			return err
 		}
-		insert := tx.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,model_profile_version_id,price_rule_version_id,params,input_hash,origin,status,region,quote_micros,quote_expires_at,confirmed_at,confirmed_by,provider_request_key)
-   VALUES(?,?,'free','text.generate','text_to_text',?,?,?::jsonb,?,'agent','submitting',?,?,clock_timestamp()+interval '15 minutes',clock_timestamp(),?,?) ON CONFLICT(id) DO NOTHING`, id, scope.ProjectID, r.VersionID, r.PriceID, string(paramsJSON), agent.Hash(raw), r.Region, quote, scope.ActorID, i.RequestKey)
+		insert := tx.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,model_profile_version_id,price_rule_version_id,params,input_hash,origin,status,region,quote_micros,quote_detail,quote_expires_at,confirmed_at,confirmed_by,provider_request_key)
+   VALUES(?,?,'free','text.generate','text_to_text',?,?,?::jsonb,?,'agent','submitting',?,?,?::jsonb,clock_timestamp()+interval '15 minutes',clock_timestamp(),?,?) ON CONFLICT(id) DO NOTHING`, id, scope.ProjectID, r.VersionID, r.PriceID, string(paramsJSON), agent.Hash(raw), r.Region, quote, string(quoteDetail), scope.ActorID, i.RequestKey)
 		if insert.Error != nil {
 			return insert.Error
 		}
@@ -162,18 +229,13 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 		if err := tx.Exec(`INSERT INTO operation.provider_binding(operation_id,release_id) VALUES(?,?)`, id, r.ReleaseID).Error; err != nil {
 			return err
 		}
-		procurement, err := price.ProcurementVersion()
-		if err != nil {
-			return err
-		}
-		reserve, err := g.billing.ReserveInTransaction(ctx, tx, billing.ReserveInput{Actor: scope.Principal(), ActorID: scope.ActorID, ProjectID: scope.ProjectID, OperationID: id, AmountMicros: quote, CommercialPriceReady: procurement != uuid.Nil, ModelKey: &r.ModelKey, Region: &r.Region, OccurredAt: time.Now()})
+		reserve, err := g.billing.ReserveInTransaction(ctx, tx, billing.ReserveInput{Actor: scope.Principal(), ActorID: scope.ActorID, ProjectID: scope.ProjectID, OperationID: id, AmountMicros: quote, WholeCredits: wholeCredits, CommercialPriceReady: procurement != uuid.Nil, ModelKey: &r.ModelKey, Region: &r.Region, OccurredAt: time.Now()})
 		if err != nil {
 			return err
 		}
 		if err := tx.Exec(`UPDATE operation.operation SET reservation_id=? WHERE id=?`, reserve.ReservationID, id).Error; err != nil {
 			return err
 		}
-		store := g.operations.BindTransaction(tx)
 		if err := store.BeginProviderCall(ctx, op.BeginProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, DispatchRequired: true}); err != nil {
 			return err
 		}

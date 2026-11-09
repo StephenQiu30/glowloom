@@ -50,17 +50,19 @@ type ProviderReference struct {
 // GenerationRequest carries validated inputs and immutable provider settings.
 type GenerationRequest struct {
 	// StrictSpeechTerminal selects the official SSE endpoint and requires an explicit terminal frame.
-	StrictSpeechTerminal bool   `json:"strict_speech_terminal,omitempty"`
-	ProviderRequestID    string `json:"provider_request_id,omitempty"`
-	Config               catalogdomain.ProviderConfig
-	ModelID              string
-	Capability           string
-	Mode                 string
-	Prompt               string
-	Params               map[string]any
-	References           []ProviderReference
-	OutputCount          int
-	EndpointTag          string
+	StrictSpeechTerminal bool `json:"strict_speech_terminal,omitempty"`
+	// RequireSpeechTerminalUsage is the character_count_v1 receipt contract.
+	RequireSpeechTerminalUsage bool   `json:"require_speech_terminal_usage,omitempty"`
+	ProviderRequestID          string `json:"provider_request_id,omitempty"`
+	Config                     catalogdomain.ProviderConfig
+	ModelID                    string
+	Capability                 string
+	Mode                       string
+	Prompt                     string
+	Params                     map[string]any
+	References                 []ProviderReference
+	OutputCount                int
+	EndpointTag                string
 }
 
 // GeneratedImage stays inside the worker; bytes never enter workflow history.

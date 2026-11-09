@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/presetvalidation"
@@ -17,7 +19,7 @@ func presetTextTemplate() domain.PresetModelTemplate {
 		UpstreamCost: domain.PresetModelCost{Currency: "CNY", MaxMicros: 20, Source: "fixture reviewed price", ReviewedAt: time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)}}
 }
 func TestPresetModelTemplatesArePortableAndProtocolBound(t *testing.T) {
-	doc := domain.PresetDocument{SchemaVersion: 1, Name: "OpenRouter", Config: domain.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
+	doc := domain.PresetDocument{SchemaVersion: 1, Name: "OpenRouter", Config: catalogfixture.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
 	require.NoError(t, doc.Validate())
 	encoded, err := json.Marshal(doc)
 	require.NoError(t, err)
@@ -25,11 +27,11 @@ func TestPresetModelTemplatesArePortableAndProtocolBound(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, parsed.ModelTemplates, 1)
 	require.NotContains(t, string(encoded), "credential_id")
-	doc.Config = domain.BuiltinPresets()[0].Config
+	doc.Config = catalogfixture.BuiltinPresets()[0].Config
 	require.NoError(t, doc.Validate(), "expanded Ark preset accepts text")
 	doc.Config.Capabilities = []string{"video"}
 	require.Error(t, doc.Validate(), "historical video-only config must reject text")
-	doc.Config = domain.BuiltinPresets()[1].Config
+	doc.Config = catalogfixture.BuiltinPresets()[1].Config
 	doc.ModelTemplates = append(doc.ModelTemplates, doc.ModelTemplates[0])
 	require.Error(t, doc.Validate(), "duplicate model template keys")
 	doc.ModelTemplates = doc.ModelTemplates[:1]
@@ -38,7 +40,7 @@ func TestPresetModelTemplatesArePortableAndProtocolBound(t *testing.T) {
 }
 
 func TestPresetTemplatesRejectSecretsAndInvalidPriceRules(t *testing.T) {
-	doc := domain.PresetDocument{SchemaVersion: 1, Name: "OpenRouter", Config: domain.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
+	doc := domain.PresetDocument{SchemaVersion: 1, Name: "OpenRouter", Config: catalogfixture.BuiltinPresets()[1].Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
 	encoded, err := json.Marshal(doc)
 	require.NoError(t, err)
 	var raw map[string]any
@@ -63,7 +65,7 @@ func TestModelCatalogForPresetDynamicallyIncludesAdminTemplates(t *testing.T) {
 	doc := domain.PresetDocument{
 		SchemaVersion: 1,
 		Name:          "Dynamic Custom Preset",
-		Config:        domain.BuiltinPresets()[1].Config, // OpenRouter
+		Config:        catalogfixture.BuiltinPresets()[1].Config, // OpenRouter
 		ModelTemplates: []domain.PresetModelTemplate{
 			{
 				Key:             "admin-custom-model",
@@ -79,7 +81,7 @@ func TestModelCatalogForPresetDynamicallyIncludesAdminTemplates(t *testing.T) {
 			},
 		},
 	}
-	catalog := domain.ModelCatalogForPreset(doc)
+	catalog := catalogfixture.ModelCatalogForPreset(doc)
 	require.NotEmpty(t, catalog.Models)
 	var found bool
 	for _, m := range catalog.Models {
@@ -97,7 +99,7 @@ func TestModelCatalogForPresetDynamicallyIncludesAdminTemplates(t *testing.T) {
 
 func TestOpenRouterAndVercelCandidatesContainFourCoreFamilies(t *testing.T) {
 	for _, adapter := range []string{"openrouter", "vercel"} {
-		catalog := domain.BuiltinModelCatalog(adapter)
+		catalog := catalogfixture.BuiltinModelCatalog(adapter)
 		require.NotEmpty(t, catalog.Models)
 		var hasChatGPT, hasAnthropic, hasGemini, hasGrok bool
 		for _, m := range catalog.Models {

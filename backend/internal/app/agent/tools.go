@@ -71,7 +71,7 @@ func canvasStore(tx *gorm.DB) *pgcanvas.Store {
 }
 func canvasService(tx *gorm.DB) *canvas.Service { return canvas.NewService(canvasStore(tx)) }
 func operationStore(tx *gorm.DB) *pgoperation.Store {
-	return pgoperation.NewScopedStore(tx, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess)
+	return pgoperation.NewScopedStore(tx, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(inner *gorm.DB) operation.ExecutionAvailability { return pgcatalog.NewStore(inner) })
 }
 
 func operationStoreWithCreditSaga(tx *gorm.DB, enabled bool) *pgoperation.Store {

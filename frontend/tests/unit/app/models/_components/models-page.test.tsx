@@ -131,7 +131,7 @@ it("连接详情跳转后预选连接，由服务端筛选模型并保留全部�
   );
 });
 
-it("按真实版本区分未配置草稿与已有版本的停用模型", async () => {
+it("配置、验证与停用的详细状态在列表统一为不可用", async () => {
   api.models.mockResolvedValue({
     items: [
       {
@@ -152,8 +152,8 @@ it("按真实版本区分未配置草稿与已有版本的停用模型", async (
   render(<ModelsPage />);
   await screen.findByText("未配置模型");
   const table = within(screen.getByRole("table", { name: "模型列表" }));
-  expect(table.getByText("待配置")).toBeTruthy();
-  expect(table.getByText("已停用")).toBeTruthy();
+  expect(table.getAllByText("不可用")).toHaveLength(2);
+  expect(table.queryByText("已停用")).toBeNull();
 });
 
 it.each([true, false])(
@@ -322,7 +322,7 @@ it("组合筛选回到第一页并清除选择，重置恢复默认查询", asyn
     target: { value: "connection" },
   });
   fireEvent.change(filter.getByLabelText("状态"), {
-    target: { value: "price_pending" },
+    target: { value: "unavailable" },
   });
   expect(api.models).toHaveBeenCalledTimes(2);
   fireEvent.click(filter.getByRole("button", { name: "筛选" }));
@@ -333,7 +333,7 @@ it("组合筛选回到第一页并清除选择，重置恢复默认查询", asyn
     cursor: undefined,
     name: "Seed",
     provider_id: "connection",
-    status: "price_pending",
+    status: "unavailable",
   });
   expect(screen.queryByRole("button", { name: "停用模型" })).toBeNull();
 

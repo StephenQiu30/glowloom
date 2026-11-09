@@ -91,26 +91,39 @@ func queueCreditSettlementOutcomeTx(
 	if err != nil {
 		return fmt.Errorf("encode operation credit settlement outcome: %w", err)
 	}
-	result := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload)
-		VALUES(?::uuid,?,?,?::jsonb) ON CONFLICT (id) DO NOTHING`,
-		eventID, application.CreditSettlementOutcomeTopic, scopeID, string(payload))
-	if result.Error != nil {
-		return fmt.Errorf("queue operation credit settlement outcome: %w", result.Error)
+	// The outbox key includes its partition timestamp. Serialize this stable
+	// business identity before checking every partition; id alone is not unique.
+	if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`,
+		"billing/operation-credit-outcome/"+eventID.String()).Error; err != nil {
+		return fmt.Errorf("lock operation credit settlement outcome: %w", err)
 	}
-	if result.RowsAffected == 1 {
-		return nil
+	var rows []struct {
+		Topic, PartitionKey string
+		Payload             []byte
+		IsDelete            bool
 	}
-	var existingRaw []byte
-	read := tx.Raw(`SELECT payload FROM infra.outbox WHERE id=?::uuid`, eventID).Scan(&existingRaw)
+	read := tx.Raw(`SELECT topic,partition_key,payload,is_delete FROM infra.outbox WHERE id=?::uuid`, eventID).Scan(&rows)
 	if read.Error != nil {
 		return fmt.Errorf("verify operation credit settlement outcome replay: %w", read.Error)
 	}
-	var existing creditSettlementOutcomeEvent
-	if read.RowsAffected != 1 || json.Unmarshal(existingRaw, &existing) != nil ||
-		existing.EventType != event.EventType || existing.EventID != event.EventID ||
-		existing.ScopeID != scopeID || existing.HoldID != holdID ||
-		existing.Outcome != outcome || existing.AmountMicros != amountMicros {
-		return application.ErrCreditOutcomeConflict
+	if len(rows) != 0 {
+		if len(rows) != 1 {
+			return application.ErrCreditOutcomeConflict
+		}
+		row := rows[0]
+		var existing creditSettlementOutcomeEvent
+		if row.Topic != event.EventType || row.PartitionKey != scopeID.String() || row.IsDelete ||
+			json.Unmarshal(row.Payload, &existing) != nil ||
+			existing.EventType != event.EventType || existing.EventID != event.EventID ||
+			existing.ScopeID != scopeID || existing.HoldID != holdID ||
+			existing.Outcome != outcome || existing.AmountMicros != amountMicros {
+			return application.ErrCreditOutcomeConflict
+		}
+		return nil
+	}
+	if err := exactlyOne(tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload)
+		VALUES(?::uuid,?,?,?::jsonb)`, eventID, application.CreditSettlementOutcomeTopic, scopeID, string(payload))); err != nil {
+		return fmt.Errorf("queue operation credit settlement outcome: %w", err)
 	}
 	return nil
 }

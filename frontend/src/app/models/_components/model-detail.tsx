@@ -1,4 +1,6 @@
 "use client";
+
+import { unavailableReasonLabel } from "@/components/generation/model-availability";
 import { PriceEvidenceFields } from "./price-evidence-fields";
 import { isProcurementPrice, pricingUnits } from "./preset-pricing-review";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -609,6 +611,29 @@ export function ModelDetail({
       </h2>
       {error && detail ? <FeedbackToast message={error} /> : null}
       <MutationStatus mutation={mutation} />
+      {model ? (
+        <div className="space-y-1 text-sm" aria-label="当前可用性">
+          <p>
+            {model.available === true ? "可用" : "不可用"} · 配置状态：
+            {model.status}
+          </p>
+          {model.unavailable_reasons?.map((reason) => (
+            <p key={reason} className="text-muted-foreground">
+              {unavailableReasonLabel(reason)}
+            </p>
+          ))}
+          {model.mode_availability?.map((item) => (
+            <p key={item.mode}>
+              {item.mode}：
+              {item.available
+                ? "可用"
+                : (item.unavailable_reasons ?? [])
+                    .map(unavailableReasonLabel)
+                    .join("；")}
+            </p>
+          ))}
+        </div>
+      ) : null}
       {!detail && error ? (
         <ContentState
           state="error"

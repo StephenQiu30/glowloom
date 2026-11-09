@@ -34,6 +34,7 @@ type CreateModelInput struct {
 
 // CreatedModel is the safe registration summary.
 type CreatedModel struct {
+	ModelAvailability
 	ID               uuid.UUID          `json:"id"`
 	Key              string             `json:"model_key"`
 	ProviderID       uuid.UUID          `json:"provider_id"`

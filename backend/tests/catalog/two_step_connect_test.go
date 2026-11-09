@@ -107,7 +107,7 @@ func TestTwoStepConnectPersistsOnlyTheConfirmedDrafts(t *testing.T) {
 
 	input := catalogapp.ConnectPresetInput{
 		SelectedModelsOnly: true,
-		CatalogVersion:     domain.ModelCatalogForPreset(document).Version,
+		CatalogVersion:     preset.ModelCatalog.Version,
 		CandidateKeys:      []string{first.Key},
 		VersionID:          preset.VersionID, RequestID: uuid.New(),
 	}
