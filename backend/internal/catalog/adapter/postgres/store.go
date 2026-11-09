@@ -31,10 +31,11 @@ var (
 // Store keeps the provider tables behind an explicitly injected database handle.
 // Administrator authorization belongs to the application command or query.
 type Store struct {
-	db         *gorm.DB
-	actors     ActorAccessFactory
-	projects   ProjectAccessFactory
-	checkUsage func(*gorm.DB) application.ProviderCheckUsageReader
+	db             *gorm.DB
+	actors         ActorAccessFactory
+	projects       ProjectAccessFactory
+	checkUsage     func(*gorm.DB) application.ProviderCheckUsageReader
+	priceRuleCache PriceRuleCache
 }
 
 // NewStore injects the database handle for catalog persistence.

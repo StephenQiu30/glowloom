@@ -5,7 +5,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
+	catalogpostgres "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	priceadapter "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricesync"
 	catalogtask "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
 	operationtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	trialtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
@@ -48,6 +51,9 @@ func RegisterProvider(ctx context.Context, handlers map[string]taskruntime.Handl
 	activities := providerprobe.NewScopedActivities(database, unsealer, providerhttp.NewClient(&http.Client{}), operationwire.NewCatalogStore(database))
 	catalogStore := operationwire.NewCatalogStore(database)
 	handlers[catalogtask.Credential] = catalogtask.CredentialHandler(catalogtask.NewActivities(catalogapp.NewCredentialTestService(catalogStore), catalogStore), activities)
+	priceStore := catalogpostgres.NewStore(database)
+	priceSync := catalogapp.NewPriceCandidateSyncService(priceStore, priceadapter.NewSources(nil), time.Now)
+	handlers[catalogtask.PriceSync] = catalogtask.PriceSyncHandler(priceSync)
 
 	subjectObjects, err := subjectwire.OpenObjects(cfg)
 	if err != nil {

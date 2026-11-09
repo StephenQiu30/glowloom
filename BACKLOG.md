@@ -78,7 +78,18 @@
 | 参考视频/OpenAI2.5商业准入          | 未完成全部计量/预留依据                                                | 视频最低Token完整表；OpenAI2.5估算上界、用量/账单合同；不以旧计算器或无价0替代                          |
 | 其他渠道/媒体补核                   | BytePlus AP、Visual/语音/Gateway有官方依据，仍有精确版本/地区/计量缺口 | EU按当前账号/目录核验；音乐直连现价未知；TTS价格仅官方索引正文需补发布证据；OmniHuman req_key不自动映射 |
 
-本轮已授权在main提交设计与首批后端实现；无收费调用、业务库迁移、价表发布、模型启用或推送。后端定向race、vet通过，govulncheck无调用路径漏洞；全量race受必需隔离DB配置限制。保留其他并行源码。
+### 官方价目同步与倍率（SRC-AI-47，2026-11-08）
+
+唯一链：[需求04 SRC-AI-47](docs/requirement/04-AI平台接入与预设管理需求.md#src-ai-47) → [设计34 §7.15](docs/design/34-积分消耗系统与模型真实计价体系设计.md#src-ai-47) → [PRD21](docs/prd/21-模型计价透明与结算恢复.md#src-ai-47) → [Plan30](docs/plan/30-模型计价透明与结算恢复实施计划.md#src-ai-47)。用户于2026-11-08授权工程实现；当前为本地实现，正式价格发布、模型启用、业务库迁移和真实收费仍关闭。默认同步只生成候选，管理员审核后才能形成新的采购/销售版本。
+
+| 范围 | 当前实现 | 剩余工作 |
+| --- | --- | --- |
+| 官方来源覆盖 | OpenRouter `/api/v1/models` 无凭据读取，限定到预设/已配置文本模型；扁平 USD/token、cache-read 可归一化，overrides/图片/请求等留作人工审核。OpenAI、DeepSeek、Ark官方页面按精确预设ID提取表格证据；Seedream Flash简单按张价、DeepSeek Flash/V4 Pro完整2026峰/闲价表可生成待审核规则。 | 直连页表格变体及模型名称映射可能变化；DeepSeek只用已核验的2026北京时间日历，缺/重复档、峰闲不成半价或未知年份均退回`needs_review`；审核前不自动发布。三家模型列表API无机器价目字段，不能推断价格。 |
+| 每日候选与历史 | `catalog.model_price_candidate`、source hash/parser version、`catalog.price_sync` 持久任务及模型详情候选摘要已接入；每天约03:00 UTC读取OpenRouter目录并按来源分组读取三家官方价目页，只写候选。 | disposable PostgreSQL 未配置；新表、候选upsert和原子候选发布未做隔离数据库集成验收。时区/失败告警仍待评审。 |
+| Redis缓存 | 价格规则按不可变 `price_version_id` 缓存在Redis 1小时；公开模型目录仍由PostgreSQL选择当前发布版本，cache miss/error回源数据库。 | 未做Redis集成测试/性能基准；报价与结算仍按原数据库快照；进程级规则预编译尚未实现，不声称计算耗时已改善。 |
+| 销售倍率与审核发布 | 管理表单支持倍率；只写入独立销售规则，采购规则保持原价。结构化OpenRouter、Seedream Flash和DeepSeek 2026候选要求规则完全匹配；其它直连页面候选允许管理员手动录入核验规则；候选状态与采购/销售版本在同一事务发布。 | 倍率范围沿既有校验（>0、最多6位小数、≤1,000,000），商业售价与利润政策仍需逐模型审核。 |
+| 产品和工程接受 | 最新Catalog/Operation/Billing scoped Race 912项通过，Catalog 369项通过；scoped vet及DeepSeek parser包lint通过。前端API生成核对、typegen、TypeScript、全量ESLint、Prettier及ModelDetail 9项通过，Next build成功。 | PostgreSQL/Redis test DSN 未配置；全仓Race、vet/lint仍有Canvas/Agent/identity等失败，Catalog lint另有既有空白问题；真实页面价目变化、账单核对和浏览器产品接受未验证。CASE-BIL-23～29未全部接受。 |
+
 
 <a id="commercial-credits"></a>
 

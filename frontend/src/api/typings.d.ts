@@ -105,6 +105,7 @@ declare namespace API {
   type AdminModelDetail = {
     candidate?: ModelCandidateSelection;
     model?: CreatedModel;
+    price_candidates?: ModelPriceCandidate[];
     price_preset?: ModelPricePreset;
     prices?: AdminPrice[];
     versions?: AdminModelVersion[];
@@ -3898,6 +3899,20 @@ declare namespace API {
     version_no?: number;
   };
 
+  type ModelPriceCandidate = {
+    currency?: string;
+    id?: string;
+    parser_version?: string;
+    provider_model_id?: string;
+    rule?: Record<string, any>;
+    source_fetched_at?: string;
+    source_hash?: string;
+    source_pricing?: Record<string, any>;
+    source_url?: string;
+    status?: string;
+    unit?: string;
+  };
+
   type ModelPricePreset = {
     currency?: string;
     reference_lines?: string[];
@@ -5060,10 +5075,12 @@ declare namespace API {
   };
 
   type PublishPriceRequest = {
+    candidate_id?: string;
     currency?: string;
     effective_from?: string;
     expected_revision?: number;
     fx_rate_to_cny?: string;
+    markup_multiplier?: string;
     reviewed_at?: string;
     rule?: Record<string, any>;
     source_url?: string;
@@ -7433,6 +7450,7 @@ declare namespace API {
     payer?: string;
     redeemed_today?: string;
     restricted_credits?: string;
+    version?: number;
   };
 
   type WorkflowControlResult = {

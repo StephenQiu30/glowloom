@@ -26,7 +26,7 @@ type PriceRuleValidator interface {
 // PublishPriceRuleStore commits the price, model revision, and audit atomically.
 type PublishPriceRuleStore interface {
 	PublishPriceRuleWithAudit(context.Context, identityapp.Principal, domain.PriceRuleVersion, int64, identityapp.OutboxEvent) (domain.PriceRuleVersion, error)
-	PublishOfficialPriceWithAudit(context.Context, identityapp.Principal, domain.PriceRuleVersion, domain.PriceRuleVersion, int64, [2]identityapp.OutboxEvent) (domain.PriceRuleVersion, error)
+	PublishOfficialPriceWithAudit(context.Context, identityapp.Principal, domain.PriceRuleVersion, domain.PriceRuleVersion, int64, uuid.UUID, time.Time, [2]identityapp.OutboxEvent) (domain.PriceRuleVersion, error)
 }
 
 // PublishPriceRuleInput is the reviewed configuration for the next price version.
@@ -34,6 +34,7 @@ type PublishPriceRuleInput struct {
 	UseOfficialRate  bool
 	SourceURL        string
 	ReviewedAt       *time.Time
+	CandidateID      uuid.UUID
 	ModelID          uuid.UUID
 	ExpectedRevision int64
 	VersionNo        int
@@ -41,6 +42,7 @@ type PublishPriceRuleInput struct {
 	Rule             json.RawMessage
 	Currency         string
 	FXRateToCNY      string
+	MarkupMultiplier string
 	EffectiveFrom    time.Time
 	RequestID        string
 }
@@ -76,7 +78,8 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 	}
 	requestID, err := uuid.Parse(input.RequestID)
 	if err != nil || requestID == uuid.Nil || requestID.String() != input.RequestID ||
-		input.ExpectedRevision < 1 || input.ExpectedRevision >= math.MaxInt32 {
+		input.ExpectedRevision < 1 || input.ExpectedRevision >= math.MaxInt32 || len(input.MarkupMultiplier) > 32 ||
+		(!input.UseOfficialRate && (input.MarkupMultiplier != "" || input.CandidateID != uuid.Nil)) {
 		return PublishedPriceRule{}, ErrInvalidPublishPriceRule
 	}
 	price := domain.PriceRuleVersion{
@@ -120,6 +123,15 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 			return PublishedPriceRule{}, fmt.Errorf("encode official rate link: %w", err)
 		}
 		rule[domain.ProcurementVersionField] = link
+		markupMultiplier := input.MarkupMultiplier
+		if markupMultiplier == "" {
+			markupMultiplier = "1"
+		}
+		markup, err := json.Marshal(markupMultiplier)
+		if err != nil {
+			return PublishedPriceRule{}, fmt.Errorf("encode sales markup multiplier: %w", err)
+		}
+		rule["markup_multiplier"] = markup
 		sale := price
 		sale.ID = uuid.NewSHA1(price.ID, []byte("official-sale"))
 		sale.VersionNo++
@@ -127,11 +139,14 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 		if err != nil {
 			return PublishedPriceRule{}, fmt.Errorf("encode official sales rate: %w", err)
 		}
+		if err := c.validator.Validate(sale); err != nil {
+			return PublishedPriceRule{}, fmt.Errorf("validate sales price rule: %w: %w", ErrInvalidPublishPriceRule, err)
+		}
 		saleEvent, err := priceRulePublishedAudit(actor, sale, revision+1, input.RequestID, occurredAt)
 		if err != nil {
 			return PublishedPriceRule{}, fmt.Errorf("build official price audit: %w", err)
 		}
-		saved, err = c.store.PublishOfficialPriceWithAudit(ctx, actor, price, sale, input.ExpectedRevision, [2]identityapp.OutboxEvent{event, saleEvent})
+		saved, err = c.store.PublishOfficialPriceWithAudit(ctx, actor, price, sale, input.ExpectedRevision, input.CandidateID, occurredAt, [2]identityapp.OutboxEvent{event, saleEvent})
 		if err != nil {
 			return PublishedPriceRule{}, fmt.Errorf("save official price pair: %w", err)
 		}

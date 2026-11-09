@@ -58,13 +58,29 @@ type ModelPricePreset struct {
 	Rule           json.RawMessage `json:"rule,omitempty" swaggertype:"object"`
 }
 
+// ModelPriceCandidate is a public supplier snapshot awaiting an administrator decision.
+type ModelPriceCandidate struct {
+	SourceURL       string          `json:"source_url"`
+	SourceHash      string          `json:"source_hash"`
+	ParserVersion   string          `json:"parser_version"`
+	ProviderModelID string          `json:"provider_model_id"`
+	Currency        string          `json:"currency"`
+	SourceFetchedAt time.Time       `json:"source_fetched_at"`
+	ID              uuid.UUID       `json:"id"`
+	Unit            *string         `json:"unit,omitempty"`
+	Rule            json.RawMessage `json:"rule,omitempty" swaggertype:"object"`
+	SourcePricing   json.RawMessage `json:"source_pricing" swaggertype:"object"`
+	Status          string          `json:"status"`
+}
+
 // AdminModelDetail combines the current identity and its real version history.
 type AdminModelDetail struct {
-	PricePreset *ModelPricePreset               `json:"price_preset,omitempty"`
-	Candidate   *domain.ModelCandidateSelection `json:"candidate,omitempty"`
-	Model       CreatedModel                    `json:"model"`
-	Versions    []AdminModelVersion             `json:"versions"`
-	Prices      []AdminPrice                    `json:"prices"`
+	PricePreset     *ModelPricePreset               `json:"price_preset,omitempty"`
+	Candidate       *domain.ModelCandidateSelection `json:"candidate,omitempty"`
+	Model           CreatedModel                    `json:"model"`
+	Versions        []AdminModelVersion             `json:"versions"`
+	Prices          []AdminPrice                    `json:"prices"`
+	PriceCandidates []ModelPriceCandidate           `json:"price_candidates"`
 }
 
 // CapabilitySummary declares the modes and ordered reference roles for forms.

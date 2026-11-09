@@ -45,6 +45,7 @@ import (
 	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
+	catalogredis "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/redis"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
@@ -251,7 +252,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err := trialwire.RegisterAPI(socketLifetime, identityProtected, database, subjectObjects.Registry(), cfg); err != nil {
 		return nil, err
 	}
-	catalogStore := operationwire.NewCatalogStore(database)
+	catalogStore := operationwire.NewCatalogStore(database).WithPriceRuleCache(catalogredis.NewPriceRuleCache(sessions.RedisClient))
 	presets := catalogapp.NewDeclaredProviderPresets(catalogStore, catalogwire.InstalledProtocol)
 	cataloghttp.NewPresetHandler(presets).Register(identityProtected)
 	cataloghttp.NewPresetDirectoryHandler(presets, providerhttp.NewClient(nil).ReadModelIDs).Register(identityProtected)

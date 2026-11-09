@@ -92,6 +92,9 @@ export function ModelDetail({
   const [view, setView] = useState<string>(initialView);
   const [priceUnit, setPriceUnit] = useState<string | null>(null);
   const [priceCurrency, setPriceCurrency] = useState<string | null>(null);
+  const [markupMultiplier, setMarkupMultiplier] = useState("1");
+  const [selectedPriceCandidate, setSelectedPriceCandidate] =
+    useState<API.ModelPriceCandidate | null>(null);
   const priceStart = useRef<{ request: string; effectiveFrom: string } | null>(
     null,
   );
@@ -120,6 +123,14 @@ export function ModelDetail({
           setDetail(d);
           setReleases(r.items ?? []);
           setDefaults(defaults.items ?? []);
+          const activeSale = d.prices?.find(
+            (price) =>
+              typeof price.rule?.procurement_price_version_id === "string",
+          );
+          setMarkupMultiplier(
+            String(activeSale?.rule?.markup_multiplier ?? "1"),
+          );
+          setSelectedPriceCandidate(null);
         }
       })
       .catch((e) => {
@@ -164,24 +175,39 @@ export function ModelDetail({
   );
   const pricePreset = detail?.price_preset;
   const editablePrice = procurement ?? (pricePreset ? undefined : latestPrice);
-  const referenceOnly = !!pricePreset && !pricePreset.unit && !procurement;
+  const referenceOnly =
+    !!pricePreset &&
+    !pricePreset.unit &&
+    !procurement &&
+    !selectedPriceCandidate;
   const currency =
-    priceCurrency ?? editablePrice?.currency ?? pricePreset?.currency ?? "CNY";
-  const unit = priceUnit ?? editablePrice?.unit ?? pricePreset?.unit ?? "";
-  const officialRule = editablePrice?.rule
-    ? Object.fromEntries(
-        Object.entries(editablePrice.rule).filter(
-          ([key]) =>
-            ![
-              "procurement_price_version_id",
-              "markup_multiplier",
-              "credit_ratio",
-            ].includes(key),
-        ),
-      )
-    : pricePreset?.unit === unit && pricePreset.currency === currency
-      ? pricePreset?.rule
-      : undefined;
+    priceCurrency ??
+    editablePrice?.currency ??
+    selectedPriceCandidate?.currency ??
+    pricePreset?.currency ??
+    "CNY";
+  const unit =
+    priceUnit ??
+    editablePrice?.unit ??
+    selectedPriceCandidate?.unit ??
+    pricePreset?.unit ??
+    "";
+  const officialRule = selectedPriceCandidate
+    ? selectedPriceCandidate.rule
+    : editablePrice?.rule
+      ? Object.fromEntries(
+          Object.entries(editablePrice.rule).filter(
+            ([key]) =>
+              ![
+                "procurement_price_version_id",
+                "markup_multiplier",
+                "credit_ratio",
+              ].includes(key),
+          ),
+        )
+      : pricePreset?.unit === unit && pricePreset.currency === currency
+        ? pricePreset?.rule
+        : undefined;
   const active = releases.find((r) => r.status === "active");
   const currentDefault = defaults.find(
     (d) => d.capability === model?.capability,
@@ -306,7 +332,9 @@ export function ModelDetail({
             unit: String(f.get("unit")) as API.PriceUnit,
             source_url: String(f.get("source_url")),
             reviewed_at: priceStart.current.effectiveFrom,
+            candidate_id: selectedPriceCandidate?.id,
             rule,
+            markup_multiplier: String(f.get("markup_multiplier") ?? "1"),
             currency,
             fx_rate_to_cny:
               currency === "CNY" ? undefined : String(f.get("fx_rate") ?? ""),
@@ -337,9 +365,127 @@ export function ModelDetail({
       </AlertDescription>
     </Alert>
   ) : null;
+  const priceCandidates = detail?.price_candidates?.length ? (
+    <section className="grid gap-3" aria-label="官方价目同步候选">
+      <h3 className="text-sm font-medium">官方价目同步候选</h3>
+      {detail.price_candidates.map((candidate, index) => {
+        const canLoad =
+          candidate.status === "needs_review" ||
+          (candidate.status === "pending_review" &&
+            !!candidate.unit &&
+            !!candidate.rule);
+        const reviewLabel =
+          candidate.status === "pending_review"
+            ? "待人工核验"
+            : candidate.status === "published"
+              ? "已发布"
+              : candidate.status === "rejected"
+                ? "已拒绝"
+                : "需人工核价";
+        return (
+          <Alert
+            key={
+              candidate.id ??
+              candidate.source_hash ??
+              `${candidate.provider_model_id ?? "candidate"}-${index}`
+            }
+          >
+            <AlertTitle className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant={
+                  candidate.status === "pending_review"
+                    ? "secondary"
+                    : "outline"
+                }
+              >
+                {reviewLabel}
+              </Badge>
+              <span>
+                {candidate.currency ?? "币种未知"}
+                {candidate.unit ? ` · ${candidate.unit}` : ""}
+              </span>
+              <time
+                dateTime={candidate.source_fetched_at ?? undefined}
+                className="text-xs font-normal text-muted-foreground"
+              >
+                {candidate.source_fetched_at
+                  ? `同步于 ${new Date(candidate.source_fetched_at).toLocaleString()}`
+                  : "同步时间未知"}
+              </time>
+            </AlertTitle>
+            <AlertDescription className="grid gap-2">
+              <a href={candidate.source_url} target="_blank" rel="noreferrer">
+                查看公开来源
+              </a>
+              {candidate.rule ? (
+                <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">
+                  {JSON.stringify(candidate.rule, null, 2)}
+                </pre>
+              ) : (
+                <p>
+                  来源未提供当前可执行的完整计费规则；核对官方条款后再手动录入。
+                </p>
+              )}
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="group/candidate-collapsible justify-between"
+                  >
+                    查看来源计价字段
+                    <ChevronDown className="transition-transform group-data-[state=open]/candidate-collapsible:rotate-180" />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2">
+                  <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">
+                    {JSON.stringify(candidate.source_pricing, null, 2)}
+                  </pre>
+                </CollapsibleContent>
+              </Collapsible>
+              {canLoad ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-pressed={selectedPriceCandidate?.id === candidate.id}
+                    onClick={() => {
+                      setSelectedPriceCandidate(candidate);
+                      setPriceUnit(candidate.unit ?? null);
+                      setPriceCurrency(candidate.currency ?? null);
+                    }}
+                  >
+                    {selectedPriceCandidate?.id === candidate.id
+                      ? "已载入，仍需核验并保存"
+                      : candidate.status === "needs_review"
+                        ? "载入来源并人工录价"
+                        : "载入候选并人工核验"}
+                  </Button>
+                  {selectedPriceCandidate?.id === candidate.id ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedPriceCandidate(null)}
+                    >
+                      改为手动录入
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </AlertDescription>
+          </Alert>
+        );
+      })}
+    </section>
+  ) : null;
   const priceForm =
     detail && !referenceOnly ? (
-      <form key={editablePrice?.id ?? "official"} onSubmit={savePrice}>
+      <form
+        key={selectedPriceCandidate?.id ?? editablePrice?.id ?? "official"}
+        onSubmit={savePrice}
+      >
         <FieldGroup className="gap-3">
           <div>
             <Badge variant="secondary">
@@ -416,6 +562,25 @@ export function ModelDetail({
               </Field>
             )}
           </FieldGroup>
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-markup`}>
+              平台销售倍率
+            </FieldLabel>
+            <Input
+              id={`${formFieldId}-markup`}
+              name="markup_multiplier"
+              type="number"
+              min="0.000001"
+              max="1000000"
+              step="0.000001"
+              required
+              value={markupMultiplier}
+              onChange={(event) => setMarkupMultiplier(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              1 表示与供应商公开价一致；倍率仅影响新销售价格版本。
+            </p>
+          </Field>
           {unit ? (
             <PriceSetup
               key={`${unit}:${currency}`}
@@ -425,7 +590,11 @@ export function ModelDetail({
             />
           ) : null}
           <PriceEvidenceFields
-            sourceURL={editablePrice?.source_url ?? pricePreset?.source_url}
+            sourceURL={
+              selectedPriceCandidate?.source_url ??
+              editablePrice?.source_url ??
+              pricePreset?.source_url
+            }
           />
           <Button disabled={archived || mutation.busy || !latest || !unit}>
             核验并保存
@@ -668,6 +837,7 @@ export function ModelDetail({
               </form>
             </TabsContent>
             <TabsContent value="pricing" forceMount hidden={view !== "pricing"}>
+              {priceCandidates}
               {priceReference}
               {priceForm}
             </TabsContent>

@@ -579,12 +579,14 @@ type PublishPriceRequest struct {
 	UseOfficialRate  bool             `json:"use_official_rate,omitempty"`
 	SourceURL        string           `json:"source_url"`
 	ReviewedAt       *time.Time       `json:"reviewed_at"`
+	CandidateID      uuid.UUID        `json:"candidate_id,omitempty"`
 	ExpectedRevision int64            `json:"expected_revision"`
 	VersionNo        int              `json:"version_no"`
 	Unit             domain.PriceUnit `json:"unit"`
 	Rule             json.RawMessage  `json:"rule" swaggertype:"object"`
 	Currency         string           `json:"currency"`
 	FXRateToCNY      string           `json:"fx_rate_to_cny"`
+	MarkupMultiplier string           `json:"markup_multiplier,omitempty"`
 	EffectiveFrom    time.Time        `json:"effective_from"`
 }
 
@@ -611,7 +613,7 @@ func (h *AdminHandler) PublishPrice(c *gin.Context) {
 	if !httpapi.Decode(c, &b) {
 		return
 	}
-	result, err := h.deps.PublishPrice.Execute(c.Request.Context(), identityhttp.Principal(c), application.PublishPriceRuleInput{UseOfficialRate: b.UseOfficialRate, SourceURL: b.SourceURL, ReviewedAt: b.ReviewedAt, ModelID: id, ExpectedRevision: b.ExpectedRevision, VersionNo: b.VersionNo, Unit: b.Unit, Rule: b.Rule, Currency: b.Currency, FXRateToCNY: b.FXRateToCNY, EffectiveFrom: b.EffectiveFrom, RequestID: c.GetHeader("Idempotency-Key")})
+	result, err := h.deps.PublishPrice.Execute(c.Request.Context(), identityhttp.Principal(c), application.PublishPriceRuleInput{UseOfficialRate: b.UseOfficialRate, SourceURL: b.SourceURL, ReviewedAt: b.ReviewedAt, CandidateID: b.CandidateID, ModelID: id, ExpectedRevision: b.ExpectedRevision, VersionNo: b.VersionNo, Unit: b.Unit, Rule: b.Rule, Currency: b.Currency, FXRateToCNY: b.FXRateToCNY, MarkupMultiplier: b.MarkupMultiplier, EffectiveFrom: b.EffectiveFrom, RequestID: c.GetHeader("Idempotency-Key")})
 	if err != nil {
 		adminError(c, err)
 		return

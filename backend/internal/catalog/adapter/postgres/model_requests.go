@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -74,7 +75,7 @@ func (s *Store) PublishPriceRuleWithAudit(ctx context.Context, actor identityapp
 }
 
 // PublishOfficialPriceWithAudit saves both rates and their audits in one replayable transaction.
-func (s *Store) PublishOfficialPriceWithAudit(ctx context.Context, actor identityapp.Principal, procurement, sale domain.PriceRuleVersion, revision int64, events [2]identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
+func (s *Store) PublishOfficialPriceWithAudit(ctx context.Context, actor identityapp.Principal, procurement, sale domain.PriceRuleVersion, revision int64, candidateID uuid.UUID, reviewedAt time.Time, events [2]identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
 	request := catalogEventRequest(events[0])
 	if s == nil || s.db == nil || request == uuid.Nil || request != catalogEventRequest(events[1]) ||
 		!validPriceRulePublishedAudit(actor.ID, actor.OrgID, procurement, revision, events[0]) ||
@@ -84,13 +85,28 @@ func (s *Store) PublishOfficialPriceWithAudit(ctx context.Context, actor identit
 	input := struct {
 		Procurement, Sale domain.PriceRuleVersion
 		Revision          int64
-	}{procurement, sale, revision}
+		CandidateID       uuid.UUID
+	}{procurement, sale, revision, candidateID}
 	saved, err := catalogRequest(ctx, s.db, s.actors, actor, "model.price", procurement.ModelID, request, input, false, func(tx *gorm.DB) (domain.PriceRuleVersion, error) {
 		store := s.withDB(tx)
+		if candidateID != uuid.Nil {
+			if err := lockPriceCandidateForPublication(tx, candidateID, procurement.ModelID, procurement); err != nil {
+				return domain.PriceRuleVersion{}, err
+			}
+		}
 		if _, err := store.publishPriceRuleWithAuditOnce(ctx, actor, procurement, revision, events[0]); err != nil {
 			return domain.PriceRuleVersion{}, err
 		}
-		return store.publishPriceRuleWithAuditOnce(ctx, actor, sale, revision+1, events[1])
+		saved, err := store.publishPriceRuleWithAuditOnce(ctx, actor, sale, revision+1, events[1])
+		if err != nil {
+			return domain.PriceRuleVersion{}, err
+		}
+		if candidateID != uuid.Nil {
+			if err := markPriceCandidatePublished(tx, candidateID, procurement, sale.ID, actor.ID, reviewedAt); err != nil {
+				return domain.PriceRuleVersion{}, err
+			}
+		}
+		return saved, nil
 	})
 	if err == nil {
 		saved.Rule = append([]byte(nil), sale.Rule...)

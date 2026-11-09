@@ -62,7 +62,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 			       v.limits::text AS version_limits,
 			       v.param_schema::text AS version_param_schema,
 			       pr.source_url AS price_source_url,pr.reviewed_at AS price_reviewed_at,pr.id AS price_id, pr.version_no AS price_version_no,
-			       pr.unit AS price_unit, pr.rule::text AS price_rule,
+			       pr.unit AS price_unit,
 			       pr.currency::text AS price_currency,
 			       pr.fx_rate_to_cny::text AS price_fx_rate_to_cny,
 			       pr.effective_from AS price_effective_from
@@ -101,6 +101,9 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 		more := len(rows) > input.Limit
 		if more {
 			rows = rows[:input.Limit]
+		}
+		if err := s.loadModelCatalogPriceRules(ctx, tx, rows); err != nil {
+			return err
 		}
 		for _, row := range rows {
 			item, err := row.item()

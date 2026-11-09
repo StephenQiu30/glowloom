@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -31,9 +32,14 @@ func (v *publishPriceValidator) Validate(price domain.PriceRuleVersion) error {
 
 type publishPriceStore struct {
 	called           bool
+	officialCalled   bool
 	actorID          uuid.UUID
 	orgID            uuid.UUID
 	price            domain.PriceRuleVersion
+	procurement      domain.PriceRuleVersion
+	sale             domain.PriceRuleVersion
+	candidateID      uuid.UUID
+	reviewedAt       time.Time
 	expectedRevision int64
 	event            identityapp.OutboxEvent
 	err              error
@@ -50,7 +56,9 @@ func (s *publishPriceStore) PublishPriceRuleWithAudit(_ context.Context, actor i
 	return price, nil
 }
 
-func (s *publishPriceStore) PublishOfficialPriceWithAudit(ctx context.Context, actor identityapp.Principal, _, sale domain.PriceRuleVersion, revision int64, events [2]identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
+func (s *publishPriceStore) PublishOfficialPriceWithAudit(ctx context.Context, actor identityapp.Principal, procurement, sale domain.PriceRuleVersion, revision int64, candidateID uuid.UUID, reviewedAt time.Time, events [2]identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
+	s.officialCalled, s.procurement, s.sale = true, procurement, sale
+	s.candidateID, s.reviewedAt = candidateID, reviewedAt
 	return s.PublishPriceRuleWithAudit(ctx, actor, sale, revision+1, events[1])
 }
 
@@ -128,6 +136,56 @@ func TestPublishPriceRuleCommandBuildsSafeAuditAndVersion(t *testing.T) {
 		Topic: store.event.Topic, Key: []byte(store.event.PartitionKey), Value: unsafePayload,
 	}); !errors.Is(err, auditapp.ErrInvalidEvent) {
 		t.Fatalf("price audit accepted undeclared field: %v", err)
+	}
+}
+
+func TestPublishOfficialPriceFreezesMultiplierOnlyOnSalesRule(t *testing.T) {
+	validator, err := pricevalidation.NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &publishPriceStore{}
+	input := validPublishPriceRuleInput(uuid.New())
+	input.UseOfficialRate = true
+	input.MarkupMultiplier = "1.25"
+	input.CandidateID = uuid.New()
+	reviewedAt := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
+	_, err = catalogapp.NewPublishPriceRuleCommand(store, validator, func() time.Time {
+		return reviewedAt
+	}).Execute(t.Context(), adminPrincipal(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var procurementRule, saleRule map[string]json.RawMessage
+	if !store.officialCalled || store.candidateID != input.CandidateID || !store.reviewedAt.Equal(reviewedAt) ||
+		json.Unmarshal(store.procurement.Rule, &procurementRule) != nil || json.Unmarshal(store.sale.Rule, &saleRule) != nil {
+		t.Fatalf("official price pair was not captured: %+v", store)
+	}
+	var multiplier string
+	if _, exists := procurementRule["markup_multiplier"]; exists {
+		t.Fatal("supplier procurement price contains a platform multiplier")
+	}
+	if json.Unmarshal(saleRule["markup_multiplier"], &multiplier) != nil || multiplier != "1.25" || saleRule[domain.ProcurementVersionField] == nil {
+		t.Fatalf("sale rule does not freeze the approved multiplier and procurement link: %s", store.sale.Rule)
+	}
+}
+
+func TestPublishOfficialPriceRejectsInvalidMultiplierBeforeStore(t *testing.T) {
+	validator, err := pricevalidation.NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, multiplier := range []string{"0", "-1", "1.1234567", "1000001", "1e2"} {
+		store := &publishPriceStore{}
+		input := validPublishPriceRuleInput(uuid.New())
+		input.UseOfficialRate = true
+		input.MarkupMultiplier = multiplier
+		_, err := catalogapp.NewPublishPriceRuleCommand(store, validator, func() time.Time {
+			return time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
+		}).Execute(t.Context(), adminPrincipal(), input)
+		if err == nil || store.called {
+			t.Fatalf("invalid multiplier %q reached publication: %v", multiplier, err)
+		}
 	}
 }
 

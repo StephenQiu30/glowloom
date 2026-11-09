@@ -138,6 +138,127 @@ it("官方费率只核验并保存一次，提交同价规则和同一核验时�
   expect(submitted.reviewed_at).toBe(submitted.effective_from);
 });
 
+it("管理员选择同步候选后显式提交原候选和平台倍率", async () => {
+  api.model.mockResolvedValue({
+    model: { id: "model-a", display_name: "聚合模型", revision: 7 },
+    candidate: {
+      model: { adapter_key: "openrouter", provider_model_id: "vendor/model" },
+    },
+    versions: [{ id: "version-a", provider_model_id: "vendor/model" }],
+    prices: [],
+    price_candidates: [
+      {
+        id: "price-candidate-a",
+        provider_model_id: "vendor/model",
+        source_url: "https://openrouter.ai/api/v1/models",
+        source_hash: "a".repeat(64),
+        parser_version: "openrouter_models_v1",
+        source_fetched_at: "2026-11-08T04:00:00Z",
+        currency: "USD",
+        unit: "per_1k_tokens",
+        rule: {
+          input_micros_per_1k: 2500,
+          output_micros_per_1k: 10000,
+        },
+        source_pricing: { prompt: "0.0000025", completion: "0.00001" },
+        status: "pending_review",
+      },
+    ],
+  });
+  api.savePrice.mockResolvedValue({ id: "sale-a" });
+  render(
+    <ModelDetail
+      id="model-a"
+      capabilities={[]}
+      initialView="pricing"
+      onSaved={vi.fn()}
+    />,
+  );
+  await screen.findByRole("heading", { name: "聚合模型" });
+  fireEvent.click(screen.getByRole("button", { name: "载入候选并人工核验" }));
+  expect(
+    screen.getByLabelText<HTMLInputElement>("每千输入 Token（USD）").value,
+  ).toBe("0.0025");
+  fireEvent.change(screen.getByLabelText("兑人民币汇率"), {
+    target: { value: "7.2" },
+  });
+  fireEvent.change(screen.getByLabelText("平台销售倍率"), {
+    target: { value: "1.5" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "核验并保存" }));
+  await waitFor(() => expect(api.savePrice).toHaveBeenCalledOnce());
+  const submitted = api.savePrice.mock.calls[0][1];
+  expect(submitted).toMatchObject({
+    candidate_id: "price-candidate-a",
+    use_official_rate: true,
+    currency: "USD",
+    fx_rate_to_cny: "7.2",
+    markup_multiplier: "1.5",
+    source_url: "https://openrouter.ai/api/v1/models",
+    rule: {
+      input_micros_per_1k: 2500,
+      output_micros_per_1k: 10000,
+    },
+  });
+});
+
+it("直连价目页候选加载计费单位并要求管理员手动录价", async () => {
+  api.model.mockResolvedValue({
+    model: { id: "model-a", display_name: "DeepSeek Flash", revision: 3 },
+    candidate: {
+      model: { adapter_key: "deepseek", provider_model_id: "deepseek-flash" },
+    },
+    versions: [{ id: "version-a", provider_model_id: "deepseek-flash" }],
+    prices: [],
+    price_candidates: [
+      {
+        id: "deepseek-page-candidate",
+        provider_model_id: "deepseek-flash",
+        source_url: "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+        source_hash: "b".repeat(64),
+        parser_version: "official_page_review_v1",
+        source_fetched_at: "2026-11-09T03:00:00Z",
+        currency: "CNY",
+        unit: "per_1k_tokens",
+        source_pricing: {
+          match_status: "matched",
+          matched_rows: ["缓存命中输入 | 0.04 元"],
+        },
+        status: "needs_review",
+      },
+    ],
+  });
+  api.savePrice.mockResolvedValue({ id: "deepseek-sale-a" });
+  render(
+    <ModelDetail
+      id="model-a"
+      capabilities={[]}
+      initialView="pricing"
+      onSaved={vi.fn()}
+    />,
+  );
+  await screen.findByRole("heading", { name: "DeepSeek Flash" });
+  fireEvent.click(screen.getByRole("button", { name: "载入来源并人工录价" }));
+  await screen.findByLabelText("每千输入 Token（CNY）");
+  fireEvent.change(screen.getByLabelText("每千输入 Token（CNY）"), {
+    target: { value: "0.002" },
+  });
+  fireEvent.change(screen.getByLabelText("每千输出 Token（CNY）"), {
+    target: { value: "0.008" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "核验并保存" }));
+  await waitFor(() => expect(api.savePrice).toHaveBeenCalledOnce());
+  const submitted = api.savePrice.mock.calls[0][1];
+  expect(submitted).toMatchObject({
+    candidate_id: "deepseek-page-candidate",
+    use_official_rate: true,
+    source_url: "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    currency: "CNY",
+    markup_multiplier: "1",
+    rule: { input_micros_per_1k: 2000, output_micros_per_1k: 8000 },
+  });
+});
+
 it("已归档模型可恢复，恢复后才可修改配置", async () => {
   let model = {
     id: "model-a",

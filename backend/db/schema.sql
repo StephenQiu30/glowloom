@@ -7274,6 +7274,7 @@ INSERT INTO infra.task_work (kind,business_id,next_run_at) VALUES
  ('maintenance.partitions','periodic',now()),
  ('maintenance.outbox','periodic',now()),
  ('maintenance.inbox','periodic',now()),
+ ('catalog.price_sync','periodic',now()),
  -- Content deletion remains disabled until an operator explicitly enables it.
  ('workspace.retention','periodic','infinity'),
  ('operation.quote_expiry','periodic',now());
@@ -7919,3 +7920,39 @@ CREATE TABLE catalog.model_price_preset (
            (unit IN ('per_image', 'per_1k_tokens') AND unit IS NOT NULL AND rule IS NOT NULL AND jsonb_typeof(rule) = 'object'))
 );
 GRANT SELECT ON catalog.model_price_preset TO glowloom_app;
+
+-- Public-source pricing snapshots are proposals; only reviewed price_rule_version rows bill.
+CREATE TABLE catalog.model_price_candidate (
+    id uuid PRIMARY KEY,
+    adapter_key text NOT NULL CHECK (adapter_key ~ '^[a-z0-9_-]{1,64}$'),
+    provider_model_id text NOT NULL CHECK (btrim(provider_model_id) <> '' AND length(provider_model_id) <= 256),
+    source_url text NOT NULL CHECK (source_url LIKE 'https://%' AND length(source_url) <= 2048),
+    source_hash text NOT NULL CHECK (source_hash ~ '^[0-9a-f]{64}$'),
+    parser_version text NOT NULL CHECK (btrim(parser_version) <> '' AND length(parser_version) <= 64),
+    source_fetched_at timestamptz NOT NULL,
+    currency character(3) NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
+    unit text,
+    rule jsonb,
+    source_pricing jsonb NOT NULL CHECK (jsonb_typeof(source_pricing) = 'object'),
+    status text NOT NULL CHECK (status IN ('pending_review', 'needs_review', 'published', 'rejected')),
+    published_price_version_id uuid REFERENCES catalog.price_rule_version(id),
+    reviewed_by uuid REFERENCES identity."user"(id),
+    reviewed_at timestamptz,
+    create_time timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (adapter_key, provider_model_id, source_hash, parser_version),
+    CHECK ((unit IS NULL AND rule IS NULL) OR
+           (unit IS NOT NULL AND unit IN ('per_image', 'per_second', 'per_request', 'per_1k_tokens', 'per_1k_chars') AND
+            (rule IS NULL OR jsonb_typeof(rule) = 'object'))),
+    CHECK (
+      (status = 'pending_review' AND unit IS NOT NULL AND rule IS NOT NULL AND published_price_version_id IS NULL AND reviewed_by IS NULL AND reviewed_at IS NULL) OR
+      (status = 'needs_review' AND published_price_version_id IS NULL AND reviewed_by IS NULL AND reviewed_at IS NULL) OR
+      (status = 'published' AND unit IS NOT NULL AND rule IS NOT NULL AND published_price_version_id IS NOT NULL AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
+      (status = 'rejected' AND published_price_version_id IS NULL AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL)
+    )
+);
+CREATE INDEX model_price_candidate_model_recent
+    ON catalog.model_price_candidate (adapter_key, provider_model_id, source_fetched_at DESC, id DESC);
+CREATE INDEX model_price_candidate_review_queue
+    ON catalog.model_price_candidate (source_fetched_at DESC, id DESC)
+    WHERE status IN ('pending_review', 'needs_review');
+GRANT SELECT, INSERT, UPDATE ON catalog.model_price_candidate TO glowloom_app;

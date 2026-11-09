@@ -130,9 +130,17 @@ type adminPriceRow struct {
 	EffectiveFrom, CreateTime time.Time
 }
 
+type adminPriceCandidateRow struct {
+	SourceURL, SourceHash, ParserVersion, ProviderModelID, Currency, Status string
+	ID                                                                      uuid.UUID
+	Unit                                                                    *string
+	Rule, SourcePricing                                                     string
+	SourceFetchedAt                                                         time.Time
+}
+
 // ReadAdminModel reads existing immutable histories without provider credentials.
 func (s *Store) ReadAdminModel(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (application.AdminModelDetail, error) {
-	result := application.AdminModelDetail{Versions: []application.AdminModelVersion{}, Prices: []application.AdminPrice{}}
+	result := application.AdminModelDetail{Versions: []application.AdminModelVersion{}, Prices: []application.AdminPrice{}, PriceCandidates: []application.ModelPriceCandidate{}}
 	if s == nil || s.db == nil || id == uuid.Nil {
 		return result, application.ErrInvalidAdminModels
 	}
@@ -218,8 +226,59 @@ WHERE model_profile_id=?::uuid AND NOT is_delete ORDER BY version_no DESC LIMIT 
 		for _, p := range prices {
 			result.Prices = append(result.Prices, application.AdminPrice{SourceURL: p.SourceURL, ReviewedAt: p.ReviewedAt, ID: p.ID, VersionNo: p.VersionNo, Unit: p.Unit, Rule: json.RawMessage(p.Rule), Currency: p.Currency, FXRateToCNY: p.FXRateToCNY, EffectiveFrom: p.EffectiveFrom, CreateTime: p.CreateTime})
 		}
+		if selection := result.Candidate; selection != nil {
+			providerModelID := selection.Model.ProviderModelID
+			if len(versions) > 0 {
+				providerModelID = versions[0].ProviderModelID
+			}
+			if selection.Model.AdapterKey != "" && providerModelID != "" {
+				var candidates []adminPriceCandidateRow
+				if err := tx.Raw(`SELECT id,provider_model_id,source_url,source_hash,parser_version,source_fetched_at,
+					currency::text AS currency,unit,rule::text AS rule,source_pricing::text AS source_pricing,status
+					FROM catalog.model_price_candidate WHERE adapter_key=? AND provider_model_id=?
+					ORDER BY source_fetched_at DESC,id DESC LIMIT 21`, selection.Model.AdapterKey, providerModelID).Scan(&candidates).Error; err != nil {
+					return fmt.Errorf("read model price candidates: %w", err)
+				}
+				if len(candidates) > 20 {
+					candidates = candidates[:20]
+				}
+				for _, candidate := range candidates {
+					result.PriceCandidates = append(result.PriceCandidates, application.ModelPriceCandidate{
+						ID: candidate.ID, ProviderModelID: candidate.ProviderModelID, SourceURL: candidate.SourceURL,
+						SourceHash: candidate.SourceHash, ParserVersion: candidate.ParserVersion, SourceFetchedAt: candidate.SourceFetchedAt,
+						Currency: candidate.Currency, Unit: candidate.Unit, Rule: json.RawMessage(candidate.Rule),
+						SourcePricing: json.RawMessage(candidate.SourcePricing), Status: candidate.Status,
+					})
+				}
+			}
+		}
 		return nil
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err == nil && result.Candidate != nil && result.Candidate.Model.AdapterKey != "" {
+		var candidates []adminPriceCandidateRow
+		queryErr := s.db.WithContext(ctx).Raw(`SELECT id,provider_model_id,source_url,source_hash,parser_version,source_fetched_at,
+			currency::text AS currency,unit,rule::text AS rule,source_pricing::text AS source_pricing,status
+		FROM catalog.model_price_candidate
+		WHERE adapter_key=? AND provider_model_id=(
+			SELECT provider_model_id FROM catalog.model_profile_version
+			WHERE model_profile_id=?::uuid AND NOT is_delete ORDER BY version_no DESC LIMIT 1)
+		ORDER BY source_fetched_at DESC,id DESC LIMIT 21`,
+			result.Candidate.Model.AdapterKey, id.String()).Scan(&candidates).Error
+		if queryErr != nil {
+			return result, fmt.Errorf("read model price candidates: %w", queryErr)
+		}
+		if len(candidates) > 20 {
+			candidates = candidates[:20]
+		}
+		for _, candidate := range candidates {
+			result.PriceCandidates = append(result.PriceCandidates, application.ModelPriceCandidate{
+				ID: candidate.ID, ProviderModelID: candidate.ProviderModelID, SourceURL: candidate.SourceURL,
+				SourceHash: candidate.SourceHash, ParserVersion: candidate.ParserVersion, SourceFetchedAt: candidate.SourceFetchedAt,
+				Currency: candidate.Currency, Unit: candidate.Unit, Rule: json.RawMessage(candidate.Rule),
+				SourcePricing: json.RawMessage(candidate.SourcePricing), Status: candidate.Status,
+			})
+		}
+	}
 	return result, err
 }
 
