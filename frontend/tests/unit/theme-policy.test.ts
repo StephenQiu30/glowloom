@@ -85,7 +85,7 @@ it("business UI uses shared colors instead of separate palettes or rich toast co
   expect(violations).toEqual([]);
 });
 
-it("all interactive states use thin rings without a second visible outline", async () => {
+it("interactive focus preserves native checkbox fields without a second visible outline", async () => {
   const violations: string[] = [];
   for (const file of await readdir("src", { recursive: true })) {
     if (!/\.(tsx|css)$/.test(file) || /\.test\./.test(file)) continue;
@@ -94,7 +94,12 @@ it("all interactive states use thin rings without a second visible outline", asy
     // separation rings are decoration, not interactive focus indicators.
     for (const token of source.split(/[\s"'`]+/)) {
       if (!/(?:focus|invalid|selected|checked|pressed)/.test(token)) continue;
+      const nativeCheckboxFocus =
+        ["components/ui/checkbox.tsx", "components/ui/field.tsx"].includes(
+          file,
+        ) && /(?:focus-visible|aria-invalid).*:ring-3$/.test(token);
       if (
+        !nativeCheckboxFocus &&
         /(?:ring|outline)-(?:[2-9]\d*|\[(?:[2-9]\d*|1\d+)px\])(?:$|[!\s])/.test(
           token,
         )

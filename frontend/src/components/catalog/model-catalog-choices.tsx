@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldLabel,
+  FieldGroup,
   FieldLegend,
   FieldSet,
 } from "@/components/ui/field";
@@ -74,7 +75,7 @@ export function ModelCatalogChoices({
           }}
         />
       </Field>
-      <div className="max-h-64 min-h-0 overflow-y-auto p-px">
+      <div className="flex max-h-64 min-h-0 flex-col gap-4 overflow-y-auto p-1">
         {!visible.length && !onlineOnly.length && (
           <Empty className="border-0 p-4">
             <EmptyHeader>
@@ -90,44 +91,41 @@ export function ModelCatalogChoices({
           );
           if (!entries.length) return null;
           return (
-            <FieldSet key={group} className="gap-1 px-1 pb-1">
-              <FieldLegend className="mb-1 text-xs font-medium text-muted-foreground">
-                {label}
-              </FieldLegend>
-              {entries.map((model) => {
-                const key = model.key!;
-                const name = model.display_name ?? model.provider_model_id;
-                const checked = picked.includes(key);
-                const configured = isConfigured?.(model);
-                return (
-                  <FieldLabel
-                    key={key}
-                    className="flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted has-data-checked:bg-muted has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-ring/50"
-                  >
-                    <Checkbox
-                      checked={checked}
-                      aria-label={name}
-                      disabled={disabled || canSelect?.(model) === false}
-                      onCheckedChange={() => onPreset(model)}
-                    />
-                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="break-words text-foreground">
+            <FieldSet key={group}>
+              <FieldLegend variant="label">{label}</FieldLegend>
+              <FieldGroup className="gap-3">
+                {entries.map((model) => {
+                  const key = model.key!;
+                  const name = model.display_name ?? model.provider_model_id;
+                  const checked = picked.includes(key);
+                  const configured = isConfigured?.(model);
+                  return (
+                    <Field
+                      key={key}
+                      orientation="horizontal"
+                      data-disabled={disabled || canSelect?.(model) === false}
+                    >
+                      <Checkbox
+                        id={`${field}-${key}`}
+                        checked={checked}
+                        disabled={disabled || canSelect?.(model) === false}
+                        onCheckedChange={() => onPreset(model)}
+                      />
+                      <FieldLabel
+                        htmlFor={`${field}-${key}`}
+                        title={model.provider_model_id}
+                      >
                         {name}
-                      </span>
-                      {model.display_name && model.provider_model_id && (
-                        <span className="text-xs break-all text-muted-foreground">
-                          {model.provider_model_id}
-                        </span>
+                      </FieldLabel>
+                      {(configured || model.requires_model_selection) && (
+                        <Badge variant="secondary">
+                          {configured ? "已添加" : "需填写接入点"}
+                        </Badge>
                       )}
-                    </span>
-                    {(configured || model.requires_model_selection) && (
-                      <Badge variant="secondary">
-                        {configured ? "已添加" : "需填写接入点"}
-                      </Badge>
-                    )}
-                  </FieldLabel>
-                );
-              })}
+                    </Field>
+                  );
+                })}
+              </FieldGroup>
             </FieldSet>
           );
         })}

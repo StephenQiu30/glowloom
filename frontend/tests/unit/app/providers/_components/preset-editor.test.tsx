@@ -58,6 +58,11 @@ it("管理员通过表单维护预设，无需手写 JSON 或标识；修改使�
   render(
     <PresetEditor presets={[preset]} onClose={vi.fn()} onSaved={vi.fn()} />,
   );
+  expect(screen.getByRole("dialog", { name: "新建预设" })).toBeTruthy();
+  expect(screen.queryByText("预设不包含 API Key。")).toBeNull();
+  expect(screen.queryByText("可复用模型模板")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "模型模板" }));
+  expect(screen.getByText("可复用模型模板")).toBeTruthy();
   expect(screen.queryByLabelText("预设 JSON（高级导入）")).toBeNull();
   fireEvent.change(screen.getByLabelText("预设名称"), {
     target: { value: "工作室 OpenRouter" },

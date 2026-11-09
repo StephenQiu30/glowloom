@@ -1,6 +1,5 @@
 "use client";
 
-import { unavailableReasonLabel } from "@/components/generation/model-availability";
 import { PriceEvidenceFields } from "./price-evidence-fields";
 import { isProcurementPrice, pricingUnits } from "./preset-pricing-review";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -51,6 +50,8 @@ import {
 import { useProviderCatalogProbe } from "@/components/catalog/provider-catalog-probe";
 import { testErrorMessage } from "@/app/providers/_components/testing-status";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { DialogFooter } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -350,137 +351,169 @@ export function ModelDetail({
     }
   }
   const priceReference = pricePreset ? (
-    <Alert>
-      <AlertTitle>官方计价预设</AlertTitle>
-      <AlertDescription>
-        <ul className="grid gap-1">
-          {pricePreset.reference_lines?.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-        <a href={pricePreset.source_url} target="_blank" rel="noreferrer">
-          查看官方价目
-        </a>
-        {referenceOnly ? (
-          <p>该模型的计量规则尚未接入，暂不能保存价格。</p>
-        ) : null}
-      </AlertDescription>
-    </Alert>
+    <>
+      {referenceOnly ? (
+        <p className="text-sm text-muted-foreground">
+          该模型的计量规则尚未接入，暂不能保存价格。
+        </p>
+      ) : null}
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            className="group/reference justify-between"
+          >
+            官方计价参考
+            <ChevronDown
+              data-icon="inline-end"
+              className="transition-transform group-data-[state=open]/reference:rotate-180"
+            />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-3">
+          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            {pricePreset.reference_lines?.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+            <Button asChild variant="link" className="h-auto self-start p-0">
+              <a href={pricePreset.source_url} target="_blank" rel="noreferrer">
+                查看官方价目
+              </a>
+            </Button>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </>
   ) : null;
   const priceCandidates = detail?.price_candidates?.length ? (
-    <section className="grid gap-3" aria-label="官方价目同步候选">
-      <h3 className="text-sm font-medium">官方价目同步候选</h3>
-      {detail.price_candidates.map((candidate, index) => {
-        const canLoad =
-          candidate.status === "needs_review" ||
-          (candidate.status === "pending_review" &&
-            !!candidate.unit &&
-            !!candidate.rule);
-        const reviewLabel =
-          candidate.status === "pending_review"
-            ? "待人工核验"
-            : candidate.status === "published"
-              ? "已发布"
-              : candidate.status === "rejected"
-                ? "已拒绝"
-                : "需人工核价";
-        return (
-          <Alert
-            key={
-              candidate.id ??
-              candidate.source_hash ??
-              `${candidate.provider_model_id ?? "candidate"}-${index}`
-            }
-          >
-            <AlertTitle className="flex flex-wrap items-center gap-2">
-              <Badge
-                variant={
-                  candidate.status === "pending_review"
-                    ? "secondary"
-                    : "outline"
-                }
-              >
-                {reviewLabel}
-              </Badge>
-              <span>
-                {candidate.currency ?? "币种未知"}
-                {candidate.unit ? ` · ${candidate.unit}` : ""}
-              </span>
-              <time
-                dateTime={candidate.source_fetched_at ?? undefined}
-                className="text-xs font-normal text-muted-foreground"
-              >
-                {candidate.source_fetched_at
-                  ? `同步于 ${new Date(candidate.source_fetched_at).toLocaleString()}`
-                  : "同步时间未知"}
-              </time>
-            </AlertTitle>
-            <AlertDescription className="grid gap-2">
-              <a href={candidate.source_url} target="_blank" rel="noreferrer">
-                查看公开来源
-              </a>
-              {candidate.rule ? (
-                <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">
-                  {JSON.stringify(candidate.rule, null, 2)}
-                </pre>
-              ) : (
-                <p>
-                  来源未提供当前可执行的完整计费规则；核对官方条款后再手动录入。
-                </p>
-              )}
-              <Collapsible>
-                <CollapsibleTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="group/candidate-collapsible justify-between"
-                  >
-                    查看来源计价字段
-                    <ChevronDown className="transition-transform group-data-[state=open]/candidate-collapsible:rotate-180" />
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-2">
-                  <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">
-                    {JSON.stringify(candidate.source_pricing, null, 2)}
-                  </pre>
-                </CollapsibleContent>
-              </Collapsible>
-              {canLoad ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    aria-pressed={selectedPriceCandidate?.id === candidate.id}
-                    onClick={() => {
-                      setSelectedPriceCandidate(candidate);
-                      setPriceUnit(candidate.unit ?? null);
-                      setPriceCurrency(candidate.currency ?? null);
-                    }}
-                  >
-                    {selectedPriceCandidate?.id === candidate.id
-                      ? "已载入，仍需核验并保存"
-                      : candidate.status === "needs_review"
-                        ? "载入来源并人工录价"
-                        : "载入候选并人工核验"}
-                  </Button>
-                  {selectedPriceCandidate?.id === candidate.id ? (
+    <Collapsible>
+      <CollapsibleTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          className="group/candidates justify-between"
+        >
+          官方价目同步候选
+          <ChevronDown
+            data-icon="inline-end"
+            className="transition-transform group-data-[state=open]/candidates:rotate-180"
+          />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent
+        className="flex flex-col gap-3 pt-3"
+        aria-label="官方价目同步候选"
+      >
+        {detail.price_candidates.map((candidate, index) => {
+          const canLoad =
+            candidate.status === "needs_review" ||
+            (candidate.status === "pending_review" &&
+              !!candidate.unit &&
+              !!candidate.rule);
+          const reviewLabel =
+            candidate.status === "pending_review"
+              ? "待人工核验"
+              : candidate.status === "published"
+                ? "已发布"
+                : candidate.status === "rejected"
+                  ? "已拒绝"
+                  : "需人工核价";
+          return (
+            <Alert
+              key={
+                candidate.id ??
+                candidate.source_hash ??
+                `${candidate.provider_model_id ?? "candidate"}-${index}`
+              }
+            >
+              <AlertTitle className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant={
+                    candidate.status === "pending_review"
+                      ? "secondary"
+                      : "outline"
+                  }
+                >
+                  {reviewLabel}
+                </Badge>
+                <span>
+                  {candidate.currency ?? "币种未知"}
+                  {candidate.unit ? ` · ${candidate.unit}` : ""}
+                </span>
+                <time
+                  dateTime={candidate.source_fetched_at ?? undefined}
+                  className="text-xs font-normal text-muted-foreground"
+                >
+                  {candidate.source_fetched_at
+                    ? `同步于 ${new Date(candidate.source_fetched_at).toLocaleString()}`
+                    : "同步时间未知"}
+                </time>
+              </AlertTitle>
+              <AlertDescription className="grid gap-2">
+                <a href={candidate.source_url} target="_blank" rel="noreferrer">
+                  查看公开来源
+                </a>
+                {!candidate.rule ? <p>请核对官方条款并录入费率。</p> : null}
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="group/candidate-collapsible justify-between"
+                    >
+                      查看来源计价字段
+                      <ChevronDown className="transition-transform group-data-[state=open]/candidate-collapsible:rotate-180" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="flex flex-col gap-2 pt-2">
+                    {candidate.rule ? (
+                      <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">
+                        {JSON.stringify(candidate.rule, null, 2)}
+                      </pre>
+                    ) : null}
+                    <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">
+                      {JSON.stringify(candidate.source_pricing, null, 2)}
+                    </pre>
+                  </CollapsibleContent>
+                </Collapsible>
+                {canLoad ? (
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
                       size="sm"
-                      variant="ghost"
-                      onClick={() => setSelectedPriceCandidate(null)}
+                      variant="outline"
+                      aria-pressed={selectedPriceCandidate?.id === candidate.id}
+                      onClick={() => {
+                        setSelectedPriceCandidate(candidate);
+                        setPriceUnit(candidate.unit ?? null);
+                        setPriceCurrency(candidate.currency ?? null);
+                      }}
                     >
-                      改为手动录入
+                      {selectedPriceCandidate?.id === candidate.id
+                        ? "已载入，仍需核验并保存"
+                        : candidate.status === "needs_review"
+                          ? "载入来源并人工录价"
+                          : "载入候选并人工核验"}
                     </Button>
-                  ) : null}
-                </div>
-              ) : null}
-            </AlertDescription>
-          </Alert>
-        );
-      })}
-    </section>
+                    {selectedPriceCandidate?.id === candidate.id ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSelectedPriceCandidate(null)}
+                      >
+                        改为手动录入
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </AlertDescription>
+            </Alert>
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
   ) : null;
   const priceForm =
     detail && !referenceOnly ? (
@@ -488,7 +521,7 @@ export function ModelDetail({
         key={selectedPriceCandidate?.id ?? editablePrice?.id ?? "official"}
         onSubmit={savePrice}
       >
-        <FieldGroup className="gap-3">
+        <FieldGroup className="gap-4">
           <div>
             <Badge variant="secondary">
               {priceID
@@ -598,40 +631,29 @@ export function ModelDetail({
               pricePreset?.source_url
             }
           />
-          <Button disabled={archived || mutation.busy || !latest || !unit}>
-            核验并保存
-          </Button>
+          {priceReference}
+          {priceCandidates}
+          <Separator />
+          <DialogFooter className="pt-0 max-md:[&_button]:min-h-11">
+            <Button disabled={archived || mutation.busy || !latest || !unit}>
+              核验并保存
+            </Button>
+          </DialogFooter>
         </FieldGroup>
       </form>
     ) : null;
   return (
-    <section className="flex min-w-0 flex-col gap-3" aria-label="模型详情">
+    <section className="flex min-w-0 flex-col gap-4" aria-label="模型详情">
       <h2 className="text-lg font-medium">
         {model?.display_name ?? "模型详情"}
       </h2>
       {error && detail ? <FeedbackToast message={error} /> : null}
       <MutationStatus mutation={mutation} />
-      {model ? (
-        <div className="space-y-1 text-sm" aria-label="当前可用性">
-          <p>
-            {model.available === true ? "可用" : "不可用"} · 配置状态：
-            {model.status}
-          </p>
-          {model.unavailable_reasons?.map((reason) => (
-            <p key={reason} className="text-muted-foreground">
-              {unavailableReasonLabel(reason)}
-            </p>
-          ))}
-          {model.mode_availability?.map((item) => (
-            <p key={item.mode}>
-              {item.mode}：
-              {item.available
-                ? "可用"
-                : (item.unavailable_reasons ?? [])
-                    .map(unavailableReasonLabel)
-                    .join("；")}
-            </p>
-          ))}
+      {model && "available" in model ? (
+        <div aria-label="当前可用性">
+          <Badge variant="secondary">
+            {model.available === true ? "可用" : "不可用"}
+          </Badge>
         </div>
       ) : null}
       {!detail && error ? (
@@ -766,7 +788,7 @@ export function ModelDetail({
                   }
                 }}
               >
-                <FieldGroup className="gap-3">
+                <FieldGroup className="gap-4">
                   <Field>
                     <FieldLabel htmlFor={`${formFieldId}-field-1`}>
                       <span>上游模型 ID</span>
@@ -784,9 +806,9 @@ export function ModelDetail({
                     />
                   </Field>
                   <FieldSet>
-                    <FieldLegend>开放模式</FieldLegend>
+                    <FieldLegend variant="label">开放模式</FieldLegend>
                     <FieldGroup>
-                      <div className="mt-2 flex flex-wrap gap-3">
+                      <div className="flex flex-wrap gap-4">
                         {modes.map((mode, fieldIndex0) => (
                           <Field key={mode} orientation="horizontal">
                             <Checkbox
@@ -857,20 +879,25 @@ export function ModelDetail({
                       />
                     </CollapsibleContent>
                   </Collapsible>
-                  <Button disabled={mutation.busy}>保存配置</Button>
+                  <Separator />
+                  <DialogFooter className="pt-0 max-md:[&_button]:min-h-11">
+                    <Button disabled={mutation.busy}>保存配置</Button>
+                  </DialogFooter>
                 </FieldGroup>
               </form>
             </TabsContent>
             <TabsContent value="pricing" forceMount hidden={view !== "pricing"}>
-              {priceCandidates}
-              {priceReference}
-              {priceForm}
+              <div className="flex flex-col gap-4">
+                {priceForm}
+                {!priceForm ? priceReference : null}
+                {!priceForm ? priceCandidates : null}
+              </div>
             </TabsContent>
             <TabsContent
               value="release"
               forceMount
               hidden={view !== "release"}
-              className="flex flex-col gap-5 data-[state=inactive]:hidden"
+              className="flex flex-col gap-4 data-[state=inactive]:hidden"
             >
               <div className="flex items-center gap-2">
                 <Badge variant="secondary">
@@ -899,7 +926,8 @@ export function ModelDetail({
                         : "请先在「价格」保存可发布的价格。"}
                     </p>
                   ) : null}
-                  <div className="flex flex-wrap gap-2">
+                  <Separator />
+                  <div className="flex flex-wrap justify-end gap-2">
                     <Button
                       variant={checkID ? "outline" : "default"}
                       disabled={
@@ -950,7 +978,7 @@ export function ModelDetail({
                     )
                   }
                 >
-                  停用模型（不接受新任务）
+                  停用模型
                 </Button>
               ) : null}
             </TabsContent>

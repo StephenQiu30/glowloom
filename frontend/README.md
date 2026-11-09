@@ -6,6 +6,8 @@
 
 复用组件位于 `src/components/<feature>/`；页面实现和独有组件位于对应 `src/app/<路由>/_components/`；基础组件使用 `components/ui/`。测试位于 `tests/`，与 `src/` 分开。目录和依赖边界见 [PROJECT](../PROJECT.md#2-可继续使用的工具)。
 
+AI 服务与模型管理的页面流程见[统一界面设计](../docs/design/07-AI平台接入市场调研与架构设计.md#ai-接入统一界面)，实现复用现有 shadcn/ui 组件与请求合同。
+
 ## 开发
 
 本地前端、后端和协作运行时统一由仓库根目录的 `docker-compose.yml` 启动；本目录不单独启动 Next.js。请按[仓库启动说明](../README.md)操作。Compose 注入 `GLOWLOOM_PUBLIC_ORIGIN` 和 `GLOWLOOM_BACKEND_ORIGIN`，缺少必需地址时服务会明确失败，不会回退到容器自身的回环地址。质量门禁见 [PROJECT](../PROJECT.md#4-质量门禁)。

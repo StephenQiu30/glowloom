@@ -208,13 +208,7 @@ export function ConnectionDetail({
         </Title>
         {provider ? (
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">
-              {archived
-                ? "已归档"
-                : provider.status === "active"
-                  ? "已启用"
-                  : "未启用"}
-            </Badge>
+            {archived ? <Badge variant="secondary">已归档</Badge> : null}
             {!renaming ? (
               <Button
                 type="button"

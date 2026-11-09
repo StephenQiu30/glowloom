@@ -12,9 +12,9 @@ import {
   MutationStatus,
   useCatalogMutation,
 } from "@/components/catalog/mutation";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { creationModeLabel } from "@/components/generation/creation-contract";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -74,11 +74,11 @@ export function ConnectionReleaseReview({
   return (
     <>
       <DialogHeader className="gap-1">
-        <DialogTitle id={titleId} tabIndex={-1} size="lg" className="text-xl">
+        <DialogTitle id={titleId} tabIndex={-1} size="lg">
           发布复核
         </DialogTitle>
-        <DialogDescription id={`${titleId}-description`}>
-          必验模式全部通过后，才可启用对应发布。
+        <DialogDescription id={`${titleId}-description`} className="sr-only">
+          发布模式验证结果
         </DialogDescription>
       </DialogHeader>
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-px">
@@ -110,7 +110,7 @@ export function ConnectionReleaseReview({
           return (
             <article
               key={release.id}
-              className="flex flex-col gap-2.5 rounded-lg border p-3 text-sm"
+              className="flex flex-col gap-3 py-2 text-sm"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h4 className="min-w-0 font-semibold break-words">
@@ -140,7 +140,9 @@ export function ConnectionReleaseReview({
                         className="flex items-center justify-between gap-2"
                       >
                         <span className="min-w-0 text-sm break-all">
-                          {mode}
+                          {mode === "text_to_text"
+                            ? "文本生成"
+                            : creationModeLabel(mode)}
                         </span>
                         <Badge
                           variant={
@@ -171,14 +173,9 @@ export function ConnectionReleaseReview({
             </article>
           );
         })}
-        {needsReview && (
-          <Alert>
-            <AlertTitle>尚有模式待复核</AlertTitle>
-            <AlertDescription>
-              本次查看保留现有发布及已冻结任务。
-            </AlertDescription>
-          </Alert>
-        )}
+        {needsReview ? (
+          <p className="text-sm text-muted-foreground">尚有模式待复核</p>
+        ) : null}
         {(activation.pending || activation.message) && (
           <MutationStatus mutation={activation} inline />
         )}

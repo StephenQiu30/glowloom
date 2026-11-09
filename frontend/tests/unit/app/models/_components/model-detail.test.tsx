@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { render } from "../../../../feedback";
 import { ModelDetail } from "@/app/models/_components/model-detail";
@@ -35,6 +41,79 @@ vi.mock("@/api/settings", async (importOriginal) => ({
 
 beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
+
+it("模型配置只显示不可用状态，不展示原因或原因入口", async () => {
+  api.model.mockResolvedValue({
+    model: {
+      id: "model-a",
+      display_name: "待发布模型",
+      status: "disabled",
+      available: false,
+      unavailable_reasons: ["disabled", "release_required", "disabled"],
+      mode_availability: [
+        {
+          mode: "text2image",
+          available: false,
+          unavailable_reasons: [
+            "disabled",
+            "release_required",
+            "mode_unverified",
+          ],
+        },
+      ],
+    },
+    versions: [],
+    prices: [],
+  });
+  render(<ModelDetail id="model-a" capabilities={[]} onSaved={vi.fn()} />);
+  await screen.findByRole("heading", { name: "待发布模型" });
+  const status = within(screen.getByLabelText("当前可用性"));
+  expect(status.getByText("不可用")).toBeTruthy();
+  expect(status.queryByRole("button")).toBeNull();
+  expect(status.queryByText(/已停用|未发布|待验证/)).toBeNull();
+  expect(status.queryByText(/disabled|text2image|配置状态/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "查看原因" })).toBeNull();
+});
+
+it("部分模式可用时只显示服务端可用结论", async () => {
+  api.model.mockResolvedValue({
+    model: {
+      id: "model-a",
+      display_name: "部分可用模型",
+      status: "active",
+      available: true,
+      mode_availability: [
+        { mode: "text2image", available: true },
+        {
+          mode: "image2image",
+          available: false,
+          unavailable_reasons: ["mode_unverified"],
+        },
+      ],
+    },
+    versions: [],
+    prices: [],
+  });
+  render(<ModelDetail id="model-a" capabilities={[]} onSaved={vi.fn()} />);
+  await screen.findByRole("heading", { name: "部分可用模型" });
+  const status = within(screen.getByLabelText("当前可用性"));
+  expect(status.getByText("可用")).toBeTruthy();
+  expect(status.queryByRole("button")).toBeNull();
+  expect(status.queryByText(/图生图|待验证|text2image|active/)).toBeNull();
+});
+
+it("全部可用时只显示状态，不提供空的原因入口", async () => {
+  api.model.mockResolvedValue({
+    model: { id: "model-a", display_name: "可用模型", available: true },
+    versions: [],
+    prices: [],
+  });
+  render(<ModelDetail id="model-a" capabilities={[]} onSaved={vi.fn()} />);
+  await screen.findByRole("heading", { name: "可用模型" });
+  const status = within(screen.getByLabelText("当前可用性"));
+  expect(status.getByText("可用")).toBeTruthy();
+  expect(status.queryByRole("button", { name: "查看原因" })).toBeNull();
+});
 
 it("详情读取失败时结束加载并允许重试同一模型", async () => {
   api.model.mockRejectedValueOnce(
@@ -175,6 +254,10 @@ it("管理员选择同步候选后显式提交原候选和平台倍率", async (
     />,
   );
   await screen.findByRole("heading", { name: "聚合模型" });
+  expect(
+    screen.queryByRole("button", { name: "载入候选并人工核验" }),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "官方价目同步候选" }));
   fireEvent.click(screen.getByRole("button", { name: "载入候选并人工核验" }));
   expect(
     screen.getByLabelText<HTMLInputElement>("每千输入 Token（USD）").value,
@@ -238,6 +321,7 @@ it("直连价目页候选加载计费单位并要求管理员手动录价", asyn
     />,
   );
   await screen.findByRole("heading", { name: "DeepSeek Flash" });
+  fireEvent.click(screen.getByRole("button", { name: "官方价目同步候选" }));
   fireEvent.click(screen.getByRole("button", { name: "载入来源并人工录价" }));
   await screen.findByLabelText("每千输入 Token（CNY）");
   fireEvent.change(screen.getByLabelText("每千输入 Token（CNY）"), {
@@ -399,7 +483,12 @@ it.each([
         onSaved={vi.fn()}
       />,
     );
-    await screen.findByText("官方计价预设");
+    const reference = await screen.findByRole("button", {
+      name: "官方计价参考",
+    });
+    expect(reference.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("link", { name: "查看官方价目" })).toBeNull();
+    fireEvent.click(reference);
     expect(
       screen.getByRole("link", { name: "查看官方价目" }).getAttribute("href"),
     ).toBe("https://example.com/pricing");

@@ -247,10 +247,8 @@ export function AddModelForm({
             {providerConnectionName(connection.provider)}
           </p>
         ) : (
-          <Field orientation="horizontal" className="justify-between">
-            <FieldLabel htmlFor={`${field}-provider`} className="sr-only">
-              供应商
-            </FieldLabel>
+          <Field>
+            <FieldLabel htmlFor={`${field}-provider`}>服务连接</FieldLabel>
             <Select
               value={providerID}
               disabled={locked}
@@ -265,10 +263,7 @@ export function AddModelForm({
                 setAccessKey("");
               }}
             >
-              <SelectTrigger
-                id={`${field}-provider`}
-                className="w-full max-w-[220px]"
-              >
+              <SelectTrigger id={`${field}-provider`} className="w-full">
                 <SelectValue placeholder="选择供应商连接">
                   {providerConnectionName(connection?.provider)}
                 </SelectValue>

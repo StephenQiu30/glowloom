@@ -447,16 +447,20 @@ function ConnectWizard({
         else void saveConnection(false);
       }}
     >
-      <ol aria-label="接入步骤" className="grid shrink-0 grid-cols-2 text-sm">
+      <ol
+        aria-label="接入步骤"
+        className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground"
+      >
         <li
           aria-current={step === 1 ? "step" : undefined}
-          className="border-t-2 border-border pt-1.5 text-muted-foreground aria-[current=step]:border-primary aria-[current=step]:font-semibold aria-[current=step]:text-foreground"
+          className="aria-[current=step]:font-medium aria-[current=step]:text-foreground"
         >
           1 连接服务
         </li>
+        <li aria-hidden="true">/</li>
         <li
           aria-current={step === 2 ? "step" : undefined}
-          className="border-t-2 border-border pt-1.5 text-muted-foreground aria-[current=step]:border-primary aria-[current=step]:font-semibold aria-[current=step]:text-foreground"
+          className="aria-[current=step]:font-medium aria-[current=step]:text-foreground"
         >
           2 选择模型
         </li>
@@ -672,14 +676,19 @@ function ConnectWizard({
                 ))}
               </ul>
             )}
-            <p className="text-xs text-muted-foreground" aria-live="polite">
-              已选 {selectionCount} 个模型
-            </p>
           </FieldSet>
         )}
       </div>
       <Separator />
       <DialogFooter className="shrink-0 pt-0 max-md:[&_button]:min-h-11">
+        {step === 2 ? (
+          <p
+            className="mr-auto self-center text-xs text-muted-foreground"
+            aria-live="polite"
+          >
+            已选 {selectionCount} 个模型
+          </p>
+        ) : null}
         {pending ? (
           <Button
             type="button"

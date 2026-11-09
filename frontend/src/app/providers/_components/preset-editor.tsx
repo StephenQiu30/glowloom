@@ -1,4 +1,6 @@
 "use client";
+import { ChevronDown } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import { providerLabel } from "./provider-label";
 
 import { useId, useState, type RefObject } from "react";
@@ -28,13 +30,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   createProviderPreset,
   previewProviderPreset,
@@ -118,28 +119,28 @@ export function PresetEditor({
     update({ ...document, config: { ...document.config, [name]: value } });
   }
   return (
-    <Sheet
+    <Dialog
       open
       onOpenChange={(open) => {
         if (!open && !mutation.busy) onClose();
       }}
     >
-      <SheetContent
+      <DialogContent
         onCloseAutoFocus={(event) => {
           if (returnFocusRef?.current?.isConnected) {
             event.preventDefault();
             returnFocusRef.current.focus();
           }
         }}
-        className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl max-md:[&_[data-slot=sheet-close]]:size-11"
+        aria-describedby={undefined}
+        className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-4 sm:max-w-[640px] sm:p-6 max-md:[&_[data-slot=dialog-close]]:size-11"
       >
-        <SheetHeader className="p-6">
-          <SheetTitle>
+        <DialogHeader>
+          <DialogTitle size="lg">
             {editing ? "编辑预设" : preset ? "复制预设" : "新建预设"}
-          </SheetTitle>
-          <SheetDescription>预设不包含 API Key。</SheetDescription>
-        </SheetHeader>
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 pb-6">
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-px">
           <FieldSet
             disabled={checking || mutation.busy}
             className="[&_[data-slot=input]]:h-10 max-md:[&_[data-slot=input]]:h-11 [&_[data-slot=native-select]]:h-10 max-md:[&_[data-slot=native-select]]:h-11"
@@ -226,14 +227,28 @@ export function PresetEditor({
                     value={document.config?.base_url ?? ""}
                   />
                 </Field>
-                <PresetModels
-                  key={document.config?.adapter_key}
-                  adapter={document.config?.adapter_key ?? ""}
-                  templates={document.model_templates ?? []}
-                  onChange={(templates) =>
-                    update({ ...document, model_templates: templates })
-                  }
-                />
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="justify-between"
+                    >
+                      模型模板
+                      <ChevronDown data-icon="inline-end" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-3">
+                    <PresetModels
+                      key={document.config?.adapter_key}
+                      adapter={document.config?.adapter_key ?? ""}
+                      templates={document.model_templates ?? []}
+                      onChange={(templates) =>
+                        update({ ...document, model_templates: templates })
+                      }
+                    />
+                  </CollapsibleContent>
+                </Collapsible>
               </FieldGroup>
             ) : (
               <Field>
@@ -389,7 +404,8 @@ export function PresetEditor({
             <MutationStatus mutation={mutation} />
           ) : null}
         </div>
-        <SheetFooter className="flex-row flex-wrap justify-end gap-2 px-6 max-md:[&_button]:min-h-11">
+        <Separator />
+        <DialogFooter className="shrink-0 pt-0 max-md:[&_button]:min-h-11">
           <Button
             className="max-md:h-11"
             variant="ghost"
@@ -446,8 +462,8 @@ export function PresetEditor({
           >
             保存预设
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

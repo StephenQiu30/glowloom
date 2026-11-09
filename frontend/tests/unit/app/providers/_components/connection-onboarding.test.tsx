@@ -351,9 +351,9 @@ it.each([false, true])(
       </SWRConfig>,
     );
     const review = await screen.findByRole("dialog", { name: "发布复核" });
-    const legacyMode = await screen.findByText("text_to_text");
+    const legacyMode = await screen.findByText("文本生成");
     expect(within(legacyMode.closest("li")!).getByText("待复核")).toBeTruthy();
-    const imageMode = screen.getByText("image2image");
+    const imageMode = screen.getByText("图生图");
     expect(
       within(imageMode.closest("li")!).getByText(
         complete ? "已验证" : "待复核",

@@ -371,9 +371,7 @@ export function ConnectionOnboarding({
       </Dialog>
       <Field>
         <div className="flex items-center justify-between gap-2">
-          <FieldLabel variant="title" htmlFor={`${fieldID}-model`}>
-            模型验证
-          </FieldLabel>
+          <FieldLabel htmlFor={`${fieldID}-model`}>模型验证</FieldLabel>
           <Badge
             variant={result === "未通过" ? "destructive" : "secondary"}
             role="status"

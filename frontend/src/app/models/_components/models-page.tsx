@@ -685,12 +685,10 @@ function ModelAdministration({
             event.preventDefault();
             if (!selected) addTrigger.current?.focus();
           }}
-          className="flex flex-col overflow-hidden border border-border p-4 sm:max-w-[640px] sm:p-6"
+          className="flex flex-col overflow-hidden border border-border p-4 sm:max-w-[560px] sm:p-6"
         >
           <DialogHeader>
-            <DialogTitle size="lg" className="text-xl">
-              添加模型
-            </DialogTitle>
+            <DialogTitle size="lg">添加模型</DialogTitle>
           </DialogHeader>
           {createOpen ? (
             <AddModelForm
@@ -727,7 +725,7 @@ function ModelAdministration({
                 addTrigger.current);
             target?.focus();
           }}
-          className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl"
+          className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:max-w-[560px] sm:p-6"
         >
           <DialogHeader className="sr-only">
             <DialogTitle>模型详情</DialogTitle>

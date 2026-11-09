@@ -562,12 +562,10 @@ function ProviderAdministration({
             event.preventDefault();
             if (!detailOpen) restoreFocus();
           }}
-          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden border border-border p-4 sm:max-w-[640px] sm:p-6 max-md:[&_[data-slot=dialog-close]]:size-11"
+          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden border border-border p-4 sm:max-w-[560px] sm:p-6 max-md:[&_[data-slot=dialog-close]]:size-11"
         >
           <DialogHeader>
-            <DialogTitle size="lg" className="text-xl">
-              接入服务
-            </DialogTitle>
+            <DialogTitle size="lg">接入服务</DialogTitle>
           </DialogHeader>
           {connect ? (
             <PresetConnect
@@ -610,8 +608,8 @@ function ProviderAdministration({
           }}
           className={
             reviewOpen
-              ? "flex flex-col overflow-hidden border border-border p-4 sm:max-w-[640px] sm:p-6"
-              : "flex flex-col overflow-hidden sm:max-w-lg max-md:[&_[data-slot=dialog-close]]:size-11"
+              ? "flex flex-col overflow-hidden border border-border p-4 sm:max-w-[560px] sm:p-6"
+              : "flex flex-col overflow-hidden sm:max-w-[560px] max-md:[&_[data-slot=dialog-close]]:size-11"
           }
         >
           {selected ? (
