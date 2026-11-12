@@ -91,8 +91,8 @@ export const NODE_SPECS = {
     metadata: { content: "", status: "idle" },
   },
   [CanvasNodeType.Audio]: {
-    width: 320,
-    height: 180,
+    width: NODE_DEFAULT_SIZE[CanvasNodeType.Audio].width,
+    height: NODE_DEFAULT_SIZE[CanvasNodeType.Audio].height,
     get title() {
       return NODE_DEFAULT_SIZE[CanvasNodeType.Audio].title;
     },
