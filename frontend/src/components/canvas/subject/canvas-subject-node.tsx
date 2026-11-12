@@ -2,7 +2,18 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { Contact, Heart, LoaderCircle, X } from "lucide-react";
+import {
+  AtSign,
+  Contact,
+  FolderOpen,
+  Heart,
+  LoaderCircle,
+  MousePointer2,
+  Pencil,
+  Settings2,
+  Upload,
+  X,
+} from "lucide-react";
 import { getSubjectVersion, listSubjects } from "@/api/subjects";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -12,6 +23,14 @@ import {
 } from "./subject-node-editor";
 import { SubjectNodeMedia } from "./subject-node-media";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -33,6 +52,9 @@ import { requireCanvasSubjectVersion } from "../lib/canvas-subject-source";
 import { reconcileSubjectSourceRelations } from "../lib/canvas-subject-connections";
 import type { CanvasYjsLiveSession } from "../yjs-live-session";
 import {
+  materializeSubject,
+  localSubjectConfig,
+  type CanvasSubjectConfig,
   importCanvasSubjects,
   setSubjectConfig,
   subjectConfig,
@@ -69,8 +91,27 @@ export function CanvasSubjectNode({
   const node = view.document?.nodes.find((item) => item.id === nodeID);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<{
-    initialSelection?: { target: SubjectMediaTarget; upload?: boolean };
+    initialSelection?: {
+      target: SubjectMediaTarget;
+      upload?: boolean;
+      canvas?: boolean;
+    };
   } | null>(null);
+  const canvasButton = useRef<HTMLButtonElement>(null);
+  const nameButton = useRef<HTMLButtonElement>(null);
+  const descriptionButton = useRef<HTMLButtonElement>(null);
+  const inlineLock = useRef(false);
+  const inlineCancelled = useRef(false);
+  const [inline, setInline] = useState<{
+    field: "title" | "description";
+    value: string;
+    title: string;
+    config: CanvasSubjectConfig;
+    epoch: string | null;
+    session: number;
+    scope: number;
+  } | null>(null);
+  const [inlineBusy, setInlineBusy] = useState(false);
   const [retry, setRetry] = useState(0);
   const [result, setResult] = useState<{
     key: string;
@@ -108,7 +149,110 @@ export function CanvasSubjectNode({
   const current = result?.key === identity ? result : null;
   const subject = current?.subject;
   const local = config.local;
-  const canEdit = view.writable && (!subjectID || !!subject || !!local);
+  const canEdit =
+    view.writable && !view.migration && (!subjectID || !!subject || !!local);
+  const description = local?.description ?? subject?.description ?? "";
+  function beginInline(field: "title" | "description") {
+    if (!canEdit || inlineLock.current) return;
+    inlineCancelled.current = false;
+    setInline({
+      field,
+      value: field === "title" ? node!.title : description,
+      title: node!.title,
+      config: structuredClone(config!),
+      epoch: client.getDocumentEpoch(),
+      session: getSessionGeneration(),
+      scope: getScopeGeneration(),
+    });
+  }
+  function restoreInlineFocus(field: "title" | "description") {
+    queueMicrotask(() =>
+      (field === "title" ? nameButton : descriptionButton).current?.focus(),
+    );
+  }
+  async function commitInline(restoreFocus = false) {
+    if (!inline || inlineLock.current || inlineCancelled.current) return;
+    const value = inline.field === "title" ? inline.value.trim() : inline.value;
+    if (value === (inline.field === "title" ? inline.title : description)) {
+      setInline(null);
+      return;
+    }
+    inlineLock.current = true;
+    setInlineBusy(true);
+    setError("");
+    try {
+      if (
+        !inline.epoch ||
+        client.getDocumentEpoch() !== inline.epoch ||
+        getSessionGeneration() !== inline.session ||
+        getScopeGeneration() !== inline.scope
+      )
+        throw new Error("画布、账号或空间已变化，请重新编辑");
+      const graph = client.getSnapshot().document;
+      const target = graph?.nodes.find((item) => item.id === nodeID);
+      if (
+        !graph ||
+        !target ||
+        target.title !== inline.title ||
+        canonical(subjectConfig(target)) !== canonical(inline.config)
+      )
+        throw new Error("主体已被其他编辑更新，当前输入已保留");
+      if (
+        inline.field === "title" &&
+        (!value || Array.from(value).length > 128 || value.includes("\0"))
+      )
+        throw new Error("主体名称应为1至128个字符");
+      const nextConfig =
+        inline.field === "description"
+          ? localSubjectConfig(inline.config, {
+              ...materializeSubject(inline.config, subject),
+              description: value,
+            })
+          : inline.config;
+      const next = reconcileSubjectSourceRelations(graph, {
+        ...graph,
+        nodes: graph.nodes.map((item) =>
+          item.id === nodeID
+            ? setSubjectConfig(
+                {
+                  ...item,
+                  title: inline.field === "title" ? value : item.title,
+                },
+                nextConfig,
+              )
+            : item,
+        ),
+      });
+      if (!client.canAccept(next))
+        throw new Error("画布当前不可编辑，当前输入已保留");
+      client.change(next, true);
+      await client.waitForSaved();
+      setInline(null);
+      if (restoreFocus) restoreInlineFocus(inline.field);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "保存尚未确认");
+    } finally {
+      inlineLock.current = false;
+      setInlineBusy(false);
+    }
+  }
+  function inlineKey(event: React.KeyboardEvent) {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      inlineCancelled.current = true;
+      if (inline) restoreInlineFocus(inline.field);
+      setInline(null);
+    } else if (
+      event.key === "Enter" &&
+      (inline?.field === "title" || event.metaKey || event.ctrlKey)
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      void commitInline(true);
+    }
+  }
   const clear = async () => {
     try {
       const graph = client.getSnapshot().document;
@@ -133,9 +277,90 @@ export function CanvasSubjectNode({
       className="canvas-subject-node"
       data-canvas-no-zoom
       data-canvas-shortcuts-ignore
-      onMouseDown={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => {
+        if (
+          (event.target as Element).closest(
+            "button,input,textarea,select,a,audio,video",
+          )
+        )
+          event.stopPropagation();
+      }}
+      onPointerDown={(event) => {
+        if (
+          (event.target as Element).closest(
+            "button,input,textarea,select,a,audio,video",
+          )
+        )
+          event.stopPropagation();
+      }}
     >
+      <div className="canvas-subject-heading">
+        {inline?.field === "title" ? (
+          <Input
+            aria-label="主体名称"
+            autoFocus
+            value={inline.value}
+            disabled={inlineBusy}
+            maxLength={128}
+            onChange={(event) =>
+              setInline({ ...inline, value: event.target.value })
+            }
+            onKeyDown={inlineKey}
+            onBlur={() => void commitInline()}
+          />
+        ) : (
+          <Button
+            ref={nameButton}
+            variant="ghost"
+            size="sm"
+            className="min-w-0 flex-1 justify-start"
+            aria-label="编辑主体名称"
+            disabled={!canEdit}
+            onClick={() => beginInline("title")}
+          >
+            <AtSign data-icon="inline-start" />
+            <span className="truncate">{node.title}</span>
+            <Pencil data-icon="inline-end" />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="编辑主体"
+          disabled={!canEdit}
+          onClick={() => setEditing({})}
+        >
+          <Settings2 data-icon="inline-start" />
+        </Button>
+      </div>
+      {inline?.field === "description" ? (
+        <Textarea
+          aria-label="主体描述"
+          placeholder="添加描述…"
+          autoFocus
+          value={inline.value}
+          disabled={inlineBusy}
+          maxLength={8192}
+          className="min-h-16 resize-none"
+          onChange={(event) =>
+            setInline({ ...inline, value: event.target.value })
+          }
+          onKeyDown={inlineKey}
+          onBlur={() => void commitInline()}
+        />
+      ) : (
+        <Button
+          ref={descriptionButton}
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+          aria-label="编辑主体描述"
+          disabled={!canEdit}
+          onClick={() => beginInline("description")}
+        >
+          <span className="truncate">{description || "添加描述…"}</span>
+        </Button>
+      )}
       <div className="canvas-subject-main">
         {local?.primary ? (
           <SubjectNodeMedia
@@ -152,37 +377,71 @@ export function CanvasSubjectNode({
             interactive
           />
         ) : (
-          <div className="canvas-subject-empty">
-            <Contact />
-            <p>
-              {subjectID && !local
-                ? (current?.error ?? "正在读取主体…")
-                : "导入主体，保持角色与声音一致"}
-            </p>
-            {view.writable && (!subjectID || local) && (
-              <div className="flex flex-wrap justify-center gap-2">
+          <Empty className="canvas-subject-empty">
+            <EmptyHeader className="sr-only">
+              <EmptyTitle>添加主体主媒体</EmptyTitle>
+              <EmptyDescription>
+                {subjectID && !local
+                  ? (current?.error ?? "正在读取主体…")
+                  : "导入主体或添加图片、视频"}
+              </EmptyDescription>
+            </EmptyHeader>
+            {!subjectID || local ? (
+              <EmptyContent className="w-full max-w-none gap-1">
                 <Button
+                  variant="ghost"
                   size="sm"
+                  disabled={!canEdit}
+                  onClick={() => setOpen(true)}
+                >
+                  <Contact data-icon="inline-start" />
+                  导入主体
+                </Button>
+                <Button
+                  ref={canvasButton}
+                  variant="ghost"
+                  size="sm"
+                  disabled={!canEdit}
+                  onClick={() =>
+                    setEditing({
+                      initialSelection: { target: "primary", canvas: true },
+                    })
+                  }
+                >
+                  <MousePointer2 data-icon="inline-start" />
+                  从画布选择
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!canEdit}
+                  onClick={() =>
+                    setEditing({ initialSelection: { target: "primary" } })
+                  }
+                >
+                  <FolderOpen data-icon="inline-start" />
+                  从资产库选择
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!canEdit}
                   onClick={() =>
                     setEditing({
                       initialSelection: { target: "primary", upload: true },
                     })
                   }
                 >
+                  <Upload data-icon="inline-start" />
                   本地添加
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setEditing({ initialSelection: { target: "primary" } })
-                  }
-                >
-                  从资产库选择
-                </Button>
-              </div>
+              </EmptyContent>
+            ) : (
+              <p role={current?.error ? "alert" : "status"}>
+                {current?.error ?? "正在读取主体…"}
+              </p>
             )}
-          </div>
+          </Empty>
         )}
         {(subjectID || local?.primary) && view.writable && (
           <Button
@@ -198,9 +457,6 @@ export function CanvasSubjectNode({
       </div>
       {local && (
         <>
-          <p className="canvas-subject-description">
-            {local.description || "暂无描述"}
-          </p>
           <div className="canvas-subject-references" aria-label="辅助媒体">
             {local.references.map((media) => (
               <div key={media.asset_id}>
@@ -226,9 +482,6 @@ export function CanvasSubjectNode({
       )}
       {subject && !local && (
         <>
-          <p className="canvas-subject-description">
-            {subject.description || "暂无描述"}
-          </p>
           <div className="canvas-subject-references" aria-label="辅助媒体">
             {subject.references.map((media) => (
               <div key={media.binding_id}>
@@ -257,22 +510,6 @@ export function CanvasSubjectNode({
           重试读取
         </Button>
       )}
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!canEdit}
-        onClick={() => setEditing({})}
-      >
-        编辑主体
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        disabled={!view.writable}
-        onClick={() => setOpen(true)}
-      >
-        主体导入
-      </Button>
       {error && <FeedbackToast message={error} />}
       {editing && (
         <SubjectNodeEditor
@@ -283,7 +520,11 @@ export function CanvasSubjectNode({
           subject={subject}
           projectID={projectID}
           initialSelection={editing.initialSelection}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null);
+            if (editing.initialSelection?.canvas)
+              queueMicrotask(() => canvasButton.current?.focus());
+          }}
         />
       )}
       {open && (
@@ -502,7 +743,16 @@ function SubjectImport({
         </div>
         {!current && <p role="status">正在读取主体…</p>}
         {current?.error && <p role="alert">{current.error}</p>}
-        {current?.page?.total === 0 && <p>暂无主体</p>}
+        {current?.page?.total === 0 && (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>暂无主体</EmptyTitle>
+              <EmptyDescription>
+                可调整搜索条件，或先在主体库添加主体。
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
         {error && <p role="alert">{error}</p>}
         <DialogFooter>
           <span className="mr-auto text-sm text-muted-foreground">

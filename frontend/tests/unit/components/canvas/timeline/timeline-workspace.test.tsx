@@ -3,6 +3,7 @@ import {
   cleanup,
   fireEvent,
   render,
+  screen,
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -853,5 +854,21 @@ it("retries only stale failed media once when the compact workspace resumes from
   act(() => f.replaceTimeline(f.read()));
   expect(mediaState.retry).toHaveBeenCalledTimes(1);
   expect(mediaState.media[healthyID]).toBe(healthy);
+  expect(f.client.changeTimeline).not.toHaveBeenCalled();
+});
+
+it("紧凑时间线提供三类素材来源，空画布来源不改时间线", async () => {
+  const f = setup(false, true, true);
+  const trigger = f.ui.getByRole("button", { name: /添加素材到/ });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  const menu = await screen.findByRole("menu");
+  expect(within(menu).getByRole("menuitem", { name: "本地上传" })).toBeTruthy();
+  expect(
+    within(menu).getByRole("menuitem", { name: "从资产库添加" }),
+  ).toBeTruthy();
+  const before = JSON.stringify(f.read());
+  f.client.changeTimeline.mockClear();
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "从画布选择" }));
+  expect(JSON.stringify(f.read())).toBe(before);
   expect(f.client.changeTimeline).not.toHaveBeenCalled();
 });

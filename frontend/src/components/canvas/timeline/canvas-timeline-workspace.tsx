@@ -1,5 +1,12 @@
 "use client";
 import { Toolbar } from "@/components/ui/toolbar";
+import { toast } from "sonner";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import {
   useCallback,
   useEffect,
@@ -29,6 +36,7 @@ import {
   PanelLeftOpen,
   Upload,
   FolderOpen,
+  MousePointer2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -37,6 +45,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -118,10 +127,14 @@ type Props = {
   compact?: boolean;
   suspended?: boolean;
   onClose?: () => void;
-  onExpand?: () => void;
+  onExpand?: (source?: "imported" | "canvas") => void;
+  initialAssetSource?: "imported" | "canvas";
 };
 export function CanvasTimelineWorkspace(props: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [expandedSource, setExpandedSource] = useState<"imported" | "canvas">(
+    "imported",
+  );
   const fullscreenGuard = useRef({ active: false, exitedAt: -Infinity });
   const onPlayerFullscreenChange = useCallback((active: boolean) => {
     if (fullscreenGuard.current.active && !active)
@@ -136,8 +149,9 @@ export function CanvasTimelineWorkspace(props: Props) {
         key={key}
         {...props}
         suspended={expanded}
-        onExpand={() => {
-          props.onExpand?.();
+        onExpand={(source = "imported") => {
+          setExpandedSource(source);
+          props.onExpand?.(source);
           if (!props.onExpand) setExpanded(true);
         }}
       />
@@ -170,6 +184,7 @@ export function CanvasTimelineWorkspace(props: Props) {
             key={key}
             {...props}
             compact={false}
+            initialAssetSource={expandedSource}
             onPlayerFullscreenChange={onPlayerFullscreenChange}
             onClose={() => setExpanded(false)}
           />
@@ -184,6 +199,7 @@ function TimelineWorkspace({
   canvasID,
   projectID,
   compact = false,
+  initialAssetSource = "imported",
   suspended = false,
   onClose,
   onExpand,
@@ -231,7 +247,7 @@ function TimelineWorkspace({
     [showAssets, setShowAssets] = useState(true),
     [assetWidth, setAssetWidth] = useState(360),
     [trackHeight, setTrackHeight] = useState(218),
-    [assetSource, setAssetSource] = useState("imported"),
+    [assetSource, setAssetSource] = useState<string>(initialAssetSource),
     [filter, setFilter] = useState("all"),
     [picker, setPicker] = useState<"library" | "upload" | null>(null),
     [pickerEpoch, setPickerEpoch] = useState<string | null>(null),
@@ -882,26 +898,46 @@ function TimelineWorkspace({
         data-canvas-no-zoom
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <DropdownMenuItem
-          onSelect={() => {
-            setTargetTrack(trackID);
-            setPickerEpoch(client.getDocumentEpoch());
-            setPicker("upload");
-          }}
-        >
-          <Upload />
-          本地上传
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            setTargetTrack(trackID);
-            setPickerEpoch(client.getDocumentEpoch());
-            setPicker("library");
-          }}
-        >
-          <FolderOpen />
-          从资产库添加
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            onSelect={() => {
+              setTargetTrack(trackID);
+              setPickerEpoch(client.getDocumentEpoch());
+              setPicker("upload");
+            }}
+          >
+            <Upload />
+            本地上传
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              setTargetTrack(trackID);
+              setPickerEpoch(client.getDocumentEpoch());
+              setPicker("library");
+            }}
+          >
+            <FolderOpen />
+            从资产库添加
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              if (!canvasAssets.length) {
+                toast.info("没有可添加的媒体节点。");
+                return;
+              }
+              if (compact) {
+                onExpand?.("canvas");
+                return;
+              }
+              setAssetSource("canvas");
+              setShowAssets(true);
+              setFilter("all");
+            }}
+          >
+            <MousePointer2 data-icon="inline-start" />
+            从画布选择
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1224,7 +1260,12 @@ function TimelineWorkspace({
                 </div>
               ))}
               {visibleAssets.length === 0 && (
-                <p className="timeline-assets-empty">将文件拖至此处添加</p>
+                <Empty className="timeline-assets-empty">
+                  <EmptyHeader>
+                    <EmptyTitle className="sr-only">暂无素材</EmptyTitle>
+                    <EmptyDescription>将文件拖至此处添加</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               )}
             </div>
             <Button

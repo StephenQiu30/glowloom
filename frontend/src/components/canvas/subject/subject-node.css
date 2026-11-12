@@ -1,7 +1,7 @@
 .canvas-subject-node {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
   padding: 16px;
   height: 100%;
   overflow: auto;
@@ -10,23 +10,26 @@
 }
 .canvas-subject-main {
   position: relative;
-  min-height: 180px;
+  min-height: 160px;
   flex: 1;
   overflow: hidden;
   border-radius: 10px;
-  background: var(--muted);
+  background: var(--accent);
 }
-.canvas-subject-empty {
+.canvas-subject-heading {
   display: flex;
-  height: 100%;
-  min-height: 180px;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.canvas-subject-empty[data-slot="empty"] {
+  height: 100%;
+  min-height: 160px;
   padding: 16px;
-  font-size: 13px;
-  color: var(--muted-foreground);
+  border: 0;
+}
+.canvas-subject-empty [data-slot="empty-content"] > button {
+  width: 100%;
 }
 .canvas-subject-clear {
   position: absolute;
@@ -68,7 +71,7 @@
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 16px;
   overflow: auto;
-  min-height: 180px;
+  min-height: 160px;
 }
 .canvas-subject-import-card {
   position: relative;

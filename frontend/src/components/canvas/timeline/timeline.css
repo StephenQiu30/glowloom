@@ -16,6 +16,7 @@
   color: var(--canvas-reference-foreground);
 }
 .canvas-timeline {
+  width: 100%;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -651,4 +652,24 @@
   background: var(--canvas-timeline-snap);
   z-index: 4;
   pointer-events: none;
+}
+
+.timeline-compact .timeline-lane,
+.timeline-compact .timeline-track-row {
+  height: 84px;
+  min-height: 84px;
+}
+.timeline-compact .timeline-ruler {
+  font-size: 12px;
+}
+.timeline-compact-play {
+  font-size: 14px;
+}
+.timeline-compact .timeline-playhead,
+.timeline-compact .timeline-playhead-slider {
+  visibility: hidden;
+}
+.timeline-compact:has(.timeline-clip) .timeline-playhead,
+.timeline-compact:has(.timeline-clip) .timeline-playhead-slider {
+  visibility: visible;
 }

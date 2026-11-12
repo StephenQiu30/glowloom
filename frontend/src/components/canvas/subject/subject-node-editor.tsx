@@ -115,9 +115,10 @@ export function SubjectNodeEditor({
         voice: { name: assets[0].file_name || "音色", media: media[0] },
       };
     change(next);
-    setSelection(null);
+    if (!(initialSelection?.canvas && chosen.canvas)) setSelection(null);
+    return next;
   }
-  async function save() {
+  async function save(nextLocal = local) {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
@@ -138,7 +139,7 @@ export function SubjectNodeEditor({
           throw new Error("主体已被其他编辑更新，请保留当前内容并重新打开");
         const config = cleared
           ? { version: 1 as const }
-          : localSubjectConfig(baseline.config, local);
+          : localSubjectConfig(baseline.config, nextLocal);
         const next = reconcileSubjectSourceRelations(graph, {
           ...graph,
           nodes: graph.nodes.map((item) =>
@@ -200,7 +201,10 @@ export function SubjectNodeEditor({
         allowed,
         controller.signal,
       );
-      if (!selected || controller.signal.aborted) return;
+      if (!selected || controller.signal.aborted) {
+        if (initialSelection?.canvas && !controller.signal.aborted) onClose();
+        return;
+      }
       active();
       const assetID = selected.serviceData?.media_ref?.asset_id;
       if (!assetID) throw new Error("所选节点没有已保存素材");
@@ -220,7 +224,8 @@ export function SubjectNodeEditor({
         preview.asset.kind !== selected.type
       )
         throw new Error("所选节点素材已变化，请重新选择");
-      add([preview.asset], choice);
+      const next = add([preview.asset], choice);
+      if (initialSelection?.canvas && next) await save(next);
     } catch (cause) {
       if (!controller.signal.aborted)
         setError(cause instanceof Error ? cause.message : "素材无法读取");
@@ -231,6 +236,20 @@ export function SubjectNodeEditor({
       }
     }
   }
+  useEffect(() => {
+    if (!initialSelection?.canvas) return;
+    let active = true;
+    // Start the external canvas gesture after the editor mount is committed.
+    queueMicrotask(() => {
+      if (active) void choose(initialSelection.target, false, true);
+    });
+    return () => {
+      active = false;
+      canvasFlight.current?.abort();
+    };
+    // Initial selection belongs to this mounted editor, like its frozen baseline.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const liveEpoch = client.getDocumentEpoch();
   useEffect(() => {
     if (liveEpoch !== baseline.epoch) canvasFlight.current?.abort();
@@ -504,7 +523,9 @@ export function SubjectNodeEditor({
           canvasPresentation
           confirmLabel="添加到主体"
           onClose={() => setSelection(null)}
-          onAdd={add}
+          onAdd={(assets) => {
+            add(assets);
+          }}
         />
       )}
     </div>
