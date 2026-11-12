@@ -239,7 +239,7 @@ func validEditorFiles(node Node) bool {
 	if primary == nil {
 		return node.RefID == nil
 	}
-	return node.RefType == "media_asset" && node.RefID != nil && *node.RefID == primary.FileID
+	return node.RefType == RefTypeMediaAsset && node.RefID != nil && *node.RefID == primary.FileID
 }
 
 // UnmarshalJSON rejects unsupported nested editor data instead of silently losing it.

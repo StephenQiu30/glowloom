@@ -78,8 +78,8 @@ func ApplySystemAssetTemplate(base Document, key string) (OperationOutcome, erro
 	for i, prompt := range prompts {
 		textID := uuid.NewSHA1(base.ID, []byte("template/"+key+"/text/"+titles[i]))
 		imageID := uuid.NewSHA1(base.ID, []byte("template/"+key+"/image/"+titles[i]))
-		text := Node{ID: textID, Title: titles[i], NodeType: "text", NodeAction: "resource", Config: NodeConfig{Text: &prompt}, X: 0, Y: float64(i) * 360, Width: &width, Height: &height, ZIndex: int32(i * 2)}
-		image := Node{ID: imageID, Title: titles[i] + " · 图片", NodeType: "image", NodeAction: "resource", Config: NodeConfig{Editor: &EditorConfig{SchemaVersion: 1, Parameters: &EditorParameters{Mode: "GENERATE"}}}, X: 560, Y: float64(i) * 360, Width: &width, Height: &height, ZIndex: int32(i*2 + 1)}
+		text := Node{ID: textID, Title: titles[i], NodeType: NodeTypeText, NodeAction: NodeActionResource, Config: NodeConfig{Text: &prompt}, X: 0, Y: float64(i) * 360, Width: &width, Height: &height, ZIndex: int32(i * 2)}
+		image := Node{ID: imageID, Title: titles[i] + " · 图片", NodeType: NodeTypeImage, NodeAction: NodeActionResource, Config: NodeConfig{Editor: &EditorConfig{SchemaVersion: 1, Parameters: &EditorParameters{Mode: "GENERATE"}}}, X: 560, Y: float64(i) * 360, Width: &width, Height: &height, ZIndex: int32(i*2 + 1)}
 		edge := Edge{ID: uuid.NewSHA1(base.ID, []byte("template/"+key+"/edge/"+titles[i])), EdgeType: "annotation", SourceNodeID: textID, TargetNodeID: imageID, Binding: append(json.RawMessage(nil), binding...)}
 		operations = append(operations, Operation{Type: "create_node", Node: &text}, Operation{Type: "create_node", Node: &image}, Operation{Type: "connect", Edge: &edge})
 	}
@@ -116,7 +116,7 @@ func directorStageNode(documentID uuid.UUID, template SystemAssetTemplate) Node 
 		ActiveShotID: shotID,
 	}
 	return Node{
-		ID: id("node"), Title: template.Name, NodeType: "director", NodeAction: "tool",
+		ID: id("node"), Title: template.Name, NodeType: NodeTypeDirector, NodeAction: NodeActionTool,
 		Width: &width, Height: &height, Config: NodeConfig{Director: &scene},
 	}
 }

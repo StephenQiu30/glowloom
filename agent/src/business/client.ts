@@ -214,6 +214,7 @@ export class BusinessClient {
             checkpoint_id: call.checkpoint_id,
             attempt: call.attempt,
             contract_version: call.contract_version,
+            input_hash: call.input_hash,
           },
           this.options(),
         ),

@@ -19,6 +19,8 @@ export function publicState(value: JsonObject): JsonObject {
     'failure',
     'delegations',
     'reconciliation',
+    'submission_status',
+    'delivery_wait',
   ];
   return Object.fromEntries(
     Object.entries(value).filter(([key]) => allowed.includes(key)),

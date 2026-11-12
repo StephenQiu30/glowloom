@@ -1,14 +1,10 @@
 package agentbusiness_test
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"os/exec"
-	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -17,6 +13,7 @@ import (
 	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 
 type commandStore struct {
@@ -53,31 +50,9 @@ func (s *commandStore) CommitYjsCommands(ctx context.Context, a identity.Princip
 	return s.CommitYjs(ctx, a, in.Base, in.Update, &in.Candidate, "")
 }
 func commandRuntime(t *testing.T) *yjsruntime.Client {
-	t.Helper()
-	root, err := filepath.Abs("../../../canvas")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.CommandContext(t.Context(), "node", "--input-type=module", "-e", `import {buildApp}from'./dist/http/app.js';const s=await buildApp({token:'isolated-agent-command-runtime-token'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`)
-	cmd.Dir = root
-	pipe, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err = cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	stop := sync.OnceFunc(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
-	t.Cleanup(stop)
-	scanner := bufio.NewScanner(pipe)
-	if !scanner.Scan() {
-		stop()
-		t.Fatal(stderr.String())
-	}
-	return yjsruntime.New("http://127.0.0.1:"+scanner.Text(), "isolated-agent-command-runtime-token")
+	return canvasfixture.CommandRuntime(t)
 }
+
 func TestFormalYjsCommandPreparesOutsideCommitAndPreservesStrictRevision(t *testing.T) {
 	doc := canvasdomain.Document{ID: uuid.New(), ProjectID: uuid.New(), Name: "Agent真实结构化写入", Revision: 1, SchemaVersion: 1, OperationVersion: 1, Writable: true, Nodes: []canvasdomain.Node{}, Edges: []canvasdomain.Edge{}}
 	store := &commandStore{base: canvas.YjsState{YjsBinding: canvas.YjsBinding{DocumentID: doc.ID}, Document: canvas.Snapshot(doc), CommandDocument: doc}}

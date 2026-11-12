@@ -157,7 +157,7 @@ func (s *Store) FindOperation(ctx context.Context, actor identityapp.Principal, 
 			       o.output_count, o.input_hash, o.origin, o.status, o.quote_micros,
 			       o.quote_detail, o.quote_expires_at, o.reused_from_id,
 			       o.force_regenerate, o.reservation_id, o.confirmed_at,
-			       o.settled_micros, o.region, o.create_time
+			       o.settled_micros, o.region, o.create_time, o.source_context
 			FROM operation.operation AS o
 			JOIN workspace.project AS p ON p.id = o.project_id
 			WHERE o.id = ?::uuid AND o.project_id = ?::uuid AND p.org_id = ?::uuid
@@ -175,6 +175,10 @@ func (s *Store) FindOperation(ctx context.Context, actor identityapp.Principal, 
 		return domain.Operation{}, fmt.Errorf("find operation: %w", err)
 	}
 	operation := row.domain()
+	operation.Source, err = decodeCanvasSource(row.SourceContext)
+	if err != nil {
+		return domain.Operation{}, err
+	}
 	if err := operation.Validate(); err != nil {
 		return domain.Operation{}, fmt.Errorf("validate stored operation: %w", err)
 	}
@@ -288,6 +292,7 @@ type operationRow struct {
 	SettledMicros         *int64
 	Region                *string
 	CreateTime            time.Time
+	SourceContext         []byte
 }
 
 func (r operationRow) domain() domain.Operation {

@@ -1,5 +1,182 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+<a id="agent-shot-first-wave-20261112"></a>
+
+## Agent与单镜首轮闭环实施（2026-11-12）
+
+当前授权为SRC-AGH-20/21：补齐详细实施计划并实际打通原请求/费用、失败恢复和单镜制作；保留原有能力。用户随后明确授权将本轮代码提交main并推送；部署、真实付费及存量库自动DDL不在本次范围。实施入口：[Plan28 §9](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md#9-首轮可执行实施src-agh-20)、[Plan33首轮](docs/plan/33-短剧工作室实施计划.md#首轮单镜可执行实施src-agh-20)。来源/设计/接受合同分别补入需求19 SRC-AGH-20/21、设计32 §7.16与设计38 §7.10、PRD19/24；后面的仅文档记录保留为历史。
+
+### 本轮结果与真实行为
+
+- 已完成原完整CallIdentity的HTTP查询、Node生成客户端与未知回执恢复。实际超额费用保留且一次结算，后续模型（含零上限）不再准入，免费查询/采用/提案继续可用。
+- 已修复原operation.Source投影，以及项目级会话的来源版本围栏；正式报价在原事务内绑定存储目标，未用测试侧补写掩盖生产装配缺口。
+- 已接shot_delivery_propose/create/get：冻结资产ID/修订/SHA与原来源、裁剪和时间线规格；明确批准后，Yjs采用/单镜时间线、现有视频和工程任务、原业务回执整体提交。重复调用不增供应商提交、费用或导出任务。
+- 已接持久waiting_delivery：分开模型轮次与作品完成；保存绝对截止和到期唤醒，重启只查询原任务；授权故障继续有界等待，暂停恢复不多调用模型。批准未创建、未审阅、失败、产物删除/不可读均不能报告成片完成。
+- 节点类型/动作/引用、时间线时长边界及交付状态使用所属领域常量；画布文本使用Node.TextInput和现有Prompt冻结语义。审批卡片复用正式媒体预览，显示确切所选视频、裁剪/时长、画幅、FPS与工程格式；无法读取的合同不能批准。
+
+### 验证证据与边界
+
+- CI接入：新增GLOWLOOM_TEST_AGENT_SHOT_DB_DSN及GLOWLOOM_TEST_SHOT_PIPELINE_DB_DSN，对应独立初始化数据库，现有backend Race步骤执行两个新增闭环用例，不以缺少专用环境跳过。
+- Agent：隔离PG与受限glowloom_agent角色，完整29文件/163测试通过，包括实际SIGKILL、原回执、授权故障、到期、暂停恢复和到期扫描。typecheck、生产build、lint、format及Swagger/生成客户端比对、严格API类型通过。
+- Go：隔离PG的agentbusiness完整47测试通过、无跳过；受控COS真实原文发布也运行。原始未知HTTP回执回收、真实费用超额/免费恢复、审批义务、资产修订/引用/FPS、原子采用与幂等均有回归。
+- 联合单镜：TestAgentShotOriginalQuoteRecoveryVideoAndProjectDelivery通过；真实报价/批准/确认→受控TLS供应商一次POST→实际MP4归档/探测→原资金一次结算→真实Yjs采用→FFmpeg成片与FCPXML归档。下载后解码视频，按原FrozenExport检查工程与媒体SHA/引用；故意丢失真实对象写入确认后重建worker恢复原产物；审阅前及删除已审阅输出后不报完成。
+- Canvas：补齐既有Outbox测试夹具的当前claim/ack合同后，领域命令与原生Yjs保存/恢复/Outbox用例通过。Go相关包vet及golangci-lint（含canvas/operation/agentbusiness测试）通过；并非整个后端/全部Canvas集成套件接受。
+- 界面：会话/结果/状态3文件13测试通过，完整前端typecheck与变更文件lint通过；typegen仅使用离线loopback origin，未发起生成。审批卡片未做登录后的浏览器实页接受。
+- 主工作区回填后：新费用/原HTTP/采用边界race、真实单镜联合测试与会话13项回归再次通过；本轮代码逐字核对，其他并行更改没有覆盖。隔离工作树的整套测试不扩展为其他并行工作的整体接受。
+- 失败照实记录：最初Agent整套出现7个5秒超时与关联Harness关闭错误；相关4文件22项独立复跑通过，随后完整163项通过。Canvas首次缺DSN及旧Outbox夹具不编译均记录并处理后才跑对应门；首次Go全套的一个COS条件跳过在补齐受控配置后完整47项无跳过。旧控制传输测试隔离自身队列，未排空其他测试root来掩盖问题。
+- 安全门未通过：当前Go1.26.10的govulncheck命中标准库GO-2026-6859，扫描建议1.26.11；本轮未升级工具链/发布镜像，不能作为生产放行。没有真实付费供应商、目标剪辑软件导入、容量或灾备接受；新增集成测试的两套专用CI数据库已接入；CI结果按本次推送的GitHub运行单独核验。
+
+### 后续实施顺序
+
+1. 先处理工具链安全门、制作实页与获授权的真实供应商/目标软件接受，再扩大生产放行范围。
+2. 沿设计38既有shot/generation-unit/take与依赖失效合同扩展两镜和整集，复用本次费用/回执/交付围栏。
+3. 再接受真实子Agent并行、Skill固定版本汇合、MCP认证与未知写入恢复；以现有原请求/额度/阶段产物约束，不新增空引擎。
+
+清理：本轮六个明确命名的隔离测试库在确认均为stephenqiu所有且连接数为零后删除；COS临时进程及本轮detached工作树已移除，其他工作树未清理。补丁、审查和测试日志保留在/tmp/glowloom-agent-shot-review及/tmp/glowloom-agent-shot-*.log。并行工作将main更新为8a2f061f，未包含本轮代码/文档路径；本轮保留该提交。
+
+Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单回填。按本轮最新授权在main提交并推送，不新建分支、不部署；仅暂存本轮允许清单，保留其他并行状态。仅新建的隔离测试数据库执行schema/data初始化，不涉及存量业务库。
+
+<details><summary>本轮首轮实现清单（66个代码/测试文件、7个合同文档与本BACKLOG）</summary>
+
+- [BACKLOG.md](BACKLOG.md)
+- [agent/src/business/client.ts](agent/src/business/client.ts)
+- [agent/src/business/generated/typings.d.ts](agent/src/business/generated/typings.d.ts)
+- [agent/src/config.ts](agent/src/config.ts)
+- [agent/src/pi-durable/definitions.ts](agent/src/pi-durable/definitions.ts)
+- [agent/src/pi-durable/docs.ts](agent/src/pi-durable/docs.ts)
+- [agent/src/pi-durable/events.ts](agent/src/pi-durable/events.ts)
+- [agent/src/server.ts](agent/src/server.ts)
+- [agent/src/sessions/delivery.ts](agent/src/sessions/delivery.ts)
+- [agent/src/sessions/runtime.ts](agent/src/sessions/runtime.ts)
+- [agent/src/sessions/service.ts](agent/src/sessions/service.ts)
+- [agent/tests/business-client.test.ts](agent/tests/business-client.test.ts)
+- [agent/tests/delivery-contract.test.ts](agent/tests/delivery-contract.test.ts)
+- [agent/tests/lifecycle-recovery.test.ts](agent/tests/lifecycle-recovery.test.ts)
+- [backend/internal/agent/adapter/http/business.go](backend/internal/agent/adapter/http/business.go)
+- [backend/internal/agent/adapter/http/business_swagger.go](backend/internal/agent/adapter/http/business_swagger.go)
+- [backend/internal/agent/adapter/postgres/authority.go](backend/internal/agent/adapter/postgres/authority.go)
+- [backend/internal/agent/adapter/postgres/calls.go](backend/internal/agent/adapter/postgres/calls.go)
+- [backend/internal/agent/application/authority.go](backend/internal/agent/application/authority.go)
+- [backend/internal/agent/domain/delivery.go](backend/internal/agent/domain/delivery.go)
+- [backend/internal/app/agent/canvas_commands.go](backend/internal/app/agent/canvas_commands.go)
+- [backend/internal/app/agent/creation.go](backend/internal/app/agent/creation.go)
+- [backend/internal/app/agent/errors.go](backend/internal/app/agent/errors.go)
+- [backend/internal/app/agent/shot_delivery.go](backend/internal/app/agent/shot_delivery.go)
+- [backend/internal/app/agent/shot_delivery_query.go](backend/internal/app/agent/shot_delivery_query.go)
+- [backend/internal/app/agent/tools.go](backend/internal/app/agent/tools.go)
+- [backend/internal/app/agent/wiring.go](backend/internal/app/agent/wiring.go)
+- [backend/internal/canvas/adapter/postgres/project_copy.go](backend/internal/canvas/adapter/postgres/project_copy.go)
+- [backend/internal/canvas/adapter/postgres/store.go](backend/internal/canvas/adapter/postgres/store.go)
+- [backend/internal/canvas/adapter/postgres/subject_input.go](backend/internal/canvas/adapter/postgres/subject_input.go)
+- [backend/internal/canvas/adapter/postgres/timeline.go](backend/internal/canvas/adapter/postgres/timeline.go)
+- [backend/internal/canvas/adapter/postgres/transcription.go](backend/internal/canvas/adapter/postgres/transcription.go)
+- [backend/internal/canvas/adapter/postgres/yjs_history.go](backend/internal/canvas/adapter/postgres/yjs_history.go)
+- [backend/internal/canvas/adapter/postgres/yjs_projection_store.go](backend/internal/canvas/adapter/postgres/yjs_projection_store.go)
+- [backend/internal/canvas/application/dto.go](backend/internal/canvas/application/dto.go)
+- [backend/internal/canvas/application/yjs_projection.go](backend/internal/canvas/application/yjs_projection.go)
+- [backend/internal/canvas/domain/asset_templates.go](backend/internal/canvas/domain/asset_templates.go)
+- [backend/internal/canvas/domain/batch_table.go](backend/internal/canvas/domain/batch_table.go)
+- [backend/internal/canvas/domain/cinema_kit.go](backend/internal/canvas/domain/cinema_kit.go)
+- [backend/internal/canvas/domain/director.go](backend/internal/canvas/domain/director.go)
+- [backend/internal/canvas/domain/document.go](backend/internal/canvas/domain/document.go)
+- [backend/internal/canvas/domain/draft.go](backend/internal/canvas/domain/draft.go)
+- [backend/internal/canvas/domain/editor_config.go](backend/internal/canvas/domain/editor_config.go)
+- [backend/internal/canvas/domain/graph.go](backend/internal/canvas/domain/graph.go)
+- [backend/internal/canvas/domain/node_types.go](backend/internal/canvas/domain/node_types.go)
+- [backend/internal/canvas/domain/operations.go](backend/internal/canvas/domain/operations.go)
+- [backend/internal/canvas/domain/project_copy.go](backend/internal/canvas/domain/project_copy.go)
+- [backend/internal/canvas/domain/subject.go](backend/internal/canvas/domain/subject.go)
+- [backend/internal/canvas/domain/subject_connections.go](backend/internal/canvas/domain/subject_connections.go)
+- [backend/internal/canvas/domain/text_input.go](backend/internal/canvas/domain/text_input.go)
+- [backend/internal/canvas/domain/timeline.go](backend/internal/canvas/domain/timeline.go)
+- [backend/internal/operation/adapter/http/generation_estimate.go](backend/internal/operation/adapter/http/generation_estimate.go)
+- [backend/internal/operation/adapter/postgres/public_query.go](backend/internal/operation/adapter/postgres/public_query.go)
+- [backend/internal/operation/adapter/postgres/quote_canvas_source.go](backend/internal/operation/adapter/postgres/quote_canvas_source.go)
+- [backend/internal/operation/adapter/postgres/store.go](backend/internal/operation/adapter/postgres/store.go)
+- [backend/internal/operation/adapter/staging/routed.go](backend/internal/operation/adapter/staging/routed.go)
+- [backend/internal/operation/domain/output.go](backend/internal/operation/domain/output.go)
+- [backend/tests/agentbusiness/http_test.go](backend/tests/agentbusiness/http_test.go)
+- [backend/tests/agentbusiness/request_cost_recovery_test.go](backend/tests/agentbusiness/request_cost_recovery_test.go)
+- [backend/tests/agentbusiness/shot_delivery_integration_test.go](backend/tests/agentbusiness/shot_delivery_integration_test.go)
+- [backend/tests/agentbusiness/yjs_commands_test.go](backend/tests/agentbusiness/yjs_commands_test.go)
+- [backend/tests/canvas/yjs_outbox_test.go](backend/tests/canvas/yjs_outbox_test.go)
+- [backend/tests/canvasfixture/command_runtime.go](backend/tests/canvasfixture/command_runtime.go)
+- [backend/tests/operation/agent_shot_pipeline_integration_test.go](backend/tests/operation/agent_shot_pipeline_integration_test.go)
+- [docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)
+- [docs/design/38-短剧工作室一致性设计.md](docs/design/38-短剧工作室一致性设计.md)
+- [docs/plan/28-完整创作Agent与Skill多Agent实施计划.md](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md)
+- [docs/plan/33-短剧工作室实施计划.md](docs/plan/33-短剧工作室实施计划.md)
+- [docs/prd/19-完整创作Agent与Skill多Agent.md](docs/prd/19-完整创作Agent与Skill多Agent.md)
+- [docs/prd/24-短剧工作室.md](docs/prd/24-短剧工作室.md)
+- [docs/requirement/19-完整创作Agent与Skill多Agent需求.md](docs/requirement/19-完整创作Agent与Skill多Agent需求.md)
+- [frontend/src/components/conversations/conversation-state.ts](frontend/src/components/conversations/conversation-state.ts)
+- [frontend/src/components/conversations/conversation-thread.tsx](frontend/src/components/conversations/conversation-thread.tsx)
+- [frontend/tests/unit/components/conversations/conversation-thread.test.tsx](frontend/tests/unit/components/conversations/conversation-thread.test.tsx)
+
+</details>
+
+<details><summary>当前其他并行未提交路径与既有缓存（本轮未覆盖）</summary>
+
+- `DESIGN.md`
+- `backend/internal/subject/adapter/http/query.go`
+- `backend/internal/subject/adapter/postgres/query.go`
+- `backend/internal/subject/application/contracts.go`
+- `backend/internal/subject/application/service.go`
+- `backend/internal/subject/domain/content.go`
+- `backend/tests/subject/type_test.go`
+- `docs/00-文档索引.md`
+- `docs/requirement/25-多模态创作与Agent编排需求.md`
+- `docs/research/00-调研导航.md`
+- `docs/research/2026-11-12-即梦多模态创作与Agent服务拆解.md`
+- `docs/research/2026-11-12-短剧制作平台源码与发行包对照调研.md`
+- `frontend/.vitest/ (existing cache)`
+- `frontend/Dockerfile`
+- `frontend/next.config.ts`
+- `frontend/public/design/reference/studios/empty.png`
+- `frontend/public/design/reference/studios/marketing-center.png`
+- `frontend/public/design/reference/studios/marketing-left.png`
+- `frontend/public/design/reference/studios/marketing-right.png`
+- `frontend/public/design/reference/studios/motion-card.png`
+- `frontend/public/design/reference/studios/motion-paper.png`
+- `frontend/public/design/reference/studios/motion-print.png`
+- `frontend/src/api/typings.d.ts`
+- `frontend/src/app/api/[...path]/route.ts`
+- `frontend/src/app/assets/_components/asset-location.ts`
+- `frontend/src/app/assets/_components/asset-query.ts`
+- `frontend/src/app/assets/_components/asset-workspace.tsx`
+- `frontend/src/app/assets/page.tsx`
+- `frontend/src/app/globals.css`
+- `frontend/src/app/marketing-studio/page.tsx`
+- `frontend/src/app/motion-studio/page.tsx`
+- `frontend/src/app/subjects/page.tsx`
+- `frontend/src/components/billing/credit-popover.tsx`
+- `frontend/src/components/layout/application-layout.tsx`
+- `frontend/src/components/layout/basic-layout.tsx`
+- `frontend/src/components/layout/page-layout.tsx`
+- `frontend/src/components/layout/product-account-actions.tsx`
+- `frontend/src/components/layout/product-header-actions.tsx`
+- `frontend/src/components/layout/product-header.tsx`
+- `frontend/src/components/layout/product-navigation.tsx`
+- `frontend/src/components/layout/product-sider.tsx`
+- `frontend/src/components/layout/routes.ts`
+- `frontend/src/components/layout/sidebar-nav-link.tsx`
+- `frontend/src/components/studios/studio-page.tsx`
+- `frontend/src/components/studios/studios.css`
+- `frontend/src/components/subjects/unified-contracts.ts`
+- `frontend/src/components/subjects/unified-editor.tsx`
+- `frontend/src/components/subjects/unified-library.tsx`
+- `frontend/src/components/subjects/unified-toolbar.tsx`
+- `frontend/src/components/subjects/use-subject-list.ts`
+- `frontend/tests/browser/assets.tsx`
+- `frontend/tests/unit/app/api/[...path]/route.test.ts`
+- `frontend/tests/unit/app/assets/_components/asset-location.test.ts`
+- `frontend/tests/unit/app/assets/_components/asset-workspace.test.tsx`
+- `frontend/tests/unit/components/layout/basic-layout.test.tsx`
+- `frontend/tests/unit/components/subjects/unified-editor.test.tsx`
+- `frontend/tests/unit/components/subjects/use-subject-list.test.ts`
+
+</details>
+
 <a id="agent-studio-reliability-20261112"></a>
 
 ## Agent/短剧稳定服务再评估（2026-11-12）

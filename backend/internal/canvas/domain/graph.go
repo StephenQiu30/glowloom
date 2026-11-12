@@ -32,7 +32,7 @@ func ValidateGraph(doc Document) error {
 		default:
 			return fmt.Errorf("%w: unknown node type", ErrUnsupportedCommand)
 		}
-		if node.NodeType == "subject" && !editable(node) {
+		if node.NodeType == NodeTypeSubject && !editable(node) {
 			return ErrInvalidCommand
 		}
 		if !validConfig(node.NodeType, node.Config) || !validEditorFiles(node) {

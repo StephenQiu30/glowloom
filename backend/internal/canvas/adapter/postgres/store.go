@@ -306,7 +306,7 @@ func saveGraphWithRestoration(tx *gorm.DB, before, after domain.Document, restor
 		if previous, exists := previousNodes[n.ID]; exists && reflect.DeepEqual(previous, n) {
 			continue
 		}
-		if (n.NodeAction != "resource" && n.NodeAction != "tool" && !domain.IsDraft(n)) || n.LastOperationID != nil {
+		if (n.NodeAction != domain.NodeActionResource && n.NodeAction != domain.NodeActionTool && !domain.IsDraft(n)) || n.LastOperationID != nil {
 			continue
 		}
 		config, err := json.Marshal(n.Config)
@@ -627,7 +627,7 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 			if err := checkTimeline(n.Config.Timeline, index, n.ID); err != nil {
 				return err
 			}
-			if n.RefType != "media_asset" || n.RefID == nil {
+			if n.RefType != domain.RefTypeMediaAsset || n.RefID == nil {
 				continue
 			}
 			kind := n.NodeType

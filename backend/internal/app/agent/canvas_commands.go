@@ -27,6 +27,10 @@ type CanvasCommandsInput struct {
 // Yjs computation adapter was installed by the process composition.
 func (b *Boundary) WithCanvasRuntime(runtime canvas.YjsCommandRuntime) *Boundary {
 	b.canvasRuntime = runtime
+	for _, binding := range shotDeliveryTools() {
+		b.bindings = append(b.bindings, binding)
+		b.Capabilities.Tools = append(b.Capabilities.Tools, app.Tool{Descriptor: binding.descriptor})
+	}
 	binding := tool("canvas_commands", "按当前revision原子写入结构化分镜、导演台镜头、时间线与真实媒体绑定。复用canvas operations闭集；覆盖需当前版本，媒体只接受项目正式asset_id。成功回执给出真实revision和commit_seq。", "write", commandSchema(CanvasCommandsInput{}), nil)
 	b.bindings = append(b.bindings, binding)
 	b.Capabilities.Tools = append(b.Capabilities.Tools, app.Tool{Descriptor: binding.descriptor})

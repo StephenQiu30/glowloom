@@ -219,6 +219,7 @@ func (h *BusinessHandler) model(c *gin.Context) {
 // @Param checkpoint_id query string true "checkpoint_id"
 // @Param attempt query integer true "attempt"
 // @Param contract_version query string true "contract_version"
+// @Param input_hash query string true "input_hash"
 // @Success 200 {object} domain.CallReceipt
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
@@ -243,7 +244,7 @@ func (h *BusinessHandler) call(c *gin.Context) {
 		send(c, nil, domain.ErrInvalid)
 		return
 	}
-	out, err := h.store.ReadCall(c.Request.Context(), rid, segment, domain.CallIdentity{CallID: c.Param("call_id"), TaskID: c.Query("task_id"), CheckpointID: c.Query("checkpoint_id"), Attempt: attempt, ContractVersion: c.Query("contract_version")})
+	out, err := h.store.ReadCall(c.Request.Context(), rid, segment, domain.CallIdentity{CallID: c.Param("call_id"), TaskID: c.Query("task_id"), CheckpointID: c.Query("checkpoint_id"), Attempt: attempt, ContractVersion: c.Query("contract_version"), InputHash: c.Query("input_hash")})
 	if err == nil && out.Kind == "model" && (out.Status == "in_flight" || out.Status == "unknown") && h.capabilities.ModelRecover != nil {
 		if _, recoverErr := h.capabilities.ModelRecover(c.Request.Context(), out.ReceiptID); recoverErr == nil {
 			out, err = h.store.ReadCall(c.Request.Context(), rid, segment, out.Call)
@@ -456,6 +457,11 @@ func (h *BusinessHandler) getSnapshot(c *gin.Context) {
 	grant, err := h.store.ValidateGrant(c.Request.Context(), in)
 	if err != nil {
 		send(c, nil, err)
+		return
+	}
+	if h.capabilities.RunSnapshot != nil {
+		out, err := h.capabilities.RunSnapshot(c.Request.Context(), grant)
+		send(c, out, err)
 		return
 	}
 	if h.capabilities.Snapshot == nil {

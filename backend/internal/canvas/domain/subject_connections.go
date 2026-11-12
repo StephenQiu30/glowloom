@@ -36,7 +36,7 @@ func SubjectConnectionReferences(doc Document, node Node) ([]prompt.Reference, e
 	refs := []prompt.Reference{}
 	for _, item := range edges {
 		index := nodeIndex(&doc, item.edge.SourceNodeID)
-		if index < 0 || doc.Nodes[index].NodeType != "subject" || doc.Nodes[index].Config.Subject == nil {
+		if index < 0 || doc.Nodes[index].NodeType != NodeTypeSubject || doc.Nodes[index].Config.Subject == nil {
 			return nil, ErrInvalidCommand
 		}
 		source := doc.Nodes[index]

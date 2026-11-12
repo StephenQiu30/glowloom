@@ -130,6 +130,8 @@ declare namespace AgentBusinessApi {
     attempt: number;
     /** contract_version */
     contract_version: string;
+    /** input_hash */
+    input_hash: string;
   };
 
   type getDecisionsParams = {

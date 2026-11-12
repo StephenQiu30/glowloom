@@ -214,6 +214,20 @@ func creationTools() []toolBinding {
 type proposalValidator struct{ tx *gorm.DB }
 
 func (v proposalValidator) ValidateProposal(ctx context.Context, s domain.Scope, p domain.ProposalInput) error {
+	var delivery shotDeliveryCandidate
+	if json.Unmarshal(p.Candidate, &delivery) == nil && delivery.Kind == shotDeliveryCandidateKind {
+		if p.BudgetMicros != 0 || p.PriceVersion != shotDeliveryPriceVersion || p.CanvasRevision != delivery.Input.ExpectedRevision {
+			return domain.ErrConflict
+		}
+		task, asset, err := loadShotCandidate(ctx, v.tx, s, delivery.Input)
+		if err != nil {
+			return err
+		}
+		if !delivery.matches(task, asset) {
+			return domain.ErrConflict
+		}
+		return nil
+	}
 	var candidate struct {
 		OperationID uuid.UUID `json:"operation_id"`
 	}
@@ -228,14 +242,12 @@ func (v proposalValidator) ValidateProposal(ctx context.Context, s domain.Scope,
 	if quoted.QuoteMicros == nil || quoted.PriceRuleVersionID == nil || *quoted.QuoteMicros > p.BudgetMicros || p.PriceVersion != quoted.PriceRuleVersionID.String() {
 		return domain.ErrConflict
 	}
-	if s.CanvasID != nil {
-		document, err := canvasService(v.tx).Get(ctx, s.Principal(), *s.CanvasID)
-		if err != nil {
-			return err
-		}
-		if document.ProjectID != s.ProjectID || document.Revision != p.CanvasRevision {
-			return domain.ErrConflict
-		}
+	revision, err := quoteCanvasRevision(ctx, v.tx, s, quoted)
+	if err != nil {
+		return err
+	}
+	if revision != p.CanvasRevision {
+		return domain.ErrConflict
 	}
 	model, price, err := store.ReadCurrentQuoteCatalog(ctx, s.Principal(), quoted, time.Now())
 	if err != nil {
@@ -335,16 +347,9 @@ func (b *Boundary) proposeOperation(ctx context.Context, tx *gorm.DB, s domain.S
 	if quoted.Status != "quoted" || quoted.QuoteMicros == nil || quoted.PriceRuleVersionID == nil || quoted.QuoteExpiresAt == nil || !quoted.QuoteExpiresAt.After(time.Now()) {
 		return domain.CallResult{}, domain.ErrConflict
 	}
-	revision := int64(0)
-	if s.CanvasID != nil {
-		document, err := canvasService(tx).Get(ctx, s.Principal(), *s.CanvasID)
-		if err != nil {
-			return domain.CallResult{}, err
-		}
-		if document.ProjectID != s.ProjectID {
-			return domain.CallResult{}, domain.ErrNotFound
-		}
-		revision = document.Revision
+	revision, err := quoteCanvasRevision(ctx, tx, s, quoted)
+	if err != nil {
+		return domain.CallResult{}, err
 	}
 	if requested.ExpectedCanvasRevision != nil && *requested.ExpectedCanvasRevision != revision {
 		return domain.CallResult{}, domain.ErrConflict
@@ -359,4 +364,30 @@ func (b *Boundary) proposeOperation(ctx context.Context, tx *gorm.DB, s domain.S
 	}
 	result, err := json.Marshal(map[string]any{"proposal_id": proposal.ProposalID, "root_run_id": proposal.RootRunID, "candidate_hash": proposal.CandidateHash, "authorization_revision": proposal.AuthorizationRevision, "candidate": proposal.Candidate, "canvas_revision": proposal.CanvasRevision, "price_version": proposal.PriceVersion, "quote_micros": *quoted.QuoteMicros, "budget_micros": proposal.BudgetMicros, "control": map[string]bool{"terminate": true}})
 	return domain.CallResult{Status: "completed", Result: result}, err
+}
+
+// quoteCanvasRevision resolves the operation's immutable source even for a
+// project-scoped conversation. Approval and confirmation use this same fence.
+func quoteCanvasRevision(ctx context.Context, tx *gorm.DB, s domain.Scope, quoted operationdomain.Operation) (int64, error) {
+	id := s.CanvasID
+	if quoted.Source != nil {
+		if id != nil && *id != quoted.Source.CanvasID {
+			return 0, domain.ErrNotFound
+		}
+		id = &quoted.Source.CanvasID
+	}
+	if id == nil {
+		return 0, nil
+	}
+	doc, err := canvasService(tx).Get(ctx, s.Principal(), *id)
+	if err != nil {
+		return 0, err
+	}
+	if doc.ProjectID != s.ProjectID {
+		return 0, domain.ErrNotFound
+	}
+	if quoted.Source != nil && doc.Revision != quoted.Source.Revision {
+		return 0, domain.ErrConflict
+	}
+	return doc.Revision, nil
 }

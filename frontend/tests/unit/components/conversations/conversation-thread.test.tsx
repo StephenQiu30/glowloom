@@ -15,6 +15,13 @@ vi.mock(
 vi.mock("@/components/conversations/conversation-result", () => ({
   ConversationResults: () => null,
 }));
+vi.mock("@/components/media/project-media", () => ({
+  ProjectMediaPreview: ({ id }: { id: string }) => (
+    <div data-testid="selected-shot" data-asset={id}>
+      已选视频
+    </div>
+  ),
+}));
 const defaultResizeObserver = globalThis.ResizeObserver;
 afterEach(() => {
   cleanup();
@@ -137,4 +144,70 @@ it("places the expandable public activity before the completed reply", () => {
   fireEvent.click(activity);
   expect(screen.getByText("完成文案")).toBeTruthy();
   expect(screen.getByText("以上内容由 AI 生成")).toBeTruthy();
+});
+
+it("shows the exact selected shot and frozen edit before allowing approval", () => {
+  const c = controller(),
+    asset = "11111111-1111-4111-8111-111111111111";
+  c.runMap.old!.snapshot.state = {
+    ...c.runMap.old!.snapshot.state,
+    status: "waiting_approval",
+    proposal: {
+      proposal_id: "proposal",
+      authorization_revision: 1,
+      candidate_hash: "hash",
+      quote_micros: 0,
+      candidate: {
+        kind: "shot_delivery",
+        asset_id: asset,
+        input: {
+          source_start_ms: 250,
+          duration_ms: 500,
+          aspect_ratio: "1:1",
+          fps: 25,
+          project_format: "fcpxml",
+        },
+      },
+    },
+  } as typeof c.runMap.old.snapshot.state;
+  render(<ConversationThread conversation={c} projectID="project" />);
+  expect(screen.getByTestId("selected-shot").getAttribute("data-asset")).toBe(
+    asset,
+  );
+  expect(screen.getByText("裁剪起点 0.25 秒 · 时长 0.5 秒")).toBeTruthy();
+  expect(screen.getByText("1:1 · 25 fps · FCPXML 工程")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "批准方案" }));
+  expect(c.command).toHaveBeenCalledWith("approve");
+});
+
+it("blocks approval of an unreadable shot contract", () => {
+  const c = controller();
+  c.runMap.old!.snapshot.state = {
+    ...c.runMap.old!.snapshot.state,
+    status: "waiting_approval",
+    proposal: {
+      proposal_id: "proposal",
+      authorization_revision: 1,
+      candidate_hash: "hash",
+      candidate: {
+        kind: "shot_delivery",
+        asset_id: "11111111-1111-4111-8111-111111111111",
+        input: {
+          source_start_ms: 0,
+          duration_ms: 500,
+          aspect_ratio: "1:1",
+          fps: 25,
+          project_format: "__proto__",
+        },
+      },
+    },
+  } as typeof c.runMap.old.snapshot.state;
+  render(<ConversationThread conversation={c} projectID="project" />);
+  expect(screen.getByRole("alert").textContent).toContain(
+    "制作方案暂时无法读取",
+  );
+  expect(
+    screen.getByRole("button", { name: "批准方案" }).hasAttribute("disabled"),
+  ).toBe(true);
+  expect(screen.queryByTestId("selected-shot")).toBeNull();
 });

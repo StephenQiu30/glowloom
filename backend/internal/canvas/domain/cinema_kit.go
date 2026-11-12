@@ -50,7 +50,7 @@ func EffectiveCinemaKit(doc Document, node Node) (*prompt.CinemaKit, error) {
 			continue
 		}
 		i := nodeIndex(&doc, edge.SourceNodeID)
-		if i < 0 || doc.Nodes[i].NodeType != "cinema_studio" || doc.Nodes[i].Config.CinemaKit == nil {
+		if i < 0 || doc.Nodes[i].NodeType != NodeTypeCinemaStudio || doc.Nodes[i].Config.CinemaKit == nil {
 			return nil, ErrInvalidCommand
 		}
 		source := doc.Nodes[i].Config.CinemaKit

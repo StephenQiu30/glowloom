@@ -13,6 +13,9 @@ import (
 	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
+// OperationCreateNode is the persisted structured node-creation command.
+const OperationCreateNode = "create_node"
+
 // Operation is the closed collaboration vocabulary. Paths address named fields
 // and stable collection identities, never arbitrary JSON paths or array indices.
 type Operation struct {
@@ -404,7 +407,7 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 	if final {
 		for i := range doc.Nodes {
 			n := &doc.Nodes[i]
-			if n.NodeType == "subject" {
+			if n.NodeType == NodeTypeSubject {
 				if err := advanceSubjectInput(document, n, operations); err != nil {
 					return OperationOutcome{}, err
 				}

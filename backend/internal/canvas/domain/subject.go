@@ -189,7 +189,7 @@ func subjectMediaSourceMatches(source Node, media SubjectMedia) bool {
 		}
 		return count == 1 && (source.RefID == nil || *source.RefID == media.AssetID)
 	}
-	return source.RefType == "media_asset" && source.RefID != nil && *source.RefID == media.AssetID
+	return source.RefType == RefTypeMediaAsset && source.RefID != nil && *source.RefID == media.AssetID
 }
 
 func nativeSubjectRelation(edge Edge) bool {
@@ -216,7 +216,7 @@ func validateSubjectRelationChanges(before, after Document) error {
 			continue
 		}
 		target := nodeIndex(&after, edge.TargetNodeID)
-		if target < 0 || after.Nodes[target].NodeType != "subject" {
+		if target < 0 || after.Nodes[target].NodeType != NodeTypeSubject {
 			continue
 		}
 		existed := slices.ContainsFunc(before.Edges, func(previous Edge) bool {

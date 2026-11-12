@@ -28,6 +28,12 @@ type RoutedFactory struct {
 	store    OperationWorkStore
 }
 
+// NewAdmission exposes only transactional output admission. Quote creation
+// does not perform object I/O and therefore needs no runtime SDK registry.
+func NewAdmission(store OperationWorkStore) application.OperationStorageAdmission {
+	return &RoutedFactory{store: store}
+}
+
 // NewRoutedFactory explicitly injects immutable profiles and admitted work.
 func NewRoutedFactory(registry *platform.Registry, store OperationWorkStore) *RoutedFactory {
 	return &RoutedFactory{registry: registry, store: store}

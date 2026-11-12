@@ -81,6 +81,19 @@ it('uses generated routes with service identity and propagates cancellation', as
     'x-agent-audience': 'agent-business',
   });
   expect(options.signal).toBeInstanceOf(AbortSignal);
+  await client.findCall(
+    { root_run_id: 'run', submission_id: 'submission' },
+    {
+      task_id: 'task',
+      call_id: 'call',
+      checkpoint_id: 'checkpoint',
+      attempt: 1,
+      contract_version: 'v1',
+      input_hash: 'hash',
+    },
+  );
+  const [lookup] = fetchMock.mock.calls[1] as unknown as [URL, RequestInit];
+  expect(lookup.searchParams.get('input_hash')).toBe('hash');
 });
 
 it('rejects generated calls without injected transport', async () => {

@@ -65,6 +65,19 @@ func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 		})
 		return out, err
 	}
+	b.Capabilities.RunSnapshot = func(ctx context.Context, g domain.Grant) (any, error) {
+		out, err := b.Capabilities.Snapshot(ctx, g.Scope)
+		if err != nil {
+			return nil, err
+		}
+		deliveries, err := shotDeliverySnapshot(ctx, database.WithContext(ctx), g)
+		if err != nil {
+			return nil, err
+		}
+		view := out.(map[string]any)
+		view["shot_deliveries"] = deliveries
+		return view, nil
+	}
 	return b
 }
 
@@ -79,6 +92,9 @@ func (b *Boundary) AtomicTool(c *gin.Context, name string, in domain.CallInput) 
 	if name == "media_reference_inspect" {
 		return b.executeMediaReference(c.Request.Context(), in)
 	}
+	if name == shotDeliveryCreateTool {
+		return b.executeShotDelivery(c.Request.Context(), in)
+	}
 	if name == "canvas_commands" {
 		return b.executeCanvasCommands(c.Request.Context(), in)
 	}
@@ -87,6 +103,9 @@ func (b *Boundary) AtomicTool(c *gin.Context, name string, in domain.CallInput) 
 			continue
 		}
 		return b.Store.ExecuteAtomicTool(c.Request.Context(), name, in, func(tx *gorm.DB, s domain.Scope, key uuid.UUID) (domain.CallResult, error) {
+			if name == shotDeliveryProposeTool {
+				return b.proposeShotDelivery(c.Request.Context(), tx, s, key, in)
+			}
 			if name == "operation_propose" {
 				return b.proposeOperation(c.Request.Context(), tx, s, key, in)
 			}

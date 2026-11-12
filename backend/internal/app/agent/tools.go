@@ -25,6 +25,7 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
 	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
@@ -71,7 +72,10 @@ func canvasStore(tx *gorm.DB) *pgcanvas.Store {
 }
 func canvasService(tx *gorm.DB) *canvas.Service { return canvas.NewService(canvasStore(tx)) }
 func operationStore(tx *gorm.DB) *pgoperation.Store {
-	return pgoperation.NewScopedStore(tx, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(inner *gorm.DB) operation.ExecutionAvailability { return pgcatalog.NewStore(inner) })
+	base := pgoperation.NewScopedStore(tx, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(inner *gorm.DB) operation.ExecutionAvailability { return pgcatalog.NewStore(inner) })
+	return pgoperation.NewStorageAwareStore(base, func(inner *gorm.DB) operation.OperationStorageAdmission {
+		return staging.NewAdmission(pgmedia.NewStorageRoutes(inner))
+	})
 }
 
 func operationStoreWithCreditSaga(tx *gorm.DB, enabled bool) *pgoperation.Store {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,8 +16,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
 	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
+	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
@@ -25,6 +29,91 @@ import (
 
 const businessToken = "business-only-test-token-00000000000000"
 const runtimeToken = "runtime-only-test-token-000000000000000"
+
+func TestHTTPOriginalCallLookupChecksInputHashAndRecoversPendingReceipt(t *testing.T) {
+	s, a, g := fixture(t)
+	in := costCall(g, 50)
+	first, err := s.ExecuteCall(t.Context(), "model", "model", in, func(context.Context, domain.Scope, uuid.UUID) (domain.CallResult, error) {
+		return domain.CallResult{}, io.ErrUnexpectedEOF
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	agenthttp.NewBusinessHandler(s, app.Capabilities{}, businessToken).Register(router)
+	for _, tc := range []struct {
+		hash   string
+		status int
+	}{{in.Call.InputHash, 200}, {domain.Hash([]byte("different")), 409}} {
+		query := url.Values{"submission_id": {g.SubmissionID.String()}, "task_id": {in.Call.TaskID}, "checkpoint_id": {in.Call.CheckpointID}, "attempt": {"1"}, "contract_version": {"v1"}, "input_hash": {tc.hash}}
+		r := httptest.NewRequestWithContext(t.Context(), "GET", "/internal/agent-business/runs/"+a.RootRunID.String()+"/calls/"+in.Call.CallID+"?"+query.Encode(), nil)
+		r.Header.Set("Authorization", "Bearer "+businessToken)
+		r.Header.Set("X-Agent-Audience", "agent-business")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, r)
+		if w.Code != tc.status {
+			t.Fatalf("original lookup status=%d want=%d: %s", w.Code, tc.status, w.Body.String())
+		}
+		if w.Code == 200 {
+			var got domain.CallReceipt
+			if json.Unmarshal(w.Body.Bytes(), &got) != nil || got.ReceiptID != first.ReceiptID || got.Status != "unknown" {
+				t.Fatal("original pending identity lost")
+			}
+		}
+	}
+	db, err := gorm.Open(postgres.Open(os.Getenv("GLOWLOOM_TEST_AGENT_BUSINESS_DB_DSN")), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	recoveries := 0
+	recovering := gin.New()
+	agenthttp.NewBusinessHandler(s, app.Capabilities{ModelRecover: func(ctx context.Context, id uuid.UUID) (domain.CallResult, error) {
+		recoveries++
+		out := domain.CallResult{Status: "completed", Result: json.RawMessage(`{"original":"recovered"}`), CostMicros: 25}
+		err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { _, e := agentpg.CompleteCall(tx, id, out); return e })
+		return out, err
+	}}, businessToken).Register(recovering)
+	for range 2 {
+		query := url.Values{"submission_id": {g.SubmissionID.String()}, "task_id": {in.Call.TaskID}, "checkpoint_id": {in.Call.CheckpointID}, "attempt": {"1"}, "contract_version": {"v1"}, "input_hash": {in.Call.InputHash}}
+		r := httptest.NewRequestWithContext(t.Context(), "GET", "/internal/agent-business/runs/"+a.RootRunID.String()+"/calls/"+in.Call.CallID+"?"+query.Encode(), nil)
+		r.Header.Set("Authorization", "Bearer "+businessToken)
+		r.Header.Set("X-Agent-Audience", "agent-business")
+		w := httptest.NewRecorder()
+		recovering.ServeHTTP(w, r)
+		var got domain.CallReceipt
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.ReceiptID != first.ReceiptID || got.Status != "completed" || got.CostMicros != 25 {
+			t.Fatalf("original HTTP recovery failed: %s", w.Body.String())
+		}
+	}
+	if recoveries != 1 {
+		t.Fatalf("reconciled original again: %d", recoveries)
+	}
+}
+
+// This transport retry test must not drain unrelated tests' durable queues.
+// Claim selection is covered by authority tests; acknowledgement remains real PG.
+type isolatedControlQueue struct {
+	app.BusinessStore
+	decision     domain.Decision
+	acknowledged bool
+}
+
+func (q *isolatedControlQueue) ClaimDecision(context.Context, time.Time) (domain.Decision, bool, error) {
+	return q.decision, !q.acknowledged, nil
+}
+func (q *isolatedControlQueue) Acknowledge(ctx context.Context, id uuid.UUID, r domain.AppliedReceipt) error {
+	err := q.BusinessStore.Acknowledge(ctx, id, r)
+	if err == nil {
+		q.acknowledged = true
+	}
+	return err
+}
 
 type identityStore struct {
 	app.BusinessStore
@@ -172,7 +261,8 @@ func TestControlDeliveryLostConfirmationRetriesSameDecision(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
 	defer cancel()
 	stopped := make(chan struct{})
-	go func() { defer close(stopped); client.DeliverControls(ctx, s, nil) }()
+	queue := &isolatedControlQueue{BusinessStore: s, decision: d}
+	go func() { defer close(stopped); client.DeliverControls(ctx, queue, nil) }()
 	select {
 	case <-done:
 	case <-ctx.Done():

@@ -1,3 +1,5 @@
+export const deliveryDefaults = { pollMs: 5000, timeoutMs: 1_800_000 } as const;
+
 export interface Config {
   host: string;
   port: number;
@@ -7,6 +9,8 @@ export interface Config {
   dbDsn: string;
   poolMax: number;
   leaseMs: number;
+  deliveryPollMs: number;
+  deliveryTimeoutMs: number;
   swagger: boolean;
 }
 
@@ -83,5 +87,17 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     businessOrigin: origin.origin,
     poolMax: integer('POOL_MAX', 8, 1, 64),
     leaseMs: integer('LEASE_MS', 30_000, 1000, 300_000),
+    deliveryPollMs: integer(
+      'DELIVERY_POLL_MS',
+      deliveryDefaults.pollMs,
+      1000,
+      60_000,
+    ),
+    deliveryTimeoutMs: integer(
+      'DELIVERY_TIMEOUT_MS',
+      deliveryDefaults.timeoutMs,
+      60_000,
+      86_400_000,
+    ),
   };
 }

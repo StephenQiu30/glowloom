@@ -14,10 +14,12 @@ import (
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
+// GenerationEstimator reads the current authorized input and price estimate.
 type GenerationEstimator interface {
 	EstimateGeneration(context.Context, identityapp.Principal, uuid.UUID, promptdomain.Draft, bool) (application.GenerationEstimate, error)
 }
 
+// GenerationEstimateRequest carries the editor draft and reuse preference.
 type GenerationEstimateRequest struct {
 	Draft           promptdomain.Draft `json:"draft"`
 	ForceRegenerate bool               `json:"force_regenerate,omitempty"`

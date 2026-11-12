@@ -11,7 +11,19 @@ import (
 
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
+
+func decodeCanvasSource(raw []byte) (*domain.CanvasSource, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var source domain.CanvasSource
+	if json.Unmarshal(raw, &source) != nil || !source.Valid() {
+		return nil, fmt.Errorf("invalid stored task source")
+	}
+	return &source, nil
+}
 
 // readQuoteCanvasSource shares the document lock used by its command writer.
 // It freezes provenance and checks references against the saved batch row.
@@ -41,8 +53,8 @@ func readQuoteCanvasSource(tx *gorm.DB, projectID uuid.UUID, input application.F
 	if read.RowsAffected != 1 {
 		return 0, application.ErrPublicNotFound
 	}
-	if node.NodeType != "batch_table" {
-		if node.NodeType == "generation" {
+	if node.NodeType != canvasdomain.NodeTypeBatchTable {
+		if node.NodeType == canvasdomain.NodeTypeGeneration {
 			return 0, checkGenerationSource(tx, node.Config, input)
 		}
 		if input.Source.RowID != nil {
@@ -94,7 +106,7 @@ func readQuoteCanvasSource(tx *gorm.DB, projectID uuid.UUID, input application.F
 			continue
 		}
 		var ref struct{ RefID *uuid.UUID }
-		read = tx.Raw(`SELECT ref_id FROM canvas.node WHERE id=?::uuid AND document_id=?::uuid AND node_type='image' AND ref_type='media_asset' AND NOT is_delete`, *nodeID, input.Source.CanvasID).Scan(&ref)
+		read = tx.Raw(`SELECT ref_id FROM canvas.node WHERE id=?::uuid AND document_id=?::uuid AND node_type=? AND ref_type=? AND NOT is_delete`, *nodeID, input.Source.CanvasID, canvasdomain.NodeTypeImage, canvasdomain.RefTypeMediaAsset).Scan(&ref)
 		if read.Error != nil {
 			return 0, fmt.Errorf("read source reference node: %w", read.Error)
 		}

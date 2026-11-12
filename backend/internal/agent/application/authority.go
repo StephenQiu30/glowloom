@@ -73,4 +73,5 @@ type Capabilities struct {
 	ModelRecover RecoverCapability
 	ToolRecover  RecoverCapability
 	Snapshot     func(context.Context, domain.Scope) (any, error)
+	RunSnapshot  func(context.Context, domain.Grant) (any, error)
 }

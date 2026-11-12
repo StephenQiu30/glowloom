@@ -40,7 +40,7 @@ func (s *Store) FreezeTranscriptionSource(ctx context.Context, actor identityapp
 			if current.ID != node {
 				continue
 			}
-			if (current.NodeType != "audio" && current.NodeType != "video") || current.RefType != "media_asset" || current.RefID == nil || *current.RefID == uuid.Nil {
+			if (current.NodeType != domain.NodeTypeAudio && current.NodeType != domain.NodeTypeVideo) || current.RefType != domain.RefTypeMediaAsset || current.RefID == nil || *current.RefID == uuid.Nil {
 				return domain.ErrInvalidCommand
 			}
 			reader := s.media(tx)

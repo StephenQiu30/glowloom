@@ -75,10 +75,10 @@ func YjsProjectionOperations(before domain.Document, after DocumentDTO) ([]domai
 	}
 	ordered := slices.Clone(after.Nodes)
 	slices.SortStableFunc(ordered, func(a, b NodeDTO) int {
-		if a.NodeType == "group" && b.NodeType != "group" {
+		if a.NodeType == domain.NodeTypeGroup && b.NodeType != domain.NodeTypeGroup {
 			return -1
 		}
-		if a.NodeType != "group" && b.NodeType == "group" {
+		if a.NodeType != domain.NodeTypeGroup && b.NodeType == domain.NodeTypeGroup {
 			return 1
 		}
 		return 0
@@ -141,10 +141,10 @@ func YjsProjectionOperations(before domain.Document, after DocumentDTO) ([]domai
 	}
 	removed := slices.Clone(previous.Nodes)
 	slices.SortStableFunc(removed, func(a, b NodeDTO) int {
-		if a.NodeType == "group" && b.NodeType != "group" {
+		if a.NodeType == domain.NodeTypeGroup && b.NodeType != domain.NodeTypeGroup {
 			return 1
 		}
-		if a.NodeType != "group" && b.NodeType == "group" {
+		if a.NodeType != domain.NodeTypeGroup && b.NodeType == domain.NodeTypeGroup {
 			return -1
 		}
 		return 0

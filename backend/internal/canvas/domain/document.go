@@ -224,7 +224,7 @@ func applyOne(doc *Document, c Command) error {
 			if n.InputRevision != 0 || n.ID == uuid.Nil || nodeIndex(doc, n.ID) >= 0 || !validTitle(n.Title) || !coordinate(n.X) || !coordinate(n.Y) || !dimension(n.NodeType, n.Width) || !dimension(n.NodeType, n.Height) || !validConfig(n.NodeType, n.Config) || !validZIndex(n.ZIndex) {
 				return ErrInvalidCommand
 			}
-			if IsDraft(n) || n.NodeType == "subject" {
+			if IsDraft(n) || n.NodeType == NodeTypeSubject {
 				n.InputRevision = 1
 			}
 			doc.Nodes = append(doc.Nodes, n)
@@ -415,20 +415,20 @@ func editable(n Node) bool {
 	if n.LastOperationID != nil {
 		return false
 	}
-	if n.NodeType == "image_generation" || n.NodeType == "video_generation" {
-		return n.NodeAction == "generate" && (n.RefType == "" && n.RefID == nil || n.Config.Editor != nil && n.RefType == "media_asset" && n.RefID != nil && *n.RefID != uuid.Nil)
+	if n.NodeType == NodeTypeImageGeneration || n.NodeType == NodeTypeVideoGeneration {
+		return n.NodeAction == NodeActionGenerate && (n.RefType == "" && n.RefID == nil || n.Config.Editor != nil && n.RefType == RefTypeMediaAsset && n.RefID != nil && *n.RefID != uuid.Nil)
 	}
-	if n.NodeType == "cinema_studio" || n.NodeType == "batch_table" || n.NodeType == "timeline" || n.NodeType == "director" || n.NodeType == "generation" {
-		return n.NodeAction == "tool" && n.RefType == "" && n.RefID == nil
+	if n.NodeType == NodeTypeCinemaStudio || n.NodeType == NodeTypeBatchTable || n.NodeType == NodeTypeTimeline || n.NodeType == NodeTypeDirector || n.NodeType == NodeTypeGeneration {
+		return n.NodeAction == NodeActionTool && n.RefType == "" && n.RefID == nil
 	}
-	if n.NodeAction != "resource" {
+	if n.NodeAction != NodeActionResource {
 		return false
 	}
 	switch n.NodeType {
-	case "text", "group", "config", "subject":
+	case NodeTypeText, NodeTypeGroup, NodeTypeConfig, NodeTypeSubject:
 		return n.RefType == "" && n.RefID == nil
-	case "image", "video", "audio", "model":
-		return n.RefType == "media_asset" && n.RefID != nil && *n.RefID != uuid.Nil || n.Config.Editor != nil && n.RefType == "" && n.RefID == nil
+	case NodeTypeImage, NodeTypeVideo, NodeTypeAudio, NodeTypeModel:
+		return n.RefType == RefTypeMediaAsset && n.RefID != nil && *n.RefID != uuid.Nil || n.Config.Editor != nil && n.RefType == "" && n.RefID == nil
 	default:
 		return false
 	}
@@ -437,51 +437,51 @@ func annotation(e Edge) bool {
 	return e.EdgeType == "annotation" && e.Role == "" && (len(e.Binding) == 0 || validEditorConnection(e.Binding))
 }
 func validConfig(kind string, c NodeConfig) bool {
-	if c.Container != nil && (kind != "group" || !validContainer(c.Container)) {
+	if c.Container != nil && (kind != NodeTypeGroup || !validContainer(c.Container)) {
 		return false
 	}
 	if c.CinemaKit != nil {
 		if c.CinemaKit.Validate() != nil || len(c.CinemaKit.Sources) != 0 {
 			return false
 		}
-		if kind == "cinema_studio" {
+		if kind == NodeTypeCinemaStudio {
 			return len(c.CinemaKit.Kinds()) == 1 && c.Subject == nil && c.Composer == nil && c.Draft == nil && c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation == nil && len(c.RichText) == 0 && c.Format == "" && c.FormatVersion == 0 && len(c.unknown) == 0 && validEditor(c.Editor)
 		}
 		media := kind
-		if kind == "image_generation" {
-			media = "image"
+		if kind == NodeTypeImageGeneration {
+			media = NodeTypeImage
 		}
-		if kind == "video_generation" {
-			media = "video"
+		if kind == NodeTypeVideoGeneration {
+			media = NodeTypeVideo
 		}
 		if !c.CinemaKit.Supports(media + ".generate") {
 			return false
 		}
-	} else if kind == "cinema_studio" {
+	} else if kind == NodeTypeCinemaStudio {
 		return false
 	}
 	if c.Draft != nil && c.Draft.Composer != nil && c.Draft.Composer.CinemaKit != nil {
 		return false
 	}
 
-	if kind == "subject" {
+	if kind == NodeTypeSubject {
 		return c.Subject != nil && validSubject(*c.Subject) && validEditor(c.Editor) && len(c.unknown) == 0 && len(c.RichText) == 0 && c.Composer == nil && c.Format == "" && c.FormatVersion == 0 && c.Draft == nil && c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation == nil
 	}
 	if c.Subject != nil {
 		return false
 	}
-	if !validEditor(c.Editor) || len(c.unknown) != 0 || (len(c.RichText) > 0 && (kind != "text" || c.Composer == nil || !validRichText(c.RichText, c.Composer))) {
+	if !validEditor(c.Editor) || len(c.unknown) != 0 || (len(c.RichText) > 0 && (kind != NodeTypeText || c.Composer == nil || !validRichText(c.RichText, c.Composer))) {
 		return false
 	}
-	if kind != "text" && (c.Composer != nil || c.Format != "" || c.FormatVersion != 0) {
+	if kind != NodeTypeText && (c.Composer != nil || c.Format != "" || c.FormatVersion != 0) {
 		return false
 	}
-	if kind == "image_generation" || kind == "video_generation" {
+	if kind == NodeTypeImageGeneration || kind == NodeTypeVideoGeneration {
 		return c.Draft != nil && validDraft(*c.Draft) && c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation == nil
 	}
 	if c.Draft != nil {
 		switch kind {
-		case "text", "image", "video", "audio":
+		case NodeTypeText, NodeTypeImage, NodeTypeVideo, NodeTypeAudio:
 			if c.Editor == nil || c.Draft.Composer == nil || !validDraft(*c.Draft) {
 				return false
 			}
@@ -489,35 +489,35 @@ func validConfig(kind string, c NodeConfig) bool {
 			return false
 		}
 	}
-	if kind == "generation" {
+	if kind == NodeTypeGeneration {
 		return c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation != nil && validGeneration(*c.Generation)
 	}
 	if c.Generation != nil {
 		return false
 	}
-	if kind == "batch_table" {
+	if kind == NodeTypeBatchTable {
 		return c.Text == nil && c.Collapsed == nil && c.Timeline == nil && c.Director == nil && c.BatchTable != nil && validBatchTable(*c.BatchTable)
 	}
-	if kind == "timeline" {
+	if kind == NodeTypeTimeline {
 		return c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Director == nil && c.Timeline != nil && validTimeline(*c.Timeline)
 	}
-	if kind == "director" {
+	if kind == NodeTypeDirector {
 		return c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director != nil && validDirector(*c.Director)
 	}
 	if c.BatchTable != nil || c.Timeline != nil || c.Director != nil {
 		return false
 	}
 	switch kind {
-	case "text":
+	case NodeTypeText:
 		if c.Composer != nil {
 			return c.Format == "tiptap" && c.FormatVersion == 1 && c.Text == nil && c.Collapsed == nil && c.Composer.Validate() == nil && c.Composer.ModelVersion == nil && c.Composer.Mode == nil && len(c.Composer.Params) == 0
 		}
 		return (c.Format == "" && c.FormatVersion == 0 || (c.Format == "plain" || c.Format == "markdown") && c.FormatVersion == 1) && c.Text != nil && c.Collapsed == nil && utf8.ValidString(*c.Text) && utf8.RuneCountInString(*c.Text) <= 10000
-	case "group":
+	case NodeTypeGroup:
 		return c.Text == nil && c.Collapsed != nil
-	case "config":
+	case NodeTypeConfig:
 		return c.Editor != nil && c.Text == nil && c.Collapsed == nil
-	case "image", "video", "audio", "model":
+	case NodeTypeImage, NodeTypeVideo, NodeTypeAudio, NodeTypeModel:
 		return c.Text == nil && c.Collapsed == nil
 	default:
 		return false
@@ -541,7 +541,7 @@ func validParents(nodes []Node) bool {
 		n := byID[id]
 		if n.ParentID != nil {
 			parent, ok := byID[*n.ParentID]
-			if !ok || parent.NodeType != "group" || parent.NodeAction != "resource" || !visit(parent.ID) {
+			if !ok || parent.NodeType != NodeTypeGroup || parent.NodeAction != NodeActionResource || !visit(parent.ID) {
 				return false
 			}
 		}
@@ -563,7 +563,7 @@ func batchSize(n int) bool      { return n > 0 && n <= 2000 }
 func coordinate(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) && math.Abs(v) <= 1e6 }
 func dimension(kind string, v *float64) bool {
 	maximum := float64(2000)
-	if kind == "group" {
+	if kind == NodeTypeGroup {
 		maximum = 100000
 	}
 	return v == nil || (!math.IsNaN(*v) && !math.IsInf(*v, 0) && *v >= 40 && *v <= maximum)

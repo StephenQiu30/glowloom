@@ -11,12 +11,17 @@ import { MarkdownContent } from "@/components/canvas/runtime/components/editor/m
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { money } from "@/components/generation/contracts";
 import type { ConversationController } from "./use-conversation";
-import { terminalStatuses } from "./conversation-state";
+import {
+  terminalStatuses,
+  readShotDeliveryProposal,
+  shotDeliveryCandidateKind,
+} from "./conversation-state";
 import { ConversationResults } from "./conversation-result";
 const labels: Record<string, string> = {
   accepted: "已受理",
   running: "正在创作",
   waiting_approval: "等待确认方案",
+  waiting_delivery: "等待制作产物",
   paused: "已暂停",
   failed: "本轮未完成",
   stopped: "已停止",
@@ -116,6 +121,12 @@ export function ConversationThread({
             const s = run.snapshot,
               state = s.state,
               latest = c.activeRunID === s.root_run_id;
+            const delivery = readShotDeliveryProposal(
+              state.proposal?.candidate,
+            );
+            const unreadableDelivery =
+              state.proposal?.candidate.kind === shotDeliveryCandidateKind &&
+              !delivery;
             const status =
               latest && c.stopping
                 ? "正在停止，等待执行回执"
@@ -301,10 +312,37 @@ export function ConversationThread({
                   {state.status === "waiting_approval" && state.proposal ? (
                     <div className="space-y-3 rounded-xl border p-4">
                       <p>请确认创作方案</p>
+                      {delivery ? (
+                        <>
+                          <div className="aspect-video max-w-md overflow-hidden rounded-lg">
+                            <ProjectMediaPreview
+                              projectID={projectID}
+                              id={delivery.assetID}
+                              kind="video"
+                              large
+                              interactive
+                            />
+                          </div>
+                          <p className="text-sm">
+                            裁剪起点 {delivery.sourceStartMS / 1000} 秒 · 时长{" "}
+                            {delivery.durationMS / 1000} 秒
+                          </p>
+                          <p className="text-sm">
+                            {delivery.aspectRatio} · {delivery.fps} fps ·{" "}
+                            {delivery.format} 工程
+                          </p>
+                        </>
+                      ) : unreadableDelivery ? (
+                        <p role="alert">
+                          制作方案暂时无法读取，请重新生成方案。
+                        </p>
+                      ) : null}
                       <p className="text-sm text-muted-foreground">
-                        {typeof state.proposal.quote_micros === "number"
-                          ? `预计费用 ${money(state.proposal.quote_micros)}`
-                          : "费用以正式报价为准"}
+                        {delivery
+                          ? "采用与导出不新增生成费用"
+                          : typeof state.proposal.quote_micros === "number"
+                            ? `预计费用 ${money(state.proposal.quote_micros)}`
+                            : "费用以正式报价为准"}
                       </p>
                       {typeof state.proposal.candidate.operation_id ===
                       "string" ? (
@@ -315,7 +353,7 @@ export function ConversationThread({
                       ) : null}
                       <div className="flex gap-2">
                         <Button
-                          disabled={!latest || c.stopping}
+                          disabled={!latest || c.stopping || unreadableDelivery}
                           onClick={() => void c.command("approve")}
                         >
                           批准方案

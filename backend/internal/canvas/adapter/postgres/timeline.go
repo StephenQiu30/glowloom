@@ -44,7 +44,7 @@ func (s *Store) FreezeTimeline(ctx context.Context, actor identityapp.Principal,
 		if !found {
 			return application.ErrNotFound
 		}
-		if target.NodeType != "timeline" || target.NodeAction != "tool" || target.Config.Timeline == nil {
+		if target.NodeType != domain.NodeTypeTimeline || target.NodeAction != domain.NodeActionTool || target.Config.Timeline == nil {
 			return domain.ErrInvalidCommand
 		}
 		if err := target.Config.Timeline.Validate(); err != nil {
@@ -65,7 +65,7 @@ func (s *Store) FreezeTimeline(ctx context.Context, actor identityapp.Principal,
 			}
 			if clip.NodeID != nil {
 				reference, ok := byID[*clip.NodeID]
-				if !ok || reference.NodeType != clip.Kind || reference.RefType != "media_asset" || reference.RefID == nil || clip.AssetID != nil && *clip.AssetID != *reference.RefID {
+				if !ok || reference.NodeType != clip.Kind || reference.RefType != domain.RefTypeMediaAsset || reference.RefID == nil || clip.AssetID != nil && *clip.AssetID != *reference.RefID {
 					return domain.ErrInvalidCommand
 				}
 				assetID := *reference.RefID

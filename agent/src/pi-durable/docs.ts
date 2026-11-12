@@ -1,4 +1,15 @@
 import { defineDoc, type JsonObject } from '@earendil-works/pi-durable';
+export const RunStatus = {
+  Accepted: 'accepted',
+  Running: 'running',
+  Completed: 'completed',
+  Failed: 'failed',
+  Stopped: 'stopped',
+  Rejected: 'rejected',
+  WaitingApproval: 'waiting_approval',
+  WaitingDelivery: 'waiting_delivery',
+  NeedsReconciliation: 'needs_reconciliation',
+} as const;
 export interface AgentState extends JsonObject {
   root_run_id: string;
   segment_id: string;
@@ -19,6 +30,8 @@ export interface AgentState extends JsonObject {
   pending_proposal: string | null;
   applied_decisions: JsonObject[];
   quiesced: JsonObject | null;
+  submission_status: string | null;
+  delivery_wait: JsonObject | null;
 }
 export const StateDoc = defineDoc<AgentState>({
   kind: 'glowloom.agent',
@@ -47,6 +60,8 @@ export const StateDoc = defineDoc<AgentState>({
     pending_proposal: null,
     applied_decisions: [],
     quiesced: null,
+    submission_status: null,
+    delivery_wait: null,
   }),
 });
 

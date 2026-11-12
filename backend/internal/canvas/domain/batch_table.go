@@ -109,7 +109,7 @@ func validToolReferences(nodes []Node) bool {
 					continue
 				}
 				reference, ok := byID[*id]
-				if !ok || reference.NodeType != "image" || reference.RefType != "media_asset" || reference.RefID == nil {
+				if !ok || reference.NodeType != NodeTypeImage || reference.RefType != RefTypeMediaAsset || reference.RefID == nil {
 					return false
 				}
 			}

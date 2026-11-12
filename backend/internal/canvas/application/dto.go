@@ -83,12 +83,12 @@ type DocumentDTO struct {
 
 func nodeDTO(n domain.Node) NodeDTO {
 	config := n.Config
-	if n.NodeType == "text" && !config.IsOpaque() && config.Format == "" && config.FormatVersion == 0 {
+	if n.NodeType == domain.NodeTypeText && !config.IsOpaque() && config.Format == "" && config.FormatVersion == 0 {
 		config.Format = "plain"
 		config.FormatVersion = 1
 	}
 	dto := NodeDTO{ID: n.ID, Title: n.Title, NodeType: n.NodeType, NodeAction: n.NodeAction, Config: config, X: n.X, Y: n.Y, Width: n.Width, Height: n.Height, ParentID: n.ParentID, ZIndex: n.ZIndex, ContentVersion: Revision(n.ContentVersion), InputRevision: n.InputRevision, RefType: n.RefType, RefID: n.RefID, LastOperationID: n.LastOperationID}
-	if n.RefType == "media_asset" && n.RefID != nil {
+	if n.RefType == domain.RefTypeMediaAsset && n.RefID != nil {
 		dto.MediaRef = &domain.MediaRef{AssetID: *n.RefID}
 		dto.RefType = ""
 		dto.RefID = nil

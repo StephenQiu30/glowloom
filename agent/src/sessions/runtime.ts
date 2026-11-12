@@ -25,13 +25,22 @@ import {
   type CallIdentity,
 } from '../business/client.js';
 import type { RunRow } from './persistence/store.js';
-import { StateDoc, releaseOwnedAllocations } from '../pi-durable/docs.js';
+import {
+  StateDoc,
+  RunStatus,
+  releaseOwnedAllocations,
+} from '../pi-durable/docs.js';
 import { PhaseTelemetry } from '../pi-durable/telemetry.js';
 import { createBusinessModels } from '../pi-durable/model-provider.js';
 import { buildRegistry, type HarnessGate } from '../pi-durable/registry.js';
 import { eventProjection } from '../pi-durable/events.js';
 import { canonicalHash, hasCurrentDefinitions } from './manifest.js';
 import { resolveConversationContent } from './input.js';
+import {
+  deliveryOutcome,
+  deliveryCreateTool,
+  type DeliveryOptions,
+} from './delivery.js';
 const context = BACKGROUND_CONTEXT;
 
 export class SessionRuntime {
@@ -54,6 +63,7 @@ export class SessionRuntime {
     readonly business: BusinessClient,
     readonly run: RunRow,
     readonly leaseMs: number,
+    readonly deliveryOptions: DeliveryOptions,
   ) {
     this.segment = run.submission_id;
   }
@@ -62,10 +72,17 @@ export class SessionRuntime {
     business: BusinessClient,
     run: RunRow,
     leaseMs: number,
+    deliveryOptions: DeliveryOptions = {},
   ) {
     if (!hasCurrentDefinitions(run.manifest))
       throw new Error('Pinned Harness definitions are unavailable');
-    const runtime = new SessionRuntime(pool, business, run, leaseMs);
+    const runtime = new SessionRuntime(
+      pool,
+      business,
+      run,
+      leaseMs,
+      deliveryOptions,
+    );
     runtime.owner = await claimSessionOwner(
       pool,
       run.session_id,
@@ -179,6 +196,8 @@ export class SessionRuntime {
             delegations: [],
             loaded_skills: [],
             model_contexts: [],
+            submission_status: null,
+            delivery_wait: null,
           });
         }
       }, context);
@@ -394,7 +413,24 @@ export class SessionRuntime {
   }
   private async drive() {
     const state = await this.state();
-    if (!state || !['accepted', 'running'].includes(state.status)) return;
+    if (
+      !state ||
+      !['accepted', 'running', RunStatus.WaitingDelivery].includes(state.status)
+    )
+      return;
+    if (state.status === RunStatus.WaitingDelivery) {
+      let authorized = false;
+      try {
+        await this.authorize();
+        authorized = true;
+      } catch {
+        // Persist the same deadline and a future wakeup even when authority is
+        // unavailable. No external action or model work is admitted here.
+        this.activeGrant = undefined;
+      }
+      await this.refreshDelivery(authorized);
+      return;
+    }
     await this.authorize();
     const segment = this.segment;
     await this.harnessValue.commit(async (tx) => {
@@ -493,17 +529,30 @@ export class SessionRuntime {
           })
         ).status;
       } catch {
-        recoveredStatus = 'needs_reconciliation';
+        recoveredStatus = RunStatus.NeedsReconciliation;
       }
     }
     if (this.proposalLine) await this.proposalLine;
+    const submissionStatus =
+      recoveredStatus ?? (settled.status === 'done' ? 'completed' : 'failed');
+    let delivery: ReturnType<typeof deliveryOutcome> | undefined;
+    if (
+      submissionStatus === 'completed' &&
+      !(await this.state())?.pending_proposal
+    ) {
+      const snapshot = await this.business
+        .snapshot(this.grant())
+        .catch(() => undefined);
+      delivery = deliveryOutcome(snapshot, null, this.deliveryPolicy());
+    }
     await this.harnessValue.commit(async (tx) => {
       const s = await tx.doc(StateDoc, this.root.id);
       if (s.status !== 'running' || s.segment_id !== segment) return;
       s.status = s.pending_proposal
         ? 'waiting_approval'
-        : (recoveredStatus ??
-          (settled.status === 'done' ? 'completed' : 'failed'));
+        : (delivery?.status ?? submissionStatus);
+      s.submission_status = submissionStatus;
+      s.delivery_wait = delivery?.wait ?? null;
       s.execution_revision++;
       if (settled.status === 'unanswered' && recoveredStatus !== 'completed')
         s.failure = {
@@ -514,6 +563,44 @@ export class SessionRuntime {
             : {}),
           reason: settled.reason,
         };
+    }, context);
+  }
+  private deliveryPolicy(): DeliveryOptions {
+    return {
+      ...this.deliveryOptions,
+      requireDeliveryFacts: this.run.manifest.tools.some(
+        (tool) => tool.name === deliveryCreateTool,
+      ),
+    };
+  }
+  private async refreshDelivery(authorized = true) {
+    const state = await this.state();
+    if (!state || state.status !== RunStatus.WaitingDelivery) return;
+    const snapshot = authorized
+      ? await this.business.snapshot(this.grant()).catch(() => undefined)
+      : undefined;
+    const outcome = deliveryOutcome(
+      snapshot,
+      state.delivery_wait,
+      this.deliveryPolicy(),
+    );
+    if (
+      !authorized &&
+      outcome.wait &&
+      outcome.status === RunStatus.WaitingDelivery
+    )
+      outcome.wait.reason = 'delivery_authority_unavailable';
+    await this.harnessValue.commit(async (tx) => {
+      const current = await tx.doc(StateDoc, this.root.id);
+      // A concurrent Stop or approval barrier always wins over a late read.
+      if (
+        current.status !== RunStatus.WaitingDelivery ||
+        current.segment_id !== this.segment
+      )
+        return;
+      current.status = outcome.status;
+      current.delivery_wait = outcome.wait;
+      current.execution_revision++;
     }, context);
   }
   async proposal(id: string, taskId: number, details: JsonObject) {

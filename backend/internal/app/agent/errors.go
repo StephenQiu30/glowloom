@@ -9,6 +9,7 @@ import (
 	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
@@ -21,6 +22,15 @@ func businessError(err error) error {
 		return nil
 	}
 	var revision *canvas.RevisionConflict
+	if errors.Is(err, mediatool.ErrConflict) {
+		return errors.Join(domain.ErrConflict, err)
+	}
+	if errors.Is(err, mediatool.ErrNotFound) {
+		return errors.Join(domain.ErrNotFound, err)
+	}
+	if errors.Is(err, mediatool.ErrInvalidExport) {
+		return errors.Join(domain.ErrInvalid, err)
+	}
 	if errors.As(err, &revision) || errors.Is(err, canvas.ErrYjsContention) || errors.Is(err, canvas.ErrIdempotencyConflict) || errors.Is(err, bible.ErrConflict) || errors.Is(err, bible.ErrIdempotencyConflict) || errors.Is(err, script.ErrConflict) || errors.Is(err, script.ErrIdempotencyConflict) || errors.Is(err, operation.ErrQuoteStale) || errors.Is(err, operation.ErrQuoteSourceStale) || errors.Is(err, operation.ErrQuoteKeyReused) || errors.Is(err, operation.ErrConfirmationKeyReused) || errors.Is(err, operationdomain.ErrQuoteNotConfirmable) {
 		return errors.Join(domain.ErrConflict, err)
 	}

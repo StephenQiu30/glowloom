@@ -63,11 +63,11 @@ func (r publicTaskRow) summary() (application.TaskSummary, error) {
 	}
 	item := application.TaskSummary{ID: r.ID, ProjectID: r.ProjectID, BatchID: r.BatchID, Capability: r.Capability, Mode: r.Mode, ModelKey: r.ModelKey, ModelName: r.ModelName, TargetType: r.TargetType, TargetID: r.TargetID, Origin: r.Origin, Status: r.Status, QuoteMicros: r.QuoteMicros, SettledMicros: r.SettledMicros, FailureCode: r.FailureCode, Retryable: r.Retryable, CancelRequested: r.CancelRequested, CreateTime: r.CreateTime, UpdateTime: r.UpdateTime, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt}
 	if r.SourceJSON != nil {
-		var source domain.CanvasSource
-		if err := json.Unmarshal([]byte(*r.SourceJSON), &source); err != nil || !source.Valid() {
-			return application.TaskSummary{}, fmt.Errorf("invalid stored task source")
+		var err error
+		item.Source, err = decodeCanvasSource([]byte(*r.SourceJSON))
+		if err != nil {
+			return application.TaskSummary{}, err
 		}
-		item.Source = &source
 	}
 	return item, nil
 }

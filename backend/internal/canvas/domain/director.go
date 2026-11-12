@@ -432,7 +432,7 @@ func validDirectorSceneReferences(c DirectorConfig, nodes map[uuid.UUID]Node) bo
 		if object.Kind == "billboard" {
 			kind = "image"
 		}
-		if !ok || node.NodeType != kind || node.RefType != "media_asset" || node.RefID == nil || object.AssetID != nil && *object.AssetID != *node.RefID {
+		if !ok || node.NodeType != kind || node.RefType != RefTypeMediaAsset || node.RefID == nil || object.AssetID != nil && *object.AssetID != *node.RefID {
 			return false
 		}
 	}

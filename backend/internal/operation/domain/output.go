@@ -8,10 +8,11 @@ type Origin string
 
 // Output origins identify the authority that created an operation result.
 const (
-	OriginPipeline Origin = "pipeline"
-	OriginBatch    Origin = "batch"
-	OriginCanvas   Origin = "canvas"
-	OriginAgent    Origin = "agent"
+	CapabilityVideoGenerate        = "video.generate"
+	OriginPipeline          Origin = "pipeline"
+	OriginBatch             Origin = "batch"
+	OriginCanvas            Origin = "canvas"
+	OriginAgent             Origin = "agent"
 )
 
 // Capability and Mode identify the operation choices used for media processing filters.

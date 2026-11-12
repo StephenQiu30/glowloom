@@ -236,7 +236,7 @@ func projectionRetainedMedia(documents ...domain.Document) ([]uuid.UUID, error) 
 			if err != nil {
 				return nil, err
 			}
-			if node.RefType == "media_asset" && node.RefID != nil {
+			if node.RefType == domain.RefTypeMediaAsset && node.RefID != nil {
 				ids = append(ids, *node.RefID)
 			}
 			for _, id := range ids {

@@ -1,3 +1,5 @@
+// Package http exposes the authenticated Agent business API.
+//
 // @title Agent business API
 // @version 1.0
 // @description Service-authenticated Agent business boundary.

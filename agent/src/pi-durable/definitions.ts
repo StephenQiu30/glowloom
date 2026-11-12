@@ -7,6 +7,9 @@ const definitions = [
   'docs',
   'telemetry',
   'events',
+  '../sessions/delivery',
+  '../sessions/runtime',
+  '../config',
 ];
 export const DEFINITION_HASH = createHash('sha256')
   .update(

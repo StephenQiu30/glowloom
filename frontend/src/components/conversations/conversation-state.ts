@@ -2,6 +2,55 @@ import { modelAvailableForMode } from "@/components/generation/model-availabilit
 import type { PromptDraft } from "@/components/generation/prompt-document";
 import type { ConversationSkillPin } from "./conversation-context";
 
+export const shotDeliveryCandidateKind = "shot_delivery";
+const projectFormatLabels = new Map([
+  ["fcpxml", "FCPXML"],
+  ["xmeml", "XMEML"],
+  ["jianying", "剪映"],
+]);
+function record(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+export function readShotDeliveryProposal(value: unknown) {
+  if (
+    !record(value) ||
+    value.kind !== shotDeliveryCandidateKind ||
+    !record(value.input)
+  )
+    return;
+  const input = value.input;
+  if (
+    typeof value.asset_id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value.asset_id,
+    ) ||
+    typeof input.source_start_ms !== "number" ||
+    !Number.isSafeInteger(input.source_start_ms) ||
+    input.source_start_ms < 0 ||
+    typeof input.duration_ms !== "number" ||
+    !Number.isSafeInteger(input.duration_ms) ||
+    input.duration_ms <= 0 ||
+    typeof input.fps !== "number" ||
+    !Number.isSafeInteger(input.fps) ||
+    input.fps <= 0 ||
+    typeof input.aspect_ratio !== "string" ||
+    !input.aspect_ratio ||
+    typeof input.project_format !== "string"
+  )
+    return;
+  const format = projectFormatLabels.get(input.project_format);
+  if (!format) return;
+  return {
+    assetID: value.asset_id,
+    sourceStartMS: input.source_start_ms,
+    durationMS: input.duration_ms,
+    aspectRatio: input.aspect_ratio,
+    fps: input.fps,
+    format,
+  };
+}
+
 export function isVersionedSkill(
   skill: API.SkillVersion,
 ): skill is API.SkillVersion & ConversationSkillPin {

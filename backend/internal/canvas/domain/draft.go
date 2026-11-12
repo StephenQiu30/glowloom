@@ -22,7 +22,7 @@ func IsDraft(n Node) bool {
 	}
 	switch n.NodeType {
 	case "text", "image", "video", "audio":
-		return n.NodeAction == "resource" && n.Config.Draft != nil
+		return n.NodeAction == NodeActionResource && n.Config.Draft != nil
 	default:
 		return false
 	}
@@ -30,7 +30,7 @@ func IsDraft(n Node) bool {
 
 // isGenerationDraft identifies legacy intent-only nodes with distinct edit rules.
 func isGenerationDraft(n Node) bool {
-	return n.NodeType == "image_generation" || n.NodeType == "video_generation"
+	return n.NodeType == NodeTypeImageGeneration || n.NodeType == NodeTypeVideoGeneration
 }
 
 func validDraft(d Draft) bool {

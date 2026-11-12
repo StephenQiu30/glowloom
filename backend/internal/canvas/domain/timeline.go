@@ -66,7 +66,11 @@ type SubtitleStyle struct {
 	Position string `json:"position"`
 }
 
-const timelineLimitMS int64 = 24 * 60 * 60 * 1000
+// MaxTimelineDurationMS bounds both source duration and timeline placement.
+const MaxTimelineDurationMS int64 = 24 * 60 * 60 * 1000
+
+// MinTimelineClipDurationMS is the minimum clip and playable source duration.
+const MinTimelineClipDurationMS int64 = 100
 
 var subtitleColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
@@ -109,8 +113,8 @@ func validTimeline(c TimelineConfig) bool {
 	ids := make(map[uuid.UUID]bool, len(c.Clips))
 	for _, clip := range c.Clips {
 		track, ok := tracks[clip.TrackID]
-		if clip.ID == uuid.Nil || ids[clip.ID] || !ok || (track.Kind != clip.Kind && (track.Kind != "video" || clip.Kind != "image")) || !validTitle(clip.Title) || clip.StartMS < 0 || clip.DurationMS < 100 || clip.DurationMS > timelineLimitMS || clip.StartMS > timelineLimitMS-clip.DurationMS ||
-			clip.SourceStartMS < 0 || clip.SourceStartMS > timelineLimitMS || (clip.SourceDurationMS != nil && (*clip.SourceDurationMS < 100 || *clip.SourceDurationMS > timelineLimitMS || clip.SourceStartMS > *clip.SourceDurationMS || ((clip.Kind == "video" || clip.Kind == "audio") && clip.DurationMS > *clip.SourceDurationMS-clip.SourceStartMS))) ||
+		if clip.ID == uuid.Nil || ids[clip.ID] || !ok || (track.Kind != clip.Kind && (track.Kind != "video" || clip.Kind != "image")) || !validTitle(clip.Title) || clip.StartMS < 0 || clip.DurationMS < MinTimelineClipDurationMS || clip.DurationMS > MaxTimelineDurationMS || clip.StartMS > MaxTimelineDurationMS-clip.DurationMS ||
+			clip.SourceStartMS < 0 || clip.SourceStartMS > MaxTimelineDurationMS || (clip.SourceDurationMS != nil && (*clip.SourceDurationMS < MinTimelineClipDurationMS || *clip.SourceDurationMS > MaxTimelineDurationMS || clip.SourceStartMS > *clip.SourceDurationMS || ((clip.Kind == "video" || clip.Kind == "audio") && clip.DurationMS > *clip.SourceDurationMS-clip.SourceStartMS))) ||
 			math.IsNaN(clip.Volume) || math.IsInf(clip.Volume, 0) || clip.Volume < 0 || clip.Volume > 2 || clip.FadeInMS < 0 || clip.FadeOutMS < 0 || clip.FadeInMS > clip.DurationMS || clip.FadeOutMS > clip.DurationMS || !validPrompt(clip.Text) || (clip.NodeID != nil && *clip.NodeID == uuid.Nil) || (clip.AssetID != nil && *clip.AssetID == uuid.Nil) {
 			return false
 		}
@@ -161,7 +165,7 @@ func validTimelineReferences(c TimelineConfig, nodes map[uuid.UUID]Node) bool {
 			continue
 		}
 		node, ok := nodes[*clip.NodeID]
-		if !ok || node.NodeType != clip.Kind || node.RefType != "media_asset" || node.RefID == nil || (clip.AssetID != nil && *clip.AssetID != *node.RefID) {
+		if !ok || node.NodeType != clip.Kind || node.RefType != RefTypeMediaAsset || node.RefID == nil || (clip.AssetID != nil && *clip.AssetID != *node.RefID) {
 			return false
 		}
 	}

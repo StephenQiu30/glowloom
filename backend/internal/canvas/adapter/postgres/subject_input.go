@@ -23,14 +23,14 @@ func ReadSubjectInput(ctx context.Context, tx *gorm.DB, project, nodeID uuid.UUI
 		InputRevision int64
 		Input         []byte
 	}
-	result := tx.WithContext(ctx).Raw(`SELECT n.id,n.document_id,n.title,n.config,n.input_revision,i.draft AS input FROM canvas.node n JOIN canvas.document d ON d.id=n.document_id JOIN canvas.node_input i ON i.node_id=n.id AND i.input_revision=n.input_revision WHERE n.id=? AND d.project_id=? AND NOT n.is_delete AND NOT d.is_delete AND d.schema_version=1 AND d.scope='{}'::jsonb AND n.node_type='subject' AND n.node_action='resource' AND n.input_revision=? FOR SHARE OF n,d`, nodeID, project, revision).Scan(&row)
+	result := tx.WithContext(ctx).Raw(`SELECT n.id,n.document_id,n.title,n.config,n.input_revision,i.draft AS input FROM canvas.node n JOIN canvas.document d ON d.id=n.document_id JOIN canvas.node_input i ON i.node_id=n.id AND i.input_revision=n.input_revision WHERE n.id=? AND d.project_id=? AND NOT n.is_delete AND NOT d.is_delete AND d.schema_version=1 AND d.scope='{}'::jsonb AND n.node_type=? AND n.node_action=? AND n.input_revision=? FOR SHARE OF n,d`, nodeID, project, domain.NodeTypeSubject, domain.NodeActionResource, revision).Scan(&row)
 	if result.Error != nil {
 		return domain.Node{}, result.Error
 	}
 	if result.RowsAffected != 1 {
 		return domain.Node{}, promptdomain.ErrReferenceUnavailable
 	}
-	node := domain.Node{ID: row.ID, Title: row.Title, NodeType: "subject", NodeAction: "resource", InputRevision: row.InputRevision}
+	node := domain.Node{ID: row.ID, Title: row.Title, NodeType: domain.NodeTypeSubject, NodeAction: domain.NodeActionResource, InputRevision: row.InputRevision}
 	if json.Unmarshal(row.Config, &node.Config) != nil || node.Config.Subject == nil || node.Config.Subject.Local == nil || node.Config.Subject.Local.Primary == nil {
 		return domain.Node{}, promptdomain.ErrReferenceUnavailable
 	}

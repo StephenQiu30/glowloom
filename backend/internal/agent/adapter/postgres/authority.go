@@ -206,6 +206,10 @@ func grantExpiry(now, lease time.Time) (time.Time, error) {
 	}
 	return expiry, nil
 }
+func spendableMicros(a domain.Authority) int64 {
+	return max(int64(0), a.BudgetMicros-a.ReservedMicros)
+}
+
 func issue(tx *gorm.DB, a domain.Authority, segment uuid.UUID, epoch int64, expiry time.Time) (domain.Grant, error) {
 	var r struct {
 		GrantID   uuid.UUID
@@ -213,7 +217,7 @@ func issue(tx *gorm.DB, a domain.Authority, segment uuid.UUID, epoch int64, expi
 	}
 	id := uuid.New()
 	q := tx.Raw(`INSERT INTO agent_business.execution_grant(grant_id,root_run_id,submission_id,owner_epoch,authorization_revision,expires_at) VALUES(?,?,?,?,?,?) ON CONFLICT(root_run_id,submission_id,owner_epoch,authorization_revision) DO UPDATE SET expires_at=EXCLUDED.expires_at RETURNING grant_id,expires_at`, id, a.RootRunID, segment, epoch, a.AuthorizationRevision, expiry).Scan(&r)
-	return domain.Grant{AvailableMicros: a.BudgetMicros - a.ReservedMicros, GrantID: r.GrantID, RootRunID: a.RootRunID, SubmissionID: segment, OwnerEpoch: epoch, AuthorizationRevision: a.AuthorizationRevision, ExpiresAt: r.ExpiresAt, Scope: a.Scope}, q.Error
+	return domain.Grant{AvailableMicros: spendableMicros(a), GrantID: r.GrantID, RootRunID: a.RootRunID, SubmissionID: segment, OwnerEpoch: epoch, AuthorizationRevision: a.AuthorizationRevision, ExpiresAt: r.ExpiresAt, Scope: a.Scope}, q.Error
 }
 
 // RegisterGrant issues a capability for the current runtime owner and authorization revision.
@@ -286,7 +290,7 @@ func (s *Store) validate(tx *gorm.DB, a domain.Authority, in domain.Grant) (doma
 	if err := validatePins(tx, a.Scope, a.SkillPins); err != nil {
 		return domain.Grant{}, err
 	}
-	in.AvailableMicros = a.BudgetMicros - a.ReservedMicros
+	in.AvailableMicros = spendableMicros(a)
 	in.ExpiresAt = row.ExpiresAt
 	in.Scope = a.Scope
 	return in, nil
@@ -610,7 +614,7 @@ func (s *Store) Propose(ctx context.Context, in domain.ProposalInput) (domain.Pr
 		if _, err = s.validate(tx, a, in.Grant); err != nil {
 			return err
 		}
-		if in.BudgetMicros > a.BudgetMicros-a.ReservedMicros {
+		if in.BudgetMicros > spendableMicros(a) {
 			return domain.ErrBudget
 		}
 		p = domain.Proposal{ProposalID: uuid.New(), RootRunID: a.RootRunID, AuthorizationRevision: a.AuthorizationRevision + 1, ProposalInput: in}

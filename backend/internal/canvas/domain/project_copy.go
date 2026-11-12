@@ -191,7 +191,7 @@ func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets m
 // User-authored source proofs need their own cross-project migration. Graph
 // references are derived after all node, edge and media identities are remapped.
 func copyableResourceInput(node Node) bool {
-	if node.NodeAction != "resource" || node.Config.Draft == nil || node.Config.Draft.Composer == nil {
+	if node.NodeAction != NodeActionResource || node.Config.Draft == nil || node.Config.Draft.Composer == nil {
 		return false
 	}
 	switch node.NodeType {

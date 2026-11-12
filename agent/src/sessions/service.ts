@@ -22,8 +22,13 @@ import {
 import { SessionRuntime } from './runtime.js';
 import { freezeManifest, stableId } from './manifest.js';
 import { DEFINITION_HASH } from '../pi-durable/definitions.js';
-import { StateDoc, releaseOwnedAllocations } from '../pi-durable/docs.js';
+import {
+  StateDoc,
+  RunStatus,
+  releaseOwnedAllocations,
+} from '../pi-durable/docs.js';
 import { ConversationStore } from './persistence/conversations.js';
+import type { DeliveryOptions } from './delivery.js';
 const context = BACKGROUND_CONTEXT;
 export class SessionService implements AgentApplication {
   readonly store: SessionStore;
@@ -38,7 +43,7 @@ export class SessionService implements AgentApplication {
   constructor(
     private pool: Pool,
     private business: BusinessClient,
-    private options: { leaseMs: number },
+    private options: { leaseMs: number } & DeliveryOptions,
   ) {
     this.store = new SessionStore(pool);
     this.conversations = new ConversationStore(pool, this.store);
@@ -146,6 +151,7 @@ export class SessionService implements AgentApplication {
       this.business,
       run,
       this.options.leaseMs,
+      this.options,
     )
       .then(async (value) => {
         if (this.stopping) {
@@ -292,15 +298,22 @@ export class SessionService implements AgentApplication {
         runtime.setGrant(grant);
         await runtime.harness.commit(async (tx) => {
           const state = await tx.doc(StateDoc, runtime.root.id);
-          await runtime.root.submit(tx, {
-            type: 'input',
-            content:
-              'Continue the unfinished adopted plan under the current approval. Query original business receipts before generating or writing again.',
-            requestId: continuation,
-            whenBusy: 'reject',
-          });
+          const resumingDelivery =
+            input.action === 'resume' &&
+            state.submission_status === RunStatus.Completed &&
+            state.delivery_wait !== null;
+          if (!resumingDelivery)
+            await runtime.root.submit(tx, {
+              type: 'input',
+              content:
+                'Continue the unfinished adopted plan under the current approval. Query original business receipts before generating or writing again.',
+              requestId: continuation,
+              whenBusy: 'reject',
+            });
           state.segment_id = continuation;
-          state.status = 'running';
+          state.status = resumingDelivery
+            ? RunStatus.WaitingDelivery
+            : RunStatus.Running;
           state.pending_proposal = null;
           state.execution_revision++;
           const applied = {
@@ -402,16 +415,23 @@ export class SessionService implements AgentApplication {
       }
       const runs = await this.pool.query<RunRow>(
         `SELECT latest.* FROM (SELECT DISTINCT ON(session_id) * FROM agent.service_runs ORDER BY session_id,accepted_revision DESC) latest
-    LEFT JOIN LATERAL (SELECT payload->>'status' status FROM agent.runtime_events e WHERE e.session_id=latest.session_id::text AND e.payload->>'root_run_id'=latest.id::text AND e.event_type='agent.state' ORDER BY commit_seq DESC,event_ordinal DESC LIMIT 1) state ON true
+    LEFT JOIN LATERAL (SELECT payload->>'status' status,payload->'delivery_wait'->>'next_wakeup_at' wakeup FROM agent.runtime_events e WHERE e.session_id=latest.session_id::text AND e.payload->>'root_run_id'=latest.id::text AND e.event_type='agent.state' ORDER BY commit_seq DESC,event_ordinal DESC LIMIT 1) state ON true
     LEFT JOIN agent.runtime_sessions owner ON owner.session_id=latest.session_id::text
-    WHERE latest.manifest->>'definition_hash'=$1 AND latest.manifest->>'pi_version'='1.5.0' AND coalesce(state.status,'accepted') IN ('accepted','running') AND (owner.session_id IS NULL OR owner.lease_until<=clock_timestamp())
-    ORDER BY latest.created_at,latest.id LIMIT 32`,
-        [DEFINITION_HASH],
+    WHERE latest.manifest->>'definition_hash'=$1 AND latest.manifest->>'pi_version'='1.5.0'
+    AND (coalesce(state.status,'accepted') IN ('accepted','running') OR
+      (state.status=$2 AND coalesce(state.wakeup,'')<=to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+    AND (owner.session_id IS NULL OR owner.lease_until<=clock_timestamp())
+    ORDER BY CASE WHEN state.status=$2 THEN state.wakeup ELSE to_char(latest.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END NULLS FIRST,latest.id LIMIT 32`,
+        [DEFINITION_HASH, RunStatus.WaitingDelivery],
       );
       for (const run of runs.rows) {
         if (this.stopping) return;
         const snapshot = await this.store.snapshot(run);
-        if (['accepted', 'running'].includes(String(snapshot.state.status)))
+        if (
+          ['accepted', 'running', RunStatus.WaitingDelivery].includes(
+            String(snapshot.state.status),
+          )
+        )
           this.launch(run);
       }
     };

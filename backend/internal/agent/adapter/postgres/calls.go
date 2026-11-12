@@ -81,7 +81,7 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 		if kind == "tool" {
 			reservation = 0
 		}
-		if reservation > a.BudgetMicros-a.ReservedMicros {
+		if reservation > spendableMicros(a) || kind == "model" && a.ReservedMicros > a.BudgetMicros {
 			return domain.ErrBudget
 		}
 		// A run never starts a new paid request while an earlier model outcome is unknown.
@@ -123,7 +123,7 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 	if !json.Valid(out.Result) {
 		out.Result = json.RawMessage(`{}`)
 	}
-	if out.CostMicros < 0 || out.CostMicros > in.MaxMicros || kind == "tool" && out.CostMicros != 0 {
+	if out.CostMicros < 0 || kind == "tool" && out.CostMicros != 0 {
 		out.Status = "unknown"
 		out.CostMicros = 0
 		out.Result = json.RawMessage(`{"code":"cost_requires_reconciliation"}`)
@@ -159,6 +159,9 @@ func (s *Store) ReadCall(ctx context.Context, rid, segment uuid.UUID, c domain.C
 		}
 		if !found {
 			return domain.ErrNotFound
+		}
+		if row.InputHash != c.InputHash {
+			return domain.ErrConflict
 		}
 		result = row.receipt()
 		return nil
@@ -204,7 +207,7 @@ func (s *Store) ExecuteAtomicTool(ctx context.Context, name string, in domain.Ca
 		if out.Status != "completed" || out.CostMicros < 0 || out.CostMicros > in.MaxMicros || !json.Valid(out.Result) {
 			return domain.ErrInvalid
 		}
-		if out.CostMicros > a.BudgetMicros-a.ReservedMicros {
+		if out.CostMicros > spendableMicros(a) {
 			return domain.ErrBudget
 		}
 		result = domain.CallReceipt{MaxMicros: in.MaxMicros, Kind: "tool", Name: name, ReceiptID: id, RootRunID: a.RootRunID, SubmissionID: g.SubmissionID, Call: in.Call, CallResult: out}
@@ -236,7 +239,7 @@ func CompleteCall(tx *gorm.DB, id uuid.UUID, out domain.CallResult) (domain.Call
 	if q.Error != nil {
 		return domain.CallReceipt{}, q.Error
 	}
-	if !json.Valid(out.Result) || out.CostMicros < 0 || out.CostMicros > row.MaxMicros || (out.Status != "completed" && out.Status != "failed" && out.Status != "unknown") {
+	if !json.Valid(out.Result) || out.CostMicros < 0 || (row.Kind == "tool" && out.CostMicros != 0) || (out.Status != "completed" && out.Status != "failed" && out.Status != "unknown") {
 		return domain.CallReceipt{}, domain.ErrInvalid
 	}
 	if row.Status == "completed" || row.Status == "failed" {

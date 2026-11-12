@@ -3,7 +3,9 @@ package canvas_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -14,15 +16,25 @@ import (
 )
 
 type canvasOutboxEvent struct {
-	event     outbox.Event
-	published bool
+	event        outbox.Event
+	published    bool
+	acknowledged bool
 }
 
-func (s *canvasOutboxEvent) WithNext(_ context.Context, deliver func(outbox.Event) error) (bool, error) {
-	if err := deliver(s.event); err != nil {
-		return false, err
+func (s *canvasOutboxEvent) ClaimNext(context.Context, time.Time, time.Duration) (outbox.Event, bool, error) {
+	s.event.ClaimToken = uuid.NewString()
+	s.event.AttemptCount = 1
+	return s.event, !s.acknowledged, nil
+}
+func (s *canvasOutboxEvent) Acknowledge(_ context.Context, event outbox.Event, _ time.Time) error {
+	if event.ID != s.event.ID || event.ClaimToken != s.event.ClaimToken {
+		return errors.New("wrong canvas outbox claim")
 	}
-	return true, nil
+	s.acknowledged = true
+	return nil
+}
+func (*canvasOutboxEvent) Retry(context.Context, outbox.Event, string, int, time.Time, time.Time) (bool, error) {
+	return false, errors.New("unexpected canvas envelope rejection")
 }
 
 func (s *canvasOutboxEvent) Publish(_ context.Context, _ outbox.Event) error {
@@ -75,7 +87,7 @@ func TestYjsSaveAndRestoreEventsPassRelayValidation(t *testing.T) {
 	}
 	for i, event := range events {
 		sink := &canvasOutboxEvent{event: outbox.Event{ID: event.ID, Topic: event.Topic, PartitionKey: event.PartitionKey, Payload: event.Payload}}
-		if sent, err := outbox.NewRelay(sink, sink).RunOnce(t.Context()); err != nil || !sent || !sink.published {
+		if sent, err := outbox.NewRelay(sink, sink).RunOnce(t.Context()); err != nil || !sent || !sink.published || !sink.acknowledged {
 			t.Errorf("event %d rejected by relay: sent=%v err=%v", i, sent, err)
 		}
 		var body struct {

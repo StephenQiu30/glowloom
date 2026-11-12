@@ -69,7 +69,7 @@ func loadCopyDocument(tx *gorm.DB, row documentRow) (domain.Document, error) {
 	}
 	for _, node := range nodes {
 		n := domain.Node{ID: node.ID, Title: node.Title, NodeType: node.NodeType, NodeAction: node.NodeAction, RefType: node.RefType, RefID: node.RefID, X: node.X, Y: node.Y, Width: node.Width, Height: node.Height, ParentID: node.ParentID, ZIndex: node.ZIndex, LastOperationID: node.LastOperationID}
-		if node.NodeType == "subject" {
+		if node.NodeType == domain.NodeTypeSubject {
 			n.InputRevision = node.InputRevision
 		}
 		if err := strictCopyJSON(node.Config, &n.Config); err != nil {

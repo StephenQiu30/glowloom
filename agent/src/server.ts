@@ -40,7 +40,11 @@ pool.on('error', () =>
 const service = new SessionService(
   pool,
   new BusinessClient(config.businessOrigin, config.businessToken),
-  { leaseMs: config.leaseMs },
+  {
+    leaseMs: config.leaseMs,
+    deliveryPollMs: config.deliveryPollMs,
+    deliveryTimeoutMs: config.deliveryTimeoutMs,
+  },
 );
 const app = await buildApp({
   service,

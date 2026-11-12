@@ -215,7 +215,7 @@ func (s *Store) CommitYjsRestore(ctx context.Context, a identity.Principal, base
 			}
 			target.Nodes[i].ContentVersion = max(versions.ContentVersion, target.Nodes[i].ContentVersion)
 			target.Nodes[i].InputRevision = max(versions.InputRevision, target.Nodes[i].InputRevision)
-			if target.Nodes[i].NodeType == "subject" || domain.IsDraft(target.Nodes[i]) {
+			if target.Nodes[i].NodeType == domain.NodeTypeSubject || domain.IsDraft(target.Nodes[i]) {
 				previous := target.Nodes[i].InputRevision
 				if previous >= math.MaxInt32 {
 					return domain.ErrInvalidCommand
