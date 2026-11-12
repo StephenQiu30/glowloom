@@ -15,6 +15,7 @@ import {
   useState,
   useSyncExternalStore,
   type ReactNode,
+  type Ref,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import dynamic from "next/dynamic";
@@ -131,6 +132,7 @@ type Props = {
   initialAssetSource?: "imported" | "canvas";
 };
 export function CanvasTimelineWorkspace(props: Props) {
+  const expandButton = useRef<HTMLButtonElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [expandedSource, setExpandedSource] = useState<"imported" | "canvas">(
     "imported",
@@ -149,6 +151,7 @@ export function CanvasTimelineWorkspace(props: Props) {
         key={key}
         {...props}
         suspended={expanded}
+        expandButtonRef={expandButton}
         onExpand={(source = "imported") => {
           setExpandedSource(source);
           props.onExpand?.(source);
@@ -160,6 +163,10 @@ export function CanvasTimelineWorkspace(props: Props) {
           aria-describedby={undefined}
           data-canvas-no-zoom
           data-canvas-shortcuts-ignore
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            expandButton.current?.focus();
+          }}
           onEscapeKeyDown={(event) => {
             // Browsers may exit fullscreen before delivering its Escape event.
             // Do not let that same key also dismiss the underlying editor.
@@ -203,8 +210,12 @@ function TimelineWorkspace({
   suspended = false,
   onClose,
   onExpand,
+  expandButtonRef,
   onPlayerFullscreenChange,
-}: Props & { onPlayerFullscreenChange?: (active: boolean) => void }) {
+}: Props & {
+  expandButtonRef?: Ref<HTMLButtonElement>;
+  onPlayerFullscreenChange?: (active: boolean) => void;
+}) {
   const view = useSyncExternalStore(
     client.subscribe,
     client.getSnapshot,
@@ -1065,6 +1076,7 @@ function TimelineWorkspace({
             variant="ghost"
             size="sm"
             aria-label="全屏编辑"
+            ref={expandButtonRef}
             onClick={() => {
               setPlaying(false);
               onExpand?.();

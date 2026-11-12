@@ -5,6 +5,7 @@ import {
   render,
   screen,
   within,
+  waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CanvasTimelineWorkspace } from "@/components/canvas/timeline/canvas-timeline-workspace";
@@ -872,3 +873,23 @@ it("紧凑时间线提供三类素材来源，空画布来源不改时间线", a
   expect(JSON.stringify(f.read())).toBe(before);
   expect(f.client.changeTimeline).not.toHaveBeenCalled();
 });
+
+it.each(["Escape", "button"])(
+  "restores compact entry focus after editor closes via %s",
+  async (method) => {
+    const f = setup(false, true, true);
+    const entry = f.ui.getByRole("button", { name: "全屏编辑" });
+    entry.focus();
+    fireEvent.click(entry);
+    const dialog = screen.getByRole("dialog", { name: "时间线" });
+    if (method === "Escape")
+      fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
+    else
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "关闭时间线编辑器" }),
+      );
+    await waitFor(() => expect(document.activeElement).toBe(entry));
+    expect(screen.queryByRole("dialog", { name: "时间线" })).toBeNull();
+    expect(f.client.changeTimeline).not.toHaveBeenCalled();
+  },
+);
