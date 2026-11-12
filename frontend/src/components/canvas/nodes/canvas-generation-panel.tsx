@@ -240,11 +240,6 @@ export function CanvasGenerationPanel({
         </div>
       )}
       <CanvasSubjectConnectionBar graph={view.document} nodeID={nodeID} />
-      <CanvasCinemaKitBar
-        client={client}
-        nodeID={nodeID}
-        motionButtonRef={motionButton}
-      />
       <RichGeneration
         key={`${canvasID}/${nodeID}`}
         projectID={projectID}
@@ -254,6 +249,13 @@ export function CanvasGenerationPanel({
           source: { canvas_id: canvasID, node_id: nodeID },
         }}
         presentation="canvas"
+        canvasToolbar={
+          <CanvasCinemaKitBar
+            client={client}
+            nodeID={nodeID}
+            motionButtonRef={motionButton}
+          />
+        }
         canvas={owner}
         onAdopt={async (assetID, kind) => {
           if (kind !== capability || kind === "text")

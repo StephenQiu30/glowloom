@@ -40,7 +40,7 @@ export const NODE_DEFAULT_SIZE = {
   },
   [CanvasNodeType.Audio]: {
     width: 320,
-    height: 180,
+    height: 320,
     get title() {
       return "音频";
     },

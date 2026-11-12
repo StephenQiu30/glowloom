@@ -1428,9 +1428,7 @@ function EmptyNodeContent({ type }: { type: string }) {
         <EmptyMedia variant="icon">
           <Icon />
         </EmptyMedia>
-        <EmptyDescription
-          className={type === CanvasNodeType.Audio ? undefined : "sr-only"}
-        >
+        <EmptyDescription className="sr-only">
           {type === CanvasNodeType.Text
             ? "双击输入故事大纲，或选中节点生成分镜脚本"
             : type === CanvasNodeType.Audio

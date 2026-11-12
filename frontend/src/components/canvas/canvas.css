@@ -808,15 +808,6 @@ html:has(.canvas-controls-layout) {
   .canvas-node-placeholder [data-slot="empty-description"] {
     font-size: 0.8125rem;
   }
-  .canvas-node-placeholder[data-node-type="audio"] {
-    position: relative;
-  }
-  .canvas-node-placeholder[data-node-type="audio"] [data-slot="empty-header"] {
-    position: absolute;
-    top: 26%;
-    left: 50%;
-    translate: -50% 0;
-  }
   .canvas-node-starters[data-slot="empty-content"] {
     position: absolute;
     top: 54%;

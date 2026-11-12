@@ -1871,3 +1871,39 @@ it.each([true, false])("确认面板展示服务端冻结系数：%s", async (pr
   } else expect(screen.queryByText(/模式系数|分辨率系数/)).toBeNull();
   expect(api.confirm).not.toHaveBeenCalled();
 });
+
+it("展开保留导演工具与编辑器，参考筛选不改草稿，Escape恢复原入口", async () => {
+  const { props, canvas, rerender } = await compactWorkspace(true);
+  rerender(
+    <RichGeneration
+      {...props}
+      canvasToolbar={
+        <div role="toolbar" aria-label="导演工具箱">
+          <button>配色</button>
+        </div>
+      }
+    />,
+  );
+  const editor = screen.getByRole("textbox", { name: "创作提示词" });
+  const expand = screen.getByRole("button", { name: "展开编辑器" });
+  expand.focus();
+  fireEvent.click(expand);
+  const dialog = await screen.findByRole("dialog", {
+    name: "多参考创作编辑器",
+  });
+  expect(
+    dialog.contains(screen.getByRole("toolbar", { name: "导演工具箱" })),
+  ).toBe(true);
+  const before = JSON.stringify(canvas.onChange.mock.calls.at(-1)?.[0]);
+  fireEvent.click(screen.getByRole("radio", { name: "图片" }));
+  expect(JSON.stringify(canvas.onChange.mock.calls.at(-1)?.[0])).toBe(before);
+  expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
+  fireEvent.keyDown(editor, { key: "Escape" });
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("dialog", { name: "多参考创作编辑器" }),
+    ).toBeNull(),
+  );
+  expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
+  expect(document.activeElement).toBe(expand);
+});

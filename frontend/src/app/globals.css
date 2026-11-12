@@ -1170,6 +1170,10 @@ button:not(:disabled),
   padding: 16px;
   align-items: stretch;
 }
+[data-canvas-reference-layout] [data-slot="button"][data-size="reference"] {
+  width: 48px;
+  height: 48px;
+}
 /* Prompt surfaces stay borderless in every state; controls retain local focus. */
 .prompt-editor {
   border: 0;

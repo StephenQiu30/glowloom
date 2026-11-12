@@ -92,6 +92,7 @@ import { validatePromptDraft } from "./prompt-document";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -191,6 +192,8 @@ export function ReferenceControls({
   disabled = false,
   authorized = false,
   compact = false,
+  canvasLayout = false,
+  expanded = false,
   home = false,
   assistant = false,
   allowDocuments = assistant,
@@ -207,6 +210,8 @@ export function ReferenceControls({
   disabled?: boolean;
   authorized?: boolean;
   compact?: boolean;
+  canvasLayout?: boolean;
+  expanded?: boolean;
   home?: boolean;
   assistant?: boolean;
   allowDocuments?: boolean;
@@ -216,6 +221,25 @@ export function ReferenceControls({
   onMotion?: () => void;
   onChooseProject?: () => void;
 }) {
+  const [referenceFilter, setReferenceFilter] = useState("all");
+  const referenceKinds = [
+    ...new Set([
+      ...draft.references.map((ref) => ref.mediaKind),
+      ...(incomingSources ?? []).map((source) => source.kind),
+    ]),
+  ];
+  const activeFilter =
+    expanded &&
+    referenceKinds.includes(referenceFilter as (typeof referenceKinds)[number])
+      ? referenceFilter
+      : "all";
+  const kindLabels: Record<string, string> = {
+    image: "图片",
+    video: "视频",
+    audio: "音频",
+    text: "文本",
+    document: "文档",
+  };
   const actorID = useOptionalSession()?.actor.id;
   const scopeID = useSpace().selected?.id;
   const displayLabel = (id: string) =>
@@ -1463,6 +1487,7 @@ export function ReferenceControls({
       >
         <section
           ref={panel}
+          data-canvas-reference-layout={canvasLayout || undefined}
           aria-label="参考素材"
           className={cn(
             "flex w-full min-w-0 flex-col gap-3",
@@ -1541,6 +1566,28 @@ export function ReferenceControls({
                   />
                 </div>
               ) : null}
+              {canvasLayout && expanded && referenceKinds.length > 0 && (
+                <ToggleGroup
+                  type="single"
+                  size="sm"
+                  aria-label="筛选参考内容"
+                  value={activeFilter}
+                  className="mb-2 flex-wrap"
+                  onValueChange={(value) => {
+                    if (value) {
+                      setReferenceFilter(value);
+                      setDetailsID(null);
+                    }
+                  }}
+                >
+                  <ToggleGroupItem value="all">全部</ToggleGroupItem>
+                  {referenceKinds.map((kind) => (
+                    <ToggleGroupItem key={kind} value={kind}>
+                      {kindLabels[kind]}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              )}
               <ReferenceRow
                 scroll={!!incomingSources}
                 className={
@@ -1551,7 +1598,9 @@ export function ReferenceControls({
                       : cn(
                           "flex min-w-0 items-center gap-3 pb-1",
                           incomingSources
-                            ? "min-h-16 w-max"
+                            ? canvasLayout
+                              ? "min-h-12 w-max"
+                              : "min-h-16 w-max"
                             : "w-full overflow-x-auto",
                         )
                 }
@@ -1586,127 +1635,138 @@ export function ReferenceControls({
                       </Button>
                     );
                   })}
-                {draft.references.map((ref) => {
-                  const Icon =
-                    ref.source.kind === "subject" ||
-                    ref.source.kind === "canvas_subject"
-                      ? UserRound
-                      : ref.mediaKind === "video"
-                        ? Video
-                        : ref.mediaKind === "audio"
-                          ? AudioLines
-                          : ImageIcon;
-                  const linked = incomingSources?.some(
-                    (source) => source.edgeID === ref.id,
-                  );
-                  const subjectPreview = unifiedReferencePreview(ref);
-                  return (
-                    <Popover
-                      key={ref.id}
-                      open={detailsID === ref.id}
-                      onOpenChange={(open) =>
-                        setDetailsID(open ? ref.id : null)
-                      }
-                    >
-                      {home && !assistant ? (
-                        <PopoverAnchor virtualRef={stackAnchor} />
-                      ) : null}
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="reference"
-                          size="reference"
-                          className={assistant ? "sr-only" : referenceTileClass}
-                          aria-label={`查看${displayLabel(ref.id)}详情`}
-                          tabIndex={assistant ? -1 : undefined}
-                        >
-                          <ReferenceThumbnail className="absolute inset-0">
-                            {authorized && subjectPreview && !home ? (
-                              <UnifiedSubjectMedia
-                                media={subjectPreview}
-                                label={displayLabel(ref.id)}
-                              />
-                            ) : authorized &&
-                              !home &&
-                              ref.source.kind === "media" &&
-                              ref.mediaKind !== "audio" ? (
-                              <ProjectMediaPreview
-                                projectID={projectID}
-                                id={ref.source.sourceId}
-                                kind={ref.mediaKind}
-                                compact
-                              />
-                            ) : (
-                              <Icon
-                                data-icon="inline-start"
-                                className="-translate-y-2"
-                              />
-                            )}
-                          </ReferenceThumbnail>
-                          <ReferenceTileLabel>
-                            {ref.source.kind === "pending_upload"
-                              ? "待上传"
-                              : displayLabel(ref.id)}
-                          </ReferenceTileLabel>
-                          {linked ? (
-                            <Badge
-                              variant="secondary"
-                              className="absolute top-0 right-0 p-0.5"
-                              aria-label="已连接"
-                            >
-                              <Link2 data-icon="inline-start" />
-                            </Badge>
-                          ) : null}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        data-canvas-no-zoom={assistant || undefined}
-                        data-canvas-shortcuts-ignore={assistant || undefined}
-                        side="top"
-                        align="start"
-                        collisionPadding={16}
-                        className={referencePopoverClass}
-                        aria-label="参考详情"
-                        onClick={(event) => event.stopPropagation()}
-                        onCloseAutoFocus={(event) => {
-                          if (home && !assistant) {
-                            event.preventDefault();
-                            referenceStackAnchor.current
-                              ?.querySelector<HTMLButtonElement>("button")
-                              ?.focus();
-                            return;
-                          }
-                          if (
-                            !session
-                              .snapshot()
-                              .draft.references.some(
-                                (item) => item.id === ref.id,
-                              )
-                          ) {
-                            event.preventDefault();
-                            session.editor.commands.focus();
-                          }
-                        }}
+                {draft.references
+                  .filter(
+                    (ref) =>
+                      activeFilter === "all" || ref.mediaKind === activeFilter,
+                  )
+                  .map((ref) => {
+                    const Icon =
+                      ref.source.kind === "subject" ||
+                      ref.source.kind === "canvas_subject"
+                        ? UserRound
+                        : ref.mediaKind === "video"
+                          ? Video
+                          : ref.mediaKind === "audio"
+                            ? AudioLines
+                            : ImageIcon;
+                    const linked = incomingSources?.some(
+                      (source) => source.edgeID === ref.id,
+                    );
+                    const subjectPreview = unifiedReferencePreview(ref);
+                    return (
+                      <Popover
+                        key={ref.id}
+                        open={detailsID === ref.id}
+                        onOpenChange={(open) =>
+                          setDetailsID(open ? ref.id : null)
+                        }
                       >
-                        <PopoverHeader>
-                          <PopoverTitle>
-                            {displayLabel(ref.id)}
+                        {home && !assistant ? (
+                          <PopoverAnchor virtualRef={stackAnchor} />
+                        ) : null}
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="reference"
+                            size="reference"
+                            className={
+                              assistant ? "sr-only" : referenceTileClass
+                            }
+                            aria-label={`查看${displayLabel(ref.id)}详情`}
+                            tabIndex={assistant ? -1 : undefined}
+                          >
+                            <ReferenceThumbnail className="absolute inset-0">
+                              {authorized && subjectPreview && !home ? (
+                                <UnifiedSubjectMedia
+                                  media={subjectPreview}
+                                  label={displayLabel(ref.id)}
+                                />
+                              ) : authorized &&
+                                !home &&
+                                ref.source.kind === "media" &&
+                                ref.mediaKind !== "audio" ? (
+                                <ProjectMediaPreview
+                                  projectID={projectID}
+                                  id={ref.source.sourceId}
+                                  kind={ref.mediaKind}
+                                  compact
+                                />
+                              ) : (
+                                <Icon
+                                  data-icon="inline-start"
+                                  className="-translate-y-2"
+                                />
+                              )}
+                            </ReferenceThumbnail>
+                            <ReferenceTileLabel>
+                              {ref.source.kind === "pending_upload"
+                                ? "待上传"
+                                : displayLabel(ref.id)}
+                            </ReferenceTileLabel>
                             {linked ? (
-                              <Badge variant="secondary" className="ml-2">
+                              <Badge
+                                variant="secondary"
+                                className="absolute top-0 right-0 p-0.5"
+                                aria-label="已连接"
+                              >
                                 <Link2 data-icon="inline-start" />
-                                已连接
                               </Badge>
                             ) : null}
-                          </PopoverTitle>
-                        </PopoverHeader>
-                        {referenceCards}
-                        {uploadConsent}
-                      </PopoverContent>
-                    </Popover>
-                  );
-                })}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          data-canvas-no-zoom={assistant || undefined}
+                          data-canvas-shortcuts-ignore={assistant || undefined}
+                          side="top"
+                          align="start"
+                          collisionPadding={16}
+                          className={referencePopoverClass}
+                          aria-label="参考详情"
+                          onClick={(event) => event.stopPropagation()}
+                          onCloseAutoFocus={(event) => {
+                            if (home && !assistant) {
+                              event.preventDefault();
+                              referenceStackAnchor.current
+                                ?.querySelector<HTMLButtonElement>("button")
+                                ?.focus();
+                              return;
+                            }
+                            if (
+                              !session
+                                .snapshot()
+                                .draft.references.some(
+                                  (item) => item.id === ref.id,
+                                )
+                            ) {
+                              event.preventDefault();
+                              session.editor.commands.focus();
+                            }
+                          }}
+                        >
+                          <PopoverHeader>
+                            <PopoverTitle>
+                              {displayLabel(ref.id)}
+                              {linked ? (
+                                <Badge variant="secondary" className="ml-2">
+                                  <Link2 data-icon="inline-start" />
+                                  已连接
+                                </Badge>
+                              ) : null}
+                            </PopoverTitle>
+                          </PopoverHeader>
+                          {referenceCards}
+                          {uploadConsent}
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  })}
                 {incomingSources
                   ?.filter(
+                    (source) =>
+                      activeFilter === "all" || source.kind === activeFilter,
+                  )
+                  .filter(
                     (source) =>
                       source.kind === "text" ||
                       !draft.references.some(

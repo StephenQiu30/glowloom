@@ -4,6 +4,7 @@ import { QuoteCostDetail } from "./quote-cost-detail";
 import { GenerationCredits, useGenerationCredits } from "./generation-credits";
 import dynamic from "next/dynamic";
 import { modelsForCreation, creationModeLabel } from "./creation-contract";
+import { ComposerSurface } from "./composer-surface";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 
@@ -174,6 +175,7 @@ type Props = {
   onComposerSession?: (session: ComposerSession | null) => void;
   onOperationReady?: (operationID: string, draftID: string) => void;
   onDraftReady?: (draftID: string) => void;
+  canvasToolbar?: ReactNode;
   headerActions?: ReactNode;
   projectControl?: ReactNode;
 };
@@ -466,6 +468,7 @@ function EditorWorkspace({
   onComposerSession,
   onOperationReady,
   headerActions,
+  canvasToolbar,
   projectControl,
   snapshot,
   actor,
@@ -581,29 +584,6 @@ function EditorWorkspace({
   useEffect(() => {
     if (task) onOperationReady?.(task, snapshot.draft_id);
   }, [task, onOperationReady, snapshot.draft_id]);
-  const workspaceRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const section = workspaceRef.current;
-    if (!full || !section) return;
-    const previous = document.activeElement as HTMLElement | null;
-    const siblings: [HTMLElement, boolean][] = [];
-    let child: HTMLElement = section;
-    while (child.parentElement) {
-      for (const sibling of child.parentElement.children) {
-        if (sibling !== child && sibling instanceof HTMLElement) {
-          siblings.push([sibling, sibling.inert]);
-          sibling.inert = true;
-        }
-      }
-      child = child.parentElement;
-      if (child === document.body) break;
-    }
-    section.querySelector<HTMLElement>('[aria-label="退出全屏"]')?.focus();
-    return () => {
-      for (const [element, inert] of siblings) element.inert = inert;
-      if (previous?.isConnected) previous.focus({ preventScroll: true });
-    };
-  }, [full]);
   const contextKey = `${actor}/${projectID}/${canvas?.contextKey ?? snapshot.draft_id}`;
   const sessionRef = useRef<ComposerSession | null>(null);
   const firstDirtyAt = useRef<number | null>(null);
@@ -1429,6 +1409,8 @@ function EditorWorkspace({
         disabled={frozen}
         authorized={sourceReady}
         compact={compact}
+        canvasLayout={presentation === "canvas"}
+        expanded={full}
         home={presentation === "home"}
         assistant={presentation === "assistant"}
         canvasSources={canvas?.referenceSources ?? referenceSources}
@@ -1734,75 +1716,45 @@ function EditorWorkspace({
     />
   );
 
+  const editorLabel =
+    seed.creationType === "music"
+      ? "音乐创作编辑器"
+      : seed.creationType === "avatar"
+        ? "数字人创作编辑器"
+        : seed.creationType === "motion"
+          ? "动作模仿创作编辑器"
+          : textOnlyAudio
+            ? "音频创作编辑器"
+            : "多参考创作编辑器";
   return (
-    <section
-      ref={workspaceRef}
-      className={cn(
-        "flex min-w-0 flex-col gap-4",
-        full &&
-          "fixed inset-0 z-50 items-center justify-center overflow-y-auto bg-cover-overlay p-4 sm:p-8",
-      )}
-      onKeyDownCapture={(event) => {
-        if (full && event.key === "Tab") {
-          const focusable = Array.from(
-            event.currentTarget.querySelectorAll<HTMLElement>(
-              'button:not(:disabled),input:not(:disabled),[contenteditable="true"],[tabindex="0"]',
-            ),
-          ).filter((n) => n.getClientRects().length);
-          const first = focusable[0],
-            last = focusable.at(-1);
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last?.focus();
-          }
-          if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first?.focus();
-          }
-        }
-        if (
-          full &&
-          event.key === "Escape" &&
-          !(event.target as HTMLElement).closest(
-            '[data-slot="popover-content"]',
-          )
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-          setFull(false);
-        }
+    <ComposerSurface
+      expanded={full}
+      onExpandedChange={(open) => {
+        if (!open && sessionRef.current?.composing) return;
+        setFull(open);
       }}
-      data-expanded={full || undefined}
-      data-presentation={presentation}
-      role={full ? "dialog" : undefined}
-      aria-modal={full || undefined}
-      aria-label={
-        seed.creationType === "music"
-          ? "音乐创作编辑器"
-          : seed.creationType === "avatar"
-            ? "数字人创作编辑器"
-            : seed.creationType === "motion"
-              ? "动作模仿创作编辑器"
-              : textOnlyAudio
-                ? "音频创作编辑器"
-                : "多参考创作编辑器"
-      }
+      title={editorLabel}
     >
       <div
+        role="region"
+        aria-label={editorLabel}
+        data-expanded={full || undefined}
+        data-presentation={presentation}
         className={cn(
           "mx-auto flex w-full max-w-5xl flex-col gap-4",
           compact && "gap-2",
           full &&
-            "max-h-[90dvh] overflow-y-auto rounded-3xl bg-card p-4 sm:p-6",
+            (compact ? "min-h-0 flex-1" : "max-h-full overflow-y-auto p-4"),
         )}
       >
+        {canvasToolbar}
         {!compact && (
           <div className="flex flex-wrap items-center gap-2">
             <span role="status" className="text-sm text-muted-foreground">
               {canvas ? "随画布保存" : saveState} · r{revision}
             </span>
             <Button variant="ghost" onClick={() => setFull((v) => !v)}>
-              {full ? "退出全屏" : "展开编辑器"}
+              {full ? "收起编辑器" : "展开编辑器"}
             </Button>
             <Button
               variant="outline"
@@ -2027,13 +1979,17 @@ function EditorWorkspace({
             className={cn(
               presentation === "home"
                 ? "creation-input-surface creation-composer creation-composer-ready"
-                : "min-h-[208px] flex-col items-stretch gap-1",
+                : "flex-col items-stretch gap-1",
+              full && "min-h-0 flex-1",
             )}
           >
             <div
-              className={
-                presentation === "home" ? "creation-ready-body" : "min-w-0"
-              }
+              className={cn(
+                presentation === "home" ? "creation-ready-body" : "min-w-0",
+                full &&
+                  presentation !== "home" &&
+                  "flex min-h-0 flex-1 flex-col",
+              )}
             >
               <InputGroupAddon
                 align="block-start"
@@ -2048,7 +2004,7 @@ function EditorWorkspace({
                 {presentation !== "home" && headerActions}
                 {presentation !== "home" && (
                   <InputGroupButton
-                    aria-label={full ? "退出全屏" : "展开编辑器"}
+                    aria-label={full ? "收起编辑器" : "展开编辑器"}
                     size="toolbar-icon"
                     className="ml-auto"
                     onClick={() => setFull((value) => !value)}
@@ -2063,7 +2019,8 @@ function EditorWorkspace({
                   presentation === "home"
                     ? "creation-ready-prompt"
                     : "min-h-20 w-full flex-1 px-4 py-2 [&_.tiptap]:min-h-16 [&_.tiptap]:outline-none",
-                  full && "[&_.tiptap]:min-h-64",
+                  full &&
+                    "min-h-0 flex-1 overflow-y-auto [&_.tiptap]:max-h-none [&_.tiptap]:min-h-full [&_.tiptap]:overflow-visible",
                 )}
               >
                 {promptControl}
@@ -2108,7 +2065,7 @@ function EditorWorkspace({
               )}
               {presentation === "home" && (
                 <InputGroupButton
-                  aria-label={full ? "退出全屏" : "展开编辑器"}
+                  aria-label={full ? "收起编辑器" : "展开编辑器"}
                   size="toolbar-icon"
                   onClick={() => setFull((value) => !value)}
                 >
@@ -2567,7 +2524,7 @@ function EditorWorkspace({
           />
         )}
       </div>
-    </section>
+    </ComposerSurface>
   );
 }
 
