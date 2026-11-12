@@ -10,7 +10,7 @@ const palette = () => ({
   },
   node: {
     label: "var(--brand-body)",
-    fill: "var(--muted)",
+    fill: "var(--card)",
     panel: "var(--card)",
     stroke: "var(--border)",
     activeStroke: "var(--ring)",

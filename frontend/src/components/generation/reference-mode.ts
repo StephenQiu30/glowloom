@@ -125,3 +125,19 @@ export function referenceGeneration(
       : 1;
   return { mode, params };
 }
+
+/** Only an unselected draft gets a default from the authoritative catalog order. */
+export function defaultGenerationDraft(
+  draft: PromptDraft,
+  models: API.ModelResponse[],
+): PromptDraft {
+  if (draft.modelVersion) return draft;
+  for (const model of models) {
+    const version = model.current_version?.id;
+    if (!version || !modelAvailableForMode(model)) continue;
+    const candidate = { ...draft, modelVersion: version };
+    const generation = referenceGeneration(candidate, model);
+    if (generation.mode) return { ...candidate, ...generation };
+  }
+  return draft;
+}

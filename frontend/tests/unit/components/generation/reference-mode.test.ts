@@ -3,6 +3,7 @@ import { expect, it } from "vitest";
 import {
   referenceMode,
   referenceGeneration,
+  defaultGenerationDraft,
 } from "@/components/generation/reference-mode";
 import {
   emptyPromptDraft,
@@ -211,4 +212,37 @@ it("does not infer an unverified mode from declared capability modes", () => {
       current,
     ),
   ).toBeNull();
+});
+
+it("默认模型跳过不可用及不兼容参考，按服务端目录顺序选择模式和参数", () => {
+  const draft = { ...emptyPromptDraft(), references: [binding] };
+  const valid = {
+    ...model,
+    current_version: {
+      ...model.current_version,
+      param_schema: [{ field: "size", label: "尺寸", type: "string", component: "select", enum: ["1024"], default: "1024" }],
+      limits: { ...model.current_version?.limits, max_outputs: 2 },
+    },
+  };
+  const next = defaultGenerationDraft(draft, [
+    { ...valid, available: false },
+    { ...valid, input_roles: [] },
+    valid,
+  ]);
+  expect(next.modelVersion).toBe("v1");
+  expect(next.mode).toBe("reference");
+  expect(next.params).toEqual({ size: "1024", output_count: 1 });
+  expect(next.document).toBe(draft.document);
+  expect(next.references).toBe(draft.references);
+  expect(draft.modelVersion).toBeNull();
+});
+
+it("已保存模型即使暂不可用也不自动替换，空目录不虚构默认值", () => {
+  const selected = { ...emptyPromptDraft(), modelVersion: "saved-version" };
+  expect(defaultGenerationDraft(selected, [model])).toBe(selected);
+  const draft = emptyPromptDraft();
+  expect(defaultGenerationDraft(draft, [])).toBe(draft);
+  expect(
+    defaultGenerationDraft(draft, [{ ...model, current_version: undefined }]),
+  ).toBe(draft);
 });

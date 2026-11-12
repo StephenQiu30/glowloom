@@ -271,6 +271,7 @@
   font-size: 12px;
 }
 .timeline-compact {
+  background: var(--card);
   padding: 8px;
   gap: 6px;
 }

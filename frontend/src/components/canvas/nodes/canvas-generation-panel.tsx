@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { getMediaPreview } from "@/api/media";
 import { getOperation } from "@/api/operations";
@@ -25,7 +26,15 @@ import { canonical } from "@/components/generation/draft-save";
 const CanvasCinemaKitBar = dynamic(
   () =>
     import("../cinema-kit/canvas-cinema-kit").then((m) => m.CanvasCinemaKitBar),
-  { loading: () => <p role="status">正在读取工具箱设置…</p> },
+  {
+    loading: () => (
+      <Skeleton
+        className="h-[60px] w-full"
+        role="status"
+        aria-label="正在读取工具箱设置"
+      />
+    ),
+  },
 );
 const RichGeneration = dynamic(
   () =>
@@ -34,9 +43,11 @@ const RichGeneration = dynamic(
     ),
   {
     loading: () => (
-      <p role="status" className="p-4 text-sm text-muted-foreground">
-        正在打开生成器…
-      </p>
+      <Skeleton
+        className="canvas-generator-loading w-full"
+        role="status"
+        aria-label="正在打开生成器"
+      />
     ),
   },
 );
@@ -208,6 +219,7 @@ export function CanvasGenerationPanel({
   return (
     <div
       className="canvas-formal-generator"
+      data-capability={capability}
       data-canvas-no-zoom
       data-canvas-shortcuts-ignore
     >
@@ -250,11 +262,13 @@ export function CanvasGenerationPanel({
         }}
         presentation="canvas"
         canvasToolbar={
-          <CanvasCinemaKitBar
-            client={client}
-            nodeID={nodeID}
-            motionButtonRef={motionButton}
-          />
+          capability === "image" || capability === "video" ? (
+            <CanvasCinemaKitBar
+              client={client}
+              nodeID={nodeID}
+              motionButtonRef={motionButton}
+            />
+          ) : undefined
         }
         canvas={owner}
         onAdopt={async (assetID, kind) => {

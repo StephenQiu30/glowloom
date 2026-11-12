@@ -1918,3 +1918,90 @@ it("展开保留导演工具与编辑器，参考筛选不改草稿，Escape恢�
   expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
   expect(document.activeElement).toBe(expand);
 });
+
+function defaultCanvasOwner(readOnly = false) {
+  const draft = emptyPromptDraft();
+  draft.document.content[0].content = [
+    { type: "text", text: "默认选择保留正文" },
+  ];
+  const canvas = {
+    contextKey: `default-${readOnly}`,
+    draft,
+    readOnly,
+    onChange: vi.fn(),
+    flush: vi.fn(),
+  };
+  render(
+    <RichGeneration
+      projectID={project.id}
+      presentation="canvas"
+      canvas={canvas}
+      seed={{
+        project,
+        prompt: "",
+        capability: "image",
+        source: { canvas_id: project.canvas_id, node_id: id },
+      }}
+    />,
+  );
+  return canvas;
+}
+
+it("新画布输入首次可编辑时已选择默认模型，随原所有者保存且不报价", async () => {
+  const canvas = defaultCanvasOwner();
+  await screen.findByRole("textbox", { name: "创作提示词" });
+  await waitFor(() =>
+    expect(
+      screen.getByRole("combobox", { name: "生成模型" }).textContent,
+    ).toContain("真实模型"),
+  );
+  expect(canvas.onChange.mock.calls[0][0]).toMatchObject({
+    modelVersion: version,
+    mode: "text_to_image",
+    params: { output_count: 1 },
+  });
+  expect(JSON.stringify(canvas.onChange.mock.calls[0][0].document)).toContain(
+    "默认选择保留正文",
+  );
+  expect(api.create).not.toHaveBeenCalled();
+  expect(api.quote).not.toHaveBeenCalled();
+  expect(api.confirm).not.toHaveBeenCalled();
+});
+
+it("只读画布不自动选择或保存默认模型", async () => {
+  const canvas = defaultCanvasOwner(true);
+  await screen.findByRole("textbox", { name: "创作提示词" });
+  expect(
+    screen.getByRole("combobox", { name: "生成模型" }).textContent,
+  ).toContain("选择模型");
+  expect(
+    canvas.onChange.mock.calls.every(([draft]) => draft.modelVersion === null),
+  ).toBe(true);
+});
+
+it("目录恢复后为未选择草稿补默认模型，保留同一输入器与已输入正文", async () => {
+  api.models.mockRejectedValueOnce(
+    new RequestError("dependency_unavailable", 503),
+  );
+  const canvas = defaultCanvasOwner();
+  const editor = await screen.findByRole("textbox", { name: "创作提示词" });
+  fireEvent.paste(editor, {
+    clipboardData: {
+      files: [],
+      getData: (kind: string) => (kind === "text/plain" ? "恢复前输入" : ""),
+    },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "重试模型目录" }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("combobox", { name: "生成模型" }).textContent,
+    ).toContain("真实模型"),
+  );
+  expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
+  const latest = canvas.onChange.mock.calls.at(-1)?.[0];
+  expect(latest.modelVersion).toBe(version);
+  expect(latest.mode).toBe("text_to_image");
+  expect(JSON.stringify(latest.document)).toContain("恢复前输入");
+  expect(api.current).toHaveBeenCalledOnce();
+  expect(api.quote).not.toHaveBeenCalled();
+});

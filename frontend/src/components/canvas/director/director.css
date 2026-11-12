@@ -207,6 +207,7 @@
   min-height: 40px;
 }
 .director-compact .director-header {
+  background: var(--card);
   padding: 4px 8px;
   min-height: 34px;
   gap: 6px;

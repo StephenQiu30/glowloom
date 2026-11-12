@@ -110,7 +110,11 @@ import type { VoiceSelection } from "./voice-library-api";
 const VoiceLibrary = dynamic(() =>
   import("./voice-library").then((m) => m.VoiceLibrary),
 );
-import { referenceMode, referenceGeneration } from "./reference-mode";
+import {
+  referenceMode,
+  referenceGeneration,
+  defaultGenerationDraft,
+} from "./reference-mode";
 import { ComposerSession, type ComposerSnapshot } from "./composer-session";
 import {
   emptyPromptDraft,
@@ -378,12 +382,25 @@ export function RichGeneration(props: Props) {
         );
         if (!Number.isSafeInteger(current.epoch))
           throw new RequestError("invalid_receipt");
+        const availableModels = modelsForCreation(
+          catalog.models,
+          props.seed.creationType,
+        );
+        if (
+          props.presentation === "canvas" &&
+          !props.canvas?.readOnly &&
+          !current.submission
+        )
+          snapshot = {
+            ...snapshot,
+            draft: defaultGenerationDraft(snapshot.draft, availableModels),
+          };
         if (active) {
           props.onDraftReady?.(snapshot.draft_id);
           setReady({
             snapshot,
             actor: identity.actor.id,
-            models: modelsForCreation(catalog.models, props.seed.creationType),
+            models: availableModels,
             initialModelError: catalog.error,
             current,
           });
@@ -404,7 +421,10 @@ export function RichGeneration(props: Props) {
   if (!ready)
     return error ? (
       <ContentState
-        className="min-h-52"
+        className={cn(
+          "min-h-52",
+          props.presentation === "canvas" && "canvas-generator-loading",
+        )}
         state="error"
         title="编辑器暂时无法加载"
         description={error}
@@ -426,7 +446,10 @@ export function RichGeneration(props: Props) {
       <div
         role="status"
         aria-label="正在加载编辑器"
-        className="flex min-h-52 flex-col gap-4 p-4"
+        className={cn(
+          "flex min-h-52 flex-col gap-4 p-4",
+          props.presentation === "canvas" && "canvas-generator-loading",
+        )}
       >
         <span className="sr-only">正在核验身份、草稿和未决提交…</span>
         <Skeleton className="size-14" />
@@ -525,8 +548,27 @@ function EditorWorkspace({
         controller.signal,
       );
       if (!controller.signal.aborted) {
-        setModels(modelsForCreation(result, seed.creationType));
+        const available = modelsForCreation(result, seed.creationType);
+        catalog.current = available;
+        setModels(available);
         setModelError("");
+        if (
+          presentation === "canvas" &&
+          session &&
+          !frozen &&
+          !current.submission &&
+          !session.pendingTarget
+        ) {
+          const before = session.snapshot().draft;
+          const next = defaultGenerationDraft(before, available);
+          if (next !== before && next.modelVersion && next.mode)
+            session.resolveModeSelection(
+              session.beginModeSelection({
+                modelVersion: next.modelVersion,
+                mode: next.mode,
+              }),
+            );
+        }
       }
     } catch (error) {
       if (!controller.signal.aborted) {

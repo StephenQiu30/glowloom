@@ -191,7 +191,7 @@ export function ModelPicker({
   return (
     <Select
       value={current?.id ?? ""}
-      disabled={disabled}
+      disabled={disabled || !choices.length}
       onValueChange={(next) => {
         const choice = choices.find(({ id }) => id === next);
         if (choice && !choice.unavailable) onSelect(choice.model);
@@ -199,7 +199,9 @@ export function ModelPicker({
     >
       <ComposerSelectTrigger aria-label={label} className="max-w-60">
         {!compact && <Box aria-hidden="true" />}
-        <SelectValue placeholder="选择模型">{current?.name}</SelectValue>
+        <SelectValue placeholder={choices.length ? "选择模型" : "暂无可用模型"}>
+          {current?.name}
+        </SelectValue>
       </ComposerSelectTrigger>
       <ModelSelectList compact={compact} current={current?.name}>
         {choices.map(({ id, model, name, unavailable }) => (

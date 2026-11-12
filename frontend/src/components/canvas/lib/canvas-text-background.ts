@@ -17,8 +17,7 @@ export function canvasTextBackground(
   value: CanvasNodeMetadata["textBackground"],
 ) {
   const choice = canvasTextBackgrounds.find((item) => item.value === value);
-  if (!choice || choice.value === "default")
-    return "linear-gradient(to bottom right, var(--canvas-reference-text-start), var(--canvas-reference-text-end))";
+  if (!choice || choice.value === "default") return "var(--card)";
   const tint = `color-mix(in srgb, ${choice.color} 16%, transparent)`;
   return `linear-gradient(${tint}, ${tint}), var(--canvas-reference-background)`;
 }
