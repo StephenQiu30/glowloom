@@ -114,7 +114,7 @@ export function GenerationCredits({ preview }: { preview: CreditPreview }) {
       <span
         role="status"
         aria-label="正在估算积分"
-        className="grid size-9 place-items-center"
+        className="grid size-(--toolbar-control-size) place-items-center max-md:size-11"
       >
         <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
       </span>
