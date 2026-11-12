@@ -6684,19 +6684,6 @@ function InfiniteCanvasPage({
             />
           ))}
 
-          {referencePickerNodeId ? (
-            <Button
-              variant="outline"
-              type="button"
-              className="absolute top-4 left-1/2 z-[90] -translate-x-1/2 border px-4 py-2 backdrop-blur"
-              onClick={exitNodeReferenceSelection}
-            >
-              {mediaPick
-                ? "从画布选择媒体 · ESC 取消"
-                : "从画布选择参考 · ESC 返回输入框"}
-            </Button>
-          ) : null}
-
           {selectionBox ? (
             <svg
               className="pointer-events-none absolute z-[100] overflow-visible"
@@ -6762,6 +6749,28 @@ function InfiniteCanvasPage({
             />
           ) : null}
         </InfiniteCanvas>
+
+        {referencePickerNodeId ? (
+          <Button
+            autoFocus
+            data-canvas-no-pan="true"
+            variant="outline"
+            type="button"
+            className="absolute top-4 left-1/2 z-[90] -translate-x-1/2 border px-4 py-2 backdrop-blur"
+            onClick={exitNodeReferenceSelection}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.stopPropagation();
+                exitNodeReferenceSelection();
+              }
+            }}
+          >
+            {mediaPick
+              ? "从画布选择媒体 · ESC 取消"
+              : "从画布选择参考 · ESC 返回输入框"}
+          </Button>
+        ) : null}
 
         {!nodes.length ? <CanvasEmptyState /> : null}
 

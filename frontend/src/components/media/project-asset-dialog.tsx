@@ -136,7 +136,13 @@ export function ProjectAssetDialog({
   const [subjectKind, setSubjectKind] = useState<API.Kind>("character");
   const [selected, setSelected] = useState<ProjectPickerAsset[]>([]);
   const [subject, setSubject] = useState<Subject | null>(null);
-  const [upload, setUpload] = useState(initialUpload);
+  const [upload, setUpload] = useState(false);
+  useEffect(() => {
+    if (!initialUpload) return;
+    // Mount the picker modal first so Radix keeps the upload modal accessible.
+    const frame = requestAnimationFrame(() => setUpload(true));
+    return () => cancelAnimationFrame(frame);
+  }, [initialUpload]);
   const [revision, setRevision] = useState(0);
   const allowDocuments = reference && allowDocumentSelection;
   function toggle(asset: ProjectPickerAsset) {
