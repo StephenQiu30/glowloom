@@ -8,6 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// UncappedBudgetMicros is the JSON-safe ledger ceiling for a project without an
+// explicit spending cap. Its wallet still limits eligible spending.
+const UncappedBudgetMicros int64 = 9_007_199_254_740_991
+
 var (
 	// ErrInvalidBudget means the budget state cannot be represented safely.
 	ErrInvalidBudget = errors.New("invalid budget")

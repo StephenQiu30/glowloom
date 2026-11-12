@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -20,7 +22,7 @@ import (
 func TestCreateFreeQuoteUsesCurrentCatalogAndCanBeConfirmed(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`
 		UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb
 		WHERE id = ?::uuid
@@ -37,8 +39,8 @@ func TestCreateFreeQuoteUsesCurrentCatalogAndCanBeConfirmed(t *testing.T) {
 		},
 	}
 	result, err := command.Execute(t.Context(), actor, input)
-	if err != nil || result.OperationID == uuid.Nil || result.QuoteMicros != 2 ||
-		result.AvailableMicros != 100 || !result.Confirmable || result.ReusedFromID != nil ||
+	if err != nil || result.OperationID == uuid.Nil || result.QuoteMicros != 2*billingdomain.MicrosPerCredit ||
+		result.AvailableMicros != 100*billingdomain.MicrosPerCredit || !result.Confirmable || result.ReusedFromID != nil ||
 		!result.ExpiresAt.After(time.Now()) {
 		t.Fatalf("free quote = %+v, %v", result, err)
 	}
@@ -48,12 +50,12 @@ func TestCreateFreeQuoteUsesCurrentCatalogAndCanBeConfirmed(t *testing.T) {
 		Outputs         int64       `json:"outputs"`
 	}
 	if err := json.Unmarshal(result.QuoteDetail, &resultDetail); err != nil ||
-		resultDetail.Quantity != "1" || resultDetail.UnitPriceMicros != 1 || resultDetail.Outputs != 2 {
+		resultDetail.Quantity != "1" || resultDetail.UnitPriceMicros != 1*billingdomain.MicrosPerCredit || resultDetail.Outputs != 2 {
 		t.Fatalf("single quote detail = %+v, %v", resultDetail, err)
 	}
 	got, err := store.FindOperation(t.Context(), actor, projectID, result.OperationID)
 	if err != nil || got.Status != domain.StatusQuoted || got.QuoteMicros == nil ||
-		*got.QuoteMicros != 2 || got.ModelProfileVersionID == nil ||
+		*got.QuoteMicros != 2*billingdomain.MicrosPerCredit || got.ModelProfileVersionID == nil ||
 		*got.ModelProfileVersionID != *quoted.ModelProfileVersionID ||
 		got.PriceRuleVersionID == nil || *got.PriceRuleVersionID != *quoted.PriceRuleVersionID {
 		t.Fatalf("persisted free quote = %+v, %v", got, err)
@@ -74,7 +76,7 @@ func TestCreateFreeQuoteUsesCurrentCatalogAndCanBeConfirmed(t *testing.T) {
 	confirmed, err := store.ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{
 		ProjectID: projectID, OperationID: got.ID, RequestID: uuid.NewString(),
 	})
-	if err != nil || confirmed.ReservationID == uuid.Nil || confirmed.AvailableMicros != 98 {
+	if err != nil || confirmed.ReservationID == uuid.Nil || confirmed.AvailableMicros != 98*billingdomain.MicrosPerCredit {
 		t.Fatalf("confirm generated free quote = %+v, %v", confirmed, err)
 	}
 }
@@ -82,7 +84,7 @@ func TestCreateFreeQuoteUsesCurrentCatalogAndCanBeConfirmed(t *testing.T) {
 func TestCreateFreeQuoteLocksReadyMediaAndFreezesAssetIdentity(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`UPDATE catalog.capability SET input_roles = ARRAY['prompt','subject'] WHERE key = ?`, quoted.Capability).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +196,7 @@ func TestCreateFreeQuoteLocksReadyMediaAndFreezesAssetIdentity(t *testing.T) {
 func TestCreateFreeQuoteUsesProjectDefaultModelAndReplaysResolvedQuote(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	modelKey := "quote-model-" + modelID.String()
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":2}'::jsonb WHERE id = ?::uuid`,
 		quoted.ModelProfileVersionID.String()).Error; err != nil {
@@ -212,7 +214,7 @@ func TestCreateFreeQuoteUsesProjectDefaultModelAndReplaysResolvedQuote(t *testin
 		},
 	}
 	first, err := store.CreateFreeQuote(t.Context(), actor, input)
-	if err != nil || first.OperationID == uuid.Nil || first.QuoteMicros != 1 {
+	if err != nil || first.OperationID == uuid.Nil || first.QuoteMicros != 1*billingdomain.MicrosPerCredit {
 		t.Fatalf("project default quote = %+v, %v", first, err)
 	}
 	batchInput := operationapp.CreateBatchFreeQuoteInput{
@@ -268,7 +270,7 @@ func TestCreateFreeQuoteUsesProjectDefaultModelAndReplaysResolvedQuote(t *testin
 func TestCreateFreeQuoteReusesCompletedInputUnlessForced(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +283,7 @@ func TestCreateFreeQuoteReusesCompletedInputUnlessForced(t *testing.T) {
 		},
 	}
 	first, err := store.CreateFreeQuote(t.Context(), actor, input)
-	if err != nil || first.QuoteMicros != 1 {
+	if err != nil || first.QuoteMicros != 1*billingdomain.MicrosPerCredit {
 		t.Fatalf("first quote = %+v, %v", first, err)
 	}
 	firstOperation, err := store.FindOperation(t.Context(), actor, projectID, first.OperationID)
@@ -297,7 +299,7 @@ func TestCreateFreeQuoteReusesCompletedInputUnlessForced(t *testing.T) {
 	input.ForceRegenerate = true
 	input.RequestID = uuid.NewString()
 	forced, err := store.CreateFreeQuote(t.Context(), actor, input)
-	if err != nil || forced.QuoteMicros != 1 || forced.ReusedFromID != nil {
+	if err != nil || forced.QuoteMicros != 1*billingdomain.MicrosPerCredit || forced.ReusedFromID != nil {
 		t.Fatalf("forced quote = %+v, %v", forced, err)
 	}
 }
@@ -305,7 +307,7 @@ func TestCreateFreeQuoteReusesCompletedInputUnlessForced(t *testing.T) {
 func TestCreateFreeQuotePersistsRequestKeyAcrossRetries(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +360,7 @@ func TestCreateFreeQuotePersistsRequestKeyAcrossRetries(t *testing.T) {
 func TestCreateFreeQuoteConcurrentSameKeyCreatesOneSnapshot(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +396,7 @@ func TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites(t 
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	foreign, _ := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`
 		UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb
 		WHERE id = ?::uuid
@@ -444,7 +446,7 @@ func TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites(t 
 		if err != nil {
 			return err
 		}
-		if created.OperationID == uuid.Nil || created.QuoteMicros != 1 {
+		if created.OperationID == uuid.Nil || created.QuoteMicros != 1*billingdomain.MicrosPerCredit {
 			t.Errorf("runtime role quote = %+v", created)
 		}
 		return nil
@@ -456,7 +458,7 @@ func TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites(t 
 func TestCreateFreeQuoteRejectsRevokedActor(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}

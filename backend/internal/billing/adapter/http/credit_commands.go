@@ -57,6 +57,16 @@ type creditCommandRequest struct {
 }
 
 // Submit validates and durably accepts one idempotent credit command.
+// @Summary 提交空间积分指令
+// @ID submitScopeCreditCommand
+// @Tags billing
+// @Accept json
+// @Produce json
+// @Param scopeID path string true "创作空间 ID"
+// @Param Idempotency-Key header string true "幂等键"
+// @Param body body creditCommandRequest true "积分指令"
+// @Success 202 {object} application.CreditCommandReceipt
+// @Router /api/platform/billing/scopes/{scopeID}/credit-commands [post]
 func (h *CreditCommandHandler) Submit(c *gin.Context) {
 	scopeID, ok := parseCreditUUID(c, "scopeID", "invalid_scope")
 	if !ok {
@@ -123,6 +133,14 @@ func (h *CreditCommandHandler) Submit(c *gin.Context) {
 }
 
 // Read returns the caller's receipt for one accepted command.
+// @Summary 查询空间积分指令回执
+// @ID getScopeCreditCommand
+// @Tags billing
+// @Produce json
+// @Param scopeID path string true "创作空间 ID"
+// @Param commandID path string true "积分指令 ID"
+// @Success 200 {object} application.CreditCommandReceipt
+// @Router /api/platform/billing/scopes/{scopeID}/credit-commands/{commandID} [get]
 func (h *CreditCommandHandler) Read(c *gin.Context) {
 	scopeID, ok := parseCreditUUID(c, "scopeID", "invalid_scope")
 	if !ok {
@@ -153,6 +171,14 @@ func (h *CreditCommandHandler) Read(c *gin.Context) {
 }
 
 // ReadWallet returns the balance projection and ledger page for one authorized service scope.
+// @Summary 查询指定创作空间积分钱包
+// @ID getScopeCreditWallet
+// @Tags billing
+// @Produce json
+// @Param scopeID path string true "创作空间 ID"
+// @Param cursor query string false "上一页的游标"
+// @Success 200 {object} application.WalletView
+// @Router /api/platform/billing/scopes/{scopeID}/wallet [get]
 func (h *CreditCommandHandler) ReadWallet(c *gin.Context) {
 	scopeID, ok := parseCreditUUID(c, "scopeID", "invalid_scope")
 	if !ok {

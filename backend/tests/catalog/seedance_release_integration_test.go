@@ -37,7 +37,7 @@ func TestSeedanceTokenPriceCanCreateDraftRelease(t *testing.T) {
 	require.Len(t, state.Models, 1)
 	model := state.Models[0]
 	var price struct{ ID uuid.UUID }
-	require.NoError(t, database.Raw(`SELECT id FROM catalog.price_rule_version WHERE model_profile_id=?`, model.ID).Scan(&price).Error)
+	require.NoError(t, database.Raw(`SELECT id FROM catalog.price_rule_version WHERE model_profile_id=? ORDER BY version_no DESC LIMIT 1`, model.ID).Scan(&price).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_1k_tokens',rule='{"input_micros_per_1k":0,"output_micros_per_1k":1000,"by_resolution":{"480p":70,"720p":70,"1080p":77}}' WHERE id=?`, price.ID).Error)
 	input := catalogapp.CreateReleaseInput{ModelVersionID: model.VersionID, PriceVersionID: price.ID, ConfigVersionID: connection.Config.ID, RequestID: uuid.New(), UpstreamCost: catalogapp.UpstreamCost{Currency: "CNY", MaxMicros: 5000000, Source: "fixture only", ReviewedAt: time.Now()}}
 	release, err := catalogapp.NewModelReleases(store).Create(ctx, actor, model.ID, input)
@@ -75,7 +75,7 @@ func TestSeedanceReleaseRejectsIncompletePriceMatrix(t *testing.T) {
 	require.Len(t, state.Models, 1)
 	model := state.Models[0]
 	var price struct{ ID uuid.UUID }
-	require.NoError(t, database.Raw(`SELECT id FROM catalog.price_rule_version WHERE model_profile_id=?`, model.ID).Scan(&price).Error)
+	require.NoError(t, database.Raw(`SELECT id FROM catalog.price_rule_version WHERE model_profile_id=? ORDER BY version_no DESC LIMIT 1`, model.ID).Scan(&price).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_1k_tokens',rule='{"pricing_strategy":"seedance_video_tokens_v1","input_micros_per_1k":0,"output_micros_per_1k":1000,"by_resolution":{"480p":37}}' WHERE id=?`, price.ID).Error)
 	input := catalogapp.CreateReleaseInput{ModelVersionID: model.VersionID, PriceVersionID: price.ID, ConfigVersionID: connection.Config.ID, RequestID: uuid.New(), UpstreamCost: catalogapp.UpstreamCost{Currency: "CNY", MaxMicros: 5000000, Source: "fixture only", ReviewedAt: time.Now()}}
 	_, err = catalogapp.NewModelReleases(store).Create(ctx, actor, model.ID, input)

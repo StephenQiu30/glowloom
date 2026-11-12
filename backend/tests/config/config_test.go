@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -77,6 +78,7 @@ func TestCredentialSealingConfigurationRequiresPublicKeyAndIdentity(t *testing.T
 }
 
 func TestLoadFromEnv(t *testing.T) {
+	t.Setenv("GLOWLOOM_OBJECT_STORAGE_CONFIG", "")
 	t.Setenv("GLOWLOOM_ENV", "staging")
 	t.Setenv("GLOWLOOM_PUBLIC_ORIGIN", "https://glowloom.example")
 	t.Setenv("GLOWLOOM_HTTP_ADDR", ":9090")
@@ -91,8 +93,8 @@ func TestLoadFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := config.Config{Env: "staging", PublicOrigin: "https://glowloom.example", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/glowloom", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092"}
-	if cfg != want {
+	want := config.Config{Env: "staging", PublicOrigin: "https://glowloom.example", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/glowloom", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092", CreditCommandRequestsPerMinute: 120}
+	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
 	}
 }

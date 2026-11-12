@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
@@ -50,14 +51,13 @@ func createProjectRowsInTx(tx *gorm.DB, project domain.Project, ownerScope uuid.
 	}
 	// Keep the storage budget ledger while projects without an explicit cap
 	// are constrained by their wallet. The sentinel is JSON-safe.
-	const unconfiguredLimit = int64(9_007_199_254_740_991)
 	if err := tx.Exec("SELECT billing.ensure_creation_wallet(?)", ownerScope).Error; err != nil {
 		return fmt.Errorf("ensure project owner's wallet: %w", err)
 	}
 	budget := tx.Exec(`
 			INSERT INTO billing.budget (id, project_id, limit_micros)
 			VALUES (?::uuid, ?::uuid, ?)
-		`, uuid.NewString(), project.ID.String(), unconfiguredLimit)
+		`, uuid.NewString(), project.ID.String(), billingdomain.UncappedBudgetMicros)
 	if budget.Error != nil {
 		return fmt.Errorf("insert initial project budget: %w", budget.Error)
 	}

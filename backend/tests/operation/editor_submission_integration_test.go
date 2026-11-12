@@ -32,7 +32,7 @@ func editorOperationStore(db *gorm.DB) *pgoperation.Store {
 func TestEditorSubmissionRecoveryDiscardAndLateEpoch(t *testing.T) {
 	db := operationStoreDB(t)
 	actor, p := operationStoreProject(t, db)
-	catalog, _, provider := seedQuoteCatalog(t, db, p, time.Now().UTC())
+	catalog, _, provider := seedGenerationQuoteCatalog(t, db, p, time.Now().UTC())
 	if err := db.Exec(`UPDATE catalog.provider SET status='active' WHERE id=?`, provider).Error; err != nil {
 		t.Fatal(err)
 	}

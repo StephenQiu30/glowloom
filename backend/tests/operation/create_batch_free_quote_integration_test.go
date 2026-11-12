@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -17,7 +19,7 @@ import (
 func TestCreateBatchFreeQuoteKeepsValidItemsAndCanConfirmThem(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -37,15 +39,15 @@ func TestCreateBatchFreeQuoteKeepsValidItemsAndCanConfirmThem(t *testing.T) {
 	}
 	store := operationStore(database)
 	result, err := operationapp.NewCreateBatchFreeQuoteCommand(store).Execute(t.Context(), actor, input)
-	if err != nil || result.BatchID == nil || result.TotalMicros != 3 ||
-		result.AvailableMicros != 100 || !result.Confirmable || len(result.Items) != 4 {
+	if err != nil || result.BatchID == nil || result.TotalMicros != 3*billingdomain.MicrosPerCredit ||
+		result.AvailableMicros != 100*billingdomain.MicrosPerCredit || !result.Confirmable || len(result.Items) != 4 {
 		t.Fatalf("batch quote = %+v, %v", result, err)
 	}
 	if result.Items[0].OperationID == nil || result.Items[0].QuoteMicros == nil ||
-		*result.Items[0].QuoteMicros != 1 || result.Items[1].OperationID != nil ||
+		*result.Items[0].QuoteMicros != 1*billingdomain.MicrosPerCredit || result.Items[1].OperationID != nil ||
 		result.Items[1].ErrorCode != "model_unavailable" ||
 		result.Items[2].OperationID == nil || result.Items[2].QuoteMicros == nil ||
-		*result.Items[2].QuoteMicros != 2 || result.Items[3].OperationID != nil ||
+		*result.Items[2].QuoteMicros != 2*billingdomain.MicrosPerCredit || result.Items[3].OperationID != nil ||
 		result.Items[3].ErrorCode != "input_not_ready" {
 		t.Fatalf("ordered batch items = %+v", result.Items)
 	}
@@ -55,11 +57,11 @@ func TestCreateBatchFreeQuoteKeepsValidItemsAndCanConfirmThem(t *testing.T) {
 		Outputs         int64       `json:"outputs"`
 	}
 	if err := json.Unmarshal(result.Items[0].QuoteDetail, &firstDetail); err != nil ||
-		firstDetail.Quantity != "1" || firstDetail.UnitPriceMicros != 1 || firstDetail.Outputs != 1 {
+		firstDetail.Quantity != "1" || firstDetail.UnitPriceMicros != 1*billingdomain.MicrosPerCredit || firstDetail.Outputs != 1 {
 		t.Fatalf("batch item quote detail = %+v, %v", firstDetail, err)
 	}
 	batch, err := store.FindBatch(t.Context(), actor, projectID, *result.BatchID)
-	if err != nil || batch.Status != domain.BatchStatusQuoted || batch.TotalCount != 2 || batch.QuoteTotalMicros != 3 {
+	if err != nil || batch.Status != domain.BatchStatusQuoted || batch.TotalCount != 2 || batch.QuoteTotalMicros != 3*billingdomain.MicrosPerCredit {
 		t.Fatalf("stored batch = %+v, %v", batch, err)
 	}
 	for _, index := range []int{0, 2} {
@@ -75,7 +77,7 @@ func TestCreateBatchFreeQuoteKeepsValidItemsAndCanConfirmThem(t *testing.T) {
 	confirmed, err := store.ConfirmBatchQuote(t.Context(), actor, operationapp.ConfirmBatchQuoteInput{
 		ProjectID: projectID, BatchID: *result.BatchID, RequestID: uuid.NewString(),
 	})
-	if err != nil || confirmed.ConfirmedCount != 2 || confirmed.QuoteTotalMicros != 3 || confirmed.AvailableMicros != 97 {
+	if err != nil || confirmed.ConfirmedCount != 2 || confirmed.QuoteTotalMicros != 3*billingdomain.MicrosPerCredit || confirmed.AvailableMicros != 97*billingdomain.MicrosPerCredit {
 		t.Fatalf("confirm generated batch quote = %+v, %v", confirmed, err)
 	}
 }
@@ -150,7 +152,7 @@ func TestCreateBatchFreeQuoteRejectsChangedDuplicateParameterRequest(t *testing.
 func TestCreateBatchFreeQuoteAsRuntimeRole(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +172,7 @@ func TestCreateBatchFreeQuoteAsRuntimeRole(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if result.BatchID == nil || result.TotalMicros != 2 || len(result.Items) != 2 {
+		if result.BatchID == nil || result.TotalMicros != 2*billingdomain.MicrosPerCredit || len(result.Items) != 2 {
 			t.Errorf("runtime role batch quote = %+v", result)
 		}
 		return nil
@@ -182,7 +184,7 @@ func TestCreateBatchFreeQuoteAsRuntimeRole(t *testing.T) {
 func TestCreateBatchFreeQuoteConcurrentSameKeyCreatesOneBatch(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +228,7 @@ func TestCreateBatchFreeQuoteConcurrentSameKeyCreatesOneBatch(t *testing.T) {
 func TestCreateBatchFreeQuoteSupportsMaximumItemCount(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now().UTC())
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +244,7 @@ func TestCreateBatchFreeQuoteSupportsMaximumItemCount(t *testing.T) {
 	}
 	started := time.Now()
 	result, err := operationStore(database).CreateBatchFreeQuote(t.Context(), actor, input)
-	if err != nil || result.BatchID == nil || len(result.Items) != 150 || result.TotalMicros != 150 || result.Confirmable {
+	if err != nil || result.BatchID == nil || len(result.Items) != 150 || result.TotalMicros != 150*billingdomain.MicrosPerCredit || result.Confirmable {
 		t.Fatalf("150-item batch = batch %v, items %d, total %d, confirmable %v, err %v",
 			result.BatchID, len(result.Items), result.TotalMicros, result.Confirmable, err)
 	}

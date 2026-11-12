@@ -66,13 +66,15 @@ func preparedVoiceFixture(t *testing.T, runtime, owner *gorm.DB, actor identity.
 	}
 	defer func() { _ = file.Close() }()
 	jobID, profileID := uuid.New(), "voice-"+uuid.NewString()
+	bucket := profileID + "-1250000000"
+	endpoint := "https://" + bucket + ".cos.ap-shanghai.myqcloud.com"
 	r := media.PersonalGeneratedAudioRequest{AssetID: uuid.New(), OwnerScopeID: actor.ScopeID, SourceJobID: jobID,
 		Personal: mediadomain.PersonalOwnership{OrgID: actor.OrgID, ActorID: actor.ID}, FileName: "智能配音1.mp3", CreatedAt: time.Now().UTC().Truncate(time.Microsecond),
 		SHA256: file.SHA256, ByteSize: file.Size, MIMEType: "audio/mpeg",
-		Intent:     media.StorageWorkIntent{ID: uuid.New(), Owner: media.StorageWorkOwner{Kind: "subject-voice", OwnerID: actor.ScopeID, WorkID: jobID}, ProfileID: profileID, Bucket: profileID, ConfigRevision: "frozen-voice-test", State: "open"},
+		Intent:     media.StorageWorkIntent{ID: uuid.New(), Owner: media.StorageWorkOwner{Kind: "subject-voice", OwnerID: actor.ScopeID, WorkID: jobID}, ProfileID: profileID, Bucket: bucket, ConfigRevision: "frozen-voice-test", State: "open"},
 		Provenance: media.PersonalGeneratedAudioProvenance{SchemaVersion: 1, ReceiptSHA256: strings.Repeat("a", 64), ReleaseID: uuid.New(), ModelVersionID: uuid.New(), ProviderRequestID: jobID, TerminalCode: 20000000}}
 	routes := pgmedia.NewStorageRoutes(runtime)
-	if err := pgmedia.NewStorageRoutes(owner).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profileID, Provider: "cos", Endpoint: "http://127.0.0.1:1", SigningEndpoint: "http://127.0.0.1:1", Region: "us-east-1", Bucket: r.Intent.Bucket}}); err != nil {
+	if err := pgmedia.NewStorageRoutes(owner).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profileID, Provider: "cos", Endpoint: endpoint, SigningEndpoint: endpoint, Region: "ap-shanghai", Bucket: r.Intent.Bucket}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := owner.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'subject-voice',?,?,?,?,?)`, r.Intent.ID, actor.ScopeID, jobID, profileID, r.Intent.Bucket, r.Intent.ConfigRevision).Error; err != nil {

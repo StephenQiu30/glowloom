@@ -5,17 +5,18 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -100,18 +101,6 @@ func insertModelCatalogProvider(ctx context.Context, t *testing.T, database *gor
 	return id
 }
 
-func insertModelCatalogCapability(ctx context.Context, t *testing.T, database *gorm.DB) string {
-	t.Helper()
-	key := "video.generate." + uuid.NewString()
-	if err := database.WithContext(ctx).Exec(`
-		INSERT INTO catalog.capability (id, key, output_type, modes, input_roles)
-		VALUES (?::uuid, ?, 'video', ARRAY['image2video', 'text2video'], ARRAY['subject'])
-	`, uuid.NewString(), key).Error; err != nil {
-		t.Fatalf("insert capability: %v", err)
-	}
-	return key
-}
-
 func insertModelCatalogModel(ctx context.Context, t *testing.T, database *gorm.DB, key string, providerID uuid.UUID, capability, status, mode string, deleted bool) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 	modelID, versionID := uuid.New(), uuid.New()
@@ -155,163 +144,113 @@ func insertModelCatalogPrice(ctx context.Context, t *testing.T, database *gorm.D
 	return id
 }
 
+// This projection includes only published, reviewed and validated models.
+// The receipts below are synthetic SQL fixtures, not supplier acceptance.
 func TestModelCatalogReadsProjectPolicyCurrentVersionsAndEffectivePricesOnLocalPostgres(t *testing.T) {
 	ctx, database := modelCatalogDB(t)
-	orgID := insertModelCatalogOrganization(ctx, t, database)
-	actor := insertModelCatalogActor(ctx, t, database, orgID)
-	domesticOnly := insertModelCatalogProject(ctx, t, database, actor, false)
-	allowOverseas := insertModelCatalogProject(ctx, t, database, actor, true)
-	capability := insertModelCatalogCapability(ctx, t, database)
-	otherCapability := insertModelCatalogCapability(ctx, t, database)
+	actor := insertModelCatalogActor(ctx, t, database, insertModelCatalogOrganization(ctx, t, database))
+	domesticProject := insertModelCatalogProject(ctx, t, database, actor, false)
+	overseasProject := insertModelCatalogProject(ctx, t, database, actor, true)
+	prefix := "model-catalog-" + uuid.NewString()
 	domestic := insertModelCatalogProvider(ctx, t, database, "domestic", "active", "ok")
-	withoutCredential := insertModelCatalogProvider(ctx, t, database, "domestic", "active", "")
-	disabledProvider := insertModelCatalogProvider(ctx, t, database, "domestic", "disabled", "ok")
-	failedCredential := insertModelCatalogProvider(ctx, t, database, "domestic", "active", "auth_failed")
 	overseas := insertModelCatalogProvider(ctx, t, database, "overseas", "active", "ok")
-
-	keyPrefix := "model-catalog-" + uuid.NewString()
-	activeID, _ := insertModelCatalogModel(ctx, t, database, keyPrefix+"-a", domestic, capability, "active", "image2video", false)
-	disabledID, _ := insertModelCatalogModel(ctx, t, database, keyPrefix+"-b", domestic, capability, "disabled", "image2video", false)
-	missingCredentialID, _ := insertModelCatalogModel(ctx, t, database, keyPrefix+"-c", withoutCredential, capability, "active", "image2video", false)
-	overseasID, _ := insertModelCatalogModel(ctx, t, database, keyPrefix+"-d", overseas, capability, "active", "image2video", false)
-	disabledProviderID, _ := insertModelCatalogModel(ctx, t, database, keyPrefix+"-e", disabledProvider, capability, "active", "image2video", false)
-	_, _ = insertModelCatalogModel(ctx, t, database, keyPrefix+"-f", domestic, capability, "active", "image2video", true)
-	textModeID, _ := insertModelCatalogModel(ctx, t, database, keyPrefix+"-g", domestic, capability, "active", "text2video", false)
-	_, _ = insertModelCatalogModel(ctx, t, database, keyPrefix+"-h", domestic, otherCapability, "active", "image2video", false)
-	noPriceID, _ := insertModelCatalogModel(ctx, t, database, keyPrefix+"-i", domestic, capability, "disabled", "image2video", false)
-	failedCredentialID, _ := insertModelCatalogModel(ctx, t, database, keyPrefix+"-j", failedCredential, capability, "active", "image2video", false)
-
-	newVersionID := uuid.New()
-	if err := database.WithContext(ctx).Exec(`
-		INSERT INTO catalog.model_profile_version
-		  (id, model_profile_id, version_no, provider_model_id, modes, limits, param_schema,
-		   supports_query, supports_cancel, supports_callback, expected_max_ms)
-		VALUES (?::uuid, ?::uuid, 2, 'test-model-v2', ARRAY['image2video'],
-		        '{"roles":{"subject":{"max_count":2,"types":["image"]}},"resolutions":["1080p"],"max_outputs":2}'::jsonb,
-		        '[{"field":"seed","label":"随机种子","type":"integer","component":"input"}]'::jsonb,
-		        true, true, false, 40000)
-	`, newVersionID.String(), activeID.String()).Error; err != nil {
-		t.Fatalf("insert newer model version: %v", err)
-	}
-	if err := database.WithContext(ctx).Exec(`
-		UPDATE catalog.model_profile SET current_version_id = ?::uuid WHERE id = ?::uuid
-	`, newVersionID.String(), activeID.String()).Error; err != nil {
-		t.Fatalf("select current model version: %v", err)
-	}
+	active, firstVersion := insertModelCatalogModel(ctx, t, database, prefix+"-a", domestic, "video.generate", "active", "image2video", false)
+	foreign, _ := insertModelCatalogModel(ctx, t, database, prefix+"-b", overseas, "video.generate", "active", "image2video", false)
+	_, _ = insertModelCatalogModel(ctx, t, database, prefix+"-c", domestic, "video.generate", "disabled", "image2video", false)
+	_, _ = insertModelCatalogModel(ctx, t, database, prefix+"-d", domestic, "video.generate", "active", "image2video", false)
 	past := time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond)
-	future := time.Now().UTC().Add(time.Hour).Truncate(time.Microsecond)
-	insertModelCatalogPrice(ctx, t, database, activeID, 1, past)
-	chosenPriceID := insertModelCatalogPrice(ctx, t, database, activeID, 2, past)
-	insertModelCatalogPrice(ctx, t, database, activeID, 3, future)
-	insertModelCatalogPrice(ctx, t, database, disabledID, 1, future)
-	insertModelCatalogPrice(ctx, t, database, missingCredentialID, 1, past)
-	insertModelCatalogPrice(ctx, t, database, overseasID, 1, past)
-	insertModelCatalogPrice(ctx, t, database, disabledProviderID, 1, past)
-	insertModelCatalogPrice(ctx, t, database, textModeID, 1, past)
-	insertModelCatalogPrice(ctx, t, database, failedCredentialID, 1, past)
-
+	price := insertModelCatalogPrice(ctx, t, database, active, 1, past)
+	newer := insertModelCatalogPrice(ctx, t, database, active, 2, past)
+	insertModelCatalogPrice(ctx, t, database, active, 3, time.Now().Add(time.Hour))
+	foreignPrice := insertModelCatalogPrice(ctx, t, database, foreign, 1, past)
+	// A newer installed version supplies public limits and parameters only after
+	// the published release and validation point to that exact version.
+	current := uuid.New()
+	require.NoError(t, database.Exec(`INSERT INTO catalog.model_profile_version(id,model_profile_id,version_no,provider_model_id,modes,limits,param_schema,supports_query,supports_cancel,supports_callback,expected_max_ms,queue)
+ VALUES(?,?,2,'test-model-v2',ARRAY['image2video'],'{"max_outputs":1,"roles":{"subject":{"max_count":2,"types":["image"]}}}','[{"field":"seed","label":"随机种子","type":"integer","component":"input"}]',true,false,false,40000,'provider')`, current, active).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE id=?`, current, active).Error)
+	release, credential := seedCatalogProjectionRelease(t, database, domesticProject, active, newer)
+	seedCatalogProjectionRelease(t, database, overseasProject, foreign, foreignPrice)
 	store := app.NewCatalogStore(database)
-	input := catalogapp.ListModelsInput{ProjectID: domesticOnly, Capability: capability, Mode: "image2video", Limit: 2}
-	var models []catalogapp.ModelCatalogItem
-	var after *catalogapp.ModelCatalogCursor
-	for range 4 {
-		input.After = after
-		page, err := store.ListModelsForProject(ctx, actor, input)
-		if err != nil {
-			t.Fatalf("list domestic page after %+v: %v", after, err)
-		}
-		if len(page.Models) > input.Limit {
-			t.Fatalf("page has %d models, limit %d", len(page.Models), input.Limit)
-		}
-		models = append(models, page.Models...)
-		if page.Next == nil {
-			break
-		}
-		if after != nil && *page.Next == *after {
-			t.Fatalf("pagination did not advance from %+v", after)
-		}
-		after = page.Next
-	}
-	wantIDs := []uuid.UUID{activeID, disabledID, missingCredentialID, disabledProviderID, noPriceID, failedCredentialID}
-	wantKeys := []string{keyPrefix + "-a", keyPrefix + "-b", keyPrefix + "-c", keyPrefix + "-e", keyPrefix + "-i", keyPrefix + "-j"}
-	if len(models) != len(wantIDs) {
-		t.Fatalf("domestic models = %d, want %d", len(models), len(wantIDs))
-	}
-	for index, item := range models {
-		if item.ID != wantIDs[index] || item.Key != wantKeys[index] {
-			t.Fatalf("domestic model %d = %+v, want ID %s", index, item, wantIDs[index])
-		}
-		if item.Capability != capability || item.DisplayName != "Catalog Model" {
-			t.Fatalf("model lost display metadata: %+v", item)
-		}
-	}
-	first := models[0]
-	if first.Status != domain.ModelActive || first.ProviderID != domestic ||
-		first.ProviderName != "Catalog Provider" || first.ProviderRegion != domain.RegionDomestic ||
-		first.ProviderStatus != domain.ProviderActive || !first.CredentialPresent ||
-		first.CredentialTestResult == nil || *first.CredentialTestResult != domain.TestOK {
-		t.Fatalf("active model/provider/credential projection = %+v", first)
-	}
-	if first.CurrentVersion == nil || first.CurrentVersion.ID != newVersionID || first.CurrentVersion.VersionNo != 2 ||
-		!slices.Equal(first.CurrentVersion.Modes, []string{"image2video"}) {
-		t.Fatalf("current model version = %+v", first.CurrentVersion)
-	}
+	query := catalogapp.ListModelsInput{ProjectID: domesticProject, ModelKey: prefix + "-a", Mode: "image2video", Limit: 1}
+	page, err := store.ListModelsForProject(ctx, actor, query)
+	require.NoError(t, err)
+	require.Len(t, page.Models, 1)
+	require.Nil(t, page.Next)
+	item := page.Models[0]
+	require.Equal(t, active, item.ID)
+	require.Equal(t, domestic, item.ProviderID)
+	require.Equal(t, current, item.CurrentVersion.ID)
+	require.Equal(t, 2, item.CurrentVersion.VersionNo)
+	require.True(t, slices.Equal([]string{"image2video"}, item.CurrentVersion.Modes))
+	require.Equal(t, newer, item.CurrentPrice.ID)
+	require.True(t, past.Equal(item.CurrentPrice.EffectiveFrom))
 	var limits struct {
 		MaxOutputs int `json:"max_outputs"`
 	}
-	var fields []struct {
-		Field string `json:"field"`
+	require.NoError(t, json.Unmarshal(item.CurrentVersion.Limits, &limits))
+	require.Equal(t, 1, limits.MaxOutputs)
+	require.Contains(t, string(item.CurrentVersion.ParamSchema), `"seed"`)
+	require.NotEqual(t, price, item.CurrentPrice.ID)
+	encoded, err := json.Marshal(page.Models)
+	require.NoError(t, err)
+	for _, secret := range []string{"ciphertext", "key_id", "model-catalog-private"} {
+		require.NotContains(t, string(encoded), secret)
 	}
-	if err := json.Unmarshal(first.CurrentVersion.Limits, &limits); err != nil || limits.MaxOutputs != 2 {
-		t.Fatalf("current limits = %s: %v", first.CurrentVersion.Limits, err)
+	// Disabled, unpriced, unvalidated and foreign models never become selectable.
+	for _, key := range []string{prefix + "-b", prefix + "-c", prefix + "-d"} {
+		query.ModelKey = key
+		page, err = store.ListModelsForProject(ctx, actor, query)
+		require.NoError(t, err)
+		require.Empty(t, page.Models)
 	}
-	if err := json.Unmarshal(first.CurrentVersion.ParamSchema, &fields); err != nil || len(fields) != 1 || fields[0].Field != "seed" {
-		t.Fatalf("current parameter schema = %s: %v", first.CurrentVersion.ParamSchema, err)
-	}
-	if first.CurrentPrice == nil || first.CurrentPrice.ID != chosenPriceID || first.CurrentPrice.VersionNo != 2 ||
-		first.CurrentPrice.Unit != string(domain.PricePerSecond) || first.CurrentPrice.Currency != "CNY" ||
-		!first.CurrentPrice.EffectiveFrom.Equal(past) {
-		t.Fatalf("current price = %+v, want version 2 at %s", first.CurrentPrice, past)
-	}
-	var priceRule struct {
-		BaseMicros int `json:"base_micros"`
-	}
-	if err := json.Unmarshal(first.CurrentPrice.Rule, &priceRule); err != nil || priceRule.BaseMicros != 1000 {
-		t.Fatalf("current price rule = %s: %v", first.CurrentPrice.Rule, err)
-	}
-	if models[1].Status != domain.ModelDisabled || models[1].CurrentPrice != nil {
-		t.Fatalf("disabled model with only future price = %+v", models[1])
-	}
-	if models[2].CredentialPresent || models[2].CredentialTestResult != nil {
-		t.Fatalf("missing credential reported present: %+v", models[2])
-	}
-	if models[3].ProviderStatus != domain.ProviderDisabled {
-		t.Fatalf("disabled provider state lost: %+v", models[3])
-	}
-	if models[4].CurrentPrice != nil {
-		t.Fatalf("model without any price has a current price: %+v", models[4])
-	}
-	if !models[5].CredentialPresent || models[5].CredentialTestResult == nil ||
-		*models[5].CredentialTestResult != domain.TestAuthFailed {
-		t.Fatalf("failed credential test state lost: %+v", models[5])
-	}
-	encoded, err := json.Marshal(models)
-	if err != nil || strings.Contains(string(encoded), "model-catalog-private-ciphertext") ||
-		strings.Contains(string(encoded), "model-catalog-private-key-id") ||
-		strings.Contains(string(encoded), "ciphertext") || strings.Contains(string(encoded), "key_id") {
-		t.Fatalf("model catalog exposed credential material: %s, %v", encoded, err)
-	}
+	query.ProjectID = overseasProject
+	query.ModelKey = prefix + "-b"
+	page, err = store.ListModelsForProject(ctx, actor, query)
+	require.NoError(t, err)
+	require.Len(t, page.Models, 1)
+	require.Equal(t, foreign, page.Models[0].ID)
+	query.ModelKey = prefix + "-a"
+	query.Mode = "text2video"
+	page, err = store.ListModelsForProject(ctx, actor, query)
+	require.NoError(t, err)
+	require.Empty(t, page.Models)
+	query.Mode = "image2video"
+	require.NoError(t, database.Exec(`UPDATE catalog.provider_credential SET last_test_result='auth_failed' WHERE id=?`, credential).Error)
+	page, err = store.ListModelsForProject(ctx, actor, query)
+	require.NoError(t, err)
+	require.Empty(t, page.Models)
+	require.NoError(t, database.Exec(`UPDATE catalog.provider_credential SET last_test_result='ok' WHERE id=?`, credential).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE id=?`, firstVersion, active).Error)
+	page, err = store.ListModelsForProject(ctx, actor, query)
+	require.NoError(t, err)
+	require.Empty(t, page.Models)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE id=?`, current, active).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_release SET status='retired' WHERE id=?`, release).Error)
+	page, err = store.ListModelsForProject(ctx, actor, query)
+	require.NoError(t, err)
+	require.Empty(t, page.Models)
+}
 
-	input.ProjectID, input.Limit, input.After = allowOverseas, 50, nil
-	page, err := store.ListModelsForProject(ctx, actor, input)
-	if err != nil || len(page.Models) != len(models)+1 || page.Models[3].ID != overseasID {
-		t.Fatalf("overseas-allowed project models = %+v: %v", page, err)
+func seedCatalogProjectionRelease(t *testing.T, db *gorm.DB, project, model, price uuid.UUID) (uuid.UUID, uuid.UUID) {
+	t.Helper()
+	var row struct {
+		Provider, Version, Credential uuid.UUID
+		Modes                         []byte
 	}
-	input.Mode = "text2video"
-	page, err = store.ListModelsForProject(ctx, actor, input)
-	if err != nil || len(page.Models) != 1 || page.Models[0].ID != textModeID {
-		t.Fatalf("mode-filtered project models = %+v: %v", page, err)
-	}
+	require.NoError(t, db.Raw(`SELECT m.provider_id AS provider,m.current_version_id AS version,c.id AS credential,to_jsonb(v.modes) AS modes FROM catalog.model_profile m JOIN catalog.model_profile_version v ON v.id=m.current_version_id JOIN catalog.provider_credential c ON c.provider_id=m.provider_id WHERE m.id=?`, model).Scan(&row).Error)
+	config, release, purchase := uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO catalog.provider_config_version(id,provider_id,preset_version_id,version_no,config,content_hash) SELECT ?,?,id,1,payload->'config',content_hash FROM catalog.provider_preset_version WHERE id='6da07a11-0000-4000-8000-000000000002'`, config, row.Provider).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.provider SET adapter_key='openrouter',current_config_version_id=? WHERE id=?`, config, row.Provider).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET queue='provider',supports_cancel=false WHERE id=?`, row.Version).Error)
+	require.NoError(t, db.Exec(`INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,currency,effective_from,source_url,reviewed_at) SELECT ?,model_profile_id,100,unit,rule,currency,effective_from-interval '1 hour','https://example.invalid/catalog-procurement',now()-interval '1 hour' FROM catalog.price_rule_version WHERE id=?`, purchase, price).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET rule=jsonb_set(rule,'{procurement_price_version_id}',to_jsonb(?::text)),source_url='https://example.invalid/catalog-retail',reviewed_at=now()-interval '1 hour' WHERE id=?`, purchase, price).Error)
+	require.NoError(t, db.Exec(`INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,status,upstream_cost) VALUES(?,?,?,?,?,'active','{}')`, release, model, row.Version, price, config).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET active_release_id=? WHERE id=?`, release, model).Error)
+	var modes []string
+	require.NoError(t, json.Unmarshal(row.Modes, &modes))
+	catalogfixture.SeedValidationEvidence(t, db, project, release, row.Credential, modes...)
+	return release, row.Credential
 }
 
 func TestModelCatalogRejectsStaleActorAndInvisibleProjectOnLocalPostgres(t *testing.T) {

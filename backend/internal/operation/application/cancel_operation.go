@@ -10,6 +10,16 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
+// Workflow control targets and actions are persisted wire values shared by
+// admission and delivery. Keep their spelling in one place.
+const (
+	WorkflowTargetOperation = "operation"
+	WorkflowTargetBatch     = "batch"
+	WorkflowActionCancel    = "cancel"
+	WorkflowActionRecover   = "recover"
+	WorkflowActionResume    = "resume"
+)
+
 var (
 	// ErrPendingConsumption prevents a second purchase for an unresolved target.
 	ErrPendingConsumption = errors.New("original consumption is unresolved")
@@ -38,10 +48,10 @@ func (i WorkflowControlInput) Validate() error {
 	if err != nil || key == uuid.Nil || key.String() != i.RequestID || i.ProjectID == uuid.Nil || i.TargetID == uuid.Nil {
 		return ErrInvalidWorkflowControl
 	}
-	if i.TargetType == "operation" && (i.Action == "cancel" || i.Action == "recover") {
+	if i.TargetType == WorkflowTargetOperation && (i.Action == WorkflowActionCancel || i.Action == WorkflowActionRecover) {
 		return nil
 	}
-	if i.TargetType == "batch" && (i.Action == "cancel" || i.Action == "resume") {
+	if i.TargetType == WorkflowTargetBatch && (i.Action == WorkflowActionCancel || i.Action == WorkflowActionResume) {
 		return nil
 	}
 	return ErrInvalidWorkflowControl

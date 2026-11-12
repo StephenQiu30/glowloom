@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
@@ -34,16 +33,17 @@ func TestGenerationEstimateUsesPublishedPriceWithoutCreatingSubmission(t *testin
 	}
 	store := editorOperationStore(db)
 	_, err := store.EstimateGeneration(t.Context(), actor, project, draft, false)
-	require.ErrorIs(t, err, billingdomain.ErrWalletPriceUnavailable)
+	require.ErrorIs(t, err, operationapp.ErrFreeQuoteModelMissing)
 
 	seedFixtureProcurement(t, db, f.identity.PriceRuleVersionID, f.identity.ModelProfileVersionID)
+	seedEditorReleaseAvailability(t, db, f)
 	estimate, err := store.EstimateGeneration(t.Context(), actor, project, draft, false)
 	require.NoError(t, err)
-	require.Equal(t, operationapp.GenerationEstimate{Credits: "2.4", Kind: "estimate", Basis: "per_image", Quantity: "2"}, estimate)
+	require.Equal(t, operationapp.GenerationEstimate{Credits: "3", Kind: "estimate", Basis: "per_image", Quantity: "2"}, estimate)
 	draft.Params["output_count"] = float64(1)
 	one, err := store.EstimateGeneration(t.Context(), actor, project, draft, false)
 	require.NoError(t, err)
-	require.Equal(t, "1.2", one.Credits)
+	require.Equal(t, "2", one.Credits)
 
 	var operations, submissions int64
 	require.NoError(t, db.Raw(`SELECT count(*) FROM operation.operation WHERE project_id=?`, project).Row().Scan(&operations))

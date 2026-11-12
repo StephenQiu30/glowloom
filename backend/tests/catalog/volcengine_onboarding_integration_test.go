@@ -173,6 +173,15 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 			enabled, err := onboarding.Activate(ctx, actor, connected.ProviderID, catalogapp.ActivateOnboardingInput{RequestID: uuid.New(), CheckID: accepted.CheckID, ExpectedRevision: state.Revision})
 			require.NoError(t, err)
 			require.Len(t, enabled.Models, quickModels)
+			availableModels := quickModels
+			// These published candidates require an unsupported image token
+			// meter; activation does not make them selectable.
+			unsupportedImages := map[string]bool{"gpt-image-2.5-sunburst": true, "gpt-image-2.5-flare": true}
+			for _, candidate := range preset.ModelCatalog.Models {
+				if unsupportedImages[candidate.ProviderModelID] {
+					availableModels--
+				}
+			}
 			count := 0
 			modelKey := ""
 			query := catalogapp.ListModelsInput{ProjectID: project, Limit: 200}
@@ -191,7 +200,7 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 				}
 				query.After = catalog.Next
 			}
-			require.Equal(t, quickModels, count)
+			require.Equal(t, availableModels, count)
 			if slug == "volcengine-speech" {
 				// Seed-Audio requires a real trial; a TTS credential check cannot publish it.
 				var guarded int64

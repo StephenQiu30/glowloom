@@ -13,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -49,9 +52,6 @@ func TestEditorSavedReferencesReachManagedWireOnce(t *testing.T) {
 	require.NoError(t, db.Exec(`UPDATE catalog.capability SET modes=array_append(modes,'image2image'),input_roles=ARRAY['prompt','reference_image'] WHERE key='image.generate' AND NOT ('image2image'=ANY(modes))`).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['image2image'],queue='provider',limits='{"max_outputs":1,"roles":{"reference_image":{"types":["image"],"max_count":4,"max_bytes":1000}}}' WHERE id=?`, f.identity.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET rule='{"base_micros":1}' WHERE id=?`, f.identity.PriceRuleVersionID).Error)
-	// The active release is authoritative even if current_version_id points to a
-	// newer draft or is unset. The project model list already follows the release.
-	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET current_version_id=NULL WHERE active_release_id=?`, f.release).Error)
 	draft := promptdomain.Draft{
 		SchemaVersion: 1, ModelVersion: &version, Mode: &mode, Params: map[string]any{},
 		LabelState: promptdomain.LabelState{
@@ -84,7 +84,9 @@ func TestEditorSavedReferencesReachManagedWireOnce(t *testing.T) {
 	store := editorOperationStore(db).WithProjectMedia(func(*gorm.DB) operationapp.ProjectMediaSigner { return editorMediaSigner{} })
 	epoch := int64(0)
 	fundOperationProject(t, db, project)
+	require.NoError(t, db.Exec(`UPDATE billing.budget SET limit_micros=? WHERE project_id=?`, 100*billingdomain.MicrosPerCredit, project).Error)
 	seedFixtureProcurement(t, db, f.identity.PriceRuleVersionID, f.identity.ModelProfileVersionID)
+	seedEditorReleaseAvailability(t, db, f)
 	quote, err := store.CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &promptdomain.InputSource{Kind: "prompt_draft", DraftID: saved.DraftID, Revision: saved.Revision}, ExpectedSubmissionEpoch: &epoch}})
 	require.NoError(t, err)
 	require.Equal(t, "使用[图片2][图片1][图片2]", quote.FinalPrompt)
@@ -141,14 +143,14 @@ func TestEditorSavedReferencesReachManagedWireOnce(t *testing.T) {
 	require.Equal(t, 1, calls)
 }
 
-func TestOpenAIEditorUsesPublishedReleaseWhenCurrentVersionIsUnset(t *testing.T) {
+func TestOpenAIEditorRejectsStaleVersionAndFreezesSupportedRelease(t *testing.T) {
 	db := operationStoreDB(t)
 	f := seedManagedFixture(t, db)
 	actor, project := operationStoreProject(t, db)
 	require.NoError(t, db.Exec(`UPDATE workspace.project SET allow_overseas_models=true WHERE id=?`, project).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.provider SET adapter_key='openai',current_config_version_id=? WHERE id=?`, f.config, f.provider).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.provider_config_version SET preset_version_id='6da07a11-0000-4000-8000-000000000009',config=(SELECT payload->'config' FROM catalog.provider_preset_version WHERE id='6da07a11-0000-4000-8000-000000000009') WHERE id=?`, f.config).Error)
-	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET provider_model_id='gpt-image-2.5-sunburst',modes=ARRAY['text2image'],supports_query=false,queue='provider',limits='{"max_outputs":1}',param_schema='[]' WHERE id=?`, f.identity.ModelProfileVersionID).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET provider_model_id='gpt-image-1',modes=ARRAY['text2image'],supports_query=false,queue='provider',limits='{"max_outputs":1}',param_schema='[]' WHERE id=?`, f.identity.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='image.generate',current_version_id=NULL WHERE active_release_id=?`, f.release).Error)
 	version, mode := f.identity.ModelProfileVersionID.String(), "text2image"
 	draft, err := promptdomain.DecodeDraft([]byte(`{"schemaVersion":1,"document":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"测试OpenAI冻结发布"}]}]},"references":[],"modelVersion":null,"mode":null,"params":{},"labelState":{"highWater":{"image":0,"video":0,"audio":0,"subject":0},"allocations":{}}}`))
@@ -161,7 +163,13 @@ func TestOpenAIEditorUsesPublishedReleaseWhenCurrentVersionIsUnset(t *testing.T)
 	epoch := int64(0)
 	store := editorOperationStore(db).WithProjectMedia(func(*gorm.DB) operationapp.ProjectMediaSigner { return editorMediaSigner{} })
 	fundOperationProject(t, db, project)
+	require.NoError(t, db.Exec(`UPDATE billing.budget SET limit_micros=? WHERE project_id=?`, 100*billingdomain.MicrosPerCredit, project).Error)
 	seedFixtureProcurement(t, db, f.identity.PriceRuleVersionID, f.identity.ModelProfileVersionID)
+	seedEditorReleaseAvailability(t, db, f)
+	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET current_version_id=NULL WHERE active_release_id=?`, f.release).Error)
+	_, unavailable := store.CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &source, ExpectedSubmissionEpoch: &epoch}})
+	require.ErrorIs(t, unavailable, operationapp.ErrFreeQuoteModelMissing)
+	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE active_release_id=?`, f.identity.ModelProfileVersionID, f.release).Error)
 	quote, err := store.CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &source, ExpectedSubmissionEpoch: &epoch}})
 	require.NoError(t, err)
 	require.NotEqual(t, uuid.Nil, quote.OperationID)
@@ -174,4 +182,21 @@ func TestOpenAIEditorUsesPublishedReleaseWhenCurrentVersionIsUnset(t *testing.T)
 	require.NoError(t, db.Raw(`SELECT o.model_profile_version_id,b.release_id FROM operation.operation o JOIN operation.provider_binding b ON b.operation_id=o.id WHERE o.id=?`, quote.OperationID).Scan(&frozen).Error)
 	require.Equal(t, f.identity.ModelProfileVersionID, frozen.ModelProfileVersionID)
 	require.Equal(t, f.release, frozen.ReleaseID)
+}
+
+// seedEditorReleaseAvailability supplies explicit synthetic validation evidence
+// after each test has finished changing the model contract.
+func seedEditorReleaseAvailability(t *testing.T, db *gorm.DB, f managedFixture) {
+	t.Helper()
+	require.NoError(t, db.Exec(`UPDATE catalog.provider SET current_config_version_id=? WHERE id=?`, f.config, f.provider).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE active_release_id=?`, f.identity.ModelProfileVersionID, f.release).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET queue='provider',moderation='provider',supports_query=false,supports_cancel=false,supports_callback=false WHERE id=?`, f.identity.ModelProfileVersionID).Error)
+	var row struct {
+		ProjectID uuid.UUID
+		Modes     []byte
+	}
+	require.NoError(t, db.Raw(`SELECT o.project_id,to_jsonb(v.modes) AS modes FROM operation.operation o JOIN catalog.model_profile_version v ON v.id=? WHERE o.id=?`, f.identity.ModelProfileVersionID, f.identity.OperationID).Scan(&row).Error)
+	var modes []string
+	require.NoError(t, json.Unmarshal(row.Modes, &modes))
+	catalogfixture.SeedValidationEvidence(t, db, row.ProjectID, f.release, f.credential, modes...)
 }

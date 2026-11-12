@@ -8,6 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -27,7 +29,7 @@ func templateQuoteStore(database *gorm.DB) *pgoperation.Store {
 
 func seedTemplateQuoteCatalog(t *testing.T, database *gorm.DB, projectID uuid.UUID) string {
 	t.Helper()
-	quoted, modelID, _ := seedQuoteCatalog(t, database, projectID, time.Now())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, projectID, time.Now())
 	if err := database.Exec(`INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES(?,'text.structured','json',ARRAY['structured'],ARRAY['prompt']) ON CONFLICT(key) DO NOTHING`, uuid.New()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,8 @@ func TestTemplateQuoteFreezesPersonalRevisionAndReplaysAfterSettingsChange(t *te
 		t.Fatalf("frozen template quote missing revision or input: %v", err)
 	}
 	characters := int64(utf8.RuneCountInString(first.FinalPrompt))
-	if first.QuoteMicros != (characters+999)/1000 {
+	wantCharge, chargeErr := billingdomain.WholeCreditMicros((characters + 999) / 1000)
+	if chargeErr != nil || first.QuoteMicros != wantCharge {
 		t.Fatal("quote did not charge final compiled characters")
 	}
 	detail, err := store.ReadPublicTask(t.Context(), actor, projectID, first.OperationID)

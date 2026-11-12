@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -53,7 +54,7 @@ func TestCanvasAssetCreationAllocatesActualPrimaryAndTemplatesWithoutGeneration(
 			Actor       uuid.UUID
 			Scope       uuid.UUID
 		}
-		if err := db.Raw(`SELECT p.initial_canvas_id AS canvas_id,b.limit_micros,p.owner_id AS actor,p.owner_scope_id AS scope FROM workspace.project p JOIN billing.budget b ON b.project_id=p.id WHERE p.id=?`, created.ProjectID).Scan(&facts).Error; err != nil || facts.CanvasID != created.ID || facts.LimitMicros != 0 || facts.Actor != actor.ID || facts.Scope != actor.ScopeID {
+		if err := db.Raw(`SELECT p.initial_canvas_id AS canvas_id,b.limit_micros,p.owner_id AS actor,p.owner_scope_id AS scope FROM workspace.project p JOIN billing.budget b ON b.project_id=p.id WHERE p.id=?`, created.ProjectID).Scan(&facts).Error; err != nil || facts.CanvasID != created.ID || facts.LimitMicros != billingdomain.UncappedBudgetMicros || facts.Actor != actor.ID || facts.Scope != actor.ScopeID {
 			t.Fatal("workspace creation invariants lost", facts, err)
 		}
 		var executions int64

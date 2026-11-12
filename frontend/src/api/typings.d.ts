@@ -1244,6 +1244,32 @@ declare namespace API {
     test_id?: string;
   };
 
+  type CreditAction =
+    "grant" | "debit" | "freeze" | "commit" | "release" | "read";
+
+  type CreditCommandReceipt = {
+    action?: CreditAction;
+    amount_micros?: number;
+    command_id?: string;
+    created_at?: string;
+    reference_id?: string;
+    result?: Record<string, any>;
+    scope_id?: string;
+    source_id?: string;
+    status?: string;
+    updated_at?: string;
+  };
+
+  type creditCommandRequest = {
+    action: CreditAction;
+    amount_credits: number;
+    expires_at?: string;
+    model_key?: string;
+    reason: string;
+    reference_id?: string;
+    source_id?: string;
+  };
+
   type currentPromptSubmissionParams = {
     /** 项目 */
     pid: string;
@@ -2541,6 +2567,20 @@ declare namespace API {
   type getPublishedWorkParams = {
     /** 作品UUID */
     work_id: string;
+  };
+
+  type getScopeCreditCommandParams = {
+    /** 创作空间 ID */
+    scopeID: string;
+    /** 积分指令 ID */
+    commandID: string;
+  };
+
+  type getScopeCreditWalletParams = {
+    /** 创作空间 ID */
+    scopeID: string;
+    /** 上一页的游标 */
+    cursor?: string;
   };
 
   type getScriptEpisodeSourceTextParams = {
@@ -6514,6 +6554,11 @@ declare namespace API {
   type SubmissionCurrent = {
     epoch?: number;
     submission?: Submission;
+  };
+
+  type submitScopeCreditCommandParams = {
+    /** 创作空间 ID */
+    scopeID: string;
   };
 
   type subscribeAgentEventsParams = {

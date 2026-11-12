@@ -13,7 +13,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
-func TestOpenAITextAndImageCanCreateReleases(t *testing.T) {
+func TestOpenAIReleasesRejectUnsupportedImagePricing(t *testing.T) {
 	ctx, database := modelCatalogDB(t)
 	org := insertModelCatalogOrganization(ctx, t, database)
 	actor := insertModelCatalogActor(ctx, t, database, org)
@@ -39,8 +39,15 @@ func TestOpenAITextAndImageCanCreateReleases(t *testing.T) {
 	for _, model := range state.Models {
 		t.Run(model.Capability, func(t *testing.T) {
 			var price struct{ ID uuid.UUID }
-			require.NoError(t, database.Raw(`SELECT id FROM catalog.price_rule_version WHERE model_profile_id=?`, model.ID).Scan(&price).Error)
+			require.NoError(t, database.Raw(`SELECT id FROM catalog.price_rule_version WHERE model_profile_id=? ORDER BY version_no DESC LIMIT 1`, model.ID).Scan(&price).Error)
 			release, err := catalogapp.NewModelReleases(store).Create(ctx, actor, model.ID, catalogapp.CreateReleaseInput{ModelVersionID: model.VersionID, PriceVersionID: price.ID, ConfigVersionID: connection.Config.ID, RequestID: uuid.New(), UpstreamCost: catalogapp.UpstreamCost{Currency: "USD", MaxMicros: 100000, Source: "fixture only, not supplier pricing", ReviewedAt: time.Now()}})
+			// GPT Image 2.5 cannot be published with a flat price in place of
+			// the token meter, even when the synthetic tariff is reviewed.
+			if model.Capability == "image.generate" {
+				require.ErrorIs(t, err, catalogapp.ErrModelSourceUnavailable)
+				require.Equal(t, uuid.Nil, release.ID)
+				return
+			}
 			require.NoError(t, err)
 			require.NotEqual(t, uuid.Nil, release.ID)
 			require.Empty(t, release.ValidatedModes)

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -53,11 +55,11 @@ func publicOperationRequest(t *testing.T, router *gin.Engine, method, path, body
 func TestPublicOperationHTTPRealQuotesConfirmationRefreshAndCancellation(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, project := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, project, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, project, time.Now().UTC())
 	setPublicQuoteLimits(t, database, quoted.ModelProfileVersionID)
 	router := publicOperationRouter(actor, database)
 	res := publicOperationRequest(t, router, "GET", "/api/models?project_id="+project.String()+"&capability="+quoted.Capability, "", "")
-	if res.Code != 200 || !strings.Contains(res.Body.String(), `"param_schema":[]`) || strings.Contains(res.Body.String(), "test-ciphertext") {
+	if res.Code != 200 || !strings.Contains(res.Body.String(), `"items":[]`) || strings.Contains(res.Body.String(), "test-ciphertext") {
 		t.Fatalf("public model catalog=%d %s", res.Code, res.Body)
 	}
 	quoteBody := fmt.Sprintf(`{"model_key":"quote-model-%s","capability":"%s","mode":"text_to_image","prompt":"晨光","params":{},"output_count":1}`, modelID, quoted.Capability)
@@ -65,7 +67,7 @@ func TestPublicOperationHTTPRealQuotesConfirmationRefreshAndCancellation(t *test
 	path := "/api/projects/" + project.String() + "/free-operations"
 	res = publicOperationRequest(t, router, "POST", path, quoteBody, key)
 	var quote operationhttp.QuoteResponse
-	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &quote) != nil || quote.OperationID == uuid.Nil || quote.QuoteMicros != 1 {
+	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &quote) != nil || quote.OperationID == uuid.Nil || quote.QuoteMicros != 1*billingdomain.MicrosPerCredit {
 		t.Fatalf("real quote=%d %s", res.Code, res.Body)
 	}
 	replay := publicOperationRequest(t, router, "POST", path, quoteBody, key)
@@ -146,7 +148,7 @@ func TestPublicTaskHTTPHidesForeignScopeAndRevokedActor(t *testing.T) {
 func TestPublicBatchHTTPConfirmsQueriesAndResumesOnlyPausedBatch(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, project := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, project, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, project, time.Now().UTC())
 	setPublicQuoteLimits(t, database, quoted.ModelProfileVersionID)
 	router := publicOperationRouter(actor, database)
 	item := fmt.Sprintf(`{"model_key":"quote-model-%s","capability":"%s","mode":"text_to_image","prompt":"风吹麦浪","params":{},"output_count":1}`, modelID, quoted.Capability)
@@ -265,7 +267,7 @@ func setPublicQuoteLimits(t *testing.T, database *gorm.DB, versionID *uuid.UUID)
 func TestPublicCanvasBatchSourceSurvivesRefreshAndEnforcesSavedCapacity(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, project := operationStoreProject(t, database)
-	quoted, modelID, _ := seedQuoteCatalog(t, database, project, time.Now().UTC())
+	quoted, modelID, _ := seedGenerationQuoteCatalog(t, database, project, time.Now().UTC())
 	setPublicQuoteLimits(t, database, quoted.ModelProfileVersionID)
 	canvasID, nodeID, rowA, rowB := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	if err := database.Exec(`INSERT INTO canvas.document(id,project_id,name,revision) VALUES(?::uuid,?::uuid,'来源恢复',3)`, canvasID, project).Error; err != nil {

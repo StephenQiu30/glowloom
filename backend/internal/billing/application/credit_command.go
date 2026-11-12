@@ -78,7 +78,7 @@ type CreditCommandReceipt struct {
 	SourceID     uuid.UUID       `json:"source_id"`
 	ReferenceID  *uuid.UUID      `json:"reference_id,omitempty"`
 	AmountMicros int64           `json:"amount_micros"`
-	Result       json.RawMessage `json:"result,omitempty"`
+	Result       json.RawMessage `json:"result,omitempty" swaggertype:"object"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
 }

@@ -16,7 +16,7 @@ import (
 func TestCanvasSplitBatchesShareSavedConcurrencyAndReleaseOnlySettledSlots(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, project := operationStoreProject(t, database)
-	quoted, model, _ := seedQuoteCatalog(t, database, project, time.Now().UTC())
+	quoted, model, _ := seedGenerationQuoteCatalog(t, database, project, time.Now().UTC())
 	setPublicQuoteLimits(t, database, quoted.ModelProfileVersionID)
 	if err := database.Exec(`UPDATE catalog.provider SET concurrency_limit=32 WHERE id=(SELECT provider_id FROM catalog.model_profile WHERE id=?)`, model).Error; err != nil {
 		t.Fatal(err)

@@ -18,7 +18,7 @@ func (s *Store) canDeliverWorkflowControl(ctx context.Context, delivery applicat
 	if s == nil || s.db == nil {
 		return false, ErrUnavailable
 	}
-	if delivery.TargetType != "operation" && delivery.TargetType != "batch" {
+	if delivery.TargetType != application.WorkflowTargetOperation && delivery.TargetType != application.WorkflowTargetBatch {
 		return false, application.ErrInvalidWorkflowControl
 	}
 	if err := requireControlReceipt(s.db.WithContext(ctx), delivery); err != nil {
@@ -26,9 +26,9 @@ func (s *Store) canDeliverWorkflowControl(ctx context.Context, delivery applicat
 	}
 	var status string
 	var readErr error
-	if delivery.TargetType == "operation" {
+	if delivery.TargetType == application.WorkflowTargetOperation {
 		readErr = s.db.WithContext(ctx).Raw(`SELECT status FROM operation.operation WHERE id=?::uuid AND project_id=?::uuid AND NOT is_delete`, delivery.TargetID, delivery.ProjectID).Scan(&status).Error
-		if readErr == nil && delivery.Action == "recover" && domain.Status(status).IsTerminal() {
+		if readErr == nil && delivery.Action == application.WorkflowActionRecover && domain.Status(status).IsTerminal() {
 			outcome, err := readBillingOutcome(s.db.WithContext(ctx), delivery.ProjectID, delivery.TargetID, domain.Status(status))
 			if err != nil || outcome.DeliveryState == "ready" {
 				return false, err
@@ -78,7 +78,7 @@ func (s *Store) requireControlActor(tx *gorm.DB, d application.WorkflowControlDe
 	if err := s.workerAccess(tx).AuthorizeOperation(tx.Statement.Context, actor, d.ProjectID, true); err != nil {
 		return err
 	}
-	if d.TargetType == "operation" {
+	if d.TargetType == application.WorkflowTargetOperation {
 		return requireAgentOperationOwner(tx, actor, d.ProjectID, d.TargetID)
 	}
 	return nil
@@ -95,6 +95,15 @@ func (s *Store) CanDeliverWorkflowControl(ctx context.Context, delivery applicat
 		allowed, err = s.withDB(tx).canDeliverWorkflowControl(ctx, delivery)
 		if err != nil || !allowed {
 			return err
+		}
+		// Recovery rechecks the request session again when applying the intent.
+		// Take that account/session lock before worker authorization locks the
+		// project. Upgrading a shared account lock while retaining the project
+		// lock deadlocks with a concurrent delivery waiting on that project.
+		if delivery.TargetType == application.WorkflowTargetOperation && delivery.Action == application.WorkflowActionRecover {
+			if err := s.requireRecoveryRequester(tx, delivery); err != nil {
+				return err
+			}
 		}
 		return s.requireControlActor(tx, delivery)
 	})

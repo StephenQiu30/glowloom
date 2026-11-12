@@ -44,7 +44,7 @@ func TestSubjectQuoteRequiresProofAndRechecksRevocationAtConfirm(t *testing.T) {
 	db := operationStoreDB(t)
 	actor, project := operationStoreProject(t, db)
 	_, sourceProject := operationStoreProject(t, db)
-	quoted, model, _ := seedQuoteCatalog(t, db, project, time.Now().UTC())
+	quoted, model, _ := seedGenerationQuoteCatalog(t, db, project, time.Now().UTC())
 	if err := db.Exec(`UPDATE catalog.capability SET input_roles=ARRAY['prompt','subject'] WHERE key=?`, quoted.Capability).Error; err != nil {
 		t.Fatal(err)
 	}
