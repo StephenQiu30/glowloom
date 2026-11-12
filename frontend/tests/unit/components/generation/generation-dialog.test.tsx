@@ -1895,6 +1895,8 @@ it("展开保留导演工具与编辑器，参考筛选不改草稿，Escape恢�
     dialog.contains(screen.getByRole("toolbar", { name: "导演工具箱" })),
   ).toBe(true);
   const before = JSON.stringify(canvas.onChange.mock.calls.at(-1)?.[0]);
+  fireEvent.pointerDown(editor, { button: 0, pointerType: "mouse" });
+  expect(screen.getByRole("dialog", { name: "多参考创作编辑器" })).toBe(dialog);
   fireEvent.click(screen.getByRole("radio", { name: "图片" }));
   expect(JSON.stringify(canvas.onChange.mock.calls.at(-1)?.[0])).toBe(before);
   expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);

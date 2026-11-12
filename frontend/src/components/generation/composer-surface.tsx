@@ -57,6 +57,19 @@ export function ComposerSurface({
             ?.querySelector<HTMLElement>('[aria-label="展开编辑器"]')
             ?.focus({ preventScroll: true });
         }}
+        onInteractOutside={(event) => {
+          const target = event.target;
+          // The stable portal sits inside the dialog in the DOM. Radix also
+          // checks React ancestry, so retain clicks in this host or its popups.
+          if (
+            target instanceof Element &&
+            (host?.contains(target) ||
+              target.closest(
+                '[data-radix-popper-content-wrapper], [data-slot="dialog-content"]',
+              ))
+          )
+            event.preventDefault();
+        }}
         onEscapeKeyDown={(event) => {
           if (event.isComposing || event.keyCode === 229)
             event.preventDefault();
