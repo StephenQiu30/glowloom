@@ -139,6 +139,27 @@ const containers = (["current", "legacy"] as const).flatMap(
         scenario === "text" ? "2024-10-28T01:00:00Z" : "2026-10-28T01:00:00Z",
     })),
 );
+const subjects = ["character", "product", "scene"].map((type, index) => ({
+  id: uuid(900 + index),
+  owner_scope_id: uuid(5),
+  revision: 1,
+  version_id: uuid(910 + index),
+  name: ["合成人物参考", "合成商品参考", "合成场景参考"][index],
+  type,
+  description: "合成浏览器验收数据",
+  favorite: false,
+  primary: {
+    binding_id: uuid(920 + index),
+    asset_id: uuid(930 + index),
+    asset_revision: 1,
+    kind: "image",
+    mime_type: "image/png",
+    file_name: "fixture.png",
+  },
+  references: [],
+  created_at: "2026-11-12T00:00:00Z",
+  updated_at: "2026-11-12T00:00:00Z",
+}));
 const receipts = new Map<string, unknown>();
 let lost = scenario === "lost";
 installDevelopmentTransport({
@@ -153,6 +174,44 @@ installDevelopmentTransport({
       ] ?? "",
     );
     if (key && receipts.has(key)) return receipts.get(key);
+    if (url === "/api/billing/wallet") return { enabled: false };
+    if (url === "/api/subjects" && method === "GET") {
+      const items = subjects.filter(
+        (item) =>
+          (!params.type || item.type === params.type) &&
+          (!params.q || item.name.includes(String(params.q))) &&
+          (!params.favorite || item.favorite),
+      );
+      return {
+        current_actor_id: actor.id,
+        current_scope_id: uuid(5),
+        items,
+        page: Number(params.page) || 1,
+        page_size: Number(params.page_size) || 20,
+        total: items.length,
+        capabilities: { intelligent_voice: { available: false } },
+      };
+    }
+    if (url.startsWith("/api/subjects/") && options.responseType === "blob")
+      return new Blob([imageBytes], { type: "image/png" });
+    if (url.startsWith("/api/subjects/") && !url.includes("/sources")) {
+      const index = subjects.findIndex(
+        (item) => url === `/api/subjects/${item.id}`,
+      );
+      if (index >= 0) {
+        if (method === "PUT") {
+          subjects[index] = {
+            ...subjects[index],
+            name: body.name,
+            description: body.description,
+            type: body.type,
+            revision: subjects[index].revision + 1,
+            version_id: uuid(950 + subjects[index].revision),
+          };
+        }
+        return subjects[index];
+      }
+    }
     if (url === "/api/session") return session;
     if (url === "/api/me/preferences")
       return {

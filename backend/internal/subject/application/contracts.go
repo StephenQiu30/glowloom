@@ -47,6 +47,7 @@ type SaveInput struct {
 	ExpectedRevision int64            `json:"expected_revision"`
 	Name             string           `json:"name"`
 	Description      string           `json:"description"`
+	Type             string           `json:"type,omitempty" enums:"character,scene,prop,product,style,other"`
 	Primary          MediaSelection   `json:"primary"`
 	References       []MediaSelection `json:"references"`
 	Voice            *VoiceSelection  `json:"voice,omitempty"`
@@ -79,6 +80,7 @@ type Detail struct {
 	VersionID    uuid.UUID `json:"version_id"`
 	Name         string    `json:"name"`
 	Description  string    `json:"description"`
+	Type         string    `json:"type,omitempty" enums:"character,scene,prop,product,style,other"`
 	Primary      Media     `json:"primary"`
 	References   []Media   `json:"references"`
 	Voice        *Voice    `json:"voice,omitempty"`
@@ -111,6 +113,7 @@ type Page struct {
 
 // ListInput filters before stable ordering and pagination.
 type ListInput struct {
+	Type      string
 	Query     string
 	Favorite  bool
 	From      *time.Time

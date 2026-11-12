@@ -207,9 +207,9 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   expect(
     screen.getByRole("group", { name: "全局操作" }).closest("main"),
   ).toBeNull();
-  expect(screen.getByRole("link", { name: "资产" }).getAttribute("href")).toBe(
-    "/assets",
-  );
+  expect(
+    screen.getByRole("link", { name: "资产和主体" }).getAttribute("href"),
+  ).toBe("/assets");
   expect(
     within(screen.getByRole("navigation", { name: "工作室" }))
       .getByRole("link", { name: "短剧工作室" })
@@ -259,9 +259,9 @@ it("素材库允许未登录页面外壳，私人数据仍由页面会话边界�
   );
   expect(await screen.findByText("素材库登录引导")).toBeTruthy();
   expect(mocks.replace).not.toHaveBeenCalled();
-  expect(screen.getByRole("link", { name: "资产" }).getAttribute("href")).toBe(
-    "/assets",
-  );
+  expect(
+    screen.getByRole("link", { name: "资产和主体" }).getAttribute("href"),
+  ).toBe("/assets");
 });
 
 it("收起后保留可访问导航和当前页，重新挂载保持偏好", async () => {
@@ -314,8 +314,8 @@ it("四页共用导航和账号节点，分组状态独立并在切页和收起�
   for (const [pathname, label, icon] of [
     ["/", "创作", "sparkles"],
     ["/explore", "探索", "compass"],
-    ["/assets", "资产", "folder-closed"],
-    ["/subjects", "主体", "contact-round"],
+    ["/assets", "资产和主体", "folder-closed"],
+    ["/subjects", "资产和主体", "folder-closed"],
   ]) {
     mocks.pathname = pathname;
     view.rerender(
@@ -346,7 +346,7 @@ it("四页共用导航和账号节点，分组状态独立并在切页和收起�
     expect(selected.getAttribute("data-active")).toBe("true");
     expect(
       within(header).queryByRole("link", { name: "积分超市" }) !== null,
-    ).toBe(pathname === "/");
+    ).toBe(true);
     expect(
       within(header).queryByRole("button", { name: "搜索灵感" }) !== null,
     ).toBe(pathname !== "/");
@@ -469,7 +469,9 @@ it("手机顶栏使用共享账号组，主题归入账号菜单且不虚构会�
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "切换主题" })).toBeNull();
   expect(within(header).queryByRole("button", { name: "更多操作" })).toBeNull();
-  expect(within(header).queryByText("开通会员")).toBeNull();
+  expect(
+    within(header).getByRole("link", { name: "开会员" }).getAttribute("href"),
+  ).toBe("/billing/membership");
   expect(within(header).getByRole("button", { name: "积分余额" })).toBeTruthy();
   fireEvent.click(within(header).getByRole("button", { name: "消息中心" }));
   expect(mocks.info).toHaveBeenCalledWith("消息中心暂未开放", {
@@ -493,7 +495,7 @@ it("空间读取期间保留顶栏和侧栏，只阻止正文私有内容", asyn
     </BasicLayout>,
   );
   const header = await screen.findByRole("banner", { name: "页面顶栏" });
-  expect(screen.getByRole("link", { name: "资产" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "资产和主体" })).toBeTruthy();
   expect(await screen.findByRole("status")).toHaveProperty(
     "textContent",
     "正在确认创作归属…",
@@ -533,7 +535,7 @@ it("游客侧栏展开和收起均只保留顶栏登录入口", async () => {
   expect(screen.queryByText("登录后保存你的创作")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "收起导航" }));
   expect(screen.getAllByRole("button", { name: "登录" })).toHaveLength(1);
-  expect(screen.getByRole("link", { name: "资产" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "资产和主体" })).toBeTruthy();
 });
 
 it("首页不挂载搜索，切页保留外壳并启用探索搜索", async () => {
@@ -692,9 +694,9 @@ it("asset header options stay stable under the shared login context", async () =
   expect(screen.queryByRole("contentinfo")).toBeNull();
   expect(within(header).queryByLabelText("资产筛选")).toBeNull();
   expect(screen.getByLabelText("资产筛选").closest("main")).toBeTruthy();
-  expect(screen.getByRole("heading", { name: /^资产$/ }).className).toContain(
-    "sr-only",
-  );
+  expect(
+    screen.getByRole("heading", { name: /^资产和主体$/ }).className,
+  ).toContain("sr-only");
   expect(
     errors.mock.calls.some((args) =>
       args.some((value) => String(value).includes("Maximum update depth")),
@@ -806,7 +808,7 @@ it("普通页面与资产复用同一账号组，切换路由保留积分弹层�
   }
 });
 
-it("资产使用replace-base动作槽时保留批量操作并在退出后恢复公共账号", async () => {
+it("资产使用replace-base动作槽时始终复用公共账号", async () => {
   const view = render(
     <BasicLayout screen="assets">
       <BatchHeaderPage batch={false} />
@@ -819,7 +821,7 @@ it("资产使用replace-base动作槽时保留批量操作并在退出后恢复�
     </BasicLayout>,
   );
   expect(screen.getByRole("button", { name: "Page action" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "账号菜单" })).toBeNull();
+  expect(screen.getByRole("button", { name: "账号菜单" })).toBeTruthy();
   view.rerender(
     <BasicLayout screen="assets">
       <BatchHeaderPage batch={false} />

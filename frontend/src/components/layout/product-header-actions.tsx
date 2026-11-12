@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Scissors } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import type { ProductAccountActionsProps } from "./product-account-actions";
 import { ProductGlobalActions } from "./product-global-actions";
@@ -33,7 +35,7 @@ export function ProductHeaderActions({
           key="tools"
           data-asset-tool-group
           aria-label="资产工具"
-          className="max-w-full flex-wrap"
+          className="product-page-tools max-w-full flex-wrap"
         >
           {showSearch && (
             <div data-asset-search className="contents">
@@ -41,6 +43,18 @@ export function ProductHeaderActions({
             </div>
           )}
           {pageActions}
+          {showSearch && (
+            <Button
+              variant="ghost"
+              size="toolbar-icon"
+              className="hidden md:inline-flex"
+              aria-label="去剪映剪辑"
+              title="剪辑导出暂未开放"
+              onClick={() => accountProps.onFeature("资产剪辑导出")}
+            >
+              <Scissors />
+            </Button>
+          )}
         </ToolbarGroup>
       ) : (
         showSearch && <ProductSearch key="search" search={search} />

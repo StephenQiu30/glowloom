@@ -3695,6 +3695,8 @@ declare namespace API {
   };
 
   type listSubjectsParams = {
+    /** 主体类型 */
+    type?: "character" | "scene" | "prop" | "product" | "style" | "other";
     /** 名称包含搜索 */
     q?: string;
     /** 仅收藏 */
@@ -5801,6 +5803,7 @@ declare namespace API {
     name?: string;
     primary?: MediaSelection;
     references?: MediaSelection[];
+    type?: "character" | "scene" | "prop" | "product" | "style" | "other";
     voice?: SubjectVoiceSelection;
   };
 
@@ -6464,6 +6467,7 @@ declare namespace API {
     primary?: Media;
     references?: Media[];
     revision?: number;
+    type?: "character" | "scene" | "prop" | "product" | "style" | "other";
     updated_at?: string;
     version_id?: string;
     voice?: Voice;

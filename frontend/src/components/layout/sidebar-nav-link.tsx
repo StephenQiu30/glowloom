@@ -14,6 +14,7 @@ export function SidebarNavLink({
   size,
   onNavigate,
   actions,
+  badge,
 }: {
   href: ComponentProps<typeof Link>["href"];
   label: string;
@@ -23,6 +24,7 @@ export function SidebarNavLink({
   size?: MenuButtonProps["size"];
   onNavigate?: () => void;
   actions?: ReactNode;
+  badge?: string;
 }) {
   return (
     <SidebarMenuItem>
@@ -43,6 +45,11 @@ export function SidebarNavLink({
         >
           {Icon && <Icon aria-hidden="true" />}
           <span>{label}</span>
+          {badge && (
+            <span className="sidebar-studio-badge rounded bg-primary/10 px-1 py-0.5 text-xs text-primary group-data-[collapsible=icon]:hidden">
+              {badge}
+            </span>
+          )}
         </Link>
       </SidebarMenuButton>
       {actions}

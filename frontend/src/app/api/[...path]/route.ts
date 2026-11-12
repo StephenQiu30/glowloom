@@ -777,6 +777,7 @@ async function proxy(
       pattern: "subjects",
       methods: ["GET", "POST"],
       query: [
+        "type",
         "q",
         "favorite",
         "from",

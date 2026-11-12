@@ -43,13 +43,8 @@
   overflow: hidden;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: var(--radius-panel);
   background: var(--muted);
-}
-.unified-subject-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
-  gap: 8px;
 }
 .unified-subject-references {
   display: flex;
@@ -67,7 +62,8 @@
 }
 .unified-subject-card,
 .unified-subject-new {
-  padding: 4px;
+  padding: 0;
+  border-radius: var(--radius-panel);
 }
 .unified-subject-open {
   display: flex;
@@ -78,14 +74,10 @@
   border: 0;
 }
 .unified-subject-info {
-  display: block;
   margin-top: 8px;
-  padding: 0 12px 8px;
-  font-size: 12px;
-  line-height: 20px;
 }
 .unified-subject-card .unified-subject-info[data-card-actions] {
-  padding-right: 48px;
+  padding-right: 36px;
 }
 .unified-subject-new .unified-subject-info {
   margin-top: 0;
@@ -96,7 +88,7 @@
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--radius-panel);
   background: var(--muted);
 }
 .unified-subject-create {
@@ -106,14 +98,10 @@
 }
 @media (max-width: 767px) {
   .unified-subject-card .unified-subject-info[data-card-actions] {
-    padding-right: 56px;
+    padding-right: 52px;
   }
 }
 @media (max-width: 639px) {
-  .unified-subject-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-  }
   .unified-subject-settings [data-slot="button"] {
     min-height: 44px;
   }

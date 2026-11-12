@@ -453,3 +453,32 @@ it("智能配音中保留原音色与表单并禁保存，正式音频成功后�
     asset_id: asset,
   });
 });
+
+it("类型选择随名称及参考原子保存，并要求回读一致", async () => {
+  const saved = { ...initial, revision: 2, type: "product" as const };
+  api.update.mockResolvedValue(saved);
+  api.get.mockResolvedValue(saved);
+  const onSaved = vi.fn();
+  render(
+    <UnifiedSubjectEditor
+      actorID={actorID}
+      scopeID={scopeID}
+      initial={initial}
+      onClose={vi.fn()}
+      onSaved={onSaved}
+    />,
+  );
+  fireEvent.click(screen.getByRole("combobox", { name: "类型" }));
+  fireEvent.click(await screen.findByRole("option", { name: "产品" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved));
+  expect(api.update).toHaveBeenCalledWith(
+    { id: initial.id },
+    expect.objectContaining({
+      type: "product",
+      name: initial.name,
+      expected_revision: 1,
+    }),
+    expect.anything(),
+  );
+});

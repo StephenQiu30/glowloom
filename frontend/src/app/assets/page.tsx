@@ -1,7 +1,7 @@
 import { AssetWorkspace } from "./_components/asset-workspace";
 import { readAssetLocation } from "./_components/asset-location";
 
-export const metadata = { title: "资产" };
+export const metadata = { title: "资产和主体" };
 export default async function Page({
   searchParams,
 }: {

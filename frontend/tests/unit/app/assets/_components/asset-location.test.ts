@@ -66,3 +66,34 @@ it("round-trips reference-library conditions separately from generated media", (
     ).reference?.favorite,
   ).toBe(false);
 });
+
+it("六类资源独立恢复，动效默认视频并拒绝文档类型", () => {
+  for (const view of [
+    "history",
+    "canvas",
+    "short_drama",
+    "motion",
+    "marketing",
+    "subjects",
+  ]) {
+    const location = readAssetLocation(new URLSearchParams({ view }));
+    expect(
+      readAssetLocation(new URLSearchParams(writeAssetLocation(location))),
+    ).toEqual(location);
+    expect(location.view).toBe(view);
+  }
+  expect(readAssetLocation(new URLSearchParams("view=motion")).kind).toBe(
+    "video",
+  );
+  expect(
+    readAssetLocation(new URLSearchParams("view=motion&kind=document")).kind,
+  ).toBe("video");
+  for (const view of ["motion", "marketing"]) {
+    const location = readAssetLocation(
+      new URLSearchParams({ view, kind: "audio" }),
+    );
+    expect(
+      readAssetLocation(new URLSearchParams(writeAssetLocation(location))).kind,
+    ).toBe("audio");
+  }
+});

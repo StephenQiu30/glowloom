@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   Download,
+  ListChecks,
   Star,
   LoaderCircle,
   MoreHorizontal,
@@ -76,8 +77,14 @@ export function UnifiedSubjectLibrary({
   query = "",
   onSelect,
   toolbarInHeader = false,
+  embedded = false,
+  onLockChange,
+  onBatchMode,
 }: {
   toolbarInHeader?: boolean;
+  embedded?: boolean;
+  onLockChange?: (locked: boolean) => void;
+  onBatchMode?: (batch: boolean) => void;
   actorID: string;
   scopeID: string;
   query?: string;
@@ -118,6 +125,14 @@ export function UnifiedSubjectLibrary({
   const [exporting, setExporting] = useState(false);
   const exportBusy = useRef(false);
   const locked = pending || uncertain || exporting;
+  useEffect(() => {
+    onLockChange?.(locked || !!editing);
+    return () => onLockChange?.(false);
+  }, [locked, editing, onLockChange]);
+  useEffect(() => {
+    onBatchMode?.(batch);
+    return () => onBatchMode?.(false);
+  }, [batch, onBatchMode]);
   useEffect(() => {
     if (!hasMore || loading || error || locked || !tail.current) return;
     const observer = new IntersectionObserver(
@@ -323,9 +338,10 @@ export function UnifiedSubjectLibrary({
       className="unified-subject-library flex min-w-0 flex-col gap-6"
       aria-label="主体"
     >
-      <PageToolbar inHeader={toolbarInHeader}>
+      <PageToolbar inHeader={toolbarInHeader && !embedded}>
         {toolbarInHeader || !batch ? (
           <UnifiedSubjectToolbar
+            showTypes={embedded}
             batchTriggerRef={batchTrigger}
             showBatchAction={!toolbarInHeader}
             searching={!!query.trim()}
@@ -339,16 +355,14 @@ export function UnifiedSubjectLibrary({
           />
         ) : null}
       </PageToolbar>
-      <PageToolbar
-        inHeader={toolbarInHeader}
-        slot="actions"
-        presentation={batch ? "replace-base" : "adjacent"}
-      >
+      <PageToolbar inHeader={toolbarInHeader && !batch} slot="actions">
         {batch ? (
           <ToolbarGroup
             appearance="plain"
-            className="unified-subject-toolbar w-full flex-wrap"
+            className="unified-subject-toolbar order-first w-full flex-wrap"
+            data-selection-toolbar
             aria-label="主体批量操作"
+            data-asset-batch={embedded || undefined}
           >
             <span className="mr-auto text-sm" aria-live="polite">
               已选择 {selected.length} 项内容
@@ -398,7 +412,8 @@ export function UnifiedSubjectLibrary({
           </ToolbarGroup>
         ) : toolbarInHeader ? (
           <Button
-            size="toolbar"
+            size="toolbar-icon"
+            aria-label="批量操作"
             ref={batchTrigger}
             variant="ghost"
             disabled={locked}
@@ -407,7 +422,7 @@ export function UnifiedSubjectLibrary({
               setSelected([]);
             }}
           >
-            批量操作
+            <ListChecks />
           </Button>
         ) : null}
       </PageToolbar>
@@ -422,7 +437,11 @@ export function UnifiedSubjectLibrary({
         />
       ) : null}
       {!page && loading ? (
-        <div className="unified-subject-grid" aria-label="正在读取主体">
+        <div
+          className="resource-card-grid unified-subject-grid"
+          data-mobile-columns="1"
+          aria-label="正在读取主体"
+        >
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-60 w-full" />
           ))}
@@ -440,7 +459,10 @@ export function UnifiedSubjectLibrary({
         />
       ) : (
         <>
-          <div className="unified-subject-grid">
+          <div
+            className="resource-card-grid unified-subject-grid"
+            data-mobile-columns="1"
+          >
             {!query && !filter.favorite && !onSelect ? (
               <Button
                 variant="ghost"
@@ -449,12 +471,12 @@ export function UnifiedSubjectLibrary({
                 onClick={() => setEditing("new")}
               >
                 <span className="unified-subject-cover unified-subject-create">
-                  <Plus className="size-6 text-muted-foreground" />
+                  <Plus className="size-5 text-muted-foreground" />
                 </span>
-                <span className="unified-subject-info">
-                  <span className="block">新建主体</span>
+                <span className="resource-card-info unified-subject-info">
+                  <span className="resource-card-title block">新建主体</span>
                   <span
-                    className="unified-subject-meta-placeholder block h-5"
+                    className="resource-card-meta-placeholder"
                     aria-hidden="true"
                   />
                 </span>
@@ -503,7 +525,7 @@ export function UnifiedSubjectLibrary({
                       {!(batch && onSelect) ? (
                         <Button
                           variant="secondary"
-                          size="icon"
+                          size="toolbar-icon"
                           className={`absolute top-2 right-2 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100 ${subject.favorite ? "text-[var(--favorite-foreground)] opacity-100" : "opacity-0"}`}
                           aria-label={`${subject.favorite ? "取消收藏" : "收藏"} ${subject.name}`}
                           aria-pressed={subject.favorite}
@@ -524,14 +546,17 @@ export function UnifiedSubjectLibrary({
                       ) : null}
                     </div>
                     <div
-                      className="unified-subject-info"
+                      className="resource-card-info unified-subject-info"
                       data-card-actions={(!batch && !onSelect) || undefined}
                     >
-                      <p className="truncate" title={subject.name}>
+                      <p
+                        className="resource-card-title truncate"
+                        title={subject.name}
+                      >
                         {subject.name}
                       </p>
                       <p
-                        className="truncate text-muted-foreground"
+                        className="resource-card-caption truncate text-muted-foreground"
                         suppressHydrationWarning
                       >
                         主体 ·{" "}
@@ -550,7 +575,7 @@ export function UnifiedSubjectLibrary({
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="secondary"
-                            size="icon"
+                            size="toolbar-icon"
                             className="absolute right-1 bottom-1 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 max-md:size-11 max-md:opacity-100"
                             aria-label={`更多 ${subject.name}`}
                             disabled={locked}

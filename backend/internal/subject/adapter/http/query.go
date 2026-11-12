@@ -13,13 +13,13 @@ import (
 )
 
 func listInput(query url.Values) (application.ListInput, error) {
-	allowed := map[string]bool{"q": true, "favorite": true, "from": true, "to": true, "time_field": true, "order": true, "page": true, "page_size": true}
+	allowed := map[string]bool{"type": true, "q": true, "favorite": true, "from": true, "to": true, "time_field": true, "order": true, "page": true, "page_size": true}
 	for key, values := range query {
 		if !allowed[key] || len(values) != 1 {
 			return application.ListInput{}, domain.ErrInvalid
 		}
 	}
-	in := application.ListInput{Query: query.Get("q"), TimeField: "updated", Order: "updated_desc", Page: 1, PageSize: 40}
+	in := application.ListInput{Type: query.Get("type"), Query: query.Get("q"), TimeField: "updated", Order: "updated_desc", Page: 1, PageSize: 40}
 	if query.Has("favorite") {
 		value := query.Get("favorite")
 		if value != "true" && value != "false" {
@@ -60,6 +60,7 @@ func listInput(query url.Values) (application.ListInput, error) {
 // @ID listSubjects
 // @Tags subjects
 // @Produce json
+// @Param type query string false "主体类型" Enums(character,scene,prop,product,style,other)
 // @Param q query string false "名称包含搜索"
 // @Param favorite query boolean false "仅收藏"
 // @Param from query string false "含开始时间 RFC3339"

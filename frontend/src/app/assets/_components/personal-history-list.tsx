@@ -420,6 +420,7 @@ export function PersonalHistoryList({
     <Toolbar
       ref={batchToolbar}
       data-asset-batch={batch || undefined}
+      data-selection-toolbar={batch || undefined}
       className="flex min-w-0 flex-wrap items-center gap-2"
       aria-label="生成历史操作"
     >
@@ -545,7 +546,7 @@ export function PersonalHistoryList({
   );
   return (
     <div className="grid min-w-0 gap-6">
-      {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
+      {toolbarTarget && !batch ? createPortal(toolbar, toolbarTarget) : toolbar}
       {intent && !deleting && (
         <Button
           disabled={writing}
@@ -621,7 +622,7 @@ export function PersonalHistoryList({
           }
         />
       )}
-      <div className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="resource-card-grid">
         {cards.map((card) => (
           <HistoryResultCard
             key={card.key}

@@ -60,6 +60,7 @@ type Content struct {
 	SchemaVersion int       `json:"schema_version"`
 	Name          string    `json:"name"`
 	Description   string    `json:"description"`
+	Type          string    `json:"type,omitempty"`
 	Primary       Binding   `json:"primary"`
 	References    []Binding `json:"references"`
 	Voice         *Voice    `json:"voice,omitempty"`
@@ -124,9 +125,19 @@ func (m MediaFact) Validate() error {
 	return nil
 }
 
+// ValidType accepts the six optional library categories and legacy untyped content.
+func ValidType(value string) bool {
+	switch value {
+	case "", "character", "scene", "prop", "product", "style", "other":
+		return true
+	default:
+		return false
+	}
+}
+
 // Validate enforces the new subject write contract without touching Bible history.
 func (c Content) Validate() error {
-	if c.SchemaVersion != 1 || !utf8.ValidString(c.Name) || strings.TrimSpace(c.Name) != c.Name || c.Name == "" || UTF16Length(c.Name) > MaxNameUnits || strings.ContainsRune(c.Name, 0) || !utf8.ValidString(c.Description) || utf8.RuneCountInString(c.Description) > MaxDescriptionScalars || strings.ContainsRune(c.Description, 0) || len(c.References) > MaxReferences {
+	if !ValidType(c.Type) || c.SchemaVersion != 1 || !utf8.ValidString(c.Name) || strings.TrimSpace(c.Name) != c.Name || c.Name == "" || UTF16Length(c.Name) > MaxNameUnits || strings.ContainsRune(c.Name, 0) || !utf8.ValidString(c.Description) || utf8.RuneCountInString(c.Description) > MaxDescriptionScalars || strings.ContainsRune(c.Description, 0) || len(c.References) > MaxReferences {
 		return ErrInvalid
 	}
 	if c.Primary.ID == uuid.Nil || c.Primary.Media.Validate() != nil || c.Primary.Media.Kind != "image" && c.Primary.Media.Kind != "video" {

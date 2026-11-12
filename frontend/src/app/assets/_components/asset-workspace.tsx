@@ -1,8 +1,17 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import dynamic from "next/dynamic";
-import { ChevronDown, PanelsTopLeft } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+import { ChevronDown, ListChecks, PanelsTopLeft } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
@@ -59,10 +68,20 @@ const ReferenceAssetsPage = dynamic(
     loading: () => <ContentState state="loading" title="正在读取参考素材" />,
   },
 );
+const UnifiedSubjectLibrary = dynamic(
+  () =>
+    import("@/components/subjects/unified-library").then(
+      (m) => m.UnifiedSubjectLibrary,
+    ),
+  { loading: () => <ContentState state="loading" title="正在读取主体" /> },
+);
 const sources = [
   { id: "history", label: "生成历史" },
   { id: "canvas", label: "画布" },
   { id: "short_drama", label: "短剧工作室" },
+  { id: "motion", label: "动效工作室" },
+  { id: "marketing", label: "营销工作室" },
+  { id: "subjects", label: "主体" },
 ] as const;
 
 export function AssetWorkspace({
@@ -93,12 +112,33 @@ function WorkspaceScope({
   initialLocation?: AssetLocation;
   authenticated: boolean;
 }) {
+  const session = useOptionalSession();
+  const space = useSpace();
+  const navigationRef = useRef<HTMLDivElement>(null);
+  const mountNavigation = useCallback((element: HTMLDivElement | null) => {
+    navigationRef.current = element;
+    const revealSelected = () =>
+      element
+        ?.querySelector<HTMLElement>('[aria-selected="true"]')
+        ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    revealSelected();
+    if (element && typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(revealSelected);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+  }, []);
   const [view, setView] = useState(initialLocation?.view ?? initialView);
   const [kind, setKind] = useState<AssetKind>(initialLocation?.kind ?? "image");
   const [search, setSearch] = useState(initialLocation?.filters.search ?? "");
   const [filters, setFilters] = useState(
     initialLocation?.filters ?? defaultFilters,
   );
+  useEffect(() => {
+    navigationRef.current
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [view]);
   const [referenceFilter, setReferenceFilter] = useState(
     initialLocation?.reference,
   );
@@ -115,6 +155,7 @@ function WorkspaceScope({
     const restored = readAssetLocation(
       new URLSearchParams(window.location.search),
     );
+    setBatch(false);
     setView(restored.view);
     setKind(restored.kind);
     setCollection(restored.collection);
@@ -138,8 +179,10 @@ function WorkspaceScope({
       window.history.replaceState(null, "", url);
   }, [view, kind, collection, filters]);
   function changeView(value: AssetSource | "reference") {
+    if (locked) return;
+    setBatch(false);
     setView(value);
-    setKind("image");
+    setKind(value === "motion" ? "video" : "image");
     setCollection("current");
     setSearch("");
     setFilters(defaultFilters);
@@ -148,7 +191,7 @@ function WorkspaceScope({
     url.search = writeAssetLocation(
       {
         view: value,
-        kind: "image",
+        kind: value === "motion" ? "video" : "image",
         collection: "current",
         filters: defaultFilters,
       },
@@ -169,7 +212,9 @@ function WorkspaceScope({
           ? "搜索本人生成历史"
           : view === "short_drama"
             ? "搜索短剧"
-            : "搜索画布",
+            : view === "subjects"
+              ? "搜索主体"
+              : "搜索画布",
       disabled: !authenticated || locked || batch,
     }),
     [search, view, authenticated, locked, batch],
@@ -199,7 +244,7 @@ function WorkspaceScope({
   };
   return (
     <PageLayout screen="assets" search={pageSearch}>
-      <h1 className="sr-only">资产</h1>
+      <h1 className="sr-only">资产和主体</h1>
       <Tabs
         value={view}
         onValueChange={(value) => changeView(value as AssetSource)}
@@ -208,12 +253,13 @@ function WorkspaceScope({
         <PageToolbar inHeader>
           <div
             data-asset-toolbar
-            className="flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
+            ref={mountNavigation}
+            className="asset-category-navigation w-full min-w-0 overflow-x-auto"
           >
             <TabsList
               variant="workspace"
               aria-label="资产来源"
-              className="max-w-full"
+              className="min-w-max"
             >
               {sources.map((source) => (
                 <TabsTrigger
@@ -228,156 +274,177 @@ function WorkspaceScope({
             </TabsList>
           </div>
         </PageToolbar>
-        <PageToolbar inHeader slot="actions">
-          <div
-            className="flex min-w-0 flex-wrap items-center gap-1"
-            data-asset-page-actions
-          >
-            <div ref={setToolbarTarget} className="min-w-0" />
-          </div>
-        </PageToolbar>
-        <div
-          aria-label="资产筛选"
-          className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
-        >
-          {view === "history" && (
-            <ToggleGroup
-              variant="workspace"
-              size="toolbar"
-              spacing={0}
-              type="single"
-              value={kind}
-              onValueChange={(value) => {
-                if (value) {
-                  setKind(value as AssetKind);
-                  setFilters((current) => ({
-                    ...current,
-                    processTypes: [],
-                    resolutions: [],
-                    ratios: [],
-                    generationModes: [],
-                  }));
-                }
-              }}
-              aria-label="生成内容类型"
-              className="max-w-full"
+        {view !== "subjects" && (
+          <PageToolbar inHeader slot="actions">
+            <div
+              className="flex min-w-0 flex-wrap items-center gap-1"
+              data-asset-page-actions
             >
-              {assetKinds.map((item) => (
-                <ToggleGroupItem
-                  key={item.id}
-                  value={item.id}
-                  disabled={locked}
-                >
-                  {item.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          )}
-          {view === "canvas" && (
-            <ToggleGroup
-              variant="workspace"
-              size="toolbar"
-              spacing={0}
-              type="single"
-              value={collection}
-              onValueChange={(value) => {
-                if (value) setCollection(value as "current" | "legacy");
-              }}
-              aria-label="画布类型"
-            >
-              <ToggleGroupItem value="current" disabled={locked}>
-                画布
-              </ToggleGroupItem>
-              <ToggleGroupItem value="legacy" disabled={locked}>
-                历史画布
-              </ToggleGroupItem>
-            </ToggleGroup>
-          )}
-          {view !== "short_drama" && (
-            <Separator
-              orientation="vertical"
-              className="hidden h-4 sm:block data-vertical:self-center"
-            />
-          )}
-          <div className="flex flex-wrap items-center">
-            <AssetFilterMenu
-              kind={view === "history" ? kind : undefined}
-              value={filters}
-              disabled={!authenticated || locked}
-              onChange={setFilters}
-            />
-            <TimeFilter
-              value={filters}
-              disabled={!authenticated || locked}
-              onChange={setFilters}
-            />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              {(view === "motion" || view === "marketing") && (
                 <Button
-                  variant="filter"
-                  size="toolbar"
-                  disabled={!authenticated || locked}
-                  aria-label="资产排序"
+                  variant="ghost"
+                  size="toolbar-icon"
+                  aria-label="批量操作"
+                  disabled
+                  title="暂无可操作资产"
                 >
-                  排序
-                  <ChevronDown data-icon="inline-end" />
+                  <ListChecks />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>顺序</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={filters.order}
-                    onValueChange={(value) =>
-                      setFilters((current) => ({
-                        ...current,
-                        order: value as AssetFilters["order"],
-                      }))
-                    }
+              )}
+              {view !== "motion" && view !== "marketing" && (
+                <div ref={setToolbarTarget} className="min-w-0" />
+              )}
+            </div>
+          </PageToolbar>
+        )}
+        {view !== "subjects" && (
+          <div
+            aria-label="资产筛选"
+            className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
+          >
+            {(view === "history" ||
+              view === "motion" ||
+              view === "marketing") && (
+              <ToggleGroup
+                variant="workspace"
+                size="toolbar"
+                spacing={0}
+                type="single"
+                value={kind}
+                onValueChange={(value) => {
+                  if (value) {
+                    setKind(value as AssetKind);
+                    setFilters((current) => ({
+                      ...current,
+                      processTypes: [],
+                      resolutions: [],
+                      ratios: [],
+                      generationModes: [],
+                    }));
+                  }
+                }}
+                aria-label="生成内容类型"
+                className="max-w-full"
+              >
+                {assetKinds
+                  .filter((item) => view !== "motion" || item.id !== "document")
+                  .map((item) => (
+                    <ToggleGroupItem
+                      key={item.id}
+                      value={item.id}
+                      disabled={locked}
+                    >
+                      {item.label}
+                    </ToggleGroupItem>
+                  ))}
+              </ToggleGroup>
+            )}
+            {view === "canvas" && (
+              <ToggleGroup
+                variant="workspace"
+                size="toolbar"
+                spacing={0}
+                type="single"
+                value={collection}
+                onValueChange={(value) => {
+                  if (value) setCollection(value as "current" | "legacy");
+                }}
+                aria-label="画布类型"
+              >
+                <ToggleGroupItem value="current" disabled={locked}>
+                  画布
+                </ToggleGroupItem>
+                <ToggleGroupItem value="legacy" disabled={locked}>
+                  历史画布
+                </ToggleGroupItem>
+              </ToggleGroup>
+            )}
+            {view !== "short_drama" && (
+              <Separator
+                orientation="vertical"
+                className="hidden h-4 sm:block data-vertical:self-center"
+              />
+            )}
+            <div className="flex flex-wrap items-center">
+              <AssetFilterMenu
+                kind={view === "history" ? kind : undefined}
+                value={filters}
+                disabled={!authenticated || locked}
+                onChange={setFilters}
+              />
+              <TimeFilter
+                value={filters}
+                disabled={!authenticated || locked}
+                onChange={setFilters}
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="filter"
+                    size="toolbar"
+                    disabled={!authenticated || locked}
+                    aria-label="资产排序"
                   >
-                    <DropdownMenuRadioItem value="desc">
-                      近-远
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="asc">
-                      远-近
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuGroup>
-                {view !== "history" && (
+                    排序
+                    <ChevronDown data-icon="inline-end" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
                   <DropdownMenuGroup>
-                    <DropdownMenuLabel>排序方式</DropdownMenuLabel>
+                    <DropdownMenuLabel>顺序</DropdownMenuLabel>
                     <DropdownMenuRadioGroup
-                      value={filters.sort}
+                      value={filters.order}
                       onValueChange={(value) =>
                         setFilters((current) => ({
                           ...current,
-                          sort: value as AssetFilters["sort"],
+                          order: value as AssetFilters["order"],
                         }))
                       }
                     >
-                      <DropdownMenuRadioItem value="updated">
-                        修改时间
+                      <DropdownMenuRadioItem value="desc">
+                        近-远
                       </DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="created">
-                        创建时间
+                      <DropdownMenuRadioItem value="asc">
+                        远-近
                       </DropdownMenuRadioItem>
                     </DropdownMenuRadioGroup>
                   </DropdownMenuGroup>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {filtered && (
-              <Button
-                variant="filter"
-                size="toolbar"
-                disabled={locked}
-                onClick={clear}
-              >
-                清除筛选
-              </Button>
-            )}
+                  {view !== "history" && (
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>排序方式</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={filters.sort}
+                        onValueChange={(value) =>
+                          setFilters((current) => ({
+                            ...current,
+                            sort: value as AssetFilters["sort"],
+                          }))
+                        }
+                      >
+                        <DropdownMenuRadioItem value="updated">
+                          修改时间
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="created">
+                          创建时间
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuGroup>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {filtered && (
+                <Button
+                  variant="filter"
+                  size="toolbar"
+                  disabled={locked}
+                  onClick={clear}
+                >
+                  清除筛选
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <TabsContent value={view} className="min-w-0">
           {!authenticated ? (
             <ContentState
@@ -385,6 +452,41 @@ function WorkspaceScope({
               title="登录查看你的资产"
               actions={<Button onClick={login}>登录 / 注册</Button>}
             />
+          ) : view === "subjects" ? (
+            session && space.selected ? (
+              <UnifiedSubjectLibrary
+                actorID={session.actor.id}
+                scopeID={space.selected.id}
+                query={filters.search}
+                toolbarInHeader
+                embedded
+                onLockChange={setLocked}
+                onBatchMode={setBatch}
+              />
+            ) : (
+              <ContentState title="请选择空间" />
+            )
+          ) : view === "motion" || view === "marketing" ? (
+            <section
+              className="studio-asset-empty flex min-h-[480px] flex-col items-center justify-center gap-4 text-center"
+              aria-label={view === "motion" ? "动效资产" : "营销资产"}
+            >
+              <Image
+                src="/design/reference/studios/empty.png"
+                alt=""
+                width={120}
+                height={120}
+              />
+              <p className="text-sm text-muted-foreground">暂无相关资产</p>
+              {view === "motion" && (
+                <Button asChild variant="outline">
+                  <Link href="/motion-studio">进入动效工作室开启创作</Link>
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {view === "motion" ? "动效" : "营销"}生成暂未开放
+              </p>
+            </section>
           ) : view === "history" ? (
             <PersonalHistoryList
               key={JSON.stringify([kind, filters])}

@@ -116,11 +116,18 @@ export function readAssetLocation(params: URLSearchParams): AssetLocation {
   const view =
     requestedView === "canvas" ||
     requestedView === "short_drama" ||
+    requestedView === "motion" ||
+    requestedView === "marketing" ||
+    requestedView === "subjects" ||
     requestedView === "reference"
       ? requestedView
       : "history";
-  const kind =
+  const requestedKind =
     assetKinds.find((item) => item.id === params.get("kind"))?.id ?? "image";
+  const kind =
+    view === "motion" && (!params.has("kind") || requestedKind === "document")
+      ? "video"
+      : requestedKind;
   const filters: AssetFilters = {
     ...defaultAssetFilters,
     search: params.get("q")?.trim() ?? "",
@@ -176,7 +183,12 @@ export function writeAssetLocation(
   const params = new URLSearchParams(existing);
   for (const key of locationKeys) params.delete(key);
   if (value.view !== "history") params.set("view", value.view);
-  if (value.view === "history" && value.kind !== "image")
+  if (
+    (value.view === "history" ||
+      value.view === "motion" ||
+      value.view === "marketing") &&
+    value.kind !== (value.view === "motion" ? "video" : "image")
+  )
     params.set("kind", value.kind);
   if (value.view === "canvas" && value.collection === "legacy")
     params.set("collection", "legacy");

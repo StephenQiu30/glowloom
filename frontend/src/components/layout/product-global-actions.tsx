@@ -12,9 +12,9 @@ export function ProductGlobalActions({
   ...props
 }: ProductAccountActionsProps & { showUtilities?: boolean }) {
   return (
-    <>
+    <div className="product-global-toolbar" data-global-toolbar>
       {showUtilities ? <ProductUtilityNavigation /> : null}
       <ProductAccountActions key="account" {...props} />
-    </>
+    </div>
   );
 }

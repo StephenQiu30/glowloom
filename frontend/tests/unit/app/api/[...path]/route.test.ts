@@ -1665,3 +1665,28 @@ it("代理按连接筛选模型及只读草稿配置验证", async () => {
   ).toBe(405);
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
+
+it("主体类型筛选透传给拥有方，拒绝重复参数", async () => {
+  const fetcher = vi.fn().mockResolvedValue(new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  const response = await GET(
+    new Request(
+      "http://localhost/api/subjects?type=product&page=2&page_size=20",
+    ),
+    context("subjects"),
+  );
+  expect(response.status).toBe(200);
+  expect((fetcher.mock.calls[0][0] as URL).searchParams.get("type")).toBe(
+    "product",
+  );
+  fetcher.mockClear();
+  expect(
+    (
+      await GET(
+        new Request("http://localhost/api/subjects?type=product&type=style"),
+        context("subjects"),
+      )
+    ).status,
+  ).toBe(422);
+  expect(fetcher).not.toHaveBeenCalled();
+});

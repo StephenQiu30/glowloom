@@ -44,6 +44,7 @@ export function useSubjectList(
     listSubjects(
       {
         q: query.trim() || undefined,
+        type: filter.type || undefined,
         favorite: filter.favorite || undefined,
         ...subjectDateRange(filter.from, filter.through),
         time_field: filter.order.startsWith("created") ? "created" : "updated",

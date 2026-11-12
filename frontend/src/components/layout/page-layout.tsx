@@ -63,7 +63,9 @@ export function PageLayout({
       {children}
       {screen !== "assets" &&
         screen !== "subjects" &&
-        screen !== "conversations" && <ProductFooter />}
+        screen !== "conversations" &&
+        screen !== "motion-studio" &&
+        screen !== "marketing-studio" && <ProductFooter />}
     </div>
   );
 }

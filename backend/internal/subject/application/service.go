@@ -131,7 +131,7 @@ func (s *Service) Save(ctx context.Context, a identity.Principal, id, key uuid.U
 			v.Number = prior.Number + 1
 			v.PreviousID = &prior.ID
 		}
-		content := domain.Content{SchemaVersion: 1, Name: strings.TrimSpace(in.Name), Description: in.Description, References: []domain.Binding{}}
+		content := domain.Content{SchemaVersion: 1, Name: strings.TrimSpace(in.Name), Description: in.Description, Type: in.Type, References: []domain.Binding{}}
 		var err error
 		content.Primary, err = reference(ctx, tx, a, in.Primary)
 		if err != nil {
@@ -313,7 +313,7 @@ func presentMedia(binding domain.Binding) Media {
 
 // Present excludes private source ownership and hashes from public content.
 func Present(h domain.Head, v domain.Version, favorite bool) Detail {
-	result := Detail{ID: h.ID, OwnerScopeID: h.OwnerScopeID, Revision: h.Revision, VersionID: v.ID, Name: v.Content.Name, Description: v.Content.Description, Primary: presentMedia(v.Content.Primary), References: []Media{}, Favorite: favorite, CreatedAt: h.CreatedAt, UpdatedAt: h.UpdatedAt}
+	result := Detail{ID: h.ID, OwnerScopeID: h.OwnerScopeID, Revision: h.Revision, VersionID: v.ID, Name: v.Content.Name, Description: v.Content.Description, Type: v.Content.Type, Primary: presentMedia(v.Content.Primary), References: []Media{}, Favorite: favorite, CreatedAt: h.CreatedAt, UpdatedAt: h.UpdatedAt}
 	for _, binding := range v.Content.References {
 		result.References = append(result.References, presentMedia(binding))
 	}
@@ -325,7 +325,7 @@ func Present(h domain.Head, v domain.Version, favorite bool) Detail {
 
 // Validate checks bounded filters before query execution.
 func (in ListInput) Validate() error {
-	if !utf8.ValidString(in.Query) || utf8.RuneCountInString(in.Query) > 512 || strings.ContainsRune(in.Query, 0) || in.Page < 1 || in.Page > 100000 || in.PageSize < 1 || in.PageSize > 120 {
+	if !domain.ValidType(in.Type) || !utf8.ValidString(in.Query) || utf8.RuneCountInString(in.Query) > 512 || strings.ContainsRune(in.Query, 0) || in.Page < 1 || in.Page > 100000 || in.PageSize < 1 || in.PageSize > 120 {
 		return domain.ErrInvalid
 	}
 	if in.TimeField != "created" && in.TimeField != "updated" {

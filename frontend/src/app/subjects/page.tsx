@@ -1,5 +1,4 @@
-import { SubjectsPage } from "./_components/subjects-page";
-export const metadata = { title: "主体 · 织光" };
+import { redirect } from "next/navigation";
 export default function Page() {
-  return <SubjectsPage />;
+  redirect("/assets?view=subjects");
 }

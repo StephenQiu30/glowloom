@@ -41,7 +41,7 @@ export function ProductNavigation({
               screen !== "home" &&
               (!resolveAdminSection(screen) || Boolean(header.search))
             }
-            showUtilities={screen === "home"}
+            showUtilities={!resolveAdminSection(screen)}
           />
           {children}
         </div>

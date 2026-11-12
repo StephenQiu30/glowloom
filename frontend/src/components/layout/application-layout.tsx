@@ -35,6 +35,8 @@ export function ApplicationLayout({
           "assets",
           "invitations",
           "short-drama",
+          "motion-studio",
+          "marketing-studio",
         ].includes(screen.id),
       )}
       initialAuthMode={authMode}

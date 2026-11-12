@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
     },
   },
   allowedDevOrigins: ["127.0.0.1", "[::1]"],
+  async redirects() {
+    return [
+      {
+        source: "/subjects",
+        destination: "/assets?view=subjects",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     // Upgrade requests must reach Go before the fetch-only API catch-all.
     const backend = getBackendOrigin();

@@ -24,6 +24,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { subjectTypes, type SubjectType } from "./unified-contracts";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,6 +68,7 @@ const versionFacts = (subject: UnifiedSubject) =>
   JSON.stringify([
     subject.name,
     subject.description,
+    subject.type ?? null,
     [
       subject.primary,
       ...subject.references,
@@ -93,6 +103,9 @@ export function UnifiedSubjectEditor({
 }) {
   const fieldID = useId();
   const [name, setName] = useState(initial?.name ?? "");
+  const [subjectType, setSubjectType] = useState<SubjectType | "">(
+    initial?.type ?? "",
+  );
   const [description, setDescription] = useState(initial?.description ?? "");
   const [primary, setPrimary] = useState<SelectedSubjectMedia | null>(
     initial ? selectedSubjectMedia(initial, initial.primary) : null,
@@ -222,6 +235,7 @@ export function UnifiedSubjectEditor({
         expected_revision: baseRevision,
         name: name.trim(),
         description: description.trim(),
+        ...(subjectType ? { type: subjectType } : {}),
         primary: selection(primary),
         references: references.map(selection),
         ...(voice
@@ -255,6 +269,7 @@ export function UnifiedSubjectEditor({
         saved.revision !== (op.body.expected_revision ?? 0) + 1 ||
         saved.name !== op.body.name ||
         saved.description !== op.body.description ||
+        (saved.type ?? "") !== (op.body.type ?? "") ||
         saved.primary.asset_id !== op.body.primary?.asset_id ||
         saved.references.length !== expectedReferences.length ||
         saved.references.some(
@@ -395,9 +410,7 @@ export function UnifiedSubjectEditor({
             close();
           }}
         >
-          <DialogTitle className="text-base leading-6 font-medium">
-            设置主体
-          </DialogTitle>
+          <DialogTitle size="lg">设置主体</DialogTitle>
 
           {(["primary", "reference", "voice"] as const).map((target) => (
             <Input
@@ -438,6 +451,63 @@ export function UnifiedSubjectEditor({
             }}
           >
             <div className="unified-subject-settings-body flex min-h-0 flex-col gap-4">
+              <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] gap-4">
+                {" "}
+                <Field>
+                  <FieldLabel htmlFor={`${fieldID}-name`}>
+                    名称 <span aria-hidden="true">*</span>
+                  </FieldLabel>
+                  <div className="relative">
+                    <Input
+                      id={`${fieldID}-name`}
+                      aria-label="名称"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      maxLength={20}
+                      required
+                      disabled={locked}
+                      placeholder="请输入名称"
+                      className="h-10 pr-16"
+                    />
+                    <span
+                      className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground"
+                      aria-live="polite"
+                    >
+                      {name.length} / 20
+                    </span>
+                  </div>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`${fieldID}-type`}>类型</FieldLabel>
+                  <Select
+                    value={subjectType || "unset"}
+                    onValueChange={(value) =>
+                      setSubjectType(
+                        value === "unset" ? "" : (value as SubjectType),
+                      )
+                    }
+                    disabled={locked}
+                  >
+                    <SelectTrigger
+                      id={`${fieldID}-type`}
+                      className="h-10 w-full"
+                      aria-label="类型"
+                    >
+                      <SelectValue placeholder="选择类型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="unset">选择类型</SelectItem>
+                        {subjectTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
               <Field>
                 <FieldLabel>
                   参考主体 <span aria-hidden="true">*</span>
@@ -609,30 +679,6 @@ export function UnifiedSubjectEditor({
                   ) : null}
                 </div>
               ) : null}
-              <Field>
-                <FieldLabel htmlFor={`${fieldID}-name`}>
-                  名称 <span aria-hidden="true">*</span>
-                </FieldLabel>
-                <div className="relative">
-                  <Input
-                    id={`${fieldID}-name`}
-                    aria-label="名称"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    maxLength={20}
-                    required
-                    disabled={locked}
-                    placeholder="请输入名称"
-                    className="h-10 pr-16"
-                  />
-                  <span
-                    className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground"
-                    aria-live="polite"
-                  >
-                    {name.length} / 20
-                  </span>
-                </div>
-              </Field>
               <Field>
                 <FieldLabel htmlFor={`${fieldID}-description`}>描述</FieldLabel>
                 <Textarea

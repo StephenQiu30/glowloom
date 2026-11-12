@@ -1,6 +1,16 @@
 import { RequestError } from "@/lib/request";
 import { isProjectID } from "@/components/projects/project";
 
+export const subjectTypes = [
+  { value: "character", label: "角色" },
+  { value: "scene", label: "场景" },
+  { value: "prop", label: "道具" },
+  { value: "product", label: "产品" },
+  { value: "style", label: "风格" },
+  { value: "other", label: "其他" },
+] as const;
+export type SubjectType = (typeof subjectTypes)[number]["value"];
+
 /** Validated presentation facts; request DTOs remain generated in @/api. */
 export type SubjectMedia = {
   binding_id: string;
@@ -20,6 +30,7 @@ export type UnifiedSubject = {
   version_id: string;
   name: string;
   description: string;
+  type?: SubjectType;
   primary: SubjectMedia;
   references: SubjectMedia[];
   voice?: { name: string; media: SubjectMedia };
@@ -95,6 +106,8 @@ export function requireUnifiedSubject(
     typeof v.name !== "string" ||
     !v.name.trim() ||
     typeof v.description !== "string" ||
+    (v.type !== undefined &&
+      !subjectTypes.some((item) => item.value === v.type)) ||
     typeof v.favorite !== "boolean" ||
     !date(v.created_at) ||
     !date(v.updated_at) ||

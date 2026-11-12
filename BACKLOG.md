@@ -671,3 +671,144 @@ f075补齐文档角色中文；b7bf以独立文档能力接通对话内补充文
 - 关联34文件230项、全前端314文件2245项全部通过；ESLint、Next typegen、TypeScript、本次5个源码/测试格式与本机生产构建通过。全目录格式仍有4个非本次修改文件的问题，未擅自整理；Docker内编译因资源压力取消，后以相同Next版本Linux基础镜像组装便携构建成功。
 - 仅更新本地frontend，Build ID `BsL4W2Rxbr6aYoUX8PM8c`，四服务healthy。原登录画布验证拖动60px、撤销、双击准确居中、进入/返回、刷新原位置与“已保存”；没有新增收费调用。即梦居中保留缩放，本项目沿既有算法适配大小，差异已记录。
 - REA静态Evidence、运行实测、截图及逐项工作区清单见 `/Users/stephenqiu/.codex/visualizations/2026/11/09/01a1bee1-0086-7082-9022-39fe77a650ce/canvas-drag-focus-20261112/validation.md`。用户已授权仅提交本轮修复并推送main；实际提交、推送与远程CI以交付回执为准，其他任务修改原样保留。
+
+## 2026-11-12 资产和主体最新 Figma 还原验收
+
+- 工作区已实现六类资源及合并入口、两个工作室首屏、主体类型保存与服务端筛选、桌面和手机布局。Seedream 5.5 未加入导航，历史 Figma 保留。
+- 设计来源：[最新设计稿](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=3713-110549)。沿用 Geist / Neutral / shadcn。
+- 预览在 `http://localhost:1124/assets`、`/motion-studio`、`/marketing-studio`。1122 容器未发布或重启。私人编辑使用 5196 源码组件与合成回执验收，未写产品数据。
+- 前端 eslint、next typegen、tsc、生产构建通过；全量 314 文件 / 2251 用例通过，最后布局专项 11 文件 / 122 用例通过。本次文件 Prettier 检查通过。
+- 全量 Prettier 遗留 4 项：`.vitest/json/output.json`、`public/director/catalog/manifest.json`、`public/director/motions/quaternius-ual1-standard.json`、`src/components/canvas/timeline/timeline-model.ts`，未修改。
+- 后端主体 race 62 用例通过，29 数据库集成用例因未配置独立 PostgreSQL 验收库跳过。goimports、go vet、golangci-lint 通过（0 issues）。旧无类型内容摘要兼容测试通过。
+- govulncheck 未通过：现有 Go 1.26.10 标准库 GO-2026-6859，工具报告修复版本 1.26.11；本次未改工具链。
+- 浏览器核对了 1460 桌面 / 390 手机、展示图加载与页面无横向溢出、末尾分类自动可见、类型筛选及保存、批量工具布局和切页后状态清理。
+- 工作室生成、资产入口剪辑导出暂未开放，界面明确说明。本次未提交，未触发生成或付费调用。
+- 旧 `/subjects` 已通过 HTTP 307 和浏览器验证直达 `/assets?view=subjects`，不受旧页面登录门控阻挡；最后配置变更后生产构建再次通过。5196 合成验收服务已停止，1124 前端预览保留；现有容器尚未接入本次新增的主体类型接口，不作为部署验收。浏览器原有登录态在预览端口可能出现校验提示，未清理用户登录信息。
+
+本次未提交文件（逐项）：
+
+- `DESIGN.md`
+- `backend/internal/subject/adapter/http/query.go`
+- `backend/internal/subject/adapter/postgres/query.go`
+- `backend/internal/subject/application/contracts.go`
+- `backend/internal/subject/application/service.go`
+- `backend/internal/subject/domain/content.go`
+- `frontend/next.config.ts`
+- `frontend/src/api/typings.d.ts`
+- `frontend/src/app/api/[...path]/route.ts`
+- `frontend/src/app/assets/_components/asset-location.ts`
+- `frontend/src/app/assets/_components/asset-query.ts`
+- `frontend/src/app/assets/_components/asset-workspace.tsx`
+- `frontend/src/app/assets/page.tsx`
+- `frontend/src/app/globals.css`
+- `frontend/src/app/subjects/page.tsx`
+- `frontend/src/components/billing/credit-popover.tsx`
+- `frontend/src/components/layout/application-layout.tsx`
+- `frontend/src/components/layout/basic-layout.tsx`
+- `frontend/src/components/layout/page-layout.tsx`
+- `frontend/src/components/layout/product-account-actions.tsx`
+- `frontend/src/components/layout/product-header-actions.tsx`
+- `frontend/src/components/layout/product-header.tsx`
+- `frontend/src/components/layout/product-navigation.tsx`
+- `frontend/src/components/layout/product-sider.tsx`
+- `frontend/src/components/layout/routes.ts`
+- `frontend/src/components/layout/sidebar-nav-link.tsx`
+- `frontend/src/components/subjects/unified-contracts.ts`
+- `frontend/src/components/subjects/unified-editor.tsx`
+- `frontend/src/components/subjects/unified-library.tsx`
+- `frontend/src/components/subjects/unified-toolbar.tsx`
+- `frontend/src/components/subjects/use-subject-list.ts`
+- `frontend/tests/browser/assets.tsx`
+- `frontend/tests/unit/app/api/[...path]/route.test.ts`
+- `frontend/tests/unit/app/assets/_components/asset-location.test.ts`
+- `frontend/tests/unit/app/assets/_components/asset-workspace.test.tsx`
+- `frontend/tests/unit/components/layout/basic-layout.test.tsx`
+- `frontend/tests/unit/components/subjects/unified-editor.test.tsx`
+- `frontend/tests/unit/components/subjects/use-subject-list.test.ts`
+- `backend/tests/subject/type_test.go`
+- `frontend/public/design/reference/studios/`
+- `frontend/src/app/marketing-studio/`
+- `frontend/src/app/motion-studio/`
+- `frontend/src/components/studios/`
+
+其他现存变更（保留）：
+
+- `docs/00-文档索引.md`
+- `docs/plan/28-完整创作Agent与Skill多Agent实施计划.md`
+- `docs/research/00-调研导航.md`
+- `docs/requirement/25-多模态创作与Agent编排需求.md`
+- `docs/research/2026-11-12-即梦多模态创作与Agent服务拆解.md`
+- `docs/research/2026-11-12-短剧制作平台源码与发行包对照调研.md`
+- `frontend/.vitest/`
+
+## 2026-11-12 1122 实际镜像与 agent-browser 验收收口
+
+- 用户允许连接当前 Chrome 登录会话。本轮实际验收 localhost:1122；原1124预览已停止，未将预览视为部署证据。
+- 原1122仍运行旧前后端镜像，已更新现有两个应用容器。合并资产和主体、六分类、三个工作室导航及旧主体链接跳转已生效，Seedream 5.5入口移除。
+- 修正登录态主体工具栏在纵向组合时继承居中对齐的问题：`items-stretch`；1460px下实测 x=284（侧栏240+正文44），与设计稿及卡片网格一致。手机工作室72px参考方块内边距4px，避免四字标签不必要换行。
+- 补齐营销示例、工具及已选参考容器的ARIA分组角色；主体/动效和最终营销桌面/手机引用状态的axe WCAG2 A/AA检查均0违规、0待定。
+- 浏览器：游客40/40布局检查；最终视觉版本已登录40/40，覆盖1460/1280/1024/390/320各六分类+两个工作室。ARIA小修后针对相关营销桌面/手机状态复测。六类真实私人内容另用页面内切换验证，不能仅凭账号入口或布局成功视为数据读取成功。
+- 原蓝色主体640×360预览读取成功；原主体关闭不保存保持原值。复用已有图片创建临时主体，验证刷新、产品→风格持久化与筛选、收藏、搜索清除、单项批量及390px弹窗。临时主体已删除，原主体与素材保留。两个工作室风格/参数/模板筛选和真实参考图片引用通过；生成和营销工具仍未开放，未发起付费调用。
+- 容器构建切换受支持的Webpack worker/构建内存优化；探索CSS Module选择器关联既有局部导航类，修正Webpack pure selector编译问题。完整容器构建曾通过；后续Docker约8GB内存和多个项目争用导致重型构建中断、引擎超时。未停止其他项目，最终主机完整生产构建/TypeScript/42页生成通过，复用已验证Linux依赖封装运行镜像。低内存并行构建环境限制仍保留。
+- 高频全页刷新触发既有每会话12次/分钟刷新保护；未更改限流，待窗口恢复后通过正常页面内切换补验真实读取。既有画布创建恢复提示只关闭，没有确认其提交。
+- 相关单测两组各54通过，最终主体/布局54通过；最终生产构建、相关ESLint、Prettier、diff检查通过。前阶段全量2251前端测试与主体62后端测试通过；29个既有集成跳过及GO-2026-6859问题不计通过。
+- 最终前端镜像：`sha256:758890a0c6281b819a33128e0c3e3afff0ec0d0a4d287a68267fa51bb282f4f1`；后端：`sha256:aec92358a37b5351915bc892dadef0746cf168bc7f508f344b19242050be0b86`。前后端healthy；前端重启0、后端在停止重型构建后重启计数稳定11。
+- 完整验收报告：[/Users/stephenqiu/.codex/visualizations/2026/11/12/01a1cdb3-944d-7820-8932-e39459dd73af/glowloom-1122-acceptance/report.md](/Users/stephenqiu/.codex/visualizations/2026/11/12/01a1cdb3-944d-7820-8932-e39459dd73af/glowloom-1122-acceptance/report.md)。包含前后截图、矩阵、真实内容读取、axe报告和限制。
+- Git：未创建分支、未提交、未推送、未发布远程；历史Figma稿保留。下列设计、主体领域/查询、API派生类型、前端页面/导航/工作室、构建及相关测试文件仍作为本任务工作区修改保留；`frontend/.vitest/`为已有验收产物，未纳入交付提交，也未擅自清理。
+
+本次最终检查的逐项残留路径：
+
+- `BACKLOG.md`
+- `DESIGN.md`
+- `backend/internal/subject/adapter/http/query.go`
+- `backend/internal/subject/adapter/postgres/query.go`
+- `backend/internal/subject/application/contracts.go`
+- `backend/internal/subject/application/service.go`
+- `backend/internal/subject/domain/content.go`
+- `frontend/Dockerfile`
+- `frontend/next.config.ts`
+- `frontend/src/api/typings.d.ts`
+- `frontend/src/app/api/[...path]/route.ts`
+- `frontend/src/app/assets/_components/asset-location.ts`
+- `frontend/src/app/assets/_components/asset-query.ts`
+- `frontend/src/app/assets/_components/asset-workspace.tsx`
+- `frontend/src/app/assets/page.tsx`
+- `frontend/src/app/explore/_components/explore.module.css`
+- `frontend/src/app/globals.css`
+- `frontend/src/app/subjects/page.tsx`
+- `frontend/src/components/billing/credit-popover.tsx`
+- `frontend/src/components/layout/application-layout.tsx`
+- `frontend/src/components/layout/basic-layout.tsx`
+- `frontend/src/components/layout/page-layout.tsx`
+- `frontend/src/components/layout/product-account-actions.tsx`
+- `frontend/src/components/layout/product-header-actions.tsx`
+- `frontend/src/components/layout/product-header.tsx`
+- `frontend/src/components/layout/product-navigation.tsx`
+- `frontend/src/components/layout/product-sider.tsx`
+- `frontend/src/components/layout/routes.ts`
+- `frontend/src/components/layout/sidebar-nav-link.tsx`
+- `frontend/src/components/subjects/unified-contracts.ts`
+- `frontend/src/components/subjects/unified-editor.tsx`
+- `frontend/src/components/subjects/unified-library.tsx`
+- `frontend/src/components/subjects/unified-toolbar.tsx`
+- `frontend/src/components/subjects/use-subject-list.ts`
+- `frontend/tests/browser/assets.tsx`
+- `frontend/tests/unit/app/api/[...path]/route.test.ts`
+- `frontend/tests/unit/app/assets/_components/asset-location.test.ts`
+- `frontend/tests/unit/app/assets/_components/asset-workspace.test.tsx`
+- `frontend/tests/unit/components/layout/basic-layout.test.tsx`
+- `frontend/tests/unit/components/subjects/unified-editor.test.tsx`
+- `frontend/tests/unit/components/subjects/use-subject-list.test.ts`
+- `backend/tests/subject/type_test.go`
+- `frontend/.vitest/`（现存验收缓存，保留）
+- `frontend/public/design/reference/studios/`
+- `frontend/src/app/marketing-studio/`
+- `frontend/src/app/motion-studio/`
+- `frontend/src/components/studios/`
+
+## 2026-11-12 确认设计后的公共样式统一与提交收口
+
+- 按用户确认的最新Figma整页设计复用公共透明顶栏、首页账号工具栏、资源网格、卡片和文字规格。批量操作留在正文，两个工作室复用现有资源卡片按钮。
+- 实际1122通过agent-browser登录态40/40、游客16/16及交互10/10；临时主体已清理，原内容保留。桌面和手机主体WCAG A/AA检查、浏览器运行与控制台均零错误。
+- 最终前端314文件2253项单测、ESLint、修改文件Prettier、TypeScript及生产构建通过；4个既有全仓格式问题保留。证据见[验收报告](/Users/stephenqiu/.codex/visualizations/2026/11/12/01a1cdb3-944d-7820-8932-e39459dd73af/approved-design-implementation/验收报告.md)。
+- 用户授权仅提交并推送本次相关修改至main。交付包含资源合并、两个工作室、主体分类所需接口/派生类型/测试；其他Agent和短剧调研文档、缓存、本地构建内存调优及未使用的余额展示扩展不纳入提交。历史Figma保留，未触发付费生成。

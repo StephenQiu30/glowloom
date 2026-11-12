@@ -20,9 +20,9 @@ const toggleVariants = cva(
       },
       size: {
         toolbar:
-          "h-(--toolbar-control-size) min-w-(--toolbar-control-size) px-2 text-xs",
+          "h-(--toolbar-control-size) min-w-(--toolbar-control-size) px-2 text-xs leading-[18px] max-md:text-sm max-md:leading-5",
         workspace:
-          "h-9 min-w-0 px-4 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium max-md:min-h-11 pointer-coarse:min-h-11",
+          "h-(--toolbar-control-size) min-w-0 px-2 text-xs leading-[18px] font-normal max-md:text-sm max-md:leading-5",
         hero: "h-8 min-w-0 px-3 leading-5",
         default:
           "h-9 min-w-9 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",

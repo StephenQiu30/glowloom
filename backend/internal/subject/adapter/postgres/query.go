@@ -103,6 +103,10 @@ func (s *Store) List(ctx context.Context, a identity.Principal, in application.L
 			where += ` AND strpos(lower(v.content->>'name'),lower(?))>0`
 			args = append(args, in.Query)
 		}
+		if in.Type != "" {
+			where += ` AND v.content->>'type'=?`
+			args = append(args, in.Type)
+		}
 		if in.Favorite {
 			where += ` AND coalesce(f.favorite,false)`
 		}

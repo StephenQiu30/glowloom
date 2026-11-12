@@ -48,13 +48,13 @@ export function ProductHeader({
       ref={pageActionsRef}
     />
   );
-  const common = replaceBase ? null : (
+  const common = (
     <ProductHeaderActions
       key="common"
       assetLayout={assetLayout}
       pageActions={assetLayout ? pageActions : undefined}
       search={search}
-      showSearch={showSearch}
+      showSearch={showSearch && !replaceBase}
       showUtilities={showUtilities}
       actor={actor}
       onLogin={onLogin}
@@ -89,12 +89,8 @@ export function ProductHeader({
         ) : null}
       </div>
       {isMobile
-        ? [common, navigation, assetLayout && !replaceBase ? null : pageActions]
-        : [
-            navigation,
-            assetLayout && !replaceBase ? null : pageActions,
-            common,
-          ]}
+        ? [common, navigation, assetLayout ? null : pageActions]
+        : [navigation, assetLayout ? null : pageActions, common]}
     </div>
   );
 }

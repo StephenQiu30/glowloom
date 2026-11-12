@@ -132,3 +132,24 @@ it("收藏请求尚未完成就返回时也从第一批重读，丢弃迟到的�
   });
   expect(result.current.error).toBeUndefined();
 });
+
+it("切换主体类型向服务端提交类型，从第一批重读并取消旧请求", async () => {
+  api.list.mockImplementation(async ({ page }) => batch(page));
+  const { result, rerender } = renderHook(
+    ({ filter }) => useSubjectList(actorID, scopeID, "", filter),
+    { initialProps: { filter: all } },
+  );
+  await waitFor(() => expect(result.current.page?.page).toBe(1));
+  const oldSignal = api.list.mock.calls[0][1].signal as AbortSignal;
+  act(() => result.current.loadMore());
+  await waitFor(() => expect(result.current.page?.page).toBe(2));
+  rerender({ filter: { ...all, type: "product" } });
+  expect(result.current.page).toBeUndefined();
+  await waitFor(() =>
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: "product", page: 1 }),
+      expect.anything(),
+    ),
+  );
+  expect(oldSignal.aborted).toBe(true);
+});

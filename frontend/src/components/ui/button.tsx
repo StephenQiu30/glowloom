@@ -32,9 +32,9 @@ const buttonVariants = cva(
       },
       size: {
         "asset-card":
-          "h-auto w-full min-w-0 flex-col items-stretch justify-start gap-0 rounded-lg border-0 p-0 text-left text-xs leading-5 font-medium [&_svg:not([class*='size-'])]:size-6",
+          "h-auto w-full min-w-0 flex-col items-stretch justify-start gap-0 rounded-lg border-0 p-0 text-left text-sm leading-5 font-normal [&_svg:not([class*='size-'])]:size-6",
         toolbar:
-          "h-(--toolbar-control-size) min-w-(--toolbar-control-size) gap-1.5 px-2 text-xs",
+          "h-(--toolbar-control-size) min-w-(--toolbar-control-size) gap-1.5 px-2 text-xs leading-[18px] max-md:text-sm max-md:leading-5",
         "toolbar-icon": "size-(--toolbar-control-size) p-0",
         "toolbar-adaptive":
           "h-(--toolbar-control-size) min-w-(--toolbar-control-size) gap-1.5 px-2 text-xs max-md:w-(--toolbar-control-size) max-md:p-0",

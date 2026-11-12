@@ -353,7 +353,7 @@ function HeaderLibraryHarness({
   );
 }
 
-it("主体筛选和批量选择共用顶栏，保留业务状态且路由卸载清除工具", async () => {
+it("主体批量选择留在正文并保留公共账号，路由卸载清除工具", async () => {
   const view = render(<HeaderLibraryHarness />);
   await screen.findByRole("button", { name: "设置主体 海边香氛" });
   const header = screen.getByRole("banner", { name: "页面顶栏" });
@@ -363,15 +363,19 @@ it("主体筛选和批量选择共用顶栏，保留业务状态且路由卸载�
   ).toBeNull();
   fireEvent.click(within(header).getByRole("button", { name: "批量操作" }));
   fireEvent.click(screen.getByRole("checkbox", { name: "选择主体 海边香氛" }));
-  expect(within(header).getByText("已选择 1 项内容")).toBeTruthy();
-  expect(within(header).getByRole("button", { name: "筛选" })).toBeTruthy();
-  expect(within(header).queryByRole("button", { name: "账号菜单" })).toBeNull();
   expect(
-    within(header)
+    within(screen.getByRole("main")).getByText("已选择 1 项内容"),
+  ).toBeTruthy();
+  expect(within(header).getByRole("button", { name: "筛选" })).toBeTruthy();
+  expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
+  expect(
+    within(screen.getByRole("main"))
       .getByRole("button", { name: "删除" })
       .hasAttribute("disabled"),
   ).toBe(false);
-  fireEvent.click(within(header).getByRole("button", { name: "取消选择" }));
+  fireEvent.click(
+    within(screen.getByRole("main")).getByRole("button", { name: "取消选择" }),
+  );
   expect(within(header).getByRole("button", { name: "排序" })).toBeTruthy();
   await waitFor(() =>
     expect(document.activeElement).toBe(

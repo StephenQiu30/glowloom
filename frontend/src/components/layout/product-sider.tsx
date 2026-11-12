@@ -17,7 +17,8 @@ import {
   ChevronDown,
   Clapperboard,
   Compass,
-  ContactRound,
+  Paintbrush,
+  ShoppingCart,
   FolderClosed,
   Grid2x2Plus,
   Plus,
@@ -55,8 +56,7 @@ const links = [
   { id: "home", label: "创作", icon: Sparkles, href: "/" },
   { id: "explore", label: "探索", icon: Compass, href: "/explore" },
   { id: "ai-tools", label: "AI工具", icon: Grid2x2Plus, href: "/ai-tools" },
-  { id: "assets", label: "资产", icon: FolderClosed, href: "/assets" },
-  { id: "subjects", label: "主体", icon: ContactRound, href: "/subjects" },
+  { id: "assets", label: "资产和主体", icon: FolderClosed, href: "/assets" },
 ] as const;
 
 function PrimaryNavigation({ screen }: { screen: Screen }) {
@@ -193,7 +193,11 @@ export function ProductSider({
         id="product-sidebar-navigation"
         className="product-sidebar-content"
       >
-        <PrimaryNavigation screen={screen === "projects" ? "assets" : screen} />
+        <PrimaryNavigation
+          screen={
+            screen === "projects" || screen === "subjects" ? "assets" : screen
+          }
+        />
         <SidebarSeparator className={compact ? "mx-3 my-1" : "mx-5 my-1"} />
         <SidebarGroup
           role="navigation"
@@ -201,17 +205,44 @@ export function ProductSider({
           className="primary-navigation"
         >
           <SidebarMenu>
-            <SidebarNavLink
-              href="/short-drama"
-              label="短剧工作室"
-              icon={Clapperboard}
-              active={screen === "short-drama"}
-              variant="workspace"
-              size="workspace"
-              onNavigate={closeMobile}
-            />
+            {[
+              {
+                href: "/marketing-studio",
+                label: "营销工作室",
+                icon: ShoppingCart,
+                badge: "New",
+                id: "marketing-studio",
+              },
+              {
+                href: "/short-drama",
+                label: "短剧工作室",
+                icon: Clapperboard,
+                badge: "New",
+                id: "short-drama",
+              },
+              {
+                href: "/motion-studio",
+                label: "动效工作室",
+                icon: Paintbrush,
+                badge: "Beta",
+                id: "motion-studio",
+              },
+            ].map((studio) => (
+              <SidebarNavLink
+                key={studio.id}
+                href={studio.href}
+                label={studio.label}
+                icon={studio.icon}
+                badge={studio.badge}
+                active={screen === studio.id}
+                variant="workspace"
+                size="workspace"
+                onNavigate={closeMobile}
+              />
+            ))}
           </SidebarMenu>
         </SidebarGroup>
+        <SidebarSeparator className={compact ? "mx-3 my-1" : "mx-5 my-1"} />
         {compact ? (
           <SidebarGroup className="sidebar-compact-actions">
             <SidebarMenu>

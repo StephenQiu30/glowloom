@@ -267,6 +267,8 @@ export function BasicLayout({
           screen === "ai-tools" ||
           screen === "invitations" ||
           screen === "short-drama" ||
+          screen === "motion-studio" ||
+          screen === "marketing-studio" ||
           screen === "assets")
       }
     >

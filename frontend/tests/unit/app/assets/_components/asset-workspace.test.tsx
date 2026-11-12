@@ -255,6 +255,9 @@ it("默认读取本人图片生成历史，原上传素材不冒充历史", asyn
     "生成历史",
     "画布",
     "短剧工作室",
+    "动效工作室",
+    "营销工作室",
+    "主体",
   ]);
   expect(screen.queryByRole("button", { name: "参考素材" })).toBeNull();
   expect(state.canvases).not.toHaveBeenCalled();
@@ -1162,8 +1165,9 @@ it("图片可选择200但收藏删除超过50禁用，超过7只禁用发布", a
   });
   render(<AssetWorkspace />);
   await screen.findByText("本人的创作记录 · 结果51");
-  const toolbar = within(screen.getByLabelText("生成历史操作"));
+  let toolbar = within(screen.getByLabelText("生成历史操作"));
   fireEvent.click(toolbar.getByRole("button", { name: "批量操作" }));
+  toolbar = within(screen.getByLabelText("生成历史操作"));
   screen
     .getAllByRole("checkbox", { name: /^选择/ })
     .forEach((item) => fireEvent.click(item));

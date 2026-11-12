@@ -9,7 +9,8 @@ export const assetKinds = [
   { id: "document", label: "文档" },
 ] as const;
 export type AssetKind = (typeof assetKinds)[number]["id"];
-export type AssetSource = "history" | "canvas" | "short_drama";
+export type AssetSource =
+  "history" | "canvas" | "short_drama" | "motion" | "marketing" | "subjects";
 export type AssetFilters = {
   search: string;
   from: string;
