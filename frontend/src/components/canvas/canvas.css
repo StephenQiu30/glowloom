@@ -1636,6 +1636,10 @@ html:has(.canvas-controls-layout) {
       PingFangSC, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial,
       sans-serif;
   }
+  [data-canvas-workspace]:has([data-node-type="text"][data-node-editing="true"])
+    .canvas-text-actions {
+    display: none;
+  }
   .canvas-text-actions button {
     color: inherit;
     flex-shrink: 0;

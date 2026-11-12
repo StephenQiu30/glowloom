@@ -217,6 +217,8 @@ export function CanvasCinemaKitBar({
   });
   return (
     <div
+      role="toolbar"
+      aria-label="导演工具箱"
       className="cinema-kit-bar"
       data-canvas-no-zoom
       data-canvas-shortcuts-ignore
@@ -229,16 +231,20 @@ export function CanvasCinemaKitBar({
           const Icon = icons[kind],
             active = kit?.[kind] !== undefined;
           return (
-            <span className={active ? "cinema-kit-chip" : ""} key={kind}>
+            <span className="cinema-kit-entry" key={kind}>
               <Button
                 ref={kind === "motion" ? motionButtonRef : undefined}
-                variant="ghost"
-                size="sm"
+                variant="secondary"
+                className="h-11 min-w-0 flex-1 justify-start"
+                aria-label={cinemaLabels[kind]}
+                title={active ? cinemaSummary(kit!, kind) : undefined}
                 disabled={!view.writable}
                 onClick={() => setEditing(edit(kind))}
               >
-                <Icon />
-                {active ? cinemaSummary(kit!, kind) : cinemaLabels[kind]}
+                <Icon data-icon="inline-start" />
+                <span className="truncate">
+                  {active ? cinemaSummary(kit!, kind) : cinemaLabels[kind]}
+                </span>
               </Button>
               {active ? (
                 <Button

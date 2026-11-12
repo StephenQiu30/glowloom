@@ -1750,7 +1750,6 @@ export function ReferenceControls({
                       aria-label={
                         assistant ? "从本地、画布或资产库添加" : "添加参考"
                       }
-                      className={incomingSources ? "order-first" : undefined}
                     >
                       <Plus />
                       {assistant && draft.references.length > 0 ? (

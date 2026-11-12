@@ -2032,9 +2032,7 @@ function EditorWorkspace({
           >
             <div
               className={
-                presentation === "home"
-                  ? "creation-ready-body"
-                  : "mx-3 mt-3 min-w-0 rounded-xl bg-muted/40"
+                presentation === "home" ? "creation-ready-body" : "min-w-0"
               }
             >
               <InputGroupAddon

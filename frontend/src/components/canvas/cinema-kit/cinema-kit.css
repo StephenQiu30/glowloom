@@ -195,17 +195,21 @@
   max-height: 150px;
 }
 .cinema-kit-bar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   align-items: center;
   gap: 8px;
   padding: 8px;
 }
-.cinema-kit-chip {
+.cinema-kit-entry {
   display: flex;
+  min-width: 0;
   align-items: center;
-  border: 1px solid var(--canvas-tool-border);
-  border-radius: 8px;
+  gap: 4px;
+}
+.cinema-kit-bar > [role="alert"] {
+  grid-column: 1 / -1;
 }
 @media (max-width: 640px) {
   .cinema-camera-columns {

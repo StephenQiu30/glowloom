@@ -1178,7 +1178,7 @@ button:not(:disabled),
   background: transparent;
   color: var(--foreground);
   font-size: 14px;
-  line-height: 22px;
+  line-height: 24px;
 }
 .creation-editor-body {
   display: flex;
@@ -1205,7 +1205,7 @@ button:not(:disabled),
 .creation-ready-prompt .tiptap {
   color: var(--foreground);
   font-size: 14px;
-  line-height: 22px;
+  line-height: 24px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
