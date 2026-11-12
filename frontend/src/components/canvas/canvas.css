@@ -900,10 +900,8 @@ html:has(.canvas-controls-layout) {
     border: 0;
     background: transparent;
   }
-  .canvas-connection-handle[data-tap][data-visible="true"]:not(
-      [data-disabled="true"]
-    )
-    .canvas-node-port {
+  .canvas-connection-handle[data-visible="true"]:not([data-disabled="true"])
+    .canvas-node-port[data-slot="button"] {
     pointer-events: auto;
   }
   .canvas-connection-handle[data-tap] .canvas-node-port::after {

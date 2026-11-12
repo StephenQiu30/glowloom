@@ -857,21 +857,6 @@ function InfiniteCanvasPage({
     [message],
   );
 
-  const connectionGraphReady = useMemo(
-    () =>
-      admitCanvasConnectionGraph(documentIntegration, { nodes, connections }),
-    // Pointer movement does not change these graph/admission identities.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Other integration callbacks are unrelated to connection admission.
-    [
-      nodes,
-      connections,
-      documentIntegration?.initialState,
-      documentIntegration?.frozen,
-      documentIntegration?.admitConnectionGraph,
-      documentIntegration?.admit,
-    ],
-  );
-
   const createHistoryEntry = useCallback(
     (): CanvasHistoryEntry => ({
       nodes: nodesRef.current,
@@ -6615,8 +6600,7 @@ function InfiniteCanvasPage({
                   : undefined
               }
               connectionTypes={
-                !connectionGraphReady ||
-                (hasMultipleSelectedNodes && selectedNodeIds.has(node.id))
+                hasMultipleSelectedNodes && selectedNodeIds.has(node.id)
                   ? { input: false, output: false }
                   : documentIntegration
                     ? {
@@ -6960,7 +6944,6 @@ function InfiniteCanvasPage({
             readOnly={documentIntegration?.frozen}
             onDownload={() => downloadSelection(selectedNodeIdsRef.current)}
             onConnectStart={
-              connectionGraphReady &&
               selectedNodes.some(
                 (node) => canvasConnectionHandles(node.type).output,
               )

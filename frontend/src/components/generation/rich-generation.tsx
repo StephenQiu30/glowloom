@@ -32,6 +32,7 @@ import {
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  RefreshCw,
   SlidersHorizontal,
 } from "lucide-react";
 import {
@@ -76,7 +77,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -512,6 +512,7 @@ function EditorWorkspace({
     [],
   );
   const [modelError, setModelError] = useState(initialModelError);
+  const [modelRetryAttempt, setModelRetryAttempt] = useState(0);
   const [reloadingModels, setReloadingModels] = useState(false);
   const modelRequest = useRef<AbortController | null>(null);
   useEffect(() => () => modelRequest.current?.abort(), []);
@@ -534,6 +535,7 @@ function EditorWorkspace({
       if (!controller.signal.aborted) {
         setModels([]);
         setModelError(errorText(error));
+        setModelRetryAttempt((attempt) => attempt + 1);
       }
     } finally {
       if (!controller.signal.aborted) setReloadingModels(false);
@@ -1699,6 +1701,39 @@ function EditorWorkspace({
         }
       />
     );
+  const modelControl = modelError ? (
+    <Button
+      variant="ghost"
+      size="toolbar"
+      aria-label="重试模型目录"
+      disabled={reloadingModels || frozen}
+      onClick={() => void retryModels()}
+    >
+      <RefreshCw data-icon="inline-start" />
+      {reloadingModels ? "正在读取模型…" : "重试模型"}
+    </Button>
+  ) : (
+    <ModelPicker
+      mode={draft.mode}
+      models={models}
+      value={draft.modelVersion}
+      disabled={frozen || !session}
+      onSelect={(target) => {
+        if (target.current_version?.id)
+          void selectMode(
+            target.current_version.id,
+            referenceMode(
+              {
+                ...draft,
+                modelVersion: target.current_version.id,
+              },
+              target,
+            ) ?? "",
+          );
+      }}
+    />
+  );
+
   return (
     <section
       ref={workspaceRef}
@@ -1937,25 +1972,7 @@ function EditorWorkspace({
                   <p role="status" className="text-xs text-muted-foreground">
                     {saveState} · r{revision}
                   </p>
-                  <ModelPicker
-                    mode={draft.mode}
-                    models={models}
-                    value={draft.modelVersion}
-                    disabled={frozen || !session}
-                    onSelect={(target) => {
-                      if (target.current_version?.id)
-                        void selectMode(
-                          target.current_version.id,
-                          referenceMode(
-                            {
-                              ...draft,
-                              modelVersion: target.current_version.id,
-                            },
-                            target,
-                          ) ?? "",
-                        );
-                    }}
-                  />
+                  {modelControl}
                   {parameterControls}
                 </PopoverContent>
               </Popover>
@@ -2113,25 +2130,7 @@ function EditorWorkspace({
                   }
                 >
                   {presentation === "home" && headerActions}
-                  <ModelPicker
-                    mode={draft.mode}
-                    models={models}
-                    value={draft.modelVersion}
-                    disabled={frozen || !session}
-                    onSelect={(target) => {
-                      if (target.current_version?.id)
-                        void selectMode(
-                          target.current_version.id,
-                          referenceMode(
-                            {
-                              ...draft,
-                              modelVersion: target.current_version.id,
-                            },
-                            target,
-                          ) ?? "",
-                        );
-                    }}
-                  />
+                  {modelControl}
                 </div>
                 <Popover>
                   <PopoverTrigger asChild>
@@ -2376,20 +2375,11 @@ function EditorWorkspace({
           </>
         )}
         {modelError && (
-          <Alert>
-            <AlertTitle>模型目录暂不可用</AlertTitle>
-            <AlertDescription>
-              {modelError}。正文和参考仍可编辑、保存；恢复模型目录前不能生成。
-            </AlertDescription>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={reloadingModels}
-              onClick={() => void retryModels()}
-            >
-              {reloadingModels ? "正在读取模型…" : "重试模型目录"}
-            </Button>
-          </Alert>
+          <FeedbackToast
+            message="模型暂不可用"
+            attempt={modelRetryAttempt}
+            action={{ label: "重试", onClick: () => void retryModels() }}
+          />
         )}
         {!compact && issuesPanel}
         {error && <FeedbackToast message={error} />}

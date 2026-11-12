@@ -1005,7 +1005,11 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
-              if (restorePanelFocus.current && selectedForFocus.current)
+              if (
+                !isConnecting &&
+                restorePanelFocus.current &&
+                selectedForFocus.current
+              )
                 nodeElement.current?.focus({ preventScroll: true });
             }}
             data-canvas-no-zoom

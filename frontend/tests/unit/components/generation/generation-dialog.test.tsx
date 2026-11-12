@@ -798,9 +798,9 @@ it("紧凑上传进入同一审核与恢复流程，失败重试复用引用身�
 });
 
 it("模型目录503仍能输入和保存，局部重试恢复模型且保留正文引用与会话", async () => {
-  api.models.mockRejectedValueOnce(
-    new RequestError("dependency_unavailable", 503),
-  );
+  api.models
+    .mockRejectedValueOnce(new RequestError("dependency_unavailable", 503))
+    .mockRejectedValueOnce(new RequestError("dependency_unavailable", 503));
   const draft = emptyPromptDraft();
   draft.document.content[0].content = [{ type: "text", text: "初始正文" }];
   draft.modelVersion = version;
@@ -843,7 +843,10 @@ it("模型目录503仍能输入和保存，局部重试恢复模型且保留正�
   );
   const editor = await screen.findByRole("textbox", { name: "创作提示词" });
   expect(editor.getAttribute("contenteditable")).toBe("true");
-  expect(await screen.findByText("模型目录暂不可用")).toBeTruthy();
+  expect(await findFeedback("模型暂不可用")).toBeTruthy();
+  expect(screen.queryByText(/dependency_unavailable/)).toBeNull();
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+  expect(screen.getByRole("button", { name: "重试模型目录" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
   expect(api.quote).not.toHaveBeenCalled();
   expect(screen.queryByText("需要调整")).toBeNull();
@@ -865,8 +868,11 @@ it("模型目录503仍能输入和保存，局部重试恢复模型且保留正�
   const identityCalls = api.identity.mock.calls.length;
   const submissionCalls = api.current.mock.calls.length;
   fireEvent.click(screen.getByRole("button", { name: "重试模型目录" }));
+  await waitFor(() => expect(api.models).toHaveBeenCalledTimes(2));
+  expect(await findFeedback("模型暂不可用")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "重试" }));
   await waitFor(() =>
-    expect(screen.queryByText("模型目录暂不可用")).toBeNull(),
+    expect(screen.queryByRole("button", { name: "重试模型目录" })).toBeNull(),
   );
   expect(
     screen.getByRole("combobox", { name: "生成模型" }).textContent,

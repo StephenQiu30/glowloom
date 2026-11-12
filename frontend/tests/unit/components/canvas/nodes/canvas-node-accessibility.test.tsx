@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 import { CanvasNode } from "@/components/canvas/nodes/canvas-node";
@@ -205,4 +211,37 @@ it("keeps a world-space hover field around each port rather than a fixed square 
   expect(field.style.height).toBe("120px");
   expect(button.style.width).toBe("20px");
   view.unmount();
+});
+
+it("keeps selected ports usable while the composer opens and yields focus to a connection gesture", async () => {
+  const p = props();
+  const view = render(
+    <CanvasNode
+      {...p}
+      isSelected
+      showPanel
+      renderPanel={() => <input aria-label="提示词" />}
+    />,
+  );
+  const button = screen.getByRole("button", { name: "连接输出节点" });
+  const group = screen.getByRole("group", { name: "文本节点：可读文本" });
+  expect(button.tabIndex).toBe(0);
+  fireEvent.mouseLeave(group);
+  expect(button.parentElement?.dataset.visible).toBe("true");
+  fireEvent.mouseDown(button, { button: 0 });
+  expect(p.onConnectStart).toHaveBeenCalledOnce();
+  const focus = vi.spyOn(group, "focus");
+  view.rerender(
+    <CanvasNode
+      {...p}
+      isSelected
+      isConnecting
+      renderPanel={() => <input aria-label="提示词" />}
+    />,
+  );
+  await waitFor(() =>
+    expect(screen.queryByRole("textbox", { name: "提示词" })).toBeNull(),
+  );
+  expect(focus).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "连接输出节点" })).toBe(button);
 });
