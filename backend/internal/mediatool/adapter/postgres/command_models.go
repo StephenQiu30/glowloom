@@ -13,8 +13,15 @@ type principalLockRecord struct {
 }
 
 func lockMediatoolPrincipal(tx *gorm.DB, actorID uuid.UUID) error {
+	// Authorization already retains identity SHARE and project locks. Upgrading
+	// the identity row here deadlocks with another authorized project reader.
+	// Serialize this module's receipts independently; each command remains
+	// scoped to one project and rechecks its original sources in that scope.
+	if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?::text,0))`, "mediatool:principal:"+actorID.String()).Error; err != nil {
+		return err
+	}
 	var row principalLockRecord
-	return tx.Table(`identity."user"`).Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", actorID).Take(&row).Error
+	return tx.Table(`identity."user"`).Select("id").Clauses(clause.Locking{Strength: "SHARE"}).Where("id = ?", actorID).Take(&row).Error
 }
 
 type projectLockRecord struct {

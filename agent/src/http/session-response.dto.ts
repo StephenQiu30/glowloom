@@ -253,6 +253,17 @@ export class AgentState {
   @ValidateIf(whenPresent)
   @IsObject()
   failure?: Record<string, unknown>;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    type: Object,
+    additionalProperties: true,
+  })
+  @Expose()
+  @ValidateIf(whenNonNull)
+  @IsObject()
+  production?: Record<string, unknown> | null;
 }
 
 export class CommittedEvent {
@@ -327,6 +338,17 @@ export class MessagePage {
 }
 
 export class RunSnapshot {
+  @ApiProperty({
+    required: false,
+    type: 'array',
+    items: { type: 'object', additionalProperties: true },
+  })
+  @Expose()
+  @ValidateIf(whenPresent)
+  @IsArray()
+  @IsObject({ each: true })
+  recovery?: Record<string, unknown>[];
+
   @ApiProperty({ type: 'boolean' })
   @Expose()
   @IsBoolean()

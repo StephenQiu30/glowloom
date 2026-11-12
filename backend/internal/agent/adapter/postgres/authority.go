@@ -4,6 +4,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,6 +52,7 @@ func (s *Store) AuthorizeProject(ctx context.Context, actor identity.Principal, 
 }
 
 type authorityRow struct {
+	GoalContract                                                    []byte
 	RootRunID, SessionID, SubmissionID, RequestID                   uuid.UUID
 	ContentHash                                                     string
 	SkillPins                                                       []byte
@@ -74,6 +76,14 @@ func load(tx *gorm.DB, rid uuid.UUID) (domain.Authority, error) {
 	if json.Unmarshal(r.Scope, &a.Scope) != nil {
 		return a, domain.ErrInvalid
 	}
+	if json.Unmarshal(r.GoalContract, &a.GoalContract) != nil {
+		return a, domain.ErrInvalid
+	}
+	goal, err := domain.NormalizeGoalContract(a.GoalContract, a.Scope)
+	if err != nil {
+		return a, err
+	}
+	a.GoalContract = goal
 	a.ModelSelection = append(json.RawMessage(nil), r.ModelSelection...)
 	if len(r.SkillPins) > 0 && json.Unmarshal(r.SkillPins, &a.SkillPins) != nil {
 		return a, domain.ErrInvalid
@@ -93,11 +103,32 @@ func load(tx *gorm.DB, rid uuid.UUID) (domain.Authority, error) {
 		}
 		a.Current = &d
 	}
+	projection, err := rootCostProjection(tx, a)
+	switch {
+	case errors.Is(err, domain.ErrUnavailable):
+		// Preserve free original recovery while refusing any new charge when the
+		// financial projection lacks coherent authoritative evidence.
+		a.CostProjectionUnavailable = true
+	case err != nil:
+		return a, err
+	default:
+		a.ReservedMicros = projection.PendingCommitment + projection.SettledCharge
+		if a.ReservedMicros != r.ReservedMicros {
+			if err = tx.Exec(`UPDATE agent_business.run_authorization SET reserved_micros=? WHERE root_run_id=?`, a.ReservedMicros, a.RootRunID).Error; err != nil {
+				return a, err
+			}
+		}
+	}
 	return a, nil
 }
 
 // AdmitRun records accepted creative intent and its business authorization.
 func (s *Store) AdmitRun(ctx context.Context, in domain.Admission) error {
+	goal, err := domain.NormalizeGoalContract(in.GoalContract, in.Scope)
+	if err != nil {
+		return err
+	}
+	in.GoalContract = goal
 	if len(in.ModelSelection) == 0 {
 		in.ModelSelection = json.RawMessage(`{}`)
 	}
@@ -120,12 +151,17 @@ func (s *Store) AdmitRun(ctx context.Context, in domain.Admission) error {
 			return err
 		}
 		var existing int64
-		if err := tx.Raw(`SELECT count(*) FROM agent_business.run_authorization WHERE root_run_id=?`, in.RootRunID).Scan(&existing).Error; err != nil {
+		if err := tx.Raw(`SELECT count(*) FROM agent_business.run_authorization WHERE root_run_id=? OR (session_id=? AND request_id=?)`, in.RootRunID, in.SessionID, in.RequestID).Scan(&existing).Error; err != nil {
 			return err
 		}
 		if existing == 0 {
+			// Source availability gates new intent, not recovery of an already
+			// accepted request. Replays still compare all frozen input below.
+			if err := validateGoalSource(tx, in); err != nil {
+				return err
+			}
 			var unresolved int64
-			if err := tx.Raw(`SELECT count(*) FROM agent_business.call_receipt c JOIN agent_business.run_authorization a ON a.root_run_id=c.root_run_id WHERE a.session_id=? AND c.status IN ('in_flight','unknown')`, in.SessionID).Scan(&unresolved).Error; err != nil {
+			if err := tx.Raw(`SELECT count(*) FROM agent_business.call_receipt c JOIN agent_business.run_authorization a ON a.root_run_id=c.root_run_id WHERE a.session_id=? AND c.status IN (?,?)`, in.SessionID, domain.CallStatusInFlight, domain.CallStatusUnknown).Scan(&unresolved).Error; err != nil {
 				return err
 			}
 			if unresolved > 0 {
@@ -148,18 +184,27 @@ func (s *Store) AdmitRun(ctx context.Context, in domain.Admission) error {
 		if string(pins) == "null" {
 			pins = []byte(`[]`)
 		}
+		goalJSON, err := json.Marshal(in.GoalContract)
+		if err != nil {
+			return err
+		}
 		raw, err := json.Marshal(in.Scope)
 		if err != nil {
 			return err
 		}
-		if err = tx.Exec(`INSERT INTO agent_business.run_authorization(root_run_id,session_id,submission_id,request_id,content_hash,scope,budget_micros,skill_pins,model_selection) VALUES(?,?,?,?,?,?::jsonb,?,?::jsonb,?::jsonb) ON CONFLICT DO NOTHING`, in.RootRunID, in.SessionID, in.SubmissionID, in.RequestID, in.ContentHash, string(raw), in.BudgetMicros, string(pins), string(in.ModelSelection)).Error; err != nil {
+		if err = tx.Exec(`INSERT INTO agent_business.run_authorization(root_run_id,session_id,submission_id,request_id,content_hash,scope,budget_micros,skill_pins,model_selection,goal_contract) VALUES(?,?,?,?,?,?::jsonb,?,?::jsonb,?::jsonb,?::jsonb) ON CONFLICT DO NOTHING`, in.RootRunID, in.SessionID, in.SubmissionID, in.RequestID, in.ContentHash, string(raw), in.BudgetMicros, string(pins), string(in.ModelSelection), string(goalJSON)).Error; err != nil {
 			return err
 		}
 		a, err := load(tx, in.RootRunID)
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrConflict
+		}
 		if err != nil {
 			return err
 		}
-		if a.ContentHash != in.ContentHash || a.SessionID != in.SessionID || a.RequestID != in.RequestID || domain.ContentHash(a.Scope) != domain.ContentHash(in.Scope) || a.BudgetMicros != in.BudgetMicros || domain.Hash(a.ModelSelection) != domain.Hash(in.ModelSelection) || domain.ContentHash(a.SkillPins) != domain.ContentHash(in.SkillPins) && (len(a.SkillPins) > 0 || len(in.SkillPins) > 0) {
+		// SubmissionID is the current execution segment and changes at
+		// Quiesce. It is not part of the immutable accepted input.
+		if domain.ContentHash(a.GoalContract) != domain.ContentHash(in.GoalContract) || a.ContentHash != in.ContentHash || a.SessionID != in.SessionID || a.RequestID != in.RequestID || domain.ContentHash(a.Scope) != domain.ContentHash(in.Scope) || a.BudgetMicros != in.BudgetMicros || domain.Hash(a.ModelSelection) != domain.Hash(in.ModelSelection) || domain.ContentHash(a.SkillPins) != domain.ContentHash(in.SkillPins) && (len(a.SkillPins) > 0 || len(in.SkillPins) > 0) {
 			return domain.ErrConflict
 		}
 		return nil
@@ -207,6 +252,9 @@ func grantExpiry(now, lease time.Time) (time.Time, error) {
 	return expiry, nil
 }
 func spendableMicros(a domain.Authority) int64 {
+	if a.CostProjectionUnavailable {
+		return 0
+	}
 	return max(int64(0), a.BudgetMicros-a.ReservedMicros)
 }
 
@@ -458,7 +506,7 @@ func (s *Store) Quiesce(ctx context.Context, rid uuid.UUID, in domain.QuiescedRe
 			return nil
 		}
 		var active int64
-		if err = tx.Raw(`SELECT count(*) FROM agent_business.call_receipt WHERE root_run_id=? AND status='in_flight'`, rid).Scan(&active).Error; err != nil {
+		if err = tx.Raw(`SELECT count(*) FROM agent_business.call_receipt WHERE root_run_id=? AND status=?`, rid, domain.CallStatusInFlight).Scan(&active).Error; err != nil {
 			return err
 		}
 		if active > 0 {

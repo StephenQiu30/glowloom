@@ -66,6 +66,14 @@ func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 		return out, err
 	}
 	b.Capabilities.RunSnapshot = func(ctx context.Context, g domain.Grant) (any, error) {
+		g, err := b.Store.ValidateGrant(ctx, g)
+		if err != nil {
+			return nil, err
+		}
+		authority, err := b.Store.CurrentAuthority(ctx, g.RootRunID)
+		if err != nil {
+			return nil, err
+		}
 		out, err := b.Capabilities.Snapshot(ctx, g.Scope)
 		if err != nil {
 			return nil, err
@@ -76,6 +84,22 @@ func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 		}
 		view := out.(map[string]any)
 		view["shot_deliveries"] = deliveries
+		completion, err := goalCompletion(authority.GoalContract, deliveries)
+		if err != nil {
+			return nil, err
+		}
+		cost, err := b.Store.CostSnapshot(ctx, g.RootRunID)
+		if err != nil {
+			return nil, err
+		}
+		view["goal_contract"] = authority.GoalContract
+		view["goal_completion"] = completion
+		operations, err := productionOperationsSnapshot(ctx, database.WithContext(ctx), g)
+		if err != nil {
+			return nil, err
+		}
+		view["production_operations"] = operations
+		view["cost"] = cost
 		return view, nil
 	}
 	return b

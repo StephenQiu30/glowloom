@@ -1,6 +1,8 @@
+import { executionPolicy } from '../pi-durable/policy.js';
 import { DEFINITION_HASH } from '../pi-durable/definitions.js';
 import { createHash } from 'node:crypto';
 import type { BusinessTool } from '../business/client.js';
+import { freezeGoalContract, type GoalContract } from '../business/goal.js';
 
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
@@ -46,6 +48,8 @@ export function stableId(namespace: string, name: string) {
 }
 export interface FrozenManifest {
   pi_version: '1.5.0';
+  execution_policy: typeof executionPolicy;
+  goal_contract: GoalContract;
   definition_hash: string;
   trusted_extensions: { path: string; sha256: string }[];
   model_key: string;
@@ -62,6 +66,11 @@ export function freezeManifest(
   input: Record<string, unknown>,
   tools: BusinessTool[],
 ): Readonly<FrozenManifest> {
+  if (
+    input.execution_policy !== undefined &&
+    canonicalHash(input.execution_policy) !== canonicalHash(executionPolicy)
+  )
+    throw new Error('Execution policy is selected by the service');
   if (
     input.trusted_extensions !== undefined &&
     JSON.stringify(input.trusted_extensions) !== '[]'
@@ -111,6 +120,8 @@ export function freezeManifest(
     throw new Error('Invalid Skill pins');
   const body = {
     pi_version: '1.5.0' as const,
+    execution_policy: structuredClone(executionPolicy),
+    goal_contract: freezeGoalContract(input.goal_contract),
     definition_hash: DEFINITION_HASH,
     trusted_extensions: [],
     model_key: input.model_key,

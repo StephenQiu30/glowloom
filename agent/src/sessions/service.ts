@@ -20,8 +20,7 @@ import {
   type RunRow,
 } from './persistence/store.js';
 import { SessionRuntime } from './runtime.js';
-import { freezeManifest, stableId } from './manifest.js';
-import { DEFINITION_HASH } from '../pi-durable/definitions.js';
+import { freezeManifest, stableId, hasCurrentDefinitions } from './manifest.js';
 import {
   StateDoc,
   RunStatus,
@@ -29,10 +28,22 @@ import {
 } from '../pi-durable/docs.js';
 import { ConversationStore } from './persistence/conversations.js';
 import type { DeliveryOptions } from './delivery.js';
+import { recoveryDefaults, runtimeDefaults } from '../config.js';
+import {
+  RecoveryStore,
+  RecoveryKind,
+  RecoveryCode,
+  type RecoveryEvent,
+} from './recovery.js';
 const context = BACKGROUND_CONTEXT;
 export class SessionService implements AgentApplication {
   readonly store: SessionStore;
   readonly conversations: ConversationStore;
+  private readonly backoff: RecoveryStore;
+  readonly recoveryStatus = {
+    last_success_at: null as string | null,
+    consecutive_failures: 0,
+  };
   private active = new Map<string, SessionRuntime>();
   private opening = new Map<string, Promise<SessionRuntime>>();
   private jobs = new Map<string, Promise<void>>();
@@ -43,15 +54,19 @@ export class SessionService implements AgentApplication {
   constructor(
     private pool: Pool,
     private business: BusinessClient,
-    private options: { leaseMs: number } & DeliveryOptions,
+    private options: {
+      leaseMs: number;
+      onRecoveryEvent?: (event: RecoveryEvent) => void;
+    } & DeliveryOptions,
   ) {
     this.store = new SessionStore(pool);
+    this.backoff = new RecoveryStore(pool);
     this.conversations = new ConversationStore(pool, this.store);
   }
   async ready() {
     try {
       await this.pool.query(
-        'SELECT s.id,s.pinned,s.archived_at,r.input,r.retry_of_run_id,m.message_id FROM agent.service_sessions s LEFT JOIN agent.service_runs r ON r.session_id=s.id LEFT JOIN agent.public_messages m ON m.run_id=r.id LIMIT 0',
+        'SELECT s.id,s.pinned,s.archived_at,r.input,r.retry_of_run_id,m.message_id,b.attempts FROM agent.service_sessions s LEFT JOIN agent.service_runs r ON r.session_id=s.id LEFT JOIN agent.public_messages m ON m.run_id=r.id LEFT JOIN agent.recovery_backoff b ON b.root_run_id=r.id LIMIT 0',
       );
       return !this.stopping;
     } catch {
@@ -151,7 +166,16 @@ export class SessionService implements AgentApplication {
       this.business,
       run,
       this.options.leaseMs,
-      this.options,
+      {
+        ...this.options,
+        onCloseFailure: () =>
+          this.noteRecoveryFailure(
+            RecoveryKind.Run,
+            run.id,
+            run.id,
+            RecoveryCode.CloseFailed,
+          ),
+      },
     )
       .then(async (value) => {
         if (this.stopping) {
@@ -166,12 +190,24 @@ export class SessionService implements AgentApplication {
     return open;
   }
   private launch(run: RunRow) {
-    if (this.stopping || this.jobs.has(run.id) || this.jobs.size >= 4) return;
+    if (
+      this.stopping ||
+      this.jobs.has(run.id) ||
+      this.jobs.size >= runtimeDefaults.maxConcurrentRoots
+    )
+      return;
     const job = (async () => {
       const runtime = await this.runtime(run);
       await runtime.start();
+      await this.backoff.succeeded(RecoveryKind.Run, run.id);
     })()
       .catch(async () => {
+        await this.noteRecoveryFailure(
+          RecoveryKind.Run,
+          run.id,
+          run.id,
+          RecoveryCode.ExecutionUnavailable,
+        );
         const current = this.active.get(run.session_id);
         if (current && !current.isClosed)
           await current.harness
@@ -190,7 +226,14 @@ export class SessionService implements AgentApplication {
                 state.execution_revision++;
               }
             }, context)
-            .catch(() => {});
+            .catch(() =>
+              this.noteRecoveryFailure(
+                RecoveryKind.Run,
+                run.id,
+                run.id,
+                RecoveryCode.ExecutionUnavailable,
+              ),
+            );
       })
       .finally(async () => {
         const current = this.active.get(run.session_id);
@@ -206,8 +249,17 @@ export class SessionService implements AgentApplication {
                 await current.close();
               }
             })
-            .catch(() => {});
+            .catch(() =>
+              this.noteRecoveryFailure(
+                RecoveryKind.Run,
+                run.id,
+                run.id,
+                RecoveryCode.CloseFailed,
+              ),
+            );
         }
+        if (current?.isClosed && this.active.get(run.session_id) === current)
+          this.active.delete(run.session_id);
         this.jobs.delete(run.id);
         // A control may submit its continuation before the previous drive has returned.
         if (continueRun) this.launch(run);
@@ -315,6 +367,7 @@ export class SessionService implements AgentApplication {
             ? RunStatus.WaitingDelivery
             : RunStatus.Running;
           state.pending_proposal = null;
+          state.pending_production_continuation = null;
           state.execution_revision++;
           const applied = {
             decision_id: input.decision_id,
@@ -359,6 +412,8 @@ export class SessionService implements AgentApplication {
       input.root_run_id,
       receipt as Parameters<BusinessClient['receipt']>[1],
     );
+    if (input.action === 'resume' && receipt.status === 'applied')
+      await this.backoff.succeeded(RecoveryKind.Run, input.root_run_id);
     return receipt;
   }
   async events(
@@ -402,48 +457,126 @@ export class SessionService implements AgentApplication {
           : row.payload,
     }));
   }
-  startRecovery() {
-    if (this.pump || this.stopping) return;
-    const recover = async () => {
+  private async noteRecoveryFailure(
+    kind: (typeof RecoveryKind)[keyof typeof RecoveryKind],
+    subject: string,
+    root: string,
+    code: (typeof RecoveryCode)[keyof typeof RecoveryCode],
+    terminal = false,
+  ) {
+    this.options.onRecoveryEvent?.({
+      kind,
+      subject_id: subject,
+      root_run_id: root,
+      code,
+    });
+    try {
+      await this.backoff.failed(kind, subject, root, code, terminal);
+    } catch {
+      this.options.onRecoveryEvent?.({
+        kind: 'scan',
+        code: RecoveryCode.ScanUnavailable,
+      });
+    }
+  }
+
+  async recoverOnce() {
+    if (this.stopping) return;
+    try {
+      await this.scanRecovery();
+      this.recoveryStatus.last_success_at = new Date().toISOString();
+      this.recoveryStatus.consecutive_failures = 0;
+    } catch {
+      this.recoveryStatus.consecutive_failures++;
+      this.options.onRecoveryEvent?.({
+        kind: 'scan',
+        code: RecoveryCode.ScanUnavailable,
+        consecutive_failures: this.recoveryStatus.consecutive_failures,
+      });
+    }
+  }
+
+  private async scanRecovery() {
+    const controls = await this.pool.query<{ input: ControlInput }>(
+      `SELECT c.input FROM agent.service_control_inbox c
+       LEFT JOIN agent.recovery_backoff b ON b.kind=$1 AND b.subject_id=c.decision_id
+       WHERE c.receipt IS NULL AND b.parked_at IS NULL AND (b.next_attempt_at IS NULL OR b.next_attempt_at<=clock_timestamp())
+       ORDER BY coalesce(b.next_attempt_at,c.created_at),c.decision_id LIMIT $2`,
+      [RecoveryKind.Control, recoveryDefaults.controlBatch],
+    );
+    for (const row of controls.rows) {
       if (this.stopping) return;
-      const controls = await this.pool.query<{ input: ControlInput }>(
-        'SELECT input FROM agent.service_control_inbox WHERE receipt IS NULL ORDER BY created_at LIMIT 20',
-      );
-      for (const row of controls.rows) {
-        if (this.stopping) return;
-        await this.command(row.input.root_run_id, row.input).catch(() => {});
+      try {
+        await this.command(row.input.root_run_id, row.input);
+        await this.backoff.succeeded(
+          RecoveryKind.Control,
+          row.input.decision_id,
+        );
+      } catch {
+        await this.noteRecoveryFailure(
+          RecoveryKind.Control,
+          row.input.decision_id,
+          row.input.root_run_id,
+          RecoveryCode.ControlUnavailable,
+        );
       }
-      const runs = await this.pool.query<RunRow>(
-        `SELECT latest.* FROM (SELECT DISTINCT ON(session_id) * FROM agent.service_runs ORDER BY session_id,accepted_revision DESC) latest
-    LEFT JOIN LATERAL (SELECT payload->>'status' status,payload->'delivery_wait'->>'next_wakeup_at' wakeup FROM agent.runtime_events e WHERE e.session_id=latest.session_id::text AND e.payload->>'root_run_id'=latest.id::text AND e.event_type='agent.state' ORDER BY commit_seq DESC,event_ordinal DESC LIMIT 1) state ON true
-    LEFT JOIN agent.runtime_sessions owner ON owner.session_id=latest.session_id::text
-    WHERE latest.manifest->>'definition_hash'=$1 AND latest.manifest->>'pi_version'='1.5.0'
-    AND (coalesce(state.status,'accepted') IN ('accepted','running') OR
-      (state.status=$2 AND coalesce(state.wakeup,'')<=to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
-    AND (owner.session_id IS NULL OR owner.lease_until<=clock_timestamp())
-    ORDER BY CASE WHEN state.status=$2 THEN state.wakeup ELSE to_char(latest.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END NULLS FIRST,latest.id LIMIT 32`,
-        [DEFINITION_HASH, RunStatus.WaitingDelivery],
-      );
-      for (const run of runs.rows) {
-        if (this.stopping) return;
+    }
+    const runs = await this.pool.query<RunRow>(
+      `SELECT latest.* FROM (SELECT DISTINCT ON(session_id) * FROM agent.service_runs ORDER BY session_id,accepted_revision DESC) latest
+       LEFT JOIN LATERAL (SELECT payload->>'status' status,payload->'delivery_wait'->>'next_wakeup_at' wakeup FROM agent.runtime_events e WHERE e.session_id=latest.session_id::text AND e.payload->>'root_run_id'=latest.id::text AND e.event_type='agent.state' ORDER BY commit_seq DESC,event_ordinal DESC LIMIT 1) state ON true
+       LEFT JOIN agent.runtime_sessions owner ON owner.session_id=latest.session_id::text
+       LEFT JOIN agent.recovery_backoff b ON b.kind=$1 AND b.subject_id=latest.id
+       WHERE (coalesce(state.status,'accepted') IN ('accepted','running') OR
+         (state.status=$2 AND coalesce(state.wakeup,'')<=to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+       AND (owner.session_id IS NULL OR owner.lease_until<=clock_timestamp())
+       AND b.parked_at IS NULL AND (b.next_attempt_at IS NULL OR b.next_attempt_at<=clock_timestamp())
+       ORDER BY coalesce(b.next_attempt_at,CASE WHEN state.status=$2 THEN state.wakeup::timestamptz ELSE latest.created_at END),latest.id LIMIT $3`,
+      [RecoveryKind.Run, RunStatus.WaitingDelivery, recoveryDefaults.runBatch],
+    );
+    for (const run of runs.rows) {
+      if (this.stopping) return;
+      if (!hasCurrentDefinitions(run.manifest) || !run.input) {
+        await this.noteRecoveryFailure(
+          RecoveryKind.Run,
+          run.id,
+          run.id,
+          RecoveryCode.DefinitionsUnavailable,
+          true,
+        );
+        continue;
+      }
+      try {
         const snapshot = await this.store.snapshot(run);
         if (
-          ['accepted', 'running', RunStatus.WaitingDelivery].includes(
-            String(snapshot.state.status),
-          )
+          (
+            [
+              RunStatus.Accepted,
+              RunStatus.Running,
+              RunStatus.WaitingDelivery,
+            ] as string[]
+          ).includes(snapshot.state.status)
         )
           this.launch(run);
+      } catch {
+        await this.noteRecoveryFailure(
+          RecoveryKind.Run,
+          run.id,
+          run.id,
+          RecoveryCode.ExecutionUnavailable,
+        );
       }
-    };
+    }
+  }
+
+  startRecovery() {
+    if (this.pump || this.stopping) return;
     const tick = () => {
       if (this.stopping || this.recovery) return;
-      this.recovery = recover()
-        .catch(() => {})
-        .finally(() => {
-          this.recovery = undefined;
-        });
+      this.recovery = this.recoverOnce().finally(() => {
+        this.recovery = undefined;
+      });
     };
-    this.pump = setInterval(tick, 1000);
+    this.pump = setInterval(tick, recoveryDefaults.pollMs);
     this.pump.unref();
     tick();
   }
@@ -462,10 +595,17 @@ export class SessionService implements AgentApplication {
   private async drain() {
     await this.recovery;
     await Promise.allSettled([...this.opening.values()]);
-    await Promise.allSettled(
+    const closed = await Promise.allSettled(
       [...this.active.values()].map((runtime) => runtime.close()),
     );
     await Promise.allSettled([...this.jobs.values()]);
     this.active.clear();
+    if (closed.some((result) => result.status === 'rejected'))
+      throw new AggregateError(
+        closed
+          .filter((result) => result.status === 'rejected')
+          .map(() => new Error(RecoveryCode.CloseFailed)),
+        'Execution shutdown failed',
+      );
   }
 }

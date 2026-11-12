@@ -1,3 +1,4 @@
+import { RecoveryStore } from '../recovery.js';
 import { publicState } from '../../pi-durable/events.js';
 import type { Pool, PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
@@ -235,7 +236,9 @@ export class SessionStore {
         [run.session_id],
       )
     ).rows[0];
+    const recovery = await new RecoveryStore(client).read(run.id);
     const base = {
+      recovery,
       execution_available: hasCurrentDefinitions(run.manifest) && !!run.input,
       history_incomplete: !run.input,
       root_run_id: run.id,

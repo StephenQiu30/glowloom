@@ -18,7 +18,7 @@
 
 生产入口为 `agent/src/server.ts`。进程装配 Nest 应用、连接池、Go 客户端与会话服务，在监听后启动恢复循环。HTTP 装配位于 `src/http/`，会话 Controller/DTO 位于同一 HTTP 边界。`pnpm api:schema` 从实际 Nest 路由离线导出 OpenAPI，Go 内部业务 Swagger 独立生成。迁移前的原生 Fastify 路由与 TypeBox 规范仅作为差分验收基线。
 
-备选宿主为 Nest 的 Express 和 Fastify 适配器。Express 会同时引入 HTTP 引擎切换，需要重验解析、流式传输和错误边界。选择 Fastify 作为底层适配器，可集中验证框架接管后的协议差异。官方依据见 [Nest HTTP 适配器](https://docs.nestjs.com/techniques/performance)、[模块](https://docs.nestjs.com/modules)、[自定义 Provider](https://docs.nestjs.com/fundamentals/custom-providers)、[Swagger](https://docs.nestjs.com/openapi/introduction)、[校验](https://docs.nestjs.com/techniques/validation)、[生命周期](https://docs.nestjs.com/fundamentals/lifecycle-events)。
+当前已采用 FastifyAdapter。Nest 现还提供 ExpressAdapter 和 NodeAdapter；切换引擎需重验解析、hook、静态资源、SSE和错误边界。本轮没有测得需要更换适配器的瓶颈，继续使用现有Fastify实现，具体评价见§7.8。官方依据见 [Nest HTTP 适配器](https://docs.nestjs.com/techniques/performance)、[模块](https://docs.nestjs.com/modules)、[自定义 Provider](https://docs.nestjs.com/fundamentals/custom-providers)、[Swagger](https://docs.nestjs.com/openapi/introduction)、[校验](https://docs.nestjs.com/techniques/validation)、[生命周期](https://docs.nestjs.com/fundamentals/lifecycle-events)。
 
 ## 4. 目标
 
@@ -141,6 +141,52 @@ Go 端通过锁定的 `go tool oapi-codegen` 生成当前模型和普通 HTTP �
 ### 7.7 Google TypeScript 实施约定
 
 以 [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html) 为手写代码基线。NodeNext 相对 `.js` 路径、`node:` 前缀、Nest 装饰器元数据、格式化配置和生成物例外由 [Agent 工程规范](../../agent/AGENTS.md) 定义。运行时反射需要的 DTO、注入 token 和类使用值导入，纯类型使用 `import type`。跨网络数据以 `unknown` 进入校验边界，业务错误保持独立的类型与因果链。
+
+### 7.8 本次技术选型评价
+
+依据SRC-ATS-10 / SRC-AGH-22，区分“技术路线合理”“当前能构建”和“生产/产品已接受”。结论：**保留现有技术组合及目录，不再次迁移框架**。技术版本仍以设计32 §7.1.2与实际package/lockfile为唯一基线，本节不复制另一份版本表。
+
+| 选择 | 合理性、已有落点 | 使用边界和备选取舍 |
+| --- | --- | --- |
+| 独立Node/TypeScript服务 | Pi与资源SDK原生TS，独立构建/池/进程，Go只管业务权威 | 不改为Go托管子进程、不按七个角色拆微服务；新增HTTP/授权/恢复边界继续实测 |
+| NestJS + FastifyAdapter | `http/app.ts`已集中Module/Provider/Pipe/Filter、认证hook及DTO，应用与Storage保持普通类 | 官方当前推荐的NodeAdapter是可评估备选，不是已测迁移收益；现有Fastify插件/请求hook/SSE已接线，保留可减少非目标变更；不宣称本项目已做引擎性能比较 |
+| 官方Pi Durable 1.5.0同版包 | 已有Harness、task-owned会话、压缩、事务doc、恢复和官方Storage适配 | 官方API仍属实验性质；锁版本、生产定义及公开API，不自动升级，不再叠加LangGraph/自写循环 |
+| pg + PostgreSQL Storage | 复用现有基础设施与受限schema，owner/epoch与事件投影同事务；不引入第二个ORM | 自定义Storage是项目维护责任，需官方conformance/未知COMMIT/跨进程测试；不把PG可连接当恢复通过 |
+| Go数据库worker | 原operation/media/mediatool及taskruntime已承载提交、查询、归档、渲染 | 不重引Temporal、BullMQ或第二套DAG；长等待释放短worker槽，外部在途容量另计 |
+| Swagger/Umi/oapi-codegen | 双向生成及临时重生成比对已存在，关键grant/receipt有运行校验 | 不从零再建接口生成；类型不是深层语义验证，响应分支、空值、金额和状态仍在各边界校验 |
+| Pino / Vitest / tsc / Compose | 已有脱敏、生产编译、隔离测试定义、独立非root镜像和内部端口 | 运行日志需要补wait/branch/call/operation关联与扫描诊断；测试定义、历史CI、容器健康不等于本轮作品接受 |
+| 官方Go MCP SDK | 拟在Go业务出口接入v1.7.0基线，语言下限与本项目相容，见设计32 §7.17.4 | 当前尚未安装/接通；真实协议互通后锁定，能力协商逐项开放；不是在Node trusted扩展中绕过业务准入 |
+
+本轮工程检查：宿主Node **24.19.0**、pnpm **12.4.2**；在`agent/`执行`pnpm typecheck`与`pnpm build`均退出0，证明现有手写/生成代码可类型检查和生产编译。Dockerfile仍固定Node24.22.2/digest，本轮没有构建该镜像、启动生产JS、执行完整PG/恢复测试或容量测试，不将宿主编译结果写成容器/生产验证。
+
+### 7.9 当前目录评价与最小调整
+
+§7.2目录已与当前源码基本一致，合理且可继续使用；不存在必须先搬成`services/`或全局Controller/Service/DAO结构的依据。保持`http → sessions → Pi/持久化/Go端口`依赖，`business/generated`只放可重生成产物；HTTP类型不进入Pi Storage，Node不导入Go数据库模型。
+
+只有承接实际能力时才细分下列职责；这里是设计位置，不预建空文件/目录：
+
+| 现有位置 | 有行为增量时的最小整理 |
+| --- | --- |
+| `pi-durable/registry.ts` | 保留注册组合；批量委派及branch映射收敛到已有`delegation.ts`，避免继续向431行注册文件堆完整编排 |
+| `pi-durable/` | 增加`policy.ts`拥有执行步数、委派深度/默认分支分配等策略类型与默认值；实际策略在manifest冻结，不建立通用constants包 |
+| `sessions/runtime.ts` | 保持官方Harness生命周期/授权出口；已有delivery.ts继续拥有交付判定，其他持久等待按真实需要抽到`waits.ts`，不另造运行时 |
+| `sessions/service.ts` | 会话/控制用例与recovery pump职责过载时将扫描抽到`recovery.ts`；端口/注入保持普通TS，停机和资源所有权仍唯一 |
+| `pi-durable/storage/`、`sessions/persistence/` | 前者官方执行批次、owner/epoch；后者会话/消息投影；不合并成可跨越业务schema的全局repository |
+| Go `app/agent/` | 仅组合现有正式工具及事务；制作核心随真正交付下沉`production`领域，MCP连接/外部调用随真正接入落`mcp`领域，均遵循adapter→application→domain |
+
+未来Go production领域拥有Shot/Revision/生成覆盖/Take/采用/影响集，复用script/Bible/operation/media/canvas/mediatool消费端口；mcp领域拥有连接版本、受权绑定和远端调用事实，资金及业务动作仍沿原Agent/operation/billing出口。两者不是新微服务、Agent状态副本或独立调度器。新增表只进入`backend/db/schema.sql`完整定义，已有库精确离线变更，禁止启动DDL或新增migrations目录。
+
+### 7.10 策略常量、执行定义与生成链收紧
+
+`pi-durable/policy.ts`集中模型/工具40步、默认分配8步、子角色4个/深度1及自动制作接续4次，版本1整体冻结到manifest；schema上限、上下文提醒和实际预算检查消费同一策略，拒绝请求覆盖策略。root执行槽另归config，Go货币上限另归业务授权；这三类限制不合并。后续可调策略须在启动边界校验并冻结，不热改活跃run。
+
+节点/动作/媒体引用复用所属Go domain常量；正式工具名、candidate kind、effect/replay/role和DeliveryStatus通过业务描述/DTO/生成合同消费，SQL过滤复用所属常量，跨语言wire值用合同测试或生成约束。移除根据工具名称前缀推断权限的隐含规则，未声明角色的写工具默认拒绝；不把任意新工具名自动赋予producer以外角色。纯Agent计划/委派协议常量留Pi职责目录，不建全局字符串仓库。
+
+`definitions.ts`摘要完整可执行src树（开发为.ts、生产为.js，排除声明文件），规范化相对路径、排序并纳入pnpm-lock.yaml字节身份；Docker运行镜像携带该锁文件。开发与生产摘要分别记录，不假定相同。运行参数/租户数据不混入构建摘要，而由manifest独立冻结；新增行为文件不依赖手工8文件白名单。
+
+新增测试必须证明：任何行为文件改变会改变摘要，相同输入构建摘要稳定，角色/工具/Skill/模型策略变化改变manifest。恢复扫描包含不兼容definition并登记原root的停车原因，不能让其从诊断视图消失；`agent.recovery_backoff`仅记录现有run/control的退避元数据，不建立第二任务执行器。执行可用标识只表达当前定义及原输入是否存在；临时停车单独展示，通过原pause/resume控制恢复，Go确认有效resume回执后仅清该root的Run退避，保持原预算、未知费用及调用计数。发布前同定义核对或原版本收束；不修改存量指纹、不增加历史定义加载器/双轨回退。
+
+双向生成链保持§7.6：改Go内部业务合同先更新专用Swagger，经Umi重生成；改Node入站DTO先从实际Nest路由导出，再重生成Go客户端。`api:typecheck`继续单独检查生成声明；禁止手改generated文件。新增制作义务、费用投影、MCP描述字段均必须同时覆盖运行验证、路由/operationId、可重生成差分及消费方语义测试，不能只增加DTO字段。
 
 ## 8. 实施与验收
 

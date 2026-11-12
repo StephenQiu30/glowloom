@@ -16,6 +16,7 @@ import {
   readShotDeliveryProposal,
   shotDeliveryCandidateKind,
 } from "./conversation-state";
+import { ConversationProduction } from "./conversation-production";
 import { ConversationResults } from "./conversation-result";
 const labels: Record<string, string> = {
   accepted: "已受理",
@@ -32,11 +33,13 @@ const labels: Record<string, string> = {
 export function ConversationThread({
   conversation: c,
   projectID,
+  writable = false,
   onUseReply,
   useReplyLabel = "作为剧本草稿",
 }: {
   conversation: ConversationController;
   projectID: string;
+  writable?: boolean;
   onUseReply?: (text: string) => void;
   useReplyLabel?: string;
 }) {
@@ -309,6 +312,18 @@ export function ConversationThread({
                     messages={run.messages}
                     onReuse={(draft) => c.changeDraft(draft)}
                   />
+                  <ConversationProduction
+                    facts={state.production}
+                    writable={writable}
+                    projectID={projectID}
+                    rootRunID={s.root_run_id}
+                    onRefresh={c.refresh}
+                  />
+                  {s.recovery?.some((item) => item.parked_at) && (
+                    <p role="status" className="text-sm text-muted-foreground">
+                      执行恢复已暂停，请核对原任务记录后再继续。
+                    </p>
+                  )}
                   {state.status === "waiting_approval" && state.proposal ? (
                     <div className="space-y-3 rounded-xl border p-4">
                       <p>请确认创作方案</p>
@@ -371,10 +386,28 @@ export function ConversationThread({
                   {state.status === "paused" && latest ? (
                     <Button
                       variant="outline"
-                      disabled={c.stopping || !s.execution_available}
+                      disabled={
+                        !writable || c.stopping || !s.execution_available
+                      }
                       onClick={() => void c.command("resume")}
                     >
                       继续创作
+                    </Button>
+                  ) : null}
+                  {latest &&
+                  (state.status === "needs_reconciliation" ||
+                    state.status === "failed") ? (
+                    <Button
+                      variant="outline"
+                      disabled={
+                        !writable ||
+                        c.stopping ||
+                        !s.execution_available ||
+                        c.phase !== "idle"
+                      }
+                      onClick={() => void c.command("pause")}
+                    >
+                      暂停以核对原任务
                     </Button>
                   ) : null}
                   {terminalStatuses.has(state.status) && s.input ? (

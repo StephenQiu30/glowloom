@@ -34,13 +34,14 @@ import { PhaseTelemetry } from '../pi-durable/telemetry.js';
 import { createBusinessModels } from '../pi-durable/model-provider.js';
 import { buildRegistry, type HarnessGate } from '../pi-durable/registry.js';
 import { eventProjection } from '../pi-durable/events.js';
-import { canonicalHash, hasCurrentDefinitions } from './manifest.js';
+import { canonicalHash, hasCurrentDefinitions, stableId } from './manifest.js';
 import { resolveConversationContent } from './input.js';
 import {
   deliveryOutcome,
   deliveryCreateTool,
   type DeliveryOptions,
 } from './delivery.js';
+import { publicProductionFacts } from '../business/goal.js';
 const context = BACKGROUND_CONTEXT;
 
 export class SessionRuntime {
@@ -150,7 +151,7 @@ export class SessionRuntime {
           model: { provider: 'glowloom', modelId: run.manifest.model_key },
           extensions: registry.rootExtensions,
           tools: registry.rootTools,
-          maxTurns: 40,
+          maxTurns: run.manifest.execution_policy.modelSteps,
           instructions:
             'You are the creative producer. Maintain a concrete versioned plan, delegate professional work, read real evidence, and use authorized business tools. A plan or text answer never means media was generated or approved. Request a business proposal before expensive or destructive work.',
         },
@@ -174,7 +175,7 @@ export class SessionRuntime {
             model: { provider: 'glowloom', modelId: run.manifest.model_key },
             extensions: registry.rootExtensions,
             tools: registry.rootTools,
-            maxTurns: 40,
+            maxTurns: run.manifest.execution_policy.modelSteps,
           });
           Object.assign(state, {
             root_run_id: run.id,
@@ -198,12 +199,18 @@ export class SessionRuntime {
             model_contexts: [],
             submission_status: null,
             delivery_wait: null,
+            production: null,
+            production_continuations: [],
+            pending_production_continuation: null,
           });
         }
       }, context);
       runtime.renewal = setInterval(
         () => {
-          void runtime.renew().catch(() => runtime.close());
+          void runtime.renew().catch(() => {
+            // Failed draining keeps the lease until expiry; the service records the failure.
+            void runtime.close().catch(() => {});
+          });
         },
         Math.max(500, Math.floor(leaseMs / 3)),
       );
@@ -361,7 +368,13 @@ export class SessionRuntime {
         return;
       }
       const field = kind === 'model' ? 'model_steps' : 'tool_steps';
-      if (state[field] >= 40) throw new Error('Run step budget exceeded');
+      if (
+        state[field] >=
+        this.run.manifest.execution_policy[
+          kind === 'model' ? 'modelSteps' : 'toolSteps'
+        ]
+      )
+        throw new Error('Run step budget exceeded');
       const taskId = Number(call.task_id);
       if (!Number.isSafeInteger(taskId))
         throw new Error('Invalid task identity');
@@ -389,7 +402,12 @@ export class SessionRuntime {
               Math.max(0, Number(item[budget] ?? 0) - Number(item[used] ?? 0)),
             0,
           );
-        if (state[field] + held >= 40)
+        if (
+          state[field] + held >=
+          this.run.manifest.execution_policy[
+            kind === 'model' ? 'modelSteps' : 'toolSteps'
+          ]
+        )
           throw new Error('Root budget is allocated to running specialists');
       }
       state[field]++;
@@ -412,7 +430,7 @@ export class SessionRuntime {
     return this.running;
   }
   private async drive() {
-    const state = await this.state();
+    let state = await this.state();
     if (
       !state ||
       !['accepted', 'running', RunStatus.WaitingDelivery].includes(state.status)
@@ -429,17 +447,28 @@ export class SessionRuntime {
         this.activeGrant = undefined;
       }
       await this.refreshDelivery(authorized);
-      return;
+      state = await this.state();
+      if (!authorized || state?.status !== RunStatus.Running) return;
     }
     await this.authorize();
     const segment = this.segment;
+    const continuation = state?.pending_production_continuation;
+    let admitted = false;
     await this.harnessValue.commit(async (tx) => {
       const s = await tx.doc(StateDoc, this.root.id);
-      s.status = 'running';
+      if (
+        this.stopping ||
+        s.segment_id !== segment ||
+        !['accepted', RunStatus.Running].includes(s.status)
+      )
+        return;
+      s.status = RunStatus.Running;
       s.execution_revision++;
+      admitted = true;
     }, context);
+    if (!admitted) return;
     const initialContent =
-      this.segment === this.run.submission_id && this.run.input
+      !continuation && this.segment === this.run.submission_id && this.run.input
         ? await resolveConversationContent(
             this.run.input,
             async (pin) => {
@@ -507,11 +536,12 @@ export class SessionRuntime {
     const submission = await this.root.submit(
       {
         type: 'input',
-        content:
-          this.segment === this.run.submission_id
+        content: continuation
+          ? 'Original production operations have completed. Read their original receipts and finish adoption, timeline and reviewed video/project delivery for the frozen goal. Never submit those operations again.'
+          : this.segment === this.run.submission_id
             ? initialContent
             : 'Continue the unfinished adopted plan. Verify current business receipts before any new action.',
-        requestId: this.segment,
+        requestId: continuation ?? this.segment,
       },
       context,
     );
@@ -536,14 +566,19 @@ export class SessionRuntime {
     const submissionStatus =
       recoveredStatus ?? (settled.status === 'done' ? 'completed' : 'failed');
     let delivery: ReturnType<typeof deliveryOutcome> | undefined;
+    let businessSnapshot: unknown;
     if (
       submissionStatus === 'completed' &&
       !(await this.state())?.pending_proposal
     ) {
-      const snapshot = await this.business
+      businessSnapshot = await this.business
         .snapshot(this.grant())
         .catch(() => undefined);
-      delivery = deliveryOutcome(snapshot, null, this.deliveryPolicy());
+      delivery = deliveryOutcome(
+        businessSnapshot,
+        (await this.state())?.delivery_wait ?? null,
+        this.deliveryPolicy(),
+      );
     }
     await this.harnessValue.commit(async (tx) => {
       const s = await tx.doc(StateDoc, this.root.id);
@@ -553,6 +588,9 @@ export class SessionRuntime {
         : (delivery?.status ?? submissionStatus);
       s.submission_status = submissionStatus;
       s.delivery_wait = delivery?.wait ?? null;
+      s.production = publicProductionFacts(businessSnapshot) ?? s.production;
+      if (continuation === s.pending_production_continuation)
+        s.pending_production_continuation = null;
       s.execution_revision++;
       if (settled.status === 'unanswered' && recoveredStatus !== 'completed')
         s.failure = {
@@ -568,6 +606,7 @@ export class SessionRuntime {
   private deliveryPolicy(): DeliveryOptions {
     return {
       ...this.deliveryOptions,
+      goalContract: this.run.manifest.goal_contract,
       requireDeliveryFacts: this.run.manifest.tools.some(
         (tool) => tool.name === deliveryCreateTool,
       ),
@@ -600,6 +639,28 @@ export class SessionRuntime {
         return;
       current.status = outcome.status;
       current.delivery_wait = outcome.wait;
+      current.production =
+        publicProductionFacts(snapshot) ?? current.production;
+      if (outcome.continueOperations) {
+        const request = stableId(
+          this.run.id,
+          `production-ready:${this.segment}:${outcome.continueOperations.join(',')}:${(outcome.continueDeliveries ?? []).join(',')}`,
+        );
+        const continued = current.production_continuations ?? [];
+        if (
+          continued.includes(request) ||
+          continued.length >=
+            this.run.manifest.execution_policy.maxProductionContinuations
+        ) {
+          current.status = RunStatus.NeedsReconciliation;
+          if (current.delivery_wait)
+            current.delivery_wait.reason = 'production_no_progress';
+        } else {
+          current.production_continuations = [...continued, request];
+          current.pending_production_continuation = request;
+          current.status = RunStatus.Running;
+        }
+      }
       current.execution_revision++;
     }, context);
   }
@@ -607,6 +668,7 @@ export class SessionRuntime {
     await this.harnessValue.commit(async (tx) => {
       const state = await tx.doc(StateDoc, this.root.id);
       state.pending_proposal = id;
+      state.pending_production_continuation = null;
       const safe = { ...details };
       delete safe.grant;
       state.proposal = safe;
@@ -663,10 +725,15 @@ export class SessionRuntime {
     if (this.renewal) clearInterval(this.renewal);
     this.activeGrant = undefined;
     this.closing = (async () => {
-      await this.harnessValue?.close(context).catch(() => {});
-      await this.trusted?.close();
-      if (this.owner)
-        await releaseSessionOwner(this.pool, this.run.session_id, this.owner);
+      try {
+        await this.harnessValue?.close(context);
+        await this.trusted?.close();
+        if (this.owner)
+          await releaseSessionOwner(this.pool, this.run.session_id, this.owner);
+      } catch (error) {
+        await this.deliveryOptions.onCloseFailure?.();
+        throw error;
+      }
     })();
     return this.closing;
   }

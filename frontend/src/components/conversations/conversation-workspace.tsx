@@ -58,6 +58,7 @@ export function ConversationWorkspace({
       {hasMessages ? (
         <ConversationThread
           conversation={c}
+          writable={authorized}
           projectID={options.projectID}
           onUseReply={onUseReply}
           useReplyLabel={useReplyLabel}

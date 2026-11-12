@@ -15,7 +15,7 @@ import (
 )
 
 func shotReceipts(tx *gorm.DB, s domain.Scope) *gorm.DB {
-	return tx.Table("agent_business.call_receipt AS c").Joins("JOIN agent_business.run_authorization a ON a.root_run_id=c.root_run_id").Where("c.kind='tool' AND c.name='shot_delivery_create' AND c.status='completed' AND a.scope->>'actor_id'=? AND a.scope->>'org_id'=? AND a.scope->>'scope_id'=? AND a.scope->>'project_id'=?", s.ActorID.String(), s.OrgID.String(), s.ScopeID.String(), s.ProjectID.String())
+	return tx.Table("agent_business.call_receipt AS c").Joins("JOIN agent_business.run_authorization a ON a.root_run_id=c.root_run_id").Where("c.kind=? AND c.name=? AND c.status=? AND a.scope->>'actor_id'=? AND a.scope->>'org_id'=? AND a.scope->>'scope_id'=? AND a.scope->>'project_id'=?", domain.CallKindTool, shotDeliveryCreateTool, domain.CallStatusCompleted, s.ActorID.String(), s.OrgID.String(), s.ScopeID.String(), s.ProjectID.String())
 }
 
 func readShotReceipt(tx *gorm.DB, s domain.Scope, id uuid.UUID) (shotDelivery, error) {
@@ -104,36 +104,36 @@ func readShotDelivery(ctx context.Context, tx *gorm.DB, s domain.Scope, id uuid.
 // identities and live job facts, never private storage keys or source prompts.
 func shotDeliverySnapshot(ctx context.Context, tx *gorm.DB, g domain.Grant) ([]map[string]any, error) {
 	var rows []struct{ Result []byte }
-	if err := shotReceipts(tx, g.Scope).Select("c.result").Where("c.root_run_id=?", g.RootRunID).Order("c.created_at,c.receipt_id").Limit(65).Scan(&rows).Error; err != nil {
+	if err := shotReceipts(tx, g.Scope).Select("c.result").Where("c.root_run_id=?", g.RootRunID).Order("c.created_at,c.receipt_id").Limit(domain.MaxGoalDeliveries + 1).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-	if len(rows) > 64 {
+	if len(rows) > domain.MaxGoalDeliveries {
 		return nil, domain.ErrBudget
 	}
 	result := []map[string]any{}
-	seen := map[uuid.UUID]bool{}
+	seen := map[uuid.UUID]int{}
 	for _, row := range rows {
 		var saved shotDelivery
 		if json.Unmarshal(row.Result, &saved) != nil {
 			return nil, domain.ErrConflict
 		}
-		if seen[saved.DeliveryID] {
+		if _, ok := seen[saved.DeliveryID]; ok {
 			continue
 		}
-		seen[saved.DeliveryID] = true
+		seen[saved.DeliveryID] = len(result)
 		live, err := refreshShotDelivery(ctx, tx, g.Scope, saved)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, map[string]any{"delivery_id": live.DeliveryID, "status": live.Status, "canvas_id": live.Input.CanvasID, "node_id": live.Input.NodeID, "operation_id": live.Input.OperationID, "output_id": live.Input.OutputID, "asset_id": live.AssetID, "canvas_revision": live.CanvasRevision, "jobs": live.Jobs})
+		result = append(result, map[string]any{"delivery_id": live.DeliveryID, "video_export_id": live.VideoExportID, "project_export_id": live.ProjectExportID, "status": live.Status, "canvas_id": live.Input.CanvasID, "node_id": live.Input.NodeID, "timeline_node_id": live.TimelineNodeID, "operation_id": live.Input.OperationID, "output_id": live.Input.OutputID, "asset_id": live.AssetID, "canvas_revision": live.CanvasRevision, "source": live.Source, "delivery": deliverySpec(live.Input), "approved": false, "jobs": live.Jobs})
 	}
 	// Approval establishes the obligation before a successful create receipt.
 	// A model ending early or a failed create must not turn this into pure chat.
 	var approvals []struct{ Body []byte }
-	if err := tx.Table("agent_business.proposal p").Select("DISTINCT p.body").Joins("JOIN agent_business.control_decision d ON d.root_run_id=p.root_run_id AND d.action='approve' AND d.body->>'proposal_id'=p.proposal_id::text").Where("p.root_run_id=? AND p.body->'candidate'->>'kind'=?", g.RootRunID, shotDeliveryCandidateKind).Limit(65).Scan(&approvals).Error; err != nil {
+	if err := tx.Table("agent_business.proposal p").Select("DISTINCT p.body").Joins("JOIN agent_business.control_decision d ON d.root_run_id=p.root_run_id AND d.action='approve' AND d.body->>'proposal_id'=p.proposal_id::text").Where("p.root_run_id=? AND p.body->'candidate'->>'kind'=?", g.RootRunID, shotDeliveryCandidateKind).Limit(domain.MaxGoalDeliveries + 1).Scan(&approvals).Error; err != nil {
 		return nil, err
 	}
-	if len(approvals) > 64 {
+	if len(approvals) > domain.MaxGoalDeliveries {
 		return nil, domain.ErrBudget
 	}
 	for _, row := range approvals {
@@ -143,21 +143,19 @@ func shotDeliverySnapshot(ctx context.Context, tx *gorm.DB, g domain.Grant) ([]m
 			return nil, domain.ErrConflict
 		}
 		id := deliveryIdentity(g.Scope, candidate.Input)
-		if seen[id] {
+		if index, ok := seen[id]; ok {
+			if domain.ContentHash(result[index]["source"]) != domain.ContentHash(candidate.Source) || domain.ContentHash(result[index]["delivery"]) != domain.ContentHash(deliverySpec(candidate.Input)) {
+				return nil, domain.ErrConflict
+			}
+			result[index]["approved"] = true
 			continue
 		}
-		seen[id] = true
-		original, err := readShotDelivery(ctx, tx, g.Scope, id)
-		switch {
-		case errors.Is(err, domain.ErrNotFound):
-			result = append(result, map[string]any{"delivery_id": id, "status": domain.DeliveryIncomplete, "reason": "approved_delivery_not_admitted"})
-		case err != nil:
-			return nil, err
-		default:
-			result = append(result, map[string]any{"delivery_id": id, "status": original.Status, "jobs": original.Jobs})
-		}
+		// An approved proposal alone cannot borrow another root's completed
+		// receipt. Explicit create/reuse must commit a receipt in this root.
+		seen[id] = len(result)
+		result = append(result, map[string]any{"delivery_id": id, "status": domain.DeliveryIncomplete, "reason": "approved_delivery_not_admitted", "source": candidate.Source, "delivery": deliverySpec(candidate.Input), "approved": true})
 	}
-	if len(result) > 64 {
+	if len(result) > domain.MaxGoalDeliveries {
 		return nil, domain.ErrBudget
 	}
 	return result, nil

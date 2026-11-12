@@ -10,17 +10,20 @@ import (
 
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 )
 
 type callRow struct {
-	ReceiptID, RootRunID, SubmissionID                                           uuid.UUID
-	TaskID, CallID, CheckpointID, ContractVersion, InputHash, Kind, Name, Status string
-	Attempt, MaxMicros, CostMicros                                               int64
-	Result                                                                       []byte
+	ReceiptID, RootRunID, SubmissionID                             uuid.UUID
+	TaskID, CallID, CheckpointID, ContractVersion, InputHash, Name string
+	Kind                                                           domain.CallKind
+	Status                                                         domain.CallStatus
+	Attempt, MaxMicros, CostMicros                                 int64
+	Result                                                         []byte
 }
 
 func (r callRow) receipt() domain.CallReceipt {
-	return domain.CallReceipt{MaxMicros: r.MaxMicros, Kind: r.Kind, Name: r.Name, ReceiptID: r.ReceiptID, RootRunID: r.RootRunID, SubmissionID: r.SubmissionID, Call: domain.CallIdentity{TaskID: r.TaskID, CallID: r.CallID, CheckpointID: r.CheckpointID, Attempt: r.Attempt, ContractVersion: r.ContractVersion, InputHash: r.InputHash}, CallResult: domain.CallResult{Status: r.Status, Result: r.Result, CostMicros: r.CostMicros}}
+	return domain.CallReceipt{MaxMicros: r.MaxMicros, Kind: string(r.Kind), Name: r.Name, ReceiptID: r.ReceiptID, RootRunID: r.RootRunID, SubmissionID: r.SubmissionID, Call: domain.CallIdentity{TaskID: r.TaskID, CallID: r.CallID, CheckpointID: r.CheckpointID, Attempt: r.Attempt, ContractVersion: r.ContractVersion, InputHash: r.InputHash}, CallResult: domain.CallResult{Status: string(r.Status), Result: r.Result, CostMicros: r.CostMicros}}
 }
 func findCall(tx *gorm.DB, rid, segment uuid.UUID, c domain.CallIdentity) (callRow, bool, error) {
 	var row callRow
@@ -29,7 +32,7 @@ func findCall(tx *gorm.DB, rid, segment uuid.UUID, c domain.CallIdentity) (callR
 }
 func validCall(in domain.CallInput, kind string) bool {
 	limit := domain.MaxToolRequestBytes
-	if kind == "model" {
+	if kind == domain.CallKindModel {
 		limit = domain.MaxModelRequestBytes
 	}
 	c := in.Call
@@ -45,10 +48,10 @@ func (s *Store) ExecuteCall(ctx context.Context, kind, name string, in domain.Ca
 // ExecuteToolIntent commits the original external-write identity and business
 // authority before any I/O. Replays never invoke admission or execution again.
 func (s *Store) ExecuteToolIntent(ctx context.Context, name string, in domain.CallInput, admit func(*gorm.DB, domain.Scope, uuid.UUID) error, execute app.Executor) (domain.CallReceipt, error) {
-	return s.executeCall(ctx, "tool", name, in, admit, execute)
+	return s.executeCall(ctx, domain.CallKindTool, name, in, admit, execute)
 }
 func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.CallInput, admit func(*gorm.DB, domain.Scope, uuid.UUID) error, execute app.Executor) (domain.CallReceipt, error) {
-	if !validCall(in, kind) || execute == nil || name == "" || (kind != "model" && kind != "tool") {
+	if !validCall(in, kind) || execute == nil || name == "" || (kind != domain.CallKindModel && kind != domain.CallKindTool) {
 		return domain.CallReceipt{}, domain.ErrInvalid
 	}
 	var result domain.CallReceipt
@@ -67,7 +70,7 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 			return err
 		}
 		if found {
-			if old.InputHash != in.Call.InputHash || old.Kind != kind || old.Name != name || old.MaxMicros != in.MaxMicros {
+			if old.InputHash != in.Call.InputHash || old.Kind != domain.CallKind(kind) || old.Name != name || old.MaxMicros != in.MaxMicros {
 				return domain.ErrConflict
 			}
 			result = old.receipt()
@@ -77,25 +80,28 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 		if err != nil {
 			return err
 		}
+		if kind == domain.CallKindModel && a.CostProjectionUnavailable {
+			return domain.ErrUnavailable
+		}
 		reservation := in.MaxMicros
-		if kind == "tool" {
+		if kind == domain.CallKindTool {
 			reservation = 0
 		}
-		if reservation > spendableMicros(a) || kind == "model" && a.ReservedMicros > a.BudgetMicros {
+		if reservation > spendableMicros(a) || kind == domain.CallKindModel && a.ReservedMicros > a.BudgetMicros {
 			return domain.ErrBudget
 		}
 		// A run never starts a new paid request while an earlier model outcome is unknown.
-		if kind == "model" {
+		if kind == domain.CallKindModel {
 			var n int64
-			if err = tx.Raw(`SELECT count(*) FROM agent_business.call_receipt WHERE root_run_id=? AND kind='model' AND status IN ('in_flight','unknown')`, a.RootRunID).Scan(&n).Error; err != nil {
+			if err = tx.Raw(`SELECT count(*) FROM agent_business.call_receipt WHERE root_run_id=? AND kind=? AND status IN (?,?)`, a.RootRunID, domain.CallKindModel, domain.CallStatusInFlight, domain.CallStatusUnknown).Scan(&n).Error; err != nil {
 				return err
 			}
 			if n > 0 {
 				return domain.ErrBlocked
 			}
 		}
-		result = domain.CallReceipt{MaxMicros: in.MaxMicros, Kind: kind, Name: name, ReceiptID: uuid.New(), RootRunID: a.RootRunID, SubmissionID: in.Grant.SubmissionID, Call: in.Call, CallResult: domain.CallResult{Status: "in_flight", Result: json.RawMessage(`{}`)}}
-		if err = tx.Exec(`INSERT INTO agent_business.call_receipt(receipt_id,root_run_id,submission_id,task_id,call_id,checkpoint_id,attempt,contract_version,input_hash,kind,name,max_micros,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'in_flight')`, result.ReceiptID, a.RootRunID, in.Grant.SubmissionID, in.Call.TaskID, in.Call.CallID, in.Call.CheckpointID, in.Call.Attempt, in.Call.ContractVersion, in.Call.InputHash, kind, name, in.MaxMicros).Error; err != nil {
+		result = domain.CallReceipt{MaxMicros: in.MaxMicros, Kind: kind, Name: name, ReceiptID: uuid.New(), RootRunID: a.RootRunID, SubmissionID: in.Grant.SubmissionID, Call: in.Call, CallResult: domain.CallResult{Status: domain.CallStatusInFlight, Result: json.RawMessage(`{}`)}}
+		if err = tx.Exec(`INSERT INTO agent_business.call_receipt(receipt_id,root_run_id,submission_id,task_id,call_id,checkpoint_id,attempt,contract_version,input_hash,kind,name,max_micros,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, result.ReceiptID, a.RootRunID, in.Grant.SubmissionID, in.Call.TaskID, in.Call.CallID, in.Call.CheckpointID, in.Call.Attempt, in.Call.ContractVersion, in.Call.InputHash, kind, name, in.MaxMicros, domain.CallStatusInFlight).Error; err != nil {
 			return err
 		}
 		if admit != nil {
@@ -115,16 +121,16 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 	}
 	out, executeErr := execute(ctx, scope, result.ReceiptID)
 	if executeErr != nil {
-		out = domain.CallResult{Status: "unknown", Result: json.RawMessage(`{"code":"business_result_unknown"}`)}
+		out = domain.CallResult{Status: domain.CallStatusUnknown, Result: json.RawMessage(`{"code":"business_result_unknown"}`)}
 	}
-	if out.Status != "completed" && out.Status != "failed" && out.Status != "unknown" {
-		out = domain.CallResult{Status: "unknown", Result: json.RawMessage(`{"code":"invalid_business_receipt"}`)}
+	if out.Status != domain.CallStatusCompleted && out.Status != domain.CallStatusFailed && out.Status != domain.CallStatusUnknown {
+		out = domain.CallResult{Status: domain.CallStatusUnknown, Result: json.RawMessage(`{"code":"invalid_business_receipt"}`)}
 	}
 	if !json.Valid(out.Result) {
 		out.Result = json.RawMessage(`{}`)
 	}
-	if out.CostMicros < 0 || kind == "tool" && out.CostMicros != 0 {
-		out.Status = "unknown"
+	if out.CostMicros < 0 || kind == domain.CallKindTool && out.CostMicros != 0 {
+		out.Status = domain.CallStatusUnknown
 		out.CostMicros = 0
 		out.Result = json.RawMessage(`{"code":"cost_requires_reconciliation"}`)
 	}
@@ -172,7 +178,7 @@ func (s *Store) ReadCall(ctx context.Context, rid, segment uuid.UUID, c domain.C
 // ExecuteAtomicTool keeps grant fencing, the formal business command and its
 // receipt in one transaction. Adapters must bind their stores to tx.
 func (s *Store) ExecuteAtomicTool(ctx context.Context, name string, in domain.CallInput, execute func(*gorm.DB, domain.Scope, uuid.UUID) (domain.CallResult, error)) (domain.CallReceipt, error) {
-	if !validCall(in, "tool") || execute == nil {
+	if !validCall(in, domain.CallKindTool) || execute == nil {
 		return domain.CallReceipt{}, domain.ErrInvalid
 	}
 	var result domain.CallReceipt
@@ -189,7 +195,7 @@ func (s *Store) ExecuteAtomicTool(ctx context.Context, name string, in domain.Ca
 			return err
 		}
 		if found {
-			if old.InputHash != in.Call.InputHash || old.Kind != "tool" || old.Name != name || old.MaxMicros != in.MaxMicros {
+			if old.InputHash != in.Call.InputHash || old.Kind != domain.CallKindTool || old.Name != name || old.MaxMicros != in.MaxMicros {
 				return domain.ErrConflict
 			}
 			result = old.receipt()
@@ -204,17 +210,42 @@ func (s *Store) ExecuteAtomicTool(ctx context.Context, name string, in domain.Ca
 		if err != nil {
 			return err
 		}
-		if out.Status != "completed" || out.CostMicros < 0 || out.CostMicros > in.MaxMicros || !json.Valid(out.Result) {
+		if out.Status != domain.CallStatusCompleted || out.CostMicros < 0 || out.CostMicros > in.MaxMicros || !json.Valid(out.Result) {
 			return domain.ErrInvalid
 		}
-		if out.CostMicros > spendableMicros(a) {
+		// A formal media confirmation commits the original reservation upper
+		// bound, while the tool itself has no actual charge. Never infer this
+		// identity from a tool name or JSON output.
+		commitment := out.CostMicros
+		var media struct {
+			ProjectID    uuid.UUID
+			AmountMicros int64
+			Status       billingdomain.ReservationStatus
+		}
+		linked := tx.Raw(`SELECT o.project_id,r.amount_micros,r.status FROM agent_business.operation_commitment link
+          JOIN operation.operation o ON o.id=link.operation_id AND NOT o.is_delete
+          JOIN billing.reservation r ON r.id=o.reservation_id AND r.operation_id=o.id AND r.project_id=o.project_id AND NOT r.is_delete
+          WHERE link.receipt_id=?`, id).Scan(&media)
+		if linked.Error != nil {
+			return linked.Error
+		}
+		if linked.RowsAffected == 1 {
+			if media.ProjectID != g.Scope.ProjectID || media.Status != billingdomain.ReservationHeld || out.CostMicros != 0 {
+				return domain.ErrInvalid
+			}
+			commitment = media.AmountMicros
+		}
+		if commitment > 0 && a.CostProjectionUnavailable {
+			return domain.ErrUnavailable
+		}
+		if commitment > in.MaxMicros || commitment > spendableMicros(a) {
 			return domain.ErrBudget
 		}
-		result = domain.CallReceipt{MaxMicros: in.MaxMicros, Kind: "tool", Name: name, ReceiptID: id, RootRunID: a.RootRunID, SubmissionID: g.SubmissionID, Call: in.Call, CallResult: out}
-		if err := tx.Exec(`UPDATE agent_business.run_authorization SET reserved_micros=reserved_micros+? WHERE root_run_id=?`, out.CostMicros, a.RootRunID).Error; err != nil {
+		result = domain.CallReceipt{MaxMicros: in.MaxMicros, Kind: domain.CallKindTool, Name: name, ReceiptID: id, RootRunID: a.RootRunID, SubmissionID: g.SubmissionID, Call: in.Call, CallResult: out}
+		if err := tx.Exec(`UPDATE agent_business.run_authorization SET reserved_micros=reserved_micros+? WHERE root_run_id=?`, commitment, a.RootRunID).Error; err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO agent_business.call_receipt(receipt_id,root_run_id,submission_id,task_id,call_id,checkpoint_id,attempt,contract_version,input_hash,kind,name,max_micros,status,result,cost_micros) VALUES(?,?,?,?,?,?,?,?,?,'tool',?,?,'completed',?::jsonb,?)`, id, a.RootRunID, g.SubmissionID, in.Call.TaskID, in.Call.CallID, in.Call.CheckpointID, in.Call.Attempt, in.Call.ContractVersion, in.Call.InputHash, name, in.MaxMicros, string(out.Result), out.CostMicros).Error
+		return tx.Exec(`INSERT INTO agent_business.call_receipt(receipt_id,root_run_id,submission_id,task_id,call_id,checkpoint_id,attempt,contract_version,input_hash,kind,name,max_micros,status,result,cost_micros) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?)`, id, a.RootRunID, g.SubmissionID, in.Call.TaskID, in.Call.CallID, in.Call.CheckpointID, in.Call.Attempt, in.Call.ContractVersion, in.Call.InputHash, domain.CallKindTool, name, in.MaxMicros, domain.CallStatusCompleted, string(out.Result), out.CostMicros).Error
 	})
 	return result, err
 }
@@ -239,11 +270,11 @@ func CompleteCall(tx *gorm.DB, id uuid.UUID, out domain.CallResult) (domain.Call
 	if q.Error != nil {
 		return domain.CallReceipt{}, q.Error
 	}
-	if !json.Valid(out.Result) || out.CostMicros < 0 || (row.Kind == "tool" && out.CostMicros != 0) || (out.Status != "completed" && out.Status != "failed" && out.Status != "unknown") {
+	if !json.Valid(out.Result) || out.CostMicros < 0 || (row.Kind == domain.CallKindTool && out.CostMicros != 0) || (out.Status != domain.CallStatusCompleted && out.Status != domain.CallStatusFailed && out.Status != domain.CallStatusUnknown) {
 		return domain.CallReceipt{}, domain.ErrInvalid
 	}
-	if row.Status == "completed" || row.Status == "failed" {
-		if row.Status != out.Status || row.CostMicros != out.CostMicros || domain.Hash(row.Result) != domain.Hash(out.Result) {
+	if row.Status == domain.CallStatusCompleted || row.Status == domain.CallStatusFailed {
+		if row.Status != domain.CallStatus(out.Status) || row.CostMicros != out.CostMicros || domain.Hash(row.Result) != domain.Hash(out.Result) {
 			return domain.CallReceipt{}, domain.ErrConflict
 		}
 		return row.receipt(), nil
@@ -251,9 +282,9 @@ func CompleteCall(tx *gorm.DB, id uuid.UUID, out domain.CallResult) (domain.Call
 	if err := tx.Exec(`UPDATE agent_business.call_receipt SET status=?,result=?::jsonb,cost_micros=? WHERE receipt_id=?`, out.Status, string(out.Result), out.CostMicros, id).Error; err != nil {
 		return domain.CallReceipt{}, err
 	}
-	if out.Status == "completed" || out.Status == "failed" {
+	if out.Status == domain.CallStatusCompleted || out.Status == domain.CallStatusFailed {
 		reservation := row.MaxMicros
-		if row.Kind == "tool" {
+		if row.Kind == domain.CallKindTool {
 			if out.CostMicros != 0 {
 				return domain.CallReceipt{}, domain.ErrInvalid
 			}
@@ -263,7 +294,7 @@ func CompleteCall(tx *gorm.DB, id uuid.UUID, out domain.CallResult) (domain.Call
 			return domain.CallReceipt{}, err
 		}
 	}
-	row.Status = out.Status
+	row.Status = domain.CallStatus(out.Status)
 	row.Result = out.Result
 	row.CostMicros = out.CostMicros
 	return row.receipt(), nil

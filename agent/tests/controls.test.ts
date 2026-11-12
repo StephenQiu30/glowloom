@@ -10,9 +10,23 @@ import {
   type BusinessDecision,
   type CallReceipt,
 } from '../src/business/client.js';
+import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
+import { StateDoc } from '../src/pi-durable/docs.js';
+import {
+  RecoveryStore,
+  RecoveryKind,
+  RecoveryCode,
+} from '../src/sessions/recovery.js';
 import { testPool } from './storage/database.js';
 
-it.each(['normal', 'restart', 'prior_job_pending', 'quiesced_reply_lost'])(
+it.each([
+  'normal',
+  'restart',
+  'prior_job_pending',
+  'quiesced_reply_lost',
+  'production_approval',
+  'parked_resume',
+])(
   'quiesces an actual proposal round, admits one approved continuation after mode=%s, and never revives an aborted submission',
   async (mode) => {
     let releaseDrive!: () => void, driveDone!: () => void;
@@ -23,6 +37,22 @@ it.each(['normal', 'restart', 'prior_job_pending', 'quiesced_reply_lost'])(
       driveDone = resolve;
     });
     let first = true;
+    const originalProposal = SessionRuntime.prototype.proposal;
+    const proposalSpy =
+      mode === 'production_approval'
+        ? vi
+            .spyOn(SessionRuntime.prototype, 'proposal')
+            .mockImplementation(async function (this: SessionRuntime, ...args) {
+              await this.harness.commit(async (tx) => {
+                const state = await tx.doc(StateDoc, this.root.id);
+                state.pending_production_continuation = randomUUID();
+              }, context);
+              await originalProposal.apply(this, args);
+              expect(
+                (await this.state())?.pending_production_continuation,
+              ).toBeNull();
+            })
+        : undefined;
     const originalStart = SessionRuntime.prototype.start;
     const spy =
       mode === 'prior_job_pending'
@@ -212,6 +242,31 @@ it.each(['normal', 'restart', 'prior_job_pending', 'quiesced_reply_lost'])(
         action: 'approve',
         content_hash: 'c'.repeat(64),
       };
+      if (mode === 'parked_resume') {
+        const backoff = new RecoveryStore(pool);
+        for (let i = 0; i < 5; i++)
+          await backoff.failed(
+            RecoveryKind.Run,
+            run.root_run_id,
+            run.root_run_id,
+            RecoveryCode.ExecutionUnavailable,
+          );
+        expect(
+          (await service.readRun(run.root_run_id, scope))?.execution_available,
+        ).toBe(true);
+        fixture.current = { ...fixture.current, action: 'pause' };
+        await service.command(run.root_run_id, fixture.current);
+        expect(
+          (await service.readRun(run.root_run_id, scope))?.state.status,
+        ).toBe('paused');
+        fixture.revision = 2;
+        fixture.current = {
+          ...fixture.current,
+          decision_id: randomUUID(),
+          action: 'resume',
+          authorization_revision: 2,
+        };
+      }
       if (mode === 'quiesced_reply_lost') {
         await expect(
           service.command(run.root_run_id, fixture.current),
@@ -233,12 +288,22 @@ it.each(['normal', 'restart', 'prior_job_pending', 'quiesced_reply_lost'])(
       expect(
         (await service.readRun(run.root_run_id, scope))?.state.status,
       ).toBe('completed');
+      if (mode === 'parked_resume')
+        for (let i = 0; i < 5; i++)
+          await new RecoveryStore(pool).failed(
+            RecoveryKind.Run,
+            run.root_run_id,
+            run.root_run_id,
+            RecoveryCode.ExecutionUnavailable,
+          );
       const duplicate = await service.command(run.root_run_id, fixture.current);
       expect(duplicate).toEqual(applied);
       expect(fixture.quiescedCount).toBe(
         mode === 'quiesced_reply_lost' ? 2 : 1,
       );
       expect(fixture.models).toBe(2);
+      if (mode === 'parked_resume')
+        expect(await new RecoveryStore(pool).read(run.root_run_id)).toEqual([]);
       const inputs = await pool.query(
         "SELECT count(*) FROM agent.runtime_records WHERE session_id=$1 AND record_type='submission' AND request_key IS NOT NULL",
         [session.id],
@@ -247,6 +312,7 @@ it.each(['normal', 'restart', 'prior_job_pending', 'quiesced_reply_lost'])(
     } finally {
       releaseDrive();
       spy?.mockRestore();
+      proposalSpy?.mockRestore();
       await service.close();
       await pool.end();
     }

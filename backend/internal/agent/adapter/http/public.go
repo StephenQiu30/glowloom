@@ -404,14 +404,15 @@ func (h *PublicHandler) Update(c *gin.Context) {
 
 // StartRequest contains the full draft, model manifest and expected execution revision.
 type StartRequest struct {
-	RequestID                 uuid.UUID       `json:"request_id"`
-	ExpectedExecutionRevision int64           `json:"expected_execution_revision"`
-	Input                     json.RawMessage `json:"input" swaggertype:"object"`
-	QuotedFrom                *app.QuoteRef   `json:"quoted_from,omitempty"`
-	RetryOfRunID              *uuid.UUID      `json:"retry_of_run_id,omitempty"`
-	Manifest                  json.RawMessage `json:"manifest" swaggertype:"object"`
-	BudgetMicros              int64           `json:"budget_micros"`
-	CanvasID                  *uuid.UUID      `json:"canvas_id,omitempty"`
+	GoalContract              domain.GoalContract `json:"goal_contract"`
+	RequestID                 uuid.UUID           `json:"request_id"`
+	ExpectedExecutionRevision int64               `json:"expected_execution_revision"`
+	Input                     json.RawMessage     `json:"input" swaggertype:"object"`
+	QuotedFrom                *app.QuoteRef       `json:"quoted_from,omitempty"`
+	RetryOfRunID              *uuid.UUID          `json:"retry_of_run_id,omitempty"`
+	Manifest                  json.RawMessage     `json:"manifest" swaggertype:"object"`
+	BudgetMicros              int64               `json:"budget_micros"`
+	CanvasID                  *uuid.UUID          `json:"canvas_id,omitempty"`
 }
 
 // Start admits business scope before forwarding an idempotent accepted run.
@@ -493,6 +494,23 @@ func (h *PublicHandler) Start(c *gin.Context) {
 	if !h.checkCanvas(c, scope) {
 		return
 	}
+	goalContract, err := domain.NormalizeGoalContract(in.GoalContract, scope)
+	if err != nil {
+		send(c, nil, err)
+		return
+	}
+	in.GoalContract = goalContract
+	if goalContract.Source != nil {
+		if h.canvas == nil {
+			send(c, nil, domain.ErrUnavailable)
+			return
+		}
+		if err := h.canvas(c.Request.Context(), scope.Principal(), scope.ProjectID, goalContract.Source.CanvasID); err != nil {
+			send(c, nil, err)
+			return
+		}
+	}
+	manifest["goal_contract"] = goalContract
 	var pins struct {
 		Skills []domain.SkillPin `json:"skills"`
 	}
@@ -528,7 +546,7 @@ func (h *PublicHandler) Start(c *gin.Context) {
 		send(c, nil, domain.ErrUnavailable)
 		return
 	}
-	frozen, model, err := h.inputs.Prepare(c.Request.Context(), scope.Principal(), scope.ProjectID, sid, in.Input, in.QuotedFrom, selection.ModelKey)
+	frozen, model, err := h.inputs.Prepare(c.Request.Context(), identityhttp.Principal(c), scope.ProjectID, sid, in.Input, in.QuotedFrom, selection.ModelKey)
 	if err != nil {
 		send(c, nil, err)
 		return
@@ -560,7 +578,7 @@ func (h *PublicHandler) Start(c *gin.Context) {
 	}
 	rid := domain.RootRunID(sid, in.RequestID)
 	hash := domain.ContentHash(in)
-	if err = h.store.AdmitRun(c.Request.Context(), domain.Admission{RootRunID: rid, SessionID: sid, SubmissionID: domain.SubmissionID(rid), RequestID: in.RequestID, ContentHash: hash, Scope: scope, BudgetMicros: in.BudgetMicros, SkillPins: pins.Skills, ModelSelection: modelSelection}); err != nil {
+	if err = h.store.AdmitRun(c.Request.Context(), domain.Admission{RootRunID: rid, SessionID: sid, SubmissionID: domain.SubmissionID(rid), RequestID: in.RequestID, ContentHash: hash, Scope: scope, BudgetMicros: in.BudgetMicros, GoalContract: in.GoalContract, SkillPins: pins.Skills, ModelSelection: modelSelection}); err != nil {
 		send(c, nil, err)
 		return
 	}

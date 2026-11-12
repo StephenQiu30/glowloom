@@ -32,6 +32,9 @@ export interface AgentState extends JsonObject {
   quiesced: JsonObject | null;
   submission_status: string | null;
   delivery_wait: JsonObject | null;
+  production: JsonObject | null;
+  production_continuations: string[];
+  pending_production_continuation: string | null;
 }
 export const StateDoc = defineDoc<AgentState>({
   kind: 'glowloom.agent',
@@ -62,6 +65,9 @@ export const StateDoc = defineDoc<AgentState>({
     quiesced: null,
     submission_status: null,
     delivery_wait: null,
+    production: null,
+    production_continuations: [],
+    pending_production_continuation: null,
   }),
 });
 

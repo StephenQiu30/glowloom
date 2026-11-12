@@ -24,6 +24,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
@@ -278,4 +279,200 @@ func TestControlDeliveryLostConfirmationRetriesSameDecision(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = bytes.NewBuffer(nil)
+}
+
+// A read-only freezer isolates business admission from catalog/provider calls.
+type goalInputFreezer struct{ release uuid.UUID }
+
+func (f goalInputFreezer) Prepare(_ context.Context, _ identity.Principal, _, _ uuid.UUID, _ json.RawMessage, _ *app.QuoteRef, _ string) (app.AuthorizedConversationInput, app.ConversationModel, error) {
+	var frozen app.AuthorizedConversationInput
+	frozen.Prompt = "make one shot"
+	return frozen, app.ConversationModel{ReleaseID: f.release}, nil
+}
+
+type goalRuntime struct {
+	session   map[string]any
+	creates   []runtimeclient.CreateRunRequest
+	failFirst bool
+}
+
+func (r *goalRuntime) Request(_ context.Context, name string, _ map[string]string, _ url.Values, body any, _ string) (*http.Response, error) {
+	var data []byte
+	if name == "getAgentSession" {
+		data, _ = json.Marshal(r.session)
+	} else {
+		raw, _ := json.Marshal(body)
+		var run runtimeclient.CreateRunRequest
+		if err := json.Unmarshal(raw, &run); err != nil {
+			return nil, err
+		}
+		r.creates = append(r.creates, run)
+		if r.failFirst && len(r.creates) == 1 {
+			return nil, io.ErrUnexpectedEOF
+		}
+		data = []byte(`{}`)
+	}
+	status := http.StatusOK
+	if name == "createAgentRun" {
+		status = http.StatusAccepted
+	}
+	return &http.Response{StatusCode: status, Body: io.NopCloser(bytes.NewReader(data))}, nil
+}
+
+func TestPublicGoalAdmissionPersistsBeforeLostForwardAndOverridesManifest(t *testing.T) {
+	s, a, _ := fixture(t)
+	sid, request := uuid.New(), uuid.New()
+	runtime := &goalRuntime{session: map[string]any{"id": sid, "actor_id": a.Scope.ActorID, "org_id": a.Scope.OrgID, "scope_id": a.Scope.ScopeID, "project_id": a.Scope.ProjectID}, failFirst: true}
+	router := gin.New()
+	protected := router.Group("/api", func(c *gin.Context) { c.Set("principal", a.Scope.Principal()) })
+	agenthttp.NewPublicHandler(s, projectAccess{}, runtime).WithConversationInputs(goalInputFreezer{uuid.New()}).Register(protected)
+	input := map[string]any{"request_id": request, "expected_execution_revision": 0, "input": map[string]any{"prompt": "one shot"}, "manifest": map[string]any{"model_key": "isolated", "goal_contract": map[string]any{"kind": "chat"}}, "budget_micros": 100, "goal_contract": map[string]any{"kind": "production"}}
+	call := func() *httptest.ResponseRecorder {
+		raw, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequestWithContext(t.Context(), "POST", "/api/projects/"+a.Scope.ProjectID.String()+"/agent/sessions/"+sid.String()+"/runs", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, req)
+		return response
+	}
+	if out := call(); out.Code != 503 {
+		t.Fatalf("lost-forward status=%d: %s", out.Code, out.Body.String())
+	}
+	admitted, err := s.CurrentAuthority(t.Context(), domain.RootRunID(sid, request))
+	if err != nil || admitted.GoalContract.Kind != domain.GoalProduction || admitted.GoalContract.RequiredDeliveries != 1 {
+		t.Fatalf("goal not persisted before forward: %+v %v", admitted.GoalContract, err)
+	}
+	if out := call(); out.Code != 202 {
+		t.Fatalf("replay status=%d: %s", out.Code, out.Body.String())
+	}
+	if len(runtime.creates) != 2 || runtime.creates[0].ContentHash != runtime.creates[1].ContentHash {
+		t.Fatal("lost forward changed admitted execution input")
+	}
+	raw, _ := json.Marshal(runtime.creates[0].Manifest["goal_contract"])
+	if domain.Hash(raw) != domain.ContentHash(admitted.GoalContract) {
+		t.Fatalf("freeform manifest overrode business authority: %s", raw)
+	}
+	input["goal_contract"] = map[string]any{"kind": "chat"}
+	if out := call(); out.Code != 409 {
+		t.Fatalf("different goal replay=%d: %s", out.Code, out.Body.String())
+	}
+	if len(runtime.creates) != 2 {
+		t.Fatal("conflicting goal reached runtime")
+	}
+	defaultRequest := uuid.New()
+	input["request_id"] = defaultRequest
+	delete(input, "goal_contract")
+	input["manifest"] = map[string]any{"model_key": "isolated", "goal_contract": map[string]any{"kind": "production", "required_deliveries": 64}}
+	if out := call(); out.Code != 202 {
+		t.Fatalf("default chat status=%d: %s", out.Code, out.Body.String())
+	}
+	chat, err := s.CurrentAuthority(t.Context(), domain.RootRunID(sid, defaultRequest))
+	if err != nil || chat.GoalContract.Kind != domain.GoalChat || chat.GoalContract.RequiredDeliveries != 0 {
+		t.Fatalf("manifest forged default business goal: %+v %v", chat.GoalContract, err)
+	}
+	// Session canvas conflict is rejected before input/model preparation or admission.
+	canvas := uuid.New()
+	runtime.session["canvas_id"] = canvas
+	input["request_id"] = uuid.New()
+	input["goal_contract"] = map[string]any{"kind": "production", "source": map[string]any{"canvas_id": uuid.New(), "node_id": uuid.New(), "revision": 1}}
+	// Supply the public canvas authority hook to reach contract conflict checking.
+	router = gin.New()
+	protected = router.Group("/api", func(c *gin.Context) { c.Set("principal", a.Scope.Principal()) })
+	agenthttp.NewPublicHandler(s, projectAccess{}, runtime).WithCanvasAccess(func(context.Context, identity.Principal, uuid.UUID, uuid.UUID) error { return nil }).WithConversationInputs(goalInputFreezer{uuid.New()}).Register(protected)
+	if out := call(); out.Code != 409 {
+		t.Fatalf("source session conflict=%d: %s", out.Code, out.Body.String())
+	}
+}
+
+func TestPublicGoalReplayAfterSourceDeletionReusesOriginalRoot(t *testing.T) {
+	_, b, business, actor, g := realCanvasBoundary(t)
+	source := goalSourceFixture(t, business, g)
+	sid, requestID := uuid.New(), uuid.New()
+	runtime := &goalRuntime{session: map[string]any{"id": sid, "actor_id": g.Scope.ActorID, "org_id": g.Scope.OrgID, "scope_id": g.Scope.ScopeID, "project_id": g.Scope.ProjectID, "canvas_id": source.CanvasID}, failFirst: true}
+	router := gin.New()
+	protected := router.Group("/api", func(c *gin.Context) { c.Set("principal", actor) })
+	agenthttp.NewPublicHandler(b.Store, b.Store, runtime).WithCanvasAccess(b.CheckCanvas).WithConversationInputs(goalInputFreezer{uuid.New()}).Register(protected)
+	input := agenthttp.StartRequest{RequestID: requestID, Input: json.RawMessage(`{"prompt":"one shot"}`), Manifest: json.RawMessage(`{"model_key":"isolated"}`), BudgetMicros: 100, GoalContract: domain.GoalContract{Kind: domain.GoalProduction, Source: &source}}
+	call := func() *httptest.ResponseRecorder {
+		raw, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequestWithContext(t.Context(), "POST", "/api/projects/"+g.Scope.ProjectID.String()+"/agent/sessions/"+sid.String()+"/runs", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		out := httptest.NewRecorder()
+		router.ServeHTTP(out, req)
+		return out
+	}
+	if out := call(); out.Code != 503 {
+		t.Fatalf("lost forward status=%d: %s", out.Code, out.Body.String())
+	}
+	if len(runtime.creates) != 1 {
+		t.Fatal("first failure did not occur at the runtime transport")
+	}
+	original, err := b.Store.CurrentAuthority(t.Context(), domain.RootRunID(sid, requestID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	changeGoalSource(t, business, g, source.CanvasID, source.Revision, "delete-lost-forward-source", canvasdomain.Operation{Type: "delete_node", NodeID: source.NodeID})
+	if out := call(); out.Code != 202 {
+		t.Fatalf("accepted goal replay after source deletion status=%d: %s", out.Code, out.Body.String())
+	}
+	if len(runtime.creates) != 2 || runtime.creates[0].ContentHash != runtime.creates[1].ContentHash {
+		t.Fatal("replay changed the original frozen execution input")
+	}
+	restored, err := b.Store.CurrentAuthority(t.Context(), domain.RootRunID(sid, requestID))
+	if err != nil || restored.RootRunID != original.RootRunID || domain.ContentHash(restored.GoalContract) != domain.ContentHash(original.GoalContract) {
+		t.Fatalf("original goal changed: %+v %v", restored.GoalContract, err)
+	}
+	input.GoalContract.RequiredDeliveries = 2
+	if out := call(); out.Code != 409 {
+		t.Fatalf("conflicting accepted goal status=%d: %s", out.Code, out.Body.String())
+	}
+	input.GoalContract.RequiredDeliveries = 1
+	input.RequestID = uuid.New()
+	if out := call(); out.Code != 404 {
+		t.Fatalf("new request for deleted source status=%d: %s", out.Code, out.Body.String())
+	}
+	if len(runtime.creates) != 2 {
+		t.Fatal("invalid source or conflicting goal reached the runtime")
+	}
+}
+
+type sessionInputFreezer struct {
+	goalInputFreezer
+	actor identity.Principal
+}
+
+func (f sessionInputFreezer) Prepare(ctx context.Context, actor identity.Principal, pid, sid uuid.UUID, raw json.RawMessage, quote *app.QuoteRef, model string) (app.AuthorizedConversationInput, app.ConversationModel, error) {
+	if actor.ID != f.actor.ID || actor.ScopeID != f.actor.ScopeID || actor.SessionID != f.actor.SessionID || actor.CredentialEpoch != f.actor.CredentialEpoch {
+		return app.AuthorizedConversationInput{}, app.ConversationModel{}, identity.ErrForbidden
+	}
+	return f.goalInputFreezer.Prepare(ctx, actor, pid, sid, raw, quote, model)
+}
+
+func TestPublicStartPreservesAuthenticatedSessionForInputFreeze(t *testing.T) {
+	store, a, _ := fixture(t)
+	actor := a.Scope.Principal()
+	actor.SessionID = uuid.New()
+	actor.CredentialEpoch = 7
+	sid := uuid.New()
+	runtime := &goalRuntime{session: map[string]any{"id": sid, "actor_id": actor.ID, "org_id": actor.OrgID, "scope_id": actor.ScopeID, "project_id": a.Scope.ProjectID}}
+	router := gin.New()
+	protected := router.Group("/api", func(c *gin.Context) { c.Set("principal", actor) })
+	agenthttp.NewPublicHandler(store, projectAccess{}, runtime).WithConversationInputs(sessionInputFreezer{goalInputFreezer: goalInputFreezer{uuid.New()}, actor: actor}).Register(protected)
+	body, err := json.Marshal(map[string]any{"request_id": uuid.New(), "expected_execution_revision": 0, "input": map[string]any{"prompt": "original authenticated input"}, "manifest": map[string]any{"model_key": "fixture"}, "budget_micros": 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/projects/"+a.Scope.ProjectID.String()+"/agent/sessions/"+sid.String()+"/runs", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted || len(runtime.creates) != 1 {
+		t.Fatalf("authenticated session lost before the owning input freezer: status=%d body=%s", response.Code, response.Body.String())
+	}
 }

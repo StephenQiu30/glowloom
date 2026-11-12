@@ -23,6 +23,19 @@ import { mediaBinding } from "@/components/generation/reference-controls";
 import { useScriptWrite } from "./use-script-write";
 import { redrawMarkets } from "./studio-input";
 
+const ConversationWorkspace = dynamic(
+  () =>
+    import("@/components/conversations/conversation-workspace").then(
+      (m) => m.ConversationWorkspace,
+    ),
+  { loading: () => <p role="status">正在读取单镜制作…</p> },
+);
+const singleShotGoal = {
+  kind: "production",
+  required_deliveries: 1,
+} as const satisfies API.GoalContract;
+const noProjectChange = () => {};
+
 const RichGeneration = dynamic(
   () =>
     import("@/components/generation/rich-generation").then(
@@ -54,6 +67,8 @@ export function VideoPanel({
   canvas,
   writable,
   initialPrompt,
+  productionSessionID,
+  onProductionAccepted,
   initialInput,
   styleAssets = [],
   onLock,
@@ -63,10 +78,19 @@ export function VideoPanel({
   canvas: string;
   writable: boolean;
   initialPrompt?: string;
+  productionSessionID?: string;
+  onProductionAccepted?: (session: string) => void;
   initialInput?: { file?: File; style: string; market: string };
   styleAssets?: readonly API.AssetSummary[];
   onLock: (locked: boolean) => void;
 }) {
+  const [production, setProduction] = useState(
+    Boolean(productionSessionID || initialPrompt),
+  );
+  const [agentLocked, setAgentLocked] = useState(false);
+  const [productionDraft, setProductionDraft] = useState(() =>
+    prompt(initialPrompt ?? ""),
+  );
   const [selected, setSelected] = useState("");
   const [style, setStyle] = useState(initialInput?.style ?? "");
   const [market, setMarket] = useState(initialInput?.market || "原片语言");
@@ -88,9 +112,17 @@ export function VideoPanel({
     [];
   const source = choices.find((asset) => asset.id === selected);
   useEffect(() => {
-    onLock(locked || change.pending);
+    onLock(locked || agentLocked || change.pending);
     return () => onLock(false);
-  }, [onLock, locked, change.pending]);
+  }, [onLock, locked, agentLocked, change.pending]);
+
+  function selectProduction(next: boolean) {
+    if (locked || agentLocked || change.pending || production === next) return;
+    void change.submit(async () => {
+      if (closeGuard.current && !(await closeGuard.current())) return;
+      setProduction(next);
+    });
+  }
 
   function selectSource(asset: API.AssetSummary) {
     if (locked || !eligibleVideo(asset, project.id)) return;
@@ -132,124 +164,165 @@ export function VideoPanel({
 
   return (
     <section className="flex flex-col gap-4">
-      <header>
-        <h2 className="text-lg font-semibold">转绘与后期</h2>
-        <p className="text-sm text-muted-foreground">
-          使用支持视频参考的模型制作新版本。项目内可预览结果，并在短剧画布的时间线中剪辑和导出。
-        </p>
-      </header>
-      {writable && (
-        <div className="flex flex-wrap items-end gap-2">
-          <Field className="max-w-sm">
-            <FieldLabel htmlFor="short-drama-video">
-              转绘源视频（MP4 / MOV，5–300 秒）
-            </FieldLabel>
-            <NativeSelect
-              id="short-drama-video"
-              value={selected}
-              onChange={(event) => setSelected(event.target.value)}
-              disabled={locked || change.pending}
-            >
-              <NativeSelectOption value="">
-                选择已上传的项目视频
-              </NativeSelectOption>
-              {choices.map((asset) => (
-                <NativeSelectOption key={asset.id} value={asset.id}>
-                  {asset.file_name ?? "项目视频"}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          <Field className="max-w-52">
-            <FieldLabel htmlFor="short-drama-market">目标市场</FieldLabel>
-            <NativeSelect
-              id="short-drama-market"
-              value={market}
-              disabled={locked || change.pending}
-              onChange={(event) => setMarket(event.target.value)}
-            >
-              {redrawMarkets.map(([value, label]) => (
-                <NativeSelectOption key={value} value={value}>
-                  {label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          <Field className="max-w-sm">
-            <FieldLabel htmlFor="short-drama-style">转绘风格</FieldLabel>
-            <Input
-              id="short-drama-style"
-              value={style}
-              maxLength={200}
-              disabled={locked || change.pending}
-              onChange={(event) => setStyle(event.target.value)}
-              placeholder="如复古胶片、二维动画"
-            />
-          </Field>
-          <Button
-            variant="outline"
-            disabled={locked || change.pending}
-            onClick={() => setUpload(true)}
-          >
-            上传视频素材
-          </Button>
-          <Button
-            disabled={!source || locked || change.pending}
-            onClick={() => {
-              if (source) selectSource(source);
-            }}
-          >
-            准备转绘
-          </Button>
-        </div>
-      )}
-      {media.error && (
-        <div role="alert">
-          无法读取项目视频。{" "}
-          <Button variant="outline" onClick={() => void media.mutate()}>
-            重试
-          </Button>
-        </div>
-      )}
-      {change.error && <p role="alert">{change.error}</p>}
-      {draft && writable && (
-        <RichGeneration
-          key={draft.references[0]?.id ?? initialPrompt}
-          projectID={project.id}
-          presentation="home"
-          seed={{
-            project,
-            capability: "video",
-            creationType: "video",
-            prompt: "",
-            composer: draft,
-          }}
-          draftID={draftID}
-          onDraftReady={setDraftID}
-          onLock={setLocked}
-          onCloseGuard={(guard) => {
-            closeGuard.current = guard;
-          }}
-          onAdopt={(id, kind) => {
-            if (isProjectID(id) && kind === "video") {
-              setResult(id);
-              void media.mutate();
-            }
-          }}
-        />
-      )}
-      {result && (
-        <div className="flex max-w-xl flex-col gap-2">
-          <h3 className="font-medium">生成视频</h3>
-          <div className="aspect-video">
-            <ProjectMediaPreview
+      <div className="flex gap-2" aria-label="制作方式">
+        <Button
+          variant={production ? "default" : "outline"}
+          disabled={locked || agentLocked || change.pending}
+          onClick={() => selectProduction(true)}
+        >
+          单镜制作
+        </Button>
+        <Button
+          variant={production ? "outline" : "default"}
+          disabled={locked || agentLocked || change.pending}
+          onClick={() => selectProduction(false)}
+        >
+          视频转绘
+        </Button>
+      </div>
+      {production ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">单镜制作</h2>
+          <p className="text-sm text-muted-foreground">
+            描述镜头，确认制作方案与费用后开始。成片和剪辑工程检查通过后交付。
+          </p>
+          <ConversationWorkspace
+            embedded
+            ownerKey={owner}
+            projectID={project.id}
+            canvasID={project.canvas_id ?? undefined}
+            sessionID={productionSessionID}
+            enabled={writable}
+            goalContract={singleShotGoal}
+            initialDraft={productionDraft}
+            onDraftChange={setProductionDraft}
+            onAccepted={onProductionAccepted}
+            onLock={setAgentLocked}
+            onChooseProject={noProjectChange}
+          />
+        </section>
+      ) : (
+        <>
+          <header>
+            <h2 className="text-lg font-semibold">转绘与后期</h2>
+            <p className="text-sm text-muted-foreground">
+              使用支持视频参考的模型制作新版本。项目内可预览结果，并在短剧画布的时间线中剪辑和导出。
+            </p>
+          </header>
+          {writable && (
+            <div className="flex flex-wrap items-end gap-2">
+              <Field className="max-w-sm">
+                <FieldLabel htmlFor="short-drama-video">
+                  转绘源视频（MP4 / MOV，5–300 秒）
+                </FieldLabel>
+                <NativeSelect
+                  id="short-drama-video"
+                  value={selected}
+                  onChange={(event) => setSelected(event.target.value)}
+                  disabled={locked || change.pending}
+                >
+                  <NativeSelectOption value="">
+                    选择已上传的项目视频
+                  </NativeSelectOption>
+                  {choices.map((asset) => (
+                    <NativeSelectOption key={asset.id} value={asset.id}>
+                      {asset.file_name ?? "项目视频"}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field className="max-w-52">
+                <FieldLabel htmlFor="short-drama-market">目标市场</FieldLabel>
+                <NativeSelect
+                  id="short-drama-market"
+                  value={market}
+                  disabled={locked || change.pending}
+                  onChange={(event) => setMarket(event.target.value)}
+                >
+                  {redrawMarkets.map(([value, label]) => (
+                    <NativeSelectOption key={value} value={value}>
+                      {label}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field className="max-w-sm">
+                <FieldLabel htmlFor="short-drama-style">转绘风格</FieldLabel>
+                <Input
+                  id="short-drama-style"
+                  value={style}
+                  maxLength={200}
+                  disabled={locked || change.pending}
+                  onChange={(event) => setStyle(event.target.value)}
+                  placeholder="如复古胶片、二维动画"
+                />
+              </Field>
+              <Button
+                variant="outline"
+                disabled={locked || change.pending}
+                onClick={() => setUpload(true)}
+              >
+                上传视频素材
+              </Button>
+              <Button
+                disabled={!source || locked || change.pending}
+                onClick={() => {
+                  if (source) selectSource(source);
+                }}
+              >
+                准备转绘
+              </Button>
+            </div>
+          )}
+          {media.error && (
+            <div role="alert">
+              无法读取项目视频。{" "}
+              <Button variant="outline" onClick={() => void media.mutate()}>
+                重试
+              </Button>
+            </div>
+          )}
+          {change.error && <p role="alert">{change.error}</p>}
+          {draft && writable && (
+            <RichGeneration
+              key={draft.references[0]?.id ?? initialPrompt}
               projectID={project.id}
-              id={result}
-              kind="video"
-              large
+              presentation="home"
+              seed={{
+                project,
+                capability: "video",
+                creationType: "video",
+                prompt: "",
+                composer: draft,
+              }}
+              draftID={draftID}
+              onDraftReady={setDraftID}
+              onLock={setLocked}
+              onCloseGuard={(guard) => {
+                closeGuard.current = guard;
+              }}
+              onAdopt={(id, kind) => {
+                if (isProjectID(id) && kind === "video") {
+                  setResult(id);
+                  void media.mutate();
+                }
+              }}
             />
-          </div>
-        </div>
+          )}
+          {result && (
+            <div className="flex max-w-xl flex-col gap-2">
+              <h3 className="font-medium">生成视频</h3>
+              <div className="aspect-video">
+                <ProjectMediaPreview
+                  projectID={project.id}
+                  id={result}
+                  kind="video"
+                  large
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
       <div className="rounded-lg border p-4">
         <h3 className="mb-2 font-medium">剪辑和导出</h3>

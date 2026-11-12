@@ -537,3 +537,36 @@ it("blocks new input when an existing session cannot be read", async () => {
   await act(() => result.current.send());
   expect(calls.start).not.toHaveBeenCalled();
 });
+
+it("pins the production obligation on the original request across an uncertain response", async () => {
+  calls.start.mockRejectedValue(new RequestError("network_error"));
+  calls.submission.mockResolvedValue(undefined);
+  const original = { kind: "production", required_deliveries: 1 } as const;
+  const { result, rerender } = renderHook(
+    ({ goalContract }) =>
+      useConversation({
+        ownerKey: "actor/space",
+        projectID: pid,
+        enabled: true,
+        canvasID: "00000000-0000-4000-8000-000000000099",
+        initialDraft: draft(),
+        goalContract,
+      }),
+    { initialProps: { goalContract: original as API.GoalContract } },
+  );
+  await waitFor(() => expect(result.current.model?.key).toBe("planner"));
+  await act(() => result.current.send());
+  expect(calls.start.mock.calls[0]![1].goal_contract).toEqual(original);
+  expect(calls.create.mock.calls[0]![1].canvas_id).toBe(
+    "00000000-0000-4000-8000-000000000099",
+  );
+  expect(calls.start.mock.calls[0]![1].canvas_id).toBe(
+    "00000000-0000-4000-8000-000000000099",
+  );
+  rerender({ goalContract: { kind: "production", required_deliveries: 2 } });
+  await act(() => result.current.send());
+  for (const [, body] of calls.start.mock.calls) {
+    expect(body.goal_contract).toEqual(original);
+    expect(body.request_id).toBe(calls.start.mock.calls[0]![1].request_id);
+  }
+});

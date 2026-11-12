@@ -53,10 +53,10 @@ type release struct {
 
 func failed(code string) agent.CallResult {
 	raw, _ := json.Marshal(map[string]string{"code": code})
-	return agent.CallResult{Status: "failed", Result: raw}
+	return agent.CallResult{Status: agent.CallStatusFailed, Result: raw}
 }
 func pending() agent.CallResult {
-	return agent.CallResult{Status: "unknown", Result: json.RawMessage(`{"code":"provider_result_unknown"}`)}
+	return agent.CallResult{Status: agent.CallStatusUnknown, Result: json.RawMessage(`{"code":"provider_result_unknown"}`)}
 }
 
 // Model binds, reserves and claims the one paid send in the same transaction.
@@ -82,7 +82,7 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 		scopeRaw, _ := json.Marshal(scope)
 		auth := tx.Raw(`SELECT a.root_run_id,a.model_selection FROM agent_business.call_receipt c JOIN agent_business.run_authorization a ON a.root_run_id=c.root_run_id
     JOIN agent_business.execution_grant g ON g.root_run_id=a.root_run_id AND g.submission_id=a.submission_id AND g.owner_epoch=a.owner_epoch AND g.authorization_revision=a.authorization_revision AND g.expires_at>clock_timestamp()
-    WHERE c.receipt_id=? AND c.status='in_flight' AND c.kind='model' AND c.submission_id=a.submission_id AND c.input_hash=? AND c.max_micros=? AND a.scope=?::jsonb AND NOT a.barrier AND NOT a.terminal FOR SHARE OF a,g`, id, agent.Hash(raw), maxMicros, string(scopeRaw)).Scan(&authority)
+    WHERE c.receipt_id=? AND c.status=? AND c.kind=? AND c.submission_id=a.submission_id AND c.input_hash=? AND c.max_micros=? AND a.scope=?::jsonb AND NOT a.barrier AND NOT a.terminal FOR SHARE OF a,g`, id, agent.CallStatusInFlight, agent.CallKindModel, agent.Hash(raw), maxMicros, string(scopeRaw)).Scan(&authority)
 		if auth.Error != nil {
 			return auth.Error
 		}
@@ -126,8 +126,8 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
    WHERE m.model_key=? AND m.status='active' AND NOT m.is_delete AND m.capability='text.generate'
    AND p.unit IN ('per_request','per_1k_tokens') AND p.effective_from<=clock_timestamp()
    AND NOT EXISTS (SELECT FROM agent_business.call_receipt past JOIN operation.provider_binding b ON b.operation_id=past.receipt_id
-      WHERE past.kind='model' AND past.root_run_id=? AND b.release_id<>r.id)
-   FOR SHARE OF c,m,r`, in.ModelKey, authority.RootRunID).Scan(&r)
+      WHERE past.kind=? AND past.root_run_id=? AND b.release_id<>r.id)
+   FOR SHARE OF c,m,r`, in.ModelKey, agent.CallKindModel, authority.RootRunID).Scan(&r)
 		if row.Error != nil {
 			return row.Error
 		}
@@ -236,6 +236,9 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 		if err := tx.Exec(`UPDATE operation.operation SET reservation_id=? WHERE id=?`, reserve.ReservationID, id).Error; err != nil {
 			return err
 		}
+		if err := agentpg.BindOperationCostInTransaction(tx, id, id); err != nil {
+			return err
+		}
 		if err := store.BeginProviderCall(ctx, op.BeginProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, DispatchRequired: true}); err != nil {
 			return err
 		}
@@ -308,7 +311,7 @@ func (g *Gateway) Recover(ctx context.Context, id uuid.UUID) (agent.CallResult, 
 	q := g.db.WithContext(ctx).Raw(`SELECT a.scope,o.project_id,o.model_profile_version_id,o.price_rule_version_id,o.provider_request_key,m.model_key,o.region
  FROM agent_business.call_receipt c JOIN agent_business.run_authorization a ON a.root_run_id=c.root_run_id
  JOIN operation.operation o ON o.id=c.receipt_id JOIN catalog.model_profile_version v ON v.id=o.model_profile_version_id
- JOIN catalog.model_profile m ON m.id=v.model_profile_id WHERE c.receipt_id=? AND c.kind='model'`, id).Scan(&row)
+ JOIN catalog.model_profile m ON m.id=v.model_profile_id WHERE c.receipt_id=? AND c.kind=?`, id, agent.CallKindModel).Scan(&row)
 	if q.Error != nil {
 		return pending(), q.Error
 	}
@@ -335,7 +338,7 @@ func (g *Gateway) Recover(ctx context.Context, id uuid.UUID) (agent.CallResult, 
 }
 
 func (g *Gateway) settle(ctx context.Context, scope agent.Scope, id uuid.UUID, r release, _ op.ProviderDispatchIdentity, evidence op.ManagedResult, result json.RawMessage) (agent.CallResult, error) {
-	out := agent.CallResult{Status: "completed", Result: result}
+	out := agent.CallResult{Status: agent.CallStatusCompleted, Result: result}
 	err := g.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Keep the same root-before-business lock order as admission and call replay.
 		if err := tx.Exec(`SELECT a.root_run_id FROM agent_business.run_authorization a JOIN agent_business.call_receipt c ON c.root_run_id=a.root_run_id WHERE c.receipt_id=? FOR UPDATE OF a`, id).Error; err != nil {

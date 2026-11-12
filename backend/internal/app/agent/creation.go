@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
@@ -328,8 +329,11 @@ func (b *Boundary) confirmOperation(ctx context.Context, tx *gorm.DB, s domain.S
 	if err != nil {
 		return domain.CallResult{}, err
 	}
+	if err = agentpg.BindOperationCostInTransaction(tx, key, requested.OperationID); err != nil {
+		return domain.CallResult{}, err
+	}
 	body, err := json.Marshal(map[string]any{"operation_id": requested.OperationID, "reservation_id": result.ReservationID, "budget_revision": result.BudgetRevision, "available_micros": result.AvailableMicros})
-	return domain.CallResult{Status: "completed", Result: body, CostMicros: *quoted.QuoteMicros}, err
+	return domain.CallResult{Status: "completed", Result: body}, err
 }
 
 func (b *Boundary) proposeOperation(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, in domain.CallInput) (domain.CallResult, error) {

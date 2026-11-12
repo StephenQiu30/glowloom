@@ -1,3 +1,4 @@
+import { executionPolicy } from './policy.js';
 import type { JsonObject } from '@earendil-works/pi-durable';
 import type { BusinessTool } from '../business/client.js';
 export const ROLES = [
@@ -22,10 +23,10 @@ export function allocateBudget(
   requested?: { model_steps: number; tool_steps: number },
 ) {
   const active = state.delegations.filter((x) => x.status === 'running');
-  if (active.length >= 4)
+  if (active.length >= executionPolicy.maxSpecialists)
     throw new Error('Specialist concurrency limit exceeded');
   const free = (kind: 'model' | 'tool') =>
-    40 -
+    executionPolicy[kind === 'model' ? 'modelSteps' : 'toolSteps'] -
     state[`${kind}_steps`] -
     active.reduce(
       (n, x) =>
@@ -33,8 +34,12 @@ export function allocateBudget(
         Math.max(0, Number(x[`${kind}_budget`]) - Number(x[`${kind}_used`])),
       0,
     );
-  const model = requested?.model_steps ?? Math.min(8, free('model'));
-  const tool = requested?.tool_steps ?? Math.min(8, free('tool'));
+  const model =
+    requested?.model_steps ??
+    Math.min(executionPolicy.defaultModelSteps, free('model'));
+  const tool =
+    requested?.tool_steps ??
+    Math.min(executionPolicy.defaultToolSteps, free('tool'));
   if (
     !Number.isSafeInteger(model) ||
     !Number.isSafeInteger(tool) ||

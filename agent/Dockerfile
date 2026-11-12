@@ -11,6 +11,7 @@ FROM node:24.22.2-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dca
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 USER node

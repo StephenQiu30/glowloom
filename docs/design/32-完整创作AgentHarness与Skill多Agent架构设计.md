@@ -6,6 +6,8 @@
 
 ## 1. 摘要
 
+本次复核阅读入口（SRC-AGH-22）：已有/缺口与详细执行合同见§7.17；技术选择和目录评价见[设计37 §7.8～7.10](37-Agent服务目录与TypeScript规范设计.md#78-本次技术选型评价)；正式制作身份与阶段产物见[设计38 §7.11](38-短剧工作室一致性设计.md#711-源码复核后的制作闭环设计)。实施依赖分别在Plan28 §10和Plan33“本次复核实施依赖”。本轮仅文档，新增决策为评审建议，不重做已落地Nest迁移、原调用、资金或导出引擎。
+
 对话页面、首页/共享参考、全部消息历史及Stop/重试交互由[设计35](35-对话工作台与参考输入一致性设计.md)→PRD22→Plan31细化，扩展本设计的session/run公共合同，不更换执行引擎或Go业务权威；基础Harness迁移仍由本主链承接。
 
 执行体系由“主Agent决定下一项工作，子Agent承担专业任务，Skill提供方法及依赖，统一工具出口调用站内能力和外部MCP，Durable状态负责等待与恢复”组成。已授权范围内可自动推进，不要求用户手工逐次调用；权限、费用或输入变化需要决定时，保存等待点并按既有控制合同接续。稳定性由持久状态、单写者、原请求回执、有限重试及故障验证共同成立，不能仅靠prompt或SDK名称保证。
@@ -177,7 +179,6 @@ Skill是方法资源，不是独立执行进程，也不需要每次开启子Age
 | 仓库目录                     | agent/                                         |
 | Compose service / 内部 DNS   | agent / agent:4401                             |
 | Docker 镜像仓库              | glowloom/agent                                 |
-| 日志 | Pino 10.4.0，接入 Nest 和 HTTP 适配器 | 统一结构化日志、脱敏、请求与执行关联。 |
 | PostgreSQL schema / 专用角色 | agent / glowloom_agent                         |
 | 配置前缀                     | GLOWLOOM_AGENT_*                               |
 | 入口 / 生产启动文件          | agent/src/server.ts / agent/dist/src/server.js |
@@ -816,6 +817,109 @@ RPO/RTO、备份周期、保留期限及媒体存储容量需通过实际环境�
 - 授权读取失败仍更新未来唤醒时间；达到原截止后进入needs_reconciliation。暂停恢复等待态只换控制代际/授权并查询原交付，不提交新的模型输入。Stop和迟到查询通过现有状态/segment围栏排序。
 - 扫描以到期唤醒时间排序，使用现有owner/lease与四个运行槽；等待轮询后释放槽。失败或缺失事实不能长期保留已到期唤醒时间、挤占其他任务。
 - 节点类型/动作/资源引用在canvas/domain常量中维护；Node.TextInput复用Prompt的冻结与编译合同。交付业务状态集中在agent/domain，Node边界以对应协议值验证，Harness状态与业务状态分别命名。
+
+### 7.17 源码复核后的执行闭环设计
+
+依据SRC-AGH-22与[七平台固定源码复核](../research/2026-11-12-AI短剧平台Agent与交付质量源码复核.md)。本节区分代码现状与待实施决策，收紧§7.0～7.16的接线和接受方法，不替换其权限、控制及数据权威。以下源码路径以仓库根为基准，行号对应本轮读取的工作树。
+
+#### 7.17.1 现有能力与具体缺口
+
+| 能力 | 当前源码事实 | 调整及复用落点 |
+| --- | --- | --- |
+| 独立服务/官方执行 | `agent/src/server.ts:27–94`、`agent/src/sessions/runtime.ts:119–177`已装配Nest、池、Harness；无第二个coding-agent会话 | 保留；技术/目录按设计37评价，不引入另一Agent或工作流框架 |
+| 主子Agent | `agent/src/pi-durable/registry.ts:260–389`有task-owned子conversation、稳定submit、结果entry和显式采用；深度1，子工具不含delegate/plan | 当前delegate和整轮工具均串行；4个子任务上限不证明4路并行，批量分支须新增稳定映射 |
+| Skill | `agent/src/pi-durable/skills.ts:6–33`、`agent/src/pi-durable/context.ts:8–45`已有版本/hash校验和压缩后提示；Go保存私有不可变版本 | 复用发现/授权/加载；自动匹配、依赖闭包与冲突求解尚缺，不能把目录发现算自动编排 |
+| MCP | `agent/src/pi-durable/trusted-extensions.ts:140–147`拒绝SDK MCP注册；请求manifest不能指定任意扩展 | 这只是防线；正式连接/发现/调用/异步恢复未完成，沿Go出口补齐 |
+| 原请求/费用 | `backend/internal/agent/adapter/postgres/calls.go:25–142,207–269`及`backend/internal/agent/adapter/modelgateway/gateway.go:277–410`已有原回执、unknown停车、实际超额记账及一次结算 | 保留；根额度混有实际收费/报价承诺，补分类投影和原operation终态收敛，不新建钱包 |
+| 单镜交付 | `backend/internal/app/agent/shot_delivery.go:226–336`真实采用/Yjs/两个export及回执原子提交，query核对原job/资源/审阅 | 保留；仅无RowID的CanvasSource节点链，不代表正式叙事Shot/Take或浏览器单集已贯通 |
+| 失败恢复 | `agent/src/sessions/delivery.ts:28–111`已有持久绝对截止；reconciliation只查原调用；Storage有owner/epoch | 扩展其他等待类型；补扫描吞错、停放诊断、公平性与关闭失败的租约策略 |
+| 完成保护 | Go快照包含成功create及已批准未create义务；Node等待原交付，不再调模型 | 尚未覆盖“制作目标未形成交付提案”；须在制作受理时固定必需清单，保留纯聊天空集合 |
+
+#### 7.17.2 主任务书、执行来源与正式完成义务
+
+主Agent负责规划、选择方法、有限委派、结果汇合和解释，不能自行签发预算、批准候选或宣布正式媒体ready。执行任务书留在现有StateDoc；制作必需清单归Go，双方只以稳定引用连接，不复制完整任务图。
+
+受理端区分`chat`与`production`目标（拟新增合同字段，非现状）：普通对话无需作品；用户明确要求单镜/整集交付时，Go在现有run授权业务边界保存目标及清单引用，再交给Agent。制作结构尚待拆分时保存“待形成并确认制作清单”的必需义务，不能用尚未知道镜头数作为空清单完成。歧义输入可以形成待决定候选，但不能靠模型最终文本消除该义务。新增必需项只在正式批准/修订事务更新；用户取消作品目标要有明确控制决定。
+
+跨服务不做分布式事务。现有公开 Start 已用 `RootRunID(session_id,request_id)` 确定稳定 root，并在调用 Node 前通过 `AdmitRun` 保存原业务授权。制作义务直接扩展该 `run_authorization.goal_contract`，随原 scope、输入及内容 hash 冻结；Go 覆盖转发 manifest 的 goal_contract，Node 按原 request/root 幂等受理，无额外 goal_admission 表或首次 grant 二次绑定。原受理重放仍校验当前项目权限及不可变输入，但不重新要求来源当前仍存在，也不把审批后可变的当前 submission_id 当作初始身份。仅新受理校验来源存在/版本。GoalContract 的 chat/production、required_deliveries、可选来源及交付规格与 Go GoalCompletion 匹配 hash；没有明确来源时保留规划义务，当前 root 的正式审批和 create/reuse 回执形成交付范围。别的 root 的旧成功或仅批准未 create 不能满足本 root。
+
+| 合同对象 | 必需字段/归属 | 约束 |
+| --- | --- | --- |
+| 根任务书 | Agent：goal、goal_kind、输入来源及版本、范围、plan_revision、必需清单引用、停止条件、execution_policy引用 | 模型计划完成仅为执行事实；不能覆盖Go目标或批准 |
+| 制作义务 | Go：root/production_manifest_id及revision、required_items、质量策略、允许缺项的显式决定 | 必需项可为待规划、镜头、音轨、字幕、成片/工程；未声明不自动视为可省略 |
+| 分支任务书 | Agent：branch_key、任务书hash、角色、输入及采用来源、工具/Skill/模型绑定、执行步数与额度引用、结果schema | 重启复用；同branch异参冲突；结果是候选 |
+| 采用记录 | 执行来源采用归Agent；Take/镜头/时间线采用归Go | `plan_update.adopt`不能代替业务Take采用或资源审核 |
+| 完成检查 | Go返回清单revision、逐项当前事实、缺失/冲突/审阅状态；Agent保存引用和等待点 | 制作缺清单、清单变化未重验、缺资源/必需审阅均不能completed |
+
+主任务自动推进规则为：正式依赖满足→按当前授权启动一项或一组独立工作→持久登记等待→读取原结果→验证/采用→检查清单。失败/取消也是批次终态，但不自动解锁依赖；纯文本回复不能充当制作清单或采用结果。root终态后的新要求建立新run，保留历史交付，不复活旧root。
+
+#### 7.17.3 真实并行子Agent与模型准入
+
+保留当前单子任务、单模型路径；不为所有简单步骤强制委派。批量委派通过**一个受控Durable工具的多个task-owned会话**扩展，根业务写链继续串行。不能只把`executionMode`改成parallel：当前实现按ownerTaskId扫描首个会话，会使多个分支错误共享child。
+
+新增分支集合在官方commit中一次校验依赖/来源并预留逻辑步数，保存`branch_key → conversation_id → submission_request_id`与任务书hash。每个分支使用独立输入、明确角色和结果schema；创建/提交任一边界中断后，从映射续查同一child，同branch不重复创建。已安装Pi公开`commit/createConversation/conversation/submit/wait`支持这些组合，运行语义仍须受控双分支和SIGKILL验证，不自写模型循环。
+
+当前顺序执行切片仅使用原根费用事实，allocated_unused=0、unallocated=remaining。BudgetAllocation 随 R4 的真实消费者一起实现，不提前建立无人消费的划拨接口；不能因此提前开放实际收费并行。
+
+涉及分支货币额度时先以`root/plan_revision/branch_key/任务书hash`形成稳定意图，由Go在原授权边界返回`BudgetAllocation`回执，再在Agent事务绑定child。该回执固定额度/单位及授权revision，属于业务准入，不记录子Agent执行状态；同键异参拒绝，响应丢失查原回执。模型/付费工具调用携带allocation引用及原CallIdentity，Go校验归属和未决占用。Go已分配而Node尚未绑定的窗口通过原意图收敛，不再次划拨；回收必须证明无未决call，不能因子会话没出现就释放未知费用。
+
+并发分支只处理独立分析、候选制作或审查；依赖分支等正式采用后再执行。分支逐个保存结果，失败保留兄弟结果，回收未使用额度之前证明没有未决调用。恢复复用原branch不是新redo；改变输入或重新收费才建立新branch/业务attempt，并引用原失败/候选。
+
+当前主子共用`manifest.model_key`，保持为可用默认。需要差异化模型时新增角色模型绑定，必须固定model/release/参数/输出上限及价格依据，并由Go目录/授权核验；不能由子Agent临时切到未批准模型。QA与制作可用独立上下文，但不因此获得独立钱包或更宽工具权限。
+
+当前Go `calls.go:87–95`在根存在in_flight/unknown模型时阻止其他新模型，形成实际收费串行。**批量会话并行与付费模型并行分别开放**：先完成§7.17.5的分支承诺上界、原回执与容量，再将准入改为短事务原子预留各调用上界。无法核验费用上界的连接保留保守串行/未知阻断；有不确定费用且不能隔离额度时阻断根的新收费。绝不能只删除现有检查来“支持并发”。
+
+#### 7.17.4 Skill与MCP的调用合同
+
+Skill复用现有Go skill_version、版本/hash及授权读取，增加与内容一起版本化的输入/输出类型、适用角色、依赖、冲突和所需正式工具元数据。选择顺序：用户显式指定→已批准范围内按任务/产物匹配→求受权依赖闭包→验证冲突/循环/工具可用→冻结集合→按需加载。选择依据可见，未匹配时使用已有工具而非虚构Skill；集合外依赖、工具/费用扩张进入新授权及唯一continuation，不热改活跃manifest。第三方脚本仍走既有Go隔离driver，缺driver就不可用；Skill文本不授予权限。
+
+MCP采用§7.11的Go受控客户端方案，复用scope、正式工具描述、call_receipt、预算、工作记录和媒体归档；Node只收到已批准的稳定工具绑定。选型建议为官方Go SDK **v1.7.0基线**：已核对[SDK官方版本支持表](https://github.com/modelcontextprotocol/go-sdk#version-compatibility)及[v1.7.0 go.mod](https://github.com/modelcontextprotocol/go-sdk/blob/v1.7.0/go.mod)，最低Go1.25与当前backend Go1.26主线相容；这仅是语言下限判断，依赖安装、协议互通和运行接受尚未执行。实施时锁版本/校验和，不因为SDK可用而同步升级Pi。官方[SDK目录](https://modelcontextprotocol.io/docs/2026-07-28/sdk)列出Go实现；协议以双方协商、冻结且实测的能力为准，不能把2026-07-28文档里的能力推给旧服务。
+
+每个连接固定租户/认证主体、配置revision、协议/能力、出站端点与凭据引用；每个工具固定本地名、远端名、schema hash、角色、effect、replay和费用/查询/取消政策。首次先接受控Streamable HTTP只读服务；写工具须具备一次受理/未知停车的真实协议测试才开放。stdio保留隔离driver门，不启用任意宿主命令。发现的resources/prompts不自动变成可执行工具，远端sampling/中途权限请求不自动放行。
+
+同步返回也须持久原调用；超时后按安全只读/原幂等/原job可查/完全未知分类。支持Tasks或领域job才保存该类句柄并查询；不支持时不能伪造长任务接口。协议成功但isError或schema错误不能作为有效产物。外部URL只有经过原媒体归档才能被正式采用。连接停用立即阻止新调用；schema变化使旧绑定阻塞，不覆盖当前manifest。站内单镜能力不依赖全部MCP服务上线。
+
+#### 7.17.5 费用合同的语义与收敛
+
+沿用run_authorization/call_receipt、operation/provider_call及billing reservation/settlement。当前模型回执CostMicros来自实际ChargeMicros；operation_confirm回执CostMicros来自QuoteMicros，并增加root reserved。后者是逻辑承诺，不意味着工具又扣了一次钱包；未找到媒体最终结算向根额度回流的完整接线，必须补齐，不能直接把reserved显示为实际账单。
+
+| 数值 | 权威与使用方式 |
+| --- | --- |
+| 批准额度与逻辑承诺 | Go根授权：批准上限、逐call/operation的未决上界、分支内划拨。仅用于准入，分支划拨不再冻结钱包 |
+| 用户实际收费 | 既有billing原settlement/credit事实；模型与媒体均按原资金身份归集，不能叠加工具报价和其实际settlement |
+| 供应商采购成本 | 既有provider/资金成本证据；与用户收费分开，含币种/单位/价格版本，不能跨币种直接加总或用root额度倒推 |
+
+拟新增根费用投影通过稳定`root → call → operation → reservation/settlement`关联，在原operation资金终态提交后可靠归集，并由定期对账补漏。准入使用“已确定计入根的实际收费 + 尚未结清的承诺上界 + 本次上界 ≤ 批准额度”；一次操作从承诺转实际而非两份相加，部分结算/退款按原资金事实释放差额。重复通知、原结果恢复和跨子Agent查询不再次扣费。根投影不可用时禁止新收费，原免费查回/归档收尾仍按已有权限执行。
+
+分支划拨的未用部分与该分支已转成call承诺/实际的部分互斥计入根可分配额：不能把“整个allocation + 其中每个call”再加一遍。Go在原根行锁/分配记录下原子执行划拨、转换、退回，记录allocation到原call/operation的关联；Node只保存分配回执，不决定钱包释放。模型/媒体对根的使用和对分支的使用是同一费用的两个视图，不是两次资金占用。
+
+根快照还须区分`allocated_unused`与`unallocated`：总剩余可为前者加后者，新的分支/无分支调用只能使用unallocated；分支call只能从本分支unused转换成pending，不能抢占兄弟已分配额度。根并发准入同时满足实际+pending+allocated_unused不超上限，超额真实结算则如实记账并封闭新收费；钱包可用余额仍由billing再次校验。allocation/production引用进入原受理身份摘要，同call不能改挂另一额度或制作版本。
+
+原调用身份继续使用CallIdentity全量字段及input_hash；生产输入、模型/价格/存储、审批revision属于同一冻结合同。基础设施重试不改变业务attempt。unknown继续占用；无上界不能承诺硬预算。实际超额如实入账，剩余可支出钳0、阻新收费，不能截断账单或擅自追扣。Stop、cancel ACK、分支结束和本地超时不代表退款/供应商容量释放。
+
+#### 7.17.6 恢复与自动推进的统一接线
+
+复用已有delivery持久字段与恢复pump，将等待类型扩展为原调用核对、业务job、分支汇合、审批、重试退避、输入/配置缺失；每项保存稳定wait_id、原引用、控制/计划revision、first_wait_at、deadline_at、next_wakeup_at、attempt及原因。先登记再查当前事实，通知只加速，补扫处理早到/丢失/重复。每次转换按wait/control revision去重，查询后释放执行槽和连接；不通过模型轮询进度。
+
+| 故障窗口 | 当前可复用事实 / 需要的处理 |
+| --- | --- |
+| 原模型结果已落ManagedResult但未结算 | Recover同一operation继续原结算/回执，不重复模型 |
+| 供应商可能已收聊天请求但本地无结果 | 当前Recover没有通用上游chat查询；保持unknown，只有原供应商确有查询协议才增加适配，否则可见待核对 |
+| 媒体已生成但下载/归档失败 | 查询原operation/provider句柄，恢复对象归档；不能新生成 |
+| 采用/时间线与导出受理失败 | 复用现有原子create及原delivery身份；查原事务是否提交，只补原失败阶段 |
+| 单个分支失败或旧revision迟到 | 原结果保留为候选，阻塞其依赖；无关分支可收尾，旧段不能采用或新收费 |
+| 授权/数据库/连接不可用 | fail closed；保留原deadline并前移下次查询，不能每轮保留过期唤醒点占满扫描 |
+| Stop/失owner/关闭失败 | 当前close已先清grant、停止新动作；Harness.close失败须可见且不提前释放可被新owner领取的lease，依自然过期及原Go回执核对 |
+
+修复`service.ts:414,441`静默catch，保存分类原因、重试次数、最近成功扫描、最老等待年龄和停车理由。进程root槽与单root子槽是不同限额；单副本默认仍有效，多租户公平/多实例容量要有独立准入证据才宣称支持。保留§7.15的DB时钟、背压及灾后闭出站要求，不新增平行恢复队列。
+
+#### 7.17.7 完成和质量判定
+
+独立投影`submission结果`、`root控制/目标`、`业务产物`、`审片接受`。聊天允许合法空交付；production必须有非空且范围闭合的必需清单或明确待规划义务。镜头计划、batch终态、子Agent回答与当前shot_deliveries全成功，都不能单独证明整集完成。
+
+Go完成检查关联当前制作/采用/时间线版本，验证必需镜头/音轨/字幕、ready资产和冻结最终导出；不同版本不能借旧完成回执。当前ObjectLocation.Readable是定位/身份条件，不等于getter已读取完整字节。最终文件核验由原worker/验证任务实际读取和检查，回执固定对象版本/hash、最终视频规格/解码、所需音轨/字幕和工程校验；完成放行再作有界对象存在性复核，存储未知继续等待、明确缺失为incomplete。不把完整视频读取塞进每次进度轮询。
+
+QA子Agent提供带媒体版本/时间窗/覆盖范围的观察候选；正式质量策略决定哪些硬失败阻断、哪些需人工。修复是新的受限制作尝试，必须有范围、次数、费用和停止条件。未审阅、检查覆盖不足或失败未处理不能贴“质量通过”；审美/故事接受与确定性文件有效性分开。详细制作阶段和质量合同见设计38 §7.11。
 
 ## 8. 实施与验收
 

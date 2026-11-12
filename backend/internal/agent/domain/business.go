@@ -46,6 +46,7 @@ func (s Scope) Valid() bool {
 
 // Admission references an accepted run; it does not mirror its Pi lifecycle.
 type Admission struct {
+	GoalContract   GoalContract    `json:"goal_contract"`
 	RootRunID      uuid.UUID       `json:"root_run_id"`
 	SessionID      uuid.UUID       `json:"session_id"`
 	SubmissionID   uuid.UUID       `json:"submission_id"`
@@ -60,12 +61,13 @@ type Admission struct {
 // Authority combines admitted intent with current authorization and control facts.
 type Authority struct {
 	Admission
-	AuthorizationRevision int64     `json:"authorization_revision"`
-	OwnerEpoch            int64     `json:"owner_epoch"`
-	Barrier               bool      `json:"barrier"`
-	Terminal              bool      `json:"terminal"`
-	ReservedMicros        int64     `json:"reserved_micros"`
-	Current               *Decision `json:"current,omitempty"`
+	AuthorizationRevision     int64     `json:"authorization_revision"`
+	OwnerEpoch                int64     `json:"owner_epoch"`
+	Barrier                   bool      `json:"barrier"`
+	Terminal                  bool      `json:"terminal"`
+	ReservedMicros            int64     `json:"reserved_micros"`
+	CostProjectionUnavailable bool      `json:"-"`
+	Current                   *Decision `json:"current,omitempty"`
 }
 
 // GrantRequest identifies the runtime ownership window requesting a capability.

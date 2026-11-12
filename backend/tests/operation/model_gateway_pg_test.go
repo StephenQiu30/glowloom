@@ -18,6 +18,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/modelgateway"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billing "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	catalogpg "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
@@ -28,7 +29,7 @@ import (
 )
 
 func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
-	for _, scenario := range []string{"complete", "thinking_explicit", "thinking_default", "thinking_enabled", "thinking_auto", "max_tokens_bound", "max_tokens_exceeded", "runtime_role", "unverified_mode", "credential_rotated", "credential_invalid", "config_changed", "price_revoked", "procurement_revoked", "availability_dependency_missing", "token_pricing", "response_lost", "response_lost_credential_changed", "settlement_interrupted", "budget_rejected", "grant_revoked", "wrong_release", "params_tampered", "model_tampered", "tokens_tampered", "identity_revoked_after_send", "skill_disabled_before_dispatch", "skill_enabled_before_dispatch"} {
+	for _, scenario := range []string{"complete", "procurement_unknown", "thinking_explicit", "thinking_default", "thinking_enabled", "thinking_auto", "max_tokens_bound", "max_tokens_exceeded", "runtime_role", "unverified_mode", "credential_rotated", "credential_invalid", "config_changed", "price_revoked", "procurement_revoked", "availability_dependency_missing", "token_pricing", "response_lost", "response_lost_credential_changed", "settlement_interrupted", "budget_rejected", "grant_revoked", "wrong_release", "params_tampered", "model_tampered", "tokens_tampered", "identity_revoked_after_send", "skill_disabled_before_dispatch", "skill_enabled_before_dispatch"} {
 		t.Run(scenario, func(t *testing.T) {
 			dsn := os.Getenv("GLOWLOOM_TEST_MODEL_GATEWAY_DB_DSN")
 			if dsn == "" {
@@ -251,6 +252,7 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 				var status string
 				require.NoError(t, database.Raw(`SELECT status FROM billing.reservation WHERE operation_id=?`, id).Scan(&status).Error)
 				require.Equal(t, "held", status)
+				assertGatewayCostSnapshot(t, gatewayDB, rid, id, maximum, 0, true, false)
 				return
 			}
 			if scenario == "settlement_interrupted" {
@@ -294,6 +296,24 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 			}
 			// The outer ledger's replay is identical and does not debit root allocation again.
 			require.NoError(t, database.Transaction(func(tx *gorm.DB) error { _, err := agentpg.CompleteCall(tx, id, result); return err }))
+			switch scenario {
+			case "complete", "runtime_role", "token_pricing", "settlement_interrupted", "procurement_unknown":
+				if scenario == "procurement_unknown" {
+					// The optional original procurement measurement can be
+					// unavailable independently of a settled user charge.
+					require.NoError(t, database.Exec(`UPDATE operation.provider_call SET procurement_cost_micros=NULL WHERE operation_id=?`, id).Error)
+				}
+				assertGatewayCostSnapshot(t, gatewayDB, rid, id, maximum, result.CostMicros, false, scenario != "procurement_unknown")
+				if scenario == "complete" {
+					require.NoError(t, database.Exec(`UPDATE agent_business.call_receipt SET cost_micros=cost_micros+1 WHERE receipt_id=?`, id).Error)
+					_, err := agentwire.NewBoundary(gatewayDB, nil).Store.CostSnapshot(t.Context(), rid)
+					require.ErrorIs(t, err, agent.ErrUnavailable, "model receipt must match original ChargeMicros")
+					require.NoError(t, database.Exec(`UPDATE agent_business.call_receipt SET cost_micros=cost_micros-1 WHERE receipt_id=?`, id).Error)
+					require.NoError(t, database.Exec(`UPDATE operation.operation SET reservation_id=NULL WHERE id=?`, id).Error)
+					_, err = agentwire.NewBoundary(gatewayDB, nil).Store.CostSnapshot(t.Context(), rid)
+					require.ErrorIs(t, err, agent.ErrUnavailable, "missing original funds identity must fail closed")
+				}
+			}
 		})
 	}
 }
@@ -317,4 +337,57 @@ func seedGatewayAvailability(t *testing.T, database *gorm.DB, f managedFixture, 
 		require.True(t, available, "synthetic gateway fixture must satisfy the real catalog projection")
 		return nil
 	}))
+}
+
+// assertGatewayCostSnapshot checks the real model gateway's original funds
+// identity after dispatch, accounting and recovery, rather than a synthetic
+// ExecuteCall callback that supplies an arbitrary cost.
+func assertGatewayCostSnapshot(t *testing.T, database *gorm.DB, root, receipt uuid.UUID, maximum, charge int64, pending, procurementKnown bool) {
+	t.Helper()
+	snapshot, err := agentwire.NewBoundary(database, nil).Store.CostSnapshot(t.Context(), root)
+	require.NoError(t, err)
+	require.Len(t, snapshot.Evidence, 1)
+	e := snapshot.Evidence[0]
+	require.Equal(t, receipt, e.ReceiptID)
+	require.NotNil(t, e.OperationID, "original model operation is missing")
+	require.Equal(t, receipt, *e.OperationID)
+	var original struct {
+		ReservationID                  uuid.UUID
+		SettlementID                   *uuid.UUID
+		Settlements, ProcurementMicros int64
+		ProcurementVersion             *uuid.UUID
+	}
+	require.NoError(t, database.Raw(`SELECT o.reservation_id,l.id AS settlement_id,
+ (SELECT count(*) FROM billing.ledger_entry WHERE operation_id=o.id AND entry_type='settle') AS settlements,
+ p.procurement_cost_micros AS procurement_micros,tariff.id AS procurement_version
+ FROM operation.operation o LEFT JOIN billing.ledger_entry l ON l.operation_id=o.id AND l.entry_type='settle'
+ LEFT JOIN operation.provider_call p ON p.operation_id=o.id
+ LEFT JOIN catalog.price_rule_version sale ON sale.id=p.price_rule_version_id
+ LEFT JOIN catalog.price_rule_version tariff ON tariff.id::text=sale.rule->>'procurement_price_version_id'
+ WHERE o.id=?`, receipt).Scan(&original).Error)
+	require.NotNil(t, e.ReservationID)
+	require.Equal(t, original.ReservationID, *e.ReservationID)
+	require.Equal(t, charge, snapshot.SettledCharge)
+	require.Equal(t, charge, e.SettledCharge)
+	if pending {
+		require.Equal(t, maximum, snapshot.PendingCommitment)
+		require.Equal(t, maximum, e.PendingCommitment)
+		require.Nil(t, e.SettlementID)
+		require.Zero(t, original.Settlements)
+	} else {
+		require.Zero(t, snapshot.PendingCommitment)
+		require.NotNil(t, e.SettlementID)
+		require.Equal(t, original.SettlementID, e.SettlementID)
+		require.EqualValues(t, 1, original.Settlements)
+	}
+	if procurementKnown {
+		require.Len(t, e.Procurement, 1)
+		require.Equal(t, original.ProcurementMicros, e.Procurement[0].AmountMicros)
+		require.Equal(t, original.ProcurementVersion, e.Procurement[0].PriceVersionID)
+		require.Equal(t, "CNY", e.Procurement[0].Currency)
+		require.NotEqual(t, charge, e.Procurement[0].AmountMicros, "supplier and user charges are distinct")
+	} else {
+		require.Empty(t, e.Procurement, "unknown procurement cannot become known zero")
+	}
+	require.Equal(t, snapshot.AuthorizedLimit-snapshot.PendingCommitment-charge, snapshot.Remaining)
 }

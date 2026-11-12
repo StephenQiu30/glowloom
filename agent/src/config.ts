@@ -1,4 +1,12 @@
 export const deliveryDefaults = { pollMs: 5000, timeoutMs: 1_800_000 } as const;
+export const recoveryDefaults = {
+  pollMs: 1000,
+  maxBackoffMs: 60_000,
+  maxAttempts: 5,
+  controlBatch: 20,
+  runBatch: 32,
+} as const;
+export const runtimeDefaults = { maxConcurrentRoots: 4 } as const;
 
 export interface Config {
   host: string;

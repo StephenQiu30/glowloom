@@ -812,3 +812,18 @@ f075补齐文档角色中文；b7bf以独立文档能力接通对话内补充文
 - 实际1122通过agent-browser登录态40/40、游客16/16及交互10/10；临时主体已清理，原内容保留。桌面和手机主体WCAG A/AA检查、浏览器运行与控制台均零错误。
 - 最终前端314文件2253项单测、ESLint、修改文件Prettier、TypeScript及生产构建通过；4个既有全仓格式问题保留。证据见[验收报告](/Users/stephenqiu/.codex/visualizations/2026/11/12/01a1cdb3-944d-7820-8932-e39459dd73af/approved-design-implementation/验收报告.md)。
 - 用户授权仅提交并推送本次相关修改至main。交付包含资源合并、两个工作室、主体分类所需接口/派生类型/测试；其他Agent和短剧调研文档、缓存、本地构建内存调优及未使用的余额展示扩展不纳入提交。历史Figma保留，未触发付费生成。
+
+## 2026-11-12 Agent 费用、制作义务、恢复与单镜联合交付
+
+- 用户 `SRC-AGH-23` 授权本地实施 Plan28 R1/R2/R3 与 Plan33 D1，明确不提交推送。先在隔离 worktree 实施，后按70个文件白名单合回当前main；生成类型保留并行Subject字段，未覆盖并行文档、样式、构建和费用展示修改，暂存区保持不变。
+- 根费用复用原call/operation/冻结/结算，区分承诺、实际收费、退款和未知；不再把媒体报价永久重复计费。归集失败、未知和超额阻止新收费，原免费恢复保留。分支货币划拨仍随R4真实消费者实现，没有空allocation接口。
+- 制作目标扩展现有Admission/run_authorization，沿稳定request/root先在Go落受理再转Node；Go目标覆盖manifest，冻结chat/production、required及可选来源/规格。完成由当前root正式批准/create、原成片及工程审核事实裁决，不借用别的root旧成功或空集合。
+- 冻结集中ExecutionPolicy和完整src/锁文件定义摘要，恢复泵有逐项退避/停车/诊断。原operation完成后按正式交付进度幂等接续，等待审核不追加模型，无进展有界停车；断网保持原ID/绝对截止。临时停车可走原pause/resume，幂等控制只清Run退避，不清预算、unknown、步数或接续历史；关闭未证实排空不早放租约。
+- 浏览器单镜入口复用ConversationWorkspace并冻结原画布；会话URL支持刷新回读。成片/工程复用正式导出预览、审核和下载，逐份明确确认，原版本/SHA及下载字节校验，审核丢回应保留原key、新版本重新检查。转绘切换继续经过原关闭guard。
+- 实际联合测试发现并修复公开Start丢SessionID/CredentialEpoch，以及导出审核升级用户写锁与项目授权形成死锁；均有RED/GREEN，没有加业务重试掩盖。当前main完整跨Go/独立编译Node/正式工具/PG/Yjs/原worker/FFmpeg/FCPXML的race用例22.34秒通过：8模型回合、1视频POST、2审核导出、9原结算900000micros；重复/重启没有重买或重扣。金额仅隔离测试账本。
+- 本次合并快照在共享main验证：Agent 31文件184项、前端316文件2262项全部通过；前端最终生产构建、类型、API重生成和lint通过，Agent类型/lint/API/格式通过。Go受影响18个顶层费用/目标/公开入口/交付race及子场景无skip，原模型网关29项PG race、锁/公开认证回归通过；受影响Go单测、vet、goimports、lint 0 issues通过，govulncheck 0可调用/0导入包漏洞，另有1个未被调用的required模块告警。前两次高负载全量尝试超时/中断留证，最终限并发和15秒用例预算后全部断言通过。
+- Chromium用独立HTTP fixture复用真实后台测试产物，验证原root刷新、实际视频解码、工程下载检查、两份人工确认和最终下载，桌面/390px无横向溢出，下载SHA与后台一致。它不是生产登录与真实供应商浏览器贯通，未冒充真人作品接受或目标剪辑器导入。
+- 新完整schema只在新建隔离库核验；现有业务库未DDL，未部署或重启正式服务。发布前仍需按既有离线流程精确处理`operation_commitment`、`run_authorization.goal_contract`和`agent.recovery_backoff`，核对旧定义运行及原账本后再单版本切换；不得运行全schema覆盖存量。
+- 详细证据见[费用目标与单镜闭环验证](docs/research/2026-11-12-Agent费用目标与单镜闭环验证.md)。后续依赖仍为R4真实分支并行、R5 Skill自动选择、R6正式MCP及D2～D5正式制作身份/局部重做/整集/真实作品接受；本切片不把这些标为完成。未发起真实付费调用，未提交或推送。
+
+- 本次后续交付授权 SRC-AGH-24：用户要求将本次代码提交到main并推送；纳入实现、验证记录及其需求/设计/计划/源码附录闭环，其他并行修改继续保留。Git回执与远程CI分别核对，不把本地测试当作CI终态。

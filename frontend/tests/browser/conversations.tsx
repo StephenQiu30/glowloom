@@ -1,4 +1,6 @@
 /** Isolated UI/API fixture; no provider or production service connection. */
+import { useState } from "react";
+import { VideoPanel } from "../../src/app/short-drama/video-panel";
 import { createRoot } from "react-dom/client";
 import { ConversationWorkspace } from "../../src/components/conversations/conversation-workspace";
 import { emptyPromptDraft } from "../../src/components/generation/prompt-document";
@@ -10,6 +12,7 @@ setCSRFToken("fixture-only");
 setCreationScope("11111111-1111-4111-8111-111111111113");
 const params = new URLSearchParams(location.search);
 const welcome = params.has("welcome");
+const production = params.has("production");
 if (params.get("theme") === "dark")
   document.documentElement.classList.add("dark");
 const draft = emptyPromptDraft();
@@ -36,16 +39,24 @@ draft.labelState.highWater.image = 2;
 function AuditControls() {
   return (
     <div className="mb-4 flex flex-wrap gap-2" aria-label="隔离测试状态控制">
-      {(["completed", "failed", "submitted"] as const).map((outcome) => (
+      {(production
+        ? ["awaiting_review"]
+        : ["completed", "failed", "submitted"]
+      ).map((outcome) => (
         <button
           key={outcome}
           className="rounded border px-3 py-2 text-xs"
           onClick={async () => {
-            const response = await fetch("/api/fixture/conversation-outcome", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ outcome }),
-            });
+            const response = await fetch(
+              production
+                ? "/api/fixture/production-ready"
+                : "/api/fixture/conversation-outcome",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ outcome }),
+              },
+            );
             if (!response.ok) return;
             const url = new URL(location.href);
             url.searchParams.set("history", "1");
@@ -56,6 +67,35 @@ function AuditControls() {
         </button>
       ))}
     </div>
+  );
+}
+function ProductionWorkspace() {
+  const [session, setSession] = useState(params.get("session") ?? undefined);
+  return (
+    <VideoPanel
+      owner="fixture/space"
+      project={{
+        id: "11111111-1111-4111-8111-111111111114",
+        canvas_id: null,
+        name: "隔离单镜",
+        aspect_ratio: "16:9",
+        style_key: null,
+        revision: 1,
+        update_time: new Date().toISOString(),
+      }}
+      canvas="/tests/browser/conversations.html?production=1"
+      writable
+      initialPrompt="制作一个海边日落镜头并交付成片和剪辑工程"
+      productionSessionID={session}
+      onProductionAccepted={(id) => {
+        setSession(id);
+        const url = new URL(location.href);
+        url.searchParams.set("session", id);
+        url.searchParams.set("history", "1");
+        history.replaceState(null, "", url);
+      }}
+      onLock={() => {}}
+    />
   );
 }
 createRoot(document.getElementById("root")!, {
@@ -73,18 +113,22 @@ createRoot(document.getElementById("root")!, {
           <AuditControls />
         </>
       )}
-      <ConversationWorkspace
-        ownerKey="fixture/space"
-        projectID="11111111-1111-4111-8111-111111111114"
-        sessionID={
-          params.get("history")
-            ? "11111111-1111-4111-8111-111111111115"
-            : undefined
-        }
-        enabled
-        initialDraft={welcome ? emptyPromptDraft() : draft}
-        onChooseProject={() => {}}
-      />
+      {production ? (
+        <ProductionWorkspace />
+      ) : (
+        <ConversationWorkspace
+          ownerKey="fixture/space"
+          projectID="11111111-1111-4111-8111-111111111114"
+          sessionID={
+            params.get("history")
+              ? "11111111-1111-4111-8111-111111111115"
+              : undefined
+          }
+          enabled
+          initialDraft={welcome ? emptyPromptDraft() : draft}
+          onChooseProject={() => {}}
+        />
+      )}
     </main>
   </TooltipProvider>,
 );

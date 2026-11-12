@@ -84,7 +84,12 @@ function ProjectWorkspace({
     if (studioInput) clearStudioInput(studioInput);
   }, [studioInput]);
   const [tab, setTab] = useState(initialTab);
-  const [sessionID, setSessionID] = useState(initialSession);
+  const [sessionID, setSessionID] = useState(
+    initialTab === "video" ? undefined : initialSession,
+  );
+  const [productionSessionID, setProductionSessionID] = useState(
+    initialTab === "video" ? initialSession : undefined,
+  );
   const [generated, setGenerated] = useState("");
   const [scriptLocked, setScriptLocked] = useState(false);
   const [episodesLocked, setEpisodesLocked] = useState(false);
@@ -216,6 +221,18 @@ function ProjectWorkspace({
 
   const canvas = canvasHref(project.data);
   const canWrite = writable && project.data.status !== "archived";
+  function selectTab(next: Tab) {
+    setTab(next);
+    const id =
+      next === "create"
+        ? sessionID
+        : next === "video"
+          ? productionSessionID
+          : undefined;
+    const query = new URLSearchParams({ tab: next });
+    if (id) query.set("session", id);
+    window.history.replaceState(null, "", `/short-drama/${projectID}?${query}`);
+  }
   const activeTab = tab;
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 pb-8">
@@ -233,7 +250,7 @@ function ProjectWorkspace({
       <Tabs
         value={activeTab}
         onValueChange={(value) => {
-          if (!locked) setTab(value as Tab);
+          if (!locked) selectTab(value as Tab);
         }}
       >
         <TabsList
@@ -300,7 +317,7 @@ function ProjectWorkspace({
               canWrite
                 ? (text) => {
                     setGenerated(text);
-                    setTab("script");
+                    selectTab("script");
                   }
                 : undefined
             }
@@ -323,6 +340,15 @@ function ProjectWorkspace({
             writable={canWrite}
             canvas={canvas}
             initialPrompt={shotPrompt}
+            productionSessionID={productionSessionID}
+            onProductionAccepted={(id) => {
+              setProductionSessionID(id);
+              window.history.replaceState(
+                null,
+                "",
+                `/short-drama/${projectID}?tab=video&session=${id}`,
+              );
+            }}
             initialInput={
               !shotPrompt && studioInput?.kind === "redraw"
                 ? studioInput
@@ -344,7 +370,7 @@ function ProjectWorkspace({
             onLock={setEpisodesLocked}
             onShot={(text) => {
               setShotPrompt(text);
-              setTab("video");
+              selectTab("video");
             }}
             onAssistant={openAssistant}
             onRewrite={(id, line, title, source) =>

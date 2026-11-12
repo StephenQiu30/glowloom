@@ -211,3 +211,38 @@ it("blocks approval of an unreadable shot contract", () => {
   ).toBe(true);
   expect(screen.queryByTestId("selected-shot")).toBeNull();
 });
+
+it.each(["needs_reconciliation", "failed"])(
+  "recovers the original %s root through pause/resume, refusing unavailable definitions",
+  (status) => {
+    const c = controller();
+    c.runMap.old!.snapshot = {
+      ...c.runMap.old!.snapshot,
+      execution_available: true,
+      state: { ...c.runMap.old!.snapshot.state, status },
+      recovery:
+        status === "failed"
+          ? []
+          : [{ kind: "run", parked_at: "2026-11-12T00:00:00Z" }],
+    };
+    const view = render(
+      <ConversationThread conversation={c} projectID="project" writable />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "暂停以核对原任务" }));
+    expect(c.command).toHaveBeenCalledWith("pause");
+    c.runMap.old!.snapshot.state.status = "paused";
+    view.rerender(
+      <ConversationThread conversation={c} projectID="project" writable />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "继续创作" }));
+    expect(c.command).toHaveBeenCalledWith("resume");
+    c.runMap.old!.snapshot.execution_available = false;
+    view.rerender(
+      <ConversationThread conversation={c} projectID="project" writable />,
+    );
+    expect(
+      (screen.getByRole("button", { name: "继续创作" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  },
+);

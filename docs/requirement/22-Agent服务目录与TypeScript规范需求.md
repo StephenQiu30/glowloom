@@ -85,4 +85,6 @@
 
 ## 3. 来源追踪
 
+SRC-ATS-10（2026-11-12）：本轮完整原文见[需求19 SRC-AGH-22](19-完整创作Agent与Skill多Agent需求.md#src-agh-22)。重新评估当前技术栈、已实施目录和双向生成链的合理性及可用证据；沿已确认ATS-01～05，不把“评估”解释为另换框架、重做迁移或新增根级contracts/scripts/services。新增工程决策归设计37，实施仍沿PRD19/Plan28；仅文档。
+
 目录专项见[设计37](../design/37-Agent服务目录与TypeScript规范设计.md)。执行权威与服务边界继续由[设计32](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md)维护，对话合同继续由[设计35](../design/35-对话工作台与参考输入一致性设计.md)维护；工程规则见 [agent/AGENTS.md](../../agent/AGENTS.md)。本专项不复制产品 PRD 或另造产品功能。

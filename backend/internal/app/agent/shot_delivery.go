@@ -57,10 +57,6 @@ func (c shotDeliveryCandidate) matches(task operation.TaskDetail, asset mediadom
 	return c.Kind == shotDeliveryCandidateKind && task.Source != nil && domain.ContentHash(c.Source) == domain.ContentHash(*task.Source) && c.AssetID == asset.ID && c.AssetRevision == asset.Revision && asset.SHA256 != nil && c.AssetSHA256 == *asset.SHA256
 }
 
-func shotTimeline(in ShotDeliveryInput) canvasdomain.TimelineConfig {
-	return canvasdomain.TimelineConfig{Version: 1, AspectRatio: in.AspectRatio, FPS: in.FPS, SubtitleStyle: canvasdomain.SubtitleStyle{FontSize: 24, Color: "#ffffff", Position: "bottom"}}
-}
-
 type shotDelivery struct {
 	DeliveryID      uuid.UUID                    `json:"delivery_id"`
 	Input           ShotDeliveryInput            `json:"input"`
@@ -78,7 +74,7 @@ type shotDelivery struct {
 }
 
 func (in ShotDeliveryInput) valid() bool {
-	return in.CanvasID != uuid.Nil && in.NodeID != uuid.Nil && in.OperationID != uuid.Nil && in.OutputID != uuid.Nil && in.ExpectedRevision > 0 && in.SourceStartMS >= 0 && in.DurationMS >= canvasdomain.MinTimelineClipDurationMS && in.DurationMS <= canvasdomain.MaxTimelineDurationMS && (in.ProjectFormat == tooldomain.OutputFCPXML || in.ProjectFormat == tooldomain.OutputXMEML || in.ProjectFormat == tooldomain.OutputJianying) && shotTimeline(in).Validate() == nil
+	return in.CanvasID != uuid.Nil && in.NodeID != uuid.Nil && in.OperationID != uuid.Nil && in.OutputID != uuid.Nil && in.ExpectedRevision > 0 && deliverySpec(in).Valid()
 }
 
 func shotDeliveryTools() []toolBinding {
@@ -278,7 +274,7 @@ func (b *Boundary) executeShotDelivery(ctx context.Context, in domain.CallInput)
 	record := shotDelivery{DeliveryID: id, Input: requested, Source: *task.Source, AssetID: asset.ID, AssetRevision: asset.Revision, AssetSHA256: *asset.SHA256, AdoptedNodeID: uuid.NewSHA1(id, []byte("adopted")), TimelineNodeID: uuid.NewSHA1(id, []byte("timeline")), Status: domain.DeliveryPending}
 	track := uuid.NewSHA1(id, []byte("track"))
 	duration := int64(*asset.DurationMS)
-	timeline := shotTimeline(requested)
+	timeline := deliverySpec(requested).TimelineConfig()
 	timeline.Tracks = []canvasdomain.TimelineTrack{{ID: track, Kind: canvasdomain.NodeTypeVideo, Label: "Shot", Visible: true}}
 	timeline.Clips = []canvasdomain.TimelineClip{{ID: uuid.NewSHA1(id, []byte("clip")), TrackID: track, Kind: canvasdomain.NodeTypeVideo, NodeID: &record.AdoptedNodeID, AssetID: &record.AssetID, Title: "Shot", DurationMS: requested.DurationMS, SourceStartMS: requested.SourceStartMS, SourceDurationMS: &duration, Volume: 1}}
 	if err = timeline.Validate(); err != nil {

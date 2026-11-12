@@ -1,7 +1,7 @@
 import path from "node:path";
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import react from "@vitejs/plugin-react";
 const pid = "11111111-1111-4111-8111-111111111114",
   sid = "11111111-1111-4111-8111-111111111115";
@@ -20,12 +20,72 @@ type Run = {
     status: string;
     execution_revision: number;
     authorization_revision: number;
+    production?: Record<string, unknown>;
   };
 };
 let revision = 0,
   stops = 0,
   control: Record<string, unknown> = {};
 const runs: Run[] = [];
+const exportJobs = new Map<
+  string,
+  { id: string; status: string; revision: number; output_kind: string }
+>();
+const reviewKeys = new Map<string, unknown>();
+const productionLedger = {
+  accepted_goals: [] as unknown[],
+  reviews: [] as string[],
+  downloads: [] as string[],
+};
+const videoExport = "11111111-1111-4111-8111-111111111151",
+  projectExport = "11111111-1111-4111-8111-111111111152",
+  timeline = "11111111-1111-4111-8111-111111111153",
+  canvasID = "11111111-1111-4111-8111-111111111154";
+function exportBytes(id: string) {
+  const directory = process.env.GLOWLOOM_AGENT_SHOT_ARTIFACT_DIR;
+  if (!directory) throw new Error("Actual D1 test artifacts must be provided");
+  return readFileSync(
+    path.join(
+      directory,
+      `glowloom-agent-contract-browser.${id === videoExport ? "mp4" : "zip"}`,
+    ),
+  );
+}
+function exportJob(id: string) {
+  const current = exportJobs.get(id);
+  if (!current) return;
+  return {
+    ...current,
+    attempt: 1,
+    project_id: pid,
+    source: { canvas_id: canvasID, node_id: timeline, revision: 9 },
+    sha256: createHash("sha256").update(exportBytes(id)).digest("hex"),
+    ...(id === videoExport
+      ? { asset_id: "11111111-1111-4111-8111-111111111155" }
+      : { artifact_id: "11111111-1111-4111-8111-111111111156" }),
+  };
+}
+function productionFacts() {
+  return {
+    cost: {
+      authorized_limit: 1000000,
+      pending_commitment: 0,
+      settled_charge: 300000,
+      remaining: 700000,
+      currency: "CNY",
+      unit: "micros",
+    },
+    deliveries: [
+      {
+        delivery_id: timeline,
+        canvas_id: canvasID,
+        timeline_node_id: timeline,
+        video_export_id: videoExport,
+        project_export_id: projectExport,
+      },
+    ],
+  };
+}
 const operationID = "11111111-1111-4111-8111-111111111130";
 let operationStatus = "completed";
 async function handle(req: IncomingMessage, res: ServerResponse) {
@@ -55,6 +115,130 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       execution_revision: revision,
       ...(latest ? { run: latest } : {}),
     };
+  if (route === `/api/projects/${pid}/media`) return reply({ items: [] });
+  if (route === "/api/fixture/production-ledger")
+    return reply({
+      ...productionLedger,
+      roots: runs.map((item) => item.root_run_id),
+    });
+  if (route === "/api/fixture/production-ready" && req.method === "POST") {
+    if (
+      !latest ||
+      (latest.manifest.goal_contract as { kind?: string } | undefined)?.kind !==
+        "production"
+    )
+      return reply({ code: "production_goal_required" }, 409);
+    exportJobs.set(videoExport, {
+      id: videoExport,
+      status: "review_required",
+      revision: 3,
+      output_kind: "video",
+    });
+    exportJobs.set(projectExport, {
+      id: projectExport,
+      status: "review_required",
+      revision: 3,
+      output_kind: "fcpxml",
+    });
+    latest.state.production = productionFacts();
+    latest.state.status = "waiting_delivery";
+    latest.state.execution_revision = ++revision;
+    latest.snapshot_cursor = `${revision}:1`;
+    latest.messages_page.through = latest.snapshot_cursor;
+    return reply({});
+  }
+  const exportMatch = route.match(
+    /^\/api\/media-exports\/([^/]+)(?:\/(preview|review|download))?$/,
+  );
+  if (exportMatch) {
+    const id = exportMatch[1]!,
+      action = exportMatch[2],
+      job = exportJob(id);
+    if (!job) return reply({}, 404);
+    if (!action) return reply(job);
+    if (action === "preview")
+      return reply({
+        job_id: id,
+        revision: job.revision,
+        sha256: job.sha256,
+        url: `http://127.0.0.1:5198/api/fixture/export-bytes/${id}`,
+        expires_at: new Date(Date.now() + 60000).toISOString(),
+        ...(id === videoExport
+          ? {
+              asset: {
+                id: "asset_id" in job ? job.asset_id : undefined,
+                project_id: pid,
+                kind: "video",
+              },
+            }
+          : {
+              artifact: {
+                id: "artifact_id" in job ? job.artifact_id : undefined,
+                job_id: id,
+                project_id: pid,
+                attempt: 1,
+                format: "fcpxml",
+                format_version: "1.10",
+                sha256: job.sha256,
+                mime_type: "application/zip",
+                file_name: `timeline-${id}.zip`,
+                byte_size: exportBytes(id).length,
+                created_at: new Date().toISOString(),
+              },
+            }),
+      });
+    if (action === "review" && req.method === "POST") {
+      const key = String(req.headers["idempotency-key"] ?? "");
+      if (reviewKeys.has(key)) return reply(reviewKeys.get(key));
+      if (
+        !key ||
+        body.project_id !== pid ||
+        body.revision !== job.revision ||
+        body.sha256 !== job.sha256 ||
+        body.local_review_confirmed !== true ||
+        job.status !== "review_required"
+      )
+        return reply({ code: "review_conflict" }, 409);
+      exportJobs.set(id, {
+        id,
+        status: "succeeded",
+        revision: job.revision + 1,
+        output_kind: job.output_kind,
+      });
+      const result = exportJob(id);
+      reviewKeys.set(key, result);
+      productionLedger.reviews.push(id);
+      if (latest) {
+        latest.state.status = [...exportJobs.values()].every(
+          (item) => item.status === "succeeded",
+        )
+          ? "completed"
+          : "waiting_delivery";
+        latest.state.execution_revision = ++revision;
+        latest.snapshot_cursor = `${revision}:1`;
+        latest.messages_page.through = latest.snapshot_cursor;
+      }
+      return reply(result);
+    }
+    if (action === "download") {
+      if (job.status !== "succeeded") return reply({}, 409);
+      productionLedger.downloads.push(id);
+      res.setHeader(
+        "Content-Type",
+        id === videoExport ? "video/mp4" : "application/zip",
+      );
+      return res.end(exportBytes(id));
+    }
+  }
+  if (route.startsWith("/api/fixture/export-bytes/")) {
+    const id = route.split("/").at(-1)!;
+    if (!exportJobs.has(id)) return reply({}, 404);
+    res.setHeader(
+      "Content-Type",
+      id === videoExport ? "video/mp4" : "application/zip",
+    );
+    return res.end(exportBytes(id));
+  }
   // Controlled outcomes are fixture-only: every /api request stays in this middleware.
   if (route === "/api/fixture/conversation-outcome" && req.method === "POST") {
     if (!latest) return reply({ code: "send_first" }, 409);
@@ -138,6 +322,8 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
           key: "fixture",
           display_name: "隔离规划模型",
           capability: "text.generate",
+          available: true,
+          mode_availability: [{ mode: "text_to_text", available: true }],
           status: "active",
           provider_status: "active",
           credential_present: true,
@@ -224,6 +410,13 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
             .join("") ?? "",
       )
       .join("\n");
+    const goal = body.goal_contract as
+      { kind?: string; required_deliveries?: number } | undefined;
+    if (goal) {
+      if (goal.kind !== "production" || goal.required_deliveries !== 1)
+        return reply({ code: "invalid_goal" }, 422);
+      productionLedger.accepted_goals.push(goal);
+    }
     const rid = randomUUID();
     revision++;
     const next: Run = {
@@ -239,7 +432,10 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         prompt: text,
         media_pins: [],
       },
-      manifest: body.manifest as Record<string, unknown>,
+      manifest: {
+        ...(body.manifest as Record<string, unknown>),
+        ...(goal ? { goal_contract: goal } : {}),
+      },
       execution_available: true,
       snapshot_cursor: `${revision}:1`,
       events: [],

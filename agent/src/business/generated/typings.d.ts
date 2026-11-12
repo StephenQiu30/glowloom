@@ -18,6 +18,7 @@ declare namespace AgentBusinessApi {
     budget_micros?: number;
     content_hash?: string;
     current?: Decision;
+    goal_contract?: GoalContract;
     model_selection?: Record<string, any>;
     owner_epoch?: number;
     request_id?: string;
@@ -94,6 +95,13 @@ declare namespace AgentBusinessApi {
     submission_id?: string;
   };
 
+  type CanvasSource = {
+    canvas_id?: string;
+    node_id?: string;
+    revision?: number;
+    row_id?: string;
+  };
+
   type Decision = {
     action?: string;
     actor_id?: string;
@@ -139,6 +147,23 @@ declare namespace AgentBusinessApi {
     rid: string;
   };
 
+  type GoalContract = {
+    delivery?: GoalDeliverySpec;
+    kind?: GoalKind;
+    required_deliveries?: number;
+    source?: CanvasSource;
+  };
+
+  type GoalDeliverySpec = {
+    aspect_ratio?: string;
+    duration_ms?: number;
+    fps?: number;
+    project_format?: OutputKind;
+    source_start_ms?: number;
+  };
+
+  type GoalKind = 'chat' | 'production';
+
   type Grant = {
     authorization_revision?: number;
     /** AvailableMicros is a current ledger observation, not part of grant identity. */
@@ -163,6 +188,9 @@ declare namespace AgentBusinessApi {
     /** id */
     id: string;
   };
+
+  type OutputKind =
+    'video' | 'audio' | 'media_bundle' | 'fcpxml' | 'xmeml' | 'jianying';
 
   type ProposalInput = {
     budget_micros?: number;

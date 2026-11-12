@@ -41,6 +41,8 @@ const service = new SessionService(
   pool,
   new BusinessClient(config.businessOrigin, config.businessToken),
   {
+    onRecoveryEvent: (event) =>
+      logger.warn({ recovery: event }, 'Agent recovery requires attention'),
     leaseMs: config.leaseMs,
     deliveryPollMs: config.deliveryPollMs,
     deliveryTimeoutMs: config.deliveryTimeoutMs,

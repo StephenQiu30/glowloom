@@ -268,8 +268,14 @@ export function buildRegistry(
       redo_of: Type.Optional(Type.String()),
       budget: Type.Optional(
         Type.Object({
-          model_steps: Type.Integer({ minimum: 1, maximum: 39 }),
-          tool_steps: Type.Integer({ minimum: 0, maximum: 39 }),
+          model_steps: Type.Integer({
+            minimum: 1,
+            maximum: manifest.execution_policy.modelSteps - 1,
+          }),
+          tool_steps: Type.Integer({
+            minimum: 0,
+            maximum: manifest.execution_policy.toolSteps - 1,
+          }),
         }),
       ),
     }),

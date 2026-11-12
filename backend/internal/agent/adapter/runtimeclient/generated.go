@@ -321,6 +321,7 @@ type AgentState struct {
 	ModelSteps            *int64                    `json:"model_steps,omitempty"`
 	PendingProposal       *string                   `extensions:"x-nullable" json:"pending_proposal,omitempty"`
 	Plan                  *[]PlanItem               `json:"plan,omitempty"`
+	Production            *map[string]interface{}   `extensions:"x-nullable" json:"production,omitempty"`
 	Proposal              *ProposalView             `json:"proposal,omitempty"`
 	Reconciliation        *map[string]interface{}   `json:"reconciliation,omitempty"`
 	RootRunId             *string                   `json:"root_run_id,omitempty"`
@@ -492,19 +493,20 @@ type RunPage struct {
 
 // RunSnapshot defines model for RunSnapshot.
 type RunSnapshot struct {
-	Events             []CommittedEvent       `binding:"required" json:"events"`
-	ExecutionAvailable bool                   `binding:"required" json:"execution_available"`
-	Goal               string                 `binding:"required" json:"goal"`
-	HistoryIncomplete  *bool                  `json:"history_incomplete,omitempty"`
-	Input              *AuthorizedInput       `json:"input,omitempty"`
-	Manifest           map[string]interface{} `binding:"required" json:"manifest"`
-	MessagesPage       MessagePage            `binding:"required" json:"messages_page"`
-	RetryOfRunId       *string                `json:"retry_of_run_id,omitempty"`
-	RootRunId          string                 `binding:"required" json:"root_run_id"`
-	SessionId          string                 `binding:"required" json:"session_id"`
-	SnapshotCursor     string                 `binding:"required" json:"snapshot_cursor"`
-	State              AgentState             `binding:"required" json:"state"`
-	SubmissionId       string                 `binding:"required" json:"submission_id"`
+	Events             []CommittedEvent          `binding:"required" json:"events"`
+	ExecutionAvailable bool                      `binding:"required" json:"execution_available"`
+	Goal               string                    `binding:"required" json:"goal"`
+	HistoryIncomplete  *bool                     `json:"history_incomplete,omitempty"`
+	Input              *AuthorizedInput          `json:"input,omitempty"`
+	Manifest           map[string]interface{}    `binding:"required" json:"manifest"`
+	MessagesPage       MessagePage               `binding:"required" json:"messages_page"`
+	Recovery           *[]map[string]interface{} `json:"recovery,omitempty"`
+	RetryOfRunId       *string                   `json:"retry_of_run_id,omitempty"`
+	RootRunId          string                    `binding:"required" json:"root_run_id"`
+	SessionId          string                    `binding:"required" json:"session_id"`
+	SnapshotCursor     string                    `binding:"required" json:"snapshot_cursor"`
+	State              AgentState                `binding:"required" json:"state"`
+	SubmissionId       string                    `binding:"required" json:"submission_id"`
 }
 
 // RunSummary defines model for RunSummary.

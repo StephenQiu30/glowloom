@@ -188,6 +188,7 @@ declare namespace API {
     model_steps?: number;
     pending_proposal?: string | null;
     plan?: PlanItem[];
+    production?: Record<string, any> | null;
     proposal?: ProposalView;
     reconciliation?: Record<string, any>;
     root_run_id?: string;
@@ -2750,6 +2751,23 @@ declare namespace API {
     /** Original request UUID */
     request: string;
   };
+
+  type GoalContract = {
+    delivery?: GoalDeliverySpec;
+    kind?: GoalKind;
+    required_deliveries?: number;
+    source?: CanvasSource;
+  };
+
+  type GoalDeliverySpec = {
+    aspect_ratio?: string;
+    duration_ms?: number;
+    fps?: number;
+    project_format?: OutputKind;
+    source_start_ms?: number;
+  };
+
+  type GoalKind = "chat" | "production";
 
   type GovernanceMutation = {
     expected_revision?: string;
@@ -5733,6 +5751,7 @@ declare namespace API {
     input?: AuthorizedInput;
     manifest: Record<string, any>;
     messages_page: MessagePage;
+    recovery?: Record<string, any>[];
     retry_of_run_id?: string;
     root_run_id: string;
     session_id: string;
@@ -6277,6 +6296,7 @@ declare namespace API {
     budget_micros?: number;
     canvas_id?: string;
     expected_execution_revision?: number;
+    goal_contract?: GoalContract;
     input?: Record<string, any>;
     manifest?: Record<string, any>;
     quoted_from?: QuoteRef;

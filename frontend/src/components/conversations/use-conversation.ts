@@ -49,9 +49,11 @@ import { useConversationEvents } from "./use-conversation-events";
 export interface ConversationOptions {
   ownerKey: string;
   projectID: string;
+  canvasID?: string;
   sessionID?: string;
   enabled: boolean;
   initialDraft?: PromptDraft;
+  goalContract?: API.GoalContract;
   onDraftChange?: (draft: PromptDraft) => void;
   onAccepted?: (sessionID: string) => void;
 }
@@ -155,9 +157,11 @@ function requireRun(value: API.RunSnapshot, sid: string) {
 export function useConversation({
   ownerKey,
   projectID,
+  canvasID,
   sessionID,
   enabled,
   initialDraft,
+  goalContract,
   onDraftChange,
   onAccepted,
 }: ConversationOptions) {
@@ -568,7 +572,13 @@ export function useConversation({
     if (!command.sessionID) {
       const session = await createAgentSession(
         { pid: projectID },
-        { request_id: command.sessionKey, title: command.title },
+        {
+          request_id: command.sessionKey,
+          title: command.title,
+          ...(command.body.canvas_id
+            ? { canvas_id: command.body.canvas_id }
+            : {}),
+        },
         { signal: signal.current ?? undefined },
       );
       if (!current()) return;
@@ -619,6 +629,7 @@ export function useConversation({
       if (!allowed.allowed || !model) return;
       const frozen = structuredClone(draft),
         requestKey = crypto.randomUUID();
+      const frozenCanvasID = state.session ? state.session.canvas_id : canvasID;
       const selectedQuote =
         quote?.identity === identity ? quote.ref : undefined;
       command = {
@@ -634,6 +645,10 @@ export function useConversation({
         sent: false,
         body: {
           request_id: requestKey,
+          ...(frozenCanvasID ? { canvas_id: frozenCanvasID } : {}),
+          ...(goalContract
+            ? { goal_contract: structuredClone(goalContract) }
+            : {}),
           input: frozen,
           expected_execution_revision:
             activeRun?.snapshot.state.execution_revision ??
@@ -980,6 +995,11 @@ export function useConversation({
               ? previous.manifest.max_micros
               : budgetMicros(settings.budget)!,
           manifest: previous.manifest,
+          ...(previous.manifest.goal_contract
+            ? {
+                goal_contract: structuredClone(previous.manifest.goal_contract),
+              }
+            : {}),
           ...(previous.input.quote
             ? {
                 quoted_from: {

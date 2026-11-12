@@ -296,7 +296,7 @@ EX-11不是末尾补文档：原意图/资金及完成判定先于自动批量�
 
 ## 9. 首轮可执行实施（SRC-AGH-20）
 
-唯一产品来源PRD19 AC-AH-40～44及AC-AH-09/16/36～39；设计32 §7.15。已获实际实现授权；状态/证据只记BACKLOG。采用writing-plans/executing-plans和TDD，不建新引擎。原工作区保留，隔离检出实施，无分支/提交/推送/部署/付费调用。
+唯一产品来源PRD19 AC-AH-40～44及AC-AH-09/16/36～39；设计32 §7.15～16。以下是已有首轮的基础合同和验证入口，不再视为全部待从零建设；本次源码复核的剩余实施依赖见§10。当前SRC-AGH-22仅授权文档，不执行下列代码/环境步骤；状态与实际证据只记BACKLOG。
 
 ### P1 原请求与真实费用
 
@@ -327,3 +327,85 @@ EX-11不是末尾补文档：原意图/资金及完成判定先于自动批量�
 5. 原HTTP恢复、正式采用和实际产物事实完成后，再做Agent完整PG/SIGKILL、Swagger重生成比对、类型/构建/lint与服务边界检查。已知工具链告警、临时超时及复跑结果如实留在BACKLOG。
 
 复核顺序和当前完成情况以BACKLOG为准，不将本切片当成完整MCP、Skill并行、整集制作或生产容量接受。
+
+## 10. 本次源码复核实施依赖
+
+唯一来源PRD19 AC-AH-45～51 / ST-AH-66～72，并继承原接受条件；技术依据经PRD追溯设计32 §7.17及其设计37依赖。现有Nest、双向生成、原调用、模型结算、delivery等待和单镜工具直接复用；不重跑“首次搭服务”任务。本节定义技术依赖顺序；SRC-AGH-23已授权R1/R2/R3与Plan33 D1实现，未授权的后续切片不据此开工。排期、完成状态及调度仍在BACKLOG。
+
+### 10.1 接口交接与依赖图
+
+| 交付接口（拟增量） | 权威及最小内容 | 消费者 |
+| --- | --- | --- |
+| RootCostSnapshot | Go：authorized_limit、pending_commitment、settled_charge、allocated_unused、unallocated、remaining及单位/币种，原call/operation/资金证据；总剩余不等于可抢占兄弟额度 | R1产出，R4并行准入、前端费用视图消费 |
+| BudgetAllocation | Go：root/plan_revision/branch_key/任务书hash、额度/单位、授权revision及稳定回执；call承诺从划拨转换，不二次冻结钱包 | 随R4真实消费者产出，创建child前绑定，重复受理查原回执 |
+| GoalAdmission / GoalCompletion | Go：稳定request/scope/hash、goal_kind、唯一bound_root、清单及revision、逐项缺失/质量事实；Agent仅保存引用 | R2产出，单镜D1、生产D2～D5消费 |
+| ExecutionPolicy / 定义摘要 | Agent：策略版本、步数/分支/深度、冻结模型/Skill/工具，生产行为依赖清单及hash | R3产出，R4/R5与发布盘点消费 |
+| WaitRecord | Agent：wait_id/type、原refs、control/plan revision、首次/绝对截止/唤醒、attempt/原因；Go job保持原身份 | R3产出，R4/R6/单镜及整集等待消费 |
+| DelegationBatch | Agent：稳定batch/branch_key、任务书hash、owned conversation/submission、角色/预算和独立结果来源 | R4产出，专业产物与QA消费；不作为正式Take采用 |
+| SkillSelection / McpToolBinding | 前者复用Go版本化资源元数据，后者Go连接/认证/工具/schema/效果/恢复政策快照 | R5/R6产出，Agent只消费冻结且受权集合 |
+
+依赖：`R1 + R2 + R3 → Plan33 D1（现有单镜联合接线）`；`R1/R3 → R4`；`R3 → R5`；`R1/R3 → R6`；`D1 → Plan33 D2 → D3 → D4 → D5`。R4实际专业并行供D3使用；R5可在受权现有Skill范围内先用手动选择，不阻塞D1。R6只读技术互通可独立验证，外部收费/写工具不可早于R1/R3；站内单镜与正式生产身份不依赖MCP全部完成。R7验证每个已开放切片，不等到最后才补恢复。
+
+### R1 原请求与费用投影收敛
+
+文件：复用`backend/internal/agent/{domain/business.go,adapter/postgres/calls.go,adapter/postgres/authority.go}`、`app/agent/creation.go`、`operation`资金终态与既有billing接口；增量`agent/adapter/postgres/cost_projection.go`及对应业务DTO。结构变更仅在`backend/db/schema.sql`。测试扩展`backend/tests/agentbusiness/request_cost_recovery_test.go`，增加`root_cost_projection_test.go`。
+
+消费原CallIdentity/operation/reservation/settlement，产出RootCostSnapshot，不改变billing唯一结算权威。
+
+- [ ] 先写失败用例：Quote承诺转媒体实际收费/退款、重复/丢通知后对账、unknown继续占用、模型超额及采购/用户价不同；R4再验分支划拨回应丢失/转call/回收竞态；本切片断言不把allocation、报价与实际重复累计，不新扣钱包。
+- [ ] 用原operation终态/资金回执更新根费用分类投影，保留原调用hash与一次发送资格；当前按原身份和账本快照对账，BudgetAllocation及转换/回收随R4消费端再实现，归集失败禁新收费但不禁止原免费恢复。
+- [ ] 运行`go -C backend test -race ./tests/agentbusiness ./tests/operation`并确认目标用例实际执行；核对原流水/原POST计数和单位/币种。已有超额测试继续通过，不能为并发先删除根未知阻断。
+
+### R2 制作受理与完成义务
+
+文件：Go `agent/domain/{business,goal}.go`、`agent/adapter/postgres/{authority,goals}.go`、`agent/adapter/http/business*.go`、`app/agent/shot_delivery_query.go`与公开conversation入口；Node `http/session-request.dto.ts`、`sessions/{input,types,manifest,delivery}.ts`；现有双向生成链。新增测试`backend/tests/agentbusiness/goal_admission_test.go`，扩展`agent/tests/{delivery-contract,conversation-contract}.test.ts`。
+
+消费用户明确意图/正式来源，扩展现有Admission/run_authorization的GoalContract和GoalCompletion；公开Start已确定稳定root并先AdmitRun，不建立第二受理表。
+
+- [ ] 先测聊天空集合可完成、production待规划/无交付提案不可完成；受理后Node/网络中断、重复request、异参hash和跨root绑定冲突均不产生第二制作root。
+- [ ] Go在原授权中先保存目标与内容hash，Node按原request/root幂等受理，Go覆盖转发manifest中的目标；快照返回版本化必需项，deliveryOutcome检查目标义务和原shot交付，而非只对空数组every。模型输出不能改目标类型。
+- [ ] 执行上述Go/Node目标用例与`pnpm --dir agent api:check`，检查生成接口、实际HTTP和缺字段拒绝；Agent单测须使用隔离受限PG。正式清单尚未形成时保留待规划，不用假完整清单通过。
+
+### R3 策略冻结、恢复泵与关闭失败
+
+文件：Agent `pi-durable/{definitions,delegation,context,registry}.ts`、增量`pi-durable/policy.ts`、`sessions/{manifest,runtime,service,delivery}.ts`、按职责需要增加`waits.ts/recovery.ts`；Go `platform/taskruntime`仅补仍存在的时钟/领取缺口，不新造worker。测试`agent/tests/{manifest,registry-budget,lifecycle-recovery,recovery-process}.test.ts`与新增`recovery-diagnostics.test.ts`。
+
+消费原owner/epoch/控制/交付等待，产出ExecutionPolicy、完整定义摘要及WaitRecord。R1/R2的协议变化一起纳入新定义，在发布前盘点原run。
+
+- [ ] 先测行为依赖修改改变摘要、相同生产输入稳定，40/39/8等策略约束一致；wait截止重开不延长，扫描连续失败/poison项/close失败可见且不早放lease。
+- [ ] 集中所属策略、扩展冻结摘要到行为依赖；扫描分类退避/停车、原定义不兼容清单和最近成功/最老年龄；保留清grant先于收尾，失败租约自然过期，不恢复新付费动作。
+- [ ] 在隔离PG执行对应进程kill/失DB/双owner用例，再运行`pnpm --dir agent typecheck`、`pnpm --dir agent build`；错误不能只catch丢弃，新增目录不可只有转发。
+
+### R4 真实分支并行与有界收费准入
+
+文件：`agent/src/pi-durable/{delegation,registry,policy}.ts`、`docs.ts`、`sessions/manifest.ts`；Go R1原费用准入。测试扩展`agent/tests/delegation.test.ts`、新增`delegation-parallel.test.ts`及Go `root_cost_projection_test.go`。
+
+消费R1/R3，产出DelegationBatch；保留单模型默认，角色模型覆盖仅在真实目录/授权合同扩展后启用。
+
+- [ ] 两个branch在屏障上同时在途；分别在create/submit/result commit边界kill，断言同branch同child/请求，失败只影响自身；工具越权、递归委派、非采用来源和总步数超限均拒绝。
+- [ ] 原子保存branch映射/分配，独立submit/wait/结果采用；保持Go正式写链串行。按已核验费用上界原子预留每个模型call后才放行真正收费并行；不满足的供应商保持保守限制。
+- [ ] 执行真实Pi+PG并行/恢复和Go根额度竞态；核对实际模型调用重叠与资金占用，不能仅断言两个conversation行存在。ST-AH-69及原ST-AH-36/50/55均保留。
+
+### R5 Skill自动选择与依赖
+
+文件：复用Go `agent/adapter/postgres/skills.go`及`domain/skill.go`；Agent `pi-durable/{skills,context}.ts`、`sessions/manifest.ts`。测试扩展`agent/tests/{skills,skills-extensions,compaction-context}.test.ts`。
+
+- [ ] 先测显式选择优先、受权自动匹配、依赖缺失/循环/冲突/撤权和压缩恢复；没有隔离driver的脚本不能加载执行。
+- [ ] 在现有不可变Skill版本资源中加入元数据/闭包，按需载入冻结集合并显示依据；越出集合走原授权/continuation，不自动安装npm/git包。
+- [ ] 实际Pi消费结构产物并由Go正式工具验证，运行对应测试；Skill加载成功不能替代制作落库/采用证明。
+
+### R6 正式MCP连接与原调用
+
+只有开始交付真实协议时才新增`backend/internal/mcp/{domain,application,adapter/http,adapter/postgres,adapter/protocol}`及对应app接线；锁定官方Go SDK候选基线，复用Go Agent原工具/费用/工作记录。HTTP端口/DTO经专用Swagger生成到Node，不开放任意server/tool参数的万能出口。测试新增`backend/tests/mcp/connection_integration_test.go`、`call_recovery_integration_test.go`。
+
+- [ ] 先以受控真实Streamable HTTP服务验证认证主体隔离、分页/重名/schema/配置变更/停用、isError/输出上限；连接/工具绑定必须实际注册并被Pi可达。
+- [ ] 再测远端已写丢回应、有原job/无查询/有幂等三类、取消非终态与中途输入；把句柄及未知写入落原调用/工作记录，有限调度原查询，未知不重发。能力不支持则明确不可用，不伪造Tasks。
+- [ ] 执行`go -C backend test -race ./tests/mcp`和跨Node/Go协议用例，检查原远端写计数/费用。stdio及外部收费分别有driver/账号/预算门禁，不能凭SDK安装签收。
+
+### R7 每个切片的运行与发布门禁
+
+复用现有官方Storage conformance、Go/Agent合同、PG进程恢复和Plan33真实FFmpeg测试。扩展现有CI job，不新增空“已完成”接口；每个切片完成后运行其有风险的边界，再统一`pnpm --dir agent test`、`api:check`、`lint`、`format:check`、`build`及Go适用门禁。
+
+验收环境必须显式提供隔离`GLOWLOOM_AGENT_TEST_DB_DSN`、业务专用测试DSN和可达对象协议夹具；单镜用`GLOWLOOM_TEST_SHOT_PIPELINE_DB_DSN`，缺变量导致skip时该门记为未验证。不得打印真实DSN/凭据、运行全schema覆盖现有库或用mock替代数据库测试。镜像/定义/角色/schema核对、停新受理、在途/未知费用清结后再单版本切换，不为部署新增兼容引擎。
+
+SRC-AGH-23已授权R1/R2/R3与Plan33 D1实现和本地验证；原文档调研证据不冒充当前执行结果。实际完成状态、测试命令与未验边界统一见BACKLOG。后续R4～R7、真实供应商与作品接受仍分别留证。

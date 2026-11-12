@@ -7965,3 +7965,33 @@ END $$;
 CREATE TRIGGER model_preset_immutable BEFORE UPDATE OR DELETE ON catalog.model_preset
 FOR EACH ROW EXECUTE FUNCTION catalog.guard_model_preset();
 GRANT SELECT,INSERT ON catalog.model_preset TO glowloom_app;
+
+-- One original Agent receipt owns one operation commitment. The receipt is
+-- inserted after the atomic command callback, within this same transaction.
+CREATE TABLE agent_business.operation_commitment (
+ receipt_id uuid PRIMARY KEY REFERENCES agent_business.call_receipt(receipt_id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+ operation_id uuid NOT NULL UNIQUE REFERENCES operation.operation(id)
+);
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='glowloom_app') THEN
+  GRANT SELECT,INSERT ON agent_business.operation_commitment TO glowloom_app;
+ END IF;
+END $$;
+
+-- Recovery diagnostics/backoff belongs to the original Agent run/control, not a new executor.
+CREATE TABLE agent.recovery_backoff (
+ kind text NOT NULL CHECK(kind IN ('run','control')),
+ subject_id uuid NOT NULL,
+ root_run_id uuid NOT NULL REFERENCES agent.service_runs(id) ON DELETE CASCADE,
+ attempts integer NOT NULL DEFAULT 0 CHECK(attempts>=0),
+ code text,
+ next_attempt_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ parked_at timestamptz,
+ PRIMARY KEY(kind,subject_id)
+);
+CREATE INDEX recovery_backoff_run ON agent.recovery_backoff(root_run_id);
+REVOKE ALL ON agent.recovery_backoff FROM PUBLIC;
+GRANT SELECT,INSERT,UPDATE ON agent.recovery_backoff TO glowloom_agent;
+
+-- Frozen business goal; empty production plans retain their delivery obligation.
+ALTER TABLE agent_business.run_authorization ADD COLUMN goal_contract jsonb NOT NULL DEFAULT '{"kind":"chat","required_deliveries":0}' CHECK (jsonb_typeof(goal_contract) = 'object');

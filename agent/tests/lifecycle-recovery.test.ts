@@ -12,9 +12,11 @@ import {
 import { SessionRuntime } from '../src/sessions/runtime.js';
 import { SessionService } from '../src/sessions/service.js';
 import { SessionStore } from '../src/sessions/persistence/store.js';
-import { freezeManifest } from '../src/sessions/manifest.js';
+import { freezeManifest, canonicalHash } from '../src/sessions/manifest.js';
 import { StateDoc } from '../src/pi-durable/docs.js';
 import { testPool } from './storage/database.js';
+import { recoveryDefaults } from '../src/config.js';
+import { RecoveryStore } from '../src/sessions/recovery.js';
 import { recoveryPumpPool } from './helpers/recovery-database.js';
 
 const scope = () => ({
@@ -89,6 +91,94 @@ class Fixture extends BusinessClient {
     };
   }
 }
+
+it.each(['progress', 'no_progress'])(
+  'resumes original production operations once across a process reopen, mode=%s',
+  async (mode) => {
+    const pool = recoveryPumpPool();
+    const who = scope();
+    const goalContract = { kind: 'production', required_deliveries: 1 };
+    const operationID = randomUUID(),
+      deliveryID = randomUUID();
+    class ProductionFixture extends Fixture {
+      ready = false;
+      override async snapshot() {
+        const completed = mode === 'progress' && this.calls >= 2;
+        return {
+          revision: 1,
+          goal_completion: {
+            kind: 'production',
+            contract_hash: canonicalHash(goalContract),
+            status: completed ? 'completed' : 'incomplete',
+            required_deliveries: 1,
+            completed_deliveries: completed ? 1 : 0,
+            missing: completed ? [] : ['required_delivery_missing'],
+          },
+          production_operations: [
+            {
+              operation_id: operationID,
+              status: this.ready ? 'completed' : 'submitted',
+            },
+          ],
+          shot_deliveries: completed
+            ? [{ delivery_id: deliveryID, status: 'completed' }]
+            : [],
+        };
+      }
+    }
+    const business = new ProductionFixture(who);
+    const service = new SessionService(pool, business, {
+      leaseMs: 30000,
+      deliveryPollMs: 10,
+    });
+    let recovered: SessionService | undefined;
+    try {
+      const session = await service.createSession({
+        ...who,
+        request_id: randomUUID(),
+        content_hash: 'a'.repeat(64),
+        title: 'Production',
+      });
+      const accepted = await service.createRun(session.id, {
+        ...who,
+        input: authorizedText('Create and deliver one shot'),
+        request_id: randomUUID(),
+        content_hash: 'b'.repeat(64),
+        goal: 'Create and deliver one shot',
+        expected_execution_revision: 0,
+        manifest: { model_key: 'fixture', goal_contract: goalContract },
+      });
+      await service.waitForRun(accepted.root_run_id);
+      const waiting = await service.readRun(accepted.root_run_id, who);
+      expect(waiting?.state.status).toBe('waiting_delivery');
+      expect(business.calls).toBe(1);
+      await service.close();
+      business.ready = true;
+      recovered = new SessionService(pool, business, {
+        leaseMs: 30000,
+        deliveryPollMs: 10,
+      });
+      recovered.startRecovery();
+      await until(
+        async () =>
+          (await recovered!.readRun(accepted.root_run_id, who))?.state
+            .status ===
+          (mode === 'progress' ? 'completed' : 'needs_reconciliation'),
+      );
+      expect(business.calls).toBe(2);
+      const final = await recovered.readRun(accepted.root_run_id, who);
+      expect(final?.state.production).toMatchObject({
+        goal_completion: {
+          status: mode === 'progress' ? 'completed' : 'incomplete',
+        },
+      });
+    } finally {
+      await recovered?.close();
+      await service.close();
+      await pool.end();
+    }
+  },
+);
 async function until(check: () => Promise<boolean>) {
   for (let i = 0; i < 250; i++) {
     if (await check()) return;
@@ -617,3 +707,56 @@ it.each([
   },
   20000,
 );
+
+it('parks more than one recovery batch of incompatible definitions without starving a healthy root', async () => {
+  const pool = recoveryPumpPool(),
+    who = scope(),
+    business = new Fixture(who),
+    store = new SessionStore(pool);
+  const service = new SessionService(pool, business, { leaseMs: 30000 });
+  const poisoned: string[] = [];
+  async function admit(old: boolean) {
+    const session = await store.createSession({
+      ...who,
+      request_id: randomUUID(),
+      content_hash: 'a'.repeat(64),
+      title: 'Recovery fairness',
+    });
+    const manifest = freezeManifest({ model_key: 'fixture' }, []);
+    return store.admitRun(
+      session.id,
+      {
+        ...who,
+        request_id: randomUUID(),
+        content_hash: 'b'.repeat(64),
+        input: authorizedText('Test'),
+        expected_execution_revision: 0,
+        goal: 'Test',
+        manifest: { model_key: 'fixture' },
+      },
+      old ? { ...manifest, definition_hash: '0'.repeat(64) } : manifest,
+    );
+  }
+  try {
+    for (let i = 0; i <= recoveryDefaults.runBatch; i++)
+      poisoned.push((await admit(true)).id);
+    const healthy = await admit(false);
+    await until(async () => {
+      await service.recoverOnce();
+      await service.waitForRun(healthy.id);
+      return (
+        (await service.readRun(healthy.id, who))?.state.status === 'completed'
+      );
+    });
+    expect((await service.readRun(healthy.id, who))?.state.status).toBe(
+      'completed',
+    );
+    expect(business.callsByRun.get(healthy.id)).toBe(1);
+    const backoff = new RecoveryStore(pool);
+    for (const id of poisoned)
+      expect((await backoff.read(id))[0]?.parked_at).not.toBeNull();
+  } finally {
+    await service.close();
+    await pool.end();
+  }
+}, 30000);
