@@ -1020,43 +1020,6 @@ html:has(.canvas-controls-layout) {
     [data-slot="input-group-control"] {
     max-height: clamp(4rem, 21dvh, 10rem);
   }
-  @media (max-height: 420px) and (min-width: 768px) {
-    [data-radix-popper-content-wrapper]:has(
-        > .canvas-node-composer .canvas-formal-generator
-      ):not(:has([data-expanded])) {
-      inset: auto 1rem 3.5rem auto !important;
-      transform: none !important;
-      min-width: 0 !important;
-    }
-    .canvas-node-composer[data-slot="popover-content"]:has(
-        .canvas-formal-generator
-      ):not(:has([data-expanded])) {
-      width: auto;
-      max-height: calc(100dvh - 7.5rem);
-    }
-    .canvas-node-composer:not(:has([data-expanded]))
-      .canvas-formal-generator
-      > :not([data-presentation]) {
-      display: none;
-    }
-
-    .canvas-node-composer
-      .canvas-formal-generator
-      [data-presentation="canvas"]:not([data-expanded])
-      [data-slot="input-group"] {
-      min-height: 0;
-    }
-    .canvas-node-composer
-      .canvas-formal-generator
-      [data-presentation="canvas"]:not([data-expanded])
-      :is(
-        [aria-label="参考素材"],
-        [data-slot="input-group-control"],
-        [data-align="block-end"]
-      ) {
-      display: none;
-    }
-  }
   [data-slot="sheet-overlay"]:has(+ .canvas-node-sheet) {
     backdrop-filter: none;
   }
