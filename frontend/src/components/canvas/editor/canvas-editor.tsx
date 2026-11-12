@@ -463,6 +463,13 @@ function InfiniteCanvasPage({
   const nodeDraggingRef = useRef(false);
   const nodeDragSessionRef = useRef<CanvasNodeDragSession | null>(null);
   const releasedDragSessionRef = useRef<CanvasNodeDragSession | null>(null);
+  /** A click-drag that may turn out to be the first half of a double-click. */
+  const recentClickDragRef = useRef<{
+    at: number;
+    distance: number;
+    initial: Map<string, { x: number; y: number }>;
+    ids: Set<string>;
+  } | null>(null);
 
   const effectiveConfig = useEffectiveConfig();
   const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
@@ -2808,6 +2815,12 @@ function InfiniteCanvasPage({
         !containerRef.current
       )
         return;
+      // The second press of a double-click must not start a second drag; the
+      // first press is reverted by the double-click handler if it only jittered.
+      if (event.detail > 1) {
+        nodeDragSessionRef.current?.cancel();
+        return;
+      }
       // Capture already selected the node; this only starts dragging, with a fallback selection if capture did not run.
       const currentNodes = nodesRef.current;
       const nextSelected =
@@ -2856,6 +2869,22 @@ function InfiniteCanvasPage({
       const movedIds = session.movedIds;
       nodeDragSessionRef.current = null;
       releasedDragSessionRef.current = positions ? session : null;
+      recentClickDragRef.current = positions
+        ? {
+            at: performance.now(),
+            distance: Math.max(
+              0,
+              ...Array.from(positions, ([id, position]) => {
+                const initial = session.initialPositions.get(id);
+                return initial
+                  ? Math.hypot(position.x - initial.x, position.y - initial.y)
+                  : 0;
+              }),
+            ),
+            initial: new Map(session.initialPositions),
+            ids: new Set(session.movedIds),
+          }
+        : null;
 
       historyPausedRef.current = false;
       nodeDraggingRef.current = false;
@@ -6368,6 +6397,12 @@ function InfiniteCanvasPage({
           tool={canvasTool}
           backgroundMode={backgroundMode}
           onViewportChange={(next) => {
+            // Any user-driven wheel/pan cancels an in-flight focus animation;
+            // otherwise the animation keeps overwriting the new viewport.
+            if (focusAnimRef.current) {
+              cancelAnimationFrame(focusAnimRef.current);
+              focusAnimRef.current = null;
+            }
             setViewport(next);
             setContextMenu(null);
           }}
@@ -6380,8 +6415,31 @@ function InfiniteCanvasPage({
             if (
               nodesRef.current.find((node) => node.id === nodeId)?.type ===
               "director"
-            )
+            ) {
+              // A double-click may have carried a few pixels of jitter; undo
+              // that click-drag so focusing never silently moves the node.
+              const recent = recentClickDragRef.current;
+              recentClickDragRef.current = null;
+              if (
+                recent &&
+                recent.ids.has(nodeId) &&
+                recent.distance <= 8 &&
+                performance.now() - recent.at < 400
+              ) {
+                const initial = recent.initial;
+                historyPausedRef.current = true;
+                setNodes((prev) =>
+                  prev.map((node) => {
+                    const position = initial.get(node.id);
+                    return position ? { ...node, position } : node;
+                  }),
+                );
+                setTimeout(() => {
+                  historyPausedRef.current = false;
+                }, 0);
+              }
               focusNode(nodeId);
+            }
           }}
           onCanvasDoubleClick={(event) => {
             if (referencePickerNodeId || integrationRef.current?.frozen) return;

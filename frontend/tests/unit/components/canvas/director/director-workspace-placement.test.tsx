@@ -158,6 +158,11 @@ function mount(
   return {
     unmount: rendered.unmount,
     client,
+    setConfig: (next: API.DirectorConfig) =>
+      act(() => {
+        config = next;
+        notify();
+      }),
     scene: () => activeDirectorScene(migrateDirectorDocument(config)),
     changeScope: (scope: "epoch" | "mode" | "readonly" | "conflict") =>
       act(() => {
@@ -260,6 +265,35 @@ it("keeps the enter-director button isolated and expands only on click", () => {
   expect(onExpand).not.toHaveBeenCalled();
   fireEvent.click(button);
   expect(onExpand).toHaveBeenCalledTimes(1);
+});
+
+it("keeps a disabled director control from leaking gestures to the card", () => {
+  const { events, wrapper } = observeCanvasEvents();
+  const { setConfig } = mount({ compact: true, wrapper });
+  setConfig({ version: 2 } as API.DirectorConfig);
+
+  const button = screen.getByRole("button", {
+    name: "进入导演台",
+  }) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  const zone = button.parentElement!;
+  expect(zone.hasAttribute("data-canvas-no-zoom")).toBe(true);
+  expect(zone.hasAttribute("data-canvas-shortcuts-ignore")).toBe(true);
+
+  fireEvent.pointerDown(zone, { button: 0 });
+  fireEvent.mouseDown(zone, { button: 0 });
+  fireEvent.doubleClick(zone);
+  fireEvent.keyDown(zone, { key: "v" });
+  expect(events).toEqual([]);
+});
+
+it("keeps wheel over the director card from zooming the canvas", () => {
+  mount({ compact: true });
+  expect(
+    screen
+      .getByRole("region", { name: "导演台节点" })
+      .hasAttribute("data-canvas-wheel-scroll"),
+  ).toBe(true);
 });
 
 it("keeps the interactive director workspace isolated from canvas gestures", () => {
