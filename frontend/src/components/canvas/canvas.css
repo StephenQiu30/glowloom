@@ -1605,7 +1605,7 @@ html:has(.canvas-controls-layout) {
     outline-offset: calc(-1 * var(--canvas-node-indicator-width));
   }
   .node-element[data-node-type="text"] .canvas-node-body {
-    border-radius: 8px;
+    border-radius: 12px;
   }
 }
 
