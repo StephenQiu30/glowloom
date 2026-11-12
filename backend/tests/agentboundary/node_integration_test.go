@@ -408,7 +408,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	}
 	for _, original := range originalCalls {
 		in := original.input
-		query := url.Values{"submission_id": {in.Grant.SubmissionID.String()}, "task_id": {in.Call.TaskID}, "checkpoint_id": {in.Call.CheckpointID}, "attempt": {fmt.Sprint(in.Call.Attempt)}, "contract_version": {in.Call.ContractVersion}}
+		query := url.Values{"submission_id": {in.Grant.SubmissionID.String()}, "task_id": {in.Call.TaskID}, "checkpoint_id": {in.Call.CheckpointID}, "attempt": {fmt.Sprint(in.Call.Attempt)}, "contract_version": {in.Call.ContractVersion}, "input_hash": {in.Call.InputHash}}
 		path := businessServer.URL + "/internal/agent-business/runs/" + rid.String() + "/calls/" + url.PathEscape(in.Call.CallID) + "?" + query.Encode()
 		var saved, replay domain.CallReceipt
 		decode(t, requestJSON(t, client, "GET", path, nil, serviceHeaders, 200), &saved)
