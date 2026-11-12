@@ -437,13 +437,18 @@ it("画布紧凑呈现等新节点保存但不物化空输入，重渲染不重�
 
 it("紧凑参数使用模型schema与候选上限，同一画布来源报价后才允许确认", async () => {
   const { canvas, pointer } = await compactWorkspace();
-  fireEvent.click(screen.getByRole("button", { name: "生成参数" }));
-  expect(screen.getByRole("combobox", { name: "画面比例" })).toBeTruthy();
-  fireEvent.keyDown(screen.getByRole("combobox", { name: "生成数量" }), {
-    key: "ArrowDown",
+  const parameterTrigger = screen.getByRole("button", { name: "生成参数" });
+  fireEvent.click(parameterTrigger);
+  expect(screen.getByRole("radiogroup", { name: "画面比例" })).toBeTruthy();
+  expect(screen.queryByRole("radiogroup", { name: "生成数量" })).toBeNull();
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(document.activeElement).toBe(parameterTrigger));
+  fireEvent.click(screen.getByRole("button", { name: "生成数量" }));
+  const countGroup = await screen.findByRole("radiogroup", {
+    name: "生成数量",
   });
-  expect(await screen.findAllByRole("option")).toHaveLength(4);
-  fireEvent.click(screen.getByRole("option", { name: "2" }));
+  expect(within(countGroup).getAllByRole("radio")).toHaveLength(4);
+  fireEvent.click(within(countGroup).getByRole("radio", { name: "2" }));
   await waitFor(() =>
     expect(canvas.onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -869,8 +874,13 @@ it("模型目录503仍能输入和保存，局部重试恢复模型且保留正�
   const submissionCalls = api.current.mock.calls.length;
   fireEvent.click(screen.getByRole("button", { name: "重试模型目录" }));
   await waitFor(() => expect(api.models).toHaveBeenCalledTimes(2));
-  expect(await findFeedback("模型暂不可用")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "重试" }));
+  const feedback = await findFeedback("模型暂不可用");
+  fireEvent.click(
+    within(feedback.closest<HTMLElement>("[data-sonner-toast]")!).getByRole(
+      "button",
+      { name: "重试" },
+    ),
+  );
   await waitFor(() =>
     expect(screen.queryByRole("button", { name: "重试模型目录" })).toBeNull(),
   );
@@ -1297,9 +1307,8 @@ it("助手紧凑展示保持提示词草稿归属并经正式报价后确认发�
     await screen.findByRole("button", { name: "从本地、画布或资产库添加" }),
   ).toBeTruthy();
   expect(screen.queryByRole("combobox", { name: "生成模式" })).toBeNull();
-  expect(screen.queryByRole("combobox", { name: "生成模型" })).toBeNull();
+  expect(screen.getByRole("combobox", { name: "生成模型" })).toBeTruthy();
   expect(screen.queryByText("全能参考")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "模型与参数" }));
   fireEvent.keyDown(await screen.findByRole("combobox", { name: "生成模型" }), {
     key: "ArrowDown",
   });

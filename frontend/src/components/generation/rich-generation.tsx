@@ -34,21 +34,8 @@ import {
   Minimize2,
   MoreHorizontal,
   RefreshCw,
-  SlidersHorizontal,
 } from "lucide-react";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-} from "@/components/ui/input-group";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverDescription,
-} from "@/components/ui/popover";
+import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
@@ -111,6 +98,13 @@ import {
 } from "./model-availability";
 import { ModelPicker } from "./model-picker";
 import { GenerationParameters } from "./generation-parameters";
+import { GenerationToolbarParameters } from "./generation-toolbar-parameters";
+import {
+  ComposerToolbar,
+  ComposerToolbarActions,
+  ComposerToolbarButton,
+  ComposerSelectTrigger,
+} from "./composer-toolbar";
 import { AvatarTextDrive } from "./avatar-text-drive";
 import type { VoiceSelection } from "./voice-library-api";
 const VoiceLibrary = dynamic(() =>
@@ -1435,21 +1429,31 @@ function EditorWorkspace({
           }
         })()
       : undefined;
+  const parameterFields = model
+    ? (() => {
+        try {
+          return fieldsForMode(
+            model.current_version?.param_schema,
+            draft.mode ?? "",
+          );
+        } catch {
+          return [];
+        }
+      })()
+    : [];
+  const durationField =
+    compact && seed.capability === "video"
+      ? parameterFields.find((f) => f.field === "duration_ms")
+      : undefined;
   const parameterControls = model ? (
     <>
       <GenerationParameters
-        fields={(() => {
-          try {
-            return fieldsForMode(
-              model.current_version?.param_schema,
-              draft.mode ?? "",
-            );
-          } catch {
-            return [];
-          }
-        })().filter(
-          (f) => !collaborativeNegativeField || f.field !== "negative_prompt",
+        fields={parameterFields.filter(
+          (f) =>
+            (!collaborativeNegativeField || f.field !== "negative_prompt") &&
+            (!durationField || f.field !== durationField.field),
         )}
+        includeOutputCount={!compact}
         params={draft.params}
         maxOutputs={Number(model.current_version?.limits?.max_outputs ?? 1)}
         disabled={frozen}
@@ -1716,6 +1720,19 @@ function EditorWorkspace({
     />
   );
 
+  const toolbarParameters = (
+    <GenerationToolbarParameters
+      enabled={!!model}
+      disabled={!session || frozen}
+      params={draft.params}
+      maxOutputs={Number(model?.current_version?.limits?.max_outputs ?? 1)}
+      duration={durationField}
+      onChange={(params) => session?.updateParams(params)}
+    >
+      {parameterControls}
+    </GenerationToolbarParameters>
+  );
+
   const editorLabel =
     seed.creationType === "music"
       ? "音乐创作编辑器"
@@ -1876,14 +1893,14 @@ function EditorWorkspace({
             >
               {promptControl}
             </div>
-            <InputGroupAddon
-              align="block-end"
+            <ComposerToolbar
+              aria-label="生成工具"
               className="canvas-assistant-tools"
             >
               {referenceControls}
               {voiceControls}
               {headerActions}
-              <InputGroupButton
+              <ComposerToolbarButton
                 aria-label="引用参考"
                 size="toolbar-icon"
                 disabled={frozen || !session}
@@ -1896,41 +1913,12 @@ function EditorWorkspace({
                 }
               >
                 <AtSign />
-              </InputGroupButton>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <InputGroupButton
-                    aria-label="模型与参数"
-                    size="toolbar-icon"
-                    disabled={frozen || !session}
-                  >
-                    <SlidersHorizontal />
-                  </InputGroupButton>
-                </PopoverTrigger>
-                <PopoverContent
-                  side="top"
-                  align="end"
-                  data-canvas-no-zoom
-                  data-canvas-shortcuts-ignore
-                  className="max-h-[70dvh] w-80 max-w-[calc(100vw-32px)] space-y-4 overflow-y-auto"
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  <PopoverHeader>
-                    <PopoverTitle>模型与参数</PopoverTitle>
-                    <PopoverDescription>
-                      发送前会核对输入与费用。
-                    </PopoverDescription>
-                  </PopoverHeader>
-                  <p role="status" className="text-xs text-muted-foreground">
-                    {saveState} · r{revision}
-                  </p>
-                  {modelControl}
-                  {parameterControls}
-                </PopoverContent>
-              </Popover>
-              <div className="ml-auto flex shrink-0 items-center gap-1">
+              </ComposerToolbarButton>
+              {modelControl}
+              {toolbarParameters}
+              <ComposerToolbarActions>
                 {creditDisplay}
-                <InputGroupButton
+                <ComposerToolbarButton
                   className="rounded-full max-md:size-11"
                   size="toolbar-icon"
                   variant="default"
@@ -1969,9 +1957,9 @@ function EditorWorkspace({
                   ) : (
                     <ArrowUp />
                   )}
-                </InputGroupButton>
-              </div>
-            </InputGroupAddon>
+                </ComposerToolbarButton>
+              </ComposerToolbarActions>
+            </ComposerToolbar>
           </InputGroup>
         ) : compact ? (
           <InputGroup
@@ -2003,14 +1991,14 @@ function EditorWorkspace({
                 {voiceControls}
                 {presentation !== "home" && headerActions}
                 {presentation !== "home" && (
-                  <InputGroupButton
+                  <ComposerToolbarButton
                     aria-label={full ? "收起编辑器" : "展开编辑器"}
                     size="toolbar-icon"
                     className="ml-auto"
                     onClick={() => setFull((value) => !value)}
                   >
                     {full ? <Minimize2 /> : <Maximize2 />}
-                  </InputGroupButton>
+                  </ComposerToolbarButton>
                 )}
               </InputGroupAddon>
               <div
@@ -2026,8 +2014,8 @@ function EditorWorkspace({
                 {promptControl}
               </div>
             </div>
-            <InputGroupAddon
-              align="block-end"
+            <ComposerToolbar
+              aria-label="生成工具"
               className={
                 presentation === "home"
                   ? "creation-tools"
@@ -2037,13 +2025,13 @@ function EditorWorkspace({
               {presentation === "home" && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <InputGroupButton
+                    <ComposerToolbarButton
                       aria-label="更多工具"
                       size="toolbar-icon"
                       disabled={pending || frozen}
                     >
                       <MoreHorizontal />
-                    </InputGroupButton>
+                    </ComposerToolbarButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" sideOffset={8}>
                     <DropdownMenuGroup>
@@ -2064,13 +2052,13 @@ function EditorWorkspace({
                 </DropdownMenu>
               )}
               {presentation === "home" && (
-                <InputGroupButton
+                <ComposerToolbarButton
                   aria-label={full ? "收起编辑器" : "展开编辑器"}
                   size="toolbar-icon"
                   onClick={() => setFull((value) => !value)}
                 >
                   {full ? <Minimize2 /> : <Maximize2 />}
-                </InputGroupButton>
+                </ComposerToolbarButton>
               )}
               <div
                 className={
@@ -2087,38 +2075,7 @@ function EditorWorkspace({
                   {presentation === "home" && headerActions}
                   {modelControl}
                 </div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <InputGroupButton
-                      aria-label="生成参数"
-                      disabled={!session || frozen}
-                    >
-                      {[draft.params.aspect_ratio, draft.params.resolution]
-                        .filter((value) => typeof value === "string" && value)
-                        .join(" · ") || "参数"}{" "}
-                      · {Number(draft.params.output_count ?? 1)}
-                      {seed.capability === "image" ? " 张" : null}
-                      <ChevronDown data-icon="inline-end" />
-                    </InputGroupButton>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    side="top"
-                    align="start"
-                    sideOffset={8}
-                    collisionPadding={16}
-                    className="max-h-[min(70dvh,var(--radix-popover-content-available-height))] w-[336px] max-w-[calc(100vw-32px)] overflow-y-auto p-4"
-                    aria-label="生成参数"
-                  >
-                    <PopoverHeader>
-                      <PopoverTitle>生成参数</PopoverTitle>
-                    </PopoverHeader>
-                    {parameterControls ?? (
-                      <PopoverDescription>
-                        请先选择可用模型，再配置生成参数。
-                      </PopoverDescription>
-                    )}
-                  </PopoverContent>
-                </Popover>
+                {toolbarParameters}
                 {seed.creationType === "music" && model ? (
                   <Select
                     value={draft.mode ?? "music_song"}
@@ -2127,13 +2084,12 @@ function EditorWorkspace({
                       selectMode(draft.modelVersion!, mode)
                     }
                   >
-                    <SelectTrigger
-                      size="toolbar"
+                    <ComposerSelectTrigger
                       aria-label="音乐模式"
                       className="w-auto"
                     >
                       <SelectValue />
-                    </SelectTrigger>
+                    </ComposerSelectTrigger>
                     <SelectContent>
                       <SelectGroup>
                         {availableModelModes(model).map((mode) => (
@@ -2162,7 +2118,7 @@ function EditorWorkspace({
                 )}
                 {!textOnlyAudio &&
                   !["avatar", "motion"].includes(seed.creationType ?? "") && (
-                    <InputGroupButton
+                    <ComposerToolbarButton
                       aria-label="提及素材或主体"
                       size="toolbar-icon"
                       disabled={frozen || !session}
@@ -2175,14 +2131,14 @@ function EditorWorkspace({
                       }
                     >
                       <AtSign />
-                    </InputGroupButton>
+                    </ComposerToolbarButton>
                   )}
                 {presentation === "home" && projectControl}
               </div>
-              <div className="ml-auto flex shrink-0 items-center gap-1">
+              <ComposerToolbarActions>
                 {creditDisplay}
                 {current.submission ? (
-                  <InputGroupButton
+                  <ComposerToolbarButton
                     size="toolbar"
                     className="shrink-0"
                     variant="default"
@@ -2191,9 +2147,9 @@ function EditorWorkspace({
                     {current.submission.state === "accepted"
                       ? "查看任务"
                       : "查看报价"}
-                  </InputGroupButton>
+                  </ComposerToolbarButton>
                 ) : (
-                  <InputGroupButton
+                  <ComposerToolbarButton
                     className="rounded-full max-md:size-11"
                     size="toolbar-icon"
                     variant="default"
@@ -2211,10 +2167,10 @@ function EditorWorkspace({
                     ) : (
                       <ArrowUp className="size-5" />
                     )}
-                  </InputGroupButton>
+                  </ComposerToolbarButton>
                 )}
-              </div>
-            </InputGroupAddon>
+              </ComposerToolbarActions>
+            </ComposerToolbar>
           </InputGroup>
         ) : (
           <>

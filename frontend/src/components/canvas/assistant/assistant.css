@@ -138,8 +138,6 @@
   min-height: 72px;
 }
 .canvas-assistant-tools {
-  gap: 2px;
-  flex-wrap: nowrap;
   padding: 8px 12px 12px;
 }
 .canvas-assistant-tools > button,

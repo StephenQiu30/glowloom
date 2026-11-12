@@ -4,12 +4,12 @@ import { useState, type ReactElement } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
-  PopoverContent,
   PopoverDescription,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ComposerPopoverContent } from "./composer-toolbar";
 
 /** Keep an unscoped creation action anchored to its own explanation. */
 export function ProjectRequiredPopover({
@@ -27,12 +27,11 @@ export function ProjectRequiredPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent
+      <ComposerPopoverContent
         side="top"
         align="start"
         sideOffset={8}
         collisionPadding={16}
-        className="max-h-(--radix-popover-content-available-height) w-80 max-w-[calc(100vw-32px)] overflow-y-auto p-4"
         aria-label={title}
       >
         <PopoverHeader>
@@ -50,7 +49,7 @@ export function ProjectRequiredPopover({
         >
           选择项目
         </Button>
-      </PopoverContent>
+      </ComposerPopoverContent>
     </Popover>
   );
 }

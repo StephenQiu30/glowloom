@@ -6,6 +6,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,30 @@ import {
 import type { ParamField } from "./contracts";
 import type { PromptDraft } from "./prompt-document";
 
+export function outputCountLimit(maxOutputs: number) {
+  return Number.isFinite(maxOutputs)
+    ? Math.max(1, Math.min(8, Math.floor(maxOutputs)))
+    : 1;
+}
+
+function RatioShape({ value }: { value: string | number }) {
+  const match = String(value).match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
+  if (!match) return null;
+  const width = Number(match[1]),
+    height = Number(match[2]);
+  if (!width || !height) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className="composer-ratio-shape"
+      style={{
+        width: 16 * Math.min(1, width / height),
+        height: 16 * Math.min(1, height / width),
+      }}
+    />
+  );
+}
+
 /** One schema-driven parameter editor for both the popover and full editor. */
 export function GenerationParameters({
   fields,
@@ -24,6 +49,7 @@ export function GenerationParameters({
   maxOutputs,
   disabled,
   compact,
+  includeOutputCount = true,
   onChange,
 }: {
   fields: ParamField[];
@@ -31,12 +57,11 @@ export function GenerationParameters({
   maxOutputs: number;
   disabled: boolean;
   compact: boolean;
+  includeOutputCount?: boolean;
   onChange: (params: PromptDraft["params"]) => void;
 }) {
   const id = useId();
-  const count = Number.isFinite(maxOutputs)
-    ? Math.max(1, Math.min(8, Math.floor(maxOutputs)))
-    : 1;
+  const count = outputCountLimit(maxOutputs);
   return (
     <FieldGroup
       className={cn("gap-3", !compact && "grid gap-5 sm:grid-cols-2")}
@@ -97,6 +122,32 @@ export function GenerationParameters({
                       )}
                   </SelectContent>
                 </Select>
+              ) : field.enum && (ratio || field.field === "resolution") ? (
+                <ToggleGroup
+                  type="single"
+                  id={fieldID}
+                  aria-label={label}
+                  value={String(params[field.field] ?? "")}
+                  disabled={disabled}
+                  className={cn(
+                    "composer-parameter-options",
+                    ratio && "composer-ratio-options",
+                  )}
+                  onValueChange={(value) => {
+                    if (value) update(value, 1);
+                  }}
+                >
+                  {field.enum.map((value) => (
+                    <ToggleGroupItem
+                      key={String(value)}
+                      value={String(value)}
+                      aria-label={String(value)}
+                    >
+                      {ratio && <RatioShape value={value} />}
+                      <span>{value}</span>
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               ) : field.enum ? (
                 <Select
                   disabled={disabled}
@@ -189,50 +240,55 @@ export function GenerationParameters({
             </Field>
           );
         })}
-      <Field data-disabled={disabled}>
-        <FieldLabel htmlFor={`${id}-count`}>
-          {compact ? "生成数量" : "候选数量"}
-        </FieldLabel>
-        {compact ? (
-          <Select
-            disabled={disabled}
-            value={String(params.output_count ?? 1)}
-            onValueChange={(value) =>
-              onChange({ ...params, output_count: Number(value) })
-            }
-          >
-            <SelectTrigger
-              id={`${id}-count`}
-              className="w-full max-md:min-h-11"
+      {includeOutputCount && (
+        <Field data-disabled={disabled}>
+          <FieldLabel htmlFor={`${id}-count`}>
+            {compact ? "生成数量" : "候选数量"}
+          </FieldLabel>
+          {compact ? (
+            <Select
+              disabled={disabled}
+              value={String(params.output_count ?? 1)}
+              onValueChange={(value) =>
+                onChange({ ...params, output_count: Number(value) })
+              }
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {Array.from({ length: count }, (_, index) => index + 1).map(
-                  (value) => (
-                    <SelectItem key={value} value={String(value)}>
-                      {value}
-                    </SelectItem>
-                  ),
-                )}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        ) : (
-          <Input
-            id={`${id}-count`}
-            type="number"
-            min={1}
-            max={count}
-            disabled={disabled}
-            value={Number(params.output_count ?? 1)}
-            onChange={(event) =>
-              onChange({ ...params, output_count: Number(event.target.value) })
-            }
-          />
-        )}
-      </Field>
+              <SelectTrigger
+                id={`${id}-count`}
+                className="w-full max-md:min-h-11"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {Array.from({ length: count }, (_, index) => index + 1).map(
+                    (value) => (
+                      <SelectItem key={value} value={String(value)}>
+                        {value}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              id={`${id}-count`}
+              type="number"
+              min={1}
+              max={count}
+              disabled={disabled}
+              value={Number(params.output_count ?? 1)}
+              onChange={(event) =>
+                onChange({
+                  ...params,
+                  output_count: Number(event.target.value),
+                })
+              }
+            />
+          )}
+        </Field>
+      )}
     </FieldGroup>
   );
 }

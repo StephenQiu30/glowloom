@@ -3,6 +3,45 @@ import { afterEach, expect, it, vi } from "vitest";
 import { GenerationParameters } from "@/components/generation/generation-parameters";
 
 afterEach(cleanup);
+it("比例与清晰度只展示模型声明的选项，取消选中不清空草稿", () => {
+  const change = vi.fn();
+  render(
+    <GenerationParameters
+      fields={[
+        {
+          field: "aspect_ratio",
+          label: "比例",
+          type: "string",
+          component: "select",
+          enum: ["16:9", "9:16"],
+        },
+        {
+          field: "resolution",
+          label: "清晰度",
+          type: "string",
+          component: "select",
+          enum: ["720P"],
+        },
+      ]}
+      params={{ aspect_ratio: "16:9", resolution: "720P" }}
+      maxOutputs={1}
+      disabled={false}
+      compact
+      onChange={change}
+    />,
+  );
+  expect(
+    screen.getByRole("radio", { name: "16:9" }).getAttribute("aria-checked"),
+  ).toBe("true");
+  expect(screen.queryByRole("radio", { name: "1080P" })).toBeNull();
+  fireEvent.click(screen.getByRole("radio", { name: "16:9" }));
+  expect(change).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("radio", { name: "9:16" }));
+  expect(change).toHaveBeenLastCalledWith({
+    aspect_ratio: "9:16",
+    resolution: "720P",
+  });
+});
 it("Select 数字枚举通过真实选项交互，保留零值与参数类型", async () => {
   const change = vi.fn();
   render(

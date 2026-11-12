@@ -28,17 +28,18 @@ import { canonical } from "@/components/generation/draft-save";
 import { ReferenceControls } from "@/components/generation/reference-controls";
 import { ReferenceStack } from "@/components/generation/reference-stack";
 import { ModelPicker } from "@/components/generation/model-picker";
-import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
+import {
+  ComposerToolbar,
+  ComposerToolbarActions,
+  ComposerToolbarButton,
+  ComposerPopoverContent,
+} from "@/components/generation/composer-toolbar";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  PopoverTitle,
-} from "@/components/ui/popover";
+import { Popover, PopoverTrigger, PopoverTitle } from "@/components/ui/popover";
 import {
   draftText,
   isSameSkillVersion,
@@ -262,7 +263,7 @@ export function ConversationComposer({
           />
         </div>
       </div>
-      <Toolbar
+      <ComposerToolbar
         className="mt-3 flex-wrap"
         aria-label="对话创作工具"
         role="group"
@@ -279,7 +280,7 @@ export function ConversationComposer({
         {projectControl}
         <Popover>
           <PopoverTrigger asChild>
-            <Button
+            <ComposerToolbarButton
               type="button"
               variant="ghost"
               size="toolbar"
@@ -287,12 +288,13 @@ export function ConversationComposer({
             >
               <SlidersHorizontal className="size-4" />
               <span className="max-sm:sr-only">创作设置</span>
-            </Button>
+            </ComposerToolbarButton>
           </PopoverTrigger>
-          <PopoverContent
+          <ComposerPopoverContent
+            width="compact"
             side="top"
             align="start"
-            className="w-72 space-y-3 p-4"
+            className="gap-3"
           >
             <PopoverTitle>创作设置</PopoverTitle>
             {projectSetting}
@@ -306,8 +308,8 @@ export function ConversationComposer({
                 {expanded ? "收起输入" : "展开输入"}
               </Button>
             )}
-            <div className="space-y-1.5">
-              <Label htmlFor={budgetID}>本轮预算上限（元）</Label>
+            <Field>
+              <FieldLabel htmlFor={budgetID}>本轮预算上限（元）</FieldLabel>
               <Input
                 id={budgetID}
                 inputMode="decimal"
@@ -319,11 +321,11 @@ export function ConversationComposer({
                   })
                 }
               />
-            </div>
+            </Field>
             <p className="text-xs leading-5 text-muted-foreground">
               对话模型用于理解需求。图片、视频等生成模型与参数会在具体方案中确认；实际费用按任务回执显示。
             </p>
-          </PopoverContent>
+          </ComposerPopoverContent>
         </Popover>
         <Popover
           open={skillsOpen}
@@ -333,7 +335,7 @@ export function ConversationComposer({
           }}
         >
           <PopoverTrigger asChild>
-            <Button
+            <ComposerToolbarButton
               type="button"
               variant="ghost"
               aria-label="选择技能"
@@ -344,12 +346,13 @@ export function ConversationComposer({
                 技能
                 {c.settings.skills.length ? ` ${c.settings.skills.length}` : ""}
               </span>
-            </Button>
+            </ComposerToolbarButton>
           </PopoverTrigger>
-          <PopoverContent
+          <ComposerPopoverContent
+            width="compact"
             side="top"
             align="start"
-            className="max-h-80 w-72 overflow-y-auto p-3"
+            className="gap-3"
             onCloseAutoFocus={(event) => {
               if (!skillsFromEditor.current) return;
               skillsFromEditor.current = false;
@@ -430,9 +433,9 @@ export function ConversationComposer({
                 清除技能选择
               </Button>
             ) : null}
-          </PopoverContent>
+          </ComposerPopoverContent>
         </Popover>
-        <Button
+        <ComposerToolbarButton
           type="button"
           variant="ghost"
           size="toolbar-icon"
@@ -441,9 +444,9 @@ export function ConversationComposer({
           onClick={mention}
         >
           <AtSign className="size-4" />
-        </Button>
+        </ComposerToolbarButton>
         {!welcome && (
-          <Button
+          <ComposerToolbarButton
             type="button"
             variant="ghost"
             size="toolbar-icon"
@@ -455,9 +458,9 @@ export function ConversationComposer({
             ) : (
               <Maximize2 className="size-4" />
             )}
-          </Button>
+          </ComposerToolbarButton>
         )}
-        <ToolbarGroup
+        <ComposerToolbarActions
           appearance="plain"
           aria-label="模型与发送"
           className="ml-auto max-w-full"
@@ -474,8 +477,9 @@ export function ConversationComposer({
               c.changeSettings({ ...c.settings, modelKey: model.key })
             }
           />
-          <Button
+          <ComposerToolbarButton
             type="button"
+            variant="default"
             size="toolbar-icon"
             aria-label={label}
             aria-describedby={hintID}
@@ -499,9 +503,9 @@ export function ConversationComposer({
             ) : (
               <ArrowUp className="size-5" />
             )}
-          </Button>
-        </ToolbarGroup>
-      </Toolbar>
+          </ComposerToolbarButton>
+        </ComposerToolbarActions>
+      </ComposerToolbar>
       <p id={hintID} className="sr-only">
         {c.sendReason ?? "发送当前需求"}
       </p>

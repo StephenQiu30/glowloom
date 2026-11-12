@@ -14,10 +14,10 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
-  SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { creationTypes, type CreationType } from "./creation-types";
+import { ComposerSelectTrigger } from "./composer-toolbar";
 
 const icons = {
   agent: Sparkles,
@@ -44,7 +44,7 @@ export function CreationTypeSelect({
       disabled={disabled}
       onValueChange={(value) => onChange(value as CreationType)}
     >
-      <SelectTrigger
+      <ComposerSelectTrigger
         aria-label="创作类型"
         variant="quiet"
         size="toolbar"
@@ -54,7 +54,7 @@ export function CreationTypeSelect({
         <SelectValue>
           {creationTypes.find((item) => item.id === value)?.label}
         </SelectValue>
-      </SelectTrigger>
+      </ComposerSelectTrigger>
       <SelectContent side="top" sideOffset={8}>
         <SelectGroup>
           {creationTypes.map((item) => {

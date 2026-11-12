@@ -7,23 +7,23 @@ import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Box, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  ComposerSelectTrigger,
+  ComposerPopoverContent,
+  ComposerToolbarButton,
+} from "./composer-toolbar";
+import {
   Empty,
   EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
   SelectGroup,
   SelectItem,
-  SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 
@@ -44,8 +44,8 @@ export function ModelSelectList({
       collisionPadding={16}
       className={
         compact
-          ? "model-select-list"
-          : "model-select-list model-select-list-detail"
+          ? "composer-model-list model-select-list"
+          : "composer-model-list model-select-list model-select-list-detail"
       }
       onEscapeKeyDown={(event) => event.stopPropagation()}
       {...props}
@@ -55,7 +55,7 @@ export function ModelSelectList({
           选择模型{current ? `：${current}` : ""}
         </div>
       )}
-      <SelectGroup className="space-y-1">{children}</SelectGroup>
+      <SelectGroup className="flex flex-col gap-2 p-0">{children}</SelectGroup>
     </SelectContent>
   );
 }
@@ -138,14 +138,14 @@ export function ModelPicker({
     return (
       <Popover open={projectPromptOpen} onOpenChange={setProjectPromptOpen}>
         <PopoverTrigger asChild>
-          <Button
+          <ComposerToolbarButton
             type="button"
             variant="ghost"
             size="toolbar"
             disabled={disabled}
             aria-label={label}
             aria-expanded={projectPromptOpen}
-            className="max-w-60 min-w-0 justify-start text-sm"
+            className="max-w-60 justify-start"
           >
             {!compact && <Box data-icon="inline-start" />}
             选择模型
@@ -153,10 +153,10 @@ export function ModelPicker({
               data-icon="inline-end"
               className="text-muted-foreground"
             />
-          </Button>
+          </ComposerToolbarButton>
         </PopoverTrigger>
-        <PopoverContent
-          side="top"
+        <ComposerPopoverContent
+          width="compact"
           align={compact ? "end" : "start"}
           sideOffset={8}
           collisionPadding={16}
@@ -183,7 +183,7 @@ export function ModelPicker({
               </Button>
             </EmptyContent>
           </Empty>
-        </PopoverContent>
+        </ComposerPopoverContent>
       </Popover>
     );
   }
@@ -197,15 +197,10 @@ export function ModelPicker({
         if (choice && !choice.unavailable) onSelect(choice.model);
       }}
     >
-      <SelectTrigger
-        variant="quiet"
-        size="toolbar"
-        aria-label={label}
-        className="max-w-60 text-sm data-[state=open]:bg-(--creation-track) data-[state=open]:[&>svg:last-child]:rotate-180"
-      >
+      <ComposerSelectTrigger aria-label={label} className="max-w-60">
         {!compact && <Box aria-hidden="true" />}
         <SelectValue placeholder="选择模型">{current?.name}</SelectValue>
-      </SelectTrigger>
+      </ComposerSelectTrigger>
       <ModelSelectList compact={compact} current={current?.name}>
         {choices.map(({ id, model, name, unavailable }) => (
           <ModelSelectOption

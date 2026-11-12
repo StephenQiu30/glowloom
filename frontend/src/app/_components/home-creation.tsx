@@ -31,6 +31,7 @@ import { ProjectPicker } from "@/components/projects/project-picker";
 import { requireProject, type Project } from "@/components/projects/project";
 import { ensureIndependentCreation } from "@/api/projects";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
+import { ComposerToolbar } from "@/components/generation/composer-toolbar";
 import { ModelPicker } from "@/components/generation/model-picker";
 import { ReferenceStack } from "@/components/generation/reference-stack";
 import { ProjectRequiredPopover } from "@/components/generation/project-required-popover";
@@ -467,8 +468,8 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
                           onChange={inputRecovery.change}
                           onUnavailable={setFeature}
                         />
-                        <InputGroupAddon
-                          align="block-end"
+                        <ComposerToolbar
+                          aria-label="生成工具"
                           className="creation-tools"
                         >
                           <div className="creation-primary-tools">
@@ -547,7 +548,7 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
                           >
                             <ArrowUp />
                           </Button>
-                        </InputGroupAddon>
+                        </ComposerToolbar>
                       </InputGroup>
                     </Field>
                   </FieldGroup>
