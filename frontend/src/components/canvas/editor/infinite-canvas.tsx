@@ -25,6 +25,7 @@ type InfiniteCanvasProps = {
   onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onCanvasDeselect?: () => void;
   onCanvasDoubleClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
+  onNodeDoubleClick?: (nodeId: string) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
   onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
   children: React.ReactNode;
@@ -41,6 +42,7 @@ export function InfiniteCanvas({
   onCanvasMouseDown,
   onCanvasDeselect,
   onCanvasDoubleClick,
+  onNodeDoubleClick,
   onContextMenu,
   onDrop,
   children,
@@ -202,15 +204,27 @@ export function InfiniteCanvas({
   };
 
   const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (tool === "pan" || isSpacePressed || hasCanvasOverlay(document)) return;
+    if (
+      event.defaultPrevented ||
+      tool === "pan" ||
+      isSpacePressed ||
+      panState.current.isPanning ||
+      hasCanvasOverlay(document)
+    )
+      return;
     const target = event.target instanceof Element ? event.target : null;
     if (!target || !event.currentTarget.contains(target)) return;
     if (
-      target?.closest(
-        "[data-canvas-no-zoom],[data-node-id],[data-connection-id]",
+      target.closest(
+        "button,input,textarea,select,a,[role='button'],[role='textbox'],[contenteditable]:not([contenteditable='false']),[data-canvas-no-zoom],[data-connection-id]",
       )
     )
       return;
+    const node = target.closest<HTMLElement>("[data-node-id]");
+    if (node) {
+      if (node.dataset.nodeId) onNodeDoubleClick?.(node.dataset.nodeId);
+      return;
+    }
     onCanvasDoubleClick?.(event);
   };
 

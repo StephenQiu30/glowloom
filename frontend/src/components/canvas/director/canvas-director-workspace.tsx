@@ -283,15 +283,7 @@ function DirectorCard({ client, nodeID, onExpand }: Props) {
   }, [raw]);
   const scene = parsed.scene;
   return (
-    <section
-      className="canvas-director director-card"
-      aria-label="导演台节点"
-      data-canvas-shortcuts-ignore
-      data-canvas-no-zoom
-      onMouseDown={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
-    >
+    <section className="canvas-director director-card" aria-label="导演台节点">
       <Camera className="director-card-icon" aria-hidden />
       <strong>3D导演台</strong>
       <p>
@@ -301,7 +293,16 @@ function DirectorCard({ client, nodeID, onExpand }: Props) {
       </p>
       <p>{scene?.mode === "dynamic" ? "动态预演" : "静态预演"}</p>
       {parsed.error && <p role="alert">{parsed.error}</p>}
-      <Button size="sm" onClick={onExpand} disabled={!scene}>
+      <Button
+        size="sm"
+        data-canvas-shortcuts-ignore
+        data-canvas-no-zoom
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
+        onClick={onExpand}
+        disabled={!scene}
+      >
         <Maximize2 />
         进入导演台
       </Button>

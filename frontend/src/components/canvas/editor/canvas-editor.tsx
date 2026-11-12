@@ -6375,6 +6375,14 @@ function InfiniteCanvasPage({
             if (!referencePickerNodeId) handleCanvasMouseDown(event);
           }}
           onCanvasDeselect={referencePickerNodeId ? undefined : deselectCanvas}
+          onNodeDoubleClick={(nodeId) => {
+            if (referencePickerNodeId) return;
+            if (
+              nodesRef.current.find((node) => node.id === nodeId)?.type ===
+              "director"
+            )
+              focusNode(nodeId);
+          }}
           onCanvasDoubleClick={(event) => {
             if (referencePickerNodeId || integrationRef.current?.frozen) return;
             setContextMenu(null);

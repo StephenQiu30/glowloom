@@ -5,6 +5,7 @@ import {
   render,
   screen,
   within,
+  type RenderOptions,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
@@ -77,7 +78,13 @@ const imageAssets = ["背景甲", "背景乙"].map(
       file_name: name,
     }) as API.AssetSummary,
 );
-function mount() {
+function mount(
+  options: Pick<
+    ComponentProps<typeof CanvasDirectorWorkspace>,
+    "compact" | "onExpand"
+  > &
+    Pick<RenderOptions, "wrapper"> = {},
+) {
   let config: API.DirectorConfig = migrateDirectorDocument(
     emptyDirectorConfig(),
   );
@@ -143,7 +150,10 @@ function mount() {
       nodeID="director"
       canvasID="canvas"
       projectID={projectID}
+      compact={options.compact}
+      onExpand={options.onExpand}
     />,
+    { wrapper: options.wrapper },
   );
   return {
     unmount: rendered.unmount,
@@ -188,6 +198,83 @@ beforeEach(() => {
   captured.preview.mockReset();
 });
 afterEach(cleanup);
+
+function observeCanvasEvents() {
+  const events: string[] = [];
+  const wrapper: RenderOptions["wrapper"] = ({ children }) => (
+    <div
+      onMouseDown={() => events.push("drag")}
+      onPointerDown={(event) => {
+        if (!(event.target as Element).closest("[data-canvas-no-zoom]"))
+          events.push("pan");
+      }}
+      onDoubleClick={() => events.push("double-click")}
+      onKeyDown={(event) => {
+        if (
+          !(event.target as Element).closest("[data-canvas-shortcuts-ignore]")
+        )
+          events.push("shortcut");
+      }}
+    >
+      {children}
+    </div>
+  );
+  return { events, wrapper };
+}
+
+it.each(["blank", "text", "icon"])(
+  "lets the compact director card %s reach canvas drag, pan and shortcuts",
+  (part) => {
+    const { events, wrapper } = observeCanvasEvents();
+    mount({ compact: true, wrapper });
+    const card = screen.getByRole("region", { name: "导演台节点" });
+    const target =
+      part === "text"
+        ? within(card).getByText("3D导演台")
+        : part === "icon"
+          ? card.querySelector("svg")!
+          : card;
+
+    fireEvent.mouseDown(target, { button: 0 });
+    fireEvent.pointerDown(target, { button: 0 });
+    fireEvent.doubleClick(target);
+    fireEvent.keyDown(target, { key: "v" });
+
+    expect(events).toEqual(["drag", "pan", "double-click", "shortcut"]);
+  },
+);
+
+it("keeps the enter-director button isolated and expands only on click", () => {
+  const { events, wrapper } = observeCanvasEvents();
+  const onExpand = vi.fn();
+  mount({ compact: true, wrapper, onExpand });
+  const button = screen.getByRole("button", { name: "进入导演台" });
+
+  fireEvent.pointerDown(button, { button: 0 });
+  fireEvent.mouseDown(button, { button: 0 });
+  fireEvent.doubleClick(button);
+  fireEvent.focus(button);
+  fireEvent.keyDown(button, { key: "v" });
+
+  expect(events).toEqual([]);
+  expect(onExpand).not.toHaveBeenCalled();
+  fireEvent.click(button);
+  expect(onExpand).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the interactive director workspace isolated from canvas gestures", () => {
+  const { events, wrapper } = observeCanvasEvents();
+  mount({ wrapper });
+  const workspace = screen.getByRole("region", { name: "导演台工作区" });
+  const title = within(workspace).getByText("3D导演台");
+
+  fireEvent.mouseDown(title, { button: 0 });
+  fireEvent.pointerDown(title, { button: 0 });
+  fireEvent.doubleClick(title);
+  fireEvent.keyDown(title, { key: "v" });
+
+  expect(events).toEqual([]);
+});
 
 it("stages an uploaded model, places it once at the ground coordinate and records undo/redo", async () => {
   const { client, scene } = mount();
