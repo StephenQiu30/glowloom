@@ -55,6 +55,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -963,10 +964,11 @@ function EditorWorkspace({
       );
       return;
     }
-    if (compact) setQuoteReviewOpen(true);
-    await run(prepareQuote);
+    if (presentation === "canvas" && !canvasCanGenerate) return;
+    if (compact) setQuoteReviewOpen(presentation !== "canvas");
+    await run(() => prepareQuote(presentation === "canvas"));
   }
-  async function prepareQuote() {
+  async function prepareQuote(submitImmediately = false) {
     if (issues.length || pendingMode || !sourceReady)
       throw new Error(issues[0] ?? "请等待参考内容核验完成。");
     const captured = latest.current.localSeq;
@@ -997,7 +999,31 @@ function EditorWorkspace({
       throw new RequestError("invalid_receipt");
     intent.confirmKey = result.confirm_key;
     await saver.current?.setSubmission(intent);
-    await discover();
+    const owner = await discover();
+    if (submitImmediately) {
+      if (!alive.current || !session?.editor.isEditable) return;
+      const receipt = owner.submission;
+      if (
+        receipt?.state !== "quoted" ||
+        receipt.id !== result.submission_id ||
+        receipt.operation_id !== result.operation_id ||
+        receipt.confirm_key !== result.confirm_key ||
+        !sameSource(pointer, receipt.input_source)
+      )
+        throw new RequestError("invalid_receipt");
+      if (captured !== latest.current.localSeq)
+        throw new Error("输入已变化，请重新生成。");
+      if (!result.confirmable)
+        throw new Error("当前报价不可用，请检查积分余额或调整生成参数。");
+      setQuote(result);
+      setQuoteSeq(captured);
+      await confirmQuote({
+        quote: result,
+        seq: captured,
+        source: pointer,
+      });
+      return;
+    }
     if (latest.current.localSeq === captured) {
       setQuote(result);
       setQuoteSeq(captured);
@@ -1011,7 +1037,7 @@ function EditorWorkspace({
     });
   }
   async function confirm() {
-    await run(async () => confirmQuote(Date.now()));
+    await run(async () => confirmQuote());
   }
   async function reconcileConfirmation() {
     if (!confirmUnknown) return;
@@ -1026,33 +1052,42 @@ function EditorWorkspace({
       )
         throw new Error("原请求仍待核对，请稍后重试。");
       // Replaying the original confirmation recovers its receipt; it never creates a quote.
-      await confirmQuote(Date.now());
+      await confirmQuote();
     });
   }
-  async function confirmQuote(now: number) {
+  async function confirmQuote(fresh?: {
+    quote: Quote;
+    seq: number;
+    source: API.InputSource;
+  }) {
+    const checkedQuote = fresh?.quote ?? activeQuote;
     // An unknown confirmation must retain its original key even after expiry.
     if (!confirmUnknown) {
-      const expires = Date.parse(activeQuote?.expires_at ?? "");
-      if (!Number.isFinite(expires) || now >= expires)
+      if (!isUnexpiredQuote(checkedQuote?.expires_at))
         throw new Error("报价已过期，请重新检查费用。");
-      if (!quoteAmountKnown || activeQuote?.confirmable !== true)
+      if ((!fresh && !quoteAmountKnown) || checkedQuote?.confirmable !== true)
         throw new Error("当前报价不可确认，请重新检查费用。");
     }
     if (session?.pendingTarget) throw new Error("模式选择尚未完成。");
     const sub = current.submission;
-    const confirmKey = sub?.confirm_key ?? quote?.confirm_key;
-    const operation = sub?.operation_id ?? quote?.operation_id;
+    const confirmKey =
+      fresh?.quote.confirm_key ?? sub?.confirm_key ?? quote?.confirm_key;
+    const operation =
+      fresh?.quote.operation_id ?? sub?.operation_id ?? quote?.operation_id;
     if (!operation || !confirmKey) throw new Error("请先恢复报价。");
-    if (quote && quoteSeq !== latest.current.localSeq)
+    if (
+      (fresh || quote) &&
+      (fresh?.seq ?? quoteSeq) !== latest.current.localSeq
+    )
       throw new Error("输入已变化，请重新报价。");
-    if (!quote && !confirmUnknown) {
+    if (!fresh && !quote && !confirmUnknown) {
       const saved = await flush();
       if (!sameSource(saved, sub?.input_source))
         throw new Error("草稿已变化，请放弃旧报价后重新检查。");
     }
     const intent = submission.current ?? {
       key: crypto.randomUUID(),
-      body: { input_source: sub?.input_source },
+      body: { input_source: fresh?.source ?? sub?.input_source },
       confirmKey,
     };
     intent.confirmRequested = true;
@@ -2187,15 +2222,19 @@ function EditorWorkspace({
                   >
                     {current.submission.state === "accepted"
                       ? "继续创作"
-                      : "查看报价"}
+                      : presentation === "canvas"
+                        ? "确认生成"
+                        : "查看报价"}
                   </ComposerToolbarButton>
                 ) : (
                   <ComposerToolbarButton
                     className="rounded-full max-md:size-11"
                     size="toolbar-icon"
                     variant="default"
-                    aria-label="检查费用"
-                    title="检查费用并继续"
+                    aria-label={presentation === "canvas" ? "生成" : "检查费用"}
+                    title={
+                      presentation === "canvas" ? "生成" : "检查费用并继续"
+                    }
                     disabled={
                       pending ||
                       confirmUnknown ||
@@ -2449,16 +2488,61 @@ function EditorWorkspace({
             }}
           >
             <DialogContent
+              {...(presentation === "canvas"
+                ? { "aria-describedby": undefined }
+                : {})}
               data-canvas-no-zoom={presentation === "assistant" || undefined}
               data-canvas-shortcuts-ignore={
                 presentation === "assistant" || undefined
               }
-              showCloseButton={!pending && !confirmUnknown}
+              showCloseButton={
+                presentation !== "canvas" && !pending && !confirmUnknown
+              }
               className="max-h-[85dvh] overflow-y-auto sm:max-w-[480px]"
             >
               <DialogTitle>确认生成</DialogTitle>
-              <DialogDescription>确认本次消耗后开始生成。</DialogDescription>
-              {submissionPanel}
+              {presentation === "canvas" ? (
+                <DialogFooter>
+                  <Button
+                    variant="ghost"
+                    disabled={pending || confirmUnknown}
+                    onClick={() => void resolve("discard_quote")}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    disabled={
+                      pending ||
+                      (!confirmUnknown &&
+                        (frozen ||
+                          !sourceReady ||
+                          !!pendingMode ||
+                          issues.length > 0 ||
+                          (!needsQuoteRefresh &&
+                            (!quoteAmountKnown ||
+                              activeQuote?.confirmable !== true))))
+                    }
+                    onClick={() => {
+                      if (confirmUnknown) void reconcileConfirmation();
+                      else if (needsQuoteRefresh)
+                        void run(async () => {
+                          await resolveSubmission("discard_quote");
+                          await prepareQuote(true);
+                        });
+                      else void confirm();
+                    }}
+                  >
+                    确认
+                  </Button>
+                </DialogFooter>
+              ) : (
+                <>
+                  <DialogDescription>
+                    确认本次消耗后开始生成。
+                  </DialogDescription>
+                  {submissionPanel}
+                </>
+              )}
             </DialogContent>
           </Dialog>
         ) : (
@@ -2520,6 +2604,10 @@ function EditorWorkspace({
       </div>
     </ComposerSurface>
   );
+}
+
+function isUnexpiredQuote(expiresAt?: string) {
+  return Date.parse(expiresAt ?? "") > Date.now();
 }
 
 function sameSource(a: API.InputSource, b?: API.InputSource) {
