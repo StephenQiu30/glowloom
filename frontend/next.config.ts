@@ -11,6 +11,11 @@ const yjsBrowserEntry = join(
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  experimental: {
+    ...(process.env.GLOWLOOM_CONTAINER_BUILD === "1"
+      ? { cpus: 1, webpackMemoryOptimizations: true }
+      : {}),
+  },
   devIndicators: false,
   // Native launch capabilities are short-lived secrets; do not log their query.
   logging: {

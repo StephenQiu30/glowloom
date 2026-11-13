@@ -29,12 +29,14 @@ CMD ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
 FROM base AS build
 # Next persists external Upgrade rewrites in its build manifest.
 ARG GLOWLOOM_BACKEND_ORIGIN
+ENV GLOWLOOM_CONTAINER_BUILD=1 NODE_OPTIONS=--max-old-space-size=1536 RAYON_NUM_THREADS=2
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /canvas /canvas
 COPY frontend/ .
 # Type checking includes the test that compares the frontend and backend catalogs.
 COPY backend/internal/prompt/domain/cinema_catalog.json /backend/internal/prompt/domain/cinema_catalog.json
-RUN test -n "$GLOWLOOM_BACKEND_ORIGIN" && node node_modules/next/dist/bin/next build
+# A separate compiler worker releases build memory before type checking.
+RUN test -n "$GLOWLOOM_BACKEND_ORIGIN" && node node_modules/next/dist/bin/next build --webpack
 
 FROM node:24.21.0-bookworm-slim
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
