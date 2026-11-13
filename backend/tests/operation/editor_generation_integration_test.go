@@ -143,7 +143,7 @@ func TestEditorSavedReferencesReachManagedWireOnce(t *testing.T) {
 	require.Equal(t, 1, calls)
 }
 
-func TestOpenAIEditorRejectsStaleVersionAndFreezesSupportedRelease(t *testing.T) {
+func TestOpenAIEditorKeepsActiveReleaseAndRejectsUnpublishedDraft(t *testing.T) {
 	db := operationStoreDB(t)
 	f := seedManagedFixture(t, db)
 	actor, project := operationStoreProject(t, db)
@@ -166,10 +166,21 @@ func TestOpenAIEditorRejectsStaleVersionAndFreezesSupportedRelease(t *testing.T)
 	require.NoError(t, db.Exec(`UPDATE billing.budget SET limit_micros=? WHERE project_id=?`, 100*billingdomain.MicrosPerCredit, project).Error)
 	seedFixtureProcurement(t, db, f.identity.PriceRuleVersionID, f.identity.ModelProfileVersionID)
 	seedEditorReleaseAvailability(t, db, f)
-	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET current_version_id=NULL WHERE active_release_id=?`, f.release).Error)
-	_, unavailable := store.CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &source, ExpectedSubmissionEpoch: &epoch}})
+	// Saving a new model draft keeps the active release executable. The draft
+	// itself cannot be quoted before explicit activation and verification.
+	draftVersion := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO catalog.model_profile_version
+ (id,model_profile_id,version_no,provider_model_id,modes,limits,param_schema,supports_query,supports_cancel,supports_callback,expected_max_ms,moderation,queue)
+ SELECT ?,model_profile_id,version_no+1,provider_model_id,modes,limits,param_schema,supports_query,supports_cancel,supports_callback,expected_max_ms,moderation,queue
+ FROM catalog.model_profile_version WHERE id=?`, draftVersion, f.identity.ModelProfileVersionID).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE active_release_id=?`, draftVersion, f.release).Error)
+	newVersion := draftVersion.String()
+	draft.ModelVersion = &newVersion
+	unpublished, err := editorDraftStore(db).SaveDraft(t.Context(), actor, promptapp.DraftWrite{ProjectID: project, Key: uuid.New(), Draft: draft})
+	require.NoError(t, err)
+	unpublishedSource := promptdomain.InputSource{Kind: "prompt_draft", DraftID: unpublished.DraftID, Revision: unpublished.Revision}
+	_, unavailable := store.CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &unpublishedSource, ExpectedSubmissionEpoch: &epoch}})
 	require.ErrorIs(t, unavailable, operationapp.ErrFreeQuoteModelMissing)
-	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE active_release_id=?`, f.identity.ModelProfileVersionID, f.release).Error)
 	quote, err := store.CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &source, ExpectedSubmissionEpoch: &epoch}})
 	require.NoError(t, err)
 	require.NotEqual(t, uuid.Nil, quote.OperationID)
