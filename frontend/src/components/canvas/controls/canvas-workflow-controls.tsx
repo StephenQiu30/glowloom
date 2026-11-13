@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Play, Square, Workflow } from "lucide-react";
 import type { useCanvasWorkflow } from "../hooks/use-canvas-workflow";
-import { readCanvasFilePreview } from "../lib/canvas-file-preview";
+import { readCanvasFilePreviewGrant } from "../lib/canvas-file-preview";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
 
 const states: Record<string, string> = {
@@ -405,7 +405,7 @@ function WorkflowFileButton({
     if (busy || !file.fileId || !file.version) return;
     setBusy(true);
     try {
-      const url = await readCanvasFilePreview({
+      const { url } = await readCanvasFilePreviewGrant({
         fileId: file.fileId,
         version: file.version,
       });

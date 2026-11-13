@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math"
+	"net/http"
 	"sort"
 	"strconv"
 	"sync"
@@ -242,7 +243,10 @@ func (b *Buffer) Overview(f domain.Filter, actor uuid.UUID) (domain.Overview, er
 		if r.Panic {
 			out.Panics++
 		}
-		samples = append(samples, r.ElapsedMS)
+		// Upgraded connections finish when the socket closes, not when the handshake succeeds.
+		if r.Status != http.StatusSwitchingProtocols {
+			samples = append(samples, r.ElapsedMS)
+		}
 		if r.Status >= 500 {
 			out.ServerErrors++
 		} else if r.Status >= 400 {
@@ -255,6 +259,8 @@ func (b *Buffer) Overview(f domain.Filter, actor uuid.UUID) (domain.Overview, er
 	if out.Requests > 0 {
 		rate := float64(out.ServerErrors) / float64(out.Requests)
 		out.ServerErrorRate = &rate
+	}
+	if len(samples) > 0 {
 		sort.Float64s(samples)
 		p50 := samples[int(math.Ceil(float64(len(samples))*0.50))-1]
 		p95 := samples[int(math.Ceil(float64(len(samples))*0.95))-1]

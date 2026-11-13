@@ -149,27 +149,31 @@ func (d *VolcengineArkDriver) Submit(ctx context.Context, c *Client, input appli
 		return invalidSubmissionResult(), nil
 	}
 
-	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, path, payload, 64<<20)
+	data, status, requestID, err := c.requestWithID(ctx, input.Config, key, http.MethodPost, path, payload, 64<<20)
 	if err != nil {
-		return submissionTransportFailure(err), nil
+		result := submissionTransportFailure(err)
+		result.HTTPStatus, result.ProviderLogID = status, requestID
+		return result, nil
 	}
 	if status < 200 || status >= 300 {
-		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, HTTPStatus: status, ProviderLogID: requestID, ErrorCode: arkSubmitError(status, data)}, nil
 	}
 	result, ok := parseStandardGenerationResponse(input, data)
 	if !ok {
-		return unknownResult(), nil
+		result = unknownResult()
 	}
+	result.HTTPStatus, result.ProviderLogID = status, requestID
 	return result, nil
 }
 
 // Query reads provider progress or reports that polling is unsupported.
-func (d *VolcengineArkDriver) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
+func (d *VolcengineArkDriver) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (result application.GenerationResult, resultErr error) {
 	if config.Validate() != nil || !validKey(key) || !validTaskID(taskID) {
 		return unknownResult(), nil
 	}
 	path := "/contents/generations/tasks/" + taskID
-	data, status, err := c.request(ctx, config, key, http.MethodGet, path, nil, 1<<20)
+	data, status, requestID, err := c.requestWithID(ctx, config, key, http.MethodGet, path, nil, 1<<20)
+	defer func() { result.HTTPStatus, result.ProviderLogID = status, requestID }()
 	if err != nil {
 		return application.GenerationResult{State: application.ProviderTaskUnknown, ErrorCode: "query_unreachable"}, nil
 	}
@@ -191,7 +195,7 @@ func (d *VolcengineArkDriver) Query(ctx context.Context, c *Client, config catal
 	if json.Unmarshal(data, &response) != nil || response.ID != taskID {
 		return unknownResult(), nil
 	}
-	result := application.GenerationResult{TaskID: taskID, Usage: safeUsage(response.Usage)}
+	result = application.GenerationResult{TaskID: taskID, Usage: safeUsage(response.Usage)}
 	switch response.Status {
 	case "queued", "pending":
 		result.State = application.ProviderTaskPending

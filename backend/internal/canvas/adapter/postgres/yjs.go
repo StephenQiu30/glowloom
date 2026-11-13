@@ -63,6 +63,31 @@ func storeYjsReceipt(tx *gorm.DB, a identity.Principal, id uuid.UUID, input appl
 	return tx.Exec(`INSERT INTO canvas.collab_receipt(document_id,epoch,actor_id,session_id,update_id,request_hash,response_body) VALUES(?,?,?,?,?,?,?::jsonb)`, id, input.Epoch, a.ID, input.SessionID, input.UpdateID, yjsHash(input), string(body)).Error
 }
 
+// ReadYjsHead rechecks authority and compares scalar revisions without locking the document.
+func (s *Store) ReadYjsHead(ctx context.Context, a identity.Principal, id uuid.UUID) (application.YjsHead, error) {
+	var head application.YjsHead
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		project, err := documentProject(tx, id)
+		if err != nil {
+			return err
+		}
+		writable, err := s.readAuthority(tx, a, project)
+		if err != nil {
+			return err
+		}
+		result := tx.Raw(`SELECT c.epoch,c.commit_seq,d.revision FROM canvas.document d LEFT JOIN canvas.collab_document c ON c.document_id=d.id WHERE d.id=? AND d.project_id=? AND NOT d.is_delete`, id, project).Scan(&head)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return application.ErrNotFound
+		}
+		head.Writable = writable
+		return nil
+	})
+	return head, err
+}
+
 // LoadYjs serializes the graph read with accepted binary state; permissions are current.
 func (s *Store) LoadYjs(ctx context.Context, a identity.Principal, id uuid.UUID) (application.YjsState, error) {
 	var result application.YjsState

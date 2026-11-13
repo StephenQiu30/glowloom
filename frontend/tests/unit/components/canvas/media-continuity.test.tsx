@@ -136,6 +136,7 @@ it("远端同文件更新保留预览但不覆盖几何、标题或配置", asyn
     await import("@/components/canvas/lib/canvas-media-continuity");
   const old = node();
   old.metadata!.naturalWidth = 640;
+  old.metadata!.status = "success";
   const incoming = {
     ...node(),
     title: "远端标题",
@@ -150,7 +151,12 @@ it("远端同文件更新保留预览但不覆盖几何、标题或配置", asyn
     position: { x: 900, y: 800 },
     width: 160,
     height: 90,
-    metadata: { content: "/image.png", prompt: "远端输入", naturalWidth: 640 },
+    metadata: {
+      content: "/image.png",
+      status: "success",
+      prompt: "远端输入",
+      naturalWidth: 640,
+    },
   });
   expect(incoming.metadata.content).toBe("");
 });

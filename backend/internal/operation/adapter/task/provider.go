@@ -53,7 +53,7 @@ func managedStep(ctx context.Context, s OperationStore, p managedProvider, l app
 		if v.State == app.ManagedProgressWaiting {
 			return time.Now().Add(5 * time.Second), nil
 		}
-		ev := app.CompleteProviderCallInput{OperationID: op.ID, Action: "submit", Attempt: 1, Outcome: app.ProviderCallOutcomeUnknown, State: app.ProviderCallStateUnknown, ErrorCode: v.ErrorCode}
+		ev := app.CompleteProviderCallInput{OperationID: op.ID, Action: "submit", Attempt: 1, Outcome: app.ProviderCallOutcomeUnknown, State: app.ProviderCallStateUnknown, ErrorCode: v.ErrorCode, HTTPStatus: v.HTTPStatus, ProviderLogID: v.ProviderLogID}
 		switch v.State {
 		case app.ManagedProgressAccepted:
 			ev.State = app.ProviderCallStateAccepted
@@ -98,7 +98,7 @@ func managedStep(ctx context.Context, s OperationStore, p managedProvider, l app
 		return soon, err
 	}
 	if action == "query" {
-		ev := app.CompleteProviderCallInput{OperationID: op.ID, Action: "query", Attempt: attempt, ProviderTaskID: taskID, Outcome: app.ProviderCallOutcomeUnknown, State: app.ProviderCallStateUnknown}
+		ev := app.CompleteProviderCallInput{OperationID: op.ID, Action: "query", Attempt: attempt, ProviderTaskID: taskID, HTTPStatus: v.HTTPStatus, ProviderLogID: v.ProviderLogID, ErrorCode: v.ErrorCode, Outcome: app.ProviderCallOutcomeUnknown, State: app.ProviderCallStateUnknown}
 		switch v.State {
 		case app.ManagedProgressSucceeded:
 			ev.Outcome = app.ProviderCallOutcomeOK

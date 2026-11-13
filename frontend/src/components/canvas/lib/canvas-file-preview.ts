@@ -13,7 +13,7 @@ export type CanvasFilePreviewContext = {
 };
 
 /** Resolve a fresh read grant without changing the document's pinned version. */
-export async function readCanvasFilePreview(
+export async function readCanvasFilePreviewGrant(
   reference: {
     fileId: string;
     version: string;
@@ -23,13 +23,14 @@ export async function readCanvasFilePreview(
   context?: CanvasFilePreviewContext & { nodeId: string; referenceKey: string },
 ) {
   if (context?.projectId) {
-    return requirePreview(
-      await getMediaPreview({
-        pid: context.projectId,
-        asset_id: reference.fileId,
-      }),
-      reference.fileId,
-    );
+    const value = await getMediaPreview({
+      pid: context.projectId,
+      asset_id: reference.fileId,
+    });
+    return {
+      url: requirePreview(value, reference.fileId),
+      expiresAt: Date.parse(value.expires_at!),
+    };
   }
   if (context) {
     const grant = unwrap(
@@ -41,7 +42,7 @@ export async function readCanvasFilePreview(
     );
     if (!grant.url?.startsWith("/api/file/content?ticket="))
       throw new Error("画布素材读取授权无效");
-    return grant.url;
+    return ticketGrant(grant.url, grant.expiresSeconds);
   }
   if (reference.publicAssetId && reference.publicRevision) {
     const grant = unwrap(
@@ -54,7 +55,7 @@ export async function readCanvasFilePreview(
     );
     if (!grant.url?.startsWith("/api/file/content?ticket="))
       throw new Error("公共素材读取授权无效");
-    return grant.url;
+    return ticketGrant(grant.url, grant.expiresSeconds);
   }
   const file = unwrap(
     await files.getFileTransfer({ fileId: reference.fileId }),
@@ -66,5 +67,11 @@ export async function readCanvasFilePreview(
   );
   if (!grant.url?.startsWith("/api/file/content?ticket="))
     throw new Error("素材读取授权无效");
-  return grant.url;
+  return ticketGrant(grant.url, grant.expiresSeconds);
+}
+
+function ticketGrant(url: string, seconds?: number) {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0)
+    throw new Error("素材授权有效期无效");
+  return { url, expiresAt: Date.now() + seconds * 1000 };
 }

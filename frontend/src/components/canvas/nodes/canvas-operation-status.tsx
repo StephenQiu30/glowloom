@@ -7,6 +7,7 @@ import { getOperation } from "@/api/operations";
 import {
   activeTask,
   generationStatusLabel,
+  taskLabels,
   requireTask,
   type Task,
 } from "@/components/generation/contracts";
@@ -79,7 +80,7 @@ function OperationStatus({
     const message = generationStatusLabel(task);
     if (
       task.status === "cancelled" ||
-      (task.status === "manual" && message !== "生成失败")
+      (task.status === "manual" && message === taskLabels.manual)
     )
       toast.info(message, { id: `canvas-operation:${task.id}` });
     else toast.error(message, { id: `canvas-operation:${task.id}` });

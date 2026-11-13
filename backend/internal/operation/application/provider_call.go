@@ -87,6 +87,8 @@ type BeginProviderCallInput struct {
 // Usage contains normalized, non-sensitive billable quantities from a trusted
 // provider adapter. The mock adapter is explicitly free.
 type CompleteProviderCallInput struct {
+	HTTPStatus     int                 `json:"http_status,omitempty"`
+	ProviderLogID  string              `json:"provider_log_id,omitempty"`
 	ErrorCode      string              `json:"error_code,omitempty"`
 	Managed        bool                `json:"managed,omitempty"`
 	OperationID    uuid.UUID           `json:"operation_id"`
@@ -118,6 +120,9 @@ func (i BeginProviderCallInput) Validate() error {
 
 // Validate limits call outcomes to redacted, internally consistent facts.
 func (i CompleteProviderCallInput) Validate() error {
+	if (i.HTTPStatus != 0 && (i.HTTPStatus < 100 || i.HTTPStatus > 599)) || !ValidProviderRequestID(i.ProviderLogID) {
+		return ErrInvalidProviderCall
+	}
 	if i.OperationID == uuid.Nil || i.Attempt < 1 || !providerCallAction(i.Action) ||
 		!validProviderTaskID(i.ProviderTaskID) || len(i.State) > 64 ||
 		(i.Usage != nil && (len(i.Usage) > 16*1024 || !json.Valid(i.Usage) || i.Usage[0] != '{')) {
@@ -186,4 +191,19 @@ func providerCallAction(action string) bool {
 func validProviderTaskID(taskID *string) bool {
 	return taskID == nil || (*taskID != "" && len(*taskID) <= 256 &&
 		strings.TrimSpace(*taskID) == *taskID)
+}
+
+// ValidProviderRequestID limits diagnostic headers to bounded opaque identifiers.
+func ValidProviderRequestID(id string) bool {
+	if len(id) > 128 {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }

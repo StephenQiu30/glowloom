@@ -3,7 +3,7 @@ import { useContext, useEffect, useId } from "react";
 import useSWR, { useSWRConfig, unstable_serialize } from "swr";
 import { useErrorNotification } from "@/components/canvas/runtime/components/feedback/error-notification";
 import { CanvasMediaContext } from "../lib/canvas-media-context";
-import { readCanvasFilePreview } from "../lib/canvas-file-preview";
+import { readCanvasFilePreviewGrant } from "../lib/canvas-file-preview";
 import type { CanvasResourceReference } from "../lib/canvas-resource-references";
 import { CANVAS_FILE_PREVIEW_CONCURRENCY } from "../constants/canvas-file-previews";
 
@@ -59,8 +59,8 @@ export function useCanvasReferencePreviews(
             .slice(start, start + CANVAS_FILE_PREVIEW_CONCURRENCY)
             .map(async (file) => {
               try {
-                urls[`${file.fileId}:${file.version}`] =
-                  await readCanvasFilePreview(
+                urls[`${file.fileId}:${file.version}`] = (
+                  await readCanvasFilePreviewGrant(
                     file,
                     context
                       ? {
@@ -69,7 +69,8 @@ export function useCanvasReferencePreviews(
                           referenceKey: file.referenceKey,
                         }
                       : undefined,
-                  );
+                  )
+                ).url;
               } catch (cause) {
                 error ??= cause;
               }

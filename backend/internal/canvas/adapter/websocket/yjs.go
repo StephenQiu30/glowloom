@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 
 // WithYjs enables protocol 4 only when its private runtime is configured.
 func (h *Handler) WithYjs(service *application.YjsService) *Handler { h.yjs = service; return h }
-func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *websocket.Conn, id uuid.UUID, join incoming, messages <-chan incoming, syncRequests <-chan struct{}, send func(packet) bool) {
+func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *websocket.Conn, id uuid.UUID, join incoming, messages, cursors <-chan incoming, syncRequests <-chan struct{}, send func(packet) bool, finish func(string, int), log *slog.Logger) {
 	if join.Type != "join" || join.ClientID == uuid.Nil || join.ScopeID == uuid.Nil || join.CSRFToken == "" {
 		send(packet{Type: "error", Status: 422, Code: "invalid_join"})
 		return
@@ -24,6 +25,8 @@ func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *web
 	var actorID uuid.UUID
 	var lastEpoch uuid.UUID
 	var lastSeq application.Revision = -1
+	var lastRevision application.Revision
+	var lastWritable bool
 	var writeAllowed bool
 	authorize := func() (identity.Principal, error) {
 		actor, write, err := h.authorize(ctx, request, id, join.ScopeID, join.CSRFToken)
@@ -44,11 +47,27 @@ func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *web
 	syncHead := func(force bool) bool {
 		actor, err := authorize()
 		if err != nil {
+			_, reason := problem(err)
+			finish(reason, 0)
 			fail("", err)
 			return false
 		}
+		if !force && lastSeq >= 0 {
+			head, err := h.yjs.Head(ctx, actor, id)
+			if err != nil {
+				_, reason := problem(err)
+				finish(reason, 0)
+				fail("", err)
+				return false
+			}
+			if head.Epoch == lastEpoch && head.CommitSeq == lastSeq && head.Revision == lastRevision {
+				return send(packet{Type: "heartbeat", Permissions: &application.Permissions{Read: true, Write: lastWritable && head.Writable && writeAllowed}, Revision: int64(head.Revision), ActorID: actor.ID})
+			}
+		}
 		state, err := h.yjs.Load(ctx, actor, id)
 		if err != nil {
+			_, reason := problem(err)
+			finish(reason, 0)
 			fail("", err)
 			return false
 		}
@@ -63,13 +82,13 @@ func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *web
 		if len(state.State) == 0 {
 			return send(packet{Type: "yjs_migration_required", YjsState: &state, ActorID: actor.ID})
 		}
-		if force || lastEpoch != state.Epoch || lastSeq != state.CommitSeq {
-			if !send(packet{Type: "yjs_snapshot", YjsState: &state, ActorID: actor.ID}) {
-				return false
-			}
-			lastEpoch = state.Epoch
-			lastSeq = state.CommitSeq
+		if !send(packet{Type: "yjs_snapshot", YjsState: &state, ActorID: actor.ID}) {
+			return false
 		}
+		lastEpoch = state.Epoch
+		lastSeq = state.CommitSeq
+		lastRevision = state.Document.Revision
+		lastWritable = state.Document.ReadOnlyReason == nil
 		return send(packet{Type: "heartbeat", Permissions: &state.Document.Permissions, Revision: int64(state.Document.Revision), ActorID: actor.ID})
 	}
 	if !syncHead(true) {
@@ -81,9 +100,20 @@ func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *web
 		return
 	}
 	defer leavePresence()
+	if r := join.Recovery; r != nil {
+		switch r.Reason {
+		case "peer_close", "watchdog", "socket_error", "access_expired":
+			if r.ElapsedMS >= 0 && r.LastFrameAgeMS >= 0 && r.Pending >= 0 {
+				log.Info("canvas.socket.recovered", "client_id", join.ClientID.String(), "client_reason", r.Reason, "recovery_ms", r.ElapsedMS, "last_frame_age_ms", r.LastFrameAgeMS, "pending", r.Pending)
+			}
+		}
+	}
+	log.Info("canvas.socket.join", "client_id", join.ClientID.String(), "commit_seq", int64(lastSeq))
 	var lastCursor time.Time
 	sendPresence := func() bool {
 		if _, err := authorize(); err != nil {
+			_, reason := problem(err)
+			finish(reason, 0)
 			fail("", err)
 			return false
 		}
@@ -113,10 +143,31 @@ func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *web
 			pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			err := conn.Ping(pingCtx)
 			cancel()
-			if err != nil || !syncHead(false) {
+			if err != nil {
+				finish("ping_failed", int(websocket.CloseStatus(err)))
+				return
+			}
+			if !syncHead(false) {
 				return
 			}
 			h.updatePresence(id, actorID, join.ClientID, nil, true)
+		case msg := <-cursors:
+			if time.Since(lastCursor) < 80*time.Millisecond {
+				continue
+			}
+			if _, err := authorize(); err != nil {
+				fail("", err)
+				return
+			}
+			var input struct {
+				Cursor *Cursor `json:"cursor"`
+			}
+			if !decodeYjsBody(msg.Body, &input) || !h.updatePresence(id, actorID, join.ClientID, input.Cursor, false) {
+				send(packet{Type: "error", Status: 422, Code: "invalid_presence"})
+				continue
+			}
+			lastCursor = time.Now()
+
 		case msg := <-messages:
 			actor, err := authorize()
 			if err != nil {
@@ -126,19 +177,6 @@ func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *web
 				continue
 			}
 			switch msg.Type {
-			case "yjs_presence":
-				if time.Since(lastCursor) < 80*time.Millisecond {
-					continue
-				}
-				var input struct {
-					Cursor *Cursor `json:"cursor"`
-				}
-				if !decodeYjsBody(msg.Body, &input) || !h.updatePresence(id, actor.ID, join.ClientID, input.Cursor, false) {
-					send(packet{Type: "error", Status: 422, Code: "invalid_presence"})
-					continue
-				}
-				lastCursor = time.Now()
-
 			case "yjs_history":
 				var input struct {
 					Before application.Revision `json:"before"`

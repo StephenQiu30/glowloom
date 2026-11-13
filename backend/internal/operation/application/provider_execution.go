@@ -79,6 +79,7 @@ type GeneratedAudio struct {
 
 // GenerationResult distinguishes transport ambiguity from confirmed rejection.
 type GenerationResult struct {
+	HTTPStatus           int            `json:"http_status,omitempty"`
 	Subtitle             *AudioSubtitle `json:"subtitle,omitempty"`
 	ProviderTerminalCode int            `json:"provider_terminal_code,omitempty"`
 	ProviderLogID        string         `json:"provider_log_id,omitempty"`

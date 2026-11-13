@@ -172,15 +172,16 @@ func TestOverviewUsesNearestRankQuantilesAndExpiresRetainedRecords(t *testing.T)
 	for _, ms := range []float64{100, 1000} {
 		b.Append(domain.DiagnosticRecord{Timestamp: now.Add(-time.Minute), Status: 200, ElapsedMS: ms})
 	}
+	b.Append(domain.DiagnosticRecord{Timestamp: now.Add(-time.Minute), Status: 101, ElapsedMS: 300000})
 	f, _ := domain.ParseFilter("", now)
 	out, err := b.Overview(f, actor)
-	if err != nil || out.P95MS == nil || *out.P95MS != 1000 || out.Requests != 2 {
+	if err != nil || out.P95MS == nil || *out.P95MS != 1000 || out.Requests != 3 {
 		t.Fatalf("quantile %+v %v", out, err)
 	}
 	now = now.Add(2 * time.Hour)
 	f, _ = domain.ParseFilter("", now)
 	out, err = b.Overview(f, actor)
-	if err != nil || out.Requests != 0 || out.P95MS != nil || out.ServerErrorRate != nil || out.Coverage.Evicted != 2 {
+	if err != nil || out.Requests != 0 || out.P95MS != nil || out.ServerErrorRate != nil || out.Coverage.Evicted != 3 {
 		t.Fatalf("expired coverage %+v %v", out, err)
 	}
 }

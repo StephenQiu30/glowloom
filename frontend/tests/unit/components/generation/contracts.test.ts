@@ -4,6 +4,7 @@ import {
   requireTask,
   fieldsForMode,
   initialParams,
+  generationStatusLabel,
 } from "@/components/generation/contracts";
 const id = "11111111-1111-4111-8111-111111111111";
 const project = "22222222-2222-4222-8222-222222222222";
@@ -25,6 +26,16 @@ describe("生成回执和参数边界", () => {
         expires_at: "2099-01-01",
       }),
     ).toThrow();
+  });
+  it("结算未定时区分审核拒绝和仍未知的执行结果", () => {
+    const label = (failure_code: string) =>
+      generationStatusLabel({ status: "manual", failure_code });
+    expect(label("provider_input_content_rejected")).toBe("输入内容未通过审核");
+    expect(label("provider_output_content_rejected")).toBe(
+      "生成内容未通过审核",
+    );
+    expect(label("provider_request_rejected")).toBe("生成失败");
+    expect(label("provider_transport_unknown")).toBe("暂未返回结果");
   });
   it("拒绝跨项目及未知状态任务", () => {
     expect(() =>

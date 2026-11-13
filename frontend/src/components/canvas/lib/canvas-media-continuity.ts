@@ -45,6 +45,7 @@ export function retainCanvasMediaPreviews(
       metadata: {
         ...node.metadata,
         content: old.metadata.content,
+        status: old.metadata.status,
         naturalWidth: old.metadata.naturalWidth,
         naturalHeight: old.metadata.naturalHeight,
       },

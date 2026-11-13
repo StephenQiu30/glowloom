@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -77,7 +78,14 @@ func (h *Handler) subscribe(id uuid.UUID) (<-chan struct{}, func()) {
 
 var errReadOnly = errors.New("canvas is currently read-only")
 
+type recoveryReport struct {
+	Reason         string `json:"reason"`
+	ElapsedMS      int64  `json:"elapsed_ms"`
+	LastFrameAgeMS int64  `json:"last_frame_age_ms"`
+	Pending        int    `json:"pending"`
+}
 type incoming struct {
+	Recovery        *recoveryReport `json:"recovery,omitempty"`
 	Type            string          `json:"type"`
 	ProtocolVersion int             `json:"protocol_version"`
 	ClientID        uuid.UUID       `json:"client_id"`
@@ -117,6 +125,15 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 	if err != nil {
 		return
 	}
+	started := time.Now()
+	log := slog.With("connection_id", uuid.NewString(), "canvas_id", id.String(), "request_id", c.GetString("request_id"))
+	log.Info("canvas.socket.open")
+	var closed sync.Once
+	finish := func(reason string, code int) {
+		closed.Do(func() {
+			log.Info("canvas.socket.close", "reason", reason, "code", code, "duration_ms", time.Since(started).Milliseconds())
+		})
+	}
 	defer func() { _ = conn.CloseNow() }()
 	ctx, cancel := context.WithCancel(lifetime)
 	defer cancel()
@@ -125,6 +142,7 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 	// coalesce; a second queued business request closes the overloaded connection
 	// rather than blocking Pong processing or allocating an unbounded queue.
 	messages := make(chan incoming, 1)
+	cursors := make(chan incoming, 1)
 	syncRequests := make(chan struct{}, 1)
 	readerDone := make(chan struct{})
 	go func() {
@@ -133,6 +151,9 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 		for {
 			kind, body, err := conn.Read(ctx)
 			if err != nil {
+				if ctx.Err() == nil {
+					finish("peer_read_ended", int(websocket.CloseStatus(err)))
+				}
 				return
 			}
 			var msg incoming
@@ -140,6 +161,15 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 			decoder.DisallowUnknownFields()
 			if kind != websocket.MessageText || !json.Valid(body) || decoder.Decode(&msg) != nil {
 				msg.Type = "invalid_message"
+			}
+			if msg.Type == "yjs_presence" {
+				// Only the reader writes this mailbox. Replace any unconsumed cursor.
+				select {
+				case <-cursors:
+				default:
+				}
+				cursors <- msg
+				continue
 			}
 			if msg.Type == "sync" {
 				select {
@@ -153,11 +183,21 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 			case <-ctx.Done():
 				return
 			default:
+				finish("command_queue_full", 0)
 				return
 			}
 		}
 	}()
-	defer func() { cancel(); _ = conn.CloseNow(); <-readerDone }()
+	defer func() {
+		if lifetime.Err() != nil {
+			finish("service_stopped", 0)
+		} else {
+			finish("session_ended", 0)
+		}
+		cancel()
+		_ = conn.CloseNow()
+		<-readerDone
+	}()
 	send := func(p packet) bool {
 		body, err := json.Marshal(p)
 		if err != nil {
@@ -172,7 +212,11 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 		}
 		writeCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 		defer stop()
-		return conn.Write(writeCtx, websocket.MessageText, body) == nil
+		if err := conn.Write(writeCtx, websocket.MessageText, body); err != nil {
+			finish("write_failed", int(websocket.CloseStatus(err)))
+			return false
+		}
+		return true
 	}
 	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
@@ -181,6 +225,7 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 	case <-ctx.Done():
 		return
 	case <-timer.C:
+		finish("join_timeout", 0)
 		return
 	case join = <-messages:
 	}
@@ -196,7 +241,7 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 		send(packet{Type: "error", Status: 503, Code: "collaboration_unavailable", Retryable: true})
 		return
 	}
-	h.serveYjs(ctx, c.Request, conn, id, join, messages, syncRequests, send)
+	h.serveYjs(ctx, c.Request, conn, id, join, messages, cursors, syncRequests, send, finish, log)
 }
 
 func problem(err error) (int, string) {

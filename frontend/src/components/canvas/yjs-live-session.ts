@@ -261,6 +261,13 @@ export class CanvasYjsLiveSession {
   private permitted = false;
   private disposed = false;
   private failures = 0;
+  private interruptedAt?: number;
+  private lastFrameAt?: number;
+  private closeReason:
+    "peer_close" | "watchdog" | "socket_error" | "access_expired" =
+    "peer_close";
+  private lastGap = 0;
+
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private deadline?: ReturnType<typeof setTimeout>;
   private peers: YjsPeer[] = [];
@@ -1243,11 +1250,26 @@ export class CanvasYjsLiveSession {
           client_id: this.clientID,
           scope_id: this.config.scopeID,
           csrf_token: this.config.csrf(),
+          ...(this.interruptedAt !== undefined
+            ? {
+                recovery: {
+                  reason: this.closeReason,
+                  elapsed_ms: Math.round(
+                    performance.now() - this.interruptedAt,
+                  ),
+                  last_frame_age_ms: this.lastGap,
+                  pending:
+                    (this.session?.pending.length ?? 0) +
+                    (this.session?.inFlight ? 1 : 0),
+                },
+              }
+            : {}),
         }),
       );
     };
     socket.onmessage = (event) => {
       if (this.socket !== socket || this.disposed) return;
+      this.lastFrameAt = performance.now();
       this.armDeadline();
       this.incoming = this.incoming
         .then(async () => {
@@ -1261,9 +1283,14 @@ export class CanvasYjsLiveSession {
           socket.close();
         });
     };
-    socket.onerror = () => socket.close();
+    socket.onerror = () => {
+      if (this.socket !== socket) return;
+      this.closeReason = "socket_error";
+      socket.close();
+    };
     socket.onclose = () => {
       if (this.socket !== socket || this.disposed) return;
+      this.noteInterruption();
       this.online = false;
       this.setPeers([]);
       clearTimeout(this.deadline);
@@ -1277,9 +1304,19 @@ export class CanvasYjsLiveSession {
     };
     this.armDeadline();
   }
+  private noteInterruption() {
+    if (this.interruptedAt !== undefined) return;
+    this.interruptedAt = performance.now();
+    this.lastGap = Math.round(
+      this.interruptedAt - (this.lastFrameAt ?? this.interruptedAt),
+    );
+  }
   private armDeadline() {
     clearTimeout(this.deadline);
-    this.deadline = setTimeout(() => this.socket?.close(), 20000);
+    this.deadline = setTimeout(() => {
+      this.closeReason = "watchdog";
+      this.socket?.close();
+    }, 20000);
   }
   private scheduleReconnect() {
     if (this.disposed) return;
@@ -1464,6 +1501,8 @@ export class CanvasYjsLiveSession {
           this.stop();
           return;
         }
+        this.closeReason = "access_expired";
+        this.noteInterruption();
         void this.reconnect(true);
         return;
       }
@@ -1502,6 +1541,8 @@ export class CanvasYjsLiveSession {
       this.online = true;
       this.permitted = !!state.document.permissions?.write;
       this.failures = 0;
+      this.interruptedAt = undefined;
+      this.closeReason = "peer_close";
       const initial: CommittedState = {
         epoch: state.epoch,
         commitSeq: state.commitSeq,

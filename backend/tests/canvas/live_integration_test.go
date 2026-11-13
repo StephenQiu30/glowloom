@@ -229,6 +229,23 @@ func TestCanvasWebSocketStopsWithAPILifetime(t *testing.T) {
 	}
 }
 
+func TestCanvasHeartbeatDoesNotWaitForDocumentWriteLock(t *testing.T) {
+	f := newLiveFixture(t)
+	c := f.dial(t)
+	liveJoinYjs(t, f, c)
+	liveRead(t, c, "heartbeat", 1)
+	tx := f.db.Begin()
+	if tx.Error != nil {
+		t.Fatal(tx.Error)
+	}
+	defer func() { _ = tx.Rollback().Error }()
+	if err := tx.Exec("SELECT id FROM canvas.document WHERE id=? FOR UPDATE", f.doc.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	// The next scheduled heartbeat must arrive before releasing the document lock.
+	liveRead(t, c, "heartbeat", 1)
+}
+
 func TestCanvasWebSocketSyncBurstDoesNotBlockHeartbeatPong(t *testing.T) {
 	f := newLiveFixture(t)
 	c := f.dial(t)
@@ -246,6 +263,7 @@ func TestCanvasWebSocketSyncBurstDoesNotBlockHeartbeatPong(t *testing.T) {
 	// must still be a reader available for control frames when heartbeat runs.
 	liveSend(t, c, map[string]any{"type": "sync"})
 	for range 100 {
+		liveSend(t, c, map[string]any{"type": "yjs_presence", "body": map[string]any{"cursor": map[string]float64{"x": 1, "y": 2}}})
 		liveSend(t, c, map[string]any{"type": "sync"})
 	}
 	timer := time.NewTimer(5100 * time.Millisecond)

@@ -2,6 +2,7 @@ package providerhttp
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
@@ -67,6 +68,31 @@ func safeHTTPErrorBody(status int, data []byte) string {
 		return "permission_denied"
 	}
 	return safeHTTPError(status)
+}
+
+// Ark uses HTTP 400 for both moderation and malformed parameters.
+func arkSubmitError(status int, data []byte) string {
+	fallback := safeHTTPErrorBody(status, data)
+	if fallback != "invalid_parameters" {
+		return fallback
+	}
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(data, &body) == nil {
+		code, _, _ := strings.Cut(body.Error.Code, ".")
+		switch code {
+		case "InputTextSensitiveContentDetected", "InputImageSensitiveContentDetected", "InputVideoSensitiveContentDetected", "InputAudioSensitiveContentDetected":
+			return "input_content_rejected"
+		case "OutputImageSensitiveContentDetected", "OutputTextSensitiveContentDetected", "OutputVideoSensitiveContentDetected", "OutputAudioSensitiveContentDetected":
+			return "output_content_rejected"
+		case "InvalidParameter", "MissingParameter":
+			return "invalid_parameters"
+		}
+	}
+	return "request_rejected"
 }
 
 func safeUsage(raw json.RawMessage) json.RawMessage {

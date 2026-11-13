@@ -21,6 +21,9 @@ type commandStore struct {
 	initialized, committed int
 }
 
+func (s *commandStore) ReadYjsHead(context.Context, identity.Principal, uuid.UUID) (canvas.YjsHead, error) {
+	return canvas.YjsHead{Epoch: s.base.Epoch, CommitSeq: s.base.CommitSeq, Revision: s.base.Document.Revision, Writable: s.base.Document.Permissions.Write}, nil
+}
 func (s *commandStore) LoadYjs(context.Context, identity.Principal, uuid.UUID) (canvas.YjsState, error) {
 	return s.base, nil
 }

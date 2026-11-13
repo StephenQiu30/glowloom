@@ -153,6 +153,9 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	if err != nil {
 		return unknown, nil
 	}
+	if result.HTTPStatus != 0 {
+		defer func() { output.HTTPStatus, output.ProviderLogID = result.HTTPStatus, result.ProviderLogID }()
+	}
 	switch result.Outcome {
 	case application.ProviderOutcomeNotSubmitted:
 		return application.ManagedProgress{State: application.ManagedProgressState(result.Outcome), ErrorCode: result.ErrorCode}, nil
@@ -170,6 +173,7 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		case application.ProviderTaskPending, application.ProviderTaskRunning, application.ProviderTaskFailed:
 			return application.ManagedProgress{State: application.ManagedProgressState(result.State), TaskID: saved.TaskID, ErrorCode: result.ErrorCode}, nil
 		default:
+			unknown.ErrorCode = result.ErrorCode
 			return unknown, nil
 		}
 	}

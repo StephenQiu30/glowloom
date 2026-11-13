@@ -22,12 +22,19 @@ export function generationStatusLabel(
   task: Pick<API.TaskSummary, "status" | "failure_code">,
 ) {
   if (
-    ["manual", "unknown", "reconciling"].includes(task.status ?? "") &&
-    ["provider_invalid_parameters", "provider_not_found"].includes(
-      task.failure_code ?? "",
-    )
-  )
-    return "生成失败";
+    ["manual", "unknown", "reconciling", "failed"].includes(task.status ?? "")
+  ) {
+    switch (task.failure_code) {
+      case "provider_input_content_rejected":
+        return "输入内容未通过审核";
+      case "provider_output_content_rejected":
+        return "生成内容未通过审核";
+      case "provider_invalid_parameters":
+      case "provider_not_found":
+      case "provider_request_rejected":
+        return "生成失败";
+    }
+  }
   return taskLabels[task.status ?? ""];
 }
 export const activeTask = (s?: string) =>

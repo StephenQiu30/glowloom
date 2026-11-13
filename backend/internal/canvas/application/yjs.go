@@ -104,6 +104,7 @@ type YjsRuntime interface {
 
 // YjsStore owns authoritative permission checks and atomic acceptance.
 type YjsStore interface {
+	ReadYjsHead(context.Context, identity.Principal, uuid.UUID) (YjsHead, error)
 	LoadYjs(context.Context, identity.Principal, uuid.UUID) (YjsState, error)
 	InitializeYjs(context.Context, identity.Principal, YjsState, YjsCandidate) (YjsState, error)
 	CommitYjs(context.Context, identity.Principal, YjsState, YjsUpdate, *YjsCandidate, string) (YjsReceipt, error)
@@ -124,6 +125,18 @@ type YjsService struct {
 // NewYjsService injects authority and isolated computation.
 func NewYjsService(store YjsStore, runtime YjsRuntime) *YjsService {
 	return &YjsService{store: store, runtime: runtime}
+}
+
+// YjsHead identifies changes without materializing the graph or binary document.
+type YjsHead struct {
+	Epoch               uuid.UUID
+	CommitSeq, Revision Revision
+	Writable            bool
+}
+
+// Head reads the authorized collaboration version.
+func (s *YjsService) Head(ctx context.Context, a identity.Principal, id uuid.UUID) (YjsHead, error) {
+	return s.store.ReadYjsHead(ctx, a, id)
 }
 
 // Load returns an authorized atomic state and projection.

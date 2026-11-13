@@ -420,6 +420,19 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 				summary["dispatch_cancelled"] = "true"
 			}
 		}
+		if input.ProviderLogID != "" {
+			summary["provider_request_id"] = input.ProviderLogID
+		} else if len(call.ResponseSummary) > 0 {
+			var previous struct {
+				RequestID string `json:"provider_request_id"`
+			}
+			if err := json.Unmarshal(call.ResponseSummary, &previous); err != nil {
+				return err
+			}
+			if previous.RequestID != "" {
+				summary["provider_request_id"] = previous.RequestID
+			}
+		}
 		state, err := json.Marshal(summary)
 		if err != nil {
 			return fmt.Errorf("encode provider result state: %w", err)
@@ -497,11 +510,11 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		}
 		result = tx.Exec(`
 			UPDATE operation.provider_call
-			SET outcome = ?, provider_task_id = ?, response_summary = ?::jsonb,
+			SET outcome = ?, provider_task_id = ?, response_summary = ?::jsonb, http_status = COALESCE(NULLIF(?,0),http_status),
 			    usage = ?::jsonb, cost_micros = ?, procurement_cost_micros = ?, receipt = ?::jsonb, update_time = now()
 			WHERE project_id = ?::uuid AND id = ?::uuid
 			  AND create_time = ?::timestamptz AND NOT is_delete
-		`, string(input.Outcome), input.ProviderTaskID, string(state), nullableJSON(input.Usage),
+		`, string(input.Outcome), input.ProviderTaskID, string(state), input.HTTPStatus, nullableJSON(input.Usage),
 			cost, procurementCost, nullableJSON(receipt), op.ProjectID.String(), call.ID.String(), call.CreateTime)
 		if result.Error != nil {
 			return fmt.Errorf("complete provider call: %w", result.Error)

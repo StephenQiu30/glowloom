@@ -57,9 +57,14 @@ func (c *Client) SetDriver(adapterKey string, driver ProtocolDriver) {
 }
 
 func (c *Client) request(ctx context.Context, config catalogdomain.ProviderConfig, key, method, path string, payload any, limit int64) ([]byte, int, error) {
+	data, status, _, err := c.requestWithID(ctx, config, key, method, path, payload, limit)
+	return data, status, err
+}
+
+func (c *Client) requestWithID(ctx context.Context, config catalogdomain.ProviderConfig, key, method, path string, payload any, limit int64) ([]byte, int, string, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", err
 	}
 	var reader io.Reader
 	if payload != nil {
@@ -69,7 +74,7 @@ func (c *Client) request(ctx context.Context, config catalogdomain.ProviderConfi
 	defer cancel()
 	request, err := http.NewRequestWithContext(timeoutCtx, method, config.BaseURL+path, reader)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", err
 	}
 	request.Header.Set("Authorization", "Bearer "+key)
 	request.Header.Set("Content-Type", "application/json")
@@ -86,19 +91,26 @@ func (c *Client) request(ctx context.Context, config catalogdomain.ProviderConfi
 	if err != nil {
 		var networkErr *net.OpError
 		if method == http.MethodPost && ctx.Err() == nil && !connected.Load() && errors.As(err, &networkErr) && networkErr.Op == "dial" {
-			return nil, 0, errDialNotSent
+			return nil, 0, "", errDialNotSent
 		}
-		return nil, 0, err
+		return nil, 0, "", err
 	}
 	defer func() { _ = response.Body.Close() }()
+	requestID := response.Header.Get("X-Request-Id")
+	if requestID == "" {
+		requestID = response.Header.Get("X-Tt-Logid")
+	}
+	if !application.ValidProviderRequestID(requestID) {
+		requestID = ""
+	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil {
-		return nil, response.StatusCode, err
+		return nil, response.StatusCode, requestID, err
 	}
 	if int64(len(data)) > limit {
-		return nil, response.StatusCode, io.ErrShortBuffer
+		return nil, response.StatusCode, requestID, io.ErrShortBuffer
 	}
-	return data, response.StatusCode, nil
+	return data, response.StatusCode, requestID, nil
 }
 
 // Submit delegates generation request execution to the registered protocol strategy driver.

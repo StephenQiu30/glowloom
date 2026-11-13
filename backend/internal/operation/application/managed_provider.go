@@ -41,10 +41,12 @@ const (
 
 // ManagedProgress contains the classified outcome and durable provider progress.
 type ManagedProgress struct {
-	State       ManagedProgressState `json:"state"`
-	TaskID      string               `json:"task_id,omitempty"`
-	OutputCount int                  `json:"output_count,omitempty"`
-	ErrorCode   string               `json:"error_code,omitempty"`
+	HTTPStatus    int                  `json:"http_status,omitempty"`
+	ProviderLogID string               `json:"provider_log_id,omitempty"`
+	State         ManagedProgressState `json:"state"`
+	TaskID        string               `json:"task_id,omitempty"`
+	OutputCount   int                  `json:"output_count,omitempty"`
+	ErrorCode     string               `json:"error_code,omitempty"`
 }
 
 // ManagedStep requests one explicit submit, read-only poll, or receipt recovery.

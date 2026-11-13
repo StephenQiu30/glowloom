@@ -73,7 +73,10 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { useCanvasFilePreviews } from "../hooks/use-canvas-file-previews";
+import {
+  CanvasPreviewRenewal,
+  useCanvasFilePreviews,
+} from "../hooks/use-canvas-file-previews";
 import { retainCanvasMediaPreviews } from "../lib/canvas-media-continuity";
 import {
   classifyCanvasRemoteApplication,
@@ -723,7 +726,7 @@ function InfiniteCanvasPage({
       return changed ? projected : previous;
     });
   }, [documentIntegration?.generation?.runs, nodes, setNodes]);
-  useCanvasFilePreviews(
+  const renewPreview = useCanvasFilePreviews(
     nodes,
     !!documentIntegration &&
       (documentIntegration.mediaEnabled ?? !documentIntegration.frozen),
@@ -6567,150 +6570,152 @@ function InfiniteCanvasPage({
             </svg>
           </ConnectionFlowProvider>
 
-          {visibleNodes.map((node) => (
-            <CanvasNode
-              readOnly={documentIntegration?.frozen}
-              collaboration={documentIntegration?.textBinding?.(node.id)}
-              key={node.id}
-              data={node}
-              scale={viewport.k}
-              isSelected={selectedNodeIds.has(node.id)}
-              isRelated={relatedHighlight.nodeIds.has(node.id)}
-              isFocusRelated={activeNodeId === node.id}
-              isConnectionTarget={
-                connectionTargetNodeId === node.id ||
-                !!tapConnectionTargets?.has(node.id)
-              }
-              isConnecting={Boolean(connectingParams)}
-              referenceSelectionState={
-                !referencePickerNodeId
-                  ? undefined
-                  : node.id === referencePickerNodeId
-                    ? "target"
-                    : mediaPick
-                      ? isCanvasMediaCandidate(
-                          node,
-                          mediaPick.target,
-                          mediaPick.kinds,
-                        )
-                        ? "available"
-                        : "disabled"
-                      : referenceConnectedNodeIds.has(node.id) ||
-                          !isCanvasReferenceNode(node, nodes) ||
-                          (!!documentIntegration &&
-                            !supportsCanvasConnection(
-                              node.type,
-                              nodes.find(
-                                (item) => item.id === referencePickerNodeId,
-                              )?.type ?? "",
-                            ))
-                        ? "disabled"
-                        : "available"
-              }
-              showPanel={
-                !documentIntegration?.frozen &&
-                !isNodeResizing &&
-                !connectingParams &&
-                dialogNodeId === node.id &&
-                !selectionBox &&
-                !getNodeDefinition(node.type)?.hidePanel &&
-                !isFixedCanvasMedia(node)
-              }
-              isMobile={isMobile}
-              panelSide={dialogNodeId === node.id ? panelSide : undefined}
-              onPanelOpen={
-                isMobile &&
-                node.type !== CanvasNodeType.Group &&
-                !documentIntegration?.frozen &&
-                !getNodeDefinition(node.type)?.hidePanel &&
-                !isFixedCanvasMedia(node) &&
-                !hasMultipleSelectedNodes
-                  ? setDialogNodeId
-                  : undefined
-              }
-              connectionTypes={
-                hasMultipleSelectedNodes && selectedNodeIds.has(node.id)
-                  ? { input: false, output: false }
-                  : documentIntegration
-                    ? {
-                        ...canvasConnectionHandles(node.type),
-                        input:
-                          !isFixedCanvasMedia(node) &&
-                          canvasConnectionHandles(node.type).input,
-                      }
+          <CanvasPreviewRenewal.Provider value={renewPreview}>
+            {visibleNodes.map((node) => (
+              <CanvasNode
+                readOnly={documentIntegration?.frozen}
+                collaboration={documentIntegration?.textBinding?.(node.id)}
+                key={node.id}
+                data={node}
+                scale={viewport.k}
+                isSelected={selectedNodeIds.has(node.id)}
+                isRelated={relatedHighlight.nodeIds.has(node.id)}
+                isFocusRelated={activeNodeId === node.id}
+                isConnectionTarget={
+                  connectionTargetNodeId === node.id ||
+                  !!tapConnectionTargets?.has(node.id)
+                }
+                isConnecting={Boolean(connectingParams)}
+                referenceSelectionState={
+                  !referencePickerNodeId
+                    ? undefined
+                    : node.id === referencePickerNodeId
+                      ? "target"
+                      : mediaPick
+                        ? isCanvasMediaCandidate(
+                            node,
+                            mediaPick.target,
+                            mediaPick.kinds,
+                          )
+                          ? "available"
+                          : "disabled"
+                        : referenceConnectedNodeIds.has(node.id) ||
+                            !isCanvasReferenceNode(node, nodes) ||
+                            (!!documentIntegration &&
+                              !supportsCanvasConnection(
+                                node.type,
+                                nodes.find(
+                                  (item) => item.id === referencePickerNodeId,
+                                )?.type ?? "",
+                              ))
+                          ? "disabled"
+                          : "available"
+                }
+                showPanel={
+                  !documentIntegration?.frozen &&
+                  !isNodeResizing &&
+                  !connectingParams &&
+                  dialogNodeId === node.id &&
+                  !selectionBox &&
+                  !getNodeDefinition(node.type)?.hidePanel &&
+                  !isFixedCanvasMedia(node)
+                }
+                isMobile={isMobile}
+                panelSide={dialogNodeId === node.id ? panelSide : undefined}
+                onPanelOpen={
+                  isMobile &&
+                  node.type !== CanvasNodeType.Group &&
+                  !documentIntegration?.frozen &&
+                  !getNodeDefinition(node.type)?.hidePanel &&
+                  !isFixedCanvasMedia(node) &&
+                  !hasMultipleSelectedNodes
+                    ? setDialogNodeId
                     : undefined
-              }
-              groupChildCount={groupChildCountById.get(node.id) || 0}
-              isGroupDropTarget={dropTargetGroupId === node.id}
-              batchExpanded={expandedBatchNodeIds.has(node.id)}
-              showImageInfo={showImageInfo}
-              mentionReferences={
-                mentionReferencesByNodeId.get(node.id) || EMPTY_REFERENCES
-              }
-              pluginHost={pluginHost}
-              registryVersion={nodeRegistryVersion}
-              renderPanel={renderNodePanel}
-              onPanelClose={(nodeId) =>
-                setDialogNodeId((current) =>
-                  current === nodeId ? null : current,
-                )
-              }
-              renderNodeContent={renderNodeContentPanel}
-              onPreviewLoaded={(nodeId, source, dimensions) => {
-                measureMedia(nodeId, source, dimensions);
-                integrationRef.current?.generation?.previewLoaded?.(
-                  nodeId,
-                  source,
-                );
-              }}
-              onPreviewError={(nodeId, source) =>
-                integrationRef.current?.generation?.recoverPreview?.(
-                  nodeId,
-                  source,
-                )
-              }
-              onMouseDown={handleNodeMouseDown}
-              onSelectCapture={handleNodeSelectCapture}
-              onHoverStart={handleNodeHoverStart}
-              onHoverEnd={handleNodeHoverEnd}
-              onConnectStart={handleConnectStart}
-              onResizeStart={handleNodeResizeStart}
-              onResize={handleNodeResize}
-              onResizeEnd={handleNodeResizeEnd}
-              onContentChange={handleNodeContentChange}
-              acceptContent={(content, richText) =>
-                admitGraph(
-                  nodesStateRef.current.map((current) =>
-                    current.id === node.id
+                }
+                connectionTypes={
+                  hasMultipleSelectedNodes && selectedNodeIds.has(node.id)
+                    ? { input: false, output: false }
+                    : documentIntegration
                       ? {
-                          ...current,
-                          metadata: {
-                            ...current.metadata,
-                            content,
-                            richText,
-                          },
+                          ...canvasConnectionHandles(node.type),
+                          input:
+                            !isFixedCanvasMedia(node) &&
+                            canvasConnectionHandles(node.type).input,
                         }
-                      : current,
-                  ),
-                  connectionsStateRef.current,
-                )
-              }
-              onTitleChange={handleNodeTitleChange}
-              onColorTagChange={(nodeID, tag) =>
-                handleColorTagChange(new Set([nodeID]), tag)
-              }
-              onToggleBatch={toggleBatchExpanded}
-              onSetBatchPrimary={setBatchPrimary}
-              onDuplicateBatchImage={duplicateBatchImage}
-              onDownloadBatchImage={downloadBatchImage}
-              onRetryBatchImage={retryBatchImage}
-              onDeleteBatchImage={deleteBatchImage}
-              onRetry={handleNodeRetry}
-              onViewImage={handleNodeViewImage}
-              onSelectReference={selectNodeReference}
-              onContextMenu={handleNodeContextMenu}
-            />
-          ))}
+                      : undefined
+                }
+                groupChildCount={groupChildCountById.get(node.id) || 0}
+                isGroupDropTarget={dropTargetGroupId === node.id}
+                batchExpanded={expandedBatchNodeIds.has(node.id)}
+                showImageInfo={showImageInfo}
+                mentionReferences={
+                  mentionReferencesByNodeId.get(node.id) || EMPTY_REFERENCES
+                }
+                pluginHost={pluginHost}
+                registryVersion={nodeRegistryVersion}
+                renderPanel={renderNodePanel}
+                onPanelClose={(nodeId) =>
+                  setDialogNodeId((current) =>
+                    current === nodeId ? null : current,
+                  )
+                }
+                renderNodeContent={renderNodeContentPanel}
+                onPreviewLoaded={(nodeId, source, dimensions) => {
+                  measureMedia(nodeId, source, dimensions);
+                  integrationRef.current?.generation?.previewLoaded?.(
+                    nodeId,
+                    source,
+                  );
+                }}
+                onPreviewError={(nodeId, source) =>
+                  integrationRef.current?.generation?.recoverPreview?.(
+                    nodeId,
+                    source,
+                  )
+                }
+                onMouseDown={handleNodeMouseDown}
+                onSelectCapture={handleNodeSelectCapture}
+                onHoverStart={handleNodeHoverStart}
+                onHoverEnd={handleNodeHoverEnd}
+                onConnectStart={handleConnectStart}
+                onResizeStart={handleNodeResizeStart}
+                onResize={handleNodeResize}
+                onResizeEnd={handleNodeResizeEnd}
+                onContentChange={handleNodeContentChange}
+                acceptContent={(content, richText) =>
+                  admitGraph(
+                    nodesStateRef.current.map((current) =>
+                      current.id === node.id
+                        ? {
+                            ...current,
+                            metadata: {
+                              ...current.metadata,
+                              content,
+                              richText,
+                            },
+                          }
+                        : current,
+                    ),
+                    connectionsStateRef.current,
+                  )
+                }
+                onTitleChange={handleNodeTitleChange}
+                onColorTagChange={(nodeID, tag) =>
+                  handleColorTagChange(new Set([nodeID]), tag)
+                }
+                onToggleBatch={toggleBatchExpanded}
+                onSetBatchPrimary={setBatchPrimary}
+                onDuplicateBatchImage={duplicateBatchImage}
+                onDownloadBatchImage={downloadBatchImage}
+                onRetryBatchImage={retryBatchImage}
+                onDeleteBatchImage={deleteBatchImage}
+                onRetry={handleNodeRetry}
+                onViewImage={handleNodeViewImage}
+                onSelectReference={selectNodeReference}
+                onContextMenu={handleNodeContextMenu}
+              />
+            ))}
+          </CanvasPreviewRenewal.Provider>
 
           {selectionBox ? (
             <svg

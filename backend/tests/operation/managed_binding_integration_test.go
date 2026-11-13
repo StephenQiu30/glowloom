@@ -223,7 +223,16 @@ func TestClosedSynchronousRejectionDoesNotBlockAnotherNode(t *testing.T) {
 	// A missing or ambiguous receipt still consumes capacity.
 	_, err = b.store.ClaimProviderDispatch(t.Context(), b.identity)
 	require.ErrorIs(t, err, application.ErrManagedCapacity)
-	require.NoError(t, db.Exec(`UPDATE operation.provider_call SET outcome='unknown',response_summary='{"state":"unknown","failure_code":"provider_invalid_parameters"}' WHERE operation_id=? AND action='submit'`, a.identity.OperationID).Error)
+	rejection := application.CompleteProviderCallInput{OperationID: a.identity.OperationID, Action: "submit", Attempt: 1, Outcome: application.ProviderCallOutcomeUnknown, State: application.ProviderCallStateUnknown, ErrorCode: "input_content_rejected", HTTPStatus: 400, ProviderLogID: "test-request-1"}
+	require.NoError(t, a.store.CompleteProviderCall(t.Context(), rejection))
+	rejection.ProviderLogID, rejection.HTTPStatus = "", 0
+	require.NoError(t, a.store.CompleteProviderCall(t.Context(), rejection))
+	var status int
+	var code, id string
+	require.NoError(t, db.Raw(`SELECT http_status,response_summary->>'failure_code',response_summary->>'provider_request_id' FROM operation.provider_call WHERE operation_id=? AND action='submit'`, a.identity.OperationID).Row().Scan(&status, &code, &id))
+	require.Equal(t, 400, status)
+	require.Equal(t, "provider_input_content_rejected", code)
+	require.Equal(t, "test-request-1", id)
 	claimed, err := b.store.ClaimProviderDispatch(t.Context(), b.identity)
 	require.NoError(t, err)
 	require.True(t, claimed.Claimed)

@@ -43,7 +43,7 @@ func readProviderUsage(tx *gorm.DB, id uuid.UUID) (providerUsage, error) {
 	err := tx.Raw(`SELECT count(DISTINCT op.id) FILTER(WHERE op.status NOT IN ('completed','failed','cancelled','expired')
  AND NOT (op.status='manual' AND NOT v.supports_query AND op.capability IN ('image.generate','text.generate')
  AND call.provider_task_id IS NULL AND call.response_summary->>'state' IS NOT DISTINCT FROM 'unknown'
- AND COALESCE(call.response_summary->>'failure_code','') IN ('provider_invalid_parameters','provider_not_found'))) AS active,
+ AND COALESCE(call.response_summary->>'failure_code','') IN ('provider_invalid_parameters','provider_not_found','provider_input_content_rejected','provider_output_content_rejected','provider_request_rejected'))) AS active,
  count(DISTINCT op.id) FILTER(WHERE COALESCE(retry.created_at,call.dispatch_started_at)>now()-interval '1 minute') AS recent
  FROM operation.provider_credential_binding cb LEFT JOIN operation.route_retry retry ON retry.operation_id=cb.operation_id JOIN catalog.provider_credential key ON key.id=COALESCE(retry.credential_id,cb.credential_id)
  JOIN operation.operation op ON op.id=cb.operation_id JOIN catalog.model_profile_version v ON v.id=op.model_profile_version_id JOIN operation.provider_call call ON call.operation_id=op.id AND call.action='submit' AND call.dispatch_started_at IS NOT NULL AND NOT call.is_delete
