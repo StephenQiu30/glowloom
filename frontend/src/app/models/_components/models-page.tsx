@@ -3,7 +3,7 @@ import { readErrorMessage } from "@/lib/read-error";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { ContentState } from "@/components/layout/content-state";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AdminTable,
@@ -43,11 +43,11 @@ import {
 } from "@/api/settings";
 import { AddModelForm } from "./add-model-form";
 import { ModelDetail, type ModelDetailView } from "./model-detail";
+import { ModelRowEnabledSwitch } from "./model-enabled-switch";
 
 const modelSections = [
   ["configuration", "模型设置"],
   ["pricing", "价格"],
-  ["release", "发布"],
 ] as const;
 
 function ModelRowActions({
@@ -192,7 +192,9 @@ function ModelAdministration({
     id: string;
     view: ModelDetailView;
   } | null>(
-    initialReviewModel ? { id: initialReviewModel, view: "release" } : null,
+    initialReviewModel
+      ? { id: initialReviewModel, view: "configuration" }
+      : null,
   );
   const detailTrigger = useRef<HTMLElement | null>(null);
   const addTrigger = useRef<HTMLButtonElement>(null);
@@ -217,7 +219,7 @@ function ModelAdministration({
   const [next, setNext] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const saved = () => setRefresh((v) => v + 1);
+  const saved = useCallback(() => setRefresh((v) => v + 1), []);
   useEffect(() => {
     const abort = new AbortController();
     Promise.all([
@@ -266,6 +268,17 @@ function ModelAdministration({
   )?.provider;
   const archivedConnection = filteredConnection?.status === "archived";
   const locked = loading || !!error || batch.busy || batch.unresolved;
+  // Keep the switch mounted while list refreshes, preserving progress and feedback.
+  const enabledCell = useCallback(
+    ({ row }: { row: { original: API.CreatedModel } }) => (
+      <ModelRowEnabledSwitch
+        model={row.original}
+        onSaved={saved}
+        disabled={locked}
+      />
+    ),
+    [locked, saved],
+  );
   const columns: AdminTableColumn<API.CreatedModel, ModelFilter>[] = [
     {
       id: "model",
@@ -388,7 +401,7 @@ function ModelAdministration({
     },
     {
       id: "status",
-      header: "状态",
+      header: "可用性",
       filter: {
         name: "status",
         type: "select",
@@ -405,6 +418,11 @@ function ModelAdministration({
           </Badge>
         );
       },
+    },
+    {
+      id: "enabled",
+      header: "启用",
+      cell: enabledCell,
     },
     {
       id: "actions",

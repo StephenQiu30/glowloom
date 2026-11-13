@@ -31,12 +31,14 @@ func readModelAvailability(tx *gorm.DB, ids []uuid.UUID) (map[uuid.UUID]applicat
 		Config                                                                   []byte
 		Capability                                                               string
 	}
+	// A saved model version is a draft. New execution keeps the active release
+	// until an explicit activation; provider configuration changes still revoke it.
 	err := tx.Raw(`SELECT m.id,m.capability,cfg.config,COALESCE(v.modes <@ cap.modes AND cardinality(v.modes)>0,false) AS mode_contract_ready,r.id AS release_id,r.model_version_id,r.price_version_id,r.config_version_id,c.id AS credential_id,
  (m.status='active' AND p.status='active' AND NOT p.is_delete AND NOT COALESCE(preset.emergency_disabled,false)) AS enabled,
  (c.id IS NOT NULL AND COALESCE(c.last_test_result NOT IN ('auth_failed'),true)) AS credential_ready,
  (price.id IS NOT NULL AND price.effective_from<=transaction_timestamp() AND price.source_url IS NOT NULL AND price.reviewed_at<=transaction_timestamp()
  AND procurement.id IS NOT NULL AND procurement.effective_from<=transaction_timestamp() AND procurement.source_url IS NOT NULL AND procurement.reviewed_at<=transaction_timestamp()) AS price_ready,
- COALESCE((p.current_config_version_id=r.config_version_id AND m.current_version_id=r.model_version_id),false) AS versions_current,
+ COALESCE(p.current_config_version_id=r.config_version_id,false) AS versions_current,
  COALESCE(to_jsonb(v.modes),'[]'::jsonb) AS modes,
  COALESCE((SELECT jsonb_agg(DISTINCT x.mode) FROM catalog.model_validation x
  JOIN operation.operation op ON op.id=x.operation_id AND op.status='completed' AND NOT op.is_delete

@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
   add: vi.fn(),
   probe: vi.fn(),
   check: vi.fn(),
+  activation: vi.fn(),
 }));
 vi.mock("@/components/auth/session", () => ({
   useSession: () => ({
@@ -32,6 +33,9 @@ vi.mock("@/api/settings", () => ({
   getConfigReceipt: vi.fn(),
   readSavedProviderModelDirectory: api.probe,
   getProviderCheck: api.check,
+}));
+vi.mock("@/app/models/_components/model-activation", () => ({
+  changeModelActivation: api.activation,
 }));
 vi.mock("@/app/models/_components/model-detail", () => ({
   ModelDetail: ({ initialView }: { initialView: string }) => (
@@ -281,14 +285,14 @@ it("读取只读目录后能搜索并添加候选模型", async () => {
   expect(api.key).not.toHaveBeenCalled();
 });
 
-it("行操作可直接进入发布页，关闭后回到管理按钮", async () => {
+it("行操作只保留设置和价格入口，关闭后回到管理按钮", async () => {
   render(<ModelsPage />);
   const trigger = await screen.findByRole("button", {
     name: "管理 当前连接模型",
   });
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
-  fireEvent.click(await screen.findByRole("menuitem", { name: "发布" }));
-  await screen.findByText("release");
+  fireEvent.click(await screen.findByRole("menuitem", { name: "模型设置" }));
+  await screen.findByText("configuration");
   fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
   await waitFor(() =>
     expect(document.activeElement).toBe(
@@ -321,7 +325,7 @@ it("组合筛选回到第一页并清除选择，重置恢复默认查询", asyn
   fireEvent.change(filter.getByLabelText("服务连接"), {
     target: { value: "connection" },
   });
-  fireEvent.change(filter.getByLabelText("状态"), {
+  fireEvent.change(filter.getByLabelText("可用性"), {
     target: { value: "unavailable" },
   });
   expect(api.models).toHaveBeenCalledTimes(2);
@@ -394,4 +398,25 @@ it("计价审核使用服务端筛选并在表格下打开价格页", async () =
     ),
   ).toBeTruthy();
   expect(screen.queryByRole("dialog", { name: "模型详情" })).toBeNull();
+});
+
+it("列表启用失败后刷新仍保留反馈，开关保持关闭", async () => {
+  api.activation.mockRejectedValue(new Error("请先保存有效价格"));
+  api.models.mockResolvedValue({
+    items: [
+      { id: "failure-model", display_name: "启用失败模型", status: "disabled" },
+    ],
+  });
+  render(<ModelsPage />);
+  const toggle = await screen.findByRole("switch", {
+    name: "启用 启用失败模型",
+  });
+  fireEvent.click(toggle);
+  await screen.findByText("请先保存有效价格");
+  await waitFor(() => expect(api.models.mock.calls.length).toBeGreaterThan(1));
+  expect(
+    screen
+      .getByRole("switch", { name: "启用 启用失败模型" })
+      .getAttribute("aria-checked"),
+  ).toBe("false");
 });

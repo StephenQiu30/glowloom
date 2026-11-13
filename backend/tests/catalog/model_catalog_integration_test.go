@@ -154,7 +154,7 @@ func TestModelCatalogReadsProjectPolicyCurrentVersionsAndEffectivePricesOnLocalP
 	prefix := "model-catalog-" + uuid.NewString()
 	domestic := insertModelCatalogProvider(ctx, t, database, "domestic", "active", "ok")
 	overseas := insertModelCatalogProvider(ctx, t, database, "overseas", "active", "ok")
-	active, firstVersion := insertModelCatalogModel(ctx, t, database, prefix+"-a", domestic, "video.generate", "active", "image2video", false)
+	active, _ := insertModelCatalogModel(ctx, t, database, prefix+"-a", domestic, "video.generate", "active", "image2video", false)
 	foreign, _ := insertModelCatalogModel(ctx, t, database, prefix+"-b", overseas, "video.generate", "active", "image2video", false)
 	_, _ = insertModelCatalogModel(ctx, t, database, prefix+"-c", domestic, "video.generate", "disabled", "image2video", false)
 	_, _ = insertModelCatalogModel(ctx, t, database, prefix+"-d", domestic, "video.generate", "active", "image2video", false)
@@ -222,10 +222,25 @@ func TestModelCatalogReadsProjectPolicyCurrentVersionsAndEffectivePricesOnLocalP
 	require.NoError(t, err)
 	require.Empty(t, page.Models)
 	require.NoError(t, database.Exec(`UPDATE catalog.provider_credential SET last_test_result='ok' WHERE id=?`, credential).Error)
-	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE id=?`, firstVersion, active).Error)
+	// Saving a new configuration is a draft until an explicit release switch.
+	// Both the public catalog and execution gate must keep the pinned version.
+	draft := uuid.New()
+	require.NoError(t, database.Exec(`INSERT INTO catalog.model_profile_version(id,model_profile_id,version_no,provider_model_id,modes,limits,param_schema,supports_query,supports_cancel,supports_callback,expected_max_ms,queue)
+ SELECT ?,model_profile_id,3,'test-model-v3',ARRAY['text2video'],limits,param_schema,supports_query,supports_cancel,supports_callback,expected_max_ms,queue FROM catalog.model_profile_version WHERE id=?`, draft, current).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE id=?`, draft, active).Error)
 	page, err = store.ListModelsForProject(ctx, actor, query)
 	require.NoError(t, err)
-	require.Empty(t, page.Models)
+	require.Len(t, page.Models, 1)
+	require.Equal(t, current, page.Models[0].CurrentVersion.ID)
+	require.Equal(t, newer, page.Models[0].CurrentPrice.ID)
+	var selectable bool
+	err = database.Transaction(func(tx *gorm.DB) error {
+		var gateErr error
+		selectable, gateErr = app.NewCatalogStore(tx).AvailableForNewExecution(ctx, current, release, "image2video")
+		return gateErr
+	})
+	require.NoError(t, err)
+	require.True(t, selectable)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET current_version_id=? WHERE id=?`, current, active).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_release SET status='retired' WHERE id=?`, release).Error)
 	page, err = store.ListModelsForProject(ctx, actor, query)

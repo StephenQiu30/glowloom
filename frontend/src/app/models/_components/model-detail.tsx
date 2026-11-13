@@ -39,6 +39,7 @@ import {
   Field,
   FieldLabel,
   FieldGroup,
+  FieldContent,
 } from "@/components/ui/field";
 import { useEffect, useState, useId, useRef, type FormEvent } from "react";
 import {
@@ -47,24 +48,18 @@ import {
   modelConfiguration,
   priceRule,
 } from "./model-setup";
-import { useProviderCatalogProbe } from "@/components/catalog/provider-catalog-probe";
-import { testErrorMessage } from "@/app/providers/_components/testing-status";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   getAdminModel,
   getProviderConfig,
   listModelReleases,
-  listCapabilityDefaults,
   publishAdminModelVersion,
   publishAdminModelPrice,
-  createModelRelease,
-  activateModelRelease,
   setAdminModelStatus,
 } from "@/api/settings";
 import {
@@ -73,14 +68,15 @@ import {
   useCatalogMutation,
 } from "@/components/catalog/mutation";
 
-export type ModelDetailView = "configuration" | "pricing" | "release";
+import { ModelEnabledSwitch, useModelActivation } from "./model-enabled-switch";
+import { releaseMatchesSaved, savedModelBinding } from "./model-activation";
+
+export type ModelDetailView = "configuration" | "pricing";
 
 export function ModelDetail({
   id,
   capabilities,
-  providers = [],
   initialView = "configuration",
-  pricingReview = false,
   onSaved,
 }: {
   id: string;
@@ -105,7 +101,6 @@ export function ModelDetail({
   const [detail, setDetail] = useState<API.AdminModelDetail | null>(null);
   const [config, setConfig] = useState<API.ConnectionConfig | null>(null);
   const [releases, setReleases] = useState<API.ModelRelease[]>([]);
-  const [defaults, setDefaults] = useState<API.CapabilityDefault[]>([]);
   const [error, setError] = useState("");
   const [readAttempt, setReadAttempt] = useState(0);
   function reloadDetail() {
@@ -116,16 +111,12 @@ export function ModelDetail({
   useEffect(() => {
     const abort = new AbortController();
     const model = getAdminModel({ id }, { signal: abort.signal });
-    Promise.all([
-      model,
-      listModelReleases({ id }, { signal: abort.signal }),
-      listCapabilityDefaults({ signal: abort.signal }),
-    ])
-      .then(([d, r, defaults]) => {
+    Promise.all([model, listModelReleases({ id }, { signal: abort.signal })])
+      .then(([d, r]) => {
         if (!abort.signal.aborted) {
+          setError("");
           setDetail(d);
           setReleases(r.items ?? []);
-          setDefaults(defaults.items ?? []);
           const activeSale = d.prices?.find(
             (price) =>
               typeof price.rule?.procurement_price_version_id === "string",
@@ -158,24 +149,9 @@ export function ModelDetail({
   }, [id, readAttempt]);
   const model = detail?.model;
   const archived = model?.status === "archived";
-  const connection = providers.find(
-    (item) => item.provider?.id === model?.provider_id,
-  );
-  const providerStatus = connection?.provider?.status;
-  const credentialID =
-    connection?.credential?.status === "active"
-      ? connection.credential.id
-      : undefined;
-  const probe = useProviderCatalogProbe(
-    model?.provider_id ?? "",
-    `model.release.check.${id}`,
-  );
   const latest = detail?.versions?.[0];
   const latestPrice = detail?.prices?.[0];
   const procurement = detail?.prices?.find(isProcurementPrice);
-  const sale = detail?.prices?.find(
-    (price) => typeof price.rule?.procurement_price_version_id === "string",
-  );
   const pricePreset = detail?.price_preset;
   const editablePrice = procurement ?? (pricePreset ? undefined : latestPrice);
   const referenceOnly =
@@ -211,96 +187,17 @@ export function ModelDetail({
       : pricePreset?.unit === unit && pricePreset.currency === currency
         ? pricePreset?.rule
         : undefined;
-  const active = releases.find((r) => r.status === "active");
-  const currentDefault = defaults.find(
-    (d) => d.capability === model?.capability,
-  );
-  const versionID = model?.current_version_id ?? latest?.id;
-  const priceID =
-    sale?.id ??
-    (!detail?.candidate?.model && !pricingReview ? latestPrice?.id : undefined);
-  const configID = config?.id;
-  const check = probe.data;
-  const checkID =
-    check?.current &&
-    check.status === "completed" &&
-    check.kind === "credential_auth" &&
-    check.auth_result === "ok" &&
-    check.adapter_result === "ok" &&
-    check.config_version_id === configID &&
-    check.credential_id === credentialID
-      ? check.id
-      : undefined;
-  const matchesSavedSettings = (release: API.ModelRelease) =>
-    release.model_version_id === versionID &&
-    release.price_version_id === priceID &&
-    release.config_version_id === configID;
-  const published = model?.status === "active" && providerStatus === "active";
-  const upToDate = published && !!active && matchesSavedSettings(active);
-  const checking = probe.running || probe.mutation.busy;
-  let checkMessage = "发布前请验证 Key 和服务可用性。";
-  if (providerStatus === "archived") {
-    checkMessage = "请先恢复服务连接。";
-  } else if (!credentialID) {
-    checkMessage = "请先在 AI 服务中保存 Key。";
-  } else if (checking) {
-    checkMessage = "正在验证 Key 和服务…";
-  } else if (probe.error) {
-    checkMessage = catalogMessage(probe.error);
-  } else if (checkID) {
-    checkMessage = "Key 有效，服务可访问。";
-  } else if (check && !check.current) {
-    checkMessage = "连接配置或 Key 已变更，请重新验证。";
-  } else if (check?.auth_result === "unsupported") {
-    checkMessage = "该服务暂不支持只读鉴权。";
-  } else if (check) {
-    checkMessage = testErrorMessage(
-      check.error_code ?? check.auth_result ?? "",
-    );
-  }
-
-  async function publish() {
-    if (!versionID || !priceID || !configID || !checkID) return;
-    const existing =
-      active && matchesSavedSettings(active)
-        ? active
-        : releases.find(
-            (release) =>
-              release.status === "draft" && matchesSavedSettings(release),
-          );
-    const release =
-      existing ??
-      (await mutation.run("release.create", id, (request) =>
-        createModelRelease(
-          { id },
-          {
-            request_id: request,
-            model_version_id: versionID,
-            price_version_id: priceID,
-            config_version_id: configID,
-          },
-        ),
-      ));
-    if (!release?.id) return;
-    const releaseID = release.id;
-    const keepDefault =
-      !!active?.id && currentDefault?.release_id === active.id;
-    await mutation.run("release.activate", releaseID, (request) =>
-      activateModelRelease(
-        { id: releaseID },
-        {
-          request_id: request,
-          credential_check_id: checkID,
-          expected_revision: release.revision,
-          expected_model_revision: model?.revision,
-          expected_active_release_id: active?.id,
-          enable_provider: providerStatus === "disabled",
-          set_default: keepDefault && active?.id !== releaseID,
-          expected_default_revision: currentDefault?.revision ?? 0,
-        },
-      ),
-    );
-  }
+  const active = releases.find((release) => release.status === "active");
+  const priceID = detail
+    ? savedModelBinding(detail).price_version_id
+    : undefined;
+  const hasUpdates =
+    !!active &&
+    !!detail &&
+    !!config &&
+    !releaseMatchesSaved(active, detail, config.id);
+  const activation = useModelActivation(model ?? { id }, reloadDetail);
+  const configurationLocked = mutation.busy || activation.blocked;
 
   const modes = (
     capabilities.find((c) => c.key === model?.capability)?.modes ?? []
@@ -526,8 +423,8 @@ export function ModelDetail({
             <Badge variant="secondary">
               {priceID
                 ? active?.price_version_id === priceID
-                  ? "已发布"
-                  : "待发布"
+                  ? "已生效"
+                  : "待应用"
                 : procurement
                   ? "待保存同价"
                   : "待核验"}
@@ -635,7 +532,9 @@ export function ModelDetail({
           {priceCandidates}
           <Separator />
           <DialogFooter className="pt-0 max-md:[&_button]:min-h-11">
-            <Button disabled={archived || mutation.busy || !latest || !unit}>
+            <Button
+              disabled={archived || configurationLocked || !latest || !unit}
+            >
               核验并保存
             </Button>
           </DialogFooter>
@@ -649,12 +548,26 @@ export function ModelDetail({
       </h2>
       {error && detail ? <FeedbackToast message={error} /> : null}
       <MutationStatus mutation={mutation} />
-      {model && "available" in model ? (
-        <div aria-label="当前可用性">
-          <Badge variant="secondary">
-            {model.available === true ? "可用" : "不可用"}
-          </Badge>
-        </div>
+      {model ? (
+        <FieldGroup>
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldLabel>启用模型</FieldLabel>
+              <div aria-label="当前可用性">
+                <Badge variant="secondary">
+                  {model.available === true ? "可用" : "不可用"}
+                </Badge>
+              </div>
+            </FieldContent>
+            <ModelEnabledSwitch
+              model={model}
+              activation={activation}
+              disabled={
+                mutation.busy || !!mutation.pending || !!error || !config
+              }
+            />
+          </Field>
+        </FieldGroup>
       ) : null}
       {!detail && error ? (
         <ContentState
@@ -693,7 +606,7 @@ export function ModelDetail({
                 <AlertDialogHeader>
                   <AlertDialogTitle>恢复模型？</AlertDialogTitle>
                   <AlertDialogDescription>
-                    模型将恢复为未启用，发布后才能接收新任务。
+                    模型将恢复为未启用，开启后才能接收新任务。
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -730,7 +643,6 @@ export function ModelDetail({
             >
               <TabsTrigger value="configuration">模型设置</TabsTrigger>
               <TabsTrigger value="pricing">价格</TabsTrigger>
-              <TabsTrigger value="release">发布</TabsTrigger>
             </TabsList>
             <TabsContent
               value="configuration"
@@ -881,7 +793,7 @@ export function ModelDetail({
                   </Collapsible>
                   <Separator />
                   <DialogFooter className="pt-0 max-md:[&_button]:min-h-11">
-                    <Button disabled={mutation.busy}>保存配置</Button>
+                    <Button disabled={configurationLocked}>保存配置</Button>
                   </DialogFooter>
                 </FieldGroup>
               </form>
@@ -893,96 +805,20 @@ export function ModelDetail({
                 {!priceForm ? priceCandidates : null}
               </div>
             </TabsContent>
-            <TabsContent
-              value="release"
-              forceMount
-              hidden={view !== "release"}
-              className="flex flex-col gap-4 data-[state=inactive]:hidden"
-            >
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">
-                  {published ? "已发布" : active ? "已停用" : "未发布"}
-                </Badge>
-                {published && !upToDate ? (
-                  <span className="text-sm text-muted-foreground">
-                    有待发布的配置
-                  </span>
-                ) : null}
-              </div>
-              {!upToDate ? (
-                <>
-                  {!checking &&
-                  (probe.mutation.pending ||
-                    (!check && probe.mutation.message)) ? (
-                    <MutationStatus mutation={probe.mutation} />
-                  ) : null}
-                  <div role="status" className="text-sm text-muted-foreground">
-                    {checkMessage}
-                  </div>
-                  {!versionID || !priceID ? (
-                    <p className="text-sm text-muted-foreground">
-                      {!versionID
-                        ? "请先在「模型设置」保存配置。"
-                        : "请先在「价格」保存可发布的价格。"}
-                    </p>
-                  ) : null}
-                  <Separator />
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Button
-                      variant={checkID ? "outline" : "default"}
-                      disabled={
-                        checking ||
-                        mutation.busy ||
-                        !credentialID ||
-                        !configID ||
-                        providerStatus === "archived"
-                      }
-                      onClick={() => {
-                        if (credentialID) void probe.run(credentialID);
-                      }}
-                    >
-                      {checking ? <Spinner data-icon="inline-start" /> : null}
-                      {checkID ? "重新验证" : "验证 Key 和服务"}
-                    </Button>
-                    <Button
-                      variant={checkID ? "default" : "outline"}
-                      disabled={
-                        !checkID ||
-                        checking ||
-                        mutation.busy ||
-                        !priceID ||
-                        !versionID ||
-                        providerStatus === "archived"
-                      }
-                      onClick={() => void publish()}
-                    >
-                      发布模型
-                    </Button>
-                  </div>
-                </>
-              ) : null}
-              {model?.status === "active" ? (
-                <Button
-                  variant="outline"
-                  disabled={mutation.busy}
-                  onClick={() =>
-                    void mutation.run("model.status", id, (requestID) =>
-                      setAdminModelStatus(
-                        { id },
-                        {
-                          status: "disabled",
-                          expected_revision: model.revision,
-                        },
-                        { headers: { "Idempotency-Key": requestID } },
-                      ),
-                    )
-                  }
-                >
-                  停用模型
-                </Button>
-              ) : null}
-            </TabsContent>
           </Tabs>
+          {hasUpdates ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm text-muted-foreground">
+                有待应用的配置
+              </span>
+              <Button
+                disabled={configurationLocked || !!mutation.pending || !!error}
+                onClick={() => void activation.change("update")}
+              >
+                {model?.status === "active" ? "应用更新" : "应用更新并启用"}
+              </Button>
+            </div>
+          ) : null}
         </>
       )}
     </section>

@@ -31,6 +31,11 @@ vi.mock("@/api/settings", async (importOriginal) => ({
   publishAdminModelPrice: api.savePrice,
   activateModelRelease: api.activateRelease,
   setAdminModelStatus: api.status,
+  getAdminProvider: async () => ({
+    provider: { status: "active" },
+    credential: { id: "key-a", status: "active" },
+  }),
+  listProviderChecks: async () => ({ current_checks: [] }),
   getProviderConfig: async () => ({
     id: "config-a",
     config: { adapter_key: "volcengine_ark" },
@@ -136,7 +141,7 @@ it("详情读取失败时结束加载并允许重试同一模型", async () => {
   ]);
 });
 
-it("模型设置、价格和发布分屏，切换后不丢未保存的配置", async () => {
+it("模型设置与价格分屏，顶部开关独立于配置草稿", async () => {
   api.model.mockResolvedValue({
     model: {
       id: "model-a",
@@ -149,6 +154,8 @@ it("模型设置、价格和发布分屏，切换后不丢未保存的配置", a
   });
   render(<ModelDetail id="model-a" capabilities={[]} onSaved={vi.fn()} />);
   await screen.findByRole("heading", { name: "示例模型" });
+  expect(screen.queryByRole("tab", { name: "发布" })).toBeNull();
+  expect(screen.getByRole("switch", { name: "启用 示例模型" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "归档模型" })).toBeNull();
   expect(screen.queryByRole("button", { name: "验证配置" })).toBeNull();
   fireEvent.change(screen.getByLabelText("上游模型 ID"), {
@@ -370,7 +377,7 @@ it("已归档模型可恢复，恢复后才可修改配置", async () => {
   ]);
 });
 
-it("通过当前 Key 的只读验证后使用已保存的配置和价格发布", async () => {
+it("开启 Switch 自动进行只读验证并启用已保存的配置", async () => {
   api.model.mockResolvedValue({
     model: {
       id: "model-a",
@@ -412,38 +419,27 @@ it("通过当前 Key 的只读验证后使用已保存的配置和价格发布",
           credential: { id: "key-a", status: "active" },
         },
       ]}
-      initialView="release"
       onSaved={vi.fn()}
     />,
   );
-  const publish = await screen.findByRole<HTMLButtonElement>("button", {
-    name: "发布模型",
+  const toggle = await screen.findByRole<HTMLButtonElement>("switch", {
+    name: "启用 Seedream",
   });
-  expect(publish.disabled).toBe(true);
-  expect(screen.queryByText("发布记录")).toBeNull();
-  expect(screen.queryByText("扣费项目（必选）")).toBeNull();
-  const verify = screen.getByRole<HTMLButtonElement>("button", {
-    name: "验证 Key 和服务",
-  });
-  await waitFor(() => expect(verify.disabled).toBe(false));
-  fireEvent.click(verify);
-  await screen.findByText("Key 有效，服务可访问。");
-  expect(api.check).toHaveBeenCalledWith(
-    { id: "provider-a", credential_id: "key-a" },
-    expect.objectContaining({ headers: expect.any(Object) }),
-  );
-  expect(api.createRelease).not.toHaveBeenCalled();
-
-  fireEvent.click(publish);
+  await waitFor(() => expect(toggle.disabled).toBe(false));
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(toggle);
+  expect(toggle.disabled).toBe(true);
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
   await waitFor(() =>
     expect(api.activateRelease).toHaveBeenCalledWith(
       { id: "release-a" },
       expect.objectContaining({
         credential_check_id: "check-a",
         expected_model_revision: 5,
-        enable_provider: true,
+        enable_provider: false,
         set_default: false,
       }),
+      expect.any(Object),
     ),
   );
   expect(api.createRelease).toHaveBeenCalledWith(
@@ -454,6 +450,7 @@ it("通过当前 Key 的只读验证后使用已保存的配置和价格发布",
       price_version_id: "price-a",
       config_version_id: "config-a",
     },
+    expect.any(Object),
   );
 });
 
