@@ -134,11 +134,18 @@ func managedStep(ctx context.Context, s OperationStore, p managedProvider, l app
 		}
 		return soon, change(ctx, s, l, domain.StatusSubmitted, "provider_accepted", &v.TaskID)
 	}
+	// An authoritative live job remains a generation, even past the estimate.
+	if v.State == app.ManagedProgressRunning || v.State == app.ManagedProgressPending {
+		if op.Status == domain.StatusReconciling {
+			return soon, change(ctx, s, l, domain.StatusSubmitted, "provider_running", taskID)
+		}
+		return time.Now().Add(10 * time.Second), nil
+	}
 	if op.Status == domain.StatusSubmitted {
 		if v.State == app.ManagedProgressFailed {
 			return soon, nil
 		}
-		if v.State != app.ManagedProgressFailed && op.ConfirmedAt != nil && time.Now().Before(op.ConfirmedAt.Add(time.Duration(max(60000, l.Provider.ExpectedMaxMS))*2*time.Millisecond)) {
+		if e.DispatchStartedAt != nil && time.Now().Before(e.DispatchStartedAt.Add(time.Duration(max(60000, l.Provider.ExpectedMaxMS))*2*time.Millisecond)) {
 			return time.Now().Add(10 * time.Second), nil
 		}
 		return soon, change(ctx, s, l, domain.StatusReconciling, "provider_poll_unresolved", nil)

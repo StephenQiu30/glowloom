@@ -42,20 +42,33 @@ beforeEach(() => {
   api.error.mockReset();
 });
 afterEach(cleanup);
-it("分页恢复各节点最新的正式任务，已完成任务不遮住结果", async () => {
+it("分页恢复各节点的执行和已完成任务，未执行的报价不遮住结果", async () => {
   api.list
-    .mockResolvedValueOnce({ items: [task()], next_cursor: "next" })
+    .mockResolvedValueOnce({
+      items: [
+        task(oldOperationID, "expired"),
+        task(oldOperationID, "manual", otherNodeID),
+        task(),
+      ],
+      next_cursor: "next",
+    })
     .mockResolvedValueOnce({
       items: [
         task(oldOperationID),
-        task(oldOperationID, "completed", otherNodeID),
+        {
+          ...task(oldOperationID, "completed", otherNodeID),
+          capability: "video.generate",
+        },
       ],
     });
   const { result } = renderHook(() => useCanvasOperationTasks(props), {
     wrapper: wrapper(),
   });
   await waitFor(() =>
-    expect(result.current.tasks).toEqual({ [nodeID]: operationID }),
+    expect(result.current.tasks).toEqual({
+      [nodeID]: operationID,
+      [otherNodeID]: oldOperationID,
+    }),
   );
   expect(api.list.mock.calls[1][0]).toMatchObject({
     pid: projectID,
@@ -68,6 +81,7 @@ it("新任务立即绑定，旧任务完成回执不能清掉新任务", async (
     wrapper: wrapper(),
   });
   await waitFor(() => expect(api.list).toHaveBeenCalledOnce());
+  api.list.mockResolvedValue({ items: [task()] });
   await act(async () => {
     result.current.register(nodeID, operationID);
   });
@@ -93,7 +107,10 @@ it("拒绝跨画布来源并通过统一通知提供读取重试", async () => {
   expect(api.error.mock.calls[0][1].action.label).toBe("重试");
 });
 it("重复分页游标失败退出，不循环请求", async () => {
-  api.list.mockResolvedValue({ items: [task()], next_cursor: "same" });
+  api.list.mockResolvedValue({
+    items: [task(oldOperationID, "expired"), task()],
+    next_cursor: "same",
+  });
   renderHook(() => useCanvasOperationTasks(props), { wrapper: wrapper() });
   await waitFor(() => expect(api.error).toHaveBeenCalled());
   expect(api.list).toHaveBeenCalledTimes(2);

@@ -12,7 +12,7 @@ import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import type { Project } from "@/components/projects/project";
-import { requireTask, taskLabels } from "@/components/generation/contracts";
+import { requireTask, generationStatusLabel } from "@/components/generation/contracts";
 import { TaskDetail } from "@/components/generation/generation-dialog";
 import { Button } from "@/components/ui/button";
 import { ContentState } from "@/components/layout/content-state";
@@ -161,7 +161,7 @@ function HistoryList({
               </span>
             </span>
             <span className="text-muted-foreground">
-              {taskLabels[item.status!]}
+              {generationStatusLabel(item)}
             </span>
           </Button>
         ))}

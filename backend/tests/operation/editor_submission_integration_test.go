@@ -6,7 +6,11 @@ import (
 	"testing"
 	"time"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -162,4 +166,66 @@ func TestEditorSubmissionRecoveryDiscardAndLateEpoch(t *testing.T) {
 	if _, err := store.ConfirmSingleQuote(t.Context(), actor, confirm); err == nil {
 		t.Fatal("confirmation replay bypassed revoked owner")
 	}
+}
+
+func TestCanvasEditorConcurrentNodeOperationsHaveIndependentHistory(t *testing.T) {
+	db := operationStoreDB(t)
+	actor, project := operationStoreProject(t, db)
+	catalog, _, provider := seedGenerationQuoteCatalog(t, db, project, time.Now().UTC())
+	require.NoError(t, db.Exec("UPDATE catalog.provider SET status='active' WHERE id=?", provider).Error)
+	require.NoError(t, db.Exec("UPDATE catalog.model_profile_version SET limits='{\"max_outputs\":1}' WHERE id=?", catalog.ModelProfileVersionID).Error)
+	canvasID := uuid.New()
+	require.NoError(t, db.Exec("INSERT INTO canvas.document(id,project_id,name,revision) VALUES(?,?,'并行节点',7)", canvasID, project).Error)
+	video, model, videoProvider := seedUnfundedQuoteCatalog(t, db, project, time.Now().UTC())
+	require.NoError(t, db.Exec("UPDATE catalog.provider SET status='active' WHERE id=?", videoProvider).Error)
+	require.NoError(t, db.Exec("UPDATE catalog.model_profile SET capability='video.generate' WHERE id=?", model).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text2video'],limits='{"max_outputs":1}' WHERE id=?`, video.ModelProfileVersionID).Error)
+	require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET rule=jsonb_set(rule,'{base_micros}',to_jsonb(?::bigint)) WHERE id=?`, billingdomain.MicrosPerCredit, video.PriceRuleVersionID).Error)
+	seedFixtureProcurement(t, db, *video.PriceRuleVersionID, *video.ModelProfileVersionID)
+	nodes := []uuid.UUID{uuid.New(), uuid.New()}
+	for idx, node := range nodes {
+		kind, mode, version := "image", "text_to_image", catalog.ModelProfileVersionID
+		if idx == 1 {
+			kind, mode, version = "video", "text2video", video.ModelProfileVersionID
+		}
+		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,input_revision,content_version,config,x,y,width,height)
+		VALUES(?,?,?,?,'resource',3,5,jsonb_build_object('editor','{"schemaVersion":1}'::jsonb,'draft',jsonb_build_object('composer',jsonb_build_object(
+		'schemaVersion',1,'document','{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"并行测试"}]}]}'::jsonb,
+		'references','[]'::jsonb,'modelVersion',?::text,'mode',?::text,'params','{}'::jsonb,'labelState','{"highWater":{"image":0,"video":0,"audio":0,"subject":0},"allocations":{}}'::jsonb))),0,0,300,300)`, node, canvasID, kind, kind, version.String(), mode).Error; err != nil {
+				return err
+			}
+			return tx.Exec(`INSERT INTO canvas.node_input(node_id,input_revision,draft,created_by) SELECT id,input_revision,config->'draft',? FROM canvas.node WHERE id=?`, actor.ID, node).Error
+		}))
+	}
+	store := editorOperationStore(db)
+	epoch := int64(0)
+	var group errgroup.Group
+	for _, node := range nodes {
+		group.Go(func() error {
+			source := promptdomain.InputSource{Kind: "canvas_input", CanvasID: canvasID, NodeID: node, CanvasRevision: 7, InputRevision: 3}
+			quote, err := store.CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &source, ExpectedSubmissionEpoch: &epoch}})
+			if err != nil {
+				return err
+			}
+			_, err = store.ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{ProjectID: project, OperationID: quote.OperationID, RequestID: quote.ConfirmKey.String()})
+			return err
+		})
+	}
+	require.NoError(t, group.Wait())
+	page, err := store.ListPublicTasks(t.Context(), actor, operationapp.ListTasksInput{ProjectID: project, CanvasID: &canvasID, Limit: 20})
+	require.NoError(t, err)
+	require.Len(t, page.Items, 2)
+	var got []uuid.UUID
+	for _, item := range page.Items {
+		require.EqualValues(t, "confirmed", item.Status)
+		require.Equal(t, "并行测试", item.CanvasPromptPreview)
+		require.Equal(t, canvasID, item.Source.CanvasID)
+		require.EqualValues(t, 7, item.Source.Revision)
+		detail, err := store.ReadPublicTask(t.Context(), actor, project, item.ID)
+		require.NoError(t, err)
+		require.Equal(t, "5", detail.TargetContentVersion)
+		got = append(got, item.Source.NodeID)
+	}
+	require.ElementsMatch(t, nodes, got)
 }

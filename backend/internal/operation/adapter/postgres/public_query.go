@@ -39,6 +39,7 @@ type publicTaskDetailRow struct {
 	QuoteExpiresAt        *time.Time
 	ReusedFromID          *uuid.UUID
 	PromptPreparationJSON *string
+	TargetContentVersion  string
 }
 
 type publicTaskRow struct {
@@ -54,6 +55,7 @@ type publicTaskRow struct {
 	CreateTime, UpdateTime                                    time.Time
 	StartedAt, FinishedAt                                     *time.Time
 	SourceJSON                                                *string
+	CanvasPromptPreview                                       string
 }
 
 func (r publicTaskRow) summary() (application.TaskSummary, error) {
@@ -61,7 +63,7 @@ func (r publicTaskRow) summary() (application.TaskSummary, error) {
 		safe := application.SafeProviderFailureCode(strings.TrimPrefix(*r.SubmitFailureCode, "provider_"), "unknown")
 		r.FailureCode = &safe
 	}
-	item := application.TaskSummary{ID: r.ID, ProjectID: r.ProjectID, BatchID: r.BatchID, Capability: r.Capability, Mode: r.Mode, ModelKey: r.ModelKey, ModelName: r.ModelName, TargetType: r.TargetType, TargetID: r.TargetID, Origin: r.Origin, Status: r.Status, QuoteMicros: r.QuoteMicros, SettledMicros: r.SettledMicros, FailureCode: r.FailureCode, Retryable: r.Retryable, CancelRequested: r.CancelRequested, CreateTime: r.CreateTime, UpdateTime: r.UpdateTime, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt}
+	item := application.TaskSummary{CanvasPromptPreview: r.CanvasPromptPreview, ID: r.ID, ProjectID: r.ProjectID, BatchID: r.BatchID, Capability: r.Capability, Mode: r.Mode, ModelKey: r.ModelKey, ModelName: r.ModelName, TargetType: r.TargetType, TargetID: r.TargetID, Origin: r.Origin, Status: r.Status, QuoteMicros: r.QuoteMicros, SettledMicros: r.SettledMicros, FailureCode: r.FailureCode, Retryable: r.Retryable, CancelRequested: r.CancelRequested, CreateTime: r.CreateTime, UpdateTime: r.UpdateTime, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt}
 	if r.SourceJSON != nil {
 		var err error
 		item.Source, err = decodeCanvasSource([]byte(*r.SourceJSON))
@@ -112,7 +114,11 @@ func (s *Store) ListPublicTasks(ctx context.Context, actor identityapp.Principal
 		if err := s.requirePublicProject(tx, actor, input.ProjectID, false); err != nil {
 			return err
 		}
-		query := publicTaskSelect + publicTaskJoin + ` WHERE o.project_id=?::uuid AND NOT o.is_delete AND ` + agentOwnerPredicate + `
+		selection := publicTaskSelect
+		if input.CanvasID != nil {
+			selection += `,(SELECT left(i.text_value,240) FROM operation.operation_input i WHERE i.operation_id=o.id AND i.role='prompt' AND NOT i.is_delete ORDER BY i.seq_no LIMIT 1) AS canvas_prompt_preview`
+		}
+		query := selection + publicTaskJoin + ` WHERE o.project_id=?::uuid AND NOT o.is_delete AND ` + agentOwnerPredicate + `
  AND (?='' OR o.status=?) AND (?='' OR o.capability=?) AND (?='' OR m.model_key=?) AND (?='' OR o.origin=?)`
 		args := []any{input.ProjectID, actor.ID, input.Status, input.Status, input.Capability, input.Capability, input.ModelKey, input.ModelKey, input.Origin, input.Origin}
 		for _, field := range []struct {
@@ -123,6 +129,9 @@ func (s *Store) ListPublicTasks(ctx context.Context, actor identityapp.Principal
 				query += ` AND o.source_context->>'` + field.name + `'=?`
 				args = append(args, field.id.String())
 			}
+		}
+		if input.CanvasID != nil && input.Status == "" {
+			query += " AND o.status NOT IN ('draft','quoted','expired')"
 		}
 		if input.After != nil {
 			query += ` AND (o.create_time,o.id)<(?,?::uuid)`
@@ -146,6 +155,31 @@ func (s *Store) ListPublicTasks(ctx context.Context, actor identityapp.Principal
 			last := page.Items[len(page.Items)-1]
 			page.Next = &application.TaskCursor{ID: last.ID, CreateTime: last.CreateTime}
 		}
+		if input.CanvasID != nil && len(page.Items) > 0 {
+			indexes := make(map[uuid.UUID]int, len(page.Items))
+			var ids []uuid.UUID
+			for i, item := range page.Items {
+				if item.Status == domain.StatusCompleted {
+					ids = append(ids, item.ID)
+					indexes[item.ID] = i
+				}
+			}
+			if len(ids) > 0 {
+				var results []struct {
+					OperationID, AssetID uuid.UUID
+					Kind                 string
+				}
+				if err := tx.Raw(`SELECT output.operation_id, asset.id AS asset_id, asset.kind
+     FROM operation.operation_output output JOIN media.media_asset asset ON asset.id=output.media_asset_id AND asset.project_id=output.project_id
+     WHERE output.operation_id IN ? AND output.project_id=? AND output.moderation_status='passed' AND NOT output.is_delete AND NOT asset.is_delete ORDER BY output.operation_id,output.seq_no`, ids, input.ProjectID).Scan(&results).Error; err != nil {
+					return fmt.Errorf("read canvas results: %w", err)
+				}
+				for _, result := range results {
+					item := &page.Items[indexes[result.OperationID]]
+					item.CanvasResults = append(item.CanvasResults, application.CanvasHistoryResult{AssetID: result.AssetID, Kind: result.Kind})
+				}
+			}
+		}
 		return nil
 	})
 	return page, err
@@ -164,7 +198,7 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		}
 		var task publicTaskDetailRow
 		row := tx.Raw(publicTaskSelect+`,o.params::text AS params,o.output_count,o.quote_detail::text AS quote_detail,
- o.quote_expires_at,o.reused_from_id,o.prompt_preparation::text AS prompt_preparation_json`+publicTaskJoin+` WHERE o.id=?::uuid AND o.project_id=?::uuid AND NOT o.is_delete AND `+agentOwnerPredicate, operationID, projectID, actor.ID).Scan(&task)
+ o.quote_expires_at,o.reused_from_id,o.prompt_preparation::text AS prompt_preparation_json, (SELECT ps.target_content_version::text FROM operation.prompt_submission ps WHERE ps.operation_id=o.id AND ps.project_id=o.project_id) AS target_content_version`+publicTaskJoin+` WHERE o.id=?::uuid AND o.project_id=?::uuid AND NOT o.is_delete AND `+agentOwnerPredicate, operationID, projectID, actor.ID).Scan(&task)
 		if row.Error != nil {
 			return fmt.Errorf("read public task: %w", row.Error)
 		}
@@ -176,6 +210,7 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		if err != nil {
 			return err
 		}
+		result.TargetContentVersion = task.TargetContentVersion
 		var editorSnapshot struct{ Snapshot, Quote []byte }
 		if err := tx.Raw(`SELECT snapshot,quote FROM operation.prompt_submission WHERE operation_id=? AND project_id=? AND actor_id=?`, operationID, projectID, actor.ID).Scan(&editorSnapshot).Error; err != nil {
 			return err

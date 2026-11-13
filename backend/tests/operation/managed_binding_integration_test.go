@@ -211,3 +211,20 @@ func TestSeedreamSharesImagesPerMinuteAcrossKeys(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, second.Claimed)
 }
+
+func TestClosedSynchronousRejectionDoesNotBlockAnotherNode(t *testing.T) {
+	db := operationStoreDB(t)
+	a, b := seedManagedFixture(t, db), seedManagedFixture(t, db)
+	require.NoError(t, db.Exec("UPDATE catalog.provider SET quota_group=?,concurrency_limit=1 WHERE id IN ?", uuid.NewString(), []uuid.UUID{a.provider, b.provider}).Error)
+	require.NoError(t, db.Exec("UPDATE catalog.model_profile_version SET supports_query=false WHERE id=?", a.identity.ModelProfileVersionID).Error)
+	_, err := a.store.ClaimProviderDispatch(t.Context(), a.identity)
+	require.NoError(t, err)
+	require.NoError(t, db.Exec("UPDATE operation.operation SET status='manual',capability='image.generate' WHERE id=?", a.identity.OperationID).Error)
+	// A missing or ambiguous receipt still consumes capacity.
+	_, err = b.store.ClaimProviderDispatch(t.Context(), b.identity)
+	require.ErrorIs(t, err, application.ErrManagedCapacity)
+	require.NoError(t, db.Exec(`UPDATE operation.provider_call SET outcome='unknown',response_summary='{"state":"unknown","failure_code":"provider_invalid_parameters"}' WHERE operation_id=? AND action='submit'`, a.identity.OperationID).Error)
+	claimed, err := b.store.ClaimProviderDispatch(t.Context(), b.identity)
+	require.NoError(t, err)
+	require.True(t, claimed.Claimed)
+}

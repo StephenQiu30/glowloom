@@ -24,27 +24,35 @@ var (
 
 // TaskSummary contains safe task facts, never raw provider receipts or credentials.
 type TaskSummary struct {
-	ID              uuid.UUID            `json:"id"`
-	ProjectID       uuid.UUID            `json:"project_id"`
-	BatchID         *uuid.UUID           `json:"batch_id" extensions:"x-nullable"`
-	Capability      string               `json:"capability"`
-	Mode            string               `json:"mode"`
-	ModelKey        string               `json:"model_key"`
-	ModelName       string               `json:"model_name"`
-	TargetType      string               `json:"target_type"`
-	TargetID        *uuid.UUID           `json:"target_id" extensions:"x-nullable"`
-	Source          *domain.CanvasSource `json:"source" extensions:"x-nullable"`
-	Origin          string               `json:"origin"`
-	Status          domain.Status        `json:"status"`
-	QuoteMicros     *int64               `json:"quote_micros" extensions:"x-nullable"`
-	SettledMicros   *int64               `json:"settled_micros" extensions:"x-nullable"`
-	FailureCode     *string              `json:"failure_code" extensions:"x-nullable"`
-	Retryable       *bool                `json:"retryable" extensions:"x-nullable"`
-	CancelRequested bool                 `json:"cancel_requested"`
-	CreateTime      time.Time            `json:"create_time"`
-	UpdateTime      time.Time            `json:"update_time"`
-	StartedAt       *time.Time           `json:"started_at" extensions:"x-nullable"`
-	FinishedAt      *time.Time           `json:"finished_at" extensions:"x-nullable"`
+	CanvasResults       []CanvasHistoryResult `json:"canvas_results,omitempty"`
+	CanvasPromptPreview string                `json:"canvas_prompt_preview,omitempty"`
+	ID                  uuid.UUID             `json:"id"`
+	ProjectID           uuid.UUID             `json:"project_id"`
+	BatchID             *uuid.UUID            `json:"batch_id" extensions:"x-nullable"`
+	Capability          string                `json:"capability"`
+	Mode                string                `json:"mode"`
+	ModelKey            string                `json:"model_key"`
+	ModelName           string                `json:"model_name"`
+	TargetType          string                `json:"target_type"`
+	TargetID            *uuid.UUID            `json:"target_id" extensions:"x-nullable"`
+	Source              *domain.CanvasSource  `json:"source" extensions:"x-nullable"`
+	Origin              string                `json:"origin"`
+	Status              domain.Status         `json:"status"`
+	QuoteMicros         *int64                `json:"quote_micros" extensions:"x-nullable"`
+	SettledMicros       *int64                `json:"settled_micros" extensions:"x-nullable"`
+	FailureCode         *string               `json:"failure_code" extensions:"x-nullable"`
+	Retryable           *bool                 `json:"retryable" extensions:"x-nullable"`
+	CancelRequested     bool                  `json:"cancel_requested"`
+	CreateTime          time.Time             `json:"create_time"`
+	UpdateTime          time.Time             `json:"update_time"`
+	StartedAt           *time.Time            `json:"started_at" extensions:"x-nullable"`
+	FinishedAt          *time.Time            `json:"finished_at" extensions:"x-nullable"`
+}
+
+// CanvasHistoryResult identifies a deliverable asset; reading bytes still requires media authorization.
+type CanvasHistoryResult struct {
+	AssetID uuid.UUID `json:"asset_id"`
+	Kind    string    `json:"kind"`
 }
 
 // TaskInput exposes only frozen prompt and project-owned media identities.
@@ -78,6 +86,7 @@ type TaskEvent struct {
 
 // TaskDetail is the persisted task snapshot used after refresh or reconnection.
 type TaskDetail struct {
+	TargetContentVersion   string                          `json:"target_content_version,omitempty"`
 	BillingOutcome         BillingOutcome                  `json:"billing_outcome"`
 	AudioSubtitle          *AudioSubtitle                  `json:"audio_subtitle,omitempty"`
 	EditorCompilerVersion  string                          `json:"editor_compiler_version,omitempty"`

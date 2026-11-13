@@ -1,3 +1,4 @@
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Toolbar } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,36 +94,74 @@ export function CanvasTopBar({
       projectID={projectID}
     />
   );
-  const secondaryActions = (
-    <>
-      <CanvasHistoryDialog>
-        <Button variant="ghost" size="toolbar-icon" aria-label="生成历史">
-          <History />
-        </Button>
-      </CanvasHistoryDialog>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="toolbar"
-            className="canvas-share-trigger"
-            aria-label="复制画布链接"
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(window.location.href)
-                .then(() => toast.success("画布链接已复制"))
-                .catch(() => toast.error("复制失败，请从浏览器地址栏复制链接"));
-            }}
-          >
-            <span className="hidden sm:inline">分享</span>
-            <Link2 className="sm:hidden" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>复制画布链接，保留现有访问权限</TooltipContent>
-      </Tooltip>
+  const groupClass =
+    "items-center gap-1 rounded-lg bg-(--canvas-toolbar) px-1.5 py-1 ring-1 ring-inset ring-border";
+  const history = (
+    <CanvasHistoryDialog
+      onLocate={
+        onFocusNode &&
+        ((id) => {
+          if (nodes?.some((n) => n.id === id)) onFocusNode(id);
+          else toast.info("原节点已删除");
+        })
+      }
+    >
       <Button
         variant="ghost"
-        size="toolbar-icon"
+        size={isMobile ? "toolbar-icon" : "icon-sm"}
+        aria-label="生成历史"
+      >
+        <History />
+      </Button>
+    </CanvasHistoryDialog>
+  );
+  const search = (
+    <CanvasNodeSearch nodes={nodes ?? []} onLocate={(id) => onFocusNode?.(id)}>
+      <Button
+        variant="ghost"
+        size={isMobile ? "toolbar-icon" : "icon-sm"}
+        aria-label="搜索画布"
+        disabled={!onFocusNode}
+      >
+        <Search />
+      </Button>
+    </CanvasNodeSearch>
+  );
+  const secondaryActions = (
+    <>
+      <div
+        className={
+          isMobile
+            ? "contents"
+            : "rounded-lg bg-(--canvas-toolbar) px-1 py-1 ring-1 ring-border ring-inset"
+        }
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size={isMobile ? "toolbar" : "sm"}
+              className="canvas-share-trigger"
+              aria-label="复制画布链接"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(window.location.href)
+                  .then(() => toast.success("画布链接已复制"))
+                  .catch(() =>
+                    toast.error("复制失败，请从浏览器地址栏复制链接"),
+                  );
+              }}
+            >
+              <Link2 />
+              <span className="hidden sm:inline">分享</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>复制画布链接，保留现有访问权限</TooltipContent>
+        </Tooltip>
+      </div>
+      <Button
+        variant="ghost"
+        size={isMobile ? "toolbar-icon" : "icon"}
         aria-label="账号设置"
         disabled={!canSwitchCanvas}
         asChild={canSwitchCanvas}
@@ -282,19 +321,14 @@ export function CanvasTopBar({
         </div>
         <div className="canvas-header-actions pointer-events-auto flex items-center gap-1">
           {!isMobile && participantsControl}
-          <CanvasNodeSearch
-            nodes={nodes ?? []}
-            onLocate={(id) => onFocusNode?.(id)}
-          >
-            <Button
-              variant="ghost"
-              size="toolbar-icon"
-              aria-label="搜索画布"
-              disabled={!onFocusNode}
-            >
-              <Search />
-            </Button>
-          </CanvasNodeSearch>
+          {isMobile ? (
+            search
+          ) : (
+            <ButtonGroup aria-label="搜索与历史" className={groupClass}>
+              {search}
+              {history}
+            </ButtonGroup>
+          )}
           {isMobile ? (
             <Popover>
               <PopoverTrigger asChild>
@@ -315,6 +349,7 @@ export function CanvasTopBar({
                 <div className="flex flex-wrap items-center gap-1">
                   {nodeSummary}
                   {participantsControl}
+                  {history}
                   {secondaryActions}
                 </div>
               </PopoverContent>

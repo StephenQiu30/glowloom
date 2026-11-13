@@ -9,7 +9,6 @@ import { replaceCanvasNodeAsset } from "./canvas-asset-replacement";
 export function canvasOperationTarget(
   client: CanvasYjsLiveSession,
   nodeID: string,
-  includeRevision = true,
 ) {
   const node = client
     .getSnapshot()
@@ -17,13 +16,15 @@ export function canvasOperationTarget(
   return canonical({
     epoch: client.getDocumentEpoch(),
     files: node?.documentData?.fileReferences ?? [],
-    content: node?.metadata?.richText ?? node?.metadata?.content,
+    content:
+      node?.type === "text"
+        ? (node.metadata?.richText ?? node.metadata?.content)
+        : undefined,
     input:
       client.getSnapshot().inputDrafts?.[nodeID]?.draft ??
       node?.serviceData?.config?.draft?.composer,
-    ...(includeRevision
-      ? { inputRevision: node?.serviceData?.input_revision }
-      : {}),
+    inputRevision: node?.serviceData?.input_revision,
+    contentVersion: node?.serviceData?.content_version,
   });
 }
 
@@ -51,11 +52,14 @@ export async function applyCanvasOperationResult(
     return node;
   };
   const before = target();
-  if (
-    expectedTarget &&
-    canvasOperationTarget(client, nodeID) !== expectedTarget
-  )
-    throw new Error("节点输入或素材已变化，结果已保留在历史记录");
+  // The server froze this version with the quote. Navigation and edits to
+  // other nodes do not invalidate it. Local uncommitted edits still win.
+  const canDeliver = () =>
+    !!task.target_content_version &&
+    task.target_content_version === before.serviceData?.content_version &&
+    !client.getSnapshot().inputDrafts?.[nodeID] &&
+    (!expectedTarget ||
+      canvasOperationTarget(client, nodeID) === expectedTarget);
   const identity = () => canvasOperationTarget(client, nodeID);
   const original = identity();
   const write = async (node: CanvasNodeData) => {
@@ -69,10 +73,8 @@ export async function applyCanvasOperationResult(
     if (!client.canAccept(next))
       throw new Error("画布当前不可编辑，结果已保留在历史记录");
     client.change(next, true);
-    const expected = canvasOperationTarget(client, nodeID, false);
     await client.waitForSaved(() => {
-      target();
-      if (canvasOperationTarget(client, nodeID, false) !== expected)
+      if (!sameResult(target(), node))
         throw new Error("节点结果再次变化，请查看历史记录");
     });
   };
@@ -84,9 +86,14 @@ export async function applyCanvasOperationResult(
         item.text,
     );
     if (!output?.text) throw new Error("生成结果尚不可用");
-    if (before.metadata?.content === output.text) return;
-    if (!expectedTarget)
-      throw new Error("节点输入已变化，结果已保留在历史记录");
+    if (before.metadata?.content === output.text) {
+      await client.waitForSaved(() => {
+        if (target().metadata?.content !== output.text)
+          throw new Error("节点内容已变化");
+      });
+      return;
+    }
+    if (!canDeliver()) return "superseded";
     await write({
       ...before,
       metadata: {
@@ -117,10 +124,13 @@ export async function applyCanvasOperationResult(
     outputs.every(
       (output, index) => references[index].fileId === output.media_asset_id,
     )
-  )
+  ) {
+    await client.waitForSaved(() => {
+      if (!sameResult(target(), before)) throw new Error("节点素材已变化");
+    });
     return;
-  if (!expectedTarget && references.length)
-    throw new Error("节点素材已变化，结果已保留在历史记录");
+  }
+  if (!canDeliver()) return "superseded";
   const previews = await Promise.all(
     outputs.map(async (output) => {
       const preview = await getMediaPreview({
@@ -228,4 +238,15 @@ export async function applyCanvasOperationResult(
       };
   }
   await write(node);
+}
+
+function sameResult(node: CanvasNodeData, expected: CanvasNodeData) {
+  if (node.type !== expected.type) return false;
+  if (node.type === "text")
+    return node.metadata?.content === expected.metadata?.content;
+  const files = (item: CanvasNodeData) =>
+    (item.documentData?.fileReferences ?? [])
+      .filter((file) => file.purpose === "CONTENT")
+      .map(({ fileId, version }) => [fileId, version]);
+  return canonical(files(node)) === canonical(files(expected));
 }

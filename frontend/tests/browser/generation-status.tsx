@@ -40,6 +40,7 @@ installDevelopmentTransport({
       return {
         id: oid,
         project_id: pid,
+        target_content_version: "1",
         status,
         source: { canvas_id: cid, node_id: nid },
         outputs:
@@ -87,6 +88,7 @@ const initial = serviceGraph(
         id: nid,
         node_type: kind,
         node_action: "resource",
+        content_version: "1",
         title: { image: "图片素材", video: "视频素材", audio: "音频素材" }[
           kind
         ],

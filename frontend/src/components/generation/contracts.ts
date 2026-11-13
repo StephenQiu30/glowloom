@@ -6,17 +6,30 @@ export const taskLabels: Record<string, string> = {
   confirmed: "等待生成",
   submitting: "正在提交",
   submitted: "正在生成",
-  succeeded: "生成成功，准备结果",
-  ingesting: "正在保存结果",
+  succeeded: "正在生成",
+  ingesting: "正在生成",
   completed: "已完成",
   failed: "生成失败",
-  unknown: "结果待确认",
-  reconciling: "正在核对结果",
-  manual: "需要人工处理",
+  unknown: "结果更新中",
+  reconciling: "结果更新中",
+  manual: "暂未返回结果",
   cancelling: "正在取消",
   cancelled: "已取消",
   expired: "报价已过期",
 };
+// Provider billing can remain unresolved after a generation request was rejected.
+export function generationStatusLabel(
+  task: Pick<API.TaskSummary, "status" | "failure_code">,
+) {
+  if (
+    ["manual", "unknown", "reconciling"].includes(task.status ?? "") &&
+    ["provider_invalid_parameters", "provider_not_found"].includes(
+      task.failure_code ?? "",
+    )
+  )
+    return "生成失败";
+  return taskLabels[task.status ?? ""];
+}
 export const activeTask = (s?: string) =>
   !!s &&
   [

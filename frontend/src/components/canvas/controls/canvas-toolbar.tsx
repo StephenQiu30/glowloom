@@ -258,7 +258,7 @@ export function CanvasToolbar({
             <PopoverTrigger asChild>
               <Button
                 variant="ghost"
-                size="toolbar-icon"
+                size={isMobile ? "toolbar-icon" : "icon"}
                 className="canvas-more-trigger"
                 aria-label="更多画布操作"
                 title="更多画布操作"

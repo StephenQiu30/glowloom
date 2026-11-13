@@ -116,7 +116,8 @@ func TestManagedTaskPollDeadlineEntersReconciliation(t *testing.T) {
 	s.loaded.ProviderTaskID = &id
 	at := time.Now().Add(-time.Hour)
 	s.loaded.Operation.ConfirmedAt = &at
-	p := &managedProbe{result: application.ManagedProgress{State: application.ManagedProgressPending}}
+	s.evidence.DispatchStartedAt = &at
+	p := &managedProbe{result: application.ManagedProgress{State: application.ManagedProgressUnknown}}
 	h := s.handlers()
 	task.RegisterProvider(h, s, p)
 	_, err := h["operation.provider"](t.Context(), taskruntime.Job{BusinessID: s.loaded.Operation.ID.String()})
@@ -124,4 +125,22 @@ func TestManagedTaskPollDeadlineEntersReconciliation(t *testing.T) {
 	require.Equal(t, domain.StatusReconciling, s.loaded.Operation.Status)
 	require.Equal(t, []string{"query"}, p.steps)
 	require.Empty(t, s.settled)
+}
+
+func TestManagedQueueWaitDoesNotConsumeProviderExecutionTime(t *testing.T) {
+	s := newStateStore()
+	s.loaded.Operation.Status = domain.StatusSubmitted
+	s.loaded.Provider.AdapterKey = "volcengine_ark"
+	id := "accepted-video"
+	s.loaded.ProviderTaskID = &id
+	queued, sent := time.Now().Add(-4*time.Hour), time.Now().Add(-time.Second)
+	s.loaded.Operation.ConfirmedAt, s.evidence.DispatchStartedAt = &queued, &sent
+	p := &managedProbe{result: application.ManagedProgress{State: application.ManagedProgressRunning}}
+	h := s.handlers()
+	task.RegisterProvider(h, s, p)
+	next, err := h["operation.provider"](t.Context(), taskruntime.Job{BusinessID: s.loaded.Operation.ID.String()})
+	require.NoError(t, err)
+	require.Equal(t, domain.StatusSubmitted, s.loaded.Operation.Status)
+	require.True(t, next.After(time.Now()))
+	require.Equal(t, []string{"query"}, p.steps)
 }

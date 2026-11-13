@@ -14,6 +14,7 @@ import (
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
@@ -102,6 +103,15 @@ func recordEditorSubmission(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, s
 	}
 	result.CompilerVersion = promptdomain.CompilerVersion
 	result.ReferenceMapping = compiled.Mapping
+	var targetContentVersion *int64
+	if source.Kind == "canvas_input" {
+		// ReadInput holds the node lock until this quote transaction commits.
+		var version int64
+		if err := tx.Raw(`SELECT content_version FROM canvas.node WHERE document_id=? AND id=? AND NOT is_delete`, source.CanvasID, source.NodeID).Row().Scan(&version); err != nil {
+			return fmt.Errorf("freeze canvas result target: %w", err)
+		}
+		targetContentVersion = &version
+	}
 	rawSource, err := json.Marshal(source)
 	if err != nil {
 		return err
@@ -114,7 +124,7 @@ func recordEditorSubmission(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, s
 	if err != nil {
 		return err
 	}
-	if err := tx.Exec(`INSERT INTO operation.prompt_submission(id,actor_id,project_id,owner_key,epoch,operation_id,confirm_key,input_source,snapshot,quote,state) VALUES(?,?,?,?,?,?,?,?::jsonb,?::jsonb,?::jsonb,'quoted')`, id, a.ID, p, source.OwnerKey(), epoch+1, result.OperationID, key, string(rawSource), string(rawDraft), string(rawQuote)).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO operation.prompt_submission(id,actor_id,project_id,owner_key,epoch,operation_id,confirm_key,input_source,snapshot,quote,state,target_content_version) VALUES(?,?,?,?,?,?,?,?::jsonb,?::jsonb,?::jsonb,'quoted',?)`, id, a.ID, p, source.OwnerKey(), epoch+1, result.OperationID, key, string(rawSource), string(rawDraft), string(rawQuote), targetContentVersion).Error; err != nil {
 		return err
 	}
 	return tx.Exec(`UPDATE operation.prompt_submission_slot SET epoch=?,submission_id=? WHERE actor_id=? AND project_id=? AND owner_key=?`, epoch+1, id, a.ID, p, source.OwnerKey()).Error
@@ -165,6 +175,9 @@ func compileEditorInput(tx *gorm.DB, input application.CreateFreeQuoteInput, d p
 		return input, err
 	}
 	prepared := application.FreeQuoteItemInput{ModelKey: model.ModelKey, Capability: model.Capability, Mode: *d.Mode, Prompt: compiled.Prompt, Params: raw, OutputCount: int32(count), ForceRegenerate: input.ForceRegenerate}
+	if source := input.InputSource; source.Kind == "canvas_input" {
+		prepared.Source = &domain.CanvasSource{CanvasID: source.CanvasID, NodeID: source.NodeID, Revision: source.CanvasRevision}
+	}
 	for _, m := range compiled.Media {
 		id, err := uuid.Parse(m.SourceID)
 		if err != nil {

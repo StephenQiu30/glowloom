@@ -16,6 +16,7 @@ const task: Task = {
   id: "55555555-5555-4555-8555-555555555555",
   project_id: pid,
   status: "completed",
+  target_content_version: "5",
   source: { canvas_id: cid, node_id: nid },
   outputs: [
     { kind: "image", moderation_status: "passed", media_asset_id: aid },
@@ -46,7 +47,7 @@ function setup(existing = false) {
                 ]
               : [],
           },
-          serviceData: { input_revision: 2 },
+          serviceData: { input_revision: 2, content_version: "5" },
         } as CanvasNodeData,
       ],
       connections: [],
@@ -99,8 +100,12 @@ it("已审核结果直接写回原节点，并采用结果宽高比", async () =
 it("本次提交可替换已有结果，刷新恢复的任务不会覆盖现有素材", async () => {
   const { client, change } = setup(true);
   await expect(
-    applyCanvasOperationResult(client, pid, cid, nid, task),
-  ).rejects.toThrow("素材已变化");
+    applyCanvasOperationResult(client, pid, cid, nid, {
+      ...task,
+      target_content_version: "4",
+    }),
+  ).resolves.toBe("superseded");
+  expect(change).not.toHaveBeenCalled();
   await applyCanvasOperationResult(
     client,
     pid,
@@ -132,7 +137,14 @@ it.each(["输入", "素材", "删除", "只读"])(
     if (kind === "输入")
       state.document.nodes[0].serviceData!.input_revision = 3;
     if (kind === "素材")
-      state.document.nodes[0].metadata = { content: "changed" };
+      state.document.nodes[0].documentData!.fileReferences = [
+        {
+          purpose: "CONTENT",
+          fileId: "changed",
+          version: "2",
+          referenceKey: "new",
+        },
+      ];
     if (kind === "删除") state.document.nodes = [];
     if (kind === "只读") state.writable = false;
     done({

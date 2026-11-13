@@ -289,20 +289,16 @@ function CollaborativeEditor({
   }, [view.dirty]);
   const completeOperation = useCallback(
     async (nodeID: string, operationID: string, task: Task) => {
-      try {
-        await applyCanvasOperationResult(
-          client,
-          projectID,
-          canvasID,
-          nodeID,
-          task,
-          operationTargets.current.get(operationID),
-        );
-      } catch (cause) {
-        toast.error(
-          cause instanceof Error ? cause.message : "生成结果暂时无法显示",
-        );
-      }
+      const outcome = await applyCanvasOperationResult(
+        client,
+        projectID,
+        canvasID,
+        nodeID,
+        task,
+        operationTargets.current.get(operationID),
+      );
+      if (outcome === "superseded")
+        toast.info("节点内容已变化，生成结果已保留在历史中");
       operationTargets.current.delete(operationID);
       completeTask(nodeID, operationID);
     },
@@ -402,6 +398,7 @@ function CollaborativeEditor({
                   operationID={operations.tasks[nodeID]}
                   identity={`${actorID}/${scopeID}`}
                   frozen={!view.writable || view.migration}
+                  onStopped={operations.refresh}
                   onCompleted={completeOperation}
                 />
               ) : null,

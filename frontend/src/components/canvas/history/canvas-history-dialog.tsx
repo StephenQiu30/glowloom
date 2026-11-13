@@ -1,38 +1,51 @@
 "use client";
-import { ContentState } from "@/components/layout/content-state";
-import { readErrorMessage } from "@/lib/read-error";
 
-import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { useContext, useState, type ReactNode } from "react";
+import useSWRInfinite from "swr/infinite";
+import { ChevronDown } from "lucide-react";
 import { listProjectOperations } from "@/api/operations";
-import { requireTask, taskLabels } from "@/components/generation/contracts";
-import { TaskDetail } from "@/components/generation/generation-dialog";
-import { CanvasMediaContext } from "../lib/canvas-media-context";
-import { isProjectID } from "@/components/projects/project";
+import {
+  activeTask,
+  generationStatusLabel,
+  requireTask,
+} from "@/components/generation/contracts";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { ContentState } from "@/components/layout/content-state";
+import { ProjectMediaPreview } from "@/components/media/project-media";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CanvasMediaContext } from "../lib/canvas-media-context";
 
-const labels = {
+const categories = {
   all: "全部",
   image: "图片",
   video: "视频",
   audio: "音频",
-  text: "文字",
-};
-type Modality = keyof typeof labels;
+} as const;
+type Category = keyof typeof categories;
+const time = new Intl.DateTimeFormat("zh-CN", {
+  hour: "2-digit",
+  minute: "2-digit",
+});
+type Locate = (nodeID: string) => void;
 
-export function CanvasHistoryDialog({ children }: { children: ReactNode }) {
+export function CanvasHistoryDialog({
+  children,
+  onLocate,
+}: {
+  children: ReactNode;
+  onLocate?: Locate;
+}) {
   const [open, setOpen] = useState(false);
   const context = useContext(CanvasMediaContext);
   return (
@@ -40,232 +53,240 @@ export function CanvasHistoryDialog({ children }: { children: ReactNode }) {
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
         align="end"
-        side="bottom"
-        sideOffset={12}
-        className="w-[440px] max-w-[calc(100dvw-2rem)] p-4"
+        sideOffset={8}
         aria-label="生成历史"
+        className="w-sm max-w-[calc(100dvw-2rem)] p-3"
         data-canvas-no-zoom
         data-canvas-shortcuts-ignore
       >
         {open &&
-          (context &&
-          isProjectID(context.projectId) &&
-          isProjectID(String(context.canvasId)) ? (
-            <HistoryContent
-              key={`${context.projectId}/${context.canvasId}`}
+          (context?.projectId && context.canvasId ? (
+            <History
+              key={context.projectId + context.canvasId}
               projectID={context.projectId}
               canvasID={String(context.canvasId)}
-              close={() => setOpen(false)}
+              onLocate={
+                onLocate &&
+                ((id) => {
+                  onLocate(id);
+                  setOpen(false);
+                })
+              }
             />
           ) : (
-            <ContentState
-              className="min-h-40"
-              state="error"
-              title="无法读取生成历史"
-              description="请重新打开画布后重试。"
-            />
+            <FeedbackToast message="无法读取生成历史" />
           ))}
       </PopoverContent>
     </Popover>
   );
 }
-
-function HistoryContent({
+function History({
   projectID,
   canvasID,
-  close,
+  onLocate,
 }: {
   projectID: string;
   canvasID: string;
-  close: () => void;
+  onLocate?: Locate;
 }) {
-  const [modality, setModality] = useState<Modality>("all");
-  const [selected, setSelected] = useState<API.TaskSummary | null>(null);
+  const [category, setCategory] = useState<Category>("all");
   return (
     <>
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium">生成历史</h2>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="关闭生成历史"
-          onClick={close}
-        >
-          <X />
-        </Button>
-      </div>
-      <Tabs
-        value={modality}
-        onValueChange={(value) => setModality(value as Modality)}
-      >
+      <h2 className="mb-2 text-sm font-medium">生成历史</h2>
+      <Tabs value={category} onValueChange={(v) => setCategory(v as Category)}>
         <TabsList aria-label="生成历史类型">
-          {(Object.keys(labels) as Modality[]).map((kind) => (
-            <TabsTrigger key={kind} value={kind}>
-              {labels[kind]}
+          {(Object.keys(categories) as Category[]).map((k) => (
+            <TabsTrigger key={k} value={k}>
+              {categories[k]}
             </TabsTrigger>
           ))}
         </TabsList>
+        <TabsContent value={category}>
+          <HistoryList
+            key={category}
+            {...{ projectID, canvasID, category, onLocate }}
+          />
+        </TabsContent>
       </Tabs>
-      <HistoryList
-        key={`${projectID}/${canvasID}/${modality}`}
-        projectID={projectID}
-        canvasID={canvasID}
-        modality={modality}
-        onSelect={setSelected}
-      />
-      <Dialog
-        open={!!selected}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null);
-        }}
-      >
-        <DialogContent className="max-h-dialog overflow-auto sm:max-w-2xl">
-          <DialogTitle>生成记录</DialogTitle>
-          <DialogDescription>
-            {selected?.model_name || "任务详情"}
-          </DialogDescription>
-          {selected?.id && (
-            <TaskDetail
-              key={selected.id}
-              projectID={projectID}
-              id={selected.id}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
-
 function HistoryList({
   projectID,
   canvasID,
-  modality,
-  onSelect,
+  category,
+  onLocate,
 }: {
   projectID: string;
   canvasID: string;
-  modality: Modality;
-  onSelect: (task: API.TaskSummary) => void;
+  category: Category;
+  onLocate?: Locate;
 }) {
-  const [items, setItems] = useState<API.TaskSummary[]>([]);
-  const [cursor, setCursor] = useState<string>();
-  const [pending, setPending] = useState(true);
-  const [error, setError] = useState("");
-  const request = useRef<AbortController | null>(null);
-  const requestedCursor = useRef<string | undefined>(undefined);
-  async function load(next?: string) {
-    request.current?.abort();
-    const controller = new AbortController();
-    request.current = controller;
-    requestedCursor.current = next;
-    setPending(true);
-    setError("");
-    try {
-      const page = await listProjectOperations(
-        {
-          pid: projectID,
-          canvas_id: canvasID,
-          capability: modality === "all" ? undefined : `${modality}.generate`,
-          cursor: next,
-          limit: 30,
-        },
-        { signal: controller.signal },
-      );
+  const query = useSWRInfinite<API.TaskPageResponse>(
+    (index, previous) =>
+      index && !previous?.next_cursor
+        ? null
+        : [
+            "canvas-generation-history",
+            projectID,
+            canvasID,
+            category,
+            previous?.next_cursor ?? "",
+          ],
+    async ([, project, canvas, kind, cursor]: [
+      string,
+      string,
+      string,
+      Category,
+      string,
+    ]) => {
+      const page = await listProjectOperations({
+        pid: project,
+        canvas_id: canvas,
+        capability: kind === "all" ? undefined : kind + ".generate",
+        cursor: cursor || undefined,
+        limit: 30,
+      });
       if (
         !Array.isArray(page.items) ||
-        (page.next_cursor != null && typeof page.next_cursor !== "string") ||
-        (next && page.next_cursor === next)
+        (page.next_cursor != null &&
+          (typeof page.next_cursor !== "string" || page.next_cursor === cursor))
       )
-        throw new Error("生成历史返回无效分页");
-      page.items.forEach((item) => requireTask(item, projectID));
-      if (controller.signal.aborted) return;
-      setItems((previous) => [
-        ...new Map(
-          [...(next ? previous : []), ...page.items!].map((item) => [
-            item.id,
-            item,
-          ]),
-        ).values(),
-      ]);
-      setCursor(page.next_cursor || undefined);
-    } catch (cause) {
-      if (!controller.signal.aborted) setError(readErrorMessage(cause));
-    } finally {
-      if (!controller.signal.aborted) setPending(false);
-    }
-  }
-  useEffect(() => {
-    let active = true;
-    queueMicrotask(() => {
-      if (active) void load();
-    });
-    return () => {
-      active = false;
-      request.current?.abort();
-    };
-    // The list remounts for every project, canvas and modality.
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        throw Error("生成历史暂时无法读取");
+      for (const item of page.items) {
+        requireTask(item, project);
+        if (item.source?.canvas_id !== canvas)
+          throw Error("生成历史来源不匹配");
+      }
+      return page;
+    },
+    {
+      shouldRetryOnError: false,
+      refreshInterval: (pages) =>
+        pages?.some((p) =>
+          p.items?.some(
+            (t) =>
+              activeTask(t.status) ||
+              (t.status === "manual" && !t.failure_code),
+          ),
+        )
+          ? 10000
+          : 0,
+    },
+  );
+  const items = [
+    ...new Map(
+      (query.data ?? []).flatMap((p) =>
+        (p.items ?? []).map((t) => [t.id, t] as const),
+      ),
+    ).values(),
+  ];
   return (
-    <div className="mt-3 flex min-h-40 flex-col gap-3">
-      <div
-        className="max-h-[min(24rem,50dvh)] overflow-auto"
-        data-canvas-wheel-scroll
-      >
-        {pending && (
-          <ContentState
-            className="min-h-40"
-            state="loading"
-            title="正在读取历史"
-          />
-        )}
-        {error && (
-          <ContentState
-            className="min-h-40"
-            state="error"
-            title="生成历史暂时无法读取"
-            description={error}
-          />
-        )}
-        {!pending && !error && !items.length && (
-          <ContentState className="min-h-40" title="暂无生成历史" />
-        )}
+    <div
+      className="max-h-[min(60dvh,var(--radix-popover-content-available-height))] overflow-y-auto"
+      data-canvas-wheel-scroll
+    >
+      {query.error && (
+        <FeedbackToast
+          message="生成历史暂时无法读取"
+          action={{ label: "重新读取", onClick: () => void query.mutate() }}
+        />
+      )}
+      {query.isLoading && <ContentState state="loading" title="正在读取历史" />}
+      {!query.isLoading && !query.error && !items.length && (
+        <ContentState title="暂无生成历史" />
+      )}
+      <ul aria-label="生成记录" className="divide-y divide-border">
         {items.map((item) => (
-          <Button
-            key={item.id}
-            variant="ghost"
-            className="h-auto w-full justify-between gap-4 py-3 text-left"
-            onClick={() => onSelect(item)}
-          >
-            <span className="min-w-0 truncate">
-              {item.model_name || "生成任务"}
-            </span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {taskLabels[item.status!]}
-            </span>
-          </Button>
+          <li key={item.id}>
+            <HistoryItem
+              item={item}
+              projectID={projectID}
+              onLocate={onLocate}
+            />
+          </li>
         ))}
-      </div>
-      <div className="mt-auto flex justify-end gap-2">
-        {cursor && (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={pending}
-            onClick={() => void load(cursor)}
-          >
-            更多记录
-          </Button>
-        )}
+      </ul>
+      {query.data?.at(-1)?.next_cursor && (
         <Button
           variant="ghost"
           size="sm"
-          disabled={pending}
-          onClick={() => void load(error ? requestedCursor.current : undefined)}
+          disabled={query.isValidating}
+          onClick={() => void query.setSize(query.size + 1)}
         >
-          {error ? "重新读取" : "刷新"}
+          更多记录
         </Button>
-      </div>
+      )}
     </div>
+  );
+}
+function HistoryItem({
+  item,
+  projectID,
+  onLocate,
+}: {
+  item: API.TaskSummary;
+  projectID: string;
+  onLocate?: Locate;
+}) {
+  const date = item.create_time && new Date(item.create_time);
+  const results = item.canvas_results ?? [];
+  const nodeID = item.source?.node_id;
+  return (
+    <article className="grid gap-2 py-2">
+      <Collapsible>
+        <header className="flex items-center justify-between gap-2">
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-w-0 px-1"
+              aria-label={`${item.model_name || "生成任务"}详情`}
+            >
+              <span className="truncate">{item.model_name || "生成任务"}</span>
+              <ChevronDown />
+            </Button>
+          </CollapsibleTrigger>
+          {date && Number.isFinite(date.getTime()) && (
+            <time
+              className="text-xs text-muted-foreground"
+              dateTime={item.create_time}
+              title={date.toLocaleString("zh-CN")}
+            >
+              {time.format(date)}
+            </time>
+          )}
+        </header>
+        <CollapsibleContent className="px-1 text-xs break-words whitespace-pre-wrap text-muted-foreground">
+          {item.canvas_prompt_preview || generationStatusLabel(item)}
+        </CollapsibleContent>
+      </Collapsible>
+      {results.length ? (
+        <div className="grid grid-cols-3 gap-1.5">
+          {results.map((out, i) => (
+            <Button
+              key={out.asset_id + ":" + i}
+              variant="ghost"
+              disabled={!onLocate || !nodeID}
+              onClick={() => nodeID && onLocate?.(nodeID)}
+              aria-label={`定位${item.model_name ?? ""}结果 ${i + 1} 的节点`}
+              className="relative aspect-square h-auto overflow-hidden bg-muted p-0"
+            >
+              <ProjectMediaPreview
+                projectID={projectID}
+                id={out.asset_id!}
+                kind={out.kind}
+                compact
+                interactive={false}
+              />
+            </Button>
+          ))}
+        </div>
+      ) : (
+        <span className="px-1 text-xs text-muted-foreground">
+          {generationStatusLabel(item)}
+        </span>
+      )}
+    </article>
   );
 }

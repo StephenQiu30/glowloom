@@ -9,7 +9,7 @@ import {
   Video,
 } from "lucide-react";
 import { ProjectMediaPreview } from "@/components/media/project-media";
-import { taskLabels } from "@/components/generation/contracts";
+import { generationStatusLabel } from "@/components/generation/contracts";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -106,7 +106,7 @@ export function HistoryResultCard({
           {title}
         </span>
         <span className="w-full truncate text-xs text-muted-foreground">
-          {[taskLabels[card.task.status], metadata].filter(Boolean).join(" · ")}
+          {[generationStatusLabel(card.task), metadata].filter(Boolean).join(" · ")}
         </span>
         <span className="w-full truncate text-xs text-muted-foreground">
           {new Date(card.task.create_time).toLocaleString("zh-CN")}

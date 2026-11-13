@@ -642,6 +642,11 @@ declare namespace API {
     prompt?: string;
   };
 
+  type CanvasHistoryResult = {
+    asset_id?: string;
+    kind?: string;
+  };
+
   type CanvasInformation = {
     created_at?: string;
     id?: string;
@@ -4264,6 +4269,8 @@ declare namespace API {
   type PersonalHistoryItem = {
     batch_id?: string | null;
     cancel_requested?: boolean;
+    canvas_prompt_preview?: string;
+    canvas_results?: CanvasHistoryResult[];
     capability?: string;
     create_time?: string;
     failure_code?: string | null;
@@ -6721,6 +6728,8 @@ declare namespace API {
     batch_id?: string | null;
     billing_outcome?: BillingOutcome;
     cancel_requested?: boolean;
+    canvas_prompt_preview?: string;
+    canvas_results?: CanvasHistoryResult[];
     capability?: string;
     create_time?: string;
     editor_compiler_version?: string;
@@ -6749,6 +6758,7 @@ declare namespace API {
     source?: CanvasSource | null;
     started_at?: string | null;
     status?: OperationStatus;
+    target_content_version?: string;
     target_id?: string | null;
     target_type?: string;
     update_time?: string;
@@ -6788,6 +6798,8 @@ declare namespace API {
   type TaskSummary = {
     batch_id?: string | null;
     cancel_requested?: boolean;
+    canvas_prompt_preview?: string;
+    canvas_results?: CanvasHistoryResult[];
     capability?: string;
     create_time?: string;
     failure_code?: string | null;

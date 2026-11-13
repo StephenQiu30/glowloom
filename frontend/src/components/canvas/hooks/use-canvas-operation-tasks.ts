@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import useSWR from "swr";
 import { listProjectOperations } from "@/api/operations";
 import { requireTask } from "@/components/generation/contracts";
@@ -16,9 +16,12 @@ export function useCanvasOperationTasks({
   canvasID: string;
   identity: string;
 }) {
+  const delivered = useRef(new Map<string, string>());
+  const awaitingReceipt = useRef(false);
   const query = useSWR(
     ["canvas-operation-tasks", identity, projectID, canvasID],
     async () => {
+      let unresolved = false;
       const tasks: Record<string, string> = {};
       const seenNodes = new Set<string>();
       const cursors = new Set<string>();
@@ -37,11 +40,22 @@ export function useCanvasOperationTasks({
           const source = task.source;
           if (source?.canvas_id !== canvasID || !source.node_id)
             throw new RequestError("invalid_receipt");
+          if (task.status === "manual" && !task.failure_code) unresolved = true;
+          if (
+            source.row_id ||
+            [
+              "draft",
+              "quoted",
+              "expired",
+              "manual",
+              "failed",
+              "cancelled",
+            ].includes(task.status)
+          )
+            continue;
           if (seenNodes.has(source.node_id)) continue;
           seenNodes.add(source.node_id);
-          if (
-            !["draft", "quoted", "expired", "completed"].includes(task.status)
-          )
+          if (delivered.current.get(source.node_id) !== task.id)
             tasks[source.node_id] = task.id;
         }
         if (
@@ -53,9 +67,13 @@ export function useCanvasOperationTasks({
         cursor = page.next_cursor || undefined;
         if (cursor) cursors.add(cursor);
       } while (cursor);
+      awaitingReceipt.current = unresolved;
       return tasks;
     },
-    { shouldRetryOnError: false },
+    {
+      shouldRetryOnError: false,
+      refreshInterval: () => (awaitingReceipt.current ? 15000 : 0),
+    },
   );
   const { mutate } = query;
   const register = useCallback(
@@ -65,13 +83,17 @@ export function useCanvasOperationTasks({
           previous?.[nodeID] === operationID
             ? previous
             : { ...previous, [nodeID]: operationID },
-        { revalidate: false },
+        { revalidate: true },
       );
     },
     [mutate],
   );
+  const refresh = useCallback(() => {
+    void mutate();
+  }, [mutate]);
   const complete = useCallback(
     (nodeID: string, operationID: string) => {
+      delivered.current.set(nodeID, operationID);
       void mutate(
         (previous) => {
           if (previous?.[nodeID] !== operationID) return previous;
@@ -91,5 +113,5 @@ export function useCanvasOperationTasks({
         action: { label: "重试", onClick: () => void mutate() },
       });
   }, [query.error, identity, canvasID, mutate]);
-  return { tasks: query.data ?? {}, register, complete };
+  return { tasks: query.data ?? {}, register, complete, refresh };
 }

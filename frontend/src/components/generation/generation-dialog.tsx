@@ -42,7 +42,7 @@ import {
   activeTask,
   flowError,
   requireTask,
-  taskLabels,
+  generationStatusLabel,
   type Task,
 } from "./contracts";
 export type GenerationSeed = {
@@ -292,7 +292,7 @@ function TaskHistory({
                 onClick={() => setSelected(t.id!)}
               >
                 <span>
-                  {t.model_name} · {taskLabels[t.status!]}
+                  {t.model_name} · {generationStatusLabel(t)}
                 </span>
                 <small>
                   {new Date(t.create_time!).toLocaleString("zh-CN")}
@@ -669,7 +669,7 @@ function ScopedTaskDetail({
       error ||
       (task &&
       ["unknown", "manual", "failed", "cancelled"].includes(task.status)
-        ? taskLabels[task.status]
+        ? generationStatusLabel(task)
         : "");
     const recoverable = task?.billing_outcome?.delivery_state === "recoverable";
     return (
@@ -769,7 +769,7 @@ function ScopedTaskDetail({
         <div className="flex items-center gap-3">
           <h3>
             {task
-              ? taskLabels[task.status]
+              ? generationStatusLabel(task)
               : presentation === "asset" && error
                 ? "生成记录"
                 : "读取任务…"}

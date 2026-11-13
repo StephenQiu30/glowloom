@@ -2497,6 +2497,8 @@ CREATE TABLE operation.prompt_submission (
     operation_id uuid NOT NULL,
     confirm_key uuid NOT NULL,
     input_source jsonb NOT NULL,
+    target_content_version bigint,
+    CONSTRAINT ck_submission_result_target CHECK ((target_content_version IS NOT NULL) = (input_source->>'kind' IS NOT DISTINCT FROM 'canvas_input') AND target_content_version > 0),
     snapshot jsonb NOT NULL,
     quote jsonb NOT NULL,
     state text NOT NULL,
