@@ -197,6 +197,20 @@ declare namespace API {
     tool_steps?: number;
   };
 
+  type AnalyticsCapability = {
+    key: string;
+    reason: string;
+    status: string;
+  };
+
+  type AnalyticsCoverage = {
+    capabilities: AnalyticsCapability[];
+    max_operations: number;
+    source: string;
+    status: string;
+    truncated: boolean;
+  };
+
   type appendCanvasAssistantTurnParams = {
     /** 画布UUID */
     id: string;
@@ -539,6 +553,17 @@ declare namespace API {
     id: string;
   };
 
+  type Business = {
+    as_of: string;
+    capabilities: AnalyticsCapability[];
+    cost_micros: string | null;
+    profit_micros: string | null;
+    reason: string;
+    refund_micros: string | null;
+    revenue_micros: string | null;
+    status: string;
+  };
+
   type cancelAiTrialParams = {
     /** Trial request ID */
     id: string;
@@ -678,12 +703,7 @@ declare namespace API {
   };
 
   type Capabilities = {
-    intelligent_voice?: Capability;
-  };
-
-  type Capability = {
-    available?: boolean;
-    reason?: string;
+    intelligent_voice?: SubjectCapability;
   };
 
   type CapabilityDefault = {
@@ -983,6 +1003,11 @@ declare namespace API {
     request_receipt?: AppliedReceipt;
   };
 
+  type Count = {
+    key: string;
+    operations: number;
+  };
+
   type createAgentRunParams = {
     /** 项目UUID */
     pid: string;
@@ -1232,6 +1257,31 @@ declare namespace API {
     voice_key?: string;
   };
 
+  type Creation = {
+    accepted_operations: number;
+    as_of: string;
+    attempts: number;
+    cancelled_operations: number;
+    completed_operations: number;
+    cost_micros: string | null;
+    coverage: AnalyticsCoverage;
+    daily: Day[];
+    entries: Count[];
+    failed_operations: number;
+    from: string;
+    models: ModelCount[];
+    outputs: number;
+    partial_operations: number;
+    profit_micros: string | null;
+    revenue_micros: string | null;
+    scope: string;
+    statuses: Count[];
+    terminal_success_rate: number | null;
+    timezone: string;
+    to: string;
+    unknown_operations: number;
+  };
+
   type CredentialField = {
     name?: string;
     required?: boolean;
@@ -1304,6 +1354,15 @@ declare namespace API {
     operation?: string;
     revision?: number;
     update_time?: string;
+  };
+
+  type Day = {
+    accepted: number;
+    cancelled: number;
+    completed: number;
+    date: string;
+    failed: number;
+    unknown: number;
   };
 
   type Decision = {
@@ -1564,6 +1623,24 @@ declare namespace API {
     | "failed"
     | "cancel_requested"
     | "cancelled";
+
+  type DiagnosticRecord = {
+    elapsed_ms: number;
+    error_class?: string;
+    event: string;
+    id: string;
+    level: string;
+    method: string;
+    panic: boolean;
+    release: string;
+    request_id: string;
+    role: string;
+    route: string;
+    service: string;
+    status: number;
+    timestamp: string;
+    trace_id?: string;
+  };
 
   type DialogueKind = "dialogue" | "voiceover" | "inner";
 
@@ -2398,6 +2475,21 @@ declare namespace API {
     target_id: string;
   };
 
+  type getCreationAnalyticsParams = {
+    /** personal (default) or platform; current platform permission required */
+    scope?: string;
+    /** Inclusive RFC3339 accepted-operation time, default last 7d */
+    from?: string;
+    /** Exclusive RFC3339 accepted-operation time, maximum range 31d */
+    to?: string;
+    /** Exact accessible project UUID */
+    project_id?: string;
+    /** Immutable model profile version UUID */
+    model_id?: string;
+    /** canvas, agent, pipeline, batch or system */
+    origin?: string;
+  };
+
   type getCreditWalletParams = {
     /** 上一页的游标 */
     cursor?: string;
@@ -2408,6 +2500,26 @@ declare namespace API {
     pid: string;
     /** 会话UUID */
     sid: string;
+  };
+
+  type getDiagnosticLogParams = {
+    /** Opaque diagnostic record UUID */
+    id: string;
+  };
+
+  type getDiagnosticsOverviewParams = {
+    /** Inclusive UTC RFC3339 time, default last 24h */
+    from?: string;
+    /** Exclusive UTC RFC3339 time, maximum range 7d */
+    to?: string;
+    /** Connected service: backend */
+    service?: string;
+    /** info, warn or error */
+    level?: string;
+    /** Exact request UUID */
+    request_id?: string;
+    /** Exact lowercase trace ID */
+    trace_id?: string;
   };
 
   type getMediaDepthParams = {
@@ -2481,6 +2593,12 @@ declare namespace API {
     cursor?: string;
     /** Page size */
     limit?: number;
+    /** Supported security event action */
+    action?: string;
+    /** Inclusive RFC3339 timestamp */
+    from?: string;
+    /** Exclusive RFC3339 timestamp */
+    to?: string;
   };
 
   type getOperationBatchParams = {
@@ -2495,6 +2613,25 @@ declare namespace API {
     id: string;
     /** 项目UUID */
     project_id: string;
+  };
+
+  type getPlatformSecurityEventsParams = {
+    /** Continuation cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+    /** Supported security event action */
+    action?: string;
+    /** Inclusive RFC3339 timestamp */
+    from?: string;
+    /** Exclusive RFC3339 timestamp */
+    to?: string;
+    /** Exact actor UUID */
+    actor_id?: string;
+    /** Exact target user UUID */
+    target_user_id?: string;
+    /** Exact team UUID */
+    team_id?: string;
   };
 
   type getPlatformUserExportParams = {
@@ -2747,6 +2884,16 @@ declare namespace API {
   };
 
   type getTeamSecurityEventsParams = {
+    /** Continuation cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+    /** Supported security event action */
+    action?: string;
+    /** Inclusive RFC3339 timestamp */
+    from?: string;
+    /** Exclusive RFC3339 timestamp */
+    to?: string;
     /** Resource UUID */
     id: string;
   };
@@ -3311,6 +3458,25 @@ declare namespace API {
   type listCanvasesParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type listDiagnosticLogsParams = {
+    /** Inclusive UTC RFC3339 time, default last 24h */
+    from?: string;
+    /** Exclusive UTC RFC3339 time, maximum range 7d */
+    to?: string;
+    /** Connected service: backend */
+    service?: string;
+    /** info, warn or error */
+    level?: string;
+    /** Exact request UUID */
+    request_id?: string;
+    /** Exact lowercase trace ID */
+    trace_id?: string;
+    /** Page size 1..100, default 50 */
+    limit?: number;
+    /** Signed actor/filter/snapshot cursor; expires after 10 minutes */
+    cursor?: string;
   };
 
   type listMediaAssetsParams = {
@@ -3960,6 +4126,12 @@ declare namespace API {
     provider_model_id?: string;
   };
 
+  type ModelCount = {
+    model_id: string | null;
+    model_name: string | null;
+    operations: number;
+  };
+
   type ModelDefaults = {
     default_models?: Record<string, any>;
     project_id?: string;
@@ -4116,6 +4288,34 @@ declare namespace API {
     z_index?: number;
   };
 
+  type ObservabilityCoverage = {
+    capacity: number;
+    evicted: number;
+    missing_services: string[];
+    oldest_at: string | null;
+    restart_loss: boolean;
+    retained: number;
+    retention_seconds: number;
+    source: string;
+    started_at: string;
+    status: string;
+  };
+
+  type ObservabilityDetail = {
+    coverage: ObservabilityCoverage;
+    record: DiagnosticRecord;
+  };
+
+  type ObservabilityPage = {
+    as_of: string;
+    coverage: ObservabilityCoverage;
+    first_cursor: string;
+    from: string;
+    items: DiagnosticRecord[];
+    next_cursor: string | null;
+    to: string;
+  };
+
   type OnboardingModel = {
     capability?: string;
     display_name?: string;
@@ -4173,6 +4373,22 @@ declare namespace API {
   type OutputKind =
     "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml" | "jianying";
 
+  type Overview = {
+    as_of: string;
+    client_errors: number;
+    coverage: ObservabilityCoverage;
+    from: string;
+    p50_ms: number | null;
+    p95_ms: number | null;
+    panics: number;
+    rate_limited: number;
+    requests: number;
+    server_error_rate: number | null;
+    server_errors: number;
+    to: string;
+    unavailable: string[];
+  };
+
   type PackageControl = {
     expected_revision?: number;
   };
@@ -4206,16 +4422,6 @@ declare namespace API {
   type PackageWarning = {
     code?: string;
     item_id?: string;
-  };
-
-  type Page = {
-    capabilities?: Capabilities;
-    current_actor_id?: string;
-    current_scope_id?: string;
-    items?: SubjectDetail[];
-    page?: number;
-    page_size?: number;
-    total?: number;
   };
 
   type PageResponse = {
@@ -5950,8 +6156,9 @@ declare namespace API {
 
   type SecurityEventPageView = {
     as_of: string;
+    first_cursor: string;
     items: SecurityEventView[];
-    next_cursor: string;
+    next_cursor: string | null;
   };
 
   type SecurityEventView = {
@@ -6549,6 +6756,11 @@ declare namespace API {
     style_type?: string;
   };
 
+  type SubjectCapability = {
+    available?: boolean;
+    reason?: string;
+  };
+
   type SubjectConfig = {
     local?: SubjectLocal;
     subject_id?: string;
@@ -6585,6 +6797,16 @@ declare namespace API {
     binding_id?: string;
     kind?: string;
     source_node_id?: string;
+  };
+
+  type SubjectPage = {
+    capabilities?: Capabilities;
+    current_actor_id?: string;
+    current_scope_id?: string;
+    items?: SubjectDetail[];
+    page?: number;
+    page_size?: number;
+    total?: number;
   };
 
   type SubjectSourceCapabilities = {

@@ -127,8 +127,27 @@ export function AccountMenu({
               修改密码
             </Link>
           </DropdownMenuItem>
+          <DropdownMenuItem asChild className={itemClassName}>
+            <Link href="/analytics">
+              <LayoutDashboard />
+              我的分析
+            </Link>
+          </DropdownMenuItem>
           {isAdmin && (
             <>
+              <DropdownMenuItem asChild className={itemClassName}>
+                <Link href="/health">
+                  <Shield />
+                  运行诊断
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className={itemClassName}>
+                <Link href="/audit">
+                  <Shield />
+                  审计日志
+                </Link>
+              </DropdownMenuItem>
+
               <DropdownMenuItem asChild className={itemClassName}>
                 <Link href="/providers">
                   <KeyRound />

@@ -470,9 +470,16 @@ export async function cancelProposal(
 }
 
 /** 此处后端没有提供注释 GET /api/platform/audit-events */
-export async function getPlatformSecurityEvents(options?: RequestOptions) {
+export async function getPlatformSecurityEvents(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getPlatformSecurityEventsParams,
+  options?: RequestOptions,
+) {
   return request<API.SecurityEventPageView>("/api/platform/audit-events", {
     method: "GET",
+    params: {
+      ...params,
+    },
     ...(options || {}),
   });
 }
@@ -1186,7 +1193,9 @@ export async function getTeamSecurityEvents(
     `/api/teams/${param0}/audit-events`,
     {
       method: "GET",
-      params: { ...queryParams },
+      params: {
+        ...queryParams,
+      },
       ...(options || {}),
     },
   );

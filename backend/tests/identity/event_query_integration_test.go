@@ -53,6 +53,23 @@ func TestSecurityEventScopeAndCursor(t *testing.T) {
 			t.Fatal("page repeated row")
 		}
 	}
+	now = now.Add(2 * time.Second)
+	insert(a.ID, nil, "self")
+	replay := filter
+	replay.Cursor = first.FirstCursor
+	back, err := query.List(t.Context(), a, replay)
+	if err != nil || len(back.Items) != 2 || back.NextCursor == nil || !back.AsOf.Equal(first.AsOf) || back.Items[0].ID != first.Items[0].ID || back.Items[1].ID != first.Items[1].ID {
+		t.Fatalf("replayed first page drifted: %v", err)
+	}
+	replay.Cursor = *back.NextCursor
+	again, err := query.List(t.Context(), a, replay)
+	if err != nil || len(again.Items) != 1 || !again.AsOf.Equal(first.AsOf) || again.Items[0].ID != second.Items[0].ID {
+		t.Fatalf("replayed continuation drifted: %v", err)
+	}
+	replay.Cursor = first.FirstCursor
+	if _, err := query.List(t.Context(), b, replay); !errors.Is(err, identity.ErrInvalidEventFilter) {
+		t.Fatal("foreign first cursor accepted")
+	}
 	if _, err := query.List(t.Context(), b, filter); !errors.Is(err, identity.ErrInvalidEventFilter) {
 		t.Fatal("cross-account cursor accepted")
 	}
@@ -70,6 +87,15 @@ func TestSecurityEventScopeAndCursor(t *testing.T) {
 	if _, err := query.List(t.Context(), a, filter); !errors.Is(err, identity.ErrInvalidEventFilter) {
 		t.Fatal("expired cursor accepted")
 	}
+	if _, err := query.List(t.Context(), a, replay); !errors.Is(err, identity.ErrInvalidEventFilter) {
+		t.Fatal("expired first cursor accepted")
+	}
+	reopened := filter
+	reopened.Cursor = ""
+	fresh, err := query.List(t.Context(), a, reopened)
+	if err != nil || len(fresh.Items) != 2 || fresh.Items[0].ID == first.Items[0].ID || !fresh.AsOf.Equal(now) {
+		t.Fatalf("failed to reopen fresh first page: %v", err)
+	}
 	now = now.Add(-10 * time.Minute)
 	foreign := b.ID
 	if _, err := query.List(t.Context(), a, identity.EventFilter{ScopeKind: "self", TargetUserID: &foreign}); !errors.Is(err, identity.ErrInvalidEventFilter) {
@@ -86,7 +112,9 @@ func TestSecurityEventScopeAndCursor(t *testing.T) {
 	}
 	a.PlatformRole = "platform_admin"
 	a.PlatformEpoch++
-	if page, err := query.List(t.Context(), a, identity.EventFilter{ScopeKind: "platform", TargetUserID: &b.ID, Action: "profile.updated"}); err != nil || len(page.Items) != 1 || page.Items[0].SafeDiff["password"] != "" {
+	platformFilter := identity.EventFilter{ScopeKind: "platform", TargetUserID: &b.ID, Action: "profile.updated"}
+	platformPage, err := query.List(t.Context(), a, platformFilter)
+	if err != nil || len(platformPage.Items) != 1 || platformPage.Items[0].SafeDiff["password"] != "" {
 		t.Fatal("platform projection invalid")
 	}
 	team := uuid.New()
@@ -113,8 +141,8 @@ func TestSecurityEventScopeAndCursor(t *testing.T) {
 	if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=? WHERE id=?`, now, a.SessionID).Error; err != nil {
 		t.Fatal(err)
 	}
-	filter.Cursor = ""
-	if _, err := query.List(t.Context(), a, filter); !errors.Is(err, identity.ErrSessionInvalid) {
+	platformFilter.Cursor = platformPage.FirstCursor
+	if _, err := query.List(t.Context(), a, platformFilter); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatal("revoked session read events")
 	}
 }

@@ -57,6 +57,16 @@ func TestSecurityEventHTTPFilters(t *testing.T) {
 	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || json.Unmarshal(w.Body.Bytes(), &page) != nil || page.Items == nil || page.AsOf.IsZero() {
 		t.Fatal("event page contract invalid")
 	}
+	var cursors struct {
+		First string `json:"first_cursor"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &cursors); err != nil || cursors.First == "" {
+		t.Fatal("missing signed audit first_cursor")
+	}
+	back := get("/api/me/security-events?cursor=" + cursors.First)
+	if back.Code != 200 {
+		t.Fatalf("signed first cursor rejected: %d", back.Code)
+	}
 	if w := get("/api/platform/audit-events"); w.Code != 403 {
 		t.Fatal("creator accessed platform audit route")
 	}

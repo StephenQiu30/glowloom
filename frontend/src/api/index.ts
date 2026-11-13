@@ -3,6 +3,7 @@
 // API 更新时间：
 // API 唯一标识：
 import * as settings from "./settings";
+import * as analytics from "./analytics";
 import * as identity from "./identity";
 import * as operations from "./operations";
 import * as billing from "./billing";
@@ -15,6 +16,7 @@ import * as mediaDepths from "./mediaDepths";
 import * as mediaExports from "./mediaExports";
 import * as mediaTranscriptions from "./mediaTranscriptions";
 import * as models from "./models";
+import * as diagnostics from "./diagnostics";
 import * as projectCopies from "./projectCopies";
 import * as agent from "./agent";
 import * as bible from "./bible";
@@ -26,6 +28,7 @@ import * as workspace from "./workspace";
 import * as works from "./works";
 export default {
   settings,
+  analytics,
   identity,
   operations,
   billing,
@@ -38,6 +41,7 @@ export default {
   mediaExports,
   mediaTranscriptions,
   models,
+  diagnostics,
   projectCopies,
   agent,
   bible,

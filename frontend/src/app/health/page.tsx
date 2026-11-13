@@ -1,11 +1,5 @@
-import { PageLayout } from "@/components/layout/page-layout";
-import { UnavailableState } from "@/components/availability/unavailable";
-export const metadata = { title: "系统健康 · 织光" };
+import { Diagnostics } from "./_components/diagnostics";
+export const metadata = { title: "运行诊断 · 织光" };
 export default function Page() {
-  return (
-    <PageLayout screen="health">
-      <h1 className="text-2xl">系统健康</h1>
-      <UnavailableState title="系统健康暂未开放" />
-    </PageLayout>
-  );
+  return <Diagnostics />;
 }

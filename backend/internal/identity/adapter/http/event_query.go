@@ -42,9 +42,10 @@ type SecurityEventView struct {
 
 // SecurityEventPageView returns a bounded event page and its query snapshot.
 type SecurityEventPageView struct {
-	Items      []SecurityEventView `json:"items" binding:"required"`
-	NextCursor *string             `json:"next_cursor" binding:"required"`
-	AsOf       time.Time           `json:"as_of" binding:"required"`
+	FirstCursor string              `json:"first_cursor" binding:"required"`
+	Items       []SecurityEventView `json:"items" binding:"required"`
+	NextCursor  *string             `json:"next_cursor" binding:"required" extensions:"x-nullable"`
+	AsOf        time.Time           `json:"as_of" binding:"required"`
 }
 
 func parseEventFilter(c *gin.Context, scope string) (application.EventFilter, error) {
@@ -130,13 +131,16 @@ func (h *EventHandler) list(scope string) gin.HandlerFunc {
 		for _, e := range page.Items {
 			items = append(items, SecurityEventView{ID: e.ID, ActorID: e.ActorID, TargetUserID: e.TargetUserID, TeamID: e.TeamID, Action: e.Action, Result: e.Result, Reason: e.Reason, RequestID: e.RequestID, SafeDiff: e.SafeDiff, CreatedAt: e.CreatedAt})
 		}
-		c.JSON(200, SecurityEventPageView{Items: items, NextCursor: page.NextCursor, AsOf: page.AsOf})
+		c.JSON(200, SecurityEventPageView{Items: items, FirstCursor: page.FirstCursor, NextCursor: page.NextCursor, AsOf: page.AsOf})
 	}
 }
 
 // @Summary getMySecurityEvents
 // @Param cursor query string false "Continuation cursor"
 // @Param limit query int false "Page size"
+// @Param action query string false "Supported security event action"
+// @Param from query string false "Inclusive RFC3339 timestamp"
+// @Param to query string false "Exclusive RFC3339 timestamp"
 // @ID getMySecurityEvents
 // @Tags identity
 // @Accept json
@@ -148,6 +152,11 @@ func (h *EventHandler) list(scope string) gin.HandlerFunc {
 func (h *EventHandler) self(c *gin.Context) { h.list("self")(c) }
 
 // @Summary getTeamSecurityEvents
+// @Param cursor query string false "Continuation cursor"
+// @Param limit query int false "Page size"
+// @Param action query string false "Supported security event action"
+// @Param from query string false "Inclusive RFC3339 timestamp"
+// @Param to query string false "Exclusive RFC3339 timestamp"
 // @ID getTeamSecurityEvents
 // @Tags identity
 // @Accept json
@@ -160,6 +169,14 @@ func (h *EventHandler) self(c *gin.Context) { h.list("self")(c) }
 func (h *EventHandler) team(c *gin.Context) { h.list("team")(c) }
 
 // @Summary getPlatformSecurityEvents
+// @Param cursor query string false "Continuation cursor"
+// @Param limit query int false "Page size"
+// @Param action query string false "Supported security event action"
+// @Param from query string false "Inclusive RFC3339 timestamp"
+// @Param to query string false "Exclusive RFC3339 timestamp"
+// @Param actor_id query string false "Exact actor UUID"
+// @Param target_user_id query string false "Exact target user UUID"
+// @Param team_id query string false "Exact team UUID"
 // @ID getPlatformSecurityEvents
 // @Tags identity
 // @Accept json

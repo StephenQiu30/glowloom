@@ -47,6 +47,37 @@ it("both themes keep ordinary surfaces, selection and keyboard focus achromatic"
   }
 });
 
+const chartPath = "components/ui/chart.tsx";
+function inlineLiteral(file: string, source: string) {
+  if (file === chartPath) {
+    // These exact Recharts selectors match library defaults. Keep the utility after each selector in scope.
+    for (const selector of [
+      "[&_.recharts-cartesian-grid_line[stroke='#ccc']]",
+      "[&_.recharts-polar-grid_[stroke='#ccc']]",
+      "[&_.recharts-reference-line_[stroke='#ccc']]",
+      "[&_.recharts-dot[stroke='#fff']]",
+      "[&_.recharts-sector[stroke='#fff']]",
+    ])
+      source = source.replaceAll(selector + ":", "");
+  }
+  return /["'`](?:#[\da-f]{3,8}|(?:rgba?|hsla?|oklch|oklab)\([^)]*\))["'`]/i.test(
+    source,
+  );
+}
+
+it("permits only known chart stroke matching selectors and still flags assigned colors", () => {
+  const known = "[&_.recharts-dot[stroke='#fff']]:stroke-transparent";
+  expect(inlineLiteral(chartPath, known)).toBe(false);
+  for (const source of [
+    known + ' stroke="#fff"',
+    known + ' fill="#ccc"',
+    "[&_.custom[stroke='#fff']]:stroke-border",
+    "[&_.recharts-dot[stroke='#abc']]:stroke-transparent",
+  ])
+    expect(inlineLiteral(chartPath, source)).toBe(true);
+  expect(inlineLiteral("components/other.tsx", known)).toBe(true);
+});
+
 it("business UI uses shared colors instead of separate palettes or rich toast colors", async () => {
   const sources = await readdir("src", { recursive: true });
   const violations: string[] = [];
@@ -62,12 +93,7 @@ it("business UI uses shared colors instead of separate palettes or rich toast co
       /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab)\(/i.test(source)
     )
       violations.push(`${file}: literal color`);
-    if (
-      /\.tsx$/.test(file) &&
-      /["'`](?:#[\da-f]{3,8}|(?:rgba?|hsla?|oklch|oklab)\([^)]*\))["'`]/i.test(
-        source,
-      )
-    )
+    if (/\.tsx$/.test(file) && inlineLiteral(file, source))
       violations.push(`${file}: inline literal color`);
     if (
       /(?:bg|text|border|ring|outline|fill|stroke|shadow)-(?:blue|sky|cyan|green|emerald|teal|amber|yellow|orange|red|rose|pink|purple|violet|indigo|lime|fuchsia|slate|zinc|neutral|stone|gray)-\d|(?:bg|text|border|ring|outline|fill|stroke)-\[(?:#|rgba?\(|hsla?\(|oklch\()/.test(

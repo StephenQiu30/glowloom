@@ -37,7 +37,7 @@ export async function listSubjects(
   params: API.listSubjectsParams,
   options?: RequestOptions,
 ) {
-  return request<API.Page>("/api/subjects", {
+  return request<API.SubjectPage>("/api/subjects", {
     method: "GET",
     params: {
       ...params,

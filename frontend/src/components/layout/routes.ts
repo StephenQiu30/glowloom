@@ -33,12 +33,12 @@ export const screens = [
   { id: "users", name: "用户管理", node: "363:16818", group: "管理" },
   { id: "providers", name: "AI 服务接入", node: "16:2", group: "管理" },
   { id: "models", name: "模型管理", node: "17:2", group: "管理" },
-  { id: "audit", name: "审计日志", node: "18:2", group: "管理" },
-  { id: "health", name: "系统健康", node: "19:2", group: "管理" },
+  { id: "audit", name: "审计日志", node: "3984:116974", group: "管理" },
+  { id: "health", name: "运行诊断", node: "3981:123278", group: "管理" },
   { id: "bible", name: "主体", node: "7:2", group: "创作" },
   { id: "storyboard", name: "分镜", node: "5:2", group: "创作" },
   { id: "shot", name: "镜头", node: "4:2", group: "创作" },
-  { id: "analytics", name: "统计", node: "6:2", group: "创作" },
+  { id: "analytics", name: "数据分析", node: "3984:117269", group: "创作" },
 ] as const;
 export type Screen = (typeof screens)[number]["id"];
 export const screenHref = (screen: string) =>

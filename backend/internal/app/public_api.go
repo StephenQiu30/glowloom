@@ -8,13 +8,15 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/yjsruntime"
 	"github.com/google/uuid"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/yjsruntime"
 
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
 	catalogwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/catalog"
+	insightswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/insights"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	copywire "github.com/StephenQiu30/glowloom-server/backend/internal/app/projectcopy"
@@ -23,6 +25,7 @@ import (
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/observability/adapter/memory"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/trace"
@@ -108,7 +111,8 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		(origin.Hostname() != "localhost" && (browser == nil || !browser.IsLoopback())) {
 		return nil, fmt.Errorf("%w: current workspace API requires loopback listener and browser origin", config.ErrInvalid)
 	}
-	router := NewRouter(logger, ready, tp)
+	diagnostics := memory.NewBuffer(4096, 24*time.Hour, time.Now)
+	router := NewRouter(logger, ready, tp, diagnostics)
 	if err := router.SetTrustedProxies(nil); err != nil {
 		return nil, err
 	}
@@ -141,6 +145,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	identityhttp.NewAuthPolicyHandler(identityapp.NewAuthPolicyQuery(pgidentity.NewStore(database), identityhttp.AcceptedLegalVersion(cfg.IdentityTermsVersion), identityhttp.LegalPackageVersion(), cfg.SMTPEnabled && cfg.IdentityMailSourceHourlyLimit > 0 && cfg.IdentityMailGlobalHourlyLimit > 0)).Register(api)
 	protected.Use(auth.RequireSession())
 	registerSelf(protected)
+	insightswire.Register(protected, database, diagnostics, time.Now)
 	platform := protected.Group("/platform")
 	creditLimiter := billingredis.NewCreditCommandLimiter(sessions.RedisClient, cfg.CreditCommandRequestsPerMinute, cfg.CreditCommandMaxAmountMicros, cfg.CreditCommandMaxDailyMicros)
 	creditCommands := billingapp.NewCreditCommands(

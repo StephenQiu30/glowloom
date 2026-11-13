@@ -35,13 +35,15 @@ type SecurityEvent struct {
 
 // EventPage contains redacted events and an authenticated continuation cursor.
 type EventPage struct {
-	Items      []SecurityEvent
-	NextCursor *string
-	AsOf       time.Time
+	Items       []SecurityEvent
+	FirstCursor string
+	NextCursor  *string
+	AsOf        time.Time
 }
 
 // EventPosition is the exclusive keyset boundary within a bounded snapshot.
 type EventPosition struct {
+	Start     bool      `json:"start,omitempty"`
 	AsOf      time.Time `json:"as_of"`
 	CreatedAt time.Time `json:"created_at"`
 	ID        uuid.UUID `json:"id"`
@@ -122,6 +124,25 @@ func (q *EventQuery) cursorDigest(actor Principal, f EventFilter, payload string
 	return q.signer.Digest("security_event_cursor", actor.ID, string(bound))
 }
 
+func (q *EventQuery) encodePosition(actor Principal, f EventFilter, p EventPosition) (string, error) {
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return "", err
+	}
+	payload := base64.RawURLEncoding.EncodeToString(raw)
+	return payload + "." + base64.RawURLEncoding.EncodeToString(q.cursorDigest(actor, f, payload)), nil
+}
+
+func (p EventPosition) valid(now time.Time) bool {
+	if p.AsOf.IsZero() || p.AsOf.After(now) || now.Sub(p.AsOf) >= 10*time.Minute {
+		return false
+	}
+	if p.Start {
+		return p.ID == uuid.Nil && p.CreatedAt.IsZero()
+	}
+	return p.ID != uuid.Nil && !p.CreatedAt.IsZero() && !p.CreatedAt.After(p.AsOf)
+}
+
 // List validates current authority, filters and cursor before redaction.
 func (q *EventQuery) List(ctx context.Context, actor Principal, filter EventFilter) (EventPage, error) {
 	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil {
@@ -132,7 +153,7 @@ func (q *EventQuery) List(ctx context.Context, actor Principal, filter EventFilt
 		return EventPage{}, ErrInvalidEventFilter
 	}
 	now := q.now().UTC()
-	position := EventPosition{AsOf: now}
+	position := EventPosition{AsOf: now, Start: true}
 	if f.Cursor != "" {
 		parts := strings.Split(f.Cursor, ".")
 		if len(parts) != 2 {
@@ -143,7 +164,8 @@ func (q *EventQuery) List(ctx context.Context, actor Principal, filter EventFilt
 			return EventPage{}, ErrInvalidEventFilter
 		}
 		raw, err := base64.RawURLEncoding.DecodeString(parts[0])
-		if err != nil || json.Unmarshal(raw, &position) != nil || position.ID == uuid.Nil || position.AsOf.After(now) || now.Sub(position.AsOf) >= 10*time.Minute || position.CreatedAt.IsZero() || position.CreatedAt.After(position.AsOf) {
+		position = EventPosition{} // Older continuation tokens omit start.
+		if err != nil || json.Unmarshal(raw, &position) != nil || !position.valid(now) {
 			return EventPage{}, ErrInvalidEventFilter
 		}
 	}
@@ -151,16 +173,18 @@ func (q *EventQuery) List(ctx context.Context, actor Principal, filter EventFilt
 	if err != nil {
 		return EventPage{}, err
 	}
-	page := EventPage{Items: make([]SecurityEvent, 0, len(items)), AsOf: position.AsOf}
+	first, err := q.encodePosition(actor, f, EventPosition{AsOf: position.AsOf, Start: true})
+	if err != nil {
+		return EventPage{}, err
+	}
+	page := EventPage{FirstCursor: first, Items: make([]SecurityEvent, 0, len(items)), AsOf: position.AsOf}
 	if len(items) > f.Limit {
 		items = items[:f.Limit]
 		last := items[len(items)-1]
-		raw, err := json.Marshal(EventPosition{AsOf: position.AsOf, CreatedAt: last.CreatedAt, ID: last.ID})
+		cursor, err := q.encodePosition(actor, f, EventPosition{AsOf: position.AsOf, CreatedAt: last.CreatedAt, ID: last.ID})
 		if err != nil {
 			return EventPage{}, err
 		}
-		payload := base64.RawURLEncoding.EncodeToString(raw)
-		cursor := payload + "." + base64.RawURLEncoding.EncodeToString(q.cursorDigest(actor, f, payload))
 		page.NextCursor = &cursor
 	}
 	for _, e := range items {

@@ -221,6 +221,36 @@ const identityRoutes: {
     query: [],
   },
   {
+    pattern: "platform/diagnostics/overview",
+    methods: ["GET"],
+    query: ["from", "to", "service", "level", "request_id", "trace_id"],
+  },
+  {
+    pattern: "platform/diagnostics/logs",
+    methods: ["GET"],
+    query: [
+      "from",
+      "to",
+      "service",
+      "level",
+      "request_id",
+      "trace_id",
+      "limit",
+      "cursor",
+    ],
+  },
+  {
+    pattern: `platform/diagnostics/logs/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: "analytics/creation",
+    methods: ["GET"],
+    query: ["scope", "from", "to", "project_id", "model_id", "origin"],
+  },
+  { pattern: "analytics/business", methods: ["GET"], query: [] },
+  {
     pattern: `platform/audit-events`,
     methods: ["GET"],
     query: [

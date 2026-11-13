@@ -12,24 +12,30 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+
+	obshttp "github.com/StephenQiu30/glowloom-server/backend/internal/observability/adapter/http"
 )
 
 // ReadyCheck tests whether dependencies needed by the API are available.
 type ReadyCheck func(context.Context) error
 
 // NewRouter builds the HTTP router for the api role.
-func NewRouter(logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider) *gin.Engine {
+func NewRouter(logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, recorders ...obshttp.Recorder) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
+	var recorder obshttp.Recorder
+	if len(recorders) > 0 {
+		recorder = recorders[0]
+	}
 	router.Use(
-		gin.Recovery(),
+		obshttp.RequestCompletion(logger, recorder),
 		otelgin.Middleware("glowloom-backend-api",
 			otelgin.WithTracerProvider(tracerProvider),
 			otelgin.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/api/media-export-launch" }),
 			otelgin.WithMeterProvider(metricnoop.NewMeterProvider()),
 			otelgin.WithPropagators(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})),
 		),
-		requestLogger(logger),
+		obshttp.SnapshotTraceID(),
 	)
 
 	router.GET("/healthz", func(c *gin.Context) {
@@ -49,19 +55,4 @@ func NewRouter(logger *zap.Logger, ready ReadyCheck, tracerProvider trace.Tracer
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 	return router
-}
-
-func requestLogger(logger *zap.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-		fields := []zap.Field{
-			zap.String("method", c.Request.Method),
-			zap.String("path", c.FullPath()),
-			zap.Int("status", c.Writer.Status()),
-		}
-		if spanContext := trace.SpanFromContext(c.Request.Context()).SpanContext(); spanContext.IsValid() {
-			fields = append(fields, zap.String("trace_id", spanContext.TraceID().String()))
-		}
-		logger.Debug("http request", fields...)
-	}
 }

@@ -51,8 +51,12 @@ func Middleware(origin string) gin.HandlerFunc {
 		c.Set("request_id", id)
 		c.Header("X-Request-Id", id)
 		defer func() {
-			if recover() != nil && !c.Writer.Written() {
-				WriteProblem(c, http.StatusInternalServerError, "internal_error", nil)
+			if recover() != nil {
+				c.Set("request_panic", true)
+				if !c.Writer.Written() {
+					WriteProblem(c, http.StatusInternalServerError, "internal_error", nil)
+				}
+				c.Abort()
 			}
 		}()
 		if c.FullPath() == "" {
