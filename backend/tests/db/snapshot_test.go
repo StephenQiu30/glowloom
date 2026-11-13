@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -72,7 +73,7 @@ func TestReadSnapshotBoundsRetriesAndDoesNotRetryOtherErrors(t *testing.T) {
 			err := db.ReadSnapshot(t.Context(), conn.DB, func(_ *gorm.DB) error { calls++; return fmt.Errorf("read: %w", want) })
 			attempts := 1
 			if code == "40001" {
-				attempts = 3
+				attempts = 5
 			}
 			if calls != attempts || !errors.Is(err, want) {
 				t.Fatalf("attempts=%d error=%v", calls, err)
@@ -86,4 +87,14 @@ func TestReadSnapshotBoundsRetriesAndDoesNotRetryOtherErrors(t *testing.T) {
 	if !errors.Is(err, context.Canceled) || calls != 0 {
 		t.Fatalf("canceled attempts=%d error=%v", calls, err)
 	}
+	t.Run("deadline during backoff", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
+		defer cancel()
+		err := db.ReadSnapshot(ctx, conn.DB, func(_ *gorm.DB) error {
+			return &pgconn.PgError{Code: "40001"}
+		})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("backoff did not stop at deadline: %v", err)
+		}
+	})
 }

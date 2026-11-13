@@ -159,6 +159,7 @@ func (h *Handler) ListModels(c *gin.Context) {
 		case errors.Is(err, application.ErrInvalidModelCatalog):
 			httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		default:
+			httpapi.LogDependencyError(c, err)
 			httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 		}
 		return

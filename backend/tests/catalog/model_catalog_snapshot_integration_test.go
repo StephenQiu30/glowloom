@@ -64,3 +64,32 @@ func TestModelCatalogSnapshotRetriesSessionActivityAndRechecksRevocation(t *test
 		})
 	}
 }
+
+func TestModelCatalogSnapshotSurvivesBurstSessionActivity(t *testing.T) {
+	ctx, database := modelCatalogDB(t)
+	actor := insertModelCatalogActor(ctx, t, database, insertModelCatalogOrganization(ctx, t, database))
+	project := insertModelCatalogProject(ctx, t, database, actor, false)
+	attempts := 0
+	store := pgcatalog.NewScopedStore(database, nil, func(tx *gorm.DB) catalog.ProjectAccess {
+		return catalogProjectRead(func(ctx context.Context, current identity.Principal, id uuid.UUID) error {
+			attempts++
+			var present int
+			if err := tx.Raw("SELECT 1").Scan(&present).Error; err != nil {
+				return err
+			}
+			// A burst of successful authenticated reads can update activity between
+			// successive snapshots; three immediate retries do not outlast that burst.
+			if attempts <= 4 {
+				if err := database.WithContext(ctx).Exec(`UPDATE identity.user_session SET last_active_at=clock_timestamp() WHERE id=?`, actor.SessionID).Error; err != nil {
+					return err
+				}
+			}
+			_, err := scopewire.ProvideProjectContentAccess(tx).Authorize(ctx, current, id, false)
+			return err
+		})
+	})
+	page, err := store.ListModelsForProject(ctx, actor, catalog.ListModelsInput{ProjectID: project, Capability: "image.generate", ModelKey: "snapshot-burst-" + uuid.NewString(), Limit: 1})
+	require.NoError(t, err)
+	require.Empty(t, page.Models)
+	require.Equal(t, 5, attempts)
+}
