@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 const adminModelSelect = `SELECT id,model_key,provider_id,capability,display_name,status,
@@ -30,7 +30,8 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 	if s == nil || s.db == nil || input.Limit < 1 || input.Limit > 200 {
 		return page, application.ErrInvalidAdminModels
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := platformdb.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {
+		page = application.AdminModelPage{Items: []application.CreatedModel{}}
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
@@ -125,7 +126,7 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 			page.Next = &application.ModelCatalogCursor{Key: last.Key, ID: last.ID}
 		}
 		return nil
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 	return page, err
 }
 
@@ -163,7 +164,8 @@ func (s *Store) ReadAdminModel(ctx context.Context, actor identityapp.Principal,
 	if s == nil || s.db == nil || id == uuid.Nil {
 		return result, application.ErrInvalidAdminModels
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := platformdb.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {
+		result = application.AdminModelDetail{Versions: []application.AdminModelVersion{}, Prices: []application.AdminPrice{}, PriceCandidates: []application.ModelPriceCandidate{}}
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
@@ -277,7 +279,7 @@ WHERE model_profile_id=?::uuid AND NOT is_delete ORDER BY version_no DESC LIMIT 
 			}
 		}
 		return nil
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 	if err == nil && result.Candidate != nil && result.Candidate.Model.AdapterKey != "" {
 		var candidates []adminPriceCandidateRow
 		queryErr := s.db.WithContext(ctx).Raw(`SELECT id,provider_model_id,source_url,source_hash,parser_version,source_fetched_at,

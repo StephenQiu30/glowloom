@@ -156,6 +156,7 @@ func adminError(c *gin.Context, err error) {
 	case errors.Is(err, application.ErrInvalidProviderDeletion), errors.Is(err, application.ErrInvalidProviderList), errors.Is(err, application.ErrInvalidProviderDetail), errors.Is(err, application.ErrInvalidAdminModels), errors.Is(err, application.ErrInvalidCreateProvider), errors.Is(err, application.ErrInvalidUpdateProvider), errors.Is(err, application.ErrInvalidSetCredential), errors.Is(err, application.ErrInvalidDisableCredential), errors.Is(err, application.ErrInvalidCredentialTest), errors.Is(err, application.ErrInvalidCreateModel), errors.Is(err, application.ErrInvalidPublishModelVersion), errors.Is(err, application.ErrInvalidPublishPriceRule), errors.Is(err, application.ErrInvalidSetModelStatus), errors.Is(err, domain.ErrInvalidProvider), errors.Is(err, domain.ErrInvalidModel), errors.Is(err, domain.ErrInvalidModelVersion), errors.Is(err, domain.ErrInvalidPriceRule):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:
+		httpapi.LogDependencyError(c, err)
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 	}
 }

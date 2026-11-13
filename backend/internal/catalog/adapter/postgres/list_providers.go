@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 // ListProvidersForAdmin reads one keyset page with safe credential columns and
@@ -23,7 +23,8 @@ func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Pri
 		return application.ProviderListPage{}, application.ErrInvalidProviderList
 	}
 	var page application.ProviderListPage
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := platformdb.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {
+		page = application.ProviderListPage{Providers: []application.ProviderListItem{}}
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
@@ -127,7 +128,7 @@ func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Pri
 			page.Next = &application.ProviderListCursor{CreateTime: last.CreateTime, ID: last.ID}
 		}
 		return nil
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 	if err != nil {
 		return application.ProviderListPage{}, fmt.Errorf("list providers transaction: %w", err)
 	}
