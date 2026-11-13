@@ -223,6 +223,12 @@ importers:
       '@tiptap/y-tiptap':
         specifier: 3.0.10
         version: 3.0.10(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.6)(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
+      '@ui-sdk/core':
+        specifier: 0.1.0-beta.1
+        version: 0.1.0-beta.1
+      '@ui-sdk/react':
+        specifier: 0.1.0-beta.1
+        version: 0.1.0-beta.1(@types/react@19.3.0)(@ui-sdk/core@0.1.0-beta.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       axios:
         specifier: 1.20.0
         version: 1.20.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
@@ -2313,6 +2319,20 @@ packages:
   '@typescript-eslint/visitor-keys@8.70.1':
     resolution: {integrity: sha512-Vwj9lUIW5Xq3wQ9w6gv3R86g1hMK8f2zNOdGTAgeXUMMXFK78G9ruCjjqutHMNJc0+CH7LYRnHeUB9IT8wFmcw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@ui-sdk/core@0.1.0-beta.1':
+    resolution: {integrity: sha512-sWsZW8RN6Gviir7REQYuDIafm9hierHQE31OJ+2g+1Pp3lDVKp/dk0+0dxFvqOQRmBveRvlE9FiARgNlQ9dMFw==}
+
+  '@ui-sdk/react@0.1.0-beta.1':
+    resolution: {integrity: sha512-7wcUsZI+WoG2uo3N+PHrWntk97qI9ez2cUrHV9H507FiL118Pi4tuhWUCMDtWwEUCNQLybpBm1QRLkEXVOPAUg==}
+    peerDependencies:
+      '@types/react': '>=19.2.10'
+      '@ui-sdk/core': ^0.1.0-beta.1
+      react: '>=19'
+      react-dom: '>=19'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   '@umijs/openapi@1.14.1':
     resolution: {integrity: sha512-riFsBjdg6OLNKWCxSyZ4BFmVKd1KkkGebxUCoDiKfz1p6L5CBiw8yVZd8J22Q/fwxKdYQ75GOCkjNouL3bGoYg==}
@@ -7640,6 +7660,16 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.70.1
       eslint-visitor-keys: 5.0.1
+
+  '@ui-sdk/core@0.1.0-beta.1': {}
+
+  '@ui-sdk/react@0.1.0-beta.1(@types/react@19.3.0)(@ui-sdk/core@0.1.0-beta.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@ui-sdk/core': 0.1.0-beta.1
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+    optionalDependencies:
+      '@types/react': 19.3.0
 
   '@umijs/openapi@1.14.1(typescript@5.9.3)':
     dependencies:

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ContentState } from "@/components/layout/content-state";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
 /** Presentation only: never converts an unconfirmed write into a success. */
@@ -36,29 +37,29 @@ export function CanvasConnectionState({
   scopeControl?: ReactNode;
 }) {
   return (
-    <ContentState
-      className="min-h-dvh"
-      state={message ? "error" : "loading"}
-      title={message ? "暂时无法打开画布" : "正在连接画布"}
-      description={
-        message ? canvasConnectionMessage(message) : "正在连接你的创作空间。"
-      }
-      actions={
-        <>
-          {scopeControl &&
-            /forbidden|not_found|权限|无权|空间/.test(message) && (
-              <div className="flex basis-full justify-center pb-2">
-                {scopeControl}
-              </div>
-            )}
-          <Button asChild variant="secondary">
-            <Link href="/projects">返回画布列表</Link>
-          </Button>
-          {message && message !== "画布访问权限已失效" && (
-            <Button onClick={onRetry}>重新连接</Button>
-          )}
-        </>
-      }
-    />
+    <div className="relative flex min-h-dvh items-end justify-center p-6">
+      <Skeleton
+        className="absolute inset-0 rounded-none"
+        role="status"
+        aria-label="正在连接画布"
+        aria-busy={!message}
+      />
+      <FeedbackToast
+        message={message ? canvasConnectionMessage(message) : ""}
+        action={
+          message && message !== "画布访问权限已失效"
+            ? { label: "重新连接", onClick: onRetry }
+            : undefined
+        }
+      />
+      <div className="relative flex items-center gap-2">
+        {scopeControl &&
+          /forbidden|not_found|权限|无权|空间/.test(message) &&
+          scopeControl}
+        <Button asChild variant="secondary">
+          <Link href="/projects">返回画布列表</Link>
+        </Button>
+      </div>
+    </div>
   );
 }

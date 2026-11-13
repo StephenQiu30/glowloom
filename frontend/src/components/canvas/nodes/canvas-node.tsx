@@ -2,6 +2,7 @@ import { CanvasConnectionHandle } from "./canvas-connection-handle";
 import { containerKind } from "../lib/canvas-containers";
 import { canvasTextBackgrounds } from "../lib/canvas-text-background";
 import { canvasNodeAccessibility } from "../lib/canvas-node-accessibility";
+import { CanvasAudioPlayer } from "./canvas-audio-player";
 import { CanvasVideoPlayer } from "./canvas-video-player";
 import {
   CanvasColorTags,
@@ -16,7 +17,7 @@ import type { CanvasMediaDimensions } from "../hooks/use-canvas-media-size";
 import { PreviewImage } from "@/components/canvas/runtime/components/media/preview-image";
 import { Button } from "@/components/ui/button";
 import { GenerationResultEmpty } from "@/components/canvas/runtime/components/generation/workspace/generation-result-empty";
-import { Spinner } from "@/components/ui/spinner";
+import { GenerationPlaceholder } from "@/components/generation/generation-placeholder";
 import { Input } from "@/components/ui/input";
 import {
   Empty,
@@ -27,6 +28,7 @@ import {
 import {
   Popover,
   PopoverAnchor,
+  PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
@@ -42,6 +44,7 @@ import {
   Clapperboard,
   Box,
   Palette,
+  Plus,
   Copy,
   Download,
   FileText,
@@ -49,7 +52,6 @@ import {
   Play,
   Group,
   Image as ImageIcon,
-  Music2,
   AudioLines,
   Puzzle,
   RefreshCw,
@@ -1069,7 +1071,7 @@ function NodeContent(props: NodeContentRendererProps) {
   )
     return <TextContent {...props} />;
   if (props.node.metadata?.status === "loading")
-    return <LoadingContent theme={props.theme} />;
+    return <GenerationPlaceholder />;
   if (props.node.metadata?.status === "error")
     return (
       <ErrorContent
@@ -1126,18 +1128,6 @@ function GroupNodeContent({
           {`${groupChildCount} 个节点`}
         </span>
       </div>
-    </div>
-  );
-}
-
-function LoadingContent({ theme }: Pick<NodeContentRendererProps, "theme">) {
-  return (
-    <div
-      className="flex h-full w-full flex-col items-center justify-center gap-3"
-      style={{ color: theme.node.activeStroke }}
-    >
-      <Spinner className="size-10" />
-      <span className="text-xs tracking-[0.2em]">{"生成中"}</span>
     </div>
   );
 }
@@ -1370,21 +1360,9 @@ function ExpandedTextCard({
 }
 
 function TextSlotStatus({ text }: { text: CanvasNodeText }) {
-  const theme = canvasThemes[useThemeStore((state) => state.theme)];
   const loading = text.status === "loading";
   if (!loading) return <GenerationResultEmpty kind="text" />;
-  return (
-    <div
-      className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center"
-      style={{
-        background: theme.node.fill,
-        color: theme.node.activeStroke,
-      }}
-    >
-      <Spinner className="size-10" />
-      <span className="text-xs tracking-[0.2em]">{"生成中"}</span>
-    </div>
-  );
+  return <GenerationPlaceholder />;
 }
 
 function ImageNodeContent(props: NodeContentRendererProps) {
@@ -1410,9 +1388,9 @@ function ImageNodeContent(props: NodeContentRendererProps) {
 function EmptyNodeContent({ type }: { type: string }) {
   if (type === CanvasNodeType.Text)
     return (
-      <div className="canvas-text-placeholder h-full w-full px-6 py-5">
-        双击编辑文本
-      </div>
+      <Empty aria-label="空文本节点">
+        <FileText aria-hidden />
+      </Empty>
     );
   const Icon =
     type === CanvasNodeType.Video
@@ -1452,25 +1430,12 @@ function VideoNodeContent({ node }: NodeContentRendererProps) {
   return <CanvasVideoPlayer node={node} />;
 }
 
-function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
-  if (!node.metadata?.content)
-    return <EmptyNodeContent type={CanvasNodeType.Audio} />;
-  return (
-    <div
-      className="flex h-full w-full flex-col justify-center gap-3 px-4"
-      style={{ background: theme.node.fill, color: theme.node.text }}
-    >
-      <div className="flex min-w-0 items-center gap-2 text-sm opacity-70">
-        <Music2 className="size-4 shrink-0" />
-        <span className="truncate">{"音频"}</span>
-      </div>
-      <audio
-        src={node.metadata.content}
-        controls
-        className="w-full"
-        data-canvas-no-zoom
-      />
-    </div>
+function AudioNodeContent({ node }: NodeContentRendererProps) {
+  const src = node.metadata?.content;
+  return src ? (
+    <CanvasAudioPlayer key={src} src={src} title={node.title} />
+  ) : (
+    <EmptyNodeContent type={CanvasNodeType.Audio} />
   );
 }
 
@@ -1524,6 +1489,100 @@ function ImageContent({
       })
     : undefined;
 
+  if (
+    isBatchRoot &&
+    node.documentData?.fileReferences?.some((ref) => ref.purpose === "CONTENT")
+  ) {
+    const groups = new Map<string, typeof images>();
+    for (const image of images) {
+      const groupID = image.id.startsWith("result/")
+        ? image.id.split("/")[1]
+        : "previous";
+      const group = groups.get(groupID);
+      if (group) group.push(image);
+      else groups.set(groupID, [image]);
+    }
+    return (
+      <div className="relative size-full">
+        <PreviewImage
+          src={primarySource}
+          alt={node.title}
+          draggable={false}
+          className="size-full rounded-xl object-contain"
+        />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="absolute top-2 right-2"
+              aria-label={`查看 ${batchCount} 个结果`}
+            >
+              {batchCount}
+              <ChevronRight />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            className="grid max-h-72 w-72 gap-3 overflow-auto"
+            aria-label="生成结果"
+            data-canvas-no-zoom
+            data-canvas-shortcuts-ignore
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {Array.from(groups, ([groupID, items]) => (
+              <div
+                key={groupID}
+                role="group"
+                aria-label={`同次生成的 ${items.length} 张图片`}
+                className="grid grid-cols-2 gap-2 border-t pt-2 first:border-0 first:pt-0"
+              >
+                {items.map((item) => {
+                  const index = images.indexOf(item);
+                  return (
+                    <div key={item.id} className="relative">
+                      <Button
+                        variant="ghost"
+                        className="h-auto w-full overflow-hidden p-0"
+                        aria-label={`使用结果 ${index + 1}`}
+                        aria-pressed={primaryImageId === item.id}
+                        disabled={!item.content}
+                        onClick={() => onSetBatchPrimary?.(item.id)}
+                      >
+                        <PreviewImage
+                          src={item.content}
+                          alt={`结果 ${index + 1}`}
+                          className="aspect-video w-full object-cover"
+                        />
+                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`添加结果 ${index + 1} 到画布`}
+                          onClick={() => onDuplicateBatchImage?.(item.id)}
+                        >
+                          <Plus />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`下载结果 ${index + 1}`}
+                          onClick={() => onDownloadBatchImage?.(item.id)}
+                        >
+                          <Download />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </PopoverContent>
+        </Popover>
+      </div>
+    );
+  }
   return (
     <BatchFrame batchCount={batchCount} batchExpanded={batchExpanded}>
       {batchExpanded
@@ -1786,20 +1845,8 @@ function BatchImageFailureActions({
 }
 
 function ImageSlotStatus({ image }: { image?: CanvasNodeImage }) {
-  const theme = canvasThemes[useThemeStore((state) => state.theme)];
   if (image?.status === "error") return <GenerationResultEmpty kind="image" />;
-  return (
-    <div
-      className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center"
-      style={{
-        background: theme.node.fill,
-        color: theme.node.activeStroke,
-      }}
-    >
-      <Spinner className="size-10" />
-      <span className="text-xs tracking-[0.2em]">{"生成中"}</span>
-    </div>
-  );
+  return <GenerationPlaceholder />;
 }
 
 function ImageInfoBar({ node }: { node: CanvasNodeData }) {

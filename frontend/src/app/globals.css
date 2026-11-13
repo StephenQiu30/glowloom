@@ -1,3 +1,5 @@
+@layer ui-sdk;
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -3618,5 +3620,31 @@ button:not(:disabled),
   }
   .composer-ratio-options[data-slot] {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.canvas-generation-shimmer svg {
+  color: var(--muted-foreground);
+  mask-image: radial-gradient(ellipse at center, black, transparent 80%);
+}
+.canvas-generation-shimmer path {
+  fill: currentColor;
+  opacity: 0.15;
+  animation: canvas-generation-glow 2.4s ease-in-out infinite alternate;
+}
+.canvas-generation-shimmer path:nth-child(3n) {
+  animation-delay: -0.8s;
+}
+.canvas-generation-shimmer path:nth-child(5n) {
+  animation-delay: -1.6s;
+}
+@keyframes canvas-generation-glow {
+  to {
+    opacity: 0.65;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-generation-shimmer path {
+    animation: none;
   }
 }

@@ -1,3 +1,4 @@
+import { Toaster } from "@/components/ui/sonner";
 import { useEffect, type ReactNode } from "react";
 import {
   cleanup,
@@ -108,11 +109,14 @@ describe("assistant durable input binding", () => {
       }),
     );
     render(
-      <CanvasAssistantPanel
-        canvasID={canvas}
-        projectID={project}
-        onClose={() => {}}
-      />,
+      <>
+        <Toaster />
+        <CanvasAssistantPanel
+          canvasID={canvas}
+          projectID={project}
+          onClose={() => {}}
+        />
+      </>,
     );
     await waitFor(() => expect(api.append).toHaveBeenCalledOnce());
     expect(screen.queryByTestId("formal-generator")).toBeNull();
@@ -130,11 +134,14 @@ describe("assistant durable input binding", () => {
   it("retries an unknown bind using the same session and draft identity", async () => {
     api.append.mockRejectedValueOnce(new Error("network lost"));
     render(
-      <CanvasAssistantPanel
-        canvasID={canvas}
-        projectID={project}
-        onClose={() => {}}
-      />,
+      <>
+        <Toaster />
+        <CanvasAssistantPanel
+          canvasID={canvas}
+          projectID={project}
+          onClose={() => {}}
+        />
+      </>,
     );
     fireEvent.click(await screen.findByRole("button", { name: "重试" }));
     await screen.findByTestId("formal-generator");
@@ -152,11 +159,14 @@ describe("assistant durable input binding", () => {
       turns: [],
     });
     render(
-      <CanvasAssistantPanel
-        canvasID={canvas}
-        projectID={project}
-        onClose={() => {}}
-      />,
+      <>
+        <Toaster />
+        <CanvasAssistantPanel
+          canvasID={canvas}
+          projectID={project}
+          onClose={() => {}}
+        />
+      </>,
     );
     await screen.findByRole("button", { name: "重试" });
     expect(api.draft).not.toHaveBeenCalled();
@@ -176,11 +186,14 @@ describe("assistant durable input binding", () => {
       ],
     });
     render(
-      <CanvasAssistantPanel
-        canvasID={canvas}
-        projectID={project}
-        onClose={() => {}}
-      />,
+      <>
+        <Toaster />
+        <CanvasAssistantPanel
+          canvasID={canvas}
+          projectID={project}
+          onClose={() => {}}
+        />
+      </>,
     );
     const editor = await screen.findByTestId("formal-generator");
     expect(editor.getAttribute("data-presentation")).toBe("assistant");
@@ -195,11 +208,14 @@ describe("assistant durable input binding", () => {
   });
   it("source shortcuts insert a request through the bound composer without creating a task", async () => {
     render(
-      <CanvasAssistantPanel
-        canvasID={canvas}
-        projectID={project}
-        onClose={() => {}}
-      />,
+      <>
+        <Toaster />
+        <CanvasAssistantPanel
+          canvasID={canvas}
+          projectID={project}
+          onClose={() => {}}
+        />
+      </>,
     );
     await screen.findByTestId("formal-generator");
     fireEvent.click(screen.getByRole("button", { name: "／ 剧本开发" }));

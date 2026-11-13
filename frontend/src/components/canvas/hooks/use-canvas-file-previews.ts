@@ -22,15 +22,17 @@ type PreviewSession = {
   drain: () => void;
 };
 
-function contentReference(node: CanvasNodeData) {
-  return node.documentData?.fileReferences?.find(
-    (reference) => reference.purpose === "CONTENT",
+function contentReferences(node: CanvasNodeData) {
+  return (
+    node.documentData?.fileReferences?.filter(
+      (reference) => reference.purpose === "CONTENT",
+    ) ?? []
   );
 }
 
 function previewKey(
   node: CanvasNodeData,
-  reference: NonNullable<ReturnType<typeof contentReference>>,
+  reference: ReturnType<typeof contentReferences>[number],
 ) {
   return JSON.stringify([
     node.id,
@@ -82,8 +84,7 @@ export function useCanvasFilePreviews(
     if (!enabled || !session) return;
     const identities = new Set(
       nodes.flatMap((node) => {
-        const reference = contentReference(node);
-        return reference ? [previewKey(node, reference)] : [];
+        return contentReferences(node).map((ref) => previewKey(node, ref));
       }),
     );
     for (const key of session.attempted) {
@@ -96,7 +97,46 @@ export function useCanvasFilePreviews(
       setNodes((latest) => {
         let changed = false;
         const restored = latest.map((node) => {
-          const reference = contentReference(node);
+          const refs = contentReferences(node);
+          if (node.type === "image" && refs.length > 1) {
+            const previous = node.metadata?.images ?? [];
+            const images = refs.map((ref) => {
+              const existing = previous.find(
+                (item) => item.id === ref.referenceKey,
+              );
+              const content =
+                existing?.content ||
+                session.urls.get(previewKey(node, ref)) ||
+                "";
+              if (existing && existing.content === content) return existing;
+              return {
+                id: ref.referenceKey,
+                content,
+                status: content ? ("success" as const) : ("loading" as const),
+                naturalWidth: node.width,
+                naturalHeight: node.height,
+                bytes: 0,
+                mimeType: "image/*",
+              };
+            });
+            if (
+              previous.length === images.length &&
+              images.every((img, i) => img === previous[i])
+            )
+              return node;
+            changed = true;
+            return {
+              ...node,
+              metadata: {
+                ...node.metadata,
+                images,
+                primaryImageId: refs[0].referenceKey,
+                content: images[0].content,
+                status: images[0].status,
+              },
+            };
+          }
+          const reference = refs[0];
           const url =
             reference && session.urls.get(previewKey(node, reference));
           if (!url || node.metadata?.content) return node;
@@ -129,35 +169,44 @@ export function useCanvasFilePreviews(
     session.drain = drain;
     let missingCachedPreview = false;
     for (const node of nodes) {
-      const reference = contentReference(node);
-      if (!reference || node.metadata?.content) continue;
-      const key = previewKey(node, reference);
-      if (session.urls.has(key)) {
-        missingCachedPreview = true;
-        continue;
-      }
-      if (session.attempted.has(key)) continue;
-      session.attempted.add(key);
-      session.queue.push(async () => {
-        if (!session.active || !session.attempted.has(key)) return;
-        try {
-          const url = await readCanvasFilePreview(
-            reference,
-            referenceContext
-              ? {
-                  ...referenceContext,
-                  nodeId: node.id,
-                  referenceKey: reference.referenceKey,
-                }
-              : undefined,
-          );
-          if (!session.active || !session.attempted.has(key)) return;
-          session.urls.set(key, url);
-          restore();
-        } catch (error) {
-          if (session.active) notifyError(error, "画布素材预览失败");
+      const refs = contentReferences(node);
+      for (const reference of refs) {
+        if (
+          refs.length > 1 && node.type === "image"
+            ? node.metadata?.images?.some(
+                (img) => img.id === reference.referenceKey && img.content,
+              )
+            : node.metadata?.content || reference !== refs[0]
+        )
+          continue;
+        const key = previewKey(node, reference);
+        if (session.urls.has(key)) {
+          missingCachedPreview = true;
+          continue;
         }
-      });
+        if (session.attempted.has(key)) continue;
+        session.attempted.add(key);
+        session.queue.push(async () => {
+          if (!session.active || !session.attempted.has(key)) return;
+          try {
+            const url = await readCanvasFilePreview(
+              reference,
+              referenceContext
+                ? {
+                    ...referenceContext,
+                    nodeId: node.id,
+                    referenceKey: reference.referenceKey,
+                  }
+                : undefined,
+            );
+            if (!session.active || !session.attempted.has(key)) return;
+            session.urls.set(key, url);
+            restore();
+          } catch (error) {
+            if (session.active) notifyError(error, "画布素材预览失败");
+          }
+        });
+      }
     }
     if (missingCachedPreview) restore();
     drain();

@@ -60,20 +60,7 @@ export function replaceCanvasNodeAsset(
     documentData: {
       ...documentData,
       parameters: { mode: "MANUAL" },
-      fileReferences: primary
-        ? references
-            .filter((reference) => reference.purpose !== "LAST_FRAME")
-            .map((reference) =>
-              reference.referenceKey === primary.referenceKey
-                ? replacement
-                : reference,
-            )
-        : [
-            ...references.filter(
-              (reference) => reference.purpose !== "LAST_FRAME",
-            ),
-            replacement,
-          ],
+      fileReferences: [replacement],
     },
     metadata: {
       ...node.metadata,

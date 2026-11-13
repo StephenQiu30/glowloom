@@ -1,12 +1,6 @@
 import { Image, Music2, Type, Video } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { Empty, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { cn } from "@/lib/utils";
 
 const contentKinds = {
@@ -32,24 +26,11 @@ export function GenerationResultEmpty({
         <EmptyMedia variant="icon">
           <Icon />
         </EmptyMedia>
-        <EmptyTitle>暂无可展示的{label}</EmptyTitle>
       </EmptyHeader>
-      {onRetry && (
-        <EmptyContent>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onRetry();
-            }}
-          >
-            重试
-          </Button>
-        </EmptyContent>
-      )}
+      <FeedbackToast
+        message={label + "生成失败"}
+        action={onRetry ? { label: "重试", onClick: onRetry } : undefined}
+      />
     </Empty>
   );
 }

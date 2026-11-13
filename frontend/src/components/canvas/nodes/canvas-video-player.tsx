@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CanvasNodeData } from "../types/canvas";
@@ -94,14 +95,7 @@ function VideoPlayer({ node }: { node: CanvasNodeData }) {
           </Button>
         </div>
       )}
-      {error && (
-        <p
-          role="status"
-          className="absolute right-2 bottom-2 left-2 rounded bg-black/70 p-2 text-center text-xs text-white"
-        >
-          {error}
-        </p>
-      )}
+      <FeedbackToast message={error} />
     </div>
   );
 }

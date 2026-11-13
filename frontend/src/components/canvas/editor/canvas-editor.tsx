@@ -11,7 +11,7 @@ import {
 } from "../lib/canvas-media-selection";
 import { layoutCanvasSelection } from "../lib/canvas-selection-layout";
 import { CanvasTextActions } from "../nodes/canvas-text-actions";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { canvasConnectionHandles } from "../constants/canvas-input-ports";
 import { isCanvasShortcut } from "../lib/canvas-keyboard";
 import {
@@ -127,7 +127,6 @@ import {
   NodeCreateMenu,
   type PendingConnectionCreate,
 } from "@/components/canvas/controls/canvas-create-menus";
-import { CanvasEmptyState } from "@/components/canvas/editor/canvas-empty-state";
 import { Minimap } from "@/components/canvas/controls/canvas-mini-map";
 import { CanvasNode } from "@/components/canvas/nodes/canvas-node";
 import {
@@ -3562,6 +3561,16 @@ function InfiniteCanvasPage({
             : fitNodeSize(image.naturalWidth, image.naturalHeight, edge, edge);
           return {
             ...node,
+            documentData: node.documentData && {
+              ...node.documentData,
+              fileReferences: node.documentData.fileReferences
+                ?.slice()
+                .sort(
+                  (a, b) =>
+                    Number(b.referenceKey === image.id) -
+                    Number(a.referenceKey === image.id),
+                ),
+            },
             position: {
               x: node.position.x + node.width / 2 - size.width / 2,
               y: node.position.y + node.height / 2 - size.height / 2,
@@ -3588,7 +3597,10 @@ function InfiniteCanvasPage({
     (node: CanvasNodeData, imageId: string) => {
       const image = node.metadata?.images?.find((item) => item.id === imageId);
       if (!image?.content) return;
-      const id = nanoid();
+      const id = crypto.randomUUID();
+      const file = node.documentData?.fileReferences?.find(
+        (ref) => ref.referenceKey === imageId,
+      );
       const edge = Math.max(node.width, node.height);
       const size = fitNodeSize(
         image.naturalWidth,
@@ -3622,6 +3634,15 @@ function InfiniteCanvasPage({
           references: node.metadata?.references,
         },
       };
+      if (file && node.documentData) {
+        copy.documentData = {
+          ...node.documentData,
+          id,
+          position: copy.position,
+          ...size,
+          fileReferences: [file],
+        };
+      }
       setNodes((prev) => [...prev, copy]);
       setSelectedNodeIds(new Set([id]));
       setSelectedConnectionId(null);
@@ -5724,8 +5745,18 @@ function InfiniteCanvasPage({
             [];
           return {
             ...item,
+            documentData: item.documentData && {
+              ...item.documentData,
+              fileReferences: item.documentData.fileReferences?.filter(
+                (ref) => ref.referenceKey !== imageId,
+              ),
+            },
             metadata: {
               ...item.metadata,
+              content:
+                item.metadata?.primaryImageId === imageId
+                  ? images[0]?.content
+                  : item.metadata?.content,
               images,
               count: images.length,
               primaryImageId:
@@ -6044,7 +6075,11 @@ function InfiniteCanvasPage({
     (panelNode: CanvasNodeData) =>
       integrationRef.current?.renderGenerationPanel &&
       ["text", "image", "video", "audio"].includes(panelNode.type) ? (
-        integrationRef.current.renderGenerationPanel(panelNode.id)
+        integrationRef.current.renderGenerationPanel(panelNode.id, () => {
+          setSelectedNodeIds(new Set());
+          setSelectedConnectionId(null);
+          setDialogNodeId(null);
+        })
       ) : integrationRef.current ? (
         <CanvasDocumentNodePanel
           collaboration={integrationRef.current.textBinding?.(panelNode.id)}
@@ -6344,17 +6379,10 @@ function InfiniteCanvasPage({
           }}
         />
       )}
-      {backgroundError && (
-        <Alert
-          className="absolute bottom-16 left-1/2 z-50 w-[min(400px,calc(100%-2rem))] -translate-x-1/2"
-          role="alert"
-        >
-          <AlertDescription>{backgroundError}</AlertDescription>
-          <Button variant="ghost" onClick={retryBackground}>
-            重试
-          </Button>
-        </Alert>
-      )}
+      <FeedbackToast
+        message={backgroundError ?? ""}
+        action={{ label: "重试", onClick: retryBackground }}
+      />
       <CanvasSidePanel
         projectId={documentIntegration?.projectId}
         nodes={nodes}
@@ -6771,8 +6799,6 @@ function InfiniteCanvasPage({
               : "从画布选择参考 · ESC 返回输入框"}
           </Button>
         ) : null}
-
-        {!nodes.length ? <CanvasEmptyState /> : null}
 
         {toolbarNode?.type === CanvasNodeType.Text &&
         selectedNodeIds.has(toolbarNode.id) &&

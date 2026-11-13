@@ -17,6 +17,7 @@ import { RichGeneration, type CanvasComposerOwner } from "./rich-generation";
 import type { PromptDraft } from "./prompt-document";
 import { useEffect, useRef, useState } from "react";
 import { History, RotateCw, ChevronDown, FileText } from "lucide-react";
+import { GenerationPlaceholder } from "./generation-placeholder";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
@@ -344,7 +345,7 @@ type TaskDetailProps = {
   onAdoptText?: (operationID: string, outputID: string) => Promise<void> | void;
   onReuse?: (task: Task) => void;
   outputID?: string;
-  presentation?: "default" | "asset";
+  presentation?: "default" | "asset" | "inline";
   resultActions?: boolean;
   onAvailabilityChange?: (available: boolean) => void;
 };
@@ -545,7 +546,9 @@ function ScopedTaskDetail({
       setConfirmCancel(false);
       setRetry((n) => n + 1);
     } catch (e) {
-      if (actionScope.current === scope) setError(flowError(e));
+      if (actionScope.current === scope) {
+        setError(flowError(e));
+      }
     } finally {
       if (actionScope.current === scope) setPendingScope(null);
     }
@@ -661,6 +664,38 @@ function ScopedTaskDetail({
       )}
     </>
   );
+  if (presentation === "inline") {
+    const notice =
+      error ||
+      (task &&
+      ["unknown", "manual", "failed", "cancelled"].includes(task.status)
+        ? taskLabels[task.status]
+        : "");
+    const recoverable = task?.billing_outcome?.delivery_state === "recoverable";
+    return (
+      <section aria-label="生成结果" className="min-w-0" aria-live="polite">
+        {notice || recoverable ? (
+          <FeedbackToast
+            message={notice || "结果可重新取回"}
+            action={
+              recoverable
+                ? { label: "取回结果", onClick: () => void recover() }
+                : error || task?.status === "unknown"
+                  ? { label: "重新查询", onClick: () => setRetry((n) => n + 1) }
+                  : undefined
+            }
+          />
+        ) : null}
+        {!notice && !recoverable && (!task || activeTask(task.status)) ? (
+          <div className="aspect-video max-h-52 overflow-hidden rounded-lg">
+            <GenerationPlaceholder />
+          </div>
+        ) : (
+          preview
+        )}
+      </section>
+    );
+  }
   return (
     <section
       className={

@@ -54,7 +54,7 @@ it("媒体失败呈现重试，并保留续播位置", () => {
   const video = screen.getByLabelText("视频验收") as HTMLVideoElement;
   video.currentTime = 5;
   fireEvent.error(video);
-  expect(screen.getByRole("status").textContent).toContain("暂时无法播放");
+  expect(screen.queryByRole("status")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "重试播放视频" }));
   expect(load).toHaveBeenCalledOnce();
   expect(play).toHaveBeenCalledOnce();

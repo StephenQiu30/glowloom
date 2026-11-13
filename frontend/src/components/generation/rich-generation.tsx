@@ -12,23 +12,14 @@ import type { Transaction } from "@tiptap/pm/state";
 import type { ComposerCollaboration } from "./composer-session";
 import { TextIntentInput } from "./text-intent-input";
 
+import { toast } from "@/components/feedback/notification";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableCaption,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "@/components/ui/table";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { cn } from "cn";
 import {
   ArrowUp,
   AtSign,
-  ChevronDown,
   LoaderCircle,
   Maximize2,
   Minimize2,
@@ -47,17 +38,13 @@ import {
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
   useId,
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -135,7 +122,7 @@ import {
   subjectBinding,
 } from "./reference-controls";
 import { editorIssues, compatibleParams } from "./editor-capabilities";
-import { fieldsForMode, requireQuote, money, type Quote } from "./contracts";
+import { fieldsForMode, requireQuote, type Quote } from "./contracts";
 import { TaskDetail, type GenerationSeed } from "./generation-dialog";
 import type {
   CanvasLinkedReferenceSource,
@@ -418,6 +405,19 @@ export function RichGeneration(props: Props) {
     // Initial seed and owner are immutable for this mounted workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.projectID, opened, retry, bootKey]);
+  if (!ready && error && props.presentation)
+    return (
+      <FeedbackToast
+        message={error}
+        action={{
+          label: "重试",
+          onClick: () => {
+            setError("");
+            setRetry((n) => n + 1);
+          },
+        }}
+      />
+    );
   if (!ready)
     return error ? (
       <ContentState
@@ -617,9 +617,7 @@ function EditorWorkspace({
     onComposerSession?.(session);
     return () => onComposerSession?.(null);
   }, [session, onComposerSession]);
-  useEffect(() => {
-    if (task) onOperationReady?.(task, snapshot.draft_id);
-  }, [task, onOperationReady, snapshot.draft_id]);
+
   const contextKey = `${actor}/${projectID}/${canvas?.contextKey ?? snapshot.draft_id}`;
   const sessionRef = useRef<ComposerSession | null>(null);
   const firstDirtyAt = useRef<number | null>(null);
@@ -1105,6 +1103,30 @@ function EditorWorkspace({
     await saver.current?.setSubmission(undefined);
   }
   const resolveKeys = useRef(new Map<string, string>());
+  const reportedOperation = useRef<string | null>(null);
+  const reportOperation = useEffectEvent(async (operationID: string) => {
+    if (reportedOperation.current === operationID) return;
+    reportedOperation.current = operationID;
+    if (compact && current.submission?.state === "accepted") {
+      try {
+        await resolveSubmission("acknowledge_result");
+      } catch (cause) {
+        toast.error(
+          cause instanceof Error ? cause.message : "生成输入暂时无法解锁",
+        );
+      }
+    }
+    onOperationReady?.(operationID, snapshot.draft_id);
+  });
+  useEffect(() => {
+    if (
+      task &&
+      !pending &&
+      (!compact || current.submission?.state === "accepted")
+    )
+      void reportOperation(task);
+  }, [task, pending, compact, current.submission?.state]);
+
   async function selectMode(version: string, mode: string) {
     if (!session || !version) return;
     if (!mode) {
@@ -1527,25 +1549,43 @@ function EditorWorkspace({
   ) : null;
   const issuesPanel =
     issues.length > 0 ? (
-      <div className="rounded border p-3 text-sm">
-        <p>输入保留在草稿中，以下问题会阻止生成：</p>
-        <ul className="list-inside list-disc">
-          {issues.map((issue, i) => (
-            <li key={i}>{issue}</li>
-          ))}
-        </ul>
-        {model && (
-          <Button
-            variant="outline"
-            disabled={frozen}
-            onClick={() =>
-              setConversion({ seq, params: compatibleParams(draft, model) })
-            }
-          >
-            检查参数转换
-          </Button>
-        )}
-      </div>
+      compact ? (
+        <FeedbackToast
+          message={issues.join("；")}
+          action={
+            model
+              ? {
+                  label: "检查参数",
+                  onClick: () =>
+                    setConversion({
+                      seq,
+                      params: compatibleParams(draft, model),
+                    }),
+                }
+              : undefined
+          }
+        />
+      ) : (
+        <div className="rounded border p-3 text-sm">
+          <p>输入保留在草稿中，以下问题会阻止生成：</p>
+          <ul className="list-inside list-disc">
+            {issues.map((issue, i) => (
+              <li key={i}>{issue}</li>
+            ))}
+          </ul>
+          {model && (
+            <Button
+              variant="outline"
+              disabled={frozen}
+              onClick={() =>
+                setConversion({ seq, params: compatibleParams(draft, model) })
+              }
+            >
+              检查参数转换
+            </Button>
+          )}
+        </div>
+      )
     ) : null;
   const needsQuoteRefresh =
     quoteExpired || recoveredChanged || (quote !== null && quoteSeq !== seq);
@@ -1605,62 +1645,6 @@ function EditorWorkspace({
               : "内容已更改，请更新费用。"}
           </p>
         )}
-      <Collapsible>
-        <CollapsibleTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="group/collapsible"
-          >
-            查看生成详情
-            <ChevronDown
-              data-icon="inline-end"
-              className="transition-transform group-data-[state=open]/collapsible:rotate-180"
-            />
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="flex min-w-0 flex-col gap-3 pt-3 text-sm">
-            <p>
-              提交 {current.submission.id?.slice(0, 8)} · 代次 {current.epoch}
-            </p>
-            {quote && quote.available_micros < Number.MAX_SAFE_INTEGER / 2 && (
-              <p>可用项目预算：{money(quote.available_micros)}</p>
-            )}
-            <pre className="max-h-36 overflow-auto text-xs whitespace-pre-wrap">
-              {quote?.final_prompt ?? current.submission.quote?.final_prompt}
-            </pre>
-            <p>
-              冻结模式：{current.submission.draft?.mode} · 编译：
-              {activeQuote?.compiler_version}
-            </p>
-            {activeQuote?.reference_mapping?.length ? (
-              <Table className="w-full text-left text-xs">
-                <TableCaption>显示标签与实际媒体输入顺序</TableCaption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>引用</TableHead>
-                    <TableHead>角色</TableHead>
-                    <TableHead>媒体位置</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeQuote.reference_mapping.map((m) => (
-                    <TableRow key={m.reference_id}>
-                      <TableCell>{m.label}</TableCell>
-                      <TableCell>{m.role}</TableCell>
-                      <TableCell>
-                        {m.media_seq_nos?.join("、") || "仅描述"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : null}
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
       <div className="flex flex-wrap justify-end gap-2">
         {current.submission.state === "accepted" ? (
           <Button
@@ -1716,6 +1700,13 @@ function EditorWorkspace({
       </div>
     </div>
   ) : null;
+  if (suspended && compact)
+    return (
+      <FeedbackToast
+        message="请重新核验登录状态，本地草稿已保留"
+        action={{ label: "重新核验", onClick: () => onOpen(snapshot.draft_id) }}
+      />
+    );
   if (suspended)
     return (
       <ContentState
@@ -1967,12 +1958,16 @@ function EditorWorkspace({
                   aria-label={
                     current.submission
                       ? current.submission.state === "accepted"
-                        ? "查看任务"
+                        ? "继续创作"
                         : "查看报价"
                       : "发送消息"
                   }
                   title={
-                    current.submission ? "查看费用与任务" : "检查费用并发送"
+                    current.submission?.state === "accepted"
+                      ? "继续创作"
+                      : current.submission
+                        ? "查看费用"
+                        : "检查费用并发送"
                   }
                   disabled={
                     pending ||
@@ -1990,7 +1985,9 @@ function EditorWorkspace({
                   }
                   onClick={() =>
                     current.submission
-                      ? setQuoteReviewOpen(true)
+                      ? current.submission.state === "accepted"
+                        ? void resolve("acknowledge_result")
+                        : setQuoteReviewOpen(true)
                       : void getQuote()
                   }
                 >
@@ -2184,10 +2181,15 @@ function EditorWorkspace({
                     size="toolbar"
                     className="shrink-0"
                     variant="default"
-                    onClick={() => setQuoteReviewOpen(true)}
+                    disabled={pending}
+                    onClick={() =>
+                      current.submission?.state === "accepted"
+                        ? void resolve("acknowledge_result")
+                        : setQuoteReviewOpen(true)
+                    }
                   >
                     {current.submission.state === "accepted"
-                      ? "查看任务"
+                      ? "继续创作"
                       : "查看报价"}
                   </ComposerToolbarButton>
                 ) : (
@@ -2440,7 +2442,11 @@ function EditorWorkspace({
         )}
         {compact ? (
           <Dialog
-            open={quoteReviewOpen && !!current.submission}
+            open={
+              quoteReviewOpen &&
+              !!current.submission &&
+              current.submission.state !== "accepted"
+            }
             onOpenChange={(open) => {
               if (!pending && !confirmUnknown) setQuoteReviewOpen(open);
             }}
@@ -2453,32 +2459,24 @@ function EditorWorkspace({
               showCloseButton={!pending && !confirmUnknown}
               className="max-h-[85dvh] overflow-y-auto sm:max-w-[480px]"
             >
-              <DialogTitle>
-                {current.submission?.state === "accepted"
-                  ? "生成任务"
-                  : "确认生成"}
-              </DialogTitle>
-              <DialogDescription>
-                {current.submission?.state === "accepted"
-                  ? "查看生成结果或继续创作。"
-                  : "确认本次消耗后开始生成。"}
-              </DialogDescription>
+              <DialogTitle>确认生成</DialogTitle>
+              <DialogDescription>确认本次消耗后开始生成。</DialogDescription>
               {submissionPanel}
-              {task && (
-                <TaskDetail
-                  projectID={projectID}
-                  id={task}
-                  onAdopt={onAdopt}
-                  adoptLabel={adoptLabel}
-                  onAdoptText={onAdoptText}
-                />
-              )}
             </DialogContent>
           </Dialog>
         ) : (
           submissionPanel
         )}
-        {!sourceReady && (
+        {!sourceReady && compact && sourceCheck?.key === sourceKey && (
+          <FeedbackToast
+            message="参考暂时无法核验"
+            action={{
+              label: "重新核验",
+              onClick: () => setSourceEpoch((epoch) => epoch + 1),
+            }}
+          />
+        )}
+        {!sourceReady && !compact && (
           <div>
             <p role="status">
               {sourceCheck?.key === sourceKey
@@ -2512,10 +2510,11 @@ function EditorWorkspace({
             </Button>
           </div>
         )}
-        {!compact && task && (
+        {task && presentation !== "canvas" && presentation !== "assistant" && (
           <TaskDetail
             projectID={projectID}
             id={task}
+            presentation={compact ? "inline" : "default"}
             onAdopt={onAdopt}
             adoptLabel={adoptLabel}
             onAdoptText={onAdoptText}

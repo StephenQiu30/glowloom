@@ -1,5 +1,6 @@
 "use client";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -19,6 +20,15 @@ import type { CanvasNodeData } from "./types/canvas";
 import type { CanvasClipboard } from "./lib/canvas-clipboard";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
 import { CanvasGenerationPanel } from "./nodes/canvas-generation-panel";
+import { CanvasOperationStatus } from "./nodes/canvas-operation-status";
+import { useCanvasOperationTasks } from "./hooks/use-canvas-operation-tasks";
+import {
+  applyCanvasOperationResult,
+  canvasOperationTarget,
+} from "./lib/canvas-operation-result";
+import type { Task } from "@/components/generation/contracts";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CanvasParticipants } from "./canvas-participants";
 import { SpaceSwitcher } from "@/components/spaces/space-context";
 import { YjsPresence } from "./yjs-presence";
@@ -26,7 +36,6 @@ import {
   CanvasConnectionState,
   canvasConnectionMessage,
 } from "./connection-state";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CanvasProviders } from "./editor";
 import CanvasPage from "./editor/canvas-editor";
 import { CanvasTopBar } from "./controls/canvas-top-bar";
@@ -68,9 +77,7 @@ const CanvasTimelineWorkspace = dynamic(
     ),
   {
     loading: () => (
-      <p role="status" className="p-4 text-sm">
-        正在打开时间线…
-      </p>
+      <Skeleton className="size-full" aria-label="正在打开时间线…" />
     ),
   },
 );
@@ -81,9 +88,7 @@ const CanvasSubjectNode = dynamic(
     ),
   {
     loading: () => (
-      <p role="status" className="p-4 text-sm">
-        正在打开主体…
-      </p>
+      <Skeleton className="size-full" aria-label="正在打开主体…" />
     ),
   },
 );
@@ -91,7 +96,11 @@ const CanvasSubjectNode = dynamic(
 const CanvasCinemaKitNode = dynamic(
   () =>
     import("./cinema-kit/canvas-cinema-kit").then((m) => m.CanvasCinemaKitNode),
-  { loading: () => <p role="status">正在打开导演工具箱…</p> },
+  {
+    loading: () => (
+      <Skeleton className="size-full" aria-label="正在打开导演工具箱" />
+    ),
+  },
 );
 const CanvasDirectorWorkspace = dynamic(
   () =>
@@ -100,9 +109,7 @@ const CanvasDirectorWorkspace = dynamic(
     ),
   {
     loading: () => (
-      <p role="status" className="p-4 text-sm">
-        正在打开导演台…
-      </p>
+      <Skeleton className="size-full" aria-label="正在打开导演台…" />
     ),
   },
 );
@@ -113,9 +120,10 @@ const CanvasAssistantPanel = dynamic(
     ),
   {
     loading: () => (
-      <p role="status" className="absolute top-4 right-4">
-        正在打开助手…
-      </p>
+      <Skeleton
+        className="absolute top-4 right-4 h-12 w-72"
+        aria-label="正在打开助手"
+      />
     ),
   },
 );
@@ -165,6 +173,24 @@ function CollaborativeEditor({
     client.subscribe,
     client.getSnapshot,
     client.getSnapshot,
+  );
+  const operations = useCanvasOperationTasks({
+    projectID,
+    canvasID,
+    identity: `${actorID}/${scopeID}`,
+  });
+  const { register: registerTask, complete: completeTask } = operations;
+  const operationTargets = useRef(new Map<string, string>());
+  const registerOperation = useCallback(
+    (nodeID: string, operationID: string) => {
+      if (!operationTargets.current.has(operationID))
+        operationTargets.current.set(
+          operationID,
+          canvasOperationTarget(client, nodeID),
+        );
+      registerTask(nodeID, operationID);
+    },
+    [client, registerTask],
   );
   const adoption = useMemo(
     () => createCanvasAssistantAdoption(client, projectID),
@@ -261,6 +287,27 @@ function CollaborativeEditor({
     window.addEventListener("beforeunload", protect);
     return () => window.removeEventListener("beforeunload", protect);
   }, [view.dirty]);
+  const completeOperation = useCallback(
+    async (nodeID: string, operationID: string, task: Task) => {
+      try {
+        await applyCanvasOperationResult(
+          client,
+          projectID,
+          canvasID,
+          nodeID,
+          task,
+          operationTargets.current.get(operationID),
+        );
+      } catch (cause) {
+        toast.error(
+          cause instanceof Error ? cause.message : "生成结果暂时无法显示",
+        );
+      }
+      operationTargets.current.delete(operationID);
+      completeTask(nodeID, operationID);
+    },
+    [client, projectID, canvasID, completeTask],
+  );
   if (!view.document || !view.dto)
     return (
       <CanvasConnectionState
@@ -346,13 +393,26 @@ function CollaborativeEditor({
                   actorID={actorID}
                   scopeID={scopeID}
                 />
+              ) : operations.tasks[nodeID] &&
+                ["text", "image", "video", "audio"].includes(type) ? (
+                <CanvasOperationStatus
+                  projectID={projectID}
+                  canvasID={canvasID}
+                  nodeID={nodeID}
+                  operationID={operations.tasks[nodeID]}
+                  identity={`${actorID}/${scopeID}`}
+                  frozen={!view.writable || view.migration}
+                  onCompleted={completeOperation}
+                />
               ) : null,
-            renderGenerationPanel: (nodeID) => (
+            renderGenerationPanel: (nodeID, onSubmitted) => (
               <CanvasGenerationPanel
                 client={client}
                 nodeID={nodeID}
                 canvasID={canvasID}
                 projectID={projectID}
+                onOperationReady={registerOperation}
+                onSubmitted={onSubmitted}
               />
             ),
             onCursor: client.setCursor,
@@ -388,9 +448,10 @@ function CollaborativeEditor({
                       {view.phase}
                     </span>
                     {view.migration && (
-                      <span className="text-xs text-muted-foreground">
-                        等待具有编辑权限的成员初始化画布
-                      </span>
+                      <FeedbackToast
+                        message="等待具有编辑权限的成员初始化画布"
+                        tone="info"
+                      />
                     )}
                     {view.recovery.map((source) => (
                       <Button
@@ -438,16 +499,10 @@ function CollaborativeEditor({
             subjectSources={canvasSubjectSources(view.document.nodes, canvasID)}
           />
         )}
-        {view.message && (
-          <Alert className="absolute bottom-16 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 flex-wrap items-center justify-between gap-3 border-0 bg-popover p-4 shadow-sm">
-            <AlertDescription className="min-w-0 flex-1">
-              {canvasConnectionMessage(view.message)}
-            </AlertDescription>
-            <Button variant="secondary" onClick={client.retry}>
-              重新连接并查证
-            </Button>
-          </Alert>
-        )}
+        <FeedbackToast
+          message={view.message ? canvasConnectionMessage(view.message) : ""}
+          action={{ label: "重新连接", onClick: client.retry }}
+        />
         <Dialog
           open={rename !== null}
           onOpenChange={(open) => {

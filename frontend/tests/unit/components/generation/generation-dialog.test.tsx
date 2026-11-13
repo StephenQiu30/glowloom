@@ -1735,7 +1735,7 @@ it("new explicit retry after acknowledged original query is still pending yields
   );
 });
 
-it("报价确认只展示消耗和授权，技术快照默认折叠", async () => {
+it("报价确认只展示消耗和授权，删除技术快照入口", async () => {
   quote.quote_detail = { estimated_credits: 8 };
   quote.final_prompt = "冻结的原提示词";
   quote.compiler_version = "compiler-v3";
@@ -1754,9 +1754,7 @@ it("报价确认只展示消耗和授权，技术快照默认折叠", async () =
   expect(screen.queryByRole("button", { name: "核对状态" })).toBeNull();
   expect(screen.queryByText("冻结的原提示词")).toBeNull();
   expect(screen.queryByText(/compiler-v3|提交 .*代次/)).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "查看生成详情" }));
-  expect(screen.getByText("冻结的原提示词")).toBeTruthy();
-  expect(screen.getByText(/compiler-v3/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "查看生成详情" })).toBeNull();
   expect(api.confirm).not.toHaveBeenCalled();
 });
 
@@ -2004,4 +2002,49 @@ it("目录恢复后为未选择草稿补默认模型，保留同一输入器与�
   expect(JSON.stringify(latest.document)).toContain("恢复前输入");
   expect(api.current).toHaveBeenCalledOnce();
   expect(api.quote).not.toHaveBeenCalled();
+});
+
+it("画布确认提交后自动解锁输入，不显示结果卡和文字详情弹窗", async () => {
+  await compactWorkspace();
+  api.get.mockResolvedValue({
+    id,
+    project_id: project.id,
+    status: "completed",
+    inputs: [{ role: "prompt", text: "不应重复展示的提示词" }],
+    outputs: [],
+    params: { size: "2K" },
+    editor_draft: emptyPromptDraft(),
+    editor_compiler_version: "internal-compiler",
+  });
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认生成" }));
+  await waitFor(() => expect(api.resolve).toHaveBeenCalled());
+  expect(screen.queryByRole("region", { name: "生成结果" })).toBeNull();
+  expect(screen.queryByRole("dialog", { name: "生成任务" })).toBeNull();
+  expect(screen.queryByRole("dialog", { name: "确认生成" })).toBeNull();
+  expect(screen.queryByText("不应重复展示的提示词")).toBeNull();
+  expect(screen.queryByText("当时使用的完整输入")).toBeNull();
+  expect(screen.queryByText("internal-compiler")).toBeNull();
+  expect(screen.queryByText("生成参数")).toBeNull();
+  expect(screen.queryByRole("button", { name: "继续创作" })).toBeNull();
+  expect(api.confirm).toHaveBeenCalledOnce();
+  await screen.findByRole("button", { name: "检查费用" });
+  expect(api.resolve.mock.calls.at(-1)?.[1].action).toBe("acknowledge_result");
+  expect(api.confirm).toHaveBeenCalledOnce();
+});
+
+it("创作入口等待时只显示可访问动效，完成后直接展示结果", async () => {
+  api.get.mockResolvedValue({
+    id,
+    project_id: project.id,
+    status: "submitted",
+    outputs: [],
+  });
+  render(<TaskDetail projectID={project.id} id={id} presentation="inline" />);
+  await waitFor(() => expect(api.get).toHaveBeenCalled());
+  expect(screen.getByRole("progressbar", { name: "生成中" }).textContent).toBe(
+    "",
+  );
+  expect(screen.queryByRole("button", { name: "取消生成" })).toBeNull();
+  expect(screen.queryByText("正在生成")).toBeNull();
 });

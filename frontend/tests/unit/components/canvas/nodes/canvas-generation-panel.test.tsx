@@ -25,6 +25,7 @@ const outputID = "55555555-5555-4555-8555-555555555555";
 function setup(
   kind = "text",
   configure?: (graph: ReturnType<typeof serviceGraph>) => void,
+  onOperationReady?: (nodeID: string, operationID: string) => void,
 ) {
   const dto: API.DocumentDTO = {
     id: canvasID,
@@ -79,10 +80,18 @@ function setup(
       nodeID={nodeID}
       canvasID={canvasID}
       projectID={projectID}
+      onOperationReady={onOperationReady}
     />,
   );
   return { state, changed, waitForSaved };
 }
+
+it("正式生成回执绑定当前节点供节点内读取，保留原始操作身份", () => {
+  const ready = vi.fn();
+  setup("image", undefined, ready);
+  captured.props!.onOperationReady?.(operationID, "draft-id");
+  expect(ready).toHaveBeenCalledWith(nodeID, operationID);
+});
 function textResult() {
   return {
     id: operationID,

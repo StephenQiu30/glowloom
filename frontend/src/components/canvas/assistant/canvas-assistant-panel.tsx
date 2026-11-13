@@ -9,7 +9,7 @@ import {
   type CSSProperties,
 } from "react";
 import dynamic from "next/dynamic";
-import { History, Plus, Minimize2, WandSparkles, RotateCw } from "lucide-react";
+import { History, Plus, Minimize2, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,7 +17,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   createCanvasAssistantSession,
   listCanvasAssistantSessions,
@@ -581,11 +581,11 @@ function AssistantPanel({
         ) : null}
         {current?.turns
           .filter((t) => t.operation_id)
-          .map((t, index) => (
+          .map((t) => (
             <section key={t.draft_id} className="canvas-assistant-turn">
-              <h3>第 {index + 1} 轮</h3>
               {t.operation_id ? (
                 <TaskDetail
+                  presentation="inline"
                   projectID={projectID}
                   id={t.operation_id}
                   {...(onAdopt ? { onAdopt } : {})}
@@ -595,26 +595,22 @@ function AssistantPanel({
             </section>
           ))}
         {error ? (
-          <Alert variant="destructive">
-            <AlertDescription>
-              {error}
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={pending}
-                onClick={() =>
-                  intent.current
-                    ? void start(
-                        !current || intent.current.sessionID !== current.id,
-                      )
-                    : setReload((v) => v + 1)
-                }
-              >
-                <RotateCw />
-                重试
-              </Button>
-            </AlertDescription>
-          </Alert>
+          <FeedbackToast
+            message={error}
+            action={
+              pending
+                ? undefined
+                : {
+                    label: "重试",
+                    onClick: () =>
+                      intent.current
+                        ? void start(
+                            !current || intent.current.sessionID !== current.id,
+                          )
+                        : setReload((v) => v + 1),
+                  }
+            }
+          />
         ) : null}
       </div>
       <footer>

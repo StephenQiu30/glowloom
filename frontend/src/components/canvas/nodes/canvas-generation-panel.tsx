@@ -1,10 +1,15 @@
 "use client";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { getMediaPreview } from "@/api/media";
 import { getOperation } from "@/api/operations";
 import {
@@ -58,11 +63,15 @@ export function CanvasGenerationPanel({
   nodeID,
   canvasID,
   projectID,
+  onOperationReady,
+  onSubmitted,
 }: {
   client: CanvasYjsLiveSession;
   nodeID: string;
   canvasID: string;
   projectID: string;
+  onOperationReady?: (nodeID: string, operationID: string) => void;
+  onSubmitted?: () => void;
 }) {
   const view = useSyncExternalStore(
     client.subscribe,
@@ -74,6 +83,16 @@ export function CanvasGenerationPanel({
   const retained = view.inputDrafts[nodeID];
   const editor = useRef<ComposerSession | null>(null);
   const motionButton = useRef<HTMLButtonElement>(null);
+  const reportedOperation = useRef<string | null>(null);
+  const operationReady = useCallback(
+    (operationID: string) => {
+      if (reportedOperation.current === operationID) return;
+      reportedOperation.current = operationID;
+      onOperationReady?.(nodeID, operationID);
+      onSubmitted?.();
+    },
+    [nodeID, onOperationReady, onSubmitted],
+  );
   const node = view.document?.nodes.find((item) => item.id === nodeID);
   if (!node || !["text", "image", "video", "audio"].includes(node.type))
     return null;
@@ -224,36 +243,34 @@ export function CanvasGenerationPanel({
       data-canvas-no-zoom
       data-canvas-shortcuts-ignore
     >
-      {retained && (
-        <Alert role="alert">
-          <AlertDescription>
-            <p>{retained.reason}</p>
-            <div className="flex gap-2">
-              {(["server", "local"] as const).map((choice) => (
-                <Button
-                  key={choice}
-                  variant="outline"
-                  size="sm"
-                  disabled={!view.writable}
-                  onClick={() => {
-                    try {
-                      client.resolveInputDraft(nodeID, choice);
-                      setRecoveryError("");
-                    } catch (cause) {
-                      setRecoveryError(
-                        cause instanceof Error ? cause.message : "草稿尚未恢复",
-                      );
-                    }
-                  }}
-                >
-                  {choice === "server" ? "使用已保存版本" : "重新提交本页草稿"}
-                </Button>
-              ))}
-            </div>
-            {recoveryError && <p>{recoveryError}</p>}
-          </AlertDescription>
-        </Alert>
-      )}
+      <FeedbackToast
+        message={recoveryError || retained?.reason || ""}
+        action={
+          retained && view.writable
+            ? {
+                label: "恢复本页草稿",
+                onClick: () => {
+                  try {
+                    client.resolveInputDraft(nodeID, "local");
+                    setRecoveryError("");
+                  } catch (cause) {
+                    setRecoveryError(
+                      cause instanceof Error ? cause.message : "草稿尚未恢复",
+                    );
+                  }
+                },
+              }
+            : undefined
+        }
+        cancel={
+          retained && view.writable
+            ? {
+                label: "使用已保存版本",
+                onClick: () => client.resolveInputDraft(nodeID, "server"),
+              }
+            : undefined
+        }
+      />
       <CanvasSubjectConnectionBar graph={view.document} nodeID={nodeID} />
       <RichGeneration
         key={`${canvasID}/${nodeID}`}
@@ -264,6 +281,7 @@ export function CanvasGenerationPanel({
           source: { canvas_id: canvasID, node_id: nodeID },
         }}
         presentation="canvas"
+        onOperationReady={operationReady}
         canvasToolbar={
           capability === "image" || capability === "video" ? (
             <CanvasCinemaKitBar

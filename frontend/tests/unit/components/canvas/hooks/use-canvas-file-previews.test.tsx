@@ -70,3 +70,38 @@ it("does not claim readiness when the authorization preview failed", async () =>
   expect(screen.getByText("idle")).toBeTruthy();
   expect(screen.queryByText("success")).toBeNull();
 });
+it("重新打开画布按固定版本恢复整组图片且不重复获取", async () => {
+  preview.mockImplementation(
+    async (ref: { fileId: string }) => "/media/" + ref.fileId,
+  );
+  function Gallery() {
+    const [items, setItems] = useState([
+      {
+        ...node(),
+        type: "image",
+        documentData: {
+          ...node().documentData!,
+          fileReferences: ["a", "b"].map((id) => ({
+            referenceKey: id,
+            fileId: id,
+            version: "1",
+            purpose: "CONTENT",
+          })),
+        },
+      },
+    ] as CanvasNodeData[]);
+    useCanvasFilePreviews(items, true, setItems, {
+      projectId: "project",
+      canvasId: "canvas",
+      bindingRevision: 1,
+    });
+    return (
+      <output>
+        {items[0].metadata?.images?.map((x) => x.content).join(",")}
+      </output>
+    );
+  }
+  render(<Gallery />);
+  await screen.findByText("/media/a,/media/b");
+  expect(preview).toHaveBeenCalledTimes(2);
+});

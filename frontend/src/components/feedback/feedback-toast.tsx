@@ -8,30 +8,41 @@ export function FeedbackToast({
   message,
   tone = "error",
   action,
+  cancel,
   attempt = 0,
   onDismiss,
 }: {
   message: string;
   tone?: "error" | "info" | "success" | "warning" | "loading";
   action?: Action;
+  cancel?: Action;
   attempt?: number;
   onDismiss?: (toast: ToastT) => void;
 }) {
   const ownerID = useId();
   const id = `${ownerID}:${attempt}`;
   const latestAction = useRef(action);
+  const latestCancel = useRef(cancel);
   const latestDismiss = useRef(onDismiss);
   const label = action?.label;
+  const cancelLabel = cancel?.label;
   useEffect(() => {
     latestAction.current = action;
+    latestCancel.current = cancel;
     latestDismiss.current = onDismiss;
-  }, [action, onDismiss]);
+  }, [action, cancel, onDismiss]);
   useEffect(() => {
     if (!message) return;
     toast[tone](message, {
       id,
       onDismiss: (toast) => latestDismiss.current?.(toast),
       onAutoClose: (toast) => latestDismiss.current?.(toast),
+      cancel: cancelLabel
+        ? {
+            label: cancelLabel,
+            onClick: (event) => latestCancel.current?.onClick(event),
+          }
+        : undefined,
       action: label
         ? {
             label,
@@ -42,6 +53,6 @@ export function FeedbackToast({
     return () => {
       toast.dismiss(id);
     };
-  }, [id, message, tone, label, attempt]);
+  }, [id, message, tone, label, cancelLabel, attempt]);
   return null;
 }

@@ -20,7 +20,10 @@ export type CanvasDocumentIntegration = {
   mediaEnabled?: boolean;
   textBinding?: (nodeId: string) => NodeTextBinding | undefined;
   renderToolNode?: (nodeId: string, type: string) => ReactNode;
-  renderGenerationPanel?: (nodeId: string) => ReactNode;
+  renderGenerationPanel?: (
+    nodeId: string,
+    onSubmitted: () => void,
+  ) => ReactNode;
   undo?: {
     canUndo: boolean;
     canRedo: boolean;

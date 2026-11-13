@@ -1,11 +1,16 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   CanvasConnectionState,
   canvasConnectionMessage,
 } from "@/components/canvas/connection-state";
 
-afterEach(cleanup);
+const notice = vi.hoisted(() => ({ error: vi.fn(), dismiss: vi.fn() }));
+vi.mock("@/components/feedback/notification", () => ({ toast: notice }));
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 it("keeps a space selection path when a refreshed team canvas opens in personal scope", () => {
   render(
     <CanvasConnectionState
@@ -28,12 +33,13 @@ it("explains incompatible versions without exposing the transport code", () => {
       onRetry={retry}
     />,
   );
-  expect(screen.getByRole("alert").textContent).toContain("画布服务版本不兼容");
+  expect(notice.error.mock.calls.at(-1)?.[0]).toContain("画布服务版本不兼容");
+  expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.queryByText("unsupported_protocol_version")).toBeNull();
   expect(
     screen.getByRole("link", { name: "返回画布列表" }).getAttribute("href"),
   ).toBe("/projects");
-  fireEvent.click(screen.getByRole("button", { name: "重新连接" }));
+  notice.error.mock.calls.at(-1)?.[1].action.onClick();
   expect(retry).toHaveBeenCalledOnce();
 });
 it("shows pending without an actionable second retry", () => {

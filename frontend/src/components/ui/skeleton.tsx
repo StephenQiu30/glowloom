@@ -1,10 +1,21 @@
 import { cn } from "cn";
 
-function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
+function Skeleton({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"div"> & {
+  variant?: "default" | "canvas-generation";
+}) {
   return (
     <div
       data-slot="skeleton"
-      className={cn("animate-pulse rounded-md bg-muted", className)}
+      data-variant={variant}
+      className={cn(
+        "animate-pulse rounded-md",
+        variant === "canvas-generation" ? "bg-card" : "bg-muted",
+        className,
+      )}
       {...props}
     />
   );
