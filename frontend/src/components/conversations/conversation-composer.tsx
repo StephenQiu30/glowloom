@@ -22,6 +22,7 @@ import {
   X,
   RefreshCw,
 } from "lucide-react";
+import { cn } from "cn";
 import { PromptEditor } from "@/components/generation/prompt-editor";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import { canonical } from "@/components/generation/draft-save";
@@ -200,7 +201,12 @@ export function ConversationComposer({
         )}
         <div
           data-slot="conversation-prompt"
-          className={`min-w-0 flex-1 overflow-y-auto ${expanded ? "h-[min(50dvh,24rem)]" : "h-(--creation-prompt-height)"}`}
+          className={cn(
+            "min-w-0 flex-1 overflow-y-auto",
+            expanded
+              ? "h-[50dvh]"
+              : "max-h-80 min-h-(--creation-prompt-min-height)",
+          )}
           onKeyDownCapture={(event) => {
             const selection = session?.editor.state.selection;
             if (
@@ -250,7 +256,7 @@ export function ConversationComposer({
                 添加主体，和 Agent 一起创作
               </>
             }
-            className="prompt-editor min-h-(--creation-prompt-height)"
+            className="prompt-editor min-h-(--creation-prompt-min-height)"
             inputGroup
             onReady={setSession}
             onChange={(snapshot) => {

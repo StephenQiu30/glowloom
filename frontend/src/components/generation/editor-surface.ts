@@ -32,7 +32,7 @@ export function useEditorSurface(
   );
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(editable, false);
+    if (editor.isEditable !== editable) editor.setEditable(editable, false);
     editor.setOptions({
       editorProps: {
         ...editor.options.editorProps,

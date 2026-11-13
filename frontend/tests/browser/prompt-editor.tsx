@@ -1,4 +1,5 @@
 /** Maintained E0 browser fixture, served by Vite only; never a Next.js product route. */
+import "../../src/app/globals.css";
 import React, { useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PromptEditor } from "../../src/components/generation/prompt-editor";

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/popover";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
 import { ProjectMediaPreview } from "@/components/media/project-media";
-import type { ComposerSession } from "./composer-session";
+import { inComposition, type ComposerSession } from "./composer-session";
 import {
   labelKind,
   referenceLabel,
@@ -98,7 +98,11 @@ export function ReferenceMentionMenu({
     return () => media.removeEventListener("change", update);
   }, []);
   const keyDown = useEffectEvent((event: KeyboardEvent) => {
-    if (event.isComposing || session.editor.view.composing) return;
+    if (inComposition(session.editor, event)) {
+      // Leave the native IME action intact while bypassing the editor keymaps.
+      event.stopImmediatePropagation();
+      return;
+    }
     if (event.key === "ArrowLeft" && category) {
       event.preventDefault();
       event.stopImmediatePropagation();

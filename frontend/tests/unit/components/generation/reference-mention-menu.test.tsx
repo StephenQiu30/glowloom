@@ -219,6 +219,9 @@ it("输入@后方向键先选分类再选参考，Enter替换触发文本且只�
   fireEvent.keyDown(editor.view.dom, { key: "ArrowDown" });
   fireEvent.keyDown(editor.view.dom, { key: "Enter" });
   await screen.findByRole("option", { name: "图片1" });
+  fireEvent.keyDown(editor.view.dom, { key: "Enter", keyCode: 229 });
+  expect(editor.getText()).toBe("保留正文 @");
+  expect(screen.getByRole("option", { name: "图片1" })).toBeTruthy();
   fireEvent.keyDown(editor.view.dom, { key: "ArrowDown" });
   fireEvent.keyDown(editor.view.dom, { key: "Enter" });
   await waitFor(() => expect(editor.getText()).toBe("保留正文 图片1"));

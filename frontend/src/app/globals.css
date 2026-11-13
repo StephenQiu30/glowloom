@@ -1194,7 +1194,7 @@ button:not(:disabled),
 }
 .creation-input-surface,
 .creation-hero .canvas-idea[data-slot="input-group"] {
-  --creation-prompt-height: 76px;
+  --creation-prompt-min-height: calc(var(--spacing) * 16);
   background: var(--creation-surface);
   box-shadow: inset 0 0 0 1px var(--creation-border);
   border-radius: 24px;
@@ -1204,7 +1204,7 @@ button:not(:disabled),
 }
 .creation-input-surface .reference-stack,
 .creation-input-surface .reference-stack > button:first-of-type {
-  height: var(--creation-prompt-height);
+  height: var(--creation-prompt-min-height);
 }
 .model-select-list[data-slot] {
   width: min(
@@ -1264,17 +1264,10 @@ button:not(:disabled),
   flex-shrink: 0;
 }
 .creation-editor-skeleton {
-  height: 160px;
-  width: 100%;
-  border-radius: var(--radius-xl);
+  @apply h-40 w-full rounded-xl;
 }
 .creation-composer[data-slot="input-group"] {
-  min-height: 160px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  align-items: stretch;
+  @apply flex h-auto min-h-40 flex-col items-stretch gap-4 p-4;
 }
 [data-canvas-reference-layout] button[data-size="reference"] {
   width: 48px;
@@ -1287,14 +1280,13 @@ button:not(:disabled),
   box-shadow: none;
   background: transparent;
   color: var(--foreground);
-  font-size: 14px;
-  line-height: 22px;
+  @apply text-base wrap-anywhere whitespace-pre-wrap md:text-sm;
 }
 .creation-editor-body {
   display: flex;
   gap: 12px;
   min-width: 0;
-  height: var(--creation-prompt-height);
+  min-height: var(--creation-prompt-min-height);
 }
 .creation-reference-tools[data-slot="input-group-addon"] {
   padding: 0;
@@ -1308,16 +1300,8 @@ button:not(:disabled),
   min-width: 0;
 }
 .home-prompt-editor {
-  height: var(--creation-prompt-height);
-  min-height: 0;
-}
-.home-prompt-editor,
-.creation-ready-prompt .tiptap {
-  color: var(--foreground);
-  font-size: 14px;
-  line-height: 22px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  @apply max-h-80;
+  min-height: var(--creation-prompt-min-height);
 }
 .creation-tools:is([data-slot="input-group-addon"], [data-composer-toolbar]) {
   min-height: 36px;
@@ -1371,17 +1355,16 @@ button:not(:disabled),
 }
 .creation-ready-prompt {
   min-width: 0;
-  height: var(--creation-prompt-height);
+  min-height: var(--creation-prompt-min-height);
   overflow-y: auto;
 }
 .creation-ready-prompt .tiptap {
-  min-height: var(--creation-prompt-height);
-  max-height: var(--creation-prompt-height);
+  min-height: var(--creation-prompt-min-height);
 }
 [data-expanded] .creation-ready-prompt,
 [data-expanded] .creation-ready-prompt .tiptap {
   height: auto;
-  min-height: 240px;
+  min-height: 100%;
   max-height: none;
 }
 .home-canvas-launch {
@@ -1472,8 +1455,7 @@ button:not(:disabled),
   min-width: 0;
 }
 .canvas-idea .home-prompt-editor {
-  height: 24px;
-  min-height: 24px;
+  min-height: 1lh;
 }
 .canvas-idea > [data-slot="input-group-addon"] {
   padding: 0;
@@ -1924,9 +1906,6 @@ button:not(:disabled),
     min-height: 80px;
     height: auto;
     padding: 12px;
-  }
-  .canvas-idea .home-prompt-editor {
-    height: 48px;
   }
 }
 .workspace-tabs {
@@ -3209,8 +3188,7 @@ button:not(:disabled),
   inset: 0 4px auto 0;
   color: var(--muted-foreground);
   pointer-events: none;
-  font-size: 14px;
-  line-height: 22px;
+  @apply text-base md:text-sm;
 }
 .prompt-with-hint:has(
     .prompt-editor > p:only-child > br:only-child,

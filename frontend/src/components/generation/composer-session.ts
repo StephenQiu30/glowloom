@@ -137,6 +137,7 @@ function referenceSuggestions() {
             onUpdate: show,
             onExit: () => editor.emit("composerMention", null),
             onKeyDown: ({ event }) => {
+              if (inComposition(editor, event)) return false;
               if (event.key === "Escape") {
                 exitSuggestion(editor.view, mentionKey);
                 return true;
@@ -359,7 +360,10 @@ function history(editor: Editor, direction: "undo" | "redo") {
   editor.view.dispatch(tr);
   return !!entry;
 }
-function inComposition(editor: Editor, event?: KeyboardEvent | InputEvent) {
+export function inComposition(
+  editor: Editor,
+  event?: KeyboardEvent | InputEvent,
+) {
   return (
     stateOf(editor.state).composing ||
     editor.view.composing ||

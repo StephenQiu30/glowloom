@@ -802,14 +802,10 @@ function EditorWorkspace({
   ]);
   useEffect(() => {
     onLock?.(frozen || pending);
-    session?.editor.setEditable(
-      !suspended && (!frozen || session.composing),
-      false,
-    );
     return () => {
       onLock?.(false);
     };
-  }, [frozen, pending, onLock, session, suspended, draft]);
+  }, [frozen, pending, onLock]);
   useEffect(() => {
     if (canvas) return;
     const before = (e: BeforeUnloadEvent) => {
@@ -1302,6 +1298,7 @@ function EditorWorkspace({
     >
       <PromptEditor
         inputGroup={compact}
+        editable={!suspended && (!frozen || session?.composing === true)}
         className={
           compact
             ? "max-h-80 min-h-16 overflow-y-auto"
@@ -1320,7 +1317,7 @@ function EditorWorkspace({
                 : textOnlyAudio
                   ? "输入需要朗读的文字。"
                   : presentation === "assistant"
-                    ? "说说你的想法或任务，上传参考、输入文字或"
+                    ? "描述任务，@ 引用素材"
                     : compact
                       ? "描述创意，@ 引用素材"
                       : undefined
