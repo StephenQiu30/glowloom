@@ -90,6 +90,9 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 			if prepareErr != nil {
 				return prepareErr
 			}
+			if originalSource.Kind == "canvas_input" {
+				prepared.Source = &domain.CanvasSource{CanvasID: originalSource.CanvasID, NodeID: originalSource.NodeID, Revision: originalSource.CanvasRevision}
+			}
 			input = prepared
 		}
 		now := time.Now().UTC()

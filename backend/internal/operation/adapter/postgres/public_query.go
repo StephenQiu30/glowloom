@@ -130,7 +130,8 @@ func (s *Store) ListPublicTasks(ctx context.Context, actor identityapp.Principal
 				args = append(args, field.id.String())
 			}
 		}
-		if input.CanvasID != nil && input.Status == "" {
+		// Canvas history lists executions; node/row restoration also needs unconfirmed quotes.
+		if input.CanvasID != nil && input.NodeID == nil && input.Status == "" {
 			query += " AND o.status NOT IN ('draft','quoted','expired')"
 		}
 		if input.After != nil {

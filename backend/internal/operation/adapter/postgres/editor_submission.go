@@ -14,7 +14,6 @@ import (
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
@@ -175,9 +174,6 @@ func compileEditorInput(tx *gorm.DB, input application.CreateFreeQuoteInput, d p
 		return input, err
 	}
 	prepared := application.FreeQuoteItemInput{ModelKey: model.ModelKey, Capability: model.Capability, Mode: *d.Mode, Prompt: compiled.Prompt, Params: raw, OutputCount: int32(count), ForceRegenerate: input.ForceRegenerate}
-	if source := input.InputSource; source.Kind == "canvas_input" {
-		prepared.Source = &domain.CanvasSource{CanvasID: source.CanvasID, NodeID: source.NodeID, Revision: source.CanvasRevision}
-	}
 	for _, m := range compiled.Media {
 		id, err := uuid.Parse(m.SourceID)
 		if err != nil {
