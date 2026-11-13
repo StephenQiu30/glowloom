@@ -13,11 +13,17 @@ import {
 
 export function CreditPopover({
   navigation = false,
+  showBalance = false,
 }: {
   navigation?: boolean;
+  showBalance?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const { data: wallet, isLoading, error } = useCreditWallet(undefined, open);
+  const {
+    data: wallet,
+    isLoading,
+    error,
+  } = useCreditWallet(undefined, open || showBalance);
   const Icon = navigation ? Sparkle : Coins;
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -33,7 +39,9 @@ export function CreditPopover({
           }
         >
           <Icon aria-hidden="true" data-icon="inline-start" />
-          <span className="max-md:hidden">积分</span>
+          <span className={showBalance ? undefined : "max-md:hidden"}>
+            {showBalance && wallet?.enabled ? wallet.general_credits : "积分"}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent
