@@ -100,3 +100,6 @@ type GenerationProvider interface {
 	Query(context.Context, catalogdomain.ProviderConfig, string, string) (GenerationResult, error)
 	Cancel(context.Context, catalogdomain.ProviderConfig, string, string) (GenerationResult, error)
 }
+
+// DialNotSent records a failed TCP dial before any connection was obtained.
+const DialNotSent = "dial_not_sent"

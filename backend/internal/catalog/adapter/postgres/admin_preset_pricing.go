@@ -27,7 +27,7 @@ WITH priced AS (
   LEFT JOIN LATERAL (
     SELECT p.id FROM catalog.price_rule_version p WHERE p.model_profile_id=m.id AND NOT p.is_delete
       AND p.source_url IS NOT NULL AND p.reviewed_at<=now()
-      AND NOT jsonb_exists(p.rule,'procurement_price_version_id') AND NOT jsonb_exists(p.rule,'markup_multiplier')
+      AND NOT jsonb_exists(p.rule,'procurement_price_version_id') AND NOT jsonb_exists(p.rule,'markup_multiplier') AND NOT jsonb_exists(p.rule,'discount_factor')
     ORDER BY p.version_no DESC LIMIT 1
   ) purchase ON true
   LEFT JOIN LATERAL (
@@ -39,7 +39,7 @@ WITH priced AS (
       AND tariff.source_url IS NOT NULL AND tariff.reviewed_at<=now() AND tariff.effective_from<=p.effective_from
       AND jsonb_exists(p.rule,'cached_input_micros_per_1k')=jsonb_exists(tariff.rule,'cached_input_micros_per_1k')
       AND jsonb_exists(p.rule,'reference_scope')=jsonb_exists(tariff.rule,'reference_scope')
-      AND NOT jsonb_exists(tariff.rule,'markup_multiplier') AND NOT jsonb_exists(tariff.rule,'procurement_price_version_id')
+      AND NOT jsonb_exists(tariff.rule,'markup_multiplier') AND NOT jsonb_exists(tariff.rule,'discount_factor') AND NOT jsonb_exists(tariff.rule,'procurement_price_version_id')
     ORDER BY (p.id=r.price_version_id AND p.effective_from<=now()) DESC NULLS LAST, p.version_no DESC LIMIT 1
   ) sale ON true
   LEFT JOIN catalog.price_rule_version active_price ON active_price.id=r.price_version_id

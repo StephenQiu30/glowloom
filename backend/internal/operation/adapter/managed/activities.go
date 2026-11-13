@@ -108,22 +108,9 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 			return unknown, nil
 		}
 	}
-	credential, err := a.store.LoadManagedCredential(ctx, op.ID)
+	config, providerKey, keyID, err := a.boundProvider(ctx, &loaded)
 	if err != nil {
 		return unknown, err
-	}
-	var config catalogdomain.ProviderConfig
-	if json.Unmarshal(credential.Config, &config) != nil || config.Validate() != nil {
-		return unknown, application.ErrInvalidProviderCall
-	}
-	secret, err := a.keys.Open(credential.KeyID, credential.ProviderID, credential.CredentialID, credential.Ciphertext)
-	if err != nil {
-		return unknown, application.ErrWorkflowModelUnavailable
-	}
-	defer clear(secret)
-	providerKey, keyErr := config.CredentialValue(secret)
-	if keyErr != nil {
-		return unknown, application.ErrWorkflowModelUnavailable
 	}
 	var result application.GenerationResult
 	var receivedAt *time.Time
@@ -132,7 +119,30 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		if requestErr != nil {
 			return application.ManagedProgress{State: application.ManagedProgressNotSubmitted, ErrorCode: "input_unavailable"}, nil
 		}
-		result, err = a.client.Submit(ctx, request, providerKey)
+		sendCtx, cancel := context.WithTimeout(ctx, time.Duration(config.TimeoutSeconds)*time.Second)
+		defer cancel()
+		result, err = a.client.Submit(sendCtx, request, providerKey)
+		if result.Outcome == application.ProviderOutcomeNotSubmitted && result.ErrorCode == application.DialNotSent && err == nil && sendCtx.Err() == nil {
+			if router, ok := a.store.(interface {
+				ClaimUnsentBackup(context.Context, application.ProviderDispatchIdentity, uuid.UUID) (bool, error)
+			}); ok {
+				claimed, claimErr := router.ClaimUnsentBackup(sendCtx, identity, keyID)
+				if claimErr != nil {
+					return unknown, claimErr
+				}
+				if claimed {
+					config, providerKey, _, err = a.boundProvider(sendCtx, &loaded)
+					if err != nil {
+						return unknown, err
+					}
+					request, err = a.request(sendCtx, loaded, config)
+					if err != nil {
+						return application.ManagedProgress{State: application.ManagedProgressNotSubmitted, ErrorCode: "input_unavailable"}, nil
+					}
+					result, err = a.client.Submit(sendCtx, request, providerKey)
+				}
+			}
+		}
 		if config.AdapterKey == "deepseek" {
 			observed := time.Now().UTC()
 			receivedAt = &observed
@@ -343,4 +353,29 @@ func (a *Activities) request(ctx context.Context, loaded application.WorkflowOpe
 	}
 	request.Prompt = strings.Join(texts, "\n")
 	return request, nil
+}
+
+func (a *Activities) boundProvider(ctx context.Context, loaded *application.WorkflowOperation) (catalogdomain.ProviderConfig, string, uuid.UUID, error) {
+	credential, err := a.store.LoadManagedCredential(ctx, loaded.Operation.ID)
+	if err != nil {
+		return catalogdomain.ProviderConfig{}, "", uuid.Nil, err
+	}
+	if credential.ModelID != "" {
+		loaded.Provider.ProviderModelID = credential.ModelID
+		loaded.Provider.EndpointTag = credential.EndpointTag
+	}
+	var config catalogdomain.ProviderConfig
+	if json.Unmarshal(credential.Config, &config) != nil || config.Validate() != nil {
+		return catalogdomain.ProviderConfig{}, "", uuid.Nil, application.ErrInvalidProviderCall
+	}
+	secret, err := a.keys.Open(credential.KeyID, credential.ProviderID, credential.CredentialID, credential.Ciphertext)
+	if err != nil {
+		return catalogdomain.ProviderConfig{}, "", uuid.Nil, application.ErrWorkflowModelUnavailable
+	}
+	defer clear(secret)
+	providerKey, keyErr := config.CredentialValue(secret)
+	if keyErr != nil {
+		return catalogdomain.ProviderConfig{}, "", uuid.Nil, application.ErrWorkflowModelUnavailable
+	}
+	return config, providerKey, credential.CredentialID, nil
 }

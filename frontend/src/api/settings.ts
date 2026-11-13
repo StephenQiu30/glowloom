@@ -125,6 +125,21 @@ export async function getConfigReceipt(
   });
 }
 
+/** 预览模型销售价格 POST /api/admin/model-price-preview */
+export async function previewAdminSalePrice(
+  body: API.SalePreviewRequest,
+  options?: RequestOptions,
+) {
+  return request<API.SalePreview>("/api/admin/model-price-preview", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 激活已验证模型发布 POST /api/admin/model-releases/${param0}/activate */
 export async function activateModelRelease(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -137,6 +152,45 @@ export async function activateModelRelease(
     `/api/admin/model-releases/${param0}/activate`,
     {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
+/** 查看模型备用线路 GET /api/admin/model-releases/${param0}/route-pool */
+export async function readAdminRoutePool(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.readAdminRoutePoolParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.RoutePool>(
+    `/api/admin/model-releases/${param0}/route-pool`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 发布模型备用线路 PUT /api/admin/model-releases/${param0}/route-pool */
+export async function publishAdminRoutePool(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.publishAdminRoutePoolParams,
+  body: API.PoolPublication,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.RoutePool>(
+    `/api/admin/model-releases/${param0}/route-pool`,
+    {
+      method: "PUT",
       headers: {
         "Content-Type": "application/json",
       },
@@ -782,6 +836,28 @@ export async function testProviderOnboardingModel(
     {
       method: "POST",
       params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 调整已验证 Key 的号池准入 PUT /api/admin/providers/${param0}/credentials/${param1}/pool */
+export async function updateAdminPoolKey(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.updateAdminPoolKeyParams,
+  body: API.PoolKeyUpdate,
+  options?: RequestOptions,
+) {
+  const { id: param0, credential_id: param1, ...queryParams } = params;
+  return request<API.ProviderCredentialSummary>(
+    `/api/admin/providers/${param0}/credentials/${param1}/pool`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
       ...(options || {}),
     },
   );

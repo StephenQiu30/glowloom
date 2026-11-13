@@ -1095,6 +1095,7 @@ declare namespace API {
     id?: string;
     key?: string;
     name?: string;
+    quota_group?: string;
     rate_limit_per_min?: number;
     region?: Region;
     revision?: number;
@@ -4482,6 +4483,18 @@ declare namespace API {
     status: string;
   };
 
+  type PoolKeyUpdate = {
+    enabled?: boolean;
+    request_id?: string;
+  };
+
+  type PoolPublication = {
+    backups?: string[];
+    equivalent?: boolean;
+    expected_revision?: number;
+    request_id?: string;
+  };
+
   type Preference = {
     customization?: Customization;
     definition?: Definition;
@@ -5030,6 +5043,7 @@ declare namespace API {
     last4?: string;
     last_test_result?: TestResult;
     last_tested_at?: string;
+    pool_enabled?: boolean;
     provider_id?: string;
     status?: CredentialStatus;
     update_time?: string;
@@ -5142,6 +5156,11 @@ declare namespace API {
     id: string;
   };
 
+  type publishAdminRoutePoolParams = {
+    /** 主线路发布编号 */
+    id: string;
+  };
+
   type PublishedModelVersion = {
     create_time?: string;
     id?: string;
@@ -5172,6 +5191,7 @@ declare namespace API {
   type PublishPriceRequest = {
     candidate_id?: string;
     currency?: string;
+    discount_factor?: string;
     effective_from?: string;
     expected_revision?: number;
     fx_rate_to_cny?: string;
@@ -5327,6 +5347,11 @@ declare namespace API {
 
   type QuotesRequest = {
     items?: QuoteItemRequest[];
+  };
+
+  type readAdminRoutePoolParams = {
+    /** 主线路发布编号 */
+    id: string;
   };
 
   type readCanvasAssistantSessionParams = {
@@ -5739,6 +5764,28 @@ declare namespace API {
     type?: string;
   };
 
+  type RouteAttempt = {
+    attempt?: number;
+    key_suffix?: string;
+    operation_id?: string;
+    provider_name?: string;
+    reason?: string;
+  };
+
+  type RouteOption = {
+    display_name?: string;
+    provider_model_id?: string;
+    provider_name?: string;
+    release_id?: string;
+  };
+
+  type RoutePool = {
+    backups?: string[];
+    options?: RouteOption[];
+    recent?: RouteAttempt[];
+    revision?: number;
+  };
+
   type RunPage = {
     items: RunSummary[];
     next_cursor?: string;
@@ -5769,6 +5816,30 @@ declare namespace API {
     root_run_id: string;
     session_id: string;
     status: string;
+  };
+
+  type SalePreview = {
+    procurement_micros?: number;
+    regular_credits?: number;
+    sale_credits?: number;
+    sale_micros?: number;
+  };
+
+  type SalePreviewRequest = {
+    characters?: number;
+    currency?: string;
+    discount_factor?: string;
+    duration_ms?: number;
+    fx_rate_to_cny?: string;
+    input_tokens?: number;
+    markup_multiplier?: string;
+    mode?: string;
+    output_count?: number;
+    output_tokens?: number;
+    reference_images?: number;
+    resolution?: string;
+    rule?: Record<string, any>;
+    unit?: PriceUnit;
   };
 
   type SampleInput = {
@@ -7190,6 +7261,13 @@ declare namespace API {
     id: string;
   };
 
+  type updateAdminPoolKeyParams = {
+    /** 连接 */
+    id: string;
+    /** 凭据 */
+    credential_id: string;
+  };
+
   type updateAdminProviderParams = {
     /** 渠道UUID */
     id: string;
@@ -7246,6 +7324,7 @@ declare namespace API {
     concurrency_limit?: number;
     expected_revision?: number;
     name?: string;
+    quota_group?: string;
     rate_limit_per_min?: number;
     status?: ProviderStatus;
   };

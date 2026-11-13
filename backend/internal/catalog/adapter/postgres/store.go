@@ -76,7 +76,7 @@ func (s *Store) FindProvider(ctx context.Context, providerID uuid.UUID) (domain.
 	var row providerRow
 	result := s.db.WithContext(ctx).Raw(`
 		SELECT id, current_config_version_id, key, name, adapter_key, region, status, concurrency_limit,
-		       rate_limit_per_min, revision, create_time, update_time
+		       quota_group,rate_limit_per_min, revision, create_time, update_time
 		FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete
 	`, providerID.String()).Scan(&row)
 	if result.Error != nil {
@@ -98,10 +98,10 @@ func (s *Store) UpdateProvider(ctx context.Context, provider domain.Provider, ex
 	}
 	result := s.db.WithContext(ctx).Exec(`
 		UPDATE catalog.provider
-		SET name = ?, status = ?, concurrency_limit = ?, rate_limit_per_min = ?,
+		SET quota_group=?, name = ?, status = ?, concurrency_limit = ?, rate_limit_per_min = ?,
 		    revision = revision + 1, update_time = now()
 		WHERE id = ?::uuid AND revision = ? AND NOT is_delete
-	`, provider.Name, string(provider.Status), provider.ConcurrencyLimit, provider.RateLimitPerMin,
+	`, provider.QuotaGroup, provider.Name, string(provider.Status), provider.ConcurrencyLimit, provider.RateLimitPerMin,
 		provider.ID.String(), expectedRevision)
 	if result.Error != nil {
 		return fmt.Errorf("update provider: %w", result.Error)
@@ -217,6 +217,7 @@ type providerRow struct {
 	Region                 string
 	Status                 string
 	ConcurrencyLimit       int
+	QuotaGroup             string
 	RateLimitPerMin        int
 	Revision               int64
 	CreateTime             time.Time
@@ -227,7 +228,7 @@ func (row providerRow) provider() domain.Provider {
 	return domain.Provider{
 		ID: row.ID, CurrentConfigVersionID: row.CurrentConfigVersionID, Key: row.Key, Name: row.Name, AdapterKey: row.AdapterKey,
 		Region: domain.Region(row.Region), Status: domain.ProviderStatus(row.Status),
-		ConcurrencyLimit: row.ConcurrencyLimit, RateLimitPerMin: row.RateLimitPerMin,
+		ConcurrencyLimit: row.ConcurrencyLimit, QuotaGroup: row.QuotaGroup, RateLimitPerMin: row.RateLimitPerMin,
 		Revision: row.Revision, CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
 	}
 }

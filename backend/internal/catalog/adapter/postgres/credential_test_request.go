@@ -178,7 +178,7 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 				return application.ErrInvalidCredentialTest
 			}
 			var limits struct{ ConcurrencyLimit, RateLimitPerMin int64 }
-			if err := tx.Raw(`SELECT concurrency_limit,rate_limit_per_min FROM catalog.provider WHERE id=?`, request.ProviderID).Scan(&limits).Error; err != nil {
+			if err := tx.Raw(`SELECT concurrency_limit,rate_limit_per_min FROM catalog.effective_provider_limit WHERE id=?`, request.ProviderID).Scan(&limits).Error; err != nil {
 				return err
 			}
 			active, recent, err := s.checkUsage(tx).ProviderUsage(ctx, request.ProviderID)

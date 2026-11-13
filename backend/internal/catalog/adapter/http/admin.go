@@ -264,6 +264,7 @@ type UpdateProviderRequest struct {
 	Name             *string                `json:"name,omitempty"`
 	ExpectedRevision int64                  `json:"expected_revision"`
 	Status           *domain.ProviderStatus `json:"status,omitempty"`
+	QuotaGroup       *string                `json:"quota_group,omitempty"`
 	ConcurrencyLimit *int                   `json:"concurrency_limit,omitempty"`
 	RateLimitPerMin  *int                   `json:"rate_limit_per_min,omitempty"`
 }
@@ -290,7 +291,7 @@ func (h *AdminHandler) UpdateProvider(c *gin.Context) {
 	if !httpapi.Decode(c, &body) {
 		return
 	}
-	result, err := h.deps.UpdateProvider.Execute(c.Request.Context(), identityhttp.Principal(c), application.UpdateProviderInput{ProviderID: id, ExpectedRevision: body.ExpectedRevision, Name: body.Name, Status: body.Status, ConcurrencyLimit: body.ConcurrencyLimit, RateLimitPerMin: body.RateLimitPerMin, RequestID: c.GetHeader("Idempotency-Key")})
+	result, err := h.deps.UpdateProvider.Execute(c.Request.Context(), identityhttp.Principal(c), application.UpdateProviderInput{ProviderID: id, ExpectedRevision: body.ExpectedRevision, QuotaGroup: body.QuotaGroup, Name: body.Name, Status: body.Status, ConcurrencyLimit: body.ConcurrencyLimit, RateLimitPerMin: body.RateLimitPerMin, RequestID: c.GetHeader("Idempotency-Key")})
 	if err != nil {
 		adminError(c, err)
 		return
@@ -588,6 +589,7 @@ type PublishPriceRequest struct {
 	Currency         string           `json:"currency"`
 	FXRateToCNY      string           `json:"fx_rate_to_cny"`
 	MarkupMultiplier string           `json:"markup_multiplier,omitempty"`
+	DiscountFactor   string           `json:"discount_factor,omitempty"`
 	EffectiveFrom    time.Time        `json:"effective_from"`
 }
 
@@ -614,7 +616,7 @@ func (h *AdminHandler) PublishPrice(c *gin.Context) {
 	if !httpapi.Decode(c, &b) {
 		return
 	}
-	result, err := h.deps.PublishPrice.Execute(c.Request.Context(), identityhttp.Principal(c), application.PublishPriceRuleInput{UseOfficialRate: b.UseOfficialRate, SourceURL: b.SourceURL, ReviewedAt: b.ReviewedAt, CandidateID: b.CandidateID, ModelID: id, ExpectedRevision: b.ExpectedRevision, VersionNo: b.VersionNo, Unit: b.Unit, Rule: b.Rule, Currency: b.Currency, FXRateToCNY: b.FXRateToCNY, MarkupMultiplier: b.MarkupMultiplier, EffectiveFrom: b.EffectiveFrom, RequestID: c.GetHeader("Idempotency-Key")})
+	result, err := h.deps.PublishPrice.Execute(c.Request.Context(), identityhttp.Principal(c), application.PublishPriceRuleInput{UseOfficialRate: b.UseOfficialRate, SourceURL: b.SourceURL, ReviewedAt: b.ReviewedAt, CandidateID: b.CandidateID, ModelID: id, ExpectedRevision: b.ExpectedRevision, VersionNo: b.VersionNo, Unit: b.Unit, Rule: b.Rule, Currency: b.Currency, FXRateToCNY: b.FXRateToCNY, MarkupMultiplier: b.MarkupMultiplier, DiscountFactor: b.DiscountFactor, EffectiveFrom: b.EffectiveFrom, RequestID: c.GetHeader("Idempotency-Key")})
 	if err != nil {
 		adminError(c, err)
 		return

@@ -316,10 +316,7 @@ func (s *Store) readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQu
 		       price.source_url AS price_source_url,price.reviewed_at AS price_reviewed_at,price.effective_from AS price_effective_from
 		FROM catalog.model_profile AS m
 		JOIN catalog.provider AS provider
-		  ON provider.id = m.provider_id AND provider.status = 'active' AND NOT provider.is_delete
-		JOIN catalog.provider_credential AS credential
-		  ON credential.provider_id = provider.id
-		 AND credential.status = 'active' AND NOT credential.is_delete
+		  ON provider.id = m.provider_id AND NOT provider.is_delete
 		LEFT JOIN catalog.model_release AS published ON published.id=m.active_release_id AND published.status='active'
 		JOIN catalog.capability AS capability
 		  ON capability.key = m.capability AND NOT capability.is_delete
@@ -331,11 +328,12 @@ func (s *Store) readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQu
 		  WHERE (provider.adapter_key NOT IN (%[1]s) OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
 		  ORDER BY effective_from DESC, version_no DESC LIMIT 1
 		) AS price ON true
-		WHERE m.model_key = ? AND (provider.adapter_key NOT IN (%[1]s) OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND m.capability = ? AND m.status = 'active'
+		WHERE m.model_key = ? AND (provider.adapter_key IN (%[1]s) OR (provider.status='active' AND EXISTS(
+ SELECT 1 FROM catalog.provider_credential k WHERE k.provider_id=provider.id AND k.status='active' AND NOT k.is_delete))) AND (provider.adapter_key NOT IN (%[1]s) OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND m.capability = ? AND m.status = 'active'
 		  AND NOT m.is_delete AND ? = ANY(v.modes) AND ? = ANY(capability.modes)
 		  AND 'prompt' = ANY(capability.input_roles)
 		  AND (? OR provider.region = 'domestic')
-		FOR SHARE OF m, provider, credential
+		FOR SHARE OF m, provider
 	`, catalogdomain.ManagedCloudSQLInList()), now, input.ModelKey, input.Capability, input.Mode, input.Mode, allowOverseas).Scan(&row)
 	if read.Error != nil {
 		return application.FreeQuoteCatalog{}, fmt.Errorf("read current free quote model: %w", read.Error)

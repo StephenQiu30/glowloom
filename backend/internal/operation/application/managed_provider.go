@@ -13,6 +13,8 @@ var ErrManagedCapacity = errors.New("managed provider capacity reached")
 // ManagedCredential is worker-only encrypted material for the original account.
 // Never serialize this structure into a workflow, API response, or log.
 type ManagedCredential struct {
+	ModelID         string
+	EndpointTag     string
 	ProviderID      uuid.UUID
 	CredentialID    uuid.UUID
 	ConfigVersionID uuid.UUID

@@ -100,12 +100,13 @@ func TestManagedReferenceSettlementRequiresFrozenQuoteCount(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			database := operationStoreDB(t)
-			f := seedManagedFixture(t, database)
+			f := seedUnverifiedManagedFixture(t, database)
 			i := f.identity
 			require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='image.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 			require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text2image'],supports_query=false,supports_cancel=false,queue='provider',moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
 			require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_image',rule='{"base_micros":11,"by_resolution":{"2K":2},"free_reference_images":1,"reference_image_micros":3,"reference_scope":"per_task"}' WHERE id=?`, i.PriceRuleVersionID).Error)
 			require.NoError(t, database.Exec(`UPDATE operation.operation SET capability='image.generate',mode='text2image',params='{"size":"2K"}',quote_detail=?::jsonb WHERE id=?`, tc.detail, i.OperationID).Error)
+			seedDispatchModeEvidence(t, database, f)
 			claim, err := f.store.ClaimProviderDispatch(t.Context(), i)
 			require.NoError(t, err)
 			require.True(t, claim.Claimed)

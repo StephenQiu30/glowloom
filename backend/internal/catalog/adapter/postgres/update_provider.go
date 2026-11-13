@@ -67,7 +67,7 @@ func (s *Store) FindProviderUpdateReceipt(ctx context.Context, actor identityapp
 		if err := json.Unmarshal(row.Result, &model); err != nil {
 			return err
 		}
-		out = application.CreatedProvider{ID: model.ID, Key: model.Key, Name: model.Name, AdapterKey: model.AdapterKey, Region: model.Region, Status: model.Status, ConcurrencyLimit: model.ConcurrencyLimit, RateLimitPerMin: model.RateLimitPerMin, Revision: model.Revision, CreateTime: model.CreateTime, UpdateTime: model.UpdateTime}
+		out = application.CreatedProvider{ID: model.ID, Key: model.Key, Name: model.Name, AdapterKey: model.AdapterKey, Region: model.Region, Status: model.Status, ConcurrencyLimit: model.ConcurrencyLimit, QuotaGroup: model.QuotaGroup, RateLimitPerMin: model.RateLimitPerMin, Revision: model.Revision, CreateTime: model.CreateTime, UpdateTime: model.UpdateTime}
 		found = true
 		return nil
 	})
@@ -80,7 +80,7 @@ func (s *Store) updateProviderWithEvents(ctx context.Context, actor identityapp.
 		before.ID != after.ID || before.Key != after.Key ||
 		before.AdapterKey != after.AdapterKey || before.Region != after.Region ||
 		before.Revision+1 != after.Revision ||
-		(before.Name == after.Name && before.Status == after.Status && before.ConcurrencyLimit == after.ConcurrencyLimit &&
+		(before.QuotaGroup == after.QuotaGroup && before.Name == after.Name && before.Status == after.Status && before.ConcurrencyLimit == after.ConcurrencyLimit &&
 			before.RateLimitPerMin == after.RateLimitPerMin) ||
 		!validProviderUpdateEvents(actor.ID, actor.OrgID, before, after, events) {
 		return domain.Provider{}, application.ErrInvalidUpdateProvider
@@ -93,7 +93,7 @@ func (s *Store) updateProviderWithEvents(ctx context.Context, actor identityapp.
 		var row providerRow
 		result := tx.Raw(`
 			SELECT id, key, name, adapter_key, region, status, concurrency_limit,
-			       rate_limit_per_min, revision, create_time, update_time
+			       quota_group,rate_limit_per_min, revision, create_time, update_time
 			FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
 		`, before.ID.String()).Scan(&row)
 		if result.Error != nil {
@@ -104,7 +104,7 @@ func (s *Store) updateProviderWithEvents(ctx context.Context, actor identityapp.
 		}
 		current := row.provider()
 		if current.Revision != before.Revision || current.Key != before.Key ||
-			current.Name != before.Name || current.AdapterKey != before.AdapterKey ||
+			current.QuotaGroup != before.QuotaGroup || current.Name != before.Name || current.AdapterKey != before.AdapterKey ||
 			current.Region != before.Region || current.Status != before.Status ||
 			current.ConcurrencyLimit != before.ConcurrencyLimit ||
 			current.RateLimitPerMin != before.RateLimitPerMin {

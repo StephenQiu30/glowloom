@@ -148,6 +148,7 @@ func TestPublishOfficialPriceFreezesMultiplierOnlyOnSalesRule(t *testing.T) {
 	input := validPublishPriceRuleInput(uuid.New())
 	input.UseOfficialRate = true
 	input.MarkupMultiplier = "1.25"
+	input.DiscountFactor = "0.8"
 	input.CandidateID = uuid.New()
 	reviewedAt := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
 	_, err = catalogapp.NewPublishPriceRuleCommand(store, validator, func() time.Time {
@@ -162,6 +163,9 @@ func TestPublishOfficialPriceFreezesMultiplierOnlyOnSalesRule(t *testing.T) {
 		t.Fatalf("official price pair was not captured: %+v", store)
 	}
 	var multiplier string
+	if procurementRule[domain.DiscountFactorField] != nil || string(saleRule[domain.DiscountFactorField]) != `"0.8"` {
+		t.Fatal("discount must only appear in sale rule")
+	}
 	if _, exists := procurementRule["markup_multiplier"]; exists {
 		t.Fatal("supplier procurement price contains a platform multiplier")
 	}

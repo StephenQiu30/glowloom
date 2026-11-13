@@ -1,5 +1,7 @@
 "use client";
 
+import { ModelRoutePool } from "./model-route-pool";
+import { SalePricePreview, saleDiscountFactor } from "./sale-price-preview";
 import { PriceEvidenceFields } from "./price-evidence-fields";
 import { isProcurementPrice, pricingUnits } from "./preset-pricing-review";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -91,6 +93,7 @@ export function ModelDetail({
   const [view, setView] = useState<string>(initialView);
   const [priceUnit, setPriceUnit] = useState<string | null>(null);
   const [priceCurrency, setPriceCurrency] = useState<string | null>(null);
+  const [discountTenths, setDiscountTenths] = useState("10");
   const [markupMultiplier, setMarkupMultiplier] = useState("1");
   const [selectedPriceCandidate, setSelectedPriceCandidate] =
     useState<API.ModelPriceCandidate | null>(null);
@@ -120,6 +123,15 @@ export function ModelDetail({
           const activeSale = d.prices?.find(
             (price) =>
               typeof price.rule?.procurement_price_version_id === "string",
+          );
+          setDiscountTenths(
+            String(
+              Number(
+                (Number(activeSale?.rule?.discount_factor ?? 1) * 10).toFixed(
+                  5,
+                ),
+              ),
+            ),
           );
           setMarkupMultiplier(
             String(activeSale?.rule?.markup_multiplier ?? "1"),
@@ -180,6 +192,7 @@ export function ModelDetail({
               ![
                 "procurement_price_version_id",
                 "markup_multiplier",
+                "discount_factor",
                 "credit_ratio",
               ].includes(key),
           ),
@@ -235,6 +248,7 @@ export function ModelDetail({
             candidate_id: selectedPriceCandidate?.id,
             rule,
             markup_multiplier: String(f.get("markup_multiplier") ?? "1"),
+            discount_factor: saleDiscountFactor(f.get("discount_tenths")),
             currency,
             fx_rate_to_cny:
               currency === "CNY" ? undefined : String(f.get("fx_rate") ?? ""),
@@ -510,8 +524,24 @@ export function ModelDetail({
               onChange={(event) => setMarkupMultiplier(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              1 表示与供应商公开价一致；倍率仅影响新销售价格版本。
+              1 倍按采购基准计算折前价。
             </p>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={formFieldId + "-discount"}>
+              销售折扣（折）
+            </FieldLabel>
+            <Input
+              id={formFieldId + "-discount"}
+              name="discount_tenths"
+              type="number"
+              min="0.00001"
+              max="10"
+              step="0.00001"
+              required
+              value={discountTenths}
+              onChange={(e) => setDiscountTenths(e.target.value)}
+            />
           </Field>
           {unit ? (
             <PriceSetup
@@ -521,6 +551,13 @@ export function ModelDetail({
               currency={currency}
             />
           ) : null}
+          {unit && (
+            <SalePricePreview
+              key={unit + ":" + currency}
+              unit={unit}
+              currency={currency}
+            />
+          )}
           <PriceEvidenceFields
             sourceURL={
               selectedPriceCandidate?.source_url ??
@@ -797,6 +834,9 @@ export function ModelDetail({
                   </DialogFooter>
                 </FieldGroup>
               </form>
+              {active?.id && (
+                <ModelRoutePool key={active.id} releaseID={active.id} />
+              )}
             </TabsContent>
             <TabsContent value="pricing" forceMount hidden={view !== "pricing"}>
               <div className="flex flex-col gap-4">

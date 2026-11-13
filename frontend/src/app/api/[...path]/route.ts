@@ -478,6 +478,17 @@ const editorCatalogRoutes: typeof identityRoutes = [
   },
   { pattern: `projects/${identityUUID}/budget`, methods: ["GET"], query: [] },
   { pattern: "billing/wallet", methods: ["GET"], query: ["cursor"] },
+  { pattern: "admin/model-price-preview", methods: ["POST"], query: [] },
+  {
+    pattern: `admin/model-releases/${identityUUID}/route-pool`,
+    methods: ["GET", "PUT"],
+    query: [],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/credentials/${identityUUID}/pool`,
+    methods: ["PUT"],
+    query: [],
+  },
   {
     pattern: `admin/model-releases/${identityUUID}/trial-recovery`,
     methods: ["GET"],

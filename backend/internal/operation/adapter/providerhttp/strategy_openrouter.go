@@ -114,7 +114,7 @@ func (s *OpenRouterStrategy) Submit(ctx context.Context, c *Client, input applic
 
 	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, path, payload, 64<<20)
 	if err != nil {
-		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}, nil
+		return submissionTransportFailure(err), nil
 	}
 	if status < 200 || status >= 300 {
 		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPErrorBody(status, data)}, nil

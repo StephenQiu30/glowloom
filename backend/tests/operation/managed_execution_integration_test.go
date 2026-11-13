@@ -41,13 +41,14 @@ func (f *fixtureGeneration) Cancel(context.Context, catalogdomain.ProviderConfig
 
 func TestManagedTextDispatchRecoveryAndSettlement(t *testing.T) {
 	database := operationStoreDB(t)
-	fixture := seedManagedFixture(t, database)
+	fixture := seedUnverifiedManagedFixture(t, database)
 	i, store := fixture.identity, fixture.store
 	require.NoError(t, database.Exec(`UPDATE catalog.provider SET current_config_version_id=? WHERE id=?`, fixture.config, fixture.provider).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":10}' WHERE id=?`, i.PriceRuleVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE operation.operation SET capability='text.generate',mode='text_to_text',params='{}' WHERE id=?`, i.OperationID).Error)
+	seedDispatchModeEvidence(t, database, fixture)
 	require.NoError(t, database.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','fixture prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
 	network := &fixtureGeneration{}
@@ -125,12 +126,13 @@ func (*cachedUsageGeneration) Cancel(context.Context, catalogdomain.ProviderConf
 
 func TestManagedCachedTokensReachFrozenSettlement(t *testing.T) {
 	database := operationStoreDB(t)
-	fixture := seedManagedFixture(t, database)
+	fixture := seedUnverifiedManagedFixture(t, database)
 	i, store := fixture.identity, fixture.store
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_1k_tokens',rule='{"input_micros_per_1k":1000,"cached_input_micros_per_1k":100,"output_micros_per_1k":2000}' WHERE id=?`, i.PriceRuleVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE operation.operation SET capability='text.generate',mode='text_to_text',params='{}' WHERE id=?`, i.OperationID).Error)
+	seedDispatchModeEvidence(t, database, fixture)
 	require.NoError(t, database.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','cached prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
 	network := &cachedUsageGeneration{}
@@ -164,7 +166,7 @@ func (*videoTokenGeneration) Read(context.Context, catalogdomain.ProviderConfig,
 
 func TestManagedVideoUsesSupplierTokensInsteadOfArtifactDuration(t *testing.T) {
 	database := operationStoreDB(t)
-	f := seedManagedFixture(t, database)
+	f := seedUnverifiedManagedFixture(t, database)
 	i := f.identity
 	require.NoError(t, database.Exec(`UPDATE catalog.provider SET adapter_key='volcengine_ark',region='domestic' WHERE id=?`, f.provider).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.provider_config_version SET config=(SELECT payload->'config' FROM catalog.provider_preset_version WHERE id='6da07a12-0000-4000-8000-000000000001') WHERE id=?`, f.config).Error)
@@ -178,6 +180,7 @@ func TestManagedVideoUsesSupplierTokensInsteadOfArtifactDuration(t *testing.T) {
 		rule=jsonb_build_object('input_micros_per_1k',0,'output_micros_per_1k',1000,'procurement_price_version_id',?::text)
 		WHERE id=?`, procurement, i.PriceRuleVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE operation.operation SET capability='video.generate',mode='text2video',params='{"duration_ms":4000,"resolution":"480p","aspect_ratio":"16:9"}' WHERE id=?`, i.OperationID).Error)
+	seedDispatchModeEvidence(t, database, f)
 	require.NoError(t, database.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','video prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
 	network := &videoTokenGeneration{}

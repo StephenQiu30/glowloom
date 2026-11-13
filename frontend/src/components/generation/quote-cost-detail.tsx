@@ -80,6 +80,11 @@ export function QuoteCostDetail({
               ? `预计消耗 ${credits} 积分`
               : `预计预留 ${formatBillingMicros(amount)}`}
       </p>
+      {typeof detail?.before_discount_credits === "number" && (
+        <p className="text-muted-foreground">
+          折前 {detail.before_discount_credits} 积分
+        </p>
+      )}
       <Collapsible className="min-w-0">
         <CollapsibleTrigger asChild>
           <Button
@@ -124,7 +129,8 @@ export function QuoteCostDetail({
                 输出数: detail?.outputs,
                 币种: detail?.currency,
                 冻结汇率: detail?.fx_rate_to_cny,
-                加价倍率: detail?.markup_multiplier,
+                销售倍率: detail?.markup_multiplier,
+                折扣系数: detail?.discount_factor,
                 ...namedFactors,
                 参考图数: detail?.reference_image_count,
                 免费参考图数: detail?.free_reference_images,

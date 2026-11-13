@@ -128,7 +128,7 @@ func ValidateProcurement(sale, supplier domain.PriceRuleVersion) error {
 	if err != nil {
 		return err
 	}
-	if supplierFields[domain.ProcurementVersionField] != nil || supplierFields["markup_multiplier"] != nil {
+	if supplierFields[domain.ProcurementVersionField] != nil || supplierFields["markup_multiplier"] != nil || supplierFields[domain.DiscountFactorField] != nil {
 		return ErrInvalidConfiguration
 	}
 	var saleStrategy, supplierStrategy string

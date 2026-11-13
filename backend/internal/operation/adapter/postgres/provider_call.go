@@ -462,7 +462,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			cost = &zero
 		case input.Managed || input.Action == "query" && (input.State == application.ProviderCallStateSucceeded || input.State == application.ProviderCallStateFailed) ||
 			input.Action == "cancel" && input.State == application.ProviderCallStateCancelled:
-			priced, procurement, err := priceProviderUsage(tx, op.ModelProfileVersionID, op.PriceRuleVersionID,
+			priced, procurement, err := priceProviderUsage(tx, input.OperationID, op.ModelProfileVersionID, op.PriceRuleVersionID,
 				op.Mode, op.Params, input.Usage, call.DispatchStartedAt, receivedAt)
 			if err != nil {
 				return err
@@ -513,7 +513,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 	})
 }
 
-func priceProviderUsage(tx *gorm.DB, modelVersionID, priceID *uuid.UUID,
+func priceProviderUsage(tx *gorm.DB, operationID uuid.UUID, modelVersionID, priceID *uuid.UUID,
 	mode string, params, rawUsage []byte, startedAt *time.Time, receivedAt time.Time,
 ) (int64, *int64, error) {
 	if len(rawUsage) == 0 || modelVersionID == nil || priceID == nil {
@@ -549,10 +549,18 @@ func priceProviderUsage(tx *gorm.DB, modelVersionID, priceID *uuid.UUID,
 	if err != nil {
 		return 0, nil, err
 	}
+	actualModelVersion := *modelVersionID
+	var route struct{ ProcurementID, VersionID uuid.UUID }
+	if err := tx.Raw(`SELECT COALESCE(retry.procurement_price_id,d.procurement_price_id) AS procurement_id,r.model_version_id AS version_id FROM operation.route_delivery d LEFT JOIN operation.route_retry retry ON retry.operation_id=d.operation_id JOIN catalog.model_release r ON r.id=COALESCE(retry.release_id,d.release_id) WHERE d.operation_id=?`, operationID).Scan(&route).Error; err != nil {
+		return 0, nil, err
+	}
+	if route.ProcurementID != uuid.Nil {
+		procurementID, actualModelVersion = route.ProcurementID, route.VersionID
+	}
 	if procurementID == uuid.Nil {
 		return amount, nil, nil
 	}
-	procurement, err := readFrozenUsagePrice(tx, *modelVersionID, procurementID)
+	procurement, err := readFrozenUsagePrice(tx, actualModelVersion, procurementID)
 	if err != nil {
 		return 0, nil, err
 	}

@@ -17,7 +17,7 @@ import (
 
 // readModelAvailability reads bounded batches inside each caller's authorized snapshot.
 // Read-only probes never contribute to verified_modes.
-func readModelAvailability(tx *gorm.DB, ids []uuid.UUID) (map[uuid.UUID]application.ModelAvailability, error) {
+func readOwnModelAvailability(tx *gorm.DB, ids []uuid.UUID) (map[uuid.UUID]application.ModelAvailability, error) {
 	result := make(map[uuid.UUID]application.ModelAvailability, len(ids))
 	if len(ids) == 0 {
 		return result, nil
@@ -40,13 +40,8 @@ func readModelAvailability(tx *gorm.DB, ids []uuid.UUID) (map[uuid.UUID]applicat
  AND procurement.id IS NOT NULL AND procurement.effective_from<=transaction_timestamp() AND procurement.source_url IS NOT NULL AND procurement.reviewed_at<=transaction_timestamp()) AS price_ready,
  COALESCE(p.current_config_version_id=r.config_version_id,false) AS versions_current,
  COALESCE(to_jsonb(v.modes),'[]'::jsonb) AS modes,
- COALESCE((SELECT jsonb_agg(DISTINCT x.mode) FROM catalog.model_validation x
- JOIN operation.operation op ON op.id=x.operation_id AND op.status='completed' AND NOT op.is_delete
- JOIN operation.provider_binding b ON b.operation_id=op.id AND b.release_id=r.id
- JOIN operation.provider_credential_binding k ON k.operation_id=op.id AND k.credential_id=c.id
- WHERE x.release_id=r.id AND x.credential_id=c.id AND x.status='succeeded' AND x.adapter_version='ai-provider-v1'
- AND x.evidence->>'kind'='real_provider' AND op.mode=x.mode AND op.model_profile_version_id=r.model_version_id
- AND op.price_rule_version_id=r.price_version_id),'[]'::jsonb) AS verified
+ COALESCE((SELECT jsonb_agg(DISTINCT verified.mode) FROM catalog.verified_route_key verified
+ WHERE verified.release_id=r.id),'[]'::jsonb) AS verified
  FROM catalog.model_profile m JOIN catalog.provider p ON p.id=m.provider_id
  LEFT JOIN catalog.capability cap ON cap.key=m.capability AND NOT cap.is_delete
  LEFT JOIN catalog.model_release r ON r.id=m.active_release_id AND r.model_id=m.id AND r.status='active'
@@ -54,7 +49,9 @@ func readModelAvailability(tx *gorm.DB, ids []uuid.UUID) (map[uuid.UUID]applicat
  LEFT JOIN catalog.provider_config_version cfg ON cfg.id=r.config_version_id AND cfg.provider_id=p.id
  LEFT JOIN catalog.provider_preset_version pv ON pv.id=cfg.preset_version_id
  LEFT JOIN catalog.provider_preset preset ON preset.id=pv.preset_id
- LEFT JOIN catalog.provider_credential c ON c.provider_id=p.id AND c.status='active' AND NOT c.is_delete
+ LEFT JOIN LATERAL (SELECT k.* FROM catalog.provider_credential k WHERE k.provider_id=p.id AND NOT k.is_delete
+ AND (k.status='active' OR (k.status='draining' AND k.pool_enabled))
+ ORDER BY (k.last_test_result IS DISTINCT FROM 'auth_failed') DESC,(k.status='active') DESC,k.id LIMIT 1) c ON true
  LEFT JOIN catalog.price_rule_version price ON price.id=r.price_version_id AND price.model_profile_id=m.id AND NOT price.is_delete
  LEFT JOIN catalog.price_rule_version procurement ON procurement.id::text=price.rule->>'procurement_price_version_id' AND procurement.model_profile_id=m.id AND NOT procurement.is_delete
  WHERE m.id IN ? AND NOT m.is_delete`, ids).Scan(&rows).Error
@@ -94,6 +91,44 @@ func readModelAvailability(tx *gorm.DB, ids []uuid.UUID) (map[uuid.UUID]applicat
 	return result, nil
 }
 
+// readModelAvailability adds only reviewed routes for the currently published
+// pool. The public model identity and its commercial contract stay unchanged.
+func readModelAvailability(tx *gorm.DB, ids []uuid.UUID) (map[uuid.UUID]application.ModelAvailability, error) {
+	states, err := readOwnModelAvailability(tx, ids)
+	if err != nil || len(ids) == 0 {
+		return states, err
+	}
+	var rows []struct {
+		ID   uuid.UUID
+		Mode string
+	}
+	err = tx.Raw(`SELECT DISTINCT m.id,ready.mode FROM catalog.model_profile m
+ JOIN catalog.model_release r ON r.id=m.active_release_id
+ JOIN catalog.model_profile_version mv ON mv.id=r.model_version_id AND coalesce(mv.limits->>'provider_endpoint','')=''
+ JOIN LATERAL (SELECT id FROM catalog.route_pool_version WHERE primary_release_id=r.id ORDER BY revision DESC LIMIT 1) v ON true
+ JOIN catalog.route_pool_ready ready ON ready.version_id=v.id
+ WHERE m.id IN ?`, ids).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		st := states[row.ID]
+		// A backup can replace a disabled connection or key, never an invalid sale.
+		if slices.Contains(st.UnavailableReasons, "unsupported_contract") || slices.Contains(st.UnavailableReasons, "price_unverified") || slices.Contains(st.UnavailableReasons, "version_changed") {
+			continue
+		}
+		for i, m := range st.ModeAvailability {
+			if m.Mode == row.Mode {
+				st.ModeAvailability[i] = application.ModeAvailability{Mode: m.Mode, Available: true, UnavailableReasons: []string{}}
+				st.Available = true
+				st.UnavailableReasons = []string{}
+			}
+		}
+		states[row.ID] = st
+	}
+	return states, nil
+}
+
 // AvailableForNewExecution shares the list projection with authorized operation
 // transactions. The caller owns project access; this reader never starts a
 // transaction or treats a credential check as execution evidence.
@@ -110,11 +145,10 @@ func (s *Store) AvailableForNewExecution(ctx context.Context, versionID, release
  JOIN catalog.model_profile_version v ON v.model_profile_id=m.id AND v.id=?
  JOIN catalog.model_release r ON r.id=m.active_release_id AND r.id=? AND r.model_id=m.id
  JOIN catalog.provider p ON p.id=m.provider_id
- JOIN catalog.provider_credential c ON c.provider_id=p.id AND c.status='active' AND NOT c.is_delete
  JOIN catalog.provider_config_version cfg ON cfg.id=r.config_version_id AND cfg.provider_id=p.id
  JOIN catalog.provider_preset_version pv ON pv.id=cfg.preset_version_id
  JOIN catalog.provider_preset preset ON preset.id=pv.preset_id
- WHERE NOT m.is_delete FOR SHARE OF preset,p,m,r,c`, versionID, releaseID).Scan(&row)
+ WHERE NOT m.is_delete FOR SHARE OF preset,p,m,r`, versionID, releaseID).Scan(&row)
 	if read.Error != nil {
 		return false, read.Error
 	}

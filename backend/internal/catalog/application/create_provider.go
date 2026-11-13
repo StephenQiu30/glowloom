@@ -42,6 +42,7 @@ type CreateProviderInput struct {
 
 // CreatedProvider is the safe summary returned by registration.
 type CreatedProvider struct {
+	QuotaGroup       string                `json:"quota_group,omitempty"`
 	ID               uuid.UUID             `json:"id"`
 	Key              string                `json:"key"`
 	Name             string                `json:"name"`

@@ -7,8 +7,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptrace"
+	"sync/atomic"
 	"time"
 
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -73,8 +77,17 @@ func (c *Client) request(ctx context.Context, config catalogdomain.ProviderConfi
 		request.Header.Set("HTTP-Referer", "https://glowloom.com")
 		request.Header.Set("X-Title", "Glowloom")
 	}
+	var connected atomic.Bool
+	if method == http.MethodPost {
+		trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { connected.Store(true) }}
+		request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
+	}
 	response, err := c.client.Do(request)
 	if err != nil {
+		var networkErr *net.OpError
+		if method == http.MethodPost && ctx.Err() == nil && !connected.Load() && errors.As(err, &networkErr) && networkErr.Op == "dial" {
+			return nil, 0, errDialNotSent
+		}
 		return nil, 0, err
 	}
 	defer func() { _ = response.Body.Close() }()
@@ -114,3 +127,12 @@ func (c *Client) Cancel(context.Context, catalogdomain.ProviderConfig, string, s
 }
 
 var _ application.GenerationProvider = (*Client)(nil)
+
+var errDialNotSent = errors.New("provider connection was never established")
+
+func submissionTransportFailure(err error) application.GenerationResult {
+	if errors.Is(err, errDialNotSent) {
+		return application.GenerationResult{Outcome: application.ProviderOutcomeNotSubmitted, ErrorCode: application.DialNotSent}
+	}
+	return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}
+}

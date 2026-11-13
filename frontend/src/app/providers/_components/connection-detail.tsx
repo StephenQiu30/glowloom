@@ -57,6 +57,7 @@ import {
   previewProviderUpgrade,
   applyProviderPreset,
   listProviderCredentials,
+  updateAdminPoolKey,
   disableAdminCredential,
   updateAdminProvider,
 } from "@/api/settings";
@@ -478,6 +479,73 @@ export function ConnectionDetail({
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-col gap-4">
+              {provider && !archived && (
+                <form
+                  key={provider.revision}
+                  className="grid gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const values = new FormData(event.currentTarget);
+                    void mutation.run("provider.update", id, (requestID) =>
+                      updateAdminProvider(
+                        { id },
+                        {
+                          expected_revision: provider.revision,
+                          quota_group: String(
+                            values.get("quota_group") ?? "",
+                          ).trim(),
+                          concurrency_limit: Number(
+                            values.get("concurrency_limit"),
+                          ),
+                          rate_limit_per_min: Number(
+                            values.get("rate_limit_per_min"),
+                          ),
+                        },
+                        { headers: { "Idempotency-Key": requestID } },
+                      ),
+                    );
+                  }}
+                >
+                  <Field>
+                    <FieldLabel>
+                      共享额度账号组
+                      <Input
+                        name="quota_group"
+                        maxLength={80}
+                        defaultValue={provider.quota_group ?? ""}
+                        placeholder="留空使用独立额度"
+                      />
+                    </FieldLabel>
+                  </Field>
+                  <Field>
+                    <FieldLabel>
+                      最大并发
+                      <Input
+                        type="number"
+                        name="concurrency_limit"
+                        required
+                        min={1}
+                        defaultValue={provider.concurrency_limit}
+                      />
+                    </FieldLabel>
+                  </Field>
+                  <Field>
+                    <FieldLabel>
+                      每分钟请求上限
+                      <Input
+                        type="number"
+                        name="rate_limit_per_min"
+                        required
+                        min={1}
+                        defaultValue={provider.rate_limit_per_min}
+                      />
+                    </FieldLabel>
+                  </Field>
+                  <Button size="sm" variant="outline" disabled={mutation.busy}>
+                    保存额度
+                  </Button>
+                </form>
+              )}
               <Toolbar aria-label="连接维护" className="flex-wrap">
                 {!archived && onReview && (
                   <Button
@@ -699,12 +767,36 @@ export function ConnectionDetail({
                         {key.status === "active"
                           ? "已配置"
                           : key.status === "draining"
-                            ? "仅供已有任务恢复"
+                            ? key.pool_enabled
+                              ? "号池可选"
+                              : "仅供已有任务恢复"
                             : "已停用"}
                         {key.create_time
                           ? ` · ${new Date(key.create_time).toLocaleString("zh-CN")}`
                           : ""}
                       </span>
+                      {key.status === "draining" && key.id && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={mutation.busy}
+                          onClick={() =>
+                            void mutation.run("pool.key", key.id!, (request) =>
+                              updateAdminPoolKey(
+                                { id, credential_id: key.id! },
+                                {
+                                  enabled: !key.pool_enabled,
+                                  request_id: request,
+                                },
+                              ),
+                            )
+                          }
+                        >
+                          {key.pool_enabled ? "停止接新单" : "加入号池"}
+                        </Button>
+                      )}
+
                       {key.status !== "disabled" ? (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>

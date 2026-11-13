@@ -32,7 +32,7 @@ func submitOpenAIResponses(ctx context.Context, c *Client, input application.Gen
 	}
 	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, "/responses", payload, 8<<20)
 	if err != nil {
-		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "transport_unknown"}, nil
+		return submissionTransportFailure(err), nil
 	}
 	if status < 200 || status >= 300 {
 		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPErrorBody(status, data)}, nil

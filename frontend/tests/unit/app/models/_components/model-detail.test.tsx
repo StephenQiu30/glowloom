@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
   checkResult: vi.fn(),
   createRelease: vi.fn(),
   savePrice: vi.fn(),
+  previewPrice: vi.fn(),
   activateRelease: vi.fn(),
 }));
 vi.mock("@/components/auth/session", () => ({
@@ -29,6 +30,7 @@ vi.mock("@/api/settings", async (importOriginal) => ({
   getProviderCheck: api.checkResult,
   createModelRelease: api.createRelease,
   publishAdminModelPrice: api.savePrice,
+  previewAdminSalePrice: api.previewPrice,
   activateModelRelease: api.activateRelease,
   setAdminModelStatus: api.status,
   getAdminProvider: async () => ({
@@ -275,6 +277,25 @@ it("管理员选择同步候选后显式提交原候选和平台倍率", async (
   fireEvent.change(screen.getByLabelText("平台销售倍率"), {
     target: { value: "1.5" },
   });
+  fireEvent.change(screen.getByLabelText("销售折扣（折）"), {
+    target: { value: "8" },
+  });
+  api.previewPrice.mockResolvedValue({
+    procurement_micros: 72000,
+    sale_micros: 86400,
+    regular_credits: 2,
+    sale_credits: 1,
+  });
+  fireEvent.click(screen.getByText("价格试算"));
+  fireEvent.click(screen.getByRole("button", { name: "试算示例用量" }));
+  await screen.findByText(/折前 2 积分 · 折后 1 积分/);
+  expect(api.previewPrice.mock.calls[0][0]).toMatchObject({
+    discount_factor: "0.8",
+    markup_multiplier: "1.5",
+    output_tokens: 1000,
+  });
+  expect(api.savePrice).not.toHaveBeenCalled();
+
   fireEvent.click(screen.getByRole("button", { name: "核验并保存" }));
   await waitFor(() => expect(api.savePrice).toHaveBeenCalledOnce());
   const submitted = api.savePrice.mock.calls[0][1];
@@ -284,6 +305,7 @@ it("管理员选择同步候选后显式提交原候选和平台倍率", async (
     currency: "USD",
     fx_rate_to_cny: "7.2",
     markup_multiplier: "1.5",
+    discount_factor: "0.8",
     source_url: "https://openrouter.ai/api/v1/models",
     rule: {
       input_micros_per_1k: 2500,

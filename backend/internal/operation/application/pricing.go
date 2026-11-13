@@ -64,6 +64,7 @@ type parsedPriceRule struct {
 	cachedInputMicros *uint64
 	inputMicros       uint64
 	outputMicros      uint64
+	discountFactor    *big.Rat
 	markupMultiplier  *big.Rat
 	creditRatio       *big.Rat
 	byMode            map[string]*big.Rat
@@ -91,6 +92,8 @@ type QuoteCostDetail struct {
 	UnitQuantity          uint64                  `json:"unit_quantity,omitempty"`
 	Outputs               int64                   `json:"outputs"`
 	Multipliers           map[string]json.Number  `json:"multipliers,omitempty"`
+	DiscountFactor        json.Number             `json:"discount_factor,omitempty"`
+	BeforeDiscountCredits *int64                  `json:"before_discount_credits,omitempty"`
 	MarkupMultiplier      json.Number             `json:"markup_multiplier,omitempty"`
 	WholeCredits          bool                    `json:"whole_credits,omitempty"`
 	ExactQuoteMicros      string                  `json:"exact_quote_micros,omitempty"`
@@ -211,7 +214,17 @@ func CalculateQuoteDetailed(price catalogdomain.PriceRuleVersion, input PricingI
 	detail.SourceURL, detail.ReviewedAt = price.SourceURL, price.ReviewedAt
 	detail.PriceRuleVersionID, detail.PriceVersionNo, detail.AmountKind = price.ID, price.VersionNo, "reservation"
 	amount.Mul(amount, rule.markupMultiplier)
-	detail.MarkupMultiplier = decimalNumber(rule.markupMultiplier, 4)
+	if rule.discountFactor.Cmp(big.NewRat(1, 1)) < 0 {
+		before, err := finishPriceAmount(new(big.Rat).Set(amount), fx)
+		if err != nil {
+			return 0, QuoteCostDetail{}, err
+		}
+		credits := calculateCredits(before, rule.creditRatio)
+		detail.BeforeDiscountCredits = &credits
+		detail.DiscountFactor = decimalNumber(rule.discountFactor, 6)
+	}
+	amount.Mul(amount, rule.discountFactor)
+	detail.MarkupMultiplier = decimalNumber(rule.markupMultiplier, 6)
 	detail.Currency = price.Currency
 	if price.Currency != "CNY" {
 		detail.FXRateToCNY = price.FXRateToCNY
@@ -292,6 +305,7 @@ func CalculateActualCostDuring(price catalogdomain.PriceRuleVersion, usage Billa
 		amount.Mul(amount, big.NewRat(1, 2))
 	}
 	amount.Mul(amount, rule.markupMultiplier)
+	amount.Mul(amount, rule.discountFactor)
 	return finishPriceAmount(amount, fx)
 }
 
@@ -430,6 +444,12 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 		return parsedPriceRule{}, nil, ErrInvalidPricingRule
 	}
 	delete(fields, catalogdomain.ProcurementVersionField)
+	discount, valid := catalogdomain.ParseSaleDiscount(fields[catalogdomain.DiscountFactorField])
+	if !valid {
+		return parsedPriceRule{}, nil, ErrInvalidPricingRule
+	}
+	rule.discountFactor = discount
+	delete(fields, catalogdomain.DiscountFactorField)
 	if raw, present := fields["pricing_strategy"]; present {
 		if string(bytes.TrimSpace(raw)) == "null" || json.Unmarshal(raw, &rule.strategy) != nil || rule.strategy == "" || !catalogdomain.CompatiblePricingStrategy(rule.strategy, price.Unit) {
 			return parsedPriceRule{}, nil, ErrInvalidPricingRule

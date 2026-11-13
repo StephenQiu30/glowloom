@@ -219,3 +219,16 @@ func TestCalculateQuoteRejectsInvalidPricingFacts(t *testing.T) {
 		})
 	}
 }
+
+func TestSaleDiscountAppliesOnceToQuotedAndActualUsage(t *testing.T) {
+	price := pricingRule(catalogdomain.PricePerImage, `{"base_micros":7560000,"markup_multiplier":"1.5","discount_factor":"0.8"}`, "CNY", "")
+	amount, detail, err := application.CalculateQuoteDetailed(price, application.PricingInput{OutputCount: 2})
+	if err != nil || amount != 18144000 || detail.EstimatedCredits == nil || *detail.EstimatedCredits != 182 {
+		t.Fatalf("two-image reservation = %d, %+v, %v", amount, detail, err)
+	}
+	delivered := int64(1)
+	actual, err := application.CalculateActualCost(price, application.BillableUsage{OutputCount: &delivered}, "", "")
+	if err != nil || actual != 9072000 {
+		t.Fatalf("one-image settlement = %d, %v", actual, err)
+	}
+}

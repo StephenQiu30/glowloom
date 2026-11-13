@@ -7995,3 +7995,141 @@ GRANT SELECT,INSERT,UPDATE ON agent.recovery_backoff TO glowloom_agent;
 
 -- Frozen business goal; empty production plans retain their delivery obligation.
 ALTER TABLE agent_business.run_authorization ADD COLUMN goal_contract jsonb NOT NULL DEFAULT '{"kind":"chat","required_deliveries":0}' CHECK (jsonb_typeof(goal_contract) = 'object');
+
+-- Route changes publish immutable membership. A quote keeps the version it saw.
+CREATE TABLE catalog.route_pool_version (
+    id uuid PRIMARY KEY,
+    primary_release_id uuid NOT NULL REFERENCES catalog.model_release(id),
+    revision integer NOT NULL CHECK (revision > 0),
+    created_by uuid NOT NULL REFERENCES identity."user"(id),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(primary_release_id,revision)
+);
+CREATE TABLE catalog.route_pool_member (
+    version_id uuid NOT NULL REFERENCES catalog.route_pool_version(id),
+    release_id uuid NOT NULL REFERENCES catalog.model_release(id),
+    priority integer NOT NULL CHECK(priority BETWEEN 0 AND 15),
+    PRIMARY KEY(version_id,release_id), UNIQUE(version_id,priority)
+);
+CREATE TABLE operation.route_pool_binding (
+    operation_id uuid PRIMARY KEY REFERENCES operation.provider_binding(operation_id),
+    version_id uuid NOT NULL REFERENCES catalog.route_pool_version(id)
+);
+CREATE TABLE operation.route_delivery (
+    operation_id uuid PRIMARY KEY REFERENCES operation.route_pool_binding(operation_id),
+    release_id uuid NOT NULL REFERENCES catalog.model_release(id),
+    procurement_price_id uuid NOT NULL REFERENCES catalog.price_rule_version(id),
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT ON catalog.route_pool_version,catalog.route_pool_member,operation.route_pool_binding,operation.route_delivery TO glowloom_app;
+
+-- An unexpired quote can keep its original sale when only the retail
+-- price changed. A changed execution contract or purchase tariff closes it.
+CREATE VIEW catalog.executable_release AS
+SELECT old.* FROM catalog.model_release old
+JOIN catalog.model_profile m ON m.id=old.model_id AND m.status='active' AND NOT m.is_delete
+JOIN catalog.model_release live ON live.id=m.active_release_id AND live.status='active'
+JOIN catalog.price_rule_version sale ON sale.id=old.price_version_id AND NOT sale.is_delete
+JOIN catalog.price_rule_version current_sale ON current_sale.id=live.price_version_id AND NOT current_sale.is_delete
+WHERE old.id=live.id OR (old.status='retired' AND old.model_version_id=live.model_version_id
+ AND old.config_version_id=live.config_version_id AND old.upstream_cost=live.upstream_cost
+ AND EXISTS(SELECT 1 FROM catalog.price_rule_version prior JOIN catalog.price_rule_version current_purchase
+ ON current_purchase.id::text=current_sale.rule->>'procurement_price_version_id'
+ WHERE prior.id::text=sale.rule->>'procurement_price_version_id' AND NOT prior.is_delete AND NOT current_purchase.is_delete
+ AND prior.model_profile_id=current_purchase.model_profile_id AND prior.unit=current_purchase.unit AND prior.rule=current_purchase.rule
+ AND prior.currency=current_purchase.currency AND prior.fx_rate_to_cny IS NOT DISTINCT FROM current_purchase.fx_rate_to_cny));
+GRANT SELECT ON catalog.executable_release TO glowloom_app;
+
+-- Equivalence requires a matching published contract. The administrator separately
+-- attests that the upstream SKU, data handling and storage location are equivalent.
+CREATE VIEW catalog.route_pool_candidate AS
+SELECT base.id AS primary_release_id, alt.id AS release_id, alt.model_version_id,
+       alt.config_version_id,alt.price_version_id,alt.model_id,ap.id AS provider_id,
+       ap.name AS provider_name,av.provider_model_id,am.display_name,
+       ap.adapter_key,tariff.id AS procurement_price_id
+FROM catalog.executable_release base
+JOIN catalog.model_profile bm ON bm.id=base.model_id AND bm.status='active' AND NOT bm.is_delete
+JOIN catalog.provider bp ON bp.id=bm.provider_id
+JOIN catalog.model_profile_version bv ON bv.id=base.model_version_id AND NOT bv.is_delete
+JOIN catalog.price_rule_version sale ON sale.id=base.price_version_id AND NOT sale.is_delete
+JOIN catalog.model_profile am ON am.capability=bm.capability AND am.status='active' AND NOT am.is_delete
+JOIN catalog.executable_release alt ON alt.model_id=am.id
+JOIN catalog.model_profile_version av ON av.id=alt.model_version_id AND NOT av.is_delete
+JOIN catalog.provider ap ON ap.id=am.provider_id AND ap.region=bp.region AND NOT ap.is_delete
+JOIN catalog.price_rule_version rate ON rate.id=alt.price_version_id AND NOT rate.is_delete AND rate.unit=sale.unit
+JOIN catalog.price_rule_version tariff ON tariff.id::text=rate.rule->>'procurement_price_version_id' AND tariff.model_profile_id=am.id AND NOT tariff.is_delete
+WHERE av.modes @> bv.modes AND av.param_schema=bv.param_schema
+AND (av.limits-'provider_endpoint')=(bv.limits-'provider_endpoint') AND av.queue=bv.queue AND av.moderation=bv.moderation
+AND av.supports_query=bv.supports_query AND av.supports_cancel=bv.supports_cancel AND av.supports_callback=bv.supports_callback
+AND av.expected_max_ms<=bv.expected_max_ms
+AND (rate.rule->>'pricing_strategy') IS NOT DISTINCT FROM (sale.rule->>'pricing_strategy')
+AND (rate.rule->>'reference_scope') IS NOT DISTINCT FROM (sale.rule->>'reference_scope')
+AND (rate.rule->>'time_pricing') IS NOT DISTINCT FROM (sale.rule->>'time_pricing')
+AND (rate.rule ? 'cached_input_micros_per_1k')=(sale.rule ? 'cached_input_micros_per_1k')
+AND ap.current_config_version_id=alt.config_version_id
+AND (alt.id=base.id OR (alt.upstream_cost->>'currency'=base.upstream_cost->>'currency'
+AND (alt.upstream_cost->>'max_micros')::bigint BETWEEN 0 AND (base.upstream_cost->>'max_micros')::bigint
+AND (ap.adapter_key<>'openrouter' OR COALESCE(av.limits->>'provider_endpoint','')<>'')));
+GRANT SELECT ON catalog.route_pool_candidate TO glowloom_app;
+
+-- Rotation keeps its historical draining semantics. Explicit admission lets an
+-- administrator reuse a previously verified credential for new pooled calls.
+ALTER TABLE catalog.provider_credential ADD COLUMN pool_enabled boolean NOT NULL DEFAULT false;
+
+
+-- Current execution evidence belongs to one key, mode and immutable release.
+CREATE TABLE catalog.route_connection_cooldown (
+ provider_id uuid PRIMARY KEY REFERENCES catalog.provider(id),
+ until_at timestamptz NOT NULL
+);
+GRANT SELECT,INSERT,UPDATE ON catalog.route_connection_cooldown TO glowloom_app;
+
+CREATE VIEW catalog.verified_route_key AS
+SELECT DISTINCT r.id AS release_id, x.mode, k.id AS credential_id
+FROM catalog.executable_release r
+JOIN catalog.model_validation x ON x.release_id=r.id AND x.status='succeeded'
+ AND x.adapter_version='ai-provider-v1' AND x.evidence->>'kind'='real_provider'
+JOIN catalog.model_profile m ON m.id=r.model_id AND NOT m.is_delete AND m.status='active'
+JOIN catalog.provider p ON p.id=m.provider_id AND p.status='active' AND NOT p.is_delete AND p.current_config_version_id=r.config_version_id
+ AND NOT EXISTS(SELECT 1 FROM catalog.route_connection_cooldown down WHERE down.provider_id=p.id AND down.until_at>statement_timestamp())
+JOIN catalog.provider_config_version cfg ON cfg.id=r.config_version_id
+JOIN catalog.provider_preset_version pv ON pv.id=cfg.preset_version_id
+JOIN catalog.provider_preset preset ON preset.id=pv.preset_id AND NOT preset.emergency_disabled AND NOT preset.archived
+JOIN catalog.provider_credential k ON k.id=x.credential_id AND k.provider_id=p.id AND NOT k.is_delete
+ AND (k.status='active' OR (k.status='draining' AND k.pool_enabled)) AND k.last_test_result IS DISTINCT FROM 'auth_failed'
+JOIN operation.operation op ON op.id=x.operation_id AND op.status='completed' AND NOT op.is_delete AND op.mode=x.mode
+ AND op.model_profile_version_id=r.model_version_id AND op.price_rule_version_id=r.price_version_id
+JOIN operation.provider_binding b ON b.operation_id=op.id AND b.release_id=r.id
+JOIN operation.provider_credential_binding used ON used.operation_id=op.id AND used.credential_id=k.id
+;
+GRANT SELECT ON catalog.verified_route_key TO glowloom_app;
+
+CREATE VIEW catalog.route_pool_ready AS
+SELECT v.id AS version_id,v.primary_release_id,c.release_id,c.model_version_id,c.provider_id,c.model_id,
+       c.config_version_id,c.procurement_price_id,m.priority,k.mode
+FROM catalog.route_pool_version v
+JOIN catalog.route_pool_member m ON m.version_id=v.id
+JOIN catalog.route_pool_candidate c ON c.primary_release_id=v.primary_release_id AND c.release_id=m.release_id
+JOIN (SELECT DISTINCT release_id,mode FROM catalog.verified_route_key) k ON k.release_id=m.release_id;
+GRANT SELECT ON catalog.route_pool_ready TO glowloom_app;
+
+-- A second send may follow only a transport-proven failure before connection.
+CREATE TABLE operation.route_retry (
+ operation_id uuid PRIMARY KEY REFERENCES operation.route_delivery(operation_id),
+ release_id uuid NOT NULL REFERENCES catalog.model_release(id),
+ credential_id uuid NOT NULL REFERENCES catalog.provider_credential(id),
+ procurement_price_id uuid NOT NULL REFERENCES catalog.price_rule_version(id),
+ reason text NOT NULL CHECK(reason='dial_not_sent'),
+ created_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT,INSERT ON operation.route_retry TO glowloom_app;
+
+ALTER TABLE catalog.provider ADD COLUMN quota_group text NOT NULL DEFAULT '' CHECK(octet_length(quota_group)<=80);
+CREATE INDEX provider_quota_group ON catalog.provider(quota_group) WHERE quota_group<>'';
+
+-- The smallest declared member limit protects a shared upstream account.
+CREATE VIEW catalog.effective_provider_limit AS
+SELECT p.id, min(peer.concurrency_limit) AS concurrency_limit,min(peer.rate_limit_per_min) AS rate_limit_per_min
+FROM catalog.provider p JOIN catalog.provider peer ON peer.id=p.id OR (p.quota_group<>'' AND peer.quota_group=p.quota_group AND NOT peer.is_delete)
+GROUP BY p.id;
+GRANT SELECT ON catalog.effective_provider_limit TO glowloom_app;

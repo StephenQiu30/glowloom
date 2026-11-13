@@ -219,6 +219,7 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 	official := effective
 	official.ExpectedRevision, official.VersionNo = 4, 3
 	official.UseOfficialRate = true
+	official.DiscountFactor = "0.8"
 	official.RequestID = uuid.NewString()
 	got, err := publishPrice.Execute(ctx, actor, official)
 	if err != nil || got.VersionNo != 4 || got.Revision != 6 {
@@ -229,8 +230,8 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 		t.Fatalf("official price replay changed result: %+v, %v", replayed, err)
 	}
 	var sameRate bool
-	if err := conn.DB.WithContext(ctx).Raw(`SELECT (sale.rule - 'procurement_price_version_id' - 'markup_multiplier') = procurement.rule
- AND sale.rule->>'markup_multiplier'='1'
+	if err := conn.DB.WithContext(ctx).Raw(`SELECT (sale.rule - 'procurement_price_version_id' - 'markup_multiplier' - 'discount_factor') = procurement.rule
+ AND sale.rule->>'markup_multiplier'='1' AND sale.rule->>'discount_factor'='0.8' AND NOT jsonb_exists(procurement.rule,'discount_factor')
  AND sale.unit = procurement.unit AND sale.currency = procurement.currency
  AND sale.fx_rate_to_cny IS NOT DISTINCT FROM procurement.fx_rate_to_cny AND sale.reviewed_at = procurement.reviewed_at
  AND sale.source_url = procurement.source_url AND sale.effective_from = procurement.effective_from

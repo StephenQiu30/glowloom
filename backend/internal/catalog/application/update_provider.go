@@ -28,6 +28,7 @@ type UpdateProviderStore interface {
 
 // UpdateProviderInput includes only mutable operational settings.
 type UpdateProviderInput struct {
+	QuotaGroup       *string `json:",omitempty"`
 	ProviderID       uuid.UUID
 	ExpectedRevision int64
 	Name             *string `json:",omitempty"`
@@ -59,11 +60,18 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	requestID, err := uuid.Parse(input.RequestID)
 	if input.ProviderID == uuid.Nil || input.ExpectedRevision < 1 || input.ExpectedRevision >= math.MaxInt32 ||
 		err != nil || requestID == uuid.Nil || requestID.String() != input.RequestID ||
-		(input.Name == nil && input.Status == nil && input.ConcurrencyLimit == nil && input.RateLimitPerMin == nil) ||
+		(input.QuotaGroup == nil && input.Name == nil && input.Status == nil && input.ConcurrencyLimit == nil && input.RateLimitPerMin == nil) ||
 		(input.Status != nil && *input.Status != domain.ProviderActive && *input.Status != domain.ProviderDisabled && *input.Status != domain.ProviderArchived) ||
 		(input.ConcurrencyLimit != nil && (*input.ConcurrencyLimit < 1 || *input.ConcurrencyLimit > math.MaxInt32)) ||
 		(input.RateLimitPerMin != nil && (*input.RateLimitPerMin < 1 || *input.RateLimitPerMin > math.MaxInt32)) {
 		return CreatedProvider{}, ErrInvalidUpdateProvider
+	}
+	if input.QuotaGroup != nil {
+		group := strings.TrimSpace(*input.QuotaGroup)
+		if len(group) > 80 || strings.ContainsRune(group, 0) {
+			return CreatedProvider{}, ErrInvalidUpdateProvider
+		}
+		input.QuotaGroup = &group
 	}
 	if input.Name != nil {
 		name := strings.TrimSpace(*input.Name)
@@ -89,6 +97,9 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 		return CreatedProvider{}, ErrInvalidUpdateProvider
 	}
 	after := before
+	if input.QuotaGroup != nil {
+		after.QuotaGroup = *input.QuotaGroup
+	}
 	if input.Name != nil {
 		after.Name = *input.Name
 	}
@@ -101,7 +112,7 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	if input.RateLimitPerMin != nil {
 		after.RateLimitPerMin = *input.RateLimitPerMin
 	}
-	if after.Name == before.Name && after.Status == before.Status && after.ConcurrencyLimit == before.ConcurrencyLimit &&
+	if after.QuotaGroup == before.QuotaGroup && after.Name == before.Name && after.Status == before.Status && after.ConcurrencyLimit == before.ConcurrencyLimit &&
 		after.RateLimitPerMin == before.RateLimitPerMin {
 		return CreatedProvider{}, ErrInvalidUpdateProvider
 	}
@@ -131,7 +142,7 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	return CreatedProvider{
 		ID: saved.ID, Key: saved.Key, Name: saved.Name, AdapterKey: saved.AdapterKey,
 		Region: saved.Region, Status: saved.Status, ConcurrencyLimit: saved.ConcurrencyLimit,
-		RateLimitPerMin: saved.RateLimitPerMin, Revision: saved.Revision,
+		QuotaGroup: saved.QuotaGroup, RateLimitPerMin: saved.RateLimitPerMin, Revision: saved.Revision,
 		CreateTime: saved.CreateTime, UpdateTime: saved.UpdateTime,
 	}, nil
 }

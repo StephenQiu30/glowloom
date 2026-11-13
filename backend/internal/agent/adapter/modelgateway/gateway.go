@@ -125,6 +125,7 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
    JOIN catalog.price_rule_version p ON p.id=r.price_version_id AND p.model_profile_id=m.id AND NOT p.is_delete
    WHERE m.model_key=? AND m.status='active' AND NOT m.is_delete AND m.capability='text.generate'
    AND p.unit IN ('per_request','per_1k_tokens') AND p.effective_from<=clock_timestamp()
+   AND EXISTS(SELECT 1 FROM catalog.verified_route_key own WHERE own.release_id=r.id AND own.mode='text_to_text')
    AND NOT EXISTS (SELECT FROM agent_business.call_receipt past JOIN operation.provider_binding b ON b.operation_id=past.receipt_id
       WHERE past.kind=? AND past.root_run_id=? AND b.release_id<>r.id)
    FOR SHARE OF c,m,r`, in.ModelKey, agent.CallKindModel, authority.RootRunID).Scan(&r)

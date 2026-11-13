@@ -42,6 +42,15 @@ func freezeManagedRelease(tx *gorm.DB, op domain.Operation) error {
 	if err := tx.Exec(`INSERT INTO operation.provider_binding(operation_id,release_id) VALUES(?,?)`, op.ID, *row.ReleaseID).Error; err != nil {
 		return fmt.Errorf("freeze quote release: %w", err)
 	}
+	// A fixed Agent authorization and explicit upstream endpoint remain pinned.
+	if err := tx.Exec(`INSERT INTO operation.route_pool_binding(operation_id,version_id)
+ SELECT ?,pv.id FROM catalog.route_pool_version pv
+ JOIN catalog.model_profile_version mv ON mv.id=?
+ JOIN operation.operation op ON op.id=? AND op.origin<>'agent'
+ WHERE pv.primary_release_id=? AND COALESCE(mv.limits->>'provider_endpoint','')=''
+ ORDER BY pv.revision DESC LIMIT 1`, op.ID, op.ModelProfileVersionID, op.ID, *row.ReleaseID).Error; err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -93,6 +102,16 @@ func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderD
 			return application.ErrWorkflowModelUnavailable
 		}
 	}
+	if !isTrial {
+		route, err := s.selectPoolMember(tx, identity)
+		if err != nil {
+			return err
+		}
+		if route != nil {
+			row.ProviderID, row.ModelID = route.ProviderID, route.ModelID
+			row.ReleaseID, row.ConfigID = &route.ReleaseID, &route.ConfigVersionID
+		}
+	}
 	var present int
 	r = tx.Raw(`SELECT 1 FROM catalog.provider_preset preset
  JOIN catalog.provider_preset_version pv ON pv.preset_id=preset.id
@@ -105,7 +124,7 @@ func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderD
 		return application.ErrWorkflowModelUnavailable
 	}
 	var connection struct{ ConcurrencyLimit, RateLimitPerMin int64 }
-	r = tx.Raw(`SELECT concurrency_limit,rate_limit_per_min FROM catalog.provider WHERE id=? AND (status='active' OR (? AND status='disabled')) AND NOT is_delete FOR UPDATE`, row.ProviderID, isTrial).Scan(&connection)
+	r = tx.Raw(`SELECT l.concurrency_limit,l.rate_limit_per_min FROM catalog.provider p JOIN catalog.effective_provider_limit l ON l.id=p.id WHERE p.id=? AND (status='active' OR (? AND status='disabled')) AND NOT is_delete FOR UPDATE OF p`, row.ProviderID, isTrial).Scan(&connection)
 	if r.Error != nil {
 		return r.Error
 	}
@@ -120,7 +139,17 @@ func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderD
 		return application.ErrManagedCapacity
 	}
 	var key struct{ ID uuid.UUID }
-	r = tx.Raw(`SELECT id FROM catalog.provider_credential WHERE provider_id=? AND status='active' AND NOT is_delete FOR SHARE`, row.ProviderID).Scan(&key)
+	r = tx.Raw(`SELECT c.id FROM catalog.provider_credential c
+ WHERE c.provider_id=? AND NOT EXISTS(SELECT 1 FROM catalog.route_connection_cooldown down WHERE down.provider_id=c.provider_id AND down.until_at>statement_timestamp()) AND (c.status='active' OR (NOT ? AND c.status='draining' AND c.pool_enabled)) AND NOT c.is_delete AND (? OR (
+ c.last_test_result IS DISTINCT FROM 'auth_failed' AND EXISTS (
+ SELECT 1 FROM catalog.model_validation x
+ JOIN operation.operation completed ON completed.id=x.operation_id AND completed.status='completed' AND NOT completed.is_delete
+ JOIN operation.provider_binding binding ON binding.operation_id=completed.id AND binding.release_id=x.release_id
+ JOIN operation.provider_credential_binding used ON used.operation_id=completed.id AND used.credential_id=c.id
+ WHERE x.release_id=? AND x.credential_id=c.id AND x.mode=(SELECT mode FROM operation.operation WHERE id=?)
+ AND x.status='succeeded' AND x.adapter_version='ai-provider-v1' AND x.evidence->>'kind'='real_provider'
+ AND completed.mode=x.mode AND EXISTS(SELECT 1 FROM catalog.model_release verified WHERE verified.id=x.release_id AND verified.model_version_id=completed.model_profile_version_id AND verified.price_version_id=completed.price_rule_version_id))))
+ ORDER BY (SELECT max(call.dispatch_started_at) FROM operation.provider_credential_binding used JOIN operation.provider_call call ON call.operation_id=used.operation_id AND call.action='submit' WHERE used.credential_id=c.id) ASC NULLS FIRST,c.create_time,c.id LIMIT 1 FOR SHARE OF c`, row.ProviderID, isTrial, isTrial, *row.ReleaseID, identity.OperationID).Scan(&key)
 	if r.Error != nil {
 		return fmt.Errorf("lock dispatch credential: %w", r.Error)
 	}
@@ -128,7 +157,7 @@ func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderD
 		return application.ErrWorkflowModelUnavailable
 	}
 	r = tx.Raw(`SELECT 1 FROM catalog.model_profile m JOIN catalog.model_release r ON r.model_id=m.id
- WHERE m.id=? AND m.status<>'archived' AND NOT m.is_delete AND r.id=? AND ((? AND (r.status='draft' OR (r.status='active' AND m.status='active' AND m.active_release_id=r.id))) OR (NOT ? AND m.status='active' AND m.active_release_id=r.id AND r.status='active'))
+ WHERE m.id=? AND m.status<>'archived' AND NOT m.is_delete AND r.id=? AND ((? AND (r.status='draft' OR (r.status='active' AND m.status='active' AND m.active_release_id=r.id))) OR (NOT ? AND m.status='active' AND EXISTS(SELECT 1 FROM catalog.executable_release e WHERE e.id=r.id)))
  FOR SHARE OF m,r`, row.ModelID, *row.ReleaseID, isTrial, isTrial).Scan(&present)
 	if r.Error != nil {
 		return fmt.Errorf("lock dispatch release: %w", r.Error)
@@ -161,12 +190,16 @@ func (s *Store) loadManagedCredential(ctx context.Context, operationID uuid.UUID
 	}
 	var row application.ManagedCredential
 	r := s.db.WithContext(ctx).Raw(`SELECT config.provider_id,config.id AS config_version_id,config.config,
- key.id AS credential_id,key.key_id,key.ciphertext
+ mv.provider_model_id AS model_id,COALESCE(mv.limits->>'provider_endpoint','') AS endpoint_tag,key.id AS credential_id,key.key_id,key.ciphertext
  FROM operation.provider_binding binding JOIN operation.operation op ON op.id=binding.operation_id AND NOT op.is_delete
  JOIN catalog.model_release release ON release.id=binding.release_id AND release.model_version_id=op.model_profile_version_id AND release.price_version_id=op.price_rule_version_id
- JOIN catalog.provider_config_version config ON config.id=release.config_version_id
+ LEFT JOIN operation.route_delivery routed ON routed.operation_id=op.id
+ LEFT JOIN operation.route_retry retry ON retry.operation_id=op.id
+ JOIN catalog.model_release actual ON actual.id=COALESCE(retry.release_id,routed.release_id,release.id)
+ JOIN catalog.model_profile_version mv ON mv.id=actual.model_version_id
+ JOIN catalog.provider_config_version config ON config.id=actual.config_version_id
  JOIN operation.provider_credential_binding cb ON cb.operation_id=op.id
- JOIN catalog.provider_credential key ON key.id=cb.credential_id AND key.provider_id=config.provider_id
+ JOIN catalog.provider_credential key ON key.id=COALESCE(retry.credential_id,cb.credential_id) AND key.provider_id=config.provider_id
  WHERE op.id=? AND key.status IN ('active','draining') AND NOT key.is_delete`, operationID).Scan(&row)
 	if r.Error != nil {
 		return application.ManagedCredential{}, fmt.Errorf("load bound credential: %w", r.Error)

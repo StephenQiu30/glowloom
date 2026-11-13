@@ -28,7 +28,7 @@ func (s *Store) FindProviderDetailForAdmin(ctx context.Context, actor identityap
 		var providerData providerRow
 		result := tx.Raw(`
 			SELECT id, key, name, adapter_key, region, status, concurrency_limit,
-			       rate_limit_per_min, revision, create_time, update_time
+			       quota_group,rate_limit_per_min, revision, create_time, update_time
 			FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete FOR SHARE
 		`, providerID.String()).Scan(&providerData)
 		if result.Error != nil {
@@ -61,6 +61,7 @@ func (s *Store) FindProviderDetailForAdmin(ctx context.Context, actor identityap
 }
 
 type credentialDisplayRow struct {
+	PoolEnabled    bool
 	ID             uuid.UUID
 	ProviderID     uuid.UUID
 	Label          string
@@ -74,7 +75,7 @@ type credentialDisplayRow struct {
 
 func (row credentialDisplayRow) summary() *application.ProviderCredentialSummary {
 	summary := &application.ProviderCredentialSummary{
-		ID: row.ID, ProviderID: row.ProviderID, Label: row.Label, Last4: row.Last4,
+		ID: row.ID, ProviderID: row.ProviderID, Label: row.Label, Last4: row.Last4, PoolEnabled: row.PoolEnabled,
 		Status: domain.CredentialStatus(row.Status), LastTestedAt: row.LastTestedAt,
 		CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
 	}

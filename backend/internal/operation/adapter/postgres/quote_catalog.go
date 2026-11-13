@@ -62,6 +62,48 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 		if err := tx.Raw(`SELECT release_id FROM operation.provider_binding WHERE operation_id=?`, quoted.ID).Scan(&frozen).Error; err != nil {
 			return err
 		}
+		// Existing quotes can use only their frozen pool, even after a later
+		// publication adds or removes a backup. Route admission rechecks at send.
+		var pool struct {
+			ID    uuid.UUID
+			Ready bool
+		}
+		result = tx.Raw(`SELECT b.version_id AS id, EXISTS(SELECT 1 FROM catalog.route_pool_ready ready
+ JOIN catalog.model_release r ON r.id=ready.primary_release_id
+ JOIN catalog.model_profile m ON m.id=r.model_id AND m.capability=?
+ JOIN catalog.provider p ON p.id=m.provider_id AND NOT p.is_delete AND p.status<>'archived'
+ JOIN catalog.provider_config_version cfg ON cfg.id=r.config_version_id
+ JOIN catalog.provider_preset_version pv ON pv.id=cfg.preset_version_id
+ JOIN catalog.provider_preset ps ON ps.id=pv.preset_id AND NOT ps.emergency_disabled AND NOT ps.archived
+ WHERE ready.version_id=b.version_id AND ready.mode=? AND r.id=? AND r.model_version_id=?
+ AND r.price_version_id=? AND (p.region='domestic' OR ?)) AS ready
+ FROM operation.route_pool_binding b WHERE b.operation_id=?`, quoted.Capability, quoted.Mode, frozen.ReleaseID, quoted.ModelProfileVersionID, quoted.PriceRuleVersionID, project.AllowOverseasModels, quoted.ID).Scan(&pool)
+		if result.Error != nil {
+			return result.Error
+		}
+		if pool.ID != uuid.Nil {
+			if pool.Ready {
+				modelID, priceID = quoted.ModelProfileVersionID, quoted.PriceRuleVersionID
+			}
+			return nil
+		}
+		// A retail-only publication can retire the original release. Keep its
+		// sale, provided that the current connection and exact key remain usable.
+		if frozen.ReleaseID != uuid.Nil {
+			var permitted bool
+			err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM catalog.executable_release r
+ JOIN catalog.model_profile m ON m.id=r.model_id AND m.capability=?
+ JOIN catalog.provider p ON p.id=m.provider_id AND (p.region='domestic' OR ?)
+ JOIN catalog.verified_route_key key ON key.release_id=r.id AND key.mode=?
+ WHERE r.id=? AND r.status='retired' AND r.model_version_id=? AND r.price_version_id=?)`, quoted.Capability, project.AllowOverseasModels, quoted.Mode, frozen.ReleaseID, quoted.ModelProfileVersionID, quoted.PriceRuleVersionID).Row().Scan(&permitted)
+			if err != nil {
+				return err
+			}
+			if permitted {
+				modelID, priceID = quoted.ModelProfileVersionID, quoted.PriceRuleVersionID
+				return nil
+			}
+		}
 		var current struct {
 			ReleaseID      *uuid.UUID
 			ModelVersionID *uuid.UUID
@@ -75,9 +117,9 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 			  ON m.id = quoted_version.model_profile_id AND NOT m.is_delete
 			JOIN catalog.provider AS provider
 			  ON provider.id = m.provider_id AND NOT provider.is_delete
-			JOIN catalog.provider_credential AS credential
-			  ON credential.provider_id = provider.id
-			 AND credential.status = 'active' AND NOT credential.is_delete
+			JOIN LATERAL (SELECT k.id FROM catalog.provider_credential k WHERE k.provider_id=provider.id
+ AND (k.status='active' OR (provider.adapter_key IN (%[1]s) AND k.status='draining' AND k.pool_enabled)) AND NOT k.is_delete
+ ORDER BY k.id LIMIT 1 FOR SHARE OF k) credential ON true
 			LEFT JOIN catalog.model_release AS published ON published.id=m.active_release_id AND published.status='active'
 			JOIN catalog.capability AS capability
 			  ON capability.key = m.capability AND NOT capability.is_delete
@@ -96,7 +138,7 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 			  AND provider.status = 'active'
 			  AND (? OR provider.region = 'domestic')
 			  AND ? = ANY(current_version.modes)
-			FOR SHARE OF m, provider, credential
+			FOR SHARE OF m, provider
 		`, catalogdomain.ManagedCloudSQLInList()), at, quoted.ModelProfileVersionID.String(), quoted.Capability,
 			project.AllowOverseasModels, quoted.Mode).Scan(&current)
 		if result.Error != nil {
@@ -133,7 +175,7 @@ func commercialPriceReady(tx *gorm.DB, priceID *uuid.UUID) (bool, error) {
 	var ready bool
 	err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM catalog.model_release r
 		JOIN catalog.price_rule_version p ON p.id=r.price_version_id
-		WHERE r.price_version_id=? AND r.status='active' AND NOT p.is_delete
+		WHERE r.price_version_id=? AND (r.status='active' OR EXISTS(SELECT 1 FROM catalog.executable_release e WHERE e.id=r.id)) AND NOT p.is_delete
 		  AND jsonb_exists(p.rule,'procurement_price_version_id'))`, priceID).Row().Scan(&ready)
 	return ready, err
 }

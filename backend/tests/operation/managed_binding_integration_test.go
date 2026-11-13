@@ -54,6 +54,13 @@ type managedFixture struct {
 
 func seedManagedFixture(t *testing.T, database *gorm.DB) managedFixture {
 	t.Helper()
+	f := seedUnverifiedManagedFixture(t, database)
+	seedDispatchModeEvidence(t, database, f)
+	return f
+}
+
+func seedUnverifiedManagedFixture(t *testing.T, database *gorm.DB) managedFixture {
+	t.Helper()
 	identity, store := seedDispatchCall(t, database, true)
 	var provider struct{ ID uuid.UUID }
 	require.NoError(t, database.Raw(`SELECT m.provider_id AS id FROM catalog.model_profile m JOIN catalog.model_profile_version v ON v.model_profile_id=m.id WHERE v.id=?`, identity.ModelProfileVersionID).Scan(&provider).Error)
@@ -66,6 +73,19 @@ func seedManagedFixture(t *testing.T, database *gorm.DB) managedFixture {
 	require.NoError(t, database.Exec(`INSERT INTO catalog.provider_credential(id,provider_id,label,last4,ciphertext,key_id,status) VALUES(?,?,'fixture','test',decode('abcd','hex'),'test','active')`, credential, provider.ID).Error)
 	require.NoError(t, database.Exec(`INSERT INTO operation.provider_binding(operation_id,release_id) VALUES(?,?)`, identity.OperationID, release).Error)
 	return managedFixture{identity: identity, store: store, provider: provider.ID, config: config, release: release, credential: credential}
+}
+
+func seedDispatchModeEvidence(t *testing.T, database *gorm.DB, f managedFixture) {
+	t.Helper()
+	identity, release, credential := f.identity, f.release, f.credential
+	// A normal dispatch fixture represents a released mode with a completed
+	// synthetic validation on this credential. It never calls a live supplier.
+	evidence := uuid.New()
+	require.NoError(t, database.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,region,model_profile_version_id,price_rule_version_id)
+ SELECT ?,project_id,'free',capability,mode,?, 'system','completed',region,model_profile_version_id,price_rule_version_id FROM operation.operation WHERE id=?`, evidence, uuid.NewString(), identity.OperationID).Error)
+	require.NoError(t, database.Exec(`INSERT INTO operation.provider_binding(operation_id,release_id) VALUES(?,?)`, evidence, release).Error)
+	require.NoError(t, database.Exec(`INSERT INTO operation.provider_credential_binding(operation_id,credential_id) VALUES(?,?)`, evidence, credential).Error)
+	require.NoError(t, database.Exec(`INSERT INTO catalog.model_validation(id,release_id,credential_id,adapter_version,mode,input_digest,operation_id,status,evidence,completed_at) SELECT ?,?,?,'ai-provider-v1',mode,input_hash,id,'succeeded','{"kind":"real_provider"}',now() FROM operation.operation WHERE id=?`, uuid.New(), release, credential, evidence).Error)
 }
 
 func TestManagedDispatchEmergencyStopPreventsCredentialBinding(t *testing.T) {
@@ -83,4 +103,85 @@ func TestManagedDispatchEmergencyStopPreventsCredentialBinding(t *testing.T) {
 	var count int64
 	require.NoError(t, db.Raw(`SELECT count(*) FROM operation.provider_credential_binding WHERE operation_id=?`, f.identity.OperationID).Scan(&count).Error)
 	require.Zero(t, count)
+}
+
+func TestRotatedKeyNeedsOwnValidationBeforePaidDispatch(t *testing.T) {
+	db := operationStoreDB(t)
+	f := seedManagedFixture(t, db)
+	require.NoError(t, db.Exec("UPDATE catalog.provider_credential SET status='draining' WHERE id=?", f.credential).Error)
+	require.NoError(t, db.Exec("INSERT INTO catalog.provider_credential(id,provider_id,label,last4,ciphertext,key_id,status) VALUES(?,?,'next','test',decode('abcd','hex'),'test','active')", uuid.New(), f.provider).Error)
+	result, err := f.store.ClaimProviderDispatch(t.Context(), f.identity)
+	require.ErrorIs(t, err, application.ErrWorkflowModelUnavailable)
+	require.False(t, result.Claimed)
+	var n int
+	require.NoError(t, db.Raw("SELECT count(*) FROM operation.provider_credential_binding WHERE operation_id=?", f.identity.OperationID).Scan(&n).Error)
+	require.Zero(t, n)
+}
+
+func TestRoutePoolFreezesActualBackupCredentialAndTariff(t *testing.T) {
+	db := operationStoreDB(t)
+	a, b := seedManagedFixture(t, db), seedManagedFixture(t, db)
+	var buyer uuid.UUID
+	require.NoError(t, db.Raw(`SELECT u.id FROM identity."user" u JOIN workspace.project p ON p.org_id=u.org_id WHERE p.id=? LIMIT 1`, a.identity.ProjectID).Row().Scan(&buyer))
+	baseCost := uuid.Nil
+	for _, f := range []managedFixture{a, b} {
+		tariff := uuid.New()
+		if f.provider == b.provider {
+			baseCost = tariff
+		}
+		require.NoError(t, db.Exec(`UPDATE catalog.provider SET current_config_version_id=? WHERE id=?`, f.config, f.provider).Error)
+		require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET limits='{"provider_endpoint":"verified-fixture"}' WHERE id=?`, f.identity.ModelProfileVersionID).Error)
+		require.NoError(t, db.Exec(`UPDATE catalog.model_release SET upstream_cost='{"currency":"CNY","max_micros":1000}' WHERE id=?`, f.release).Error)
+		require.NoError(t, db.Exec(`INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,effective_from) SELECT ?,model_profile_id,2,unit,rule,now() FROM catalog.price_rule_version WHERE id=?`, tariff, f.identity.PriceRuleVersionID).Error)
+		require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET rule=rule||jsonb_build_object('procurement_price_version_id',?::text) WHERE id=?`, tariff, f.identity.PriceRuleVersionID).Error)
+	}
+	// Only the backup is pinned to this aggregator endpoint.
+	require.NoError(t, db.Exec("UPDATE catalog.model_profile_version SET limits='{}' WHERE id=?", a.identity.ModelProfileVersionID).Error)
+	ver := uuid.New()
+	require.NoError(t, db.Exec("INSERT INTO catalog.route_pool_version(id,primary_release_id,revision,created_by) VALUES(?,?,1,?)", ver, a.release, buyer).Error)
+	require.NoError(t, db.Exec("INSERT INTO catalog.route_pool_member(version_id,release_id,priority) VALUES(?,?,0),(?,?,1)", ver, a.release, ver, b.release).Error)
+	require.NoError(t, db.Exec("INSERT INTO operation.route_pool_binding(operation_id,version_id) VALUES(?,?)", a.identity.OperationID, ver).Error)
+	require.NoError(t, db.Exec("UPDATE catalog.provider_credential SET status='disabled' WHERE id=?", a.credential).Error)
+	dispatch, err := a.store.ClaimProviderDispatch(t.Context(), a.identity)
+	require.NoError(t, err)
+	require.True(t, dispatch.Claimed)
+	got, err := a.store.LoadManagedCredential(t.Context(), a.identity.OperationID)
+	require.NoError(t, err)
+	require.Equal(t, b.credential, got.CredentialID)
+	var actual uuid.UUID
+	require.NoError(t, db.Raw("SELECT procurement_price_id FROM operation.route_delivery WHERE operation_id=?", a.identity.OperationID).Row().Scan(&actual))
+	require.Equal(t, baseCost, actual)
+	again, err := a.store.ClaimProviderDispatch(t.Context(), a.identity)
+	require.NoError(t, err)
+	require.False(t, again.Claimed)
+
+	require.NoError(t, db.Exec("UPDATE catalog.provider_credential SET status='active' WHERE id=?", a.credential).Error)
+	replaced, err := a.store.ClaimUnsentBackup(t.Context(), a.identity, b.credential)
+	require.NoError(t, err)
+	require.True(t, replaced)
+	recovered, err := a.store.LoadManagedCredential(t.Context(), a.identity.OperationID)
+	require.NoError(t, err)
+	require.Equal(t, a.credential, recovered.CredentialID)
+	replaced, err = a.store.ClaimUnsentBackup(t.Context(), a.identity, b.credential)
+	require.NoError(t, err)
+	require.False(t, replaced)
+}
+
+func TestTwoConnectionsCompeteForOneSharedAccountSlot(t *testing.T) {
+	db := operationStoreDB(t)
+	a, b := seedManagedFixture(t, db), seedManagedFixture(t, db)
+	require.NoError(t, db.Exec("UPDATE catalog.provider SET quota_group=?,concurrency_limit=1 WHERE id IN ?", uuid.NewString(), []uuid.UUID{a.provider, b.provider}).Error)
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, f := range []managedFixture{a, b} {
+		go func() { <-start; _, err := f.store.ClaimProviderDispatch(t.Context(), f.identity); results <- err }()
+	}
+	close(start)
+	first, second := <-results, <-results
+	if first == nil {
+		require.ErrorIs(t, second, application.ErrManagedCapacity)
+	} else {
+		require.ErrorIs(t, first, application.ErrManagedCapacity)
+		require.NoError(t, second)
+	}
 }

@@ -50,6 +50,7 @@ export function isProcurementPrice(price: API.AdminPrice) {
     price.source_url &&
     price.reviewed_at &&
     !price.rule?.procurement_price_version_id &&
+    price.rule?.discount_factor === undefined &&
     price.rule?.markup_multiplier === undefined
   );
 }

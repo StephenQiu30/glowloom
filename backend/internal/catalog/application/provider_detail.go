@@ -28,6 +28,7 @@ type CredentialField struct {
 
 // ProviderCredentialSummary contains only metadata safe for an administrator.
 type ProviderCredentialSummary struct {
+	PoolEnabled    bool                    `json:"pool_enabled"`
 	ID             uuid.UUID               `json:"id"`
 	ProviderID     uuid.UUID               `json:"provider_id"`
 	Label          string                  `json:"label"`
@@ -94,7 +95,7 @@ func (q *ProviderDetailQuery) Execute(ctx context.Context, actor identityapp.Pri
 		Provider: CreatedProvider{
 			ID: provider.ID, Key: provider.Key, Name: provider.Name,
 			AdapterKey: provider.AdapterKey, Region: provider.Region, Status: provider.Status,
-			ConcurrencyLimit: provider.ConcurrencyLimit, RateLimitPerMin: provider.RateLimitPerMin,
+			QuotaGroup: provider.QuotaGroup, ConcurrencyLimit: provider.ConcurrencyLimit, RateLimitPerMin: provider.RateLimitPerMin,
 			Revision: provider.Revision, CreateTime: provider.CreateTime, UpdateTime: provider.UpdateTime,
 		},
 		Credential: credential, CredentialSchema: fields,

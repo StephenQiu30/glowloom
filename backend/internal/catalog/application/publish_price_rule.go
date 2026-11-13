@@ -43,6 +43,7 @@ type PublishPriceRuleInput struct {
 	Currency         string
 	FXRateToCNY      string
 	MarkupMultiplier string
+	DiscountFactor   string
 	EffectiveFrom    time.Time
 	RequestID        string
 }
@@ -78,8 +79,8 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 	}
 	requestID, err := uuid.Parse(input.RequestID)
 	if err != nil || requestID == uuid.Nil || requestID.String() != input.RequestID ||
-		input.ExpectedRevision < 1 || input.ExpectedRevision >= math.MaxInt32 || len(input.MarkupMultiplier) > 32 ||
-		(!input.UseOfficialRate && (input.MarkupMultiplier != "" || input.CandidateID != uuid.Nil)) {
+		input.ExpectedRevision < 1 || input.ExpectedRevision >= math.MaxInt32 || len(input.MarkupMultiplier) > 32 || len(input.DiscountFactor) > 8 ||
+		(!input.UseOfficialRate && (input.MarkupMultiplier != "" || input.DiscountFactor != "" || input.CandidateID != uuid.Nil)) {
 		return PublishedPriceRule{}, ErrInvalidPublishPriceRule
 	}
 	price := domain.PriceRuleVersion{
@@ -111,33 +112,9 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 		if revision >= math.MaxInt32 || price.VersionNo >= math.MaxInt32 {
 			return PublishedPriceRule{}, ErrInvalidPublishPriceRule
 		}
-		var rule map[string]json.RawMessage
-		if err := json.Unmarshal(price.Rule, &rule); err != nil || rule == nil {
-			return PublishedPriceRule{}, ErrInvalidPublishPriceRule
-		}
-		if rule[domain.ProcurementVersionField] != nil || rule["markup_multiplier"] != nil || rule["credit_ratio"] != nil {
-			return PublishedPriceRule{}, ErrInvalidPublishPriceRule
-		}
-		link, err := json.Marshal(price.ID)
+		sale, err := domain.SalePriceFromProcurement(price, input.MarkupMultiplier, input.DiscountFactor)
 		if err != nil {
-			return PublishedPriceRule{}, fmt.Errorf("encode official rate link: %w", err)
-		}
-		rule[domain.ProcurementVersionField] = link
-		markupMultiplier := input.MarkupMultiplier
-		if markupMultiplier == "" {
-			markupMultiplier = "1"
-		}
-		markup, err := json.Marshal(markupMultiplier)
-		if err != nil {
-			return PublishedPriceRule{}, fmt.Errorf("encode sales markup multiplier: %w", err)
-		}
-		rule["markup_multiplier"] = markup
-		sale := price
-		sale.ID = uuid.NewSHA1(price.ID, []byte("official-sale"))
-		sale.VersionNo++
-		sale.Rule, err = json.Marshal(rule)
-		if err != nil {
-			return PublishedPriceRule{}, fmt.Errorf("encode official sales rate: %w", err)
+			return PublishedPriceRule{}, fmt.Errorf("%w: %w", ErrInvalidPublishPriceRule, err)
 		}
 		if err := c.validator.Validate(sale); err != nil {
 			return PublishedPriceRule{}, fmt.Errorf("validate sales price rule: %w: %w", ErrInvalidPublishPriceRule, err)

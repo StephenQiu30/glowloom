@@ -56,12 +56,13 @@ func TestTerminalPaidManifestRestoresOriginalDeliveryWithoutNewGeneration(t *tes
 	}{{"partial_release", 4}, {"overage", 16}} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := operationStoreDB(t)
-			f := seedManagedFixture(t, db)
+			f := seedUnverifiedManagedFixture(t, db)
 			i, store := f.identity, f.store
 			require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 			require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
 			require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule=jsonb_build_object('base_micros',?::int) WHERE id=?`, tc.price, i.PriceRuleVersionID).Error)
 			require.NoError(t, db.Exec(`UPDATE operation.operation SET capability='text.generate',mode='text_to_text',params='{}' WHERE id=?`, i.OperationID).Error)
+			seedDispatchModeEvidence(t, db, f)
 			require.NoError(t, db.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','original fixture prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 			objects := &stageTestObjects{entries: map[string]stageTestObject{}}
 			results := application.NewManagedResults(objects, store)
@@ -383,12 +384,13 @@ func TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived(t 
 }
 func TestFinalReviewTerminalLedgerConflictMustRefuseArchive(t *testing.T) {
 	db := operationStoreDB(t)
-	f := seedManagedFixture(t, db)
+	f := seedUnverifiedManagedFixture(t, db)
 	i, store := f.identity, f.store
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":10}' WHERE id=?`, i.PriceRuleVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE operation.operation SET capability='text.generate',mode='text_to_text',params='{}' WHERE id=?`, i.OperationID).Error)
+	seedDispatchModeEvidence(t, db, f)
 	require.NoError(t, db.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','original fixture prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	objects := &stageTestObjects{entries: map[string]stageTestObject{}}
 	results := application.NewManagedResults(objects, store)
@@ -430,12 +432,13 @@ func TestFinalReviewTerminalLedgerConflictMustRefuseArchive(t *testing.T) {
 }
 func TestFinalReviewAuthorizedSurvivingTeamMemberCanRecover(t *testing.T) {
 	db := operationStoreDB(t)
-	f := seedManagedFixture(t, db)
+	f := seedUnverifiedManagedFixture(t, db)
 	i, store := f.identity, f.store
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":10}' WHERE id=?`, i.PriceRuleVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE operation.operation SET capability='text.generate',mode='text_to_text',params='{}' WHERE id=?`, i.OperationID).Error)
+	seedDispatchModeEvidence(t, db, f)
 	require.NoError(t, db.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','original fixture prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	var original identityapp.Principal
 	require.NoError(t, db.Raw(`SELECT u.id,u.org_id,u.role FROM identity."user" u JOIN operation.operation o ON o.confirmed_by=u.id WHERE o.id=?`, i.OperationID).Scan(&original).Error)
@@ -508,12 +511,13 @@ func TestRecoveredAudioShowsOnlyOriginalSubtitle(t *testing.T) {
 	db := operationStoreDB(t).Begin()
 	require.NoError(t, db.Error)
 	t.Cleanup(func() { _ = db.Rollback().Error })
-	f := seedManagedFixture(t, db)
+	f := seedUnverifiedManagedFixture(t, db)
 	i, store := f.identity, f.store
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='audio.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['omni_audio'],moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":8}' WHERE id=?`, i.PriceRuleVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE operation.operation SET capability='audio.generate',mode='omni_audio' WHERE id=?`, i.OperationID).Error)
+	seedDispatchModeEvidence(t, db, f)
 	claim, err := store.ClaimProviderDispatch(t.Context(), i)
 	require.NoError(t, err)
 	require.True(t, claim.Claimed)
