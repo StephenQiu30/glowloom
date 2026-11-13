@@ -1,11 +1,6 @@
+import { render } from "../../../feedback";
 import { pageBusinessMemory } from "@/lib/page-business-memory";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ProjectCopyDialog } from "@/components/projects/project-copy-dialog";
 import { createProjectCopy } from "@/api/projectCopies";

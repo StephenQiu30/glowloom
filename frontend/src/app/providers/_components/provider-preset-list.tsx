@@ -2,7 +2,7 @@
 
 import { saveAs } from "file-saver";
 import { MoreHorizontal } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { exportProviderPreset } from "@/api/settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

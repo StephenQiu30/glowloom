@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useRef, useState } from "react";
 import { Ellipsis, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
@@ -197,11 +198,7 @@ export function ConversationHistoryItem({
           }
         />
       )}
-      {error && !deleting && (
-        <li role="alert" className="px-2 text-xs text-destructive">
-          {error}
-        </li>
-      )}
+      {error && !deleting && <FeedbackToast message={error} />}
       <AlertDialog
         open={deleting}
         onOpenChange={(open) => {
@@ -220,11 +217,7 @@ export function ConversationHistoryItem({
               确定删除「{item.title}」？
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
+          {error && <FeedbackToast message={error} />}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending} onClick={closeDelete}>
               取消

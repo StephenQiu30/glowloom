@@ -18,7 +18,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { CaptchaField } from "./captcha-field";
 import type { AuthMode } from "./auth-dialog-provider";
 

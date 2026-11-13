@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { ContentState } from "@/components/layout/content-state";
 import { useEffect, useRef, useState } from "react";
 import { ProjectAssetDialog } from "@/components/media/project-asset-dialog";
@@ -171,11 +172,7 @@ export function LibraryPickerContent({
           {busy ? "正在上传" : `上传选中的 ${files.length} 个文件`}
         </Button>
       )}
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FeedbackToast message={error} />}
       {open && (
         <ProjectAssetDialog
           projectID={projectId}

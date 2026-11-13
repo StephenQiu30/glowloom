@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useEffect, useState } from "react";
 import useSWR from "swr";
@@ -137,12 +138,14 @@ export function EpisodePanel(props: Scope) {
       )}
       {result.isLoading && <p role="status">正在读取分集…</p>}
       {result.error && (
-        <div role="alert">
-          无法读取分集。{" "}
-          <Button variant="outline" onClick={() => void result.mutate()}>
-            重试
-          </Button>
-        </div>
+        <Alert role="alert">
+          <AlertDescription>
+            无法读取分集。{" "}
+            <Button variant="outline" onClick={() => void result.mutate()}>
+              重试
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
       {candidate?.boundaries?.length ? (
         <div className="flex flex-col gap-3 rounded-lg border p-4">
@@ -205,17 +208,19 @@ export function EpisodePanel(props: Scope) {
         </div>
       ) : null}
       {write.error && (
-        <div role="alert">
-          {write.error}{" "}
-          {write.unknown && (
-            <Button
-              disabled={write.pending}
-              onClick={() => void write.submit()}
-            >
-              重试原操作
-            </Button>
-          )}
-        </div>
+        <Alert role="alert">
+          <AlertDescription>
+            {write.error}{" "}
+            {write.unknown && (
+              <Button
+                disabled={write.pending}
+                onClick={() => void write.submit()}
+              >
+                重试原操作
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
       {episodes.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
@@ -419,7 +424,9 @@ function EpisodeEditor({
         </Button>
       </header>
       {source.error ? (
-        <p role="alert">无法读取分集正文。</p>
+        <Alert role="alert">
+          <AlertDescription>无法读取分集正文。</AlertDescription>
+        </Alert>
       ) : (
         <Collapsible>
           <CollapsibleTrigger asChild>
@@ -434,7 +441,11 @@ function EpisodeEditor({
           </CollapsibleContent>
         </Collapsible>
       )}
-      {saved.error && <p role="alert">无法读取分镜草稿。</p>}
+      {saved.error && (
+        <Alert role="alert">
+          <AlertDescription>无法读取分镜草稿。</AlertDescription>
+        </Alert>
+      )}
       {saved.isLoading && <p role="status">正在读取分镜草稿…</p>}
       {document?.scenes?.map((scene, sceneIndex) => (
         <section key={scene.scene_key} className="flex flex-col gap-2">
@@ -542,17 +553,19 @@ function EpisodeEditor({
         </div>
       )}
       {write.error && (
-        <div role="alert">
-          {write.error}{" "}
-          {write.unknown && (
-            <Button
-              disabled={write.pending}
-              onClick={() => void write.submit()}
-            >
-              重试原操作
-            </Button>
-          )}
-        </div>
+        <Alert role="alert">
+          <AlertDescription>
+            {write.error}{" "}
+            {write.unknown && (
+              <Button
+                disabled={write.pending}
+                onClick={() => void write.submit()}
+              >
+                重试原操作
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
     </article>
   );

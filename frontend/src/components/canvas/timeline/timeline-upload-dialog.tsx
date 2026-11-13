@@ -1,4 +1,5 @@
 "use client";
+import { FieldError } from "@/components/ui/field";
 
 import { useEffect, useId, useRef, useState } from "react";
 import { uploadMediaAsset } from "@/api/media";
@@ -313,11 +314,7 @@ function TimelineUploadSession({
           <Upload className="size-4" aria-hidden="true" />
           选择文件或拖至此处
         </Button>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FieldError>{error}</FieldError>}
         {items.length > 0 && (
           <>
             <p role="status" className="text-xs text-muted-foreground">

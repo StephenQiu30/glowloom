@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../feedback";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { listMediaLibrary, previewLibraryMediaAsset } from "@/api/media";
 import {
@@ -132,7 +127,7 @@ it("rejects a changed asset version and can retry the same selection", async () 
     await within(picker).findByRole("button", { name: "参考图" }),
   );
   fireEvent.click(confirm);
-  expect(await within(picker).findByRole("alert")).toBeTruthy();
+  expect(await findFeedback()).toBeTruthy();
   expect(within(picker).getByText("已选择 1 个素材")).toBeTruthy();
   fireEvent.click(confirm);
   expect(await screen.findByRole("img", { name: "参考图" })).toBeTruthy();

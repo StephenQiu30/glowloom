@@ -1,9 +1,9 @@
+import { render, findFeedback } from "../../../../feedback";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -102,7 +102,7 @@ it("blocks an epoch change before upload", async () => {
   });
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.click(screen.getByRole("button", { name: "上传并放置" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(mocks.uploadMediaAsset).not.toHaveBeenCalled();
 });
 
@@ -113,7 +113,7 @@ it("retains the accepted asset when placement handoff fails and retries without 
     .mockResolvedValue(undefined);
   const { props } = mount({ onAdd });
   await reviewAndUpload();
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(props.onClose).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "重试放置" }));
   await waitFor(() => expect(props.onClose).toHaveBeenCalledOnce());
@@ -125,7 +125,7 @@ it("retries an unknown receipt using the same request identity and locks file re
   mocks.uploadMediaAsset.mockRejectedValueOnce(new Error("network lost"));
   mount();
   await reviewAndUpload();
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(
     (screen.getByLabelText("选择模型文件") as HTMLInputElement).disabled,
   ).toBe(true);
@@ -142,7 +142,7 @@ it("rejects cross-project or non-model receipts before adding to a scene", async
   });
   const { props } = mount();
   await reviewAndUpload();
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(props.onAdd).not.toHaveBeenCalled();
 });
 
@@ -187,7 +187,5 @@ it("checks the current project again after an in-flight upload", async () => {
     finish(receipt);
   });
   expect(props.onAdd).not.toHaveBeenCalled();
-  expect((await screen.findByRole("alert")).textContent).toContain(
-    "项目或编辑权限已变化",
-  );
+  expect((await findFeedback()).textContent).toContain("项目或编辑权限已变化");
 });

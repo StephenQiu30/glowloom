@@ -1,11 +1,6 @@
+import { render, findFeedback } from "../../../feedback";
 import { afterEach, it, expect, vi } from "vitest";
-import {
-  cleanup,
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
 import { CinemaKitPicker } from "@/components/canvas/cinema-kit/cinema-kit-picker";
 import { ConnectionCreateMenu } from "@/components/canvas/controls/canvas-create-menus";
 import { makeCinemaNode } from "@/components/canvas/cinema-kit/cinema-kit-graph";
@@ -42,11 +37,11 @@ it("keeps a failed save open with the draft available for retry", async () => {
     />,
   );
   fireEvent.click(screen.getByText("确认"));
-  await screen.findByRole("alert");
-  expect(screen.getByRole("alert").textContent).toBe("保存未确认");
+  await findFeedback();
+  expect((await findFeedback()).textContent).toBe("保存未确认");
   expect(close).not.toHaveBeenCalled();
 });
-it("motion selection is single and clear disables confirm", () => {
+it("motion selection is single and clear disables confirm", async () => {
   render(
     <CinemaKitPicker kind="motion" onConfirm={vi.fn()} onClose={vi.fn()} />,
   );
@@ -66,7 +61,7 @@ it("motion selection is single and clear disables confirm", () => {
   fireEvent.click(screen.getByText("清空选择"));
   expect((screen.getByText("确认") as HTMLButtonElement).disabled).toBe(true);
 });
-it("keeps all seven connection choices visible and explains camera video restriction", () => {
+it("keeps all seven connection choices visible and explains camera video restriction", async () => {
   const node = makeCinemaNode(
     { version: 1, camera: cameraDefault() },
     { x: 0, y: 0 },

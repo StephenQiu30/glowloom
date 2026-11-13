@@ -24,14 +24,44 @@ export default defineConfig([
   ...nextTs,
   {
     files: ["src/components/**/*.{ts,tsx}"],
+    ignores: [
+      "src/components/feedback/notification.ts",
+      "src/components/ui/sonner.tsx",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
         {
+          paths: [
+            {
+              name: "sonner",
+              importNames: ["toast", "Toaster"],
+              message:
+                "消息通知使用统一的 feedback/notification 与根级 ui/sonner。",
+            },
+          ],
           patterns: [
             {
               group: ["@/app/**", "**/app/**"],
               message: "复用组件不得反向导入路由页面或页面私有组件。",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/app/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "sonner",
+              importNames: ["toast", "Toaster"],
+              message:
+                "消息通知使用统一的 feedback/notification 与根级 ui/sonner。",
             },
           ],
         },

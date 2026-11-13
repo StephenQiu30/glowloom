@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
@@ -224,32 +225,34 @@ export function CanvasGenerationPanel({
       data-canvas-shortcuts-ignore
     >
       {retained && (
-        <div role="alert" className="space-y-2 rounded-xl border p-3 text-sm">
-          <p>{retained.reason}</p>
-          <div className="flex gap-2">
-            {(["server", "local"] as const).map((choice) => (
-              <Button
-                key={choice}
-                variant="outline"
-                size="sm"
-                disabled={!view.writable}
-                onClick={() => {
-                  try {
-                    client.resolveInputDraft(nodeID, choice);
-                    setRecoveryError("");
-                  } catch (cause) {
-                    setRecoveryError(
-                      cause instanceof Error ? cause.message : "草稿尚未恢复",
-                    );
-                  }
-                }}
-              >
-                {choice === "server" ? "使用已保存版本" : "重新提交本页草稿"}
-              </Button>
-            ))}
-          </div>
-          {recoveryError && <p>{recoveryError}</p>}
-        </div>
+        <Alert role="alert">
+          <AlertDescription>
+            <p>{retained.reason}</p>
+            <div className="flex gap-2">
+              {(["server", "local"] as const).map((choice) => (
+                <Button
+                  key={choice}
+                  variant="outline"
+                  size="sm"
+                  disabled={!view.writable}
+                  onClick={() => {
+                    try {
+                      client.resolveInputDraft(nodeID, choice);
+                      setRecoveryError("");
+                    } catch (cause) {
+                      setRecoveryError(
+                        cause instanceof Error ? cause.message : "草稿尚未恢复",
+                      );
+                    }
+                  }}
+                >
+                  {choice === "server" ? "使用已保存版本" : "重新提交本页草稿"}
+                </Button>
+              ))}
+            </div>
+            {recoveryError && <p>{recoveryError}</p>}
+          </AlertDescription>
+        </Alert>
       )}
       <CanvasSubjectConnectionBar graph={view.document} nodeID={nodeID} />
       <RichGeneration

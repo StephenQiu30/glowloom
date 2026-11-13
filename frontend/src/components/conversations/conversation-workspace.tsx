@@ -9,7 +9,8 @@ import { isSameSkillVersion, selectSkillVersion } from "./conversation-state";
 import { cn } from "cn";
 import { ConversationThread } from "./conversation-thread";
 import { useConversation, type ConversationOptions } from "./use-conversation";
-import { Button } from "@/components/ui/button";
+import { FeedbackNotice } from "@/components/feedback/feedback-notice";
+import { Spinner } from "@/components/ui/spinner";
 export function ConversationWorkspace({
   onChooseProject,
   headerActions,
@@ -51,9 +52,13 @@ export function ConversationWorkspace({
       )}
     >
       {c.loading && !welcome ? (
-        <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
+        <div
+          role="status"
+          className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground"
+        >
+          <Spinner aria-hidden="true" />
           正在读取对话…
-        </p>
+        </div>
       ) : null}
       {hasMessages ? (
         <ConversationThread
@@ -113,27 +118,49 @@ export function ConversationWorkspace({
       ) : !embedded ? (
         <div className="flex-1" />
       ) : null}
-      {c.error || c.connection !== "connected" || c.unresolved.length > 0 ? (
-        <div
-          className="mx-auto mb-3 flex w-full max-w-[960px] flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm"
-          role="status"
-        >
-          <p className="min-w-0 flex-1">
-            {c.error ||
-              (c.unresolved.length
-                ? "原任务结果仍待核对，请先读取原记录。"
-                : c.connection === "recovering"
-                  ? "正在恢复消息连接…"
-                  : "消息连接已断开，已受理的任务仍保留。")}
-          </p>
-          <Button variant="outline" size="sm" onClick={c.refresh}>
-            刷新核对
-          </Button>
-          {c.phase === "unknown" ? (
-            <Button variant="outline" size="sm" onClick={() => void c.send()}>
-              核对原发送
-            </Button>
-          ) : null}
+      {c.phase === "unknown" ||
+      c.error ||
+      c.connection !== "connected" ||
+      c.unresolved.length > 0 ? (
+        <div className="mx-auto mb-3 w-full max-w-[800px] empty:hidden">
+          <FeedbackNotice
+            key={`${identity}/${c.phase === "unknown" ? "unknown" : c.error || c.connection}`}
+            message={
+              c.phase === "unknown"
+                ? "发送结果待确认"
+                : c.error ||
+                  (c.unresolved.length
+                    ? "任务结果待确认"
+                    : c.connection === "recovering"
+                      ? "正在恢复消息连接…"
+                      : "消息连接已断开")
+            }
+            description={
+              c.phase === "unknown"
+                ? c.canRetrySubmission
+                  ? "草稿已保留，可重试发送。"
+                  : "草稿已保留，请先查看状态。"
+                : undefined
+            }
+            tone={
+              c.phase === "unknown" ||
+              c.connection !== "connected" ||
+              c.unresolved.length
+                ? "info"
+                : "error"
+            }
+            action={{
+              label:
+                c.phase === "unknown" && c.canRetrySubmission
+                  ? "重试发送"
+                  : "查看状态",
+              onClick: () => {
+                if (c.phase === "unknown" && c.canRetrySubmission)
+                  void c.send();
+                else c.refresh();
+              },
+            }}
+          />
         </div>
       ) : null}
       <div

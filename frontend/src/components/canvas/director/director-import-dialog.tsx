@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useEffect, useId, useRef, useState } from "react";
 import { uploadMediaAsset } from "@/api/media";
@@ -225,11 +226,7 @@ export function DirectorImportDialog(props: DirectorImportDialogProps) {
           />
           我有使用权限，且无待授权真人内容。
         </Label>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FeedbackToast message={error} />}
         {busy && (
           <p role="status">
             {!model

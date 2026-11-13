@@ -73,6 +73,7 @@ interface View {
   loading: boolean;
   error: string;
   phase: Phase;
+  canRetrySubmission: boolean;
   connection: "connected" | "recovering" | "offline";
   unresolved: string[];
   olderRuns?: string;
@@ -107,6 +108,7 @@ function initialView(identity: string, sessionID?: string): View {
     loading: true,
     error: "",
     phase: "idle",
+    canRetrySubmission: false,
     connection: "connected",
     unresolved: [],
     denied: false,
@@ -536,6 +538,7 @@ export function useConversation({
     patch((old) => ({
       ...old,
       phase: "idle",
+      canRetrySubmission: false,
       sessionID: command.sessionID!,
       activeRunID: receipt.root_run_id,
       error: "",
@@ -608,7 +611,8 @@ export function useConversation({
           patch((old) => ({
             ...old,
             phase: "unknown",
-            error: "尚未找到受理回执。可核对并重试原发送，不会创建新的尝试。",
+            canRetrySubmission: true,
+            error: "尚未确认发送结果，草稿已保留。",
           }));
           return;
         }
@@ -667,7 +671,12 @@ export function useConversation({
       pending.current = command;
     }
     flight.current = true;
-    patch((old) => ({ ...old, phase: "submitting", error: "" }));
+    patch((old) => ({
+      ...old,
+      phase: "submitting",
+      canRetrySubmission: false,
+      error: "",
+    }));
     try {
       await submitPending(command, true);
     } catch (error) {
@@ -687,7 +696,7 @@ export function useConversation({
         patch((old) => ({
           ...old,
           phase: "unknown",
-          error: "发送回执暂未确认，正在核对原请求。",
+          error: "发送结果待确认，正在查看状态。",
         }));
         try {
           await submitPending(command, false);
@@ -696,7 +705,7 @@ export function useConversation({
             patch((old) => ({
               ...old,
               phase: "unknown",
-              error: "连接暂时中断，请核对原发送。原输入仍保留。",
+              error: "消息连接已中断，草稿已保留。",
             }));
         }
       }
@@ -928,7 +937,7 @@ export function useConversation({
       else
         patch((old) => ({
           ...old,
-          error: "控制请求已受理，执行回执仍待同步。可刷新核对原任务。",
+          error: "操作已提交，结果待确认。",
         }));
     };
     timer = setTimeout(() => void poll(), 1000);
@@ -1050,6 +1059,7 @@ export function useConversation({
     stopping,
     control: state.control,
     phase: state.phase,
+    canRetrySubmission: state.canRetrySubmission,
     loading: state.loading,
     error: state.error,
     connection: state.connection,
@@ -1072,6 +1082,29 @@ export function useConversation({
     loadOlderRuns,
     loadOlderMessages,
     quoteMessage,
-    refresh: () => setRefreshKey((n) => n + 1),
+    refresh: () => {
+      const command = pending.current;
+      if (!command) {
+        setRefreshKey((n) => n + 1);
+        return;
+      }
+      if (flight.current) return;
+      flight.current = true;
+      patch((old) => ({ ...old, loading: true, canRetrySubmission: false }));
+      void submitPending(command, false)
+        .catch(() => {
+          if (current())
+            patch((old) => ({
+              ...old,
+              phase: "unknown",
+              error: "暂时无法查看状态，草稿已保留。",
+            }));
+        })
+        .finally(() => {
+          if (!current()) return;
+          flight.current = false;
+          patch((old) => ({ ...old, loading: false }));
+        });
+    },
   };
 }

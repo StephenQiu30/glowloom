@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { pageBusinessMemory } from "@/lib/page-business-memory";
 
 import { useEffect, useRef, useState } from "react";
@@ -539,11 +540,7 @@ export function ServiceTrial({
               />
             </Field>
           ) : null}
-          {error ? (
-            <p role="alert" className="text-sm">
-              {error}
-            </p>
-          ) : null}
+          {error ? <FeedbackToast message={error} /> : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t pt-4">
           {job ? (

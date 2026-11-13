@@ -1,11 +1,12 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { render, findFeedback } from "../../../../feedback";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { DirectorVideoDialog } from "@/components/canvas/director/director-video-dialog";
 import { emptyDirectorConfig } from "@/components/canvas/director/director-model";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 
 afterEach(cleanup);
-it("opens with the current shot and aspect after switching scenes", () => {
+it("opens with the current shot and aspect after switching scenes", async () => {
   const initial = { ...emptyDirectorConfig(), mode: "dynamic" as const };
   const props = {
     client: {} as CanvasYjsLiveSession,
@@ -91,7 +92,7 @@ it("uses all shot durations for sequence export and keeps manual overrides edita
       expect.any(Function),
     ),
   );
-  await screen.findByRole("alert");
+  await findFeedback();
   fireEvent.keyDown(screen.getByRole("combobox", { name: "机位来源" }), {
     key: "ArrowDown",
   });

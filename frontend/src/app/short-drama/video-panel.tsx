@@ -1,4 +1,6 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -275,14 +277,16 @@ export function VideoPanel({
             </div>
           )}
           {media.error && (
-            <div role="alert">
-              无法读取项目视频。{" "}
-              <Button variant="outline" onClick={() => void media.mutate()}>
-                重试
-              </Button>
-            </div>
+            <Alert role="alert">
+              <AlertDescription>
+                无法读取项目视频。{" "}
+                <Button variant="outline" onClick={() => void media.mutate()}>
+                  重试
+                </Button>
+              </AlertDescription>
+            </Alert>
           )}
-          {change.error && <p role="alert">{change.error}</p>}
+          {change.error && <FeedbackToast message={change.error} />}
           {draft && writable && (
             <RichGeneration
               key={draft.references[0]?.id ?? initialPrompt}

@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -156,9 +157,11 @@ export function CanvasWorkflowControls({
                 : "所选固定输入、确定性拼接与 Agent Mock 不调用付费模型。"}
             </p>
             {generated && !workflow.options?.generationEnabled && (
-              <p role="alert">
-                当前PoC未开放收费生成，请调整运行范围或使用确定性处理。
-              </p>
+              <Alert role="alert">
+                <AlertDescription>
+                  当前PoC未开放收费生成，请调整运行范围或使用确定性处理。
+                </AlertDescription>
+              </Alert>
             )}
           </div>
           <div className="flex justify-end gap-2">
@@ -232,7 +235,11 @@ export function CanvasWorkflowControls({
               </section>
             )}
             {workflow.error && (
-              <p role="alert">流程状态读取失败，原运行仍保留。请重新读取。</p>
+              <Alert role="alert">
+                <AlertDescription>
+                  流程状态读取失败，原运行仍保留。请重新读取。
+                </AlertDescription>
+              </Alert>
             )}
             {workflow.runs.length === 0 && !workflow.error && (
               <p className="text-sm text-muted-foreground">
@@ -272,11 +279,13 @@ export function CanvasWorkflowControls({
                   </p>
                 )}
                 {run.resolution === "NEEDS_RECONCILIATION" && (
-                  <p role="alert" className="text-sm">
-                    {run.nodes?.some((node) => node.state === "UNKNOWN")
-                      ? "提交结果未知，请按原任务核对；该流程不会自动再次生成。"
-                      : "引擎状态需要核对，原任务与停止门禁已保留；该流程不会自动重新启动。"}
-                  </p>
+                  <Alert role="alert">
+                    <AlertDescription>
+                      {run.nodes?.some((node) => node.state === "UNKNOWN")
+                        ? "提交结果未知，请按原任务核对；该流程不会自动再次生成。"
+                        : "引擎状态需要核对，原任务与停止门禁已保留；该流程不会自动重新启动。"}
+                    </AlertDescription>
+                  </Alert>
                 )}
                 {(run.nodes ?? []).map((node) => (
                   <div

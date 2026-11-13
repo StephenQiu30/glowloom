@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   DirectorTimelineKey,
   DirectorTimelineClip,
@@ -390,11 +391,7 @@ export function DirectorTimeline({
           </Button>
         </div>
       )}
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FeedbackToast message={error} />}
     </div>
   );
 }

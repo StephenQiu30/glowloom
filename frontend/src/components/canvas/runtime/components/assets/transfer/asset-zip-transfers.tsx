@@ -43,7 +43,7 @@ import {
   type FileTransfersHandle,
   ZipImportRecordsContext,
 } from "./file-transfers-panel";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { useTransferAbort } from "../hooks/use-transfer-abort";
 
 import {

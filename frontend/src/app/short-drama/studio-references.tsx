@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
 import { AtSign, FolderOpen, Link2, Plus, Upload, X } from "lucide-react";
 import {
@@ -209,11 +210,7 @@ export function StudioReferences({
             ))}
           </div>
         )}
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FeedbackToast message={error} />}
       </div>
       {open === "library" && owner && (
         <PersonalLibraryPicker
@@ -411,11 +408,7 @@ export function VideoLinkDialog({
           </FieldLabel>
         </Field>
         {pending && <p role="status">正在解析并保存视频…</p>}
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FeedbackToast message={error} />}
         <DialogFooter>
           <Button variant="secondary" disabled={pending} onClick={onClose}>
             关闭

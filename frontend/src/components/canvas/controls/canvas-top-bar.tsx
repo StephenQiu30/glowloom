@@ -18,7 +18,7 @@ import {
 import { ChevronDown, Pencil, FolderOpen, History } from "lucide-react";
 import { CanvasNodeSearch } from "../search/canvas-node-search";
 import { CanvasHistoryDialog } from "../history/canvas-history-dialog";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { Search, UserRound, Link2 } from "lucide-react";
 import Link from "next/link";
 import { BrandMark } from "@/components/canvas/runtime/components/layout/shell/brand-mark";

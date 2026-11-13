@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({ import: vi.fn() }));
 vi.mock("@/api/media", async (original) => ({
@@ -35,9 +30,7 @@ it("空链接、私网或平台伪装地址不会提交，实际解析失败不�
     new RequestError("video_link_unresolvable", 422),
   );
   fireEvent.click(confirm);
-  expect((await screen.findByRole("alert")).textContent).toContain(
-    "无法公开读取",
-  );
+  expect((await findFeedback()).textContent).toContain("无法公开读取");
   expect(adopted).not.toHaveBeenCalled();
 });
 it("回执丢失后复用URL与永久key；后续采用失败仅重试已入库素材", async () => {
@@ -59,10 +52,10 @@ it("回执丢失后复用URL与永久key；后续采用失败仅重试已入库�
   });
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.click(screen.getByRole("button", { name: "确认" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   fireEvent.click(screen.getByRole("button", { name: "重试原导入" }));
   await waitFor(() => expect(adopted).toHaveBeenCalledTimes(1));
-  await screen.findByRole("alert");
+  await findFeedback();
   fireEvent.click(screen.getByRole("button", { name: "重试原导入" }));
   await waitFor(() => expect(adopted).toHaveBeenCalledTimes(2));
   expect(api.import).toHaveBeenCalledTimes(2);

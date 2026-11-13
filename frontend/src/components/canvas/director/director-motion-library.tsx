@@ -1,6 +1,7 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -485,11 +486,7 @@ export function DirectorMotionLibrary(props: DirectorMotionLibraryProps) {
       <p className="text-xs text-muted-foreground">
         文字生成动作尚未接入可输出骨骼动画的服务。
       </p>
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FeedbackToast message={error} />}
     </div>
   );
 }

@@ -53,7 +53,7 @@ it("音频保存待重试展示明确阶段，只恢复原媒体导入", () => {
   };
   render(<UnifiedSubjectVoiceControls owner={value} />);
   expect(screen.queryByRole("button", { name: "音色加载中" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "重试保存音频" }));
+  fireEvent.click(screen.getByRole("button", { name: "重试保存" }));
   expect(value.retryOriginal).toHaveBeenCalledOnce();
   expect(value.begin).not.toHaveBeenCalled();
 });
@@ -63,7 +63,7 @@ it("unknown只提供恢复原任务，不提供新生成入口", () => {
     error: "音色生成结果尚未确认，请恢复读取。",
   };
   render(<UnifiedSubjectVoiceControls owner={value} />);
-  fireEvent.click(screen.getByRole("button", { name: "恢复读取" }));
+  fireEvent.click(screen.getByRole("button", { name: "查看状态" }));
   expect(value.recover).toHaveBeenCalledOnce();
   expect(screen.queryByRole("button", { name: "重新生成" })).toBeNull();
 });

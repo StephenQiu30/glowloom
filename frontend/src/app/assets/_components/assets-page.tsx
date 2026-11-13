@@ -1,5 +1,5 @@
 "use client";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -828,14 +828,7 @@ function Library({
                     </Button>
                   </DialogFooter>
                 </form>
-                {writeError && (
-                  <p
-                    role="alert"
-                    className="text-sm break-words text-destructive"
-                  >
-                    {writeError}
-                  </p>
-                )}
+                {writeError && <FeedbackToast message={writeError} />}
                 {pendingOperation && !saving && (
                   <Button onClick={() => void command()}>重试原操作</Button>
                 )}

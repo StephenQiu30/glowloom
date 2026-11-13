@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useState } from "react";
 import { ProjectMediaPicker } from "@/components/media/project-media";
 import { referenceRoleLabel } from "@/components/generation/reference-source";
@@ -106,11 +107,7 @@ export function TrialReferences({
             ))}
         </div>
       ))}
-      {error ? (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
+      {error ? <FeedbackToast message={error} /> : null}
       {picker && projectID ? (
         <ProjectMediaPicker
           key={`${projectID}:${picker.role}`}

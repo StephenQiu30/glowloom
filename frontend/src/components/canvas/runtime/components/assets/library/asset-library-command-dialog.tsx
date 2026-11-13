@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import {
   createAssetLibrary,
   getAssetLibraryCommand,

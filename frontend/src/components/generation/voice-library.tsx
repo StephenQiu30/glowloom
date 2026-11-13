@@ -1,7 +1,8 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import dynamic from "next/dynamic";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
 import { VoiceFilters, emptyVoiceTags, type VoiceTags } from "./voice-filters";
@@ -302,19 +303,21 @@ export function VoiceLibrary({
           </div>
         )}
         {error && !deleting && (
-          <div role="alert">
-            <p>{error}</p>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setLoading(true);
-                setError("");
-                setEpoch((n) => n + 1);
-              }}
-            >
-              重新读取
-            </Button>
-          </div>
+          <Alert role="alert">
+            <AlertDescription>
+              <p>{error}</p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setLoading(true);
+                  setError("");
+                  setEpoch((n) => n + 1);
+                }}
+              >
+                重新读取
+              </Button>
+            </AlertDescription>
+          </Alert>
         )}
         {creating && (
           <CreateVoice
@@ -368,7 +371,7 @@ export function VoiceLibrary({
               >
                 保存名称
               </Button>
-              {error && <p role="alert">{error}</p>}
+              {error && <FeedbackToast message={error} />}
             </DialogContent>
           </Dialog>
         )}
@@ -584,7 +587,7 @@ function CreateVoice({
           />
           我有权使用该声音，并同意将所选音频用于生成。
         </Label>
-        {error && <p role="alert">{error}</p>}
+        {error && <FeedbackToast message={error} />}
         <Button
           disabled={busy || !name.trim() || !asset || !consent}
           onClick={() => void save()}

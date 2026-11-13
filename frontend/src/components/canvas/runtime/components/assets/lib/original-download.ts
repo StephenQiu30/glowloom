@@ -2,7 +2,7 @@
 
 import { readFileTransfer } from "@/components/canvas/runtime/api/file-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 
 export function startFileDownload(url: string) {
   if (!url.startsWith("/api/file/content?ticket="))

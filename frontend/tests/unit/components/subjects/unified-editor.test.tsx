@@ -313,7 +313,7 @@ it("主参考本地拖入进入独立上传流程，上传结束前保存禁用"
   );
 });
 
-it("添加音色菜单读取真实配置，不可用时说明接入原因", async () => {
+it("添加音色菜单读取真实配置，不可用时显示业务提示", async () => {
   render(
     <UnifiedSubjectEditor
       actorID={actorID}
@@ -332,9 +332,7 @@ it("添加音色菜单读取真实配置，不可用时说明接入原因", asyn
   ).toBeTruthy();
   expect(screen.queryByRole("menuitem", { name: "从资产添加" })).toBeNull();
   fireEvent.click(screen.getByRole("menuitem", { name: "智能配音" }));
-  expect(
-    await screen.findByText("请先接入火山引擎豆包语音模型并配置可用音色。"),
-  ).toBeTruthy();
+  expect(await screen.findByText("智能配音暂不可用")).toBeTruthy();
   expect(api.voiceOptions).toHaveBeenCalledOnce();
   expect(api.voiceCreate).not.toHaveBeenCalled();
   expect(api.create).not.toHaveBeenCalled();

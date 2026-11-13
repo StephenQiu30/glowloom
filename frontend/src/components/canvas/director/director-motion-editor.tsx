@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useState } from "react";
 import { DIRECTOR_BUILTIN_MOTION_PRESETS } from "./director-motion-catalog";
 const motionLabel = (name: string) =>
@@ -197,11 +198,7 @@ export function DirectorMotionEditor({
   return (
     <div className="director-fields">
       <h3>模型动作</h3>
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FeedbackToast message={error} />}
       {!available ? (
         <p className="text-foreground/45">等待模型加载与动作检查</p>
       ) : !available.animations.length ? (

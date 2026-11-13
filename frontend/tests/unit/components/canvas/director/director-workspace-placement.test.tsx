@@ -1,8 +1,8 @@
+import { render, findFeedback } from "../../../../feedback";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   within,
   type RenderOptions,
@@ -249,7 +249,7 @@ it.each(["blank", "text", "icon"])(
   },
 );
 
-it("keeps the enter-director button isolated and expands only on click", () => {
+it("keeps the enter-director button isolated and expands only on click", async () => {
   const { events, wrapper } = observeCanvasEvents();
   const onExpand = vi.fn();
   mount({ compact: true, wrapper, onExpand });
@@ -267,7 +267,7 @@ it("keeps the enter-director button isolated and expands only on click", () => {
   expect(onExpand).toHaveBeenCalledTimes(1);
 });
 
-it("keeps a disabled director control from leaking gestures to the card", () => {
+it("keeps a disabled director control from leaking gestures to the card", async () => {
   const { events, wrapper } = observeCanvasEvents();
   const { setConfig } = mount({ compact: true, wrapper });
   setConfig({ version: 2 } as API.DirectorConfig);
@@ -287,7 +287,7 @@ it("keeps a disabled director control from leaking gestures to the card", () => 
   expect(events).toEqual([]);
 });
 
-it("keeps wheel over the director card from zooming the canvas", () => {
+it("keeps wheel over the director card from zooming the canvas", async () => {
   mount({ compact: true });
   expect(
     screen
@@ -296,7 +296,7 @@ it("keeps wheel over the director card from zooming the canvas", () => {
   ).toBe(true);
 });
 
-it("keeps the interactive director workspace isolated from canvas gestures", () => {
+it("keeps the interactive director workspace isolated from canvas gestures", async () => {
   const { events, wrapper } = observeCanvasEvents();
   mount({ wrapper });
   const workspace = screen.getByRole("region", { name: "导演台工作区" });
@@ -364,7 +364,7 @@ it.each(["epoch", "mode", "readonly", "conflict"] as const)(
     changeScope(scope);
     act(() => captured.viewport!.onPlace!([1, 2, 3]));
     expect(scene().objects).toEqual([]);
-    expect(screen.getByRole("alert").textContent).toBeTruthy();
+    expect((await findFeedback()).textContent).toBeTruthy();
   },
 );
 
@@ -441,7 +441,7 @@ it("rejects a mixed-project batch before staging any object", async () => {
   expect(captured.viewport!.placement).toBeUndefined();
 });
 
-it("uses the palette name for a newly placed cube", () => {
+it("uses the palette name for a newly placed cube", async () => {
   const { scene } = mount();
   fireEvent.mouseDown(screen.getAllByRole("tab", { name: "物体" })[0], {
     button: 0,

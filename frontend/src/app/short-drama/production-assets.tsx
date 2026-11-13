@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -106,10 +107,12 @@ export function ProductionAssets({
         </TabsList>
         <TabsContent value="media">
           {media.error && (
-            <div role="alert">
-              无法读取项目素材。{" "}
-              <Button onClick={() => void media.mutate()}>重试</Button>
-            </div>
+            <Alert role="alert">
+              <AlertDescription>
+                无法读取项目素材。{" "}
+                <Button onClick={() => void media.mutate()}>重试</Button>
+              </AlertDescription>
+            </Alert>
           )}
           {media.isLoading && <p role="status">正在读取项目素材…</p>}
           {media.data && !media.data.items?.length && (
@@ -188,10 +191,12 @@ export function ProductionAssets({
             )}
             {entities.isLoading && <p role="status">正在读取{label}…</p>}
             {entities.error && (
-              <div role="alert">
-                无法读取{label}。{" "}
-                <Button onClick={() => void entities.mutate()}>重试</Button>
-              </div>
+              <Alert role="alert">
+                <AlertDescription>
+                  无法读取{label}。{" "}
+                  <Button onClick={() => void entities.mutate()}>重试</Button>
+                </AlertDescription>
+              </Alert>
             )}
             {entities.data && !entities.data.entries?.length && (
               <p className="text-muted-foreground">暂无{label}。</p>
@@ -210,17 +215,19 @@ export function ProductionAssets({
         ))}
       </Tabs>
       {write.error && (
-        <div role="alert">
-          {write.error}{" "}
-          {write.unknown && (
-            <Button
-              disabled={write.pending}
-              onClick={() => void write.submit()}
-            >
-              重试原操作
-            </Button>
-          )}
-        </div>
+        <Alert role="alert">
+          <AlertDescription>
+            {write.error}{" "}
+            {write.unknown && (
+              <Button
+                disabled={write.pending}
+                onClick={() => void write.submit()}
+              >
+                重试原操作
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
       {upload && (
         <UploadDialog

@@ -23,7 +23,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import * as api from "@/components/canvas/runtime/api/file-bff";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { useAuthDialog } from "@/components/canvas/runtime/components/account/auth/auth-dialog-provider";

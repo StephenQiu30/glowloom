@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useEffect, useRef, useState } from "react";
 import { listMediaLibrary } from "@/api/media";
@@ -264,11 +265,7 @@ export function ToolAssetPicker({
           </Button>
         </div>
       )}
-      {confirmError && (
-        <p role="alert" className="text-sm text-destructive">
-          {confirmError}
-        </p>
-      )}
+      {confirmError && <FeedbackToast message={confirmError} />}
       <div className="flex items-center justify-between gap-2">
         <span role="status" className="text-sm text-muted-foreground">
           已选择 {selected ? 1 : 0} 个素材

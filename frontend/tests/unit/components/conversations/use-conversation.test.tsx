@@ -196,6 +196,9 @@ it("keeps the original request and session when refreshing an unresolved send", 
   act(() => result.current.refresh());
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.phase).toBe("unknown");
+  expect(result.current.canRetrySubmission).toBe(true);
+  expect(calls.start).toHaveBeenCalledTimes(1);
+  expect(calls.submission).toHaveBeenCalledTimes(2);
   calls.start.mockResolvedValue(receipt);
   await act(() => result.current.send());
   expect(calls.create).toHaveBeenCalledTimes(1);

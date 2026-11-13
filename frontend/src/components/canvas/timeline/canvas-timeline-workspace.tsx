@@ -1,6 +1,8 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Toolbar } from "@/components/ui/toolbar";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import {
   Empty,
   EmptyHeader,
@@ -702,9 +704,9 @@ function TimelineWorkspace({
   }
   if (!timeline)
     return (
-      <div role="alert" className="p-4 text-sm">
-        {invalid}
-      </div>
+      <Alert role="alert">
+        <AlertDescription>{invalid}</AlertDescription>
+      </Alert>
     );
   const selectedClip = timeline.clips.find((item) => item.id === selected),
     selectedTrack = timeline.tracks.find(
@@ -1098,38 +1100,32 @@ function TimelineWorkspace({
           )
         )}
       </header>
-      {error && (
-        <p role="alert" className="px-3 text-xs text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FeedbackToast message={error} />}
       {Object.entries(mediaFailures).map(([assetID, message]) => {
         const title =
           media[assetID]?.asset.file_name ??
           timeline.clips.find((clip) => clip.asset_id === assetID)?.title ??
           "素材";
         return (
-          <div
-            key={assetID}
-            role="alert"
-            className="flex items-center gap-2 px-3 text-xs text-destructive"
-          >
-            <span>{message}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setPlaybackFailures((current) => {
-                  const next = { ...current };
-                  delete next[assetID];
-                  return next;
-                });
-                previewMedia.retry(assetID);
-              }}
-            >
-              重新读取 {title}
-            </Button>
-          </div>
+          <Alert role="alert" key={assetID}>
+            <AlertDescription>
+              <span>{message}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPlaybackFailures((current) => {
+                    const next = { ...current };
+                    delete next[assetID];
+                    return next;
+                  });
+                  previewMedia.retry(assetID);
+                }}
+              >
+                重新读取 {title}
+              </Button>
+            </AlertDescription>
+          </Alert>
         );
       })}
       {retainedEdit && (

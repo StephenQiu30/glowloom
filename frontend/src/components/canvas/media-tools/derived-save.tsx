@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -87,11 +88,7 @@ export function DerivedMediaSave({
             我已确认处理结果的内容与使用权限
           </FieldLabel>
         </Field>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FeedbackToast message={error} />}
         {pending && <p role="status">正在保存素材并等待画布确认…</p>}
         <DialogFooter>
           <Button variant="outline" disabled={pending} onClick={onClose}>

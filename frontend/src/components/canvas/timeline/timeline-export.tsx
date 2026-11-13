@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useCallback, useEffect, useRef, useState, useId } from "react";
 import {
   createMediaExport,
@@ -702,11 +703,7 @@ function TimelineExportSession({
               </SelectContent>
             </Select>
           </div>
-          {error && (
-            <p role="alert" className="mb-3 text-xs text-destructive">
-              {error}
-            </p>
-          )}
+          {error && <FeedbackToast message={error} />}
           <div className="flex justify-end gap-3 pt-1">
             <Button
               variant="secondary"
@@ -783,11 +780,7 @@ function TimelineExportSession({
                   ? "正在准备..."
                   : status}
             </span>
-            {error && (
-              <span role="alert" className="max-w-64 text-destructive">
-                {error}
-              </span>
-            )}
+            {error && <FeedbackToast message={error} />}
             {running && (
               <Button
                 variant="ghost"

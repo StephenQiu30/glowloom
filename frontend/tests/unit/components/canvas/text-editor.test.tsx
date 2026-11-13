@@ -1,8 +1,8 @@
+import { render, findFeedback } from "../../../feedback";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -85,7 +85,7 @@ it("展开保留会话和选区，失败保留引用，保存重开与文件导�
     session.editor.view.dom.querySelectorAll("[data-prompt-reference]"),
   ).toHaveLength(2);
   fireEvent.click(screen.getByRole("button", { name: "保存文本" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(onClose).not.toHaveBeenCalled();
   expect(session.snapshot().draft).toEqual(saved[0].metadata!.composer);
   fireEvent.click(screen.getByRole("button", { name: "保存文本" }));

@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { getSubjectVersion } from "@/api/subjects";
@@ -346,11 +347,7 @@ export function ProjectAssetDialog({
               </TabsContent>
             )}
           </Tabs>
-          {confirmError && (
-            <p role="alert" className="text-sm text-destructive">
-              {confirmError}
-            </p>
-          )}
+          {confirmError && <FeedbackToast message={confirmError} />}
           <DialogFooter className="canvas-material-footer">
             <p
               className="mr-auto text-xs text-muted-foreground"

@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -224,15 +225,9 @@ export function ConversationPage({
         </Dialog>
       )}
       {failure?.owner === owner ? (
-        <p role="alert" className="mb-3 text-sm">
-          {failure.text}
-        </p>
+        <FeedbackToast message={failure.text} />
       ) : null}
-      {switchError && (
-        <p className="mx-auto mb-2 text-sm" role="alert">
-          {switchError}
-        </p>
-      )}
+      {switchError && <FeedbackToast message={switchError} />}
       <ConversationWorkspace
         key={`${owner}/${selectedID}/${sessionID ?? "new"}`}
         ownerKey={owner}

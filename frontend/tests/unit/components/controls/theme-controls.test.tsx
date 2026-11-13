@@ -25,7 +25,9 @@ vi.mock("@/api/identity", () => ({
   getMyPreferences: preferenceMocks.get,
   updateMyPreferences: preferenceMocks.update,
 }));
-vi.mock("sonner", () => ({ toast: preferenceMocks.toast }));
+vi.mock("@/components/feedback/notification", () => ({
+  toast: preferenceMocks.toast,
+}));
 
 let systemDark = false;
 const mediaListeners = new Set<(event: { matches: boolean }) => void>();

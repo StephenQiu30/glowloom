@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
@@ -77,7 +78,7 @@ export function AvatarTextDrive({
           >
             <DialogTitle>文本驱动 · 制作配音</DialogTitle>
             <DialogDescription>试听配音后，再确认视频费用。</DialogDescription>
-            {error && <p role="alert">{error}</p>}
+            {error && <FeedbackToast message={error} />}
             <SpeechComposer
               adoptLabel="使用这段配音"
               projectID={projectID}

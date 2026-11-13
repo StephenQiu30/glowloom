@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useOptionalSession } from "@/components/auth/session";
 import { getMyPreferences, updateMyPreferences } from "@/api/identity";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import {
   DropdownMenu,
   DropdownMenuContent,

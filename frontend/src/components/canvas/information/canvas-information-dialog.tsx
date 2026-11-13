@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useState } from "react";
 import "./information.css";
 import { getCanvasInformation } from "@/api/canvases";
@@ -162,12 +163,17 @@ export function CanvasInformationDialog({
             </p>
           )}
           {error && (
-            <div role="alert" className="py-6">
-              <p>{error}</p>
-              <Button variant="outline" onClick={() => setRetry((v) => v + 1)}>
-                重试
-              </Button>
-            </div>
+            <Alert role="alert">
+              <AlertDescription>
+                <p>{error}</p>
+                <Button
+                  variant="outline"
+                  onClick={() => setRetry((v) => v + 1)}
+                >
+                  重试
+                </Button>
+              </AlertDescription>
+            </Alert>
           )}
           {data && (
             <>

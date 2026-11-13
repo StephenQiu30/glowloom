@@ -1,7 +1,7 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import {
   Dialog,
   DialogContent,

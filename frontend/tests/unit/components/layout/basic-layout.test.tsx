@@ -139,7 +139,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => mocks.pathname,
   useRouter: () => mocks,
 }));
-vi.mock("sonner", () => ({
+vi.mock("@/components/feedback/notification", () => ({
   toast: Object.assign(vi.fn(), {
     info: mocks.info,
     success: mocks.success,

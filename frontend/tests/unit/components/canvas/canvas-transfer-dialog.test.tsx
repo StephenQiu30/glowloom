@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   CanvasTransferDialog,
@@ -35,7 +30,16 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/auth/session", () => ({
   useSession: () => ({ session_id: "transfer-session" }),
 }));
-vi.mock("sonner", () => ({ toast: { success: api.success } }));
+vi.mock("@/components/feedback/notification", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/components/feedback/notification")>();
+  return {
+    ...actual,
+    toast: Object.assign(vi.fn(actual.toast), actual.toast, {
+      success: api.success,
+    }),
+  };
+});
 const owner = {
   actorID: "actor",
   sessionID: "transfer-session",
@@ -171,7 +175,7 @@ it("does not mutate the target after source read permission is revoked", async (
     <CanvasTransferReceiver {...owner} client={f.client} canvasID="target" />,
   );
   fireEvent.click(screen.getByRole("button", { name: "保存所选内容" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(f.change).not.toHaveBeenCalled();
   expect(api.success).not.toHaveBeenCalled();
 });

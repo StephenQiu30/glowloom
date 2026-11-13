@@ -1,3 +1,4 @@
+import { findFeedback } from "../../../feedback";
 import { render } from "../../../feedback";
 import {
   act,
@@ -320,9 +321,7 @@ it("确认核验失败保留选择且不调用添加", async () => {
     await screen.findByRole("button", { name: "选择素材 海边香氛.png" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "添加到画布" }));
-  expect((await screen.findByRole("alert")).textContent).toContain(
-    "素材不可用",
-  );
+  expect((await findFeedback()).textContent).toContain("素材不可用");
   expect(add).not.toHaveBeenCalled();
   expect(screen.getByText("已选择 1 个素材（最多 24 个）")).toBeTruthy();
 });

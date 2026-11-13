@@ -1,4 +1,5 @@
 "use client";
+import { FieldError } from "@/components/ui/field";
 
 import { Toolbar } from "@/components/ui/toolbar";
 import type { Transaction } from "@tiptap/pm/state";
@@ -307,11 +308,7 @@ export function DocumentEditor({
         </Button>
       )}
       <EditorContent editor={editor} className="rich-document-content" />
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FieldError>{error}</FieldError>}
     </div>
   );
   return expanded && editable ? createPortal(content, document.body) : content;

@@ -1,4 +1,6 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { FieldError } from "@/components/ui/field";
 import { ToolbarGroup } from "@/components/ui/toolbar";
 import {
   useCallback,
@@ -296,7 +298,7 @@ function DirectorCard({ client, nodeID, onExpand }: Props) {
           : "搭建三维场景，自由调整机位与灯光"}
       </p>
       <p>{scene?.mode === "dynamic" ? "动态预演" : "静态预演"}</p>
-      {parsed.error && <p role="alert">{parsed.error}</p>}
+      {parsed.error && <FieldError>{parsed.error}</FieldError>}
       {/* The wrapper owns the gesture isolation so a disabled button, which
           carries pointer-events:none, cannot leak presses to the card. */}
       <span
@@ -685,12 +687,7 @@ function DirectorWorkspace({
       setError(cause instanceof Error ? cause.message : "操作失败");
     }
   }
-  if (!scene)
-    return (
-      <p role="alert" className="p-4">
-        {parsed.error}
-      </p>
-    );
+  if (!scene) return <FieldError>{parsed.error}</FieldError>;
   const entity = directorEntity(scene, selected),
     camera =
       selected?.kind === "camera"
@@ -1134,11 +1131,7 @@ function DirectorWorkspace({
           {compact ? <Maximize2 /> : <X />}
         </Button>
       </header>
-      {error && (
-        <p role="alert" className="px-3 text-xs text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FeedbackToast message={error} />}
       {recovery.status && (
         <p role="status" className="px-3 text-xs">
           {recovery.status}

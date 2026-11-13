@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useContext, useEffect, useRef, useState } from "react";
 import { CanvasMediaSelectionContext } from "../lib/canvas-media-selection";
 import dynamic from "next/dynamic";
@@ -498,7 +499,7 @@ export function SubjectNodeEditor({
               )}
             </div>
           </section>
-          {error && <p role="alert">{error}</p>}
+          {error && <FeedbackToast message={error} />}
           <DialogFooter>
             <Button variant="outline" disabled={busy} onClick={onClose}>
               取消

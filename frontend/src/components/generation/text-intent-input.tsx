@@ -1,6 +1,7 @@
 "use client";
+import { FieldError } from "@/components/ui/field";
 
-import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 import { Input } from "@/components/ui/input";
 import {
   nativeTextEdit,
@@ -29,6 +30,7 @@ export function TextIntentInput({
 }: Props) {
   const [display, setDisplay] = useState(value),
     [error, setError] = useState("");
+  const errorID = useId();
   const input = useRef<HTMLInputElement>(null),
     lastApplied = useRef(value);
   const before = useRef<BeforeTextInput | undefined>(undefined),
@@ -96,6 +98,11 @@ export function TextIntentInput({
         ref={input}
         value={display}
         aria-invalid={error ? true : props["aria-invalid"]}
+        aria-describedby={
+          [props["aria-describedby"], error ? errorID : undefined]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
         onCompositionStart={(event) => {
           composition.current = {
             value: event.currentTarget.value,
@@ -135,11 +142,7 @@ export function TextIntentInput({
           }
         }}
       />
-      {error ? (
-        <span role="alert" className="text-xs text-destructive">
-          {error}
-        </span>
-      ) : null}
+      {error ? <FieldError id={errorID}>{error}</FieldError> : null}
     </>
   );
 }

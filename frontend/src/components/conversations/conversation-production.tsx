@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
@@ -380,9 +381,11 @@ function DeliveryFile({
         )}
       </div>
       {(query.error || error) && (
-        <p role="alert" className="text-sm">
-          {error || readErrorMessage(query.error)}
-        </p>
+        <Alert role="alert">
+          <AlertDescription>
+            {error || readErrorMessage(query.error)}
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );

@@ -3,7 +3,7 @@
 import { Toolbar } from "@/components/ui/toolbar";
 import { useRef, useState } from "react";
 import { Download, Maximize2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

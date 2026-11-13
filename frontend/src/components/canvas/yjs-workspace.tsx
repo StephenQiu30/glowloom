@@ -6,7 +6,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import dynamic from "next/dynamic";
 import { createCanvasAssistantAdoption } from "./assistant/canvas-assistant-adoption";
 import { createCanvasDomainConnector } from "./lib/canvas-domain-connection";

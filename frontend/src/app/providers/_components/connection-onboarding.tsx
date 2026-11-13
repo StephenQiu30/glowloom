@@ -3,7 +3,7 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import copy from "copy-to-clipboard";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { providerConsoleURL } from "./provider-label";
 import { useSession } from "@/components/auth/session";
 import { Check } from "lucide-react";

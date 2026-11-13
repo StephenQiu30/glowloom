@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { pageBusinessMemory } from "@/lib/page-business-memory";
 
 import { useEffect, useRef, useState } from "react";
@@ -237,11 +238,7 @@ export function ProjectCopyDialog({
             {job.failure_code ? ` · ${job.failure_code}` : ""}
           </p>
         )}
-        {error && (
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FeedbackToast message={error} />}
         <DialogFooter>
           <Button variant="ghost" disabled={pending} onClick={onClose}>
             关闭

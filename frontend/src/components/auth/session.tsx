@@ -39,7 +39,7 @@ import {
   ApplicationLoading,
   ApplicationState,
 } from "@/components/layout/application-state";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { projectIntentStore } from "@/components/projects/project-intent-store";
 import { projectPresentationStore } from "@/components/projects/project-presentation-store";
 

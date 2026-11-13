@@ -4,6 +4,7 @@ import { ConversationWorkspace } from "@/components/conversations/conversation-w
 import { emptyPromptDraft } from "@/components/generation/prompt-document";
 import { draftText } from "@/components/conversations/conversation-state";
 import type { ConversationController } from "@/components/conversations/use-conversation";
+import { render as renderFeedback, findFeedback } from "../../../feedback";
 
 const { useConversation } = vi.hoisted(() => ({ useConversation: vi.fn() }));
 vi.mock("@/components/conversations/use-conversation", () => ({
@@ -62,6 +63,21 @@ const props = {
   enabled: true,
   onChooseProject: vi.fn(),
 };
+
+it("发送结果待确认时，即使错误文本被刷新清空也保留查询入口", async () => {
+  const refresh = vi.fn();
+  const c = setup({
+    phase: "unknown",
+    error: "",
+    refresh,
+    canRetrySubmission: false,
+  });
+  renderFeedback(<ConversationWorkspace {...props} />);
+  expect((await findFeedback()).textContent).toBe("发送结果待确认");
+  fireEvent.click(screen.getByRole("button", { name: "查看状态" }));
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(c.send).not.toHaveBeenCalled();
+});
 
 it("selects the exact enabled skill version without changing the draft or sending", () => {
   const c = setup({

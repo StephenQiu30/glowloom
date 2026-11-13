@@ -1,3 +1,4 @@
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 /* eslint-disable @next/next/no-img-element -- Source media previews for local canvas processing. */
 // Attribution and source revision are recorded in /licenses/canvas-sources.md.
 // See /licenses/canvas-sources.md.
@@ -133,11 +134,7 @@ export function CanvasNodeUpscaleDialog({
           "max-h-[calc(100dvh-2rem)] w-full overflow-y-auto sm:max-w-3xl"
         }
       >
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FeedbackToast message={error} />}
         {busy && <p role="status">正在处理图片…</p>}
         <DialogHeader>
           <DialogTitle className="sr-only">图片放大</DialogTitle>

@@ -1,16 +1,11 @@
+import { render } from "../../../../feedback";
 import {
   activeDirectorScene,
   migrateDirectorDocument,
 } from "@/components/canvas/director/director-workspaces";
 import { createElement, type ImgHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import {
   DirectorCapture,
   DirectorGallery,

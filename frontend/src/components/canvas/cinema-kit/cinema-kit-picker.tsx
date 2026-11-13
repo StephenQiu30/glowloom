@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useRef, useState } from "react";
 import {
   Camera,
@@ -622,7 +623,7 @@ export function CinemaKitPicker({
             ) : null}
           </>
         )}
-        {error ? <p role="alert">{error}</p> : null}
+        {error ? <FeedbackToast message={error} /> : null}
         {!custom ? (
           <DialogFooter>
             <Button disabled={!valid || pending} onClick={() => void confirm()}>

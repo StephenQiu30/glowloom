@@ -1,4 +1,6 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FieldError } from "@/components/ui/field";
 
 import { useEffect, useId, useRef, useState } from "react";
 import useSWR from "swr";
@@ -271,11 +273,7 @@ export function ScriptPanel({
                   </Button>
                 </div>
               )}
-              {fileError && (
-                <p role="alert" className="text-destructive">
-                  {fileError}
-                </p>
-              )}
+              {fileError && <FieldError>{fileError}</FieldError>}
             </Field>
             {!file && (
               <>
@@ -398,7 +396,11 @@ export function ScriptPanel({
             下一批来源
           </Button>
         )}
-        {detail.error && <p role="alert">无法读取此剧本正文。</p>}
+        {detail.error && (
+          <Alert role="alert">
+            <AlertDescription>无法读取此剧本正文。</AlertDescription>
+          </Alert>
+        )}
         {detail.isLoading && <p role="status">正在读取正文…</p>}
         {detail.data && (
           <pre className="max-h-96 overflow-auto rounded-md bg-muted p-4 font-sans text-sm break-words whitespace-pre-wrap">
@@ -406,7 +408,11 @@ export function ScriptPanel({
           </pre>
         )}
         <h2 className="font-semibold">文件导入记录</h2>
-        {imports.error && <p role="alert">无法读取文件导入记录。</p>}
+        {imports.error && (
+          <Alert role="alert">
+            <AlertDescription>无法读取文件导入记录。</AlertDescription>
+          </Alert>
+        )}
         {imports.data?.items?.map((job) => (
           <div
             key={job.id}
@@ -463,21 +469,23 @@ export function ScriptPanel({
         ))}
       </section>
       {write.error && (
-        <div role="alert" className="flex items-center gap-2 text-sm">
-          {write.error}
-          {write.unknown ? (
-            <Button
-              disabled={write.pending}
-              onClick={() => void write.submit()}
-            >
-              重试原操作
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={() => void onChange()}>
-              刷新剧本版本
-            </Button>
-          )}
-        </div>
+        <Alert role="alert">
+          <AlertDescription>
+            {write.error}
+            {write.unknown ? (
+              <Button
+                disabled={write.pending}
+                onClick={() => void write.submit()}
+              >
+                重试原操作
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => void onChange()}>
+                刷新剧本版本
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );

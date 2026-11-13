@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { DirectorNodePoses } from "./director-workspaces";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -364,21 +365,20 @@ export function DirectorViewport(props: Props) {
       )}
 
       {contextLost && (
-        <div
-          role="alert"
-          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 text-foreground"
-        >
-          <p>三维视口暂时中断，场景数据已保留</p>
-          <Button
-            onClick={() => {
-              savedView.current = runtime.current?.directorView() ?? null;
-              setContextLost(false);
-              setRecoveryEpoch((value) => value + 1);
-            }}
-          >
-            恢复视口
-          </Button>
-        </div>
+        <Alert role="alert">
+          <AlertDescription>
+            <p>三维视口暂时中断，场景数据已保留</p>
+            <Button
+              onClick={() => {
+                savedView.current = runtime.current?.directorView() ?? null;
+                setContextLost(false);
+                setRecoveryEpoch((value) => value + 1);
+              }}
+            >
+              恢复视口
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RequestError } from "@/lib/request";
 import { reauthenticate } from "@/api/identity";
 import { authErrorMessage } from "@/components/auth/contracts";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import {
   executeBatch,
   type BatchEntry,

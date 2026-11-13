@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { RequestError } from "@/lib/request";
 import { useRef, useState } from "react";
@@ -133,7 +133,7 @@ export function ProjectActionsDialog({
       if (failed.length === 0) {
         onClose();
         toast.success(`已${label} ${success.length} 个画布。`, {
-          duration: 5000,
+          duration: action === "restore" ? Infinity : 4000,
           description:
             action === "recycle" ? (
               "30天内可在回收站恢复。"

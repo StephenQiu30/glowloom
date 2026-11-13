@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { notifyError } from "./error-notification";
 
 import {

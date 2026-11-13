@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useRef, useState } from "react";
 import { getMediaPreview, listMediaLibrary } from "@/api/media";
 import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
@@ -211,19 +212,21 @@ function ProjectAssets({
         ))}
       </div>
       {error && (
-        <div role="alert">
-          <p>{error}</p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setLoading(true);
-              setRetry((v) => v + 1);
-            }}
-          >
-            重试
-          </Button>
-        </div>
+        <Alert role="alert">
+          <AlertDescription>
+            <p>{error}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setLoading(true);
+                setRetry((v) => v + 1);
+              }}
+            >
+              重试
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
       {hasMore && !error && (
         <Button

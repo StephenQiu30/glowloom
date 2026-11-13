@@ -1,7 +1,8 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import dynamic from "next/dynamic";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   Download,
@@ -624,15 +625,14 @@ export function UnifiedSubjectLibrary({
               />
             </div>
           ) : error ? (
-            <div
-              className="flex items-center justify-center gap-3 py-4"
-              role="alert"
-            >
-              <span className="text-sm text-muted-foreground">{error}</span>
-              <Button variant="secondary" onClick={retry}>
-                重试加载
-              </Button>
-            </div>
+            <Alert role="alert">
+              <AlertDescription>
+                <span className="text-sm text-muted-foreground">{error}</span>
+                <Button variant="secondary" onClick={retry}>
+                  重试加载
+                </Button>
+              </AlertDescription>
+            </Alert>
           ) : hasMore ? (
             <div ref={tail} className="h-4" aria-hidden="true" />
           ) : null}

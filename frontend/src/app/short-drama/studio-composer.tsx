@@ -1,3 +1,5 @@
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { FieldError } from "@/components/ui/field";
 import { useId, useRef, useState } from "react";
 import {
   FileText,
@@ -226,11 +228,7 @@ export function StudioComposer({
                 >
                   {tile}
                 </Button>
-                {fileError && (
-                  <p role="alert" className="mt-1 text-xs text-destructive">
-                    {fileError}
-                  </p>
-                )}
+                {fileError && <FieldError>{fileError}</FieldError>}
                 {file && (
                   <Button
                     variant="ghost"
@@ -373,11 +371,7 @@ export function StudioComposer({
           </div>
         </div>
       </div>
-      {referenceError && (
-        <p role="alert" className="text-sm text-destructive">
-          {referenceError}
-        </p>
-      )}
+      {referenceError && <FeedbackToast message={referenceError} />}
       {creative && (
         <div
           role="group"

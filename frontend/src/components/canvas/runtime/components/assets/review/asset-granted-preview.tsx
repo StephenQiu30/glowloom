@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useEffect } from "react";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
@@ -58,9 +59,11 @@ export function AssetGrantedPreview({
       {preview.isLoading ? (
         <Spinner aria-label="正在读取固定原件" />
       ) : preview.error ? (
-        <p className="text-sm text-muted-foreground" role="alert">
-          原件暂不可读取，许可或读取凭据可能已变化。
-        </p>
+        <Alert role="alert">
+          <AlertDescription>
+            原件暂不可读取，许可或读取凭据可能已变化。
+          </AlertDescription>
+        </Alert>
       ) : preview.data ? (
         kind === "text" ? (
           <p className="max-h-64 w-full overflow-auto text-sm break-words whitespace-pre-wrap">

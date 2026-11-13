@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   AtSign,
@@ -742,7 +742,7 @@ function SubjectImport({
           ))}
         </div>
         {!current && <p role="status">正在读取主体…</p>}
-        {current?.error && <p role="alert">{current.error}</p>}
+        {current?.error && <FeedbackToast message={current.error} />}
         {current?.page?.total === 0 && (
           <Empty>
             <EmptyHeader>
@@ -753,7 +753,7 @@ function SubjectImport({
             </EmptyHeader>
           </Empty>
         )}
-        {error && <p role="alert">{error}</p>}
+        {error && <FeedbackToast message={error} />}
         <DialogFooter>
           <span className="mr-auto text-sm text-muted-foreground">
             已选择 {selected.length} 个主体

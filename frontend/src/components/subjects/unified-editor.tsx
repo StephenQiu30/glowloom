@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useId, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -693,28 +694,27 @@ export function UnifiedSubjectEditor({
                 />
               </Field>
               {error ? (
-                <div
-                  role="alert"
-                  className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive"
-                >
-                  {error}
-                  {conflict ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="mt-2"
-                      disabled={pending}
-                      onClick={() => void refreshConflict()}
-                    >
-                      读取最新版本并保留输入
-                    </Button>
-                  ) : null}
-                  {frozen ? (
-                    <p className="mt-2 text-muted-foreground">
-                      当前输入已冻结。重试会核对同一请求，不会重复创建主体。
-                    </p>
-                  ) : null}
-                </div>
+                <Alert role="alert">
+                  <AlertDescription>
+                    {error}
+                    {conflict ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-2"
+                        disabled={pending}
+                        onClick={() => void refreshConflict()}
+                      >
+                        读取最新版本并保留输入
+                      </Button>
+                    ) : null}
+                    {frozen ? (
+                      <p className="mt-2 text-muted-foreground">
+                        当前输入已冻结。重试会核对同一请求，不会重复创建主体。
+                      </p>
+                    ) : null}
+                  </AlertDescription>
+                </Alert>
               ) : null}
             </div>
             <div className="flex shrink-0 justify-end">

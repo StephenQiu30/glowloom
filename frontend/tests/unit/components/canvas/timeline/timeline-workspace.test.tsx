@@ -1,8 +1,8 @@
+import { render } from "../../../../feedback";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   within,
   waitFor,
@@ -259,7 +259,7 @@ it("previews trim without saving and cancels on Escape, pointer cancellation and
     expect(f.client.changeTimeline).not.toHaveBeenCalled();
   }
 });
-it("commits one scaled trim and refuses a gesture captured before epoch replacement", () => {
+it("commits one scaled trim and refuses a gesture captured before epoch replacement", async () => {
   const f = setup();
   const root = f.clip.closest<HTMLElement>(".canvas-timeline")!;
   Object.defineProperty(root, "offsetWidth", {
@@ -280,7 +280,7 @@ it("commits one scaled trim and refuses a gesture captured before epoch replacem
   f.replaceEpoch();
   fireEvent.pointerUp(handle, { clientX: 89.3, pointerId: 2 });
   expect(f.client.changeTimeline).toHaveBeenCalledTimes(1);
-  expect(f.ui.getByText(/画布已恢复到其他版本/)).toBeTruthy();
+  expect(await screen.findByText(/画布已恢复到其他版本/)).toBeTruthy();
 });
 it("moves audio into the hovered audio lane using canvas-scaled pointer coordinates", () => {
   const f = setup(true);
@@ -479,7 +479,7 @@ it("keeps normal editor state after a denied fullscreen request", async () => {
   await act(async () => {
     fireEvent.click(f.ui.getByRole("button", { name: "全屏播放" }));
   });
-  expect(f.ui.getByText("浏览器未允许全屏播放")).toBeTruthy();
+  expect(await screen.findByText("浏览器未允许全屏播放")).toBeTruthy();
   expect(f.ui.queryByRole("button", { name: "退出全屏播放" })).toBeNull();
 });
 

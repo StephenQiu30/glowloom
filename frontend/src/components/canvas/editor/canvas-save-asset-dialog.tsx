@@ -1,8 +1,9 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import {
   getAssetCommand,
   saveMyAsset,
@@ -153,16 +154,18 @@ export function CanvasSaveAssetDialog({
             </Field>
           </FieldGroup>
           {project.error && !chosenTarget && !pending && (
-            <p role="alert" className="mb-4 text-sm text-destructive">
-              无法读取当前项目的参考素材，请重试或明确选择保存位置。
-              <Button
-                type="button"
-                variant="link"
-                onClick={() => void project.mutate()}
-              >
-                重试
-              </Button>
-            </p>
+            <Alert role="alert">
+              <AlertDescription>
+                无法读取当前项目的参考素材，请重试或明确选择保存位置。
+                <Button
+                  type="button"
+                  variant="link"
+                  onClick={() => void project.mutate()}
+                >
+                  重试
+                </Button>
+              </AlertDescription>
+            </Alert>
           )}
           {pending && (
             <p role="status" className="mb-4 text-sm text-muted-foreground">

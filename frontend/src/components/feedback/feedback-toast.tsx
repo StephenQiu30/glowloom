@@ -1,31 +1,37 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
-import { toast, type Action } from "sonner";
+import type { Action, ToastT } from "sonner";
+import { toast } from "./notification";
 
-/** Present state-owned async feedback through the single root shadcn Toaster. */
 export function FeedbackToast({
   message,
   tone = "error",
   action,
   attempt = 0,
+  onDismiss,
 }: {
   message: string;
-  tone?: "error" | "info" | "success";
+  tone?: "error" | "info" | "success" | "warning" | "loading";
   action?: Action;
   attempt?: number;
+  onDismiss?: (toast: ToastT) => void;
 }) {
   const ownerID = useId();
   const id = `${ownerID}:${attempt}`;
   const latestAction = useRef(action);
+  const latestDismiss = useRef(onDismiss);
   const label = action?.label;
   useEffect(() => {
     latestAction.current = action;
-  }, [action]);
+    latestDismiss.current = onDismiss;
+  }, [action, onDismiss]);
   useEffect(() => {
     if (!message) return;
     toast[tone](message, {
       id,
+      onDismiss: (toast) => latestDismiss.current?.(toast),
+      onAutoClose: (toast) => latestDismiss.current?.(toast),
       action: label
         ? {
             label,

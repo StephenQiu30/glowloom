@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import useSWR from "swr";
@@ -192,24 +193,23 @@ function Details({ profile }: { profile: Profile }) {
           </p>
         )}
         {(profile.unavailable || profile.avatarError) && (
-          <div
-            role="alert"
-            className="grid gap-1 text-xs text-muted-foreground"
-          >
-            <p>
-              {profile.unavailable
-                ? "暂时无法读取参与者信息"
-                : "头像暂时无法加载，已显示默认头像"}
-            </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="min-h-11"
-              onClick={profile.retry}
-            >
-              重新读取
-            </Button>
-          </div>
+          <Alert role="alert">
+            <AlertDescription>
+              <p>
+                {profile.unavailable
+                  ? "暂时无法读取参与者信息"
+                  : "头像暂时无法加载，已显示默认头像"}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="min-h-11"
+                onClick={profile.retry}
+              >
+                重新读取
+              </Button>
+            </AlertDescription>
+          </Alert>
         )}
       </div>
     </div>

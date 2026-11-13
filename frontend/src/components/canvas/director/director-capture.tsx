@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Camera, ImageIcon, Star, Trash2, Download, Plus } from "lucide-react";
@@ -322,11 +323,7 @@ export function DirectorCapture({
               }}
             />
           )}
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
+          {error && <FeedbackToast message={error} />}
           <Label className="flex items-center gap-2">
             <Checkbox
               checked={reviewed}
@@ -491,11 +488,7 @@ export function DirectorGallery({
               添加到画布
             </Button>
           </div>
-          {error && (
-            <p role="alert" className="text-destructive">
-              {error}
-            </p>
-          )}
+          {error && <FeedbackToast message={error} />}
           <div className="grid max-h-[65vh] grid-cols-2 gap-4 overflow-auto">
             {shot.screenshots?.map((image) => (
               <div key={image.id} className="space-y-2">

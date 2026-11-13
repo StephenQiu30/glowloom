@@ -1,6 +1,6 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useRef, useState } from "react";
 import { reauthenticate } from "@/api/identity";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { ApiError } from "@/components/canvas/runtime/lib/request";
 import { SyncPendingError } from "@/components/canvas/runtime/lib/read-recovery";
 

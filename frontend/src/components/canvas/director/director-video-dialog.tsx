@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
 import { Film, Download } from "lucide-react";
 import { uploadMediaAsset } from "@/api/media";
@@ -471,11 +472,7 @@ export function DirectorVideoDialog({
               )}
             </>
           )}
-          {error && (
-            <p role="alert" className="text-destructive">
-              {error}
-            </p>
-          )}
+          {error && <FeedbackToast message={error} />}
         </DialogContent>
       </Dialog>
     </>

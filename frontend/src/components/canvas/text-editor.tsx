@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import {
   useRef,
@@ -172,11 +173,7 @@ export function CanvasTextEditor({
             onRequestSave={() => void save()}
           />
         </div>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FeedbackToast message={error} />}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
           <span
             className={

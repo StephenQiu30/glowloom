@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ChevronRight, Copy, Quote, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -348,9 +349,11 @@ export function ConversationThread({
                           </p>
                         </>
                       ) : unreadableDelivery ? (
-                        <p role="alert">
-                          制作方案暂时无法读取，请重新生成方案。
-                        </p>
+                        <Alert role="alert">
+                          <AlertDescription>
+                            制作方案暂时无法读取，请重新生成方案。
+                          </AlertDescription>
+                        </Alert>
                       ) : null}
                       <p className="text-sm text-muted-foreground">
                         {delivery

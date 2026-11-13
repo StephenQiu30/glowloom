@@ -80,7 +80,7 @@ it("a startup 503 keeps the canvas location and never opens login", async () => 
     window.history.replaceState(null, "", "/");
   }
 });
-vi.mock("sonner", () => ({
+vi.mock("@/components/feedback/notification", () => ({
   toast: Object.assign(notifications.show, { dismiss: notifications.dismiss }),
 }));
 afterEach(() => {

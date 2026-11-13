@@ -11,7 +11,7 @@ import {
   type ConnectionRow,
 } from "@/components/governance/batch-actions";
 import { Plus } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { useSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

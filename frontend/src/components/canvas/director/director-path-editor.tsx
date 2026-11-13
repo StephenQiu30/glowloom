@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -336,11 +337,7 @@ export function DirectorPathEditor({
           />
           替换此范围内的相关关键帧
         </Label>
-        {error && (
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FeedbackToast message={error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             取消

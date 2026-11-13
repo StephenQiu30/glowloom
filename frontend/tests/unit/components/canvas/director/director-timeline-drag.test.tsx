@@ -1,5 +1,6 @@
+import { render, findFeedback } from "../../../../feedback";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { DirectorTimeline } from "@/components/canvas/director/director-timeline";
 import { createDirectorActor } from "@/components/canvas/director/director-assets";
 import {
@@ -78,7 +79,7 @@ function move(node: HTMLElement, x: number) {
 function up(node: HTMLElement, x: number) {
   fireEvent.pointerUp(node, { clientX: x, pointerId: 1 });
 }
-it("previews snapped keys locally and commits exactly once on release", () => {
+it("previews snapped keys locally and commits exactly once on release", async () => {
   const { onChange } = setup(),
     key = keyButton();
   down(key);
@@ -107,7 +108,7 @@ it.each(["escape", "window-blur", "blur", "pointercancel", "lostcapture"])(
     expect(key.style.left).toBe("10%");
   },
 );
-it("rejects stale scenes, collisions, out of bounds, locked and read-only writes", () => {
+it("rejects stale scenes, collisions, out of bounds, locked and read-only writes", async () => {
   const { scene, actor, props, rerender, onChange } = setup();
   let key = keyButton();
   down(key);
@@ -151,7 +152,7 @@ it("rejects stale scenes, collisions, out of bounds, locked and read-only writes
   }
   expect(onChange).not.toHaveBeenCalled();
 });
-it("moves clips without changing source offset and trims both ends with frame snapping", () => {
+it("moves clips without changing source offset and trims both ends with frame snapping", async () => {
   const { props, actor, rerender, onChange } = setup();
   const clip = screen.getByRole("button", { name: "移动走路" });
   down(clip);
@@ -184,7 +185,7 @@ it("moves clips without changing source offset and trims both ends with frame sn
   });
   expect(actor.motion_clips![0].duration).toBe(2);
 });
-it("rejects clip overlap, negative source in-point and cancelled resize", () => {
+it("rejects clip overlap, negative source in-point and cancelled resize", async () => {
   const { props, scene, actor, rerender, onChange } = setup();
   const next = structuredClone(scene);
   next.objects[0].motion_clips!.push({
@@ -211,7 +212,7 @@ it("rejects clip overlap, negative source in-point and cancelled resize", () => 
   expect(onChange).not.toHaveBeenCalled();
 });
 
-it("keeps numeric key editing usable after a cancelled drag", () => {
+it("keeps numeric key editing usable after a cancelled drag", async () => {
   const { onChange } = setup();
   const key = keyButton();
   down(key);
@@ -232,16 +233,16 @@ it.each([
   ["裁剪走路终点", -100],
   ["裁剪走路起点", 900],
   ["裁剪走路终点", 850],
-] as const)("rejects an invalid clip boundary from %s", (name, x) => {
+] as const)("rejects an invalid clip boundary from %s", async (name, x) => {
   const { onChange } = setup();
   const handle = screen.getByRole("button", { name });
   down(handle);
   move(handle, x);
   up(handle, x);
   expect(onChange).not.toHaveBeenCalled();
-  expect(screen.getByRole("alert").textContent).toMatch(/范围/);
+  expect((await findFeedback()).textContent).toMatch(/范围/);
 });
-it("preserves a nonzero source in-point when moving a clip", () => {
+it("preserves a nonzero source in-point when moving a clip", async () => {
   const { scene, props, rerender, onChange } = setup();
   const changed = structuredClone(scene);
   changed.objects[0].motion_clips![0].source_offset = 0.75;

@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackAlert } from "@/components/feedback/feedback-alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { useSubjectVoiceJob } from "./unified-voice-job";
@@ -12,62 +13,83 @@ export function UnifiedSubjectVoiceControls({ owner }: { owner: Owner }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       {loading ? (
-        <Button type="button" variant="outline" disabled className="w-40 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="feedback"
+          disabled
+          className="w-40 gap-2"
+        >
           <Spinner aria-hidden="true" />
           音色加载中
         </Button>
       ) : null}
       {owner.error ? (
-        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-destructive">{owner.error}</span>
-          {recovering ? (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => void owner.recover()}
-            >
-              恢复读取
-            </Button>
-          ) : null}
-          {owner.phase === "unrecorded" ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void owner.retryOriginal()}
-            >
-              重试原生成请求
-            </Button>
-          ) : null}
-          {owner.phase === "import_pending" ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void owner.retryOriginal()}
-            >
-              重试保存音频
-            </Button>
-          ) : null}
-          {owner.phase === "failed" ? (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => void owner.begin()}
-            >
-              重新生成
-            </Button>
-          ) : null}
-          {owner.phase === "unavailable" ? (
+        <FeedbackAlert
+          title={
+            owner.phase === "import_pending"
+              ? "音频尚未保存"
+              : recovering
+                ? "配音结果待确认"
+                : owner.phase === "unavailable"
+                  ? "智能配音暂不可用"
+                  : "配音失败"
+          }
+          tone={
+            recovering || owner.phase === "import_pending" ? "info" : "error"
+          }
+          description={
+            owner.phase === "import_pending"
+              ? "重试保存即可，无需重新生成。"
+              : recovering
+                ? "请先查看状态，避免重复生成。"
+                : undefined
+          }
+          actions={
             <>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => void owner.begin()}
-              >
-                重试
-              </Button>
+              {recovering ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="feedback"
+                  onClick={() => void owner.recover()}
+                >
+                  查看状态
+                </Button>
+              ) : null}
+              {owner.phase === "unrecorded" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="feedback"
+                  onClick={() => void owner.retryOriginal()}
+                >
+                  重试生成
+                </Button>
+              ) : null}
+              {owner.phase === "import_pending" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="feedback"
+                  onClick={() => void owner.retryOriginal()}
+                >
+                  重试保存
+                </Button>
+              ) : null}
+              {owner.phase === "failed" || owner.phase === "unavailable" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="feedback"
+                  onClick={() => void owner.begin()}
+                >
+                  {owner.phase === "failed" ? "重新生成" : "重试"}
+                </Button>
+              ) : null}
             </>
-          ) : null}
-        </div>
+          }
+        />
       ) : null}
       {owner.active && owner.phase !== "options" ? (
         <p className="text-xs text-muted-foreground">

@@ -126,7 +126,9 @@ export function ConversationComposer({
       ? "正在停止"
       : "停止"
     : unknown
-      ? "核对原发送"
+      ? c.canRetrySubmission
+        ? "重试发送"
+        : "查看状态"
       : submitting
         ? "正在发送"
         : "发送";
@@ -491,6 +493,7 @@ export function ConversationComposer({
                 return;
               }
               if (c.active) void c.stop();
+              else if (unknown && !c.canRetrySubmission) c.refresh();
               else void c.send();
             }}
           >

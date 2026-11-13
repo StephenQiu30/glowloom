@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
 import {
   createMediaTransfer,
@@ -284,7 +285,7 @@ export function SubjectNodeVoice({
           关闭编辑不会取消已提交的配音或音频转移任务。
         </p>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <FeedbackToast message={error} />}
     </div>
   );
 }

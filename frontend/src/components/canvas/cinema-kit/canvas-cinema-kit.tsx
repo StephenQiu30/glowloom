@@ -1,4 +1,6 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { Camera, Palette, Clapperboard, MoveRight, X } from "lucide-react";
@@ -116,7 +118,11 @@ export function CanvasCinemaKitNode({
   try {
     kit = readCinemaKit(node.serviceData?.config?.cinema_kit);
   } catch {
-    return <p role="alert">导演工具箱设置无法读取</p>;
+    return (
+      <Alert role="alert">
+        <AlertDescription>导演工具箱设置无法读取</AlertDescription>
+      </Alert>
+    );
   }
   const kind = kitKind(kit),
     Icon = icons[kind];
@@ -206,7 +212,11 @@ export function CanvasCinemaKitBar({
   try {
     kit = effectiveCinema(view.document, nodeID);
   } catch {
-    return <p role="alert">工具箱引用存在冲突，请移除重复连接</p>;
+    return (
+      <Alert role="alert">
+        <AlertDescription>工具箱引用存在冲突，请移除重复连接</AlertDescription>
+      </Alert>
+    );
   }
   const edit = (kind: CinemaKind): Editing => ({
     kind,
@@ -267,7 +277,7 @@ export function CanvasCinemaKitBar({
             </span>
           );
         })}
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <FeedbackToast message={error} /> : null}
       {editing ? (
         <CinemaKitPicker
           kind={editing.kind}

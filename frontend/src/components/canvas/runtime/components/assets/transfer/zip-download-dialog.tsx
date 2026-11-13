@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatBytes } from "@/components/canvas/runtime/lib/media/image-utils";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { useTransferAbort } from "../hooks/use-transfer-abort";
 
 const labels: Record<string, string> = {

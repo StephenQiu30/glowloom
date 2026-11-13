@@ -1,11 +1,6 @@
+import { render, findFeedback } from "../../../../feedback";
 import { afterEach, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { webcrypto } from "node:crypto";
 import { Blob as NodeBlob } from "node:buffer";
 import {
@@ -91,7 +86,7 @@ function mount(
   fireEvent.click(screen.getByRole("button", { name: "导出" }));
   return { prepareTimeline };
 }
-it("rejects wrong project, node, unknown statuses, output kinds and non-authoritative source revision", () => {
+it("rejects wrong project, node, unknown statuses, output kinds and non-authoritative source revision", async () => {
   expect(requireTimelineExport(job(), projectID, canvasID, nodeID)).toEqual(
     job(),
   );
@@ -113,7 +108,7 @@ it("rejects wrong project, node, unknown statuses, output kinds and non-authorit
       ),
     ).toThrow();
 });
-it("binds preview to exact job revision, digest, asset, project, output and unexpired HTTP URL", () => {
+it("binds preview to exact job revision, digest, asset, project, output and unexpired HTTP URL", async () => {
   const source = preview();
   expect(requireTimelinePreview(source, job())).toEqual(source);
   for (const patch of [
@@ -145,7 +140,7 @@ it("checks actual downloaded bytes against the reviewed SHA256", async () => {
     "为空",
   );
 });
-it("rejects a status response for a different job or stale revision even within the same timeline", () => {
+it("rejects a status response for a different job or stale revision even within the same timeline", async () => {
   expect(() =>
     requireTimelineExport(
       { ...job(), id: crypto.randomUUID() },
@@ -191,7 +186,7 @@ const artifactPreview = (): API.ExportPreview => ({
     created_at: new Date().toISOString(),
   },
 });
-it("requires exclusive artifact identity and its exact format, attempt, project and file receipt", () => {
+it("requires exclusive artifact identity and its exact format, attempt, project and file receipt", async () => {
   expect(
     requireTimelineExport(artifactJob(), projectID, canvasID, nodeID),
   ).toEqual(artifactJob());
@@ -541,7 +536,7 @@ it.each([409, 403, 422, 503])(
     mount();
     fireEvent.click(screen.getByRole("button", { name: "确认" }));
     fireEvent.click(await screen.findByRole("button", { name: "取消导出" }));
-    await screen.findByRole("alert");
+    await findFeedback();
     expect(api.cancelMediaExport).toHaveBeenCalledTimes(status === 409 ? 2 : 1);
     expect(api.getMediaExport).toHaveBeenCalledTimes(status === 409 ? 1 : 0);
   },

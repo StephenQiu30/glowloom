@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { FileText, ImageIcon, Search, Upload, Video } from "lucide-react";
@@ -359,11 +360,7 @@ function PersonalPicker({
               </div>
             )}
           </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
+          {error && <FeedbackToast message={error} />}
           <div className="flex items-center justify-between text-sm">
             <Button
               variant="ghost"

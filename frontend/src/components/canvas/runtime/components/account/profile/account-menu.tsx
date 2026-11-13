@@ -27,7 +27,7 @@ import {
   PopoverContent,
   PopoverTitle,
 } from "@/components/ui/popover";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 
 export function AccountMenu() {
   const [open, setOpen] = useState(false);

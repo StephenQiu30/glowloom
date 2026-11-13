@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import Link from "next/link";
 import useSWR from "swr";
@@ -92,12 +93,14 @@ export function ConnectionReleaseReview({
           </p>
         )}
         {error && (
-          <p role="alert">
-            {catalogMessage(error)}{" "}
-            <Button variant="link" onClick={() => void mutate()}>
-              重新读取
-            </Button>
-          </p>
+          <Alert role="alert">
+            <AlertDescription>
+              {catalogMessage(error)}{" "}
+              <Button variant="link" onClick={() => void mutate()}>
+                重新读取
+              </Button>
+            </AlertDescription>
+          </Alert>
         )}
         {data && reviews.length === 0 && (
           <p className="text-sm text-muted-foreground">

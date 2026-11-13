@@ -1,9 +1,11 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { toast } from "sonner";
+import { toast } from "@/components/feedback/notification";
 import { createCanvas, getCanvas, listCanvases } from "@/api/canvases";
 import { useSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
@@ -172,12 +174,14 @@ export function CanvasTransferDialog({
         </DialogHeader>
         {targets.isLoading && <p role="status">正在读取画布…</p>}
         {targets.error && (
-          <p role="alert">
-            读取失败，请重试。
-            <Button variant="outline" onClick={() => void targets.mutate()}>
-              重试
-            </Button>
-          </p>
+          <Alert role="alert">
+            <AlertDescription>
+              读取失败，请重试。
+              <Button variant="outline" onClick={() => void targets.mutate()}>
+                重试
+              </Button>
+            </AlertDescription>
+          </Alert>
         )}
         {targets.data?.length === 0 && <p>当前项目没有其他画布。</p>}
         <ul className="max-h-80 space-y-2 overflow-auto">
@@ -218,7 +222,7 @@ export function CanvasTransferDialog({
           )}
         </div>
         {busy && <p role="status">正在核验来源与目标…</p>}
-        {error && <p role="alert">{error}</p>}
+        {error && <FeedbackToast message={error} />}
       </DialogContent>
     </Dialog>
   );
@@ -303,7 +307,7 @@ export function CanvasTransferReceiver(props: Props) {
       <p className="text-sm text-muted-foreground">
         原画布保留。保存后可以撤销整次副本。
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && <FeedbackToast message={error} />}
       <div className="flex gap-2">
         <Button
           disabled={busy || !view.writable}

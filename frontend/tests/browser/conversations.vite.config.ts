@@ -27,6 +27,9 @@ let revision = 0,
   stops = 0,
   control: Record<string, unknown> = {};
 const runs: Run[] = [];
+let feedbackMode = "normal";
+const feedbackRequests: string[] = [];
+let feedbackReads = 0;
 const exportJobs = new Map<
   string,
   { id: string; status: string; revision: number; output_kind: string }
@@ -115,6 +118,30 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       execution_revision: revision,
       ...(latest ? { run: latest } : {}),
     };
+  if (route === "/api/fixture/feedback") {
+    if (req.method === "POST") feedbackMode = String(body.mode);
+    return reply({
+      mode: feedbackMode,
+      requestIDs: feedbackRequests,
+      reads: feedbackReads,
+    });
+  }
+  if (
+    feedbackMode !== "normal" &&
+    route.includes("/submissions/") &&
+    !route.endsWith("/current")
+  ) {
+    feedbackReads++;
+    return reply(
+      {
+        code:
+          feedbackMode === "missing"
+            ? "submission_not_found"
+            : "dependency_unavailable",
+      },
+      feedbackMode === "missing" ? 404 : 503,
+    );
+  }
   if (route === `/api/projects/${pid}/media`) return reply({ items: [] });
   if (route === "/api/fixture/production-ledger")
     return reply({
@@ -386,6 +413,10 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         : {},
     );
   if (route.endsWith(`/sessions/${sid}/runs`)) {
+    if (req.method === "POST" && feedbackMode !== "normal") {
+      feedbackRequests.push(String(body.request_id));
+      return reply({ code: "dependency_unavailable" }, 503);
+    }
     if (req.method !== "POST")
       return reply({
         items: runs.map((r, i) => ({

@@ -1,3 +1,4 @@
+import { findFeedback } from "../../../feedback";
 import { render } from "../../../feedback";
 import {
   act,
@@ -82,7 +83,7 @@ it("主体添加重新授权固定版本，拒绝新版替换与错误归属", a
     version_id: fixture.id,
   });
   fireEvent.click(screen.getByRole("button", { name: "添加主体" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(add).not.toHaveBeenCalled();
   expect(fixture.read.mock.calls[0][0]).toEqual({
     id: fixture.id,
