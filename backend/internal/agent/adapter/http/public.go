@@ -197,7 +197,7 @@ func (h *PublicHandler) proxy(c *gin.Context, operation string, scope domain.Sco
 
 	if response.StatusCode >= 200 && response.StatusCode < 300 {
 		if operation == "getCurrentAgentSubmission" && h.unresolved != nil {
-			ids, readErr := h.unresolved.UnresolvedConversationRuns(c.Request.Context(), scope.Principal(), scope.ProjectID, uuid.MustParse(c.Param("sid")))
+			ids, readErr := h.unresolved.UnresolvedConversationRuns(c.Request.Context(), identityhttp.Principal(c), scope.ProjectID, uuid.MustParse(c.Param("sid")))
 			if readErr != nil {
 				send(c, nil, readErr)
 				return
@@ -240,7 +240,7 @@ func (h *PublicHandler) proxy(c *gin.Context, operation string, scope domain.Sco
 				}
 			}
 			if raw := run["input"]; len(raw) > 0 && string(raw) != "null" {
-				filtered, readErr := h.history.ReadConversationInput(c.Request.Context(), scope.Principal(), scope.ProjectID, raw)
+				filtered, readErr := h.history.ReadConversationInput(c.Request.Context(), identityhttp.Principal(c), scope.ProjectID, raw)
 				if readErr != nil {
 					send(c, nil, readErr)
 					return
@@ -505,7 +505,7 @@ func (h *PublicHandler) Start(c *gin.Context) {
 			send(c, nil, domain.ErrUnavailable)
 			return
 		}
-		if err := h.canvas(c.Request.Context(), scope.Principal(), scope.ProjectID, goalContract.Source.CanvasID); err != nil {
+		if err := h.canvas(c.Request.Context(), identityhttp.Principal(c), scope.ProjectID, goalContract.Source.CanvasID); err != nil {
 			send(c, nil, err)
 			return
 		}
