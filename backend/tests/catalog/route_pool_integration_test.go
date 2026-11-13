@@ -2,16 +2,6 @@ package catalog_test
 
 import (
 	"encoding/json"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	ophttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace/noop"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -19,6 +9,18 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	ophttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestRoutePoolPublication(t *testing.T) {
@@ -28,7 +30,7 @@ func TestRoutePoolPublication(t *testing.T) {
 	}
 	conn, err := db.Open(t.Context(), dsn, noop.NewTracerProvider())
 	require.NoError(t, err)
-	defer conn.Close()
+	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	actor := adminPrincipal()
 	require.NoError(t, conn.DB.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password,platform_role) VALUES(?,?,?,'Fixture','producer','synthetic',false,'platform_admin')`, actor.ID, actor.OrgID, "test-"+actor.ID.String()).Error)
 	actor = identityfixture.Session(t, conn.DB, actor)

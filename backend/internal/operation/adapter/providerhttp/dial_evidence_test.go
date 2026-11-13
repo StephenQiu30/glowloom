@@ -3,11 +3,12 @@ package providerhttp
 import (
 	"context"
 	"errors"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 // Before TCP connect the server cannot have accepted the POST. A peer that
@@ -16,7 +17,7 @@ func TestDialEvidenceRequiresNoConnection(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		conn, _, err := w.(http.Hijacker).Hijack()
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 		}
 	}))
 	cfg := domain.ProviderConfig{BaseURL: server.URL, TimeoutSeconds: 5}

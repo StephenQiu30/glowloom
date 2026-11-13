@@ -3,8 +3,9 @@ package application
 import (
 	"context"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/google/uuid"
+
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // RouteOption identifies a published model release on a particular connection.
