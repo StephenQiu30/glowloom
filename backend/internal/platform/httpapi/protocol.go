@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -55,6 +56,12 @@ func Middleware(origin string) gin.HandlerFunc {
 			}
 		}()
 		if c.FullPath() == "" {
+			c.Next()
+			return
+		}
+		// Internal service routes enforce their own directional identity and replay
+		// contracts. Browser Origin and idempotency headers do not identify them.
+		if strings.HasPrefix(c.FullPath(), "/internal/") {
 			c.Next()
 			return
 		}
