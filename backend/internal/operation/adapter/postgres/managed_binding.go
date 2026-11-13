@@ -131,11 +131,11 @@ func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderD
 	if r.RowsAffected != 1 {
 		return application.ErrWorkflowModelUnavailable
 	}
-	counts, err := readProviderUsage(tx, row.ProviderID)
+	available, err := modelHasCapacity(tx, row.ProviderID, *row.ReleaseID, identity.OperationID, connection.ConcurrencyLimit, connection.RateLimitPerMin)
 	if err != nil {
 		return err
 	}
-	if counts.Active >= connection.ConcurrencyLimit || counts.Recent >= connection.RateLimitPerMin {
+	if !available {
 		return application.ErrManagedCapacity
 	}
 	var key struct{ ID uuid.UUID }

@@ -8133,3 +8133,11 @@ SELECT p.id, min(peer.concurrency_limit) AS concurrency_limit,min(peer.rate_limi
 FROM catalog.provider p JOIN catalog.provider peer ON peer.id=p.id OR (p.quota_group<>'' AND peer.quota_group=p.quota_group AND NOT peer.is_delete)
 GROUP BY p.id;
 GRANT SELECT ON catalog.effective_provider_limit TO glowloom_app;
+
+-- Native image throughput from the Ark model list. Key by immutable SKU.
+CREATE TABLE catalog.model_image_limit (
+ adapter_key text NOT NULL,provider_model_id text NOT NULL,
+ images_per_minute integer NOT NULL CHECK(images_per_minute>0),
+ PRIMARY KEY(adapter_key,provider_model_id)
+);
+GRANT SELECT ON catalog.model_image_limit TO glowloom_app;

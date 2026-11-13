@@ -246,3 +246,14 @@ SELECT adapter_key, provider_model_id, currency, source_url, to_jsonb(reference_
 ON CONFLICT (adapter_key, provider_model_id) DO UPDATE
 SET currency=EXCLUDED.currency, source_url=EXCLUDED.source_url, reference_lines=EXCLUDED.reference_lines,
     unit=EXCLUDED.unit, rule=EXCLUDED.rule, executable_until=EXCLUDED.executable_until;
+
+-- https://www.volcengine.com/docs/82379/1330310 (2026-11-13), images/minute.
+INSERT INTO catalog.model_image_limit(adapter_key,provider_model_id,images_per_minute) VALUES
+ ('volcengine_ark','doubao-seedream-5-0-flash-260915',500),
+ ('volcengine_ark','doubao-seedream-5-0-pro-260628',500),
+ ('volcengine_ark','doubao-seedream-5-5-261028',500),
+ ('volcengine_ark','doubao-seedream-5-0-260128',500),
+ ('volcengine_ark','doubao-seedream-5-0-lite-260128',500),
+ ('volcengine_ark','doubao-seedream-4-5-251128',500),
+ ('volcengine_ark','doubao-seedream-4-0-250828',500)
+ON CONFLICT(adapter_key,provider_model_id) DO UPDATE SET images_per_minute=excluded.images_per_minute;

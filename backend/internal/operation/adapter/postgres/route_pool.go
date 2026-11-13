@@ -39,11 +39,11 @@ func (s *Store) selectPoolMember(tx *gorm.DB, id application.ProviderDispatchIde
 		if err := tx.Raw("SELECT concurrency_limit,rate_limit_per_min FROM catalog.effective_provider_limit WHERE id=?", route.ProviderID).Scan(&limits).Error; err != nil {
 			return nil, err
 		}
-		usage, err := readProviderUsage(tx, route.ProviderID)
+		available, err := modelHasCapacity(tx, route.ProviderID, route.ReleaseID, id.OperationID, limits.ConcurrencyLimit, limits.RateLimitPerMin)
 		if err != nil {
 			return nil, err
 		}
-		if usage.Active >= limits.ConcurrencyLimit || usage.Recent >= limits.RateLimitPerMin {
+		if !available {
 			continue
 		}
 		if err := tx.Exec("INSERT INTO operation.route_delivery(operation_id,release_id,procurement_price_id) VALUES(?,?,?)", id.OperationID, route.ReleaseID, route.ProcurementPriceID).Error; err != nil {
@@ -103,11 +103,11 @@ func (s *Store) ClaimUnsentBackup(ctx context.Context, id application.ProviderDi
 			return err
 		}
 		for _, route := range rows {
-			u, err := readProviderUsage(tx, route.ProviderID)
+			available, err := modelHasCapacity(tx, route.ProviderID, route.ReleaseID, id.OperationID, route.ConcurrencyLimit, route.RateLimitPerMin)
 			if err != nil {
 				return err
 			}
-			if u.Active >= route.ConcurrencyLimit || u.Recent >= route.RateLimitPerMin {
+			if !available {
 				continue
 			}
 			r := tx.Exec(`INSERT INTO operation.route_retry(operation_id,release_id,credential_id,procurement_price_id,reason)

@@ -185,3 +185,29 @@ func TestTwoConnectionsCompeteForOneSharedAccountSlot(t *testing.T) {
 		require.NoError(t, second)
 	}
 }
+
+func TestSeedreamSharesImagesPerMinuteAcrossKeys(t *testing.T) {
+	db := operationStoreDB(t)
+	// Use a fixture SKU with a 3-image budget to exercise the last slot.
+	sku := "seedream-ipm-test-" + uuid.NewString()
+	group := uuid.NewString()
+	require.NoError(t, db.Exec("INSERT INTO catalog.model_image_limit VALUES('volcengine_ark',?,3)", sku).Error)
+	var official int
+	require.NoError(t, db.Raw("SELECT images_per_minute FROM catalog.model_image_limit WHERE adapter_key='volcengine_ark' AND provider_model_id='doubao-seedream-5-0-flash-260915'").Row().Scan(&official))
+	require.Equal(t, 500, official)
+	a, b := seedManagedFixture(t, db), seedManagedFixture(t, db)
+	for _, f := range []managedFixture{a, b} {
+		require.NoError(t, db.Exec("UPDATE catalog.provider SET quota_group=?,adapter_key='volcengine_ark',concurrency_limit=1 WHERE id=?", group, f.provider).Error)
+		require.NoError(t, db.Exec("UPDATE catalog.model_profile_version SET provider_model_id=? WHERE id=?", sku, f.identity.ModelProfileVersionID).Error)
+		require.NoError(t, db.Exec("UPDATE operation.operation SET output_count=2 WHERE id=?", f.identity.OperationID).Error)
+	}
+	first, err := a.store.ClaimProviderDispatch(t.Context(), a.identity)
+	require.NoError(t, err)
+	require.True(t, first.Claimed)
+	_, err = b.store.ClaimProviderDispatch(t.Context(), b.identity)
+	require.ErrorIs(t, err, application.ErrManagedCapacity)
+	require.NoError(t, db.Exec("UPDATE operation.operation SET output_count=1 WHERE id=?", b.identity.OperationID).Error)
+	second, err := b.store.ClaimProviderDispatch(t.Context(), b.identity)
+	require.NoError(t, err)
+	require.True(t, second.Claimed)
+}
