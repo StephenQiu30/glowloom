@@ -61,6 +61,7 @@ type ModelCatalogItem struct {
 	Status               domain.ModelStatus
 	ProviderID           uuid.UUID
 	ProviderName         string
+	ProviderAdapterKey   string
 	ProviderRegion       domain.Region
 	ProviderStatus       domain.ProviderStatus
 	CredentialPresent    bool

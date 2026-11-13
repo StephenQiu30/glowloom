@@ -1,17 +1,16 @@
 # 供应商标识来源
 
-仅用于接入选项的品牌识别，不表示品牌方背书。品牌名称和标识的权利仍属于各自权利人。
+本目录八个SVG统一取自Iconfont公开图标（2026-11-13获取），保留原始矢量内容。标识仅用于识别供应商，不表示品牌方背书；品牌和图标权利归对应权利人，不将这些素材声明为MIT。图标ID及上传者ID便于回溯原资源。
 
-OpenRouter、火山引擎、豆包、DeepSeek、OpenAI、即梦来自 [Lobe Icons](https://github.com/lobehub/lobe-icons) 的 `@lobehub/icons-static-svg@1.101.0`，原 SVG 保持不变，代码许可见本目录 `LICENSE-lobe-icons`。BytePlus 使用其[官网](https://www.byteplus.com/en)公开引用的 favicon，仅作供应商识别，不将它声明为 MIT 资产。
+所有文件本地提供，页面不请求第三方CDN。OpenAI、OpenRouter、Vercel单色图标沿用前景色遮罩适配明暗主题，其余保留原色。
 
-所有文件本地提供；页面不请求第三方 CDN。OpenRouter 和 OpenAI 的单色 SVG 通过前景色遮罩适配明暗主题，其余保留品牌原色。
-
-| 文件             | 来源                                                                                          | SHA-256                                                            |
-| ---------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `openrouter.svg` | [原文件](https://unpkg.com/@lobehub/icons-static-svg@1.101.0/icons/openrouter.svg)            | `ae671cc83de9bd45db97a47ed5e38a4e1bd9f93a12be495ba4b4f8b284026bca` |
-| `volcengine.svg` | [原文件](https://unpkg.com/@lobehub/icons-static-svg@1.101.0/icons/volcengine-color.svg)      | `84f9e2cd1da7e73dc6c9a0f2521745d39cae96c008752cdb1baf57a8c94393a1` |
-| `doubao.svg`     | [原文件](https://unpkg.com/@lobehub/icons-static-svg@1.101.0/icons/doubao-color.svg)          | `3cd31ba03ae44b8c29561597a3b863809efecb13fcdfd08407a086df86a69b55` |
-| `deepseek.svg`   | [原文件](https://unpkg.com/@lobehub/icons-static-svg@1.101.0/icons/deepseek-color.svg)        | `deba5f98a5c1796e20fcac3149bcd7eb8a32f0bdd04d048819400b1f28bd1439` |
-| `byteplus.png`   | [原文件](https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/portal/assets/favicon.png) | `64fc512a00a7e955b1fc678cc72485aaba3af7a7fa5d915aaccd79daa8474b76` |
-| `openai.svg`     | [原文件](https://unpkg.com/@lobehub/icons-static-svg@1.101.0/icons/openai.svg)                | `a595df6b423920c67a7f8f73c063e4bfb72d415948097b6cac063a2366bb5186` |
-| `jimeng.svg`     | [原文件](https://unpkg.com/@lobehub/icons-static-svg@1.101.0/icons/jimeng-color.svg)          | `a9afc64b9afae1990e3c9fa967b349927c3f6a148647ac5c6f016b1a31b39167` |
+| 文件             | Iconfont图标ID／上传者ID | 来源图标库                                                        | SHA-256                                                            |
+| ---------------- | ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `openai.svg`     | 39249099／12586164       | [Iconfont](https://www.iconfont.cn/collections/detail?cid=651928) | `e2500dd322ef753a6d415b7a96c7b5e97b939e6a390cd8efc607e810c77dc568` |
+| `openrouter.svg` | 45747008／177404         | [Iconfont](https://www.iconfont.cn/collections/detail?cid=492131) | `c297497ac3ecadb7071df3e1b5949af97fcefdd27737b60a226ef2f249155264` |
+| `volcengine.svg` | 44819731／14755069       | [Iconfont](https://www.iconfont.cn/collections/detail?cid=714157) | `6b4e8a4c187c616f38d1177cb271685433ba491fdb263f79447e1f56380b5352` |
+| `doubao.svg`     | 47616564／171101         | [Iconfont](https://www.iconfont.cn/collections/detail?cid=113313) | `3d3f336a897e687d6d504c96a86476ce5284da0a37596ad24c90167f12a31825` |
+| `jimeng.svg`     | 46737301／4247658        | [Iconfont](https://www.iconfont.cn/collections/detail?cid=291309) | `10b751ef95ee05f2cc83c98764fd8b2589a9d0b0dc907a423d31ab37a2731d53` |
+| `deepseek.svg`   | 43694179／9994981        | [Iconfont](https://www.iconfont.cn/collections/detail?cid=707148) | `b88aa45bfe13fd60a365e3ea7732f266ef72324fffb910aab39f3d06d33c1cf6` |
+| `byteplus.svg`   | 45835661／10299233       | [Iconfont](https://www.iconfont.cn/collections/detail?cid=515020) | `19142a3c9be98c1e0ed4107f9413204e9bcad2ce851d9277e79d8ef65907ad04` |
+| `vercel.svg`     | 38949624／5161263        | [Iconfont](https://www.iconfont.cn/collections/detail?cid=226859) | `7f74d24bfc2633896b1b08d3b540207fc170e8e83979203f7b04d775edeccf14` |

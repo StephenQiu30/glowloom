@@ -127,7 +127,12 @@ func TestAgentShotOriginalQuoteRecoveryVideoAndProjectDelivery(t *testing.T) {
 	cfg, err := json.Marshal(storagefixture.Configuration(t, "http://127.0.0.1:19000", "glowloom-shot-1250000000"))
 	require.NoError(t, err)
 	t.Setenv("GLOWLOOM_OBJECT_STORAGE_CONFIG", string(cfg))
-	database := operationStoreDB(t)
+	database := businessEmptyFixtureDB(t, dsn)
+	for _, name := range []string{"schema.sql", "data.sql"} {
+		schema, err := os.ReadFile(filepath.Join("..", "..", "db", name))
+		require.NoError(t, err)
+		require.NoError(t, database.Exec(string(schema)).Error)
+	}
 	objects := businessStorageRegistry(t)
 	require.NoError(t, objects.Ping(t.Context()))
 	f := seedManagedFixture(t, database)

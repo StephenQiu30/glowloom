@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ProviderLogo } from "./provider-logo";
+import { ProviderLogo } from "@/components/providers/provider-logo";
 import { providerLabel } from "./provider-label";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 export function regionLabel(region?: string) {

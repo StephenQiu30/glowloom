@@ -180,6 +180,7 @@ func TestModelCatalogReadsProjectPolicyCurrentVersionsAndEffectivePricesOnLocalP
 	item := page.Models[0]
 	require.Equal(t, active, item.ID)
 	require.Equal(t, domestic, item.ProviderID)
+	require.Equal(t, "openrouter", item.ProviderAdapterKey)
 	require.Equal(t, current, item.CurrentVersion.ID)
 	require.Equal(t, 2, item.CurrentVersion.VersionNo)
 	require.True(t, slices.Equal([]string{"image2video"}, item.CurrentVersion.Modes))

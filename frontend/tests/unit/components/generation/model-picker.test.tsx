@@ -9,6 +9,33 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ModelPicker } from "@/components/generation/model-picker";
 
 afterEach(cleanup);
+
+it("按真实供应商身份显示当前模型及菜单标识，不从可改连接名猜测品牌", async () => {
+  const model = {
+    ...models[0],
+    provider_adapter_key: "deepseek",
+    provider_name: "OpenAI · 12345678",
+  };
+  render(
+    <ModelPicker
+      models={[model]}
+      value="first-version"
+      compact
+      disabled={false}
+      onSelect={vi.fn()}
+    />,
+  );
+  const trigger = screen.getByRole("combobox", { name: "生成模型" });
+  expect(trigger.querySelector("img")?.getAttribute("src")).toBe(
+    "/brand/providers/deepseek.svg",
+  );
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  const option = await screen.findByRole("option", { name: /图像模型/ });
+  expect(option.querySelector("img")?.getAttribute("src")).toBe(
+    "/brand/providers/deepseek.svg",
+  );
+});
+
 const models: API.ModelResponse[] = [
   {
     id: "first",

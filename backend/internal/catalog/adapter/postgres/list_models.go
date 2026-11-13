@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 // ErrModelCatalogProjectNotFound also hides projects outside the actor's organization.
@@ -33,7 +33,8 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 		input.Limit = 50
 	}
 	page := application.ModelCatalogPage{Models: []application.ModelCatalogItem{}}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := platformdb.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {
+		page = application.ModelCatalogPage{Models: []application.ModelCatalogItem{}}
 		if err := s.requireProject(tx, actor, input.ProjectID); err != nil {
 			return err
 		}
@@ -54,7 +55,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 		query := fmt.Sprintf(`
 			SELECT m.id, published.id AS release_id, m.model_key, m.display_name, m.capability, m.status,
 			       to_jsonb(cap.input_roles)::text AS input_roles,
-			       p.id AS provider_id, p.name AS provider_name,
+			       p.id AS provider_id, p.name AS provider_name, p.adapter_key AS provider_adapter_key,
 			       p.region AS provider_region, p.status AS provider_status,
 			       (c.id IS NOT NULL) AS credential_present,
 			       c.last_test_result AS credential_test_result,
@@ -151,7 +152,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 			page.Next = &application.ModelCatalogCursor{Key: last.Key, ID: last.ID}
 		}
 		return nil
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 	if err != nil {
 		return application.ModelCatalogPage{}, fmt.Errorf("list models for project: %w", err)
 	}
@@ -175,6 +176,7 @@ type modelCatalogRow struct {
 	Status               string
 	ProviderID           uuid.UUID
 	ProviderName         string
+	ProviderAdapterKey   string
 	ProviderRegion       string
 	ProviderStatus       string
 	CredentialPresent    bool
@@ -204,7 +206,7 @@ func (row modelCatalogRow) item() (application.ModelCatalogItem, error) {
 		ID: row.ID, Key: row.ModelKey, DisplayName: row.DisplayName,
 		Capability: row.Capability, Status: domain.ModelStatus(row.Status),
 		InputRoles: roles,
-		ProviderID: row.ProviderID, ProviderName: row.ProviderName,
+		ProviderID: row.ProviderID, ProviderName: row.ProviderName, ProviderAdapterKey: row.ProviderAdapterKey,
 		ProviderRegion:    domain.Region(row.ProviderRegion),
 		ProviderStatus:    domain.ProviderStatus(row.ProviderStatus),
 		CredentialPresent: row.CredentialPresent,

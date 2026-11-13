@@ -9,7 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { render } from "../../../../feedback";
 import { PresetEditor } from "@/app/providers/_components/preset-editor";
 import { PresetConnect } from "@/app/providers/_components/preset-connect";
-import { ProviderLogo } from "@/app/providers/_components/provider-logo";
+import { ProviderLogo } from "@/components/providers/provider-logo";
 import { providerLabel } from "@/app/providers/_components/provider-label";
 import { pageBusinessMemory } from "@/lib/page-business-memory";
 const api = vi.hoisted(() => ({

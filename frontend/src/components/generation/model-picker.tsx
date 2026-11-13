@@ -1,6 +1,7 @@
 "use client";
 
 import { modelAvailableForMode } from "./model-availability";
+import { ProviderLogo } from "@/components/providers/provider-logo";
 
 import { useState, type ComponentProps } from "react";
 import { providerConnectionName } from "@/lib/provider-connection-name";
@@ -65,12 +66,14 @@ export function ModelSelectOption({
   description,
   detailed = false,
   unavailable = false,
+  providerAdapterKey,
   ...props
 }: Omit<ComponentProps<typeof SelectItem>, "children" | "className"> & {
   name: string;
   description?: string;
   detailed?: boolean;
   unavailable?: boolean;
+  providerAdapterKey?: string;
 }) {
   return (
     <SelectItem textValue={name} className="model-select-option" {...props}>
@@ -80,8 +83,11 @@ export function ModelSelectOption({
             aria-hidden="true"
             className="model-select-symbol flex size-[42px] shrink-0 items-center justify-center rounded-lg border"
           >
-            <Box />
+            <ProviderLogo adapterKey={providerAdapterKey} iconOnly />
           </span>
+        )}
+        {!detailed && providerAdapterKey && (
+          <ProviderLogo adapterKey={providerAdapterKey} iconOnly />
         )}
         <span className="min-w-0">
           <span className="block truncate">
@@ -198,7 +204,15 @@ export function ModelPicker({
       }}
     >
       <ComposerSelectTrigger aria-label={label} className="max-w-60">
-        {!compact && <Box aria-hidden="true" />}
+        {current ? (
+          <ProviderLogo
+            adapterKey={current.model.provider_adapter_key}
+            iconOnly
+            className="size-4"
+          />
+        ) : !compact ? (
+          <Box aria-hidden="true" />
+        ) : null}
         <SelectValue placeholder={choices.length ? "选择模型" : "暂无可用模型"}>
           {current?.name}
         </SelectValue>
@@ -209,6 +223,7 @@ export function ModelPicker({
             key={id}
             value={id}
             name={name}
+            providerAdapterKey={model.provider_adapter_key}
             disabled={unavailable}
             detailed={!compact}
             unavailable={unavailable}

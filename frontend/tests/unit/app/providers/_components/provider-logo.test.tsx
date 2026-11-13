@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ProviderLogo } from "@/app/providers/_components/provider-logo";
+import { ProviderLogo } from "@/components/providers/provider-logo";
 import { providerLabel } from "@/app/providers/_components/provider-label";
 
 describe("ProviderLogo", () => {
@@ -33,7 +33,7 @@ describe("ProviderLogo", () => {
     );
   });
 
-  it("火山引擎各服务及即梦均精准映射官方 Logo，无一回退为地球网格", () => {
+  it("火山引擎各服务及即梦均映射对应标识，无一回退为地球网格", () => {
     const checks: [string, string][] = [
       ["volcengine_ark", "/brand/providers/volcengine.svg"],
       ["volcengine_music", "/brand/providers/volcengine.svg"],
@@ -41,7 +41,7 @@ describe("ProviderLogo", () => {
       ["volcengine_motion", "/brand/providers/jimeng.svg"],
       ["volcengine_speech", "/brand/providers/doubao.svg"],
       ["deepseek", "/brand/providers/deepseek.svg"],
-      ["byteplus", "/brand/providers/byteplus.png"],
+      ["byteplus", "/brand/providers/byteplus.svg"],
     ];
 
     for (const [adapter, expectedSrc] of checks) {

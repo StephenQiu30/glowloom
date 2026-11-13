@@ -4037,6 +4037,7 @@ declare namespace API {
     key?: string;
     mode_availability?: ModeAvailability[];
     pricing_preview?: PricingPreview;
+    provider_adapter_key?: string;
     provider_id?: string;
     provider_name?: string;
     provider_status?: string;

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Globe } from "lucide-react";
+import { cn } from "cn";
 
 const logos: Record<string, string> = {
   openrouter: "/brand/providers/openrouter.svg",
@@ -9,7 +10,7 @@ const logos: Record<string, string> = {
   volcengine_avatar: "/brand/providers/jimeng.svg",
   volcengine_motion: "/brand/providers/jimeng.svg",
   volcengine_speech: "/brand/providers/doubao.svg",
-  byteplus: "/brand/providers/byteplus.png",
+  byteplus: "/brand/providers/byteplus.svg",
   deepseek: "/brand/providers/deepseek.svg",
   vercel: "/brand/providers/vercel.svg",
 };
@@ -17,9 +18,13 @@ const logos: Record<string, string> = {
 export function ProviderLogo({
   adapterKey,
   metadata,
+  className,
+  iconOnly = false,
 }: {
   adapterKey?: string;
   metadata?: API.AdapterMetadata;
+  className?: string;
+  iconOnly?: boolean;
 }) {
   const logoKey = metadata?.logo_key ?? adapterKey;
   const source =
@@ -27,10 +32,15 @@ export function ProviderLogo({
   if (!source)
     return (
       <span className="inline-flex min-w-0 items-center gap-1">
-        <Globe aria-hidden="true" className="size-5 shrink-0" />
-        <span className="truncate">
-          {metadata?.display_name ?? adapterKey ?? "其他服务"}
-        </span>
+        <Globe
+          aria-hidden="true"
+          className={cn("size-5 shrink-0", className)}
+        />
+        {!iconOnly && (
+          <span className="truncate">
+            {metadata?.display_name ?? adapterKey ?? "其他服务"}
+          </span>
+        )}
       </span>
     );
 
@@ -42,7 +52,7 @@ export function ProviderLogo({
     return (
       <span
         aria-hidden="true"
-        className="size-5 shrink-0 bg-foreground"
+        className={cn("size-5 shrink-0 bg-foreground", className)}
         style={{
           maskImage: `url('${source}')`,
           maskSize: "contain",
@@ -60,7 +70,7 @@ export function ProviderLogo({
       width={20}
       height={20}
       unoptimized
-      className="size-5 shrink-0 object-contain"
+      className={cn("size-5 shrink-0 object-contain", className)}
     />
   );
 }

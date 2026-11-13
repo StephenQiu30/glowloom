@@ -73,6 +73,7 @@ type ModelResponse struct {
 	Status               string         `json:"status"`
 	ProviderID           uuid.UUID      `json:"provider_id"`
 	ProviderName         string         `json:"provider_name"`
+	ProviderAdapterKey   string         `json:"provider_adapter_key"`
 	Region               string         `json:"region"`
 	ProviderStatus       string         `json:"provider_status"`
 	CredentialPresent    bool           `json:"credential_present"`
@@ -166,7 +167,7 @@ func (h *Handler) ListModels(c *gin.Context) {
 	for _, model := range page.Models {
 		item := ModelResponse{ModelAvailability: model.ModelAvailability, PricingPreview: PricingPreview{AmountKind: "unknown"}, ID: model.ID, Key: model.Key, DisplayName: model.DisplayName, Capability: model.Capability, Status: string(model.Status), ProviderID: model.ProviderID,
 			InputRoles:   append([]string{}, model.InputRoles...),
-			ProviderName: model.ProviderName, Region: string(model.ProviderRegion), ProviderStatus: string(model.ProviderStatus), CredentialPresent: model.CredentialPresent}
+			ProviderName: model.ProviderName, ProviderAdapterKey: model.ProviderAdapterKey, Region: string(model.ProviderRegion), ProviderStatus: string(model.ProviderStatus), CredentialPresent: model.CredentialPresent}
 		if model.CredentialTestResult != nil {
 			result := string(*model.CredentialTestResult)
 			item.CredentialTestResult = &result

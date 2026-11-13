@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { ContentState } from "@/components/layout/content-state";
 import { canConnectPreset, providerLabel } from "./provider-label";
-import { ProviderLogo } from "./provider-logo";
+import { ProviderLogo } from "@/components/providers/provider-logo";
 
 export type PresetStateAction = "archive" | "emergency";
 
