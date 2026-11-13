@@ -18,7 +18,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
@@ -60,6 +59,14 @@ func TestOperationTaskResumesAfterWorkerRestartOnLocalServices(t *testing.T) {
 		t.Run(outcome, func(t *testing.T) {
 			id, project := seedLiveMockOperation(t, database, server.URL, outcome)
 			businessPinOperation(t, database, operationapp.ProviderDispatchIdentity{OperationID: id, ProjectID: project})
+			unrelated, unrelatedProject := seedLiveMockOperation(t, database, server.URL, "accepted")
+			businessPinOperation(t, database, operationapp.ProviderDispatchIdentity{OperationID: unrelated, ProjectID: unrelatedProject})
+			require.NoError(t, taskruntime.Enqueue(ctx, database, "operation.run", unrelated.String(), time.Now().Add(-time.Minute)))
+			t.Cleanup(func() {
+				cleanup, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 5*time.Second)
+				defer cancel()
+				require.NoError(t, database.WithContext(cleanup).Exec(`DELETE FROM infra.task_work WHERE business_id=?`, unrelated.String()).Error)
+			})
 			s := operationStore(database)
 			f := app.NewOperationFinalizer(database, s, pgbilling.NewStore(database))
 			h := map[string]taskruntime.Handler{}
@@ -67,10 +74,13 @@ func TestOperationTaskResumesAfterWorkerRestartOnLocalServices(t *testing.T) {
 			operationflow.RegisterProvider(h, s, nil)
 			operationflow.RegisterMedia(h, s, media, nil)
 			require.NoError(t, taskruntime.Enqueue(ctx, database, "operation.run", id.String(), time.Now()))
-			stop := taskfixture.Start(t, database, h)
+			stop := operationTestWorker(t, database, id, h)
 			waitForOperationStatus(ctx, t, database, id, "submitted")
 			stop()
-			taskfixture.Start(t, database, h)
+			var foreignEpoch int64
+			require.NoError(t, database.Raw(`SELECT epoch FROM infra.task_work WHERE kind='operation.run' AND business_id=?`, unrelated.String()).Scan(&foreignEpoch).Error)
+			require.Zero(t, foreignEpoch, "restart fixture must not claim another operation's work")
+			operationTestWorker(t, database, id, h)
 			waitForOperationStatus(ctx, t, database, id, "completed")
 			assertLiveOperationResult(ctx, t, database, objects, id, project)
 			require.NoError(t, f.FinalizeOperation(ctx, operationflow.SettlementInput{OperationID: id.String(), From: domain.StatusIngesting, To: domain.StatusCompleted}))
