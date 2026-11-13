@@ -16,7 +16,7 @@ export default function CreationChart({ daily }: { daily: API.Day[] }) {
     <ChartContainer
       config={config}
       className="h-52 w-full"
-      aria-label="每日已接受与已完成任务趋势"
+      aria-label="每日创作任务趋势"
     >
       <LineChart data={daily} accessibilityLayer>
         <CartesianGrid vertical={false} />

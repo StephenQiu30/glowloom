@@ -79,7 +79,7 @@ const fields: FilterField[] = [
 function Coverage({ value }: { value: API.ObservabilityCoverage }) {
   return (
     <Notice title="部分覆盖 · 当前后端实例">
-      <p>短期 HTTP 样本，不代表全站流量；Agent / Canvas 未接入，重启丢失。</p>
+      <p>仅当前后端实例，不代表全站流量；重启丢失。</p>
       <Collapsible>
         <CollapsibleTrigger asChild>
           <Button variant="ghost" size="sm">
@@ -94,7 +94,7 @@ function Coverage({ value }: { value: API.ObservabilityCoverage }) {
           </p>
           <p>
             启动 {timestamp(value.started_at)} · 最早{" "}
-            {timestamp(value.oldest_at)}。跨实例或重启后游标可能失效，请刷新。
+            {timestamp(value.oldest_at)}。游标失效时请刷新。
           </p>
         </CollapsibleContent>
       </Collapsible>
@@ -129,34 +129,22 @@ function Overview({
         <>
           <Coverage value={d.coverage} />
           <div className="insights-metrics">
-            <Metric
-              label="已观测请求"
-              value={numberValue(d.requests)}
-              context="当前窗口 · 不含健康探针"
-            />
+            <Metric label="已观测请求" value={numberValue(d.requests)} />
             <Metric
               label="系统错误率"
               value={rateValue(d.server_error_rate)}
-              context={`${numberValue(d.server_errors)} 个 HTTP 5xx / ${numberValue(d.requests)} 个完成请求`}
+              context="HTTP 5xx 占比"
             />
             <Metric
               label="请求 P95"
               value={
                 d.p95_ms === null ? "不适用" : `${numberValue(d.p95_ms)} ms`
               }
-              context="当前保留的完成请求"
             />
-            <Metric
-              label="服务覆盖"
-              value="仅后端"
-              context="Agent / Canvas 等未接入"
-            />
+            <Metric label="服务覆盖" value="仅后端" />
           </div>
           <div className="insights-panels">
-            <Panel
-              title="HTTP 请求结果"
-              description="系统错误与业务失败分别计数"
-            >
+            <Panel title="HTTP 请求结果">
               <dl className="grid grid-cols-2 gap-4">
                 <dt>HTTP 5xx</dt>
                 <dd>{numberValue(d.server_errors)}</dd>
@@ -167,17 +155,10 @@ function Overview({
                 <dt>Panic 记录</dt>
                 <dd>{numberValue(d.panics)}</dd>
               </dl>
-              <p className="insights-note mt-4">
-                Panic 可能发生在响应已发送之后，不等于 HTTP
-                5xx；业务执行结果请查看原任务。
-              </p>
+              <p className="insights-note mt-4">Panic 不等同于 HTTP 5xx。</p>
             </Panel>
-            <Panel title="请求趋势" description="未接入聚合时序来源">
-              <ContentState
-                className="min-h-40"
-                title="趋势暂不可用"
-                description="当前接口提供窗口汇总与逐条日志，不提供全量时序、资源或队列指标。"
-              />
+            <Panel title="请求趋势">
+              <ContentState className="min-h-40" title="趋势暂不可用" />
             </Panel>
           </div>
           <Snapshot at={d.as_of} pending={read.pending} />
@@ -222,7 +203,7 @@ function LogDetail({
       >
         <SheetHeader>
           <SheetTitle>日志详情</SheetTitle>
-          <SheetDescription>已重新核验访问权限 · 只读安全字段</SheetDescription>
+          <SheetDescription className="sr-only">安全诊断字段</SheetDescription>
         </SheetHeader>
         <div className="insights-detail-content">
           {read.error ? (
@@ -252,15 +233,12 @@ function LogDetail({
                   {d.record.event} / {d.record.error_class || "—"}
                 </dd>
                 <dt>Panic</dt>
-                <dd>{d.record.panic ? "是（不等同于 HTTP 5xx）" : "否"}</dd>
+                <dd>{d.record.panic ? "是" : "否"}</dd>
                 <CopyValue label="记录 ID" value={d.record.id} />
                 <CopyValue label="请求 ID" value={d.record.request_id} />
                 <CopyValue label="追踪 ID" value={d.record.trace_id ?? ""} />
                 <CopyValue label="发布标识" value={d.record.release} />
               </dl>
-              <p className="insights-note">
-                仅展示安全诊断字段。业务操作请返回原任务处理。
-              </p>
             </>
           ) : (
             <Loading />
@@ -329,10 +307,7 @@ function Logs({
               </p>
             )}
           <Coverage value={d.coverage} />
-          <Panel
-            title="诊断日志"
-            description="按时间倒序；当前筛选与快照内分页"
-          >
+          <Panel title="诊断日志">
             {d.items.length ? (
               <div className="insights-table">
                 <Table>
@@ -394,7 +369,6 @@ function Logs({
                 title={
                   Object.keys(query).length ? "没有匹配的日志" : "暂无保留日志"
                 }
-                description="可调整筛选条件；未接入或已过保留期的记录不会出现在这里。"
               />
             )}
           </Panel>
@@ -439,7 +413,6 @@ function DiagnosticsContent() {
         <InsightsHeading
           active="health"
           title="运行诊断"
-          description="业务 HTTP · 当前实例保留样本"
           refresh={() => setRevision((n) => n + 1)}
         />
         <Tabs value={tab} onValueChange={setTab}>

@@ -50,29 +50,24 @@ function SafeDiff({ value }: { value: API.SecurityEventView["safe_diff"] }) {
       typeof v === "string",
   );
   return fields.length ? (
-    <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>字段</TableHead>
-            <TableHead>安全摘要</TableHead>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>字段</TableHead>
+          <TableHead>安全摘要</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {fields.map(([key, v]) => (
+          <TableRow key={key}>
+            <TableCell>{key}</TableCell>
+            <TableCell className="insights-code">{String(v)}</TableCell>
           </TableRow>
-        </TableHeader>
-        <TableBody>
-          {fields.map(([key, v]) => (
-            <TableRow key={key}>
-              <TableCell>{key}</TableCell>
-              <TableCell className="insights-code">{String(v)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <p className="insights-note">
-        来源仅提供安全字段摘要，未提供独立变更前后值。
-      </p>
-    </>
+        ))}
+      </TableBody>
+    </Table>
   ) : (
-    <p className="insights-note">此记录没有可展示的安全变更摘要。</p>
+    <p className="insights-note">暂无变更摘要</p>
   );
 }
 function Events() {
@@ -107,7 +102,7 @@ function Events() {
         <InsightsHeading
           active="audit"
           title="审计日志"
-          description="平台安全事件 · 当前管理员授权范围"
+          description="平台安全事件"
           pending={read.pending}
           refresh={restart}
         />
@@ -137,10 +132,7 @@ function Events() {
                   已读取首页新快照
                 </p>
               )}
-            <Panel
-              title="安全事件"
-              description="安全摘要及脱敏变更；不包含组织业务审计"
-            >
+            <Panel title="安全事件">
               {d.items.length ? (
                 <div className="insights-table">
                   <Table>
@@ -197,7 +189,6 @@ function Events() {
                       ? "没有匹配的安全事件"
                       : "暂无安全事件"
                   }
-                  description="可调整时间、操作或账号筛选条件。"
                 />
               )}
             </Panel>
@@ -236,8 +227,8 @@ function Events() {
           >
             <SheetHeader>
               <SheetTitle>审计详情</SheetTitle>
-              <SheetDescription>
-                当前列表已授权的安全摘要 · 只读
+              <SheetDescription className="sr-only">
+                安全事件摘要
               </SheetDescription>
             </SheetHeader>
             {show ? (

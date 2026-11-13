@@ -124,10 +124,8 @@ it("creator gets personal analysis with no management or business/export links a
   ).toBe("/analytics");
   expect(screen.queryByRole("link", { name: "运行诊断" })).toBeNull();
   expect(screen.queryByRole("tab", { name: "经营" })).toBeNull();
-  expect(screen.queryByText("导出不可用")).toBeNull();
-  expect(
-    screen.getByText("操作数不代表人数、下载或访问。", { exact: false }),
-  ).toBeTruthy();
+  expect(screen.queryByText("导出未开放")).toBeNull();
+  expect(screen.queryByText("有效创作用户")).toBeNull();
   expect(mocks.creation.mock.calls[0][0]).toEqual({ scope: "personal" });
 });
 it("does not apply draft filters until submit, then all requests use the applied source/scope", async () => {
@@ -159,7 +157,7 @@ it("business exposes unavailable capability only, with disabled export and unkno
   });
   await screen.findByText("经营数据未接入");
   expect(
-    (screen.getByRole("button", { name: "导出不可用" }) as HTMLButtonElement)
+    (screen.getByRole("button", { name: "导出未开放" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
   expect(screen.queryByText(/¥/)).toBeNull();
@@ -316,7 +314,7 @@ it("keeps applied platform filters and datetime drafts consistent after business
   fireEvent.change(screen.getByLabelText("创作来源"), {
     target: { value: "canvas" },
   });
-  fireEvent.change(screen.getByLabelText("开始时间（上海）"), {
+  fireEvent.change(screen.getByLabelText("开始时间"), {
     target: { value: "2026-11-01T00:00" },
   });
   fireEvent.change(screen.getByLabelText("结束时间（不含）"), {
@@ -350,9 +348,9 @@ it("keeps applied platform filters and datetime drafts consistent after business
   expect((screen.getByLabelText("创作来源") as HTMLSelectElement).value).toBe(
     "canvas",
   );
-  expect(
-    (screen.getByLabelText("开始时间（上海）") as HTMLInputElement).value,
-  ).toBe("2026-11-01T00:00");
+  expect((screen.getByLabelText("开始时间") as HTMLInputElement).value).toBe(
+    "2026-11-01T00:00",
+  );
   fireEvent.click(screen.getByRole("button", { name: "筛选" }));
   expect(mocks.creation.mock.calls.at(-1)![0]).toEqual(applied);
   expect(screen.getByText("已应用 4 项条件")).toBeTruthy();
@@ -360,7 +358,7 @@ it("keeps applied platform filters and datetime drafts consistent after business
   await waitFor(() =>
     expect(mocks.creation.mock.calls.at(-1)![0]).toEqual({ scope: "personal" }),
   );
-  expect(screen.getByText("默认范围 · 上海时间")).toBeTruthy();
+  expect(screen.queryByText(/已应用 \d+ 项条件/)).toBeNull();
 });
 it("keeps unsubmitted drafts through tab round-trip but clears them synchronously on identity change", async () => {
   const view = render(<Analytics />);
@@ -405,7 +403,7 @@ it("keeps unsubmitted drafts through tab round-trip but clears them synchronousl
   mocks.actor = "actor-2";
   view.rerender(<Analytics />);
   expect(screen.queryByRole("dialog")).toBeNull();
-  expect(screen.getByText("默认范围 · 上海时间")).toBeTruthy();
+  expect(screen.queryByText(/已应用 \d+ 项条件/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "筛选条件" }));
   expect((screen.getByLabelText("分析范围") as HTMLSelectElement).value).toBe(
     "personal",

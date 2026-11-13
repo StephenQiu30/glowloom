@@ -78,7 +78,7 @@ export function InsightsHeading({
 }: {
   active: "health" | "audit" | "analytics";
   title: string;
-  description: string;
+  description?: string;
   pending?: boolean;
   refresh: () => void;
   children?: ReactNode;
@@ -91,7 +91,9 @@ export function InsightsHeading({
       <div className="insights-header">
         <div>
           <h1>{title}</h1>
-          <p className="insights-subtitle">{description}</p>
+          {description ? (
+            <p className="insights-subtitle">{description}</p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {children}
@@ -101,11 +103,6 @@ export function InsightsHeading({
           </Button>
         </div>
       </div>
-      {pending ? (
-        <span className="insights-note" role="status">
-          正在更新…
-        </span>
-      ) : null}
     </>
   );
 }
@@ -135,7 +132,7 @@ export function Metric({
 }: {
   label: string;
   value: string;
-  context: string;
+  context?: string;
 }) {
   return (
     <Card variant="flat" className="insights-metric">
@@ -144,7 +141,7 @@ export function Metric({
       </CardHeader>
       <CardContent>
         <p className="insights-metric-value">{value}</p>
-        <p className="insights-note">{context}</p>
+        {context ? <p className="insights-note">{context}</p> : null}
       </CardContent>
     </Card>
   );
@@ -208,7 +205,7 @@ export function Snapshot({ at, pending }: { at: string; pending: boolean }) {
   }, []);
   return (
     <p className="insights-note" role="status">
-      快照 {timestamp(at)} · 上海时间
+      快照 {timestamp(at)}
       {pending ? " · 正在刷新，保留上次结果" : ""}
       {now - Date.parse(at) > 15 * 60000 ? " · 快照较早，请刷新" : ""}
     </p>
@@ -221,7 +218,7 @@ export type FilterField = {
   options?: readonly (readonly [string, string])[];
 };
 export const dateFields: FilterField[] = [
-  { key: "from", label: "开始时间（上海）", type: "datetime-local" },
+  { key: "from", label: "开始时间", type: "datetime-local" },
   { key: "to", label: "结束时间（不含）", type: "datetime-local" },
 ];
 type FilterControl =
@@ -335,9 +332,7 @@ export function Filters({
         <SheetContent className="insights-detail">
           <SheetHeader>
             <SheetTitle>筛选条件</SheetTitle>
-            <SheetDescription>
-              上海时间，最多{maxDays}天；填写后点击筛选。
-            </SheetDescription>
+            <SheetDescription>最多{maxDays}天，上海时间</SheetDescription>
           </SheetHeader>
           <form
             className="insights-detail-content"
@@ -350,9 +345,9 @@ export function Filters({
           </form>
         </SheetContent>
       </Sheet>
-      <span className="insights-note">
-        {appliedCount ? `已应用 ${appliedCount} 项条件` : "默认范围 · 上海时间"}
-      </span>
+      {appliedCount ? (
+        <span className="insights-note">已应用 {appliedCount} 项条件</span>
+      ) : null}
       <Button variant="ghost" onClick={reset}>
         重置
       </Button>
@@ -372,7 +367,6 @@ export function Pager({
 }) {
   return (
     <div className="insights-pagination">
-      <p className="insights-note">按当前快照分页</p>
       <div className="flex gap-2">
         <Button variant="ghost" disabled={!back} onClick={onBack}>
           上一页
