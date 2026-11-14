@@ -1,0 +1,8 @@
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=1130
+WORKDIR /app
+COPY --chown=node:node package/ ./
+COPY workspace/deploy/online-entry.mjs ./online-entry.mjs
+USER node
+EXPOSE 1130
+CMD ["node", "online-entry.mjs"]

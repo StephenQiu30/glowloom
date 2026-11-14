@@ -1,10 +1,24 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+<a id="workspace-20261114"></a>
+
+## Workspace知识库与研发工作流（2026-11-14）
+
+来源链：[原始需求28](workspace/content/requirement/28-Workspace知识库与研发工作流需求.md) → [设计43](workspace/content/design/43-Workspace知识库与研发工作流服务设计.md) → [PRD29](workspace/content/prd/29-Workspace知识库与研发工作流.md) → [Plan38](workspace/content/plan/38-Workspace知识库与研发工作流执行计划.md)。SRC-WS-08授权本地完整实施；SRC-WS-09明确暂不启用真实TTS，不上传声音、不收费合成。SRC-WS-10随后授权仅提交本次实现和文档迁移至main并推送，保留其他并行修改；不含生产部署或业务库操作。
+
+实施顺序为G0基线 → G1迁移／静态知识库 → G2 Skill／工作流 → G3已有音频播放 → G4本机在线协作／Codex → G6本地联合接受；G5供应商与真实朗读按用户选择延期。知识单源为workspace/content，业务工程仍拥有源码与契约，根规范和schema保留原位。研发运行采用dev_workspace和受限glowloom_workspace，避免与现有产品workspace表冲突。
+
+本地候选已实现Markdown／GFM解析、显式锚点、目录、Pagefind中文与ID搜索、Mermaid SVG、raw、关系链、4份Skill原文／发现链接、3份流程和有限上下文、音频manifest校验／播放器／章节范围；在线版实现本机令牌、提案修订冲突与幂等落地、PG运行／事件／证据、认证Unix执行桥及原Codex句柄查询。已完成独立审查及8项重要问题修复回归；共享工作树按逐文件摘要、三方合并和精确白名单切换，保留原业务修改。当前本地验收回执在workspace/.local/evidence-20261114/，不纳入知识发布。
+
+已验证：44项单元／集成测试含隔离PG受限角色、幂等和并发CAS；静态4项、在线3项和朗读1项真实浏览器用例；独立Nginx静态托管3项、无源码standalone登录／阅读／原文／搜索；public空集与单页白名单构建，私有页面／原文未进入公共包；本机Codex实际发现4份Skill，完成只读任务，并在关闭、重建主机进程后读取同一thread／turn的完成结果。未发起供应商试用或TTS；Codex自身正常模型推理不等于真实TTS接受。历史断链仅恢复到已核实Git版本，未归档引用明确标记，不伪造附件。
+
+仍需区分：自动测试／静音PCM fixture、本机Codex、产品人工接受、团队SSO、生产数据库、远程部署和效率基线。团队身份、线上域名、生产受控schema变更、保留期与真实TTS供应商／音色／预算未验收；不得推定完成。详情见[使用与部署](workspace/content/templates/04-Workspace使用与部署.md)。
+
 <a id="logs-analytics-20261113"></a>
 
 ## 日志与完整创作经营分析（2026-11-13）
 
-用户明确要求重新分析日志需求，并确认同时建设完整创作与经营分析。来源链：[需求27](docs/requirement/27-日志与创作经营分析需求.md) → [设计42](docs/design/42-日志与创作经营分析设计.md) → [PRD28](docs/prd/28-日志与创作经营分析.md) → [Plan37](docs/plan/37-日志与创作经营分析执行计划.md)。SRC-LOG-04已授权先提交main并推送，再落实页面；文档提交`bcb099e2`已推送。
+用户明确要求重新分析日志需求，并确认同时建设完整创作与经营分析。来源链：[需求27](workspace/content/requirement/27-日志与创作经营分析需求.md) → [设计42](workspace/content/design/42-日志与创作经营分析设计.md) → [PRD28](workspace/content/prd/28-日志与创作经营分析.md) → [Plan37](workspace/content/plan/37-日志与创作经营分析执行计划.md)。SRC-LOG-04已授权先提交main并推送，再落实页面；文档提交`bcb099e2`已推送。
 
 页面已接入运行诊断、平台审计、创作快照与经营缺项状态，复用现有外壳、Geist/Neutral和shadcn。诊断仅当前后端进程4096条/24小时内存样本，重启丢失；创作区分受理任务、执行尝试和已登记产物，个人只看本人确认且当前可读的事实，平台汇总重查权限。经营金额、采用/留存、独立团队汇总及导出依赖未接入，保持明确不可用，不用Figma样例或零值替代。当前合同与来源见设计42 §7.9。
 
@@ -16,13 +30,13 @@
 
 ## 模型号池与销售计费
 
-后台可发布备用线路、调整 Key 准入、共享并发额度、倍率与折扣。隔离 PostgreSQL 已验证并发争抢、派发前换路、连接未建立时的一次备线尝试及采购价归属。浏览器通过实际接口验证线路发布与 91/114 积分试算。DeepSeek Flash 实单已完成。火山方舟实单、同规格双渠道及采购凭证见[验收记录](docs/research/2026-11-13-模型号池与销售计费验收.md)。后台可查看实际尝试、连接及 Key 尾号。连接前失败使用 15 秒冷却。仅销售价格变化时可保留旧报价，已核验冻结线路版本。跨供应商同规格实单及供应商账单验收待完成。[Plan35](docs/plan/35-模型号池接入与路由执行计划.md) · [Plan36](docs/plan/36-模型销售定价与结算执行计划.md)
+后台可发布备用线路、调整 Key 准入、共享并发额度、倍率与折扣。隔离 PostgreSQL 已验证并发争抢、派发前换路、连接未建立时的一次备线尝试及采购价归属。浏览器通过实际接口验证线路发布与 91/114 积分试算。DeepSeek Flash 实单已完成。火山方舟实单、同规格双渠道及采购凭证见[验收记录](workspace/content/research/2026-11-13-模型号池与销售计费验收.md)。后台可查看实际尝试、连接及 Key 尾号。连接前失败使用 15 秒冷却。仅销售价格变化时可保留旧报价，已核验冻结线路版本。跨供应商同规格实单及供应商账单验收待完成。[Plan35](workspace/content/plan/35-模型号池接入与路由执行计划.md) · [Plan36](workspace/content/plan/36-模型销售定价与结算执行计划.md)
 
 <a id="agent-shot-first-wave-20261112"></a>
 
 ## Agent与单镜首轮闭环实施（2026-11-12）
 
-当前授权为SRC-AGH-20/21：补齐详细实施计划并实际打通原请求/费用、失败恢复和单镜制作；保留原有能力。用户随后明确授权将本轮代码提交main并推送；部署、真实付费及存量库自动DDL不在本次范围。实施入口：[Plan28 §9](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md#9-首轮可执行实施src-agh-20)、[Plan33首轮](docs/plan/33-短剧工作室实施计划.md#首轮单镜可执行实施src-agh-20)。来源/设计/接受合同分别补入需求19 SRC-AGH-20/21、设计32 §7.16与设计38 §7.10、PRD19/24；后面的仅文档记录保留为历史。
+当前授权为SRC-AGH-20/21：补齐详细实施计划并实际打通原请求/费用、失败恢复和单镜制作；保留原有能力。用户随后明确授权将本轮代码提交main并推送；部署、真实付费及存量库自动DDL不在本次范围。实施入口：[Plan28 §9](workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md#9-首轮可执行实施src-agh-20)、[Plan33首轮](workspace/content/plan/33-短剧工作室实施计划.md#首轮单镜可执行实施src-agh-20)。来源/设计/接受合同分别补入需求19 SRC-AGH-20/21、设计32 §7.16与设计38 §7.10、PRD19/24；后面的仅文档记录保留为历史。
 
 ### 本轮结果与真实行为
 
@@ -120,13 +134,13 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 - [backend/tests/canvas/yjs_outbox_test.go](backend/tests/canvas/yjs_outbox_test.go)
 - [backend/tests/canvasfixture/command_runtime.go](backend/tests/canvasfixture/command_runtime.go)
 - [backend/tests/operation/agent_shot_pipeline_integration_test.go](backend/tests/operation/agent_shot_pipeline_integration_test.go)
-- [docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)
-- [docs/design/38-短剧工作室一致性设计.md](docs/design/38-短剧工作室一致性设计.md)
-- [docs/plan/28-完整创作Agent与Skill多Agent实施计划.md](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md)
-- [docs/plan/33-短剧工作室实施计划.md](docs/plan/33-短剧工作室实施计划.md)
-- [docs/prd/19-完整创作Agent与Skill多Agent.md](docs/prd/19-完整创作Agent与Skill多Agent.md)
-- [docs/prd/24-短剧工作室.md](docs/prd/24-短剧工作室.md)
-- [docs/requirement/19-完整创作Agent与Skill多Agent需求.md](docs/requirement/19-完整创作Agent与Skill多Agent需求.md)
+- [workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)
+- [workspace/content/design/38-短剧工作室一致性设计.md](workspace/content/design/38-短剧工作室一致性设计.md)
+- [workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md](workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md)
+- [workspace/content/plan/33-短剧工作室实施计划.md](workspace/content/plan/33-短剧工作室实施计划.md)
+- [workspace/content/prd/19-完整创作Agent与Skill多Agent.md](workspace/content/prd/19-完整创作Agent与Skill多Agent.md)
+- [workspace/content/prd/24-短剧工作室.md](workspace/content/prd/24-短剧工作室.md)
+- [workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md](workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md)
 - [frontend/src/components/conversations/conversation-state.ts](frontend/src/components/conversations/conversation-state.ts)
 - [frontend/src/components/conversations/conversation-thread.tsx](frontend/src/components/conversations/conversation-thread.tsx)
 - [frontend/tests/unit/components/conversations/conversation-thread.test.tsx](frontend/tests/unit/components/conversations/conversation-thread.test.tsx)
@@ -142,11 +156,11 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 - `backend/internal/subject/application/service.go`
 - `backend/internal/subject/domain/content.go`
 - `backend/tests/subject/type_test.go`
-- `docs/00-文档索引.md`
-- `docs/requirement/25-多模态创作与Agent编排需求.md`
-- `docs/research/00-调研导航.md`
-- `docs/research/2026-11-12-即梦多模态创作与Agent服务拆解.md`
-- `docs/research/2026-11-12-短剧制作平台源码与发行包对照调研.md`
+- `workspace/content/00-文档索引.md`
+- `workspace/content/requirement/25-多模态创作与Agent编排需求.md`
+- `workspace/content/research/00-调研导航.md`
+- `workspace/content/research/2026-11-12-即梦多模态创作与Agent服务拆解.md`
+- `workspace/content/research/2026-11-12-短剧制作平台源码与发行包对照调研.md`
 - `frontend/.vitest/ (existing cache)`
 - `frontend/Dockerfile`
 - `frontend/next.config.ts`
@@ -199,7 +213,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## Agent/短剧稳定服务再评估（2026-11-12）
 
-用户再次要求评估并详细设计稳定服务，来源SRC-AGH-19/SRC-STUDIO-21，继续只做文档。对当前runtime/ownership/registry/delegation/reconciliation、恢复扫描及Go taskruntime复核后，保留已有执行基础，新增[设计32 §7.15](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#715-稳定服务再评估与详细执行合同)和[设计38 §7.9](docs/design/38-短剧工作室一致性设计.md#79-可靠生产与版本化交付的收紧)。这两节收紧此前整体方案，对应AGH-046/FR-STUDIO-13、PRD19 AC-AH-40～44/ST-AH-58～65及PRD24 AC-STUDIO-14/15/ST-STUDIO-20～23，Plan28 EX-11/Plan33 DR-08定义联合门禁。
+用户再次要求评估并详细设计稳定服务，来源SRC-AGH-19/SRC-STUDIO-21，继续只做文档。对当前runtime/ownership/registry/delegation/reconciliation、恢复扫描及Go taskruntime复核后，保留已有执行基础，新增[设计32 §7.15](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#715-稳定服务再评估与详细执行合同)和[设计38 §7.9](workspace/content/design/38-短剧工作室一致性设计.md#79-可靠生产与版本化交付的收紧)。这两节收紧此前整体方案，对应AGH-046/FR-STUDIO-13、PRD19 AC-AH-40～44/ST-AH-58～65及PRD24 AC-STUDIO-14/15/ST-STUDIO-20～23，Plan28 EX-11/Plan33 DR-08定义联合门禁。
 
 关键决定：简单任务主Agent直接执行，专业子会话仅用于独立工作，确定性交付不再每步问LLM；区分模型轮次/目标控制/作品交付；根步数/货币资金/容量槽分开；发送前CAS持久“可能已发送”，未知只查原请求；失owner迟到回执只能成为受限原请求证据；等待释放短槽但保留上游在途/未决资金；真实账单超估仍记录，自动硬预算必须有可信费用上界；停机排空后再释放owner/关池；灾后先隔离旧实例和旧授权、重建执行代际并核对账本/上游再开闸。
 
@@ -226,7 +240,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## Agent与短剧完整方案评审（2026-11-12）
 
-用户明确要求将调研整合成完整设计并明确实施顺序，先不编写代码。已保留来源SRC-AGH-18/SRC-STUDIO-20；统一阅读入口为[设计32 §7.0](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#70-整体方案与完整调用路径)，逐阶段制作/局部重做为[设计38 §7.7～7.8](docs/design/38-短剧工作室一致性设计.md#77-阶段产物与贯穿制作流程)。本轮整合既有权威，未新建第三套架构。PRD19增加AC-AH-38/39和ST-AH-55～57，PRD24增加AC-STUDIO-13和ST-STUDIO-17～19，两个Plan分别补联合门禁。均为待评审方案，不是实现或接受记录。
+用户明确要求将调研整合成完整设计并明确实施顺序，先不编写代码。已保留来源SRC-AGH-18/SRC-STUDIO-20；统一阅读入口为[设计32 §7.0](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#70-整体方案与完整调用路径)，逐阶段制作/局部重做为[设计38 §7.7～7.8](workspace/content/design/38-短剧工作室一致性设计.md#77-阶段产物与贯穿制作流程)。本轮整合既有权威，未新建第三套架构。PRD19增加AC-AH-38/39和ST-AH-55～57，PRD24增加AC-STUDIO-13和ST-STUDIO-17～19，两个Plan分别补联合门禁。均为待评审方案，不是实现或接受记录。
 
 设计补漏：Go预算和Agent分支登记独立提交/原意图核对；分支是根内额度分配而非双扣；人工修订在Go准入侧建立失效围栏，通知未达也不准旧计划新收费；迟到素材保留旧版本候选；Stop/完成root后新修改新受理run；跨镜生成单元的重做范围、字幕/take/声音/剪辑不同传播及人工剪辑保护。采用默认人工、自动采用/额外费用仅事前授权，实际并发/超时/质量阈值待验证；沿NestJS/Pi/PostgreSQL/Go/Compose，不重新引入Temporal/SQLite。
 
@@ -255,7 +269,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## 短剧制作能力与Agent执行补齐（2026-11-12）
 
-按用户本轮“先不要编写代码”要求，已用GitHub/Firecrawl/Context7调查BeefTV、Toonflow、waoowaoo、火宝的固定源码与官方制作材料，并按reverse-engineer-anything对BeefTV v2.2.1发行ZIP及交付宿主JS静态分析；[完整报告](docs/research/2026-11-12-短剧制作平台源码与发行包对照调研.md)保留SHA/许可、实际调用链、生产流程、REA Evidence ID及未知边界。5个选定宿主JS与固定main字节一致，不推定整个发行包等同main；没有安装/运行参考产品、付费调用、代码或部署变更。
+按用户本轮“先不要编写代码”要求，已用GitHub/Firecrawl/Context7调查BeefTV、Toonflow、waoowaoo、火宝的固定源码与官方制作材料，并按reverse-engineer-anything对BeefTV v2.2.1发行ZIP及交付宿主JS静态分析；[完整报告](workspace/content/research/2026-11-12-短剧制作平台源码与发行包对照调研.md)保留SHA/许可、实际调用链、生产流程、REA Evidence ID及未知边界。5个选定宿主JS与固定main字节一致，不推定整个发行包等同main；没有安装/运行参考产品、付费调用、代码或部署变更。
 
 补齐评审主链：需求23 SRC-STUDIO-19新增FR-STUDIO-01～12 → 设计38 §7.3～7.6 → PRD24新增12项AC/16项ST → Plan33 DR-01～07；Agent共性需求19新增SRC-AGH-17/AGH-043～045 → 设计32 §7.14 → PRD19新增AC-AH-35～37/ST-AH-51～54 → Plan28 EX-08～10。均为新增设计/接受合同，不是实现或通过记录。已有手动文字数字人链、Bible造型/声音、可选ASR、batch和真实FFmpeg/工程输出已纠偏，避免重复建设。
 
@@ -269,30 +283,30 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 | 文件                                                                                                                                                                         | 归属/处理                                             |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | [BACKLOG.md](BACKLOG.md)                                                                                                                                                     | 本轮及此前同目标的状态/行动，保留原有内容；保留工作区 |
-| [docs/00-文档索引.md](docs/00-文档索引.md)                                                                                                                                   | 更新两条主链及研究入口；保留工作区                    |
-| [docs/requirement/00-需求导航.md](docs/requirement/00-需求导航.md)                                                                                                           | 更新来源入口；保留工作区                              |
-| [docs/research/00-调研导航.md](docs/research/00-调研导航.md)                                                                                                                 | 更新研究入口；保留工作区                              |
-| [docs/requirement/19-完整创作Agent与Skill多Agent需求.md](docs/requirement/19-完整创作Agent与Skill多Agent需求.md)                                                             | 主子/Skill/MCP及阶段产物/交付/后续需求；保留工作区    |
-| [docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)                                                 | Agent执行体系评审稿；保留工作区                       |
-| [docs/prd/19-完整创作Agent与Skill多Agent.md](docs/prd/19-完整创作Agent与Skill多Agent.md)                                                                                     | Agent接受与故障场景；保留工作区                       |
-| [docs/plan/28-完整创作Agent与Skill多Agent实施计划.md](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md)                                                                   | Agent未来切片，本轮不执行；保留工作区                 |
-| [docs/requirement/23-短剧工作室对齐即梦需求.md](docs/requirement/23-短剧工作室对齐即梦需求.md)                                                                               | 短剧制作补齐来源及12项功能要求；保留工作区            |
-| [docs/design/38-短剧工作室一致性设计.md](docs/design/38-短剧工作室一致性设计.md)                                                                                             | 生产身份、依赖及交付评审稿；保留工作区                |
-| [docs/prd/24-短剧工作室.md](docs/prd/24-短剧工作室.md)                                                                                                                       | 12项制作接受与16项场景；保留工作区                    |
-| [docs/plan/33-短剧工作室实施计划.md](docs/plan/33-短剧工作室实施计划.md)                                                                                                     | 7个未来制作切片，保留历史记录；保留工作区             |
-| [docs/requirement/25-多模态创作与Agent编排需求.md](docs/requirement/25-多模态创作与Agent编排需求.md)                                                                         | 此前同目标新增，尚未跟踪；保留工作区                  |
-| [docs/research/2026-11-12-即梦多模态创作与Agent服务拆解.md](docs/research/2026-11-12-即梦多模态创作与Agent服务拆解.md)                                                       | 此前同目标新增，并校正数字人已有手动链；保留工作区    |
-| [docs/research/2026-11-12-短剧制作平台源码与发行包对照调研.md](docs/research/2026-11-12-短剧制作平台源码与发行包对照调研.md)                                                 | 本轮新增完整调研；保留工作区                          |
-| [docs/requirement/14-无限画布对齐即梦需求.md](docs/requirement/14-无限画布对齐即梦需求.md)                                                                                   | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
-| [docs/design/27-无限画布一致性改造设计.md](docs/design/27-无限画布一致性改造设计.md)                                                                                         | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
-| [docs/prd/14-无限画布一致性改造.md](docs/prd/14-无限画布一致性改造.md)                                                                                                       | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
-| [docs/plan/23-无限画布一致性改造实施计划.md](docs/plan/23-无限画布一致性改造实施计划.md)                                                                                     | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
+| [workspace/content/00-文档索引.md](workspace/content/00-文档索引.md)                                                                                                                                   | 更新两条主链及研究入口；保留工作区                    |
+| [workspace/content/requirement/00-需求导航.md](workspace/content/requirement/00-需求导航.md)                                                                                                           | 更新来源入口；保留工作区                              |
+| [workspace/content/research/00-调研导航.md](workspace/content/research/00-调研导航.md)                                                                                                                 | 更新研究入口；保留工作区                              |
+| [workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md](workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md)                                                             | 主子/Skill/MCP及阶段产物/交付/后续需求；保留工作区    |
+| [workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)                                                 | Agent执行体系评审稿；保留工作区                       |
+| [workspace/content/prd/19-完整创作Agent与Skill多Agent.md](workspace/content/prd/19-完整创作Agent与Skill多Agent.md)                                                                                     | Agent接受与故障场景；保留工作区                       |
+| [workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md](workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md)                                                                   | Agent未来切片，本轮不执行；保留工作区                 |
+| [workspace/content/requirement/23-短剧工作室对齐即梦需求.md](workspace/content/requirement/23-短剧工作室对齐即梦需求.md)                                                                               | 短剧制作补齐来源及12项功能要求；保留工作区            |
+| [workspace/content/design/38-短剧工作室一致性设计.md](workspace/content/design/38-短剧工作室一致性设计.md)                                                                                             | 生产身份、依赖及交付评审稿；保留工作区                |
+| [workspace/content/prd/24-短剧工作室.md](workspace/content/prd/24-短剧工作室.md)                                                                                                                       | 12项制作接受与16项场景；保留工作区                    |
+| [workspace/content/plan/33-短剧工作室实施计划.md](workspace/content/plan/33-短剧工作室实施计划.md)                                                                                                     | 7个未来制作切片，保留历史记录；保留工作区             |
+| [workspace/content/requirement/25-多模态创作与Agent编排需求.md](workspace/content/requirement/25-多模态创作与Agent编排需求.md)                                                                         | 此前同目标新增，尚未跟踪；保留工作区                  |
+| [workspace/content/research/2026-11-12-即梦多模态创作与Agent服务拆解.md](workspace/content/research/2026-11-12-即梦多模态创作与Agent服务拆解.md)                                                       | 此前同目标新增，并校正数字人已有手动链；保留工作区    |
+| [workspace/content/research/2026-11-12-短剧制作平台源码与发行包对照调研.md](workspace/content/research/2026-11-12-短剧制作平台源码与发行包对照调研.md)                                                 | 本轮新增完整调研；保留工作区                          |
+| [workspace/content/requirement/14-无限画布对齐即梦需求.md](workspace/content/requirement/14-无限画布对齐即梦需求.md)                                                                                   | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
+| [workspace/content/design/27-无限画布一致性改造设计.md](workspace/content/design/27-无限画布一致性改造设计.md)                                                                                         | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
+| [workspace/content/prd/14-无限画布一致性改造.md](workspace/content/prd/14-无限画布一致性改造.md)                                                                                                       | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
+| [workspace/content/plan/23-无限画布一致性改造实施计划.md](workspace/content/plan/23-无限画布一致性改造实施计划.md)                                                                                     | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
 | [frontend/src/components/canvas/director/canvas-director-workspace.tsx](frontend/src/components/canvas/director/canvas-director-workspace.tsx)                               | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
 | [frontend/src/components/canvas/editor/canvas-editor.tsx](frontend/src/components/canvas/editor/canvas-editor.tsx)                                                           | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
 | [frontend/src/components/canvas/editor/infinite-canvas.tsx](frontend/src/components/canvas/editor/infinite-canvas.tsx)                                                       | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
 | [frontend/tests/unit/components/canvas/director/director-workspace-placement.test.tsx](frontend/tests/unit/components/canvas/director/director-workspace-placement.test.tsx) | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
 | [frontend/tests/unit/components/canvas/node-double-click.test.tsx](frontend/tests/unit/components/canvas/node-double-click.test.tsx)                                         | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
-| [frontend/.vitest/](frontend/.vitest/)                                                                                                                                       | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
+| frontend/.vitest/（历史引用未归档）                                                                                                                                       | 并行已有修改/未跟踪项；本轮未编辑、清理或纳入验证     |
 
 </details>
 
@@ -300,7 +314,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## 多模态创作与 Agent 编排需求（2026-11-12）
 
-本轮按用户“先不要编写代码”的要求交付[即梦服务拆解](docs/research/2026-11-12-即梦多模态创作与Agent服务拆解.md)及[需求25](docs/requirement/25-多模态创作与Agent编排需求.md)：36项功能要求、25项验收场景和8项待评审选择。REA两个隔离公开场景已退出，Chrome登录态逐类走查表单、Agent设置/Skill和已有图片历史后返回原首页；没有新消息、上传、模型消费或业务写入。已有CDP端点无法附着；公开数字人/动作深链采样与登录态表单不同，原因未定；网络采样有截断，不宣称即梦内部架构已逆向完成。
+本轮按用户“先不要编写代码”的要求交付[即梦服务拆解](workspace/content/research/2026-11-12-即梦多模态创作与Agent服务拆解.md)及[需求25](workspace/content/requirement/25-多模态创作与Agent编排需求.md)：36项功能要求、25项验收场景和8项待评审选择。REA两个隔离公开场景已退出，Chrome登录态逐类走查表单、Agent设置/Skill和已有图片历史后返回原首页；没有新消息、上传、模型消费或业务写入。已有CDP端点无法附着；公开数字人/动作深链采样与登录态表单不同，原因未定；网络采样有截断，不宣称即梦内部架构已逆向完成。
 
 当前源码已具备七类入口、独立NestJS/Pi Durable Agent、专业子任务和多类媒体适配；新增需求聚焦精确能力一致性、正式产物接续、数字人已有手动文本配音链的Agent自动接续、真实专业并发及恢复/预算。Agent仍不接收音频理解，视频仅3帧投影；委派顺序等待，不能以并发上限宣称并行生产。以上为源码结论，未检查当前部署或执行真实供应商/账单接受。
 
@@ -314,7 +328,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## AI 接入极简重设计
 
-来源：[DESIGN](DESIGN.md#极简呈现) · [设计07](docs/design/07-AI平台接入市场调研与架构设计.md#ai-接入统一界面)。Figma更新49张接入、预设、连接、模型及测试状态画板，新增关键原型跳转，沿用Geist、共享token与组件实例。前端使用shadcn/ui，并按Vercel React/Next.js规范实现；模型配置无不可用原因或原因入口，价格参考与模型模板默认收起。模型多选使用官方水平Field、Checkbox与FieldLabel，保留原生标签、选中、禁用和焦点样式。
+来源：[DESIGN](DESIGN.md#极简呈现) · [设计07](workspace/content/design/07-AI平台接入市场调研与架构设计.md#ai-接入统一界面)。Figma更新49张接入、预设、连接、模型及测试状态画板，新增关键原型跳转，沿用Geist、共享token与组件实例。前端使用shadcn/ui，并按Vercel React/Next.js规范实现；模型配置无不可用原因或原因入口，价格参考与模型模板默认收起。模型多选使用官方水平Field、Checkbox与FieldLabel，保留原生标签、选中、禁用和焦点样式。
 
 验证：提交范围独立检查312文件、2221项测试、ESLint、类型、改动代码格式、生产构建及standalone代理通过；完整工作区313文件、2227项测试及生产镜像构建亦通过。本地1122前端已更新。实际页面验证模型配置、价格及两步接入，390px无横向溢出；预设编辑通过现有模拟API夹具完成桌面、390px与键盘验证；多选验证标签点击、空格选择两项、16px复选框与14px默认标签，选择行无自定义背景。未调用真实供应商或保存业务数据。
 
@@ -322,9 +336,9 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## 全站即梦逐项核对与组件复用（2026-11-07）
 
-[即梦页面及交互清单](docs/research/2026-11-07-即梦页面功能与交互逐项核对.md)与[织光/Figma核对](docs/research/2026-11-07-织光页面与Figma还原核对.md)分别保留来源事实和当前实现；工具位置清单338条，覆盖39条页面路由及1条兼容入口，新增23条短剧首页控件与缺项。Figma原生节点/目标检查不等于全站1:1通过。实际数据、真实生成与复杂组合状态、当前不可用服务、字体差异继续逐项核验。全站旧视觉基线为ad1cf640，短剧新版的有限补核范围见下文，不能沿用旧版截图签收。
+[即梦页面及交互清单](workspace/content/research/2026-11-07-即梦页面功能与交互逐项核对.md)与[织光/Figma核对](workspace/content/research/2026-11-07-织光页面与Figma还原核对.md)分别保留来源事实和当前实现；工具位置清单338条，覆盖39条页面路由及1条兼容入口，新增23条短剧首页控件与缺项。Figma原生节点/目标检查不等于全站1:1通过。实际数据、真实生成与复杂组合状态、当前不可用服务、字体差异继续逐项核验。全站旧视觉基线为ad1cf640，短剧新版的有限补核范围见下文，不能沿用旧版截图签收。
 
-通用组件复用原则SRC-CAN-15已记录，用户确认Infinite Canvas为basketikun/infinite-canvas。[固定版本评估](docs/research/2026-11-07-画布组件复用与完整接入评估.md)建议按职责比较，React Flow为交互层验证候选；本轮没有替换画布内核或安装新组件。
+通用组件复用原则SRC-CAN-15已记录，用户确认Infinite Canvas为basketikun/infinite-canvas。[固定版本评估](workspace/content/research/2026-11-07-画布组件复用与完整接入评估.md)建议按职责比较，React Flow为交互层验证候选；本轮没有替换画布内核或安装新组件。
 
 提交前复核短剧输入在项目创建后的承接，补账号/空间切换清空输入及创建弹窗、输入交接身份隔离与迟到清理保护测试。范围33项测试、全前端ESLint、类型检查和Next生产构建通过。全量测试中的会话恢复6项、项目页6项、资产工作区4项失败，在独立ad1cf640源码快照同样复现（109项中16失败）；本轮主题色规范失败已修正并定向复验。全量Prettier仍有既有3文件失败：public/director/catalog/manifest.json、public/director/motions/quaternius-ual1-standard.json、src/components/canvas/timeline/timeline-model.ts；本次范围格式通过。不得报告全量门禁通过，后续按实际需求区分产品缺陷和测试契约漂移。
 
@@ -338,7 +352,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## 短剧多媒体参考与私有风格库（2026-11-07）
 
-[当前实现对照](docs/research/2026-11-07-织光页面与Figma还原核对.md#多媒体参考与风格库当前实现对照2026-11-07)及[独立核对CSV](docs/research/2026-11-07-多媒体参考与风格库实现核对.csv)记录本轮工作区增量，原338项CSV及其旧版本实页/Figma事实继续保留。新增28项按源码、工程、隔离组件、业务运行版、供应商与Figma分别记录，不是28项全部接受。
+[当前实现对照](workspace/content/research/2026-11-07-织光页面与Figma还原核对.md#多媒体参考与风格库当前实现对照2026-11-07)及[独立核对CSV](workspace/content/research/2026-11-07-多媒体参考与风格库实现核对.csv)记录本轮工作区增量，原338项CSV及其旧版本实页/Figma事实继续保留。新增28项按源码、工程、隔离组件、业务运行版、供应商与Figma分别记录，不是28项全部接受。
 
 源码已接入真实个人素材选择、项目复制及草稿承接，图片/视频/文档各最多30个来源。风格库有真实API、当前归属内官方/本人目录及本人CRUD，名称20码点、描述2000码点、最多4图且首图为封面，revision CAS与永久幂等回执处理冲突和未知写结果。采用风格先读取并冻结详情。分析风格先复制参考图，再由用户选择模型、预算及发送，并明确采用回复。TXT/DOCX读取全文后按上下文预算接收或拒绝。视频实际输入是10%/50%/90%三帧投影，受所选模型图片预算约束，不含音轨或全片理解。视频链接仅解析允许的抖音、头条、西瓜公开网页，下载真实MP4后经私有上传管线入库，仍执行500MiB和既有60秒限制，不能保证任意分享页成功。
 
@@ -346,19 +360,19 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## 短剧工作室对齐即梦（2026-11-06）
 
-[独立需求](docs/requirement/23-短剧工作室对齐即梦需求.md) · [实现对照与 Figma](docs/design/38-短剧工作室一致性设计.md) · [验收](docs/plan/33-短剧工作室实施计划.md)。
+[独立需求](workspace/content/requirement/23-短剧工作室对齐即梦需求.md) · [实现对照与 Figma](workspace/content/design/38-短剧工作室一致性设计.md) · [验收](workspace/content/plan/33-短剧工作室实施计划.md)。
 
 已接通短剧项目工作区、文本和文件剧本导入、项目 Agent 剧本草稿、制作资产库、分集确认、分镜编辑及故事板助手建议。视频阶段接入片段生成、视频参考转绘和同项目画布时间线。仍待验证真实供应商产物，并补齐独立转绘、逐镜产物归档与合成全集、精选只读画布和复制、智能预演、片段重拍、超分及拉片。设计稿含目标态与示例内容。
 
 ## Canvas 服务命名与目录整理（2026-11-06）
 
-`canvas/`、Compose `canvas:4400` 和 `@glowloom/canvas` 已同步，目录与依赖见[设计 17](docs/design/17-画布Yjs协作编辑设计.md)。Canvas 106 项测试、前端画布目录 949 项测试和类型检查、Go 画布/Agent 命令/项目复制相关 race 集成、Compose 配置及独立镜像健康和鉴权验证通过。现有计算和协作模块沿用 `noImplicitAny` 例外。
+`canvas/`、Compose `canvas:4400` 和 `@glowloom/canvas` 已同步，目录与依赖见[设计 17](workspace/content/design/17-画布Yjs协作编辑设计.md)。Canvas 106 项测试、前端画布目录 949 项测试和类型检查、Go 画布/Agent 命令/项目复制相关 race 集成、Compose 配置及独立镜像健康和鉴权验证通过。现有计算和协作模块沿用 `noImplicitAny` 例外。
 
 <a id="agent-nestjs-migration"></a>
 
 ## Agent 服务 NestJS 迁移（2026-11-06）
 
-来源：[需求22](docs/requirement/22-Agent服务目录与TypeScript规范需求.md) · [设计37](docs/design/37-Agent服务目录与TypeScript规范设计.md) · [Plan28](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md#nestjs-框架切换顺序)。
+来源：[需求22](workspace/content/requirement/22-Agent服务目录与TypeScript规范需求.md) · [设计37](workspace/content/design/37-Agent服务目录与TypeScript规范设计.md) · [Plan28](workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md#nestjs-框架切换顺序)。
 
 | 范围       | 工程状态                                                                                                                                                                                                                    |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -374,7 +388,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## 模型接入与预设对齐（SRC-AI-46，2026-11-06）
 
-[调研](docs/research/2026-11-06-BeefTV与竞品模型接入和预设对照.md)与[设计07](docs/design/07-AI平台接入市场调研与架构设计.md#src-ai-46)已对齐。新建连接入口已换成「连接服务 → 选择模型」，保存前可读预设注册端点的模型 ID。首批目录适配器为 OpenAI、DeepSeek、OpenRouter、Vercel。保存只实例化确认的草稿，未知结果先读取原回执。已有连接的「添加模型」直达模型管理的共用选模入口。目录工作器使用已保存凭据仅读取候选 ID，选中后核对目录回执、配置及凭据。连接详情新增「发布复核」，展示历史回执与逐模式正式证据，批量启用和恢复均执行逐项门禁。旧发布状态及冻结任务保留。
+[调研](workspace/content/research/2026-11-06-BeefTV与竞品模型接入和预设对照.md)与[设计07](workspace/content/design/07-AI平台接入市场调研与架构设计.md#src-ai-46)已对齐。新建连接入口已换成「连接服务 → 选择模型」，保存前可读预设注册端点的模型 ID。首批目录适配器为 OpenAI、DeepSeek、OpenRouter、Vercel。保存只实例化确认的草稿，未知结果先读取原回执。已有连接的「添加模型」直达模型管理的共用选模入口。目录工作器使用已保存凭据仅读取候选 ID，选中后核对目录回执、配置及凭据。连接详情新增「发布复核」，展示历史回执与逐模式正式证据，批量启用和恢复均执行逐项门禁。旧发布状态及冻结任务保留。
 
 验证使用模拟供应商响应和隔离 PostgreSQL，覆盖目录权限及出站边界、精确选择、空集合、请求重放与无价格或发布写入。前端全量 Vitest 300 文件、2141 用例通过。最终界面调整后，相关 15 文件、151 用例、ESLint、生产构建和 390px／1440px 浏览器验证通过。全 Catalog Race 检查的组合过滤失败属于并行变更范围。未使用真实凭据、调用生成或部署。
 
@@ -386,7 +400,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 ## 预设持久化、音频与计量一致性（SRC-AI-48，2026-11-09）
 
-来源：[需求04 FR-AI-57～64、AC-AI-38～43](docs/requirement/04-AI平台接入与预设管理需求.md#src-ai-48)。用户已追加“根据我们的需求和设计，开始展开实现”，替代初始仅文档范围。先前17份文档已提交main并推送`e091cb1b`；本次实现按以下工程边界追踪，不继承旧SRC-AI-47接受结论。
+来源：[需求04 FR-AI-57～64、AC-AI-38～43](workspace/content/requirement/04-AI平台接入与预设管理需求.md#src-ai-48)。用户已追加“根据我们的需求和设计，开始展开实现”，替代初始仅文档范围。先前17份文档已提交main并推送`e091cb1b`；本次实现按以下工程边界追踪，不继承旧SRC-AI-47接受结论。
 
 | 任务/裁决                | 当前状态                                                                                                                     | 剩余接受与依赖                                                                                                |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -401,15 +415,15 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 
 MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`image_pixels_tiers_v1`、`image_token_buckets_v1`、`provider_invoice_v1`、`unverified_metering_v1`等未安装/未核验策略仍保留候选并失败关闭；不能将95个候选持久化解释为95个型号已真实可用。缺执行合同、审核价格或当前真实模式证据的项目保持不可用，不用删候选或伪造零价补齐覆盖。
 
-代码与分层证据见[Plan29](docs/plan/29-模型与供应商接入扩展实施计划.md#src-ai-48)、[Plan30](docs/plan/30-模型计价透明与结算恢复实施计划.md#src-ai-48)、[Plan10](docs/plan/10-AI平台接入与预设管理实施计划.md#src-ai-48)。本机验收记录与逐项文件清单：`/Users/stephenqiu/.codex/visualizations/2026/11/09/01a1bee1-0086-7082-9022-39fe77a650ce/implementation/`。
+代码与分层证据见[Plan29](workspace/content/plan/29-模型与供应商接入扩展实施计划.md#src-ai-48)、[Plan30](workspace/content/plan/30-模型计价透明与结算恢复实施计划.md#src-ai-48)、[Plan10](workspace/content/plan/10-AI平台接入与预设管理实施计划.md#src-ai-48)。本机验收记录与逐项文件清单：`/Users/stephenqiu/.codex/visualizations/2026/11/09/01a1bee1-0086-7082-9022-39fe77a650ce/implementation/`。
 
 <a id="official-model-contracts"></a>
 
 ## 官方模型接入、预设与参数计价（SRC-AI-40，2026-11-05）
 
-用户要求补足官方接入、模型定价、CC Switch预设与算法细节。[官方研究](docs/research/2026-11-05-官方模型接入预设与计价核验.md)已核首批12个精确ID及多维采购价、参数差异，另列媒体/Gateway与缺证范围；CC Switch固定`ca58c0313360eae7c851fbd7553c1614c7af03e7`。模型/价格未写业务库，未增加供应商调用，不把本轮官方网页核验当账号真实验收。
+用户要求补足官方接入、模型定价、CC Switch预设与算法细节。[官方研究](workspace/content/research/2026-11-05-官方模型接入预设与计价核验.md)已核首批12个精确ID及多维采购价、参数差异，另列媒体/Gateway与缺证范围；CC Switch固定`ca58c0313360eae7c851fbd7553c1614c7af03e7`。模型/价格未写业务库，未增加供应商调用，不把本轮官方网页核验当账号真实验收。
 
-主链：[需求04 SRC-AI-40](docs/requirement/04-AI平台接入与预设管理需求.md#src-ai-40) → 设计33/PRD20/Plan29（预设与参数合同），设计34/PRD21/Plan30（计量与计价策略）。商业积分仍依设计36，不另建报价引擎。
+主链：[需求04 SRC-AI-40](workspace/content/requirement/04-AI平台接入与预设管理需求.md#src-ai-40) → 设计33/PRD20/Plan29（预设与参数合同），设计34/PRD21/Plan30（计量与计价策略）。商业积分仍依设计36，不另建报价引擎。
 
 | 任务                                | 当前状态                                                                                             | 下一步与依赖                                                                                            |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -421,7 +435,7 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 ### 官方价目同步与倍率（SRC-AI-47，2026-11-08）
 
-唯一链：[需求04 SRC-AI-47](docs/requirement/04-AI平台接入与预设管理需求.md#src-ai-47) → [设计34 §7.15](docs/design/34-积分消耗系统与模型真实计价体系设计.md#src-ai-47) → [PRD21](docs/prd/21-模型计价透明与结算恢复.md#src-ai-47) → [Plan30](docs/plan/30-模型计价透明与结算恢复实施计划.md#src-ai-47)。用户于2026-11-08授权工程实现；当前为本地实现，正式价格发布、模型启用、业务库迁移和真实收费仍关闭。默认同步只生成候选，管理员审核后才能形成新的采购/销售版本。
+唯一链：[需求04 SRC-AI-47](workspace/content/requirement/04-AI平台接入与预设管理需求.md#src-ai-47) → [设计34 §7.15](workspace/content/design/34-积分消耗系统与模型真实计价体系设计.md#src-ai-47) → [PRD21](workspace/content/prd/21-模型计价透明与结算恢复.md#src-ai-47) → [Plan30](workspace/content/plan/30-模型计价透明与结算恢复实施计划.md#src-ai-47)。用户于2026-11-08授权工程实现；当前为本地实现，正式价格发布、模型启用、业务库迁移和真实收费仍关闭。默认同步只生成候选，管理员审核后才能形成新的采购/销售版本。
 
 | 范围               | 当前实现                                                                                                                                                                                                                                                                             | 剩余工作                                                                                                                                                                                           |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -435,7 +449,7 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 ## 模型商业计费与积分（2026-11-05）
 
-来源：[需求21 SRC-CREDIT-01](docs/requirement/21-模型商业计费与积分系统需求.md)；主链：[设计36](docs/design/36-模型商业计费与积分钱包设计.md) → [PRD23](docs/prd/23-模型商业计费与积分系统.md) → [Plan32](docs/plan/32-模型商业计费与积分系统实施计划.md)。[竞品研究](docs/research/2026-11-05-模型计费与积分竞品研究.md)完成GitHub固定版本与REA未登录页面走查；未做竞品真实充值/失败返还。
+来源：[需求21 SRC-CREDIT-01](workspace/content/requirement/21-模型商业计费与积分系统需求.md)；主链：[设计36](workspace/content/design/36-模型商业计费与积分钱包设计.md) → [PRD23](workspace/content/prd/23-模型商业计费与积分系统.md) → [Plan32](workspace/content/plan/32-模型商业计费与积分系统实施计划.md)。[竞品研究](workspace/content/research/2026-11-05-模型计费与积分竞品研究.md)完成GitHub固定版本与REA未登录页面走查；未做竞品真实充值/失败返还。
 
 | 任务                                 | 当前状态                                                                                                                                                                                                                 | 下一步/依赖                                                                                                                                                                                                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -446,7 +460,7 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 | T-CREDIT-04 消费补偿与核查           | 受控返还与过期宽限固定，重复操作幂等                                                                                                                                                                                     | 自动售后政策继续按失败原因审批，未知保留原预留                                                                                                                                                                                                           |
 | T-CREDIT-05 批量短剧与Agent预算      | 单次、批量和Agent复用钱包预留，Agent冻结服务端计算价                                                                                                                                                                     | 实际短剧的供应商费用验收待明确测试范围                                                                                                                                                                                                                   |
 | T-CREDIT-06 界面与会员周期           | 积分总览、流水分页、付款方及采购版本选择已接入                                                                                                                                                                           | 正式渠道、商品和周期权益待评审                                                                                                                                                                                                                           |
-| T-CREDIT-07 独立创作与整数积分       | 2026-11-06 用户要求及即梦证据已记录，尚未实施                                                                                                                                                                            | [独立创作](docs/requirement/07-项目与画布创建原始需求.md#src-pc-08)和[付款准入](docs/requirement/21-模型商业计费与积分系统需求.md#src-credit-04)待联合设计。先做存量库钱包增量迁移与历史回执保护，统一新报价的整数积分预估、冻结与实扣，再完成首模试点。 |
+| T-CREDIT-07 独立创作与整数积分       | 2026-11-06 用户要求及即梦证据已记录，尚未实施                                                                                                                                                                            | [独立创作](workspace/content/requirement/07-项目与画布创建原始需求.md#src-pc-08)和[付款准入](workspace/content/requirement/21-模型商业计费与积分系统需求.md#src-credit-04)待联合设计。先做存量库钱包增量迁移与历史回执保护，统一新报价的整数积分预估、冻结与实扣，再完成首模试点。 |
 | T-CREDIT-08 异步命令与接入方幂等     | grant/debit/freeze/commit/release、稳定command_id、HMAC服务身份、key ID轮换、scope/action映射、服务余额/流水与回执查询已实现；配置/HMAC单测和本机Redis nonce集成通过                                                     | 配置并演练真实caller的密钥轮换；评审幂等凭据保留策略；operation内部caller保留身份由T-CREDIT-10接入                                                                                                                                                       |
 | T-CREDIT-09 CAS与不可变账本          | 账户/批次版本CAS、不可变有符号流水、来源去重及账户安全初始化函数已实现；本机应用角色测试通过                                                                                                                             | 对账本全量重建和跨账户恢复流程做演练；财务保留策略评审后再配置归档                                                                                                                                                                                       |
 | T-CREDIT-10 Outbox、Kafka与SAGA      | Outbox事务投递、退避/DLQ、Kafka有界重试与死信已实现；operation冻结命令、派发屏障、终态/未知事件和失败补偿已接入，内部caller保留；等待冻结的task持久重排，开关默认关闭；operation集成用例已添加但本轮因无隔离DB DSN未执行 | 使用已启动的本机PostgreSQL为operation/billing用例提供隔离数据库并核验`glowloom_app`角色；完成故障注入、DLQ重放、旧/新路径切换回退及共享账户锁顺序演练，再评审开启开关                                                                                    |
@@ -460,7 +474,7 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 2026-11-08 SRC-CREDIT-05仅复用用户已启动的本机服务；未启动额外容器。本轮未配置隔离operation/billing数据库DSN，因此新增operation SAGA集成用例未执行，也未连接或改写Glowloom业务数据库。命令账本、基础SAGA事件消费与服务caller安全证据见Plan32 §11；operation切换/故障验收、用户维度防滥用、审批审计和性能容量验收仍待完成。金额/日额度缺少评审值时写命令fail-closed，不据此推断生产服务已启用。
 
 > **当前聚焦里程碑**：完整创作 Agent Harness、多 Agent 协作系统与 Skill 沙箱体系
-> **已确认技术方向（2026-11-04）**：同仓库独立 TypeScript/Pi Durable Agent 服务；Go 保留业务权威，Agent 独占执行状态；PostgreSQL 分 schema/角色；Docker Compose 统一启动；无 Temporal、旧实现或兼容。完整设计见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，状态见[本轮迁移](#pi-durable-migration)。
+> **已确认技术方向（2026-11-04）**：同仓库独立 TypeScript/Pi Durable Agent 服务；Go 保留业务权威，Agent 独占执行状态；PostgreSQL 分 schema/角色；Docker Compose 统一启动；无 Temporal、旧实现或兼容。完整设计见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，状态见[本轮迁移](#pi-durable-migration)。
 
 ---
 
@@ -468,7 +482,7 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 本节的唯一主链指Agent执行基础；对话产品专项沿[对话工作台](#conversation-workspace)补充，不重置独立Agent迁移的进度或验收。
 
-唯一当前链：[需求19](docs/requirement/19-完整创作Agent与Skill多Agent需求.md) → [设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md) → [PRD19](docs/prd/19-完整创作Agent与Skill多Agent.md) → [Plan28](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md)。旧 Go 图引擎、旧单图阶段与假 sandbox 命令的完成清单已删除；历史版本由 Git 追溯，不作为当前实施指南或验收。
+唯一当前链：[需求19](workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md) → [设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md) → [PRD19](workspace/content/prd/19-完整创作Agent与Skill多Agent.md) → [Plan28](workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md)。旧 Go 图引擎、旧单图阶段与假 sandbox 命令的完成清单已删除；历史版本由 Git 追溯，不作为当前实施指南或验收。
 
 工程测试、隔离基础设施、实际供应商与完整创作接受分别记录；未提交代码、镜像构建或健康页不能代替真实产物与计费验收。
 
@@ -476,7 +490,7 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 ## 2026-11-05 对话工作台与参考输入一致性
 
-用户通过需求20 SRC-CONV-07/08授权从知识库开始并确认实施。唯一链：[需求20](docs/requirement/20-对话工作台与参考输入一致性需求.md) → [设计35](docs/design/35-对话工作台与参考输入一致性设计.md) → [PRD22](docs/prd/22-对话工作台与参考输入一致性.md) → [Plan31](docs/plan/31-对话工作台与参考输入一致性实施计划.md)。基础Agent仍沿设计32/PRD19/Plan28，不在此重新声明完成。
+用户通过需求20 SRC-CONV-07/08授权从知识库开始并确认实施。唯一链：[需求20](workspace/content/requirement/20-对话工作台与参考输入一致性需求.md) → [设计35](workspace/content/design/35-对话工作台与参考输入一致性设计.md) → [PRD22](workspace/content/prd/22-对话工作台与参考输入一致性.md) → [Plan31](workspace/content/plan/31-对话工作台与参考输入一致性实施计划.md)。基础Agent仍沿设计32/PRD19/Plan28，不在此重新声明完成。
 
 | 工作                                            | 当前状态                                                                                                                                                                                                                                               | 依赖/下一步                                                                                                                                                                                                                                |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -486,11 +500,11 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 | T-CONV-FIGMA 设计一致性                         | 已只读核对66个原型状态，更新入口3条说明，新增[Figma工程状态合同](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=3491-92778)；明确受理未知、Stop投递中和引用撤权                                                                           | 文档与原型不是供应商接受；未重建或宣称新增全部状态画面                                                                                                                                                                                     |
 | T-CONV-09 工程/浏览器验证                       | Agent 134例及官方Storage/恢复通过；Go范围race、实际Go→编译Node24.22.2→Pi→隔离PG及业务权限测试通过；前端295文件/2101测试、类型、ESLint、格式及生产构建通过，实际浏览器已核对桌面、320/390/768、参考展开/移除、发送、Stop pending→applied及retry保留草稿 | 全仓Go race有未配置集成环境及并行模块失败；govulncheck有15项当前Go标准库可达告警，golangci-lint未安装；不冒称全仓门禁通过                                                                                                                  |
 | T-CONV-AUDIT-1105 页面复核与修复                | 对照即梦已有对话与Figma，修复Agent空输入提示、异步结果底部跟随，补齐结果大图预览/正式原件下载；走查时前端296文件/2105测试及生产构建、范围ESLint/格式通过；桌面与320/390浏览器核对发送、Stop、retry、参考与结果动作                                     | 1122真实首页提示已复验；登录后对话因当前登录服务不可用未验收，交互与下载采用不连接供应商的隔离fixture；新增积分0；用户已授权仅提交本专项并推送main                                                                                         |
-| T-CONV-ACCEPT-1105 现有服务验收                 | 服务恢复后 agent-browser 真实登录、项目、参考读取/提及/移除、去重上传201、历史/技能200、320px与既有图片原文件读取200已核对；修复 Agent 代理旧白名单404与SSE续传/期限合同。前端2122测试及构建、Go相关Race、Agent构建通过                                | 待验收：用户确认目前无可用于零费用验收的规划模型或项目；待具备条件后复验发送、停止、重试、新结果卡与媒体队列取消。Agent26测试仍缺专用数据库而失败。复验新增生成费用为0；详见[验收记录](docs/research/2026-11-05-对话工作台现有服务验收.md) |
+| T-CONV-ACCEPT-1105 现有服务验收                 | 服务恢复后 agent-browser 真实登录、项目、参考读取/提及/移除、去重上传201、历史/技能200、320px与既有图片原文件读取200已核对；修复 Agent 代理旧白名单404与SSE续传/期限合同。前端2122测试及构建、Go相关Race、Agent构建通过                                | 待验收：用户确认目前无可用于零费用验收的规划模型或项目；待具备条件后复验发送、停止、重试、新结果卡与媒体队列取消。Agent26测试仍缺专用数据库而失败。复验新增生成费用为0；详见[验收记录](workspace/content/research/2026-11-05-对话工作台现有服务验收.md) |
 | T-CONV-10 即梦对话改版                          | 独立竞品基线、实现差距及九个 Figma 状态已整理。前端已统一对话命名、技能搜索及 `/` 入口、回合活动与 AI 标识。全量前端 299 文件、2148 项通过，生产构建、修改范围 lint/格式及隔离 Chrome 验证通过。                                                       | T-CONV-11～13 仍需接入持久历史管理、混合时间线与检索、独立媒体参数。真实供应商调用未执行。                                                                                                                                                 |
-| T-CONV-11／13 对话历史与创作类型                | 七项类型、草稿隔离与真实项目编辑器通过实页验收。历史管理通过隔离浏览器、Agent HTTP 和 PostgreSQL 验收。证据见[创作类型与对话历史对照验收](docs/research/2026-11-06-创作类型与对话历史对照验收.md)。                                                    | 现有本地数据库增量与 Go／Agent 部署未执行。真实模型和结算另验。T-CONV-12 混合时间线独立。                                                                                                                                                  |
+| T-CONV-11／13 对话历史与创作类型                | 七项类型、草稿隔离与真实项目编辑器通过实页验收。历史管理通过隔离浏览器、Agent HTTP 和 PostgreSQL 验收。证据见[创作类型与对话历史对照验收](workspace/content/research/2026-11-06-创作类型与对话历史对照验收.md)。                                                    | 现有本地数据库增量与 Go／Agent 部署未执行。真实模型和结算另验。T-CONV-12 混合时间线独立。                                                                                                                                                  |
 | T-CONV-14 新建对话空态                          | 800px 内容栏、真实项目技能推荐、资产库入口与输入聚焦已接线。前端全量 300 文件、2151 项通过，生产构建、范围 lint/格式及隔离 Chrome 通过。隔离服务确认一次提交携带正确的技能版本。                                                                       | 正式账号的技能目录与实际模型执行仍按真实服务验收记录跟踪。                                                                                                                                                                                 |
-| T-CONV-14 对话空态实页复验                      | 修复无技能时缺卡、项目选择遮挡和输入区尺寸偏差。agent-browser 核对真实空态、回填、项目切换、设置、参考入口和窄屏，隔离验证发送、停止、重试、历史及结果。详见[验收记录](docs/research/2026-11-06-对话空态即梦对照与浏览器验收.md)。                     | 真实项目无可用对话模型，生成链路仍待验收。                                                                                                                                                                                                 |
+| T-CONV-14 对话空态实页复验                      | 修复无技能时缺卡、项目选择遮挡和输入区尺寸偏差。agent-browser 核对真实空态、回填、项目切换、设置、参考入口和窄屏，隔离验证发送、停止、重试、历史及结果。详见[验收记录](workspace/content/research/2026-11-06-对话空态即梦对照与浏览器验收.md)。                     | 真实项目无可用对话模型，生成链路仍待验收。                                                                                                                                                                                                 |
 | 真实模型、媒体队列取消与费用接受                | 未执行；新增积分与真实生成费用均为0，先前即梦10分已用完                                                                                                                                                                                                | 未解除真实收费禁令；上线和真实供应商接受需另行授权                                                                                                                                                                                         |
 
 所有本轮命令、边界、review修复、修改文件和剩余并行变更明细保存在git忽略的`.superpowers/sdd/31-对话工作台与参考输入一致性实施计划/`。原Docker测试容器不可连后未启动或修改业务栈，改为任务拥有的临时PostgreSQL两个全新`*_test`库；原业务库未改。保留共享工作区并行改动，HEAD仍为`8549d9d5`，未提交、推送、创建分支或发布。
@@ -501,12 +515,12 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 **文档、代码实施与独立整体工程规格/质量审查已完成；用户于2026-11-03授权实施。本次实现相关代码、测试、文档与BACKLOG按用户后续授权提交main并推送；CI独立于既有本地工程验证。首个Seedream 5.0 Flash已按SRC-AI-36完成本地真实文生图/图生图、COS归档、启用及首页免费报价接受；其他模型、个人积分钱包及完整产品接受未完成。** 设计评审、商业政策接受、代码实现、实际供应商和产品接受分别记录。
 
-来源：[调研](docs/research/2026-11-03-BeefTV模型接入与计费调研.md)与[需求04 SRC-AI-35](docs/requirement/04-AI平台接入与预设管理需求.md#src-ai-35)。
+来源：[调研](workspace/content/research/2026-11-03-BeefTV模型接入与计费调研.md)与[需求04 SRC-AI-35](workspace/content/requirement/04-AI平台接入与预设管理需求.md#src-ai-35)。
 
 | 父任务                     | 唯一设计→PRD→Plan                                                                                                                                                                | 当前状态                                                | 优先级建议/依赖                                  |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------ |
-| T-AI-21 接入声明与协议扩展 | [设计33](docs/design/33-多设计模式驱动的模型与供应商接入扩展体系设计.md) → [PRD20](docs/prd/20-模型与供应商接入扩展.md) → [Plan29](docs/plan/29-模型与供应商接入扩展实施计划.md) | 工程实现/任务复核通过；整体工程审查通过，联合接受未完成 | P2；补原任务恢复联动及产品接受                   |
-| T-AI-22 计价与费用说明     | [设计34](docs/design/34-积分消耗系统与模型真实计价体系设计.md) → [PRD21](docs/prd/21-模型计价透明与结算恢复.md) → [Plan30](docs/plan/30-模型计价透明与结算恢复实施计划.md)       | 工程实现/任务复核通过；整体工程审查通过，合同门控保留   | P1；D-AI-35-01/02影响对应功能                    |
+| T-AI-21 接入声明与协议扩展 | [设计33](workspace/content/design/33-多设计模式驱动的模型与供应商接入扩展体系设计.md) → [PRD20](workspace/content/prd/20-模型与供应商接入扩展.md) → [Plan29](workspace/content/plan/29-模型与供应商接入扩展实施计划.md) | 工程实现/任务复核通过；整体工程审查通过，联合接受未完成 | P2；补原任务恢复联动及产品接受                   |
+| T-AI-22 计价与费用说明     | [设计34](workspace/content/design/34-积分消耗系统与模型真实计价体系设计.md) → [PRD21](workspace/content/prd/21-模型计价透明与结算恢复.md) → [Plan30](workspace/content/plan/30-模型计价透明与结算恢复实施计划.md)       | 工程实现/任务复核通过；整体工程审查通过，合同门控保留   | P1；D-AI-35-01/02影响对应功能                    |
 | T-AI-23 结算证据与恢复     | 设计34→PRD21→Plan30                                                                                                                                                              | 工程实现/任务复核通过；整体工程审查通过                 | P1；保留unknown保护，和现有operation/billing对接 |
 | T-AI-24 Agent统一网关      | 设计32→PRD19→Plan28                                                                                                                                                              | 沿前文Agent主链；本节不重置其状态                       | 仅依赖费用授权/原operation身份，不重复计算交付   |
 | T-AI-25 错误与原币对账     | 设计34→PRD21→Plan30                                                                                                                                                              | 结构化分类工程复核通过；原币部分仍待合同                | P2；25-01可独立核查，25-02依赖D-AI-35-03         |
@@ -530,7 +544,7 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 | T-AI-25-01 | 配额/权限/速率安全分类    | 23-01                       | 工程复核通过；同402/429不同证据分类，不推断退款/零成本                                        | CASE-BIL-09/11/12       |
 | T-AI-25-02 | 原币账单与迟到退款补偿    | D-AI-35-03及真实验证授权    | 待合同；未关闭不开放，禁止Settle(0)改旧账                                                     | CASE-BIL-03/07/10       |
 
-工程验证记录（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md`）。Plan29提交前工程证据（以下命令在当时共享工作区执行）：隔离catalog全量及Race通过；协议/operation Race通过；前端279文件/2016测试、API一致性、ESLint、类型及构建通过。独立审阅发现的重复键保存绕过已按Red→Green修复并复核关闭。本次改动golangci增量检查0问题；全scope保留既有静态问题及18个无关前端格式文件，未扩展修复。fixture不替代浏览器/供应商接受。
+工程验证记录（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md`）。Plan29提交前工程证据（以下命令在当时共享工作区执行）：隔离catalog全量及Race通过；协议/operation Race通过；前端279文件/2016测试、API一致性、ESLint、类型及构建通过。独立审阅发现的重复键保存绕过已按Red→Green修复并复核关闭。本次改动golangci增量检查0问题；全scope保留既有静态问题及18个无关前端格式文件，未扩展修复。fixture不替代浏览器/供应商接受。
 
 工程补证：Plan30初审4项Important已按Red→Green修复；round1引入的legacy/reuse完整性兼容问题已在round2关闭，原独立PG失败用例转PASS。多产物中断仅在实际manifest全集归档后ready；账务冲突统一约束GET/quote/单批确认/dispatch；足额、部分释放及既有overage均不误封。修复后catalog Race371通过，operation Race663通过/26跳过；前端284文件/2035测试、类型、ESLint、API与生产构建通过。全仓/专库/最新family去重为3345个pass动作、882个skip、0fail；跳过不计接受。总审查初审1项Critical、6项Important及字幕问题全部修复；精确复核剩余迟到矛盾回调、实际SDK固定ID冲突两项亦已独立原样复跑关闭，整体工程规格与代码质量通过，无未关闭Critical/Important。最终operation整包676通过/26跳过，operation/media内部合计733通过；catalog去重371通过；前端284文件/2038测试通过，最终相关组件49通过。最后两项收口Race105通过/0跳过，变更行lint/vet/goimports/diff检查通过。未再次重复未变前端/其他包；真实供应商/浏览器/生产迁移未执行。
 
@@ -545,14 +559,14 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 ### 6.3 下一步与完成判据
 
-1. 本轮可执行工程范围已完成并通过独立整体审查；按验证记录（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md`）和逐项文件清单（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/worktree-files.md`）审阅本次提交范围；首轮实现已提交main并推送（4ab20c15）；后续Flash运行修复沿同范围交付，本地仅启用已验证Flash。
+1. 本轮可执行工程范围已完成并通过独立整体审查；按验证记录（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md`）和逐项文件清单（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-03-beeftv-adoption/worktree-files.md`）审阅本次提交范围；首轮实现已提交main并推送（4ab20c15）；后续Flash运行修复沿同范围交付，本地仅启用已验证Flash。
 2. 分别关闭D-AI-35-01～03的商业/供应商合同；未确认前不开放对应参考计费、原币账单和退款补偿，不以工程fixture充当真实费率。
 3. 在获准的运行环境补D-AI-35-04：真实供应商、生产式 PostgreSQL 任务/Kafka/对象存储与原回执恢复，以及桌面/320/390、键盘焦点和读屏接受。除下述Flash本地观测外，未执行项不计通过。
 4. 新问题或后续发布继续沿对应CASE留证，保留原价格/汇率/Key/预留/账本；不得用清零旧账、超时解锁、同键重POST或新Key补买替代核查。
 
 ### 6.4 首个Flash模型实际接受（SRC-AI-36）
 
-运行验证记录（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/runtime-validation.md`）：复用现有COS桶及凭据，242项旧对象位置经字节核验绑定；文生图、图生图各成功并结算0.12元，已启用并设为图片能力默认。首页实际选模/免费报价显示0.12元、预估2积分；没有执行第四次供应商请求。
+运行验证记录（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-03-beeftv-adoption/runtime-validation.md`）：复用现有COS桶及凭据，242项旧对象位置经字节核验绑定；文生图、图生图各成功并结算0.12元，已启用并设为图片能力默认。首页实际选模/免费报价显示0.12元、预估2积分；没有执行第四次供应商请求。
 
 - 已完成：模型详情失败重试、试运行价格来源投影、Ark不支持参数移除、Pro/Flash尺寸候选修正、试运行模式空值同步修复及对应回归。
 - 待核对：原请求`827948cf-87fe-48ac-bbdf-486eaf6f84c1`参数拒绝后为manual/费用未知，保留0.12元预留，不重发、不强制零结算；需取得原请求的可信供应商费用证据。
@@ -564,7 +578,7 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 用户选择先完成配置和代码、暂不收费调用。9个有现存凭据的模型已追加配置v2、11份审核价格；Pro图片、两款豆包文本及四款Seedance共7个待验证发布已保存。DeepSeek分别留存高峰/空闲价，分时结算依据未齐不创建发布；两个OpenAI模型仍缺Key。所有新增模型保持停用，Flash原发布不变。
 
-- 已完成：缓存用量分价、Seedance输出Token报价/结算及发布门禁、Pro参考附加的发布/报价/冻结计数结算、试运行积分明细传递；受影响catalog/operation及managed/providerhttp整包Race通过，前端7项定向、类型和lint通过。完整验证见本轮记录（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/remaining-models-validation.md`）及安全配置快照（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/remaining-model-configurations.json`）。
+- 已完成：缓存用量分价、Seedance输出Token报价/结算及发布门禁、Pro参考附加的发布/报价/冻结计数结算、试运行积分明细传递；受影响catalog/operation及managed/providerhttp整包Race通过，前端7项定向、类型和lint通过。完整验证见本轮记录（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-03-beeftv-adoption/remaining-models-validation.md`）及安全配置快照（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-03-beeftv-adoption/remaining-model-configurations.json`）。
 - 免费页面验证：Pro 2K报价0.60元、预计6积分；仅quoted，不确认生成。当前视频最低样例高于原项目0.64元可用预算，保留既有页面门禁，不增加预算。
 - 全仓限制：首次后端全仓命令受测试环境条件阻断，后续受影响整包已用完整隔离环境通过；前端全量2069通过/1失败，失败指向并行探索搜索存储策略，保留该改动。
 - 未接受：9个模型的真实生成/归档/结算与启用、DeepSeek自动分时/节假日结算、输入视频阶梯费率/最低用量、OpenAI凭据与价格、个人积分钱包。本轮新增供应商调用0次、派发总数仍3；原manual的0.12元预留不变。
@@ -574,18 +588,18 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 2026-11-04：按用户要求复用原计费链路，禁止收费调用；实现及隔离验收通过后定向提交main并推送，其他改动保留。
 
 - 实现：在原Token价格内追加固定年度分时标识；高峰预留、按原调用区间判断空闲半价，缓存/未命中/输出合并后一次取整。原私有结果留存received_at，恢复沿原时间和价格；缺证据/跨费率边界转原待核验，不零结算或释放预留。未核验年度禁止新派发，不新增服务、表或定时任务。
-- 配置：两款DeepSeek均追加价格v4及待验证draft，复用连接配置和模型v2，保持disabled；旧v2高峰/v3空闲价不改写。安全快照见配置记录（Git 5c785a12 的 `docs/research/evidence/2026-11-04-deepseek-time-pricing/configurations.json`）。
+- 配置：两款DeepSeek均追加价格v4及待验证draft，复用连接配置和模型v2，保持disabled；旧v2高峰/v3空闲价不改写。安全快照见配置记录（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-04-deepseek-time-pricing/configurations.json`）。
 - 工程接受：operation/catalog/billing/managed/providerhttp五包最终Race通过，格式、vet、lint及可达漏洞检查通过；全仓首次环境失败及分包复跑证据均保留。
-- 验证证据与限制：本轮验证（Git 5c785a12 的 `docs/research/evidence/2026-11-04-deepseek-time-pricing/validation.md`）。本轮供应商调用0次，历史派发仍3；首轮Flash账本及原0.12元未知预留不变。
+- 验证证据与限制：本轮验证（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-04-deepseek-time-pricing/validation.md`）。本轮供应商调用0次，历史派发仍3；首轮Flash账本及原0.12元未知预留不变。
 - 未接受：DeepSeek真实供应商生成/归档/账单对账与启用、跨费率边界的供应商计费时刻确认、2027及以后节假日规则。未经新的明确收费授权不试运行；新年度须审核规则后追加版本，不自动延用2026规则。
 
 ### 2026-11-03 SRC-AI-37 界面增量
 
-报价、服务接入和模型管理按即梦实页重新分层，公共Select长文本与移动端样式同步修复；Figma先行，代码落盘未提交。执行证据见Plan29/30本轮回执及[研究记录](docs/research/2026-11-03-即梦报价与模型接入交互拆解.md)。本轮未执行收费调用、数据库迁移或新价格发布；T-AI-21/22/23/25既有未接受项与合同依赖保留。
+报价、服务接入和模型管理按即梦实页重新分层，公共Select长文本与移动端样式同步修复；Figma先行，代码落盘未提交。执行证据见Plan29/30本轮回执及[研究记录](workspace/content/research/2026-11-03-即梦报价与模型接入交互拆解.md)。本轮未执行收费调用、数据库迁移或新价格发布；T-AI-21/22/23/25既有未接受项与合同依赖保留。
 
 ### 2026-11-03 FR-AST-09 删除反馈精简
 
-生成历史删除回执改为全局Sonner Toast，全部成功退出批量，部分失败保留选择与原请求恢复；主体、参考素材、音色、账号和项目/画布删除同步。Figma公共提示与删除成功页已更新并回读；真实资产页与合成删除浏览器检查完成，实现与验证完成，Git提交以仓库记录为准。工程验证与边界见[Plan22本轮回执](docs/plan/22-资产对齐即梦实施计划.md#2026-11-03-ac-ast-09-删除toast执行)及仓库外output/delete-toast-2026-11-03。
+生成历史删除回执改为全局Sonner Toast，全部成功退出批量，部分失败保留选择与原请求恢复；主体、参考素材、音色、账号和项目/画布删除同步。Figma公共提示与删除成功页已更新并回读；真实资产页与合成删除浏览器检查完成，实现与验证完成，Git提交以仓库记录为准。工程验证与边界见[Plan22本轮回执](workspace/content/plan/22-资产对齐即梦实施计划.md#2026-11-03-ac-ast-09-删除toast执行)及仓库外output/delete-toast-2026-11-03。
 
 ### 2026-11-03 CR-076 顶栏尺寸
 
@@ -607,21 +621,21 @@ EX-REQ-10核查完成：侧栏已采用官方Sidebar体系并继续复用；共�
 
 ## 2026-11-03 连线显示纠错
 
-已修复命令式拖动更新SVG路径但流光沿旧网格的问题，取消恢复也跟随实际路径；取消仅因关联节点active而触发的持续高亮。5文件20项、全局tsc、4文件ESLint通过，原生Chrome已核对用户原画布选中节点后保持灰线。生成中拖动的GPU逐帧验收尚未执行，不冒称新一轮源端全量标定。设计/原始需求/PRD已同步，增量未提交；证据见本轮验证（Git 5c785a12 的 `docs/research/evidence/2026-11-03-canvas-line-fix/validation.md`）。
+已修复命令式拖动更新SVG路径但流光沿旧网格的问题，取消恢复也跟随实际路径；取消仅因关联节点active而触发的持续高亮。5文件20项、全局tsc、4文件ESLint通过，原生Chrome已核对用户原画布选中节点后保持灰线。生成中拖动的GPU逐帧验收尚未执行，不冒称新一轮源端全量标定。设计/原始需求/PRD已同步，增量未提交；证据见本轮验证（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-03-canvas-line-fix/validation.md`）。
 
 ## 2026-11-04 连线提交与实页复核
 
-上一轮限定15文件已提交ca56fa06并推main。前端CI成功；后端缺agent.graph_checkpoint表，父提交已有同一失败。当前即梦实页与新bundle更正上轮降灰判断：恢复endpoint-active，节点拖动/视图移动/框选暂停流光，hover200ms、滚轮150ms+RAF、缩放基线1/k，13渐变节点精度对齐。6文件24项、全局tsc、范围lint与指定本地origin后的生产构建通过；实页三档缩放及拖动暂停/恢复已验，原Figma动效板3159:54491同步规则与精确渐变。后续增量未再次提交。按用户授权，通过既有领域命令仅补足Seedream报价2积分所需的120000微元预算，账本与审计各1条；仅确认任务0d7fd96a一次，随后provider_not_submitted失败，预留全额释放、实际扣费0、剩余可用120000微元。失败后取消选中，两边恢复默认opacity0.16且流光暂停，无高亮残留；供应商生成中/成功及其拖动缩放组合未通过。下一步先查明供应商未提交原因，再取得单次生成验收条件；本次不再提交新任务，不签全量一致。结束时共享main已由并行billing推进至4b1909f9且远端相同，本任务ca56fa06仍在历史中。见复核记录（Git 5c785a12 的 `docs/research/evidence/2026-11-04-connection-review/validation.md`）。
+上一轮限定15文件已提交ca56fa06并推main。前端CI成功；后端缺agent.graph_checkpoint表，父提交已有同一失败。当前即梦实页与新bundle更正上轮降灰判断：恢复endpoint-active，节点拖动/视图移动/框选暂停流光，hover200ms、滚轮150ms+RAF、缩放基线1/k，13渐变节点精度对齐。6文件24项、全局tsc、范围lint与指定本地origin后的生产构建通过；实页三档缩放及拖动暂停/恢复已验，原Figma动效板3159:54491同步规则与精确渐变。后续增量未再次提交。按用户授权，通过既有领域命令仅补足Seedream报价2积分所需的120000微元预算，账本与审计各1条；仅确认任务0d7fd96a一次，随后provider_not_submitted失败，预留全额释放、实际扣费0、剩余可用120000微元。失败后取消选中，两边恢复默认opacity0.16且流光暂停，无高亮残留；供应商生成中/成功及其拖动缩放组合未通过。下一步先查明供应商未提交原因，再取得单次生成验收条件；本次不再提交新任务，不签全量一致。结束时共享main已由并行billing推进至4b1909f9且远端相同，本任务ca56fa06仍在历史中。见复核记录（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-04-connection-review/validation.md`）。
 
 ### 2026-11-04 复核交付与供应商输入修复
 
-限定34文件已提交e7e376b4并推送main，提交前22项定向前端测试通过；CI41751714383前端成功，后端仍为既有agent.graph_checkpoint缺表失败。随后按用户“仅修复，暂不再生成”排查：当前cos-main/COS主路由的真实HeadBucket成功，原引用图片则保存于legacy-main/MinIO，5442字节、回环HTTP签名；Temporal原activity明确invalid_provider_request。已修复该私有图片传输和安全分类保留，公网COS URL不改，未迁移旧资源。8组定向Race、隔离PG调用摘要/幂等、原49事件回放、goimports/vet及后端构建通过，govulncheck无可达漏洞；golangci-lint未安装。Figma原板与设计/PRD/原需求/Plan已同步。只重启本地后端载入修复，readyz正常、运行二进制与已验证构建SHA一致；原失败状态、1条调用和预算预留/结算0保持不变。修复增量未提交，未发起新生成、未加预算。下一步仍需获得真实任务验收条件后核对供应商生成中/完成及其拖动缩放组合；同项目COS图片完整读取、其它本地多模态引用另验，不以本轮图片修复签全量一致。见根因与证据（Git 5c785a12 的 `docs/research/evidence/2026-11-04-provider-reference/validation.md`）。
+限定34文件已提交e7e376b4并推送main，提交前22项定向前端测试通过；CI41751714383前端成功，后端仍为既有agent.graph_checkpoint缺表失败。随后按用户“仅修复，暂不再生成”排查：当前cos-main/COS主路由的真实HeadBucket成功，原引用图片则保存于legacy-main/MinIO，5442字节、回环HTTP签名；Temporal原activity明确invalid_provider_request。已修复该私有图片传输和安全分类保留，公网COS URL不改，未迁移旧资源。8组定向Race、隔离PG调用摘要/幂等、原49事件回放、goimports/vet及后端构建通过，govulncheck无可达漏洞；golangci-lint未安装。Figma原板与设计/PRD/原需求/Plan已同步。只重启本地后端载入修复，readyz正常、运行二进制与已验证构建SHA一致；原失败状态、1条调用和预算预留/结算0保持不变。修复增量未提交，未发起新生成、未加预算。下一步仍需获得真实任务验收条件后核对供应商生成中/完成及其拖动缩放组合；同项目COS图片完整读取、其它本地多模态引用另验，不以本轮图片修复签全量一致。见根因与证据（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-04-provider-reference/validation.md`）。
 
 <a id="pi-durable-migration"></a>
 
 ## 2026-11-04 独立 agent 与数据库任务迁移
 
-来源：需求19 SRC-AGH-10～15；唯一设计→PRD→Plan：设计32 → PRD19 → Plan28。2026-11-05工程终验完成；产品与现有部署切换分开判定。完整验证记录（Git 5c785a12 的 `docs/research/evidence/2026-11-04-agent-service/validation.md`）、机器结果（Git 5c785a12 的 `docs/research/evidence/2026-11-04-agent-service/checks.json`）、逐项工作区路径（Git 5c785a12 的 `docs/research/evidence/2026-11-04-agent-service/working-tree-paths.tsv`）。
+来源：需求19 SRC-AGH-10～15；唯一设计→PRD→Plan：设计32 → PRD19 → Plan28。2026-11-05工程终验完成；产品与现有部署切换分开判定。完整验证记录（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-04-agent-service/validation.md`）、机器结果（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-04-agent-service/checks.json`）、逐项工作区路径（Git 5c785a12 的 `workspace/content/research/evidence/2026-11-04-agent-service/working-tree-paths.tsv`）。
 
 | 工作                         | 当前状态                                                                                                                                                                                                | 接受依据                   |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
@@ -650,13 +664,13 @@ EX-REQ-10核查完成：侧栏已采用官方Sidebar体系并继续复用；共�
 
 分析风格和短剧项目参考复制发现真实BFF404，854e83be已补齐转移全生命周期封闭代理与正确领域错误，新增两个先红后绿回归；312文件2212项全量前端、全前端ESLint、改动文件Prettier与TypeScript通过。58ae0e38直接执行已安装Next入口，避免构建阶段pnpm重复联网，两提交已推送main且远端一致。完整生产构建尚未成功：首次资源压力与重试超时均保留失败/中断事实，不计为通过。
 
-Docker引擎在停止本任务构建后仍多次阻塞，业务请求读取超时，不能继续把这些页面计为接受。已请求允许重启Docker Desktop，因其影响其他本地项目而未擅自执行。恢复后优先在原项目/原复制命令复测三类参考承接，再复测分析四图与风格草稿、素材记录、手机、未签收页面及Figma逐像素差异。上一313097be的CI已终结：前端/Agent通过，后端失败；新提交CI另追踪。详细证据见[Plan33](docs/plan/33-短剧工作室实施计划.md#2026-11-08-真实运行版重启与验收证据)。
+Docker引擎在停止本任务构建后仍多次阻塞，业务请求读取超时，不能继续把这些页面计为接受。已请求允许重启Docker Desktop，因其影响其他本地项目而未擅自执行。恢复后优先在原项目/原复制命令复测三类参考承接，再复测分析四图与风格草稿、素材记录、手机、未签收页面及Figma逐像素差异。上一313097be的CI已终结：前端/Agent通过，后端失败；新提交CI另追踪。详细证据见[Plan33](workspace/content/plan/33-短剧工作室实施计划.md#2026-11-08-真实运行版重启与验收证据)。
 
 ### Docker恢复与复测补记
 
 Docker Desktop获用户授权后已重启，原运行30个名称均已恢复且无unhealthy，原停用容器未主动启动。前端实际部署main-b7bf9676，后端/Agent/Canvas保持313097be，健康HTTP200。转移旧结构增量升级前完成完整备份和隔离旧结构验证；实际8项受保护计数不变。原命令的三类参考、风格分析4图、手机同构建风格4图均复制成功并进入待发送草稿，11个独立目标身份和29个物理对象verified，未发起付费调用。
 
-已逐项扩展[52项运行版记录](docs/research/2026-11-08-运行版验收记录.csv)：AI工具16个入口均可打开但处理服务仍未接入，插件无安装版本；资产筛选/批量状态、短剧阶段导航、主体真实创建回读已补核。跨部署整页刷新会丢失内存交接输入，作为未通过保留，不以同构建通过替代。存量其他3个缺表、目录导出4缺列、真实生成/解析/分析采用、复杂项目编辑与全站Figma像素仍需后续独立核验。
+已逐项扩展[52项运行版记录](workspace/content/research/2026-11-08-运行版验收记录.csv)：AI工具16个入口均可打开但处理服务仍未接入，插件无安装版本；资产筛选/批量状态、短剧阶段导航、主体真实创建回读已补核。跨部署整页刷新会丢失内存交接输入，作为未通过保留，不以同构建通过替代。存量其他3个缺表、目录导出4缺列、真实生成/解析/分析采用、复杂项目编辑与全站Figma像素仍需后续独立核验。
 
 f075补齐文档角色中文；b7bf以独立文档能力接通对话内补充文档，普通生成继续拒绝文档。全量2214、全前端ESLint、类型、改动格式和生产构建通过。Mac当前再次锁屏，已请求解锁，下一步先对新文档菜单、真实上传及中文角色完成可见实页复测，再继续未验页面；这些尚未标为运行版通过。旧b577 CI前端/Agent通过、后端失败；新CI另追踪。
 
@@ -664,7 +678,7 @@ f075补齐文档角色中文；b7bf以独立文档能力接通对话内补充文
 
 用户已解锁，以上锁屏暂停状态由本次可见实页复测取代。文档上传TXT/DOCX均201，中文角色正确；继续发现共享选择器禁用文档、误标音频，以及确认误用画布preview连续404。b08071c9与c0dbdcb6分别修复引用能力开关和目录详情核验，真实选择确认200并进入对话草稿；画布文档仍只读。自有DOCX真实导入202后显示已导入70字，整页刷新后完整正文与末尾标记仍在；复制TXT/DOCX字节数及SHA256与原件一致。
 
-[运行清单](docs/research/2026-11-08-运行版验收记录.csv)扩展为72条：41通过、23部分通过、7条修复前失败及1跨部署未通过。自建画布文本新建/编辑/保存确认/刷新、缩放、搜索定位、操作模式及工具箱展开已分别记录；不把工具入口当作执行完成。前端c0dbdcb6及其他三服务313097be均healthy，前端healthz200。当前全量2216项、ESLint、类型、改动格式和生产构建通过；b080的CI42434331311前端/Agent通过，后端失败。
+[运行清单](workspace/content/research/2026-11-08-运行版验收记录.csv)扩展为72条：41通过、23部分通过、7条修复前失败及1跨部署未通过。自建画布文本新建/编辑/保存确认/刷新、缩放、搜索定位、操作模式及工具箱展开已分别记录；不把工具入口当作执行完成。前端c0dbdcb6及其他三服务313097be均healthy，前端healthz200。当前全量2216项、ESLint、类型、改动格式和生产构建通过；b080的CI42434331311前端/Agent通过，后端失败。
 
 下一步仍按未验项推进AI工具真实处理、会员/作品发布、复杂分镜/时间线/转绘、跨部署草稿耐久性和Figma逐像素核对。没有新增全站1:1完成结论，没有发起付费生成。存量其他结构缺口与既有CI失败保持独立边界。
 
@@ -750,12 +764,12 @@ f075补齐文档角色中文；b7bf以独立文档能力接通对话内补充文
 
 其他现存变更（保留）：
 
-- `docs/00-文档索引.md`
-- `docs/plan/28-完整创作Agent与Skill多Agent实施计划.md`
-- `docs/research/00-调研导航.md`
-- `docs/requirement/25-多模态创作与Agent编排需求.md`
-- `docs/research/2026-11-12-即梦多模态创作与Agent服务拆解.md`
-- `docs/research/2026-11-12-短剧制作平台源码与发行包对照调研.md`
+- `workspace/content/00-文档索引.md`
+- `workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md`
+- `workspace/content/research/00-调研导航.md`
+- `workspace/content/requirement/25-多模态创作与Agent编排需求.md`
+- `workspace/content/research/2026-11-12-即梦多模态创作与Agent服务拆解.md`
+- `workspace/content/research/2026-11-12-短剧制作平台源码与发行包对照调研.md`
 - `frontend/.vitest/`
 
 ## 2026-11-12 1122 实际镜像与 agent-browser 验收收口
@@ -841,14 +855,14 @@ f075补齐文档角色中文；b7bf以独立文档能力接通对话内补充文
 - 本次合并快照在共享main验证：Agent 31文件184项、前端316文件2262项全部通过；前端最终生产构建、类型、API重生成和lint通过，Agent类型/lint/API/格式通过。Go受影响18个顶层费用/目标/公开入口/交付race及子场景无skip，原模型网关29项PG race、锁/公开认证回归通过；受影响Go单测、vet、goimports、lint 0 issues通过，govulncheck 0可调用/0导入包漏洞，另有1个未被调用的required模块告警。前两次高负载全量尝试超时/中断留证，最终限并发和15秒用例预算后全部断言通过。
 - Chromium用独立HTTP fixture复用真实后台测试产物，验证原root刷新、实际视频解码、工程下载检查、两份人工确认和最终下载，桌面/390px无横向溢出，下载SHA与后台一致。它不是生产登录与真实供应商浏览器贯通，未冒充真人作品接受或目标剪辑器导入。
 - 新完整schema只在新建隔离库核验；现有业务库未DDL，未部署或重启正式服务。发布前仍需按既有离线流程精确处理`operation_commitment`、`run_authorization.goal_contract`和`agent.recovery_backoff`，核对旧定义运行及原账本后再单版本切换；不得运行全schema覆盖存量。
-- 详细证据见[费用目标与单镜闭环验证](docs/research/2026-11-12-Agent费用目标与单镜闭环验证.md)。后续依赖仍为R4真实分支并行、R5 Skill自动选择、R6正式MCP及D2～D5正式制作身份/局部重做/整集/真实作品接受；本切片不把这些标为完成。未发起真实付费调用，未提交或推送。
+- 详细证据见[费用目标与单镜闭环验证](workspace/content/research/2026-11-12-Agent费用目标与单镜闭环验证.md)。后续依赖仍为R4真实分支并行、R5 Skill自动选择、R6正式MCP及D2～D5正式制作身份/局部重做/整集/真实作品接受；本切片不把这些标为完成。未发起真实付费调用，未提交或推送。
 
 - 本次后续交付授权 SRC-AGH-24：用户要求将本次代码提交到main并推送；纳入实现、验证记录及其需求/设计/计划/源码附录闭环，其他并行修改继续保留。Git回执与远程CI分别核对，不把本地测试当作CI终态。
 
 
 ## provider-workbench-unified-20261113
 
-来源：[SRC-AI-50](docs/requirement/04-AI平台接入与预设管理需求.md#src-ai-50-接入工作台合并与模型弹窗2026-11-13) → [设计07](docs/design/07-AI平台接入市场调研与架构设计.md#src-ai-50-统一接入工作台) → [PRD03](docs/prd/03-AI平台接入与预设管理.md#src-ai-50-统一页面与模型接入弹窗) → [Plan10](docs/plan/10-AI平台接入与预设管理实施计划.md#src-ai-50-统一接入工作台实施)。
+来源：[SRC-AI-50](workspace/content/requirement/04-AI平台接入与预设管理需求.md#src-ai-50-接入工作台合并与模型弹窗2026-11-13) → [设计07](workspace/content/design/07-AI平台接入市场调研与架构设计.md#src-ai-50-统一接入工作台) → [PRD03](workspace/content/prd/03-AI平台接入与预设管理.md#src-ai-50-统一页面与模型接入弹窗) → [Plan10](workspace/content/plan/10-AI平台接入与预设管理实施计划.md#src-ai-50-统一接入工作台实施)。
 
 本地完成：Figma 8 个视图、统一服务连接与供应商预设标签、预设预选接入、同一 Dialog 接入模型、焦点及迟到回执回归。桌面／390px／320px 浏览器检查了现有服务数据读取、单一弹窗、取消返回及手机操作菜单；320px 预设表格宽度 286px，模型弹窗宽度 288px，页面无横向溢出。未修改凭据或发起真实供应商生成。
 
@@ -857,14 +871,14 @@ f075补齐文档角色中文；b7bf以独立文档能力接通对话内补充文
 
 ## provider-custom-config-logo-20261114
 
-来源：[SRC-AI-51](docs/requirement/04-AI平台接入与预设管理需求.md#src-ai-51-自定义供应商模型配置与-logo2026-11-14) → [设计07](docs/design/07-AI平台接入市场调研与架构设计.md#src-ai-51-自定义配置与供应商-logo) → [PRD03](docs/prd/03-AI平台接入与预设管理.md#src-ai-51-自定义供应商与模型接入) → [Plan10](docs/plan/10-AI平台接入与预设管理实施计划.md#src-ai-51-自定义接入与-logo-实施安排)。
+来源：[SRC-AI-51](workspace/content/requirement/04-AI平台接入与预设管理需求.md#src-ai-51-自定义供应商模型配置与-logo2026-11-14) → [设计07](workspace/content/design/07-AI平台接入市场调研与架构设计.md#src-ai-51-自定义配置与供应商-logo) → [PRD03](workspace/content/prd/03-AI平台接入与预设管理.md#src-ai-51-自定义供应商与模型接入) → [Plan10](workspace/content/plan/10-AI平台接入与预设管理实施计划.md#src-ai-51-自定义接入与-logo-实施安排)。
 
 设计阶段记录：支持第三方网关、CC Switch 式完整供应商/模型配置、Logo 自定义上传及模型沿用。当时用户要求先更正文档与设计，暂不编码。原 SRC-AI-50 的本地预览与160项回归只证明旧范围，不能作为新网关、Logo 或新表单的实现证据。
 
 设计阶段交付：原始需求、设计、PRD、执行计划和[Figma33](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=4018-122220)共8个设计视图；已移除当前设计区的独立手工模型入口，并将旧两步向导标为历史。后续按Plan10先补合同及失败用例，再开展实现。本轮未改业务代码、重建服务、提交或发布，也未进行真实上传或生成；其他并行工作保留。
 
 
-Magpie 参考已完成本机只读查看，记录在[实测文档](docs/research/2026-11-14-Magpie供应商与模型接入实测.md)。采用供应商内管理模型、图标入口与高级项展开；目录读取明确触发，不照搬独立ID输入、自动读取或未支持的协议。未保存Magpie配置或发起模型检测；不改变本轮暂不编码的范围。
+Magpie 参考已完成本机只读查看，记录在[实测文档](workspace/content/research/2026-11-14-Magpie供应商与模型接入实测.md)。采用供应商内管理模型、图标入口与高级项展开；目录读取明确触发，不照搬独立ID输入、自动读取或未支持的协议。未保存Magpie配置或发起模型检测；不改变本轮暂不编码的范围。
 
 
 SRC-AI-51 最新确认：用户要求先更正分析再落实代码，实施授权已恢复。范围已收敛为最少供应商/模型字段、供应商Logo、现有OpenAI兼容网关与既有草稿/回执。此前“暂不编码”是历史阶段约束；进度与真实验证在本条后续更新。

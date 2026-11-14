@@ -8146,3 +8146,61 @@ CREATE TABLE catalog.model_image_limit (
 GRANT SELECT ON catalog.model_image_limit TO glowloom_app;
 
 ALTER TABLE catalog.provider ADD CONSTRAINT provider_logo_asset_fk FOREIGN KEY (logo_asset_id) REFERENCES media.media_asset(id);
+
+-- Developer Workspace runtime; business workspace schema remains unchanged.
+-- NOLOGIN capability role. Administrators provision a dedicated LOGIN and grant this role;
+-- never grant it glowloom_app or business-schema privileges.
+DO $$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='glowloom_workspace') THEN
+  CREATE ROLE glowloom_workspace NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+ ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='glowloom_workspace' AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication)) THEN
+  RAISE EXCEPTION 'glowloom_workspace must be a restricted role';
+ END IF;
+END $$;
+CREATE SCHEMA dev_workspace;
+REVOKE ALL ON SCHEMA dev_workspace FROM PUBLIC;
+GRANT USAGE ON SCHEMA dev_workspace TO glowloom_workspace;
+CREATE TABLE dev_workspace.content_proposal (
+ id uuid PRIMARY KEY,
+ actor text NOT NULL CHECK(length(actor) BETWEEN 1 AND 128),
+ idempotency_key text NOT NULL CHECK(length(idempotency_key) BETWEEN 1 AND 160),
+ input_digest text NOT NULL CHECK(length(input_digest)=64),
+ record jsonb NOT NULL CHECK(jsonb_typeof(record)='object' AND octet_length(record::text)<=3000000),
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(actor,idempotency_key)
+);
+CREATE TABLE dev_workspace.workflow_run (
+ id uuid PRIMARY KEY,
+ actor text NOT NULL CHECK(length(actor) BETWEEN 1 AND 128),
+ idempotency_key text NOT NULL CHECK(length(idempotency_key) BETWEEN 1 AND 160),
+ input_digest text NOT NULL CHECK(length(input_digest)=64),
+ record jsonb NOT NULL CHECK(jsonb_typeof(record)='object' AND octet_length(record::text)<=3000000),
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(actor,idempotency_key)
+);
+CREATE INDEX dev_workspace_run_actor_created ON dev_workspace.workflow_run(actor,created_at DESC);
+CREATE TABLE dev_workspace.run_event (
+ run_id uuid NOT NULL REFERENCES dev_workspace.workflow_run(id),
+ seq bigint NOT NULL CHECK(seq>0),
+ event_key text NOT NULL CHECK(length(event_key) BETWEEN 1 AND 160),
+ kind text NOT NULL CHECK(length(kind) BETWEEN 1 AND 64),
+ payload jsonb NOT NULL CHECK(jsonb_typeof(payload)='object' AND octet_length(payload::text)<=1000000),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(run_id,seq), UNIQUE(run_id,event_key)
+);
+CREATE TABLE dev_workspace.artifact_ref (
+ id uuid PRIMARY KEY,
+ run_id uuid REFERENCES dev_workspace.workflow_run(id), actor text NOT NULL,
+ kind text NOT NULL, source_revision text NOT NULL,
+ checksum text NOT NULL CHECK(length(checksum)=64),
+ manifest jsonb NOT NULL CHECK(jsonb_typeof(manifest)='object' AND octet_length(manifest::text)<=1000000),
+ created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE dev_workspace.executor_binding (
+ run_id uuid NOT NULL REFERENCES dev_workspace.workflow_run(id), attempt integer NOT NULL CHECK(attempt>0),
+ executor text NOT NULL, external_handle text NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(run_id,attempt)
+);
+REVOKE ALL ON ALL TABLES IN SCHEMA dev_workspace FROM PUBLIC;
+GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA dev_workspace TO glowloom_workspace;

@@ -1,0 +1,63 @@
+name: Workspace
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: workspace-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  workspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: glowloom_workspace_test_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      GLOWLOOM_WORKSPACE_TEST_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci?options=-c%20role%3Dglowloom_workspace
+    defaults:
+      run:
+        working-directory: workspace
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: workspace/package.json
+          cache: true
+          cache_dependency_path: workspace/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Initialize isolated schema from canonical source
+        run: |
+          psql postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN' -c 'CREATE ROLE glowloom_agent NOLOGIN'
+          psql postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci -X --single-transaction -v ON_ERROR_STOP=1 -f ../backend/db/schema.sql
+      - run: pnpm test && pnpm typecheck && pnpm lint && pnpm check:content
+      - name: Build both modes without runtime secrets
+        run: pnpm build:static && pnpm build:online
+      - name: Static browser acceptance
+        run: |
+          pnpm serve:static > "$RUNNER_TEMP/workspace-static.log" 2>&1 &
+          reader_pid=$!
+          trap 'kill "$reader_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:1131/ > /dev/null
+          pnpm exec playwright test tests/browser/static.spec.ts tests/browser/narration.spec.ts
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: workspace-browser-evidence
+          path: workspace/test-results

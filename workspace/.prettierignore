@@ -1,0 +1,8 @@
+node_modules
+.build
+dist
+/content/
+test-results
+playwright-report
+pnpm-lock.yaml
+.local

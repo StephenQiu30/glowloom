@@ -1,0 +1,32 @@
+[
+  {
+    "id": "frontend",
+    "path": "frontend",
+    "contract": "package.json",
+    "rules": "AGENTS.md"
+  },
+  {
+    "id": "backend",
+    "path": "backend",
+    "contract": "go.mod",
+    "rules": "AGENTS.md"
+  },
+  {
+    "id": "agent",
+    "path": "agent",
+    "contract": "package.json",
+    "rules": "AGENTS.md"
+  },
+  {
+    "id": "canvas",
+    "path": "canvas",
+    "contract": "package.json",
+    "rules": "AGENTS.md"
+  },
+  {
+    "id": "workspace",
+    "path": "workspace",
+    "contract": "package.json",
+    "rules": "AGENTS.md"
+  }
+]

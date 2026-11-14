@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="#开始开发">开始开发</a> ·
-  <a href="docs/00-文档索引.md">阅读文档</a> ·
+  <a href="workspace/content/00-文档索引.md">阅读文档</a> ·
   <a href="BACKLOG.md">当前进展</a>
 </p>
 
@@ -21,7 +21,7 @@
 
 <p align="center"><sub>创作页本地实拍 · 2026-10-29。展示创作入口与参考内容；精选封面为 AI 生成的静态示例。</sub></p>
 
-> 同仓库独立 `agent` 服务使用 TypeScript、官方 Pi Durable 与 PostgreSQL；Go 提供业务授权、模型和工具。Docker Compose 统一启动四个服务，当前源码不依赖 Temporal 或旧 Agent 实现。完整合同见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，工程验证与真实创作接受见 [BACKLOG](BACKLOG.md#pi-durable-migration)。
+> 同仓库独立 `agent` 服务使用 TypeScript、官方 Pi Durable 与 PostgreSQL；Go 提供业务授权、模型和工具。Docker Compose 统一启动四个服务，当前源码不依赖 Temporal 或旧 Agent 实现。完整合同见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，工程验证与真实创作接受见 [BACKLOG](BACKLOG.md#pi-durable-migration)。
 
 ## 在织光中创作
 
@@ -32,7 +32,7 @@ Glowloom 是一个围绕视觉创作组织的 Web 工作台。这个仓库同时
 - **管理创作资源**：通过资产、参考素材和主体入口，管理上传内容与可复用的创作资料。
 - **接入 AI 模型**：配置供应商及模型；模型是否可用，以实际适配、配置和验证结果为准。
 
-项目仍在持续开发。功能设计不代表全部已实现或通过验收；完整范围见[产品总览](docs/design/24-产品总览与交付边界设计.md)，实际进展与阻塞见 [BACKLOG](BACKLOG.md)。真实供应商生成、邮件、支付及生产环境须分别验证。
+项目仍在持续开发。功能设计不代表全部已实现或通过验收；完整范围见[产品总览](workspace/content/design/24-产品总览与交付边界设计.md)，实际进展与阻塞见 [BACKLOG](BACKLOG.md)。真实供应商生成、邮件、支付及生产环境须分别验证。
 
 ## 开始开发
 
@@ -126,7 +126,7 @@ frontend/      Next.js 工作台与交互界面
 backend/       Go API、worker、relay 与数据库定义
 agent/         独立 TypeScript/Pi Durable 服务与 PostgreSQL Storage
 canvas/ 私有 Yjs 协作运行时
-docs/          原始需求、设计、PRD、实施计划与验证证据
+workspace/     知识库、静态阅读与在线研发协作服务（正文在 content/）
 ```
 
 GitHub 仓库现名为 `StephenQiu30/glowloom`。后端 Go 模块路径暂保留 `github.com/StephenQiu30/glowloom-server/backend`，以保持现有导入与生成合同一致；应用命令为 `glowloom`，入口为 `backend/cmd/glowloom`。配置只使用当前 `GLOWLOOM_*`，旧环境变量别名已移除；运行资源名称以实际部署为准。
@@ -135,15 +135,17 @@ GitHub 仓库现名为 `StephenQiu30/glowloom`。后端 Go 模块路径暂保留
 
 | 入口                                                                                                                          | 内容                           |
 | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| [文档索引](docs/00-文档索引.md)                                                                                               | 从产品范围进入各主题文档       |
-| [产品总览](docs/design/24-产品总览与交付边界设计.md) · [设计导航](docs/design/00-设计导航.md)                                 | 能力范围、技术方案与交付边界   |
-| [工作台与创作入口](docs/design/09-统一顶栏与阶段入口设计.md) · [多参考编辑器](docs/design/06-多参考提示词编辑器调研与设计.md) | 创作流程与交互合同             |
-| [AI 接入](docs/design/07-AI平台接入市场调研与架构设计.md)                                                                     | 供应商与模型接入方案           |
-| [用户系统](docs/prd/01-用户系统.md) · [需求与验收](docs/requirement/02-用户系统需求.md)                                       | 账号、权限及验收规则           |
+| [文档索引](workspace/content/00-文档索引.md)                                                                                               | 从产品范围进入各主题文档       |
+| [产品总览](workspace/content/design/24-产品总览与交付边界设计.md) · [设计导航](workspace/content/design/00-设计导航.md)                                 | 能力范围、技术方案与交付边界   |
+| [工作台与创作入口](workspace/content/design/09-统一顶栏与阶段入口设计.md) · [多参考编辑器](workspace/content/design/06-多参考提示词编辑器调研与设计.md) | 创作流程与交互合同             |
+| [AI 接入](workspace/content/design/07-AI平台接入市场调研与架构设计.md)                                                                     | 供应商与模型接入方案           |
+| [用户系统](workspace/content/prd/01-用户系统.md) · [需求与验收](workspace/content/requirement/02-用户系统需求.md)                                       | 账号、权限及验收规则           |
 | [PROJECT](PROJECT.md) · [AGENTS](AGENTS.md) · [DESIGN](DESIGN.md)                                                             | 工程工具链、协作规则与视觉规范 |
 | [BACKLOG](BACKLOG.md)                                                                                                         | 当前实施进展、剩余工作和阻塞   |
 
-文档直接维护 Markdown，按原始需求 → design → PRD → Plan 分层，使用[统一模板](docs/templates/00-模板导航.md)。实施状态统一维护在 BACKLOG；设计、工程验证与产品接受分别记录。
+文档直接维护 Markdown，按原始需求 → design → PRD → Plan 分层，使用[统一模板](workspace/content/templates/00-模板导航.md)。实施状态统一维护在 BACKLOG；设计、工程验证与产品接受分别记录。
+
+研发知识正文统一在`workspace/content/`，同仓独立Workspace提供静态阅读、Skill、工作流和本机在线协作。入口、构建与配置见[服务说明](workspace/README.md)；实际验证及未覆盖项见[BACKLOG](BACKLOG.md#workspace-20261114)。真实TTS暂不启用。
 
 默认 CI 包含后端全量 Race、隔离 PostgreSQL 集成与协作运行时测试，以及前端全量 Vitest 和含 TypeScript 检查的生产构建。完整质量门禁见 [PROJECT](PROJECT.md#4-质量门禁)。CI 通过不代表真实邮件、供应商或生产环境已通过验收。
 

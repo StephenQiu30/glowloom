@@ -1,12 +1,12 @@
 # 织光前端
 
-正式首页为 `/`，页面与状态遵循[视觉规范](../DESIGN.md)和[产品范围](../docs/requirement/01-产品范围.md)。账号目标行为见[用户系统需求](../docs/requirement/02-用户系统需求.md)。
+正式首页为 `/`，页面与状态遵循[视觉规范](../DESIGN.md)和[产品范围](../workspace/content/requirement/01-产品范围.md)。账号目标行为见[用户系统需求](../workspace/content/requirement/02-用户系统需求.md)。
 
 认证使用邮箱和密码调用真实会话接口。不同业务的实现及验收状态以 [PROJECT](../PROJECT.md#1-当前阶段与文件职责)、服务回执和实际验收证据为准。
 
 复用组件位于 `src/components/<feature>/`；页面实现和独有组件位于对应 `src/app/<路由>/_components/`；基础组件使用 `components/ui/`。测试位于 `tests/`，与 `src/` 分开。目录和依赖边界见 [PROJECT](../PROJECT.md#2-可继续使用的工具)。
 
-AI 服务与模型管理的页面流程见[统一界面设计](../docs/design/07-AI平台接入市场调研与架构设计.md#ai-接入统一界面)，实现复用现有 shadcn/ui 组件与请求合同。
+AI 服务与模型管理的页面流程见[统一界面设计](../workspace/content/design/07-AI平台接入市场调研与架构设计.md#ai-接入统一界面)，实现复用现有 shadcn/ui 组件与请求合同。
 
 ## 开发
 

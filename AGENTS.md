@@ -13,8 +13,8 @@
 
 ## 设计与实现
 
-1. 文档按原始需求 → design → PRD → Plan 分层组织。原始需求与确认独立保留在 docs/requirement，技术设计在 docs/design，人读需求与验收在 docs/prd，AI 实施步骤与证据在 docs/plan。每份 PRD 指定唯一来源设计，每份 Plan 指定唯一来源 PRD；跨领域依赖用链接表达，不合并来源正文。
-2. 设计按 [docs/templates](docs/templates/00-模板导航.md) 采用八节结构，用户故事与测试场景按对应模板组织。保留需求原文、稳定 ID、确认结论和实际证据；已确认、建议、待定分别标注。实施进度、优先级、估算、承诺、阻塞和下一步只在 BACKLOG 维护；统一模板不得删除 PRD、Plan 或原始需求，评审通过不代表实现或验收完成。
+1. 文档按原始需求 → design → PRD → Plan 分层组织。原始需求与确认独立保留在 workspace/content/requirement，技术设计在 workspace/content/design，人读需求与验收在 workspace/content/prd，AI 实施步骤与证据在 workspace/content/plan。每份 PRD 指定唯一来源设计，每份 Plan 指定唯一来源 PRD；跨领域依赖用链接表达，不合并来源正文。
+2. 设计按 [workspace/content/templates](workspace/content/templates/00-模板导航.md) 采用八节结构，用户故事与测试场景按对应模板组织。保留需求原文、稳定 ID、确认结论和实际证据；已确认、建议、待定分别标注。实施进度、优先级、估算、承诺、阻塞和下一步只在 BACKLOG 维护；统一模板不得删除 PRD、Plan 或原始需求，评审通过不代表实现或验收完成。
 3. 核心业务逻辑默认遵循 Red → Green → Refactor；无法先写测试时说明原因，并给出最接近的可执行验收。
 4. 业务模块按职责组织并显式声明依赖，避免全局 `utils`、重复 DTO、重复异常体系和仅转发调用的空层。
 5. 复用已接受的架构与工具链；设计发生变化时先更新事实来源，再继续实现。

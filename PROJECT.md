@@ -4,23 +4,23 @@
 
 ## 1. 当前阶段与文件职责
 
-已确认规则保留：邮箱 + 密码、注册验证邮箱；个人与团队创作者共用账号，平台管理与团队管理权限分别校验；账号注销采用即时软删除并撤权。当前实施进度、下一步与剩余接受统一见 [BACKLOG](BACKLOG.md)，历史证据保留在[用户系统设计](docs/design/01-用户系统总体设计.md)和[测试与运行设计](docs/design/04-用户系统测试与运行设计.md)。
+已确认规则保留：邮箱 + 密码、注册验证邮箱；个人与团队创作者共用账号，平台管理与团队管理权限分别校验；账号注销采用即时软删除并撤权。当前实施进度、下一步与剩余接受统一见 [BACKLOG](BACKLOG.md)，历史证据保留在[用户系统设计](workspace/content/design/01-用户系统总体设计.md)和[测试与运行设计](workspace/content/design/04-用户系统测试与运行设计.md)。
 
-[文档索引](docs/00-文档索引.md) 为文档入口。原始需求与确认在 docs/requirement 独立保留；按 design → PRD → Plan 分层，技术合同在 design，用户价值、范围及验收在 PRD，实施步骤和实际验证证据在 Plan。每份 PRD 显式指定唯一来源设计，每份 Plan 显式指定唯一来源 PRD；专项技术依赖通过链接展开。设计使用[八节模板](docs/templates/01-设计模板.md)，故事与场景按模板进入对应主题。当前实施进度与调度只在 BACKLOG。已有长期调研保留来源、适用版本与采用边界，研究不等于采用或验收。AGENTS 负责长期协作规则，根 DESIGN 负责共享视觉与交互。完整候选范围见[原始产品范围](docs/requirement/01-产品范围.md)和[总 PRD](docs/prd/10-产品总览与交付边界.md)，不据目录承诺排期或完成。
+[文档索引](workspace/content/00-文档索引.md) 为文档入口。原始需求与确认在 workspace/content/requirement 独立保留；按 design → PRD → Plan 分层，技术合同在 design，用户价值、范围及验收在 PRD，实施步骤和实际验证证据在 Plan。每份 PRD 显式指定唯一来源设计，每份 Plan 显式指定唯一来源 PRD；专项技术依赖通过链接展开。设计使用[八节模板](workspace/content/templates/01-设计模板.md)，故事与场景按模板进入对应主题。当前实施进度与调度只在 BACKLOG。已有长期调研保留来源、适用版本与采用边界，研究不等于采用或验收。AGENTS 负责长期协作规则，根 DESIGN 负责共享视觉与交互。完整候选范围见[原始产品范围](workspace/content/requirement/01-产品范围.md)和[总 PRD](workspace/content/prd/10-产品总览与交付边界.md)，不据目录承诺排期或完成。
 
 ## 2. 可继续使用的工具
 
 前端现有 Next.js App Router、React、TypeScript strict、pnpm、Tailwind、shadcn/Radix、ESLint/Prettier；后端现有Go、Gin、GORM、Wire、swag。安装版本以包清单和lockfile为准。继续使用工具不等于继续使用旧业务合同或要求所有旧依赖进入新运行架构。
 
-Agent Harness 与多 Agent 的已确认目标（2026-11-04，SRC-AGH-12）：同仓库独立 `agent/`，TypeScript strict + 官方 Pi Durable，独立构建/测试/容器与进程；通过当前内部 HTTP/SSE 与 Go 业务 API 交互。Agent 单独拥有会话、运行、计划、子 Agent 和恢复状态；Go 只保留身份/审批/预算/模型出站/工具与业务数据权威，不镜像执行状态、不启动或监督 Node。复用 PostgreSQL，使用独立 `agent` schema 与受限角色；Docker Compose 统一启动。项目移除 Temporal，普通后台任务使用数据库工作记录与 Go worker。新架构无旧实现、兼容/双轨/别名/回退。完整合同见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)；代码与 Compose 已按该合同实施；工程和产品接受分别记录在 BACKLOG，不能由设计推定验证通过。
+Agent Harness 与多 Agent 的已确认目标（2026-11-04，SRC-AGH-12）：同仓库独立 `agent/`，TypeScript strict + 官方 Pi Durable，独立构建/测试/容器与进程；通过当前内部 HTTP/SSE 与 Go 业务 API 交互。Agent 单独拥有会话、运行、计划、子 Agent 和恢复状态；Go 只保留身份/审批/预算/模型出站/工具与业务数据权威，不镜像执行状态、不启动或监督 Node。复用 PostgreSQL，使用独立 `agent` schema 与受限角色；Docker Compose 统一启动。项目移除 Temporal，普通后台任务使用数据库工作记录与 Go worker。新架构无旧实现、兼容/双轨/别名/回退。完整合同见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)；代码与 Compose 已按该合同实施；工程和产品接受分别记录在 BACKLOG，不能由设计推定验证通过。
 
-`agent` 服务与根目录 `agent/`、包名 `agent`（private）、Compose/CI `agent`、镜像 `glowloom/agent` 统一命名。服务使用 Node 24、TypeScript ESM、NestJS 与官方 Fastify 适配器。Controller/DTO 注解生成 OpenAPI，TypeBox 仅用于 Pi 工具参数。Pi Durable、pg、Pino、Vitest 与 pnpm/tsc 延续现有基线。只发布单一 NestJS 实现，移除原生 Fastify 入口、TypeBox HTTP 合同及兼容分支。完整技术栈与版本见[设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，目标目录和生成链见[设计37](docs/design/37-Agent服务目录与TypeScript规范设计.md)。
+`agent` 服务与根目录 `agent/`、包名 `agent`（private）、Compose/CI `agent`、镜像 `glowloom/agent` 统一命名。服务使用 Node 24、TypeScript ESM、NestJS 与官方 Fastify 适配器。Controller/DTO 注解生成 OpenAPI，TypeBox 仅用于 Pi 工具参数。Pi Durable、pg、Pino、Vitest 与 pnpm/tsc 延续现有基线。只发布单一 NestJS 实现，移除原生 Fastify 入口、TypeBox HTTP 合同及兼容分支。完整技术栈与版本见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，目标目录和生成链见[设计37](workspace/content/design/37-Agent服务目录与TypeScript规范设计.md)。
 
-`canvas` 服务对应 `canvas/`、Compose 内部地址 `canvas:4400`、镜像 `glowloom/canvas` 与私有包 `@glowloom/canvas`。服务使用 Node 24、NestJS/Fastify、TypeScript ESM 和 Yjs。Go 拥有鉴权、接受与持久化，Canvas 计算候选更新，浏览器只消费共享包的指定子路径。目录见[设计17](docs/design/17-画布Yjs协作编辑设计.md)。
+`canvas` 服务对应 `canvas/`、Compose 内部地址 `canvas:4400`、镜像 `glowloom/canvas` 与私有包 `@glowloom/canvas`。服务使用 Node 24、NestJS/Fastify、TypeScript ESM 和 Yjs。Go 拥有鉴权、接受与持久化，Canvas 计算候选更新，浏览器只消费共享包的指定子路径。目录见[设计17](workspace/content/design/17-画布Yjs协作编辑设计.md)。
 
-Harness 按[设计32 §7.6](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)直接组合官方 registry/tool/doc/owned conversation；四个同版 Pi 包中 coding-agent 仅提供受控资源 SDK，不运行 CLI 或第二个 AgentSession。运行固定 manifest、显式角色工具名单，模型/工具出口强制校验 Go 授权；第三方 Skill 脚本走 Go 隔离能力。审批/暂停收束后的 continuation 与崩溃恢复原未决任务分别处理，不自写循环或另造插件加载器。
+Harness 按[设计32 §7.6](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)直接组合官方 registry/tool/doc/owned conversation；四个同版 Pi 包中 coding-agent 仅提供受控资源 SDK，不运行 CLI 或第二个 AgentSession。运行固定 manifest、显式角色工具名单，模型/工具出口强制校验 Go 授权；第三方 Skill 脚本走 Go 隔离能力。审批/暂停收束后的 continuation 与崩溃恢复原未决任务分别处理，不自写循环或另造插件加载器。
 
-Go 业务模块按 `adapter → application → domain` 单向依赖并显式注入依赖；编码与审查遵循根 [AGENTS](AGENTS.md) 中的 Google Go 与 Vercel/Next.js 规则。独立 Node 服务遵循 Google TypeScript Style Guide 及各自的 NodeNext/NestJS 约定；Agent 目录职责见[设计37 §7.2](docs/design/37-Agent服务目录与TypeScript规范设计.md#72-目录与依赖)。两端都不预建空层、通用框架或仅转发调用的抽象。
+Go 业务模块按 `adapter → application → domain` 单向依赖并显式注入依赖；编码与审查遵循根 [AGENTS](AGENTS.md) 中的 Google Go 与 Vercel/Next.js 规则。独立 Node 服务遵循 Google TypeScript Style Guide 及各自的 NodeNext/NestJS 约定；Agent 目录职责见[设计37 §7.2](workspace/content/design/37-Agent服务目录与TypeScript规范设计.md#72-目录与依赖)。两端都不预建空层、通用框架或仅转发调用的抽象。
 
 Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 API、worker、relay 与身份/存储/分区运维；已移除旧工作流初始化命令。独立 Agent 服务有自己的 TypeScript 入口、Dockerfile 与锁文件，生命周期由 Compose 管理；不把“Go 只有一个入口”解释成整个应用必须单进程。
 
@@ -41,7 +41,7 @@ Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 AP
 - 按接受的设计维护 Handler/DTO 和注解，由固定版本 swag 生成规范，再由固定版本 @umijs/openapi 生成前端调用；`frontend/src/api/` 全部为生成文件，不手改，不在组件目录手写业务请求函数或维护另一套客户端。`frontend/openapi2ts.config.ts` 只声明生成配置，遵循 [@umijs/openapi 官方用法](https://github.com/chenshuai2144/openapi2typescript#usage)，不执行外部命令、切换进程目录或改写工具模板。在 `frontend/` 执行 `pnpm api:generate`：先运行 `api:schema` 将后端注解导出到忽略目录 `node_modules/.cache/openapi/swagger.json`，再运行官方 openapi2ts 和项目 Prettier。无需启动后端；生成需要 Go、Node 和已安装的前端依赖。`pnpm api:check` 独立重生成并逐文件核对、核对全部 operationId，发现手改、漏生成或额外文件即失败。
 - 通用请求层为 `frontend/src/lib/request.ts`：使用 Axios 实例、原生 Axios 配置和拦截器，统一超时、幂等键、multipart 与 HTTP 错误转换，直接返回后端 payload。取消保留 Axios 的取消语义；传输层不导入 UI/认证组件，不弹窗或跳转。认证文案和会话校验位于 `components/auth/contracts.ts`。页面导入 `@/api/<标签>`，类型使用生成的 `API` 命名空间。下载传入自定义 options 时显式指定 `responseType: "blob"`；@umijs/openapi 1.14.1 原始模板只有在 options 未提供时使用 hook 默认值，不通过改写模板改变该行为。
 - 后端不提供在线 Swagger 路由，不新增跟踪的 backend/docs 产物。生成合同检查与实际路由双向核对。
-- `backend/db/schema.sql` 是仓库唯一的 PostgreSQL 结构定义，保留身份等系统初始化。开发、CI 和部署先用它初始化空库，再导入 `backend/db/data.sql` 的公共供应商、能力、版本化模型候选及官方计价参考。模型目录运行时读取 PostgreSQL 的固定版本快照；种子不写入连接、凭据、真实验证或已审核价目，同版本内容冲突拒绝导入。存量环境以 PostgreSQL 实际结构为准，部署前核对其与当前定义是否一致。仓库仅维护完整结构，禁止向已有业务库重放空库 SQL，禁止新增 migrations 目录或增量 SQL 文件，服务启动及运行时严禁执行任何动态 DDL，防止新实例冷启动时产生数据与结构不一致。邮箱与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#81-d6-迁移与切换)。
+- `backend/db/schema.sql` 是仓库唯一的 PostgreSQL 结构定义，保留身份等系统初始化。开发、CI 和部署先用它初始化空库，再导入 `backend/db/data.sql` 的公共供应商、能力、版本化模型候选及官方计价参考。模型目录运行时读取 PostgreSQL 的固定版本快照；种子不写入连接、凭据、真实验证或已审核价目，同版本内容冲突拒绝导入。存量环境以 PostgreSQL 实际结构为准，部署前核对其与当前定义是否一致。仓库仅维护完整结构，禁止向已有业务库重放空库 SQL，禁止新增 migrations 目录或增量 SQL 文件，服务启动及运行时严禁执行任何动态 DDL，防止新实例冷启动时产生数据与结构不一致。邮箱与身份引用保护见[用户系统设计](workspace/content/design/01-用户系统总体设计.md#81-d6-迁移与切换)。
 - 浏览器请求经同站代理；服务端 `GLOWLOOM_BACKEND_ORIGIN` 不进入浏览器。凭据不进入文档、日志、前端包或提交。
 - 默认本地工程验证不发起真实收费生成；fixture、协议握手或页面成功不能代替真实供应商验收。模型可用性以实际配置和适配能力为准。
 - `docker-compose.yml` 是部署基础配置；完成数据库结构核验后的 `docker compose up -d --build --wait` 统一启动 frontend、backend、独立 agent 和 canvas。前端使用 Next.js standalone 镜像，完整启动等待后端健康。后端直接运行构建阶段生成的 Go 二进制。Agent 独立镜像及连接池/资源限制，仅在 Compose 网络监听 `agent:4401`，不发布宿主端口；Go 与 Agent 不设置相互 service_healthy 等待、不管理彼此进程。前端仍为 `http://localhost:1122`，Go 为 `http://127.0.0.1:1123`。复用既有 PostgreSQL、Redis、Kafka、对象存储，不创建依赖栈，不保留 Temporal 服务/namespace 配置。当前源码与 Compose 采用此拓扑；已有库的结构核验在启动前独立完成。
@@ -74,6 +74,8 @@ Go 测试统一放在 `backend/tests/<业务模块>/`，通过模块构造函数
 
 文档使用简短、直接的表述，只保留现行规则、必要条件与验收；重复说明改为来源链接，界面文案遵循[DESIGN 极简呈现](DESIGN.md#极简呈现)。
 
-直接维护标准 Markdown，以 Git 管理修订；docs 作为 Obsidian vault，不建设知识库网站。需求、设计、PRD、Plan、长期调研和模板各自保留独立文件与导航。原始需求、确认、文件名及稳定 ID 不因整理而删除或覆盖；引用修复不得改变业务含义。技术合同、产品范围和实施步骤各有唯一维护位置，当前状态只在 BACKLOG。根规范和工程 README 保留原位置，docs 不复制 README，不添加脚本、测试、依赖或生成工程。本机编辑器配置和第三方版权不随整理覆盖或删除。
+项目知识以标准Markdown／Git为唯一正文，已经归入同仓独立`workspace/content/`，Workspace服务代码与正文分离。采用Next App Router／React／TypeScript strict、Tailwind／现有shadcn组件、Geist／Neutral、Node24／pnpm、Pagefind和Mermaid。`build:static`生成独立export产物，`build:online`生成完整standalone包；分别构建、部署与验收，接口／凭据／运行存储不进入静态产物。规则见[设计43](workspace/content/design/43-Workspace知识库与研发工作流服务设计.md)，操作见[服务说明](workspace/README.md)。在线采用本机私有令牌、短期会话、同源／CSRF及受控执行桥；首个主机为Codex app-server。研发记录使用PG独立`dev_workspace` schema与受限角色；现有业务`workspace` schema保持原归属。真实TTS暂时禁用，支持已有授权音频／cue导入与原生播放；实际状态和验证边界只见BACKLOG。
+
+需求、设计、PRD、Plan、长期调研和模板继续各自保留独立文件与导航。原始需求、确认、文件名及稳定 ID 不因整理而删除或覆盖；引用修复不得改变业务含义。技术合同、产品范围和实施步骤各有唯一维护位置，当前调度只在 BACKLOG。根规范和工程 README 保留原位置，Workspace关联工程事实，不复制成第二套权威。知识正文不添加脚本、测试、依赖或构建产物；本机编辑器配置和第三方版权不随整理覆盖或删除。
 
 提交遵循 AGENTS；只包含本任务，报告检查结果、未决项与工作区状态。未经用户要求不提交、推送或发布，不改外部任务系统状态。

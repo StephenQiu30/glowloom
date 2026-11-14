@@ -1,6 +1,6 @@
 # Agent 服务代码规范
 
-本文件适用于 `agent/` 及其测试，继承[仓库工程规范](../AGENTS.md)。业务与持久化合同由[设计32](../docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)维护，NestJS 迁移目标、目录与验收见[设计37](../docs/design/37-Agent服务目录与TypeScript规范设计.md)。当前运行依赖以包清单和锁文件为准。
+本文件适用于 `agent/` 及其测试，继承[仓库工程规范](../AGENTS.md)。业务与持久化合同由[设计32](../workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)维护，NestJS 迁移目标、目录与验收见[设计37](../workspace/content/design/37-Agent服务目录与TypeScript规范设计.md)。当前运行依赖以包清单和锁文件为准。
 
 ## Google TypeScript
 
@@ -19,7 +19,7 @@
 
 ## 接口生成
 
-- 生成方向与检查见[设计37 §7.6](../docs/design/37-Agent服务目录与TypeScript规范设计.md#76-swagger-与-umi-接口生成)。Agent 注解生成 OpenAPI 供 Go 客户端消费。Go 内部独立 Swagger 经 `@umijs/openapi` 生成 Agent 消费的 TypeScript 请求和类型，位于 `src/business/generated/`。
+- 生成方向与检查见[设计37 §7.6](../workspace/content/design/37-Agent服务目录与TypeScript规范设计.md#76-swagger-与-umi-接口生成)。Agent 注解生成 OpenAPI 供 Go 客户端消费。Go 内部独立 Swagger 经 `@umijs/openapi` 生成 Agent 消费的 TypeScript 请求和类型，位于 `src/business/generated/`。
 - 仅可验证重生成的 Umi 产物允许保留官方生成器输出的命名空间、聚合入口、默认导出与局部抑制注释。生成代码纳入严格编译和生产构建，生成声明和传输层另用 `pnpm api:typecheck` 在 `skipLibCheck=false` 下校验。请求层保留服务端身份、取消、超时及有界读取。
 
 ## 质量门禁

@@ -1,0 +1,1366 @@
+[
+  {
+    "id": "design-43",
+    "path": "content/design/43-Workspace知识库与研发工作流服务设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/43-Workspace知识库与研发工作流服务设计.md"]
+  },
+  {
+    "id": "plan-38",
+    "path": "content/plan/38-Workspace知识库与研发工作流执行计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/38-Workspace知识库与研发工作流执行计划.md"]
+  },
+  {
+    "id": "prd-29",
+    "path": "content/prd/29-Workspace知识库与研发工作流.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/29-Workspace知识库与研发工作流.md"]
+  },
+  {
+    "id": "requirement-28",
+    "path": "content/requirement/28-Workspace知识库与研发工作流需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/28-Workspace知识库与研发工作流需求.md"]
+  },
+  {
+    "id": "doc-916c5fc5a894",
+    "path": "content/research/2026-11-14-Chat4j与Workspace静态知识库调研.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-14-Chat4j与Workspace静态知识库调研.md"]
+  },
+  {
+    "id": "doc-b80295c78f10",
+    "path": "content/00-文档索引.md",
+    "visibility": "internal",
+    "aliases": ["docs/00-文档索引.md"]
+  },
+  {
+    "id": "doc-e75d48f9905e",
+    "path": "content/COS配置说明.md",
+    "visibility": "internal",
+    "aliases": ["docs/COS配置说明.md"]
+  },
+  {
+    "id": "design-00",
+    "path": "content/design/00-设计导航.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/00-设计导航.md"]
+  },
+  {
+    "id": "design-01",
+    "path": "content/design/01-用户系统总体设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/01-用户系统总体设计.md"]
+  },
+  {
+    "id": "design-02",
+    "path": "content/design/02-用户系统数据库设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/02-用户系统数据库设计.md"]
+  },
+  {
+    "id": "design-03",
+    "path": "content/design/03-用户系统接口设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/03-用户系统接口设计.md"]
+  },
+  {
+    "id": "design-04",
+    "path": "content/design/04-用户系统测试与运行设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/04-用户系统测试与运行设计.md"]
+  },
+  {
+    "id": "design-05",
+    "path": "content/design/05-无感登录与会话续期调研设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/05-无感登录与会话续期调研设计.md"]
+  },
+  {
+    "id": "design-06",
+    "path": "content/design/06-多参考提示词编辑器调研与设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/06-多参考提示词编辑器调研与设计.md"]
+  },
+  {
+    "id": "design-07",
+    "path": "content/design/07-AI平台接入市场调研与架构设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/07-AI平台接入市场调研与架构设计.md"]
+  },
+  {
+    "id": "design-08",
+    "path": "content/design/08-文件上传服务调研与架构设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/08-文件上传服务调研与架构设计.md"]
+  },
+  {
+    "id": "design-09",
+    "path": "content/design/09-统一顶栏与阶段入口设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/09-统一顶栏与阶段入口设计.md"]
+  },
+  {
+    "id": "design-10",
+    "path": "content/design/10-画布交互设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/10-画布交互设计.md"]
+  },
+  {
+    "id": "design-13",
+    "path": "content/design/13-项目与画布创建及一致性详细设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/13-项目与画布创建及一致性详细设计.md"]
+  },
+  {
+    "id": "design-14",
+    "path": "content/design/14-画布数据与接口设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/14-画布数据与接口设计.md"]
+  },
+  {
+    "id": "design-15",
+    "path": "content/design/15-画布WebSocket实时通道设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/15-画布WebSocket实时通道设计.md"]
+  },
+  {
+    "id": "design-17",
+    "path": "content/design/17-画布Yjs协作编辑设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/17-画布Yjs协作编辑设计.md"]
+  },
+  {
+    "id": "design-18",
+    "path": "content/design/18-邮箱认证与授权基础设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/18-邮箱认证与授权基础设计.md"]
+  },
+  {
+    "id": "design-19",
+    "path": "content/design/19-个人中心设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/19-个人中心设计.md"]
+  },
+  {
+    "id": "design-20",
+    "path": "content/design/20-平台用户管理设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/20-平台用户管理设计.md"]
+  },
+  {
+    "id": "design-21",
+    "path": "content/design/21-团队创作与成员管理设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/21-团队创作与成员管理设计.md"]
+  },
+  {
+    "id": "design-22",
+    "path": "content/design/22-账号生命周期设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/22-账号生命周期设计.md"]
+  },
+  {
+    "id": "design-24",
+    "path": "content/design/24-产品总览与交付边界设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/24-产品总览与交付边界设计.md"]
+  },
+  {
+    "id": "design-25",
+    "path": "content/design/25-统一主体库与创作引用设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/25-统一主体库与创作引用设计.md"]
+  },
+  {
+    "id": "design-26",
+    "path": "content/design/26-资产信息架构与即梦对齐设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/26-资产信息架构与即梦对齐设计.md"]
+  },
+  {
+    "id": "design-27",
+    "path": "content/design/27-无限画布一致性改造设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/27-无限画布一致性改造设计.md"]
+  },
+  {
+    "id": "design-28",
+    "path": "content/design/28-探索发现与创作转化设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/28-探索发现与创作转化设计.md"]
+  },
+  {
+    "id": "design-29",
+    "path": "content/design/29-创作一致性与公共组件设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/29-创作一致性与公共组件设计.md"]
+  },
+  {
+    "id": "design-30",
+    "path": "content/design/30-导演台一致性与实现整理设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/30-导演台一致性与实现整理设计.md"]
+  },
+  {
+    "id": "design-31",
+    "path": "content/design/31-时间线即梦一致性设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/31-时间线即梦一致性设计.md"]
+  },
+  {
+    "id": "design-32",
+    "path": "content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md"]
+  },
+  {
+    "id": "design-33",
+    "path": "content/design/33-多设计模式驱动的模型与供应商接入扩展体系设计.md",
+    "visibility": "internal",
+    "aliases": [
+      "docs/design/33-多设计模式驱动的模型与供应商接入扩展体系设计.md"
+    ]
+  },
+  {
+    "id": "design-34",
+    "path": "content/design/34-积分消耗系统与模型真实计价体系设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/34-积分消耗系统与模型真实计价体系设计.md"]
+  },
+  {
+    "id": "design-35",
+    "path": "content/design/35-对话工作台与参考输入一致性设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/35-对话工作台与参考输入一致性设计.md"]
+  },
+  {
+    "id": "design-36",
+    "path": "content/design/36-模型商业计费与积分钱包设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/36-模型商业计费与积分钱包设计.md"]
+  },
+  {
+    "id": "design-37",
+    "path": "content/design/37-Agent服务目录与TypeScript规范设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/37-Agent服务目录与TypeScript规范设计.md"]
+  },
+  {
+    "id": "design-38",
+    "path": "content/design/38-短剧工作室一致性设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/38-短剧工作室一致性设计.md"]
+  },
+  {
+    "id": "design-39",
+    "path": "content/design/39-AI工具目录与交互一致性设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/39-AI工具目录与交互一致性设计.md"]
+  },
+  {
+    "id": "design-40",
+    "path": "content/design/40-模型号池与销售计费设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/40-模型号池与销售计费设计.md"]
+  },
+  {
+    "id": "design-41",
+    "path": "content/design/41-模型销售定价与结算设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/41-模型销售定价与结算设计.md"]
+  },
+  {
+    "id": "design-42",
+    "path": "content/design/42-日志与创作经营分析设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/42-日志与创作经营分析设计.md"]
+  },
+  {
+    "id": "plan-00",
+    "path": "content/plan/00-Plan导航.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/00-Plan导航.md"]
+  },
+  {
+    "id": "plan-01",
+    "path": "content/plan/01-用户系统执行总览.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/01-用户系统执行总览.md"]
+  },
+  {
+    "id": "plan-02",
+    "path": "content/plan/02-邮箱认证与授权基础.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/02-邮箱认证与授权基础.md"]
+  },
+  {
+    "id": "plan-03",
+    "path": "content/plan/03-个人中心.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/03-个人中心.md"]
+  },
+  {
+    "id": "plan-04",
+    "path": "content/plan/04-平台用户管理.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/04-平台用户管理.md"]
+  },
+  {
+    "id": "plan-05",
+    "path": "content/plan/05-团队创作与成员管理.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/05-团队创作与成员管理.md"]
+  },
+  {
+    "id": "plan-06",
+    "path": "content/plan/06-账号生命周期.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/06-账号生命周期.md"]
+  },
+  {
+    "id": "plan-07",
+    "path": "content/plan/07-迁移切换与综合验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/07-迁移切换与综合验收.md"]
+  },
+  {
+    "id": "plan-08",
+    "path": "content/plan/08-无感登录与会话续期实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/08-无感登录与会话续期实施计划.md"]
+  },
+  {
+    "id": "plan-09",
+    "path": "content/plan/09-多参考提示词编辑器实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/09-多参考提示词编辑器实施计划.md"]
+  },
+  {
+    "id": "plan-10",
+    "path": "content/plan/10-AI平台接入与预设管理实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/10-AI平台接入与预设管理实施计划.md"]
+  },
+  {
+    "id": "plan-11",
+    "path": "content/plan/11-AI平台接入实施验证与上线手册.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/11-AI平台接入实施验证与上线手册.md"]
+  },
+  {
+    "id": "plan-12",
+    "path": "content/plan/12-文件上传与对象存储接入实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/12-文件上传与对象存储接入实施计划.md"]
+  },
+  {
+    "id": "plan-13",
+    "path": "content/plan/13-画布编辑与素材实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/13-画布编辑与素材实施计划.md"]
+  },
+  {
+    "id": "plan-15",
+    "path": "content/plan/15-项目与画布创建及一致性实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/15-项目与画布创建及一致性实施计划.md"]
+  },
+  {
+    "id": "plan-16",
+    "path": "content/plan/16-Figma设计落地实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/16-Figma设计落地实施计划.md"]
+  },
+  {
+    "id": "plan-17",
+    "path": "content/plan/17-画布数据库持久化与DAG实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/17-画布数据库持久化与DAG实施计划.md"]
+  },
+  {
+    "id": "plan-18",
+    "path": "content/plan/18-画布WebSocket实时同步实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/18-画布WebSocket实时同步实施计划.md"]
+  },
+  {
+    "id": "plan-19",
+    "path": "content/plan/19-画布Yjs协作编辑实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/19-画布Yjs协作编辑实施计划.md"]
+  },
+  {
+    "id": "plan-20",
+    "path": "content/plan/20-Glowloom命名统一与数据迁移实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/20-Glowloom命名统一与数据迁移实施计划.md"]
+  },
+  {
+    "id": "plan-21",
+    "path": "content/plan/21-统一主体库与创作引用实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/21-统一主体库与创作引用实施计划.md"]
+  },
+  {
+    "id": "plan-22",
+    "path": "content/plan/22-资产对齐即梦实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/22-资产对齐即梦实施计划.md"]
+  },
+  {
+    "id": "plan-23",
+    "path": "content/plan/23-无限画布一致性改造实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/23-无限画布一致性改造实施计划.md"]
+  },
+  {
+    "id": "plan-24",
+    "path": "content/plan/24-探索一致性改造Agent执行计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/24-探索一致性改造Agent执行计划.md"]
+  },
+  {
+    "id": "plan-25",
+    "path": "content/plan/25-创作一致性与公共组件实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/25-创作一致性与公共组件实施计划.md"]
+  },
+  {
+    "id": "plan-26",
+    "path": "content/plan/26-导演台一致性与实现整理实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/26-导演台一致性与实现整理实施计划.md"]
+  },
+  {
+    "id": "plan-27",
+    "path": "content/plan/27-画布时间线实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/27-画布时间线实施计划.md"]
+  },
+  {
+    "id": "plan-28",
+    "path": "content/plan/28-完整创作Agent与Skill多Agent实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/28-完整创作Agent与Skill多Agent实施计划.md"]
+  },
+  {
+    "id": "plan-29",
+    "path": "content/plan/29-模型与供应商接入扩展实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/29-模型与供应商接入扩展实施计划.md"]
+  },
+  {
+    "id": "plan-30",
+    "path": "content/plan/30-模型计价透明与结算恢复实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/30-模型计价透明与结算恢复实施计划.md"]
+  },
+  {
+    "id": "plan-31",
+    "path": "content/plan/31-对话工作台与参考输入一致性实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/31-对话工作台与参考输入一致性实施计划.md"]
+  },
+  {
+    "id": "plan-32",
+    "path": "content/plan/32-模型商业计费与积分系统实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/32-模型商业计费与积分系统实施计划.md"]
+  },
+  {
+    "id": "plan-33",
+    "path": "content/plan/33-短剧工作室实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/33-短剧工作室实施计划.md"]
+  },
+  {
+    "id": "plan-34",
+    "path": "content/plan/34-AI工具目录与交互实施计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/34-AI工具目录与交互实施计划.md"]
+  },
+  {
+    "id": "plan-35",
+    "path": "content/plan/35-模型号池接入与路由执行计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/35-模型号池接入与路由执行计划.md"]
+  },
+  {
+    "id": "plan-36",
+    "path": "content/plan/36-模型销售定价与结算执行计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/36-模型销售定价与结算执行计划.md"]
+  },
+  {
+    "id": "plan-37",
+    "path": "content/plan/37-日志与创作经营分析执行计划.md",
+    "visibility": "internal",
+    "aliases": ["docs/plan/37-日志与创作经营分析执行计划.md"]
+  },
+  {
+    "id": "prd-00",
+    "path": "content/prd/00-PRD导航.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/00-PRD导航.md"]
+  },
+  {
+    "id": "prd-01",
+    "path": "content/prd/01-用户系统.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/01-用户系统.md"]
+  },
+  {
+    "id": "prd-02",
+    "path": "content/prd/02-多参考提示词编辑器.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/02-多参考提示词编辑器.md"]
+  },
+  {
+    "id": "prd-03",
+    "path": "content/prd/03-AI平台接入与预设管理.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/03-AI平台接入与预设管理.md"]
+  },
+  {
+    "id": "prd-04",
+    "path": "content/prd/04-文件上传与对象存储接入.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/04-文件上传与对象存储接入.md"]
+  },
+  {
+    "id": "prd-05",
+    "path": "content/prd/05-画布编辑与素材.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/05-画布编辑与素材.md"]
+  },
+  {
+    "id": "prd-06",
+    "path": "content/prd/06-项目与画布创建及继续创作.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/06-项目与画布创建及继续创作.md"]
+  },
+  {
+    "id": "prd-07",
+    "path": "content/prd/07-画布数据库持久化与DAG.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/07-画布数据库持久化与DAG.md"]
+  },
+  {
+    "id": "prd-08",
+    "path": "content/prd/08-画布WebSocket实时同步.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/08-画布WebSocket实时同步.md"]
+  },
+  {
+    "id": "prd-09",
+    "path": "content/prd/09-画布协作编辑.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/09-画布协作编辑.md"]
+  },
+  {
+    "id": "prd-10",
+    "path": "content/prd/10-产品总览与交付边界.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/10-产品总览与交付边界.md"]
+  },
+  {
+    "id": "prd-11",
+    "path": "content/prd/11-统一工作台与创作入口.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/11-统一工作台与创作入口.md"]
+  },
+  {
+    "id": "prd-12",
+    "path": "content/prd/12-统一主体库与创作引用.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/12-统一主体库与创作引用.md"]
+  },
+  {
+    "id": "prd-13",
+    "path": "content/prd/13-资产与创作回访.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/13-资产与创作回访.md"]
+  },
+  {
+    "id": "prd-14",
+    "path": "content/prd/14-无限画布一致性改造.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/14-无限画布一致性改造.md"]
+  },
+  {
+    "id": "prd-15",
+    "path": "content/prd/15-探索发现与创作转化.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/15-探索发现与创作转化.md"]
+  },
+  {
+    "id": "prd-16",
+    "path": "content/prd/16-创作一致性与公共组件.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/16-创作一致性与公共组件.md"]
+  },
+  {
+    "id": "prd-17",
+    "path": "content/prd/17-导演台构图与动态预演.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/17-导演台构图与动态预演.md"]
+  },
+  {
+    "id": "prd-18",
+    "path": "content/prd/18-画布时间线.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/18-画布时间线.md"]
+  },
+  {
+    "id": "prd-19",
+    "path": "content/prd/19-完整创作Agent与Skill多Agent.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/19-完整创作Agent与Skill多Agent.md"]
+  },
+  {
+    "id": "prd-20",
+    "path": "content/prd/20-模型与供应商接入扩展.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/20-模型与供应商接入扩展.md"]
+  },
+  {
+    "id": "prd-21",
+    "path": "content/prd/21-模型计价透明与结算恢复.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/21-模型计价透明与结算恢复.md"]
+  },
+  {
+    "id": "prd-22",
+    "path": "content/prd/22-对话工作台与参考输入一致性.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/22-对话工作台与参考输入一致性.md"]
+  },
+  {
+    "id": "prd-23",
+    "path": "content/prd/23-模型商业计费与积分系统.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/23-模型商业计费与积分系统.md"]
+  },
+  {
+    "id": "prd-24",
+    "path": "content/prd/24-短剧工作室.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/24-短剧工作室.md"]
+  },
+  {
+    "id": "prd-25",
+    "path": "content/prd/25-AI工具目录与交互.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/25-AI工具目录与交互.md"]
+  },
+  {
+    "id": "prd-26",
+    "path": "content/prd/26-模型号池接入与路由.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/26-模型号池接入与路由.md"]
+  },
+  {
+    "id": "prd-27",
+    "path": "content/prd/27-模型销售定价与结算.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/27-模型销售定价与结算.md"]
+  },
+  {
+    "id": "prd-28",
+    "path": "content/prd/28-日志与创作经营分析.md",
+    "visibility": "internal",
+    "aliases": ["docs/prd/28-日志与创作经营分析.md"]
+  },
+  {
+    "id": "requirement-00",
+    "path": "content/requirement/00-需求导航.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/00-需求导航.md"]
+  },
+  {
+    "id": "requirement-01",
+    "path": "content/requirement/01-产品范围.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/01-产品范围.md"]
+  },
+  {
+    "id": "requirement-02",
+    "path": "content/requirement/02-用户系统需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/02-用户系统需求.md"]
+  },
+  {
+    "id": "requirement-03",
+    "path": "content/requirement/03-多参考提示词编辑器需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/03-多参考提示词编辑器需求.md"]
+  },
+  {
+    "id": "requirement-04",
+    "path": "content/requirement/04-AI平台接入与预设管理需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/04-AI平台接入与预设管理需求.md"]
+  },
+  {
+    "id": "requirement-05",
+    "path": "content/requirement/05-文件上传与对象存储接入需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/05-文件上传与对象存储接入需求.md"]
+  },
+  {
+    "id": "requirement-06",
+    "path": "content/requirement/06-画布组件迁入与定制需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/06-画布组件迁入与定制需求.md"]
+  },
+  {
+    "id": "requirement-07",
+    "path": "content/requirement/07-项目与画布创建原始需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/07-项目与画布创建原始需求.md"]
+  },
+  {
+    "id": "requirement-08",
+    "path": "content/requirement/08-画布数据库持久化与DAG需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/08-画布数据库持久化与DAG需求.md"]
+  },
+  {
+    "id": "requirement-09",
+    "path": "content/requirement/09-画布WebSocket实时同步需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/09-画布WebSocket实时同步需求.md"]
+  },
+  {
+    "id": "requirement-10",
+    "path": "content/requirement/10-画布协作编辑需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/10-画布协作编辑需求.md"]
+  },
+  {
+    "id": "requirement-11",
+    "path": "content/requirement/11-统一工作台与创作入口需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/11-统一工作台与创作入口需求.md"]
+  },
+  {
+    "id": "requirement-12",
+    "path": "content/requirement/12-主体功能对齐需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/12-主体功能对齐需求.md"]
+  },
+  {
+    "id": "requirement-13",
+    "path": "content/requirement/13-资产对齐即梦需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/13-资产对齐即梦需求.md"]
+  },
+  {
+    "id": "requirement-14",
+    "path": "content/requirement/14-无限画布对齐即梦需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/14-无限画布对齐即梦需求.md"]
+  },
+  {
+    "id": "requirement-15",
+    "path": "content/requirement/15-探索对齐即梦需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/15-探索对齐即梦需求.md"]
+  },
+  {
+    "id": "requirement-16",
+    "path": "content/requirement/16-创作对齐即梦与全站公共组件需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/16-创作对齐即梦与全站公共组件需求.md"]
+  },
+  {
+    "id": "requirement-17",
+    "path": "content/requirement/17-导演台对齐与实现整理需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/17-导演台对齐与实现整理需求.md"]
+  },
+  {
+    "id": "requirement-18",
+    "path": "content/requirement/18-时间线即梦一致性需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/18-时间线即梦一致性需求.md"]
+  },
+  {
+    "id": "requirement-19",
+    "path": "content/requirement/19-完整创作Agent与Skill多Agent需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/19-完整创作Agent与Skill多Agent需求.md"]
+  },
+  {
+    "id": "requirement-20",
+    "path": "content/requirement/20-对话工作台与参考输入一致性需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/20-对话工作台与参考输入一致性需求.md"]
+  },
+  {
+    "id": "requirement-21",
+    "path": "content/requirement/21-模型商业计费与积分系统需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/21-模型商业计费与积分系统需求.md"]
+  },
+  {
+    "id": "requirement-22",
+    "path": "content/requirement/22-Agent服务目录与TypeScript规范需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/22-Agent服务目录与TypeScript规范需求.md"]
+  },
+  {
+    "id": "requirement-23",
+    "path": "content/requirement/23-短剧工作室对齐即梦需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/23-短剧工作室对齐即梦需求.md"]
+  },
+  {
+    "id": "requirement-24",
+    "path": "content/requirement/24-AI工具对齐即梦需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/24-AI工具对齐即梦需求.md"]
+  },
+  {
+    "id": "requirement-25",
+    "path": "content/requirement/25-多模态创作与Agent编排需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/25-多模态创作与Agent编排需求.md"]
+  },
+  {
+    "id": "requirement-26",
+    "path": "content/requirement/26-模型号池与多供应商路由需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/26-模型号池与多供应商路由需求.md"]
+  },
+  {
+    "id": "requirement-27",
+    "path": "content/requirement/27-日志与创作经营分析需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/27-日志与创作经营分析需求.md"]
+  },
+  {
+    "id": "doc-ed268ca825b5",
+    "path": "content/research/00-调研导航.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/00-调研导航.md"]
+  },
+  {
+    "id": "doc-f927c66606f4",
+    "path": "content/research/01-AI网关市场调研与LiteLLM选型分析.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/01-AI网关市场调研与LiteLLM选型分析.md"]
+  },
+  {
+    "id": "doc-ecfedd07e1a2",
+    "path": "content/research/02-项目与画布入口竞品研究.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/02-项目与画布入口竞品研究.md"]
+  },
+  {
+    "id": "doc-68f94e4f56ce",
+    "path": "content/research/03-画布节点保存与协作机制竞品研究.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/03-画布节点保存与协作机制竞品研究.md"]
+  },
+  {
+    "id": "doc-70f47036e688",
+    "path": "content/research/04-无限画布同步机制与Yjs及OT比较.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/04-无限画布同步机制与Yjs及OT比较.md"]
+  },
+  {
+    "id": "doc-24d27d2d3537",
+    "path": "content/research/05-画布参与者头像与顶栏布局对照.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/05-画布参与者头像与顶栏布局对照.md"]
+  },
+  {
+    "id": "doc-c319728b51d9",
+    "path": "content/research/06-即梦创作界面与AI接入表单对照.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/06-即梦创作界面与AI接入表单对照.md"]
+  },
+  {
+    "id": "doc-62008e4c11bc",
+    "path": "content/research/07-首页富文本与即梦设计对照.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/07-首页富文本与即梦设计对照.md"]
+  },
+  {
+    "id": "doc-13d58a2665d4",
+    "path": "content/research/08-即梦资产完整需求分析.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/08-即梦资产完整需求分析.md"]
+  },
+  {
+    "id": "doc-e2d8311b10b8",
+    "path": "content/research/09-即梦主体功能与需求基线.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/09-即梦主体功能与需求基线.md"]
+  },
+  {
+    "id": "doc-018277dc5981",
+    "path": "content/research/09-资产展示精简复核.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/09-资产展示精简复核.md"]
+  },
+  {
+    "id": "doc-000227409505",
+    "path": "content/research/10-即梦无限画布需求基线.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/10-即梦无限画布需求基线.md"]
+  },
+  {
+    "id": "doc-fb91d69090ee",
+    "path": "content/research/11-即梦探索完整需求分析.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/11-即梦探索完整需求分析.md"]
+  },
+  {
+    "id": "doc-5c3e65d719ea",
+    "path": "content/research/12-即梦创作完整需求分析.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/12-即梦创作完整需求分析.md"]
+  },
+  {
+    "id": "doc-df7c48fcffa3",
+    "path": "content/research/13-即梦导演台完整需求分析.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/13-即梦导演台完整需求分析.md"]
+  },
+  {
+    "id": "doc-0f4ce771a024",
+    "path": "content/research/14-音乐数字人与动作模仿供应商接口调研.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/14-音乐数字人与动作模仿供应商接口调研.md"]
+  },
+  {
+    "id": "doc-3f55d73d0d01",
+    "path": "content/research/2026-10-28-即梦共享顶栏架构逆向.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-10-28-即梦共享顶栏架构逆向.md"]
+  },
+  {
+    "id": "doc-7b5120eef6b5",
+    "path": "content/research/2026-10-29-即梦时间线需求分析.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-10-29-即梦时间线需求分析.md"]
+  },
+  {
+    "id": "doc-f8b2d5a717fd",
+    "path": "content/research/2026-10-29-时间线验收场景.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-10-29-时间线验收场景.md"]
+  },
+  {
+    "id": "doc-945bd7b4f50c",
+    "path": "content/research/2026-11-01-AgentHarness与Skill能力分析.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-01-AgentHarness与Skill能力分析.md"]
+  },
+  {
+    "id": "doc-694672421f7e",
+    "path": "content/research/2026-11-01-短剧Agent能力与服务边界调研.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-01-短剧Agent能力与服务边界调研.md"]
+  },
+  {
+    "id": "doc-743faceb7155",
+    "path": "content/research/2026-11-03-BeefTV模型接入与计费调研.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-03-BeefTV模型接入与计费调研.md"]
+  },
+  {
+    "id": "doc-f7b20351b72c",
+    "path": "content/research/2026-11-03-即梦报价与模型接入交互拆解.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-03-即梦报价与模型接入交互拆解.md"]
+  },
+  {
+    "id": "doc-cd0d1aa11cea",
+    "path": "content/research/2026-11-04-即梦对话流程与设计基线.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-04-即梦对话流程与设计基线.md"]
+  },
+  {
+    "id": "doc-3150e04772c2",
+    "path": "content/research/2026-11-05-即梦对话功能与需求基线.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-05-即梦对话功能与需求基线.md"]
+  },
+  {
+    "id": "doc-27d165ab0a41",
+    "path": "content/research/2026-11-05-官方模型接入预设与计价核验.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-05-官方模型接入预设与计价核验.md"]
+  },
+  {
+    "id": "doc-7603e412cf00",
+    "path": "content/research/2026-11-05-对话工作台现有服务验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-05-对话工作台现有服务验收.md"]
+  },
+  {
+    "id": "doc-edd2844e6486",
+    "path": "content/research/2026-11-05-模型计费与积分竞品研究.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-05-模型计费与积分竞品研究.md"]
+  },
+  {
+    "id": "doc-c2cdb9f3c2a4",
+    "path": "content/research/2026-11-06-BeefTV与竞品模型接入和预设对照.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-06-BeefTV与竞品模型接入和预设对照.md"]
+  },
+  {
+    "id": "doc-669b0fcf8984",
+    "path": "content/research/2026-11-06-创作类型与对话历史对照验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-06-创作类型与对话历史对照验收.md"]
+  },
+  {
+    "id": "doc-25822bf6a12d",
+    "path": "content/research/2026-11-06-即梦独立创作项目与积分拆解.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-06-即梦独立创作项目与积分拆解.md"]
+  },
+  {
+    "id": "doc-018704f9c9e1",
+    "path": "content/research/2026-11-06-对话空态即梦对照与浏览器验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-06-对话空态即梦对照与浏览器验收.md"]
+  },
+  {
+    "id": "doc-d11f9547ed88",
+    "path": "content/research/2026-11-07-全站工具位置逐项核对.csv",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-07-全站工具位置逐项核对.csv"]
+  },
+  {
+    "id": "doc-c0de3b287f30",
+    "path": "content/research/2026-11-07-即梦页面功能与交互逐项核对.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-07-即梦页面功能与交互逐项核对.md"]
+  },
+  {
+    "id": "doc-cbe2b44dfd99",
+    "path": "content/research/2026-11-07-多媒体参考与风格库实现核对.csv",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-07-多媒体参考与风格库实现核对.csv"]
+  },
+  {
+    "id": "doc-35a6bd288ae5",
+    "path": "content/research/2026-11-07-画布组件复用与完整接入评估.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-07-画布组件复用与完整接入评估.md"]
+  },
+  {
+    "id": "doc-a041a554d9ba",
+    "path": "content/research/2026-11-07-织光页面与Figma还原核对.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-07-织光页面与Figma还原核对.md"]
+  },
+  {
+    "id": "doc-5abb08b4abd7",
+    "path": "content/research/2026-11-08-运行版验收记录.csv",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-08-运行版验收记录.csv"]
+  },
+  {
+    "id": "doc-526e5f50a7f9",
+    "path": "content/research/2026-11-09-模型预设音频与统一计量调研.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-09-模型预设音频与统一计量调研.md"]
+  },
+  {
+    "id": "doc-0e722460ccb2",
+    "path": "content/research/2026-11-12-AI短剧平台Agent与交付质量源码复核.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-12-AI短剧平台Agent与交付质量源码复核.md"]
+  },
+  {
+    "id": "doc-6d5d1805c92c",
+    "path": "content/research/2026-11-12-Agent费用目标与单镜闭环验证.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-12-Agent费用目标与单镜闭环验证.md"]
+  },
+  {
+    "id": "doc-666c7acf5944",
+    "path": "content/research/2026-11-12-即梦多模态创作与Agent服务拆解.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-12-即梦多模态创作与Agent服务拆解.md"]
+  },
+  {
+    "id": "doc-908c72db4b73",
+    "path": "content/research/2026-11-12-富文本与共享创作工具栏核对.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-12-富文本与共享创作工具栏核对.md"]
+  },
+  {
+    "id": "doc-24c9bbb45169",
+    "path": "content/research/2026-11-12-画布图片音频与展开编辑器验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-12-画布图片音频与展开编辑器验收.md"]
+  },
+  {
+    "id": "doc-bbc412226634",
+    "path": "content/research/2026-11-12-画布时间线与主体对照.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-12-画布时间线与主体对照.md"]
+  },
+  {
+    "id": "doc-708eda631ed3",
+    "path": "content/research/2026-11-12-短剧制作平台源码与发行包对照调研.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-12-短剧制作平台源码与发行包对照调研.md"]
+  },
+  {
+    "id": "doc-3cca50852918",
+    "path": "content/research/2026-11-12-资产工具栏与素材上传核对.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-12-资产工具栏与素材上传核对.md"]
+  },
+  {
+    "id": "doc-b4402049c69d",
+    "path": "content/research/2026-11-13-全局消息通知统一与浏览器验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-13-全局消息通知统一与浏览器验收.md"]
+  },
+  {
+    "id": "doc-f7c0590609bb",
+    "path": "content/research/2026-11-13-文本AI目录恢复验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-13-文本AI目录恢复验收.md"]
+  },
+  {
+    "id": "doc-c756e37499e6",
+    "path": "content/research/2026-11-13-模型号池与多供应商路由调研.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-13-模型号池与多供应商路由调研.md"]
+  },
+  {
+    "id": "doc-fd9c505be98b",
+    "path": "content/research/2026-11-13-模型号池与销售计费验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-13-模型号池与销售计费验收.md"]
+  },
+  {
+    "id": "doc-84eb66a5a90f",
+    "path": "content/research/2026-11-13-模型启用开关与1122验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-13-模型启用开关与1122验收.md"]
+  },
+  {
+    "id": "doc-88f3e7a91e63",
+    "path": "content/research/2026-11-13-模型目录恢复与供应商标识验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-13-模型目录恢复与供应商标识验收.md"]
+  },
+  {
+    "id": "doc-add8c8324090",
+    "path": "content/research/2026-11-13-生成任务状态精简与验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-13-生成任务状态精简与验收.md"]
+  },
+  {
+    "id": "doc-c5dd569b76be",
+    "path": "content/research/2026-11-13-画布节点统一与默认模型验收.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-13-画布节点统一与默认模型验收.md"]
+  },
+  {
+    "id": "doc-9689677575df",
+    "path": "content/research/2026-11-14-Magpie供应商与模型接入实测.md",
+    "visibility": "internal",
+    "aliases": ["docs/research/2026-11-14-Magpie供应商与模型接入实测.md"]
+  },
+  {
+    "id": "doc-8a7a95c9300b",
+    "path": "content/research/evidence/2026-11-12-short-drama-platforms/01-BeefTV源码复核.md",
+    "visibility": "internal",
+    "aliases": [
+      "docs/research/evidence/2026-11-12-short-drama-platforms/01-BeefTV源码复核.md"
+    ]
+  },
+  {
+    "id": "doc-7e8a94c272ed",
+    "path": "content/research/evidence/2026-11-12-short-drama-platforms/02-Toonflow与waoowaoo源码复核.md",
+    "visibility": "internal",
+    "aliases": [
+      "docs/research/evidence/2026-11-12-short-drama-platforms/02-Toonflow与waoowaoo源码复核.md"
+    ]
+  },
+  {
+    "id": "doc-c9a99f44f1a2",
+    "path": "content/research/evidence/2026-11-12-short-drama-platforms/03-Huobao与CineGen源码复核.md",
+    "visibility": "internal",
+    "aliases": [
+      "docs/research/evidence/2026-11-12-short-drama-platforms/03-Huobao与CineGen源码复核.md"
+    ]
+  },
+  {
+    "id": "doc-1a6a0090b8dd",
+    "path": "content/research/evidence/2026-11-12-short-drama-platforms/04-Printfilm与Frametell源码复核.md",
+    "visibility": "internal",
+    "aliases": [
+      "docs/research/evidence/2026-11-12-short-drama-platforms/04-Printfilm与Frametell源码复核.md"
+    ]
+  },
+  {
+    "id": "doc-aced3262dad7",
+    "path": "content/superpowers/plans/2026-11-14-database-canonical-schema-specification.md",
+    "visibility": "internal",
+    "aliases": [
+      "docs/superpowers/plans/2026-11-14-database-canonical-schema-specification.md"
+    ]
+  },
+  {
+    "id": "doc-4582c43a53c2",
+    "path": "content/superpowers/specs/2026-11-14-database-canonical-schema-specification-design.md",
+    "visibility": "internal",
+    "aliases": [
+      "docs/superpowers/specs/2026-11-14-database-canonical-schema-specification-design.md"
+    ]
+  },
+  {
+    "id": "templates-00",
+    "path": "content/templates/00-模板导航.md",
+    "visibility": "internal",
+    "aliases": ["docs/templates/00-模板导航.md"]
+  },
+  {
+    "id": "templates-01",
+    "path": "content/templates/01-设计模板.md",
+    "visibility": "internal",
+    "aliases": ["docs/templates/01-设计模板.md"]
+  },
+  {
+    "id": "templates-02",
+    "path": "content/templates/02-用户故事模板.md",
+    "visibility": "internal",
+    "aliases": ["docs/templates/02-用户故事模板.md"]
+  },
+  {
+    "id": "templates-03",
+    "path": "content/templates/03-测试场景模板.md",
+    "visibility": "internal",
+    "aliases": ["docs/templates/03-测试场景模板.md"]
+  },
+  {
+    "id": "doc-0fe86d394156",
+    "path": "content/templates/编写规范.md",
+    "visibility": "internal",
+    "aliases": ["docs/templates/编写规范.md"]
+  },
+  {
+    "id": "root-agents",
+    "path": "../AGENTS.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "root-project",
+    "path": "../PROJECT.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "root-design",
+    "path": "../DESIGN.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "root-backlog",
+    "path": "../BACKLOG.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "root-readme",
+    "path": "../README.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "root-frontend-agents",
+    "path": "../frontend/AGENTS.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "root-agent-agents",
+    "path": "../agent/AGENTS.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "root-canvas-agents",
+    "path": "../canvas/AGENTS.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "skill-project",
+    "path": "skills/workspace-project/SKILL.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "skill-contract",
+    "path": "skills/workspace-contract/SKILL.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "skill-browser",
+    "path": "skills/workspace-browser/SKILL.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "skill-handoff",
+    "path": "skills/workspace-handoff/SKILL.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "workflow-feature",
+    "path": "workflows/feature.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "workflow-bugfix",
+    "path": "workflows/bugfix.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "workflow-knowledge",
+    "path": "workflows/knowledge.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "templates-04",
+    "path": "content/templates/04-Workspace使用与部署.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "workspace-readme",
+    "path": "README.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "workspace-agents",
+    "path": "AGENTS.md",
+    "visibility": "internal",
+    "aliases": []
+  }
+]

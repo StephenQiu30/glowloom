@@ -1,5 +1,11 @@
 .DS_Store
-.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/workspace-project
+!.agents/skills/workspace-contract
+!.agents/skills/workspace-browser
+!.agents/skills/workspace-handoff
 skills-lock.json
 .env
 .env.*
@@ -56,3 +62,5 @@ docker-compose-env.env
 /.obsidian/themes/
 /.obsidian/hotkeys.json
 /.obsidian/appearance.json
+
+/workspace/content/.obsidian/
