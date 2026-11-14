@@ -44,6 +44,8 @@ const identityRoutes: {
   { pattern: `me`, methods: ["GET", "PATCH"], query: [] },
   { pattern: `me/avatar`, methods: ["GET"], query: [] },
   { pattern: `me/avatar/uploads`, methods: ["POST"], query: [] },
+  { pattern: `admin/provider-logos`, methods: ["POST"], query: [] },
+  { pattern: `provider-logos/${identityUUID}`, methods: ["GET"], query: [] },
   { pattern: `me/email-change`, methods: ["POST"], query: [] },
   {
     pattern: `me/email-change/${identityUUID}`,
@@ -461,6 +463,12 @@ const editorCatalogRoutes: typeof identityRoutes = [
     pattern: "admin/providers",
     methods: ["GET", "POST"],
     query: ["limit", "cursor", "name", "adapter_key", "status"],
+  },
+  { pattern: "admin/providers/custom", methods: ["POST"], query: [] },
+  {
+    pattern: `admin/providers/${identityUUID}/logo`,
+    methods: ["PATCH"],
+    query: [],
   },
   {
     pattern: "admin/models",
@@ -1111,16 +1119,21 @@ async function proxy(
     }
     if (
       resource === "me/avatar/uploads" ||
+      resource === "admin/provider-logos" ||
       resource === "media/library/uploads" ||
       resource === "subjects/sources/uploads" ||
       matches(`projects/${uuid}/media/uploads`)
     ) {
       let bytes = 0;
+      const maxUploadBytes =
+        resource === "admin/provider-logos"
+          ? 6 * 1024 * 1024
+          : 501 * 1024 * 1024;
       const body = request.body?.pipeThrough(
         new TransformStream({
           transform(chunk, controller) {
             bytes += chunk.byteLength;
-            if (bytes > 501 * 1024 * 1024) {
+            if (bytes > maxUploadBytes) {
               uploadTooLarge = true;
               controller.error(new Error("upload_too_large"));
               return;

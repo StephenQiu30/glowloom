@@ -679,27 +679,51 @@ it.each([
   expect(result.status).toBe(422);
   expect(fetcher).not.toHaveBeenCalled();
 });
-it("素材上传流式透传multipart正文和原幂等键，不受JSON 1MB上限影响", async () => {
-  const fetcher = vi.fn().mockImplementation(async (_url, init) => {
-    const bytes = await new Response(init.body).arrayBuffer();
-    expect(bytes.byteLength).toBe(1048580);
-    expect(init.duplex).toBe("half");
-    expect(init.headers.get("Idempotency-Key")).toBe("original-key");
-    return new Response('{"asset":{}}', { status: 201 });
-  });
-  vi.stubGlobal("fetch", fetcher);
-  const result = await POST(
-    new Request("http://localhost/api/media/library/uploads", {
-      method: "POST",
-      headers: {
-        "Content-Type": "multipart/form-data; boundary=fixture",
-        "Idempotency-Key": "original-key",
-      },
-      body: "x".repeat(1048580),
+it.each(["media/library/uploads", "admin/provider-logos"])(
+  "%s流式透传multipart正文和原幂等键，不受JSON 1MB上限影响",
+  async (path) => {
+    const fetcher = vi.fn().mockImplementation(async (_url, init) => {
+      const bytes = await new Response(init.body).arrayBuffer();
+      expect(bytes.byteLength).toBe(1048580);
+      expect(init.duplex).toBe("half");
+      expect(init.headers.get("Idempotency-Key")).toBe("original-key");
+      return new Response('{"asset":{}}', { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const result = await POST(
+      new Request(`http://localhost/api/${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "multipart/form-data; boundary=fixture",
+          "Idempotency-Key": "original-key",
+        },
+        body: "x".repeat(1048580),
+      }),
+      context(path),
+    );
+    expect(result.status).toBe(201);
+  },
+);
+
+it("供应商Logo上传有独立传输上限，超限不进入JSON缓冲", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation(async (_url, init) => {
+      await new Response(init.body).arrayBuffer();
+      return new Response("{}");
     }),
-    context("media/library/uploads"),
   );
-  expect(result.status).toBe(201);
+  const path = "admin/provider-logos";
+  const result = await POST(
+    new Request(`http://localhost/api/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "multipart/form-data; boundary=fixture" },
+      body: "x".repeat(6 * 1024 * 1024 + 1),
+    }),
+    context(path),
+  );
+  expect(result.status).toBe(413);
+  expect(await result.json()).toEqual({ code: "request_too_large" });
 });
 
 it("生成、主体与管理员接口保持封闭路径和查询范围", async () => {
@@ -832,6 +856,7 @@ it("all current registered identity handler contracts cross the bounded BFF", as
       "workspace/adapter/http/platform_team.go",
       "workspace/adapter/http/team_avatar.go",
       "media/adapter/http/avatar.go",
+      "media/adapter/http/provider_logo.go",
       "identity/adapter/http/event_query.go",
       "identity/adapter/http/platform_users.go",
       "identity/adapter/http/platform_delete.go",
