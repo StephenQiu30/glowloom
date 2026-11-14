@@ -1,6 +1,7 @@
-import { Suspense } from "react";
-import { Search } from "@/components/search";
-export const metadata = { title: "搜索知识库" };
+import { Skeleton } from '@/components/ui/skeleton';
+import { Suspense } from 'react';
+import { Search } from '@/components/search';
+export const metadata = { title: '搜索知识库' };
 export default function SearchPage() {
   return (
     <div className="page">
@@ -10,7 +11,7 @@ export default function SearchPage() {
           <p>检索当前版本，直接进入命中的正文位置。</p>
         </div>
       </div>
-      <Suspense fallback={<p role="status">加载搜索…</p>}>
+      <Suspense fallback={<Skeleton className="h-48 w-full" />}>
         <Search />
       </Suspense>
     </div>

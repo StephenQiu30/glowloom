@@ -1,9 +1,20 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { FileDown, GitCommitHorizontal, Pencil } from "lucide-react";
-import { getSnapshot, categoryNames } from "@/content/runtime";
-import { NarrationPlayer } from "@/components/narration-player";
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import { Disclosure } from '@/components/disclosure';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { FileDown, GitCommitHorizontal, Pencil } from 'lucide-react';
+import { getSnapshot, categoryNames } from '@/content/runtime';
+import { NarrationPlayer } from '@/components/narration-player';
 
 export async function generateStaticParams() {
   return (await getSnapshot()).documents.map((d) => ({ id: d.id }));
@@ -18,7 +29,7 @@ export async function generateMetadata({
   return {
     title:
       (await getSnapshot()).documents.find((d) => d.id === id)?.title ??
-      "文档未找到",
+      '文档未找到',
   };
 }
 export default async function Reader({
@@ -29,9 +40,11 @@ export default async function Reader({
   const { id } = await params;
   const snapshot = await getSnapshot();
   const doc = snapshot.documents.find((d) => d.id === id);
-  if (!doc) notFound();
+  if (!doc) {
+    notFound();
+  }
   const first = doc.headings[0];
-  const html = doc.html.replace(/^<h1[^>]*>[\s\S]*?<\/h1>\n?/, "");
+  const html = doc.html.replace(/^<h1[^>]*>[\s\S]*?<\/h1>\n?/, '');
   return (
     <div className="reader-grid">
       <article
@@ -39,34 +52,46 @@ export default async function Reader({
         data-pagefind-body
         data-pagefind-filter={`category:${categoryNames[doc.category] ?? doc.category}`}
       >
-        <div className="breadcrumbs" data-pagefind-ignore>
-          <Link href="/">知识库</Link>
-          <span>/</span>
-          <span>{categoryNames[doc.category] ?? doc.category}</span>
-        </div>
+        <Breadcrumb className="mb-6" data-pagefind-ignore>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link href="/">知识库</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>
+                {categoryNames[doc.category] ?? doc.category}
+              </BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
         <h1 className="reader-title" id={first?.id} data-pagefind-meta="title">
           {doc.title}
         </h1>
         <div className="reader-meta" data-pagefind-ignore>
-          <span>
-            <GitCommitHorizontal
-              style={{ display: "inline", marginRight: 5 }}
-            />
+          <Badge variant="outline">
+            <GitCommitHorizontal aria-hidden="true" />
             {doc.revision.slice(0, 10)}
-          </span>
-          <a
-            href={`${process.env.NEXT_PUBLIC_WORKSPACE_BASE_PATH ?? ""}/raw/${id}${doc.path.endsWith(".csv") ? ".csv" : ".md"}`}
-            download={doc.path.split("/").at(-1)}
-          >
-            <FileDown />
-            原文
-          </a>
-          {process.env.NEXT_PUBLIC_WORKSPACE_MODE === "online" &&
-            doc.path.startsWith("content/") && (
-              <Link href={`/operations/?document=${id}`}>
-                <Pencil />
-                提出修改
-              </Link>
+          </Badge>
+          <Button asChild variant="ghost" size="sm">
+            <a
+              href={`${process.env.NEXT_PUBLIC_WORKSPACE_BASE_PATH ?? ''}/raw/${id}${doc.path.endsWith('.csv') ? '.csv' : '.md'}`}
+              download={doc.path.split('/').at(-1)}
+            >
+              <FileDown data-icon="inline-start" aria-hidden="true" />
+              原文
+            </a>
+          </Button>
+          {process.env.NEXT_PUBLIC_WORKSPACE_MODE === 'online' &&
+            doc.path.startsWith('content/') && (
+              <Button asChild variant="ghost" size="sm">
+                <Link href={`/operations/?document=${id}`}>
+                  <Pencil data-icon="inline-start" aria-hidden="true" />
+                  提出修改
+                </Link>
+              </Button>
             )}
         </div>
         <NarrationPlayer
@@ -83,6 +108,23 @@ export default async function Reader({
                 .map((b) => b.id),
             }))}
         />
+        <div className="mb-6 xl:hidden" data-pagefind-ignore>
+          <Disclosure label="本页目录">
+            <nav aria-label="本页目录" className="flex flex-col gap-1">
+              {doc.headings
+                .filter((heading) => heading.depth === 2 || heading.depth === 3)
+                .map((heading) => (
+                  <a
+                    className="py-2 text-sm text-muted-foreground hover:text-foreground"
+                    key={heading.id}
+                    href={`#${encodeURIComponent(heading.id)}`}
+                  >
+                    {heading.text}
+                  </a>
+                ))}
+            </nav>
+          </Disclosure>
+        </div>
         <div className="prose" dangerouslySetInnerHTML={{ __html: html }} />
       </article>
       <aside className="toc" aria-label="本页目录" data-pagefind-ignore>

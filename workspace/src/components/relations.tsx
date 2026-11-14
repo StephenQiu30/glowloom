@@ -1,86 +1,129 @@
-"use client";
-import { useState } from "react";
-import Link from "next/link";
-import { ArrowDown } from "lucide-react";
-type Node = {
-  id: string;
-  title: string;
-  category: string;
-  sourceIds: string[];
-  references: string[];
-};
-export function Relations({ nodes }: { nodes: Node[] }) {
-  const [selected, setSelected] = useState(
-    nodes.find((d) => d.id === "plan-38")?.id ?? nodes[0]?.id ?? "",
-  );
-  const doc = nodes.find((d) => d.id === selected);
-  const chain: Node[] = [];
+'use client';
+
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { ArrowDown } from 'lucide-react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@/components/ui/native-select';
+import { DocumentList } from '@/components/document-list';
+
+interface KnowledgeNode {
+  readonly id: string;
+  readonly title: string;
+  readonly category: string;
+  readonly sourceIds: string[];
+  readonly references: string[];
+}
+/** Distinguishes the declared source chain from ordinary cross references. */
+export function Relations({ nodes }: { readonly nodes: KnowledgeNode[] }) {
+  const params = useSearchParams();
+  const selected =
+    params.get('document') ??
+    nodes.find((document) => document.id === 'plan-38')?.id ??
+    nodes[0]?.id ??
+    '';
+  const document = nodes.find((node) => node.id === selected);
+  const chain: KnowledgeNode[] = [];
   const seen = new Set<string>();
-  let current = doc;
+  let current = document;
   while (current && !seen.has(current.id)) {
     seen.add(current.id);
     chain.unshift(current);
-    current = nodes.find((d) => d.id === current?.sourceIds[0]);
+    const sourceId = current.sourceIds[0];
+    current = nodes.find((node) => node.id === sourceId);
   }
-  const incoming = nodes.filter((d) => d.sourceIds.includes(selected));
+  const incoming = nodes.filter((node) => node.sourceIds.includes(selected));
+  const references = nodes.filter(
+    (node) =>
+      document?.references.includes(node.id) &&
+      !document.sourceIds.includes(node.id),
+  );
   return (
-    <>
-      <div className="search-filters">
-        <label htmlFor="relation-document">选择文档</label>
-        <select
-          id="relation-document"
-          value={selected}
-          onChange={(e) => setSelected(e.target.value)}
-          style={{ maxWidth: "100%" }}
-        >
-          {nodes.map((d) => (
-            <option value={d.id} key={d.id}>
-              {d.title}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="relation-flow" aria-label="唯一来源链">
-        {chain.flatMap((d, i) => [
-          i > 0 ? <ArrowDown key={`arrow-${d.id}`} aria-hidden="true" /> : null,
-          <Link key={d.id} className="relation-node" href={`/read/${d.id}/`}>
-            <strong>{d.title}</strong>
-            <span>{d.category}</span>
-          </Link>,
-        ])}
-      </div>
-      <h2 className="section-title">由此文档承接</h2>
-      <div className="document-list">
-        {incoming.length ? (
-          incoming.map((d) => (
-            <Link className="document-row" href={`/read/${d.id}/`} key={d.id}>
-              <div>
-                <h3>{d.title}</h3>
-                <p>唯一来源关系</p>
-              </div>
-            </Link>
-          ))
-        ) : (
-          <p className="subtle-note">没有声明以本文为唯一来源的文档。</p>
-        )}
-      </div>
-      <h2 className="section-title" style={{ marginTop: 32 }}>
-        其他引用
-      </h2>
-      <div className="document-list">
-        {doc?.references
-          .filter((id) => !doc.sourceIds.includes(id))
-          .map((id) => nodes.find((d) => d.id === id))
-          .filter(Boolean)
-          .map((d) => (
-            <Link key={d!.id} className="document-row" href={`/read/${d!.id}/`}>
-              <div>
-                <h3>{d!.title}</h3>
-                <p>普通资料引用</p>
-              </div>
-            </Link>
-          ))}
-      </div>
-    </>
+    <div className="flex flex-col gap-8">
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="relation-document">选择文档</FieldLabel>
+          <NativeSelect
+            id="relation-document"
+            value={selected}
+            onChange={(event) => {
+              const url = new URL(location.href);
+              url.searchParams.set('document', event.target.value);
+              history.pushState(null, '', url);
+            }}
+            className="w-full"
+          >
+            <NativeSelectOption value="" disabled>
+              请选择文档
+            </NativeSelectOption>
+            {nodes.map((node) => (
+              <NativeSelectOption value={node.id} key={node.id}>
+                {node.title}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Field>
+      </FieldGroup>
+      <section
+        aria-label="唯一来源链"
+        className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3"
+      >
+        {chain.map((node, index) => (
+          <div
+            key={node.id}
+            className="flex w-full flex-col items-center gap-3"
+          >
+            {index > 0 && (
+              <ArrowDown
+                aria-hidden="true"
+                className="size-4 text-muted-foreground"
+              />
+            )}
+            <Card className="w-full">
+              <CardHeader>
+                <CardDescription>{node.category}</CardDescription>
+                <CardTitle>
+                  <Link className="hover:underline" href={`/read/${node.id}/`}>
+                    {node.title}
+                  </Link>
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </div>
+        ))}
+      </section>
+      {[
+        { title: '由此文档承接', documents: incoming },
+        { title: '其他引用', documents: references },
+      ].map((group) => (
+        <Card key={group.title}>
+          <CardHeader>
+            <CardTitle>{group.title}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {group.documents.length ? (
+              <DocumentList documents={group.documents} />
+            ) : (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>暂无{group.title}</EmptyTitle>
+                </EmptyHeader>
+              </Empty>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }

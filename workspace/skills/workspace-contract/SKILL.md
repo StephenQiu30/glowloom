@@ -1,6 +1,6 @@
 ---
 name: workspace-contract
-description: "修改API、数据库结构、共享类型或业务契约前使用。"
+description: '修改API、数据库结构、共享类型或业务契约前使用。'
 ---
 
 # 契约变更与实现

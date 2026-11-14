@@ -8,6 +8,7 @@
 
 ```bash
 pnpm install --frozen-lockfile
+pnpm knowledge:sync --repository ..
 pnpm build:static
 pnpm serve:static
 ```
@@ -42,5 +43,17 @@ pnpm exec playwright test
 - `src/app/`：共用阅读路由；`src/online/`：在线页面、API 和访问保护。
 - `src/server/`：运行记录、提案、执行桥与 Codex 适配；不进入静态产物。
 - `skills/`、`workflows/`：唯一 Skill 和流程原文；根发现链接不复制正文。
-- 界面原语从现有 `frontend/src/components/ui/` 读取，在忽略的构建目录中派生，不维护第二套手改副本。
+- `components.json`、`src/components/ui/`、`src/hooks/` 与主题、图标均由 Workspace 独立持有，通过官方 shadcn CLI 维护。
 - 数据结构唯一来源为根 `backend/db/schema.sql`；研发运行使用 `dev_workspace`，现有业务 `workspace` schema 保持原归属。
+
+## 界面与 TypeScript 规范
+
+界面遵循根 DESIGN 的 Radix Nova／Neutral／Geist，使用本地官方 shadcn 原语与 Sidebar。Google TypeScript 规范通过 strict、ESLint、Prettier 及边界测试核验。
+
+`src/build/` 负责双模式构建与不可变选版，`src/content/` 负责知识导入／校验，`src/narration/` 负责有权音频导入，`src/runtime/` 负责服务进程，`src/cli.ts` 只作参数与装配。没有 scripts 目录或构建时的业务前端复制。
+
+项目根规范通过 `pnpm knowledge:sync --repository <项目仓库>` 导入 `.local/knowledge/references.json` 受控快照，随独立构建输入一起提供；不复制业务源码或建立第二份可写正文。仅需本目录、锁定依赖及知识输入即可构建，父目录无需 frontend。重新同步后再构建新知识版本。
+
+`pnpm start:online` 仅启动站点。单独运行桥：`pnpm start:bridge --repository <项目仓库>`，站点通过受控 socket／独立令牌连接；本机显式组合使用 `pnpm dev --repository ..`。不连接桥时仍提供认证阅读，执行／落地操作如实显示不可用。
+
+浏览器回归执行 `pnpm exec playwright test`；在线用例要求先启动隔离在线服务，并显式设置 `WORKSPACE_ONLINE_TEST_TOKEN`（可另设 `WORKSPACE_ONLINE_TEST_URL`），不提供内置真实服务令牌。静态用例可单独选择，不连接在线服务。`tests/browser/interface.spec.ts` 补充搜索 URL、键盘焦点、375px／横屏、减少动态效果与双主题 axe 检查。自动扫描与真实产品接受分别记录；朗读测试使用静音 fixture，不调用 TTS。

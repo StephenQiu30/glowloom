@@ -36,6 +36,12 @@ Creation 验证：受影响七包 race、全后端 vet/build、增量 golangci-l
 
 已验证：44项单元／集成测试含隔离PG受限角色、幂等和并发CAS；静态4项、在线3项和朗读1项真实浏览器用例；独立Nginx静态托管3项、无源码standalone登录／阅读／原文／搜索；public空集与单页白名单构建，私有页面／原文未进入公共包；本机Codex实际发现4份Skill，完成只读任务，并在关闭、重建主机进程后读取同一thread／turn的完成结果。未发起供应商试用或TTS；Codex自身正常模型推理不等于真实TTS接受。历史断链仅恢复到已核实Git版本，未归档引用明确标记，不伪造附件。
 
+SRC-WS-11～14 的独立工程与规范整改：Workspace 自持 components.json、29项 shadcn 原语、Hook、Neutral／Geist 主题和资源；标准 Sidebar 支持图标折叠、文档子菜单和移动 Sheet。删除 scripts 目录及业务前端复制步骤，能力分别归属 src/build、src/content、src/narration、src/runtime，薄 CLI 负责装配。业务规范显式导入只读知识快照，执行桥校验实时规则；站点与桥分别运行，本机组合需显式指定仓库。
+
+自有源码、运行入口和测试统一 Google TS 与严格类型／Lint／格式门禁；交互模块按需加载，Server／Client 只传必要数据。外部 HTTP／音频 JSON 在边界校验，编辑器异步读取期间锁定输入与文档选择，离开草稿和取消操作明确确认；过渡限定具体属性。界面采用既有 shadcn、Geist、Neutral，核验 Vercel 与可访问性规范；在线测试必须显式提供私有测试令牌，CI 包含格式和界面回归。
+
+验证边界：本轮隔离候选完成52项单元／集成测试、类型／Lint／格式、229份知识检查、静态／在线双构建和14项真实浏览器回归。浏览器使用独立空测试库，低层PG测试使用各自随机actor，避免夹具混入本机协作数据。在线首轮最后一项因复用低层测试夹具被严格响应校验拦住；分库后4项全通过，未放宽合同。独立在线包曾在无数据库／执行桥时验证认证阅读、原文与搜索；不把静音音频fixture当作真实TTS验收。仅将本任务允许清单提交main并推送，BACKLOG只暂存Workspace段落；提交摘要、远端一致性、CI终态与保留文件分别核对，详细本机证据位于 workspace/.local/delivery-standard-20261114/。当前本机静态1131、在线1130；未执行镜像构建、远程部署、生产库操作或真实收费生成，真实TTS持续禁用。
+
 仍需区分：自动测试／静音PCM fixture、本机Codex、产品人工接受、团队SSO、生产数据库、远程部署和效率基线。团队身份、线上域名、生产受控schema变更、保留期与真实TTS供应商／音色／预算未验收；不得推定完成。详情见[使用与部署](workspace/content/templates/04-Workspace使用与部署.md)。
 
 <a id="logs-analytics-20261113"></a>

@@ -46,7 +46,8 @@ jobs:
         run: |
           psql postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN' -c 'CREATE ROLE glowloom_agent NOLOGIN'
           psql postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci -X --single-transaction -v ON_ERROR_STOP=1 -f ../backend/db/schema.sql
-      - run: pnpm test && pnpm typecheck && pnpm lint && pnpm check:content
+      - run: pnpm knowledge:sync --repository ..
+      - run: pnpm test && pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:content
       - name: Build both modes without runtime secrets
         run: pnpm build:static && pnpm build:online
       - name: Static browser acceptance
@@ -55,7 +56,7 @@ jobs:
           reader_pid=$!
           trap 'kill "$reader_pid" 2>/dev/null || true' EXIT
           curl --fail --silent --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:1131/ > /dev/null
-          pnpm exec playwright test tests/browser/static.spec.ts tests/browser/narration.spec.ts
+          pnpm exec playwright test tests/browser/static.spec.ts tests/browser/narration.spec.ts tests/browser/interface.spec.ts
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

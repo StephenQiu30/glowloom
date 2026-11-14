@@ -1,57 +1,75 @@
-"use client";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { api } from "./api";
+'use client';
+import { useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Field,
+  FieldLabel,
+  FieldDescription,
+  FieldGroup,
+  FieldError,
+} from '@/components/ui/field';
+import { Spinner } from '@/components/ui/spinner';
+import { api } from './api';
+
+/** Keeps authentication outside the private knowledge shell. */
 export function Login() {
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
+  const input = useRef<HTMLInputElement>(null);
   return (
     <form
-      className="form-stack"
-      onSubmit={async (e) => {
-        e.preventDefault();
+      onSubmit={async (event) => {
+        event.preventDefault();
         setBusy(true);
-        setError("");
+        setError('');
         try {
-          await api("/session", { token });
-          const next = new URL(location.href).searchParams.get("next") ?? "/";
+          await api('/session', { token });
+          const next = new URL(location.href).searchParams.get('next') ?? '/';
           const url = new URL(next, location.origin);
           location.assign(
-            url.origin === location.origin ? url.pathname + url.search : "/",
+            url.origin === location.origin ? url.pathname + url.search : '/',
           );
         } catch (error) {
-          setError(error instanceof Error ? error.message : "登录失败");
+          setError(error instanceof Error ? error.message : '登录失败');
+          input.current?.focus();
         } finally {
           setBusy(false);
         }
       }}
     >
-      <Field>
-        <FieldLabel htmlFor="access-token">本机访问令牌</FieldLabel>
-        <Input
-          id="access-token"
-          type="password"
-          autoComplete="off"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          required
-        />
-        <FieldDescription>
-          启动时生成的令牌保存在本机私有配置中；它不属于产品账号密码。
-        </FieldDescription>
-      </Field>
-      {error && (
-        <Alert>
-          <AlertDescription role="alert">{error}</AlertDescription>
-        </Alert>
-      )}
-      <Button type="submit" disabled={busy || !token}>
-        {busy ? "正在验证…" : "进入工作空间"}
-      </Button>
+      <FieldGroup>
+        <Field data-invalid={Boolean(error)}>
+          <FieldLabel htmlFor="access-token">本机访问令牌</FieldLabel>
+          <Input
+            ref={input}
+            id="access-token"
+            name="access-token"
+            type="password"
+            autoComplete="current-password"
+            value={token}
+            onChange={(event) => setToken(event.target.value)}
+            required
+            aria-invalid={Boolean(error)}
+            aria-describedby={
+              error ? 'token-description token-error' : 'token-description'
+            }
+          />
+          <FieldDescription id="token-description">
+            令牌保存在本机私有配置中，与产品账号密码分开管理。
+          </FieldDescription>
+          {error && (
+            <FieldError id="token-error" role="alert">
+              {error}
+            </FieldError>
+          )}
+        </Field>
+        <Button type="submit" disabled={busy}>
+          {busy && <Spinner data-icon="inline-start" aria-label="正在验证" />}
+          进入工作空间
+        </Button>
+      </FieldGroup>
     </form>
   );
 }

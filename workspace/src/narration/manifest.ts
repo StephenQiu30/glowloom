@@ -1,25 +1,25 @@
-export type Cue = {
+export interface Cue {
   startMs: number;
   endMs: number;
   blockId: string;
   textStart: number;
   textEnd: number;
-};
-export type Segment = {
+}
+export interface Segment {
   id: string;
   src: string;
   sha256: string;
   durationMs: number;
   cues: Cue[];
-};
-export type NarrationManifest = {
+}
+export interface NarrationManifest {
   documentId: string;
   revision: string;
   scope: string;
   configDigest: string;
-  precision: "sentence" | "paragraph" | "segment" | "none";
+  precision: 'sentence' | 'paragraph' | 'segment' | 'none';
   segments: Segment[];
-};
+}
 export function rangeForChapter(
   manifest: NarrationManifest,
   blocks: string[],
@@ -38,15 +38,17 @@ export function rangeForChapter(
   } = null;
   manifest.segments.forEach((segment, index) => {
     for (const cue of segment.cues) {
-      if (!ids.has(cue.blockId)) continue;
-      if (!range)
+      if (!ids.has(cue.blockId)) {
+        continue;
+      }
+      if (!range) {
         range = {
           fromSegment: index,
           fromMs: cue.startMs,
           toSegment: index,
           toMs: cue.endMs,
         };
-      else {
+      } else {
         range.toSegment = index;
         range.toMs = cue.endMs;
       }
@@ -59,18 +61,21 @@ export function validateManifest(
   doc: { id: string; revision: string; blocks: { id: string; text: string }[] },
   expectedScope?: string,
 ) {
-  if (m.documentId !== doc.id || m.revision !== doc.revision)
-    throw new Error("Narration source stale 过期");
+  if (m.documentId !== doc.id || m.revision !== doc.revision) {
+    throw new Error('Narration source stale 过期');
+  }
   if (
     !m.scope ||
     !m.configDigest ||
     !Array.isArray(m.segments) ||
     !m.segments.length ||
-    !["sentence", "paragraph", "segment", "none"].includes(m.precision)
-  )
-    throw new Error("Invalid manifest");
-  if (expectedScope && m.scope !== expectedScope)
-    throw new Error("Narration scope mismatch");
+    !['sentence', 'paragraph', 'segment', 'none'].includes(m.precision)
+  ) {
+    throw new Error('Invalid manifest');
+  }
+  if (expectedScope && m.scope !== expectedScope) {
+    throw new Error('Narration scope mismatch');
+  }
   const blocks = new Map(doc.blocks.map((b) => [b.id, b.text]));
   const ids = new Set<string>();
   for (const segment of m.segments) {
@@ -78,13 +83,14 @@ export function validateManifest(
       ids.has(segment.id) ||
       !segment.id ||
       !/^[\w/-]+\.(wav|mp3|m4a|ogg|opus)$/.test(segment.src) ||
-      segment.src.includes("..") ||
-      segment.src.startsWith("/") ||
+      segment.src.includes('..') ||
+      segment.src.startsWith('/') ||
       !Number.isFinite(segment.durationMs) ||
       segment.durationMs <= 0 ||
       !/^[a-f0-9]{64}$/.test(segment.sha256)
-    )
-      throw new Error("Invalid audio segment");
+    ) {
+      throw new Error('Invalid audio segment');
+    }
     ids.add(segment.id);
     let end = 0;
     for (const cue of segment.cues) {
@@ -99,8 +105,9 @@ export function validateManifest(
         cue.textStart < 0 ||
         cue.textEnd <= cue.textStart ||
         cue.textEnd > text.length
-      )
-        throw new Error("Invalid cue mapping");
+      ) {
+        throw new Error('Invalid cue mapping');
+      }
       end = cue.endMs;
     }
   }
@@ -129,14 +136,14 @@ export function planSegments(
     return {
       id: t.id,
       action:
-        existing?.status === "ready"
-          ? "reuse"
+        existing?.status === 'ready'
+          ? 'reuse'
           : cache.some(
                 (c) =>
-                  c.id === t.id && ["unknown", "running"].includes(c.status),
+                  c.id === t.id && ['unknown', 'running'].includes(c.status),
               )
-            ? "reconcile"
-            : "generate",
+            ? 'reconcile'
+            : 'generate',
     };
   });
 }

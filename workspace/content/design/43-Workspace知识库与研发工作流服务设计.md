@@ -424,6 +424,34 @@ MiniMax参考合同提供句级字幕但有模型限制，详见调研；只按�
 
 **音色边界。** 初始建议使用系统音色；本人或其他获授权的复刻音色作为可选配置，声音样本、访问凭据和授权记录不进入静态包。供应商、音色选择、声音上传及真实收费均需在后续任务明确，本次分享中的“复刻自己的声音”只是作者经历。音色不可用时由用户选择替代音色或继续文字阅读，不静默换声或伪造音色已验证。
 
+### 7.16 界面与 TypeScript 规范
+
+依据 SRC-WS-11～12，视觉继承根 DESIGN，不为 Workspace 创建第二套调色板、字体或组件源。采用低动效、内容优先、清晰层级的文档工作台；UI/UX Pro Max 查询建议与现有设计冲突时以根规范为准。
+
+- 布局采用 shadcn SidebarProvider／Sidebar／SidebarInset；窄屏使用其 Sheet，关闭后恢复触发器焦点。头部 Breadcrumb、搜索 CommandDialog（⌘K／Ctrl K）、主题 DropdownMenu；浅色／深色／系统均可选择。
+- 首页统计与分类、Skill／工作流／工程、交接及协作台统一 Card；文档列表使用 ItemGroup／Item。关系链展示真实声明，不虚构关系或已完成数据。正文、代码、表格保留语义 HTML，长文控制行宽并提供桌面目录及移动端可折叠目录。
+- 表单统一 FieldGroup／Field，输入使用 Input／Textarea，附带图标的搜索使用 InputGroup，选择使用 NativeSelect，布尔值使用 Checkbox／Switch。可折叠证据使用 Collapsible；加载使用 Skeleton／Spinner，空态使用 Empty，持续错误使用 Alert，字段错误使用 FieldError。
+- 搜索关键词与分类写入 URL，刷新、分享与返回可复现；异步取消后不显示旧结果。移动端输入至少 16px、主要控件触控区域至少 44px；键盘、可见焦点、减少动态效果和两种主题分别验证。
+- 原语、use-mobile Hook 与主题由 Workspace 本地源码独立持有，通过官方 shadcn CLI 维护并纳入构建指纹（SRC-WS-13 覆盖早期派生方案）。静态构建只包含阅读及交接代码；在线运行存储、身份、提案与执行桥仍单独组装，不能因共享 UI 引入静态包。
+- 自有 TypeScript 使用单引号、一条声明一个变量、const／let、控制流花括号、命名函数、对象形状优先 interface、显式模块职责；导入在声明前。外部 JSON 以 unknown 进入，在消费边界校验；不得以仅返回类型泛型或 any 掩盖响应错误。类型擦除的导入不产生静态服务依赖。
+- Next.js 入口／工具配置的默认导出及框架路径为明确例外；其他自有模块使用命名导出。第三方 API 的默认导入、上游 shadcn 源规范保持兼容。格式和 lint 仅覆盖适用的自有文件，不重写知识正文或派生组件。
+
+参考：[Vercel 界面规范](https://vercel.com/design/guidelines)、[React 最佳实践](https://vercel.com/blog/introducing-react-best-practices)、[shadcn Sidebar](https://ui.shadcn.com/docs/components/radix/sidebar)、[Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)。上述外部页面作为设计依据，不授予额外执行权限。
+
+### 7.17 独立工程、服务入口与组件所有权
+
+SRC-WS-13 覆盖 §7.16 中“从 frontend 派生组件”的实现方式。Workspace 是同仓独立部署的应用工程：本目录持有 package／lockfile、components.json、本地 shadcn 原语与 use-mobile、主题、品牌资源；读取项目知识不等于依赖业务前端的构建源码。
+
+- `src/build/` 负责内容快照、模式组装、编译、索引、打包与不可变选版；`src/content/` 负责知识校验和项目规范导入；`src/narration/` 负责有权音频导入；`src/runtime/` 负责监听、进程关闭与本机组合；`src/cli.ts` 只解析参数、调用模块和报告结果。删除 scripts 目录及 prepare-ui／共享原语复制清单，不把原散装脚本原样搬进另一工具目录。
+- 项目规范通过显式知识同步产生本机受控引用快照，再随知识包构建。独立构建不读取 sibling frontend 源码；已有业务工程仍由工程 ID 与受控桥引用，既有文档 ID、锚点及原文保留。
+- `start:online` 只启动已构建在线站点，桥由独立入口提供；本机 `dev --repository <路径>` 可显式组合。远程只读运行包不挂可写源码，不因服务冷启动创建 schema、启动主机推理或调用 TTS。
+- 布局按 SidebarProvider／Sidebar／SidebarHeader／SidebarContent／SidebarGroup／SidebarMenu／SidebarFooter／SidebarInset 实现；文档树用 SidebarMenuSub，桌面折叠到图标、窄屏 Sheet、明确选中态和焦点恢复。头部 Breadcrumb 与 Command 搜索、正文阅读和在线能力保持独立职责。
+- 对独立包执行“移走 sibling frontend 仍可安装、类型检查、双构建及运行”的验证；工程引用与数据库结构作为显式输入分别核验，不靠禁用边界检查获得通过。
+
+独立工程的质量门禁统一覆盖自有应用、运行模块、Hook 与测试。单独启动站点按需加载站点模块，只有显式选择本机桥时才加载执行适配；不保留空转装配。外部响应在边界校验，读取文档期间锁定文档选择和编辑框，避免异步原文覆盖新选择或草稿。组件仅声明实际需要的过渡属性。
+
+测试按行为和工程边界组织，真实在线接受显式提供隔离服务访问令牌，不能用内置固定令牌掩盖配置缺失。模拟响应只用于合同失败分支，不作为主机、PG、音频质量或收费接受。CI 统一执行类型、lint、格式、内容、双构建及静态界面回归；结果只在 BACKLOG 和受控证据记录，不在多份设计正文重复进度。
+
 ## 8. 实施与验收
 
 本节定义交付边界与验收条件，不维护排期或任务进度；实际调度见BACKLOG。[PRD29](../prd/29-Workspace知识库与研发工作流.md)以本设计为唯一来源细化产品接受，[Plan38](../plan/38-Workspace知识库与研发工作流执行计划.md)以PRD29为唯一来源拆解实施顺序、文件责任和检查。执行状态只回写BACKLOG，不提前编造接受记录。

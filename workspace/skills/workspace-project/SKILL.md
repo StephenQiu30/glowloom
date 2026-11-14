@@ -1,6 +1,6 @@
 ---
 name: workspace-project
-description: "在新会话进入Glowloom、定位需求来源、业务工程或验证入口时使用。"
+description: '在新会话进入Glowloom、定位需求来源、业务工程或验证入口时使用。'
 ---
 
 # 项目定位与上下文

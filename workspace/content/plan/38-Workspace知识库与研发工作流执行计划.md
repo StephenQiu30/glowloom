@@ -41,7 +41,7 @@ SRC-WS-08已授权本地实施，执行状态与证据只在根BACKLOG维护。S
 | `workspace/catalog.json`                                                       | 稳定文档ID、路径、可见性、别名；标题与来源从正文解析                 | 02～04             |
 | `workspace/src/content/{inventory,parse,links,catalog,context}.ts`             | 清单、解析、链接、索引模型、有限上下文；此处是代码，不是第二知识目录 | 02、04、06         |
 | `workspace/src/app/`、`workspace/src/online/app/`、`workspace/src/components/` | 共用阅读路由／组件；仅在线入口与模式构建分离                         | 03～04、08～10、12 |
-| `workspace/scripts/`、`workspace/package.json`                                 | 内容检查、图表预渲染、静态／在线构建和范围门禁                       | 02～04、16         |
+| `workspace/src/build/`、`workspace/src/cli.ts`、`workspace/package.json`                                 | 内容检查、图表预渲染、静态／在线构建和范围门禁                       | 02～04、16         |
 | `workspace/skills/<name>/SKILL.md`、根`.agents/skills/`                        | 唯一Skill正文与目标主机支持的发现关联                                | 05                 |
 | `workspace/workflows/<name>.md`                                                | 阶段、角色、输入、产物、门禁和恢复定义                               | 06                 |
 | `workspace/projects.json`、`workspace/projects.local.json`                     | 共享工程ID与相对路径／个人映射；后者忽略提交                         | 06                 |
@@ -80,7 +80,7 @@ SRC-WS-08已授权本地实施，执行状态与证据只在根BACKLOG维护。S
 | 部署要求   | 纯HTTP托管；不挂仓库、凭据，不运行Node                                        | Node24、PG受限角色、运行配置；按能力接执行桥和外部服务                              |
 | 镜像与变更 | 可选`glowloom/workspace:static-<release_id>`，整包原子切换                    | `glowloom/workspace:online-<release_id>`，兼容schema后独立升级／回退                |
 
-T-WS-02在`workspace/scripts/`建立入口准备／配置／打包职责，使用显式清单组装标准Next工程；模式输入输出互不覆盖，派生目录忽略且不可手工维护。T-WS-04证明静态产物无在线依赖；T-WS-09证明online实际完整打包，public不承载未保护私有知识；T-WS-16验证交替构建与两版独立发布／回退。
+T-WS-02在`workspace/src/build/`建立内容编译／配置／打包职责，以`src/cli.ts`提供薄入口，使用显式清单组装标准Next工程；模式输入输出互不覆盖，派生目录忽略且不可手工维护。T-WS-04证明静态产物无在线依赖；T-WS-09证明online实际完整打包，public不承载未保护私有知识；T-WS-16验证交替构建与两版独立发布／回退。
 
 两种构建不读取在线生产凭据，不连接PG、业务API、主机或TTS；构建时Node工具不等于静态部署需要Node。生产配置仅在线运行时注入，私有快照放受控目录而非公开public。Pagefind均从同版允许范围预渲染HTML生成；提案／工作树预览不进入共享搜索索引。构建产物必须在无源码工作区的环境启动或托管后验收，不能借开发机文件补漏包。
 
@@ -119,7 +119,7 @@ DB测试必须显式提供名称以`glowloom_workspace_test_`开头的隔离库�
 
 ### T-WS-02｜打通全量内容解析与构建检查
 
-**依赖／责任：** 01；内容管线维护者。文件：`workspace/src/content/`、`catalog.json`、`scripts/`、包配置及`tests/content/`。
+**依赖／责任：** 01；内容管线维护者。文件：`workspace/src/content/`、`catalog.json`、`src/build/`、包配置及`tests/content/`。
 
 **输入与产出：** 当前docs清单与根引用允许集 → ContentSnapshot。候选实现可以只读旧docs验证；不得复制两份正文或支持长期双写。
 
@@ -311,6 +311,33 @@ DB测试必须显式提供名称以`glowloom_workspace_test_`开头的隔离库�
 4. 检查最终Git差异、根规范和工程命令引用；建立只包含本次允许文件的交付集。实际提交、合并、推送、发布或生产操作按当时授权进行。
 
 **出口：** 适用AC都有可复查证据与接受结论；产品接受者明确已交付、限制和未执行项。仅静态构建成功不能替代联合接受。
+
+### T-WS-17｜统一 shadcn 界面与 Google TS 实现
+
+**来源／出口：** SRC-WS-11～12、设计43 §7.16、AC-WS-16～18；保持本地实施范围和 TTS 禁用。
+
+1. 记录当前 Git、脏修改与运行服务基线；读取用户指定技能、根视觉规范和官方 Google TS／Vercel 文档，保存改造前截图。
+2. 统一共享原语与 Hook 的复制清单／指纹，再完成 Sidebar、Command 搜索、Breadcrumb、主题和正文目录；逐页改造 Card／Item／Field 与在线状态、证据控件，不改变 API 权限及运行合同。
+3. 配置适用 lint／格式规则，整理自有 TS 导入、声明与模块职责，校验外部 JSON，保留框架与上游源码例外；提案与任务控制仍按修订／幂等键／原句柄执行。
+4. 执行适用单元／隔离 PG、typecheck、lint、format、content、静态与在线构建；通过浏览器验证原文／锚点／SVG／搜索／交接／fixture 朗读，以及认证／提案冲突／Skill 发现。新交互补充 URL／键盘／移动端／双主题／自动可访问性检查。
+5. 仅重启已确认属于 Workspace 的本机服务，检查对应模式及 TTS=false，打开知识库。截图和真实命令回执放本地受控目录，实际结果只回写 BACKLOG；不推定远端部署或本轮 Git 提交完成。
+
+**失败处理：** 保留其他任务的源码与文档；并行编辑导致内容快照变化时重新构建，不覆盖并行文件。浏览器、类型或 lint 失败逐项修复后重验；不降低门禁或伪造接受。
+
+### T-WS-18｜落实独立工程与 Sidebar 所有权
+
+**依据：** SRC-WS-13、设计43 §7.17、AC-WS-19～21。
+
+1. 记录脏修改和旧入口清单；先加入独立性失败用例，再移除散装入口。旧命令能力分别沉入构建／内容／朗读／运行模块，薄 CLI 显式组装服务。
+2. 在 Workspace 初始化同一 Radix Nova／Neutral 配置，通过官方 shadcn CLI 添加本地组件与 Hook，按现有根视觉规则维护本项目主题。移除派生别名、frontend 源码／图标读取和共享复制清单。
+3. 用标准 Sidebar 子菜单和图标折叠重整布局；文档来源、功能入口、在线状态分组，保持键盘、移动端和主题合同。
+4. 显式同步项目规范的引用快照，验证与业务目录隔离的独立构建；静态／在线及桥分别启动。检查内容、类型、lint、格式、单元／隔离 PG、两种发布包及真实浏览器；结果回写 BACKLOG，不提交或推送。
+
+### T-WS-19｜规范复核与限定 Git 交付
+
+**依据：** SRC-WS-14、AC-WS-22。复核 Server／Client 边界、条件加载、异步编辑保护、Google TS 和测试显式配置；精简重复装配与过时说明。完成单元／隔离 PG、类型、lint、格式、内容、双构建和浏览器回归，核对 TTS=false。
+
+以当前 main 建立固定候选，只叠加 Workspace 允许清单与混合根文档的相关段落；确认暂存文件／内容、diff、受控证据与实际来源一致后提交推送。推送后核验远端 SHA、适用 CI 终态和并行修改保留情况；失败或未运行的检查如实记录，不覆盖其他任务或扩大交付范围。
 
 ## 5. 接受追踪与执行用例
 

@@ -9,21 +9,23 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "pnpm prepare:ui && tsc --noEmit",
-    "check:content": "tsx scripts/check-content.ts",
-    "build:static": "tsx scripts/build.ts static",
-    "build:online": "tsx scripts/build.ts online",
-    "serve:static": "tsx scripts/serve-static.ts",
-    "dev": "node --env-file-if-exists=.env --import tsx scripts/start-online.ts",
+    "typecheck": "tsc --noEmit",
+    "check:content": "tsx src/cli.ts check",
+    "build:static": "tsx src/cli.ts build static",
+    "build:online": "tsx src/cli.ts build online",
+    "serve:static": "tsx src/cli.ts serve",
+    "dev": "node --env-file-if-exists=.env --import tsx src/cli.ts dev",
     "lint": "eslint .",
     "format:check": "prettier --check .",
-    "prepare:ui": "tsx scripts/prepare-ui.ts",
-    "start:online": "node --env-file-if-exists=.env --import tsx scripts/start-online.ts",
-    "import:narration": "tsx scripts/import-narration.ts",
-    "release:select": "tsx scripts/select-release.ts"
+    "start:online": "node --env-file-if-exists=.env --import tsx src/cli.ts online",
+    "import:narration": "tsx src/cli.ts narration",
+    "release:select": "tsx src/cli.ts select",
+    "knowledge:sync": "tsx src/cli.ts knowledge",
+    "start:bridge": "node --env-file-if-exists=.env --import tsx src/cli.ts bridge"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",
+    "cmdk": "1.1.1",
     "cn": "0.4.0",
     "geist": "1.8.1",
     "lucide-react": "1.48.0",
@@ -32,9 +34,12 @@
     "pg": "8.16.3",
     "radix-ui": "1.6.7",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "sonner": "2.0.7",
+    "zod": "4.3.6"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.11.1",
     "@mermaid-js/mermaid-cli": "12.2.0",
     "@playwright/test": "1.58.2",
     "@tailwindcss/postcss": "4.3.0",

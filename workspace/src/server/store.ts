@@ -1,10 +1,10 @@
-import type { Pool, PoolClient } from "pg";
-import { isDeepStrictEqual } from "node:util";
-import { randomUUID } from "node:crypto";
-import { digest } from "../content/parse";
-import { evolveRun, type Run, type Action } from "../workflows/run";
-import type { TaskContext } from "../workflows/definition";
-export type Proposal = {
+import type { Pool, PoolClient } from 'pg';
+import { isDeepStrictEqual } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import { digest } from '../content/parse';
+import { evolveRun, type Run, type Action } from '../workflows/run';
+import type { TaskContext } from '../workflows/definition';
+export interface Proposal {
   id: string;
   actor: string;
   documentId: string;
@@ -12,18 +12,18 @@ export type Proposal = {
   text: string;
   baseText?: string;
   receipt: Record<string, unknown> | null;
-};
+}
 export class PgStore {
   constructor(private pool: Pool) {}
   private async transaction<T>(action: (c: PoolClient) => Promise<T>) {
     const c = await this.pool.connect();
     try {
-      await c.query("BEGIN");
+      await c.query('BEGIN');
       const result = await action(c);
-      await c.query("COMMIT");
+      await c.query('COMMIT');
       return result;
     } catch (error) {
-      await c.query("ROLLBACK");
+      await c.query('ROLLBACK');
       throw error;
     } finally {
       c.release();
@@ -33,8 +33,9 @@ export class PgStore {
     const result = await this.pool.query(
       "SELECT has_schema_privilege(current_user,'dev_workspace','USAGE') AS own,has_schema_privilege(current_user,'workspace','USAGE') AS business",
     );
-    if (!result.rows[0]?.own || result.rows[0]?.business)
-      throw new Error("restricted_database_role_required");
+    if (!result.rows[0]?.own || result.rows[0]?.business) {
+      throw new Error('restricted_database_role_required');
+    }
     return true;
   }
   async createRun(
@@ -45,7 +46,7 @@ export class PgStore {
   ): Promise<Run> {
     const semanticContext = Object.fromEntries(
       Object.entries(context).filter(
-        ([key]) => !["expiresAt", "digest"].includes(key),
+        ([key]) => !['expiresAt', 'digest'].includes(key),
       ),
     );
     const inputDigest = digest(
@@ -57,7 +58,7 @@ export class PgStore {
         actor,
         workflowId: workflow,
         context,
-        status: "created",
+        status: 'created',
         version: 1,
         attempt: 0,
         stage: 0,
@@ -66,16 +67,17 @@ export class PgStore {
         acceptedBy: null,
       };
       const inserted = await c.query(
-        "INSERT INTO dev_workspace.workflow_run(id,actor,idempotency_key,input_digest,record) VALUES($1,$2,$3,$4,$5) ON CONFLICT(actor,idempotency_key) DO NOTHING RETURNING record",
+        'INSERT INTO dev_workspace.workflow_run(id,actor,idempotency_key,input_digest,record) VALUES($1,$2,$3,$4,$5) ON CONFLICT(actor,idempotency_key) DO NOTHING RETURNING record',
         [run.id, actor, key, inputDigest, run],
       );
       if (!inserted.rowCount) {
         const existing = await c.query(
-          "SELECT record,input_digest FROM dev_workspace.workflow_run WHERE actor=$1 AND idempotency_key=$2",
+          'SELECT record,input_digest FROM dev_workspace.workflow_run WHERE actor=$1 AND idempotency_key=$2',
           [actor, key],
         );
-        if (existing.rows[0]?.input_digest !== inputDigest)
-          throw new Error("idempotency_conflict");
+        if (existing.rows[0]?.input_digest !== inputDigest) {
+          throw new Error('idempotency_conflict');
+        }
         return existing.rows[0].record as Run;
       }
       await c.query(
@@ -98,7 +100,7 @@ export class PgStore {
   }
   async getRun(id: string, actor: string): Promise<Run | null> {
     const result = await this.pool.query(
-      "SELECT record FROM dev_workspace.workflow_run WHERE id=$1 AND actor=$2",
+      'SELECT record FROM dev_workspace.workflow_run WHERE id=$1 AND actor=$2',
       [id, actor],
     );
     return result.rows[0]?.record ?? null;
@@ -106,7 +108,7 @@ export class PgStore {
   async listRuns(actor: string): Promise<Run[]> {
     return (
       await this.pool.query(
-        "SELECT record FROM dev_workspace.workflow_run WHERE actor=$1 ORDER BY created_at DESC LIMIT 100",
+        'SELECT record FROM dev_workspace.workflow_run WHERE actor=$1 ORDER BY created_at DESC LIMIT 100',
         [actor],
       )
     ).rows.map((r) => r.record);
@@ -122,40 +124,46 @@ export class PgStore {
     return this.transaction(async (c) => {
       const row = (
         await c.query(
-          "SELECT record FROM dev_workspace.workflow_run WHERE id=$1 AND actor=$2 FOR UPDATE",
+          'SELECT record FROM dev_workspace.workflow_run WHERE id=$1 AND actor=$2 FOR UPDATE',
           [id, actor],
         )
       ).rows[0];
-      if (!row) throw new Error("run_not_found");
+      if (!row) {
+        throw new Error('run_not_found');
+      }
       const run = row.record as Run;
       const event = await c.query(
-        "SELECT payload FROM dev_workspace.run_event WHERE run_id=$1 AND event_key=$2",
+        'SELECT payload FROM dev_workspace.run_event WHERE run_id=$1 AND event_key=$2',
         [id, key],
       );
       const actionDigest = digest(JSON.stringify(action));
       if (event.rowCount) {
-        if (event.rows[0].payload.actionDigest !== actionDigest)
-          throw new Error("idempotency_conflict");
+        if (event.rows[0].payload.actionDigest !== actionDigest) {
+          throw new Error('idempotency_conflict');
+        }
         return { run, replayed: true };
       }
-      if (run.version !== version) throw new Error("version_conflict");
+      if (run.version !== version) {
+        throw new Error('version_conflict');
+      }
       const next = evolveRun(run, action, Date.now(), current);
-      if (action.type === "bind" || action.type === "external") {
+      if (action.type === 'bind' || action.type === 'external') {
         const binding = await c.query(
-          "SELECT external_handle FROM dev_workspace.executor_binding WHERE run_id=$1 AND attempt=$2",
+          'SELECT external_handle FROM dev_workspace.executor_binding WHERE run_id=$1 AND attempt=$2',
           [run.id, run.attempt],
         );
         if (
           binding.rows[0] &&
           binding.rows[0].external_handle !== action.handle
-        )
-          throw new Error("handle_conflict");
+        ) {
+          throw new Error('handle_conflict');
+        }
         await c.query(
           "INSERT INTO dev_workspace.executor_binding(run_id,attempt,executor,external_handle) VALUES($1,$2,'codex',$3) ON CONFLICT DO NOTHING",
           [run.id, run.attempt, action.handle],
         );
       }
-      if (action.type === "refresh")
+      if (action.type === 'refresh') {
         await c.query(
           "INSERT INTO dev_workspace.artifact_ref(id,run_id,actor,kind,source_revision,checksum,manifest) VALUES($1,$2,$3,'task-context',$4,$5,$6)",
           [
@@ -167,12 +175,13 @@ export class PgStore {
             { context: next.context },
           ],
         );
+      }
       await c.query(
-        "UPDATE dev_workspace.workflow_run SET record=$1,updated_at=now() WHERE id=$2",
+        'UPDATE dev_workspace.workflow_run SET record=$1,updated_at=now() WHERE id=$2',
         [next, id],
       );
       await c.query(
-        "INSERT INTO dev_workspace.run_event(run_id,seq,event_key,kind,payload) SELECT $1,COALESCE(MAX(seq),0)+1,$2,$3,$4 FROM dev_workspace.run_event WHERE run_id=$1",
+        'INSERT INTO dev_workspace.run_event(run_id,seq,event_key,kind,payload) SELECT $1,COALESCE(MAX(seq),0)+1,$2,$3,$4 FROM dev_workspace.run_event WHERE run_id=$1',
         [
           id,
           key,
@@ -196,7 +205,7 @@ export class PgStore {
   > {
     return (
       await this.pool.query(
-        "SELECT e.seq::int,e.kind,e.payload FROM dev_workspace.run_event e JOIN dev_workspace.workflow_run r ON r.id=e.run_id WHERE r.id=$1 AND r.actor=$2 ORDER BY e.seq",
+        'SELECT e.seq::int,e.kind,e.payload FROM dev_workspace.run_event e JOIN dev_workspace.workflow_run r ON r.id=e.run_id WHERE r.id=$1 AND r.actor=$2 ORDER BY e.seq',
         [id, actor],
       )
     ).rows;
@@ -210,15 +219,17 @@ export class PgStore {
     idempotencyKey: string;
   }): Promise<Proposal> {
     if (
-      Buffer.byteLength(input.text) + Buffer.byteLength(input.baseText ?? "") >
+      Buffer.byteLength(input.text) + Buffer.byteLength(input.baseText ?? '') >
       2_000_000
-    )
-      throw new Error("proposal_too_large");
+    ) {
+      throw new Error('proposal_too_large');
+    }
     if (
       input.baseText !== undefined &&
       digest(input.baseText) !== input.baseRevision
-    )
-      throw new Error("proposal_baseline_mismatch");
+    ) {
+      throw new Error('proposal_baseline_mismatch');
+    }
     const inputDigest = digest(
       JSON.stringify([
         input.documentId,
@@ -238,18 +249,21 @@ export class PgStore {
         receipt: null,
       };
       const inserted = await c.query(
-        "INSERT INTO dev_workspace.content_proposal(id,actor,idempotency_key,input_digest,record) VALUES($1,$2,$3,$4,$5) ON CONFLICT(actor,idempotency_key) DO NOTHING RETURNING record",
+        'INSERT INTO dev_workspace.content_proposal(id,actor,idempotency_key,input_digest,record) VALUES($1,$2,$3,$4,$5) ON CONFLICT(actor,idempotency_key) DO NOTHING RETURNING record',
         [proposal.id, input.actor, input.idempotencyKey, inputDigest, proposal],
       );
-      if (inserted.rowCount) return proposal;
+      if (inserted.rowCount) {
+        return proposal;
+      }
       const previous = (
         await c.query(
-          "SELECT record,input_digest FROM dev_workspace.content_proposal WHERE actor=$1 AND idempotency_key=$2",
+          'SELECT record,input_digest FROM dev_workspace.content_proposal WHERE actor=$1 AND idempotency_key=$2',
           [input.actor, input.idempotencyKey],
         )
       ).rows[0];
-      if (previous.input_digest !== inputDigest)
-        throw new Error("idempotency_conflict");
+      if (previous.input_digest !== inputDigest) {
+        throw new Error('idempotency_conflict');
+      }
       return previous.record;
     });
   }
@@ -261,17 +275,20 @@ export class PgStore {
     await this.transaction(async (c) => {
       const row = (
         await c.query(
-          "SELECT record FROM dev_workspace.content_proposal WHERE id=$1 AND actor=$2 FOR UPDATE",
+          'SELECT record FROM dev_workspace.content_proposal WHERE id=$1 AND actor=$2 FOR UPDATE',
           [id, actor],
         )
       ).rows[0];
-      if (!row) throw new Error("proposal_not_found");
+      if (!row) {
+        throw new Error('proposal_not_found');
+      }
       const proposal = row.record as Proposal;
-      if (proposal.receipt && !isDeepStrictEqual(proposal.receipt, receipt))
-        throw new Error("receipt_conflict");
+      if (proposal.receipt && !isDeepStrictEqual(proposal.receipt, receipt)) {
+        throw new Error('receipt_conflict');
+      }
       proposal.receipt = receipt;
       await c.query(
-        "UPDATE dev_workspace.content_proposal SET record=$1,updated_at=now() WHERE id=$2",
+        'UPDATE dev_workspace.content_proposal SET record=$1,updated_at=now() WHERE id=$2',
         [proposal, id],
       );
     });
@@ -280,7 +297,7 @@ export class PgStore {
     return (
       (
         await this.pool.query(
-          "SELECT record FROM dev_workspace.content_proposal WHERE id=$1 AND actor=$2",
+          'SELECT record FROM dev_workspace.content_proposal WHERE id=$1 AND actor=$2',
           [id, actor],
         )
       ).rows[0]?.record ?? null
@@ -289,24 +306,24 @@ export class PgStore {
   async listProposals(actor: string): Promise<Proposal[]> {
     return (
       await this.pool.query(
-        "SELECT record FROM dev_workspace.content_proposal WHERE actor=$1 ORDER BY created_at DESC LIMIT 100",
+        'SELECT record FROM dev_workspace.content_proposal WHERE actor=$1 ORDER BY created_at DESC LIMIT 100',
         [actor],
       )
     ).rows.map((r) => r.record);
   }
   async recordArtifact(
     run: Run,
-    evidence: import("../workflows/run").Evidence,
+    evidence: import('../workflows/run').Evidence,
   ) {
     await this.pool.query(
-      "INSERT INTO dev_workspace.artifact_ref(id,run_id,actor,kind,source_revision,checksum,manifest) VALUES($1,$2,$3,$4,$5,$6,$7)",
+      'INSERT INTO dev_workspace.artifact_ref(id,run_id,actor,kind,source_revision,checksum,manifest) VALUES($1,$2,$3,$4,$5,$6,$7)',
       [
         randomUUID(),
         run.id,
         run.actor,
         evidence.kind,
         run.context.digest,
-        evidence.artifactRef.replace(/^sha256:/, ""),
+        evidence.artifactRef.replace(/^sha256:/, ''),
         evidence,
       ],
     );

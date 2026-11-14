@@ -1,4 +1,5 @@
-export type Workflow = {
+import { digest } from '../content/parse';
+export interface Workflow {
   id: string;
   revision: string;
   stages: {
@@ -8,8 +9,8 @@ export type Workflow = {
     outputs: string[];
     optional: boolean;
   }[];
-};
-export type TaskContext = {
+}
+export interface TaskContext {
   goal: string;
   project: string;
   repoCommit: string;
@@ -22,24 +23,33 @@ export type TaskContext = {
   acceptance: string[];
   stageIds: string[];
   digest: string;
-};
+}
 export function parseWorkflow(source: string): Workflow {
   const match = source.match(/```workspace-workflow\s*\n([\s\S]*?)\n```/);
-  if (!match) throw new Error("Workflow definition missing");
-  const parsed = JSON.parse(match[1]) as Omit<Workflow, "revision">;
+  if (!match) {
+    throw new Error('Workflow definition missing');
+  }
+  const parsed = JSON.parse(match[1]) as Omit<Workflow, 'revision'>;
   if (
     !/^[a-z][\w-]*$/.test(parsed.id) ||
     !Array.isArray(parsed.stages) ||
     !parsed.stages.length
-  )
-    throw new Error("Invalid workflow");
+  ) {
+    throw new Error('Invalid workflow');
+  }
   const stages = new Map(parsed.stages.map((s) => [s.id, s]));
-  if (stages.size !== parsed.stages.length) throw new Error("Duplicate stage");
-  const done = new Set<string>(),
-    active = new Set<string>();
-  const walk = (id: string) => {
-    if (active.has(id)) throw new Error("Dependency cycle 循环");
-    if (done.has(id)) return;
+  if (stages.size !== parsed.stages.length) {
+    throw new Error('Duplicate stage');
+  }
+  const done = new Set<string>();
+  const active = new Set<string>();
+  function walk(id: string) {
+    if (active.has(id)) {
+      throw new Error('Dependency cycle 循环');
+    }
+    if (done.has(id)) {
+      return;
+    }
     const stage = stages.get(id);
     if (
       !stage ||
@@ -47,14 +57,19 @@ export function parseWorkflow(source: string): Workflow {
       !Array.isArray(stage.outputs) ||
       !stage.outputs.length ||
       !Array.isArray(stage.needs)
-    )
-      throw new Error("Missing stage input/output");
+    ) {
+      throw new Error('Missing stage input/output');
+    }
     active.add(id);
-    for (const parent of stage.needs) walk(parent);
+    for (const parent of stage.needs) {
+      walk(parent);
+    }
     active.delete(id);
     done.add(id);
-  };
-  for (const stage of parsed.stages) walk(stage.id);
+  }
+  for (const stage of parsed.stages) {
+    walk(stage.id);
+  }
   return { ...parsed, revision: digest(source) };
 }
 export function buildContext(input: {
@@ -77,8 +92,9 @@ export function buildContext(input: {
     !input.acceptance.length ||
     !input.allowedActions.length ||
     !Number.isFinite(input.expiresAt)
-  )
-    throw new Error("Incomplete task context");
+  ) {
+    throw new Error('Incomplete task context');
+  }
   let remaining = Math.min(input.budget ?? 12000, 48000);
   const documents = input.documents.map((d) => {
     const excerpt = d.source.slice(0, Math.max(remaining, 0));
@@ -96,7 +112,7 @@ export function buildContext(input: {
     allowedActions: input.allowedActions,
     expiresAt: input.expiresAt,
     acceptance: input.acceptance,
-    stageIds: input.stageIds ?? ["accept"],
+    stageIds: input.stageIds ?? ['accept'],
   };
   return { ...context, digest: digest(JSON.stringify(context)) };
 }
@@ -120,4 +136,3 @@ export function contextMatches(
     )
   );
 }
-import { digest } from "../content/parse";

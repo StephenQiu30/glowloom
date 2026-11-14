@@ -1,12 +1,12 @@
-import { Handoff } from "@/components/handoff";
-import { getSnapshot } from "@/content/runtime";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-export const metadata = { title: "任务与交接" };
+import { Handoff } from '@/components/handoff';
+import { getSnapshot } from '@/content/runtime';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+export const metadata = { title: '任务与交接' };
 export default async function TasksPage() {
   const snapshot = await getSnapshot();
-  const online = process.env.NEXT_PUBLIC_WORKSPACE_MODE === "online";
+  const online = process.env.NEXT_PUBLIC_WORKSPACE_MODE === 'online';
   return (
     <div className="page">
       <div className="page-heading">
@@ -22,12 +22,12 @@ export default async function TasksPage() {
       </div>
       <Alert>
         <AlertTitle>
-          {online ? "进入在线协作台管理任务" : "当前为静态阅读版"}
+          {online ? '进入在线协作台管理任务' : '当前为静态阅读版'}
         </AlertTitle>
         <AlertDescription>
           {online
-            ? "创建任务、审阅文档提案、核对运行状态和交接产物。执行前检查主机及授权。"
-            : "可阅读工作流和 Skill，实际运行、文档编辑及恢复需进入独立在线版。"}
+            ? '创建任务、审阅文档提案、核对运行状态和交接产物。执行前检查主机及授权。'
+            : '可阅读工作流和 Skill，实际运行、文档编辑及恢复需进入独立在线版。'}
         </AlertDescription>
       </Alert>
       <Handoff

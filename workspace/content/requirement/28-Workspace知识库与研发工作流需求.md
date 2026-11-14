@@ -82,6 +82,34 @@
 
 **已确认：** 仅交付本次 Workspace 源码、相关规范与知识迁移至 main 并推送。混合文件按内容拆分；其他任务源码、Go架构草稿及其导航保留在工作区。真实TTS继续禁用，不上传声音、不收费合成；推送代码不等于生产部署或业务库变更。
 
+<a id="src-ws-11"></a>
+**SRC-WS-11｜统一组件与交互规范并启动知识库**
+
+> 这里存在很大的问题时我们搭建的知识库并没有遵循我们的 Vercel 的设计规范，并且所有的组件都要基于 shadcn 来实现，并且遵循 ui-ux-pro-max 的设计规范，进行对应的调整并启动我们的知识库
+
+**已确认：** 调整现有知识库和在线协作台的布局、组件与交互；以根 DESIGN 的 Radix Nova、Neutral、Geist 为视觉权威，落实 Vercel Web Interface Guidelines／React Best Practices，并使用用户指定的 shadcn 与 UI/UX Pro Max 技能。允许本地实现、验证与启动；本轮没有新增提交、推送、远程发布或真实 TTS 授权。现有 Markdown 正文的语义标签与原生 audio 不属于重复实现 UI 原语。
+
+<a id="src-ws-12"></a>
+**SRC-WS-12｜Google TypeScript 规范**
+
+> 包括我们的实现结果也应该遵循的是 Google TS 的设计规范
+
+**已确认：** Workspace 自有 TS／TSX、脚本及测试按 Google TypeScript Style Guide 编写与审查，配合 strict、ESLint 与 Prettier。Next.js 页面／布局及配置的必需默认导出、第三方默认导入与框架文件命名保留；frontend 的 shadcn 原语保持其现有源规范，不能修改生成副本。
+
+<a id="src-ws-13"></a>
+**SRC-WS-13｜独立工程与 Sidebar 重新实现**
+
+> 按照我们的项目的设计规范，我们当前的项目中不应该出现这种脚本文件，script 文件夹应该删除，第二点，我们当前的项目中workspace 是一个单独的部署的项目，因此我们应该独立的实现我们的业务和服务，使用 shadcn 中还有 sider 组件来重新做设计实现
+
+**已确认：** 删除 Workspace 的 scripts 目录，功能归入明确的构建、内容、运行模块及薄命令入口；不删除其他业务工程的工具。Workspace 独立持有 shadcn 配置、组件、Hook、主题与图标，使用官方 Sidebar 组合重整导航，不再复制 frontend 源码。静态与在线部署独立，执行桥作为显式连接的外部能力。根规范、业务源码与唯一 schema 继续属于原工程；知识导入为受控版本快照，不建立第二份可写权威。Google TS、已有功能与真实 TTS 禁用约束继续有效。
+
+<a id="src-ws-14"></a>
+**SRC-WS-14｜规范精简与限定提交推送**
+
+> 将本次 Workspace 独立工程重构、Sidebar 实现及相关文档修改提交到 main 并推送，只提交本次相关改动，保留其他并行修改，真实 TTS 继续保持关闭。当前我们的 workspace 下的服务需要遵循 Vercel 的设计规范和最佳实现，并且遵循 Google TS 的设计规范，删除冗余设计，保持简洁，包括 test 服务都需要保持规范。
+
+**已确认：** 在既有独立工程和 Sidebar 实现上复核 Vercel React／界面规则与 Google TS，精简无效耦合，测试采用相同质量门禁并显式配置真实服务凭据。仅提交 Workspace 源码、测试、直接关联的需求链／使用说明、Workspace CI 与根工程事实／进度的相关段落至 main 并推送；保留其他业务源码和文档的并行改动。真实 TTS 持续关闭；本条不批准远程部署、业务库变更或真实收费生成。
+
 ## 2. 使用者与问题
 
 | 使用者                 | 需要解决的问题                                                       |

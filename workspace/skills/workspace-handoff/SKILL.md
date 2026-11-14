@@ -1,6 +1,6 @@
 ---
 name: workspace-handoff
-description: "结束阶段、断连恢复、新会话接手、知识回写或审阅提案时使用。"
+description: '结束阶段、断连恢复、新会话接手、知识回写或审阅提案时使用。'
 ---
 
 # 知识回写与任务交接

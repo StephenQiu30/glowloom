@@ -4,7 +4,7 @@
 
 ## 1. 初始化与静态阅读
 
-在仓库的 `workspace/` 目录安装锁定依赖，执行 `pnpm build:static`，再执行 `pnpm serve:static`。默认只监听 `127.0.0.1:1131`，不会启动业务 API、PG、Redis、Kafka、Codex 或 TTS。
+在独立 `workspace/` 工程安装锁定依赖，先用 `pnpm knowledge:sync --repository <项目仓库>` 导入项目规范的受控快照（同仓研发可传 `..`），再执行 `pnpm build:static`，再执行 `pnpm serve:static`。默认只监听 `127.0.0.1:1131`，不会启动业务 API、PG、Redis、Kafka、Codex 或 TTS。
 
 构建输入包含允许范围的正文、根规范、Skill、流程及可选音频。输出为 `dist/static/<release_id>/`，其 `release.json` 记录来源、范围、音频指纹和资源摘要清单。`current.json` 仅指向上次成功产物；构建失败不会替换它。脏工作区产物标为本地预览，不代表已发布提交。
 
@@ -14,7 +14,7 @@
 
 ## 2. 在线启动与身份
 
-执行 `pnpm build:online` 后，以 `pnpm start:online` 启动。启动器监听 `127.0.0.1:1130`，创建本机私有令牌和受控桥；令牌文件为 `.local/access-token`，权限为0600，不打印到日志或发送到模型。可通过运行环境设置 `GLOWLOOM_WORKSPACE_SESSION_SECRET`，不把它写入构建参数或 `NEXT_PUBLIC_*`。
+执行 `pnpm build:online` 后，以 `pnpm start:online` 启动。启动器监听 `127.0.0.1:1130`，创建本机私有令牌；不自动绑定仓库或启动受控桥；令牌文件为 `.local/access-token`，权限为0600，不打印到日志或发送到模型。可通过运行环境设置 `GLOWLOOM_WORKSPACE_SESSION_SECRET`，不把它写入构建参数或 `NEXT_PUBLIC_*`。
 
 浏览器输入令牌后取得30分钟 HttpOnly、SameSite=Strict 会话。写请求还需同源和会话绑定的 CSRF。退出不删除已发生的运行事实；轮换令牌并重启在线服务可使原会话失效。首版仅本机 owner，团队身份提供方未接入，不使用产品账号自动授予研发权限。
 
@@ -31,6 +31,9 @@
 未配置或PG失联时，受控知识快照仍可阅读，写入与运行显示不可用。运行保留期和生产容量在部署前核定；不得把缺失监控或未运行验收补为零或通过。
 
 ## 4. 编辑、主机与交接
+
+站点与执行桥独立启动。桥通过 `pnpm start:bridge --repository <项目仓库>` 运行；在线站点显式配置 `GLOWLOOM_WORKSPACE_BRIDGE_SOCKET` 与 `GLOWLOOM_WORKSPACE_BRIDGE_TOKEN` 后连接。本机可使用 `pnpm dev --repository ..` 显式组合；未连接桥仍可认证阅读，不能执行或落地。生产在线包使用 `node runtime.ts` 启动，不需要 pnpm、tsx、父目录 frontend 或可写源码。
+
 
 协作台先读取当前原文，再保存带基线摘要的提案。审阅修改前后后单独应用；已有修改导致冲突时保留提案，不覆盖正文。应用、Git提交、合并和站点发布互相独立；在线正文落地不会自动更新已发布阅读快照。
 

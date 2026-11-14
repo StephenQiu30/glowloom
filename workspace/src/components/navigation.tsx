@@ -1,155 +1,232 @@
-"use client";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+'use client';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
-  BookOpen,
-  Boxes,
-  GitBranch,
-  ListChecks,
-  FolderGit2,
-  Search,
-  PanelLeft,
-  ChevronRight,
-  ArrowUpRight,
-} from "lucide-react";
-import { cn } from "cn";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type CSSProperties,
+} from 'react';
+import { BookOpen, Search } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Kbd } from '@/components/ui/kbd';
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from '@/components/ui/sidebar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { ThemeToggle } from '@/components/theme';
+import {
+  WorkspaceSidebar,
+  workspaceSections,
+  type DirectoryItem,
+} from '@/components/workspace-sidebar';
 
-type Item = { id: string; title: string; category: string };
-const sections = [
-  { href: "/", label: "知识库", icon: BookOpen },
-  { href: "/skills/", label: "Skill", icon: Boxes },
-  { href: "/workflows/", label: "工作流", icon: GitBranch },
-  { href: "/tasks/", label: "任务", icon: ListChecks },
-  { href: "/engineering/", label: "工程", icon: FolderGit2 },
-];
+const sidebarStyle: CSSProperties & { '--sidebar-width': string } = {
+  '--sidebar-width': '15rem',
+};
 
-function Directory({
-  items,
-  categories,
-  onNavigate,
-}: {
-  items: Item[];
-  categories: Record<string, string>;
-  onNavigate?: () => void;
-}) {
-  const pathname = usePathname();
-  const [query, setQuery] = useState("");
+interface NavigationProps {
+  readonly items: DirectoryItem[];
+  readonly categories: Record<string, string>;
+  readonly children: ReactNode;
+  readonly online: boolean;
+  readonly preview: boolean;
+}
+/** Shares one accessible sidebar and search palette across both build modes. */
+export function Navigation(props: NavigationProps) {
   return (
-    <nav aria-label="项目目录" className="directory">
-      <Link href="/" className="brand" onClick={onNavigate}>
-        <span className="brand-mark">织</span>
-        <span>
-          织光<span className="brand-subtitle">Workspace</span>
-        </span>
-      </Link>
-      <Button asChild variant="outline" className="nav-search">
-        <Link href="/search/" onClick={onNavigate}>
-          <Search data-icon="inline-start" />
-          搜索知识库<kbd>⌕</kbd>
-        </Link>
-      </Button>
-      <div className="primary-nav">
-        {sections.map(({ href, label, icon: Icon }) => (
-          <Link
-            href={href}
-            onClick={onNavigate}
-            key={href}
-            className={cn("nav-link", pathname === href && "active")}
-          >
-            <Icon aria-hidden="true" />
-            {label}
-          </Link>
-        ))}
-      </div>
-      <div className="directory-heading">
-        项目文档
-        <Link href="/graph/" onClick={onNavigate} aria-label="查看知识关系">
-          <GitBranch />
-        </Link>
-      </div>
-      <Input
-        aria-label="筛选目录"
-        placeholder="筛选文档…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="directory-filter"
-      />
-      <div className="directory-groups">
-        {Object.entries(categories).map(([category, label]) => {
-          const docs = items.filter(
-            (item) =>
-              item.category === category &&
-              item.title.toLowerCase().includes(query.toLowerCase()),
-          );
-          if (!docs.length) return null;
-          return (
-            <details key={category} open={query ? true : undefined}>
-              <summary>
-                <ChevronRight aria-hidden="true" />
-                {label}
-                <span>{docs.length}</span>
-              </summary>
-              <div>
-                {docs.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/read/${item.id}/`}
-                    onClick={onNavigate}
-                    className={cn(
-                      "document-link",
-                      pathname === `/read/${item.id}/` && "active",
-                    )}
-                    title={item.title}
-                  >
-                    {item.title}
-                  </Link>
-                ))}
-              </div>
-            </details>
-          );
-        })}
-      </div>
-      <div className="directory-footer">
-        <Link href="/engineering/" onClick={onNavigate}>
-          同仓知识与工程
-          <ArrowUpRight />
-        </Link>
-      </div>
-    </nav>
+    <SidebarProvider style={sidebarStyle}>
+      <WorkspaceShell {...props} />
+    </SidebarProvider>
   );
 }
-export function Navigation(props: {
-  items: Item[];
-  categories: Record<string, string>;
-}) {
-  const [open, setOpen] = useState(false);
+
+function WorkspaceShell({
+  items,
+  categories,
+  children,
+  online,
+  preview,
+}: NavigationProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { setOpenMobile, isMobile, state } = useSidebar();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchTrigger = useRef<HTMLButtonElement>(null);
+  const menuTrigger = useRef<HTMLButtonElement>(null);
+  const current = items.find((item) => pathname === `/read/${item.id}/`);
+  const title =
+    current?.title ??
+    workspaceSections.find((section) => section.href === pathname)?.label ??
+    (pathname === '/operations/' ? '在线协作台' : '搜索知识库');
+  const matching = items
+    .filter((item) =>
+      item.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+    )
+    .slice(0, 20);
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setSearchOpen((open) => !open);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+  function navigate(href: string) {
+    const event = new CustomEvent('workspace:navigate', {
+      cancelable: true,
+      detail: { href },
+    });
+    if (!document.dispatchEvent(event)) {
+      setSearchOpen(false);
+      return;
+    }
+    setSearchOpen(false);
+    setOpenMobile(false);
+    router.push(href);
+  }
   return (
     <>
-      <aside className="desktop-sidebar">
-        <Directory {...props} />
-      </aside>
-      <div className="mobile-menu">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="icon" aria-label="打开项目目录">
-              <PanelLeft />
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="mobile-directory">
-            <DialogTitle className="sr-only">项目目录</DialogTitle>
-            <Directory {...props} onNavigate={() => setOpen(false)} />
-          </DialogContent>
-        </Dialog>
-      </div>
+      <WorkspaceSidebar
+        items={items}
+        categories={categories}
+        online={online}
+        preview={preview}
+        trigger={menuTrigger}
+      />
+      <SidebarInset id="main" tabIndex={-1} className="min-w-0">
+        <header
+          className="flex h-16 shrink-0 items-center gap-3 px-4 md:px-8"
+          data-pagefind-ignore
+        >
+          <SidebarTrigger
+            ref={menuTrigger}
+            aria-label={
+              isMobile
+                ? '打开项目目录'
+                : state === 'expanded'
+                  ? '折叠侧栏'
+                  : '展开侧栏'
+            }
+          />
+          <Breadcrumb className="min-w-0 flex-1">
+            <BreadcrumbList className="flex-nowrap">
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Link href="/">Workspace</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem className="min-w-0">
+                <BreadcrumbPage className="truncate">
+                  {current ? categories[current.category] : title}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <Badge variant="outline" className="hidden sm:inline-flex">
+            {online ? '在线协作' : '静态阅读'}
+            {preview ? ' · 预览' : ''}
+          </Badge>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                ref={searchTrigger}
+                variant="ghost"
+                size="icon"
+                aria-label="搜索知识库"
+                onClick={() => setSearchOpen(true)}
+              >
+                <Search />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              搜索知识库 <Kbd>⌘ / Ctrl K</Kbd>
+            </TooltipContent>
+          </Tooltip>
+          <ThemeToggle />
+        </header>
+        <div className="min-w-0 flex-1">{children}</div>
+        <footer
+          className="px-4 py-6 text-xs text-muted-foreground md:px-8"
+          data-pagefind-ignore
+        >
+          织光 Workspace · 知识与工程共用同一版本
+        </footer>
+      </SidebarInset>
+      <CommandDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        title="搜索知识库"
+        description="查找文档标题，或打开全文搜索。"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          searchTrigger.current?.focus();
+        }}
+      >
+        <Command label="知识库搜索">
+          <CommandInput
+            placeholder="搜索文档标题…"
+            value={query}
+            onValueChange={setQuery}
+          />
+          <CommandList>
+            <CommandEmpty>没有找到匹配的标题，试试全文搜索。</CommandEmpty>
+            <CommandGroup heading="全文搜索">
+              <CommandItem
+                value={`全文搜索 ${query}`}
+                onSelect={() =>
+                  navigate(`/search/?q=${encodeURIComponent(query)}`)
+                }
+              >
+                <Search aria-hidden="true" />
+                全文搜索{query ? `「${query}」` : ''}
+              </CommandItem>
+            </CommandGroup>
+            <CommandGroup heading="项目文档">
+              {matching.map((item) => (
+                <CommandItem
+                  key={item.id}
+                  value={item.title}
+                  onSelect={() => navigate(`/read/${item.id}/`)}
+                >
+                  <BookOpen aria-hidden="true" />
+                  <span>{item.title}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </CommandDialog>
     </>
   );
 }

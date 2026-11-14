@@ -1,5 +1,7 @@
-import { Operations } from "@/online/components/operations";
-export const metadata = { title: "在线协作台" };
+import { Suspense } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Operations } from '@/online/components/operations';
+export const metadata = { title: '在线协作台' };
 export default function OperationsPage() {
   return (
     <div className="page">
@@ -9,7 +11,9 @@ export default function OperationsPage() {
           <p>审阅提案、固定任务上下文，按阶段核对真实交付。</p>
         </div>
       </div>
-      <Operations />
+      <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+        <Operations />
+      </Suspense>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 ---
 name: workspace-browser
-description: "验收知识库、产品界面、键盘操作、响应式或真实媒体交互时使用。"
+description: '验收知识库、产品界面、键盘操作、响应式或真实媒体交互时使用。'
 ---
 
 # 浏览器交互验收
