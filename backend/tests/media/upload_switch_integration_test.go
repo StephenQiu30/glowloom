@@ -22,6 +22,7 @@ import (
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func uploadRoutingPolicy() mediaapp.UploadPolicy {
@@ -86,7 +87,9 @@ func (routingScopeStub) AuthorizeCopyTarget(context.Context, identityapp.Princip
 	return nil
 }
 func routingMediaStore(database *gorm.DB) *pgmedia.Store {
-	return pgmedia.NewScopedStore(database, func(*gorm.DB) mediaapp.ScopeAccess { return routingScopeStub{} })
+	return pgmedia.NewScopedStore(database, func(tx *gorm.DB) mediaapp.ScopeAccess {
+		return routingUploadAccess{projects: pgworkspace.NewScopedProjectContentAccessStore(tx, routingUploadScope{})}
+	})
 }
 
 type persistedRoutedUpload struct {

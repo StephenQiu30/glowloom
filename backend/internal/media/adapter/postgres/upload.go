@@ -17,7 +17,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 // AuthorizeUpload checks the current actor and active project before body reading.
@@ -28,43 +27,30 @@ func (s *Store) AuthorizeUpload(ctx context.Context, actor identityapp.Principal
 	var aspect string
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		aspect, err = s.authorizeUpload(tx, actor, projectID, false)
+		aspect, err = s.authorizeUpload(tx, actor, projectID)
 		return err
 	})
 	return aspect, err
 }
 
-func (s scopeAuthority) authorizeUpload(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUID, lock bool) (string, error) {
-	if err := s.requireCurrentActor(tx, actor); err != nil {
+func (s scopeAuthority) uploadProjects(tx *gorm.DB) (application.UploadProjectAccess, error) {
+	access, err := s.accessScope(tx)
+	if err != nil {
+		return nil, err
+	}
+	projects, ok := access.(application.UploadProjectAccess)
+	if !ok {
+		return nil, ErrUnavailable
+	}
+	return projects, nil
+}
+
+func (s scopeAuthority) authorizeUpload(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUID) (string, error) {
+	projects, err := s.uploadProjects(tx)
+	if err != nil {
 		return "", err
 	}
-	if err := s.requireProject(tx, actor, projectID, true); err != nil {
-		return "", err
-	}
-	if projectID == uuid.Nil {
-		return "", ErrNotFound
-	}
-	query := tx.Table("workspace.project").Select("status", "aspect_ratio").Where("id = ? AND org_id = ? AND is_delete = ? AND status IN ?", projectID, actor.OrgID, false, []string{workspacedomain.ProjectStatusActive, workspacedomain.ProjectStatusArchived})
-	if lock {
-		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
-	} else {
-		query = query.Clauses(clause.Locking{Strength: "SHARE"})
-	}
-	var row struct {
-		Status      string
-		AspectRatio string
-	}
-	r := query.Take(&row)
-	if errors.Is(r.Error, gorm.ErrRecordNotFound) {
-		return "", ErrNotFound
-	}
-	if r.Error != nil {
-		return "", fmt.Errorf("authorize upload project: %w", r.Error)
-	}
-	if row.Status != workspacedomain.ProjectStatusActive {
-		return "", ErrProjectStateConflict
-	}
-	return row.AspectRatio, nil
+	return projects.AuthorizeUploadProject(tx.Statement.Context, actor, projectID)
 }
 
 // FindUpload returns the durable response only for an identical request body.
@@ -78,7 +64,7 @@ func (s *Store) FindUpload(ctx context.Context, actor identityapp.Principal, r a
 	var result application.UploadResult
 	var found bool
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := s.authorizeUpload(tx, actor, r.ProjectID, false); err != nil {
+		if _, err := s.authorizeUpload(tx, actor, r.ProjectID); err != nil {
 			return err
 		}
 		var err error
@@ -132,7 +118,7 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 	}
 	var result application.UploadResult
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := s.authorizeUpload(tx, actor, r.ProjectID, true); err != nil {
+		if _, err := s.authorizeUpload(tx, actor, r.ProjectID); err != nil {
 			return err
 		}
 		if prior, found, err := replayUpload(tx, actor, r); err != nil || found {
@@ -250,13 +236,12 @@ func (s *Store) UploadAssetExists(ctx context.Context, projectID, id uuid.UUID) 
 	}
 	var count int64
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var project struct{ ID uuid.UUID }
-		read := tx.Table("workspace.project").Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", projectID).Take(&project)
-		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
-			return ErrUnavailable
+		projects, err := s.uploadProjects(tx)
+		if err != nil {
+			return err
 		}
-		if read.Error != nil {
-			return read.Error
+		if err := projects.AwaitUploadProjectCommit(ctx, projectID); err != nil {
+			return err
 		}
 		return tx.Model(&assetRow{}).Where("id = ? AND project_id = ?", id, projectID).Count(&count).Error
 	})
