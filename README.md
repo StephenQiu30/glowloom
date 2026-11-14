@@ -21,7 +21,7 @@
 
 <p align="center"><sub>创作页本地实拍 · 2026-10-29。展示创作入口与参考内容；精选封面为 AI 生成的静态示例。</sub></p>
 
-> 同仓库独立 `agent` 服务使用 TypeScript、官方 Pi Durable 与 PostgreSQL；Go 提供业务授权、模型和工具。Docker Compose 统一启动四个服务，当前源码不依赖 Temporal 或旧 Agent 实现。完整合同见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，工程验证与真实创作接受见 [BACKLOG](BACKLOG.md#pi-durable-migration)。
+> 同仓库独立 `agent` 服务使用 TypeScript、官方 Pi Durable 与 PostgreSQL；Go 提供业务授权、模型和工具。Docker Compose 统一启动应用服务，当前源码不依赖 Temporal 或旧 Agent 实现。完整合同见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，工程验证与真实创作接受见 [BACKLOG](BACKLOG.md#pi-durable-migration)。
 
 ## 在织光中创作
 
@@ -65,11 +65,11 @@ docker compose ps
 
 首次启动成功后，打开工作台；需要私人素材、主体、画布或生成时，使用有效账号登录，并按对象权限访问。容器健康不等于真实生成能力已验收。
 
-`docker-compose.yml` 是应用的基础部署配置，包含 `frontend`、`gateway`、`backend`、`agent` 和 `canvas`。前端运行镜像内的 Next.js standalone 构建，经 Gateway 转发 `/api`，完整启动时等待 Gateway 和后端健康。业务后端仍在同一容器运行 API、worker、relay，并等待协作运行时健康后启动；Agent 的内部接口不经过公开 Gateway。四个业务服务的独立写入权按[设计44](workspace/content/design/44-Go微服务架构与技术选型设计.md)逐域验收，不由入口拆分推定完成。仅更新后端时执行：
+`docker-compose.yml` 是应用的基础部署配置，包含 `frontend`、`gateway`、`backend`、`worker`、`relay`、`agent` 和 `canvas`。前端运行 Next.js standalone 构建，经 Gateway 转发 `/api`。业务 API、持久任务、事件中继各用独立容器、探针与停机生命周期；三者仍复用同一业务镜像、配置与数据库，不是四域已独立。完整启动用 `--wait` 核对所有服务，Gateway 的 readiness 只探测 API，不以 worker 健康作为同步请求准入。Agent 内部调用不经过公开 Gateway。四域独立写入权按[设计44](workspace/content/design/44-Go微服务架构与技术选型设计.md)逐域验收。更新同一业务镜像时一起更新三个运行角色：
 
 ```sh
-docker compose up -d --build --wait backend
-docker compose logs --tail=100 backend
+docker compose up -d --build --wait backend worker relay
+docker compose logs --tail=100 backend worker relay
 ```
 
 后端已健康时，可单独更新前端：
@@ -113,7 +113,7 @@ psql "$GLOWLOOM_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f bac
 
 身份与会话密钥由 `.env` 直接注入，配置名及格式见 `.env.example`：`GLOWLOOM_IDENTITY_KEY`、`GLOWLOOM_IDENTITY_JWT_PRIVATE_KEY`、`GLOWLOOM_IDENTITY_JWT_VERIFY_KEYS`、`GLOWLOOM_IDENTITY_JWT_ACTIVE_KID`、`GLOWLOOM_IDENTITY_REFRESH_RECEIPT_KEY`。JWT 私钥使用 Base64 PEM，验证映射为 KID 到 Base64 公钥 PEM 的 JSON，回执密钥为独立32字节 Base64值；运行时不加载独立密钥文件或 Compose secret 挂载。已有密钥不得随启动重新生成，缺失密钥按恢复授权处理，身份主密钥必须保留。
 
-模型预设接入还需要独立的凭据加密 RSA 密钥对与请求 MAC 密钥，配置四个 `GLOWLOOM_CREDENTIAL_*` 项（见 `.env.example`）。采用 PEM 环境值，或由部署环境明确提供容器内只读密钥文件并配置对应 FILE 项；当前 Compose 不自动挂载宿主凭据目录。首次配置使用至少 2048 位 RSA 的 PKCS8 私钥及 PKIX 公钥；请求 MAC 密钥为随机 32 字节的十六进制编码。密钥文件和 `.env` 不进入 Git，已有加密凭据对应的密钥必须保留，不在启动时自动重新生成。配置私钥后 `--role=all` 会同时消费 `provider` 队列；独立部署仍通过 `--role=worker --queues=provider` 运行。
+模型预设接入还需要独立的凭据加密 RSA 密钥对与请求 MAC 密钥，配置四个 `GLOWLOOM_CREDENTIAL_*` 项（见 `.env.example`）。采用 PEM 环境值，或由部署环境明确提供容器内只读密钥文件并配置对应 FILE 项；当前 Compose 不自动挂载宿主凭据目录。首次配置使用至少 2048 位 RSA 的 PKCS8 私钥及 PKIX 公钥；请求 MAC 密钥为随机 32 字节的十六进制编码。密钥文件和 `.env` 不进入 Git，已有加密凭据对应的密钥必须保留，不在启动时自动重新生成。Compose 的 `worker --queues=auto` 与显式 `--role=all` 都在配置私钥后加入 `provider` 队列；没有私钥时只选 flow、media，agent.codex 不自动启用。显式 `--role=worker --queues=provider` 仍可单独选择供应商队列。
 
 Go 二进制和 Next.js 构建产物均在镜像构建阶段生成，容器启动时直接运行镜像内产物。变更代码、依赖、Dockerfile 或 Compose 配置后，使用上述带 `--build` 的命令更新对应服务。构建会纳入工作区当前源码，包括未提交修改。
 

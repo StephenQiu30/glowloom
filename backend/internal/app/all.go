@@ -13,16 +13,12 @@ import (
 // RunAll serves API, configured workers, and relay roles together.
 // A role failure cancels the others; the process waits for every role to exit.
 func RunAll(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
-	queues := "flow,media"
-	if cfg.HasCredentialPrivateKey() {
-		queues += ",provider"
-	}
 	roles := []struct {
 		name string
 		run  func(context.Context) error
 	}{
 		{"api", func(ctx context.Context) error { return RunAPI(ctx, cfg, logger) }},
-		{"worker", func(ctx context.Context) error { return RunWorker(ctx, cfg, logger, queues) }},
+		{"worker", func(ctx context.Context) error { return RunWorker(ctx, cfg, logger, "auto") }},
 		{"relay", func(ctx context.Context) error { return RunRelay(ctx, cfg, logger) }},
 	}
 	runCtx, cancel := context.WithCancel(ctx)

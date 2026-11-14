@@ -78,13 +78,15 @@ for port in ${GLOWLOOM_HOST_SERVICE_PORTS-5432 6379 9092}; do
   esac
   socat "TCP-LISTEN:$port,bind=127.0.0.1,reuseaddr,fork" "TCP:host.docker.internal:$port" &
 done
-# The local API requires a loopback listener. Forward Compose traffic to it.
-socat TCP-LISTEN:18080,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:8080 &
+# Only the API role needs a network bridge to its protected loopback listener.
+if [ "${GLOWLOOM_COMPOSE_API_PROXY-true}" = "true" ]; then
+  socat TCP-LISTEN:18080,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:8080 &
+fi
 exec /usr/local/bin/glowloom "$@"
 ENTRYPOINT
 USER 65532:65532
 EXPOSE 18080
 ENTRYPOINT ["/usr/local/bin/glowloom-compose-entrypoint"]
-CMD ["--role=all"]
+CMD ["--role=api"]
 
 FROM runtime AS production

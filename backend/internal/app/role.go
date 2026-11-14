@@ -3,7 +3,6 @@ package app
 import (
 	"errors"
 	"fmt"
-	"strings"
 )
 
 // Role identifies a backend process role selected by the command-line entrypoint.
@@ -36,52 +35,4 @@ func ParseRole(value string) (Role, error) {
 	default:
 		return "", fmt.Errorf("%w: %q, want api|worker|relay|all", ErrUnknownRole, value)
 	}
-}
-
-// WorkerQueue returns the canonical set of implemented backend queues.
-func WorkerQueue(value string) (string, error) {
-	if value == "" {
-		return "flow", nil
-	}
-	var flow, media, provider, codex bool
-	for _, item := range strings.Split(value, ",") {
-		switch strings.TrimSpace(item) {
-		case "agent.codex":
-			if codex {
-				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
-			}
-			codex = true
-		case "flow":
-			if flow {
-				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
-			}
-			flow = true
-		case "provider":
-			if provider {
-				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
-			}
-			provider = true
-		case "media":
-			if media {
-				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
-			}
-			media = true
-		default:
-			return "", fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, item)
-		}
-	}
-	var selected []string
-	if flow {
-		selected = append(selected, "flow")
-	}
-	if media {
-		selected = append(selected, "media")
-	}
-	if provider {
-		selected = append(selected, "provider")
-	}
-	if codex {
-		selected = append(selected, "agent.codex")
-	}
-	return strings.Join(selected, ","), nil
 }

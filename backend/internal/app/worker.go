@@ -15,7 +15,7 @@ import (
 
 // RunWorker serves each selected backend queue until cancellation or failure.
 func RunWorker(ctx context.Context, cfg config.Config, logger *zap.Logger, queues string) error {
-	selected, err := WorkerQueue(queues)
+	selected, err := ResolveWorkerQueues(queues, cfg)
 	if err != nil {
 		return err
 	}
