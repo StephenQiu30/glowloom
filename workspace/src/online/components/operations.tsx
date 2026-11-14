@@ -190,7 +190,7 @@ export function Operations() {
         <Badge variant="outline">本机协作</Badge>
         <span className="subtle-note">
           存储：{status?.database ? '已连接' : '未连接'}　执行桥：
-          {status?.bridge ? '已连接' : '未连接'}　真实 TTS：未启用
+          {status?.bridge ? '已连接' : '未连接'}
         </span>
         <Button
           variant="ghost"

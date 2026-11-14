@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFile, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { loadSnapshot } from '../../content/catalog';
-import { digest } from '../../content/parse';
+import { digest } from '../../content/identity';
 import {
   contextMatches,
   parseWorkflow,

@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { isDeepStrictEqual } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { digest } from '../content/parse';
+import { digest } from '../content/identity';
 import { evolveRun, type Run, type Action } from '../workflows/run';
 import type { TaskContext } from '../workflows/definition';
 export interface Proposal {

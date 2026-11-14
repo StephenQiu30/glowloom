@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { freezeNarration } from '../../src/narration/release';
-import { digest } from '../../src/content/parse';
+import { digest } from '../../src/content/identity';
 it('freezes audio identity and requires separate public scope', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ws-narr-'));
   const doc = { id: 'd', revision: 'r', blocks: [] };

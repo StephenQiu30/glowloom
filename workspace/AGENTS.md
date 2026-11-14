@@ -14,3 +14,4 @@
 
 10. 自有 TS／TSX、工具入口与测试遵循 [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)：命名函数、单变量声明、单引号、花括号、导入前置、对象形状优先 interface、unknown 边界校验；strict／lint／format 作为可执行门禁。Next.js 页面、布局及配置要求的默认导出和文件命名是框架例外，其他自有模块使用命名导出。第三方导入按其真实导出；本地 shadcn 原语经审阅后独立维护并纳入同样门禁。
 11. UI 继承根 DESIGN，布局及控件复用现有 shadcn。修改界面须核验 Vercel Web Interface Guidelines 与 React Best Practices，并按适用 UI/UX Pro Max 规则检查键盘、焦点、移动端、双主题和减少动态效果。Markdown 正文与原生媒体保留标准语义。
+12. 通用文档能力使用 Fumadocs Core／Headless；shadcn 负责界面。正文仍按普通 Markdown 处理，不引入可执行 MDX。catalog 的文档 ID、旧阅读／raw 地址和显式锚点保持稳定，先做隔离全量兼容再替换。身份／摘要模块不得依赖文档渲染器；不建设 TTS 服务。

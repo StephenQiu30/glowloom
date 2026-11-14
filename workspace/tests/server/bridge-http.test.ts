@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { startBridge } from '../../src/server/bridge/service';
-import { digest } from '../../src/content/parse';
+import { digest } from '../../src/content/identity';
 it('preserves Chinese text across split UTF-8 IPC chunks', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ws-ipc-'));
   const socket = '/tmp/ws-ipc-' + randomUUID() + '.sock';

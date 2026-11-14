@@ -116,34 +116,3 @@ export function cueAt(segment: Segment, seconds: number): Cue | null {
   const ms = seconds * 1000;
   return segment.cues.find((c) => c.startMs <= ms && ms < c.endMs) ?? null;
 }
-export function planSegments(
-  texts: { id: string; textDigest: string }[],
-  config: string,
-  cache: {
-    id: string;
-    textDigest: string;
-    configDigest: string;
-    status: string;
-  }[],
-): { id: string; action: string }[] {
-  return texts.map((t) => {
-    const existing = cache.find(
-      (c) =>
-        c.id === t.id &&
-        c.textDigest === t.textDigest &&
-        c.configDigest === config,
-    );
-    return {
-      id: t.id,
-      action:
-        existing?.status === 'ready'
-          ? 'reuse'
-          : cache.some(
-                (c) =>
-                  c.id === t.id && ['unknown', 'running'].includes(c.status),
-              )
-            ? 'reconcile'
-            : 'generate',
-    };
-  });
-}

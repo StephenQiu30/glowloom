@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { cache } from 'react';
 import type { Snapshot } from './catalog';
+import { createDocumentSource } from './source';
 
 export const getSnapshot = cache(async (): Promise<Snapshot> => {
   return JSON.parse(
@@ -21,3 +22,7 @@ export const categoryNames: Record<string, string> = {
   superpowers: '专项计划',
   工程规范: '工程规范',
 };
+
+export const getDocumentSource = cache(async () =>
+  createDocumentSource(await getSnapshot(), categoryNames),
+);

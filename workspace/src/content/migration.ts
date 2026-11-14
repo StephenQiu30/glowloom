@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
-import { digest } from './parse';
+import { digest } from './identity';
 import { rewriteMarkdownLinks } from './catalog';
 
 export async function migrateKnowledge(

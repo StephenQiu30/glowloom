@@ -16,7 +16,7 @@ import puppeteer from 'puppeteer-core';
 import { chromium } from '@playwright/test';
 import { renderMermaid } from '@mermaid-js/mermaid-cli';
 import { loadSnapshot, validateLinks } from '../content/catalog';
-import { digest } from '../content/parse';
+import { digest } from '../content/identity';
 import { sealRelease, selectRelease } from './release';
 import { categoryNames } from '../content/runtime';
 import { aliasRedirect } from './aliases';

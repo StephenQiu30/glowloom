@@ -127,3 +127,32 @@ test('collapses the local shadcn sidebar to icons and keeps document navigation 
   ).toBeVisible();
   await expect(document).toHaveAttribute('aria-current', 'page');
 });
+
+test('uses the framework tree, heading observer and adjacent document links without changing old routes', async ({
+  page,
+}) => {
+  await page.goto('/read/doc-e75d48f9905e/');
+  const directory = page.getByRole('navigation', { name: '项目目录' });
+  await expect(
+    directory.locator('a[href="/read/doc-e75d48f9905e/"]'),
+  ).toHaveAttribute('aria-current', 'page');
+  await page.goto('/read/design-43/');
+  const outline = page
+    .locator('aside.toc')
+    .getByRole('navigation', { name: '本页目录' });
+  const link = outline
+    .getByRole('link')
+    .filter({ hasText: '7.1 决策与权威归属' });
+  await link.click();
+  await expect(page).toHaveURL(/#7[.]1-|#71-/);
+  await expect(link).toHaveAttribute('data-active', 'true');
+  const next = page
+    .getByRole('navigation', { name: '相邻文档' })
+    .getByRole('link', { name: /^下一篇/ });
+  const href = await next.getAttribute('href');
+  expect(href).toMatch(/^\/read\/.+\/$/);
+  await next.click();
+  await expect(page).toHaveURL((url) => url.pathname === href);
+  await page.goto('/read/root-readme/');
+  await expect(page.locator('main h1')).toHaveCount(1);
+});

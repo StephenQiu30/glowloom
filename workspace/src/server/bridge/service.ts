@@ -10,7 +10,7 @@ import { CodexHost, type TaskResult } from '../executors/codex';
 import { atomicWrite, readJson, claimJson } from './files';
 import { readDocument, applyProposal } from './proposals';
 import { liveContext, currentContext } from './context';
-import { digest } from '../../content/parse';
+import { digest } from '../../content/identity';
 import { parseWorkflow, type TaskContext } from '../../workflows/definition';
 import type { Evidence } from '../../workflows/run';
 const execute = promisify(execFile);

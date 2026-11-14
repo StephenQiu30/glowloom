@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { applyProposal } from '../../src/server/bridge/proposals';
-import { digest } from '../../src/content/parse';
+import { digest } from '../../src/content/identity';
 it('applies a revision once and protects later user edits on replay or conflicting proposals', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ws-proposal-'));
   try {

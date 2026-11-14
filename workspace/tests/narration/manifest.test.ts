@@ -2,7 +2,6 @@ import { expect, it } from 'vitest';
 import {
   validateManifest,
   cueAt,
-  planSegments,
   type NarrationManifest,
 } from '../../src/narration/manifest';
 const manifest: NarrationManifest = {
@@ -63,31 +62,6 @@ it('rejects stale sources and out-of-bounds cues without inventing timings', () 
     ),
   ).toThrow(/cue/);
 });
-it('reuses only matching text and configuration and never resubmits unknown segments', () => {
-  const jobs = planSegments(
-    [
-      { id: 'a', textDigest: 't1' },
-      { id: 'b', textDigest: 't2' },
-      { id: 'c', textDigest: 't3' },
-    ],
-    'cfg',
-    [
-      { id: 'a', textDigest: 't1', configDigest: 'cfg', status: 'ready' },
-      { id: 'b', textDigest: 't2', configDigest: 'cfg', status: 'unknown' },
-    ],
-  );
-  expect(jobs).toEqual([
-    { id: 'a', action: 'reuse' },
-    { id: 'b', action: 'reconcile' },
-    { id: 'c', action: 'generate' },
-  ]);
-  expect(
-    planSegments([{ id: 'a', textDigest: 'changed' }], 'cfg', [
-      { id: 'a', textDigest: 't1', configDigest: 'cfg', status: 'ready' },
-    ]),
-  ).toEqual([{ id: 'a', action: 'generate' }]);
-});
-
 it('rejects malformed browser manifests and non-finite local progress', async () => {
   const { decodeManifest, decodeResume } =
     await import('../../src/narration/contract');

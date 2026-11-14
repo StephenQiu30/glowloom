@@ -7,7 +7,8 @@ import remarkParse from 'remark-parse';
 import { visit } from 'unist-util-visit';
 import { toString } from 'mdast-util-to-string';
 import type { ParsedDocument } from './types';
-import { digest, parseMarkdown } from './parse';
+import { parseMarkdown } from './parse';
+import { digest, documentHref } from './identity';
 
 export interface CatalogEntry {
   id: string;
@@ -35,10 +36,6 @@ const rootFiles = referencePaths;
 function isExternal(href: string) {
   return /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(href);
 }
-export function documentHref(id: string, anchor = '') {
-  return `/read/${encodeURIComponent(id)}/${anchor ? `#${encodeURIComponent(anchor)}` : ''}`;
-}
-
 export function rewriteMarkdownLinks(
   source: string,
   rewrite: (url: string) => string | null,

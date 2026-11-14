@@ -28,3 +28,24 @@ describe('Markdown reading contract', () => {
     expect(doc.html).toContain('{process.exit(1)}');
   });
 });
+
+it('preserves literal custom-ID text and isolates heading state between concurrent Markdown renders', async () => {
+  const [first, second] = await Promise.all([
+    parseMarkdown('# 方案 [#literal]\n\n## 重复\n\n## 重复'),
+    parseMarkdown(
+      '# 另文\n\n## 重复\n\nimport x from "not-a-real-package";\n\n{globalThis.untrustedCall()}',
+    ),
+  ]);
+  expect(first.headings.map((heading) => heading.id)).toEqual([
+    '方案-literal',
+    '重复',
+    '重复-1',
+  ]);
+  expect(first.headings[0].text).toBe('方案 [#literal]');
+  expect(second.headings.map((heading) => heading.id)).toEqual([
+    '另文',
+    '重复',
+  ]);
+  expect(second.html).toContain('not-a-real-package');
+  expect(second.html).toContain('{globalThis.untrustedCall()}');
+});

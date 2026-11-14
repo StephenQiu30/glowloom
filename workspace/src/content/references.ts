@@ -10,7 +10,8 @@ import {
 import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { digest, parseMarkdown } from './parse';
+import { parseMarkdown } from './parse';
+import { digest } from './identity';
 
 /** Only project governance documents may be imported as external knowledge. */
 export const referencePaths = new Set([

@@ -1,4 +1,4 @@
-import { digest } from '../content/parse';
+import { digest } from '../content/identity';
 export interface Workflow {
   id: string;
   revision: string;

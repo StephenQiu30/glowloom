@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: "24"
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:
@@ -44,7 +44,13 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - name: Initialize isolated schema from canonical source
         run: |
-          psql postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN' -c 'CREATE ROLE glowloom_agent NOLOGIN'
+          psql postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci -X -v ON_ERROR_STOP=1 \
+            -c 'CREATE ROLE glowloom_app NOLOGIN' \
+            -c 'CREATE ROLE glowloom_agent NOLOGIN' \
+            -c 'CREATE ROLE glowloom_identity NOLOGIN' \
+            -c 'CREATE ROLE glowloom_creation NOLOGIN' \
+            -c 'CREATE ROLE glowloom_media NOLOGIN' \
+            -c 'CREATE ROLE glowloom_execution NOLOGIN'
           psql postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci -X --single-transaction -v ON_ERROR_STOP=1 -f ../backend/db/schema.sql
       - run: pnpm knowledge:sync --repository ..
       - run: pnpm test && pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:content

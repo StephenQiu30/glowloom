@@ -8,7 +8,7 @@ import {
 } from 'node:fs/promises';
 import { resolve, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { digest } from '../content/parse';
+import { digest } from '../content/identity';
 interface Asset {
   path: string;
   sha256: string;

@@ -1,6 +1,6 @@
 import { readFile, realpath } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
-import { digest } from '../content/parse';
+import { digest } from '../content/identity';
 import { validateManifest, type NarrationManifest } from './manifest';
 export async function freezeNarration(
   root: string,

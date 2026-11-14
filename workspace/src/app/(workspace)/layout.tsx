@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { getSnapshot, categoryNames } from '@/content/runtime';
+import { getSnapshot, getDocumentSource } from '@/content/runtime';
 import { Navigation } from '@/components/navigation';
 
 export default async function WorkspaceLayout({
@@ -7,15 +7,13 @@ export default async function WorkspaceLayout({
 }: {
   readonly children: ReactNode;
 }) {
-  const snapshot = await getSnapshot();
+  const [source, snapshot] = await Promise.all([
+    getDocumentSource(),
+    getSnapshot(),
+  ]);
   return (
     <Navigation
-      items={snapshot.documents.map(({ id, title, category }) => ({
-        id,
-        title,
-        category,
-      }))}
-      categories={categoryNames}
+      tree={source.pageTree}
       online={process.env.NEXT_PUBLIC_WORKSPACE_MODE === 'online'}
       preview={snapshot.preview}
     >

@@ -1,6 +1,7 @@
 import { mkdir, readFile, realpath } from 'node:fs/promises';
 import { resolve, relative } from 'node:path';
-import { digest, parseMarkdown } from '../../content/parse';
+import { parseMarkdown } from '../../content/parse';
+import { digest } from '../../content/identity';
 import {
   loadSnapshot,
   validateLinks,

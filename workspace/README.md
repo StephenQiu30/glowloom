@@ -57,3 +57,11 @@ pnpm exec playwright test
 `pnpm start:online` 仅启动站点。单独运行桥：`pnpm start:bridge --repository <项目仓库>`，站点通过受控 socket／独立令牌连接；本机显式组合使用 `pnpm dev --repository ..`。不连接桥时仍提供认证阅读，执行／落地操作如实显示不可用。
 
 浏览器回归执行 `pnpm exec playwright test`；在线用例要求先启动隔离在线服务，并显式设置 `WORKSPACE_ONLINE_TEST_TOKEN`（可另设 `WORKSPACE_ONLINE_TEST_URL`），不提供内置真实服务令牌。静态用例可单独选择，不连接在线服务。`tests/browser/interface.spec.ts` 补充搜索 URL、键盘焦点、375px／横屏、减少动态效果与双主题 axe 检查。自动扫描与真实产品接受分别记录；朗读测试使用静音 fixture，不调用 TTS。
+
+## 文档底座与部署边界
+
+通用文档能力使用 Fumadocs Core／Headless：普通 Markdown、标题与 TOC、内容源、页面树和相邻导航；界面仍使用本项目 shadcn，不安装另一套完整主题或可执行 MDX。catalog 保留原文档 ID、文件路径和旧链接；Pagefind 是唯一静态搜索索引。
+
+`build:static` 只生成受允许的页面、搜索、raw、图表和既有合法音频，运行时仅需静态托管；内部知识须由托管入口统一保护。`build:online` 单独生成 standalone，按需连接身份、PG、受控执行桥；未配置 PG／桥时仍可认证阅读。静态站不依赖在线 API、数据库、桥或模型。
+
+不建设 TTS 服务、供应商、声音上传或生成调度。既有音频导入／播放只作兼容保留，无资源时完整阅读文字。

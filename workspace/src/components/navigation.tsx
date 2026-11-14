@@ -1,5 +1,7 @@
 'use client';
 import Link from 'next/link';
+import { NextProvider } from 'fumadocs-core/framework/next';
+import { flattenTree, findPath, type Root } from 'fumadocs-core/page-tree';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   useEffect,
@@ -44,7 +46,6 @@ import { ThemeToggle } from '@/components/theme';
 import {
   WorkspaceSidebar,
   workspaceSections,
-  type DirectoryItem,
 } from '@/components/workspace-sidebar';
 
 const sidebarStyle: CSSProperties & { '--sidebar-width': string } = {
@@ -52,8 +53,7 @@ const sidebarStyle: CSSProperties & { '--sidebar-width': string } = {
 };
 
 interface NavigationProps {
-  readonly items: DirectoryItem[];
-  readonly categories: Record<string, string>;
+  readonly tree: Root;
   readonly children: ReactNode;
   readonly online: boolean;
   readonly preview: boolean;
@@ -61,19 +61,15 @@ interface NavigationProps {
 /** Shares one accessible sidebar and search palette across both build modes. */
 export function Navigation(props: NavigationProps) {
   return (
-    <SidebarProvider style={sidebarStyle}>
-      <WorkspaceShell {...props} />
-    </SidebarProvider>
+    <NextProvider>
+      <SidebarProvider style={sidebarStyle}>
+        <WorkspaceShell {...props} />
+      </SidebarProvider>
+    </NextProvider>
   );
 }
 
-function WorkspaceShell({
-  items,
-  categories,
-  children,
-  online,
-  preview,
-}: NavigationProps) {
+function WorkspaceShell({ tree, children, online, preview }: NavigationProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { setOpenMobile, isMobile, state } = useSidebar();
@@ -81,14 +77,21 @@ function WorkspaceShell({
   const [query, setQuery] = useState('');
   const searchTrigger = useRef<HTMLButtonElement>(null);
   const menuTrigger = useRef<HTMLButtonElement>(null);
-  const current = items.find((item) => pathname === `/read/${item.id}/`);
+  const items = flattenTree(tree.children);
+  const current = items.find((item) => pathname === item.url);
+  const category = findPath(
+    tree.children,
+    (node) => node.type === 'page' && node.url === pathname,
+  )?.find((node) => node.type === 'folder')?.name;
   const title =
-    current?.title ??
+    current?.name ??
     workspaceSections.find((section) => section.href === pathname)?.label ??
     (pathname === '/operations/' ? '在线协作台' : '搜索知识库');
   const matching = items
     .filter((item) =>
-      item.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+      String(item.name)
+        .toLocaleLowerCase()
+        .includes(query.trim().toLocaleLowerCase()),
     )
     .slice(0, 20);
   useEffect(() => {
@@ -117,8 +120,7 @@ function WorkspaceShell({
   return (
     <>
       <WorkspaceSidebar
-        items={items}
-        categories={categories}
+        tree={tree}
         online={online}
         preview={preview}
         trigger={menuTrigger}
@@ -148,7 +150,7 @@ function WorkspaceShell({
               <BreadcrumbSeparator />
               <BreadcrumbItem className="min-w-0">
                 <BreadcrumbPage className="truncate">
-                  {current ? categories[current.category] : title}
+                  {current ? category : title}
                 </BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
@@ -215,12 +217,12 @@ function WorkspaceShell({
             <CommandGroup heading="项目文档">
               {matching.map((item) => (
                 <CommandItem
-                  key={item.id}
-                  value={item.title}
-                  onSelect={() => navigate(`/read/${item.id}/`)}
+                  key={item.url}
+                  value={String(item.name)}
+                  onSelect={() => navigate(item.url)}
                 >
                   <BookOpen aria-hidden="true" />
-                  <span>{item.title}</span>
+                  <span>{item.name}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

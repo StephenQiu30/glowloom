@@ -53,9 +53,10 @@ it('remembers cancellation before a native turn handle is available', async () =
   );
   const events = join(root, 'events');
   const fake = join(root, 'codex');
+  const release = join(root, 'release-thread');
   await writeFile(
     fake,
-    `#!/usr/bin/env node\nconst{createInterface}=require('node:readline');const{appendFileSync}=require('node:fs');createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);if(m.id===undefined)return;appendFileSync(${JSON.stringify(events)},m.method+'\\n');let result={};if(m.method==='thread/start')result={thread:{id:'thread'}};if(m.method==='turn/start')result={turn:{id:'turn'}};if(m.method==='thread/read')result={thread:{turns:[{id:'turn',status:'inProgress',items:[]}]}};setTimeout(()=>process.stdout.write(JSON.stringify({id:m.id,result})+'\\n'),m.method==='thread/start'?150:0);});`,
+    `#!/usr/bin/env node\nconst{createInterface}=require('node:readline');const{appendFileSync,existsSync}=require('node:fs');createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);if(m.id===undefined)return;appendFileSync(${JSON.stringify(events)},m.method+'\\n');let result={};if(m.method==='thread/start')result={thread:{id:'thread'}};if(m.method==='turn/start')result={turn:{id:'turn'}};if(m.method==='thread/read')result={thread:{turns:[{id:'turn',status:'inProgress',items:[]}]}};const respond=()=>process.stdout.write(JSON.stringify({id:m.id,result})+'\\n');if(m.method==='thread/start'){const wait=setInterval(()=>{if(existsSync(${JSON.stringify(release)})){clearInterval(wait);respond();}},5);}else respond();});`,
   );
   await chmod(fake, 0o700);
   execFileSync('git', ['init', '-q'], { cwd: root });
@@ -113,13 +114,27 @@ it('remembers cancellation before a native turn handle is available', async () =
       workflowId: 'feature',
       stage: 0,
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await expect
+      .poll(
+        async () => {
+          try {
+            return (await readFile(events, 'utf8')).includes('thread/start');
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+              return false;
+            }
+            throw error;
+          }
+        },
+        { timeout: 5000 },
+      )
+      .toBe(true);
     await call('/run/interrupt', { runId, attempt: 1 });
+    await writeFile(release, 'continue');
     await started;
     const log = await readFile(events, 'utf8');
-    expect(!log.includes('turn/start') || log.includes('turn/interrupt')).toBe(
-      true,
-    );
+    expect(log).toContain('thread/start');
+    expect(log).not.toContain('turn/start');
   } finally {
     await bridge.close();
     await rm(root, { recursive: true, force: true });

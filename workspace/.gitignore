@@ -8,3 +8,5 @@ projects.local.json
 test-results/
 playwright-report/
 coverage/
+
+.vitest/

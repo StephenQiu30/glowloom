@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { findPath, flattenTree, type Root } from 'fumadocs-core/page-tree';
 import { usePathname } from 'next/navigation';
 import { useState, type RefObject } from 'react';
 import {
@@ -40,11 +41,6 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 
-export interface DirectoryItem {
-  readonly id: string;
-  readonly title: string;
-  readonly category: string;
-}
 /** Stable destinations are shared with the breadcrumb; document content stays server-rendered. */
 export const workspaceSections = [
   { href: '/', label: '知识库', icon: BookOpen },
@@ -56,14 +52,12 @@ export const workspaceSections = [
 ];
 /** Project-owned shadcn Sidebar: icon collapse, document submenus and mobile Sheet. */
 export function WorkspaceSidebar({
-  items,
-  categories,
+  tree,
   online,
   preview,
   trigger,
 }: {
-  readonly items: DirectoryItem[];
-  readonly categories: Record<string, string>;
+  readonly tree: Root;
   readonly online: boolean;
   readonly preview: boolean;
   readonly trigger: RefObject<HTMLButtonElement | null>;
@@ -71,7 +65,11 @@ export function WorkspaceSidebar({
   const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
   const [filter, setFilter] = useState('');
-  const current = items.find((item) => pathname === `/read/${item.id}/`);
+  const pages = flattenTree(tree.children);
+  const activePath = findPath(
+    tree.children,
+    (node) => node.type === 'page' && node.url === pathname,
+  );
   function closeMobile() {
     setOpenMobile(false);
   }
@@ -157,22 +155,27 @@ export function WorkspaceSidebar({
           </InputGroup>
           <nav aria-label="项目目录">
             <SidebarMenu>
-              {Object.entries(categories).map(([category, label]) => {
-                const documents = items.filter(
-                  (item) =>
-                    item.category === category &&
-                    item.title
-                      .toLocaleLowerCase()
-                      .includes(filter.toLocaleLowerCase()),
-                );
+              {tree.children.map((folder) => {
+                if (folder.type !== 'folder') {
+                  return null;
+                }
+                const documents = folder.children
+                  .filter(
+                    (node) =>
+                      node.type === 'page' &&
+                      String(node.name)
+                        .toLocaleLowerCase()
+                        .includes(filter.toLocaleLowerCase()),
+                  )
+                  .filter((node) => node.type === 'page');
                 if (!documents.length) {
                   return null;
                 }
-                const active = current?.category === category;
+                const active = activePath?.includes(folder) ?? false;
                 return (
                   <Collapsible
                     asChild
-                    key={`${category}:${Boolean(filter)}:${active}`}
+                    key={`${folder.$id}:${Boolean(filter)}:${active}`}
                     defaultOpen={Boolean(filter) || active}
                     className="group/category"
                   >
@@ -183,28 +186,28 @@ export function WorkspaceSidebar({
                             aria-hidden="true"
                             className="transition-transform group-data-[state=open]/category:rotate-90"
                           />
-                          <span>{label}</span>
+                          <span>{folder.name}</span>
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
                       <SidebarMenuBadge>{documents.length}</SidebarMenuBadge>
                       <CollapsibleContent>
                         <SidebarMenuSub>
                           {documents.map((item) => (
-                            <SidebarMenuSubItem key={item.id}>
+                            <SidebarMenuSubItem key={item.url}>
                               <SidebarMenuSubButton
                                 asChild
-                                isActive={current?.id === item.id}
+                                isActive={pathname === item.url}
                                 className="h-auto min-h-9 py-2"
                               >
                                 <Link
-                                  href={`/read/${item.id}/`}
-                                  title={item.title}
+                                  href={item.url}
+                                  title={String(item.name)}
                                   aria-current={
-                                    current?.id === item.id ? 'page' : undefined
+                                    pathname === item.url ? 'page' : undefined
                                   }
                                   onClick={closeMobile}
                                 >
-                                  <span className="truncate">{item.title}</span>
+                                  <span className="truncate">{item.name}</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -218,8 +221,8 @@ export function WorkspaceSidebar({
             </SidebarMenu>
           </nav>
           {filter &&
-            !items.some((item) =>
-              item.title
+            !pages.some((item) =>
+              String(item.name)
                 .toLocaleLowerCase()
                 .includes(filter.toLocaleLowerCase()),
             ) && (

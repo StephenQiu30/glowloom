@@ -11,7 +11,7 @@ import {
 import { resolve, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { loadSnapshot } from '../content/catalog';
-import { digest } from '../content/parse';
+import { digest } from '../content/identity';
 import {
   validateManifest,
   type NarrationManifest,

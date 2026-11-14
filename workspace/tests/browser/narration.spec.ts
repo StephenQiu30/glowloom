@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { parseMarkdown, digest } from '../../src/content/parse';
+import { parseMarkdown } from '../../src/content/parse';
+import { digest } from '../../src/content/identity';
 // Explicit silent PCM fixture: validates native media behavior, not TTS quality or speech alignment.
 function silentWav(seconds: number) {
   const count = 8000 * seconds;
