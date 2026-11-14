@@ -23,7 +23,6 @@ import (
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	scriptextract "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
 )
 
 type referenceContent struct {
@@ -140,7 +139,7 @@ func (b *Boundary) executeMediaReference(ctx context.Context, in domain.CallInpu
 		return domain.CallReceipt{}, err
 	}
 	defer func() { _ = file.Close() }()
-	result, err := inspectReferenceFile(readCtx, fact, file)
+	result, err := b.inspectReferenceFile(readCtx, fact, file)
 	if err != nil {
 		return domain.CallReceipt{}, err
 	}
@@ -226,10 +225,13 @@ func readReferenceOriginal(ctx context.Context, body io.ReadCloser, fact mediado
 	return out, nil
 }
 
-func inspectReferenceFile(ctx context.Context, fact mediadomain.MediaAsset, file *media.Downloaded) (inspectedReference, error) {
+func (b *Boundary) inspectReferenceFile(ctx context.Context, fact mediadomain.MediaAsset, file *media.Downloaded) (inspectedReference, error) {
 	result := inspectedReference{AssetID: fact.ID, Revision: fact.Revision, SHA256: *fact.SHA256, MediaKind: string(fact.Kind), Content: []referenceContent{}}
 	if fact.Kind == mediadomain.KindDocument {
-		extracted, err := scriptextract.NewExtractor().Extract(ctx, file)
+		if b.documentExtractor == nil {
+			return result, domain.ErrUnavailable
+		}
+		extracted, err := b.documentExtractor.Extract(ctx, file)
 		if err != nil {
 			return result, err
 		}

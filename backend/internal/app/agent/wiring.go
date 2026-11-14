@@ -28,9 +28,19 @@ type Boundary struct {
 	db                         *gorm.DB
 	canvasRuntime              canvas.YjsCommandRuntime
 	mediaObjects               media.ObjectReader
+	documentExtractor          script.SourceExtractor
 	sourceObjects              script.PrivateObjects
 	sourceOwner                *script.SourceService
 	creditOperationSagaEnabled bool
+}
+
+// WithDocumentExtractor installs the remote Creation document capability.
+// An absent extractor fails closed for documents, without affecting visuals.
+func (b *Boundary) WithDocumentExtractor(extractor script.SourceExtractor) *Boundary {
+	if b != nil {
+		b.documentExtractor = extractor
+	}
+	return b
 }
 
 // WithCreditOperationSaga enables event-driven freezes for Agent confirmations.

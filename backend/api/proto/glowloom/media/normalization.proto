@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package glowloom.media;
+
+option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/media;media";
+
+// Normalization owns transient media computation, not asset publication.
+service Normalization {
+  // Each direction starts with exactly one header, followed by bounded chunks.
+  // The client half-closes before the server sends its result. No paths, URLs,
+  // object credentials, business identities or durable commands cross this RPC.
+  rpc Normalize(stream NormalizeRequest) returns (stream NormalizeResponse);
+}
+
+message Source {
+  int64 byte_size = 1;
+  string sha256 = 2;
+  string mime_type = 3;
+}
+
+message NormalizeRequest {
+  oneof payload {
+    Source source = 1;
+    bytes chunk = 2;
+  }
+}
+
+message Canonical {
+  int64 byte_size = 1;
+  string sha256 = 2;
+  string mime_type = 3;
+  string source_codec = 4;
+}
+
+message NormalizeResponse {
+  oneof payload {
+    Canonical canonical = 1;
+    bytes chunk = 2;
+  }
+}

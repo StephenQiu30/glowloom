@@ -154,7 +154,11 @@ func buildBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Conne
 		handlers[tooltask.Depth] = tooltask.DepthHandler(depthWorker, depths)
 		copyWorker, copies := copywire.ProvideProjectCopyWorker(dbConn.DB, registry)
 		handlers[workspacetask.Copy] = workspacetask.CopyHandler(copyWorker, copies)
-		importWorker, imports := scriptwire.ProvideScriptImportWorkerWithObjects(dbConn.DB, registry)
+		extractor, err := scriptwire.ProvideSourceExtractor(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("configure Creation extraction: %w", err)
+		}
+		importWorker, imports := scriptwire.ProvideScriptImportWorkerWithObjects(dbConn.DB, registry, extractor)
 		handlers[scripttask.Import] = scripttask.ImportHandler(importWorker, imports)
 		transferWorker, transfers := mediawire.ProvideMediaTransferWorker(dbConn.DB, registry)
 		handlers[mediatask.Transfer] = mediatask.TransferHandler(transferWorker, transfers)

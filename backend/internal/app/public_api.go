@@ -227,7 +227,11 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	}
 	uploadStore := pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess)
 	registry := subjectObjects.Registry()
-	scopedUpload := mediaapp.NewRoutedUploadService(uploadStore, uploadStore, pgmedia.NewUploadAdmission(uploadStore), mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(registry, pgmedia.NewStorageRoutes(database)), time.Now)
+	normalizer, err := mediawire.ProvideUploadNormalizer(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("configure media normalization: %w", err)
+	}
+	scopedUpload := mediaapp.NewRoutedUploadService(uploadStore, uploadStore, pgmedia.NewUploadAdmission(uploadStore), mediaflow.NewUploadProber(modelValidator), normalizer, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(registry, pgmedia.NewStorageRoutes(database)), time.Now)
 	uploadHandler := mediahttp.NewUploadHandler(scopedUpload)
 	uploadHandler.Register(protected)
 	videoLinks, err := mediaflow.NewPublicVideoLinkResolver(mediaflow.VideoLinkResolverOptions{})
@@ -342,7 +346,11 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure agent model gateway: %w", err)
 	}
-	if err := RegisterAgentBoundary(socketLifetime, router, protected, database, AgentBoundaryOptions{Origin: cfg.AgentOrigin, ServiceToken: cfg.AgentServiceToken, BusinessToken: cfg.AgentBusinessToken, Model: agentModel, ModelRecover: agentRecover, MediaObjects: subjectObjects.Routed, SourceObjects: scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)), CanvasRuntime: yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken), CreditOperationSagaEnabled: cfg.CreditOperationSagaEnabled}, logger); err != nil {
+	documentExtractor, err := scriptwire.ProvideSourceExtractor(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("configure Creation extraction: %w", err)
+	}
+	if err := RegisterAgentBoundary(socketLifetime, router, protected, database, AgentBoundaryOptions{DocumentExtractor: documentExtractor, Origin: cfg.AgentOrigin, ServiceToken: cfg.AgentServiceToken, BusinessToken: cfg.AgentBusinessToken, Model: agentModel, ModelRecover: agentRecover, MediaObjects: subjectObjects.Routed, SourceObjects: scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)), CanvasRuntime: yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken), CreditOperationSagaEnabled: cfg.CreditOperationSagaEnabled}, logger); err != nil {
 		return nil, fmt.Errorf("configure agent boundary: %w", err)
 	}
 	operationhttp.NewSubmissionHandler(operations).Register(protected)

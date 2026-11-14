@@ -97,6 +97,76 @@ services:
       retries: 3
       start_period: 15s
 
+  # Private Creation document extraction; no database, broker or object credentials.
+  creation:
+    container_name: glowloom-creation
+    build:
+      context: ./backend
+      dockerfile: creation.Dockerfile
+    image: glowloom/creation:current
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 15s
+    tmpfs:
+      - /work:rw,noexec,nosuid,size=64m,uid=65532,gid=65532,mode=0700
+    environment:
+      GLOWLOOM_CREATION_ENV: local
+      GLOWLOOM_CREATION_GRPC_ADDR: 0.0.0.0:9092
+      GLOWLOOM_CREATION_HTTP_ADDR: 0.0.0.0:8083
+      GLOWLOOM_CREATION_SERVICE_TOKEN: ${GLOWLOOM_CREATION_SERVICE_TOKEN:?Set a separate API-and-Worker-to-Creation token of at least 32 bytes}
+      GLOWLOOM_CREATION_CONCURRENCY: "2"
+    expose: ["9092", "8083"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:8083/health/ready",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    mem_limit: 1g
+    cpus: 2
+
+  # Private Media processing only; no database, broker or object-storage credentials.
+  media:
+    container_name: glowloom-media
+    build:
+      context: ./backend
+      dockerfile: media.Dockerfile
+    image: glowloom/media:current
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 15s
+    tmpfs:
+      - /work:rw,noexec,nosuid,size=2100m,uid=65532,gid=65532,mode=0700
+    environment:
+      GLOWLOOM_MEDIA_ENV: local
+      GLOWLOOM_MEDIA_GRPC_ADDR: 0.0.0.0:9091
+      GLOWLOOM_MEDIA_HTTP_ADDR: 0.0.0.0:8081
+      GLOWLOOM_MEDIA_SERVICE_TOKEN: ${GLOWLOOM_MEDIA_SERVICE_TOKEN:?Set a separate API-to-Media token of at least 32 bytes}
+      GLOWLOOM_MEDIA_CONCURRENCY: "2"
+    expose: ["9091", "8081"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    mem_limit: 3g
+    cpus: 2
+
   frontend:
     container_name: glowloom-frontend
     build:
@@ -134,6 +204,10 @@ services:
     depends_on:
       canvas:
         condition: service_healthy
+      media:
+        condition: service_healthy
+      creation:
+        condition: service_healthy
     container_name: glowloom-backend
     build:
       context: ./backend
@@ -157,6 +231,10 @@ services:
       GLOWLOOM_COMPOSE_API_PROXY: "true"
       GLOWLOOM_CANVAS_RUNTIME_URL: http://canvas:4400
       GLOWLOOM_AGENT_ORIGIN: http://agent:4401
+      GLOWLOOM_CREATION_EXTRACTION_ADDRESS: creation:9092
+      GLOWLOOM_CREATION_SERVICE_TOKEN: ${GLOWLOOM_CREATION_SERVICE_TOKEN:?Set a separate API-and-Worker-to-Creation token of at least 32 bytes}
+      GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS: media:9091
+      GLOWLOOM_MEDIA_SERVICE_TOKEN: ${GLOWLOOM_MEDIA_SERVICE_TOKEN:?Set a separate API-to-Media token of at least 32 bytes}
       GLOWLOOM_AGENT_SERVICE_TOKEN: ${GLOWLOOM_AGENT_SERVICE_TOKEN:?Set a separate Go-to-Agent token}
       GLOWLOOM_AGENT_BUSINESS_TOKEN: ${GLOWLOOM_AGENT_BUSINESS_TOKEN:?Set a separate Agent-to-Go token}
       GLOWLOOM_COLLAB_RUNTIME_TOKEN: ${GLOWLOOM_COLLAB_RUNTIME_TOKEN:?Set an internal collaboration token of at least 32 bytes}
@@ -218,10 +296,17 @@ services:
   worker:
     <<: *backend-runtime
     container_name: glowloom-worker
+    depends_on:
+      canvas:
+        condition: service_healthy
+      creation:
+        condition: service_healthy
     command: ["--role=worker", "--queues=auto"]
     environment:
       <<: *backend-environment
       GLOWLOOM_COMPOSE_API_PROXY: "false"
+      GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS: ""
+      GLOWLOOM_MEDIA_SERVICE_TOKEN: ""
     expose: ["8081"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/healthz"]
@@ -238,6 +323,10 @@ services:
     environment:
       <<: *backend-environment
       GLOWLOOM_COMPOSE_API_PROXY: "false"
+      GLOWLOOM_CREATION_EXTRACTION_ADDRESS: ""
+      GLOWLOOM_CREATION_SERVICE_TOKEN: ""
+      GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS: ""
+      GLOWLOOM_MEDIA_SERVICE_TOKEN: ""
     expose: ["8082"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8082/healthz"]

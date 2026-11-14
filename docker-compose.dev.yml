@@ -59,6 +59,54 @@ services:
         - action: rebuild
           path: ./backend/gateway.Dockerfile
 
+  creation:
+    image: glowloom/creation:dev
+    develop:
+      watch:
+        - action: rebuild
+          path: ./backend/cmd/creation
+        - action: rebuild
+          path: ./backend/internal/app/creationruntime
+        - action: rebuild
+          path: ./backend/internal/creation/document
+        - action: rebuild
+          path: ./backend/internal/script/domain
+        - action: rebuild
+          path: ./backend/internal/platform/serviceauth
+        - action: rebuild
+          path: ./backend/internal/contract/gen/creation
+        - action: rebuild
+          path: ./backend/api/proto/glowloom/creation
+        - action: rebuild
+          path: ./backend/go.mod
+        - action: rebuild
+          path: ./backend/go.sum
+        - action: rebuild
+          path: ./backend/creation.Dockerfile
+
+  media:
+    image: glowloom/media:dev
+    develop:
+      watch:
+        - action: rebuild
+          path: ./backend/cmd/media
+        - action: rebuild
+          path: ./backend/internal/app/mediaruntime
+        - action: rebuild
+          path: ./backend/internal/media/processing
+        - action: rebuild
+          path: ./backend/internal/platform/serviceauth
+        - action: rebuild
+          path: ./backend/internal/contract/gen/media
+        - action: rebuild
+          path: ./backend/api/proto/glowloom/media
+        - action: rebuild
+          path: ./backend/go.mod
+        - action: rebuild
+          path: ./backend/go.sum
+        - action: rebuild
+          path: ./backend/media.Dockerfile
+
   backend:
     image: glowloom/backend:dev
     develop: &backend-development

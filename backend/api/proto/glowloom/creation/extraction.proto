@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package glowloom.creation;
+
+option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/creation;creation";
+
+// Extraction computes content only. It cannot publish or fetch arbitrary URLs.
+service Extraction {
+  // The caller sends exactly one source, chunks, then half-closes. Only then
+  // does the server send bounded JSON chunks and its final status.
+  rpc Extract(stream ExtractRequest) returns (stream ExtractResponse);
+}
+
+message Source {
+  int64 byte_size = 1;
+  string sha256 = 2;
+  string mime_type = 3;
+}
+
+message ExtractRequest {
+  oneof payload {
+    Source source = 1;
+    bytes chunk = 2;
+  }
+}
+
+// JSON is the closed Creation extracted-document schema, never a publish command.
+message ExtractResponse {
+  bytes json_chunk = 1;
+}

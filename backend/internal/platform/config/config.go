@@ -47,6 +47,18 @@ type Config struct {
 	CredentialKeyID                string
 	CredentialRequestMACKey        string
 	CredentialPrivateKeyFile       string
+	CreationExtractionAddress      string
+	CreationServiceToken           string `json:"-" yaml:"-"`
+	CreationExtractionTLSCAFile    string
+	CreationExtractionTLSCertFile  string
+	CreationExtractionTLSKeyFile   string
+	CreationExtractionServerName   string
+	MediaNormalizationAddress      string
+	MediaServiceToken              string `json:"-" yaml:"-"`
+	MediaNormalizationTLSCAFile    string
+	MediaNormalizationTLSCertFile  string
+	MediaNormalizationTLSKeyFile   string
+	MediaNormalizationServerName   string
 	MediaResultAllowedOrigins      string
 	MediaAllowTestLoopbackTLS      bool
 	WhisperEndpoint                string
@@ -146,6 +158,18 @@ func Load() (Config, error) {
 		CredentialKeyID:                strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_KEY_ID")),
 		CredentialRequestMACKey:        strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_REQUEST_MAC_KEY")),
 		CredentialPrivateKeyFile:       strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_PRIVATE_KEY_FILE")),
+		CreationExtractionAddress:      strings.TrimSpace(v.GetString("GLOWLOOM_CREATION_EXTRACTION_ADDRESS")),
+		CreationServiceToken:           v.GetString("GLOWLOOM_CREATION_SERVICE_TOKEN"),
+		CreationExtractionTLSCAFile:    strings.TrimSpace(v.GetString("GLOWLOOM_CREATION_EXTRACTION_TLS_CA_FILE")),
+		CreationExtractionTLSCertFile:  strings.TrimSpace(v.GetString("GLOWLOOM_CREATION_EXTRACTION_TLS_CERT_FILE")),
+		CreationExtractionTLSKeyFile:   strings.TrimSpace(v.GetString("GLOWLOOM_CREATION_EXTRACTION_TLS_KEY_FILE")),
+		CreationExtractionServerName:   strings.TrimSpace(v.GetString("GLOWLOOM_CREATION_EXTRACTION_SERVER_NAME")),
+		MediaNormalizationAddress:      strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS")),
+		MediaServiceToken:              v.GetString("GLOWLOOM_MEDIA_SERVICE_TOKEN"),
+		MediaNormalizationTLSCAFile:    strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_NORMALIZATION_TLS_CA_FILE")),
+		MediaNormalizationTLSCertFile:  strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_NORMALIZATION_TLS_CERT_FILE")),
+		MediaNormalizationTLSKeyFile:   strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_NORMALIZATION_TLS_KEY_FILE")),
+		MediaNormalizationServerName:   strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_NORMALIZATION_SERVER_NAME")),
 		MediaResultAllowedOrigins:      strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_RESULT_ALLOWED_ORIGINS")),
 		MediaAllowTestLoopbackTLS:      v.GetBool("GLOWLOOM_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
 		WhisperEndpoint:                strings.TrimSpace(v.GetString("GLOWLOOM_WHISPER_ENDPOINT")),

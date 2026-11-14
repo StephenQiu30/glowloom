@@ -13,7 +13,6 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	scriptextract "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
@@ -68,7 +67,7 @@ func ProvideServicesWithObjects(database *gorm.DB, registry *objectstorage.Regis
 }
 
 // ProvideScriptImportWorkerWithObjects shares exact source/history location ownership.
-func ProvideScriptImportWorkerWithObjects(database *gorm.DB, registry *objectstorage.Registry) (*scriptapp.ImportWorker, *pgscript.ImportStore) {
+func ProvideScriptImportWorkerWithObjects(database *gorm.DB, registry *objectstorage.Registry, extractor scriptapp.SourceExtractor) (*scriptapp.ImportWorker, *pgscript.ImportStore) {
 	store := ProvideScriptImportStore(database)
 	objects := scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database))
 	services := ProvideServicesWithObjects(database, registry)
@@ -84,7 +83,7 @@ func ProvideScriptImportWorkerWithObjects(database *gorm.DB, registry *objectsto
 	// publication call and its durable exit proof both finish. Recovery runs
 	// after that join and checks the source owner's persistent I/O facts.
 	documents := mediaapp.NewRoutedDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaWorkerScopeAccess), mediaobjects.NewRoutedReadObjects(registry))
-	worker := scriptapp.NewImportWorker(store, documents, scriptextract.NewExtractor(), publication, recovery, time.Now)
+	worker := scriptapp.NewImportWorker(store, documents, extractor, publication, recovery, time.Now)
 	return worker, store
 }
 

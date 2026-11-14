@@ -27,6 +27,7 @@ type AgentBoundaryOptions struct {
 	ModelRecover                        agentapp.RecoverCapability
 	CanvasRuntime                       canvas.YjsCommandRuntime
 	MediaObjects                        media.ObjectReader
+	DocumentExtractor                   script.SourceExtractor
 	CreditOperationSagaEnabled          bool
 }
 
@@ -39,6 +40,7 @@ func RegisterAgentBoundary(ctx context.Context, router *gin.Engine, protected *g
 	}
 	boundary := agentwire.NewBoundary(database, options.Model)
 	boundary.WithCreditOperationSaga(options.CreditOperationSagaEnabled)
+	boundary.WithDocumentExtractor(options.DocumentExtractor)
 	boundary.Capabilities.ModelRecover = options.ModelRecover
 	if options.SourceObjects != nil {
 		boundary.WithSourceObjects(options.SourceObjects)

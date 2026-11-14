@@ -1,4 +1,4 @@
-package extract
+package native
 
 import (
 	"archive/zip"
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
@@ -153,18 +153,18 @@ func wordParts(ctx context.Context, data []byte) (map[string][]byte, error) {
 	return parts, nil
 }
 
-func warn(result *application.ExtractedDocument, code string) {
+func warn(result *application.Result, code string) {
 	for i := range result.Warnings {
 		if result.Warnings[i].Code == code {
 			result.Warnings[i].Count++
 			return
 		}
 	}
-	result.Warnings = append(result.Warnings, application.ExtractionWarning{Code: code, Count: 1})
+	result.Warnings = append(result.Warnings, domain.SourceExtractionWarning{Code: code, Count: 1})
 }
 
-func extractDOCX(ctx context.Context, data []byte) (application.ExtractedDocument, error) {
-	result := application.ExtractedDocument{Document: domain.RichDocument{Type: "doc"}, Encoding: "docx-xml"}
+func extractDOCX(ctx context.Context, data []byte) (application.Result, error) {
+	result := application.Result{Document: domain.RichDocument{Type: "doc"}, Encoding: "docx-xml"}
 	parts, err := wordParts(ctx, data)
 	if err != nil {
 		return result, err
@@ -258,7 +258,7 @@ func wordLinks(ctx context.Context, data []byte) (map[string]string, error) {
 	return links, nil
 }
 
-func wordParagraph(node *wordNode, links map[string]string, result *application.ExtractedDocument) (domain.RichDocument, error) {
+func wordParagraph(node *wordNode, links map[string]string, result *application.Result) (domain.RichDocument, error) {
 	paragraph := domain.RichDocument{Type: "paragraph"}
 	if props := node.child("pPr"); props != nil {
 		for _, prop := range props.children {
@@ -368,7 +368,7 @@ func wordParagraph(node *wordNode, links map[string]string, result *application.
 	return paragraph, nil
 }
 
-func wordRunMarks(props *wordNode, result *application.ExtractedDocument) []domain.RichMark {
+func wordRunMarks(props *wordNode, result *application.Result) []domain.RichMark {
 	var marks []domain.RichMark
 	for _, prop := range props.children {
 		if slices.Contains([]string{"0", "false", "off", "none"}, prop.value("val")) {
@@ -417,8 +417,8 @@ func wordRunMarks(props *wordNode, result *application.ExtractedDocument) []doma
 	return marks
 }
 
-func wordMapping(doc domain.RichDocument) []application.SourceMapping {
-	var mappings []application.SourceMapping
+func wordMapping(doc domain.RichDocument) []domain.SourceOriginMapping {
+	var mappings []domain.SourceOriginMapping
 	var walk func(domain.RichDocument, int) int
 	walk = func(node domain.RichDocument, start int) int {
 		if node.Type == "text" {
@@ -442,7 +442,7 @@ func wordMapping(doc domain.RichDocument) []application.SourceMapping {
 		}
 		if node.Type == "paragraph" || node.Type == "heading" {
 			paragraph := len(mappings)
-			mappings = append(mappings, application.SourceMapping{Part: "word/document.xml", Paragraph: &paragraph, Start: start, End: next})
+			mappings = append(mappings, domain.SourceOriginMapping{Part: "word/document.xml", Paragraph: &paragraph, Start: start, End: next})
 		}
 		return next
 	}
@@ -501,7 +501,7 @@ func wordNumbering(ctx context.Context, data []byte) (map[string]map[int]wordNum
 	return result, nil
 }
 
-func (s *wordListState) append(result *application.ExtractedDocument, paragraph domain.RichDocument, props *wordNode, formats map[string]map[int]wordNumberFormat) error {
+func (s *wordListState) append(result *application.Result, paragraph domain.RichDocument, props *wordNode, formats map[string]map[int]wordNumberFormat) error {
 	number, level := props.child("numId"), props.child("ilvl")
 	if number == nil {
 		return application.ErrExtractionFailed

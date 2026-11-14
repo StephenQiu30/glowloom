@@ -46,7 +46,7 @@ cd glowloom
 启动前，按 [.env.example](.env.example) 与 [PROJECT](PROJECT.md) 准备本地配置：
 
 1. 可用的 PostgreSQL、Redis、Kafka 与对象存储。
-2. `.env` 中的依赖连接、身份与会话密钥、协作令牌、两个方向独立的 Agent 服务令牌与受限 PostgreSQL DSN；模型接入另需凭据加密与请求 MAC 密钥。
+2. `.env` 中的依赖连接、身份与会话密钥、协作令牌、两个方向独立的 Agent 服务令牌与受限 PostgreSQL DSN，以及独立 API→Media 令牌 `GLOWLOOM_MEDIA_SERVICE_TOKEN`（至少 32 字节可见 ASCII，不含空白，不复用其他凭据）；模型接入另需凭据加密与请求 MAC 密钥。
 3. 与运行版本匹配的 PostgreSQL 结构。空库使用 [schema.sql](backend/db/schema.sql) 初始化。已有库在部署前核对实际结构。
 
 确认端口可用后，在仓库根目录启动：
@@ -57,20 +57,26 @@ docker compose up -d --build --wait
 docker compose ps
 ```
 
-| 服务       | 本地地址                                                |
-| ---------- | ------------------------------------------------------- |
-| 前端工作台 | [localhost:1122](http://localhost:1122)                 |
-| Go Gateway | [127.0.0.1:1123](http://127.0.0.1:1123)，业务后端仅内网 |
-| Agent      | Compose 内部 `agent:4401`，无宿主端口                   |
+| 服务          | 本地地址                                                |
+| ------------- | ------------------------------------------------------- |
+| 前端工作台    | [localhost:1122](http://localhost:1122)                 |
+| Go Gateway    | [127.0.0.1:1123](http://127.0.0.1:1123)，业务后端仅内网 |
+| Agent         | Compose 内部 `agent:4401`，无宿主端口                   |
+| Media 计算    | Compose 内部 `media:9091`，健康端口 8081，无宿主端口    |
+| Creation 文档 | Compose 内部 `creation:9092`，健康端口 8083，无宿主端口 |
 
 首次启动成功后，打开工作台；需要私人素材、主体、画布或生成时，使用有效账号登录，并按对象权限访问。容器健康不等于真实生成能力已验收。
 
-`docker-compose.yml` 是应用的基础部署配置，包含 `frontend`、`gateway`、`backend`、`worker`、`relay`、`agent` 和 `canvas`。前端运行 Next.js standalone 构建，经 Gateway 转发 `/api`。业务 API、持久任务、事件中继各用独立容器、探针与停机生命周期；三者仍复用同一业务镜像、配置与数据库，不是四域已独立。完整启动用 `--wait` 核对所有服务，Gateway 的 readiness 只探测 API，不以 worker 健康作为同步请求准入。Agent 内部调用不经过公开 Gateway。四域独立写入权按[设计44](workspace/content/design/44-Go微服务架构与技术选型设计.md)逐域验收。更新同一业务镜像时一起更新三个运行角色：
+`docker-compose.yml` 是应用的基础部署配置，包含 `frontend`、`gateway`、`backend`、`worker`、`relay`、`media`、`creation`、`agent` 和 `canvas`。独立 Media 镜像实际承接 WebM→H264 MP4 规范化，API 通过带身份的 gRPC 字节流调用，不挂载共享文件或透传任意 URL，不自动重试或本地回退。原上传最终权限锁、审阅、对象与资产提交保持原 owner；Media 不连接业务数据库，因此不是整个 Media 域已迁出。前端运行 Next.js standalone 构建，经 Gateway 转发 `/api`。业务 API、持久任务、事件中继各用独立容器、探针与停机生命周期；三者仍复用同一业务镜像、配置与数据库，不是四域已独立。完整启动用 `--wait` 核对所有服务，Gateway 的 readiness 只探测 API，不以 worker 健康作为同步请求准入。Agent 内部调用不经过公开 Gateway。四域独立写入权按[设计44](workspace/content/design/44-Go微服务架构与技术选型设计.md)逐域验收。更新同一业务镜像时一起更新三个运行角色：
 
 ```sh
 docker compose up -d --build --wait backend worker relay
 docker compose logs --tail=100 backend worker relay
 ```
+
+更新 Media 计算镜像时使用 `docker compose up -d --build --wait media`。其 `/health/live` 和 `/health/ready` 仅在内部健康端口可达；默认并发 2、临时盘 2100MiB、内存上限 3GiB。未配置远端地址及令牌的非 Compose API 会拒绝 WebM 规范化，其他上传类型保持原路径；只填其中一项会启动失败。独立进程在 `backend/` 下执行 `go run ./cmd/media`，必须由环境提供令牌并安装 FFmpeg/ffprobe，不读取业务 `.env`。非 local 部署必须分别为服务端 `GLOWLOOM_MEDIA_TLS_*_FILE` 和客户端 `GLOWLOOM_MEDIA_NORMALIZATION_TLS_*_FILE` 配置完整 mTLS 身份，另设私有 `GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS`；当前 Compose 明确只声明 local 网络，不充当生产 TLS 配置。
+
+Creation 的 TXT/DOCX 提取由独立 `creation` 镜像承接，脚本导入 Worker 和 Agent 文档引用均通过 gRPC 调用。更新使用 `docker compose up -d --build --wait creation`；默认并发 2、临时盘 64MiB、内存上限 1GiB，内部健康端口 8083。源文件上限 20MiB，结果 JSON 上限 32MiB，单次期限 60 秒。它不接入数据库、对象存储或消息队列，也不需要 FFmpeg；最终文档保存、权限复核、任务租约和幂等提交仍由原 owner 负责，不代表 Creation 全域已迁出。Compose 需提供独立 `GLOWLOOM_CREATION_SERVICE_TOKEN`；非 Compose 消费方另设 `GLOWLOOM_CREATION_EXTRACTION_ADDRESS`，两者全空会拒绝提取，部分配置会启动失败。独立进程在 `backend/` 执行 `go run ./cmd/creation`，只读自身环境配置；非 local 两端分别要求完整 `GLOWLOOM_CREATION_TLS_*_FILE` 和 `GLOWLOOM_CREATION_EXTRACTION_TLS_*_FILE` mTLS 身份。配置模板见 `.env.example`。
 
 后端已健康时，可单独更新前端：
 
