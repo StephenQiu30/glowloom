@@ -11,26 +11,26 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	pgsubject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/postgres"
+	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	pgsubject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/postgres"
-	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 type toolBinding struct {
@@ -114,7 +114,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return canvasService(tx).List(ctx, s.Principal(), s.ProjectID)
+			return canvasService(tx).List(ctx, app.Principal(s), s.ProjectID)
 		}),
 		tool("canvas_get", "读取当前范围内画布现场", "read", `{"type":"object","properties":{"canvas_id":{"type":"string","format":"uuid"}},"required":["canvas_id"],"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -123,7 +123,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			doc, err := canvasService(tx).Get(ctx, s.Principal(), in.CanvasID)
+			doc, err := canvasService(tx).Get(ctx, app.Principal(s), in.CanvasID)
 			if err == nil && (doc.ProjectID != s.ProjectID || s.CanvasID != nil && doc.ID != *s.CanvasID) {
 				return nil, domain.ErrNotFound
 			}
@@ -137,7 +137,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return canvasService(tx).Create(ctx, s.Principal(), s.ProjectID, key.String(), canvas.CreateInput{Name: in.Name, Kind: in.Kind, Scope: json.RawMessage(`{}`)})
+			return canvasService(tx).Create(ctx, app.Principal(s), s.ProjectID, key.String(), canvas.CreateInput{Name: in.Name, Kind: in.Kind, Scope: json.RawMessage(`{}`)})
 		}),
 		tool("canvas_rename", "按成功回执真实版本重命名画布", "write", `{"type":"object","properties":{"canvas_id":{"type":"string","format":"uuid"},"expected_revision":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1}},"required":["canvas_id","expected_revision","name"],"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -148,21 +148,21 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			doc, err := canvasService(tx).Get(ctx, s.Principal(), in.CanvasID)
+			doc, err := canvasService(tx).Get(ctx, app.Principal(s), in.CanvasID)
 			if err != nil {
 				return nil, err
 			}
 			if doc.ProjectID != s.ProjectID || s.CanvasID != nil && doc.ID != *s.CanvasID {
 				return nil, domain.ErrNotFound
 			}
-			return canvasService(tx).Rename(ctx, s.Principal(), in.CanvasID, key.String(), canvas.RenameInput{ExpectedRevision: in.ExpectedRevision, Name: in.Name})
+			return canvasService(tx).Rename(ctx, app.Principal(s), in.CanvasID, key.String(), canvas.RenameInput{ExpectedRevision: in.ExpectedRevision, Name: in.Name})
 		}),
 		tool("script_workspace", "读取正式剧本工作区版本", "read", `{"type":"object","properties":{},"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct{}
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return scriptService(tx).Workspace(ctx, s.Principal(), s.ProjectID)
+			return scriptService(tx).Workspace(ctx, app.Principal(s), s.ProjectID)
 		}),
 		tool("script_sources", "分页读取冻结的剧本素材元数据", "read", `{"type":"object","properties":{"version_id":{"type":"string","format":"uuid"},"after":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -173,7 +173,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return scriptService(tx).Sources(ctx, s.Principal(), s.ProjectID, in.VersionID, in.After, in.Limit)
+			return scriptService(tx).Sources(ctx, app.Principal(s), s.ProjectID, in.VersionID, in.After, in.Limit)
 		}),
 		tool("media_list", "分页读取项目正式媒体素材", "read", `{"type":"object","properties":{"kind":{"type":"string"},"cursor":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -184,7 +184,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return media.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaWorkerScopeAccess)).List(ctx, s.Principal(), s.ProjectID, in.Kind, in.Cursor, in.Limit)
+			return media.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaWorkerScopeAccess)).List(ctx, app.Principal(s), s.ProjectID, in.Kind, in.Cursor, in.Limit)
 		}),
 		tool("subject_list", "查询当前创作空间的正式主体", "read", `{"type":"object","properties":{"query":{"type":"string"},"page":{"type":"integer","minimum":1},"page_size":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -195,7 +195,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return subjectStore(tx).List(ctx, s.Principal(), subject.ListInput{Query: in.Query, Page: in.Page, PageSize: in.PageSize, TimeField: "created_at", Order: "desc"})
+			return subjectStore(tx).List(ctx, app.Principal(s), subject.ListInput{Query: in.Query, Page: in.Page, PageSize: in.PageSize, TimeField: "created_at", Order: "desc"})
 		}),
 		tool("subject_get", "读取当前空间主体的冻结资源绑定", "read", `{"type":"object","properties":{"subject_id":{"type":"string","format":"uuid"}},"required":["subject_id"],"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -204,7 +204,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return subjectStore(tx).Get(ctx, s.Principal(), in.SubjectID)
+			return subjectStore(tx).Get(ctx, app.Principal(s), in.SubjectID)
 		}),
 		tool("catalog_models", "读取当前项目可用模型发布与价格", "read", `{"type":"object","properties":{"model_key":{"type":"string"},"capability":{"type":"string"},"mode":{"type":"string"}},"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -215,7 +215,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return catalog.NewListModelsQuery(catalogStore(tx)).Execute(ctx, s.Principal(), catalog.ListModelsInput{ProjectID: s.ProjectID, ModelKey: in.ModelKey, Capability: in.Capability, Mode: in.Mode, Limit: 50})
+			return catalog.NewListModelsQuery(catalogStore(tx)).Execute(ctx, app.Principal(s), catalog.ListModelsInput{ProjectID: s.ProjectID, ModelKey: in.ModelKey, Capability: in.Capability, Mode: in.Mode, Limit: 50})
 		}),
 		tool("operation_task", "查询原正式生成任务与计费回执，不创建新请求", "read", `{"type":"object","properties":{"operation_id":{"type":"string","format":"uuid"}},"required":["operation_id"],"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -224,7 +224,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return operation.NewPublicQuery(operationStore(tx)).Task(ctx, s.Principal(), s.ProjectID, in.OperationID)
+			return operation.NewPublicQuery(operationStore(tx)).Task(ctx, app.Principal(s), s.ProjectID, in.OperationID)
 		}),
 	}
 }

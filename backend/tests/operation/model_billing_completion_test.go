@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 func TestCachedTokenSettlementChargesEachInputTokenOnce(t *testing.T) {

@@ -8,15 +8,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

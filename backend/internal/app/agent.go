@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

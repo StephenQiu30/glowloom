@@ -10,10 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
 
 func TestHistoricalPasswordFlagNeverRestrictsAuthenticatedAccount(t *testing.T) {

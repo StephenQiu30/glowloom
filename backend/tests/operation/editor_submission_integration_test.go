@@ -6,19 +6,19 @@ import (
 	"testing"
 	"time"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type editorAccess struct{ tx *gorm.DB }

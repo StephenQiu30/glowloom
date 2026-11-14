@@ -9,15 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	billingevent "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/event"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	operationpg "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	billingevent "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/event"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 func TestCreditOperationSagaFreezesBeforeDispatchAndReleasesOnZeroCostTerminal(t *testing.T) {

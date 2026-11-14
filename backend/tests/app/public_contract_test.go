@@ -15,7 +15,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
 
 	"github.com/swaggo/swag"
 	"go.opentelemetry.io/otel/trace/noop"

@@ -12,11 +12,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
 
 func TestAuthOriginAndEnumeration(t *testing.T) {

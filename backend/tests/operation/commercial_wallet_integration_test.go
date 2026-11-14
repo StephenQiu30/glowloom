@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	op "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
-	op "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {

@@ -10,10 +10,10 @@
 !canvas/src/
 !canvas/src/**
 !backend/
-!backend/internal/
-!backend/internal/prompt/
-!backend/internal/prompt/domain/
-!backend/internal/prompt/domain/cinema_catalog.json
+!backend/creation/
+!backend/creation/prompt/
+!backend/creation/prompt/domain/
+!backend/creation/prompt/domain/cinema_catalog.json
 **/node_modules
 **/.next
 **/.env*

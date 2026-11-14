@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func invitationProof(t *testing.T, tx *gorm.DB, email string) string {

@@ -1,9 +1,9 @@
 package domain
 
 import (
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	mediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	mediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 // GoalKind identifies the admitted business obligation, independently of model text.

@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Store persists Go-owned Agent authority, grants and permanent business receipts.
@@ -43,7 +43,7 @@ func (s *Store) worker(tx *gorm.DB, a domain.Authority) error {
 	if s.access == nil {
 		return identity.ErrForbidden
 	}
-	return s.access(tx).AuthorizeWorker(tx.Statement.Context, a.Scope.Principal(), a.Scope.ProjectID)
+	return s.access(tx).AuthorizeWorker(tx.Statement.Context, app.Principal(a.Scope), a.Scope.ProjectID)
 }
 
 // AuthorizeProject checks current request access to the project.

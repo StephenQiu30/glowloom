@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 func TestConfirmationCommitsRunnableTaskWithoutEventRedelivery(t *testing.T) {

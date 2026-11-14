@@ -6,11 +6,11 @@ import (
 
 	"gorm.io/gorm"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trialtask"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // Objects uses the exact destination frozen in development_trial input/state.

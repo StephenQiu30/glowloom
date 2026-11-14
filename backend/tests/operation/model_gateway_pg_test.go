@@ -15,16 +15,16 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billing "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	catalogpg "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	operationpg "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	op "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/modelgateway"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billing "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	catalogpg "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	op "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 

@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 func TestLibraryPickerFullFilteredPaginationAndProjectIsolation(t *testing.T) {

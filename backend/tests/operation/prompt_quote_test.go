@@ -11,12 +11,12 @@ import (
 
 	"github.com/google/uuid"
 
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type quotePreferenceReader struct{ calls int }

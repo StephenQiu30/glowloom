@@ -22,9 +22,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/dns/dnsmessage"
 
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
 )
 
 type gatewayTransport func(*http.Request) (*http.Response, error)

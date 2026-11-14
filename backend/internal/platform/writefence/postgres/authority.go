@@ -49,10 +49,28 @@ func (r coordinationRow) control() writefence.Control {
 	return writefence.Control{Authority: writefence.Authority{Issuer: r.Issuer, Kind: r.AuthorityKind, ID: r.AuthorityID, Epoch: r.Epoch}, CoordinationID: r.CoordinationID, Blocked: r.Blocked}
 }
 
-// Begin atomically closes admission and advances the epoch. The expected epoch is
-// a CAS, except exact historical replay is checked first, even after later epochs.
-// A pending coordination cannot be displaced by a different ID.
+// Begin commits source closure before returning to an RPC coordinator.
 func (s *AuthorityStore) Begin(ctx context.Context, authority writefence.Authority, id uuid.UUID, blocked bool) (writefence.Coordination, error) {
+	if s == nil || s.db == nil || s.db.Statement == nil {
+		return writefence.Coordination{}, writefence.ErrUnavailable
+	}
+	if _, open := s.db.Statement.ConnPool.(gorm.TxCommitter); open {
+		return writefence.Coordination{}, writefence.ErrTransaction
+	}
+	var state writefence.Coordination
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		state, err = s.BeginTx(ctx, tx, authority, id, blocked)
+		return err
+	})
+	return state, err
+}
+
+// BeginTx closes admission in the caller's existing policy transaction. It never
+// calls a remote writer. The caller must roll back on error and commit before
+// propagating this control. The expected epoch is a CAS; an exact historical
+// replay retains its original ID.
+func (s *AuthorityStore) BeginTx(ctx context.Context, tx *gorm.DB, authority writefence.Authority, id uuid.UUID, blocked bool) (writefence.Coordination, error) {
 	if authority.Epoch < 0 || authority.Epoch == math.MaxInt64 || id == uuid.Nil {
 		return writefence.Coordination{}, writefence.ErrInvalid
 	}
@@ -64,8 +82,14 @@ func (s *AuthorityStore) Begin(ctx context.Context, authority writefence.Authori
 	if s == nil || s.db == nil {
 		return writefence.Coordination{}, writefence.ErrUnavailable
 	}
+	if tx == nil || tx.Statement == nil {
+		return writefence.Coordination{}, writefence.ErrTransaction
+	}
+	if _, ok := tx.Statement.ConnPool.(gorm.TxCommitter); !ok {
+		return writefence.Coordination{}, writefence.ErrTransaction
+	}
 	var state writefence.Coordination
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := func() error {
 		owner, err := authorityOwner(ctx, tx)
 		if err != nil {
 			return err
@@ -125,7 +149,7 @@ func (s *AuthorityStore) Begin(ctx context.Context, authority writefence.Authori
 		}
 		return tx.Exec(`UPDATE infra.authority_head SET epoch=?,coordination_id=?,blocked=true,complete=false,updated_at=statement_timestamp()
 			WHERE service_owner=infra.runtime_owner() AND issuer=? AND authority_kind=? AND authority_id=?`, epoch, id, authority.Issuer, authority.Kind, authority.ID).Error
-	})
+	}()
 	return state, err
 }
 

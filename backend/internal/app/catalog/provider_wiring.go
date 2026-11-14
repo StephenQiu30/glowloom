@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"time"
 
-	catalogpostgres "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
-	priceadapter "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricesync"
-	catalogtask "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
-	operationtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
-	trialtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
+	subjecttask "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/task"
+	catalogpostgres "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+	priceadapter "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricesync"
+	catalogtask "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/task"
+	operationtask "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	trialtask "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trialtask"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	subjecttask "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/task"
 
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
 
@@ -22,19 +22,19 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/providerprobe"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	managedprovider "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/doubao"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialschema"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialseal"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/providerprobe"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	managedprovider "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/doubao"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 )
 
 // RegisterProvider registers provider activities with the operation worker.

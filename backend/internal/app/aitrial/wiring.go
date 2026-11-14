@@ -9,12 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialseal"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/codex"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trial"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trial"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )

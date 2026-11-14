@@ -13,10 +13,10 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func TestM1BlankProjectOwnsInitialCanvasAndReceipt(t *testing.T) {

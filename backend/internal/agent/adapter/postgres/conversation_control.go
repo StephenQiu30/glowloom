@@ -7,9 +7,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func controlReceipt(tx *gorm.DB, rid uuid.UUID, id uuid.UUID, byRequest bool) (*domain.Decision, string, *domain.AppliedReceipt, error) {

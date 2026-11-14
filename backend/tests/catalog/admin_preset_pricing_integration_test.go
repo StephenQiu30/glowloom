@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -80,5 +80,4 @@ func TestPresetPricingReviewUsesEffectiveSalesRelease(t *testing.T) {
 	rows = read("billable")
 	require.Len(t, rows, 1)
 	require.True(t, rows[0].Billing.SalePublished)
-
 }

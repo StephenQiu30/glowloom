@@ -10,9 +10,9 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // The final schema admits only copies whose original receipt includes physical

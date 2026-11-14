@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 type downloadFixtureObjects struct {

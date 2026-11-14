@@ -13,9 +13,9 @@ import (
 
 	"github.com/google/uuid"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // ProbeReceipt contains public evidence only. SentinelKey is intentionally

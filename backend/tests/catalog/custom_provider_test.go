@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type customProviderStore struct {

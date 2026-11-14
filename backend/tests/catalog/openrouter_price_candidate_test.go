@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricesync"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricesync"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricevalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 )
 
 func TestParseOpenRouterPriceCandidateNormalizesSupportedTokenPricing(t *testing.T) {

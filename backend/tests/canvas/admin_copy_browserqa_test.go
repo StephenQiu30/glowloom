@@ -10,17 +10,17 @@ import (
 	"net"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
+	copytask "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trialtask"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	copytask "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trial"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	copywire "github.com/StephenQiu30/glowloom-server/backend/internal/app/projectcopy"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trial"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 

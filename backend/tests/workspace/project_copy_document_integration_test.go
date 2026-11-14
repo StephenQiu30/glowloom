@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
 	"github.com/google/uuid"
 
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func copyDocumentDOCX(t *testing.T) []byte {

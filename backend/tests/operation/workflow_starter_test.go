@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	application "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	application "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 // The former event starter eligibility is now enforced at confirmation and

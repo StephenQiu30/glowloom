@@ -92,7 +92,11 @@ func TestProvidersOfficialSDKContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	t.Cleanup(func() {
+		if err := file.Close(); err != nil {
+			t.Error("close upload source:", err)
+		}
+	})
 	if _, err := file.WriteString("data"); err != nil {
 		t.Fatal(err)
 	}

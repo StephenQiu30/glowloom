@@ -17,13 +17,13 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	exportff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
-	exportapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	exportdomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	exportff "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/ffmpeg"
+	exportapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	exportdomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 func TestExportAudioExtractsTrimmedSoundWithGapsMutedTracksAndFades(t *testing.T) {

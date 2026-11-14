@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

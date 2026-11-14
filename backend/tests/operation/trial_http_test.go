@@ -8,15 +8,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trialtask"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type trialAuth struct{ err error }

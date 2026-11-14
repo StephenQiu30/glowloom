@@ -14,8 +14,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type conversationSessionAuthority struct {

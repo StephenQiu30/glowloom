@@ -9,12 +9,12 @@ import (
 
 	"github.com/google/uuid"
 
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 type scriptLocationFence struct {

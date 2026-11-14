@@ -13,14 +13,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	md "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
-	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	td "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	md "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/workflow"
+	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	td "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 func reviewBytes(t *testing.T, body, mime string) *media.Downloaded {

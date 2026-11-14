@@ -11,12 +11,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 )
 
 var errSettlementStateConflict = operationapp.ErrTransitionConflict

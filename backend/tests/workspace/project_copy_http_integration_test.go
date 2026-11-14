@@ -9,18 +9,18 @@ import (
 	"testing"
 	"time"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
-	copytask "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/task"
+	copytask "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	mo "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	wh "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+	wa "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	wh "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	wa "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	mo "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
 )
 
 func copyHTTPRequest(t *testing.T, r *gin.Engine, method, path, body string, key uuid.UUID) *httptest.ResponseRecorder {

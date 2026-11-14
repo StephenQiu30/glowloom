@@ -13,13 +13,13 @@ import (
 
 	"gorm.io/gorm"
 
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 

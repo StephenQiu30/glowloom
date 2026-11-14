@@ -1489,6 +1489,21 @@ CREATE TABLE identity.user_session (
     CONSTRAINT user_session_token_hash_check CHECK ((octet_length(token_hash) = 32))
 );
 
+-- Identity-owned original revocation commands outlive account/session cleanup.
+-- No account/session FK: the source transaction validates ownership while holding
+-- the account, actor-session and target-session policy locks. Recovery binds only
+-- to these durable IDs; deleting a session must never erase source responsibility
+-- or permit that session's revocation history to be recreated under a new command.
+CREATE TABLE identity.session_revocation (
+    session_id uuid PRIMARY KEY CHECK (session_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    account_id uuid NOT NULL CHECK (account_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    request_session_id uuid NOT NULL CHECK (request_session_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    coordination_id uuid NOT NULL UNIQUE CHECK (coordination_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    expected_epoch bigint NOT NULL CHECK (expected_epoch >= 0),
+    requested_at timestamptz NOT NULL,
+    completed_at timestamptz CHECK (completed_at >= requested_at)
+);
+
 CREATE TABLE infra.idempotency_record (
     service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
     id uuid NOT NULL,
@@ -8477,3 +8492,10 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+
+-- Identity's journal is not shared owner infrastructure: actual role ACLs, not
+-- multi-owner RLS, isolate it. Keep all binding fields immutable and retain every
+-- original command. Legacy receives the same minimum for offline compatibility.
+-- Grant after the legacy ACL-copy loop; other business owners receive nothing.
+GRANT SELECT,INSERT ON TABLE identity.session_revocation TO glowloom_app,glowloom_identity;
+GRANT UPDATE(completed_at) ON TABLE identity.session_revocation TO glowloom_app,glowloom_identity;

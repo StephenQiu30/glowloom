@@ -7,9 +7,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 func TestGenerationEstimateUsesPublishedPriceWithoutCreatingSubmission(t *testing.T) {

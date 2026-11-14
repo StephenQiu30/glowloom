@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	task "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	task "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/google/uuid"

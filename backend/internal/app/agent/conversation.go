@@ -1,10 +1,10 @@
 package agent
 
 import (
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
 )
 
 // ConversationInputs wires the formal draft, catalog and quote owners for Agent input admission.

@@ -11,17 +11,17 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	flow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
-	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	domain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	platform "github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	flow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	toolff "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/ffmpeg"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/workflow"
+	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	domain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 // The saved-node boundary and speech recognizer are controlled fixtures; media

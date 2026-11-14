@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	token "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/sessiontoken"
+	token "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/sessiontoken"
 )
 
 func TestSessionKeysLoadFromEnvironmentValues(t *testing.T) {

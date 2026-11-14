@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 // BindOperationCostInTransaction binds the original atomic tool receipt to its

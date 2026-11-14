@@ -14,7 +14,7 @@ import (
 	"github.com/coder/websocket"
 	"go.uber.org/zap"
 
-	appgateway "github.com/StephenQiu30/glowloom-server/backend/internal/app/gateway"
+	appgateway "github.com/StephenQiu30/glowloom-server/backend/gateway/app"
 )
 
 func TestConfigDoesNotLoadBusinessDependencies(t *testing.T) {

@@ -10,11 +10,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialschema"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
 
 type providerDetailStore struct {

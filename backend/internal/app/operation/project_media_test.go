@@ -21,9 +21,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 

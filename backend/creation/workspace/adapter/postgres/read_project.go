@@ -1,0 +1,112 @@
+package postgres
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+)
+
+// FindProject reads a live project by both its ID and the actor's organization.
+func (s *Store) FindProject(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (domain.Project, error) {
+	if s == nil || s.db == nil {
+		return domain.Project{}, ErrUnavailable
+	}
+	if projectID == uuid.Nil {
+		return domain.Project{}, ErrProjectNotFound
+	}
+	var project domain.Project
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.authorizeProject(ctx, tx, actor, projectID, false); err != nil {
+			return err
+		}
+		var err error
+		project, err = readProjectInTx(tx, actor.OrgID, projectID)
+		if err != nil {
+			return err
+		}
+		unavailable, err := s.projectCoverUnavailable(ctx, tx, actor, project)
+		if err != nil {
+			return err
+		}
+		if unavailable {
+			return application.ErrProjectCoverUnavailable
+		}
+		return nil
+	})
+	if err != nil {
+		return domain.Project{}, fmt.Errorf("find project: %w", err)
+	}
+	return project, nil
+}
+
+func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, error) {
+	var row struct {
+		IndependentCanvas   bool
+		IndependentMedia    bool
+		ID                  uuid.UUID
+		OrgID               uuid.UUID
+		OwnerID             *uuid.UUID
+		CanvasID            *uuid.UUID
+		StyleKey            *string
+		Name                string
+		Description         string
+		AspectRatio         string
+		StyleType           string
+		StyleSubtype        *string
+		StylePresetID       *uuid.UUID
+		CoverAssetID        *uuid.UUID
+		Resolution          string
+		AllowOverseasModels bool
+		Status              string
+		ArchivedAt          *time.Time
+		DeleteTime          *time.Time
+		PurgeAfter          *time.Time
+		Revision            int64
+		CreateTime          time.Time
+		UpdateTime          time.Time
+	}
+	result := tx.Raw(`
+		SELECT id, org_id, owner_id, initial_canvas_id AS canvas_id, style_key, name, description, aspect_ratio, style_type,
+		       style_subtype, style_preset_id, cover_asset_id, resolution, allow_overseas_models,
+		       status, archived_at, delete_time, purge_after, revision,
+		       create_time, update_time, independent_canvas, independent_media
+		FROM workspace.project
+		WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete AND status IN ('active','archived')
+	`, projectID.String(), orgID.String()).Scan(&row)
+	if result.Error != nil {
+		return domain.Project{}, fmt.Errorf("read project: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return domain.Project{}, ErrProjectNotFound
+	}
+	project := domain.Project{
+		IndependentCanvas: row.IndependentCanvas, IndependentMedia: row.IndependentMedia,
+		ID: row.ID, OrgID: row.OrgID, Name: row.Name, Description: row.Description,
+		AspectRatio: row.AspectRatio, StyleType: row.StyleType, Resolution: row.Resolution,
+		AllowOverseasModels: row.AllowOverseasModels, Status: row.Status,
+		ArchivedAt: row.ArchivedAt, DeleteTime: row.DeleteTime,
+		CoverAssetID: row.CoverAssetID, PurgeAfter: row.PurgeAfter, Revision: row.Revision,
+		CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
+	}
+	if row.OwnerID != nil {
+		project.OwnerID = *row.OwnerID
+	}
+	if row.CanvasID != nil {
+		project.CanvasID = *row.CanvasID
+	}
+	project.StyleKey = row.StyleKey
+	if row.StyleSubtype != nil {
+		project.StyleSubtype = *row.StyleSubtype
+	}
+	if row.StylePresetID != nil {
+		project.StylePresetID = *row.StylePresetID
+	}
+	return project, nil
+}

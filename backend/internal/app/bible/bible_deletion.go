@@ -9,10 +9,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbible "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
-	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	pgbible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
+	bibleapp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func provideBibleDeletionImpacts(tx *gorm.DB) bibleapp.Impacts {

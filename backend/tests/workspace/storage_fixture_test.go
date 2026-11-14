@@ -8,18 +8,18 @@ import (
 
 	"github.com/google/uuid"
 
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/storageoperator"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 )
 
 // businessStorageConfig uses only the explicitly selected isolated storage fixture.

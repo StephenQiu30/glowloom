@@ -16,19 +16,20 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 
+	sourcepostgres "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	sourcepostgres "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 type sourceBytes struct {
@@ -170,7 +171,7 @@ func TestSourcePublicationStopDuringObjectIOCannotPublishOrReplaceUnknownIntent(
 		t.Fatal(err)
 	}
 	store := sourcepostgres.NewSourceStore(db, func(tx *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(tx) }).WithPublicationAuthorization(scriptwire.ProvideSourcePublicationAuthorization)
-	if _, err := store.FinishWrite(t.Context(), g.Scope.Principal(), plan); !errors.Is(err, domain.ErrTerminal) {
+	if _, err := store.FinishWrite(t.Context(), agentapp.Principal(g.Scope), plan); !errors.Is(err, domain.ErrTerminal) {
 		t.Fatal("generic source owner bypassed Stop", err)
 	}
 }
@@ -204,15 +205,15 @@ func TestCancelledOriginalSourceProofClosesUnknownCallWithoutReexecuting(t *test
 	store := sourceStoreForFixture(restrictedSourceRuntime(t))
 	owner := script.NewSourceService(store, objects, time.Now)
 	recovery := script.NewSourceRecovery(store, owner, time.Now)
-	page, err := recovery.List(t.Context(), g.Scope.Principal(), g.Scope.ProjectID, 0, 10)
+	page, err := recovery.List(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, 0, 10)
 	if err != nil || len(page.Items) != 1 {
 		t.Fatal(page, err)
 	}
 	command := script.SourceControlCommand{ProjectID: g.Scope.ProjectID, IntentID: page.Items[0].ID, Key: uuid.New(), RequestID: uuid.New(), Action: "cancel", ExpectedRevision: page.Items[0].Revision}
-	if _, err := recovery.Control(t.Context(), g.Scope.Principal(), command); err != nil {
+	if _, err := recovery.Control(t.Context(), agentapp.Principal(g.Scope), command); err != nil {
 		t.Fatal(err)
 	}
-	current, err := recovery.Get(t.Context(), g.Scope.Principal(), g.Scope.ProjectID, command.IntentID)
+	current, err := recovery.Get(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, command.IntentID)
 	if err != nil || current.Status != "pending" || !current.NeedsReconciliation || len(objects.data) != 1 {
 		t.Fatal("bounded unknown write was deleted early", current, len(objects.data), err)
 	}
@@ -242,10 +243,10 @@ func TestCancelledOriginalSourceProofClosesUnknownCallWithoutReexecuting(t *test
 	command.Key = uuid.New()
 	command.RequestID = uuid.New()
 	command.ExpectedRevision = current.Revision
-	if _, err := recovery.Control(t.Context(), g.Scope.Principal(), command); err != nil {
+	if _, err := recovery.Control(t.Context(), agentapp.Principal(g.Scope), command); err != nil {
 		t.Fatal(err)
 	}
-	current, err = recovery.Get(t.Context(), g.Scope.Principal(), g.Scope.ProjectID, command.IntentID)
+	current, err = recovery.Get(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, command.IntentID)
 	if err != nil || current.Status != "cancelled" || len(objects.data) != 0 {
 		t.Fatal("formal cleanup not complete", current, len(objects.data), err)
 	}
@@ -336,7 +337,7 @@ func TestSourcePublicationActualCOSBytesAndSavedHistory(t *testing.T) {
 	if status != 200 || first.Status != "completed" {
 		t.Fatal("official object publication", status, message)
 	}
-	base, err := sourceStoreForFixture(runtime).LoadBase(t.Context(), g.Scope.Principal(), g.Scope.ProjectID, nil)
+	base, err := sourceStoreForFixture(runtime).LoadBase(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, nil)
 	if err != nil || len(base.Sources) != 1 || base.Sources[0].Rich.LocationID == uuid.Nil {
 		t.Fatal("saved history missing", base, err)
 	}

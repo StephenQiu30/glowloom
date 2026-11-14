@@ -12,11 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/providerprobe"
+	flow "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/task"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/providerprobe"
-	flow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )

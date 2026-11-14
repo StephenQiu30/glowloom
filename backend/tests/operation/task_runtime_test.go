@@ -3,7 +3,7 @@ package operation_test
 import (
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 

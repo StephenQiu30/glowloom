@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 
 	"github.com/google/uuid"
 

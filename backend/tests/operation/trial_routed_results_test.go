@@ -16,12 +16,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trial"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trial"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 func TestTrialOfficialSDKRecoversOriginalPhysicalRefDespiteDifferentDefault(t *testing.T) {

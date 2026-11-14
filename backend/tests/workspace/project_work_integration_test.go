@@ -12,24 +12,24 @@ import (
 	"testing"
 	"time"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	toolpg "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
 type owningProjectWork []workspaceapp.ProjectWorkGuard

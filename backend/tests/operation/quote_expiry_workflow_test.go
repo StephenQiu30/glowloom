@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 type expiryPageStore struct {

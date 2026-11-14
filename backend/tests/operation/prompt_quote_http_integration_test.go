@@ -12,13 +12,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 func templateQuoteRouter(actor identityapp.Principal, database *gorm.DB) *gin.Engine {

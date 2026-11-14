@@ -9,11 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricevalidation"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // seedReviewedOnboardingPrices explicitly authorizes synthetic zero sales prices

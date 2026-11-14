@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app/creationruntime"
+	creationruntime "github.com/StephenQiu30/glowloom-server/backend/creation/app"
 	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/creation"
 )
 

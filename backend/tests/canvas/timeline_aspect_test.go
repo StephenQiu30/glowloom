@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 )
 
 var timelineAspectRatios = []string{"auto", "2.35:1", "21:9", "1.85:1", "16:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"}

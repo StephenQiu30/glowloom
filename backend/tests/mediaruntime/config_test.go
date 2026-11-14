@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app/mediaruntime"
+	mediaruntime "github.com/StephenQiu30/glowloom-server/backend/media/app"
 )
 
 func localConfig() mediaruntime.Config {

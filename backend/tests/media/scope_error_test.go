@@ -8,11 +8,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	http "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	http "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 type scopeFailureStore struct {

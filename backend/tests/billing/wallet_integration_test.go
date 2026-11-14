@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 )
 
 func TestWalletReserveCapAndReplay(t *testing.T) {

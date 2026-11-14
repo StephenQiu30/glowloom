@@ -19,15 +19,15 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	prompthttp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/http"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	prompthttp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/http"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

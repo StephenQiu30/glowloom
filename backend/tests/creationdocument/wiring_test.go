@@ -8,13 +8,13 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/document/adapter/grpcserver"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/document/adapter/native"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/creation"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/adapter/grpcserver"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/adapter/native"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func TestCreationProductionFactoryUsesRemoteParserWithoutFallback(t *testing.T) {

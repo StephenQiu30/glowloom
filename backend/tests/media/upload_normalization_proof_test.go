@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 func normalizedUploadProof() (mediaapp.UploadRequest, domain.MediaAsset, mediaapp.UploadNormalization) {

@@ -13,11 +13,11 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func projectConsumerFixture(t *testing.T) (*gorm.DB, identity.Principal, uuid.UUID, uuid.UUID, uuid.UUID, pgworkspace.RequestScopeFactory) {

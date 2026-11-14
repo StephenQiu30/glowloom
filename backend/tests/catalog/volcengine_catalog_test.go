@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 )
 
 func TestVolcengineCatalogCoversCurrentGenerationFamilies(t *testing.T) {

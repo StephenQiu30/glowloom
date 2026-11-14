@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
 )
 
 // seedOnboardingModeEvidence simulates committed formal-validation receipts in

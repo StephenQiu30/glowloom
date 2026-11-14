@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
 
 // A wrong policy selection, inclusive deadline, or legacy-policy upgrade breaks this test.

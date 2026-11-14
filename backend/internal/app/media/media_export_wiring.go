@@ -3,15 +3,15 @@ package media
 import (
 	"gorm.io/gorm"
 
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/workflow"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
 // ProvideMediaExportStore binds source authorization and media publication to

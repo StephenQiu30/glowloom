@@ -3,18 +3,18 @@ package agent
 import (
 	"errors"
 
+	bible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	bible "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
-	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
 func businessError(err error) error {

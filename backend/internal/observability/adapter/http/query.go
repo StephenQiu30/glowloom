@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/observability/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/observability/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"

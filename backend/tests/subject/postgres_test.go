@@ -18,15 +18,15 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	pg "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/postgres"
+	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	pg "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/postgres"
-	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/subject/domain"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

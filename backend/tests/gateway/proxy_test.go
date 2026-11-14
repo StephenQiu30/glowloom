@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/gateway"
+	gateway "github.com/StephenQiu30/glowloom-server/backend/gateway/proxy"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 

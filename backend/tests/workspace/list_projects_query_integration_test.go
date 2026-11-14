@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func insertProjectListFixture(

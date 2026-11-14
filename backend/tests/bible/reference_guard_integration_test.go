@@ -10,23 +10,23 @@ import (
 	"time"
 
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	scriptextract "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/extract"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
+	scriptpg "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	scriptextract "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
-	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func guardedBibleReference(ctx context.Context, db *gorm.DB, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {

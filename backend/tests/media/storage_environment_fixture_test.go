@@ -11,8 +11,8 @@ import (
 
 	"gorm.io/gorm"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 var storageRevisionAllocator = struct {

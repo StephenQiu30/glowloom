@@ -5,14 +5,14 @@ import (
 
 	"gorm.io/gorm"
 
-	pgbible "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
-	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	pgbible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
+	bibleapp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type projectCopyBibleScopes struct{ store *pgscript.ProjectCopyStore }

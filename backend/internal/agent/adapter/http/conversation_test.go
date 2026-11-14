@@ -9,15 +9,15 @@ import (
 	"strings"
 	"testing"
 
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type conversationStore struct {
@@ -33,7 +33,7 @@ func TestConversationControlStatusDoesNotRequireAgentAvailability(t *testing.T) 
 	gin.SetMode(gin.TestMode)
 	s := &conversationStore{authority: domain.Authority{Admission: domain.Admission{RootRunID: uuid.New(), SessionID: uuid.New(), Scope: domain.Scope{ActorID: uuid.New(), OrgID: uuid.New(), ScopeID: uuid.New(), ProjectID: uuid.New()}}}}
 	router := gin.New()
-	router.Use(func(c *gin.Context) { c.Set("principal", s.authority.Scope.Principal()) })
+	router.Use(func(c *gin.Context) { c.Set("principal", app.Principal(s.authority.Scope)) })
 	NewPublicHandler(s, nil, nil).Register(router.Group("/api"))
 	path := "/api/projects/" + s.authority.Scope.ProjectID.String() + "/agent/sessions/" + s.authority.SessionID.String() + "/runs/" + s.authority.RootRunID.String() + "/commands/current"
 	out := httptest.NewRecorder()
@@ -125,7 +125,7 @@ func TestConversationHistoryUpdateRequiresProjectWriteAndVerifiesReceipt(t *test
 		return &stdhttp.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(reply))}, nil
 	})
 	router := gin.New()
-	router.Use(func(c *gin.Context) { c.Set("principal", scope.Principal()) })
+	router.Use(func(c *gin.Context) { c.Set("principal", app.Principal(scope)) })
 	NewPublicHandler(nil, access, runtime).Register(router.Group("/api"))
 	path := "/api/projects/" + scope.ProjectID.String() + "/agent/sessions/" + strings.ToUpper(sid)
 	send := func(body string) *httptest.ResponseRecorder {

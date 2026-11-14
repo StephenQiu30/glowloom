@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 )
 
 func TestConfirmSingleQuoteRejectsReusedKeyForDifferentOperation(t *testing.T) {

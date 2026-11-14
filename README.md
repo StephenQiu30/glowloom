@@ -74,9 +74,9 @@ docker compose up -d --build --wait backend worker relay
 docker compose logs --tail=100 backend worker relay
 ```
 
-更新 Media 计算镜像时使用 `docker compose up -d --build --wait media`。其 `/health/live` 和 `/health/ready` 仅在内部健康端口可达；默认并发 2、临时盘 2100MiB、内存上限 3GiB。未配置远端地址及令牌的非 Compose API 会拒绝 WebM 规范化，其他上传类型保持原路径；只填其中一项会启动失败。独立进程在 `backend/` 下执行 `go run ./cmd/media`，必须由环境提供令牌并安装 FFmpeg/ffprobe，不读取业务 `.env`。非 local 部署必须分别为服务端 `GLOWLOOM_MEDIA_TLS_*_FILE` 和客户端 `GLOWLOOM_MEDIA_NORMALIZATION_TLS_*_FILE` 配置完整 mTLS 身份，另设私有 `GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS`；当前 Compose 明确只声明 local 网络，不充当生产 TLS 配置。
+更新 Media 计算镜像时使用 `docker compose up -d --build --wait media`。其 `/health/live` 和 `/health/ready` 仅在内部健康端口可达；默认并发 2、临时盘 2100MiB、内存上限 3GiB。未配置远端地址及令牌的非 Compose API 会拒绝 WebM 规范化，其他上传类型保持原路径；只填其中一项会启动失败。独立进程在 `backend/` 下执行 `go run ./media`，必须由环境提供令牌并安装 FFmpeg/ffprobe，不读取业务 `.env`。非 local 部署必须分别为服务端 `GLOWLOOM_MEDIA_TLS_*_FILE` 和客户端 `GLOWLOOM_MEDIA_NORMALIZATION_TLS_*_FILE` 配置完整 mTLS 身份，另设私有 `GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS`；当前 Compose 明确只声明 local 网络，不充当生产 TLS 配置。
 
-Creation 的 TXT/DOCX 提取由独立 `creation` 镜像承接，脚本导入 Worker 和 Agent 文档引用均通过 gRPC 调用。更新使用 `docker compose up -d --build --wait creation`；默认并发 2、临时盘 64MiB、内存上限 1GiB，内部健康端口 8083。源文件上限 20MiB，结果 JSON 上限 32MiB，单次期限 60 秒。它不接入数据库、对象存储或消息队列，也不需要 FFmpeg；最终文档保存、权限复核、任务租约和幂等提交仍由原 owner 负责，不代表 Creation 全域已迁出。Compose 需提供独立 `GLOWLOOM_CREATION_SERVICE_TOKEN`；非 Compose 消费方另设 `GLOWLOOM_CREATION_EXTRACTION_ADDRESS`，两者全空会拒绝提取，部分配置会启动失败。独立进程在 `backend/` 执行 `go run ./cmd/creation`，只读自身环境配置；非 local 两端分别要求完整 `GLOWLOOM_CREATION_TLS_*_FILE` 和 `GLOWLOOM_CREATION_EXTRACTION_TLS_*_FILE` mTLS 身份。配置模板见 `.env.example`。
+Creation 的 TXT/DOCX 提取由独立 `creation` 镜像承接，脚本导入 Worker 和 Agent 文档引用均通过 gRPC 调用。更新使用 `docker compose up -d --build --wait creation`；默认并发 2、临时盘 64MiB、内存上限 1GiB，内部健康端口 8083。源文件上限 20MiB，结果 JSON 上限 32MiB，单次期限 60 秒。它不接入数据库、对象存储或消息队列，也不需要 FFmpeg；最终文档保存、权限复核、任务租约和幂等提交仍由原 owner 负责，不代表 Creation 全域已迁出。Compose 需提供独立 `GLOWLOOM_CREATION_SERVICE_TOKEN`；非 Compose 消费方另设 `GLOWLOOM_CREATION_EXTRACTION_ADDRESS`，两者全空会拒绝提取，部分配置会启动失败。独立进程在 `backend/` 执行 `go run ./creation`，只读自身环境配置；非 local 两端分别要求完整 `GLOWLOOM_CREATION_TLS_*_FILE` 和 `GLOWLOOM_CREATION_EXTRACTION_TLS_*_FILE` mTLS 身份。配置模板见 `.env.example`。
 
 后端已健康时，可单独更新前端：
 
@@ -129,13 +129,31 @@ Go 二进制和 Next.js 构建产物均在镜像构建阶段生成，容器启�
 
 ```text
 frontend/      Next.js 工作台与交互界面
-backend/       Go API、worker、relay 与数据库定义
+backend/       单 Go module；服务 owner、legacy API/worker/relay 与数据库定义
 agent/         独立 TypeScript/Pi Durable 服务与 PostgreSQL Storage
 canvas/ 私有 Yjs 协作运行时
 workspace/     知识库、静态阅读与在线研发协作服务（正文在 content/）
 ```
 
-GitHub 仓库现名为 `StephenQiu30/glowloom`。后端 Go 模块路径暂保留 `github.com/StephenQiu30/glowloom-server/backend`，以保持现有导入与生成合同一致；应用命令为 `glowloom`，入口为 `backend/cmd/glowloom`。配置只使用当前 `GLOWLOOM_*`，旧环境变量别名已移除；运行资源名称以实际部署为准。
+GitHub 仓库现名为 `StephenQiu30/glowloom`。后端保留根单 Go module `github.com/StephenQiu30/glowloom-server/backend`；legacy 业务命令为 `glowloom`，入口仍为 `backend/cmd/glowloom`。按[设计44 §7.5](workspace/content/design/44-Go微服务架构与技术选型设计.md#75-go-项目结构)，已有实现以服务 owner 归位：
+
+```text
+backend/
+  gateway/       main.go、app/、proxy/、Dockerfile
+  identity/      domain/、application/、adapter/（无假入口或镜像）
+  creation/      main.go、app/、document/、workspace/、canvas/、script/、bible/、subject/、prompt/、Dockerfile
+  media/         main.go、app/、processing/、domain/、application/、adapter/、mediatool/、Dockerfile
+  execution/     operation/、catalog/、billing/（无假入口或镜像）
+  cmd/glowloom/  尚未切换的业务角色和显式运维入口
+  internal/      platform/、contract/gen/、app/（legacy 全量组合）及暂留跨域/专用包
+  api/proto/     唯一 Go RPC 协议源
+  tests/         集中行为与工程门禁
+  db/            唯一 schema.sql 和公共 data.sql
+```
+
+参照 Google 官方 microservices-demo 的服务内聚示例，不把它称为唯一 Google 目录标准；不增加 services/cmd/internal 套层、嵌套 internal、facade 或空服务。三个真实入口的 `app` 只保留实际配置/生命周期，不吸入 legacy 数据库 wiring；`internal/{agent,skill,analytics,observability,audit,infra}` 暂留，不假归通用库。目录归位不等于四个业务 owner、授权或资金事务已独立，完整拆分目标及原保护不变。
+
+三个服务镜像分别使用 `backend/gateway/Dockerfile`、`backend/creation/Dockerfile`、`backend/media/Dockerfile`，构建上下文仍为 `backend`；从 backend 执行 `go run ./gateway`、`go run ./creation`、`go run ./media`。构建入口时用 `go build -o <临时目录>/<二进制> ./<入口>`，避免输出名与服务目录冲突。配置只使用当前 `GLOWLOOM_*`，旧环境变量别名已移除；运行资源名称以实际部署为准。
 
 ## 文档与协作
 

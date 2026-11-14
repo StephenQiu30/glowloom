@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 // Mathematical fixtures, not published supplier prices or counting contracts.

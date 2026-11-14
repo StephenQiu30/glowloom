@@ -16,12 +16,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	scripthttp "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/http"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	scripthttp "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/http"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 func scriptStorage(t *testing.T) *objectstorage.Client {

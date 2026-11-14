@@ -9,15 +9,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	pgsubject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/postgres"
+	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	platform "github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	pgsubject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/postgres"
-	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // NewVoiceExecution composes actual staged bytes, existing sealed credentials and

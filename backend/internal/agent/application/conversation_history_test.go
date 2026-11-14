@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type historySourceFixture struct{ err error }

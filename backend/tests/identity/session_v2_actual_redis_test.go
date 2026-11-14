@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/refreshredis"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/refreshredis"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // Exact opt-in. Never pass a shared source string: peer hashes are fixture-owned.

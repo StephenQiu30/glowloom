@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type styleLibraryStub struct {

@@ -13,19 +13,19 @@ import (
 	"testing"
 	"time"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 )
 
 type editorWireTransport func(*http.Request) (*http.Response, error)

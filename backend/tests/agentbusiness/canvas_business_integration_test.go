@@ -17,12 +17,12 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

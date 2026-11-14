@@ -6,13 +6,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 type workerNavigationScope struct{ tx *gorm.DB }

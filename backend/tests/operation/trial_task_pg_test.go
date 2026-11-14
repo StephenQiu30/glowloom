@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	trial "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	trial "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trialtask"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 

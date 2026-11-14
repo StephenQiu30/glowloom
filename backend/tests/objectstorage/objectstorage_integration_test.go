@@ -85,7 +85,11 @@ func TestPutStatAndRemoveWithHostObjectStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal("read signed object")
 	}
-	defer response.Body.Close()
+	t.Cleanup(func() {
+		if err := response.Body.Close(); err != nil {
+			t.Error("close signed response body")
+		}
+	})
 	data, err := io.ReadAll(response.Body)
 	if err != nil || response.StatusCode != http.StatusOK || string(data) != content {
 		t.Fatalf("signed read did not return the original object: status %d, error %v", response.StatusCode, err)

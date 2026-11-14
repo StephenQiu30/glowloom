@@ -11,11 +11,11 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // Routing fixtures deliberately stub identity, but Creation still owns project

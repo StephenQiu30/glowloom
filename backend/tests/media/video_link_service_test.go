@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 type linkUploadFixture struct {

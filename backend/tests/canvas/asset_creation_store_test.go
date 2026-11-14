@@ -12,11 +12,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestCanvasAssetCreationAllocatesActualPrimaryAndTemplatesWithoutGeneration(t *testing.T) {

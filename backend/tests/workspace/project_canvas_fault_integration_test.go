@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 )
 
 func TestCreationRecoveryDoesNotWaitForCreationAdvisoryLock(t *testing.T) {

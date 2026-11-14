@@ -14,8 +14,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

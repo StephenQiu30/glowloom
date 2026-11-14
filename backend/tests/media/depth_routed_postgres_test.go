@@ -16,15 +16,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	objects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	objects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/workflow"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 type routedDepthSource struct{ asset uuid.UUID }

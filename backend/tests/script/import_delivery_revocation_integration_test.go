@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 )
 
 func assertRevokedImportDelivery(t *testing.T, db *gorm.DB, store app.ImportWorkerStore, worker *app.ImportWorker, delivery app.ImportDelivery) {

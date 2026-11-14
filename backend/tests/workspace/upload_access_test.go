@@ -7,9 +7,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func TestUploadProjectOwnerRejectsMissingTransaction(t *testing.T) {

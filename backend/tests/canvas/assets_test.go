@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type assetQueryRecorder struct {

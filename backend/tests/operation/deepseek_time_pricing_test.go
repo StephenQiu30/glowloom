@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 const deepSeekTimeRule = `{"input_micros_per_1k":2000,"cached_input_micros_per_1k":40,"output_micros_per_1k":8000,"time_pricing":"deepseek_cn_2026","markup_multiplier":"1","credit_ratio":"10"}`

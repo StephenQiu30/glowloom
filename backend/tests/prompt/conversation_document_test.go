@@ -3,7 +3,7 @@ package prompt_test
 import (
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 )
 
 func TestConversationDocumentReferencePreservesIdentityAndLegacyLabels(t *testing.T) {

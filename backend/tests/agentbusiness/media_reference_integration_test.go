@@ -23,7 +23,7 @@ import (
 	"gorm.io/gorm"
 
 	agentdomain "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 func referenceDOCX(t *testing.T) []byte {

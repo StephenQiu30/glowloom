@@ -30,9 +30,9 @@ func (s *memoryStore) Acknowledge(_ context.Context, _ application.Event, _ time
 	return nil
 }
 
-func (s *memoryStore) Retry(_ context.Context, event application.Event, class string, max int, _, _ time.Time) (bool, error) {
+func (s *memoryStore) Retry(_ context.Context, event application.Event, class string, maxAttempts int, _, _ time.Time) (bool, error) {
 	s.class = class
-	if event.AttemptCount >= max {
+	if event.AttemptCount >= maxAttempts {
 		s.dead, s.pending = true, false
 	}
 	return s.dead, nil

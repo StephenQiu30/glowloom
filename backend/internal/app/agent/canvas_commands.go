@@ -8,10 +8,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
 // CanvasCommandsInput uses the existing closed Go canvas operation vocabulary.
@@ -41,7 +41,7 @@ func (b *Boundary) WithCanvasRuntime(runtime canvas.YjsCommandRuntime) *Boundary
 		if err := decode(raw, &input); err != nil {
 			return nil, err
 		}
-		state, err := canvasStore(tx).LoadYjs(ctx, s.Principal(), input.CanvasID)
+		state, err := canvasStore(tx).LoadYjs(ctx, app.Principal(s), input.CanvasID)
 		if err != nil {
 			return nil, err
 		}
@@ -83,7 +83,7 @@ func (b *Boundary) executeCanvasCommands(ctx context.Context, in domain.CallInpu
 	if requested.CanvasID == uuid.Nil || grant.Scope.CanvasID != nil && *grant.Scope.CanvasID != requested.CanvasID {
 		return domain.CallReceipt{}, domain.ErrNotFound
 	}
-	state, err := canvasStore(b.db).LoadYjs(ctx, grant.Scope.Principal(), requested.CanvasID)
+	state, err := canvasStore(b.db).LoadYjs(ctx, app.Principal(grant.Scope), requested.CanvasID)
 	if err != nil {
 		return domain.CallReceipt{}, err
 	}
@@ -91,14 +91,14 @@ func (b *Boundary) executeCanvasCommands(ctx context.Context, in domain.CallInpu
 		return domain.CallReceipt{}, domain.ErrNotFound
 	}
 	commandID := uuid.NewSHA1(grant.RootRunID, []byte("canvas-command:"+grant.SubmissionID.String()+":"+domain.ContentHash(in.Call)))
-	prepared, err := canvas.NewYjsService(canvasStore(b.db), b.canvasRuntime).PrepareCommands(ctx, grant.Scope.Principal(), requested.CanvasID, canvas.YjsCommandInput{CommandID: commandID, SessionID: grant.SubmissionID, ExpectedRevision: requested.ExpectedRevision, ExpectedCommitSeq: requested.ExpectedCommitSeq, Operations: requested.Operations})
+	prepared, err := canvas.NewYjsService(canvasStore(b.db), b.canvasRuntime).PrepareCommands(ctx, app.Principal(grant.Scope), requested.CanvasID, canvas.YjsCommandInput{CommandID: commandID, SessionID: grant.SubmissionID, ExpectedRevision: requested.ExpectedRevision, ExpectedCommitSeq: requested.ExpectedCommitSeq, Operations: requested.Operations})
 	if err != nil {
 		return domain.CallReceipt{}, businessError(err)
 	}
 	// All expensive Node computation is complete. This lock encloses the current
 	// grant check, formal Yjs acceptance and original business call receipt.
 	return b.Store.ExecuteAtomicTool(ctx, "canvas_commands", in, func(tx *gorm.DB, s domain.Scope, _ uuid.UUID) (domain.CallResult, error) {
-		receipt, err := canvas.NewYjsService(canvasStore(tx), b.canvasRuntime).CommitCommands(ctx, s.Principal(), prepared)
+		receipt, err := canvas.NewYjsService(canvasStore(tx), b.canvasRuntime).CommitCommands(ctx, app.Principal(s), prepared)
 		if err != nil {
 			return domain.CallResult{}, businessError(err)
 		}

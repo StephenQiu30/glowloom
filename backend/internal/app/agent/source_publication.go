@@ -9,14 +9,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	scriptpostgres "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 	agentpostgres "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	scriptpostgres "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 // ScriptSourceDocument accepts canonical authored content, without accepting
@@ -90,11 +90,11 @@ func (b *Boundary) executeSourcePublication(ctx context.Context, in domain.CallI
 		store := sourceStore(b.db)
 		command := requested.command(s, key)
 		owner := script.NewSourceServiceSharingIO(store, b.sourceObjects, time.Now, b.sourceOwner)
-		receipt, err := owner.Write(ctx, s.Principal(), command)
+		receipt, err := owner.Write(ctx, app.Principal(s), command)
 		if err != nil {
 			hash, hashErr := script.SourceCommandHash(command)
 			if hashErr == nil {
-				prior, readErr := store.FindCommand(ctx, s.Principal(), s.ProjectID, key, hash)
+				prior, readErr := store.FindCommand(ctx, app.Principal(s), s.ProjectID, key, hash)
 				if readErr == nil && prior == nil {
 					return domain.CallResult{Status: "failed", Result: json.RawMessage(`{"code":"script_source_not_published"}`)}, nil
 				}
@@ -115,7 +115,7 @@ func (b *Boundary) executeSourcePublication(ctx context.Context, in domain.CallI
 }
 func (b *Boundary) recoverSourceCall(ctx context.Context, id uuid.UUID) (domain.CallResult, error) {
 	receipt, err := b.Store.RecoverSourceCall(ctx, id, func(tx *gorm.DB, s domain.Scope, key uuid.UUID, hash string) (domain.CallResult, error) {
-		prior, err := sourceStore(tx).FindCommand(ctx, s.Principal(), s.ProjectID, key, hash)
+		prior, err := sourceStore(tx).FindCommand(ctx, app.Principal(s), s.ProjectID, key, hash)
 		if err != nil {
 			return domain.CallResult{}, businessError(err)
 		}
@@ -123,7 +123,7 @@ func (b *Boundary) recoverSourceCall(ctx context.Context, id uuid.UUID) (domain.
 			return domain.CallResult{}, domain.ErrUnavailable
 		}
 		if prior.Receipt == nil {
-			cancelled, err := sourceStore(tx).CancelledPublication(ctx, s.Principal(), s.ProjectID, key, hash)
+			cancelled, err := sourceStore(tx).CancelledPublication(ctx, app.Principal(s), s.ProjectID, key, hash)
 			if err != nil {
 				return domain.CallResult{}, businessError(err)
 			}

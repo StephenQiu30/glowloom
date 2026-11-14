@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
+	subjecttask "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/task"
+	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	subjecttask "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/task"
-	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
 )
 
 type voiceWorkMemory struct {

@@ -5,8 +5,8 @@ import (
 	"context"
 	"time"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/analytics/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Store owns current-session authorization and a transaction-consistent projection read.

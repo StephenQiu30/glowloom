@@ -6,8 +6,8 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
-	workspaceflow "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/task"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspaceflow "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 )
 
 type retentionWorkflowStore struct{ enqueued, processed bool }

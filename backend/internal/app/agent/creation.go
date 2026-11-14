@@ -10,20 +10,20 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	pgbible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
+	bible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billing "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	pgbible "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
-	bible "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billing "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
-	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 // commandSchema derives nested business argument fields from the consumed Go
@@ -159,7 +159,7 @@ func creationTools() []toolBinding {
 			in.ProjectID = s.ProjectID
 			in.Key = key
 			in.RequestID = key
-			return bibleService(tx).Change(ctx, s.Principal(), in)
+			return bibleService(tx).Change(ctx, app.Principal(s), in)
 		}),
 		tool("script_adopt", "按剧本/分集双版本采用正式剧本版本", "write", commandSchema(script.AdoptCommand{}), func(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, raw json.RawMessage) (any, error) {
 			var in script.AdoptCommand
@@ -173,7 +173,7 @@ func creationTools() []toolBinding {
 			in.Key = key
 			in.RequestID = key
 			store := pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(inner) })
-			return script.NewAdoptService(store, time.Now).Adopt(ctx, s.Principal(), in)
+			return script.NewAdoptService(store, time.Now).Adopt(ctx, app.Principal(s), in)
 		}),
 		tool("script_confirm_split", "确认完整分集边界与映射；保留既有正式剧集身份", "write", commandSchema(script.SplitCommand{}), func(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, raw json.RawMessage) (any, error) {
 			var in script.SplitCommand
@@ -187,7 +187,7 @@ func creationTools() []toolBinding {
 			in.Key = key
 			in.RequestID = key
 			store := pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(inner) })
-			return script.NewEpisodeService(store, nil, time.Now).ConfirmSplit(ctx, s.Principal(), in)
+			return script.NewEpisodeService(store, nil, time.Now).ConfirmSplit(ctx, app.Principal(s), in)
 		}),
 		tool("operation_quote", "建立真实模型/价格冻结报价，不确认费用；随后必须提交提案并取得用户批准", "write", commandSchema(quoteInput{}), func(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, raw json.RawMessage) (any, error) {
 			var in quoteInput
@@ -197,11 +197,11 @@ func creationTools() []toolBinding {
 			if in.Source != nil && s.CanvasID != nil && in.Source.CanvasID != *s.CanvasID {
 				return nil, domain.ErrNotFound
 			}
-			result, err := operation.NewCreateFreeQuoteCommand(operationStore(tx)).Execute(ctx, s.Principal(), operation.CreateFreeQuoteInput{ProjectID: s.ProjectID, RequestID: key.String(), FreeQuoteItemInput: operation.FreeQuoteItemInput{ModelKey: in.ModelKey, Capability: in.Capability, Mode: in.Mode, Prompt: in.Prompt, Params: in.Params, OutputCount: in.OutputCount, Source: in.Source, ForceRegenerate: true}})
+			result, err := operation.NewCreateFreeQuoteCommand(operationStore(tx)).Execute(ctx, app.Principal(s), operation.CreateFreeQuoteInput{ProjectID: s.ProjectID, RequestID: key.String(), FreeQuoteItemInput: operation.FreeQuoteItemInput{ModelKey: in.ModelKey, Capability: in.Capability, Mode: in.Mode, Prompt: in.Prompt, Params: in.Params, OutputCount: in.OutputCount, Source: in.Source, ForceRegenerate: true}})
 			if err != nil {
 				return nil, err
 			}
-			op, err := operationStore(tx).FindOperation(ctx, s.Principal(), s.ProjectID, result.OperationID)
+			op, err := operationStore(tx).FindOperation(ctx, app.Principal(s), s.ProjectID, result.OperationID)
 			if err != nil {
 				return nil, err
 			}
@@ -236,7 +236,7 @@ func (v proposalValidator) ValidateProposal(ctx context.Context, s domain.Scope,
 		return domain.ErrInvalid
 	}
 	store := operationStore(v.tx)
-	quoted, err := store.FindOperation(ctx, s.Principal(), s.ProjectID, candidate.OperationID)
+	quoted, err := store.FindOperation(ctx, app.Principal(s), s.ProjectID, candidate.OperationID)
 	if err != nil {
 		return err
 	}
@@ -250,11 +250,11 @@ func (v proposalValidator) ValidateProposal(ctx context.Context, s domain.Scope,
 	if revision != p.CanvasRevision {
 		return domain.ErrConflict
 	}
-	model, price, err := store.ReadCurrentQuoteCatalog(ctx, s.Principal(), quoted, time.Now())
+	model, price, err := store.ReadCurrentQuoteCatalog(ctx, app.Principal(s), quoted, time.Now())
 	if err != nil {
 		return err
 	}
-	reuse, err := store.ReadReuseSourceAvailable(ctx, s.Principal(), quoted)
+	reuse, err := store.ReadReuseSourceAvailable(ctx, app.Principal(s), quoted)
 	if err != nil {
 		return err
 	}
@@ -265,7 +265,7 @@ func (v proposalValidator) ValidateProposal(ctx context.Context, s domain.Scope,
 	if len(reasons) > 0 {
 		return domain.ErrConflict
 	}
-	budget, err := billingpg.NewScopedStore(v.tx, func(tx *gorm.DB) billing.ProjectAccess { return billingAccess{tx} }).FindBudget(ctx, s.Principal(), s.ProjectID)
+	budget, err := billingpg.NewScopedStore(v.tx, func(tx *gorm.DB) billing.ProjectAccess { return billingAccess{tx} }).FindBudget(ctx, app.Principal(s), s.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -318,14 +318,14 @@ func (b *Boundary) confirmOperation(ctx context.Context, tx *gorm.DB, s domain.S
 	if err = (proposalValidator{tx}).ValidateProposal(ctx, s, proposal); err != nil {
 		return domain.CallResult{}, err
 	}
-	quoted, err := operationStore(tx).FindOperation(ctx, s.Principal(), s.ProjectID, requested.OperationID)
+	quoted, err := operationStore(tx).FindOperation(ctx, app.Principal(s), s.ProjectID, requested.OperationID)
 	if err != nil {
 		return domain.CallResult{}, err
 	}
 	if quoted.QuoteMicros == nil || *quoted.QuoteMicros > in.MaxMicros {
 		return domain.CallResult{}, domain.ErrBudget
 	}
-	result, err := operation.NewConfirmSingleQuoteCommand(operationStoreWithCreditSaga(tx, b.creditOperationSagaEnabled)).Execute(ctx, s.Principal(), operation.ConfirmSingleQuoteInput{ProjectID: s.ProjectID, OperationID: requested.OperationID, RequestID: key.String()})
+	result, err := operation.NewConfirmSingleQuoteCommand(operationStoreWithCreditSaga(tx, b.creditOperationSagaEnabled)).Execute(ctx, app.Principal(s), operation.ConfirmSingleQuoteInput{ProjectID: s.ProjectID, OperationID: requested.OperationID, RequestID: key.String()})
 	if err != nil {
 		return domain.CallResult{}, err
 	}
@@ -344,7 +344,7 @@ func (b *Boundary) proposeOperation(ctx context.Context, tx *gorm.DB, s domain.S
 	if err := decode(in.Input, &requested); err != nil {
 		return domain.CallResult{}, err
 	}
-	quoted, err := operationStore(tx).FindOperation(ctx, s.Principal(), s.ProjectID, requested.OperationID)
+	quoted, err := operationStore(tx).FindOperation(ctx, app.Principal(s), s.ProjectID, requested.OperationID)
 	if err != nil {
 		return domain.CallResult{}, err
 	}
@@ -383,7 +383,7 @@ func quoteCanvasRevision(ctx context.Context, tx *gorm.DB, s domain.Scope, quote
 	if id == nil {
 		return 0, nil
 	}
-	doc, err := canvasService(tx).Get(ctx, s.Principal(), *id)
+	doc, err := canvasService(tx).Get(ctx, app.Principal(s), *id)
 	if err != nil {
 		return 0, err
 	}

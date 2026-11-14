@@ -8,15 +8,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 type assetMutationAccess struct {

@@ -11,19 +11,19 @@ import (
 	"testing"
 	"time"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/http"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )

@@ -10,12 +10,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	domain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	domain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // Child snapshots are controlled; these tests exercise coordinator persistence and authority.

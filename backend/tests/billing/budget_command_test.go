@@ -11,11 +11,11 @@ import (
 
 	"github.com/google/uuid"
 
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 

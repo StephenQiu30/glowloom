@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 )
 
 func TestSequenceStrictAtomsAndSemanticPromptRoundTrip(t *testing.T) {

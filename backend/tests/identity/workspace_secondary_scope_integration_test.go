@@ -13,14 +13,14 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	workspaceevent "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/event"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	domain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	workspaceevent "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/event"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	domain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func secondaryWorkers(tx *gorm.DB) workspace.WorkerScopeResolver {

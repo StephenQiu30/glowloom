@@ -10,13 +10,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	bibleapp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 func bibleCopyMediaBinding(b bibleapp.ProjectCopyBinding) mediaapp.ProjectCopyBinding {

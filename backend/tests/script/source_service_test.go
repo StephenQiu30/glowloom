@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type sourceObjects struct {

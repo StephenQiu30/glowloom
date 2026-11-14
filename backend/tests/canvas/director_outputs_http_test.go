@@ -15,10 +15,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvashttp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	canvashttp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 

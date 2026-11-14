@@ -11,13 +11,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type bibleCopyAccess struct {

@@ -4,13 +4,13 @@ import (
 	"testing"
 	"time"
 
-	currenttask "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/task"
+	currenttask "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/extract"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 )
 
 func TestScriptFileImportTaskPGActualPrivateOriginalToVersion(t *testing.T) {

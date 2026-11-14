@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/task"
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
@@ -29,19 +29,19 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
-	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	toolff "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/ffmpeg"
+	toolhttp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/http"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.T) {

@@ -19,7 +19,7 @@ func TestMediaUploadKeepsCreationSQLBehindOwnerPort(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(source), "../.."))
 	for _, name := range []string{"upload.go", "upload_admission.go"} {
 		t.Run(name, func(t *testing.T) {
-			file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, "internal/media/adapter/postgres", name), nil, 0)
+			file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, "media/adapter/postgres", name), nil, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -28,7 +28,7 @@ func TestMediaUploadKeepsCreationSQLBehindOwnerPort(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if strings.Contains(value, "/internal/workspace/") {
+				if strings.Contains(value, "/creation/workspace/") {
 					t.Errorf("upload adapter imports Creation implementation: %s", value)
 				}
 			}

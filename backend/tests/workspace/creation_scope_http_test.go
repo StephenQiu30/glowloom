@@ -9,11 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type headerScopeResolver struct {

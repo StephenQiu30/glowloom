@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	app "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type publicationFake struct{ calls int }

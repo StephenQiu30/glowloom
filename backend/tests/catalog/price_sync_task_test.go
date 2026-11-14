@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	catalogtask "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/task"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	catalogtask "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/task"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 

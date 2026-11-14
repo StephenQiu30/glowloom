@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func TestProjectCopyPlacementPGUnremovedObjectKeepsTargetAndDirectoryFenced(t *testing.T) {

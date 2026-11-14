@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app/creationruntime"
+	creationruntime "github.com/StephenQiu30/glowloom-server/backend/creation/app"
 )
 
 func localConfig() creationruntime.Config {

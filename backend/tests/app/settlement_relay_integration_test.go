@@ -18,9 +18,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	redisrealtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/redis"

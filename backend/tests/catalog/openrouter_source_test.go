@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricesync"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricesync"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

@@ -11,14 +11,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // This contract fixture tests actual coordinator SQL/fences, not script content ownership.

@@ -8,15 +8,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	subjectdomain "github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
-	subjectdomain "github.com/StephenQiu30/glowloom-server/backend/internal/subject/domain"
 )
 
 type generationAccess struct {

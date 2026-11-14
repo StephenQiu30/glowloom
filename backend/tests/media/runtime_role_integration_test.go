@@ -17,7 +17,7 @@ import (
 
 	"gorm.io/gorm"
 
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 )
 
 func TestMediaIngestAndModerationUnderRuntimeRole(t *testing.T) {

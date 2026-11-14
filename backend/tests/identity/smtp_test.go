@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	identitymail "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/mail"
+	identitymail "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/mail"
 )
 
 func TestSMTPMessageAndConfiguration(t *testing.T) {

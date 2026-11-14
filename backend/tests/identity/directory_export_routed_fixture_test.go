@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func exportFixtureInfo(data []byte) identity.ExportObjectInfo {

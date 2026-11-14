@@ -39,7 +39,7 @@ export function UnifiedSubjectSourcePicker({
   onClose: () => void;
   onSelect: (value: SelectedSubjectMedia) => string | void;
   onSelectMany?: (values: SelectedSubjectMedia[]) => string | void;
-  // backend/internal/subject/domain/content.go: MaxReferences=120; a primary batch may add one primary.
+  // backend/creation/subject/domain/content.go: MaxReferences=120; a primary batch may add one primary.
   maxSelection?: number;
 }) {
   const [kind, setKind] = useState(allowedKinds[0]);

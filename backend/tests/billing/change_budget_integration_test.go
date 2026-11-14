@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 )
 
 func TestChangeBudgetCommitsSignedLedgerAndBothEvents(t *testing.T) {

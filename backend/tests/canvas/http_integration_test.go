@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 
@@ -21,11 +21,11 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

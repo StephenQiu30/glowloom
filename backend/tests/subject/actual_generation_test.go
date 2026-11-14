@@ -9,27 +9,27 @@ import (
 	"testing"
 	"time"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 type actualSubjectGeneration struct {

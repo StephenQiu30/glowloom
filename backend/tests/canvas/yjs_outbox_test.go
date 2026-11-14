@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 	outbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )

@@ -13,10 +13,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func TestIndependentCreationScopeAndCanvasListing(t *testing.T) {

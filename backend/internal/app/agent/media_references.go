@@ -19,10 +19,10 @@ import (
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 type referenceContent struct {
@@ -61,7 +61,7 @@ func referenceLimit(kind mediadomain.Kind) int64 {
 	}
 }
 func referenceFact(ctx context.Context, db *gorm.DB, scope domain.Scope, id uuid.UUID) (mediadomain.MediaAsset, error) {
-	a, err := pgmedia.NewScopedStore(db, mediawire.NewMediaWorkerScopeAccess).FindAsset(ctx, scope.Principal(), scope.ProjectID, id)
+	a, err := pgmedia.NewScopedStore(db, mediawire.NewMediaWorkerScopeAccess).FindAsset(ctx, app.Principal(scope), scope.ProjectID, id)
 	if err != nil {
 		return a, businessError(err)
 	}

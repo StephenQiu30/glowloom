@@ -13,9 +13,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 

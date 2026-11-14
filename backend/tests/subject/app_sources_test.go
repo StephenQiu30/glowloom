@@ -27,15 +27,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/http"
+	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/http"
-	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 

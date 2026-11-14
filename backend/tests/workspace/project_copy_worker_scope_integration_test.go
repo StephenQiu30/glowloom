@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func TestProjectCopyWorkerReadUsesDurableAuthorityWithoutRequestSession(t *testing.T) {

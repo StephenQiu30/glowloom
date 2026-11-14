@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Agent errors classify invalid input, unavailable authority, conflicts and budget failures.
@@ -32,11 +30,6 @@ type Scope struct {
 	ScopeID   uuid.UUID  `json:"scope_id"`
 	ProjectID uuid.UUID  `json:"project_id"`
 	CanvasID  *uuid.UUID `json:"canvas_id,omitempty"`
-}
-
-// Principal returns the authenticated identity carried by the established scope.
-func (s Scope) Principal() identity.Principal {
-	return identity.Principal{ID: s.ActorID, OrgID: s.OrgID, ScopeID: s.ScopeID}
 }
 
 // Valid reports whether all required scope identities are present.

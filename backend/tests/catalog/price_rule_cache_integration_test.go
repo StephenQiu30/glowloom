@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	redisclient "github.com/redis/go-redis/v9"
 
-	catalogredis "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/redis"
+	catalogredis "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/redis"
 )
 
 func TestPriceRuleCacheSeparatesImmutableVersions(t *testing.T) {

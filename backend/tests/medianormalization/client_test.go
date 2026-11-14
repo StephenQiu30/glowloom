@@ -18,8 +18,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/media"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/normalizationgrpc"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/adapter/normalizationgrpc"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 type streamServer struct {

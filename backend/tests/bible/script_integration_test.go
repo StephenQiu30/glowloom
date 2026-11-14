@@ -9,20 +9,20 @@ import (
 	"time"
 
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
+	scriptpg "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
-	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 func bibleObjects(t *testing.T) *objectstorage.Client {

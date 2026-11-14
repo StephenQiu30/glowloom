@@ -11,11 +11,11 @@ import (
 
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/media"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/processing/adapter/ffmpeg"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/processing/adapter/grpcserver"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/processing/adapter/ffmpeg"
+	"github.com/StephenQiu30/glowloom-server/backend/media/processing/adapter/grpcserver"
 )
 
 func remoteUploadNormalizer(t *testing.T, clientToken string) mediaapp.UploadNormalizer {

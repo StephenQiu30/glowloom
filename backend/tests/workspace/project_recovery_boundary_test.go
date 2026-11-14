@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
 
 func TestProjectRecoveryExactThirtyDayBoundary(t *testing.T) {

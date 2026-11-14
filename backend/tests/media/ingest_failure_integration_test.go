@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 )
 
 func TestMediaIngestRejectsPermanentProviderResults(t *testing.T) {

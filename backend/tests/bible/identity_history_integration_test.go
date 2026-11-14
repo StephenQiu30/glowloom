@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // This explicit protocol fixture proves the consumer's acknowledgment contract,

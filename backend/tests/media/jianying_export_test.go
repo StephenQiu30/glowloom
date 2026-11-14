@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	project "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/editproject"
-	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+	project "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/editproject"
+	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 func TestJianyingNativeDraftPreservesEditsAndOriginals(t *testing.T) {

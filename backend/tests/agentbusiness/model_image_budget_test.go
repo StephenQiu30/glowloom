@@ -18,11 +18,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/modelgateway"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 type imageProxy func(*http.Request) (*http.Response, error)

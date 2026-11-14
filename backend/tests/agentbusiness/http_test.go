@@ -19,13 +19,13 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 const businessToken = "business-only-test-token-00000000000000"
@@ -324,7 +324,7 @@ func TestPublicGoalAdmissionPersistsBeforeLostForwardAndOverridesManifest(t *tes
 	sid, request := uuid.New(), uuid.New()
 	runtime := &goalRuntime{session: map[string]any{"id": sid, "actor_id": a.Scope.ActorID, "org_id": a.Scope.OrgID, "scope_id": a.Scope.ScopeID, "project_id": a.Scope.ProjectID}, failFirst: true}
 	router := gin.New()
-	protected := router.Group("/api", func(c *gin.Context) { c.Set("principal", a.Scope.Principal()) })
+	protected := router.Group("/api", func(c *gin.Context) { c.Set("principal", app.Principal(a.Scope)) })
 	agenthttp.NewPublicHandler(s, projectAccess{}, runtime).WithConversationInputs(goalInputFreezer{uuid.New()}).Register(protected)
 	input := map[string]any{"request_id": request, "expected_execution_revision": 0, "input": map[string]any{"prompt": "one shot"}, "manifest": map[string]any{"model_key": "isolated", "goal_contract": map[string]any{"kind": "chat"}}, "budget_micros": 100, "goal_contract": map[string]any{"kind": "production"}}
 	call := func() *httptest.ResponseRecorder {
@@ -380,7 +380,7 @@ func TestPublicGoalAdmissionPersistsBeforeLostForwardAndOverridesManifest(t *tes
 	input["goal_contract"] = map[string]any{"kind": "production", "source": map[string]any{"canvas_id": uuid.New(), "node_id": uuid.New(), "revision": 1}}
 	// Supply the public canvas authority hook to reach contract conflict checking.
 	router = gin.New()
-	protected = router.Group("/api", func(c *gin.Context) { c.Set("principal", a.Scope.Principal()) })
+	protected = router.Group("/api", func(c *gin.Context) { c.Set("principal", app.Principal(a.Scope)) })
 	agenthttp.NewPublicHandler(s, projectAccess{}, runtime).WithCanvasAccess(func(context.Context, identity.Principal, uuid.UUID, uuid.UUID) error { return nil }).WithConversationInputs(goalInputFreezer{uuid.New()}).Register(protected)
 	if out := call(); out.Code != 409 {
 		t.Fatalf("source session conflict=%d: %s", out.Code, out.Body.String())
@@ -456,7 +456,7 @@ func (f sessionInputFreezer) Prepare(ctx context.Context, actor identity.Princip
 
 func TestPublicStartPreservesAuthenticatedSessionForInputFreeze(t *testing.T) {
 	store, a, _ := fixture(t)
-	actor := a.Scope.Principal()
+	actor := app.Principal(a.Scope)
 	actor.SessionID = uuid.New()
 	actor.CredentialEpoch = 7
 	sid := uuid.New()

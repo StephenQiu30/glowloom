@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/doubao"
-	subject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/doubao"
+	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
 )
 
 type voiceTransport func(*http.Request) (*http.Response, error)

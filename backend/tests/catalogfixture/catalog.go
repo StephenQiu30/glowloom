@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"runtime"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 )
 
 type providerSeed struct {

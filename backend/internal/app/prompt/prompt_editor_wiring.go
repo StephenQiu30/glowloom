@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 )

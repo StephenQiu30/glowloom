@@ -11,12 +11,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	scriptevent "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/event"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	scriptevent "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/event"
-	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func TestSecondarySourceRecoveryUsesTeamWriteAuthority(t *testing.T) {

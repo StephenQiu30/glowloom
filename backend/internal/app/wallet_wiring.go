@@ -9,13 +9,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	billinghttp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/http"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billingredis "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/redis"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	billinghttp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/http"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billingredis "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/redis"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func walletReader(db *gorm.DB, redisClient *redis.Client) billinghttp.WalletReader {

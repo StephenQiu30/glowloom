@@ -17,14 +17,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 type scriptStorageSettings struct {

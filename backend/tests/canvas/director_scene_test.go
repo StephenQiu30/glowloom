@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 )
 
 func TestDirectorSceneControlsPersistAndRemainClosed(t *testing.T) {

@@ -16,25 +16,25 @@ import (
 	"testing"
 	"time"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	cd "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
-	mo "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	mf "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	ma "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	cd "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	wp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	wa "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	wd "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	wp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	wa "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	wd "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/media/adapter/gltf"
+	mo "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	mf "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	ma "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func projectCopyObjects(t *testing.T) *objectstorage.Client {

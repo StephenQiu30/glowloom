@@ -1,0 +1,131 @@
+package postgres
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+)
+
+var (
+	// ErrWorkflowInputNotReady means frozen media is missing, unready, or unapproved.
+	ErrWorkflowInputNotReady = application.ErrWorkflowInputNotReady
+	// ErrWorkflowConsentUnavailable fails closed until consent records are queryable.
+	ErrWorkflowConsentUnavailable = application.ErrWorkflowConsentUnavailable
+)
+
+// CheckSubmissionInputs verifies frozen media before a provider request. The
+// submitting transition repeats this check under the same transaction as its
+// state write, so a later media change cannot slip between check and submit.
+func (s *Store) CheckSubmissionInputs(ctx context.Context, operationID uuid.UUID) error {
+	if s == nil || s.db == nil {
+		return ErrUnavailable
+	}
+	if operationID == uuid.Nil {
+		return ErrNotFound
+	}
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, operationID, true); err != nil {
+			return err
+		}
+		var operation struct{ ProjectID uuid.UUID }
+		result := tx.Raw(`
+			SELECT project_id FROM operation.operation
+			WHERE id = ?::uuid AND NOT is_delete FOR SHARE
+		`, operationID.String()).Scan(&operation)
+		if result.Error != nil {
+			return fmt.Errorf("read submission operation: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrNotFound
+		}
+		return s.checkWorkflowInputsForSubmission(tx, operationID, operation.ProjectID)
+	})
+	if err != nil {
+		return fmt.Errorf("check workflow submission inputs: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) checkWorkflowInputsForSubmission(tx *gorm.DB, operationID, projectID uuid.UUID, actors ...identity.Principal) error {
+	var actor identity.Principal
+	if len(actors) == 1 {
+		actor = actors[0]
+	}
+	var inputs []operationInputRow
+	result := tx.Raw(`
+		SELECT id,operation_id,seq_no,role,ref_type,ref_id,ref_version,text_value,media_asset_id,mask_asset_id
+		FROM operation.operation_input
+		WHERE operation_id = ?::uuid AND NOT is_delete
+		ORDER BY seq_no
+	`, operationID.String()).Scan(&inputs)
+	if result.Error != nil {
+		return fmt.Errorf("read frozen submission media: %w", result.Error)
+	}
+	assetIDs := make(map[uuid.UUID]struct{})
+	contentHashes := make(map[uuid.UUID]string)
+	for _, input := range inputs {
+		if input.RefType == "subject_media" {
+			frozen := input.domain()
+			if frozen.Validate() != nil || s.subjects(tx) == nil {
+				return ErrWorkflowInputNotReady
+			}
+			if err := s.subjects(tx).VerifyInput(tx.Statement.Context, actor, operationID, projectID, frozen); err != nil {
+				return err
+			}
+			continue
+		}
+		if input.RefType == "media_asset" && input.MediaAssetID != nil && input.RefVersion != nil {
+			if previous, exists := contentHashes[*input.MediaAssetID]; exists && previous != *input.RefVersion {
+				return ErrWorkflowInputNotReady
+			}
+			contentHashes[*input.MediaAssetID] = *input.RefVersion
+		}
+		for _, id := range []*uuid.UUID{input.MediaAssetID, input.MaskAssetID} {
+			if id != nil {
+				assetIDs[*id] = struct{}{}
+			}
+		}
+	}
+	ordered := make([]uuid.UUID, 0, len(assetIDs))
+	for id := range assetIDs {
+		ordered = append(ordered, id)
+	}
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].String() < ordered[j].String() })
+	for _, id := range ordered {
+		var asset struct {
+			Status             string
+			ModerationStatus   string
+			ContainsRealPerson bool
+			ConsentRecordID    *uuid.UUID
+			SHA256             *string
+		}
+		result = tx.Raw(`
+			SELECT status, moderation_status, contains_real_person, consent_record_id, sha256
+			FROM media.media_asset
+			WHERE id = ?::uuid AND project_id = ?::uuid AND NOT is_delete
+			FOR SHARE
+		`, id.String(), projectID.String()).Scan(&asset)
+		if result.Error != nil {
+			return fmt.Errorf("lock frozen submission asset: %w", result.Error)
+		}
+		if result.RowsAffected != 1 || asset.Status != "ready" || asset.ModerationStatus != "passed" {
+			return ErrWorkflowInputNotReady
+		}
+		// media.consent_record is not migrated yet. A real-person asset or
+		// recorded consent must never be assumed valid from the asset alone.
+		if asset.ContainsRealPerson || asset.ConsentRecordID != nil {
+			return ErrWorkflowConsentUnavailable
+		}
+		if expected, exists := contentHashes[id]; exists && (asset.SHA256 == nil || !strings.EqualFold(*asset.SHA256, expected)) {
+			return ErrWorkflowInputNotReady
+		}
+	}
+	return nil
+}

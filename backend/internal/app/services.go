@@ -3,19 +3,19 @@ package app
 import (
 	"gorm.io/gorm"
 
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func init() {

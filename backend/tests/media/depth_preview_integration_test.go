@@ -12,7 +12,7 @@ func TestDepthPreviewMatchesFixedWholeClipNormalizationByteForByte(t *testing.T)
 	if base == "" || source == "" {
 		t.Skip("fixed native Python and BeefTV public source were not configured")
 	}
-	worker, err := filepath.Abs(filepath.Join("..", "..", "internal", "mediatool", "adapter", "videodepth", "worker.py"))
+	worker, err := filepath.Abs(filepath.Join("..", "..", "media", "mediatool", "adapter", "videodepth", "worker.py"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 )
 
@@ -36,7 +37,7 @@ func TestCallPersistsActualOverrunCostAndBlocksNewPaidAdmission(t *testing.T) {
 	if err != nil || replay.ReceiptID != out.ReceiptID || replay.CostMicros != 125 || sends != 1 {
 		t.Fatalf("replay changed original settlement: %+v sends=%d %v", replay, sends, err)
 	}
-	authority, err := s.ReadAuthority(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID)
+	authority, err := s.ReadAuthority(t.Context(), agentapp.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID)
 	if err != nil || authority.ReservedMicros != 125 {
 		t.Fatalf("actual charge missing from root: %+v %v", authority, err)
 	}
@@ -95,7 +96,7 @@ func TestRecoveredOverrunSettlesOnce(t *testing.T) {
 			t.Fatalf("recover original actual bill: %v", err)
 		}
 	}
-	authority, err := s.ReadAuthority(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID)
+	authority, err := s.ReadAuthority(t.Context(), agentapp.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID)
 	if err != nil || authority.ReservedMicros != 70 {
 		t.Fatalf("recovery settled twice or discarded charge: %+v %v", authority, err)
 	}

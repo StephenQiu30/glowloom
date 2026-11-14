@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	ce "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/event"
+	wa "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	wd "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	record "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	ce "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/event"
-	wa "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	wd "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 type recordedCopyDelivery struct {

@@ -5,19 +5,19 @@ import (
 	"encoding/json"
 	"time"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Boundary owns the business services and formal command adapters.
@@ -62,11 +62,11 @@ func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 	b.Capabilities.Snapshot = func(ctx context.Context, s domain.Scope) (any, error) {
 		var out map[string]any
 		err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			canvases, err := canvasService(tx).List(ctx, s.Principal(), s.ProjectID)
+			canvases, err := canvasService(tx).List(ctx, app.Principal(s), s.ProjectID)
 			if err != nil {
 				return err
 			}
-			script, err := scriptService(tx).Workspace(ctx, s.Principal(), s.ProjectID)
+			script, err := scriptService(tx).Workspace(ctx, app.Principal(s), s.ProjectID)
 			if err != nil {
 				return err
 			}

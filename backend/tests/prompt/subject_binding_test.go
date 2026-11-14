@@ -9,10 +9,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	promptpg "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
+	promptpg "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 )
 
 type subjectSourceOwner struct {

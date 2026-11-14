@@ -13,13 +13,13 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	pg "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	pg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

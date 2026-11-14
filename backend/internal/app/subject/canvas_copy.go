@@ -6,11 +6,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 // NewCanvasCopySources retains fixed subject identities only inside the copy

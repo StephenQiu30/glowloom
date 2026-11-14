@@ -21,15 +21,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
-	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	toolff "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/ffmpeg"
+	toolhttp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/http"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

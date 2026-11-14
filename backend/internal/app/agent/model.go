@@ -6,11 +6,11 @@ import (
 
 	"gorm.io/gorm"
 
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billing "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialseal"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/modelgateway"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billing "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 

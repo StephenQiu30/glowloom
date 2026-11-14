@@ -17,10 +17,10 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 var reset sync.Once
@@ -75,7 +75,7 @@ func fixture(t *testing.T) (*pg.Store, domain.Admission, domain.Grant) {
 }
 func decide(t *testing.T, s *pg.Store, a domain.Admission, action string, revision int64) domain.Decision {
 	t.Helper()
-	d, err := s.Decide(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: action, ExpectedAuthorizationRevision: revision})
+	d, err := s.Decide(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: action, ExpectedAuthorizationRevision: revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,12 +83,12 @@ func decide(t *testing.T, s *pg.Store, a domain.Admission, action string, revisi
 }
 func TestGrantPrivateScopeEpochExpiryAndSegment(t *testing.T) {
 	s, a, g := fixture(t)
-	wrong := a.Scope.Principal()
+	wrong := app.Principal(a.Scope)
 	wrong.ID = uuid.New()
 	if _, err := s.ReadAuthority(t.Context(), wrong, a.Scope.ProjectID, a.RootRunID); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("cross actor: %v", err)
 	}
-	if _, err := s.ReadAuthority(t.Context(), a.Scope.Principal(), uuid.New(), a.RootRunID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := s.ReadAuthority(t.Context(), app.Principal(a.Scope), uuid.New(), a.RootRunID); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("cross project: %v", err)
 	}
 	for _, mutate := range []func(*domain.Grant){func(x *domain.Grant) { x.SubmissionID = uuid.New() }, func(x *domain.Grant) { x.OwnerEpoch++ }, func(x *domain.Grant) { x.AuthorizationRevision++ }, func(x *domain.Grant) { x.GrantID = uuid.New() }} {
@@ -146,7 +146,7 @@ func TestResumeRequiresQuiescenceUniqueContinuationAndStopDominates(t *testing.T
 	if _, err := s.ValidateGrant(t.Context(), next); err == nil {
 		t.Fatal("stop did not fence")
 	}
-	if _, err := s.Decide(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: "resume", ExpectedAuthorizationRevision: stop.AuthorizationRevision}); !errors.Is(err, domain.ErrTerminal) {
+	if _, err := s.Decide(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: "resume", ExpectedAuthorizationRevision: stop.AuthorizationRevision}); !errors.Is(err, domain.ErrTerminal) {
 		t.Fatalf("stop reopened %v", err)
 	}
 	q.ContinuationID = next.SubmissionID
@@ -162,7 +162,7 @@ func TestDecisionConcurrentRevisionAndDurableDelivery(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := s.Decide(context.Background(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: "pause", ExpectedAuthorizationRevision: 1}); err == nil {
+			if _, err := s.Decide(context.Background(), app.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: "pause", ExpectedAuthorizationRevision: 1}); err == nil {
 				wins.Add(1)
 			} else if !errors.Is(err, domain.ErrConflict) {
 				t.Error(err)
@@ -215,7 +215,7 @@ func TestCallReceiptUnknownDoesNotReexecuteOrReserveTwice(t *testing.T) {
 func TestSkillVersionsPrivateHashPinnedAndImmediatelyRevoked(t *testing.T) {
 	s, a, _ := fixture(t)
 	input := domain.SkillInput{RequestID: uuid.New(), Name: "storyboard", Version: "1.0.0", Description: "分镜知识", Body: "# Storyboard", Resources: map[string]string{"references/camera.md": "wide / close"}}
-	installed, err := s.InstallSkill(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, input)
+	installed, err := s.InstallSkill(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,12 +240,12 @@ func TestSkillVersionsPrivateHashPinnedAndImmediatelyRevoked(t *testing.T) {
 	if _, err = s.ReadSkill(t.Context(), g, installed.SkillID, installed.Version, "wrong", ""); !errors.Is(err, domain.ErrConflict) {
 		t.Fatal("hash drift", err)
 	}
-	other := a.Scope.Principal()
+	other := app.Principal(a.Scope)
 	other.ID = uuid.New()
 	if _, err = s.SetSkillEnabled(t.Context(), other, a.Scope.ProjectID, installed.SkillID, installed.Version, false); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatal("cross owner disable", err)
 	}
-	if _, err = s.SetSkillEnabled(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, installed.SkillID, installed.Version, false); err != nil {
+	if _, err = s.SetSkillEnabled(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, installed.SkillID, installed.Version, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.ReadSkill(t.Context(), g, installed.SkillID, installed.Version, installed.ResourceHash, ""); !errors.Is(err, domain.ErrBlocked) {
@@ -288,7 +288,7 @@ func TestAtomicToolRollbackReplayBudgetAndStopSerialization(t *testing.T) {
 	<-entered
 	stopped := make(chan error, 1)
 	go func() {
-		_, err := s.Decide(context.Background(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: "stop", ExpectedAuthorizationRevision: 1})
+		_, err := s.Decide(context.Background(), app.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: "stop", ExpectedAuthorizationRevision: 1})
 		stopped <- err
 	}()
 	close(release)
@@ -341,7 +341,7 @@ func TestProposalFencesTreeAndEarlyApprovalCannotOpenOldSegment(t *testing.T) {
 	if _, err = s.Propose(t.Context(), other); !errors.Is(err, domain.ErrBlocked) {
 		t.Fatal("competing proposal replaced first", err)
 	}
-	approved, err := s.Decide(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: "approve", ProposalID: proposal.ProposalID, CandidateHash: proposal.CandidateHash, ExpectedAuthorizationRevision: proposal.AuthorizationRevision})
+	approved, err := s.Decide(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: uuid.New(), Action: "approve", ProposalID: proposal.ProposalID, CandidateHash: proposal.CandidateHash, ExpectedAuthorizationRevision: proposal.AuthorizationRevision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,10 +474,10 @@ func TestSourceIntentDurableGrantHashUnknownReplayAndFreeAccounting(t *testing.T
 	}
 	first, err := s.ExecuteToolIntent(t.Context(), "script_source_publish", in, admit, func(ctx context.Context, scope domain.Scope, id uuid.UUID) (domain.CallResult, error) {
 		calls++
-		if err := s.AuthorizeSourcePublication(ctx, scope.Principal(), scope.ProjectID, id, hash); err != nil {
+		if err := s.AuthorizeSourcePublication(ctx, app.Principal(scope), scope.ProjectID, id, hash); err != nil {
 			t.Fatal("original durable authority absent before I/O", err)
 		}
-		if err := s.AuthorizeSourcePublication(ctx, scope.Principal(), scope.ProjectID, id, domain.Hash([]byte(`{"other":true}`))); !errors.Is(err, domain.ErrConflict) {
+		if err := s.AuthorizeSourcePublication(ctx, app.Principal(scope), scope.ProjectID, id, domain.Hash([]byte(`{"other":true}`))); !errors.Is(err, domain.ErrConflict) {
 			t.Fatal("source key reused for different body", err)
 		}
 		return domain.CallResult{}, errors.New("fixture actual I/O outcome unknown")
@@ -504,7 +504,7 @@ func TestSourceIntentDurableGrantHashUnknownReplayAndFreeAccounting(t *testing.T
 		t.Fatal("free external source reserved manifest cap", current, err)
 	}
 	decide(t, s, a, "stop", 1)
-	if err := s.AuthorizeSourcePublication(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, first.ReceiptID, hash); !errors.Is(err, domain.ErrTerminal) {
+	if err := s.AuthorizeSourcePublication(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, first.ReceiptID, hash); !errors.Is(err, domain.ErrTerminal) {
 		t.Fatal("Stop failed durable source fence", err)
 	}
 }
@@ -513,7 +513,7 @@ func TestLostQuiescedGrantReplyRebindsOriginalContinuationToRegisteredNewOwner(t
 	s, a, _ := fixture(t)
 	paused := decide(t, s, a, "pause", 1)
 	resumeInput := domain.DecisionInput{RequestID: uuid.New(), Action: "resume", ExpectedAuthorizationRevision: paused.AuthorizationRevision}
-	resumed, err := s.Decide(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID, resumeInput)
+	resumed, err := s.Decide(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID, resumeInput)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,7 +566,7 @@ func TestLostQuiescedGrantReplyRebindsOriginalContinuationToRegisteredNewOwner(t
 			t.Fatal("changed continuation proof accepted", bad)
 		}
 	}
-	if _, err := s.Decide(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: resumeInput.RequestID, Action: "resume", ExpectedAuthorizationRevision: paused.AuthorizationRevision, CandidateHash: "changed-original-decision-hash"}); err == nil {
+	if _, err := s.Decide(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: resumeInput.RequestID, Action: "resume", ExpectedAuthorizationRevision: paused.AuthorizationRevision, CandidateHash: "changed-original-decision-hash"}); err == nil {
 		t.Fatal("changed immutable original decision hash accepted")
 	}
 	current, err := s.CurrentAuthority(t.Context(), a.RootRunID)

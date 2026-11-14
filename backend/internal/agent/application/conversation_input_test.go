@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type draftInputFixture struct{ err error }

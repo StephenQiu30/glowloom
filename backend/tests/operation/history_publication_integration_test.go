@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type publicationAccess struct {

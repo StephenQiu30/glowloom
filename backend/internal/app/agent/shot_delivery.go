@@ -9,17 +9,18 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	mediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	mediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 const (
@@ -107,7 +108,7 @@ func loadShotCandidate(ctx context.Context, tx *gorm.DB, s domain.Scope, in Shot
 	if s.CanvasID != nil && *s.CanvasID != in.CanvasID {
 		return operation.TaskDetail{}, mediadomain.MediaAsset{}, domain.ErrNotFound
 	}
-	task, err := operation.NewPublicQuery(operationStore(tx)).Task(ctx, s.Principal(), s.ProjectID, in.OperationID)
+	task, err := operation.NewPublicQuery(operationStore(tx)).Task(ctx, agentapp.Principal(s), s.ProjectID, in.OperationID)
 	if err != nil {
 		return task, mediadomain.MediaAsset{}, businessError(err)
 	}
@@ -124,10 +125,10 @@ func loadShotCandidate(ctx context.Context, tx *gorm.DB, s domain.Scope, in Shot
 		return task, mediadomain.MediaAsset{}, domain.ErrNotFound
 	}
 	repo := pgmedia.NewScopedStore(tx, mediawire.NewMediaWorkerScopeAccess)
-	if _, err = media.NewAssetQuery(repo).Reference(ctx, s.Principal(), s.ProjectID, assetID); err != nil {
+	if _, err = media.NewAssetQuery(repo).Reference(ctx, agentapp.Principal(s), s.ProjectID, assetID); err != nil {
 		return task, mediadomain.MediaAsset{}, businessError(err)
 	}
-	asset, err := repo.FindAsset(ctx, s.Principal(), s.ProjectID, assetID)
+	asset, err := repo.FindAsset(ctx, agentapp.Principal(s), s.ProjectID, assetID)
 	if err != nil {
 		return task, asset, businessError(err)
 	}
@@ -140,7 +141,7 @@ func loadShotCandidate(ctx context.Context, tx *gorm.DB, s domain.Scope, in Shot
 	if _, _, ok := mediatool.ProjectSourceFrameRate(*asset.FPS); !ok {
 		return task, asset, domain.ErrBlocked
 	}
-	doc, err := canvasService(tx).Get(ctx, s.Principal(), in.CanvasID)
+	doc, err := canvasService(tx).Get(ctx, agentapp.Principal(s), in.CanvasID)
 	if err != nil {
 		return task, asset, businessError(err)
 	}
@@ -281,7 +282,7 @@ func (b *Boundary) executeShotDelivery(ctx context.Context, in domain.CallInput)
 		return domain.CallReceipt{}, domain.ErrInvalid
 	}
 	commands := []canvasdomain.Operation{{Type: canvasdomain.OperationCreateNode, Node: &canvasdomain.Node{ID: record.AdoptedNodeID, Title: "Adopted shot", NodeType: canvasdomain.NodeTypeVideo, NodeAction: canvasdomain.NodeActionResource, RefType: canvasdomain.RefTypeMediaAsset, RefID: &record.AssetID}}, {Type: canvasdomain.OperationCreateNode, Node: &canvasdomain.Node{ID: record.TimelineNodeID, Title: "Shot timeline", NodeType: canvasdomain.NodeTypeTimeline, NodeAction: canvasdomain.NodeActionTool, Config: canvasdomain.NodeConfig{Timeline: &timeline}, X: 400}}}
-	prepared, err := canvas.NewYjsService(canvasStore(b.db), b.canvasRuntime).PrepareCommands(ctx, g.Scope.Principal(), requested.CanvasID, canvas.YjsCommandInput{CommandID: uuid.NewSHA1(id, []byte("adopt-timeline")), SessionID: g.SubmissionID, ExpectedRevision: requested.ExpectedRevision, Operations: commands})
+	prepared, err := canvas.NewYjsService(canvasStore(b.db), b.canvasRuntime).PrepareCommands(ctx, agentapp.Principal(g.Scope), requested.CanvasID, canvas.YjsCommandInput{CommandID: uuid.NewSHA1(id, []byte("adopt-timeline")), SessionID: g.SubmissionID, ExpectedRevision: requested.ExpectedRevision, Operations: commands})
 	if err != nil {
 		return domain.CallReceipt{}, businessError(err)
 	}
@@ -310,13 +311,13 @@ func (b *Boundary) executeShotDelivery(ctx context.Context, in domain.CallInput)
 		if !approved.matches(currentTask, current) || current.Revision != record.AssetRevision || current.SHA256 == nil || *current.SHA256 != record.AssetSHA256 {
 			return domain.CallResult{}, domain.ErrConflict
 		}
-		committed, e := canvas.NewYjsService(canvasStore(tx), b.canvasRuntime).CommitCommands(ctx, s.Principal(), prepared)
+		committed, e := canvas.NewYjsService(canvasStore(tx), b.canvasRuntime).CommitCommands(ctx, agentapp.Principal(s), prepared)
 		if e != nil {
 			return domain.CallResult{}, businessError(e)
 		}
 		record.CanvasRevision = committed.ContentRevision
 		for _, kind := range []tooldomain.OutputKind{tooldomain.OutputVideo, requested.ProjectFormat} {
-			job, e := exportStore(tx).Create(ctx, s.Principal(), s.ProjectID, uuid.NewSHA1(id, []byte("export:"+string(kind))), mediatool.CreateInput{CanvasID: requested.CanvasID, NodeID: record.TimelineNodeID, Revision: int64(record.CanvasRevision), OutputKind: kind})
+			job, e := exportStore(tx).Create(ctx, agentapp.Principal(s), s.ProjectID, uuid.NewSHA1(id, []byte("export:"+string(kind))), mediatool.CreateInput{CanvasID: requested.CanvasID, NodeID: record.TimelineNodeID, Revision: int64(record.CanvasRevision), OutputKind: kind})
 			if e != nil {
 				return domain.CallResult{}, businessError(e)
 			}

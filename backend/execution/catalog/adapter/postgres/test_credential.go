@@ -1,0 +1,248 @@
+package postgres
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+)
+
+// ErrTestSuperseded means a later test has already updated this credential.
+var ErrTestSuperseded = errors.New("credential test superseded")
+
+// LoadForCredentialTest rechecks administrator rights and reads the current
+// sealed credential while holding provider and credential share locks.
+func (s *Store) LoadForCredentialTest(ctx context.Context, request application.CredentialTestRequest) (domain.Provider, domain.Credential, error) {
+	if s == nil || s.db == nil || request.ActorID == uuid.Nil || request.OrgID == uuid.Nil ||
+		request.ProviderID == uuid.Nil || request.CredentialID == uuid.Nil {
+		return domain.Provider{}, domain.Credential{}, application.ErrInvalidCredentialTest
+	}
+	var provider domain.Provider
+	var credential domain.Credential
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		if err := s.requireWorkerPlatform(tx, request); err != nil {
+			return err
+		}
+		if err := requireCredentialProvider(tx, request.ProviderID); err != nil {
+			return err
+		}
+		query, err := isBoundModelQuery(tx, request)
+		if err != nil {
+			return err
+		}
+		var p providerRow
+		result := tx.Raw(`
+			SELECT id, current_config_version_id, key, name, adapter_key, region, status, concurrency_limit,
+			       rate_limit_per_min, revision, create_time, update_time
+			FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete FOR SHARE
+		`, request.ProviderID.String()).Scan(&p)
+		if result.Error != nil {
+			return fmt.Errorf("read provider for credential test: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrProviderNotFound
+		}
+		if p.Status != string(domain.ProviderActive) && p.CurrentConfigVersionID == uuid.Nil {
+			return ErrProviderUnavailable
+		}
+		var c credentialRow
+		result = tx.Raw(`
+			SELECT id, provider_id, label, ciphertext, key_id, last4, status,
+			       last_tested_at, last_test_result, create_time, update_time
+			FROM catalog.provider_credential
+			WHERE id = ?::uuid AND provider_id = ?::uuid AND (status = 'active' OR (? AND status='draining'))
+			  AND NOT is_delete FOR SHARE
+		`, request.CredentialID.String(), request.ProviderID.String(), query).Scan(&c)
+		if result.Error != nil {
+			return fmt.Errorf("read sealed credential for test: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrCredentialNotFound
+		}
+		var original struct{ ConfigVersionID uuid.UUID }
+		check := tx.Raw(`UPDATE catalog.provider_check SET status='running' WHERE id=? AND actor_id=? AND provider_id=? AND credential_id=? AND (config_version_id=? OR (? AND kind='model_query')) RETURNING config_version_id`, request.TestID, request.ActorID, request.ProviderID, request.CredentialID, p.CurrentConfigVersionID, query).Scan(&original)
+		if check.Error != nil {
+			return check.Error
+		}
+		if p.CurrentConfigVersionID != uuid.Nil && check.RowsAffected != 1 {
+			return application.ErrPresetConflict
+		}
+		provider, credential = p.provider(), c.credential()
+		return nil
+	})
+	if err != nil {
+		return domain.Provider{}, domain.Credential{}, fmt.Errorf("load credential test transaction: %w", err)
+	}
+	return provider, credential, nil
+}
+
+// RecordCredentialTest writes the result and both safe events in one
+// transaction, after checking the same administrator and credential again.
+func (s *Store) RecordCredentialTest(ctx context.Context, observation application.CredentialTestObservation, events []identityapp.OutboxEvent) error {
+	if s == nil || s.db == nil || observation.TestID == uuid.Nil || observation.ActorID == uuid.Nil ||
+		observation.OrgID == uuid.Nil || observation.ProviderID == uuid.Nil ||
+		observation.CredentialID == uuid.Nil || observation.TestedAt.IsZero() ||
+		!validCredentialTestEvents(observation, events) {
+		return application.ErrInvalidCredentialTest
+	}
+	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		if err := s.requireWorkerPlatform(tx, observation.CredentialTestRequest); err != nil {
+			return err
+		}
+		if err := requireCredentialProvider(tx, observation.ProviderID); err != nil {
+			return err
+		}
+		query, err := isBoundModelQuery(tx, observation.CredentialTestRequest)
+		if err != nil {
+			return err
+		}
+		var provider struct {
+			Status                 string
+			CurrentConfigVersionID *uuid.UUID
+		}
+		result := tx.Raw(`
+			SELECT status,current_config_version_id FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
+		`, observation.ProviderID.String()).Scan(&provider)
+		if result.Error != nil {
+			return fmt.Errorf("lock provider for credential test: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrProviderNotFound
+		}
+		// The provider lock also serializes replay with another write of this test.
+		var existing int
+		result = tx.Raw(`SELECT 1 FROM infra.outbox WHERE id = ?::uuid`, events[0].ID.String()).Scan(&existing)
+		if result.Error != nil {
+			return fmt.Errorf("check credential test replay: %w", result.Error)
+		}
+		if result.RowsAffected == 1 {
+			return nil
+		}
+		if provider.Status != string(domain.ProviderActive) && provider.CurrentConfigVersionID == nil {
+			return ErrProviderUnavailable
+		}
+		var credential struct {
+			Last4        string
+			LastTestedAt *time.Time
+		}
+		result = tx.Raw(`
+			SELECT last4, last_tested_at FROM catalog.provider_credential
+			WHERE id = ?::uuid AND provider_id = ?::uuid AND (status = 'active' OR (? AND status='draining'))
+			  AND NOT is_delete FOR UPDATE
+		`, observation.CredentialID.String(), observation.ProviderID.String(), query).Scan(&credential)
+		if result.Error != nil {
+			return fmt.Errorf("lock credential for test result: %w", result.Error)
+		}
+		if result.RowsAffected != 1 || credential.Last4 != observation.Last4 {
+			return ErrCredentialNotFound
+		}
+		updatesCredential := !query && observation.Kind != "discovery"
+		if updatesCredential && credential.LastTestedAt != nil && !credential.LastTestedAt.Before(observation.TestedAt) {
+			return ErrTestSuperseded
+		}
+		if updatesCredential {
+			result = tx.Exec(`
+			UPDATE catalog.provider_credential
+			SET last_tested_at = ?, last_test_result = ?, update_time = now()
+			WHERE id = ?::uuid AND provider_id = ?::uuid AND status = 'active' AND NOT is_delete
+		`, observation.TestedAt.UTC(), string(observation.Result),
+				observation.CredentialID.String(), observation.ProviderID.String())
+			if result.Error != nil {
+				return fmt.Errorf("update credential test result: %w", result.Error)
+			}
+			if result.RowsAffected != 1 {
+				return ErrCredentialNotFound
+			}
+		}
+		if err := recordProviderCheck(tx, observation); err != nil {
+			return err
+		}
+		for _, event := range events {
+			result = tx.Exec(`
+				INSERT INTO infra.outbox (id, topic, partition_key, payload)
+				VALUES (?::uuid, ?, ?, ?::jsonb)
+			`, event.ID.String(), event.Topic, event.PartitionKey, string(event.Payload))
+			if result.Error != nil {
+				return fmt.Errorf("insert credential test event %s: %w", event.Topic, result.Error)
+			}
+			if result.RowsAffected != 1 {
+				return fmt.Errorf("insert credential test event %s: inserted %d rows", event.Topic, result.RowsAffected)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("record credential test transaction: %w", err)
+	}
+	return nil
+}
+
+type credentialTestChangedEvent struct {
+	credentialChangedEvent
+	Data struct {
+		Change     string            `json:"change"`
+		ProviderID uuid.UUID         `json:"provider_id"`
+		Result     domain.TestResult `json:"result"`
+	} `json:"data"`
+}
+
+func validCredentialTestEvents(observation application.CredentialTestObservation, events []identityapp.OutboxEvent) bool {
+	if len(events) != 2 || events[0].ID != uuid.NewSHA1(observation.TestID, []byte("catalog.credential_changed.v1")) ||
+		events[1].ID != uuid.NewSHA1(observation.TestID, []byte("audit.recorded.v1")) ||
+		events[0].Topic != "glowloom.catalog.credential_changed.v1" || events[1].Topic != "glowloom.audit.recorded.v1" {
+		return false
+	}
+	for _, event := range events {
+		if event.PartitionKey != observation.OrgID.String() || len(event.Payload) == 0 || len(event.Payload) > 32*1024 {
+			return false
+		}
+	}
+	var changed credentialTestChangedEvent
+	if !decodeCredentialEvent(events[0].Payload, &changed) || changed.EventID != events[0].ID ||
+		changed.EventType != events[0].Topic || !changed.OccurredAt.Equal(observation.TestedAt.UTC()) ||
+		changed.OrgID != observation.OrgID || changed.Actor.Kind != "user" ||
+		changed.Actor.ID != observation.ActorID || changed.Aggregate.Type != "provider_credential" ||
+		changed.Aggregate.ID != observation.CredentialID || changed.Data.Change != "tested" ||
+		changed.Data.ProviderID != observation.ProviderID || changed.Data.Result != observation.Result {
+		return false
+	}
+	var audit credentialAuditEvent
+	return decodeCredentialEvent(events[1].Payload, &audit) && audit.EventID == events[1].ID &&
+		audit.EventType == events[1].Topic && audit.OccurredAt.Equal(observation.TestedAt.UTC()) &&
+		audit.OrgID == observation.OrgID && audit.Actor.Kind == "user" &&
+		audit.Actor.ID == observation.ActorID && audit.Aggregate.Type == "audit" &&
+		audit.Aggregate.ID == audit.EventID && audit.Data.Action == "credential.tested" &&
+		audit.Data.Object.Type == "provider_credential" && audit.Data.Object.ID == observation.CredentialID &&
+		audit.Data.After.Last4 == observation.Last4 && audit.Data.RequestID == observation.RequestID
+}
+
+var _ application.CredentialTestStore = (*Store)(nil)
+
+// isBoundModelQuery proves the immutable original task before allowing its draining key.
+func isBoundModelQuery(tx *gorm.DB, request application.CredentialTestRequest) (bool, error) {
+	if request.Kind != "model_query" {
+		return false, nil
+	}
+	var found int
+	row := tx.Raw(`SELECT 1 FROM catalog.provider_check query JOIN catalog.provider_check original ON original.id=query.parent_check_id
+ WHERE query.id=? AND query.actor_id=? AND query.provider_id=? AND query.credential_id=? AND query.request_id=?::uuid AND query.kind='model_query'
+ AND original.kind='model_access' AND original.provider_id=query.provider_id AND original.credential_id=query.credential_id
+ AND original.config_version_id=query.config_version_id AND original.model_id=query.model_id AND original.model_version_id=query.model_version_id
+ AND original.task_id=query.task_id AND query.task_id<>'' FOR SHARE OF query,original`, request.TestID, request.ActorID, request.ProviderID, request.CredentialID, request.RequestID).Scan(&found)
+	if row.Error != nil {
+		return false, row.Error
+	}
+	if row.RowsAffected != 1 {
+		return false, application.ErrInvalidCredentialTest
+	}
+	return true, nil
+}

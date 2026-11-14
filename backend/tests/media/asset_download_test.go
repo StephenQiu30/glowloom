@@ -13,10 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 type originalReadStore struct {

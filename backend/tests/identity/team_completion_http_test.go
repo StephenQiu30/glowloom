@@ -8,10 +8,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func TestGovernanceLargeRevisionWire(t *testing.T) {

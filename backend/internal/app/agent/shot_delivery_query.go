@@ -8,10 +8,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 func shotReceipts(tx *gorm.DB, s domain.Scope) *gorm.DB {
@@ -42,7 +43,7 @@ func refreshShotDelivery(ctx context.Context, tx *gorm.DB, s domain.Scope, resul
 	result.Status = domain.DeliveryCompleted
 	artifactMissing := false
 	for _, id := range []uuid.UUID{result.VideoExportID, result.ProjectExportID} {
-		job, err := exportStore(tx).Get(ctx, s.Principal(), s.ProjectID, id)
+		job, err := exportStore(tx).Get(ctx, agentapp.Principal(s), s.ProjectID, id)
 		if err != nil {
 			return result, businessError(err)
 		}
@@ -53,13 +54,13 @@ func refreshShotDelivery(ctx context.Context, tx *gorm.DB, s domain.Scope, resul
 		if job.Status == tooldomain.Succeeded {
 			var evidenceErr error
 			if id == result.VideoExportID {
-				_, asset, e := exportStore(tx).PreviewAsset(ctx, s.Principal(), s.ProjectID, id)
+				_, asset, e := exportStore(tx).PreviewAsset(ctx, agentapp.Principal(s), s.ProjectID, id)
 				evidenceErr = e
 				if e == nil && (job.AssetID == nil || asset.ID != *job.AssetID || !asset.CanReference() || !asset.ObjectLocation.Readable(asset.ObjectKey)) {
 					evidenceErr = mediatool.ErrConflict
 				}
 			} else {
-				_, artifact, e := exportStore(tx).PreviewArtifact(ctx, s.Principal(), s.ProjectID, id)
+				_, artifact, e := exportStore(tx).PreviewArtifact(ctx, agentapp.Principal(s), s.ProjectID, id)
 				evidenceErr = e
 				if e == nil && (job.ArtifactID == nil || artifact.ID != *job.ArtifactID || !artifact.ObjectLocation.Readable(artifact.ObjectKey)) {
 					evidenceErr = mediatool.ErrConflict

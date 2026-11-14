@@ -13,18 +13,18 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
 type mediaScopeTestAccess struct {
@@ -39,14 +39,29 @@ func (a mediaScopeTestAccess) CheckActor(ctx context.Context, p identity.Princip
 	}
 	return pgidentity.NewStore(a.tx).CheckSession(ctx, p, time.Now)
 }
-func (a mediaScopeTestAccess) AuthorizeProject(ctx context.Context, p identity.Principal, id uuid.UUID, w bool) error {
-	var store *pgworkspace.ProjectContentAccessStore
+
+var _ mediaapp.UploadProjectAccess = mediaScopeTestAccess{}
+
+func (a mediaScopeTestAccess) project() *pgworkspace.ProjectContentAccessStore {
 	if a.worker {
-		store = pgworkspace.NewWorkerProjectContentAccessStore(a.tx, workspace.NewScopeAccess(pgworkspace.NewScopeStore(a.tx, func(tx *gorm.DB) workspace.ActorAccess { return pgidentity.NewStore(tx) })))
-	} else {
-		store = pgworkspace.NewScopedProjectContentAccessStore(a.tx, a.request)
+		return pgworkspace.NewWorkerProjectContentAccessStore(a.tx, workspace.NewScopeAccess(pgworkspace.NewScopeStore(a.tx, func(tx *gorm.DB) workspace.ActorAccess { return pgidentity.NewStore(tx) })))
 	}
-	_, err := store.Authorize(ctx, p, id, w)
+	return pgworkspace.NewScopedProjectContentAccessStore(a.tx, a.request)
+}
+
+func (a mediaScopeTestAccess) AuthorizeUploadProject(ctx context.Context, actor identity.Principal, id uuid.UUID) (string, error) {
+	if err := a.CheckActor(ctx, actor); err != nil {
+		return "", err
+	}
+	return a.project().AuthorizeUploadProject(ctx, actor, id)
+}
+
+func (a mediaScopeTestAccess) AwaitUploadProjectCommit(ctx context.Context, id uuid.UUID) error {
+	return a.project().AwaitUploadProjectCommit(ctx, id)
+}
+
+func (a mediaScopeTestAccess) AuthorizeProject(ctx context.Context, p identity.Principal, id uuid.UUID, w bool) error {
+	_, err := a.project().Authorize(ctx, p, id, w)
 	return err
 }
 func (a mediaScopeTestAccess) AuthorizePersonal(ctx context.Context, p identity.Principal, w bool) error {
@@ -71,13 +86,7 @@ func (a mediaScopeTestAccess) AuthorizePersonal(ctx context.Context, p identity.
 	return nil
 }
 func (a mediaScopeTestAccess) AuthorizeCopyTarget(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
-	var store *pgworkspace.ProjectContentAccessStore
-	if a.worker {
-		store = pgworkspace.NewWorkerProjectContentAccessStore(a.tx, workspace.NewScopeAccess(pgworkspace.NewScopeStore(a.tx, func(tx *gorm.DB) workspace.ActorAccess { return pgidentity.NewStore(tx) })))
-	} else {
-		store = pgworkspace.NewScopedProjectContentAccessStore(a.tx, a.request)
-	}
-	_, err := store.AuthorizeCopyTarget(ctx, actor, id)
+	_, err := a.project().AuthorizeCopyTarget(ctx, actor, id)
 	return err
 }
 

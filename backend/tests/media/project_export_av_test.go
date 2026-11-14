@@ -13,11 +13,11 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	project "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/editproject"
-	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	project "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/editproject"
+	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 // Real generated video/audio originals validate rate conversion, trimming and stream facts.

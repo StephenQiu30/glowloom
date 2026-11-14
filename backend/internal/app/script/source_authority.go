@@ -7,11 +7,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agentpostgres "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 type sourceControl struct{ tx *gorm.DB }

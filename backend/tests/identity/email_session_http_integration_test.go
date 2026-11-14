@@ -13,9 +13,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func TestEmailSessionHTTPCompleteReceiptAndLegacyProofRejection(t *testing.T) {

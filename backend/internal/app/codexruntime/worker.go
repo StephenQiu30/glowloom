@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	operationtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
-	trialtask "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/trialtask"
+	operationtask "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	trialtask "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trialtask"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
@@ -17,14 +17,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/codex"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 )
 
 // Register uses the installed CLI identity for local administrator trials.

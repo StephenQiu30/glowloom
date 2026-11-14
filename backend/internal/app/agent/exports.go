@@ -7,13 +7,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	mediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
+	mediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
 func exportStore(tx *gorm.DB) *pgtool.Store {
@@ -30,7 +31,7 @@ func exportTools() []toolBinding {
 		if s.CanvasID != nil && in.CanvasID != *s.CanvasID {
 			return nil, domain.ErrNotFound
 		}
-		return exportStore(tx).Create(ctx, s.Principal(), s.ProjectID, key, in)
+		return exportStore(tx).Create(ctx, agentapp.Principal(s), s.ProjectID, key, in)
 	})
 	create.descriptor.Roles = []string{"producer", "edit"}
 	query := tool("media_export_get", "查询原正式导出任务的真实状态/产物ID，不重复创建任务。", "read", `{"type":"object","properties":{"export_id":{"type":"string","format":"uuid"}},"required":["export_id"],"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
@@ -40,7 +41,7 @@ func exportTools() []toolBinding {
 		if err := decode(raw, &in); err != nil {
 			return nil, err
 		}
-		return exportStore(tx).Get(ctx, s.Principal(), s.ProjectID, in.ExportID)
+		return exportStore(tx).Get(ctx, agentapp.Principal(s), s.ProjectID, in.ExportID)
 	})
 	return []toolBinding{create, query}
 }

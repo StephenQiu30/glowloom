@@ -11,12 +11,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvaslive "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/websocket"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	canvaslive "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/websocket"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // SocketAuthority authenticates a canvas socket and resolves its creation scope.

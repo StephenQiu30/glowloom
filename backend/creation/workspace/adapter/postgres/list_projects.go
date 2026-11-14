@@ -1,0 +1,173 @@
+package postgres
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+)
+
+// ListProjectsForActor reads one organization-scoped keyset page after
+// rechecking the actor and organization in the same transaction.
+func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Principal, input application.ListProjectsInput) (application.ProjectListPage, error) {
+	if s == nil || s.db == nil {
+		return application.ProjectListPage{}, ErrUnavailable
+	}
+	if (input.Order != "" && input.Order != "recent_content") || input.Limit < 1 || input.Limit > 200 ||
+		(input.Status != "" && input.Status != "active" && input.Status != "archived") ||
+		(input.After != nil && (input.After.ID == uuid.Nil || input.After.UpdateTime.IsZero())) ||
+		(input.Deleted && input.FolderID != nil) || (input.IncludeExpired && !input.Deleted) {
+		return application.ProjectListPage{}, application.ErrInvalidProjectList
+	}
+	var page application.ProjectListPage
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireScope(ctx, tx, actor, false); err != nil {
+			return err
+		}
+		if err := tx.Raw(`SELECT clock_timestamp()`).Scan(&page.ServerTime).Error; err != nil {
+			return fmt.Errorf("read project list time: %w", err)
+		}
+		if input.FolderID != nil && *input.FolderID != uuid.Nil {
+			var exists bool
+			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM workspace.project_folder WHERE id=? AND org_id=? AND actor_id=? AND owner_scope_id=? AND NOT is_delete)`, *input.FolderID, actor.OrgID, actor.ID, actor.ScopeID).Scan(&exists).Error; err != nil {
+				return err
+			}
+			if !exists {
+				return domain.ErrProjectFolderNotFound
+			}
+		}
+		timeColumn := "p.update_time"
+		if input.Order == "recent_content" {
+			timeColumn = "COALESCE(a.modified_at,p.create_time)"
+		}
+		query := `
+			SELECT p.id, p.org_id, p.initial_canvas_id AS canvas_id, p.style_key, p.name, p.aspect_ratio, p.style_type,
+			       COALESCE(a.modified_at,p.create_time) AS last_modified_at,COALESCE(a.basis,'created') AS last_modified_basis,
+			       p.style_subtype, p.style_preset_id, p.cover_asset_id, p.resolution,
+			       p.allow_overseas_models, p.status, p.is_delete,
+			       p.archived_at, p.delete_time, p.purge_after, p.revision,
+			       p.create_time, p.update_time, f.id AS folder_id,
+			       coalesce(m.revision,0) AS placement_revision
+			FROM workspace.project AS p
+			LEFT JOIN workspace.project_activity a ON a.project_id=p.id
+			LEFT JOIN workspace.project_folder_placement m ON m.project_id=p.id AND m.org_id=p.org_id AND m.owner_scope_id=p.owner_scope_id AND m.actor_id=?::uuid
+			LEFT JOIN workspace.project_folder f ON f.id=m.folder_id AND f.org_id=m.org_id AND f.actor_id=m.actor_id AND f.owner_scope_id=m.owner_scope_id AND NOT f.is_delete
+			WHERE p.org_id = ?::uuid AND p.owner_scope_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived') AND NOT p.independent_media
+		`
+		args := []any{actor.ID.String(), actor.OrgID.String(), actor.ScopeID.String(), input.Deleted}
+		if !input.IncludeIndependentCanvases {
+			query += " AND NOT p.independent_canvas"
+		}
+		if input.FolderID != nil {
+			if *input.FolderID == uuid.Nil {
+				query += ` AND f.id IS NULL`
+			} else {
+				query += ` AND f.id=?::uuid`
+				args = append(args, input.FolderID.String())
+			}
+		}
+		if input.Deleted && !input.IncludeExpired {
+			query += ` AND p.purge_after > ?`
+			args = append(args, page.ServerTime)
+		}
+		if input.Status != "" {
+			query += ` AND p.status = ?`
+			args = append(args, input.Status)
+		}
+		if input.Query != "" {
+			query += ` AND strpos(lower(p.name), lower(?)) > 0`
+			args = append(args, input.Query)
+		}
+		if input.After != nil {
+			query += ` AND (` + timeColumn + `, p.id) < (?::timestamptz, ?::uuid)`
+			args = append(args, input.After.UpdateTime.UTC(), input.After.ID.String())
+		}
+		query += ` ORDER BY ` + timeColumn + ` DESC, p.id DESC LIMIT ?`
+		args = append(args, input.Limit+1)
+
+		var rows []projectListRow
+		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
+			return fmt.Errorf("read project list: %w", err)
+		}
+		more := len(rows) > input.Limit
+		if more {
+			rows = rows[:input.Limit]
+		}
+		page.Projects = make([]application.ProjectListItem, 0, len(rows))
+		for _, row := range rows {
+			item := row.item()
+			var err error
+			item.CoverUnavailable, err = s.projectCoverUnavailable(ctx, tx, actor, domain.Project{ID: item.ID, CoverAssetID: item.CoverAssetID})
+			if err != nil {
+				return err
+			}
+			page.Projects = append(page.Projects, item)
+		}
+		if more {
+			last := page.Projects[len(page.Projects)-1]
+			boundary := last.UpdateTime
+			if input.Order == "recent_content" {
+				boundary = last.LastModifiedAt
+			}
+			page.Next = &application.ProjectListCursor{UpdateTime: boundary, ID: last.ID}
+		}
+		return nil
+	})
+	if err != nil {
+		return application.ProjectListPage{}, fmt.Errorf("list projects transaction: %w", err)
+	}
+	return page, nil
+}
+
+type projectListRow struct {
+	LastModifiedAt      time.Time
+	LastModifiedBasis   string
+	CoverAssetID        *uuid.UUID
+	ID                  uuid.UUID
+	OrgID               uuid.UUID
+	CanvasID            *uuid.UUID
+	StyleKey            *string
+	Name                string
+	AspectRatio         string
+	StyleType           string
+	StyleSubtype        *string
+	StylePresetID       *uuid.UUID
+	Resolution          string
+	AllowOverseasModels bool
+	Status              string
+	IsDelete            bool
+	ArchivedAt          *time.Time
+	DeleteTime          *time.Time
+	PurgeAfter          *time.Time
+	Revision            int64
+	CreateTime          time.Time
+	UpdateTime          time.Time
+	FolderID            *uuid.UUID
+	PlacementRevision   int64
+}
+
+func (row projectListRow) item() application.ProjectListItem {
+	item := application.ProjectListItem{CoverAssetID: row.CoverAssetID,
+		LastModifiedAt: row.LastModifiedAt, LastModifiedBasis: row.LastModifiedBasis,
+		ID: row.ID, OrgID: row.OrgID, CanvasID: row.CanvasID, StyleKey: row.StyleKey, Name: row.Name,
+		AspectRatio: row.AspectRatio, StyleType: row.StyleType,
+		StylePresetID: row.StylePresetID, Resolution: row.Resolution,
+		AllowOverseasModels: row.AllowOverseasModels, Status: row.Status,
+		IsDelete: row.IsDelete, ArchivedAt: row.ArchivedAt,
+		DeleteTime: row.DeleteTime, PurgeAfter: row.PurgeAfter,
+		Revision: row.Revision, CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
+		FolderID: row.FolderID, PlacementRevision: row.PlacementRevision,
+	}
+	if row.StyleSubtype != nil {
+		item.StyleSubtype = *row.StyleSubtype
+	}
+	return item
+}
+
+var _ application.ListProjectsStore = (*Store)(nil)

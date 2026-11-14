@@ -9,9 +9,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/refreshredis"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/sessiontoken"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/refreshredis"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/sessiontoken"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 

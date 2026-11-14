@@ -20,8 +20,8 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/media"
-	grpcserver "github.com/StephenQiu30/glowloom-server/backend/internal/media/processing/adapter/grpcserver"
-	processing "github.com/StephenQiu30/glowloom-server/backend/internal/media/processing/application"
+	grpcserver "github.com/StephenQiu30/glowloom-server/backend/media/processing/adapter/grpcserver"
+	processing "github.com/StephenQiu30/glowloom-server/backend/media/processing/application"
 )
 
 const serviceToken = "normalization-test-token-at-least-32-bytes"

@@ -13,8 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type exportStatisticsFixture struct {

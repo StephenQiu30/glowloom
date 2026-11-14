@@ -22,7 +22,7 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS dev
 ENV NODE_ENV=development
 COPY frontend/ .
-COPY backend/internal/prompt/domain/cinema_catalog.json /backend/internal/prompt/domain/cinema_catalog.json
+COPY backend/creation/prompt/domain/cinema_catalog.json /backend/creation/prompt/domain/cinema_catalog.json
 EXPOSE 3000
 CMD ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
 
@@ -34,7 +34,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /canvas /canvas
 COPY frontend/ .
 # Type checking includes the test that compares the frontend and backend catalogs.
-COPY backend/internal/prompt/domain/cinema_catalog.json /backend/internal/prompt/domain/cinema_catalog.json
+COPY backend/creation/prompt/domain/cinema_catalog.json /backend/creation/prompt/domain/cinema_catalog.json
 # A separate compiler worker releases build memory before type checking.
 RUN test -n "$GLOWLOOM_BACKEND_ORIGIN" && node node_modules/next/dist/bin/next build --webpack
 

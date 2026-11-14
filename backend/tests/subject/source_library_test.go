@@ -10,10 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/http"
+	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 type sourceActorFake struct {

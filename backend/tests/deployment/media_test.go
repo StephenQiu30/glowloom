@@ -15,7 +15,7 @@ func TestMediaProcessorIsPrivateIndependentAndCapacityBounded(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			v := readDeployment(t, overlay)
 			const prefix = "services.media."
-			if got := v.GetString(prefix + "build.dockerfile"); got != "media.Dockerfile" {
+			if got := v.GetString(prefix + "build.dockerfile"); got != "media/Dockerfile" {
 				t.Errorf("Media build=%q", got)
 			}
 			if len(v.GetStringSlice(prefix+"ports")) != 0 || !slices.Equal(v.GetStringSlice(prefix+"expose"), []string{"9091", "8081"}) {

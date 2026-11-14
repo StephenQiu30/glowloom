@@ -30,8 +30,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app/mediaruntime"
 	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/media"
+	mediaruntime "github.com/StephenQiu30/glowloom-server/backend/media/app"
 )
 
 type runtimeAddresses struct {

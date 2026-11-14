@@ -13,20 +13,20 @@ import (
 	driver "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestConversationStopReadSurvivesPendingDeliveryAndRejectsWrongSession(t *testing.T) {
 	s, a, _ := fixture(t)
 	key := uuid.New()
-	decision, err := s.Decide(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: key, Action: "stop", ExpectedAuthorizationRevision: 1})
+	decision, err := s.Decide(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, a.RootRunID, domain.DecisionInput{RequestID: key, Action: "stop", ExpectedAuthorizationRevision: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, err := s.ReadControlStatus(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.SessionID, a.RootRunID, &key)
+	status, err := s.ReadControlStatus(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, a.SessionID, a.RootRunID, &key)
 	if err != nil || status.DeliveryStatus != "pending" || status.ApplicationReceipt != nil || status.CurrentDecision.DecisionID != decision.DecisionID || status.RequestDecision.DecisionID != decision.DecisionID {
 		t.Fatalf("pending status=%+v err=%v", status, err)
 	}
@@ -34,11 +34,11 @@ func TestConversationStopReadSurvivesPendingDeliveryAndRejectsWrongSession(t *te
 	if err = s.Acknowledge(t.Context(), a.RootRunID, receipt); err != nil {
 		t.Fatal(err)
 	}
-	status, err = s.ReadControlStatus(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.SessionID, a.RootRunID, &key)
+	status, err = s.ReadControlStatus(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, a.SessionID, a.RootRunID, &key)
 	if err != nil || status.DeliveryStatus != "applied" || status.ApplicationReceipt == nil || status.ApplicationReceipt.ExecutionRevision != 3 {
 		t.Fatalf("applied status=%+v err=%v", status, err)
 	}
-	if _, err = s.ReadControlStatus(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, uuid.New(), a.RootRunID, nil); !errors.Is(err, domain.ErrNotFound) {
+	if _, err = s.ReadControlStatus(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, uuid.New(), a.RootRunID, nil); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatal("wrong session control exposed", err)
 	}
 }
@@ -53,11 +53,11 @@ func TestConversationUnresolvedReceiptBlocksNewRunButAllowsOriginalAdmission(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	ids, readErr := s.UnresolvedConversationRuns(t.Context(), a.Scope.Principal(), a.Scope.ProjectID, a.SessionID)
+	ids, readErr := s.UnresolvedConversationRuns(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, a.SessionID)
 	if readErr != nil || len(ids) != 1 || ids[0] != a.RootRunID {
 		t.Fatalf("unresolved authority missing: %v %v", ids, readErr)
 	}
-	stranger := a.Scope.Principal()
+	stranger := app.Principal(a.Scope)
 	stranger.ID = uuid.New()
 	ids, readErr = s.UnresolvedConversationRuns(t.Context(), stranger, a.Scope.ProjectID, a.SessionID)
 	if readErr != nil || len(ids) != 0 {

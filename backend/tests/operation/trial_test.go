@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/codex"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 func TestTrialRequestHasNoBillingOrArbitraryRuntimeFields(t *testing.T) {

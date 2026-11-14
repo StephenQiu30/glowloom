@@ -8,17 +8,17 @@ import (
 	"testing"
 	"time"
 
-	currenttask "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	currenttask "github.com/StephenQiu30/glowloom-server/backend/media/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/google/uuid"
 
 	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	mediaevent "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/event"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	mediaevent "github.com/StephenQiu30/glowloom-server/backend/media/adapter/event"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 type transferDeliveryRecorder struct {

@@ -8,11 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	analyticshttp "github.com/StephenQiu30/glowloom-server/backend/internal/analytics/adapter/http"
 	analyticspg "github.com/StephenQiu30/glowloom-server/backend/internal/analytics/adapter/postgres"
 	analyticsapp "github.com/StephenQiu30/glowloom-server/backend/internal/analytics/application"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	obshttp "github.com/StephenQiu30/glowloom-server/backend/internal/observability/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/observability/adapter/memory"
 	obsapp "github.com/StephenQiu30/glowloom-server/backend/internal/observability/application"

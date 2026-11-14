@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/extract"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 )
 
 func TestScriptFileImportPGAdmissionOutboxFailureRollsBackAllFrozenFacts(t *testing.T) {

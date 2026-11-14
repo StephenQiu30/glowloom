@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type compilerReader struct {

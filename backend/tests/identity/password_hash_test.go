@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
 
 func TestArgonPasswordAndLegacyUpgrade(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 )
 
 func cinemaFixture(t *testing.T) (domain.Document, domain.Node, domain.Node) {

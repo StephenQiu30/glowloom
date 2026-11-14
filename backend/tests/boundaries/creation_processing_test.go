@@ -20,7 +20,7 @@ func TestCreationProcessorHasNoStorageMediaOrOtherDomainDependencies(t *testing.
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "list", "-deps", "./cmd/creation")
+	cmd := exec.CommandContext(ctx, "go", "list", "-deps", "./creation")
 	root := filepath.Clean(filepath.Join(filepath.Dir(source), "../.."))
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
@@ -28,7 +28,7 @@ func TestCreationProcessorHasNoStorageMediaOrOtherDomainDependencies(t *testing.
 		t.Fatalf("inspect Creation dependency closure: %v\n%s", err, output)
 	}
 	const module = "github.com/StephenQiu30/glowloom-server/backend/"
-	allowed := map[string]bool{"cmd/creation": true, "internal/app/creationruntime": true, "internal/contract/gen/creation": true, "internal/creation/document/application": true, "internal/creation/document/adapter/native": true, "internal/creation/document/adapter/grpcserver": true, "internal/script/domain": true, "internal/platform/serviceauth": true}
+	allowed := map[string]bool{"creation": true, "creation/app": true, "internal/contract/gen/creation": true, "creation/document/application": true, "creation/document/adapter/native": true, "creation/document/adapter/grpcserver": true, "creation/script/domain": true, "internal/platform/serviceauth": true}
 	for _, pkg := range strings.Fields(string(output)) {
 		if strings.HasPrefix(pkg, module) && !allowed[strings.TrimPrefix(pkg, module)] {
 			t.Errorf("Creation processor imports business state: %s", pkg)
@@ -49,7 +49,7 @@ func TestCreationProcessorHasNoStorageMediaOrOtherDomainDependencies(t *testing.
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(data), "internal/script/adapter/extract\"") {
+		if strings.Contains(string(data), "/creation/script/adapter/extract\"") {
 			t.Errorf("production path embeds a local parser: %s", path)
 		}
 	}

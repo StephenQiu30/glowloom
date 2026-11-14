@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 const syncCompletedReceiptJSON = `{

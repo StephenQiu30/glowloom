@@ -11,15 +11,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 func TestManagedMediaRealStorageAndProbeAreIdempotent(t *testing.T) {

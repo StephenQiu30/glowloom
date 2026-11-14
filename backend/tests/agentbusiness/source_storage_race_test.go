@@ -10,12 +10,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	script "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 type finishGate struct {
@@ -62,7 +63,7 @@ func TestSourcePublicationCommitWinsBeforeRestrictedRemoval(t *testing.T) {
 	done := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	go func() { _, err := service.Write(ctx, g.Scope.Principal(), raceSourceCommand(g)); done <- err }()
+	go func() { _, err := service.Write(ctx, agentapp.Principal(g.Scope), raceSourceCommand(g)); done <- err }()
 	var plan script.WritePlan
 	select {
 	case plan = <-held:
@@ -160,7 +161,7 @@ func TestRestrictedDeletePendingWinsBeforeSourceFinishAndAccept(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { _, err := service.Write(ctx, g.Scope.Principal(), raceSourceCommand(g)); done <- err }()
+	go func() { _, err := service.Write(ctx, agentapp.Principal(g.Scope), raceSourceCommand(g)); done <- err }()
 	var plan script.WritePlan
 	select {
 	case plan = <-prepared:
@@ -169,18 +170,18 @@ func TestRestrictedDeletePendingWinsBeforeSourceFinishAndAccept(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	page, err := recovery.List(t.Context(), g.Scope.Principal(), g.Scope.ProjectID, 0, 10)
+	page, err := recovery.List(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, 0, 10)
 	if err != nil || len(page.Items) != 1 {
 		t.Fatal(page, err)
 	}
 	control := script.SourceControlCommand{ProjectID: g.Scope.ProjectID, IntentID: page.Items[0].ID, Key: uuid.New(), RequestID: uuid.New(), Action: "cancel", ExpectedRevision: page.Items[0].Revision}
-	if _, err := recovery.Control(t.Context(), g.Scope.Principal(), control); err != nil {
+	if _, err := recovery.Control(t.Context(), agentapp.Principal(g.Scope), control); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-done; err == nil {
 		t.Fatal("cancelled writer published")
 	}
-	current, err := recovery.Get(t.Context(), g.Scope.Principal(), g.Scope.ProjectID, control.IntentID)
+	current, err := recovery.Get(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, control.IntentID)
 	if err != nil || current.Status != "pending" {
 		t.Fatal(current, err)
 	}
@@ -202,7 +203,7 @@ func TestRestrictedDeletePendingWinsBeforeSourceFinishAndAccept(t *testing.T) {
 	control.RequestID = uuid.New()
 	control.ExpectedRevision = current.Revision
 	cleaned := make(chan error, 1)
-	go func() { _, err := recovery.Control(t.Context(), g.Scope.Principal(), control); cleaned <- err }()
+	go func() { _, err := recovery.Control(t.Context(), agentapp.Principal(g.Scope), control); cleaned <- err }()
 	select {
 	case <-objects.entered:
 	case err := <-cleaned:
@@ -210,7 +211,7 @@ func TestRestrictedDeletePendingWinsBeforeSourceFinishAndAccept(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	if _, err := store.FinishWrite(t.Context(), g.Scope.Principal(), plan); err == nil {
+	if _, err := store.FinishWrite(t.Context(), agentapp.Principal(g.Scope), plan); err == nil {
 		t.Fatal("delete_pending permitted a new source publication")
 	}
 	ids := make([]uuid.UUID, len(plan.Objects))
@@ -224,7 +225,7 @@ func TestRestrictedDeletePendingWinsBeforeSourceFinishAndAccept(t *testing.T) {
 	if err := <-cleaned; err != nil {
 		t.Fatal(err)
 	}
-	current, err = recovery.Get(t.Context(), g.Scope.Principal(), g.Scope.ProjectID, control.IntentID)
+	current, err = recovery.Get(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, control.IntentID)
 	if err != nil || current.Status != "cancelled" {
 		t.Fatal(current, err)
 	}

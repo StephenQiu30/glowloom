@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialschema"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/paramvalidation"
 )
 
 func TestMusicCredentialRequiresSeparateSigningKeys(t *testing.T) {

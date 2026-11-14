@@ -6,10 +6,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	scriptpg "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type deletionUsage struct{ reader *scriptpg.BibleScopes }

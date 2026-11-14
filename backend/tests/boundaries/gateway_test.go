@@ -17,7 +17,7 @@ func TestGatewayDependencyClosureDoesNotOwnBusinessData(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "list", "-deps", "./cmd/gateway")
+	cmd := exec.CommandContext(ctx, "go", "list", "-deps", "./gateway")
 	cmd.Dir = filepath.Clean(filepath.Join(filepath.Dir(source), "../.."))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -25,9 +25,9 @@ func TestGatewayDependencyClosureDoesNotOwnBusinessData(t *testing.T) {
 	}
 	const module = "github.com/StephenQiu30/glowloom-server/backend/"
 	allowed := map[string]bool{
-		"cmd/gateway":               true,
-		"internal/app/gateway":      true,
-		"internal/gateway":          true,
+		"gateway":                   true,
+		"gateway/app":               true,
+		"gateway/proxy":             true,
 		"internal/platform/httpapi": true,
 		"internal/platform/log":     true,
 	}

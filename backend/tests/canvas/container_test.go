@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 )
 
 func TestCanvasContainerTypedKindsAndClosedConfig(t *testing.T) {

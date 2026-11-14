@@ -10,10 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	http "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	http "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type scopeFailureStore struct {

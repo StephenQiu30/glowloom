@@ -5,19 +5,19 @@ import (
 	"errors"
 	"testing"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/codex"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 // The task handlers run actual PostgreSQL/COS adapters and a fake

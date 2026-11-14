@@ -19,10 +19,10 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	canvaspg "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 // Command is validated before any database connection is opened.

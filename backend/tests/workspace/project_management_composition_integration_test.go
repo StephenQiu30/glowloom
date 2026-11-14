@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 // Use the installed owner list, rather than the smaller historical test guard.

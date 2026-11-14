@@ -9,17 +9,18 @@ import (
 	"os"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app/storageoperator"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/storageoperator"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 // This regression uses the production router, real session/scope middleware and

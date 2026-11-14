@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 )
 
 func TestBillingOutcomePreservesLedgerAndUnknownEvidence(t *testing.T) {

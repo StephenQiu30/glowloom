@@ -14,9 +14,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/document/adapter/grpcserver"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/document/application"
 	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/creation"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/adapter/grpcserver"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/application"
 )
 
 type waitingExtraction struct {

@@ -13,8 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
-	token "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/sessiontoken"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	token "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/sessiontoken"
+	app "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 

@@ -5,28 +5,28 @@ import (
 	"encoding/json"
 	"testing"
 
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
 	pgaudit "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/postgres"
 	audit "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type operationScopeGate struct {

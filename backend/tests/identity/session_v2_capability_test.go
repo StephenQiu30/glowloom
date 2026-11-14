@@ -13,9 +13,9 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	token "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/sessiontoken"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	token "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/sessiontoken"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
 
 type capabilityStore struct {

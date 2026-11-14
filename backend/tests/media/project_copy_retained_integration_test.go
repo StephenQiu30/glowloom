@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *testing.T) {

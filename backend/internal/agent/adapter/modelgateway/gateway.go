@@ -12,15 +12,16 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billing "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	opstore "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	op "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billing "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	opstore "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	op "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 // Unsealer opens an encrypted catalog credential for its exact owning identity.
@@ -230,7 +231,7 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 		if err := tx.Exec(`INSERT INTO operation.provider_binding(operation_id,release_id) VALUES(?,?)`, id, r.ReleaseID).Error; err != nil {
 			return err
 		}
-		reserve, err := g.billing.ReserveInTransaction(ctx, tx, billing.ReserveInput{Actor: scope.Principal(), ActorID: scope.ActorID, ProjectID: scope.ProjectID, OperationID: id, AmountMicros: quote, WholeCredits: wholeCredits, CommercialPriceReady: procurement != uuid.Nil, ModelKey: &r.ModelKey, Region: &r.Region, OccurredAt: time.Now()})
+		reserve, err := g.billing.ReserveInTransaction(ctx, tx, billing.ReserveInput{Actor: agentapp.Principal(scope), ActorID: scope.ActorID, ProjectID: scope.ProjectID, OperationID: id, AmountMicros: quote, WholeCredits: wholeCredits, CommercialPriceReady: procurement != uuid.Nil, ModelKey: &r.ModelKey, Region: &r.Region, OccurredAt: time.Now()})
 		if err != nil {
 			return err
 		}

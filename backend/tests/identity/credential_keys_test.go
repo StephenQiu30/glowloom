@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
+	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
 )
 
 func TestIdentityKeyFailsClosed(t *testing.T) {

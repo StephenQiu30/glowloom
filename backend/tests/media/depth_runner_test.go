@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/videodepth"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/videodepth"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
 func TestDepthRunnerRejectsOfflineModelBeforeOutput(t *testing.T) {

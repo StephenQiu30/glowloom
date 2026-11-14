@@ -3,9 +3,9 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 // WithInputSources injects current resource authority for every model egress.
@@ -53,6 +53,6 @@ func (h *BusinessHandler) validateInputSources(c *gin.Context) {
 		send(c, nil, err)
 		return
 	}
-	err = h.inputSources.CheckConversationSources(c.Request.Context(), grant.Scope.Principal(), grant.Scope.ProjectID, draft)
+	err = h.inputSources.CheckConversationSources(c.Request.Context(), app.Principal(grant.Scope), grant.Scope.ProjectID, draft)
 	send(c, businessValid{Valid: true}, err)
 }

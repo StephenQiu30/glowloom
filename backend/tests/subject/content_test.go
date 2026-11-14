@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/subject/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
 )
 
 func fact(kind string) domain.MediaFact {

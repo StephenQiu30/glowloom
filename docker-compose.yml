@@ -72,7 +72,7 @@ services:
     container_name: glowloom-gateway
     build:
       context: ./backend
-      dockerfile: gateway.Dockerfile
+      dockerfile: gateway/Dockerfile
     image: glowloom/gateway:current
     depends_on:
       backend:
@@ -102,7 +102,7 @@ services:
     container_name: glowloom-creation
     build:
       context: ./backend
-      dockerfile: creation.Dockerfile
+      dockerfile: creation/Dockerfile
     image: glowloom/creation:current
     init: true
     restart: unless-stopped
@@ -141,7 +141,7 @@ services:
     container_name: glowloom-media
     build:
       context: ./backend
-      dockerfile: media.Dockerfile
+      dockerfile: media/Dockerfile
     image: glowloom/media:current
     init: true
     restart: unless-stopped

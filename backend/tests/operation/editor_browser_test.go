@@ -11,15 +11,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	prompthttp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/http"
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/http"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	prompthttp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/http"
+	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
+	mediapg "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // TestEditorBrowserFixture exposes only synthetic isolated data on loopback, when explicitly requested.

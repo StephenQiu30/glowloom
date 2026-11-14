@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 )
 
 func TestContentActivityIgnoresViewportAndTransportVersions(t *testing.T) {

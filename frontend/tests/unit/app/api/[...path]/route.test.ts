@@ -853,8 +853,8 @@ it("all current registered identity handler contracts cross the bounded BFF", as
       "identity/adapter/http/governance_directory.go",
       "identity/adapter/http/platform_password_reset.go",
       "identity/adapter/http/platform_team_invitation.go",
-      "workspace/adapter/http/platform_team.go",
-      "workspace/adapter/http/team_avatar.go",
+      "creation/workspace/adapter/http/platform_team.go",
+      "creation/workspace/adapter/http/team_avatar.go",
       "media/adapter/http/avatar.go",
       "media/adapter/http/provider_logo.go",
       "identity/adapter/http/event_query.go",
@@ -862,9 +862,9 @@ it("all current registered identity handler contracts cross the bounded BFF", as
       "identity/adapter/http/platform_delete.go",
       "identity/adapter/http/governance.go",
       "identity/adapter/http/invitation.go",
-      "workspace/adapter/http/team.go",
-      "workspace/adapter/http/team_lifecycle.go",
-    ].map((file) => readFile(`../backend/internal/${file}`, "utf8")),
+      "creation/workspace/adapter/http/team.go",
+      "creation/workspace/adapter/http/team_lifecycle.go",
+    ].map((file) => readFile(`../backend/${file}`, "utf8")),
   );
   const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
   vi.stubGlobal("fetch", fetcher);
@@ -1017,22 +1017,22 @@ it("统计查询不能携带分页或越范围字段，CSV下载保留授权与�
 it("编辑器和目录管理已注册合同均经过同站代理", async () => {
   const { readFile, readdir } = await import("node:fs/promises");
   const handlers = await import("@/app/api/[...path]/route");
-  const files = (await readdir("../backend/internal/catalog/adapter/http")).map(
-    (f) => `catalog/adapter/http/${f}`,
+  const files = (await readdir("../backend/execution/catalog/adapter/http")).map(
+    (f) => `execution/catalog/adapter/http/${f}`,
   );
   files.push(
-    "prompt/adapter/http/drafts.go",
-    "prompt/adapter/http/preferences.go",
-    "operation/adapter/http/editor_submission.go",
-    "operation/adapter/http/provider_trials.go",
-    "operation/adapter/http/handler.go",
-    "workspace/adapter/http/model_defaults.go",
-    "workspace/adapter/http/project_budget.go",
+    "creation/prompt/adapter/http/drafts.go",
+    "creation/prompt/adapter/http/preferences.go",
+    "execution/operation/adapter/http/editor_submission.go",
+    "execution/operation/adapter/http/provider_trials.go",
+    "execution/operation/adapter/http/handler.go",
+    "creation/workspace/adapter/http/model_defaults.go",
+    "creation/workspace/adapter/http/project_budget.go",
   );
   const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
   vi.stubGlobal("fetch", fetcher);
   for (const file of files) {
-    const source = await readFile(`../backend/internal/${file}`, "utf8");
+    const source = await readFile(`../backend/${file}`, "utf8");
     for (const match of source.matchAll(
       /@Router (\/api\/\S+) \[(get|post|patch|put|delete)\]/g,
     )) {

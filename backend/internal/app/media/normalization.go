@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/normalizationgrpc"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/media/adapter/normalizationgrpc"
 )
 
 // ProvideUploadNormalizer configures the real remote processing dependency.

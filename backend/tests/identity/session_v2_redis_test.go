@@ -13,8 +13,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
-	adapter "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/refreshredis"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	adapter "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/refreshredis"
+	app "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type offlineHook struct{}

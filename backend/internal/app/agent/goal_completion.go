@@ -8,9 +8,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 func deliverySpec(in ShotDeliveryInput) domain.GoalDeliverySpec {
@@ -99,7 +100,7 @@ func productionOperationsSnapshot(ctx context.Context, tx *gorm.DB, g domain.Gra
 	result := []map[string]any{}
 	query := operationapp.NewPublicQuery(operationStore(tx))
 	for _, id := range ids {
-		task, err := query.Task(ctx, g.Scope.Principal(), g.Scope.ProjectID, id)
+		task, err := query.Task(ctx, agentapp.Principal(g.Scope), g.Scope.ProjectID, id)
 		if err != nil {
 			return nil, businessError(err)
 		}

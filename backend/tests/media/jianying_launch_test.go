@@ -15,12 +15,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	tool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	toolhttp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/http"
+	app "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 type launchStore struct {

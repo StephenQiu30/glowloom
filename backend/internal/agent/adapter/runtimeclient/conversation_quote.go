@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // ReadConversationQuote reads and verifies an authorized public message for quoting.

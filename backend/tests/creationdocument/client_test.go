@@ -21,11 +21,11 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/document/adapter/grpcserver"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/document/adapter/native"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/document/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/extractiongrpc"
 	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/creation"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/adapter/grpcserver"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/adapter/native"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extractiongrpc"
 )
 
 const clientOriginalText = "第一幕\r\n\r\n正文😀"

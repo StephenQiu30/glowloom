@@ -15,7 +15,7 @@ func TestCreationExtractorIsPrivateIndependentAndCapacityBounded(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			v := readDeployment(t, overlay)
 			const prefix = "services.creation."
-			if v.GetString(prefix+"build.dockerfile") != "creation.Dockerfile" {
+			if v.GetString(prefix+"build.dockerfile") != "creation/Dockerfile" {
 				t.Error("Creation must use its own binary image")
 			}
 			if len(v.GetStringSlice(prefix+"ports")) != 0 || !slices.Equal(v.GetStringSlice(prefix+"expose"), []string{"9092", "8083"}) {

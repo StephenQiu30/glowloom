@@ -3,8 +3,8 @@ package media
 import (
 	"gorm.io/gorm"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // ProvideAssetDownloads retains scope authorization and explicit object routes.

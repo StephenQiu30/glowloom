@@ -17,7 +17,7 @@ func TestMediaProcessorHasNoBusinessStorageOrOtherDomainDependencies(t *testing.
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "list", "-deps", "./cmd/media")
+	cmd := exec.CommandContext(ctx, "go", "list", "-deps", "./media")
 	cmd.Dir = filepath.Clean(filepath.Join(filepath.Dir(source), "../.."))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -25,13 +25,13 @@ func TestMediaProcessorHasNoBusinessStorageOrOtherDomainDependencies(t *testing.
 	}
 	const module = "github.com/StephenQiu30/glowloom-server/backend/"
 	allowed := map[string]bool{
-		"cmd/media":                                    true,
-		"internal/app/mediaruntime":                    true,
-		"internal/contract/gen/media":                  true,
-		"internal/media/processing/application":        true,
-		"internal/media/processing/adapter/ffmpeg":     true,
-		"internal/media/processing/adapter/grpcserver": true,
-		"internal/platform/serviceauth":                true,
+		"media":                               true,
+		"media/app":                           true,
+		"internal/contract/gen/media":         true,
+		"media/processing/application":        true,
+		"media/processing/adapter/ffmpeg":     true,
+		"media/processing/adapter/grpcserver": true,
+		"internal/platform/serviceauth":       true,
 	}
 	for _, pkg := range strings.Fields(string(output)) {
 		if strings.HasPrefix(pkg, module) && !allowed[strings.TrimPrefix(pkg, module)] {

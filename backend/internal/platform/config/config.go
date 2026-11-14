@@ -381,12 +381,13 @@ func validateCreditServiceCallers(callers []CreditServiceCaller) error {
 	return nil
 }
 
-func validCreditCallerToken(value string, max int) bool {
-	if value == "" || len(value) > max {
+func validCreditCallerToken(value string, maxLength int) bool {
+	if value == "" || len(value) > maxLength {
 		return false
 	}
 	for _, r := range value {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+		valid := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-'
+		if !valid {
 			return false
 		}
 	}
@@ -401,7 +402,8 @@ func validUUID(value string) bool {
 		if index == 8 || index == 13 || index == 18 || index == 23 {
 			continue
 		}
-		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+		validHex := r >= '0' && r <= '9' || r >= 'a' && r <= 'f'
+		if !validHex {
 			return false
 		}
 	}

@@ -71,11 +71,18 @@ func TestTechnicalSQLUsesDatabaseServiceOwner(t *testing.T) {
 	seen := make(map[string]int)
 	conflicts := make(map[string]int)
 	files := token.NewFileSet()
-	err := filepath.WalkDir(filepath.Join("..", "..", "internal"), func(path string, entry fs.DirEntry, err error) error {
+	err := filepath.WalkDir(filepath.Join("..", ".."), func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if entry.IsDir() {
+			switch entry.Name() {
+			case "tests", "node_modules", ".git":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		file, err := parser.ParseFile(files, path, nil, 0)

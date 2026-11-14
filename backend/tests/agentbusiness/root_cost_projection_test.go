@@ -12,10 +12,11 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billing "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billing "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
@@ -41,7 +42,7 @@ func rootMediaCost(t *testing.T) (*gorm.DB, *pg.Store, domain.Admission, domain.
 			t.Fatal(err)
 		}
 	}
-	actor := identityfixture.Session(t, db, a.Scope.Principal())
+	actor := identityfixture.Session(t, db, agentapp.Principal(a.Scope))
 	if err = db.Exec(`INSERT INTO workspace.project(id,org_id,owner_scope_id,name,aspect_ratio,style_type) VALUES(?,?,?,'root cost','16:9','realistic')`, a.Scope.ProjectID, a.Scope.OrgID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}

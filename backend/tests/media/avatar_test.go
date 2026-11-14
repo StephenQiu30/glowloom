@@ -9,7 +9,7 @@ import (
 	"image/png"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func TestAvatarDecodeLimits(t *testing.T) {

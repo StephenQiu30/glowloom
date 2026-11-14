@@ -31,13 +31,13 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 // fixtureInputs uses the production draft codec while pinning a deterministic
@@ -265,7 +265,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	}
 	publicRouter := gin.New()
 	api := publicRouter.Group("/api", func(c *gin.Context) {
-		principal := scope.Principal()
+		principal := app.Principal(scope)
 		if c.GetHeader("X-Fixture-Actor") == "other" {
 			principal.ID = access.other
 		}

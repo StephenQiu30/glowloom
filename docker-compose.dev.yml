@@ -36,18 +36,14 @@ services:
         - action: rebuild
           path: ./canvas/tsconfig.json
         - action: rebuild
-          path: ./backend/internal/prompt/domain/cinema_catalog.json
+          path: ./backend/creation/prompt/domain/cinema_catalog.json
 
   gateway:
     image: glowloom/gateway:dev
     develop:
       watch:
         - action: rebuild
-          path: ./backend/cmd/gateway
-        - action: rebuild
-          path: ./backend/internal/gateway
-        - action: rebuild
-          path: ./backend/internal/app/gateway
+          path: ./backend/gateway
         - action: rebuild
           path: ./backend/internal/platform/httpapi
         - action: rebuild
@@ -56,21 +52,19 @@ services:
           path: ./backend/go.mod
         - action: rebuild
           path: ./backend/go.sum
-        - action: rebuild
-          path: ./backend/gateway.Dockerfile
 
   creation:
     image: glowloom/creation:dev
     develop:
       watch:
         - action: rebuild
-          path: ./backend/cmd/creation
+          path: ./backend/creation/main.go
         - action: rebuild
-          path: ./backend/internal/app/creationruntime
+          path: ./backend/creation/app
         - action: rebuild
-          path: ./backend/internal/creation/document
+          path: ./backend/creation/document
         - action: rebuild
-          path: ./backend/internal/script/domain
+          path: ./backend/creation/script/domain
         - action: rebuild
           path: ./backend/internal/platform/serviceauth
         - action: rebuild
@@ -82,18 +76,18 @@ services:
         - action: rebuild
           path: ./backend/go.sum
         - action: rebuild
-          path: ./backend/creation.Dockerfile
+          path: ./backend/creation/Dockerfile
 
   media:
     image: glowloom/media:dev
     develop:
       watch:
         - action: rebuild
-          path: ./backend/cmd/media
+          path: ./backend/media/main.go
         - action: rebuild
-          path: ./backend/internal/app/mediaruntime
+          path: ./backend/media/app
         - action: rebuild
-          path: ./backend/internal/media/processing
+          path: ./backend/media/processing
         - action: rebuild
           path: ./backend/internal/platform/serviceauth
         - action: rebuild
@@ -105,7 +99,7 @@ services:
         - action: rebuild
           path: ./backend/go.sum
         - action: rebuild
-          path: ./backend/media.Dockerfile
+          path: ./backend/media/Dockerfile
 
   backend:
     image: glowloom/backend:dev

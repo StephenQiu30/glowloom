@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 var errInput = errors.New("invalid model transcript")

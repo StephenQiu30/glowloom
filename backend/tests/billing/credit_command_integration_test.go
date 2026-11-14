@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 )
 
 func TestCreditCommandsGrantDebitFreezeCommitAndRelease(t *testing.T) {

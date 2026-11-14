@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/paramvalidation"
 )
 
 func TestModelVersionValidatorUsesSharedParamSchemaCases(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "internal", "catalog", "testdata", "param-schema", "cases.json"))
+	content, err := os.ReadFile(filepath.Join("..", "..", "execution", "catalog", "testdata", "param-schema", "cases.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

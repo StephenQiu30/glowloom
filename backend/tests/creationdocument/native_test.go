@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/adapter/native"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/document/adapter/native"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/document/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 )
 
 const docxMIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

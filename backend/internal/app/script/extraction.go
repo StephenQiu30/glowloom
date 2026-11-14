@@ -11,11 +11,11 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	document "github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	document "github.com/StephenQiu30/glowloom-server/backend/creation/document/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/extractiongrpc"
+	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extractiongrpc"
-	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 type remoteExtractor struct{ client *extractiongrpc.Client }
