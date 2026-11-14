@@ -19,6 +19,13 @@
 4. 业务模块按职责组织并显式声明依赖，避免全局 `utils`、重复 DTO、重复异常体系和仅转发调用的空层。
 5. 复用已接受的架构与工具链；设计发生变化时先更新事实来源，再继续实现。
 
+## 数据库与数据规范
+
+1. `backend/db/schema.sql` 是仓库唯一的 PostgreSQL 结构规范性文件（Single Source of Truth），`backend/db/data.sql` 是唯一的公共预设/种子数据文件。
+2. 严禁在仓库内创建 `migrations/` 目录或增量 SQL 迁移脚本，严禁在应用服务中引入自动迁移框架或在服务启动/运行时执行任何动态 DDL 操作。服务启动绝不承担数据库结构变更职责，杜绝新服务冷启动或多实例并发启动时产生竞态、锁超时与数据/结构不一致。
+3. 任何表结构、字段、索引或约束的调整，必须直接在 `backend/db/schema.sql` 的完整声明中维护，并通过 `backend/tests/db/schema_source_test.go` 门禁测试，确保仓库内不存在除 `schema.sql` 与 `data.sql` 以外的任何 SQL 文件。
+4. 新环境与 CI 部署统一且仅通过 `backend/db/schema.sql` 一次性完成空库初始化，再按需导入 `backend/db/data.sql`；已有存量业务库的升级必须由管理员/DBA 在部署前基于线上实际结构与最新 `schema.sql` 的比对结果（diff）执行受控离线事务变更，核验一致后再启动新版本服务，严禁对已有业务库直接重放空库 SQL。
+
 ## Go 工程规范
 
 1. 所有 Go 代码的编写、修改和审查必须以 [Google Go Style Guide](https://google.github.io/styleguide/go/guide) 和 [Style Decisions](https://google.github.io/styleguide/go/decisions) 为首要编码标准，按场景落实 [Best Practices](https://google.github.io/styleguide/go/best-practices)。Go 官方文档作为语言与 API 的依据，Uber Go Style Guide 作为补充；补充建议冲突时以 Google 规范为准。保持清晰、简单、简洁、可维护和一致，并遵守已接受的项目目录与架构边界。
