@@ -15,6 +15,7 @@ const release = JSON.parse(
 );
 const types: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css",
   ".json": "application/json",

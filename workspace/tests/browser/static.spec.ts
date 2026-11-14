@@ -6,6 +6,14 @@ test("reads the real Workspace design, its source anchor, diagram and raw docume
   await expect(
     page.getByRole("heading", { name: "知识库", exact: true }),
   ).toBeVisible();
+  const flight = await page.request.get("/read/design-43/index.txt");
+  expect(flight.headers()["content-type"]).toMatch(/^text\/plain/);
+  await page.evaluate(() =>
+    Object.defineProperty(window, "__workspaceNavigationProbe", {
+      value: "preserved",
+      configurable: true,
+    }),
+  );
   await page.locator('main a[href="/read/design-43/"]').first().click();
   await expect(
     page.getByRole("heading", {
@@ -14,6 +22,11 @@ test("reads the real Workspace design, its source anchor, diagram and raw docume
     }),
   ).toBeVisible();
   await expect(page.locator(".prose figure svg").first()).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      Reflect.get(window, "__workspaceNavigationProbe"),
+    ),
+  ).toBe("preserved");
   await page.goto("/read/requirement-28/#src-ws-07");
   await expect(page.locator("#src-ws-07")).toBeAttached();
   const raw = await page.request.get("/raw/requirement-28.md");
