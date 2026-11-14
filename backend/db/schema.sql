@@ -7236,7 +7236,6 @@ CREATE INDEX task_work_due ON infra.task_work (kind, next_run_at) WHERE complete
 -- Exactly one cursor for each periodic business sweep. Restarting a process
 -- never resets its due time. The worker checks existing expiries on first claim.
 INSERT INTO infra.task_work (kind,business_id,next_run_at) VALUES
- ('maintenance.partitions','periodic',now()),
  ('maintenance.outbox','periodic',now()),
  ('maintenance.inbox','periodic',now()),
  ('catalog.price_sync','periodic',now()),
