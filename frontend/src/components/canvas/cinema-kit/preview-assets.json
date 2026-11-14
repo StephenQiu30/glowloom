@@ -1,0 +1,367 @@
+{
+  "style:复古对称美学": {
+    "image": "/cinema/45ce18bb6c9dc7a7.jpg",
+    "source": "https://p26-sign.douyinpic.com/tos-cn-p-148450/oAnhXwPDWqQz7IIt3EE7iVaZHAqgaqj6gBP4i~tplv-noop.image",
+    "sha256": "45ce18bb6c9dc7a7edcc6579f8f62c64c3263a388419a3266639d9a79c31085c"
+  },
+  "style:3D动画风": {
+    "image": "/cinema/99db59d7d68d8de5.jpg",
+    "source": "https://p9-sign.douyinpic.com/tos-cn-p-148450/o4DCsFBiBCUf7fqbxVxUkQEVshEOI2odDe61EA~tplv-noop.image",
+    "sha256": "99db59d7d68d8de5acfac998d7c00c36ca1b60f3b3c13235665034d87653c28d"
+  },
+  "style:治愈日漫风": {
+    "image": "/cinema/8ad76c73df2f3f7e.jpg",
+    "source": "https://p26-sign.douyinpic.com/tos-cn-p-148450/oYsluZmEeBEfsyYVkZAID6cFQfPVOjOEBDcCAb~tplv-noop.image",
+    "sha256": "8ad76c73df2f3f7e2b4c176e31106ece2f6617479ca53233a02eafe6ec59cf70"
+  },
+  "style:港夜迷离风": {
+    "image": "/cinema/14cb8f8a1b3390b2.jpg",
+    "source": "https://p26-sign.douyinpic.com/tos-cn-p-148450/okxDAaArjiohJAhhr1wNgPQkliEzfgNBIWMrRd~tplv-noop.image",
+    "sha256": "14cb8f8a1b3390b206b40816d289a2fcc6e8b3f925b5c2a3f3ccbcc068b99fbe"
+  },
+  "style:哥特式恐怖": {
+    "image": "/cinema/b2da499f1460669e.jpg",
+    "source": "https://p26-sign.douyinpic.com/tos-cn-p-148450/o0YvXkfo9GEQhQgVNqW8BCAelqfMV8QdDAM6Oz~tplv-noop.image",
+    "sha256": "b2da499f1460669e296d0e4f7607bb6a705be655cea757754e3f9d54ee73e5f0"
+  },
+  "style:邵氏武侠风": {
+    "image": "/cinema/4aefc647776c8a10.jpg",
+    "source": "https://p5-ex-gddgtc-sign.douyinpic.com/tos-cn-p-148450/o84JRwtiAqBrEX93BaBbQNWV6rEViITXM8Ivh~tplv-noop.image",
+    "sha256": "4aefc647776c8a1011b976e98d35edc36478a1e15a0afb84322e200a868dc018"
+  },
+  "style:丧尸列车": {
+    "image": "/cinema/deccb0e296d9ef47.jpg",
+    "source": "https://p5-ex-gddgtc-sign.douyinpic.com/tos-cn-p-148450/ogBVGh7EIAja3EiFwfg6Ds5gkWqUvQQkA7Jti1~tplv-noop.image",
+    "sha256": "deccb0e296d9ef4720fc6e9eef9b6e3d49094366967ec1a13dd1c7c0a1d3c8c2"
+  },
+  "style:美式迷幻青春": {
+    "image": "/cinema/ac9e625f00283de9.jpg",
+    "source": "https://p5-ex-gddgtc-sign.douyinpic.com/tos-cn-p-148450/ok2VL9AqfkEGusvZADDVlxCs6EBaFOafCeqIK8~tplv-noop.image",
+    "sha256": "ac9e625f00283de93fbd186e8d63f230bce4856f5735536d210e7706207e29d0"
+  },
+  "style:台湾偶像剧": {
+    "image": "/cinema/9b15ece5506f91a0.jpg",
+    "source": "https://p26-sign.douyinpic.com/tos-cn-p-148450/oYnxigJiAEZyTgAQLcDaxVIvHG6aBfPAhrB1hV~tplv-noop.image",
+    "sha256": "9b15ece5506f91a049dc10fde430a25a98a1a215c55bd82b7415ce3d25760693"
+  },
+  "style:异常阈限空间": {
+    "image": "/cinema/40c1e8053a328131.jpg",
+    "source": "https://p26-sign.douyinpic.com/tos-cn-p-148450/o8kAViFfqquuB6cdDf3CegO9AEiJB7VILVq4EA~tplv-noop.image",
+    "sha256": "40c1e8053a32813104f812b407637cfb930c2082aad1c86763a05324735a0bfd"
+  },
+  "palette:日系清新色调": {
+    "image": "/cinema/ad2ebd7cf9b00444.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/44430bfebd784d51bcd266e7aba1f1b0~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "ad2ebd7cf9b004444dd8c92eba28eddfda64040d362908616d69b06521be7b8d"
+  },
+  "palette:雾蓝米白色调": {
+    "image": "/cinema/4d25771e509681a7.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/c0151c549fbd4074a9c206b4e9a0ee27~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "4d25771e509681a74eff7bc8d9275c381c33ec2c825ce9efd04c3e03e03556cf"
+  },
+  "palette:复古糖果色调": {
+    "image": "/cinema/d2509f93687e57a7.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/7c9faf66d50245cbbc675ba9c0ab3ee2~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "d2509f93687e57a7c94a036b28b3680052caab12a706d483497589f138e8d0c1"
+  },
+  "palette:暖黄灰褐色调": {
+    "image": "/cinema/077e5ae9b9a5d185.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/24019c0f6c404e3da9932ed2f7b6cb0f~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "077e5ae9b9a5d185253dfe711ab7b9e7adbebf2380e5bba3f5ccbc0d823dcbe2"
+  },
+  "palette:冷青琥珀色调": {
+    "image": "/cinema/8e0ed2ad2c13ff0f.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/3d8e860070564919af97de196426a169~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "8e0ed2ad2c13ff0fe8a2bb5c149953c8a429bd851ef7713a1d550fc17ad6f50d"
+  },
+  "palette:南法假日色调": {
+    "image": "/cinema/fa1bca86c633231b.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/88a87100418c4732abddf27b46c377a5~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "fa1bca86c633231bf3c4085667a9b2beccce33ccafe8d9af65ec7f874c6d6f6b"
+  },
+  "palette:沙漠史诗色调": {
+    "image": "/cinema/6486340bc1493733.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/e0c07005a3b54870b8a150921f810b77~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "6486340bc14937331105312bdcd847c7633eda2dc2ac9a2a15a1d38a3f8c5ddc"
+  },
+  "palette:复古好莱坞色调": {
+    "image": "/cinema/29c09589ad1c591f.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/1fe0f2bfb25b4216a20fb8a0b92c98b5~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "29c09589ad1c591f84a228ac1751415bc198546ddd66642164f17aa4ddaa5366"
+  },
+  "palette:幻彩史诗色调": {
+    "image": "/cinema/89a0fd2c3e321b39.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/15d3837d975a46a6a1e99bd851a07d03~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "89a0fd2c3e321b3985e540c177e14573c048778c1e0ecc95e8f56855c99e9da6"
+  },
+  "palette:过期暖黄色调": {
+    "image": "/cinema/376aa7448ea2c546.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/25e4ed30f0e0400f827366a0bf29ebb9~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "376aa7448ea2c5462bcf959234452604633a24152c765bc35441e46a78985b3d"
+  },
+  "palette:琥珀棕褐色调": {
+    "image": "/cinema/065a9d6b88cba9ed.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/82039acabe9649ba89a396e8faa931d6~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "065a9d6b88cba9ed08f8ae198853e3731df61eb8bd7acb806a6174a1ffe4a33f"
+  },
+  "palette:法式红绿色调": {
+    "image": "/cinema/dd94ff231ea7e60b.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/eccc2be07f5d498489c55e60047b7775~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "dd94ff231ea7e60b61cd5844ef34c6bdbc4c49212c8a3d0330fd9fc1e1fce9e5"
+  },
+  "palette:墨绿暖黄色调": {
+    "image": "/cinema/3686a980c5994013.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/a8e2d7ebcae841a596b32e7f1980d615~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "3686a980c5994013ef9d86638b5eabe265a176873e97cc37abd64e0791398b28"
+  },
+  "palette:灰绿砖红色调": {
+    "image": "/cinema/5f32d0fef02c6de2.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/4455e5e880ff4ee69903c4e1ac4ecc6d~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "5f32d0fef02c6de2ad3fa00134150473d709042b08183e5765ab39182e1011ee"
+  },
+  "palette:韩系冷青色调": {
+    "image": "/cinema/44e895c9f59693c1.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/6bbe5b8fde64415783bc0f6946cd4efe~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "44e895c9f59693c1484fcc89483621b354260140bfb7f23b25585597ddcc4ffd"
+  },
+  "palette:赛博冷绿色调": {
+    "image": "/cinema/52903fcdeba2915e.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/097101323e9c43e1ad3cd38cb95d7368~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "52903fcdeba2915ea3d6d8d475d2ad70732c76856d83075254ec985ce4b037bf"
+  },
+  "palette:灰蓝海岸色调": {
+    "image": "/cinema/de8b95d425b735a4.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/0771d95fe8ac4b4cb8a0c88de0c781cc~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "de8b95d425b735a49c3d482798f2f147d07c4fc68dc64d9b9009b5cf820dc24f"
+  },
+  "palette:米黄天蓝色调": {
+    "image": "/cinema/7008e2c7f3dae766.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/c7aa1960170b4bdbb561078ad354f3b5~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "7008e2c7f3dae7664bba24103ddbd8ca38bf2ccbff217c030eb1fffbc9510edf"
+  },
+  "palette:青橙色调": {
+    "image": "/cinema/671bfd22602f416f.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/fc873107fb4143f9b780378ecd8fdac4~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "671bfd22602f416ff7c23ccb044f8c2318bd75b2418d02ca637d5912f5f4fb70"
+  },
+  "palette:港片霓虹色调": {
+    "image": "/cinema/ef4aa588f7329746.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/3784fbcfa65e462da0ac4bd7b9260834~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "ef4aa588f7329746a0dd45131f1ca2d0b8dfbb580a7e0ef54c8e422c9750e748"
+  },
+  "palette:孔雀蓝色调": {
+    "image": "/cinema/d09c6a33840a9d74.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/88defad987c5491e999279798d62a263~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "d09c6a33840a9d74ab7a56a8993a59190524c02cda6982ba8732fbe5460a6aae"
+  },
+  "palette:单色蓝色调": {
+    "image": "/cinema/e2292fc28c9449cf.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/0fd55264ce8e4d7793f0b5ec2963bb70~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "e2292fc28c9449cfe9a0ca3545cf49d8bbf1bb919a063f3c5206a88816591014"
+  },
+  "palette:暗黑冷色调": {
+    "image": "/cinema/c2291c763de8176e.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/043748c9a59f4a739cec92542db5569b~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "c2291c763de8176e7242d20e1462eef508947fac46d4d171ed5fad1d200f2209"
+  },
+  "palette:单色红色调": {
+    "image": "/cinema/75339c36794dc9e1.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/8a8d3778eecd4ecc9b5a6339c1ee34fe~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "75339c36794dc9e14baa6aa73bf0dd9c78b46b6b6512ec7b04e26d53c9c3a4b3"
+  },
+  "palette:绛红紫灰色调": {
+    "image": "/cinema/fcc6fb00bab8bad9.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/be2498b9a7e64b1db73c622e1fd455a8~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "fcc6fb00bab8bad92fc33fc94779e61b0d7b87b2e8ef80f14fbe8dd8bb106f78"
+  },
+  "palette:都市暮色蓝调": {
+    "image": "/cinema/622bffcd4e4834e2.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/45a133fa1cd8478f9c43b3326efdb7f3~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "622bffcd4e4834e2bc412fa6265d7806dd546265ffa0e8357ec57d346d7238c1"
+  },
+  "palette:黑白纪实色调": {
+    "image": "/cinema/32f4ce9cd2d34978.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/40211efb0f954d888ab36d9f44457646~tplv-tb4s082cfz-aigc_resize:360:360.webp",
+    "sha256": "32f4ce9cd2d34978f5f9dec45b3002966d768a5ab36178bbf40e21f0a71d226a"
+  },
+  "motion:迎面跟拍": {
+    "image": "/cinema/b41c2a41280d5fef.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/4c3db0d6aabc4bb48bbebe993066f433~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "b41c2a41280d5fef9f1e40c3103aa725dadcc76db78599bc927688cc28b0ce19"
+  },
+  "motion:侧面跟拍": {
+    "image": "/cinema/403265daaa7996ad.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/85c48629810f4c8ba768b5a1dab299f3~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "403265daaa7996ad9b059787b9571b4ac36766fa286ff5c34b5659bafee069b8"
+  },
+  "motion:镜头左移": {
+    "image": "/cinema/30e904de7a20fed1.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/1babc1b9cde1469688b41ff60c16eb5f~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "30e904de7a20fed1f95798e7334f614c237a3a72ddb2083b462f45c4fd348e13"
+  },
+  "motion:镜头右移": {
+    "image": "/cinema/6227071c642ee4dd.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/efcc023c28174c19afc4542aab08d492~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "6227071c642ee4dd1e4818a809f582c5a40be2abf992d72c11f6d3772359e9d6"
+  },
+  "motion:镜头上移": {
+    "image": "/cinema/8b1f72e532a4c44f.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/f68abcc0d0e141c799c05c5a53e9dce0~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "8b1f72e532a4c44f226f365dc8e9b714af3d3bf6732c4b98969cb8c568c76846"
+  },
+  "motion:镜头下移": {
+    "image": "/cinema/e009c947f46e1a4b.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/70f12d70740e41fd90a9704cbab48850~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "e009c947f46e1a4b9d3f8306089fdfadd41b40e09826092efc8ad512461a82b8"
+  },
+  "motion:急速推进": {
+    "image": "/cinema/0bfe99906ddfd855.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/0bea21629d2e4d55b6e3f54efde293fc~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "0bfe99906ddfd855ec64e8cc7d8bbf1d76a83703678a9d57a92ed495608f86fd"
+  },
+  "motion:急速后移": {
+    "image": "/cinema/6a3e82c136ebbe2f.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/fd335c08fd424aa98352ce24ff292a68~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "6a3e82c136ebbe2f63ae4fbe5443e9c7408e1ed47467570b718ab802f067dde7"
+  },
+  "motion:FPV穿越机": {
+    "image": "/cinema/4f8372f1c9559071.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/085f4d3447514267bc39db0b66655318~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "4f8372f1c955907166bf04982b08701921d4a147c75efcdb1bd916cdbd9d13db"
+  },
+  "motion:一镜到底": {
+    "image": "/cinema/6338a3205c2534a4.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/1012737b78c14410b73a6ac77ba31d4e~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "6338a3205c2534a4ea1253c25bef19243f08e2b59b122deae0fa45f8362d40ea"
+  },
+  "motion:盘旋抬升": {
+    "image": "/cinema/71c3a0b4496d8107.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/490329ef269348dfb8330e58a2a345c8~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "71c3a0b4496d810785dfacad49931569f75c363d9322a9e9e626cafb9000a4bc"
+  },
+  "motion:手持拍摄": {
+    "image": "/cinema/5446366d09cf7613.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/fee3af31f6e942ee97ad8de057a03f17~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "5446366d09cf7613bda4db0b194f10ee7091cb98c2a9744f63ec1c5526c4111d"
+  },
+  "motion:低角度环绕": {
+    "image": "/cinema/c3d36c7ec08648ec.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/e624fb9dbd5c4b25b39d4be9f133eef3~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "c3d36c7ec08648ec8ff6c6260e1508ec251dbca3c248b91d7e182f164d705ce6"
+  },
+  "motion:第一视角": {
+    "image": "/cinema/7a5bc31479c8373b.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/d8f2e6b8723145b0aa77ca9f70b5292b~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "7a5bc31479c8373b2e64017f9e6e3a8fb4244d865af6710398791deba61f62f9"
+  },
+  "motion:希区柯克": {
+    "image": "/cinema/b5ed333cc193c278.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/1887581840244ebd910d116ca8672fc2~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "b5ed333cc193c278fbbe0fdd7cce509225e306418360d20c5a8353cb36b0c12e"
+  },
+  "motion:子弹时间": {
+    "image": "/cinema/0f1041ed19bf1616.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/fc6340fa98244019b8c8d260c713d356~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "0f1041ed19bf1616f02f244dd7c8d669607d69055d7a57278d4a0b94d712eea4"
+  },
+  "motion:快速摇摄": {
+    "image": "/cinema/88b9783148f32606.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/510e0545b9454a60bbf9934f620b2a0c~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "88b9783148f32606a46218eb55e85ee9640fa882f3b2ba5a5f13f7b8a7f2e89b"
+  },
+  "motion:定格抽帧": {
+    "image": "/cinema/a221ca701b76ce13.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/dcbbc845e8324083a8ab6307fc15dec6~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "a221ca701b76ce137a73ddf8b4a1341cc872c5790a8623d3b7ce07346462d7ae"
+  },
+  "motion:焦点转移": {
+    "image": "/cinema/15de18e4f1ac39c9.webp",
+    "source": "https://p9-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/ed2755b8f0c5444d919cd3a334a112c4~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "15de18e4f1ac39c976a0aa851f6991d9dc587a6909f8ba62ce980193f5f34a21"
+  },
+  "motion:机械臂": {
+    "image": "/cinema/6aa4cb52cf4e23f1.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/0283fcf8d8184f4180f2b1d9bb1192c2~tplv-tb4s082cfz-resize:720:720.webp",
+    "sha256": "6aa4cb52cf4e23f11e8ba8c222a1767d95a8129dc24e5fa4db2de07d44e0d192"
+  },
+  "camera:自动": {
+    "image": "/cinema/49bc69ff0fa4ac01.webp",
+    "source": "https://p26-dreamina-sign.byteimg.com/tos-cn-i-tb4s082cfz/cd1a7418fdb24758b6f7e3f49cfadb27~tplv-tb4s082cfz-resize:1600:900.webp",
+    "sha256": "49bc69ff0fa4ac011464e5306b6ec421f7f76b829f2d96e781982ea8bf9a4047"
+  },
+  "body:黑白纪实": {
+    "image": "/cinema/4ecf50790b67497d.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-model-bw-documentary.4b4638483b.png",
+    "sha256": "4ecf50790b67497de2bf81c1d2ad8441278b7e39cfe6e8c29ffef429db245d51"
+  },
+  "body:Y2K卡片机": {
+    "image": "/cinema/43f2ee93fa95dfa9.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-model-y2k.7d7541abc2.png",
+    "sha256": "43f2ee93fa95dfa933cd68bbe0e807e79a7fdf45da3bbabae8a25c443dd5ef76"
+  },
+  "body:自动": {
+    "image": "/cinema/b78f4750255c3825.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-auto-model.618ab5e438.png",
+    "sha256": "b78f4750255c3825b7ce3e1e2903a2a563e6f0ba7363cc2f4898477d2d7ebcfd"
+  },
+  "body:现代数字": {
+    "image": "/cinema/f40a83957d7e8c11.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-model-modern-digital.306fad597d.png",
+    "sha256": "f40a83957d7e8c116a698f85424bbaf2f19ec550a01630034023f6e6c83243b9"
+  },
+  "body:电影胶片": {
+    "image": "/cinema/bb73cb0c51e468f3.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-model-film.7102d8342e.png",
+    "sha256": "bb73cb0c51e468f3fc97bb3d186019ad46dbe3f3bae37f12d42de6a537bb7f86"
+  },
+  "lens:鱼眼广角镜头": {
+    "image": "/cinema/2a8ce8d307daeaed.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-lens-fisheye.6c42149572.png",
+    "sha256": "2a8ce8d307daeaedc4bf3272dd9402180d6439eafb220411a6399388cd8a76de"
+  },
+  "lens:漏光镜头": {
+    "image": "/cinema/3abd16d9710a920c.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-lens-light-leak.d08378ad35.png",
+    "sha256": "3abd16d9710a920c88da4f630f9f01e319569c73dae7d9ff56cdad361d5d0039"
+  },
+  "lens:自动": {
+    "image": "/cinema/4362f5dc83bfe96a.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-auto-lens.40fe1d0cd2.png",
+    "sha256": "4362f5dc83bfe96ad5e3ba886d7fa17bdba4ca6067763d72b63c7a0913dde27c"
+  },
+  "lens:干净锐利镜头": {
+    "image": "/cinema/431d9b2720b8467a.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-lens-clean-sharp.ca713b5876.png",
+    "sha256": "431d9b2720b8467abf1d6a5082909baa87087c985ee44d599a9a1f58137288f1"
+  },
+  "lens:银幕电影镜头": {
+    "image": "/cinema/769a271f31753d96.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-lens-cinema-screen.1c368433bd.png",
+    "sha256": "769a271f31753d96870ad812ab728cc666c34ccb208454bf56a69e8d82d6d276"
+  },
+  "focal_length:自动": {
+    "image": "/cinema/1f083c227306f9f2.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-auto-focal.3437239f5f.png",
+    "sha256": "1f083c227306f9f26f7d57a2bea29bf3e4f6fa8066c4e18f7c524074961b83ca"
+  },
+  "aperture:f4中景深": {
+    "image": "/cinema/14ed535d4496788d.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-aperture-f4.a74a0efc3a.png",
+    "sha256": "14ed535d4496788dfd15f325751e462cb6a702503e58e28f6dbc197e92919d9f"
+  },
+  "aperture:f11深景深": {
+    "image": "/cinema/626b9688b6d229ce.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-aperture-f11.61a495277f.png",
+    "sha256": "626b9688b6d229cea569bbe7aa479a1b3445873e73d0dee2bc409c99419e6ac4"
+  },
+  "aperture:自动": {
+    "image": "/cinema/5b950ad7100e2f28.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-auto-aperture.52157e8ff6.png",
+    "sha256": "5b950ad7100e2f283e8fc864d457c6912150d6bfe4caf89b3553a45e66ce12d1"
+  },
+  "aperture:f1.4浅景深": {
+    "image": "/cinema/eac138b1114a892e.png",
+    "source": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/lvweb/octo_web/static/image/camera-aperture-f14.b9d53e1bff.png",
+    "sha256": "eac138b1114a892e3c453ae276461247a2d1126795fcb58f39cca3366f586e3d"
+  }
+}

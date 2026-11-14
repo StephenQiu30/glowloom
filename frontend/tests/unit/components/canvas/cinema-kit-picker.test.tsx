@@ -1,3 +1,4 @@
+import { within } from "@testing-library/react";
 import { render, findFeedback } from "../../../feedback";
 import { afterEach, it, expect, vi } from "vitest";
 import { cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -58,7 +59,7 @@ it("motion selection is single and clear disables confirm", async () => {
       .getByRole("radio", { name: /侧面跟拍/ })
       .getAttribute("aria-checked"),
   ).toBe("true");
-  fireEvent.click(screen.getByText("清空选择"));
+  fireEvent.click(screen.getByRole("radio", { name: "侧面跟拍" }));
   expect((screen.getByText("确认") as HTMLButtonElement).disabled).toBe(true);
 });
 it("keeps all seven connection choices visible and explains camera video restriction", async () => {
@@ -93,4 +94,61 @@ it("keeps all seven connection choices visible and explains camera video restric
   expect(
     screen.getByRole("option", { name: /图片/ }).getAttribute("aria-disabled"),
   ).not.toBe("true");
+});
+
+it("previews a palette locally and confirms its typed colors without media URLs", async () => {
+  const confirm = vi.fn();
+  render(
+    <CinemaKitPicker kind="palette" onConfirm={confirm} onClose={vi.fn()} />,
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "沙漠史诗色调" }));
+  expect(
+    decodeURIComponent(
+      screen.getByRole("img", { name: "沙漠史诗色调" }).getAttribute("src") ??
+        "",
+    ),
+  ).toContain("/cinema/");
+  fireEvent.click(screen.getByRole("button", { name: "确认" }));
+  await waitFor(() => expect(confirm).toHaveBeenCalled());
+  const value = confirm.mock.calls[0][0];
+  expect(value.palette.preset).toBe("沙漠史诗色调");
+  expect(value.palette.colors).toHaveLength(8);
+  expect(JSON.stringify(value)).not.toContain("/cinema/");
+});
+
+it("cycles camera choices with the keyboard and confirms a typed camera intent", async () => {
+  const confirm = vi.fn();
+  render(
+    <CinemaKitPicker kind="camera" onConfirm={confirm} onClose={vi.fn()} />,
+  );
+  fireEvent.keyDown(
+    within(screen.getByRole("radiogroup", { name: "焦距" })).getByRole(
+      "radio",
+      { name: "自动" },
+    ),
+    {
+      key: "ArrowRight",
+    },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "确认" }));
+  await waitFor(() => expect(confirm).toHaveBeenCalled());
+  expect(confirm.mock.calls[0][0].camera.focal_length).toBe("24mm");
+});
+
+it("selects a style through the shared toggle group without exposing neighbor previews", async () => {
+  const confirm = vi.fn();
+  render(
+    <CinemaKitPicker kind="style" onConfirm={confirm} onClose={vi.fn()} />,
+  );
+  expect(screen.getAllByRole("img")).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "下一风格" }));
+  expect(
+    screen
+      .getByRole("radio", { name: "3D动画风" })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "确认" }));
+  await waitFor(() =>
+    expect(confirm).toHaveBeenCalledWith({ version: 1, style: "3D动画风" }),
+  );
 });

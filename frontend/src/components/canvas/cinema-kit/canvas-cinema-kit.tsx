@@ -160,7 +160,10 @@ export function CanvasCinemaKitNode({
         </>
       ) : (
         <>
-          <CinemaPreview />
+          <CinemaPreview
+            kind={kind}
+            name={kind === "style" ? kit.style : kit.motion}
+          />
           <p>{cinemaSummary(kit, kind)}</p>
         </>
       )}

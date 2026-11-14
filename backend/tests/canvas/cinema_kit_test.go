@@ -114,3 +114,38 @@ func TestCinemaKitCompilerPreservesAuthoredDocumentAndRejectsInvalidTypedIntent(
 		}
 	}
 }
+
+func TestCinemaKitOmniReferenceCompilesVisualPresetsWithoutPreviewMedia(t *testing.T) {
+	target := composerNode(t)
+	target.NodeType = "video_generation"
+	mode := "omni_reference"
+	target.Config.Draft.Composer.Mode = &mode
+	target.Config.Draft.Composer.Document.Content[0].Content = []prompt.Inline{{Type: "text", Text: "白色陶瓷杯"}}
+	target.Config.CinemaKit = &prompt.CinemaKit{
+		Version: 1,
+		Palette: &prompt.CinemaPalette{Name: "自定义配色", Colors: []string{"#FFFFFF", "#112233"}},
+		Style:   "复古对称美学",
+		Motion:  "迎面跟拍",
+	}
+	doc := domain.Document{ID: uuid.New(), ProjectID: uuid.New(), Nodes: []domain.Node{target}}
+	input, err := domain.GenerationInput(doc, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := input.Composer.Compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"白色陶瓷杯", "#FFFFFF", "#112233", "复古对称美学", "迎面跟拍"} {
+		if !strings.Contains(compiled.Prompt, want) {
+			t.Fatalf("compiled prompt omitted %q", want)
+		}
+	}
+	if *input.Composer.Mode != mode || len(compiled.Media) != 0 || len(input.Composer.References) != 0 || target.Config.Draft.Composer.CinemaKit != nil {
+		t.Fatal("visual presets changed mode, introduced preview media, or rewrote the authored draft")
+	}
+	target.Config.CinemaKit.Palette.Colors[0] = "#000000"
+	if input.Composer.CinemaKit.Palette.Colors[0] != "#FFFFFF" {
+		t.Fatal("compiled input did not freeze the selected palette")
+	}
+}
