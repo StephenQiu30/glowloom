@@ -12,10 +12,12 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -64,6 +66,26 @@ func TestCustomProviderTransactionsAndLogoMetadata(t *testing.T) {
 	}
 	require.Equal(t, results[0], results[1])
 	created := results[0]
+	var recorded []struct {
+		ID                  uuid.UUID
+		Topic, PartitionKey string
+		Payload             []byte
+	}
+	require.NoError(t, conn.DB.Raw(`SELECT id,topic,partition_key,payload FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->'data'->>'action'='provider.custom.connect' AND payload->'data'->>'request_id'=?`, input.RequestID.String()).Scan(&recorded).Error)
+	require.Len(t, recorded, 1)
+	event, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{Topic: recorded[0].Topic, Key: []byte(recorded[0].PartitionKey), Value: recorded[0].Payload})
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, event.ID)
+	require.Equal(t, recorded[0].ID, event.ID)
+	require.Equal(t, "provider.custom.connect", event.Action)
+	require.Equal(t, "provider", event.ObjectType)
+	require.Equal(t, created.ProviderID.String(), event.ObjectID)
+	require.Equal(t, input.RequestID.String(), event.RequestID)
+	require.Equal(t, actor.OrgID, event.OrgID)
+	require.Equal(t, &actor.ID, event.ActorID)
+	require.Empty(t, event.Before)
+	require.Empty(t, event.After)
+
 	receipt, err := catalog.NewConfigReceipts(store).Read(t.Context(), actor, "provider.custom.connect", uuid.Nil, input.RequestID)
 	require.NoError(t, err)
 	require.NotContains(t, string(receipt.Result), "credential")
@@ -129,7 +151,13 @@ func TestCustomProviderTransactionsAndLogoMetadata(t *testing.T) {
 	require.EqualValues(t, 2, updated.Revision)
 	again, err := service.SetLogo(t.Context(), actor, created.ProviderID, patch)
 	require.NoError(t, err)
-	require.Equal(t, updated, again)
+	// Receipt replay must reproduce every wire field. time.Location is an
+	// in-process representation detail and is not part of the JSON contract.
+	updatedJSON, err := json.Marshal(updated)
+	require.NoError(t, err)
+	replayJSON, err := json.Marshal(again)
+	require.NoError(t, err)
+	require.Equal(t, updatedJSON, replayJSON)
 	configAfter, err := configs.Read(t.Context(), actor, created.ProviderID)
 	require.NoError(t, err)
 	require.Equal(t, config.ID, configAfter.ID)

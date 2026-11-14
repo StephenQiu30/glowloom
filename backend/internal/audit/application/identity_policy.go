@@ -10,7 +10,7 @@ func NewIdentityActionParser() *Parser {
 // NewRecordedActionParser includes every action currently produced by the app.
 func NewRecordedActionParser() *Parser {
 	fields := identityActionFields()
-	for _, action := range []string{"preset.save", "preset.state", "preset.connect", "config.upgrade", "release.create", "release.activate"} {
+	for _, action := range []string{"preset.save", "preset.state", "preset.connect", "config.upgrade", "release.create", "release.activate", "provider.custom.connect", "provider.logo.set"} {
 		fields[action] = nil
 	}
 	fields["credential.set"] = []string{"last4"}

@@ -397,11 +397,19 @@ function ConnectForm({
         onValueChange={(value) => changeKind(value as "preset" | "custom")}
         className="min-h-0"
       >
-        <TabsList aria-label="供应商接入方式">
-          <TabsTrigger value="preset" disabled={busy || uploading || !!pending}>
+        <TabsList aria-label="供应商接入方式" className="max-md:h-12">
+          <TabsTrigger
+            value="preset"
+            disabled={busy || uploading || !!pending}
+            className="max-md:min-h-11"
+          >
             预设
           </TabsTrigger>
-          <TabsTrigger value="custom" disabled={busy || uploading || !!pending}>
+          <TabsTrigger
+            value="custom"
+            disabled={busy || uploading || !!pending}
+            className="max-md:min-h-11"
+          >
             自定义
           </TabsTrigger>
         </TabsList>

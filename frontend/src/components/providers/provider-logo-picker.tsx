@@ -60,7 +60,7 @@ export function ProviderLogoPicker({
     }
   }
   return (
-    <Field className="mt-4">
+    <Field className="mt-4 max-md:[&_button]:min-h-11">
       <FieldLabel htmlFor={id}>Logo（可选）</FieldLabel>
       <div className="flex flex-wrap items-center gap-3">
         <ProviderLogo adapterKey={adapterKey} logoAssetID={value} iconOnly />

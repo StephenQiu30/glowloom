@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -37,7 +38,7 @@ func validateProviderLogo(tx *gorm.DB, actor identityapp.Principal, id *uuid.UUI
 
 // CreateCustomProvider atomically saves an empty editing snapshot and receipt.
 func (s *Store) CreateCustomProvider(ctx context.Context, actor identityapp.Principal, input application.CustomProviderInput) (application.PresetConnection, error) {
-	return catalogMutation(ctx, s.db, s.actors, actor, "provider.custom.connect", uuid.Nil, input.RequestID, input, func(tx *gorm.DB) (application.PresetConnection, error) {
+	return catalogRequest(ctx, s.db, s.actors, actor, "provider.custom.connect", uuid.Nil, input.RequestID, input, false, func(tx *gorm.DB) (application.PresetConnection, error) {
 		if err := validateProviderLogo(tx, actor, input.LogoAssetID); err != nil {
 			return application.PresetConnection{}, err
 		}
@@ -55,6 +56,13 @@ func (s *Store) CreateCustomProvider(ctx context.Context, actor identityapp.Prin
 			return application.PresetConnection{}, err
 		}
 		if err := tx.Exec(`UPDATE catalog.provider SET current_config_version_id=? WHERE id=?`, configID, providerID).Error; err != nil {
+			return application.PresetConnection{}, err
+		}
+		event, err := customProviderCreatedAudit(actor, providerID, input.RequestID)
+		if err != nil {
+			return application.PresetConnection{}, err
+		}
+		if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, event.ID, event.Topic, event.PartitionKey, string(event.Payload)).Error; err != nil {
 			return application.PresetConnection{}, err
 		}
 		catalog := domain.ModelCandidateCatalog{Version: configID.String(), Models: []domain.ModelCandidatePreset{}}
@@ -90,4 +98,17 @@ func (s *Store) SetProviderLogo(ctx context.Context, actor identityapp.Principal
 		item, err := saved.item()
 		return item.Provider, err
 	})
+}
+
+// customProviderCreatedAudit names the created provider independently of the
+// request receipt's intentionally empty target. Existing events remain immutable.
+func customProviderCreatedAudit(actor identityapp.Principal, providerID, requestID uuid.UUID) (identityapp.OutboxEvent, error) {
+	eventID := uuid.New()
+	payload, err := json.Marshal(map[string]any{"event_id": eventID, "event_type": "glowloom.audit.recorded.v1", "occurred_at": time.Now().UTC(), "org_id": actor.OrgID,
+		"actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": eventID},
+		"data": map[string]any{"action": "provider.custom.connect", "object": map[string]any{"type": "provider", "id": providerID}, "request_id": requestID}})
+	if err != nil {
+		return identityapp.OutboxEvent{}, err
+	}
+	return identityapp.OutboxEvent{ID: eventID, Topic: "glowloom.audit.recorded.v1", PartitionKey: actor.OrgID.String(), Payload: payload}, nil
 }

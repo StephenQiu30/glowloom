@@ -52,7 +52,7 @@ export function ConnectionLogoEditor({
   );
   const locked = disabled || mutation.busy || !!mutation.pending;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 max-md:[&_button]:min-h-11">
       <div className="flex items-center gap-3">
         <ProviderLogo
           adapterKey={provider.adapter_key}
