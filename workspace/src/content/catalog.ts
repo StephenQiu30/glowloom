@@ -255,6 +255,14 @@ export async function validateLinks(
     for (const target of doc.links) {
       if (isExternal(target)) continue;
       const [pathname, anchor] = target.split("#");
+      if (decodeURIComponent(pathname).startsWith("/")) {
+        errors.push({
+          documentId: doc.id,
+          target,
+          reason: "nonportable_local_link",
+        });
+        continue;
+      }
       const path = pathname
         ? resolve(
             dirname(resolve(snapshot.workspaceRoot, doc.path)),

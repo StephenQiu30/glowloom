@@ -159,3 +159,22 @@ it("invalidates the snapshot when a document alias changes without changing its 
     ).contentDigest,
   ).not.toBe(first.contentDigest);
 });
+it("rejects machine-absolute knowledge links even when the file exists locally", async () => {
+  const root = await fixture();
+  const absolute = join(root, "workspace/content/b.md");
+  await writeFile(
+    join(root, "workspace/content/a.md"),
+    "# Entry\n\n[Local evidence](" + absolute + ")",
+  );
+  const snapshot = await loadSnapshot({
+    workspaceRoot: join(root, "workspace"),
+    scope: "internal",
+  });
+  expect(await validateLinks(snapshot)).toEqual([
+    expect.objectContaining({
+      documentId: "requirement-1",
+      target: absolute,
+      reason: "nonportable_local_link",
+    }),
+  ]);
+});
