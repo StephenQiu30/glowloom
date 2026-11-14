@@ -1,5 +1,6 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { toast } from "@/components/feedback/notification";
 import { useRef, useState } from "react";
 import {
   ChevronLeft,
@@ -101,7 +102,7 @@ export function CinemaKitPicker({
       await onConfirm(readCinemaKit(value));
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "设置尚未保存");
+      toast.error(e instanceof Error ? e.message : "设置尚未保存");
     } finally {
       setPending(false);
     }

@@ -104,4 +104,21 @@ func TestCinemaKitPostgresYjsSaveEditReadAndDetach(t *testing.T) {
 	if err != nil || cleared.CinemaKit != nil || find(detached, target.ID).InputRevision != find(moved, target.ID).InputRevision+1 {
 		t.Fatal("detach did not invalidate", cleared, err)
 	}
+
+	// A resource with no local settings must accept its first preset through the
+	// same binary update, projection CAS and immutable input path as later edits.
+	local := &prompt.CinemaKit{Version: 1, Style: "复古对称美学"}
+	localValue, _ := json.Marshal(map[string]any{"cinema_kit": local})
+	submit(domain.Operation{Type: "set", NodeID: target.ID, Path: []string{"config", "cinema_kit"}, ExpectedExists: ptr(false), Value: localValue})
+	withLocal := read()
+	localInput, err := readInput(withLocal)
+	if err != nil || localInput.CinemaKit == nil || localInput.CinemaKit.Style != local.Style || find(withLocal, target.ID).InputRevision != find(detached, target.ID).InputRevision+1 {
+		t.Fatal("first local preset was not saved and frozen", localInput, err)
+	}
+	submit(domain.Operation{Type: "set", NodeID: target.ID, Path: []string{"config", "cinema_kit"}, ExpectedExists: ptr(true), Expected: localValue, Value: raw(`{}`)})
+	withoutLocal := read()
+	removedInput, err := readInput(withoutLocal)
+	if err != nil || removedInput.CinemaKit != nil || find(withoutLocal, target.ID).Config.CinemaKit != nil {
+		t.Fatal("local preset clear was not saved", removedInput, err)
+	}
 }

@@ -42,6 +42,24 @@ it("keeps a failed save open with the draft available for retry", async () => {
   expect((await findFeedback()).textContent).toBe("保存未确认");
   expect(close).not.toHaveBeenCalled();
 });
+it("reports a rejected save after the canvas replaces the editor", async () => {
+  const pending = Promise.withResolvers<void>();
+  const close = vi.fn();
+  const { rerender } = render(
+    <CinemaKitPicker
+      kind="style"
+      onConfirm={() => pending.promise}
+      onClose={close}
+    />,
+  );
+  fireEvent.click(screen.getByText("确认"));
+  rerender(<div>服务器画布</div>);
+  pending.reject(new Error("设置未保存，请重试"));
+  expect((await findFeedback("设置未保存，请重试")).textContent).toBe(
+    "设置未保存，请重试",
+  );
+  expect(close).not.toHaveBeenCalled();
+});
 it("motion selection is single and clear disables confirm", async () => {
   render(
     <CinemaKitPicker kind="motion" onConfirm={vi.fn()} onClose={vi.fn()} />,

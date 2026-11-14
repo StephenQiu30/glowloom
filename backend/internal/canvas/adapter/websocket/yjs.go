@@ -302,6 +302,8 @@ func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *web
 				}
 				if receipt.Status == application.YjsReceiptStatusAccepted {
 					h.Notify(id)
+				} else {
+					log.Warn("canvas.save.rejected", "update_id", receipt.UpdateID, "epoch", receipt.Epoch, "code", receipt.Code, "commit_seq", receipt.CommitSeq)
 				}
 				if !send(packet{Type: "yjs_ack", OpID: msg.OpID, YjsReceipt: receipt}) {
 					return
