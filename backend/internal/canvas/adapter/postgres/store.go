@@ -401,7 +401,7 @@ func receipt(tx *gorm.DB, actor uuid.UUID, key, hash string, status int, respons
 		return err
 	}
 	return tx.Exec(`INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at) VALUES(?,?,?,?,?,?::jsonb,now()+interval '24 hours')
-	 ON CONFLICT(actor_id,idem_key) DO UPDATE SET request_hash=excluded.request_hash,status_code=excluded.status_code,response_body=excluded.response_body,expires_at=excluded.expires_at,is_delete=false,update_time=now()`, uuid.New(), actor, key, hash, status, string(body)).Error
+	 ON CONFLICT(service_owner,actor_id,idem_key) DO UPDATE SET request_hash=excluded.request_hash,status_code=excluded.status_code,response_body=excluded.response_body,expires_at=excluded.expires_at,is_delete=false,update_time=now()`, uuid.New(), actor, key, hash, status, string(body)).Error
 }
 func changed(tx *gorm.DB, a identityapp.Principal, id, p uuid.UUID, revision int64) error {
 	eventID := uuid.New()

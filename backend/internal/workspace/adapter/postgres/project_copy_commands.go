@@ -98,7 +98,7 @@ func (s *ProjectCopyStore) Change(ctx context.Context, actor identityapp.Princip
 		if err := tx.Exec(`INSERT INTO workspace.project_copy_command(id,copy_job_id,actor_id,idem_key,request_sha256,response_body) VALUES(?,?,?,?,?,?::jsonb)`, uuid.New(), saved.ID, actor.ID, key, fingerprint, string(response)).Error; err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at) VALUES(?,?,?,?,202,?::jsonb,statement_timestamp()+interval '24 hours') ON CONFLICT(actor_id,idem_key) DO UPDATE SET request_hash=excluded.request_hash,status_code=202,response_body=excluded.response_body,expires_at=excluded.expires_at,is_delete=false,update_time=statement_timestamp()`, uuid.New(), actor.ID, key.String(), fingerprint, string(response)).Error
+		return tx.Exec(`INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at) VALUES(?,?,?,?,202,?::jsonb,statement_timestamp()+interval '24 hours') ON CONFLICT(service_owner,actor_id,idem_key) DO UPDATE SET request_hash=excluded.request_hash,status_code=202,response_body=excluded.response_body,expires_at=excluded.expires_at,is_delete=false,update_time=statement_timestamp()`, uuid.New(), actor.ID, key.String(), fingerprint, string(response)).Error
 	})
 	return saved, err
 }

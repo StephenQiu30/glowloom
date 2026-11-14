@@ -22,7 +22,17 @@ SRC-GO-MS-03 的先提交推送已完成：首切片 `25c2dfbff` 与退休分区
 
 Creation 验证：受影响七包 race、全后端 vet/build、增量 golangci-lint、协议临时重生成的两文件逐字节比较、两套 Compose 实际解析通过；客户端及过载契约额外重复三轮通过。Creation 调用路径 govulncheck 无可达漏洞（required modules 另有一项未被导入/调用）。独立镜像构建成功，初次独立容器在非 root/只读根/有界临时盘下双探针 204、Docker healthy、SIGTERM 退出码 0；最终源码镜像也已重新构建成功，重建后再次烟测因清理命令的安全检查未执行，未新建容器或绕过检查。全量 race 仍仅 `tests/agentboundary`、`tests/canvas` 缺显式隔离测试 DSN 而失败；未复用业务库。未启动整套 Compose、未部署生产证书、未提交推送。
 
-未完成项：隔离 PostgreSQL 的旧租约恢复、真实撤权/关闭锁竞争、受限角色验证、Media 镜像构建/整套 Compose/角色故障注入、真实登录和业务接受。本轮未连接业务数据库、未部署、未收费。Media 最终写入仍依赖同事务 Identity/Creation 锁，不能把端口或一次 RPC 预检当作独立授权屏障。下一步先在隔离 PG 核实上传提交与真实身份/团队/关闭操作的双向竞争，再定义持久准入/排空/未知结果协议，证明等价后才移动写入权；其余 owner/跨域引用/任务事件清点仍未完成，不把本轮责任收敛算作四域完成。
+SRC-GO-MS-05 要求先提交 main 并推送、再落实完整拆分。第一阶段已完成：`e3fa8fb86` 的上传 owner 切片及 `69a1fef4d` 的 Media/Creation 独立计算服务均已到 main/origin/main；前端与 Workspace 并行改动未混入提交。后续完整拆分按设计44 §7.19、PRD30 AC-GMS-12～16、Plan39 T-GMS-12～16 实施，不能把该次推送当作四域写入权已迁出。
+
+T-GMS-12 的技术记录基础已实现：四个独立数据库能力角色不继承全库 app；共享任务、Outbox/Inbox、DLQ、重放审计、幂等及审计记录由实际数据库身份派生 owner，唯一键/冲突目标、FORCE RLS、分区直访和列级权限同步隔离，不信任 GUC 或调用方传 owner。相关 SQL 只进入 schema.sql，CI 离线初始化受限角色与独立测试库；业务表/跨域 FK、触发器及全部密钥责任尚未完成迁移，不能把技术记录隔离称作整个数据库所有权已独立。
+
+T-GMS-13 的持久屏障基础已实现：authority 头、协调历史、逐 writer ACK 和准入账本；writer 本地命令、单调围栏、最终事务 Guard/Complete、冻结与按原身份恢复。私有 `glowloom.coordination.WriterFence` 使用唯一无数字版本的协议源，固定四个 writer、按 issuer/目标分离令牌、期限和有界消息；控制端核验实际数据库能力与固定 audience，仅传 W3C 追踪，不接受用户身份透传或自动重放。回执保留精确大整数，线级 1MiB/JSONB 显示 2MiB，限制数值指数放大、不可表示文本和嵌套。该协议尚未接入全部生产业务，不替代账号/精确会话、成员或项目政策判定；原同事务锁仍保留。
+
+本轮验证：真实隔离 PG18/受限 LOGIN 与真实 TCP RPC 覆盖写入先/撤权先、回执与 Outbox 同回滚、丢 ACK 后重建协调者/客户端并补齐原协调、旧 epoch/冻结命令不复活、错误数据库角色不得冒充 writer、错误身份/audience/回执拒绝及取消。最终 12 包 race 通过，Workspace 直接受影响的 8 项幂等/跨进程/失败回滚测试另跑 3 轮通过；全后端 vet/build、增量 golangci-lint 0 issues、围栏调用路径 govulncheck、三份协议的六个生成文件逐字节比较通过；Workspace 229 份文档检查通过。新库均由 schema.sql/data.sql 离线初始化，测试 PG 保留于 loopback 52080 以便复现，未连接业务库。
+
+验证边界：首次广泛 PG 回归并非全绿。Prompt 的固定 receipt 库名守卫已按原夹具新建隔离库后完整重跑通过；Workspace 全包仍有失败，包括 HEAD 已使用无上限预算而旧断言期望 0、缺对象存储/免费模型夹具等，未改既有业务或断言使其假通过。定点通过不能代替 Workspace 全包接受；本轮未宣称全后端 race、生产 mTLS 部署、整套 Compose 或全部 CASE 已接受。
+
+完整拆分仍未完成：账号/注册/注销与团队治理、项目/钱包准备、Agent 承诺、Execution 供应商/资金/交付、Media 对象 pin/引用/删除、完整四域入口和 Gateway 唯一路由及最终角色切换仍须接入并验收；旧租约、真实业务撤权/关闭、供应商未知结果、对象引用与受控切换的端到端证明不能只由基础测试替代。本次后续基础改动尚未追加提交推送，未部署、未收费、未操作存量业务库。
 
 <a id="workspace-20261114"></a>
 

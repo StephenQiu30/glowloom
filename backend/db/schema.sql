@@ -1,15 +1,39 @@
 -- 当前 PostgreSQL 完整结构与基础数据。开发、CI 和部署使用同一空库定义。
--- PostgreSQL 18。由结构所有者执行；预建 glowloom_app NOLOGIN NOSUPERUSER 与受限 glowloom_agent LOGIN（凭据离线设置）。
+-- PostgreSQL 18。由结构所有者执行；管理员离线预建 glowloom_app、四域 NOLOGIN 角色与受限 glowloom_agent LOGIN。
+-- 四域角色不得拥有对象/继承 glowloom_app；普通 LOGIN 只能加入单一 owner，凭据离线设置。
 -- psql "$GLOWLOOM_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql -f backend/db/data.sql
 -- 禁止对已有业务库重放本文件。
 
 DO $$
+DECLARE
+  runtime_role text;
 BEGIN
+  FOREACH runtime_role IN ARRAY ARRAY['glowloom_identity','glowloom_creation','glowloom_media','glowloom_execution'] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_roles WHERE rolname = runtime_role
+      AND NOT (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
+    ) THEN
+      RAISE EXCEPTION '% must be a pre-provisioned restricted NOLOGIN role', runtime_role;
+    END IF;
+    IF pg_has_role(runtime_role, 'glowloom_app', 'MEMBER') OR EXISTS (
+      SELECT 1 FROM pg_roles WHERE rolname IN ('glowloom_identity','glowloom_creation','glowloom_media','glowloom_execution')
+      AND rolname <> runtime_role AND pg_has_role(runtime_role, oid, 'MEMBER')
+    ) THEN
+      RAISE EXCEPTION '% must not inherit another runtime owner or glowloom_app', runtime_role;
+    END IF;
+    IF current_user = runtime_role OR pg_has_role(runtime_role, current_user, 'MEMBER') THEN
+      RAISE EXCEPTION '% must not inherit the schema initializer', runtime_role;
+    END IF;
+  END LOOP;
   IF NOT EXISTS (
     SELECT 1 FROM pg_roles
-    WHERE rolname = 'glowloom_app' AND NOT rolcanlogin AND NOT rolsuper
+    WHERE rolname = 'glowloom_app'
+      AND NOT (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
   ) THEN
-    RAISE EXCEPTION 'glowloom_app must be a pre-provisioned NOLOGIN, NOSUPERUSER role';
+    RAISE EXCEPTION 'glowloom_app must be a pre-provisioned restricted NOLOGIN role';
+  END IF;
+  IF current_user = 'glowloom_app' OR pg_has_role('glowloom_app',current_user,'MEMBER') THEN
+    RAISE EXCEPTION 'glowloom_app must not inherit the schema initializer';
   END IF;
   IF EXISTS (
     SELECT 1 FROM pg_namespace
@@ -61,6 +85,38 @@ CREATE SCHEMA workspace;
 CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
+
+-- Trusted service identity comes only from database memberships, never a GUC.
+-- Offline schema owner/superuser imports retain legacy ownership. Ordinary
+-- LOGINs (including NOINHERIT) must have exactly one capability; SET ROLE cannot
+-- conceal a second capability held by the authenticated session identity.
+CREATE FUNCTION infra.runtime_owner() RETURNS text
+LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path = pg_catalog AS $$
+DECLARE
+  owner_count integer;
+  owner_name text;
+  offline_session boolean;
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND rolsuper)
+     OR current_user = (SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname='infra') THEN
+    RETURN 'legacy';
+  END IF;
+  SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=session_user AND rolsuper)
+     OR session_user = (SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname='infra')
+    INTO offline_session;
+  SELECT count(*), min(CASE WHEN rolname='glowloom_app' THEN 'legacy' ELSE substr(rolname,10) END)
+    INTO owner_count, owner_name
+    FROM pg_roles
+    WHERE rolname IN ('glowloom_app','glowloom_identity','glowloom_creation','glowloom_media','glowloom_execution')
+      AND (pg_has_role(current_user,oid,'MEMBER')
+           OR (NOT offline_session AND pg_has_role(session_user,oid,'MEMBER')));
+  IF owner_count <> 1 THEN
+    RAISE EXCEPTION 'runtime owner requires exactly one database capability' USING ERRCODE='42501';
+  END IF;
+  RETURN owner_name;
+END $$;
+REVOKE ALL ON FUNCTION infra.runtime_owner() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION infra.runtime_owner() TO glowloom_app,glowloom_identity,glowloom_creation,glowloom_media,glowloom_execution;
 
 CREATE FUNCTION audit.reject_audit_mutation() RETURNS trigger
     LANGUAGE plpgsql
@@ -371,6 +427,7 @@ END;
 $$;
 
 CREATE TABLE audit.audit_log (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
     id uuid NOT NULL,
     org_id uuid NOT NULL,
     project_id uuid,
@@ -1433,6 +1490,7 @@ CREATE TABLE identity.user_session (
 );
 
 CREATE TABLE infra.idempotency_record (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
     id uuid NOT NULL,
     actor_id uuid NOT NULL,
     idem_key text NOT NULL,
@@ -1446,6 +1504,7 @@ CREATE TABLE infra.idempotency_record (
 );
 
 CREATE TABLE infra.outbox (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
     id uuid NOT NULL,
     topic text NOT NULL,
     partition_key text NOT NULL,
@@ -1465,6 +1524,7 @@ CREATE TABLE infra.outbox (
 PARTITION BY RANGE (create_time);
 
 CREATE TABLE infra.outbox_dead_letter (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
     event_id uuid NOT NULL,
     event_create_time timestamptz NOT NULL,
     topic text NOT NULL,
@@ -1475,11 +1535,13 @@ CREATE TABLE infra.outbox_dead_letter (
     error_class text NOT NULL,
     failed_at timestamptz NOT NULL,
     replayed_at timestamptz,
-    PRIMARY KEY (event_id, event_create_time)
+    PRIMARY KEY (service_owner, event_id, event_create_time)
 );
 
 CREATE TABLE infra.outbox_dead_letter_audit (
-    id uuid PRIMARY KEY,
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
+    id uuid NOT NULL,
+    PRIMARY KEY (service_owner, id),
     event_id uuid NOT NULL,
     event_create_time timestamptz NOT NULL,
     operator_id uuid NOT NULL,
@@ -1488,6 +1550,7 @@ CREATE TABLE infra.outbox_dead_letter_audit (
 );
 
 CREATE TABLE infra.processed_event (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
     id uuid NOT NULL,
     consumer text NOT NULL,
     event_id uuid NOT NULL,
@@ -3422,7 +3485,7 @@ CREATE TABLE workspace.team_member (
 );
 
 ALTER TABLE ONLY audit.audit_log
-    ADD CONSTRAINT audit_log_pkey PRIMARY KEY (id, create_time);
+    ADD CONSTRAINT audit_log_pkey PRIMARY KEY (service_owner, id, create_time);
 
 ALTER TABLE ONLY bible.character_confirmation
     ADD CONSTRAINT character_confirmation_entry_id_revision_key UNIQUE (entry_id, revision);
@@ -3767,19 +3830,19 @@ ALTER TABLE ONLY identity.user_session
     ADD CONSTRAINT user_session_token_hash_key UNIQUE (token_hash);
 
 ALTER TABLE ONLY infra.idempotency_record
-    ADD CONSTRAINT idempotency_record_pkey PRIMARY KEY (id);
+    ADD CONSTRAINT idempotency_record_pkey PRIMARY KEY (service_owner, id);
 
 ALTER TABLE ONLY infra.outbox
-    ADD CONSTRAINT outbox_pkey PRIMARY KEY (id, create_time);
+    ADD CONSTRAINT outbox_pkey PRIMARY KEY (service_owner, id, create_time);
 
 ALTER TABLE ONLY infra.processed_event
-    ADD CONSTRAINT processed_event_pkey PRIMARY KEY (id);
+    ADD CONSTRAINT processed_event_pkey PRIMARY KEY (service_owner, id);
 
 ALTER TABLE ONLY infra.idempotency_record
-    ADD CONSTRAINT uq_idempotency_record_natural UNIQUE (actor_id, idem_key);
+    ADD CONSTRAINT uq_idempotency_record_natural UNIQUE (service_owner, actor_id, idem_key);
 
 ALTER TABLE ONLY infra.processed_event
-    ADD CONSTRAINT uq_processed_event_natural UNIQUE (consumer, event_id);
+    ADD CONSTRAINT uq_processed_event_natural UNIQUE (service_owner, consumer, event_id);
 
 ALTER TABLE ONLY media.library_command
     ADD CONSTRAINT library_command_actor_id_idem_key_key UNIQUE (actor_id, idem_key);
@@ -7215,6 +7278,7 @@ ALTER TABLE agent_business.run_authorization ADD COLUMN model_selection jsonb NO
 
 -- Durable business tasks.
 CREATE TABLE infra.task_work (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
     kind text NOT NULL,
     business_id text NOT NULL,
     next_run_at timestamptz NOT NULL,
@@ -7227,7 +7291,7 @@ CREATE TABLE infra.task_work (
     failed_at timestamptz,
     stop_requested_at timestamptz,
     completed_at timestamptz,
-    PRIMARY KEY (kind, business_id),
+    PRIMARY KEY (service_owner, kind, business_id),
     CHECK (kind <> '' AND business_id <> ''),
     CHECK ((owner IS NULL) = (lease_until IS NULL))
 );
@@ -8203,3 +8267,213 @@ CREATE TABLE dev_workspace.executor_binding (
 );
 REVOKE ALL ON ALL TABLES IN SCHEMA dev_workspace FROM PUBLIC;
 GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA dev_workspace TO glowloom_workspace;
+
+-- Writer-local final-commit barriers. These are technical records, not an
+-- alternative source of account, session or project policy. Only authenticated
+-- issuer control adapters may install decisions; effects/receipts share the
+-- writer's existing local business transaction. No TTL deletes responsibility.
+CREATE TABLE infra.writer_fence (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
+    issuer text NOT NULL,
+    authority_kind text NOT NULL,
+    authority_id uuid NOT NULL,
+    epoch bigint NOT NULL CHECK (epoch > 0),
+    blocked boolean NOT NULL,
+    coordination_id uuid NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    PRIMARY KEY (service_owner, issuer, authority_kind, authority_id),
+    CHECK ((issuer='identity' AND authority_kind IN ('account','session')) OR
+           (issuer='creation' AND authority_kind IN ('scope','project','agent_grant')))
+);
+
+CREATE TABLE infra.writer_command (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
+    id uuid NOT NULL,
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    action varchar(128) NOT NULL CHECK (action ~ '^[a-z0-9._-]+$'),
+    authority_set_sha256 text NOT NULL CHECK (authority_set_sha256 ~ '^[0-9a-f]{64}$'),
+    authorities jsonb NOT NULL CHECK (jsonb_typeof(authorities)='array' AND jsonb_array_length(authorities) BETWEEN 1 AND 16),
+    state text NOT NULL CHECK (state IN ('admitted','committed','frozen')),
+    receipt jsonb,
+    created_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    PRIMARY KEY (service_owner, id),
+    CHECK ((state='committed') = (receipt IS NOT NULL)),
+    -- The adapter bounds canonical JSON to 1MiB. PostgreSQL JSONB display adds
+    -- separators/spaces, so this defensive storage cap allows that expansion.
+    CHECK (receipt IS NULL OR (jsonb_typeof(receipt)='object' AND octet_length(receipt::text)<=2097152))
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON infra.writer_fence,infra.writer_command TO glowloom_app;
+
+-- Issuer-local durable coordination. Pending open AND block controls close
+-- admission locally; only all four exact writer ACKs permit completion. Policy
+-- checks remain in the issuer's existing business transaction, not these tables.
+CREATE TABLE infra.authority_head (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('identity','creation')),
+    issuer text NOT NULL CHECK (issuer = service_owner),
+    authority_kind text NOT NULL,
+    authority_id uuid NOT NULL,
+    epoch bigint NOT NULL CHECK (epoch > 0),
+    coordination_id uuid NOT NULL,
+    blocked boolean NOT NULL DEFAULT true,
+    complete boolean NOT NULL DEFAULT false,
+    updated_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    PRIMARY KEY (service_owner, issuer, authority_kind, authority_id),
+    CHECK (complete OR blocked),
+    CHECK ((issuer='identity' AND authority_kind IN ('account','session')) OR
+           (issuer='creation' AND authority_kind IN ('scope','project','agent_grant')))
+);
+
+CREATE TABLE infra.authority_coordination (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('identity','creation')),
+    coordination_id uuid NOT NULL,
+    issuer text NOT NULL CHECK (issuer = service_owner),
+    authority_kind text NOT NULL,
+    authority_id uuid NOT NULL,
+    expected_epoch bigint NOT NULL CHECK (expected_epoch >= 0 AND expected_epoch < 9223372036854775807),
+    epoch bigint NOT NULL CHECK (epoch = expected_epoch + 1),
+    blocked boolean NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    PRIMARY KEY (service_owner, coordination_id),
+    UNIQUE (service_owner, issuer, authority_kind, authority_id, epoch),
+    FOREIGN KEY (service_owner, issuer, authority_kind, authority_id)
+        REFERENCES infra.authority_head(service_owner, issuer, authority_kind, authority_id)
+);
+
+CREATE TABLE infra.authority_acknowledgement (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('identity','creation')),
+    coordination_id uuid NOT NULL,
+    writer text NOT NULL CHECK (writer IN ('identity','creation','media','execution')),
+    created_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    PRIMARY KEY (service_owner, coordination_id, writer),
+    FOREIGN KEY (service_owner, coordination_id)
+        REFERENCES infra.authority_coordination(service_owner, coordination_id)
+);
+
+CREATE TABLE infra.authority_admission (
+    service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('identity','creation')),
+    id uuid NOT NULL,
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    action varchar(128) NOT NULL CHECK (action ~ '^[a-z0-9._-]+$'),
+    authority_set_sha256 text NOT NULL CHECK (authority_set_sha256 ~ '^[0-9a-f]{64}$'),
+    authorities jsonb NOT NULL CHECK (jsonb_typeof(authorities)='array' AND jsonb_array_length(authorities) BETWEEN 1 AND 16),
+    target_writer text NOT NULL CHECK (target_writer IN ('identity','creation','media','execution')),
+    created_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    PRIMARY KEY (service_owner, id)
+);
+-- History, ACKs and admissions are append-only under every runtime role. No
+-- UPDATE/DELETE privilege can clear unknown responsibility or reset an old ID.
+GRANT SELECT,INSERT ON infra.authority_head,infra.authority_coordination,
+    infra.authority_acknowledgement,infra.authority_admission TO glowloom_app;
+GRANT UPDATE(epoch,coordination_id,blocked,complete,updated_at)
+    ON infra.authority_head TO glowloom_app;
+
+-- Stage B: database-enforced technical-record ownership. The old runtime is
+-- still the sole writer of unmigrated business paths, but only of legacy rows.
+-- Applying this policy to existing children also protects accidental direct
+-- grants. Future offline partitions receive no runtime ACL/default privileges.
+DO $$
+DECLARE
+  target regclass;
+  column_names text;
+BEGIN
+  FOR target IN
+    SELECT oid FROM pg_class WHERE oid IN (
+      'audit.audit_log'::regclass,'infra.idempotency_record'::regclass,
+      'infra.outbox'::regclass,'infra.outbox_dead_letter'::regclass,
+      'infra.outbox_dead_letter_audit'::regclass,'infra.processed_event'::regclass,
+      'infra.task_work'::regclass,'infra.writer_fence'::regclass,'infra.writer_command'::regclass,
+      'infra.authority_head'::regclass,'infra.authority_coordination'::regclass,
+      'infra.authority_acknowledgement'::regclass,'infra.authority_admission'::regclass
+    ) OR oid IN (
+      SELECT inhrelid FROM pg_inherits WHERE inhparent IN ('audit.audit_log'::regclass,'infra.outbox'::regclass)
+    )
+  LOOP
+    EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', target);
+    EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY', target);
+    EXECUTE format('CREATE POLICY owner_isolation ON %s USING (service_owner = infra.runtime_owner()) WITH CHECK (service_owner = infra.runtime_owner())', target);
+    -- Preserve the original mutable columns, never grant UPDATE(service_owner).
+    IF has_table_privilege('glowloom_app',target,'UPDATE') THEN
+      SELECT string_agg(quote_ident(attname),',' ORDER BY attnum) INTO column_names
+        FROM pg_attribute WHERE attrelid=target AND attnum>0 AND NOT attisdropped AND attname<>'service_owner';
+      EXECUTE format('REVOKE UPDATE ON %s FROM glowloom_app',target);
+      EXECUTE format('GRANT UPDATE(%s) ON %s TO glowloom_app',column_names,target);
+    END IF;
+  END LOOP;
+END $$;
+
+-- Reuse the final legacy ACL as the mutation contract, including column-level
+-- UPDATE restrictions. This is initialization-time GRANT only, not runtime DDL
+-- or role inheritance. No schema-wide business grants and no child-table grants.
+DO $$
+DECLARE
+  owned_table record;
+  table_privilege text;
+  column_grant record;
+  runtime_role text;
+BEGIN
+  FOR owned_table IN
+    SELECT c.oid,n.nspname,c.relname,
+      CASE WHEN n.nspname='identity' THEN 'identity'
+           WHEN n.nspname IN ('workspace','canvas','script','bible','subject') THEN 'creation'
+           WHEN n.nspname IN ('media','mediatool') THEN 'media'
+           WHEN n.nspname IN ('operation','catalog','billing') THEN 'execution'
+           WHEN n.nspname='agent_business' AND c.relname='operation_commitment' THEN 'execution'
+           WHEN n.nspname='agent_business' THEN 'creation'
+           ELSE NULL END AS domain_owner
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname IN ('identity','workspace','canvas','script','bible','subject','media','mediatool','operation','catalog','billing','agent_business','infra','audit')
+      AND c.relkind IN ('r','p','v') AND NOT c.relispartition
+  LOOP
+    FOREACH runtime_role IN ARRAY CASE WHEN owned_table.domain_owner IS NULL
+      THEN ARRAY['glowloom_identity','glowloom_creation','glowloom_media','glowloom_execution']
+      ELSE ARRAY['glowloom_' || owned_table.domain_owner] END
+    LOOP
+      EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I',owned_table.nspname,runtime_role);
+      FOREACH table_privilege IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE'] LOOP
+        IF has_table_privilege('glowloom_app',owned_table.oid,table_privilege) THEN
+          EXECUTE format('GRANT %s ON %s TO %I',table_privilege,owned_table.oid::regclass,runtime_role);
+        END IF;
+      END LOOP;
+      FOR column_grant IN
+        SELECT a.attname,acl.privilege_type
+        FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+        WHERE a.attrelid=owned_table.oid AND a.attnum>0 AND NOT a.attisdropped
+          AND acl.grantee='glowloom_app'::regrole
+          AND acl.privilege_type IN ('SELECT','INSERT','UPDATE')
+      LOOP
+        EXECUTE format('GRANT %s(%I) ON %s TO %I',column_grant.privilege_type,column_grant.attname,owned_table.oid::regclass,runtime_role);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+END $$;
+
+-- Functions are not a cross-owner back door. Keep legacy's existing EXECUTE
+-- rights, remove PUBLIC access, and expose only same-domain SECURITY INVOKER
+-- functions to the new roles. Existing cross-domain triggers/FKs are deliberately
+-- not declared usable: their durable handoff belongs to later stages.
+DO $$
+DECLARE
+  owned_function record;
+  legacy_execute boolean;
+BEGIN
+  FOR owned_function IN
+    SELECT p.oid,p.prosecdef,n.nspname,
+      CASE WHEN n.nspname='identity' THEN 'glowloom_identity'
+           WHEN n.nspname IN ('workspace','canvas','script','bible','subject','agent_business') THEN 'glowloom_creation'
+           WHEN n.nspname IN ('media','mediatool') THEN 'glowloom_media'
+           WHEN n.nspname IN ('operation','catalog','billing') THEN 'glowloom_execution'
+           ELSE NULL END AS runtime_role
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname IN ('identity','workspace','canvas','script','bible','subject','agent_business','media','mediatool','operation','catalog','billing','audit')
+  LOOP
+    legacy_execute := has_function_privilege('glowloom_app',owned_function.oid,'EXECUTE');
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',owned_function.oid::regprocedure);
+    IF legacy_execute THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO glowloom_app',owned_function.oid::regprocedure);
+      IF owned_function.runtime_role IS NOT NULL AND NOT owned_function.prosecdef THEN
+        EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO %I',owned_function.oid::regprocedure,owned_function.runtime_role);
+      END IF;
+    END IF;
+  END LOOP;
+END $$;

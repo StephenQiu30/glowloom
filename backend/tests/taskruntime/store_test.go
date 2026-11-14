@@ -4,7 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +23,118 @@ import (
 
 	runtime "github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
+
+func TestEnqueueUsesDatabaseServiceOwner(t *testing.T) {
+	db, err := gorm.Open(postgres.New(postgres.Config{DSN: "host=unused dbname=unused"}), &gorm.Config{
+		DryRun: true, DisableAutomaticPing: true, SkipDefaultTransaction: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var statement string
+	if err := db.Callback().Create().After("gorm:create").Register("test:capture_insert", func(tx *gorm.DB) {
+		statement = tx.Statement.SQL.String()
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, reference := range []any{nil, map[string]string{"job_id": "business"}} {
+		if err := runtime.EnqueueReference(t.Context(), db, "test.kind", "business", time.Now(), reference); err != nil {
+			t.Fatal(err)
+		}
+		const target = `ON CONFLICT ("service_owner","kind","business_id") DO NOTHING`
+		if !strings.Contains(statement, target) {
+			t.Errorf("enqueue conflict target must include database owner: %s", statement)
+		}
+		insert, _, ok := strings.Cut(statement, " VALUES ")
+		if !ok || strings.Contains(insert, "service_owner") {
+			t.Errorf("enqueue must omit service_owner from inserted columns: %s", statement)
+		}
+	}
+}
+
+// Keep raw SQL writers aligned with the database-owned technical namespace;
+// business table conflict keys and business idempotency identities stay intact.
+func TestTechnicalSQLUsesDatabaseServiceOwner(t *testing.T) {
+	targets := map[string]string{
+		"infra.task_work":                "service_owner,kind,business_id",
+		"infra.processed_event":          "service_owner,consumer,event_id",
+		"infra.idempotency_record":       "service_owner,actor_id,idem_key",
+		"infra.outbox":                   "service_owner,id,create_time",
+		"infra.outbox_dead_letter":       "service_owner,event_id,event_create_time",
+		"infra.outbox_dead_letter_audit": "service_owner,id",
+		"audit.audit_log":                "service_owner,id,create_time",
+	}
+	insertPattern := regexp.MustCompile(`(?is)\binsert\s+into\s+((?:infra|audit)\.[a-z_]+)\s*\(([^)]*)\)`)
+	conflictPattern := regexp.MustCompile(`(?is)\bon\s+conflict\s*\(([^)]*)\)`)
+	ownerPattern := regexp.MustCompile(`(?i)\bservice_owner\b`)
+	spaces := strings.NewReplacer(" ", "", "\n", "", "\t", "", "\r", "")
+	seen := make(map[string]int)
+	conflicts := make(map[string]int)
+	files := token.NewFileSet()
+	err := filepath.WalkDir(filepath.Join("..", "..", "internal"), func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		file, err := parser.ParseFile(files, path, nil, 0)
+		if err != nil {
+			return err
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			literal, ok := node.(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				return true
+			}
+			value, err := strconv.Unquote(literal.Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lower := strings.ToLower(value)
+			ownerSetting := ownerPattern.MatchString(lower) || strings.Contains(lower, "runtime_owner")
+			setsConfig := strings.Contains(lower, "set_config") || strings.Contains(lower, "set local")
+			if strings.Contains(lower, "column:service_owner") || setsConfig && ownerSetting {
+				t.Errorf("%s: service owner must not be supplied by an application model or GUC", files.Position(literal.Pos()))
+			}
+			insert := insertPattern.FindStringSubmatch(lower)
+			if len(insert) == 0 {
+				return true
+			}
+			expected, technical := targets[insert[1]]
+			if !technical {
+				return true
+			}
+			seen[insert[1]]++
+			if ownerPattern.MatchString(insert[2]) {
+				t.Errorf("%s: %s INSERT must let the database default service_owner", files.Position(literal.Pos()), insert[1])
+			}
+			if !strings.Contains(lower, "on conflict") {
+				return true
+			}
+			conflicts[insert[1]]++
+			conflict := conflictPattern.FindStringSubmatch(lower)
+			if len(conflict) != 2 || spaces.Replace(conflict[1]) != expected {
+				t.Errorf("%s: %s conflict target must be (%s)", files.Position(literal.Pos()), insert[1], expected)
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"infra.processed_event", "infra.idempotency_record", "infra.outbox", "infra.outbox_dead_letter", "infra.outbox_dead_letter_audit", "audit.audit_log"} {
+		if seen[table] == 0 {
+			t.Errorf("no INSERT inspected for %s", table)
+		}
+	}
+	for table, minimum := range map[string]int{"infra.processed_event": 1, "infra.outbox_dead_letter": 1, "infra.idempotency_record": 5} {
+		if conflicts[table] < minimum {
+			t.Errorf("inspected %d %s conflict targets, want at least %d", conflicts[table], table, minimum)
+		}
+	}
+}
 
 func TestClaimRollbackDedupAndFence(t *testing.T) {
 	dsn := os.Getenv("GLOWLOOM_TEST_TASK_DB_DSN")

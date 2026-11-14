@@ -50,6 +50,8 @@ jobs:
       GLOWLOOM_TEST_MODEL_GATEWAY_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_gateway_test?sslmode=disable
       GLOWLOOM_AGENT_TEST_DB_DSN: postgres://glowloom_agent@127.0.0.1:5432/glowloom_boundary_test?sslmode=disable
       GLOWLOOM_TEST_SCHEMA_DB_DSN: postgres://postgres@127.0.0.1:5432/schema_probe?sslmode=disable
+      GLOWLOOM_TEST_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_owner_ci_test?sslmode=disable
+      GLOWLOOM_TEST_WRITE_FENCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_owner_ci_test?sslmode=disable
       GLOWLOOM_TEST_CANVAS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
       GLOWLOOM_TEST_GOVERNANCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_governance?sslmode=disable
       GLOWLOOM_TEST_CATALOG_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable
@@ -92,6 +94,14 @@ jobs:
           admin_dsn="$GLOWLOOM_TEST_CANVAS_DB_DSN"
           psql "$admin_dsn" -X -v ON_ERROR_STOP=1 \
             -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' \
+            -c 'CREATE ROLE glowloom_identity NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+            -c 'CREATE ROLE glowloom_creation NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+            -c 'CREATE ROLE glowloom_media NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+            -c 'CREATE ROLE glowloom_execution NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+            -c 'CREATE ROLE owner_b_identity_test LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS IN ROLE glowloom_identity' \
+            -c 'CREATE ROLE owner_b_creation_test LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS IN ROLE glowloom_creation' \
+            -c 'CREATE ROLE owner_b_media_test LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS IN ROLE glowloom_media' \
+            -c 'CREATE ROLE owner_b_execution_test LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS IN ROLE glowloom_execution' \
             -c 'CREATE ROLE glowloom_agent LOGIN NOSUPERUSER' \
             -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app'
           # These suites initialize their own schema.
@@ -99,7 +109,7 @@ jobs:
             psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
           done
           psql "$admin_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
-          for database in glowloom_governance glowloom_catalog glowloom_subject_alignment_ci glowloom_subject_storage_script_ci glowloom_app_scope_test glowloom_business_test glowloom_agent_canvas_test glowloom_agent_shot_ci_test glowloom_shot_pipeline_ci_test glowloom_boundary_test glowloom_tasks_test glowloom_maintenance_test glowloom_receipt glowloom_gateway_test glowloom_studio_inputs_test; do
+          for database in glowloom_governance glowloom_catalog glowloom_subject_alignment_ci glowloom_subject_storage_script_ci glowloom_app_scope_test glowloom_business_test glowloom_agent_canvas_test glowloom_agent_shot_ci_test glowloom_shot_pipeline_ci_test glowloom_boundary_test glowloom_tasks_test glowloom_maintenance_test glowloom_receipt glowloom_gateway_test glowloom_studio_inputs_test glowloom_owner_ci_test; do
             psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             psql "postgres://postgres@127.0.0.1:5432/$database?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
           done
@@ -165,7 +175,14 @@ jobs:
       - name: Provision separate restricted-role test partitions
         working-directory: backend
         run: |
-          psql postgres://postgres@127.0.0.1:5432/glowloom_agent_test -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE glowloom_agent LOGIN NOSUPERUSER' -c 'CREATE DATABASE glowloom_agent_recovery_test'
+          psql postgres://postgres@127.0.0.1:5432/glowloom_agent_test -X -v ON_ERROR_STOP=1 \
+            -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' \
+            -c 'CREATE ROLE glowloom_identity NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+            -c 'CREATE ROLE glowloom_creation NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+            -c 'CREATE ROLE glowloom_media NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+            -c 'CREATE ROLE glowloom_execution NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+            -c 'CREATE ROLE glowloom_agent LOGIN NOSUPERUSER' \
+            -c 'CREATE DATABASE glowloom_agent_recovery_test'
           for database in glowloom_agent_test glowloom_agent_recovery_test; do
             psql "postgres://postgres@127.0.0.1:5432/$database" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
           done

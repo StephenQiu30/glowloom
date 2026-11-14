@@ -106,7 +106,7 @@ func (s *Store) Retry(ctx context.Context, event application.Event, errorClass s
 				(event_id,event_create_time,topic,partition_key,payload,headers,attempt_count,error_class,failed_at)
 				SELECT id,create_time,topic,partition_key,payload,headers,attempt_count,?,?
 				FROM infra.outbox WHERE id=?::uuid AND create_time=?
-				ON CONFLICT (event_id,event_create_time) DO UPDATE SET
+				ON CONFLICT (service_owner,event_id,event_create_time) DO UPDATE SET
 					topic=excluded.topic,partition_key=excluded.partition_key,payload=excluded.payload,
 					headers=excluded.headers,attempt_count=excluded.attempt_count,error_class=excluded.error_class,
 					failed_at=excluded.failed_at,replayed_at=NULL`, errorClass, now.UTC(), event.ID, event.CreateTime.UTC())

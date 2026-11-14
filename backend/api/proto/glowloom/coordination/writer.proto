@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package glowloom.coordination;
+
+option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/coordination;coordination";
+
+// WriterFence installs issuer-authenticated local barriers, never business policy.
+// A writer exposes this on its private authenticated listener, not the Gateway.
+service WriterFence {
+  rpc Install(InstallRequest) returns (InstallResponse);
+  // Resolve reads original responsibility; it cannot admit or execute new work.
+  rpc Resolve(ResolveRequest) returns (ResolveResponse);
+}
+
+enum Writer {
+  WRITER_UNSPECIFIED = 0;
+  WRITER_IDENTITY = 1;
+  WRITER_CREATION = 2;
+  WRITER_MEDIA = 3;
+  WRITER_EXECUTION = 4;
+}
+
+enum Issuer {
+  ISSUER_UNSPECIFIED = 0;
+  ISSUER_IDENTITY = 1;
+  ISSUER_CREATION = 2;
+}
+
+enum AuthorityKind {
+  AUTHORITY_KIND_UNSPECIFIED = 0;
+  AUTHORITY_KIND_ACCOUNT = 1;
+  AUTHORITY_KIND_SESSION = 2;
+  AUTHORITY_KIND_SCOPE = 3;
+  AUTHORITY_KIND_PROJECT = 4;
+  AUTHORITY_KIND_AGENT_GRANT = 5;
+}
+
+message Authority {
+  Issuer issuer = 1;
+  AuthorityKind kind = 2;
+  bytes id = 3;
+  int64 epoch = 4;
+}
+
+message Control {
+  Authority authority = 1;
+  bool blocked = 2;
+  bytes coordination_id = 3;
+}
+
+message InstallRequest {
+  Writer writer = 1;
+  Control control = 2;
+}
+
+message InstallResponse {
+  Writer writer = 1;
+  Control control = 2;
+}
+
+message Command {
+  bytes id = 1;
+  string sha256 = 2;
+  string action = 3;
+  repeated Authority authorities = 4;
+}
+
+message ResolveRequest {
+  Writer writer = 1;
+  Command command = 2;
+}
+
+enum CommandState {
+  COMMAND_STATE_UNSPECIFIED = 0;
+  COMMAND_STATE_ADMITTED = 1;
+  COMMAND_STATE_COMMITTED = 2;
+  COMMAND_STATE_FROZEN = 3;
+}
+
+message ResolveResponse {
+  Command command = 1;
+  CommandState state = 2;
+  bytes receipt_json = 3;
+}
+
+enum ErrorReason {
+  ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_INVALID = 1;
+  ERROR_REASON_FENCED = 2;
+  ERROR_REASON_CONFLICT = 3;
+  ERROR_REASON_STALE = 4;
+  ERROR_REASON_NOT_FOUND = 5;
+  ERROR_REASON_COMMITTED = 6;
+  ERROR_REASON_FROZEN = 7;
+}
+
+// Failure carries closed reasons only, never SQL, tokens or caller content.
+message Failure {
+  ErrorReason reason = 1;
+}

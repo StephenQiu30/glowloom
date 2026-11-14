@@ -163,7 +163,7 @@ func recordPreference(tx *gorm.DB, actor, key uuid.UUID, fingerprint string, sav
 	}
 	result := tx.Exec(`INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at)
 	 VALUES(?,?,?,?,200,?::jsonb,statement_timestamp()+interval '24 hours')
-	 ON CONFLICT(actor_id,idem_key) DO UPDATE SET request_hash=excluded.request_hash,status_code=excluded.status_code,
+	 ON CONFLICT(service_owner,actor_id,idem_key) DO UPDATE SET request_hash=excluded.request_hash,status_code=excluded.status_code,
 	 response_body=excluded.response_body,expires_at=excluded.expires_at,is_delete=false,update_time=statement_timestamp()
 	 WHERE infra.idempotency_record.expires_at<=statement_timestamp() OR infra.idempotency_record.is_delete`,
 		uuid.New(), actor, key.String(), fingerprint, string(body))

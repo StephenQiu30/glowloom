@@ -105,7 +105,7 @@ func EnqueueReference(ctx context.Context, tx *gorm.DB, kind, id string, at time
 	}
 	row := taskWorkRow{Kind: kind, BusinessID: id, NextRunAt: at.UTC(), Reference: taskJSON(raw)}
 	return tx.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "kind"}, {Name: "business_id"}},
+		Columns:   []clause.Column{{Name: "service_owner"}, {Name: "kind"}, {Name: "business_id"}},
 		DoNothing: true,
 	}).Create(&row).Error
 }

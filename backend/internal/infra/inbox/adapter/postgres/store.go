@@ -62,7 +62,7 @@ func (s *Store) ProcessOnce(ctx context.Context, consumer, eventID string, handl
 		inserted := tx.Exec(`
 			INSERT INTO infra.processed_event(id, consumer, event_id)
 			VALUES (?::uuid, ?, ?::uuid)
-			ON CONFLICT (consumer, event_id) DO NOTHING
+			ON CONFLICT (service_owner, consumer, event_id) DO NOTHING
 		`, markerID.String(), consumer, id.String())
 		if inserted.Error != nil {
 			return fmt.Errorf("claim event for consumer %s: %w", consumer, inserted.Error)
