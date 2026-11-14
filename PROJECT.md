@@ -22,13 +22,13 @@ Harness 按[设计32 §7.6](workspace/content/design/32-完整创作AgentHarness
 
 Go 业务模块按 `adapter → application → domain` 单向依赖并显式注入依赖；编码与审查遵循根 [AGENTS](AGENTS.md) 中的 Google Go 与 Vercel/Next.js 规则。独立 Node 服务遵循 Google TypeScript Style Guide 及各自的 NodeNext/NestJS 约定；Agent 目录职责见[设计37 §7.2](workspace/content/design/37-Agent服务目录与TypeScript规范设计.md#72-目录与依赖)。两端都不预建空层、通用框架或仅转发调用的抽象。
 
-Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 API、worker、relay 与身份/存储/分区运维；已移除旧工作流初始化命令。独立 Agent 服务有自己的 TypeScript 入口、Dockerfile 与锁文件，生命周期由 Compose 管理；不把“Go 只有一个入口”解释成整个应用必须单进程。
+Go 业务组合入口为 `backend/cmd/glowloom`，承载 API、worker、relay 与身份/存储/管理员显式分区运维；独立无业务数据库的公开入口为 `backend/cmd/gateway`，只读取自身监听、后端 origin 与日志配置。普通维护不执行分区 DDL，历史分区任务只完成收束，管理员操作不接回服务生命周期。四个业务服务的完整独立性仍须满足[设计44](workspace/content/design/44-Go微服务架构与技术选型设计.md)门禁，不由 Gateway 进程推定。独立 Agent 有自己的 TypeScript 入口、Dockerfile 与锁文件，生命周期由 Compose 管理。
 
 业务实现放在 `backend/internal/<模块>/`：`domain` 只含规则，`application` 编排用例，`adapter/<技术>` 对接 HTTP、数据库、工作流或外部系统。领域与应用不依赖 Gin、GORM，也不调用另一个业务模块的应用服务。跨模块事实由消费方定义小接口。
 
 包按 Google Go 的内聚规则划分：一个包只放必须一起使用的类型，调用方不需要同时理解无关实现。整个后端不放进一个包，也不使用 `util`、`common` 这类无职责包。
 
-`backend/internal/app` 的 `package app` 只保留角色进程、路由入口和 Wire 注入。圣经、素材、项目复制、画布、操作等服务的跨模块适配各自放在 `backend/internal/app/<服务>/`，包名与目录一致。这些包只做注入适配，不放领域规则，也不再增加进程入口。身份运行时、身份维护和存储维护保持各自的包，不并入 `package app`。新的服务接线写入对应服务包；不再往 `package app` 增加服务接线文件。
+`backend/internal/app` 的 `package app` 只保留角色进程、路由入口和 Wire 注入。圣经、素材、项目复制、画布、操作等服务的跨模块适配各自放在 `backend/internal/app/<服务>/`，包名与目录一致。这些包只做注入适配，不放领域规则；新独立入口的配置与生命周期留在对应 `app/<服务>` 子包，不扩张原 `package app`。身份运行时、身份维护和存储维护保持各自的包，不并入 `package app`。新的服务接线写入对应服务包；不再往 `package app` 增加服务接线文件。
 
 `backend/internal/platform/` 的目标职责为 Go 配置、日志及 PostgreSQL、Redis、Kafka、对象存储连接，移除 Temporal。Agent 独立拥有 HTTP、Pi、PostgreSQL Storage 与执行生命周期；双方不共享业务数据库模型。配置只接受当前 `GLOWLOOM_*`，不保留旧键回退。实际凭据、数据库角色与既有资源使用现有部署配置；新增受限角色/schema 由部署管理员按完整结构定义提供，应用启动不建表。
 
@@ -44,7 +44,7 @@ Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 AP
 - `backend/db/schema.sql` 是仓库唯一的 PostgreSQL 结构定义，保留身份等系统初始化。开发、CI 和部署先用它初始化空库，再导入 `backend/db/data.sql` 的公共供应商、能力、版本化模型候选及官方计价参考。模型目录运行时读取 PostgreSQL 的固定版本快照；种子不写入连接、凭据、真实验证或已审核价目，同版本内容冲突拒绝导入。存量环境以 PostgreSQL 实际结构为准，部署前核对其与当前定义是否一致。仓库仅维护完整结构，禁止向已有业务库重放空库 SQL，禁止新增 migrations 目录或增量 SQL 文件，服务启动及运行时严禁执行任何动态 DDL，防止新实例冷启动时产生数据与结构不一致。邮箱与身份引用保护见[用户系统设计](workspace/content/design/01-用户系统总体设计.md#81-d6-迁移与切换)。
 - 浏览器请求经同站代理；服务端 `GLOWLOOM_BACKEND_ORIGIN` 不进入浏览器。凭据不进入文档、日志、前端包或提交。
 - 默认本地工程验证不发起真实收费生成；fixture、协议握手或页面成功不能代替真实供应商验收。模型可用性以实际配置和适配能力为准。
-- `docker-compose.yml` 是部署基础配置；完成数据库结构核验后的 `docker compose up -d --build --wait` 统一启动 frontend、backend、独立 agent 和 canvas。前端使用 Next.js standalone 镜像，完整启动等待后端健康。后端直接运行构建阶段生成的 Go 二进制。Agent 独立镜像及连接池/资源限制，仅在 Compose 网络监听 `agent:4401`，不发布宿主端口；Go 与 Agent 不设置相互 service_healthy 等待、不管理彼此进程。前端仍为 `http://localhost:1122`，Go 为 `http://127.0.0.1:1123`。复用既有 PostgreSQL、Redis、Kafka、对象存储，不创建依赖栈，不保留 Temporal 服务/namespace 配置。当前源码与 Compose 采用此拓扑；已有库的结构核验在启动前独立完成。
+- `docker-compose.yml` 是部署基础配置；完成数据库结构核验后的 `docker compose up -d --build --wait` 统一启动 frontend、gateway、backend、独立 agent 和 canvas。前端使用 Next.js standalone 镜像，经 `gateway:8080` 访问业务后端，完整启动等待 Gateway 及后端健康。后端直接运行构建阶段生成的 Go 二进制。Agent 独立镜像及连接池/资源限制，仅在 Compose 网络监听 `agent:4401`，不发布宿主端口；Go 与 Agent 不设置相互 service_healthy 等待、不管理彼此进程。前端仍为 `http://localhost:1122`，公开 Go Gateway 为 `http://127.0.0.1:1123`；backend 不发布宿主端口，Agent 的内部调用仍直达业务后端，不开放为公网 Gateway 路由。复用既有 PostgreSQL、Redis、Kafka、对象存储，不创建依赖栈，不保留 Temporal 服务/namespace 配置。当前源码与 Compose 采用此拓扑；已有库的结构核验在启动前独立完成。
 - 本地开发可显式叠加 `docker-compose.dev.yml` 使用 Compose Watch。前端用 Next.js 开发服务器同步页面源码和静态文件。Go、Agent、画布协作由 Compose 分别重建并替换容器。开发镜像使用独立标签，沿用基础配置的端口、健康检查和宿主依赖。
 - API 生成使用上述 package.json 命令组织标准工具；其他检查使用现有工具直接命令，不新增 shell 脚本或 Makefile。
 

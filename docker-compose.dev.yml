@@ -38,6 +38,27 @@ services:
         - action: rebuild
           path: ./backend/internal/prompt/domain/cinema_catalog.json
 
+  gateway:
+    image: glowloom/gateway:dev
+    develop:
+      watch:
+        - action: rebuild
+          path: ./backend/cmd/gateway
+        - action: rebuild
+          path: ./backend/internal/gateway
+        - action: rebuild
+          path: ./backend/internal/app/gateway
+        - action: rebuild
+          path: ./backend/internal/platform/httpapi
+        - action: rebuild
+          path: ./backend/internal/platform/log
+        - action: rebuild
+          path: ./backend/go.mod
+        - action: rebuild
+          path: ./backend/go.sum
+        - action: rebuild
+          path: ./backend/gateway.Dockerfile
+
   backend:
     image: glowloom/backend:dev
     develop:

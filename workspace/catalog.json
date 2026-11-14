@@ -1,5 +1,17 @@
 [
   {
+    "id": "prd-30",
+    "path": "content/prd/30-Go微服务拆分.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
+    "id": "plan-39",
+    "path": "content/plan/39-Go微服务拆分执行计划.md",
+    "visibility": "internal",
+    "aliases": []
+  },
+  {
     "id": "design-43",
     "path": "content/design/43-Workspace知识库与研发工作流服务设计.md",
     "visibility": "internal",
@@ -22,6 +34,12 @@
     "path": "content/requirement/28-Workspace知识库与研发工作流需求.md",
     "visibility": "internal",
     "aliases": ["docs/requirement/28-Workspace知识库与研发工作流需求.md"]
+  },
+  {
+    "id": "requirement-29",
+    "path": "content/requirement/29-Go微服务架构需求.md",
+    "visibility": "internal",
+    "aliases": ["docs/requirement/29-Go微服务架构需求.md"]
   },
   {
     "id": "doc-916c5fc5a894",
@@ -1362,5 +1380,11 @@
     "path": "AGENTS.md",
     "visibility": "internal",
     "aliases": []
+  },
+  {
+    "id": "design-44",
+    "path": "content/design/44-Go微服务架构与技术选型设计.md",
+    "visibility": "internal",
+    "aliases": ["docs/design/44-Go微服务架构与技术选型设计.md"]
   }
 ]

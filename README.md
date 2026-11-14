@@ -57,15 +57,15 @@ docker compose up -d --build --wait
 docker compose ps
 ```
 
-| 服务       | 本地地址                                |
-| ---------- | --------------------------------------- |
-| 前端工作台 | [localhost:1122](http://localhost:1122) |
-| 后端       | [127.0.0.1:1123](http://127.0.0.1:1123) |
-| Agent      | Compose 内部 `agent:4401`，无宿主端口   |
+| 服务       | 本地地址                                                |
+| ---------- | ------------------------------------------------------- |
+| 前端工作台 | [localhost:1122](http://localhost:1122)                 |
+| Go Gateway | [127.0.0.1:1123](http://127.0.0.1:1123)，业务后端仅内网 |
+| Agent      | Compose 内部 `agent:4401`，无宿主端口                   |
 
 首次启动成功后，打开工作台；需要私人素材、主体、画布或生成时，使用有效账号登录，并按对象权限访问。容器健康不等于真实生成能力已验收。
 
-`docker-compose.yml` 是应用的基础部署配置，包含 `frontend`、`backend`、`agent` 和 `canvas`。前端运行镜像内的 Next.js standalone 构建，完整启动时等待后端健康。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动。仅更新后端时执行：
+`docker-compose.yml` 是应用的基础部署配置，包含 `frontend`、`gateway`、`backend`、`agent` 和 `canvas`。前端运行镜像内的 Next.js standalone 构建，经 Gateway 转发 `/api`，完整启动时等待 Gateway 和后端健康。业务后端仍在同一容器运行 API、worker、relay，并等待协作运行时健康后启动；Agent 的内部接口不经过公开 Gateway。四个业务服务的独立写入权按[设计44](workspace/content/design/44-Go微服务架构与技术选型设计.md)逐域验收，不由入口拆分推定完成。仅更新后端时执行：
 
 ```sh
 docker compose up -d --build --wait backend
@@ -133,15 +133,15 @@ GitHub 仓库现名为 `StephenQiu30/glowloom`。后端 Go 模块路径暂保留
 
 ## 文档与协作
 
-| 入口                                                                                                                          | 内容                           |
-| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| [文档索引](workspace/content/00-文档索引.md)                                                                                               | 从产品范围进入各主题文档       |
+| 入口                                                                                                                                                    | 内容                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| [文档索引](workspace/content/00-文档索引.md)                                                                                                            | 从产品范围进入各主题文档       |
 | [产品总览](workspace/content/design/24-产品总览与交付边界设计.md) · [设计导航](workspace/content/design/00-设计导航.md)                                 | 能力范围、技术方案与交付边界   |
 | [工作台与创作入口](workspace/content/design/09-统一顶栏与阶段入口设计.md) · [多参考编辑器](workspace/content/design/06-多参考提示词编辑器调研与设计.md) | 创作流程与交互合同             |
-| [AI 接入](workspace/content/design/07-AI平台接入市场调研与架构设计.md)                                                                     | 供应商与模型接入方案           |
+| [AI 接入](workspace/content/design/07-AI平台接入市场调研与架构设计.md)                                                                                  | 供应商与模型接入方案           |
 | [用户系统](workspace/content/prd/01-用户系统.md) · [需求与验收](workspace/content/requirement/02-用户系统需求.md)                                       | 账号、权限及验收规则           |
-| [PROJECT](PROJECT.md) · [AGENTS](AGENTS.md) · [DESIGN](DESIGN.md)                                                             | 工程工具链、协作规则与视觉规范 |
-| [BACKLOG](BACKLOG.md)                                                                                                         | 当前实施进展、剩余工作和阻塞   |
+| [PROJECT](PROJECT.md) · [AGENTS](AGENTS.md) · [DESIGN](DESIGN.md)                                                                                       | 工程工具链、协作规则与视觉规范 |
+| [BACKLOG](BACKLOG.md)                                                                                                                                   | 当前实施进展、剩余工作和阻塞   |
 
 文档直接维护 Markdown，按原始需求 → design → PRD → Plan 分层，使用[统一模板](workspace/content/templates/00-模板导航.md)。实施状态统一维护在 BACKLOG；设计、工程验证与产品接受分别记录。
 

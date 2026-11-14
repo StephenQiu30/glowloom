@@ -12,8 +12,6 @@ import (
 var ErrInvalidBatchSize = errors.New("maintenance batch size must be positive")
 
 type outboxStore interface {
-	EnsurePartitions(context.Context, time.Time) error
-	DropEmptyPastPartitions(context.Context, time.Time) (int, error)
 	PrunePublished(context.Context, time.Time, int) (int64, error)
 }
 
@@ -21,7 +19,7 @@ type processedEventStore interface {
 	PruneExpired(context.Context, time.Time, int) (int64, error)
 }
 
-// Service coordinates Outbox partitions and event retention through injected stores.
+// Service coordinates message retention through injected DML-only store ports.
 type Service struct {
 	outbox    outboxStore
 	processed processedEventStore
@@ -30,22 +28,6 @@ type Service struct {
 // NewService constructs maintenance work from the stores that own each table.
 func NewService(outbox outboxStore, processed processedEventStore) *Service {
 	return &Service{outbox: outbox, processed: processed}
-}
-
-// MaintainPartitions prepares writable Outbox partitions, then removes only
-// completed month partitions that are empty.
-func (s *Service) MaintainPartitions(ctx context.Context, now time.Time) (int, error) {
-	if err := ctx.Err(); err != nil {
-		return 0, err
-	}
-	if err := s.outbox.EnsurePartitions(ctx, now); err != nil {
-		return 0, fmt.Errorf("ensure Outbox partitions: %w", err)
-	}
-	dropped, err := s.outbox.DropEmptyPastPartitions(ctx, now)
-	if err != nil {
-		return 0, fmt.Errorf("drop empty Outbox partitions: %w", err)
-	}
-	return dropped, nil
 }
 
 // PruneOutbox drains events that have been published for over seven days.

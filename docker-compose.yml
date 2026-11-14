@@ -1,6 +1,6 @@
 # Local application stack; existing host middleware retains its data.
 # Single project entry point: docker compose up -d --build --wait
-# Fixed host ports: frontend 1122, backend 1123. Resolve host conflicts before starting.
+# Fixed host ports: frontend 1122, public gateway 1123. Resolve conflicts before starting.
 name: glowloom
 
 services:
@@ -68,16 +68,45 @@ services:
       retries: 3
     mem_limit: 512m
     cpus: 1
+  gateway:
+    container_name: glowloom-gateway
+    build:
+      context: ./backend
+      dockerfile: gateway.Dockerfile
+    image: glowloom/gateway:current
+    depends_on:
+      backend:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 15s
+    environment:
+      GLOWLOOM_ENV: ${GLOWLOOM_ENV:-local}
+      GLOWLOOM_LOG_LEVEL: ${GLOWLOOM_LOG_LEVEL:-info}
+      GLOWLOOM_GATEWAY_HTTP_ADDR: "0.0.0.0:8080"
+      GLOWLOOM_GATEWAY_BACKEND_ORIGIN: http://backend:18080
+    ports:
+      - "127.0.0.1:1123:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   frontend:
     container_name: glowloom-frontend
     build:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        GLOWLOOM_BACKEND_ORIGIN: &backend-origin http://backend:18080
+        GLOWLOOM_BACKEND_ORIGIN: &backend-origin http://gateway:8080
     image: glowloom/frontend:latest
     depends_on:
-      backend:
+      gateway:
         condition: service_healthy
     init: true
     restart: unless-stopped
@@ -170,7 +199,6 @@ services:
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Glowloom}
       GLOWLOOM_DB_DSN: ${GLOWLOOM_DB_DSN:?Set GLOWLOOM_DB_DSN for the backend API}
-      GLOWLOOM_PARTITION_MAINTENANCE_DB_DSN: ${GLOWLOOM_PARTITION_MAINTENANCE_DB_DSN:-}
       GLOWLOOM_CREDIT_OPERATION_SAGA_ENABLED: ${GLOWLOOM_CREDIT_OPERATION_SAGA_ENABLED:-false}
       GLOWLOOM_CREDIT_COMMANDS_PER_MINUTE: ${GLOWLOOM_CREDIT_COMMANDS_PER_MINUTE:-120}
       GLOWLOOM_CREDIT_MAX_AMOUNT_MICROS: ${GLOWLOOM_CREDIT_MAX_AMOUNT_MICROS:-0}
@@ -185,5 +213,5 @@ services:
       GLOWLOOM_STORAGE_SESSION_TOKEN: ${GLOWLOOM_STORAGE_SESSION_TOKEN:-}
       GLOWLOOM_STORAGE_MAINTENANCE_DSN: ${GLOWLOOM_STORAGE_MAINTENANCE_DSN:-}
       GLOWLOOM_OTEL_ENDPOINT: ${GLOWLOOM_OTEL_ENDPOINT:-}
-    ports:
-      - "127.0.0.1:1123:18080"
+    # Business and internal Agent traffic stay on the Compose network.
+    expose: ["18080"]

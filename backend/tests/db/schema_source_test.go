@@ -2,10 +2,21 @@ package db_test
 
 import (
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestSchemaDoesNotScheduleRetiredRuntimeDDL(t *testing.T) {
+	schema, err := os.ReadFile(filepath.Join("..", "..", "db", "schema.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(schema), "'maintenance.partitions'") {
+		t.Fatal("canonical schema must not schedule runtime partition DDL")
+	}
+}
 
 func TestBackendSQLHasCanonicalSchemaAndPresetData(t *testing.T) {
 	backend := filepath.Join("..", "..")

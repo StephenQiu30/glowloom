@@ -1,5 +1,17 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+<a id="go-microservices-20261114"></a>
+
+## Go 微服务拆分（2026-11-14）
+
+SRC-GO-MS-02 已确认四个业务服务＋轻量 Gateway 并授权开始执行。来源链：[需求29](workspace/content/requirement/29-Go微服务架构需求.md) → [设计44](workspace/content/design/44-Go微服务架构与技术选型设计.md) → [PRD30](workspace/content/prd/30-Go微服务拆分.md) → [Plan39](workspace/content/plan/39-Go微服务拆分执行计划.md)。Identity / Creation / Media / Execution 为确认边界；账务、模型目录与生成执行保持同域事务，不将该确认扩大为 Node 全量改写或生产发布授权。
+
+首个工程切片已实现：独立 `cmd/gateway`、显式小配置、公共 `/api` 透明转发、独立探针、SSE/WS 与有界停机；不加载业务组合根/数据库/消息驱动。普通/开发 Compose 声明 frontend → gateway → backend，1123 仅发布 Gateway，Agent 内部调用保持原边界。普通 maintenance 已移除分区 DDL 端口与调用；旧任务仅成功收束，schema.sql 不再播种该任务，管理员显式能力保留但不接回常驻生命周期。
+
+工程验证：变更包 vet/lint/race、SQL来源与退休种子门禁、全后端构建、依赖闭包及两种 Compose 静态拓扑通过；SSE/WS/未知回执 10 轮回归通过，真实 Gateway 二进制在无业务配置、loopback 夹具下启动/转发/SIGTERM 通过。漏洞检查在切片调用路径影响为0，所需module仍有1项未调用报告。具体命令与证据见 Plan39，不等于业务域独立或产品接受。
+
+未完成项：隔离 PostgreSQL 的旧租约恢复与受限角色验证、镜像构建/整套 Compose、真实登录和端到端业务接受；本轮未连接数据库、未启动部署、未收费、未提交/推送。下一步按 T-GMS-07 清点 owner/跨域 JOIN/外键/身份锁/任务事件，先固定报价资金、立即撤权、创建复制和资产清除的等价合同，再对满足五项门禁的首个业务域建立内部契约与唯一写入权；不默认先拆 Identity，不把多角色或多个空进程算作完成。
+
 <a id="workspace-20261114"></a>
 
 ## Workspace知识库与研发工作流（2026-11-14）

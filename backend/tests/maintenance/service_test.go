@@ -9,20 +9,11 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/application"
 )
 
+// outboxStore deliberately provides only DML retention operations. Maintenance
+// must not require partition administration privileges from its consumer port.
 type outboxStore struct {
-	ensured []time.Time
-	dropped int
-	counts  []int64
-	err     error
-}
-
-func (s *outboxStore) EnsurePartitions(_ context.Context, now time.Time) error {
-	s.ensured = append(s.ensured, now)
-	return s.err
-}
-
-func (s *outboxStore) DropEmptyPastPartitions(context.Context, time.Time) (int, error) {
-	return s.dropped, s.err
+	counts []int64
+	err    error
 }
 
 func (s *outboxStore) PrunePublished(context.Context, time.Time, int) (int64, error) {
@@ -50,15 +41,9 @@ func (s *inboxStore) PruneExpired(context.Context, time.Time, int) (int64, error
 
 func TestMaintenanceDrainsBatchesAndReportsProgress(t *testing.T) {
 	now := time.Date(2026, time.September, 27, 0, 0, 0, 0, time.UTC)
-	outbox := &outboxStore{dropped: 2, counts: []int64{2, 2, 1}}
+	outbox := &outboxStore{counts: []int64{2, 2, 1}}
 	inbox := &inboxStore{counts: []int64{2, 0}}
 	service := application.NewService(outbox, inbox)
-	if dropped, err := service.MaintainPartitions(t.Context(), now); err != nil || dropped != 2 {
-		t.Fatalf("maintain partitions = (%d, %v)", dropped, err)
-	}
-	if len(outbox.ensured) != 1 || !outbox.ensured[0].Equal(now) {
-		t.Fatalf("ensure partitions times = %v", outbox.ensured)
-	}
 	var progress []int64
 	if removed, err := service.PruneOutbox(t.Context(), now, 2, func(total int64) {
 		progress = append(progress, total)
@@ -76,9 +61,6 @@ func TestMaintenanceDrainsBatchesAndReportsProgress(t *testing.T) {
 func TestMaintenancePropagatesCancellationAndStoreFailure(t *testing.T) {
 	want := errors.New("database unavailable")
 	service := application.NewService(&outboxStore{err: want}, &inboxStore{err: want})
-	if _, err := service.MaintainPartitions(t.Context(), time.Now()); !errors.Is(err, want) {
-		t.Fatalf("partition maintenance error = %v", err)
-	}
 	if _, err := service.PruneOutbox(t.Context(), time.Now(), 100, nil); !errors.Is(err, want) {
 		t.Fatalf("outbox cleanup error = %v", err)
 	}

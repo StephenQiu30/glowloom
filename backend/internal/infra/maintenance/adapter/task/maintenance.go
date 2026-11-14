@@ -9,19 +9,22 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 
-// Maintenance task kinds identify partition upkeep and durable message pruning.
+// Partitions identifies retired partition work so persisted tasks can complete.
+// It must not be admitted or rescheduled as periodic maintenance.
+const Partitions = "maintenance.partitions"
+
+// Outbox and Inbox identify periodic durable message pruning.
 const (
-	Partitions = "maintenance.partitions"
-	Outbox     = "maintenance.outbox"
-	Inbox      = "maintenance.inbox"
+	Outbox = "maintenance.outbox"
+	Inbox  = "maintenance.inbox"
 )
 
-// Handlers returns the persisted periodic maintenance task handlers.
+// Handlers returns retention handlers and a completion-only retired task handler.
 func Handlers(service *application.Service) map[string]taskruntime.Handler {
 	return map[string]taskruntime.Handler{
-		Partitions: func(ctx context.Context, _ taskruntime.Job) (time.Time, error) {
-			_, err := service.MaintainPartitions(ctx, time.Now().UTC())
-			return nextUTC(3 * time.Hour), err
+		Partitions: func(context.Context, taskruntime.Job) (time.Time, error) {
+			// A zero cursor completes old durable tasks without DDL or another wakeup.
+			return time.Time{}, nil
 		},
 		Outbox: func(ctx context.Context, _ taskruntime.Job) (time.Time, error) {
 			_, err := service.PruneOutbox(ctx, time.Now().UTC(), 500, nil)
