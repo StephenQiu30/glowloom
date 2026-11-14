@@ -1,10 +1,12 @@
 # Workspace 使用与部署指南
 
-本指南维护长期操作合同，实际接受与环境见对应 Plan 和 BACKLOG。静态与在线使用同一知识正文，但分别构建、打包和部署。
+本指南维护长期操作合同，实际接受与环境见对应 Plan 和 BACKLOG。日常仅一个免登录阅读入口，默认1130；静态与在线使用同一正文、分别构建，按交付场景择一部署。
 
-## 1. 初始化与静态阅读
+## 1. 初始化与单一入口
 
-在独立 `workspace/` 工程安装锁定依赖，先用 `pnpm knowledge:sync --repository <项目仓库>` 导入项目规范的受控快照（同仓研发可传 `..`），再执行 `pnpm build:static`，再执行 `pnpm serve:static`。默认只监听 `127.0.0.1:1131`，不会启动业务 API、PG、Redis、Kafka、Codex 或 TTS。
+在独立 `workspace/` 安装锁定依赖，用 `pnpm knowledge:sync --repository <项目仓库>` 导入规范快照（同仓可传 `..`），再 `pnpm build:online`、单独同步搜索，最后 `pnpm start`。唯一日常地址为 `http://127.0.0.1:1130/`，阅读与搜索直接访问，无需填写令牌；编辑和执行沿用现有权限验证。构建与启动不会调用TTS。
+
+仅交付离线静态包时执行 `pnpm build:static`。本地预览须先停止在线站点，再 `pnpm serve:static`，默认仍监听1130；不再同时启动1131。静态包保留Pagefind离线搜索，不需要业务服务或Meilisearch。
 
 构建输入包含允许范围的正文、根规范、Skill、流程及可选音频。输出为 `dist/static/<release_id>/`，其 `release.json` 记录来源、范围、音频指纹和资源摘要清单。`current.json` 仅指向上次成功产物；构建失败不会替换它。脏工作区产物标为本地预览，不代表已发布提交。
 
@@ -14,11 +16,21 @@
 
 ## 2. 在线启动与身份
 
-执行 `pnpm build:online` 后，以 `pnpm start:online` 启动。启动器监听 `127.0.0.1:1130`，创建本机私有令牌；不自动绑定仓库或启动受控桥；令牌文件为 `.local/access-token`，权限为0600，不打印到日志或发送到模型。可通过运行环境设置 `GLOWLOOM_WORKSPACE_SESSION_SECRET`，不把它写入构建参数或 `NEXT_PUBLIC_*`。
+执行 `pnpm build:online` 后，以 `pnpm start:online` 启动。启动器监听 `127.0.0.1:1130`，创建仅用于编辑与执行的本机私有令牌，知识阅读和搜索不使用它；不自动绑定仓库或启动受控桥；令牌文件为 `.local/access-token`，权限为0600，不打印到日志或发送到模型。可通过运行环境设置 `GLOWLOOM_WORKSPACE_SESSION_SECRET`，不把它写入构建参数或 `NEXT_PUBLIC_*`。
 
-浏览器输入令牌后取得30分钟 HttpOnly、SameSite=Strict 会话。写请求还需同源和会话绑定的 CSRF。退出不删除已发生的运行事实；轮换令牌并重启在线服务可使原会话失效。首版仅本机 owner，团队身份提供方未接入，不使用产品账号自动授予研发权限。
+仅在进入协作台进行编辑／执行时，浏览器输入令牌后取得30分钟 HttpOnly、SameSite=Strict 会话。写请求还需同源和会话绑定的 CSRF。退出不删除已发生的运行事实；轮换令牌并重启在线服务可使原会话失效。首版仅本机 owner，团队身份提供方未接入，不使用产品账号自动授予研发权限。
 
 `GLOWLOOM_WORKSPACE_ORIGIN` 必须与浏览器真实来源一致；默认 `http://127.0.0.1:1130`。反向代理和HTTPS部署显式配置来源及转发，Cookie在HTTPS来源下启用Secure。端口可用 `WORKSPACE_PORT` 配置，不占用现有1122／1123业务端口。
+
+### 2.1 Meilisearch 初始化、同步与查询权限
+
+已隔离验证 `npx @fumadocs/cli@1.9.2 feature search --provider meilisearch`。官方预设会生成Fumadocs UI、static.json与同步脚本；本工程按Core／Headless＋shadcn约束复用`toDocuments`／`sync`及SDK，职责模块为`src/content/search.ts`、`src/search/sync.ts`、`src/server/search.ts`，不生成scripts目录。
+
+自托管可用官方 `getmeili/meilisearch:v1.37`，持久化数据目录，启用master key、限制网络访问；本机引擎仅绑定loopback的17700，不是第二个知识站入口。云服务和远端实例由部署环境配置，本轮不创建收费资源。
+
+两种构建均不连接Meilisearch。在线构建导出受保护的`static.json`及同版`search-documents.json`；按内容摘要生成`workspace_<digest>`索引名。发布进程单独注入`GLOWLOOM_WORKSPACE_MEILISEARCH_HOST`及`GLOWLOOM_WORKSPACE_MEILISEARCH_ADMIN_KEY`，执行`pnpm search:sync`并等待成功。随后创建仅允许该索引`search`动作的密钥，作为`GLOWLOOM_WORKSPACE_MEILISEARCH_SEARCH_KEY`提供给站点；站点不持有管理密钥。切换内容版本须先同步对应索引并更新限定密钥，再启动目标产物；不同版本不共用可变索引。失败保留旧服务和索引，不强行删除旧记录。
+
+浏览器直接请求同源只读`/api/search/`，不公开引擎地址或任何密钥。搜索失联显示错误与重试，仍可从目录阅读。`static.json`、raw与GET搜索API免填写令牌；协作数据和写操作仍校验会话、Origin与CSRF。静态替代部署保护整个产物入口。生产环境的索引清理、密钥轮换及资源保留由管理员按实际发布清单执行，不在服务启动时自动删除。
 
 ## 3. PostgreSQL 与权限
 

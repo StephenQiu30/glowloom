@@ -9,20 +9,15 @@
 ```bash
 pnpm install --frozen-lockfile
 pnpm knowledge:sync --repository ..
-pnpm build:static
-pnpm serve:static
-```
-
-静态阅读默认地址为 `http://127.0.0.1:1131/`，部署产物只需静态 HTTP 托管。
-
-在线协作单独构建与启动：
-
-```bash
 pnpm build:online
-pnpm start:online
+# 仅发布同步进程注入 Meilisearch 管理密钥
+pnpm search:sync
+pnpm start
 ```
 
-默认地址为 `http://127.0.0.1:1130/`。访问令牌由启动器保存在 `.local/access-token`，不进入 Git 或构建产物。在线记录需配置受限 PostgreSQL 连接；未配置时仅开放经认证的知识阅读，协作台明确显示不可用。
+唯一日常入口为 `http://127.0.0.1:1130/`，知识阅读和搜索直接访问，无需填写令牌；编辑与执行沿用已有权限验证。站点配置私有 Meilisearch 地址与限定索引的 search-only 密钥；管理密钥只传给同步进程，不放浏览器或日常站点环境。构建不需要运行时密钥或搜索连接。访问令牌见 `.local/access-token`；数据库未配置时协作台如实显示不可用。
+
+`pnpm dev --repository ..` 可显式组合本机桥。`pnpm build:static` 只生成独立离线交付；如需预览，先停止在线站点再运行 `pnpm serve:static`，默认仍用1130，不同时开放第二个知识站。
 
 详细初始化、环境变量、静态与在线打包、音频导入、权限、发布和恢复见[使用与部署指南](content/templates/04-Workspace使用与部署.md)。真实 TTS 生成暂不启用。
 
@@ -60,8 +55,8 @@ pnpm exec playwright test
 
 ## 文档底座与部署边界
 
-通用文档能力使用 Fumadocs Core／Headless：普通 Markdown、标题与 TOC、内容源、页面树和相邻导航；界面仍使用本项目 shadcn，不安装另一套完整主题或可执行 MDX。catalog 保留原文档 ID、文件路径和旧链接；Pagefind 是唯一静态搜索索引。
+通用文档能力使用 Fumadocs Core／Headless：普通 Markdown、标题与 TOC、内容源、页面树和相邻导航；界面仍使用本项目 shadcn，不安装另一套完整主题或可执行 MDX。catalog 保留原文档 ID、文件路径和旧链接；在线搜索采用 Fumadocs Meilisearch，经同源只读 `/api/search/` 查询；Pagefind 仅用于静态导出。
 
-`build:static` 只生成受允许的页面、搜索、raw、图表和既有合法音频，运行时仅需静态托管；内部知识须由托管入口统一保护。`build:online` 单独生成 standalone，按需连接身份、PG、受控执行桥；未配置 PG／桥时仍可认证阅读。静态站不依赖在线 API、数据库、桥或模型。
+`build:static` 只生成受允许的页面、搜索、raw、图表和既有合法音频，运行时仅需静态托管；内部知识须由托管入口统一保护。`build:online` 单独生成 standalone，按需连接身份、PG、受控执行桥；未配置 PG／桥时仍可直接阅读。静态站不依赖在线 API、数据库、桥或模型。
 
 不建设 TTS 服务、供应商、声音上传或生成调度。既有音频导入／播放只作兼容保留，无资源时完整阅读文字。

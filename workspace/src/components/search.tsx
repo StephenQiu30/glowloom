@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { fetchClient } from 'fumadocs-core/search/client/fetch';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { RefreshCw, Search as SearchIcon } from 'lucide-react';
@@ -35,6 +36,7 @@ interface Result {
   readonly url: string;
   readonly meta: { readonly title?: string };
   readonly excerpt: string;
+  readonly plain?: boolean;
 }
 interface Pagefind {
   search(
@@ -48,7 +50,37 @@ interface SearchResponse {
   readonly results: Result[];
 }
 
-/** Uses the frozen local index; URL state survives refresh and browser history. */
+/** The same-origin Fumadocs endpoint keeps private engine credentials on the server. */
+async function searchOnline(
+  query: string,
+  category: string,
+): Promise<Result[]> {
+  const found = await fetchClient({
+    api: `${process.env.NEXT_PUBLIC_WORKSPACE_BASE_PATH ?? ''}/api/search/`,
+    tag: category || undefined,
+    cache: new Map(),
+  }).search(query);
+  const groups = new Map<string, Result>();
+  for (const item of found) {
+    const page = item.url.split('#')[0];
+    if (item.type === 'page') {
+      groups.set(page, {
+        url: page,
+        meta: { title: item.content },
+        excerpt: '',
+        plain: true,
+      });
+    } else {
+      const group = groups.get(page);
+      if (group && !group.excerpt) {
+        groups.set(page, { ...group, url: item.url, excerpt: item.content });
+      }
+    }
+  }
+  return [...groups.values()];
+}
+
+/** Searches the frozen version; URL state survives refresh and browser history. */
 export function Search() {
   const params = useSearchParams();
   const query = params.get('q') ?? '';
@@ -76,15 +108,21 @@ export function Search() {
     let canceled = false;
     const timer = setTimeout(async () => {
       try {
-        // Pagefind is emitted by our build, outside the application JS bundle.
-        const url = `${process.env.NEXT_PUBLIC_WORKSPACE_BASE_PATH ?? ''}/pagefind/pagefind.js`;
-        const pagefind: Pagefind = await import(/* webpackIgnore: true */ url);
-        const found = await pagefind.search(query, {
-          filters: category ? { category } : undefined,
-        });
-        const results = await Promise.all(
-          found.results.slice(0, 30).map((result) => result.data()),
-        );
+        let results: Result[];
+        if (process.env.NEXT_PUBLIC_WORKSPACE_MODE === 'online') {
+          results = await searchOnline(query, category);
+        } else {
+          const url = `${process.env.NEXT_PUBLIC_WORKSPACE_BASE_PATH ?? ''}/pagefind/pagefind.js`;
+          const pagefind: Pagefind = await import(
+            /* webpackIgnore: true */ url
+          );
+          const found = await pagefind.search(query, {
+            filters: category ? { category } : undefined,
+          });
+          results = await Promise.all(
+            found.results.slice(0, 30).map((result) => result.data()),
+          );
+        }
         if (!canceled) {
           setResponse({ key: requestKey, state: 'ready', results });
         }
@@ -179,9 +217,9 @@ export function Search() {
       )}
       {state === 'error' && (
         <Alert>
-          <AlertTitle>搜索索引暂时不可用</AlertTitle>
+          <AlertTitle>搜索暂时不可用</AlertTitle>
           <AlertDescription>
-            请检查资源是否完整，或重新加载索引。
+            请稍后重试，文档仍可从目录阅读。
             <Button
               variant="outline"
               size="sm"
@@ -212,9 +250,13 @@ export function Search() {
                   <ItemContent className="min-w-0">
                     <ItemTitle>{result.meta.title ?? result.url}</ItemTitle>
                     <ItemDescription>
-                      <span
-                        dangerouslySetInnerHTML={{ __html: result.excerpt }}
-                      />
+                      {result.plain ? (
+                        result.excerpt
+                      ) : (
+                        <span
+                          dangerouslySetInnerHTML={{ __html: result.excerpt }}
+                        />
+                      )}
                     </ItemDescription>
                   </ItemContent>
                 </Link>

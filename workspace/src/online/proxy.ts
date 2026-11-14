@@ -14,7 +14,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
   const secret = process.env.GLOWLOOM_WORKSPACE_SESSION_SECRET ?? '';
-  if (verifySession(request.cookies.get(cookieName)?.value ?? '', secret)) {
+  const knowledgeRead =
+    ['GET', 'HEAD'].includes(request.method) &&
+    ((!path.startsWith('/api/') && !/^\/operations(?:\/|$)/.test(path)) ||
+      /^\/api\/search\/?$/.test(path));
+  if (
+    knowledgeRead ||
+    verifySession(request.cookies.get(cookieName)?.value ?? '', secret)
+  ) {
     if (path.startsWith('/docs/')) {
       const doc = (await getSnapshot()).documents.find((d) =>
         d.aliases?.includes(
@@ -30,6 +37,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
   if (
+    path === '/static.json' ||
     path.startsWith('/api/') ||
     path.startsWith('/raw/') ||
     path.startsWith('/pagefind/') ||

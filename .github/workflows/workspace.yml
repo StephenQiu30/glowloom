@@ -22,7 +22,15 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      meilisearch:
+        image: getmeili/meilisearch:v1.37
+        env:
+          MEILI_MASTER_KEY: workspace-ci-only-meilisearch-key
+          MEILI_NO_ANALYTICS: true
+        ports: [7700:7700]
     env:
+      WORKSPACE_MEILISEARCH_TEST_HOST: http://127.0.0.1:7700
+      WORKSPACE_MEILISEARCH_TEST_ADMIN_KEY: workspace-ci-only-meilisearch-key
       GLOWLOOM_WORKSPACE_TEST_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci?options=-c%20role%3Dglowloom_workspace
     defaults:
       run:
@@ -58,7 +66,7 @@ jobs:
         run: pnpm build:static && pnpm build:online
       - name: Static browser acceptance
         run: |
-          pnpm serve:static > "$RUNNER_TEMP/workspace-static.log" 2>&1 &
+          pnpm serve:static --port 1131 > "$RUNNER_TEMP/workspace-static.log" 2>&1 &
           reader_pid=$!
           trap 'kill "$reader_pid" 2>/dev/null || true' EXIT
           curl --fail --silent --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:1131/ > /dev/null

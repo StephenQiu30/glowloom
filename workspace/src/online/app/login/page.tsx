@@ -5,7 +5,7 @@ import {
   CardDescription,
   CardHeader,
 } from '@/components/ui/card';
-export const metadata = { title: '访问工作空间' };
+export const metadata = { title: '协作权限' };
 export default function LoginPage() {
   return (
     <main
@@ -14,9 +14,9 @@ export default function LoginPage() {
     >
       <Card className="w-full">
         <CardHeader>
-          <h1 className="text-xl font-semibold">访问工作空间</h1>
+          <h1 className="text-xl font-semibold">验证协作权限</h1>
           <CardDescription>
-            验证本机身份后，进入知识与研发协作。
+            阅读和搜索无需验证。编辑与执行前，请验证本机权限。
           </CardDescription>
         </CardHeader>
         <CardContent>

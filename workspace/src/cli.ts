@@ -14,11 +14,7 @@ const { positionals, values } = parseArgs({
   },
 });
 const [command, argument, identity] = positionals;
-const port = Number(
-  values.port ??
-    process.env.WORKSPACE_PORT ??
-    (command === 'serve' ? '1131' : '1130'),
-);
+const port = Number(values.port ?? process.env.WORKSPACE_PORT ?? '1130');
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error('Invalid port');
 }
@@ -81,6 +77,11 @@ async function main() {
           authorized: values.authorized ?? false,
         }),
       );
+      return;
+    }
+    case 'search': {
+      const { synchronizeSearch } = await import('./search/sync');
+      console.log(await synchronizeSearch(workspaceRoot));
       return;
     }
     case 'serve': {

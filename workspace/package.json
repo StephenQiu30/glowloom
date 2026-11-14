@@ -21,7 +21,9 @@
     "import:narration": "tsx src/cli.ts narration",
     "release:select": "tsx src/cli.ts select",
     "knowledge:sync": "tsx src/cli.ts knowledge",
-    "start:bridge": "node --env-file-if-exists=.env --import tsx src/cli.ts bridge"
+    "start:bridge": "node --env-file-if-exists=.env --import tsx src/cli.ts bridge",
+    "start": "node --env-file-if-exists=.env --import tsx src/cli.ts online",
+    "search:sync": "node --env-file-if-exists=.env --import tsx src/cli.ts search"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",
@@ -30,6 +32,7 @@
     "fumadocs-core": "16.19.0",
     "geist": "1.8.1",
     "lucide-react": "1.48.0",
+    "meilisearch": "0.63.0",
     "next": "16.3.6",
     "next-themes": "0.4.6",
     "pg": "8.16.3",

@@ -5,10 +5,15 @@ import {
   type MetaData,
 } from 'fumadocs-core/source';
 import type { Snapshot, Document } from './catalog';
+import {
+  structure,
+  type StructuredData,
+} from 'fumadocs-core/mdx-plugins/remark-structure';
 import { documentHref } from './identity';
 
 interface WorkspacePage extends PageData {
   readonly document: Document;
+  readonly structuredData: () => StructuredData;
 }
 
 /** Catalog identities stay authoritative; the framework owns the page tree and lookups. */
@@ -51,7 +56,11 @@ export function createDocumentSource(
       type: 'page',
       path: `${document.category}/${document.id}.md`,
       slugs: [document.id],
-      data: { title: document.title, document },
+      data: {
+        title: document.title,
+        document,
+        structuredData: () => structure(document.source),
+      },
     });
   }
   return loader({

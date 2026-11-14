@@ -21,24 +21,29 @@ function accessToken() {
   return token;
 }
 const origin = process.env.WORKSPACE_ONLINE_TEST_URL ?? 'http://127.0.0.1:1130';
-test('keeps unauthenticated login free of private knowledge and protects every data resource', async ({
+test('opens knowledge without a token while keeping collaboration protected', async ({
   page,
 }) => {
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: '访问工作空间' }),
+    page.getByRole('heading', { name: '知识库', exact: true }),
   ).toBeVisible();
-  expect(await page.content()).not.toContain(
-    'Workspace 知识库与研发工作流服务设计',
-  );
+  await expect(page.getByLabel('本机访问令牌')).toHaveCount(0);
+  await page.goto('/read/design-43/');
+  await expect(page.locator('main h1')).toContainText('Workspace');
   for (const path of [
     '/raw/design-43.md',
-    '/pagefind/pagefind.js',
     '/narration/index.json',
-    '/api/documents/',
+    '/static.json',
+    '/api/search/?query=Workspace',
   ]) {
-    expect((await page.request.get(path)).status()).toBe(401);
+    expect((await page.request.get(path)).status()).toBe(200);
   }
+  expect((await page.request.get('/api/documents/')).status()).toBe(401);
+  expect(
+    (await page.request.post('/api/proposals/', { data: {} })).status(),
+  ).toBe(401);
+  expect((await page.request.get('/api/session/')).status()).toBe(401);
 });
 test('authenticates local ownership, rejects cross-origin writes, and preserves conflicting proposals', async ({
   page,
@@ -304,4 +309,58 @@ test('uses accessible online forms and protects unsaved document edits', async (
     ).violations.map(({ id }) => id),
   ).toEqual([]);
   expect(errors).toEqual([]);
+});
+
+test('uses Meilisearch without a login in the single knowledge entry and recovers search failures', async ({
+  page,
+}) => {
+  const unauthenticated = await page.request.get(
+    '/api/search/?query=Workspace',
+  );
+  expect(unauthenticated.status()).toBe(200);
+  expect((await page.request.get('/static.json')).status()).toBe(200);
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '知识库', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel('本机访问令牌')).toHaveCount(0);
+  const assets: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/pagefind/')) {
+      assets.push(request.url());
+    }
+  });
+  await page.goto('/search/?q=FR-WS-01&category=产品需求');
+  await expect(page.locator('.search-result').first()).toBeVisible();
+  const response = await page.request.get(
+    '/api/search/?query=FR-WS-01&tag=产品需求',
+  );
+  expect(response.status()).toBe(200);
+  const result = z
+    .array(z.object({ url: z.string(), content: z.string() }))
+    .parse(await response.json());
+  expect(result.some((item) => item.url.startsWith('/read/prd-29/'))).toBe(
+    true,
+  );
+  const href = await page
+    .locator('.search-result')
+    .first()
+    .getAttribute('href');
+  expect(href).toMatch(/^\/read\/.+\//);
+  await page.locator('.search-result').first().click();
+  await expect(page.locator('main h1')).toBeVisible();
+  await page.goto('/search/');
+  await page.route('**/api/search/**', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: '{"error":"search_unavailable"}',
+    }),
+  );
+  await page.getByRole('searchbox', { name: '全文搜索' }).fill('知识库');
+  await expect(page.getByText('搜索暂时不可用', { exact: true })).toBeVisible();
+  await page.unroute('**/api/search/**');
+  await page.getByRole('button', { name: '重试', exact: true }).click();
+  await expect(page.locator('.search-result').first()).toBeVisible();
+  expect(assets).toEqual([]);
 });

@@ -22,6 +22,8 @@ import { categoryNames } from '../content/runtime';
 import { aliasRedirect } from './aliases';
 import { copyPortableTree } from './package';
 import { assertStaticBoundary } from './boundary';
+import { toDocuments } from 'fumadocs-core/search/meilisearch';
+import { createDocumentSource } from '../content/source';
 import { freezeNarration } from '../narration/release';
 
 export interface BuildOptions {
@@ -333,40 +335,39 @@ export async function buildWorkspace(options: BuildOptions) {
         ],
         stage,
       );
-      const indexSite =
-        mode === 'static'
-          ? resolve(stage, 'out')
-          : resolve(stage, '.local-index');
-      if (mode === 'online') {
-        for (const doc of snapshot.documents) {
-          const dir = resolve(indexSite, 'read', doc.id);
-          await mkdir(dir, { recursive: true });
+      if (mode === 'static') {
+        if (snapshot.documents.length) {
+          run(
+            'pnpm',
+            [
+              'exec',
+              'pagefind',
+              '--site',
+              resolve(stage, 'out'),
+              '--glob',
+              'read/**/*.html',
+              '--output-path',
+              resolve(stage, 'public/pagefind'),
+            ],
+            workspace,
+          );
+        } else {
+          await mkdir(resolve(stage, 'public/pagefind'), { recursive: true });
           await writeFile(
-            resolve(dir, 'index.html'),
-            `<html lang="zh-CN"><body><article data-pagefind-body data-pagefind-filter="category:${categoryNames[doc.category] ?? doc.category}"><h1 data-pagefind-meta="title">${doc.title.replaceAll('<', '&lt;')}</h1>${doc.html}</article></body></html>`,
+            resolve(stage, 'public/pagefind/pagefind.js'),
+            'export async function search(){return {results:[]};}\n',
           );
         }
-      }
-      if (snapshot.documents.length) {
-        run(
-          'pnpm',
-          [
-            'exec',
-            'pagefind',
-            '--site',
-            indexSite,
-            '--glob',
-            'read/**/*.html',
-            '--output-path',
-            resolve(stage, 'public/pagefind'),
-          ],
-          workspace,
-        );
       } else {
-        await mkdir(resolve(stage, 'public/pagefind'), { recursive: true });
+        const source = createDocumentSource(snapshot, categoryNames);
+        const documents = await toDocuments(source, {
+          tag: (page) =>
+            categoryNames[page.data.document.category] ??
+            page.data.document.category,
+        });
         await writeFile(
-          resolve(stage, 'public/pagefind/pagefind.js'),
-          'export async function search(){return {results:[]};}\n',
+          resolve(stage, 'public/static.json'),
+          JSON.stringify(documents),
         );
       }
       if (mode === 'static') {
@@ -438,6 +439,10 @@ export async function buildWorkspace(options: BuildOptions) {
         );
       }
       if (mode === 'online') {
+        await cp(
+          resolve(stage, 'public/static.json'),
+          resolve(candidate, 'search-documents.json'),
+        );
         await cp(
           resolve(workspace, 'src/runtime/production.ts'),
           resolve(candidate, 'runtime.ts'),

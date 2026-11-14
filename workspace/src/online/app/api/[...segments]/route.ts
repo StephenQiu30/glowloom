@@ -1,3 +1,4 @@
+import { searchKnowledge } from '@/server/search';
 import { verificationCommand } from '@/server/bridge/verification';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getSnapshot } from '@/content/runtime';
@@ -76,6 +77,16 @@ async function handle(request: Request) {
       `${cookieName}=${session}; Path=${base || '/'}; HttpOnly; SameSite=Strict; Max-Age=1800${config.origin.startsWith('https:') ? '; Secure' : ''}`,
     );
     return response;
+  }
+  if (path === '/api/search' && request.method === 'GET') {
+    const snapshot = await getSnapshot();
+    return json(
+      await searchKnowledge(
+        snapshot.contentDigest,
+        url.searchParams.get('query') ?? '',
+        url.searchParams.get('tag') ?? '',
+      ),
+    );
   }
   const principal = requireAccess(
     request,
