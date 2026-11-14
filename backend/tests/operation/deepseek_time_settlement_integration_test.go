@@ -98,13 +98,14 @@ func TestDeepSeekTimeSettlementUsesOriginalEvidenceAndSingleLedger(t *testing.T)
 
 func TestDeepSeekWorkerPersistsOriginalResponseClock(t *testing.T) {
 	db := operationStoreDB(t)
-	f := seedManagedFixture(t, db)
+	f := seedUnverifiedManagedFixture(t, db)
 	i := f.identity
 	require.NoError(t, db.Exec(`UPDATE catalog.provider SET adapter_key='deepseek',region='domestic' WHERE id=?`, f.provider).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.provider_config_version SET config=(SELECT payload->'config' FROM catalog.provider_preset_version WHERE id='6da07a11-0000-4000-8000-000000000004') WHERE id=?`, f.config).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE operation.operation SET capability='text.generate',mode='text_to_text',params='{}' WHERE id=?`, i.OperationID).Error)
+	seedDispatchModeEvidence(t, db, f)
 	require.NoError(t, db.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','cached prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
 	network := &cachedUsageGeneration{}

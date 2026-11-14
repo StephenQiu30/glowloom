@@ -63,12 +63,13 @@ func TestOperationTaskRuntimePersistsStagesAndRecoversWithoutPaidReplay(t *testi
 	for _, scenario := range []string{"normal", "submit_reply_interrupted", "ingest_interrupted"} {
 		t.Run(scenario, func(t *testing.T) {
 			database := operationStoreDB(t)
-			f := seedManagedFixture(t, database)
+			f := seedUnverifiedManagedFixture(t, database)
 			id := f.identity.OperationID
 			require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, f.identity.ModelProfileVersionID).Error)
 			require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, f.identity.ModelProfileVersionID).Error)
 			require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":10}' WHERE id=?`, f.identity.PriceRuleVersionID).Error)
 			require.NoError(t, database.Exec(`UPDATE operation.operation SET capability='text.generate',mode='text_to_text',params='{}' WHERE id=?`, id).Error)
+			seedDispatchModeEvidence(t, database, f)
 			results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
 			network := &fixtureGeneration{}
 			provider := managed.NewActivities(f.store, fixtureUnsealer{}, network, results, nil)

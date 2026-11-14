@@ -28,11 +28,12 @@ func TestExplicitRecoverReopensOnlyOriginalParkedReadWorkOnce(t *testing.T) {
 	for _, scenario := range []string{"query", "unknown", "no_dispatch", "wrong_task", "wrong_identity", "active_lease", "completed_work", "revoked"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := operationStoreDB(t)
-			f := seedManagedFixture(t, db)
+			f := seedUnverifiedManagedFixture(t, db)
 			id, pid := f.identity.OperationID, f.identity.ProjectID
 			require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='video.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, f.identity.ModelProfileVersionID).Error)
 			require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text2video'],queue='provider',supports_query=true,supports_cancel=false,moderation='provider',expected_max_ms=60000 WHERE id=?`, f.identity.ModelProfileVersionID).Error)
 			require.NoError(t, db.Exec(`UPDATE operation.operation SET status='confirmed',capability='video.generate',mode='text2video',params='{}' WHERE id=?`, id).Error)
+			seedDispatchModeEvidence(t, db, f)
 			var actor identityapp.Principal
 			require.NoError(t, db.Raw(`SELECT u.id,u.org_id,u.role FROM identity."user" u JOIN operation.operation o ON o.confirmed_by=u.id WHERE o.id=?`, id).Scan(&actor).Error)
 			actor = identityfixture.Session(t, db, actor)
@@ -138,11 +139,12 @@ func TestExplicitRecoverReopensOnlyOriginalParkedReadWorkOnce(t *testing.T) {
 
 func TestExplicitRecoverReopensParkedDeliveryWithoutProviderDispatch(t *testing.T) {
 	db := operationStoreDB(t)
-	f := seedManagedFixture(t, db)
+	f := seedUnverifiedManagedFixture(t, db)
 	id, pid := f.identity.OperationID, f.identity.ProjectID
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, f.identity.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',moderation='provider' WHERE id=?`, f.identity.ModelProfileVersionID).Error)
 	require.NoError(t, db.Exec(`UPDATE operation.operation SET capability='text.generate',mode='text_to_text' WHERE id=?`, id).Error)
+	seedDispatchModeEvidence(t, db, f)
 	claim, err := f.store.ClaimProviderDispatch(t.Context(), f.identity)
 	require.NoError(t, err)
 	require.True(t, claim.Claimed)

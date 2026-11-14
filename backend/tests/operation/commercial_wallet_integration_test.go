@@ -120,6 +120,12 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "2", wallet.HeldCredits)
 
+	identity := op.ProviderDispatchIdentity{OperationID: id, ProjectID: project, ModelProfileVersionID: version,
+		PriceRuleVersionID: price, Action: "submit", Attempt: 1, RequestKey: key}
+	var credential uuid.UUID
+	require.NoError(t, db.Raw(`SELECT id FROM catalog.provider_credential WHERE provider_id=? AND status='active'`, provider).Row().Scan(&credential))
+	seedDispatchModeEvidence(t, db, managedFixture{identity: identity, release: release, credential: credential})
+
 	network := &fixtureGeneration{}
 	results := op.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
 	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil)
@@ -133,8 +139,6 @@ func TestCommercialWalletQuoteConfirmationAndMockedSettlement(t *testing.T) {
 	require.NoError(t, err)
 	_, err = store.TransitionWorkflowOperation(t.Context(), op.TransitionInput{OperationID: id, From: []domain.Status{domain.StatusSucceeded}, To: domain.StatusIngesting})
 	require.NoError(t, err)
-	identity := op.ProviderDispatchIdentity{OperationID: id, ProjectID: project, ModelProfileVersionID: version,
-		PriceRuleVersionID: price, Action: "submit", Attempt: 1, RequestKey: key}
 	require.NoError(t, store.IngestManagedText(t.Context(), identity))
 	f := app.NewOperationFinalizer(db, store, billingpg.NewStore(db))
 	finish := operationflow.SettlementInput{OperationID: id.String(), From: domain.StatusIngesting, To: domain.StatusCompleted, ActualCostMicros: 120_000}
