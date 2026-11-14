@@ -46,6 +46,7 @@ type Pagination = Omit<
 
 type Props<T extends Row, FilterKey extends string> = {
   title: string;
+  showHeading?: boolean;
   label: string;
   columns: AdminTableColumn<T, FilterKey>[];
   rows: T[];
@@ -67,6 +68,7 @@ type Props<T extends Row, FilterKey extends string> = {
 
 export function AdminTable<T extends Row, FilterKey extends string>({
   title,
+  showHeading = true,
   label,
   columns,
   rows,
@@ -107,26 +109,39 @@ export function AdminTable<T extends Row, FilterKey extends string>({
     ) : null;
   const selectionInToolbar = selection?.inToolbar && selectionBar;
 
+  const toolbar = (
+    <>
+      {toolbarExtra}
+      {selectionInToolbar || (
+        <>
+          {ready && !mobile && rows.length > 0 && configurable.length > 0 ? (
+            <ColumnMenu
+              columns={configurable.map(({ id, header }) => ({
+                id,
+                label: header,
+              }))}
+              visibility={columnVisibility}
+              onChange={setVisibility}
+            />
+          ) : null}
+          {actions}
+        </>
+      )}
+    </>
+  );
+
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <AdminHeading title={title}>
-        {toolbarExtra}
-        {selectionInToolbar || (
-          <>
-            {ready && !mobile && rows.length > 0 && configurable.length > 0 ? (
-              <ColumnMenu
-                columns={configurable.map(({ id, header }) => ({
-                  id,
-                  label: header,
-                }))}
-                visibility={columnVisibility}
-                onChange={setVisibility}
-              />
-            ) : null}
-            {actions}
-          </>
-        )}
-      </AdminHeading>
+      {showHeading ? (
+        <AdminHeading title={title}>{toolbar}</AdminHeading>
+      ) : toolbarExtra ||
+        actions ||
+        selectionInToolbar ||
+        (ready && !mobile && rows.length > 0 && configurable.length > 0) ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {toolbar}
+        </div>
+      ) : null}
       {context}
       {filter && fields.length > 0 ? (
         <AdminTableFilters {...filter} fields={fields} />

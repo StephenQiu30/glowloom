@@ -3,6 +3,8 @@ import { readErrorMessage } from "@/lib/read-error";
 import { ContentState } from "@/components/layout/content-state";
 
 import { useEffect, useId, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminHeading } from "@/components/governance/admin-layout";
 import { useBatchOperation } from "@/components/governance/use-batch-operation";
 import { BatchDialog } from "@/components/governance/batch-dialog";
@@ -45,7 +47,7 @@ import {
 import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
 import { ConnectionReleaseReview } from "./connection-release-review";
-import { PresetConnect } from "./preset-connect";
+import { PresetConnect, usePendingProviderConnection } from "./preset-connect";
 import {
   useConnectionColumns,
   regionLabel,
@@ -61,6 +63,16 @@ import {
   type PresetStateAction,
 } from "./provider-preset-list";
 import { connectionPresets, providerLabel } from "./provider-label";
+
+const AddModelForm = dynamic(
+  () =>
+    import("@/app/models/_components/add-model-form").then(
+      (module) => module.AddModelForm,
+    ),
+  {
+    loading: () => <ContentState state="loading" title="正在加载模型" />,
+  },
+);
 
 type Confirmation = { preset: API.Preset; action: PresetStateAction };
 
@@ -95,6 +107,7 @@ function ProviderAdministration({
   initialMode,
   onPresetViewChange,
 }: ProvidersPageProps) {
+  const onboardingPending = usePendingProviderConnection();
   const overlayTrigger = useRef<HTMLElement | null>(null);
   function rememberTrigger() {
     const active = document.activeElement;
@@ -155,9 +168,32 @@ function ProviderAdministration({
   const [detailOpen, setDetailOpen] = useState(Boolean(initialConnection));
   const detailContent = useRef<HTMLDivElement>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [modelTarget, setModelTarget] = useState<{
+    row: API.ProviderListItem;
+    generation: number;
+  } | null>(null);
+  const modelGeneration = useRef(0);
+  const modelTitleId = useId();
+  const modelTrigger = useRef<HTMLButtonElement>(null);
+  function closeModel() {
+    modelGeneration.current += 1;
+    setModelTarget(null);
+  }
+  function openModel(row: API.ProviderListItem, trigger: HTMLButtonElement) {
+    modelTrigger.current = trigger;
+    setModelTarget({ row, generation: ++modelGeneration.current });
+  }
+  useEffect(() => {
+    if (modelTarget) document.getElementById(modelTitleId)?.focus();
+    else if (modelTrigger.current) {
+      modelTrigger.current.focus();
+      modelTrigger.current = null;
+    }
+  }, [modelTarget, modelTitleId]);
   const reviewTitleId = useId();
   const reviewTrigger = useRef<HTMLButtonElement>(null);
   const [connect, setConnect] = useState(false);
+  const [connectPreset, setConnectPreset] = useState<string>();
   const connectVisible = useRef(false);
   const [connectionError, setConnectionError] = useState("");
   const [registryError, setRegistryError] = useState("");
@@ -238,7 +274,8 @@ function ProviderAdministration({
     setSelection({ scope: search, rows: [] });
     onPresetViewChange?.(open);
   }
-  function openConnect() {
+  function openConnect(preset?: string) {
+    setConnectPreset(preset);
     rememberTrigger();
     connectVisible.current = true;
     setConnect(true);
@@ -276,6 +313,10 @@ function ProviderAdministration({
     }
   }, [reviewOpen, reviewTitleId]);
   function closeDetail(open: boolean) {
+    if (!open && modelTarget) {
+      closeModel();
+      return;
+    }
     if (!open && reviewOpen) {
       setReviewOpen(false);
       return;
@@ -293,15 +334,23 @@ function ProviderAdministration({
     setConnect(false);
     setRefresh((value) => value + 1);
   }
-  function connected() {
+  function connected(id: string) {
     setRefresh((value) => value + 1);
     if (!connectVisible.current) {
       return;
     }
     connectVisible.current = false;
     setConnect(false);
-    closeDetail(false);
-    toast.success("服务已接入");
+    setSelected(id);
+    setRenamingConnection(false);
+    setContext({ model: undefined, release: undefined, mode: undefined });
+    const url = new URL(window.location.href);
+    for (const name of ["view", "model", "release", "mode"])
+      url.searchParams.delete(name);
+    url.searchParams.set("connection", id);
+    window.history.replaceState(null, "", url);
+    setDetailOpen(true);
+    toast.success("供应商已保存");
   }
   const query = search.trim().toLocaleLowerCase();
   const matches = (text: string) => text.toLocaleLowerCase().includes(query);
@@ -358,10 +407,58 @@ function ProviderAdministration({
       />
     );
   return (
-    <div className="flex w-full flex-col gap-5">
-      <div hidden={presetsOpen}>
+    <Tabs
+      value={presetsOpen ? "presets" : "connections"}
+      onValueChange={(value) => showPresetView(value === "presets")}
+      className="w-full gap-5"
+    >
+      <AdminHeading title="AI 服务接入">
+        {presetsOpen ? (
+          <Button
+            size="toolbar"
+            disabled={loading || Boolean(error)}
+            onClick={() => openEditor("new")}
+          >
+            <Plus data-icon="inline-start" />
+            新建预设
+          </Button>
+        ) : (
+          <Button
+            size="toolbar"
+            ref={registerFallbackTrigger}
+            onClick={() => openConnect()}
+            disabled={loading || Boolean(error) || batchLocked}
+          >
+            <Plus data-icon="inline-start" />
+            接入服务
+          </Button>
+        )}
+      </AdminHeading>
+      <TabsList aria-label="AI 服务接入视图" className="max-md:h-11">
+        <TabsTrigger
+          value="connections"
+          disabled={batchLocked}
+          className="max-md:min-h-11"
+        >
+          服务连接
+        </TabsTrigger>
+        <TabsTrigger
+          value="presets"
+          disabled={batchLocked}
+          className="max-md:min-h-11"
+        >
+          供应商预设
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent
+        value="connections"
+        forceMount
+        hidden={presetsOpen}
+        className="data-[state=inactive]:hidden"
+      >
         <AdminTable
           title="AI 服务接入"
+          showHeading={false}
           label="连接列表"
           columns={columns}
           rows={visibleProviders}
@@ -377,37 +474,16 @@ function ProviderAdministration({
               </Button>
             ) : null
           }
-          actions={
-            <>
-              <Button
-                size="toolbar"
-                variant="ghost"
-
-                disabled={batchLocked}
-                onClick={() => showPresetView(true)}
-              >
-                供应商预设
-              </Button>
-              <Button
-                size="toolbar"
-                ref={registerFallbackTrigger}
-
-                onClick={openConnect}
-                disabled={loading || Boolean(error) || batchLocked}
-              >
-                <Plus data-icon="inline-start" />
-                接入服务
-              </Button>
-            </>
-          }
           context={
             !presetsOpen ? (
               <>
                 {mutationStatus}
-                {pendingCreate.pending || pendingKey.pending ? (
+                {onboardingPending ||
+                pendingCreate.pending ||
+                pendingKey.pending ? (
                   <div className="flex flex-wrap items-center gap-3">
                     <Badge variant="secondary">保存待确认</Badge>
-                    <Button variant="outline" onClick={openConnect}>
+                    <Button variant="outline" onClick={() => openConnect()}>
                       继续接入
                     </Button>
                   </div>
@@ -497,58 +573,38 @@ function ProviderAdministration({
             ) : null
           }
         />
-      </div>
-      {presetsOpen ? (
-        <>
-          <AdminHeading title="供应商预设">
-            <Button
-              size="toolbar"
-              variant="ghost"
-
-              onClick={() => showPresetView(false)}
-            >
-              返回 AI 服务接入
-            </Button>
-            <Button
-              size="toolbar"
-
-              disabled={loading || Boolean(error)}
-              onClick={() => openEditor("new")}
-            >
-              <Plus data-icon="inline-start" />
-              新建预设
-            </Button>
-          </AdminHeading>
-          {mutationStatus}
-          {loading ? (
-            <div
-              role="status"
-              aria-label="正在加载供应商预设"
-              className="flex flex-col gap-4"
-            >
-              {[0, 1, 2].map((n) => (
-                <Skeleton key={n} className="h-20 w-full" />
-              ))}
-            </div>
-          ) : error ? (
-            <ContentState
-              state="error"
-              title="供应商预设暂时无法读取"
-              description={error}
-              actions={<Button onClick={retry}>重试</Button>}
-            />
-          ) : (
-            <ProviderPresetList
-              items={visiblePresets}
-              adapters={adapters}
-              busy={mutation.busy}
-              filtered={Boolean(query)}
-              onEdit={openEditor}
-              onState={(preset, action) => openConfirmation({ preset, action })}
-            />
-          )}
-        </>
-      ) : null}
+      </TabsContent>
+      <TabsContent value="presets">
+        {mutationStatus}
+        {loading ? (
+          <div
+            role="status"
+            aria-label="正在加载供应商预设"
+            className="flex flex-col gap-4"
+          >
+            {[0, 1, 2].map((n) => (
+              <Skeleton key={n} className="h-20 w-full" />
+            ))}
+          </div>
+        ) : error ? (
+          <ContentState
+            state="error"
+            title="供应商预设暂时无法读取"
+            description={error}
+            actions={<Button onClick={retry}>重试</Button>}
+          />
+        ) : (
+          <ProviderPresetList
+            items={visiblePresets}
+            adapters={adapters}
+            busy={mutation.busy}
+            filtered={Boolean(query)}
+            onEdit={openEditor}
+            onConnect={(preset) => openConnect(preset.id)}
+            onState={(preset, action) => openConfirmation({ preset, action })}
+          />
+        )}
+      </TabsContent>
       <BatchDialog key={batch.generation} batch={batch} />
       <Dialog
         open={Boolean(connect)}
@@ -570,9 +626,16 @@ function ProviderAdministration({
           {connect ? (
             <PresetConnect
               adapters={adapters}
+              initialPreset={
+                onboardingPending?.kind === "preset"
+                  ? onboardingPending.presetID
+                  : (pendingCreate.pending?.target ?? connectPreset)
+              }
               presets={connectionPresets(
                 presets,
-                pendingCreate.pending?.target,
+                onboardingPending?.kind === "preset"
+                  ? onboardingPending.presetID
+                  : pendingCreate.pending?.target,
               )}
               providers={providers}
               onCreated={(id) => {
@@ -588,7 +651,11 @@ function ProviderAdministration({
       <Dialog open={detailOpen} onOpenChange={closeDetail}>
         <DialogContent
           ref={detailContent}
-          {...(reviewOpen ? { "aria-labelledby": reviewTitleId } : {})}
+          {...(modelTarget
+            ? { "aria-labelledby": modelTitleId }
+            : reviewOpen
+              ? { "aria-labelledby": reviewTitleId }
+              : {})}
           aria-describedby={
             reviewOpen ? `${reviewTitleId}-description` : undefined
           }
@@ -613,12 +680,16 @@ function ProviderAdministration({
           }
         >
           {selected ? (
-            <div className={reviewOpen ? "hidden" : "contents"}>
+            <div
+              hidden={reviewOpen || Boolean(modelTarget)}
+              className={reviewOpen || modelTarget ? "hidden" : "contents"}
+            >
               <ConnectionDetail
                 key={`${selected}:${renamingConnection}`}
                 id={selected}
                 Title={DialogTitle}
                 onReview={openReview}
+                onAddModel={openModel}
                 initialRename={renamingConnection}
                 initialModel={context.model}
                 initialRelease={context.release}
@@ -628,6 +699,26 @@ function ProviderAdministration({
                 onSaved={() => setRefresh((v) => v + 1)}
               />
             </div>
+          ) : null}
+          {modelTarget ? (
+            <>
+              <DialogHeader>
+                <DialogTitle id={modelTitleId} tabIndex={-1} size="lg">
+                  接入模型
+                </DialogTitle>
+              </DialogHeader>
+              <AddModelForm
+                key={modelTarget.generation}
+                providers={[modelTarget.row]}
+                initialProvider={modelTarget.row.provider?.id ?? selected}
+                onCredentialSaved={() => setRefresh((value) => value + 1)}
+                onAdded={() => {
+                  setRefresh((value) => value + 1);
+                  if (modelGeneration.current === modelTarget.generation)
+                    closeModel();
+                }}
+              />
+            </>
           ) : null}
           {selected && reviewOpen ? (
             <ConnectionReleaseReview
@@ -717,6 +808,6 @@ function ProviderAdministration({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Tabs>
   );
 }

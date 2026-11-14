@@ -67,6 +67,7 @@ export function ModelSelectOption({
   detailed = false,
   unavailable = false,
   providerAdapterKey,
+  providerLogoAssetID,
   ...props
 }: Omit<ComponentProps<typeof SelectItem>, "children" | "className"> & {
   name: string;
@@ -74,6 +75,7 @@ export function ModelSelectOption({
   detailed?: boolean;
   unavailable?: boolean;
   providerAdapterKey?: string;
+  providerLogoAssetID?: string;
 }) {
   return (
     <SelectItem textValue={name} className="model-select-option" {...props}>
@@ -83,11 +85,19 @@ export function ModelSelectOption({
             aria-hidden="true"
             className="model-select-symbol flex size-[42px] shrink-0 items-center justify-center rounded-lg border"
           >
-            <ProviderLogo adapterKey={providerAdapterKey} iconOnly />
+            <ProviderLogo
+              adapterKey={providerAdapterKey}
+              logoAssetID={providerLogoAssetID}
+              iconOnly
+            />
           </span>
         )}
-        {!detailed && providerAdapterKey && (
-          <ProviderLogo adapterKey={providerAdapterKey} iconOnly />
+        {!detailed && (providerAdapterKey || providerLogoAssetID) && (
+          <ProviderLogo
+            adapterKey={providerAdapterKey}
+            logoAssetID={providerLogoAssetID}
+            iconOnly
+          />
         )}
         <span className="min-w-0">
           <span className="block truncate">
@@ -207,6 +217,7 @@ export function ModelPicker({
         {current ? (
           <ProviderLogo
             adapterKey={current.model.provider_adapter_key}
+            logoAssetID={current.model.provider_logo_asset_id}
             iconOnly
             className="size-4"
           />
@@ -224,6 +235,7 @@ export function ModelPicker({
             value={id}
             name={name}
             providerAdapterKey={model.provider_adapter_key}
+            providerLogoAssetID={model.provider_logo_asset_id}
             disabled={unavailable}
             detailed={!compact}
             unavailable={unavailable}

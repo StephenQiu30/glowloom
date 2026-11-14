@@ -79,6 +79,8 @@ func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, 
 		avatarService := mediaapp.NewRoutedAvatarService(avatars, routedObjects, now)
 		avatarQuery := mediaapp.NewRoutedAvatarQuery(avatars, routedObjects, now, cfg.ObjectStorage.Access.PreviewTTL)
 		mediahttp.NewAvatarHandler(avatarService, avatarQuery).Register(group)
+		logos := pgmedia.NewProviderLogoStore(database, func(tx *gorm.DB) mediaapp.AvatarActorAccess { return pgidentity.NewStore(tx) })
+		mediahttp.NewProviderLogoHandler(mediaapp.NewRoutedProviderLogoService(logos, routedObjects, now), mediaapp.NewProviderLogoQuery(logos, routedObjects, now, cfg.ObjectStorage.Access.PreviewTTL)).Register(group)
 		sessions.Register(group)
 		http.NewPlatformDirectoryHandler(identityapp.NewPlatformDirectory(pgidentity.NewPlatformDirectoryStore(database), protector, now)).Register(group)
 		exportStore := pgidentity.NewDirectoryExportStore(database)

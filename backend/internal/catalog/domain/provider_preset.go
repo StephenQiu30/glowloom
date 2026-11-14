@@ -19,7 +19,7 @@ import (
 var ErrInvalidPreset = errors.New("invalid provider preset")
 
 // ProviderConfig is a nonsecret, immutable execution configuration. Endpoints
-// belong to the adapter registry; presets cannot introduce arbitrary hosts.
+// belong to the adapter registry, except public HTTPS OpenAI-compatible gateways.
 type ProviderConfig struct {
 	AdapterKey       string   `json:"adapter_key"`
 	BaseURL          string   `json:"base_url"`
@@ -33,7 +33,10 @@ type ProviderConfig struct {
 // Validate admits only implemented protocols and bounded operational settings.
 func (c ProviderConfig) Validate() error {
 	spec, ok := GetAdapterSpec(c.AdapterKey)
-	if !ok || c.BaseURL != spec.AllowedBaseURL || c.Region != spec.AllowedRegion {
+	if !ok || c.Region != spec.AllowedRegion {
+		return ErrInvalidPreset
+	}
+	if c.BaseURL != spec.AllowedBaseURL && (c.AdapterKey != "openai" || ValidateGatewayBaseURL(c.BaseURL) != nil) {
 		return ErrInvalidPreset
 	}
 	if c.TimeoutSeconds < 5 || c.TimeoutSeconds > 300 || c.ConcurrencyLimit < 1 || c.ConcurrencyLimit > 1000 || c.RateLimitPerMin < 1 || c.RateLimitPerMin > 100000 || len(c.Capabilities) == 0 {
@@ -65,6 +68,9 @@ func (p PresetDocument) Validate() error {
 		return ErrInvalidPreset
 	}
 	if p.Config.Validate() != nil || len(p.ModelTemplates) > 16 || (p.AdapterDeclaration != nil && p.AdapterDeclaration.Validate(p.Config) != nil) {
+		return ErrInvalidPreset
+	}
+	if p.Config.IsCustomGateway() && len(p.ModelTemplates) != 0 {
 		return ErrInvalidPreset
 	}
 	seen := map[string]bool{}

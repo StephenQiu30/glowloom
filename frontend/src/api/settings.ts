@@ -897,6 +897,25 @@ export async function previewAdminProviderDeletion(
   );
 }
 
+/** 更新供应商 Logo PATCH /api/admin/providers/${param0}/logo */
+export async function updateProviderLogo(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.updateProviderLogoParams,
+  body: API.ProviderLogoInput,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.CreatedProvider>(`/api/admin/providers/${param0}/logo`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 从连接预设添加模型 POST /api/admin/providers/${param0}/models */
 export async function addProviderPresetModel(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -992,6 +1011,21 @@ export async function previewProviderUpgrade(
       ...(options || {}),
     },
   );
+}
+
+/** 创建自定义供应商连接 POST /api/admin/providers/custom */
+export async function createCustomProviderConnection(
+  body: API.CustomProviderInput,
+  options?: RequestOptions,
+) {
+  return request<API.PresetConnection>("/api/admin/providers/custom", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
 }
 
 /** 项目默认模型 GET /api/projects/${param0}/model-defaults */

@@ -140,7 +140,7 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 		return CreatedProvider{}, ErrInvalidUpdateProvider
 	}
 	return CreatedProvider{
-		ID: saved.ID, Key: saved.Key, Name: saved.Name, AdapterKey: saved.AdapterKey,
+		LogoAssetID: saved.LogoAssetID, ID: saved.ID, Key: saved.Key, Name: saved.Name, AdapterKey: saved.AdapterKey,
 		Region: saved.Region, Status: saved.Status, ConcurrencyLimit: saved.ConcurrencyLimit,
 		QuotaGroup: saved.QuotaGroup, RateLimitPerMin: saved.RateLimitPerMin, Revision: saved.Revision,
 		CreateTime: saved.CreateTime, UpdateTime: saved.UpdateTime,

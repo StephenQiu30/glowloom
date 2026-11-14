@@ -51,6 +51,7 @@ type ModelCatalogPrice struct {
 
 // ModelCatalogItem contains internal display data without credential secrets.
 type ModelCatalogItem struct {
+	ProviderLogoAssetID *uuid.UUID
 	ModelAvailability
 	ID                   uuid.UUID
 	ReleaseID            uuid.UUID

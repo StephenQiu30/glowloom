@@ -77,6 +77,12 @@ func (c ModelCandidateCatalog) Select(version string, keys []string) ([]ModelCan
 // ModelCatalogForPreset returns candidate models matching the config's capabilities,
 // merging a persisted snapshot with explicit administrator model templates.
 func ModelCatalogForPreset(document PresetDocument, source ModelCandidateCatalog) ModelCandidateCatalog {
+	// A matching model name does not establish a gateway's execution contract,
+	// availability or supplier pricing. Gateways start with custom drafts.
+	if document.Config.IsCustomGateway() {
+		source.Models = nil
+		document.ModelTemplates = nil
+	}
 	catalog := ModelCandidateCatalog{Version: source.Version, Models: []ModelCandidatePreset{}}
 	for _, model := range source.Models {
 		if model.AdapterKey == document.Config.AdapterKey && slices.Contains(document.Config.Capabilities, strings.TrimSuffix(model.Capability, ".generate")) {

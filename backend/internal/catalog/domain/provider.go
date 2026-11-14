@@ -46,6 +46,7 @@ const (
 
 // Provider is the platform-level adapter and rate-limit configuration.
 type Provider struct {
+	LogoAssetID            *uuid.UUID
 	QuotaGroup             string
 	ID                     uuid.UUID
 	CurrentConfigVersionID uuid.UUID

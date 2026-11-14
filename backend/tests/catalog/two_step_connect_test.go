@@ -48,7 +48,7 @@ func TestTwoStepModelDirectoryUsesOnlyRegisteredReadEndpoints(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"a", "b"}, ids)
 
-	config.BaseURL = "https://invalid.example"
+	config.BaseURL = "https://127.0.0.1/v1"
 	_, err = client.ReadModelIDs(t.Context(), config, "directory-test-value")
 	require.ErrorIs(t, err, catalogapp.ErrModelDirectoryUnsupported)
 	require.Equal(t, 1, calls)

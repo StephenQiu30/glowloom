@@ -43,6 +43,13 @@ const config = {
   resolve: {
     alias: [
       {
+        find: "next/dynamic",
+        replacement: path.resolve(
+          import.meta.dirname,
+          "ai-presets-next-dynamic.tsx",
+        ),
+      },
+      {
         find: "@/components/auth/session",
         replacement: path.resolve(import.meta.dirname, "ai-presets-session.ts"),
       },

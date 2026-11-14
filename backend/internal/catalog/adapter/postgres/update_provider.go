@@ -67,7 +67,7 @@ func (s *Store) FindProviderUpdateReceipt(ctx context.Context, actor identityapp
 		if err := json.Unmarshal(row.Result, &model); err != nil {
 			return err
 		}
-		out = application.CreatedProvider{ID: model.ID, Key: model.Key, Name: model.Name, AdapterKey: model.AdapterKey, Region: model.Region, Status: model.Status, ConcurrencyLimit: model.ConcurrencyLimit, QuotaGroup: model.QuotaGroup, RateLimitPerMin: model.RateLimitPerMin, Revision: model.Revision, CreateTime: model.CreateTime, UpdateTime: model.UpdateTime}
+		out = application.CreatedProvider{LogoAssetID: model.LogoAssetID, ID: model.ID, Key: model.Key, Name: model.Name, AdapterKey: model.AdapterKey, Region: model.Region, Status: model.Status, ConcurrencyLimit: model.ConcurrencyLimit, QuotaGroup: model.QuotaGroup, RateLimitPerMin: model.RateLimitPerMin, Revision: model.Revision, CreateTime: model.CreateTime, UpdateTime: model.UpdateTime}
 		found = true
 		return nil
 	})
@@ -92,7 +92,7 @@ func (s *Store) updateProviderWithEvents(ctx context.Context, actor identityapp.
 		}
 		var row providerRow
 		result := tx.Raw(`
-			SELECT id, key, name, adapter_key, region, status, concurrency_limit,
+			SELECT id, logo_asset_id, key, name, adapter_key, region, status, concurrency_limit,
 			       quota_group,rate_limit_per_min, revision, create_time, update_time
 			FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
 		`, before.ID.String()).Scan(&row)

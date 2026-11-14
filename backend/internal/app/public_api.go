@@ -263,6 +263,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	cataloghttp.NewPresetHandler(presets).Register(identityProtected)
 	cataloghttp.NewPresetDirectoryHandler(presets, providerhttp.NewClient(nil).ReadModelIDs).Register(identityProtected)
 	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(identityProtected)
+	cataloghttp.NewCustomProviderHandler(catalogapp.NewCustomProviders(catalogStore)).Register(identityProtected)
 	cataloghttp.RoutePoolHandler{Store: catalogStore}.Register(identityProtected)
 	cataloghttp.NewReleaseHandler(catalogapp.NewModelReleases(catalogStore)).Register(identityProtected)
 	cataloghttp.NewCheckHandler(catalogapp.NewProviderChecks(catalogStore)).Register(identityProtected)

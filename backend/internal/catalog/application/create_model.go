@@ -34,6 +34,8 @@ type CreateModelInput struct {
 
 // CreatedModel is the safe registration summary.
 type CreatedModel struct {
+	ProviderAdapterKey  string     `json:"provider_adapter_key,omitempty"`
+	ProviderLogoAssetID *uuid.UUID `json:"provider_logo_asset_id,omitempty"`
 	ModelAvailability
 	ID               uuid.UUID          `json:"id"`
 	Key              string             `json:"model_key"`

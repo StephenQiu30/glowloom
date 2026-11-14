@@ -14,6 +14,7 @@ import (
 	pgbible "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
@@ -92,7 +93,7 @@ func provideMediaReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 // their caller. Workers must not inherit request-session factories indirectly
 // through Bible, script, or unpublished package reference readers.
 func provideMediaReferenceOwnersWithAccess(tx *gorm.DB, access *pgworkspace.ProjectContentAccessStore, project pgmedia.LibraryProjectAccessFactory, scopes pgmedia.ScopeAccessFactory) mediaapp.LibraryReferences {
-	return mediaReferenceOwners{retained: []retainedMediaOwner{pgsubject.NewMediaGuard(tx), pgworkspace.NewStyleMediaGuard(tx)}, avatars: []avatarReferenceOwner{pgidentity.NewAvatarReferences(tx), pgworkspace.NewTeamAvatarReferences(tx)}, owners: []mediaapp.LibraryReferences{
+	return mediaReferenceOwners{retained: []retainedMediaOwner{pgsubject.NewMediaGuard(tx), pgworkspace.NewStyleMediaGuard(tx), pgcatalog.NewProviderLogoReferences(tx)}, avatars: []avatarReferenceOwner{pgidentity.NewAvatarReferences(tx), pgworkspace.NewTeamAvatarReferences(tx)}, owners: []mediaapp.LibraryReferences{
 		pgworkspace.NewScopedMediaReferenceGuard(tx, access),
 		pgcanvas.NewScopedMediaReferenceGuard(tx, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }),
 		pgoperation.NewScopedMediaReferenceGuard(tx, func(*gorm.DB) operationapp.ProjectAccess { return operationwire.ContentProjectAccess(access) }),

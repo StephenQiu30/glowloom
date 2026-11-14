@@ -8,8 +8,9 @@ import (
 )
 
 // AdapterDeclaration is a data-only reference to an installed adapter protocol.
-// Origins and regions are pinned to the host specification; credentials, custom
-// headers, executable expressions and network overrides are unrepresentable.
+// Endpoints follow ProviderConfig validation; regions stay pinned to the host
+// specification. Credentials, custom headers and executable expressions are
+// unrepresentable.
 type AdapterDeclaration struct {
 	SchemaVersion int      `json:"schema_version"`
 	AdapterKey    string   `json:"adapter_key"`

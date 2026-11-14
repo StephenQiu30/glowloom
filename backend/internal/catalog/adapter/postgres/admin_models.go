@@ -16,12 +16,15 @@ import (
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
-const adminModelSelect = `SELECT id,model_key,provider_id,capability,display_name,status,
-current_version_id,revision,create_time,update_time FROM catalog.model_profile`
+const adminModelSelect = `SELECT m.id,m.model_key,m.provider_id,m.capability,m.display_name,m.status,
+m.current_version_id,m.revision,m.create_time,m.update_time,
+(SELECT p.adapter_key FROM catalog.provider p WHERE p.id=m.provider_id AND NOT p.is_delete) AS provider_adapter_key,
+(SELECT p.logo_asset_id FROM catalog.provider p WHERE p.id=m.provider_id AND NOT p.is_delete) AS provider_logo_asset_id
+FROM catalog.model_profile m`
 
 func createdModel(row modelProfileRow) application.CreatedModel {
 	m := row.model()
-	return application.CreatedModel{ID: m.ID, Key: m.Key, ProviderID: m.ProviderID, Capability: m.Capability, DisplayName: m.DisplayName, Status: m.Status, CurrentVersionID: m.CurrentVersionID, Revision: m.Revision, CreateTime: m.CreateTime, UpdateTime: m.UpdateTime}
+	return application.CreatedModel{ProviderAdapterKey: row.ProviderAdapterKey, ProviderLogoAssetID: row.ProviderLogoAssetID, ID: m.ID, Key: m.Key, ProviderID: m.ProviderID, Capability: m.Capability, DisplayName: m.DisplayName, Status: m.Status, CurrentVersionID: m.CurrentVersionID, Revision: m.Revision, CreateTime: m.CreateTime, UpdateTime: m.UpdateTime}
 }
 
 // ListAdminModels includes all real models independently of any project's region.
@@ -35,10 +38,10 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
-		query := `WITH models AS (SELECT m.id,m.model_key,m.provider_id,m.capability,m.display_name,m.status,m.current_version_id,m.revision,m.create_time,m.update_time,
+		query := `WITH models AS (SELECT provider.adapter_key AS provider_adapter_key,provider.logo_asset_id AS provider_logo_asset_id,m.id,m.model_key,m.provider_id,m.capability,m.display_name,m.status,m.current_version_id,m.revision,m.create_time,m.update_time,
 			EXISTS(SELECT 1 FROM catalog.model_release r WHERE r.model_id=m.id AND r.status IN ('active','retired')) AS has_publication,
 			EXISTS(SELECT 1 FROM catalog.price_rule_version p WHERE p.model_profile_id=m.id AND NOT p.is_delete) AS has_price
-			FROM catalog.model_profile m WHERE NOT m.is_delete) SELECT * FROM models AS m WHERE TRUE`
+			FROM catalog.model_profile m LEFT JOIN catalog.provider provider ON provider.id=m.provider_id AND NOT provider.is_delete WHERE NOT m.is_delete) SELECT * FROM models AS m WHERE TRUE`
 		args := []any{}
 		if input.PricingReview {
 			query = adminPresetPricingQuery

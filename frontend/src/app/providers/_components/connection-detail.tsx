@@ -1,5 +1,6 @@
 "use client";
 import { ConnectionTests } from "./connection-tests";
+import { ConnectionLogoEditor } from "./connection-logo-editor";
 import useSWR from "swr";
 import { useSession } from "@/components/auth/session";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -72,6 +73,7 @@ export function ConnectionDetail({
   presets,
   onSaved,
   onReview,
+  onAddModel,
   revision = 0,
   initialRename = false,
   initialModel,
@@ -89,6 +91,7 @@ export function ConnectionDetail({
   presets: API.Preset[];
   onSaved: () => void;
   onReview?: (trigger: HTMLButtonElement) => void;
+  onAddModel?: (row: API.ProviderListItem, trigger: HTMLButtonElement) => void;
 }) {
   const formFieldId = useId();
   const { actor } = useSession();
@@ -106,8 +109,10 @@ export function ConnectionDetail({
     data: detail,
     error: detailError,
     mutate,
-  } = useSWR(["admin-provider", actor.id, id, revision], () =>
-    getAdminProvider({ id }),
+  } = useSWR(
+    ["admin-provider", actor.id, id, revision],
+    () => getAdminProvider({ id }),
+    { keepPreviousData: true },
   );
   const {
     data: settings,
@@ -238,6 +243,11 @@ export function ConnectionDetail({
         <LoadingState>正在加载连接…</LoadingState>
       ) : (
         <>
+          <ConnectionLogoEditor
+            provider={provider}
+            disabled={keyBusy || archived}
+            onSaved={refresh}
+          />
           {onboardingPending ? (
             <MutationStatus mutation={onboarding} inline />
           ) : null}
@@ -442,11 +452,28 @@ export function ConnectionDetail({
               </Link>
             </Button>
             {!archived ? (
-              <Button variant="outline" size="toolbar" asChild>
-                <Link href={`/models?provider=${encodeURIComponent(id)}&add=1`}>
-                  添加模型
-                </Link>
-              </Button>
+              onAddModel ? (
+                <Button
+                  variant="outline"
+                  size="toolbar"
+                  onClick={(event) =>
+                    onAddModel(
+                      { provider, credential: detail?.credential },
+                      event.currentTarget,
+                    )
+                  }
+                >
+                  接入模型
+                </Button>
+              ) : (
+                <Button variant="outline" size="toolbar" asChild>
+                  <Link
+                    href={`/models?provider=${encodeURIComponent(id)}&add=1`}
+                  >
+                    添加模型
+                  </Link>
+                </Button>
+              )
             ) : null}
             {archived ? archiveAction : null}
           </Toolbar>

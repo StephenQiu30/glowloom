@@ -84,6 +84,7 @@ declare namespace API {
     config_id?: string;
     credential_id?: string;
     custom_model_id?: string;
+    custom_model_name?: string;
     directory_check_id?: string;
     draft_only?: boolean;
     request_id?: string;
@@ -954,6 +955,7 @@ declare namespace API {
     custom_candidates?: ModelCandidatePreset[];
     direct_use?: boolean;
     key?: string;
+    logo_asset_id?: string;
     name?: string;
     request_id?: string;
     selected_models_only?: boolean;
@@ -1091,7 +1093,9 @@ declare namespace API {
     id?: string;
     mode_availability?: ModeAvailability[];
     model_key?: string;
+    provider_adapter_key?: string;
     provider_id?: string;
+    provider_logo_asset_id?: string;
     revision?: number;
     status?: ModelStatus;
     unavailable_reasons?: string[];
@@ -1124,6 +1128,7 @@ declare namespace API {
     create_time?: string;
     id?: string;
     key?: string;
+    logo_asset_id?: string;
     name?: string;
     quota_group?: string;
     rate_limit_per_min?: number;
@@ -1354,6 +1359,13 @@ declare namespace API {
     operation?: string;
     revision?: number;
     update_time?: string;
+  };
+
+  type CustomProviderInput = {
+    config?: ProviderConfig;
+    logo_asset_id?: string;
+    name?: string;
+    request_id?: string;
   };
 
   type Day = {
@@ -2695,6 +2707,11 @@ declare namespace API {
 
   type getProviderConfigParams = {
     /** 连接ID */
+    id: string;
+  };
+
+  type getProviderLogoParams = {
+    /** Logo asset UUID */
     id: string;
   };
 
@@ -4217,6 +4234,7 @@ declare namespace API {
     pricing_preview?: PricingPreview;
     provider_adapter_key?: string;
     provider_id?: string;
+    provider_logo_asset_id?: string;
     provider_name?: string;
     provider_status?: string;
     region?: string;
@@ -5288,6 +5306,12 @@ declare namespace API {
     model_count?: number;
     provider?: CreatedProvider;
     unavailable_reasons?: string[];
+  };
+
+  type ProviderLogoInput = {
+    expected_revision?: number;
+    logo_asset_id?: string | null;
+    request_id?: string;
   };
 
   type ProviderOnboardingState = {
@@ -7547,6 +7571,11 @@ declare namespace API {
   type updateProjectParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type updateProviderLogoParams = {
+    /** 供应商ID */
+    id: string;
   };
 
   type updateProviderPresetStateParams = {

@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { render } from "../../../../feedback";
+import { DialogClose } from "@/components/ui/dialog";
 import { ProvidersPage } from "@/app/providers/_components/providers-page";
 const api = vi.hoisted(() => ({
   providers: vi.fn(),
@@ -18,6 +19,7 @@ const api = vi.hoisted(() => ({
   deleteConnection: vi.fn(),
   role: "creator",
   delayed: false,
+  pendingModel: null as null | (() => void),
   pendingSave: null as null | (() => void),
 }));
 vi.mock("@/components/auth/session", () => ({
@@ -39,15 +41,19 @@ vi.mock("@/app/providers/_components/preset-editor", () => ({
   PresetEditor: () => null,
 }));
 vi.mock("@/app/providers/_components/preset-connect", () => ({
+  usePendingProviderConnection: () => null,
   PresetConnect: ({
     onCreated,
     onSaved,
+    initialPreset,
   }: {
+    initialPreset?: string;
     onCreated: (id: string) => void;
     onSaved: (id: string) => void;
   }) => (
     <div>
       接入表单
+      {initialPreset ? <span>预选：{initialPreset}</span> : null}
       <button
         onClick={() => {
           onCreated("connection");
@@ -64,14 +70,60 @@ vi.mock("@/app/providers/_components/connection-detail", () => ({
   ConnectionDetail: ({
     Title = "h2",
     initialRename,
+    onAddModel,
   }: {
     Title?: React.ElementType;
     initialRename?: boolean;
+    onAddModel?: (
+      row: API.ProviderListItem,
+      trigger: HTMLButtonElement,
+    ) => void;
   }) => (
     <>
       <Title>连接详情</Title>
       <div>{initialRename ? "编辑名称表单" : "连接详情内容"}</div>
+      {onAddModel ? (
+        <button
+          onClick={(event) =>
+            onAddModel(
+              {
+                provider: { id: "connection", name: "DeepSeek" },
+                credential: { id: "credential", status: "active" },
+              },
+              event.currentTarget,
+            )
+          }
+        >
+          接入模型
+        </button>
+      ) : null}
     </>
+  ),
+}));
+vi.mock("@/app/models/_components/add-model-form", () => ({
+  AddModelForm: ({
+    providers,
+    initialProvider,
+    onAdded,
+  }: {
+    providers: API.ProviderListItem[];
+    initialProvider: string;
+    onAdded: (id: string) => void;
+  }) => (
+    <div>
+      <p>
+        模型接入表单：{initialProvider}，凭据：{providers[0]?.credential?.id}
+      </p>
+      <button onClick={() => onAdded("model")}>完成模型接入</button>
+      <button
+        onClick={() => {
+          api.pendingModel = () => onAdded("model");
+        }}
+      >
+        延迟模型保存
+      </button>
+      <DialogClose>返回连接</DialogClose>
+    </div>
   ),
 }));
 beforeEach(() => {
@@ -84,6 +136,7 @@ beforeEach(() => {
   api.role = "creator";
   api.delayed = false;
   api.pendingSave = null;
+  api.pendingModel = null;
   api.providers.mockResolvedValue({ items: [] });
   api.presets.mockResolvedValue({ items: [] });
 });
@@ -139,7 +192,7 @@ it("加载失败显示恢复入口，不伪装成空连接", async () => {
   expect(screen.queryByText("还没有连接")).toBeNull();
 });
 
-it("成功回执后关闭接入弹窗并刷新列表，不自动打开详情", async () => {
+it("供应商保存后进入详情，用户可继续添加模型", async () => {
   api.role = "platform_admin";
   api.providers.mockResolvedValueOnce({ items: [] }).mockResolvedValue({
     items: [
@@ -153,10 +206,16 @@ it("成功回执后关闭接入弹窗并刷新列表，不自动打开详情", a
   await screen.findByText("还没有连接");
   fireEvent.click(screen.getAllByRole("button", { name: "接入服务" })[0]);
   fireEvent.click(screen.getByRole("button", { name: "模拟保存完成" }));
+  await screen.findByRole("dialog", { name: "连接详情" });
+  expect(screen.getByText("连接详情内容")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "接入模型" })).toBeTruthy();
+  expect(screen.queryByText("接入表单")).toBeNull();
+  expect(screen.queryByText(/模型接入表单/)).toBeNull();
+  expect(new URL(window.location.href).searchParams.get("connection")).toBe(
+    "connection",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
   await screen.findByRole("button", { name: "查看 保存的连接" });
-  expect(screen.queryByRole("dialog")).toBeNull();
-  expect(screen.queryByText("连接详情内容")).toBeNull();
-  expect(api.detail).not.toHaveBeenCalled();
 });
 
 it("关闭后仍展示未确认写入，继续接入只打开原流程而不自动写入", async () => {
@@ -230,16 +289,16 @@ it("连接筛选条件提交给服务端，切换预设后仍然保留", async (
     name: "OpenAI",
     status: "available",
   });
-  fireEvent.click(screen.getByRole("button", { name: "供应商预设" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商预设" }));
   expect(screen.queryByRole("form", { name: "服务连接筛选" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "返回 AI 服务接入" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "服务连接" }));
   await screen.findByText("没有匹配的连接");
   expect((filter.getByLabelText("连接名称") as HTMLInputElement).value).toBe(
     "OpenAI",
   );
 });
 
-it("页头打开独立供应商预设列表并可返回连接", async () => {
+it("统一接入页使用标签切换，保留标题和独立搜索", async () => {
   api.role = "platform_admin";
   api.presets.mockResolvedValue({
     items: [
@@ -259,9 +318,9 @@ it("页头打开独立供应商预设列表并可返回连接", async () => {
   // Shared management navigation is exercised by the persistent shell tests.
   expect(screen.queryByRole("navigation", { name: "管理页面" })).toBeNull();
   expect(screen.queryByRole("button", { name: "使用预设" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "供应商预设" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商预设" }));
   expect(
-    await screen.findByRole("heading", { name: "供应商预设" }),
+    await screen.findByRole("heading", { name: "AI 服务接入" }),
   ).toBeTruthy();
   expect(
     screen.getByRole("button", { name: "BytePlus预设的操作" }),
@@ -269,7 +328,7 @@ it("页头打开独立供应商预设列表并可返回连接", async () => {
   expect(screen.queryByText("v9")).toBeNull();
   expect(screen.queryByRole("button", { name: "接入服务" })).toBeNull();
   expect(screen.queryByRole("button", { name: "预设管理" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "返回 AI 服务接入" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "服务连接" }));
   expect(await screen.findByText("还没有连接")).toBeTruthy();
 });
 
@@ -536,4 +595,52 @@ it("删除成功后直接关闭确认弹窗并刷新列表", async () => {
   await screen.findByText("还没有连接");
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(api.deleteConnection).toHaveBeenCalledTimes(1);
+});
+
+it("从预设直接接入时预选原预设，不离开统一页面", async () => {
+  api.role = "platform_admin";
+  api.presets.mockResolvedValue({
+    items: [
+      {
+        id: "deepseek",
+        document: { name: "DeepSeek", config: { adapter_key: "deepseek" } },
+      },
+    ],
+  });
+  render(<ProvidersPage />);
+  await screen.findByText("还没有连接");
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商预设" }));
+  fireEvent.click(await screen.findByRole("button", { name: "接入" }));
+  expect(screen.getByRole("dialog", { name: "接入服务" })).toBeTruthy();
+  expect(screen.getByText("预选：deepseek")).toBeTruthy();
+});
+
+it("接入模型在同一个 Dialog 中完成，取消返回连接并恢复焦点", async () => {
+  api.role = "platform_admin";
+  render(<ProvidersPage initialConnection="connection" />);
+  const trigger = await screen.findByRole("button", { name: "接入模型" });
+  trigger.focus();
+  fireEvent.click(trigger);
+  expect(
+    await screen.findByText("模型接入表单：connection，凭据：credential"),
+  ).toBeTruthy();
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  expect(screen.getByRole("dialog", { name: "接入模型" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "返回连接" }));
+  expect(screen.getByRole("dialog", { name: "连接详情" })).toBeTruthy();
+  await waitFor(() => expect(document.activeElement).toBe(trigger));
+});
+
+it("模型接入关闭后迟到的保存结果不会关闭新打开的表单", async () => {
+  api.role = "platform_admin";
+  render(<ProvidersPage initialConnection="connection" />);
+  fireEvent.click(await screen.findByRole("button", { name: "接入模型" }));
+  fireEvent.click(await screen.findByRole("button", { name: "延迟模型保存" }));
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  fireEvent.click(screen.getByRole("button", { name: "接入模型" }));
+  await screen.findByRole("button", { name: "完成模型接入" });
+  act(() => api.pendingModel?.());
+  expect(screen.getByRole("dialog", { name: "接入模型" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "完成模型接入" }));
+  expect(screen.getByRole("dialog", { name: "连接详情" })).toBeTruthy();
 });

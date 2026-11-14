@@ -55,6 +55,9 @@ func (s *Store) ReadConnectionConfig(ctx context.Context, actor identityapp.Prin
 		if err != nil {
 			return err
 		}
+		if config.PresetVersionID == uuid.Nil {
+			catalog.Version = config.ID.String()
+		}
 		config.ModelCatalog = &catalog
 		return tx.Raw(`SELECT m.id,m.capability,COALESCE(v.provider_model_id,m.candidate_snapshot->'model'->>'provider_model_id') AS provider_model_id FROM catalog.model_profile m
 			LEFT JOIN catalog.model_profile_version v ON v.id=m.current_version_id AND NOT v.is_delete

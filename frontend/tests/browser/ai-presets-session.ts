@@ -1,6 +1,7 @@
 /** Browser fixture identity; selected through Vite alias only, never a product auth path. */
 export function useSession() {
   return {
+    session_id: "provider-browser-fixture",
     actor: {
       id: "11111111-1111-4111-8111-111111111111",
       email: "fixture@example.test",

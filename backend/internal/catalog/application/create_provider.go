@@ -42,6 +42,7 @@ type CreateProviderInput struct {
 
 // CreatedProvider is the safe summary returned by registration.
 type CreatedProvider struct {
+	LogoAssetID      *uuid.UUID            `json:"logo_asset_id,omitempty"`
 	QuotaGroup       string                `json:"quota_group,omitempty"`
 	ID               uuid.UUID             `json:"id"`
 	Key              string                `json:"key"`
@@ -112,7 +113,7 @@ func (c *CreateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 		return CreatedProvider{}, ErrInvalidCreateProvider
 	}
 	return CreatedProvider{
-		ID: saved.ID, Key: saved.Key, Name: saved.Name, AdapterKey: saved.AdapterKey,
+		LogoAssetID: saved.LogoAssetID, ID: saved.ID, Key: saved.Key, Name: saved.Name, AdapterKey: saved.AdapterKey,
 		Region: saved.Region, Status: saved.Status,
 		ConcurrencyLimit: saved.ConcurrencyLimit, RateLimitPerMin: saved.RateLimitPerMin,
 		Revision: saved.Revision, CreateTime: saved.CreateTime, UpdateTime: saved.UpdateTime,

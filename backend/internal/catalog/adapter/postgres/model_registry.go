@@ -289,16 +289,18 @@ func setModelStatusInTx(tx *gorm.DB, model domain.ModelProfile, status domain.Mo
 }
 
 type modelProfileRow struct {
-	ID               uuid.UUID
-	ModelKey         string
-	ProviderID       uuid.UUID
-	Capability       string
-	DisplayName      string
-	Status           string
-	CurrentVersionID *uuid.UUID
-	Revision         int64
-	CreateTime       time.Time
-	UpdateTime       time.Time
+	ProviderAdapterKey  string
+	ProviderLogoAssetID *uuid.UUID
+	ID                  uuid.UUID
+	ModelKey            string
+	ProviderID          uuid.UUID
+	Capability          string
+	DisplayName         string
+	Status              string
+	CurrentVersionID    *uuid.UUID
+	Revision            int64
+	CreateTime          time.Time
+	UpdateTime          time.Time
 }
 
 func (row modelProfileRow) model() domain.ModelProfile {
@@ -316,11 +318,7 @@ func (row modelProfileRow) model() domain.ModelProfile {
 
 func lockModelProfile(tx *gorm.DB, modelID uuid.UUID) (modelProfileRow, error) {
 	var row modelProfileRow
-	result := tx.Raw(`
-		SELECT id, model_key, provider_id, capability, display_name, status,
-		       current_version_id, revision, create_time, update_time
-		FROM catalog.model_profile WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
-	`, modelID.String()).Scan(&row)
+	result := tx.Raw(adminModelSelect+` WHERE id = ?::uuid AND NOT is_delete FOR UPDATE`, modelID.String()).Scan(&row)
 	if result.Error != nil {
 		return modelProfileRow{}, fmt.Errorf("lock model profile: %w", result.Error)
 	}

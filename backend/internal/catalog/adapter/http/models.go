@@ -63,6 +63,7 @@ type PricingPreview struct {
 
 // ModelResponse is the public model metadata and current configuration projection.
 type ModelResponse struct {
+	ProviderLogoAssetID *uuid.UUID `json:"provider_logo_asset_id,omitempty"`
 	application.ModelAvailability
 	PricingPreview       PricingPreview `json:"pricing_preview"`
 	ID                   uuid.UUID      `json:"id"`
@@ -167,8 +168,8 @@ func (h *Handler) ListModels(c *gin.Context) {
 	response := ModelPage{Items: make([]ModelResponse, 0, len(page.Models))}
 	for _, model := range page.Models {
 		item := ModelResponse{ModelAvailability: model.ModelAvailability, PricingPreview: PricingPreview{AmountKind: "unknown"}, ID: model.ID, Key: model.Key, DisplayName: model.DisplayName, Capability: model.Capability, Status: string(model.Status), ProviderID: model.ProviderID,
-			InputRoles:   append([]string{}, model.InputRoles...),
-			ProviderName: model.ProviderName, ProviderAdapterKey: model.ProviderAdapterKey, Region: string(model.ProviderRegion), ProviderStatus: string(model.ProviderStatus), CredentialPresent: model.CredentialPresent}
+			InputRoles:          append([]string{}, model.InputRoles...),
+			ProviderLogoAssetID: model.ProviderLogoAssetID, ProviderName: model.ProviderName, ProviderAdapterKey: model.ProviderAdapterKey, Region: string(model.ProviderRegion), ProviderStatus: string(model.ProviderStatus), CredentialPresent: model.CredentialPresent}
 		if model.CredentialTestResult != nil {
 			result := string(*model.CredentialTestResult)
 			item.CredentialTestResult = &result

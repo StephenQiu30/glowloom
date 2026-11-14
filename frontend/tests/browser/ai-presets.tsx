@@ -155,16 +155,35 @@ const providers: API.ProviderListItem[] = [
     model_count: 1,
   },
 ];
+const providerConfigs = new Map<string, API.ConnectionConfig>([
+  [
+    providerID,
+    {
+      id: "fixture-config",
+      version: 1,
+      provider_id: providerID,
+      config: presets[0].document?.config,
+      model_catalog: presets[0].model_catalog,
+      configured_models: [],
+    },
+  ],
+]);
 // Test-only mock server state survives a page reload. Production stores only the ID.
 const trials = new Map<string, API.TrialState>(
   JSON.parse(sessionStorage.getItem("fixture.ai-trials") ?? "[]"),
 );
 const receipts = new Map<string, unknown>();
+const fixtureRequests: { path: string; method?: string }[] = [];
+Object.assign(window, { providerFixtureRequests: fixtureRequests });
+let failLogoUpload = new URLSearchParams(location.search).has(
+  "logo-upload-fail",
+);
 let loseCreationReceipt = new URLSearchParams(location.search).has(
   "lost-create",
 );
 axios.defaults.adapter = async (config) => {
   const path = config.url ?? "";
+  fixtureRequests.push({ path, method: config.method });
   const body =
     typeof config.data === "string"
       ? JSON.parse(config.data)
@@ -286,7 +305,8 @@ axios.defaults.adapter = async (config) => {
     providers.push({
       provider: {
         id,
-        name: `${p?.document?.name} 测试连接`,
+        name: body.name ?? `${p?.document?.name} 测试连接`,
+        logo_asset_id: body.logo_asset_id,
         adapter_key: p?.document?.config?.adapter_key,
         region: p?.document?.config?.region,
         status: "disabled",
@@ -296,14 +316,91 @@ axios.defaults.adapter = async (config) => {
         (p?.document?.model_templates?.length ?? 0) +
         (Array.isArray(body.candidate_keys) ? body.candidate_keys.length : 0),
     });
-    data = {
+    const config: API.ConnectionConfig = {
+      id: crypto.randomUUID(),
       provider_id: id,
-      config: {
-        id: crypto.randomUUID(),
-        provider_id: id,
-        version: 1,
-        config: p?.document?.config,
+      version: 1,
+      config: p?.document?.config,
+      model_catalog: p?.model_catalog,
+      configured_models: [],
+    };
+    providerConfigs.set(id, config);
+    data = { provider_id: id, config };
+  } else if (path === "/api/admin/providers/custom") {
+    const id = crypto.randomUUID();
+    providers.push({
+      provider: {
+        id,
+        name: body.name,
+        adapter_key: body.config.adapter_key,
+        region: body.config.region,
+        status: "disabled",
+        revision: 1,
+        logo_asset_id: body.logo_asset_id,
       },
+      model_count: 0,
+    });
+    const config: API.ConnectionConfig = {
+      id: crypto.randomUUID(),
+      provider_id: id,
+      version: 1,
+      config: body.config,
+      model_catalog: { version: "fixture-custom-catalog", models: [] },
+      configured_models: [],
+    };
+    providerConfigs.set(id, config);
+    data = { provider_id: id, config };
+  } else if (path === "/api/admin/provider-logos") {
+    if (failLogoUpload) {
+      failLogoUpload = false;
+      throw new axios.AxiosError(
+        "fixture upload failure",
+        "ERR_NETWORK",
+        config,
+      );
+    }
+    data = { id: crypto.randomUUID(), media_type: "image", mime: "image/png" };
+  } else if (path.startsWith("/api/provider-logos/")) {
+    data = {
+      asset: { id: path.split("/").at(-1) },
+      url: "/brand/providers/volcengine.svg",
+      expires_at: new Date(Date.now() + 60000).toISOString(),
+    };
+  } else if (path.endsWith("/logo") && config.method === "patch") {
+    const p = providers.find(
+      (item) => item.provider?.id === path.split("/").at(-2),
+    );
+    if (p?.provider) {
+      p.provider = {
+        ...p.provider,
+        logo_asset_id: body.logo_asset_id ?? undefined,
+        revision: (p.provider.revision ?? 0) + 1,
+      };
+      data = p.provider;
+    }
+  } else if (
+    /^\/api\/admin\/providers\/[^/]+\/models$/.test(path) &&
+    config.method === "post"
+  ) {
+    const id = path.split("/").at(-2)!;
+    const config = providerConfigs.get(id);
+    const candidate = config?.model_catalog?.models?.find(
+      (item) => item.key === body.candidate_key,
+    );
+    const modelID = crypto.randomUUID();
+    const provider = providers.find((item) => item.provider?.id === id);
+    if (provider) provider.model_count = (provider.model_count ?? 0) + 1;
+    config?.configured_models?.push({
+      id: modelID,
+      provider_model_id: body.custom_model_id ?? candidate?.provider_model_id,
+      capability: body.capability ?? candidate?.capability,
+    });
+    data = {
+      id: modelID,
+      provider_id: id,
+      name: body.custom_model_name ?? candidate?.display_name,
+      provider_model_id: body.custom_model_id ?? candidate?.provider_model_id,
+      capability: body.capability ?? candidate?.capability,
     };
   } else if (path.endsWith("/credentials") && config.method === "put") {
     const id = path.split("/").at(-2)!;
@@ -317,14 +414,31 @@ axios.defaults.adapter = async (config) => {
     if (p) p.credential = data as API.ProviderCredentialSummary;
   } else if (path.endsWith("/credentials")) data = [];
   else if (path.endsWith("/config"))
+    data = providerConfigs.get(path.split("/").at(-2)!);
+  else if (path.startsWith("/api/admin/config-requests/")) {
+    const requestID = path.split("/").at(-1)!;
+    const result = receipts.get(requestID);
+    if (!result)
+      throw new axios.AxiosError(
+        "fixture receipt absent",
+        "ERR_BAD_RESPONSE",
+        config,
+        undefined,
+        {
+          data: { code: "not_found" },
+          status: 404,
+          statusText: "Not Found",
+          headers: {},
+          config,
+        },
+      );
     data = {
-      id: "fixture-config",
-      version: 1,
-      config: presets[0].document?.config,
+      request_id: requestID,
+      action: config.params?.action,
+      target_id: config.params?.target_id,
+      result,
     };
-  else if (path.startsWith("/api/admin/config-requests/"))
-    data = { result: receipts.get(path.split("/").at(-1)!) };
-  else if (path.startsWith("/api/admin/providers/")) {
+  } else if (path.startsWith("/api/admin/providers/")) {
     const p = providers.find((p) => p.provider?.id === path.split("/").at(-1));
     if (p?.provider && config.method === "patch") {
       p.provider = {
@@ -341,7 +455,10 @@ axios.defaults.adapter = async (config) => {
   if (body.request_id) receipts.set(body.request_id, data);
   const key = config.headers?.get("Idempotency-Key");
   if (typeof key === "string") receipts.set(key, data);
-  if (loseCreationReceipt && path.endsWith("/connections")) {
+  if (
+    loseCreationReceipt &&
+    (path.endsWith("/connections") || path === "/api/admin/providers/custom")
+  ) {
     loseCreationReceipt = false;
     throw new axios.AxiosError(
       "fixture response intentionally lost",

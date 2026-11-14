@@ -81,6 +81,7 @@ export function useConnectionColumns({
               {mobile ? (
                 <ProviderLogo
                   adapterKey={row.original.provider?.adapter_key}
+                  logoAssetID={row.original.provider?.logo_asset_id}
                   metadata={adapters?.find(
                     (item) =>
                       item.adapter_key === row.original.provider?.adapter_key,
@@ -149,6 +150,7 @@ export function useConnectionColumns({
         <div className="flex items-center gap-2">
           <ProviderLogo
             adapterKey={row.original.provider?.adapter_key}
+            logoAssetID={row.original.provider?.logo_asset_id}
             metadata={adapters?.find(
               (item) => item.adapter_key === row.original.provider?.adapter_key,
             )}

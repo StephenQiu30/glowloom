@@ -36,7 +36,7 @@ func (c *Client) ProbeReachability(ctx context.Context, config catalog.ProviderC
 			return result
 		}
 		start := time.Now()
-		response, err := c.client.Do(request)
+		response, err := c.do(config, request)
 		result.ElapsedMS = time.Since(start).Milliseconds()
 		if response != nil {
 			_ = response.Body.Close()

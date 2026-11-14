@@ -2,7 +2,13 @@ import { pageBusinessMemory } from "@/lib/page-business-memory";
 import { render as renderView } from "../../../../feedback";
 import { SWRConfig } from "swr";
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ConnectionDetail } from "@/app/providers/_components/connection-detail";
 import { RequestError } from "@/lib/request";
@@ -173,4 +179,77 @@ it("在连接详情顶部重命名未启用的连接", async () => {
     { name: "OpenRouter 备用", expected_revision: 1 },
     { headers: { "Idempotency-Key": expect.any(String) } },
   );
+});
+
+it("接入模型使用已读取的连接与凭据，不跳转或发起验证", async () => {
+  const onAddModel = vi.fn();
+  api.detail.mockResolvedValue({
+    provider: {
+      id: "connection",
+      name: "DeepSeek",
+      adapter_key: "deepseek",
+      status: "active",
+    },
+    credential: { id: "credential", status: "active" },
+  });
+  render(
+    <ConnectionDetail
+      id="connection"
+      presets={[]}
+      onSaved={() => {}}
+      onAddModel={onAddModel}
+    />,
+  );
+  const trigger = await screen.findByRole("button", { name: "接入模型" });
+  fireEvent.click(trigger);
+  expect(onAddModel).toHaveBeenCalledWith(
+    expect.objectContaining({
+      provider: expect.objectContaining({ id: "connection" }),
+      credential: expect.objectContaining({ id: "credential" }),
+    }),
+    trigger,
+  );
+  expect(api.config).not.toHaveBeenCalled();
+  expect(api.save).not.toHaveBeenCalled();
+});
+
+it("模型保存刷新连接时保留原触发按钮，避免返回焦点丢失", async () => {
+  const detail = {
+    provider: {
+      id: "connection",
+      name: "DeepSeek",
+      adapter_key: "deepseek",
+      status: "active",
+    },
+    credential: { id: "credential", status: "active" },
+  };
+  api.detail.mockResolvedValue(detail);
+  const cache = new Map();
+  const value = { provider: () => cache, dedupingInterval: 0 };
+  const onAddModel = vi.fn();
+  const node = (revision: number) => (
+    <SWRConfig value={value}>
+      <ConnectionDetail
+        id="connection"
+        revision={revision}
+        presets={[]}
+        onSaved={() => {}}
+        onAddModel={onAddModel}
+      />
+    </SWRConfig>
+  );
+  const view = renderView(node(0));
+  const trigger = await screen.findByRole("button", { name: "接入模型" });
+  let finish!: (result: typeof detail) => void;
+  api.detail.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  view.rerender(node(1));
+  await waitFor(() => expect(api.detail).toHaveBeenCalledTimes(2));
+  expect(screen.getByRole("button", { name: "接入模型" })).toBe(trigger);
+  await act(async () => finish(detail));
+  expect(screen.getByRole("button", { name: "接入模型" })).toBe(trigger);
 });

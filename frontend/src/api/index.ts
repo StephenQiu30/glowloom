@@ -3,6 +3,7 @@
 // API 更新时间：
 // API 唯一标识：
 import * as settings from "./settings";
+import * as media from "./media";
 import * as analytics from "./analytics";
 import * as identity from "./identity";
 import * as operations from "./operations";
@@ -11,7 +12,6 @@ import * as canvases from "./canvases";
 import * as canvasAssistant from "./canvasAssistant";
 import * as projects from "./projects";
 import * as script from "./script";
-import * as media from "./media";
 import * as mediaDepths from "./mediaDepths";
 import * as mediaExports from "./mediaExports";
 import * as mediaTranscriptions from "./mediaTranscriptions";
@@ -28,6 +28,7 @@ import * as workspace from "./workspace";
 import * as works from "./works";
 export default {
   settings,
+  media,
   analytics,
   identity,
   operations,
@@ -36,7 +37,6 @@ export default {
   canvasAssistant,
   projects,
   script,
-  media,
   mediaDepths,
   mediaExports,
   mediaTranscriptions,

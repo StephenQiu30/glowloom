@@ -4,7 +4,7 @@ package postgres
 // Effective sales are resolved from the active release, not the latest edit.
 const adminPresetPricingQuery = `
 WITH priced AS (
-  SELECT m.id,m.model_key,m.provider_id,m.capability,m.display_name,m.status,m.current_version_id,m.revision,m.create_time,m.update_time,
+  SELECT provider.adapter_key AS provider_adapter_key,provider.logo_asset_id AS provider_logo_asset_id,m.id,m.model_key,m.provider_id,m.capability,m.display_name,m.status,m.current_version_id,m.revision,m.create_time,m.update_time,
     EXISTS (SELECT 1 FROM catalog.model_release old WHERE old.model_id=m.id AND old.status IN ('active','retired')) AS has_publication,
     latest.id IS NOT NULL AS has_price,
     COALESCE(active_price.unit, sale.unit, latest.unit, '') AS billing_unit,

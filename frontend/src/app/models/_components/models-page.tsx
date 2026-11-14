@@ -1,6 +1,7 @@
 "use client";
 import { readErrorMessage } from "@/lib/read-error";
 import { providerConnectionName } from "@/lib/provider-connection-name";
+import { ProviderLogo } from "@/components/providers/provider-logo";
 import { ContentState } from "@/components/layout/content-state";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -290,17 +291,15 @@ function ModelAdministration({
         placeholder: "名称或标识",
       },
       cell: ({ row }) => {
-        const provider = mobile
-          ? providers.find(
-              (item) => item.provider?.id === row.original.provider_id,
-            )?.provider
-          : undefined;
+        const provider = providers.find(
+          (item) => item.provider?.id === row.original.provider_id,
+        )?.provider;
         return (
           <div className="flex min-w-0 flex-col gap-1">
             <Button
               size="toolbar"
               variant="link"
-              className="h-auto justify-start p-0 text-left break-words whitespace-normal text-foreground"
+              className="h-auto justify-start gap-2 p-0 text-left break-words whitespace-normal text-foreground"
               id={`model-overview-${row.original.id}`}
               aria-label={`查看 ${row.original.display_name}`}
               disabled={locked}
@@ -312,6 +311,15 @@ function ModelAdministration({
                 )
               }
             >
+              <ProviderLogo
+                adapterKey={
+                  row.original.provider_adapter_key ?? provider?.adapter_key
+                }
+                logoAssetID={
+                  row.original.provider_logo_asset_id ?? provider?.logo_asset_id
+                }
+                iconOnly
+              />
               {row.original.display_name}
             </Button>
             {mobile ? (
@@ -321,7 +329,7 @@ function ModelAdministration({
                 · 按用量计费
               </span>
             ) : null}
-            {provider?.id ? (
+            {mobile && provider?.id ? (
               locked ? (
                 <span className="text-xs text-muted-foreground">
                   {providerConnectionName(provider)}

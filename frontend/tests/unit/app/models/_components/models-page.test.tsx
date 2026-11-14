@@ -17,12 +17,18 @@ const api = vi.hoisted(() => ({
   probe: vi.fn(),
   check: vi.fn(),
   activation: vi.fn(),
+  logo: vi.fn(),
 }));
 vi.mock("@/components/auth/session", () => ({
   useSession: () => ({
     actor: { id: "admin", platform_role: "platform_admin" },
   }),
+  useOptionalSession: () => ({
+    actor: { id: "admin" },
+    session_id: "session",
+  }),
 }));
+vi.mock("@/api/media", () => ({ getProviderLogo: api.logo }));
 vi.mock("@/api/settings", () => ({
   listAdminModels: api.models,
   listAdminProviders: api.providers,
@@ -45,6 +51,10 @@ vi.mock("@/app/models/_components/model-detail", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  api.logo.mockResolvedValue({
+    url: "https://storage.example.com/logo.png",
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+  });
   api.config.mockResolvedValue({
     id: "config",
     config: { capabilities: ["text"] },
@@ -419,4 +429,77 @@ it("列表启用失败后刷新仍保留反馈，开关保持关闭", async () =
       .getByRole("switch", { name: "启用 启用失败模型" })
       .getAttribute("aria-checked"),
   ).toBe("false");
+});
+
+it("自定义接入要求名称、标识与能力，并保留切换来源时的草稿", async () => {
+  api.providers.mockResolvedValue({
+    items: [
+      {
+        provider: {
+          id: "connection",
+          name: "自定义网关",
+          adapter_key: "openai",
+        },
+        credential: { id: "existing-key", status: "active" },
+      },
+    ],
+  });
+  render(<ModelsPage initialProvider="connection" openAdd />);
+  const tab = await screen.findByRole("tab", { name: "自定义配置" });
+  await waitFor(() => expect(tab).toHaveProperty("disabled", false));
+  expect(screen.queryByRole("button", { name: "手动输入模型 ID" })).toBeNull();
+  fireEvent.mouseDown(tab);
+  const dialog = within(screen.getByRole("dialog"));
+  fireEvent.change(dialog.getByLabelText("模型标识"), {
+    target: { value: "gateway-chat" },
+  });
+  expect(screen.getByRole("button", { name: "保存模型" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  fireEvent.change(dialog.getByLabelText("模型名称"), {
+    target: { value: "中文助手" },
+  });
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "模型预设" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "自定义配置" }));
+  expect(dialog.getByLabelText("模型名称")).toHaveProperty("value", "中文助手");
+  expect(dialog.getByLabelText("模型标识")).toHaveProperty(
+    "value",
+    "gateway-chat",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "保存模型" }));
+  await waitFor(() =>
+    expect(api.add).toHaveBeenCalledWith(
+      { id: "connection" },
+      expect.objectContaining({
+        custom_model_id: "gateway-chat",
+        custom_model_name: "中文助手",
+        capability: "text.generate",
+        draft_only: true,
+      }),
+    ),
+  );
+  expect(api.key).not.toHaveBeenCalled();
+  expect(api.probe).not.toHaveBeenCalled();
+});
+
+it("供应商不在当前分页时仍按模型投影读取其 Logo", async () => {
+  api.models.mockResolvedValue({
+    items: [
+      {
+        id: "outside-provider-page-model",
+        provider_id: "outside-provider-page",
+        provider_adapter_key: "openai",
+        provider_logo_asset_id: "outside-provider-page-logo",
+        display_name: "跨页供应商模型",
+      },
+    ],
+  });
+  render(<ModelsPage />);
+  await screen.findByRole("button", { name: "查看 跨页供应商模型" });
+  await waitFor(() =>
+    expect(api.logo).toHaveBeenCalledWith({
+      id: "outside-provider-page-logo",
+    }),
+  );
 });

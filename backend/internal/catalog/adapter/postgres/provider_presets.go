@@ -256,6 +256,9 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 			return application.PresetConnection{}, domain.ErrInvalidPreset
 		}
 		config := document.Config
+		if config.IsCustomGateway() && len(document.ModelTemplates) > 0 {
+			return application.PresetConnection{}, domain.ErrInvalidPreset
+		}
 		catalog, err := readModelCatalog(tx, input.VersionID, document)
 		if err != nil {
 			return application.PresetConnection{}, err
@@ -304,8 +307,11 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 		if input.Name == "" {
 			input.Name = document.Name + " · " + input.RequestID.String()[:8]
 		}
+		if err := validateProviderLogo(tx, actor, input.LogoAssetID); err != nil {
+			return application.PresetConnection{}, err
+		}
 		providerID, configID := uuid.New(), uuid.New()
-		if err := tx.Exec(`INSERT INTO catalog.provider(id,key,name,adapter_key,region,status,concurrency_limit,rate_limit_per_min) VALUES(?,?,?,?,?,'disabled',?,?)`, providerID, input.Key, input.Name, config.AdapterKey, config.Region, config.ConcurrencyLimit, config.RateLimitPerMin).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO catalog.provider(id,key,name,adapter_key,region,status,concurrency_limit,rate_limit_per_min,logo_asset_id) VALUES(?,?,?,?,?,'disabled',?,?,?)`, providerID, input.Key, input.Name, config.AdapterKey, config.Region, config.ConcurrencyLimit, config.RateLimitPerMin, input.LogoAssetID).Error; err != nil {
 			return application.PresetConnection{}, err
 		}
 		payload, err := json.Marshal(config)

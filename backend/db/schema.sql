@@ -1029,6 +1029,7 @@ CREATE TABLE catalog.price_rule_version (
 );
 
 CREATE TABLE catalog.provider (
+    logo_asset_id uuid,
     id uuid NOT NULL,
     key text NOT NULL,
     name text NOT NULL,
@@ -8143,3 +8144,5 @@ CREATE TABLE catalog.model_image_limit (
  PRIMARY KEY(adapter_key,provider_model_id)
 );
 GRANT SELECT ON catalog.model_image_limit TO glowloom_app;
+
+ALTER TABLE catalog.provider ADD CONSTRAINT provider_logo_asset_fk FOREIGN KEY (logo_asset_id) REFERENCES media.media_asset(id);

@@ -93,7 +93,7 @@ func (q *ProviderDetailQuery) Execute(ctx context.Context, actor identityapp.Pri
 	}
 	return ProviderDetail{
 		Provider: CreatedProvider{
-			ID: provider.ID, Key: provider.Key, Name: provider.Name,
+			LogoAssetID: provider.LogoAssetID, ID: provider.ID, Key: provider.Key, Name: provider.Name,
 			AdapterKey: provider.AdapterKey, Region: provider.Region, Status: provider.Status,
 			QuotaGroup: provider.QuotaGroup, ConcurrencyLimit: provider.ConcurrencyLimit, RateLimitPerMin: provider.RateLimitPerMin,
 			Revision: provider.Revision, CreateTime: provider.CreateTime, UpdateTime: provider.UpdateTime,

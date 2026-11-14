@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -44,6 +45,7 @@ type AddPresetModelInput struct {
 	ConfigID         uuid.UUID  `json:"config_id"`
 	CatalogVersion   string     `json:"catalog_version"`
 	CandidateKey     string     `json:"candidate_key,omitempty"`
+	CustomModelName  string     `json:"custom_model_name,omitempty"`
 	CustomModelID    string     `json:"custom_model_id,omitempty"`
 	Capability       string     `json:"capability,omitempty"`
 	RequestID        uuid.UUID  `json:"request_id"`
@@ -80,6 +82,10 @@ func (s *ProviderConfigs) AddModel(ctx context.Context, actor identityapp.Princi
 	if id == uuid.Nil || input.ConfigID == uuid.Nil || input.RequestID == uuid.Nil || input.CatalogVersion == "" || (input.CandidateKey == "") == (input.CustomModelID == "") {
 		return CreatedModel{}, domain.ErrInvalidPreset
 	}
+	input.CustomModelName = strings.TrimSpace(input.CustomModelName)
+	if input.CustomModelName != "" && (!validDisplayName(input.CustomModelName) || input.CustomModelID == "") {
+		return CreatedModel{}, domain.ErrInvalidPreset
+	}
 	return s.store.AddPresetModel(ctx, actor, id, input)
 }
 
@@ -93,6 +99,7 @@ type ModelConfigurationCheck struct {
 	ParametersValid bool       `json:"parameters_valid"`
 }
 
+// CheckModel validates the saved draft without pricing or dispatch.
 func (s *ProviderConfigs) CheckModel(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (ModelConfigurationCheck, error) {
 	if !IsPlatformAdmin(actor) {
 		return ModelConfigurationCheck{}, identityapp.ErrForbidden

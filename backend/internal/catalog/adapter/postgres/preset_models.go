@@ -48,6 +48,9 @@ func (s *Store) instantiatePresetModels(ctx context.Context, tx *gorm.DB, actor 
 }
 
 func connectionPresetDocument(tx *gorm.DB, config application.ConnectionConfig) (domain.PresetDocument, error) {
+	if config.PresetVersionID == uuid.Nil {
+		return domain.PresetDocument{SchemaVersion: 1, Config: config.Config}, nil
+	}
 	var payload []byte
 	err := tx.Raw(`SELECT payload FROM catalog.provider_preset_version WHERE id=?`, config.PresetVersionID).Row().Scan(&payload)
 	if err != nil {
@@ -109,6 +112,12 @@ func (s *Store) AddPresetModel(ctx context.Context, actor identityapp.Principal,
 		catalog, err := readModelCatalog(tx, config.PresetVersionID, document)
 		if err != nil {
 			return empty, err
+		}
+		if config.PresetVersionID == uuid.Nil {
+			catalog.Version = config.ID.String()
+		}
+		if input.CustomModelID != "" || config.PresetVersionID == uuid.Nil || config.Config.IsCustomGateway() {
+			input.DraftOnly = true
 		}
 		candidate, err := resolveAddModelCandidate(config.Config, catalog, input)
 		if err != nil {
@@ -203,16 +212,14 @@ func resolveAddModelCandidate(config domain.ProviderConfig, catalog domain.Model
 	}) >= 0 || !slices.Contains(config.Capabilities, strings.TrimSuffix(input.Capability, ".generate")) {
 		return empty, domain.ErrInvalidPreset
 	}
-	for _, model := range catalog.Models {
-		if model.ProviderModelID == id && model.Capability == input.Capability {
-			return model, nil
-		}
+	name := strings.TrimSpace(input.CustomModelName)
+	if name == "" {
+		name = id
 	}
-
 	if input.DraftOnly {
 		return domain.ModelCandidatePreset{
 			Key: "custom-" + uuid.NewString(), AdapterKey: config.AdapterKey,
-			DisplayName: id, ProviderModelID: id, Capability: input.Capability,
+			DisplayName: name, ProviderModelID: id, Capability: input.Capability,
 			SourceURL: "custom://admin", Lifecycle: "unknown",
 		}, nil
 	}
@@ -230,7 +237,7 @@ func resolveAddModelCandidate(config domain.ProviderConfig, catalog domain.Model
 	}
 	return domain.ModelCandidatePreset{
 		Key: "custom-" + uuid.NewString(), AdapterKey: config.AdapterKey,
-		DisplayName: id, ProviderModelID: id, Capability: input.Capability,
+		DisplayName: name, ProviderModelID: id, Capability: input.Capability,
 		Modes: []string{mode}, Lifecycle: "unknown",
 	}, nil
 }

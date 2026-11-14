@@ -27,7 +27,7 @@ func (s *Store) FindProviderDetailForAdmin(ctx context.Context, actor identityap
 		}
 		var providerData providerRow
 		result := tx.Raw(`
-			SELECT id, key, name, adapter_key, region, status, concurrency_limit,
+			SELECT id, logo_asset_id, key, name, adapter_key, region, status, concurrency_limit,
 			       quota_group,rate_limit_per_min, revision, create_time, update_time
 			FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete FOR SHARE
 		`, providerID.String()).Scan(&providerData)

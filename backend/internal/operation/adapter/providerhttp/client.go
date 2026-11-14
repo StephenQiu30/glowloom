@@ -12,6 +12,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"net/netip"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -22,8 +24,9 @@ import (
 // Client uses one bounded HTTP client without an implicit retry middleware,
 // delegating wire execution to protocol strategy drivers.
 type Client struct {
-	client  http.Client
-	drivers map[string]ProtocolDriver
+	client   http.Client
+	drivers  map[string]ProtocolDriver
+	lookupIP func(context.Context, string, string) ([]netip.Addr, error)
 }
 
 // NewClient copies transport settings and disables redirects that could leak Keys.
@@ -43,8 +46,9 @@ func NewClient(client *http.Client) *Client {
 	registryMu.RUnlock()
 
 	return &Client{
-		client:  copied,
-		drivers: drivers,
+		client:   copied,
+		drivers:  drivers,
+		lookupIP: net.DefaultResolver.LookupNetIP,
 	}
 }
 
@@ -72,7 +76,7 @@ func (c *Client) requestWithID(ctx context.Context, config catalogdomain.Provide
 	}
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(config.TimeoutSeconds)*time.Second)
 	defer cancel()
-	request, err := http.NewRequestWithContext(timeoutCtx, method, config.BaseURL+path, reader)
+	request, err := http.NewRequestWithContext(timeoutCtx, method, strings.TrimRight(config.BaseURL, "/")+path, reader)
 	if err != nil {
 		return nil, 0, "", err
 	}
@@ -87,7 +91,7 @@ func (c *Client) requestWithID(ctx context.Context, config catalogdomain.Provide
 		trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { connected.Store(true) }}
 		request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
 	}
-	response, err := c.client.Do(request)
+	response, err := c.do(config, request)
 	if err != nil {
 		var networkErr *net.OpError
 		if method == http.MethodPost && ctx.Err() == nil && !connected.Load() && errors.As(err, &networkErr) && networkErr.Op == "dial" {

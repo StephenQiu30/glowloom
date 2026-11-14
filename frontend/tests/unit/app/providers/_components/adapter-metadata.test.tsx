@@ -13,6 +13,7 @@ import { ProviderLogo } from "@/components/providers/provider-logo";
 import { providerLabel } from "@/app/providers/_components/provider-label";
 import { pageBusinessMemory } from "@/lib/page-business-memory";
 const api = vi.hoisted(() => ({
+  session: "",
   preview: vi.fn(),
   save: vi.fn(),
   version: vi.fn(),
@@ -22,6 +23,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/components/auth/session", () => ({
   useSession: () => ({
+    session_id: api.session,
     actor: { id: "admin-metadata", platform_role: "platform_admin" },
   }),
 }));
@@ -67,6 +69,7 @@ const preset: API.Preset = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  api.session = crypto.randomUUID();
   pageBusinessMemory.clear();
   api.preview.mockImplementation(async ({ document_json }) => ({
     document: JSON.parse(document_json),
@@ -132,8 +135,7 @@ it("凭据输入使用安全字段，保存只建立连接与凭据", async () =
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-secret-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
-  fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存供应商" }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(api.test).not.toHaveBeenCalled();
   expect(api.credential).toHaveBeenCalledWith(
@@ -162,8 +164,7 @@ it("离开原连接后，迟到的创建响应不保存 Key 或归属到新连�
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "old-key-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
-  fireEvent.click(screen.getByRole("button", { name: "仅保存连接" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存供应商" }));
   await waitFor(() => expect(api.connect).toHaveBeenCalledOnce());
   old.unmount();
   const nextSaved = vi.fn();

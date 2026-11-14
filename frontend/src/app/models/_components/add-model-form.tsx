@@ -34,6 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ProviderLogo } from "@/components/providers/provider-logo";
 import { Spinner } from "@/components/ui/spinner";
 
 const capabilityLabels: Record<string, string> = {
@@ -70,6 +72,7 @@ export function AddModelForm({
   const [directorySelection, setDirectorySelection] = useState<string>();
   const [manual, setManual] = useState(false);
   const [customID, setCustomID] = useState("");
+  const [customName, setCustomName] = useState("");
   const [capability, setCapability] = useState("");
   const [apiKey, setAPIKey] = useState("");
   const [accessKey, setAccessKey] = useState("");
@@ -147,7 +150,7 @@ export function AddModelForm({
     !!credential.pending ||
     !!probe.mutation.pending;
   const selectable = manual
-    ? !!customID.trim() && !!capability
+    ? !!customID.trim() && !!customName.trim() && !!capability
     : !!selected?.key;
 
   async function ensureCredential() {
@@ -174,6 +177,7 @@ export function AddModelForm({
     setDirectorySelection(undefined);
     setManual(!!model.requires_model_selection);
     setCustomID("");
+    setCustomName(model.display_name ?? "");
     setCapability(model.capability ?? "");
   }
 
@@ -182,6 +186,7 @@ export function AddModelForm({
     setCandidateKey("");
     setManual(true);
     setCustomID(modelID);
+    setCustomName(modelID);
     setCapability(capabilities.length === 1 ? capabilities[0] : "");
   }
 
@@ -195,7 +200,7 @@ export function AddModelForm({
             check?.discovery_result === "partial"
           ? `目录${check.discovery_result === "partial" ? "部分" : ""}返回 ${online.length} 个候选。`
           : check
-            ? "目录暂不可读取，可以使用推荐预设或手动输入模型 ID。"
+            ? "目录暂不可读取，可使用预设或自定义配置。"
             : "";
   const adapters = [
     ...new Set(
@@ -228,7 +233,11 @@ export function AddModelForm({
             { id: providerID },
             {
               ...(manual
-                ? { custom_model_id: customID.trim(), capability }
+                ? {
+                    custom_model_id: customID.trim(),
+                    custom_model_name: customName.trim(),
+                    capability,
+                  }
                 : { candidate_key: selected?.key }),
               config_id: config.id,
               credential_id: savedID,
@@ -243,9 +252,14 @@ export function AddModelForm({
     >
       <FieldGroup className="min-h-0 gap-4 overflow-y-auto p-px">
         {initialProvider && connection ? (
-          <p className="text-sm font-medium">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <ProviderLogo
+              adapterKey={adapter}
+              logoAssetID={connection.provider?.logo_asset_id}
+              iconOnly
+            />
             {providerConnectionName(connection.provider)}
-          </p>
+          </div>
         ) : (
           <Field>
             <FieldLabel htmlFor={`${field}-provider`}>服务连接</FieldLabel>
@@ -258,6 +272,7 @@ export function AddModelForm({
                 setCandidateKey("");
                 setManual(false);
                 setCustomID("");
+                setCustomName("");
                 setCapability("");
                 setAPIKey("");
                 setAccessKey("");
@@ -295,121 +310,165 @@ export function AddModelForm({
             </Select>
           </Field>
         )}
-        <div className="flex min-w-0 flex-col gap-3">
-          {directoryAdapters.has(adapter) && credentialID ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="max-md:min-h-11"
-                disabled={!config || locked}
-                onClick={() => void probe.run(credentialID)}
-              >
-                {readingDirectory && <Spinner data-icon="inline-start" />}
-                {readingDirectory ? "正在读取目录…" : "读取在线目录"}
-              </Button>
-              {directoryMessage && (
-                <p role="status" className="text-xs text-muted-foreground">
-                  {directoryMessage}
-                </p>
-              )}
-            </div>
-          ) : null}
-          {isLoading ? (
-            <p role="status">正在读取预设…</p>
-          ) : config ? (
-            <ModelCatalogChoices
-              key={config.id}
-              models={presets}
-              online={online.flatMap((item) =>
-                item.provider_model_id ? [item.provider_model_id] : [],
-              )}
-              picked={candidateKey ? [candidateKey] : []}
-              disabled={locked}
-              canSelect={(model) =>
-                !model.requires_model_selection ||
-                capabilities.includes(model.capability ?? "")
+        <Tabs
+          value={manual ? "custom" : "preset"}
+          onValueChange={(value) => {
+            if (locked) return;
+            if (value === "custom") {
+              setManual(true);
+              if (!capability && capabilities.length === 1) {
+                setCapability(capabilities[0]);
               }
-              isConfigured={(model) =>
-                !!matchingModel(model.provider_model_id, model.capability)
-              }
-              onPreset={choosePreset}
-              onOnline={(id) => chooseManual(id, check?.id)}
-            />
-          ) : null}
-          {capabilities.length ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-fit max-md:min-h-11"
-              disabled={locked}
-              onClick={() => chooseManual()}
+            } else setManual(false);
+          }}
+          className="gap-4"
+        >
+          <TabsList aria-label="模型配置来源" className="max-md:h-12">
+            <TabsTrigger
+              value="preset"
+              disabled={locked || !config}
+              className="max-md:min-h-11"
             >
-              手动输入模型 ID
-            </Button>
-          ) : null}
-          {selected && !manual ? (
-            <p className="sr-only" role="status">
-              已选择 {selected.display_name}
-            </p>
-          ) : null}
-          {!probe.mutation.busy && probe.mutation.pending ? (
-            <MutationStatus mutation={probe.mutation} inline />
-          ) : null}
-          {!probe.mutation.pending &&
-          probe.mutation.message &&
-          !probe.data &&
-          !readingDirectory &&
-          probe.mutation.message !== "已保存。" ? (
-            <p className="text-sm text-muted-foreground">
-              {probe.mutation.message}
-            </p>
-          ) : null}
-        </div>
-        {manual ? (
-          <>
-            <Field>
-              <FieldLabel htmlFor={`${field}-model-id`}>
-                上游模型或接入点 ID
-              </FieldLabel>
-              <Input
-                id={`${field}-model-id`}
-                value={customID}
-                maxLength={200}
-                className="max-md:min-h-11 max-md:text-base"
-                disabled={locked}
-                required
-                onChange={(e) => {
-                  setCustomID(e.target.value);
-                  setDirectorySelection(undefined);
-                }}
-              />
-            </Field>
-            {capabilities.length > 1 ? (
-              <Field>
-                <FieldLabel htmlFor={`${field}-capability`}>
-                  模型能力
-                </FieldLabel>
-                <Select
-                  value={capability}
-                  onValueChange={setCapability}
+              模型预设
+            </TabsTrigger>
+            <TabsTrigger
+              value="custom"
+              disabled={locked || !config}
+              className="max-md:min-h-11"
+            >
+              自定义配置
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="preset">
+            {" "}
+            <div className="flex min-w-0 flex-col gap-3">
+              {directoryAdapters.has(adapter) && credentialID ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="max-md:min-h-11"
+                    disabled={!config || locked}
+                    onClick={() => void probe.run(credentialID)}
+                  >
+                    {readingDirectory && <Spinner data-icon="inline-start" />}
+                    {readingDirectory ? "正在读取目录…" : "读取在线目录"}
+                  </Button>
+                  {directoryMessage && (
+                    <p role="status" className="text-xs text-muted-foreground">
+                      {directoryMessage}
+                    </p>
+                  )}
+                </div>
+              ) : null}
+              {isLoading ? (
+                <p role="status">正在读取预设…</p>
+              ) : config ? (
+                <ModelCatalogChoices
+                  key={config.id}
+                  models={presets}
+                  online={online.flatMap((item) =>
+                    item.provider_model_id ? [item.provider_model_id] : [],
+                  )}
+                  picked={candidateKey ? [candidateKey] : []}
                   disabled={locked}
-                >
-                  <SelectTrigger id={`${field}-capability`} className="w-full">
-                    <SelectValue placeholder="选择模型能力" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {capabilities.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {capabilityLabels[item]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+                  canSelect={(model) =>
+                    !model.requires_model_selection ||
+                    capabilities.includes(model.capability ?? "")
+                  }
+                  isConfigured={(model) =>
+                    !!matchingModel(model.provider_model_id, model.capability)
+                  }
+                  onPreset={choosePreset}
+                  onOnline={(id) => chooseManual(id, check?.id)}
+                />
+              ) : null}
+              {selected && !manual ? (
+                <p className="sr-only" role="status">
+                  已选择 {selected.display_name}
+                </p>
+              ) : null}
+              {!probe.mutation.busy && probe.mutation.pending ? (
+                <MutationStatus mutation={probe.mutation} inline />
+              ) : null}
+              {!probe.mutation.pending &&
+              probe.mutation.message &&
+              !probe.data &&
+              !readingDirectory &&
+              probe.mutation.message !== "已保存。" ? (
+                <p className="text-sm text-muted-foreground">
+                  {probe.mutation.message}
+                </p>
+              ) : null}
+            </div>
+          </TabsContent>
+          <TabsContent value="custom" className="flex flex-col gap-4">
+            {" "}
+            {manual ? (
+              <>
+                <Field>
+                  <FieldLabel htmlFor={`${field}-model-name`}>
+                    模型名称
+                  </FieldLabel>
+                  <Input
+                    id={`${field}-model-name`}
+                    value={customName}
+                    maxLength={100}
+                    disabled={locked}
+                    required
+                    className="max-md:min-h-11"
+                    onChange={(event) => setCustomName(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`${field}-model-id`}>
+                    模型标识
+                  </FieldLabel>
+                  <Input
+                    id={`${field}-model-id`}
+                    value={customID}
+                    maxLength={200}
+                    className="max-md:min-h-11 max-md:text-base"
+                    disabled={locked}
+                    required
+                    onChange={(e) => {
+                      setCustomID(e.target.value);
+                      setDirectorySelection(undefined);
+                    }}
+                  />
+                </Field>
+                {capabilities.length ? (
+                  <Field>
+                    <FieldLabel htmlFor={`${field}-capability`}>
+                      模型能力
+                    </FieldLabel>
+                    <Select
+                      value={capability}
+                      onValueChange={setCapability}
+                      disabled={locked}
+                    >
+                      <SelectTrigger
+                        id={`${field}-capability`}
+                        className="w-full"
+                      >
+                        <SelectValue placeholder="选择模型能力" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {capabilities.map((item) => (
+                            <SelectItem key={item} value={item}>
+                              {capabilityLabels[item]}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                ) : null}
+              </>
             ) : null}
-          </>
-        ) : null}
+          </TabsContent>
+        </Tabs>
         {keyRequired && !existing ? (
           <>
             {signedCredential ? (

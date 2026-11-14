@@ -29,7 +29,7 @@ func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Pri
 			return err
 		}
 		query := `
-			SELECT p.id AS provider_id, p.key, p.name, p.adapter_key, p.region,
+			SELECT p.id AS provider_id, p.logo_asset_id, p.key, p.name, p.adapter_key, p.region,
 			       p.status AS provider_status, p.concurrency_limit, p.rate_limit_per_min,
 			       p.revision, p.create_time AS provider_create_time,
 			       p.update_time AS provider_update_time,
@@ -136,6 +136,7 @@ func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Pri
 }
 
 type providerListRow struct {
+	LogoAssetID          *uuid.UUID
 	ProviderID           uuid.UUID
 	Key                  string
 	Name                 string
@@ -161,7 +162,7 @@ type providerListRow struct {
 func (row providerListRow) item() (application.ProviderListItem, error) {
 	item := application.ProviderListItem{
 		Provider: application.CreatedProvider{
-			ID: row.ProviderID, Key: row.Key, Name: row.Name, AdapterKey: row.AdapterKey,
+			LogoAssetID: row.LogoAssetID, ID: row.ProviderID, Key: row.Key, Name: row.Name, AdapterKey: row.AdapterKey,
 			Region: domain.Region(row.Region), Status: domain.ProviderStatus(row.ProviderStatus),
 			ConcurrencyLimit: row.ConcurrencyLimit, RateLimitPerMin: row.RateLimitPerMin,
 			Revision: row.Revision, CreateTime: row.ProviderCreateTime, UpdateTime: row.ProviderUpdateTime,

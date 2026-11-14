@@ -13,6 +13,9 @@ import (
 // readModelCatalog resolves only the persisted snapshot pinned by the connection.
 // A missing seed is never replaced by a separate compiled catalog.
 func readModelCatalog(tx *gorm.DB, versionID uuid.UUID, document domain.PresetDocument) (domain.ModelCandidateCatalog, error) {
+	if document.Config.IsCustomGateway() {
+		return domain.ModelCatalogForPreset(domain.PresetDocument{SchemaVersion: 1, Config: document.Config}, domain.ModelCandidateCatalog{Version: versionID.String(), Models: []domain.ModelCandidatePreset{}}), nil
+	}
 	var rows []struct{ Payload []byte }
 	if err := tx.Raw(`SELECT payload FROM catalog.model_preset WHERE preset_version_id=? ORDER BY ordinal,model_key`, versionID).Scan(&rows).Error; err != nil {
 		return domain.ModelCandidateCatalog{}, fmt.Errorf("read model preset snapshot: %w", err)
@@ -34,6 +37,9 @@ func readModelCatalog(tx *gorm.DB, versionID uuid.UUID, document domain.PresetDo
 // copyModelPresets copies public candidates in the same version-creation transaction.
 // Older versions retain their own parameters and never follow a changing head.
 func copyModelPresets(tx *gorm.DB, presetID, versionID uuid.UUID, document domain.PresetDocument) error {
+	if document.Config.IsCustomGateway() {
+		return nil
+	}
 	var source struct{ ID uuid.UUID }
 	if err := tx.Raw(`SELECT id FROM catalog.provider_preset_version WHERE preset_id=? AND id<>? ORDER BY version_no DESC LIMIT 1`, presetID, versionID).Scan(&source).Error; err != nil {
 		return err

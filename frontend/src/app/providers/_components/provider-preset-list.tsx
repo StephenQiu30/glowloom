@@ -33,12 +33,14 @@ export function ProviderPresetList({
   busy,
   filtered,
   onEdit,
+  onConnect,
   onState,
 }: {
   items: API.Preset[];
   adapters: API.AdapterMetadata[];
   busy: boolean;
   filtered: boolean;
+  onConnect: (preset: API.Preset) => void;
   onEdit: (preset: API.Preset) => void;
   onState: (preset: API.Preset, action: PresetStateAction) => void;
 }) {
@@ -78,7 +80,7 @@ export function ProviderPresetList({
                     <div className="min-w-0 break-words">
                       <div>{name}</div>
                       <div className="text-xs text-muted-foreground sm:hidden">
-                        {supplier} · {source}
+                        {name === supplier ? source : `${supplier} · ${source}`}
                       </div>
                     </div>
                   </div>
@@ -103,58 +105,89 @@ export function ProviderPresetList({
                   </div>
                 </TableCell>
                 <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="max-md:size-11"
-                        aria-label={`${name}预设的操作`}
-                        disabled={busy}
-                      >
-                        <MoreHorizontal />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem onSelect={() => onEdit(preset)}>
-                          {preset.origin === "builtin"
-                            ? "复制并编辑"
-                            : "编辑预设"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            void exportProviderPreset({ id: preset.id! })
-                              .then((result) =>
-                                saveAs(
-                                  new Blob([JSON.stringify(result, null, 2)], {
-                                    type: "application/json",
-                                  }),
-                                  `provider-preset-${preset.id}.json`,
-                                ),
-                              )
-                              .catch(() =>
-                                toast.error("预设导出失败，请重试。"),
-                              );
-                          }}
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="hidden max-md:min-h-11 sm:inline-flex"
+                      disabled={
+                        busy ||
+                        !canConnectPreset(preset) ||
+                        preset.archived ||
+                        preset.emergency_disabled
+                      }
+                      onClick={() => onConnect(preset)}
+                    >
+                      接入
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="max-md:size-11"
+                          aria-label={`${name}预设的操作`}
+                          disabled={busy}
                         >
-                          导出
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => onState(preset, "archive")}
-                        >
-                          {preset.archived ? "恢复预设" : "归档预设"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => onState(preset, "emergency")}
-                        >
-                          {preset.emergency_disabled
-                            ? "解除紧急停用"
-                            : "紧急停用"}
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                          <MoreHorizontal />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuGroup>
+                          <DropdownMenuItem
+                            className="sm:hidden"
+                            disabled={
+                              busy ||
+                              !canConnectPreset(preset) ||
+                              preset.archived ||
+                              preset.emergency_disabled
+                            }
+                            onSelect={() => onConnect(preset)}
+                          >
+                            接入服务
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => onEdit(preset)}>
+                            {preset.origin === "builtin"
+                              ? "复制并编辑"
+                              : "编辑预设"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              void exportProviderPreset({ id: preset.id! })
+                                .then((result) =>
+                                  saveAs(
+                                    new Blob(
+                                      [JSON.stringify(result, null, 2)],
+                                      {
+                                        type: "application/json",
+                                      },
+                                    ),
+                                    `provider-preset-${preset.id}.json`,
+                                  ),
+                                )
+                                .catch(() =>
+                                  toast.error("预设导出失败，请重试。"),
+                                );
+                            }}
+                          >
+                            导出
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => onState(preset, "archive")}
+                          >
+                            {preset.archived ? "恢复预设" : "归档预设"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => onState(preset, "emergency")}
+                          >
+                            {preset.emergency_disabled
+                              ? "解除紧急停用"
+                              : "紧急停用"}
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </TableCell>
               </TableRow>
             );

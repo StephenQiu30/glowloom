@@ -75,7 +75,7 @@ func (s *Store) FindProvider(ctx context.Context, providerID uuid.UUID) (domain.
 	}
 	var row providerRow
 	result := s.db.WithContext(ctx).Raw(`
-		SELECT id, current_config_version_id, key, name, adapter_key, region, status, concurrency_limit,
+		SELECT id, logo_asset_id, current_config_version_id, key, name, adapter_key, region, status, concurrency_limit,
 		       quota_group,rate_limit_per_min, revision, create_time, update_time
 		FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete
 	`, providerID.String()).Scan(&row)
@@ -209,6 +209,7 @@ func (s *Store) DisableCredential(ctx context.Context, providerID, credentialID 
 }
 
 type providerRow struct {
+	LogoAssetID            *uuid.UUID
 	CurrentConfigVersionID uuid.UUID
 	ID                     uuid.UUID
 	Key                    string
@@ -226,7 +227,7 @@ type providerRow struct {
 
 func (row providerRow) provider() domain.Provider {
 	return domain.Provider{
-		ID: row.ID, CurrentConfigVersionID: row.CurrentConfigVersionID, Key: row.Key, Name: row.Name, AdapterKey: row.AdapterKey,
+		LogoAssetID: row.LogoAssetID, ID: row.ID, CurrentConfigVersionID: row.CurrentConfigVersionID, Key: row.Key, Name: row.Name, AdapterKey: row.AdapterKey,
 		Region: domain.Region(row.Region), Status: domain.ProviderStatus(row.Status),
 		ConcurrencyLimit: row.ConcurrencyLimit, QuotaGroup: row.QuotaGroup, RateLimitPerMin: row.RateLimitPerMin,
 		Revision: row.Revision, CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,

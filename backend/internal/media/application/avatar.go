@@ -161,6 +161,7 @@ type AvatarRoutedStorage interface {
 
 // AvatarService reuses the configured media object pipeline and asset storage.
 type AvatarService struct {
+	purpose       string
 	repo          AvatarRepository
 	objects       UploadObjects
 	routedRepo    RoutedAvatarRepository
@@ -203,8 +204,12 @@ func (s *AvatarService) Upload(ctx context.Context, a identityapp.Principal, dat
 	hash := hex.EncodeToString(digest[:])
 	size := int64(len(im.Bytes))
 	codec := "png"
-	detail, _ := json.Marshal(map[string]any{"avatar": map[string]any{"version": 1, "method": "server_reencode_png"}})
-	asset := domain.MediaAsset{ID: id, Personal: &domain.PersonalOwnership{OrgID: a.OrgID, ActorID: a.ID}, Kind: domain.KindImage, Origin: domain.OriginUpload, Status: domain.StatusReady, ObjectKey: key, FileName: "avatar.png", MimeType: "image/png", ByteSize: size, SHA256: &hash, Width: &im.Width, Height: &im.Height, Codec: &codec, ModerationStatus: domain.ModerationPassed, ModerationDetail: detail, Revision: 1, CreateTime: now, UpdateTime: now}
+	purpose := s.purpose
+	if purpose == "" {
+		purpose = "avatar"
+	}
+	detail, _ := json.Marshal(map[string]any{purpose: map[string]any{"version": 1, "method": "server_reencode_png"}})
+	asset := domain.MediaAsset{ID: id, Personal: &domain.PersonalOwnership{OrgID: a.OrgID, ActorID: a.ID}, Kind: domain.KindImage, Origin: domain.OriginUpload, Status: domain.StatusReady, ObjectKey: key, FileName: purpose + ".png", MimeType: "image/png", ByteSize: size, SHA256: &hash, Width: &im.Width, Height: &im.Height, Codec: &codec, ModerationStatus: domain.ModerationPassed, ModerationDetail: detail, Revision: 1, CreateTime: now, UpdateTime: now}
 	if err := asset.Validate(); err != nil {
 		return LibraryAssetSummary{}, err
 	}

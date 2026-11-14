@@ -98,8 +98,9 @@ type AvatarActorAccessFactory func(*gorm.DB) application.AvatarActorAccess
 
 // AvatarStore publishes avatar metadata using explicitly injected identity authority.
 type AvatarStore struct {
-	db     *gorm.DB
-	actors AvatarActorAccessFactory
+	providerLogo bool
+	db           *gorm.DB
+	actors       AvatarActorAccessFactory
 }
 
 // NewAvatarStore binds the live identity checker to each store transaction.
@@ -115,7 +116,15 @@ func (s *AvatarStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.
 	if access == nil {
 		return identityapp.ErrSessionInvalid
 	}
-	if err := access.CheckSession(ctx, a, clock); err != nil {
+	if s.providerLogo {
+		platform, ok := access.(application.ProviderLogoActorAccess)
+		if !ok {
+			return application.ErrUnavailable
+		}
+		if err := platform.CheckPlatformSession(ctx, a, clock); err != nil {
+			return err
+		}
+	} else if err := access.CheckSession(ctx, a, clock); err != nil {
 		return err
 	}
 	// Storage ownership is a media concern; never accept a client-selected org.
@@ -236,7 +245,7 @@ func (s *AvatarStore) CommitAvatar(ctx context.Context, a identityapp.Principal,
 		if err := tx.Create(&asset).Error; err != nil {
 			return err
 		}
-		event := avatarSecurityEventRecord{ID: uuid.New(), ActorID: a.ID, TargetUserID: a.ID, ScopeKind: "self", Action: "avatar.uploaded", Result: "success", CreatedAt: clock().UTC()}
+		event := avatarSecurityEventRecord{ID: uuid.New(), ActorID: a.ID, TargetUserID: a.ID, ScopeKind: "self", Action: uploadEventAction(s.providerLogo), Result: "success", CreatedAt: clock().UTC()}
 		return tx.Create(&event).Error
 	})
 }

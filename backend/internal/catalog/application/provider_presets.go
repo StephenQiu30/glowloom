@@ -46,6 +46,7 @@ type PresetStateInput struct {
 
 // ConnectPresetInput creates a disabled connection from a pinned preset version.
 type ConnectPresetInput struct {
+	LogoAssetID        *uuid.UUID                    `json:"logo_asset_id,omitempty"`
 	SelectedModelsOnly bool                          `json:"selected_models_only,omitempty"`
 	DirectUse          bool                          `json:"direct_use,omitempty"`
 	CatalogVersion     string                        `json:"catalog_version,omitempty"`
@@ -68,6 +69,7 @@ type ConnectionConfig struct {
 	ConfiguredModels []ConfiguredModel             `json:"configured_models,omitempty"`
 }
 
+// ConfiguredModel identifies a saved upstream model within the connection.
 type ConfiguredModel struct {
 	ID              uuid.UUID `json:"id"`
 	ProviderModelID string    `json:"provider_model_id"`
@@ -154,6 +156,9 @@ func (s *ProviderPresets) Connect(ctx context.Context, actor identityapp.Princip
 		return PresetConnection{}, identityapp.ErrForbidden
 	}
 	if id == uuid.Nil || input.VersionID == uuid.Nil || input.RequestID == uuid.Nil || (input.Key != "" && !validProviderKey(input.Key)) || (input.Name != "" && strings.TrimSpace(input.Name) == "") || len(input.Name) > 200 {
+		return PresetConnection{}, domain.ErrInvalidPreset
+	}
+	if input.LogoAssetID != nil && *input.LogoAssetID == uuid.Nil {
 		return PresetConnection{}, domain.ErrInvalidPreset
 	}
 	if input.SelectedModelsOnly && (input.DirectUse || len(input.CandidateKeys)+len(input.CustomCandidates) > domain.MaxPresetModels) {

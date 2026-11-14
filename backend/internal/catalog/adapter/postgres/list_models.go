@@ -55,7 +55,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 		query := fmt.Sprintf(`
 			SELECT m.id, published.id AS release_id, m.model_key, m.display_name, m.capability, m.status,
 			       to_jsonb(cap.input_roles)::text AS input_roles,
-			       p.id AS provider_id, p.name AS provider_name, p.adapter_key AS provider_adapter_key,
+			       p.logo_asset_id AS provider_logo_asset_id,p.id AS provider_id, p.name AS provider_name, p.adapter_key AS provider_adapter_key,
 			       p.region AS provider_region, p.status AS provider_status,
 			       (c.id IS NOT NULL) AS credential_present,
 			       c.last_test_result AS credential_test_result,
@@ -167,6 +167,7 @@ func (s *Store) requireProject(tx *gorm.DB, actor identityapp.Principal, project
 }
 
 type modelCatalogRow struct {
+	ProviderLogoAssetID  *uuid.UUID
 	ID                   uuid.UUID
 	ReleaseID            *uuid.UUID
 	ModelKey             string
@@ -205,8 +206,8 @@ func (row modelCatalogRow) item() (application.ModelCatalogItem, error) {
 	item := application.ModelCatalogItem{
 		ID: row.ID, Key: row.ModelKey, DisplayName: row.DisplayName,
 		Capability: row.Capability, Status: domain.ModelStatus(row.Status),
-		InputRoles: roles,
-		ProviderID: row.ProviderID, ProviderName: row.ProviderName, ProviderAdapterKey: row.ProviderAdapterKey,
+		InputRoles:          roles,
+		ProviderLogoAssetID: row.ProviderLogoAssetID, ProviderID: row.ProviderID, ProviderName: row.ProviderName, ProviderAdapterKey: row.ProviderAdapterKey,
 		ProviderRegion:    domain.Region(row.ProviderRegion),
 		ProviderStatus:    domain.ProviderStatus(row.ProviderStatus),
 		CredentialPresent: row.CredentialPresent,
