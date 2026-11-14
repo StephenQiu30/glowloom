@@ -136,10 +136,13 @@ export type CanvasComposerOwner = {
   draft: PromptDraft;
   onChange: (draft: PromptDraft, transaction?: Transaction) => void;
   collaboration?: ComposerCollaboration;
-  onSession?: (session: ComposerSession) => (() => void) | void;
+  onSession?: (
+    session: ComposerSession,
+    initialDraft: PromptDraft,
+  ) => (() => void) | void;
   // Opening the editor must not materialize an empty generation input.
   waitForNode?: () => Promise<void>;
-  flush: () => Promise<API.InputSource>;
+  flush: (draft: PromptDraft) => Promise<API.InputSource>;
   referenceSources?: CanvasReferenceSource[];
   subjectSources?: CanvasSubjectReferenceSource[];
   incomingSources?: CanvasLinkedReferenceSource[];
@@ -374,15 +377,6 @@ export function RichGeneration(props: Props) {
           catalog.models,
           props.seed.creationType,
         );
-        if (
-          props.presentation === "canvas" &&
-          !props.canvas?.readOnly &&
-          !current.submission
-        )
-          snapshot = {
-            ...snapshot,
-            draft: defaultGenerationDraft(snapshot.draft, availableModels),
-          };
         if (active) {
           props.onDraftReady?.(snapshot.draft_id);
           setReady({
@@ -502,6 +496,11 @@ function EditorWorkspace({
   current: API.SubmissionCurrent;
   onOpen: (id: string) => void;
 }) {
+  const [initialDraft] = useState(() =>
+    presentation === "canvas" && !canvas?.readOnly && !initialCurrent.submission
+      ? defaultGenerationDraft(snapshot.draft, initialModels)
+      : snapshot.draft,
+  );
   const formFieldId = useId();
   const [voiceLibraryOpen, setVoiceLibraryOpen] = useState(false);
   const voiceLibraryButton = useRef<HTMLButtonElement>(null);
@@ -562,13 +561,24 @@ function EditorWorkspace({
         ) {
           const before = session.snapshot().draft;
           const next = defaultGenerationDraft(before, available);
-          if (next !== before && next.modelVersion && next.mode)
-            session.resolveModeSelection(
-              session.beginModeSelection({
-                modelVersion: next.modelVersion,
-                mode: next.mode,
-              }),
-            );
+          if (next !== before && next.modelVersion && next.mode) {
+            if (!canvasEdited.current) {
+              session.applyAuthoritative(
+                next,
+                session.editor.state.tr.setMeta(
+                  "composer-display-defaults",
+                  before,
+                ),
+              );
+            } else {
+              session.resolveModeSelection(
+                session.beginModeSelection({
+                  modelVersion: next.modelVersion,
+                  mode: next.mode,
+                }),
+              );
+            }
+          }
         }
       }
     } catch (error) {
@@ -584,7 +594,7 @@ function EditorWorkspace({
   }
   const [replicaId] = useState(() => crypto.randomUUID()),
     [session, setSession] = useState<ComposerSession | null>(null),
-    [draft, setDraft] = useState(snapshot.draft),
+    [draft, setDraft] = useState(initialDraft),
     [seq, setSeq] = useState(0),
     [current, setCurrent] = useState(initialCurrent),
     [quote, setQuote] = useState<Quote | null>(null),
@@ -631,7 +641,7 @@ function EditorWorkspace({
       contextKey,
       replicaId,
       localSeq: 0,
-      draft: snapshot.draft,
+      draft: initialDraft,
     });
   const [sourceEpoch, setSourceEpoch] = useState(0);
   const sourceKey = JSON.stringify([draft.references, sourceEpoch]);
@@ -831,7 +841,13 @@ function EditorWorkspace({
           .then((identity) => {
             if (identity.actor?.id !== actor) suspend();
           })
-          .catch(suspend);
+          .catch((error: unknown) => {
+            if (
+              error instanceof RequestError &&
+              [401, 403].includes(error.status)
+            )
+              suspend();
+          });
       }
     };
     const channel =
@@ -849,6 +865,8 @@ function EditorWorkspace({
       window.removeEventListener("online", check);
     };
   }, [actor, session]);
+  const publishedCanvasSeq = useRef(0);
+  const canvasEdited = useRef(false);
   const ownerSessionCleanup = useRef<(() => void) | undefined>(undefined);
   const changed = useCallback(
     (value: ComposerSnapshot, transaction?: Transaction) => {
@@ -857,42 +875,51 @@ function EditorWorkspace({
       setDraft(value.draft);
       setSeq(value.localSeq);
       saver.current?.edit(value);
-      if (transaction?.getMeta("composer-authoritative")) return;
-      if (canvas?.collaboration || !sessionRef.current?.composing)
-        if (canvas?.collaboration) canvas.onChange(value.draft, transaction);
-        else canvas?.onChange(value.draft);
+      if (transaction?.getMeta("composer-authoritative")) {
+        publishedCanvasSeq.current = value.localSeq;
+        canvasEdited.current = false;
+        return;
+      }
+      if (canvas) {
+        if (
+          !canvas.readOnly &&
+          publishedCanvasSeq.current !== value.localSeq &&
+          (canvas.collaboration || !sessionRef.current?.composing)
+        ) {
+          publishedCanvasSeq.current = value.localSeq;
+          canvasEdited.current = true;
+          if (canvas.collaboration) canvas.onChange(value.draft, transaction);
+          else canvas.onChange(value.draft);
+        }
+        return;
+      }
       if (previous.localSeq === value.localSeq && !firstDirtyAt.current) return;
       firstDirtyAt.current ??= Date.now();
       if (timer.current) clearTimeout(timer.current);
-      if (!canvas) {
-        const autosave = () => {
-          if (sessionRef.current?.composing) {
-            timer.current = setTimeout(autosave, 100);
-            return;
-          }
-          void saver.current
-            ?.flush()
-            .then(() => {
-              firstDirtyAt.current = null;
-            })
-            .catch((e) => {
-              if (alive.current) setError(errorText(e));
-            });
-        };
-        timer.current = setTimeout(
-          autosave,
-          Math.max(
-            0,
-            Math.min(800, 5000 - (Date.now() - firstDirtyAt.current)),
-          ),
-        );
-      }
+      const autosave = () => {
+        if (sessionRef.current?.composing) {
+          timer.current = setTimeout(autosave, 100);
+          return;
+        }
+        void saver.current
+          ?.flush()
+          .then(() => {
+            firstDirtyAt.current = null;
+          })
+          .catch((e) => {
+            if (alive.current) setError(errorText(e));
+          });
+      };
+      timer.current = setTimeout(
+        autosave,
+        Math.max(0, Math.min(800, 5000 - (Date.now() - firstDirtyAt.current))),
+      );
     },
     [canvas],
   );
   async function flush() {
     if (session?.composing) throw new Error("请先完成当前输入法组合。");
-    if (canvas) return canvas.flush();
+    if (canvas) return canvas.flush(latest.current.draft);
     if (!saver.current) throw new Error("保存协调器尚未就绪");
     const saved = await saver.current.flush();
     return {
@@ -1360,7 +1387,7 @@ function EditorWorkspace({
         resolveGeneration={compact ? resolveReferenceGeneration : undefined}
         contextKey={contextKey}
         replicaId={replicaId}
-        draft={snapshot.draft}
+        draft={initialDraft}
         collaboration={canvas?.collaboration}
         onDispose={() => {
           ownerSessionCleanup.current?.();
@@ -1370,12 +1397,13 @@ function EditorWorkspace({
           sessionRef.current = value;
           setSession(value);
           ownerSessionCleanup.current?.();
-          ownerSessionCleanup.current = canvas?.onSession?.(value) || undefined;
+          ownerSessionCleanup.current =
+            canvas?.onSession?.(value, snapshot.draft) || undefined;
           const current = value.snapshot();
           latest.current = current;
           setDraft(current.draft);
           setSeq(current.localSeq);
-          canvas?.onChange(current.draft);
+          publishedCanvasSeq.current = current.localSeq;
         }}
         onChange={changed}
         onRequestSave={() =>

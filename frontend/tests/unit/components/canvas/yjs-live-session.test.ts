@@ -364,7 +364,8 @@ it("keeps rejected input private, recovers only reviewed fields under a fresh im
   });
   await vi.waitFor(() => expect(client.getSnapshot().recovery).toHaveLength(1));
   expect(client.getSnapshot().document!.nodes[0].title).toBe("正文");
-  expect(client.getSnapshot().dirty).toBe(true);
+  expect(client.getSnapshot().dirty).toBe(false);
+  expect(client.getSnapshot().unsafeToLeave).toBe(true);
   const source = client.getSnapshot().recovery[0];
   await expect(
     client.applyRecovery(source.sourceId, source.fields, "9"),
@@ -452,7 +453,8 @@ it("queries an old-epoch original and archives its rejected input instead of rep
     ),
   );
   expect(client.getSnapshot().document!.nodes[0].title).toBe("正文");
-  expect(client.getSnapshot().dirty).toBe(true);
+  expect(client.getSnapshot().dirty).toBe(false);
+  expect(client.getSnapshot().unsafeToLeave).toBe(true);
   expect(sockets[1].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
     0,
   );
@@ -728,7 +730,7 @@ it.each([false, true])(
     });
     await vi.waitFor(() =>
       expect(client.getSnapshot().phase).toBe(
-        lostOriginal ? "输入已保留，需处理" : "已保存",
+        lostOriginal ? "等待保存确认" : "已保存",
       ),
     );
     expect(client.getSnapshot().document!.nodes[0].title).toBe(
@@ -785,7 +787,7 @@ it.each(["missing", "epoch", "document", "revision"])(
       });
     }
     await vi.waitFor(() =>
-      expect(client.getSnapshot().phase).toBe("输入已保留，需处理"),
+      expect(client.getSnapshot().phase).toBe("等待保存确认"),
     );
     expect(client.getSnapshot().dirty).toBe(true);
     await recover();
@@ -1050,6 +1052,42 @@ it("deleting a clean empty resource with its composer open does not retain a pha
   unbind();
   expect(f.client.readInputDraft(f.nodeID)).toBeNull();
   expect(f.client.getSnapshot().recovery).toHaveLength(0);
+});
+
+it("opening a model-prefilled composer and deleting its node never creates private input", async () => {
+  const f = setup();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const composer = new ComposerSession(
+    new Editor(
+      composerEditorOptions({
+        contextKey: f.nodeID,
+        replicaId: "prefill",
+        draft: {
+          ...emptyPromptDraft(),
+          modelVersion: "published-image-model",
+          mode: "text2image",
+          params: { size: "2K" },
+        },
+      }),
+    ),
+  );
+  composers.push(composer);
+  const unbind = f.client.bindInputComposer(f.nodeID, composer, null);
+  await expect(f.client.waitForSaved()).resolves.toMatchObject({
+    revision: "1",
+  });
+  remoteInput(f, "", true);
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document?.nodes).toHaveLength(0),
+  );
+  unbind();
+  expect(f.client.readInputDraft(f.nodeID)).toBeNull();
+  expect(f.client.getSnapshot().unsafeToLeave).toBe(false);
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
 });
 
 it("quote preparation can explicitly materialize an empty input", async () => {
@@ -2596,7 +2634,7 @@ async function durableSessionFixture() {
     },
   };
 }
-it("reopening after lost acknowledgement resolves the durably stored original packet before offering uncommitted intent recovery", async () => {
+it("reopening after a lost acknowledgement queries and resubmits the same original if absent", async () => {
   const f = await durableSessionFixture(),
     first = await f.open();
   const next = structuredClone(first.client.getSnapshot().document!);
@@ -2630,34 +2668,105 @@ it("reopening after lost acknowledgement resolves the durably stored original pa
   );
   reopened.sockets[0].receive({ type: "yjs_not_found", op_id: original.op_id });
   await vi.waitFor(() =>
-    expect(reopened.client.getSnapshot().recovery).toHaveLength(1),
+    expect(
+      reopened.sockets[0].sent.find((p) => p.type === "yjs_submit"),
+    ).toEqual(original),
   );
-  expect(reopened.client.getSnapshot().document!.nodes[0].position.x).toBe(0);
-  expect(JSON.stringify(reopened.client.getSnapshot().recovery)).toContain(
-    "777",
-  );
-  expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
-    false,
-  );
+  expect(reopened.client.getSnapshot().document!.nodes[0].position.x).toBe(777);
+  expect(reopened.client.getSnapshot().recovery).toHaveLength(0);
   expect(JSON.stringify([...f.records.values()])).not.toContain(
     "csrf-not-journaled",
   );
-  const recovered = reopened.client.getSnapshot().recovery[0];
-  await reopened.client.applyRecovery(
-    recovered.sourceId,
-    recovered.fields,
-    reopened.client.commitSeq,
+  const body = original.body as { update: string; payloadHash: string };
+  reopened.sockets[0].receive({
+    type: "yjs_ack",
+    op_id: original.op_id,
+    yjs_receipt: {
+      status: "accepted",
+      epoch: f.state.epoch,
+      updateId: original.op_id,
+      payloadHash: body.payloadHash,
+      update: body.update,
+      commitSeq: "1",
+      contentRevision: "2",
+      graphHash: f.state.graphHash,
+      effect: "VISIBLE_CHANGE",
+    },
+  });
+  await vi.waitFor(() =>
+    expect(reopened.client.getSnapshot().dirty).toBe(false),
   );
+  expect(f.records.size).toBe(0);
+});
+it("refresh resumes unsent offline edits without turning the original journal into a recovery form", async () => {
+  const f = await durableSessionFixture();
+  const first = await f.open();
+  first.sockets[0].close();
+  first.client.rename("离线输入");
+  await vi.waitFor(() =>
+    expect([...f.records.values()][0]?.pending.length).toBeGreaterThan(0),
+  );
+  await f.close(first.client);
+  const reopened = await f.open();
   await vi.waitFor(() =>
     expect(
-      reopened.sockets[0].sent.some((packet) => packet.type === "yjs_submit"),
-    ).toBe(true),
+      reopened.sockets[0].sent.filter((p) => p.type === "yjs_submit"),
+    ).toHaveLength(1),
   );
-  expect(
-    reopened.sockets[0].sent.find((packet) => packet.type === "yjs_submit")!
-      .op_id,
-  ).not.toBe(original.op_id);
-  expect(reopened.client.getSnapshot().document!.nodes[0].position.x).toBe(777);
+  expect(reopened.client.getSnapshot().dto?.name).toBe("协作");
+  expect(reopened.client.getSnapshot().recovery).toHaveLength(0);
+});
+
+it("a node deleted while the page was away stays deleted while its unsaved edit survives a missing receipt", async () => {
+  const f = await durableSessionFixture();
+  const first = await f.open();
+  const next = structuredClone(first.client.getSnapshot().document!);
+  next.nodes[0].title = "我的节点名称";
+  first.client.change(next, true);
+  await vi.waitFor(() =>
+    expect(first.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+      true,
+    ),
+  );
+  const original = first.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  await f.close(first.client);
+  const remote = new Y.Doc();
+  Y.applyUpdate(remote, Buffer.from(f.state.state, "base64"));
+  (remote.getMap("canvas").get("nodes") as Y.Map<unknown>).delete(f.nodeID);
+  f.state.state = Buffer.from(Y.encodeStateAsUpdate(remote)).toString("base64");
+  f.state.document.nodes = [];
+  f.state.document.revision = "2";
+  f.state.commitSeq = "1";
+  remote.destroy();
+  const reopened = await f.open();
+  await vi.waitFor(() =>
+    expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_resolve")).toBe(
+      true,
+    ),
+  );
+  reopened.sockets[0].receive({ type: "yjs_not_found", op_id: original.op_id });
+  await vi.waitFor(() =>
+    expect(reopened.client.getSnapshot().recovery).toHaveLength(1),
+  );
+  expect(reopened.client.getSnapshot().recovery[0].fields[0].after.value).toBe(
+    "我的节点名称",
+  );
+  expect(reopened.client.getSnapshot().document?.nodes).toEqual([]);
+  expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+    false,
+  );
+  await vi.waitFor(() =>
+    expect(reopened.client.getSnapshot().unsafeToLeave).toBe(false),
+  );
+  await expect(reopened.client.waitForSaved()).resolves.toMatchObject({
+    revision: "2",
+  });
+  await f.close(reopened.client);
+  const again = await f.open();
+  expect(again.client.getSnapshot().recovery[0].fields[0].after.value).toBe(
+    "我的节点名称",
+  );
+  expect(again.client.getSnapshot().document?.nodes).toEqual([]);
 });
 it("device recovery cannot cross actor identity and a forbidden response keeps its disk draft", async () => {
   const f = await durableSessionFixture(),
@@ -2697,6 +2806,7 @@ it("a device journal quota failure blocks transport submission and never labels 
   );
   expect(opened.client.getSnapshot().phase).toContain("请勿关闭");
   expect(opened.client.getSnapshot().dirty).toBe(true);
+  expect(opened.client.getSnapshot().unsafeToLeave).toBe(true);
 });
 it("a reopened accepted submission consumes its exact receipt without creating another update identity", async () => {
   const f = await durableSessionFixture(),
@@ -2769,6 +2879,12 @@ it("an epoch change queries the old frozen operation then retains a review draft
   await vi.waitFor(() =>
     expect(reopened.client.getSnapshot().recovery).toHaveLength(1),
   );
+  await vi.waitFor(() =>
+    expect(reopened.client.getSnapshot().unsafeToLeave).toBe(false),
+  );
+  await expect(reopened.client.waitForSaved()).resolves.toMatchObject({
+    revision: "1",
+  });
   expect(reopened.client.getDocumentEpoch()).toBe(epoch);
   expect(reopened.client.getSnapshot().document!.nodes[0].position.x).toBe(0);
   expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(

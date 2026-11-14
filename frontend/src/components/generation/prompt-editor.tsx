@@ -67,8 +67,7 @@ export function PromptEditor({
     if (!editor) return;
     const changed = ({ transaction }: { transaction: Transaction }) => {
       const snapshot = new ComposerSession(editor).snapshot();
-      if (options.collaboration) onChange?.(snapshot, transaction);
-      else onChange?.(snapshot);
+      onChange?.(snapshot, transaction);
     };
     editor.on("transaction", changed);
     if (onRequestSave) editor.on("composerSaveRequested", onRequestSave);
@@ -79,7 +78,7 @@ export function PromptEditor({
       if (onRequestSubmit)
         editor.off("composerSubmitRequested", onRequestSubmit);
     };
-  }, [editor, onRequestSave, onRequestSubmit, onChange, options.collaboration]);
+  }, [editor, onRequestSave, onRequestSubmit, onChange]);
 
   if (!placeholderContent)
     return <EditorContent editor={editor} className="w-full min-w-0 flex-1" />;

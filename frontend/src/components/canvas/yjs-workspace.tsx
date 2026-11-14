@@ -45,7 +45,7 @@ import { canvasSubjectSources } from "./lib/canvas-subject-source";
 import { getCSRFToken } from "@/lib/request";
 import { ensureSessionFresh } from "@/components/auth/session-renewal";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CanvasLocalDrafts } from "./controls/canvas-local-drafts";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -56,7 +56,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import type { RecoveryField } from "@glowloom/canvas/recovery";
 import { getProject } from "@/api/projects";
 import { requireProject, type Project } from "@/components/projects/project";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
@@ -272,21 +271,15 @@ function CollaborativeEditor({
       if (renameRequest.current === controller) renameRequest.current = null;
     }
   };
-  const [review, setReview] = useState<{
-    sourceId: string;
-    fields: RecoveryField[];
-    selected: Set<string>;
-    commitSeq: string;
-  } | null>(null);
   useEffect(() => {
-    if (!view.dirty) return;
+    if (!view.unsafeToLeave) return;
     const protect = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", protect);
     return () => window.removeEventListener("beforeunload", protect);
-  }, [view.dirty]);
+  }, [view.unsafeToLeave]);
   const completeOperation = useCallback(
     async (nodeID: string, operationID: string, task: Task) => {
       const outcome = await applyCanvasOperationResult(
@@ -353,7 +346,7 @@ function CollaborativeEditor({
             mediaEnabled: true,
             onOpenAssistant: () => setAssistantOpen(true),
             onTransferSelection: setTransfer,
-            canNavigate: !view.dirty,
+            canNavigate: !view.unsafeToLeave,
             frozen: !view.writable || view.migration,
             admit: client.canAccept,
             admitConnectionGraph: client.canAcceptConnectionGraph,
@@ -428,7 +421,7 @@ function CollaborativeEditor({
                 title={view.dto!.name ?? "画布"}
                 canDeleteCanvas={false}
                 canRenameCanvas={view.writable && !view.dirty}
-                canSwitchCanvas={!view.dirty}
+                canSwitchCanvas={!view.unsafeToLeave}
                 onDeleteProject={() => {}}
                 onRenameProject={() => void openRename()}
                 participantsControl={
@@ -450,21 +443,21 @@ function CollaborativeEditor({
                         tone="info"
                       />
                     )}
-                    {view.recovery.map((source) => (
-                      <Button
-                        key={source.sourceId}
-                        size="sm"
-                        onClick={() =>
-                          setReview({
-                            ...source,
-                            selected: new Set(),
-                            commitSeq: client.commitSeq,
-                          })
+                    {(view.recovery.length > 0 ||
+                      view.recoveryRemaining > 0) && (
+                      <CanvasLocalDrafts
+                        sources={view.recovery}
+                        otherSessions={view.recoveryRemaining}
+                        writable={
+                          view.writable && view.connected && !view.dirty
                         }
-                      >
-                        查看待恢复输入
-                      </Button>
-                    ))}
+                        commitSeq={client.commitSeq}
+                        apply={(id, fields, seq) =>
+                          client.applyRecovery(id, fields, seq)
+                        }
+                        discard={client.discardRecovery}
+                      />
+                    )}
                   </div>
                 }
               />
@@ -550,141 +543,7 @@ function CollaborativeEditor({
             }}
           />
         )}
-        <Dialog
-          open={!!review}
-          onOpenChange={(open) => {
-            if (!open) setReview(null);
-          }}
-        >
-          <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>核对并恢复本页输入</DialogTitle>
-              <DialogDescription>
-                只重新应用勾选内容。服务器发生变化后需要重新核对；未处理的输入仅保留在此页面。
-              </DialogDescription>
-            </DialogHeader>
-            {review?.fields.map((field) => (
-              <Label
-                key={field.key}
-                className="block space-y-2 rounded border p-3"
-              >
-                <span className="flex gap-2">
-                  <Checkbox
-                    checked={review.selected.has(field.key)}
-                    onCheckedChange={(checked) => {
-                      setReview((current) => {
-                        if (!current) return null;
-                        const selected = new Set(current.selected);
-                        if (checked === true) selected.add(field.key);
-                        else selected.delete(field.key);
-                        return { ...current, selected };
-                      });
-                    }}
-                  />
-                  {field.field === "textDocument"
-                    ? "正文"
-                    : field.field === "title"
-                      ? "名称"
-                      : field.field === "entity"
-                        ? "节点"
-                        : field.field === "native"
-                          ? "素材与节点配置"
-                          : field.field === "size"
-                            ? "尺寸"
-                            : field.field === "placement"
-                              ? "位置与分组"
-                              : "编辑内容"}
-                </span>
-                {field.copyRequired && (
-                  <p className="text-sm text-muted-foreground">
-                    原节点已删除或无法原位恢复。勾选后将把所选输入恢复为新节点，不恢复原连线。
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    当前内容
-                    <pre className="break-all whitespace-pre-wrap">
-                      {recoveryText(field.current.value)}
-                    </pre>
-                  </div>
-                  <div>
-                    本页输入
-                    <pre className="break-all whitespace-pre-wrap">
-                      {recoveryText(field.after.value)}
-                    </pre>
-                  </div>
-                </div>
-              </Label>
-            ))}
-            <DialogFooter>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  if (review && window.confirm("放弃这份本页输入？"))
-                    void client
-                      .discardRecovery(review.sourceId)
-                      .then(() => setReview(null));
-                }}
-              >
-                放弃这份输入
-              </Button>
-              <Button
-                disabled={!review?.selected.size}
-                onClick={() => {
-                  if (!review) return;
-                  void client
-                    .applyRecovery(
-                      review.sourceId,
-                      review.fields
-                        .filter((field) => review.selected.has(field.key))
-                        .map((field) => ({
-                          ...field,
-                          copyNode: field.copyRequired,
-                        })),
-                      review.commitSeq,
-                    )
-                    .then(() => setReview(null))
-                    .catch((cause) => {
-                      setReview(null);
-                      toast.error(
-                        cause instanceof Error ? cause.message : "恢复失败",
-                      );
-                    });
-                }}
-              >
-                重新应用所选内容
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </CanvasMediaContext.Provider>
   );
-}
-
-function recoveryText(value: unknown): string {
-  if (value === undefined) return "内容已不存在";
-  if (typeof value === "string") return value;
-  if (
-    value &&
-    typeof value === "object" &&
-    "schemaVersion" in value &&
-    "content" in value
-  ) {
-    const text = (node: unknown): string => {
-      if (!node || typeof node !== "object") return "";
-      const part = node as {
-        text?: string;
-        type?: string;
-        content?: unknown[];
-      };
-      return (
-        part.text ??
-        part.content?.map(text).join(part.type === "doc" ? "\n" : "") ??
-        ""
-      );
-    };
-    return text((value as { content: unknown }).content) || "（空白正文）";
-  }
-  return JSON.stringify(value, null, 2);
 }

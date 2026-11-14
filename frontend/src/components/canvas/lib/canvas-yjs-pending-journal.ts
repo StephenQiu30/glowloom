@@ -32,7 +32,7 @@ const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const storageKey = (namespace: string, scope: CollaborationScope) =>
   JSON.stringify([namespace, scope.sessionId, scope.epoch]);
-export function hasCanvasPendingIntent(record: Record) {
+function hasActiveChanges(record: Record) {
   return !!(
     record.inFlight ||
     record.sealed ||
@@ -40,10 +40,12 @@ export function hasCanvasPendingIntent(record: Record) {
     record.pending.length ||
     record.intents.length ||
     record.inFlightIntents.length ||
-    record.recoverySources.length ||
     Object.keys(record.forms).length ||
     Object.keys(record.textDrafts).length
   );
+}
+export function hasCanvasPendingIntent(record: Record) {
+  return hasActiveChanges(record) || record.recoverySources.length > 0;
 }
 function validate(
   record: Record,
@@ -199,7 +201,11 @@ export async function openCanvasPendingJournal(
   rows.forEach((record) => validate(record, identity));
   const pending = rows
     .filter(hasCanvasPendingIntent)
-    .sort((a, b) => a.updatedAt - b.updatedAt);
+    .sort(
+      (a, b) =>
+        Number(hasActiveChanges(b)) - Number(hasActiveChanges(a)) ||
+        a.updatedAt - b.updatedAt,
+    );
   let record: Record | undefined;
   let release: (() => Promise<void>) | null = null;
   for (const previous of pending) {

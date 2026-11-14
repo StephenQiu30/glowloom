@@ -1,6 +1,7 @@
 import type { RichGeneration } from "@/components/generation/rich-generation";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { emptyPromptDraft } from "@/components/generation/prompt-document";
 import { CanvasGenerationPanel } from "@/components/canvas/nodes/canvas-generation-panel";
 import { serviceGraph } from "@/components/canvas/service-graph";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
@@ -66,7 +67,13 @@ function setup(
     check?.();
     return dto;
   });
+  const changeInput = vi.fn().mockReturnValue(true);
+  const prepareInput = vi
+    .fn()
+    .mockResolvedValue({ kind: "canvas_input", node_id: nodeID });
   const client = {
+    changeInput,
+    prepareInput,
     subscribe: () => () => {},
     getDocumentEpoch: () => state.epoch,
     getSnapshot: () => state,
@@ -83,8 +90,26 @@ function setup(
       onOperationReady={onOperationReady}
     />,
   );
-  return { state, changed, waitForSaved };
+  return { state, changed, waitForSaved, changeInput, prepareInput };
 }
+
+it("生成时保存编辑器展示的完整输入，写入失败则不能用旧版本报价", async () => {
+  const { changeInput, prepareInput } = setup("image");
+  const owner = captured.props!.canvas!;
+  const draft = {
+    ...emptyPromptDraft(),
+    modelVersion: projectID,
+    mode: "text2image",
+    params: { size: "2K" },
+  };
+  expect(changeInput).not.toHaveBeenCalled();
+  changeInput.mockReturnValueOnce(false);
+  await expect(owner.flush(draft)).rejects.toThrow("生成输入尚未保存");
+  expect(prepareInput).not.toHaveBeenCalled();
+  await expect(owner.flush(draft)).resolves.toMatchObject({ node_id: nodeID });
+  expect(changeInput).toHaveBeenLastCalledWith(nodeID, draft, true);
+  expect(prepareInput).toHaveBeenCalledOnce();
+});
 
 it("正式生成回执绑定当前节点供节点内读取，保留原始操作身份", () => {
   const ready = vi.fn();

@@ -123,10 +123,10 @@ export function CanvasGenerationPanel({
     readOnly: !view.writable || view.migration,
     draft: input,
     onChange: (draft) => client.changeInput(nodeID, draft),
-    onSession: (session) => {
+    onSession: (session, initialDraft) => {
       editor.current = session;
       // Binding also guards IME and keeps the authoritative draft in this editor.
-      const dispose = client.bindInputComposer(nodeID, session);
+      const dispose = client.bindInputComposer(nodeID, session, initialDraft);
       return () => {
         dispose();
         if (editor.current === session) editor.current = null;
@@ -142,23 +142,10 @@ export function CanvasGenerationPanel({
           throw new Error("节点已不存在");
       });
     },
-    flush: async () => {
+    flush: async (draft) => {
       if (editor.current?.composing) throw new Error("请先完成当前输入法组合");
-      if (
-        !client.getSnapshot().document?.nodes.find((item) => item.id === nodeID)
-          ?.serviceData?.config?.draft?.composer
-      ) {
-        await client.waitForSaved();
-        const current = client
-          .getSnapshot()
-          .document?.nodes.find((item) => item.id === nodeID);
-        if (!current) throw new Error("节点已不存在");
-        if (
-          !current.serviceData?.config?.draft?.composer &&
-          !client.changeInput(nodeID, emptyPromptDraft(), true)
-        )
-          throw new Error("生成输入尚未保存");
-      }
+      if (!client.changeInput(nodeID, draft, true))
+        throw new Error("生成输入尚未保存");
       return client.prepareInput(nodeID);
     },
     referenceSources: references,

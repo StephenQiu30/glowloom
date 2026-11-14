@@ -1,5 +1,6 @@
 import { render, findFeedback } from "../../../feedback";
 import {
+  act,
   cleanup,
   fireEvent,
   screen,
@@ -450,6 +451,24 @@ it("画布紧凑呈现等新节点保存但不物化空输入，重渲染不重�
   expect(canvas.waitForNode).toHaveBeenCalledOnce();
 });
 
+it("恢复标签页时遇到短暂网络错误仍可编辑，身份改变后锁定原草稿", async () => {
+  const { canvas } = await compactWorkspace();
+  const editor = screen.getByRole("textbox", { name: "创作提示词" });
+  api.identity.mockRejectedValueOnce(
+    new RequestError("dependency_unavailable", 503),
+  );
+  await act(async () => {
+    fireEvent(document, new Event("visibilitychange"));
+  });
+  expect(editor.getAttribute("contenteditable")).toBe("true");
+  expect(canvas.onChange).not.toHaveBeenCalled();
+  api.identity.mockResolvedValueOnce({ actor: { id: "other-actor" } });
+  await act(async () => {
+    fireEvent(window, new Event("online"));
+  });
+  expect(screen.queryByRole("textbox", { name: "创作提示词" })).toBeNull();
+});
+
 it("紧凑参数使用模型schema与候选上限，同一画布来源报价后才允许确认", async () => {
   const { canvas, pointer } = await compactWorkspace();
   const parameterTrigger = screen.getByRole("button", { name: "生成参数" });
@@ -514,9 +533,7 @@ it("默认全能参考来自真实目录合同，无模式切换且不重建正�
   expect(screen.queryByRole("combobox", { name: "生成模式" })).toBeNull();
   expect(screen.queryByText("需要调整")).toBeNull();
   expect(screen.getByText("全能参考")).toBeTruthy();
-  await waitFor(() =>
-    expect(canvas.onChange.mock.calls.at(-1)?.[0].mode).toBe("omni_reference"),
-  );
+  expect(canvas.onChange).not.toHaveBeenCalled();
   expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
   expect(editor.textContent).toContain("保留同一富文本会话");
   expect(api.quote).not.toHaveBeenCalled();
@@ -1951,7 +1968,7 @@ function defaultCanvasOwner(readOnly = false) {
   return canvas;
 }
 
-it("新画布输入首次可编辑时已选择默认模型，随原所有者保存且不报价", async () => {
+it("默认模型只用于展示，首次编辑时才随正文写入画布", async () => {
   const canvas = defaultCanvasOwner();
   await screen.findByRole("textbox", { name: "创作提示词" });
   await waitFor(() =>
@@ -1959,6 +1976,17 @@ it("新画布输入首次可编辑时已选择默认模型，随原所有者保�
       screen.getByRole("combobox", { name: "生成模型" }).textContent,
     ).toContain("真实模型"),
   );
+  const editor = screen.getByRole("textbox", { name: "创作提示词" });
+  fireEvent.focus(editor);
+  fireEvent.blur(editor);
+  expect(canvas.onChange).not.toHaveBeenCalled();
+  fireEvent.paste(editor, {
+    clipboardData: {
+      files: [],
+      getData: (kind: string) => (kind === "text/plain" ? "编辑" : ""),
+    },
+  });
+  expect(canvas.onChange).toHaveBeenCalledOnce();
   expect(canvas.onChange.mock.calls[0][0]).toMatchObject({
     modelVersion: version,
     mode: "text_to_image",
@@ -1978,9 +2006,22 @@ it("只读画布不自动选择或保存默认模型", async () => {
   expect(
     screen.getByRole("combobox", { name: "生成模型" }).textContent,
   ).toContain("选择模型");
-  expect(
-    canvas.onChange.mock.calls.every(([draft]) => draft.modelVersion === null),
-  ).toBe(true);
+  expect(canvas.onChange).not.toHaveBeenCalled();
+});
+
+it("目录恢复只补充当前展示的默认模型，未编辑的画布仍保持干净", async () => {
+  api.models.mockRejectedValueOnce(
+    new RequestError("dependency_unavailable", 503),
+  );
+  const canvas = defaultCanvasOwner();
+  await screen.findByRole("textbox", { name: "创作提示词" });
+  fireEvent.click(screen.getByRole("button", { name: "重试模型目录" }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("combobox", { name: "生成模型" }).textContent,
+    ).toContain("真实模型"),
+  );
+  expect(canvas.onChange).not.toHaveBeenCalled();
 });
 
 it("目录恢复后为未选择草稿补默认模型，保留同一输入器与已输入正文", async () => {

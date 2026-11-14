@@ -192,3 +192,40 @@ it("preserves optional undefined fields supported by structured clone but reject
   }
   await handle.close();
 });
+
+it("resumes an abandoned save before an older archived conflict", async () => {
+  const f = fixture();
+  const id = identity();
+  const first = await openCanvasPendingJournal(id, f);
+  const archived = record(id, first.sessionId);
+  archived.inFlight = null;
+  archived.updatedAt = 1;
+  archived.recoverySources = [
+    {
+      id: crypto.randomUUID(),
+      generation: archived.generation,
+      scope: archived.scope,
+      confirmed: archived.confirmed,
+      sealed: {
+        reason: "REMOTE_DELETED",
+        snapshot: archived.snapshot,
+        inFlight: null,
+        pending: [],
+      },
+      forms: { input: { value: "保留输入" } },
+      textDrafts: {},
+      textGenerations: {},
+      locations: {},
+    },
+  ];
+  await first.put(archived);
+  const second = await openCanvasPendingJournal(id, f);
+  const active = record(id, second.sessionId);
+  await second.put(active);
+  await first.close();
+  await second.close();
+  const resumed = await openCanvasPendingJournal(id, f);
+  expect(resumed.record).toEqual(active);
+  expect([...f.rows.values()]).toContainEqual(archived);
+  await resumed.close();
+});

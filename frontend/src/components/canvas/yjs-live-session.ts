@@ -31,6 +31,7 @@ import {
   type ServiceGraph,
 } from "@glowloom/canvas/service-document";
 import type * as Y from "yjs";
+import type { Transaction } from "@tiptap/pm/state";
 import { DOMParser as PromptDOMParser } from "@tiptap/pm/model";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import { RequestError } from "@/lib/request";
@@ -97,6 +98,7 @@ export type YjsView = {
   connected: boolean;
   writable: boolean;
   dirty: boolean;
+  unsafeToLeave: boolean;
   migration: boolean;
   message: string;
   phase: string;
@@ -192,8 +194,7 @@ export class CanvasYjsLiveSession {
   private journal: CanvasPendingJournal | null = null;
   private journalError: Error | null = null;
   private storedRecovery?: RecoveryRecord<ServiceGraph>;
-  private restoringOriginal = false;
-  private restoredOriginalMissing = false;
+  private sealedOriginalMissing = false;
   private journalLifecycle = 0;
   private journalReady = false;
   private socket: WebSocket | null = null;
@@ -204,6 +205,7 @@ export class CanvasYjsLiveSession {
     {
       composer: ComposerSession;
       baseline: PromptDraft | null;
+      cleanEditor: string;
       applying: boolean;
       conflict: boolean;
       cleanup: () => void;
@@ -340,6 +342,7 @@ export class CanvasYjsLiveSession {
     connected: false,
     writable: false,
     dirty: false,
+    unsafeToLeave: false,
     migration: false,
     message: "",
     phase: "正在连接",
@@ -455,6 +458,7 @@ export class CanvasYjsLiveSession {
         if (!binding.composer.applyAuthoritative(input, tr))
           throw problem("输入仍在编辑，本页草稿继续保留");
         binding.baseline = structuredClone(authoritative);
+        binding.cleanEditor = composerFingerprint(input);
         binding.conflict = false;
       } finally {
         binding.applying = false;
@@ -474,13 +478,11 @@ export class CanvasYjsLiveSession {
     );
   }
   private hasUnsubmittedInput() {
-    return [...this.inputBindings].some(([nodeID, binding]) => {
+    return [...this.inputBindings.values()].some((binding) => {
       if (binding.composer.editor.isDestroyed) return false;
-      const input = this.view.document?.nodes.find((node) => node.id === nodeID)
-        ?.serviceData?.config?.draft?.composer;
       return (
         composerFingerprint(readableInput(binding.composer)) !==
-        composerFingerprint(input)
+        binding.cleanEditor
       );
     });
   }
@@ -567,22 +569,31 @@ export class CanvasYjsLiveSession {
       );
       return false;
     }
-    if (binding) binding.baseline = structuredClone(input);
+    if (binding) {
+      binding.baseline = structuredClone(input);
+      binding.cleanEditor = composerFingerprint(input);
+    }
     this.clearInputDraft(nodeID);
     return true;
   };
-  bindInputComposer = (nodeID: string, composer: ComposerSession) => {
+  bindInputComposer = (
+    nodeID: string,
+    composer: ComposerSession,
+    serverDraft?: PromptDraft | null,
+  ) => {
     this.inputBindings.get(nodeID)?.cleanup();
     const boundNode = this.view.document?.nodes.find(
       (node) => node.id === nodeID,
     );
     const baseline =
-      boundNode?.serviceData?.config?.draft?.composer ??
-      (boundNode ? emptyPromptDraft() : null);
+      (serverDraft === undefined
+        ? boundNode?.serviceData?.config?.draft?.composer
+        : serverDraft) ?? (boundNode ? emptyPromptDraft() : null);
     if (baseline) validatePromptDraft(baseline);
     const binding = {
       composer,
       baseline: structuredClone(baseline ?? null),
+      cleanEditor: composerFingerprint(readableInput(composer)),
       applying: false,
       conflict: !!this.readInputDraft(nodeID),
       cleanup: () => {},
@@ -606,7 +617,7 @@ export class CanvasYjsLiveSession {
       // A clean editor disappearing during undo has no unsaved input to retain.
       if (
         !composer.composing &&
-        composerFingerprint(draft) === composerFingerprint(binding.baseline)
+        composerFingerprint(draft) === binding.cleanEditor
       )
         return;
       if (composer.composing || binding.conflict)
@@ -619,15 +630,20 @@ export class CanvasYjsLiveSession {
             : "输入法编辑尚未结束",
         );
     };
-    composer.editor.on("transaction", protect);
+    const onTransaction = ({ transaction }: { transaction: Transaction }) => {
+      const previous = transaction.getMeta("composer-display-defaults");
+      if (previous && composerFingerprint(previous) === binding.cleanEditor)
+        binding.cleanEditor = composerFingerprint(readableInput(composer));
+      protect();
+    };
+    composer.editor.on("transaction", onTransaction);
     composer.editor.view.dom.addEventListener("input", protect);
     composer.editor.view.dom.addEventListener("compositionstart", protect);
     composer.editor.view.dom.addEventListener("compositionend", protect);
     binding.cleanup = () => {
       if (
         !composer.editor.isDestroyed &&
-        composerFingerprint(readableInput(composer)) !==
-          composerFingerprint(binding.baseline)
+        composerFingerprint(readableInput(composer)) !== binding.cleanEditor
       )
         this.retainInputDraft(
           nodeID,
@@ -637,7 +653,7 @@ export class CanvasYjsLiveSession {
         );
       protect();
       unregister();
-      composer.editor.off("transaction", protect);
+      composer.editor.off("transaction", onTransaction);
       if (!composer.editor.isDestroyed) {
         composer.editor.view.dom.removeEventListener("input", protect);
         composer.editor.view.dom.removeEventListener(
@@ -671,8 +687,7 @@ export class CanvasYjsLiveSession {
         if (!next) {
           if (
             composer.composing ||
-            composerFingerprint(current) !==
-              composerFingerprint(binding.baseline)
+            composerFingerprint(current) !== binding.cleanEditor
           )
             this.retainInputDraft(
               nodeID,
@@ -685,6 +700,7 @@ export class CanvasYjsLiveSession {
         }
         if (composerFingerprint(next) === composerFingerprint(current)) {
           binding.baseline = structuredClone(next);
+          binding.cleanEditor = composerFingerprint(current);
           if (!composer.composing && !binding.conflict)
             this.clearInputDraft(nodeID);
           continue;
@@ -694,7 +710,7 @@ export class CanvasYjsLiveSession {
         if (
           composer.composing ||
           binding.conflict ||
-          composerFingerprint(current) !== composerFingerprint(binding.baseline)
+          composerFingerprint(current) !== binding.cleanEditor
         ) {
           binding.conflict = true;
           this.retainInputDraft(
@@ -713,8 +729,10 @@ export class CanvasYjsLiveSession {
         );
         binding.applying = true;
         try {
-          if (composer.applyAuthoritative(next, tr))
+          if (composer.applyAuthoritative(next, tr)) {
             binding.baseline = structuredClone(next);
+            binding.cleanEditor = composerFingerprint(next);
+          }
         } finally {
           binding.applying = false;
         }
@@ -1031,8 +1049,7 @@ export class CanvasYjsLiveSession {
             this.uploads.size ||
             this.uploadErrors.size ||
             Object.keys(session.textDrafts).length ||
-            session.status === "UNKNOWN" ||
-            this.view.recovery.length
+            session.status === "UNKNOWN"
           )
             throw problem("请先完成或恢复当前画布编辑，再开始生成");
           if (session.status !== "CLEAN" || session.inFlight || this.draining)
@@ -1071,12 +1088,17 @@ export class CanvasYjsLiveSession {
           fields: recoveryFields(source, session.snapshot),
         }))
         .filter((source) => source.fields.length) ?? [];
+    const hasLocalMedia =
+      this.draft?.nodes.some((node) => {
+        const source = localSource(node);
+        return source && this.receipts.get(node.id)?.source !== source;
+      }) ?? false;
     const dirty =
       (!!session &&
         (session.status !== "CLEAN" ||
           !!session.inFlight ||
-          !!session.sealed ||
-          recovery.length > 0)) ||
+          !!session.sealed)) ||
+      hasLocalMedia ||
       this.uploads.size > 0 ||
       this.uploadErrors.size > 0 ||
       this.gesture ||
@@ -1084,6 +1106,14 @@ export class CanvasYjsLiveSession {
       Object.keys(inputDrafts).length > 0;
     this.view = {
       ...this.view,
+      unsafeToLeave:
+        this.gesture ||
+        hasLocalMedia ||
+        !!this.restoreCommand ||
+        this.uploads.size > 0 ||
+        this.uploadErrors.size > 0 ||
+        ((dirty || recovery.length > 0) &&
+          (!this.journal || !session?.protected || !!session.journalError)),
       recoveryRemaining: this.journal?.remaining ?? 0,
       localPersistence:
         this.config.recoveryJournal === false
@@ -1111,25 +1141,19 @@ export class CanvasYjsLiveSession {
         this.config.recoveryJournal !== false &&
         (this.journalError || session?.journalError)
           ? "本机草稿保存失败，请勿关闭页面"
-          : (this.journal?.remaining ?? 0) > 0
-            ? `另有 ${this.journal!.remaining} 份本机草稿，当前恢复完成后请重新打开处理`
-            : recovery.length ||
-                session?.sealed ||
-                Object.keys(inputDrafts).length
-              ? "输入已保留，需处理"
-              : this.uploads.size
-                ? "素材上传中"
-                : this.uploadErrors.size
-                  ? "素材待重试"
-                  : this.gesture
-                    ? "正在编辑，尚未保存"
-                    : session?.status === "UNKNOWN"
-                      ? "保存结果未确认"
-                      : dirty
-                        ? "等待保存确认"
-                        : this.online
-                          ? "已保存"
-                          : "连接中断",
+          : this.uploads.size
+            ? "素材上传中"
+            : this.uploadErrors.size
+              ? "素材待重试"
+              : this.gesture
+                ? "正在编辑，尚未保存"
+                : session?.status === "UNKNOWN"
+                  ? "保存结果未确认"
+                  : dirty
+                    ? "等待保存确认"
+                    : this.online
+                      ? "已保存"
+                      : "连接中断",
       ...patch,
     };
     this.refreshInputBindings();
@@ -1138,6 +1162,7 @@ export class CanvasYjsLiveSession {
   private changed = () => {
     if (this.disposed) return;
     const session = this.session;
+    session?.releaseResolvedSources();
     if (session && this.config.recoveryJournal !== false)
       void session.protect().then(() => {
         if (!this.disposed && this.session === session) this.emit();
@@ -1406,14 +1431,16 @@ export class CanvasYjsLiveSession {
             throw problem("本机草稿保存失败，请勿关闭页面");
           if (this.disposed || this.session !== active)
             throw problem("原提交会话已关闭");
+          if (!this.permitted || this.epochPending || active.sealed)
+            throw problem("画布编辑权限或版本已变化");
           const receipt = await this.rpc("yjs_submit", update);
           if (!receipt) throw problem("缺少保存回执");
           return receipt;
         },
         query: async (update) => {
           const receipt = await this.rpc("yjs_resolve", update);
-          if (this.restoringOriginal && !receipt)
-            this.restoredOriginalMissing = true;
+          if ((this.epochPending || this.session?.sealed) && !receipt)
+            this.sealedOriginalMissing = true;
           return receipt;
         },
         confirmedSnapshot: (receipt) => this.confirmedSnapshot(receipt),
@@ -1558,8 +1585,16 @@ export class CanvasYjsLiveSession {
       if (!this.session) {
         const stored = this.storedRecovery;
         this.storedRecovery = undefined;
-        if (stored?.inFlight) {
-          this.restoringOriginal = true;
+        // Rejoin the same causal history. Start at the journal's confirmed
+        // revision so receive() can detect deletions since the last save.
+        if (
+          stored &&
+          (stored.inFlight ||
+            (stored.scope.epoch === initial.epoch &&
+              !stored.sealed &&
+              !Object.keys(stored.textDrafts).length &&
+              !Object.keys(stored.forms).length))
+        ) {
           this.makeSession(stored.confirmed, stored);
         } else
           this.makeSession(
@@ -1577,8 +1612,7 @@ export class CanvasYjsLiveSession {
         const record = archiveRecovery(this.session.record(), initial);
         if (this.config.recoveryJournal !== false)
           await this.journal!.put(record);
-        this.restoringOriginal = false;
-        this.restoredOriginalMissing = false;
+        this.sealedOriginalMissing = false;
         this.makeSession(initial, record);
       }
       this.emit({ migration: false, message: "" });
@@ -1632,7 +1666,7 @@ export class CanvasYjsLiveSession {
         }
       }
       if (this.disposed || this.session !== session) return;
-      if (this.restoredOriginalMissing) {
+      if (this.sealedOriginalMissing) {
         await this.archiveMissingOriginal(this.epochPending!);
         return;
       }
@@ -1645,8 +1679,8 @@ export class CanvasYjsLiveSession {
       if (this.config.recoveryJournal !== false)
         await this.journal!.put(recovery);
       this.epochPending = null;
-      this.restoringOriginal = false;
       this.makeSession(initial, recovery);
+      if (this.journal) await this.session?.protect();
       this.emit({ message: "" });
       this.render();
     } catch (cause) {
@@ -1721,24 +1755,7 @@ export class CanvasYjsLiveSession {
     this.draining = true;
     let completed = false;
     try {
-      await session.flush({
-        queryOnly: !this.permitted || this.restoringOriginal,
-      });
-      if (this.restoringOriginal && !session.inFlight) {
-        this.restoringOriginal = false;
-        if (
-          session.pending.length ||
-          session.sealed ||
-          Object.keys(session.forms).length ||
-          Object.keys(session.textDrafts).length
-        ) {
-          const recovery = archiveRecovery(session.record(), session.confirmed);
-          await this.journal!.put(recovery);
-          this.makeSession(session.confirmed, recovery);
-          this.render();
-          return;
-        }
-      }
+      await session.flush({ queryOnly: !this.permitted || !!session.sealed });
       completed = true;
       if (!this.disposed && this.session === session) {
         this.emit({ message: "" });
@@ -1748,9 +1765,11 @@ export class CanvasYjsLiveSession {
       }
     } catch (cause) {
       if (!this.disposed && this.session === session) {
-        if (this.restoredOriginalMissing) {
+        if (this.sealedOriginalMissing) {
           try {
-            await this.archiveMissingOriginal(session.confirmed);
+            await this.archiveMissingOriginal(
+              this.epochPending ?? session.confirmed,
+            );
           } catch (error) {
             this.journalError =
               error instanceof Error ? error : problem("本机草稿归档失败");
@@ -1781,24 +1800,25 @@ export class CanvasYjsLiveSession {
       inFlight: null,
       acceptedReceipt: null,
       sealed: {
-        reason: "ORIGINAL_NOT_FOUND",
-        snapshot: record.snapshot,
-        inFlight: original,
-        pending: record.pending,
-        intents: [...record.inFlightIntents, ...record.intents],
+        ...(record.sealed ?? {
+          reason: "ORIGINAL_NOT_FOUND",
+          snapshot: record.snapshot,
+          inFlight: original,
+          pending: record.pending,
+          intents: [...record.inFlightIntents, ...record.intents],
+        }),
         originalOutcome: "NOT_FOUND",
       },
     };
     const recovery = archiveRecovery(settled, initial);
-    await this.journal!.put(recovery);
+    if (this.config.recoveryJournal !== false)
+      await this.journal!.put(recovery);
     this.journalError = null;
     this.epochPending = null;
-    this.restoringOriginal = false;
-    this.restoredOriginalMissing = false;
+    this.sealedOriginalMissing = false;
     this.makeSession(initial, recovery);
-    this.emit({
-      message: "原提交未被服务器接收，本机修改已保留，请查看恢复内容",
-    });
+    if (this.journal) await this.session?.protect();
+    this.emit({ message: "" });
     this.render();
   }
 
@@ -1849,10 +1869,7 @@ export class CanvasYjsLiveSession {
       )
         return false;
       return (
-        composerFingerprint(readableInput(composer)) ===
-        composerFingerprint(
-          node.serviceData.config?.draft?.composer ?? emptyPromptDraft(),
-        )
+        composerFingerprint(readableInput(composer)) === binding.cleanEditor
       );
     } catch {
       return false;
