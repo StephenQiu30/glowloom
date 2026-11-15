@@ -21,10 +21,18 @@ const config: GenerateServiceProps = {
         const duplicate = names.some(
           (other) => other !== name && shortName(other) === short,
         );
-        const moduleName = name.match(/internal_([^_]+)_/)?.[1];
-        const target = duplicate
-          ? `${moduleName![0].toUpperCase()}${moduleName!.slice(1)}${short}`
-          : short;
+        let target = short;
+        if (duplicate) {
+          const moduleName = name.match(
+            /(?:^|_)([^_.]+)_(?:adapter|application|domain)(?:_|\.)/,
+          )?.[1];
+          if (!moduleName) {
+            throw new Error(
+              `Cannot identify Go module for Swagger type: ${name}`,
+            );
+          }
+          target = `${moduleName.charAt(0).toUpperCase()}${moduleName.slice(1)}${short}`;
+        }
         if ([...renamed.values()].includes(target))
           throw new Error(`Swagger type name collision: ${target}`);
         renamed.set(name, target);

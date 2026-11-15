@@ -1,5 +1,15 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+<a id="openapi-ci-paths-20261115"></a>
+
+## OpenAPI 生成目录修复（2026-11-15）
+
+主 CI 43674583296 的 Agent 失败已在干净的 04c560d83 快照复现：业务 Swagger 的扫描清单仍指向已移除的 internal/operation、internal/canvas、internal/mediatool；改为 execution/operation、creation/canvas、media/mediatool 的现行 domain。前端同轮唯一失败为 API 重生成：类型重名处理依赖 internal 包名前缀，迁移后的 creation／execution／media 类型无法取得模块名。命名钩子改为识别 adapter／application／domain 前的实际模块；合同断言通过公开响应和节点字段的 $ref 查找模型，不再硬编码 Go 包名。
+
+修复前两个真实重生成测试均失败；修复后 Agent 业务客户端和前端所有 API 文件与已提交生成产物逐字节一致，无需手改或提交生成代码。隔离快照通过 Agent api:check（双向合同与生成类型）、typecheck、lint、format:check、build，以及前端 API 重生成、目标文件 Lint／格式、路由类型生成和全量 TypeScript 检查。前端类型生成使用与 CI 相同的显式本机 backend origin，仅生成类型，没有访问业务服务。
+
+同轮后端另在 TestMediaReferenceBusinessReadsActualDocumentsAndVideo 的 txt／docx 用例返回 503 agent_unavailable，失败位于 media_reference_integration_test.go:88；后续 backend Race 阶段未运行。这不是 Swagger 路径问题，本次只核对证据，不改动媒体读取业务链路。用户已授权仅提交相关 OpenAPI 修复到 main 并推送；保留其他并行业务／文档修改和部署模板删除。新提交的 Agent／前端／后端 CI 终态单独核对，本地证据位于 `/tmp/glowloom-openapi-ci-fix-20261115/`。
+
 <a id="go-microservices-20261114"></a>
 
 ## Go 微服务拆分（2026-11-14）

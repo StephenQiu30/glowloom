@@ -71,17 +71,17 @@ it("所有 API 都可从 Swagger 重现，禁止手改、遗漏或额外接口�
         "utf8",
       ),
     );
-    const canvasDocument =
-      schema.definitions[
-        "github_com_StephenQiu30_glowloom-server_backend_internal_canvas_application.DocumentDTO"
-      ];
+    function definition(reference: string) {
+      expect(reference).toMatch(/^#\/definitions\//);
+      return schema.definitions[reference.slice("#/definitions/".length)];
+    }
+    const canvasDocument = definition(
+      schema.paths["/api/canvases/{id}"].get.responses["200"].schema.$ref,
+    );
     expect(canvasDocument.properties.revision.type).toBe("string");
     expect(canvasDocument.properties.read_only_reason["x-nullable"]).toBe(true);
     expect(canvasDocument.properties.schema_version.type).toBe("integer");
-    const canvasNode =
-      schema.definitions[
-        "github_com_StephenQiu30_glowloom-server_backend_internal_canvas_application.NodeDTO"
-      ];
+    const canvasNode = definition(canvasDocument.properties.nodes.items.$ref);
     expect(canvasNode.properties.content_version.type).toBe("string");
     expect(canvasNode.properties.parent_id["x-nullable"]).toBe(true);
     for (const action of ["refresh", "upgrade"]) {
@@ -91,9 +91,9 @@ it("所有 API 都可从 Swagger 重现，禁止手改、遗漏或额外接口�
         expect.arrayContaining([expect.objectContaining({ in: "body" })]),
       );
     }
-    const sessionProperties =
-      schema.definitions["internal_identity_adapter_http.EmailSessionView"]
-        .properties;
+    const sessionProperties = definition(
+      schema.paths["/api/session"].get.responses["200"].schema.$ref,
+    ).properties;
     expect(Object.keys(sessionProperties)).toEqual(
       expect.arrayContaining([
         "access_expires_at",
