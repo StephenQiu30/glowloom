@@ -22,7 +22,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("对话补充TXT保留真实文档类型、角色和待上传身份，不误判为text", () => {
+it.each([
+  ["novel.txt", "text/plain"],
+  ["novel.md", "text/markdown"],
+  ["NOVEL.MD", ""],
+])("对话补充%s保留真实文档类型、角色和待上传身份", (fileName, mimeType) => {
   const editor = new Editor(
     composerEditorOptions({
       contextKey: "conversation/document",
@@ -46,7 +50,7 @@ it("对话补充TXT保留真实文档类型、角色和待上传身份，不误�
   expect(input.getAttribute("accept")).toContain(".txt,.docx");
   fireEvent.change(input, {
     target: {
-      files: [new File(["完整小说正文"], "novel.txt", { type: "text/plain" })],
+      files: [new File(["# 完整小说正文"], fileName, { type: mimeType })],
     },
   });
   expect(session.snapshot().draft.references).toEqual([

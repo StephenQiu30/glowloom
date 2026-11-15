@@ -89,6 +89,7 @@ func TestNativeDocumentExtractionBorrowsOriginalAndPreservesCursor(t *testing.T)
 		data                       []byte
 	}{
 		{"TXT", "text/plain", "utf-8", "第1集\n\n正文😀", []byte("第1集\r\n\r\n正文😀")},
+		{"Markdown", "text/markdown", "utf-8", "# 第1集\n\n- 正文😀\n\n```text\n完整结局\n```", []byte("# 第1集\r\n\r\n- 正文😀\r\n\r\n```text\n完整结局\n```")},
 		{"DOCX", docxMIME, "docx-xml", "正文😀", nativeWord(t, "", 0)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -57,7 +57,7 @@ func (c *Client) Extract(ctx context.Context, source *app.File) (app.Result, err
 	if c == nil || c.target == "" {
 		return app.Result{}, ErrUnavailable
 	}
-	if source == nil || source.File == nil || source.Size < 1 || source.Size > app.MaxBytes || (source.MIMEType != "text/plain" && source.MIMEType != "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+	if source == nil || source.File == nil || source.Size < 1 || source.Size > app.MaxBytes || (source.MIMEType != "text/plain" && source.MIMEType != "text/markdown" && source.MIMEType != "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
 		return app.Result{}, app.ErrExtractionFailed
 	}
 	digest, err := hex.DecodeString(source.SHA256)

@@ -66,12 +66,16 @@ func TestMediaReferenceBusinessReadsActualDocumentsAndVideo(t *testing.T) {
 	}{
 		{"txt", "document", "text/plain", []byte("小说真实开头\n全文最后一行完整结局"), 0, "全文最后一行完整结局"},
 		{"docx", "document", mediadomain.MIMEDOCX, referenceDOCX(t), 0, "完整结局"},
+		{"md", "document", "text/markdown", []byte("# 小说真实开头\n\n- 原文\n\n```text\n全文最后一行完整结局\n```"), 0, "# 小说真实开头\n\n- 原文\n\n```text\n全文最后一行完整结局\n```"},
 		{"video", "video", "video/mp4", video, 3, "full clip and audio have not been inspected"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			temporary := t.TempDir()
 			t.Setenv("TMPDIR", temporary)
 			db, boundary, _, _, grant := realCanvasBoundary(t)
+			if tc.kind == "document" {
+				boundary.WithDocumentExtractor(referenceDocumentExtractor(t))
+			}
 			id, ref := referenceAssetFixture(t, db, grant, tc.name, tc.kind, tc.mime, tc.body)
 			reads := 0
 			boundary.WithMediaObjects(imageObjects(func(_ context.Context, got mediadomain.ObjectRef) (io.ReadCloser, error) {
@@ -146,6 +150,21 @@ func TestMediaReferenceRejectsCorruptOriginalAndOversizedSource(t *testing.T) {
 	}
 	if entries, err := os.ReadDir(temporary); err != nil || len(entries) != 0 {
 		t.Fatal("failed read temporary file remains", entries, err)
+	}
+}
+
+func TestMediaReferenceDocumentWithoutCreationExtractorFailsClosed(t *testing.T) {
+	db, boundary, _, _, grant := realCanvasBoundary(t)
+	body := []byte("original document")
+	id, _ := referenceAssetFixture(t, db, grant, "txt", "document", mediadomain.MIMEText, body)
+	boundary.WithMediaObjects(imageObjects(func(context.Context, mediadomain.ObjectRef) (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(body)), nil
+	}))
+	router := gin.New()
+	boundary.BusinessHandler(businessToken).Register(router)
+	status, _, message := businessToolRequest(t, router, grant, "media_reference_inspect", "missing-document-extractor", map[string]any{"asset_id": id, "revision": 1, "media_kind": "document"})
+	if status != http.StatusServiceUnavailable || !strings.Contains(message, "agent_unavailable") {
+		t.Fatal("unconfigured document capability must fail closed", status, message)
 	}
 }
 

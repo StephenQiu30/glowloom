@@ -642,7 +642,7 @@ export function ReferenceControls({
       return;
     }
     const kind = (
-      allowDocuments && /\.(txt|docx)$/i.test(file.name)
+      allowDocuments && /\.(txt|docx|md)$/i.test(file.name)
         ? "document"
         : file.type.split("/")[0]
     ) as MediaKind;
@@ -657,8 +657,8 @@ export function ReferenceControls({
       setError(
         allowDocuments
           ? assistant
-            ? "请选择图片、视频或TXT/DOCX小说文档。"
-            : "请选择图片、视频、音频或TXT/DOCX小说文档。"
+            ? "请选择图片、视频或TXT/DOCX/MD小说文档。"
+            : "请选择图片、视频、音频或TXT/DOCX/MD小说文档。"
           : "请选择图片、视频或音频文件。",
       );
       return;
@@ -1095,7 +1095,7 @@ export function ReferenceControls({
                   type="file"
                   accept={
                     ref.mediaKind === "document"
-                      ? ".txt,.docx"
+                      ? ".txt,.docx,.md"
                       : `${ref.mediaKind}/*`
                   }
                   disabled={disabled}
@@ -1998,9 +1998,9 @@ export function ReferenceControls({
             type="file"
             accept={
               assistant
-                ? "image/*,video/*,.txt,.docx"
+                ? "image/*,video/*,.txt,.docx,.md"
                 : allowDocuments
-                  ? "image/*,video/*,audio/*,.txt,.docx"
+                  ? "image/*,video/*,audio/*,.txt,.docx,.md"
                   : "image/*,video/*,audio/*"
             }
             className="hidden"

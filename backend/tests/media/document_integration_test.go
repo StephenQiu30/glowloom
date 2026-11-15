@@ -127,7 +127,7 @@ func TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment(t *t
 	for _, sample := range []struct {
 		name string
 		data []byte
-	}{{"带 引号\".txt", []byte("原文\r\n不转换。")}, {"剧本.docx", documentDOCX(t, nil)}} {
+	}{{"带 引号\".txt", []byte("原文\r\n不转换。")}, {"剧本.docx", documentDOCX(t, nil)}, {"剧本.md", []byte("# 原始章节\n\n- 完整的 Markdown 正文。")}} {
 		t.Run(sample.name, func(t *testing.T) {
 			key := uuid.New()
 			missing := httptest.NewRecorder()

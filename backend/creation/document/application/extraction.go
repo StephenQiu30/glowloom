@@ -9,7 +9,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 )
 
-// MaxBytes bounds the original TXT or DOCX, not the canonical rich JSON.
+// MaxBytes bounds the original TXT, Markdown or DOCX, not the canonical rich JSON.
 const MaxBytes int64 = 20 << 20
 
 // ErrExtractionFailed rejects originals that cannot be faithfully extracted.

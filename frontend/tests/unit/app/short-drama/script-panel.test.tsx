@@ -83,30 +83,37 @@ it("粘贴剧本受理结果未知时重放原内容与幂等键", async () => {
   });
 });
 
-it("已上传原件在解析受理未知时只重放解析请求", async () => {
-  setup();
-  api.upload.mockResolvedValue({
-    asset: { id: resource, project_id: project, kind: "document" },
-  });
-  api.parse
-    .mockRejectedValueOnce(new RequestError("timeout", 503))
-    .mockResolvedValueOnce({
-      id: resource,
-      project_id: project,
-      status: "queued",
+it.each(["txt", "md"])(
+  "已上传%s原件在解析受理未知时只重放解析请求",
+  async (extension) => {
+    setup();
+    api.upload.mockResolvedValue({
+      asset: { id: resource, project_id: project, kind: "document" },
     });
-  fireEvent.change(screen.getByLabelText("上传文件"), {
-    target: {
-      files: [new File(["第一集"], "script.txt", { type: "text/plain" })],
-    },
-  });
-  fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.click(screen.getByRole("button", { name: "上传并解析" }));
-  fireEvent.click(await screen.findByRole("button", { name: "重试原操作" }));
-  await waitFor(() => expect(api.parse).toHaveBeenCalledTimes(2));
-  expect(api.upload).toHaveBeenCalledOnce();
-  expect(api.parse.mock.calls[1][1]).toMatchObject({ asset_ids: [resource] });
-  expect(api.parse.mock.calls[0][2].headers).toEqual(
-    api.parse.mock.calls[1][2].headers,
-  );
-});
+    api.parse
+      .mockRejectedValueOnce(new RequestError("timeout", 503))
+      .mockResolvedValueOnce({
+        id: resource,
+        project_id: project,
+        status: "queued",
+      });
+    fireEvent.change(screen.getByLabelText("上传文件"), {
+      target: {
+        files: [
+          new File(["# 第一集"], `script.${extension}`, {
+            type: extension === "md" ? "text/markdown" : "text/plain",
+          }),
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "上传并解析" }));
+    fireEvent.click(await screen.findByRole("button", { name: "重试原操作" }));
+    await waitFor(() => expect(api.parse).toHaveBeenCalledTimes(2));
+    expect(api.upload).toHaveBeenCalledOnce();
+    expect(api.parse.mock.calls[1][1]).toMatchObject({ asset_ids: [resource] });
+    expect(api.parse.mock.calls[0][2].headers).toEqual(
+      api.parse.mock.calls[1][2].headers,
+    );
+  },
+);

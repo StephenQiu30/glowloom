@@ -117,7 +117,7 @@ func (s *ConversationInputService) Prepare(ctx context.Context, a identity.Princ
 			visuals++
 		case "video":
 			visuals += 3
-		case "document": // Native TXT/DOCX extraction supplies actual text.
+		case "document": // Native TXT/DOCX/MD extraction supplies actual text.
 		default:
 			return out, selected, prompt.ErrReferenceUnavailable
 		}

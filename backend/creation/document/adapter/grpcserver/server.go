@@ -68,7 +68,7 @@ func (s *Server) Extract(stream grpc.BidiStreamingServer[pb.ExtractRequest, pb.E
 		return receiveError(err)
 	}
 	header := first.GetSource()
-	if header == nil || header.ByteSize < 1 || header.ByteSize > app.MaxBytes || !validHash(header.Sha256) || (header.MimeType != "text/plain" && header.MimeType != "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+	if header == nil || header.ByteSize < 1 || header.ByteSize > app.MaxBytes || !validHash(header.Sha256) || (header.MimeType != "text/plain" && header.MimeType != "text/markdown" && header.MimeType != "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
 		return status.Error(codes.InvalidArgument, "invalid original document receipt")
 	}
 	file, err := os.CreateTemp("", "glowloom-creation-source-*")

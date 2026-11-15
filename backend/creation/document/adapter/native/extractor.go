@@ -1,4 +1,4 @@
-// Package native extracts bounded TXT and DOCX originals without remote execution.
+// Package native extracts bounded TXT, Markdown and DOCX originals without remote execution.
 package native
 
 import (
@@ -19,7 +19,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 )
 
-// Extractor performs bounded native TXT/Word extraction without remote execution.
+// Extractor performs bounded native TXT/Markdown/Word extraction without remote execution.
 type Extractor struct{}
 
 // NewExtractor creates the stateless original-document extractor.
@@ -56,7 +56,7 @@ func (e *Extractor) Extract(ctx context.Context, file *application.File) (applic
 	}
 	var result application.Result
 	switch file.MIMEType {
-	case "text/plain":
+	case "text/plain", "text/markdown":
 		text, encoding, err := decodeText(data)
 		if err != nil {
 			return result, fmt.Errorf("decode text: %w", errors.Join(application.ErrExtractionFailed, err))

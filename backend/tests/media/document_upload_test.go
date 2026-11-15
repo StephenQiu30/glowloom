@@ -51,6 +51,8 @@ func TestDocumentUploadPreservesOriginalBytesWithoutAVRenditions(t *testing.T) {
 		mime string
 	}{
 		{"剧本.txt", []byte("第一场\n你好。\n"), "text/plain"},
+		{"剧本.md", []byte("# 第一场\n\n- 正文\n\n```text\n完整结局\n```"), "text/markdown"},
+		{"UPPER.MD", []byte("# Markdown\n\nOriginal bytes."), "text/markdown"},
 		{"UTF16LE.txt", []byte{0xff, 0xfe, 0x2c, 0x7b, 0x00, 0x0a}, "text/plain"},
 		{"UTF16BE.txt", []byte{0xfe, 0xff, 0x7b, 0x2c, 0x0a, 0x00}, "text/plain"},
 		{"GB18030.txt", []byte{0xb5, 0xda, 0xd2, 0xbb, 0xb3, 0xa1}, "text/plain"},
@@ -90,6 +92,8 @@ func TestDocumentUploadRejectsSpoofedMalformedAndActiveContainers(t *testing.T) 
 		data []byte
 	}{
 		{"binary.txt", []byte{0, 1, 2, 3}},
+		{"binary.md", []byte{0, 1, 2, 3}},
+		{"image.md", uploadPNG(t)},
 		{"image.txt", uploadPNG(t)},
 		{"not-word.docx", []byte("not an OOXML document")},
 		{"unsafe.docx", documentDOCX(t, map[string]string{"../escaped.xml": "<x/>"})},

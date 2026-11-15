@@ -63,6 +63,9 @@ func ReadUpload(ctx context.Context, reader io.Reader, name string) (*Downloaded
 	if strings.EqualFold(path.Ext(name), ".txt") && mimeType == "" {
 		mimeType, extension, limit = domain.MIMEText, "txt", MaxUploadDocumentBytes
 	}
+	if strings.EqualFold(path.Ext(name), ".md") && mimeType == "" {
+		mimeType, extension, limit = domain.MIMEMarkdown, "md", MaxUploadDocumentBytes
+	}
 	if strings.EqualFold(path.Ext(name), ".docx") && n >= 4 && bytes.Equal(magic[:4], []byte{'P', 'K', 3, 4}) {
 		mimeType, extension, limit = domain.MIMEDOCX, "docx", MaxUploadDocumentBytes
 	}

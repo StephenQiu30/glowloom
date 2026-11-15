@@ -344,7 +344,7 @@ func validUploadProbe(file *Downloaded, p ProbeResult) bool {
 			p.Width == nil && p.Height == nil && p.DurationMS == nil && p.FPS == nil && p.AudioChannels == nil
 	case domain.KindDocument:
 		return file.Size >= 1 && file.Size <= MaxUploadDocumentBytes && p.Width == nil && p.Height == nil && p.DurationMS == nil && p.FPS == nil && p.AudioChannels == nil &&
-			(file.MIMEType == domain.MIMEText && p.Extension == "txt" && *p.Codec == "txt" || file.MIMEType == domain.MIMEDOCX && p.Extension == "docx" && *p.Codec == "docx")
+			(file.MIMEType == domain.MIMEText && p.Extension == "txt" && *p.Codec == "txt" || file.MIMEType == domain.MIMEMarkdown && p.Extension == "md" && *p.Codec == "md" || file.MIMEType == domain.MIMEDOCX && p.Extension == "docx" && *p.Codec == "docx")
 	default:
 		return false
 	}

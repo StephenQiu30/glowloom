@@ -416,7 +416,7 @@ function PersonalPicker({
               : k === "video"
                 ? ["mp4", "mov", "webm"]
                 : k === "document"
-                  ? ["txt", "docx"]
+                  ? ["txt", "docx", "md"]
                   : [],
           )}
           onClose={() => setUpload(false)}

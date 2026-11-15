@@ -33,7 +33,7 @@ func (h *DocumentHandler) Register(group *gin.RouterGroup) {
 // @Produce application/octet-stream
 // @Param pid path string true "项目UUID"
 // @Param asset_id path string true "文档素材UUID"
-// @Success 200 {file} file "原始TXT/DOCX附件"
+// @Success 200 {file} file "原始TXT/DOCX/MD附件"
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem

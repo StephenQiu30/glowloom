@@ -121,10 +121,10 @@ export function ScriptPanel({
   const count = Array.from(text).length;
   const fileError =
     file &&
-    (!/\.(txt|docx)$/i.test(file.name) ||
+    (!/\.(txt|docx|md)$/i.test(file.name) ||
       file.size < 1 ||
       file.size > documentLimit)
-      ? "请选择 20 MB 以内的 TXT 或 DOCX 剧本。"
+      ? "请选择 20 MB 以内的 TXT、DOCX 或 MD 剧本。"
       : "";
 
   function save() {
@@ -252,7 +252,7 @@ export function ScriptPanel({
                 ref={fileInput}
                 id={id + "-file"}
                 type="file"
-                accept=".txt,.docx"
+                accept=".txt,.docx,.md"
                 disabled={write.locked}
                 onChange={(event) => setFile(event.target.files?.[0])}
               />

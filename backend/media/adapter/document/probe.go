@@ -1,4 +1,4 @@
-// Package document validates bounded original TXT and non-macro DOCX containers.
+// Package document validates bounded original TXT, Markdown and non-macro DOCX containers.
 // It does not extract, decode or normalize script content.
 package document
 
@@ -45,6 +45,9 @@ func Probe(ctx context.Context, file *application.Downloaded) (application.Probe
 	switch file.MIMEType {
 	case domain.MIMEText:
 		extension = "txt"
+		err = validateText(ctx, io.NewSectionReader(file.File, 0, file.Size))
+	case domain.MIMEMarkdown:
+		extension = "md"
 		err = validateText(ctx, io.NewSectionReader(file.File, 0, file.Size))
 	case domain.MIMEDOCX:
 		extension = "docx"

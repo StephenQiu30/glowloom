@@ -41,9 +41,10 @@ const (
 // MaxModelBytes bounds a local self-contained GLB 2.0 model asset.
 const MaxModelBytes int64 = 64 << 20
 
-// Document MIME types describe original TXT and ordinary, non-macro OOXML files.
+// Document MIME types describe original TXT, Markdown and ordinary, non-macro OOXML files.
 const (
 	MIMEText               = "text/plain"
+	MIMEMarkdown           = "text/markdown"
 	MIMEDOCX               = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 	MaxDocumentBytes int64 = 20 << 20
 )
@@ -220,6 +221,7 @@ func (a MediaAsset) validDocumentFacts() bool {
 	ext := strings.ToLower(path.Ext(a.FileName))
 	objectExt := path.Ext(a.ObjectKey)
 	return a.MimeType == MIMEText && *a.Codec == "txt" && ext == ".txt" && objectExt == ".txt" ||
+		a.MimeType == MIMEMarkdown && *a.Codec == "md" && ext == ".md" && objectExt == ".md" ||
 		a.MimeType == MIMEDOCX && *a.Codec == "docx" && ext == ".docx" && objectExt == ".docx"
 }
 

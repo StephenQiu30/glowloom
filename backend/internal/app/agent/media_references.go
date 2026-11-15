@@ -45,7 +45,7 @@ func (b *Boundary) registerMediaReferences() {
 			return
 		}
 	}
-	binding := tool("media_reference_inspect", "真实读取项目图片、视频或TXT/DOCX正文。视频最多500MiB，返回10%/50%/90%三个取样目标时间的实际画面，不含音轨、不是全片理解。必须提供被冻结的素材版本。", "read", `{"type":"object","properties":{"asset_id":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1},"media_kind":{"type":"string","enum":["image","video","document"]}},"required":["asset_id","revision","media_kind"],"additionalProperties":false}`, nil)
+	binding := tool("media_reference_inspect", "真实读取项目图片、视频或TXT/DOCX/MD正文。视频最多500MiB，返回10%/50%/90%三个取样目标时间的实际画面，不含音轨、不是全片理解。必须提供被冻结的素材版本。", "read", `{"type":"object","properties":{"asset_id":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1},"media_kind":{"type":"string","enum":["image","video","document"]}},"required":["asset_id","revision","media_kind"],"additionalProperties":false}`, nil)
 	b.bindings = append(b.bindings, binding)
 	b.Capabilities.Tools = append(b.Capabilities.Tools, app.Tool{Descriptor: binding.descriptor})
 }

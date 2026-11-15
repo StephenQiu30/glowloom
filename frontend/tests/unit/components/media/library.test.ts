@@ -44,6 +44,11 @@ it("上传在浏览器侧拒绝空文件、未知格式及超限图片", () => {
   ).toBeTruthy();
   expect(validateUpload(new File(["x"], "script.exe"))).toBeTruthy();
   expect(
+    validateUpload(
+      new File(["# 原始文档"], "notes.md", { type: "text/markdown" }),
+    ),
+  ).toBe("");
+  expect(
     validateUpload(new File(["x"], "image.png", { type: "image/png" })),
   ).toBe("");
 });

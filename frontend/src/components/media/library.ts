@@ -115,7 +115,7 @@ export function mediaError(error: unknown) {
 export function validateUpload(file: File) {
   if (!file.size) return "不能上传空文件。";
   const ext = file.name.split(".").at(-1)?.toLowerCase() ?? "";
-  const max = ["png", "jpg", "jpeg", "webp", "txt", "docx"].includes(ext)
+  const max = ["png", "jpg", "jpeg", "webp", "txt", "docx", "md"].includes(ext)
     ? 20
     : ["mp4", "webm", "mov"].includes(ext)
       ? 500

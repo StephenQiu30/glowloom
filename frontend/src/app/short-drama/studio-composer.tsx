@@ -97,12 +97,12 @@ export function StudioComposer({
   >({});
   const creative = mode === "create";
   const uploading = mode === "upload";
-  const fileType = uploading ? "TXT 或 DOCX" : "MP4 或 MOV";
+  const fileType = uploading ? "TXT、DOCX 或 MD" : "MP4 或 MOV";
   const fileLimit = uploading ? 20 : 500;
 
   function selectFile(selected?: File) {
     if (!selected) return;
-    const format = uploading ? /\.(txt|docx)$/i : /\.(mp4|mov)$/i;
+    const format = uploading ? /\.(txt|docx|md)$/i : /\.(mp4|mov)$/i;
     if (
       !format.test(selected.name) ||
       selected.size < 1 ||
@@ -215,7 +215,7 @@ export function StudioComposer({
                   ref={fileInput}
                   type="file"
                   hidden
-                  accept={uploading ? ".txt,.docx" : ".mp4,.mov"}
+                  accept={uploading ? ".txt,.docx,.md" : ".mp4,.mov"}
                   onChange={(event) => {
                     selectFile(event.target.files?.[0]);
                     event.target.value = "";

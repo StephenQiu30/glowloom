@@ -46,27 +46,29 @@ func TestCreationProductionFactoryUsesRemoteParserWithoutFallback(t *testing.T) 
 		{"wrong_identity", listener.Addr().String(), "another-service-identity-at-least-32-bytes", true},
 		{"disabled", "", "", true},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			extractor, err := scriptwire.ProvideSourceExtractor(config.Config{Env: "local", CreationExtractionAddress: tc.address, CreationServiceToken: tc.identity})
-			if err != nil {
-				t.Fatal(err)
-			}
-			original := nativeOriginal(t, []byte("完整脚本文档"), "text/plain")
-			result, err := extractor.Extract(t.Context(), &media.Downloaded{File: original.File, Size: original.Size, SHA256: original.SHA256, MIMEType: original.MIMEType})
-			if tc.wantError {
-				if !errors.Is(err, script.ErrUnavailable) {
-					t.Fatalf("expected unavailable, got %v", err)
+		for _, mime := range []string{"text/plain", "text/markdown"} {
+			t.Run(tc.name+"/"+mime, func(t *testing.T) {
+				extractor, err := scriptwire.ProvideSourceExtractor(config.Config{Env: "local", CreationExtractionAddress: tc.address, CreationServiceToken: tc.identity})
+				if err != nil {
+					t.Fatal(err)
 				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			plain, err := result.Document.PlainText()
-			if err != nil || plain != "完整脚本文档" {
-				t.Fatalf("plain=%q err=%v", plain, err)
-			}
-		})
+				original := nativeOriginal(t, []byte("完整脚本文档"), mime)
+				result, err := extractor.Extract(t.Context(), &media.Downloaded{File: original.File, Size: original.Size, SHA256: original.SHA256, MIMEType: original.MIMEType})
+				if tc.wantError {
+					if !errors.Is(err, script.ErrUnavailable) {
+						t.Fatalf("expected unavailable, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				plain, err := result.Document.PlainText()
+				if err != nil || plain != "完整脚本文档" {
+					t.Fatalf("plain=%q err=%v", plain, err)
+				}
+			})
+		}
 	}
 }
 

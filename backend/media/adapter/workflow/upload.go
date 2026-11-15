@@ -22,7 +22,7 @@ func (p FFUploadProber) Probe(ctx context.Context, file *application.Downloaded)
 	if file != nil && file.MIMEType == "image/gif" {
 		return animation.ProbeGIF(ctx, file)
 	}
-	if file != nil && (file.MIMEType == domain.MIMEText || file.MIMEType == domain.MIMEDOCX) {
+	if file != nil && (file.MIMEType == domain.MIMEText || file.MIMEType == domain.MIMEMarkdown || file.MIMEType == domain.MIMEDOCX) {
 		return document.Probe(ctx, file)
 	}
 	if file != nil && (file.MIMEType == "model/gltf-binary" || file.MIMEType == "model/gltf+json") {

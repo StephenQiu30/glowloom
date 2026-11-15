@@ -178,7 +178,7 @@ func packageFileKind(kind string, f LibraryPackageFile) bool {
 	case "model":
 		allowed, maxBytes = []string{"model/gltf-binary", "model/gltf+json"}, MaxUploadModelBytes
 	case "document":
-		allowed, maxBytes = []string{domain.MIMEText, domain.MIMEDOCX}, MaxUploadDocumentBytes
+		allowed, maxBytes = []string{domain.MIMEText, domain.MIMEMarkdown, domain.MIMEDOCX}, MaxUploadDocumentBytes
 	default:
 		return false
 	}
