@@ -119,6 +119,8 @@ jobs:
             psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             psql "postgres://postgres@127.0.0.1:5432/$database?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
           done
+          psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE glowloom_document_ci_test'
+          psql postgres://postgres@127.0.0.1:5432/glowloom_document_ci_test -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
       - name: Install the production Agent used by boundary tests
         working-directory: agent
         run: pnpm install --frozen-lockfile
@@ -140,6 +142,17 @@ jobs:
           trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
           curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 \
             --head --header 'Authorization: q-sign-algorithm=sha1&fixture=readiness' http://127.0.0.1:19000/
+          # Document originals use their own nonowner database and synthetic bucket.
+          jq -n --arg endpoint http://127.0.0.1:19000 --arg bucket glowloom-receipt-test \
+            --arg access_key "$GLOWLOOM_TEST_STORAGE_AK" --arg secret_key "$GLOWLOOM_TEST_STORAGE_SK" \
+            '{endpoint: $endpoint, bucket: $bucket, access_key: $access_key, secret_key: $secret_key, region: "us-east-1"}' \
+            > "$RUNNER_TEMP/document-storage.json"
+          document_storage_config="$(jq '.profiles["test-main"].bucket = "glowloom-receipt-test"' <<< "$GLOWLOOM_OBJECT_STORAGE_CONFIG")"
+          GLOWLOOM_TEST_DOCUMENT_DB_DSN='postgres://postgres@127.0.0.1:5432/glowloom_document_ci_test?sslmode=disable&options=-c%20role%3Dglowloom_app' \
+          GLOWLOOM_TEST_DOCUMENT_OWNER_DSN='postgres://postgres@127.0.0.1:5432/glowloom_document_ci_test?sslmode=disable' \
+          GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG="$RUNNER_TEMP/document-storage.json" \
+          GLOWLOOM_OBJECT_STORAGE_CONFIG="$document_storage_config" \
+            go test -race -count=1 ./tests/media -run '^TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment$'
           GLOWLOOM_TEST_OBJECT_STORAGE=1 go test -race -count=1 ./...
 
   agent:
