@@ -72,7 +72,7 @@ func TestAuditEnsurePartitionsMovesDefaultRowsWithoutChangingRecords(t *testing.
 
 	store := pgaudit.NewPartitionStore(tx)
 	role := "audit_partition_test_" + uuid.NewString()[:8]
-	if err := tx.Exec("CREATE ROLE " + role + " NOLOGIN").Error; err != nil {
+	if err := tx.Exec("CREATE ROLE " + role + " NOLOGIN INHERIT IN ROLE glowloom_app").Error; err != nil {
 		t.Fatalf("create transaction-local application role: %v", err)
 	}
 	if err := tx.Exec("GRANT USAGE ON SCHEMA audit TO " + role).Error; err != nil {

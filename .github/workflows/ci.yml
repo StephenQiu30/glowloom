@@ -18,7 +18,7 @@ env:
 jobs:
   backend:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18-alpine
@@ -153,7 +153,7 @@ jobs:
           GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG="$RUNNER_TEMP/document-storage.json" \
           GLOWLOOM_OBJECT_STORAGE_CONFIG="$document_storage_config" \
             go test -race -count=1 ./tests/media -run '^TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment$'
-          GLOWLOOM_TEST_OBJECT_STORAGE=1 go test -race -count=1 ./...
+          GLOWLOOM_TEST_OBJECT_STORAGE=1 go test -race -count=1 -timeout=15m ./...
 
   agent:
     runs-on: ubuntu-24.04

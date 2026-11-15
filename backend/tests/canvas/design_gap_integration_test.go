@@ -65,11 +65,11 @@ func TestCanvasOversizedGraphRejectedBeforeSaveAndReportedOnLoad(t *testing.T) {
 	f := newLiveFixture(t)
 	// Model an existing large document. A new edit must not be accepted into an
 	// unloadable graph, even when that edit and its history entry are small.
-	if err := f.db.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,config,x,y) SELECT gen_random_uuid(),?,'large','text','resource',jsonb_build_object('text',repeat('x',10000)),0,0 FROM generate_series(1,1700)`, f.doc.ID).Error; err != nil {
-		t.Fatal(err)
-	}
-	var row struct{ ID uuid.UUID }
-	if err := f.db.Raw(`SELECT id FROM canvas.node WHERE document_id=? LIMIT 1`, f.doc.ID).Scan(&row).Error; err != nil {
+	// HTML escaping makes each '<' six JSON bytes. Cross the actual wire budget
+	// with valid individual nodes instead of loading a much larger raw fixture.
+	const nodeTextSize = 10000
+	nodeCount := domain.MaxDocumentBytes/(nodeTextSize*len(`\u003c`)) + 1
+	if err := f.db.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,config,x,y) SELECT gen_random_uuid(),?,'large','text','resource',jsonb_build_object('text',repeat('<',?)),0,0 FROM generate_series(1,?)`, f.doc.ID, nodeTextSize, nodeCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	shared := application.NewYjsService(canvasStore(f.db), yjsRuntime(t))
