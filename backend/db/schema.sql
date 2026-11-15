@@ -1504,6 +1504,39 @@ CREATE TABLE identity.session_revocation (
     completed_at timestamptz CHECK (completed_at >= requested_at)
 );
 
+-- Accepted public intents and their original evidence outlive ordinary credential
+-- cleanup. Only same-owner durable journals are referenced; no account/session FK
+-- can erase or prevent recovery of a previously committed responsibility.
+CREATE TABLE identity.session_revocation_request (
+    id uuid PRIMARY KEY CHECK (id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    idem_key uuid NOT NULL CHECK (idem_key <> '00000000-0000-0000-0000-000000000000'::uuid),
+    account_id uuid NOT NULL CHECK (account_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    request_session_id uuid NOT NULL CHECK (request_session_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    action text NOT NULL CHECK (action IN ('revoke_session','revoke_others')),
+    target_session_id uuid CHECK (target_session_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    requested_at timestamptz NOT NULL,
+    completed_at timestamptz CHECK (completed_at >= requested_at),
+    UNIQUE (account_id,request_session_id,idem_key),
+    CHECK ((action='revoke_session' AND target_session_id IS NOT NULL) OR
+           (action='revoke_others' AND target_session_id IS NULL))
+);
+
+CREATE TABLE identity.session_revocation_request_target (
+    request_id uuid NOT NULL REFERENCES identity.session_revocation_request(id),
+    session_id uuid NOT NULL REFERENCES identity.session_revocation(session_id),
+    PRIMARY KEY (request_id,session_id)
+);
+
+CREATE TABLE identity.session_revocation_request_proof (
+    request_id uuid NOT NULL REFERENCES identity.session_revocation_request(id),
+    kind text NOT NULL CHECK (kind IN ('legacy','access','refresh')),
+    token_digest bytea NOT NULL CHECK (octet_length(token_digest)=32),
+    csrf_hash bytea NOT NULL CHECK (octet_length(csrf_hash)=32),
+    PRIMARY KEY (request_id,kind)
+);
+CREATE INDEX session_revocation_request_proof_digest_idx
+    ON identity.session_revocation_request_proof(kind,token_digest);
+
 CREATE TABLE infra.idempotency_record (
     service_owner text NOT NULL DEFAULT infra.runtime_owner() CHECK (service_owner IN ('legacy','identity','creation','media','execution')),
     id uuid NOT NULL,
@@ -8499,3 +8532,7 @@ END $$;
 -- Grant after the legacy ACL-copy loop; other business owners receive nothing.
 GRANT SELECT,INSERT ON TABLE identity.session_revocation TO glowloom_app,glowloom_identity;
 GRANT UPDATE(completed_at) ON TABLE identity.session_revocation TO glowloom_app,glowloom_identity;
+GRANT SELECT,INSERT ON TABLE identity.session_revocation_request TO glowloom_app,glowloom_identity;
+GRANT UPDATE(completed_at) ON TABLE identity.session_revocation_request TO glowloom_app,glowloom_identity;
+GRANT SELECT,INSERT ON TABLE identity.session_revocation_request_target TO glowloom_app,glowloom_identity;
+GRANT SELECT,INSERT ON TABLE identity.session_revocation_request_proof TO glowloom_app,glowloom_identity;

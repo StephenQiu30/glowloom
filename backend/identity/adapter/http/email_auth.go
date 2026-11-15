@@ -125,11 +125,12 @@ type AcceptedView struct {
 // EmailAuthHandler registers only email authentication. App cutover must also
 // install scope authorization before exposing these routes to public traffic.
 type EmailAuthHandler struct {
-	auth   *application.Auth
-	origin string
-	secure bool
-	revoke gin.HandlerFunc
-	policy SessionHTTPPolicy
+	auth              *application.Auth
+	origin            string
+	secure            bool
+	revoke            gin.HandlerFunc
+	policy            SessionHTTPPolicy
+	publicRevocations SessionRevocationCommands
 }
 
 // NewEmailAuthHandler constructs EmailAuthHandler with explicit caller-supplied dependencies.
@@ -153,6 +154,9 @@ func (h *EmailAuthHandler) Register(api *gin.RouterGroup) {
 	routes.POST("/me/reauthentication", h.authenticated(), h.reauthenticate)
 	routes.POST("/me/password", h.authenticated(), h.password)
 	routes.DELETE("/sessions/:id", h.revokeSession)
+	if h.publicRevocations != nil {
+		routes.POST("/me/sessions/revoke-others", h.revokeOtherSessionsPublic)
+	}
 }
 
 // WithSessionRevocation installs the self-owned session directory revocation adapter.
@@ -161,6 +165,10 @@ func (h *EmailAuthHandler) WithSessionRevocation(revoke gin.HandlerFunc) *EmailA
 	return h
 }
 func (h *EmailAuthHandler) revokeSession(c *gin.Context) {
+	if h.publicRevocations != nil {
+		h.revokeSessionPublic(c)
+		return
+	}
 	result, err := h.authenticateRequest(c, application.NoActivity)
 	if err != nil {
 		// A refresh is authority only for its own bound target, never the device directory.

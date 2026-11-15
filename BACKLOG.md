@@ -46,7 +46,17 @@ Google Go 规范复核不再只看目录和增量 lint：全量首次发现 26 �
 
 最终规范检查：全量 golangci-lint 0 issues、全后端 vet/build、受影响调用链 govulncheck 通过（required module 另有 1 项未被调用，不宣称整个依赖树零漏洞）。18 个有测试的受影响包 race、CI/依赖等七包补跑、模型目录/审计/原 Media 三包补跑均通过；前端三项资源来源契约共 86 tests 通过，两个规范正文及 CI 定点格式和 Workspace 229 文档检查通过。已分别记录真实隔离 PG、未配置真实对象存储/深度模型等夹具的接受边界；未执行全仓 race、未构建本轮镜像、未启动整套 Compose，不以全量 lint 等同所有设计都已符合。
 
-完整拆分仍未完成：公共 legacy/refresh/目录及批量退出尚未全部接入原凭据与 CSRF 恢复，因此本轮未启用公共撤权切换，原事务保护保留；源侧准入只证明身份，不替代 scope/project 或业务权限。账号/注册与团队治理、项目/钱包准备、Agent 承诺、Execution 供应商/资金/交付、Media 对象 pin/引用/删除、完整四域入口和 Gateway 唯一路由及最终角色切换仍须接入并验收；基础测试不能代替端到端接受。本次 `14e7f200d` 之后的会话源侧改动尚未追加提交推送，未部署、未收费、未操作存量业务库。
+后续按要求先提交并推送：上述薄服务目录、Identity 会话源侧及 Google Go 规范修复已纳入 `d3bebaf10` 并到 main/origin/main，未混入并行 Workspace 和前端业务改动。此后继续 T-GMS-19 / AC-GMS-19 公共撤权闭环；以下为该提交之后落实的代码与验收记录，本次按授权单独提交相关修改，其他并行工作保留。
+
+公共单会话和批量撤权已接入显式生产组合根：原 key/动作/固定目标快照、首次已验凭据摘要及 CSRF 持久保存；legacy/access/refresh 恢复路径不因撤权后的身份失效而误报成功，不把旧证明用作新授权或会话目录读取。全部 source 与四 writer 回执完成才返回成功并按需清 Cookie；未知/错误不清 Cookie。批量不重新枚举新会话，错误 refresh 不得作为已验恢复证明，聚合完成不能盖过 pending target。规范三表只在 schema.sql，使用最小 ACL，不存原始令牌，不引入迁移脚本或运行时 DDL。
+
+真实浏览器请求层已保留同一身份、后端和精确撤权目标的原操作键，仅内存保存 UUID，不存凭据或 CSRF；Creation scope 改变不丢键，身份改变清空。未知结果由用户手动重试，未新增自动写重放；当前原操作 204 才 CAS 释放，迟到的旧响应不删下一请求原键。显式调用方键与其他写请求不变，不手改生成 API。页面重载不承诺浏览器原键仍在，不能把前端内存当持久责任。
+
+已补服务端持久恢复：首次接受请求与只含原 request ID 的 Identity owner 任务同事务，入队失败会回滚本地撤权/准入关闭/回执；受限身份 worker 不依赖浏览器、凭据或重新认证，只处理固定已接受目标。重建沿用原任务与协调身份；业务事务尾部核查任务租约，旧 worker 失去 owner/epoch 后不能提交源侧完成或成功审计。启动有界 DML 对账补缺，既有 completed/failed 任务不重开；失败责任保留待核查，不按 TTL 删除。
+
+验证：新隔离 `glowloom_public_revocation_20261115_test` 离线完整 schema/data 初始化，四实际受限 LOGIN、真实 TCP writer、Gin HTTP 覆盖四种公共模式及丢 ACK 后清理凭据恢复；两项凭据/聚合反例均先红后绿。八包完整 race（含 Identity 全包 351.511s）通过；恢复任务新增后六个受影响包完整 race 与公共 Identity 用例三轮通过，原子入队失败、无浏览器、旧任务补缺、失租约回滚/接管及不重开任务另重复三轮通过。真实前端五文件 137 tests、全量 TypeScript typecheck、本轮两文件 ESLint 通过；最新全后端 golangci-lint 0 issues、vet/build、相关调用路径 govulncheck 通过（required module 另有 1 项未调用），三个合同文档定点格式与 Workspace 229 文档检查通过。独立只读复核未发现本轮恢复补丁的已确认正确性问题，该复核不代替上述实际测试。
+
+完整拆分仍未完成：默认 legacy 根和后台 worker 尚未自动切换到新的 owner 依赖，显式部分依赖会拒绝启用；源侧准入不替代 scope/project 或业务权限。账号/注册与团队治理、项目/钱包准备、Agent 承诺、Execution 供应商/资金/交付、Media 对象 pin/引用/删除、完整四域入口和 Gateway 唯一路由及最终角色切换仍须接入并验收；不以公共恢复闭环或测试通过当作全域已独立。未执行全仓 race、生产 mTLS/Redis/真实 JWT 及整套 Compose 接受，未部署、未收费、未操作存量业务库；其他前端/Workspace 并行工作保留。
 
 <a id="workspace-20261114"></a>
 

@@ -71,7 +71,7 @@ func TestRuntimeTeamInvitationAndNotificationWiring(t *testing.T) {
 		router.Use(httpapi.Middleware(cfg.PublicOrigin))
 		api := router.Group("/api")
 		storage := identityRouterStorage(t, &cfg)
-		handler, register, err := identityruntime.RegisterSelf(tx, auth, cfg, storage, api, func() time.Time { return now })
+		handler, register, err := identityruntime.RegisterSelf(tx, auth, cfg, storage, api, func() time.Time { return now }, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

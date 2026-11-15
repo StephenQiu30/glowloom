@@ -23,6 +23,26 @@ export class RequestError extends Error {
   }
 }
 
+// Only original operation IDs are retained in memory; no credentials or browser storage.
+const pendingSessionRevocations = new Map<string, string>();
+
+function sessionRevocationKey(
+  method: string,
+  url: string,
+  baseURL: string | undefined,
+  generation: number,
+): string | null {
+  const single =
+    method === "DELETE" &&
+    /^\/api\/sessions\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      url,
+    );
+  const batch = method === "POST" && url === "/api/me/sessions/revoke-others";
+  return single || batch
+    ? JSON.stringify([generation, baseURL ?? "", method, url])
+    : null;
+}
+
 let csrfToken: string | null = null;
 export function getCSRFToken() {
   return csrfToken;
@@ -143,6 +163,7 @@ export function setCreationScope(scope: string | null) {
 /** Session-bound proof stays in memory and is cleared on identity loss. */
 export function setCSRFToken(token: string | null) {
   if (csrfToken !== token) {
+    pendingSessionRevocations.clear();
     setCreationScope(null);
     scopeSwitching = false;
     sessionGeneration++;
@@ -162,7 +183,11 @@ client.interceptors.request.use((config) => {
   const method = config.method?.toUpperCase() ?? "GET";
   const snapshot = (
     config as typeof config & {
-      identityProof?: { csrf: string | null; scope: string | null };
+      identityProof?: {
+        csrf: string | null;
+        scope: string | null;
+        generation: number;
+      };
     }
   ).identityProof;
   if (snapshot?.scope) config.headers.set("X-Creation-Scope", snapshot.scope);
@@ -172,7 +197,23 @@ client.interceptors.request.use((config) => {
     !["GET", "HEAD", "OPTIONS"].includes(method) &&
     !config.headers.has("Idempotency-Key")
   ) {
-    config.headers.set("Idempotency-Key", crypto.randomUUID());
+    const pendingKey =
+      snapshot?.csrf &&
+      snapshot.generation === sessionGeneration &&
+      !config.signal?.aborted
+        ? sessionRevocationKey(
+            method,
+            config.url ?? "",
+            config.baseURL,
+            snapshot.generation,
+          )
+        : null;
+    const original = pendingKey
+      ? pendingSessionRevocations.get(pendingKey)
+      : undefined;
+    const key = original ?? crypto.randomUUID();
+    if (pendingKey) pendingSessionRevocations.set(pendingKey, key);
+    config.headers.set("Idempotency-Key", key);
   }
   return config;
 });
@@ -240,7 +281,7 @@ export async function request<T>(
       ...config,
       url,
       signal,
-      identityProof: { csrf: proof, scope: creationScope },
+      identityProof: { csrf: proof, scope: creationScope, generation },
     };
     const response = await client.request<T>(outgoing);
     if (
@@ -249,6 +290,20 @@ export async function request<T>(
       generation !== sessionGeneration
     )
       throw new axios.CanceledError("identity_or_scope_changed");
+    const pendingKey = sessionRevocationKey(
+      method,
+      url,
+      config.baseURL,
+      generation,
+    );
+    if (
+      response.status === 204 &&
+      pendingKey &&
+      pendingSessionRevocations.get(pendingKey) ===
+        response.config.headers.get("Idempotency-Key")
+    ) {
+      pendingSessionRevocations.delete(pendingKey);
+    }
     return response.status === 204 ? (undefined as T) : response.data;
   } catch (error) {
     if (

@@ -30,8 +30,14 @@ func NewSessionDirectoryHandler(sessions *application.SessionDirectory, secure b
 
 // Register requires email authentication and Origin/CSRF protection on group.
 func (h *SessionDirectoryHandler) Register(group *gin.RouterGroup) {
-	group.GET("/me/sessions", h.list)
+	h.RegisterRead(group)
 	group.POST("/me/sessions/revoke-others", h.revokeOthers)
+}
+
+// RegisterRead retains normal authentication for listing when durable mutation
+// routes have their own original-proof authentication on the public group.
+func (h *SessionDirectoryHandler) RegisterRead(group *gin.RouterGroup) {
+	group.GET("/me/sessions", h.list)
 }
 
 // Revoke handles /sessions/:id after the email handler's current-only adapter is retired.

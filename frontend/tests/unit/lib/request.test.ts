@@ -1,21 +1,43 @@
 // @vitest-environment node
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import axios from "axios";
+import axios, { type AxiosAdapter } from "axios";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import {
   downloadLibraryMediaAsset,
   uploadPersonalMediaAsset,
 } from "@/api/media";
-import { request, RequestError } from "@/lib/request";
+import {
+  request,
+  RequestError,
+  setCSRFToken,
+  setCreationScope,
+  type RequestOptions,
+} from "@/lib/request";
 
 let server: Server;
 let baseURL: string;
+const revocationAttempts: string[] = [];
 beforeAll(async () => {
   server = createServer(async (incoming, response) => {
     const chunks: Buffer[] = [];
     for await (const chunk of incoming) chunks.push(Buffer.from(chunk));
     const path = incoming.url ?? "";
+    if (incoming.headers["x-revocation-fixture"]) {
+      revocationAttempts.push(String(incoming.headers["idempotency-key"]));
+      if (incoming.headers["x-revocation-fixture"] === "complete") {
+        response.writeHead(204).end();
+      } else {
+        response.writeHead(503, { "Content-Type": "application/json" });
+        response.end(
+          JSON.stringify({
+            code: "writer_ack_pending",
+            meta: { key: incoming.headers["idempotency-key"] },
+          }),
+        );
+      }
+      return;
+    }
     if (path === "/slow") return;
     if (path === "/empty") {
       response.writeHead(204).end();
@@ -90,6 +112,142 @@ it("写请求缺少幂等键时生成 UUID，读取不生成", async () => {
   const read = await request<Echo>("/echo", { baseURL });
   expect(read.headers["idempotency-key"]).toBeUndefined();
 });
+
+for (const [method, url] of [
+  ["DELETE", "/api/sessions/00000000-0000-4000-8000-000000000001"],
+  ["POST", "/api/me/sessions/revoke-others"],
+]) {
+  it(`${method} ${url} 未确认时保留原键、完成后才释放且不自动重试`, async () => {
+    setCSRFToken("revocation-proof");
+    const start = revocationAttempts.length;
+    const options: RequestOptions = {
+      baseURL,
+      method,
+      headers: { "X-Revocation-Fixture": "pending" },
+    };
+    try {
+      const first = await pendingRevocation(url, options);
+      expect(revocationAttempts).toHaveLength(start + 1);
+      setCreationScope("other-creation-scope");
+      const second = await pendingRevocation(url, options);
+      expect(second.meta?.key).toBe(first.meta?.key);
+      expect(revocationAttempts).toHaveLength(start + 2);
+      await request(url, {
+        ...options,
+        headers: { "X-Revocation-Fixture": "complete" },
+      });
+      expect(revocationAttempts[start + 2]).toBe(first.meta?.key);
+      const next = await pendingRevocation(url, options);
+      expect(next.meta?.key).not.toBe(first.meta?.key);
+    } finally {
+      setCSRFToken(null);
+    }
+  });
+}
+
+it("撤权不借用另一身份的原键，也不改变调用方键或普通写请求", async () => {
+  const url = "/api/sessions/00000000-0000-4000-8000-000000000002";
+  const options: RequestOptions = {
+    baseURL,
+    method: "DELETE",
+    headers: { "X-Revocation-Fixture": "pending" },
+  };
+  try {
+    setCSRFToken("revocation-first-identity");
+    const first = await pendingRevocation(url, options);
+    setCSRFToken("revocation-second-identity");
+    const second = await pendingRevocation(url, options);
+    expect(second.meta?.key).not.toBe(first.meta?.key);
+    const explicit = await pendingRevocation(url, {
+      ...options,
+      headers: {
+        "X-Revocation-Fixture": "pending",
+        "idempotency-key": "caller-owned-key",
+      },
+    });
+    expect(explicit.meta?.key).toBe("caller-owned-key");
+    const original = await pendingRevocation(url, options);
+    expect(original.meta?.key).toBe(second.meta?.key);
+    const other = await pendingRevocation("/api/me/password", {
+      ...options,
+      method: "POST",
+    });
+    const another = await pendingRevocation("/api/me/password", {
+      ...options,
+      method: "POST",
+    });
+    expect(other.meta?.key).not.toBe(another.meta?.key);
+  } finally {
+    setCSRFToken(null);
+  }
+});
+
+it("迟到的已完成响应不释放下一次撤权的原键", async () => {
+  setCSRFToken("revocation-concurrent-proof");
+  const url = "/api/sessions/00000000-0000-4000-8000-000000000003";
+  const keys: string[] = [];
+  const replies: Array<() => void> = [];
+  let started!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const adapter: AxiosAdapter = (config) =>
+    new Promise((resolve) => {
+      keys.push(String(config.headers.get("Idempotency-Key")));
+      replies.push(() =>
+        resolve({
+          config,
+          status: 204,
+          statusText: "No Content",
+          headers: {},
+          data: undefined,
+        }),
+      );
+      if (replies.length === 2) started();
+    });
+  const first = request(url, { baseURL, method: "DELETE", adapter });
+  const second = request(url, { baseURL, method: "DELETE", adapter });
+  const options: RequestOptions = {
+    baseURL,
+    method: "DELETE",
+    headers: { "X-Revocation-Fixture": "pending" },
+  };
+  try {
+    await ready;
+    expect(keys[1]).toBe(keys[0]);
+    replies[0]();
+    await first;
+    const next = await pendingRevocation(url, options);
+    expect(next.meta?.key).not.toBe(keys[0]);
+    replies[1]();
+    await second;
+    const pending = await pendingRevocation(url, options);
+    expect(pending.meta?.key).toBe(next.meta?.key);
+    const otherTarget = await pendingRevocation(
+      "/api/sessions/00000000-0000-4000-8000-000000000004",
+      options,
+    );
+    expect(otherTarget.meta?.key).not.toBe(pending.meta?.key);
+  } finally {
+    for (const reply of replies) reply();
+    await Promise.allSettled([first, second]);
+    setCSRFToken(null);
+  }
+});
+
+async function pendingRevocation(
+  url: string,
+  options: RequestOptions,
+): Promise<RequestError> {
+  try {
+    await request(url, options);
+  } catch (error) {
+    if (!(error instanceof RequestError)) throw error;
+    expect(error.status).toBe(503);
+    return error;
+  }
+  throw new Error("unconfirmed revocation unexpectedly succeeded");
+}
 
 it("生成上传函数通过 Axios 发送包含实际边界的 multipart", async () => {
   const result = await uploadPersonalMediaAsset(

@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/writefence"
 	pgfence "github.com/StephenQiu30/glowloom-server/backend/internal/platform/writefence/postgres"
 )
@@ -63,45 +64,9 @@ func (s *SessionRevocationStore) PrepareSessionRevocation(ctx context.Context, a
 		if _, err := lockSelfActor(tx, actor, clock); err != nil {
 			return err
 		}
-		var target struct {
-			ID        uuid.UUID
-			RevokedAt *time.Time
-		}
-		read := tx.Raw(`SELECT id,revoked_at FROM identity.user_session WHERE id=? AND account_id=? FOR UPDATE`, id, actor.ID).Scan(&target)
-		if read.Error != nil {
-			return fmt.Errorf("lock session revocation target: %w", read.Error)
-		}
-		if read.RowsAffected != 1 {
-			return application.ErrSessionInvalid
-		}
-		if saved, err := readSessionRevocation(tx, id, true); err == nil {
-			if saved.AccountID != actor.ID || target.RevokedAt == nil {
-				return application.ErrSessionRevocationUnavailable
-			}
-			result = saved
-			return nil
-		} else if !errors.Is(err, writefence.ErrNotFound) {
-			return err
-		}
-		// Return exactly the precision persisted by PostgreSQL, not an in-memory
-		// nanosecond timestamp that would conflict with its own recovery receipt.
-		now := clock().UTC().Truncate(time.Microsecond)
-		if err := revokeSessions(tx, actor.ID, &id, nil, now); err != nil {
-			return err
-		}
-		var head struct{ Epoch int64 }
-		if err := tx.Raw(`SELECT epoch FROM infra.authority_head WHERE service_owner=infra.runtime_owner() AND issuer='identity' AND authority_kind='session' AND authority_id=? FOR UPDATE`, id).Scan(&head).Error; err != nil {
-			return fmt.Errorf("lock original session authority: %w", err)
-		}
-		state, err := pgfence.NewAuthorityStore(tx).BeginTx(ctx, tx, writefence.Authority{Issuer: writefence.Identity, Kind: writefence.Session, ID: id, Epoch: head.Epoch}, uuid.New(), true)
-		if err != nil {
-			return err
-		}
-		if err := tx.Exec(`INSERT INTO identity.session_revocation(session_id,account_id,request_session_id,coordination_id,expected_epoch,requested_at) VALUES (?,?,?,?,?,?)`, id, actor.ID, actor.SessionID, state.Control.CoordinationID, head.Epoch, now).Error; err != nil {
-			return fmt.Errorf("persist original session revocation: %w", err)
-		}
-		result = application.SessionRevocation{AccountID: actor.ID, SessionID: id, RequestSessionID: actor.SessionID, Control: state.Control, RequestedAt: now}
-		return result.Validate()
+		var err error
+		result, err = prepareSessionRevocationTx(ctx, tx, actor, id, clock)
+		return err
 	})
 	return result, err
 }
@@ -197,7 +162,7 @@ func identityWriterTransaction(ctx context.Context, db *gorm.DB, run func(*gorm.
 	if _, open := db.Statement.ConnPool.(gorm.TxCommitter); open {
 		return writefence.ErrTransaction
 	}
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return taskruntime.Transaction(ctx, db, func(tx *gorm.DB) error {
 		owner, err := pgfence.New(tx).Owner(ctx)
 		if err != nil {
 			return err
@@ -207,6 +172,53 @@ func identityWriterTransaction(ctx context.Context, db *gorm.DB, run func(*gorm.
 		}
 		return run(tx)
 	})
+}
+
+// prepareSessionRevocationTx shares the exact source closure path with atomic
+// public batches. Its caller already holds the current account and actor locks.
+func prepareSessionRevocationTx(ctx context.Context, tx *gorm.DB, actor application.Principal, id uuid.UUID, clock func() time.Time) (application.SessionRevocation, error) {
+	var target struct {
+		ID        uuid.UUID
+		RevokedAt *time.Time
+	}
+	read := tx.Raw(`SELECT id,revoked_at FROM identity.user_session WHERE id=? AND account_id=? FOR UPDATE`, id, actor.ID).Scan(&target)
+	if read.Error != nil {
+		return application.SessionRevocation{}, fmt.Errorf("lock session revocation target: %w", read.Error)
+	}
+	if saved, err := readSessionRevocation(tx, id, true); err == nil {
+		// A collected target is valid only when the immutable source has the
+		// authenticated account. An extant target must already be locally closed.
+		if saved.AccountID != actor.ID && read.RowsAffected != 1 {
+			return application.SessionRevocation{}, application.ErrSessionInvalid
+		}
+		if saved.AccountID != actor.ID || (read.RowsAffected == 1 && target.RevokedAt == nil) {
+			return application.SessionRevocation{}, application.ErrSessionRevocationUnavailable
+		}
+		return saved, nil
+	} else if !errors.Is(err, writefence.ErrNotFound) {
+		return application.SessionRevocation{}, err
+	}
+	if read.RowsAffected != 1 {
+		return application.SessionRevocation{}, application.ErrSessionInvalid
+	}
+	// PostgreSQL persists microseconds; return exactly its recovery precision.
+	now := clock().UTC().Truncate(time.Microsecond)
+	if err := revokeSessions(tx, actor.ID, &id, nil, now); err != nil {
+		return application.SessionRevocation{}, err
+	}
+	var head struct{ Epoch int64 }
+	if err := tx.Raw(`SELECT epoch FROM infra.authority_head WHERE service_owner=infra.runtime_owner() AND issuer='identity' AND authority_kind='session' AND authority_id=? FOR UPDATE`, id).Scan(&head).Error; err != nil {
+		return application.SessionRevocation{}, fmt.Errorf("lock original session authority: %w", err)
+	}
+	state, err := pgfence.NewAuthorityStore(tx).BeginTx(ctx, tx, writefence.Authority{Issuer: writefence.Identity, Kind: writefence.Session, ID: id, Epoch: head.Epoch}, uuid.New(), true)
+	if err != nil {
+		return application.SessionRevocation{}, err
+	}
+	if err := tx.Exec(`INSERT INTO identity.session_revocation(session_id,account_id,request_session_id,coordination_id,expected_epoch,requested_at) VALUES (?,?,?,?,?,?)`, id, actor.ID, actor.SessionID, state.Control.CoordinationID, head.Epoch, now).Error; err != nil {
+		return application.SessionRevocation{}, fmt.Errorf("persist original session revocation: %w", err)
+	}
+	result := application.SessionRevocation{AccountID: actor.ID, SessionID: id, RequestSessionID: actor.SessionID, Control: state.Control, RequestedAt: now}
+	return result, result.Validate()
 }
 
 func readSessionRevocation(tx *gorm.DB, id uuid.UUID, lock bool) (application.SessionRevocation, error) {
