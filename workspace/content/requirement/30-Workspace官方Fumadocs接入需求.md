@@ -11,3 +11,9 @@
 当前配置与启动以 [Workspace README](../../README.md) 和 [Fumadocs 官方文档](https://fumadocs.dev/docs/next) 为准；实施进度与验证记录仍只在根 BACKLOG。
 
 当前来源链：[设计45](../design/45-Workspace官方Fumadocs设计.md) → [PRD31](../prd/31-Workspace官方Fumadocs.md) → [Plan40](../plan/40-Workspace官方Fumadocs执行计划.md)。
+
+## 知识分类与编号补充
+
+用户于本轮要求清理知识库中的工具过程设置和服务文档，将腾讯云配置归入适当分类，并补齐文档编号。工具过程文档从发布源和索引移除；COS 归部署运维；分类内采用唯一两位序号，沿用现有编号和稳定 ID，补齐未编号文档并同步导航、标题、引用和搜索。
+
+本轮用户补充指出知识库缺少 Logo：沿用项目既有品牌标识，补齐桌面／手机导航、浏览器图标和 Apple 图标。

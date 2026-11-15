@@ -40,7 +40,7 @@ export default async function Page(props: PageProps<'/read/[[...slug]]'>) {
           components={getMDXComponents({
             // this allows you to link to other pages with relative file paths
             a: createContentLink(page),
-            h1: DocsTitle,
+            h1: (props) => <DocsTitle {...props}>{page.data.title}</DocsTitle>,
           })}
         />
       </DocsBody>

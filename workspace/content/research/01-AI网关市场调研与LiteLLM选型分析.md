@@ -12,7 +12,7 @@
 ## 1. 研究问题、现状与约束
 
 > [!NOTE] 2026-11-03 架构与范围演进备忘（短剧多 Agent 启动后的定位澄清）
-> 自 2026-11-01 起，产品范围正式确立为“自建短剧多 Agent 创作工作台”（见[短剧Agent调研](2026-11-01-短剧Agent能力与服务边界调研.md)与[设计32](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md)），需要集成 ChatGPT (o3/GPT-6.1)、Claude 5.5、Gemini 3.8/4、Grok 4.7、豆包 Pro、DeepSeek 等大模型。
+> 自 2026-11-01 起，产品范围正式确立为“自建短剧多 Agent 创作工作台”（见[短剧Agent调研](20-2026-11-01-短剧Agent能力与服务边界调研.md)与[设计32](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md)），需要集成 ChatGPT (o3/GPT-6.1)、Claude 5.5、Gemini 3.8/4、Grok 4.7、豆包 Pro、DeepSeek 等大模型。
 > **选型结论更新与重平衡**：
 > 1. **坚持单一 Go 二进制原则**：依然不引入独立的 Python LiteLLM Proxy 容器，避免多进程微服务运维负担与跨进程网络开销；
 > 2. **轻量化协议统一**：针对多模型 Chat/Thinking/Tool Calling 协议分散的痛点，吸纳开源 BeefTV 的声明式 Manifest 与 Go 原生策略管道，在 Go 进程内实现轻量统一适配，避免陷入为每个模型手写重复 Go 适配代码的维护泥潭。

@@ -12,7 +12,7 @@ This site is built with [Fumadocs](https://fumadocs.dev) on Next.js. The APIs an
 ## Project constraints
 
 - Inherit the repository rules. Own TypeScript follows Google TS; use the official Fumadocs UI and shadcn theme rather than recreating document components.
-- Keep the existing content files and stable document identities. Content is ordinary Markdown; preserve original bodies and use the official MDX collection and extension APIs.
+- Keep stable document identities and original anchors. Maintain unique two-digit filename numbers within each category; update links and identity paths when moving content. Keep tool-generated setup, plans and specifications out of the published knowledge source. Content is ordinary Markdown; preserve original bodies and use the official MDX collection and extension APIs.
 - One anonymous knowledge entry on port 1130. No custom authentication, PG, workflow executor, host bridge, TTS or duplicated static/online applications.
 - Use the official scaffold and search synchronization. Do not recreate the retired src, scripts, release-builder or compatibility-renderer architecture.
 - Keep runtime credentials and Meilisearch data private and outside Git. Run lint, types, format, build and browser acceptance after changes.

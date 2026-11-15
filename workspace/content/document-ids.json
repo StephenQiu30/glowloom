@@ -46,7 +46,7 @@
   },
   {
     "id": "doc-916c5fc5a894",
-    "path": "research/2026-11-14-Chat4j与Workspace静态知识库调研.md",
+    "path": "research/55-2026-11-14-Chat4j与Workspace静态知识库调研.md",
     "aliases": [
       "docs/research/2026-11-14-Chat4j与Workspace静态知识库调研.md"
     ]
@@ -60,7 +60,7 @@
   },
   {
     "id": "doc-e75d48f9905e",
-    "path": "COS配置说明.md",
+    "path": "operations/01-腾讯云COS对象存储配置.md",
     "aliases": [
       "docs/COS配置说明.md"
     ]
@@ -1068,7 +1068,7 @@
   },
   {
     "id": "doc-018277dc5981",
-    "path": "research/09-资产展示精简复核.md",
+    "path": "research/15-资产展示精简复核.md",
     "aliases": [
       "docs/research/09-资产展示精简复核.md"
     ]
@@ -1110,280 +1110,280 @@
   },
   {
     "id": "doc-3f55d73d0d01",
-    "path": "research/2026-10-28-即梦共享顶栏架构逆向.md",
+    "path": "research/16-2026-10-28-即梦共享顶栏架构逆向.md",
     "aliases": [
       "docs/research/2026-10-28-即梦共享顶栏架构逆向.md"
     ]
   },
   {
     "id": "doc-7b5120eef6b5",
-    "path": "research/2026-10-29-即梦时间线需求分析.md",
+    "path": "research/17-2026-10-29-即梦时间线需求分析.md",
     "aliases": [
       "docs/research/2026-10-29-即梦时间线需求分析.md"
     ]
   },
   {
     "id": "doc-f8b2d5a717fd",
-    "path": "research/2026-10-29-时间线验收场景.md",
+    "path": "research/18-2026-10-29-时间线验收场景.md",
     "aliases": [
       "docs/research/2026-10-29-时间线验收场景.md"
     ]
   },
   {
     "id": "doc-945bd7b4f50c",
-    "path": "research/2026-11-01-AgentHarness与Skill能力分析.md",
+    "path": "research/19-2026-11-01-AgentHarness与Skill能力分析.md",
     "aliases": [
       "docs/research/2026-11-01-AgentHarness与Skill能力分析.md"
     ]
   },
   {
     "id": "doc-694672421f7e",
-    "path": "research/2026-11-01-短剧Agent能力与服务边界调研.md",
+    "path": "research/20-2026-11-01-短剧Agent能力与服务边界调研.md",
     "aliases": [
       "docs/research/2026-11-01-短剧Agent能力与服务边界调研.md"
     ]
   },
   {
     "id": "doc-743faceb7155",
-    "path": "research/2026-11-03-BeefTV模型接入与计费调研.md",
+    "path": "research/21-2026-11-03-BeefTV模型接入与计费调研.md",
     "aliases": [
       "docs/research/2026-11-03-BeefTV模型接入与计费调研.md"
     ]
   },
   {
     "id": "doc-f7b20351b72c",
-    "path": "research/2026-11-03-即梦报价与模型接入交互拆解.md",
+    "path": "research/22-2026-11-03-即梦报价与模型接入交互拆解.md",
     "aliases": [
       "docs/research/2026-11-03-即梦报价与模型接入交互拆解.md"
     ]
   },
   {
     "id": "doc-cd0d1aa11cea",
-    "path": "research/2026-11-04-即梦对话流程与设计基线.md",
+    "path": "research/23-2026-11-04-即梦对话流程与设计基线.md",
     "aliases": [
       "docs/research/2026-11-04-即梦对话流程与设计基线.md"
     ]
   },
   {
     "id": "doc-3150e04772c2",
-    "path": "research/2026-11-05-即梦对话功能与需求基线.md",
+    "path": "research/24-2026-11-05-即梦对话功能与需求基线.md",
     "aliases": [
       "docs/research/2026-11-05-即梦对话功能与需求基线.md"
     ]
   },
   {
     "id": "doc-27d165ab0a41",
-    "path": "research/2026-11-05-官方模型接入预设与计价核验.md",
+    "path": "research/25-2026-11-05-官方模型接入预设与计价核验.md",
     "aliases": [
       "docs/research/2026-11-05-官方模型接入预设与计价核验.md"
     ]
   },
   {
     "id": "doc-7603e412cf00",
-    "path": "research/2026-11-05-对话工作台现有服务验收.md",
+    "path": "research/26-2026-11-05-对话工作台现有服务验收.md",
     "aliases": [
       "docs/research/2026-11-05-对话工作台现有服务验收.md"
     ]
   },
   {
     "id": "doc-edd2844e6486",
-    "path": "research/2026-11-05-模型计费与积分竞品研究.md",
+    "path": "research/27-2026-11-05-模型计费与积分竞品研究.md",
     "aliases": [
       "docs/research/2026-11-05-模型计费与积分竞品研究.md"
     ]
   },
   {
     "id": "doc-c2cdb9f3c2a4",
-    "path": "research/2026-11-06-BeefTV与竞品模型接入和预设对照.md",
+    "path": "research/28-2026-11-06-BeefTV与竞品模型接入和预设对照.md",
     "aliases": [
       "docs/research/2026-11-06-BeefTV与竞品模型接入和预设对照.md"
     ]
   },
   {
     "id": "doc-669b0fcf8984",
-    "path": "research/2026-11-06-创作类型与对话历史对照验收.md",
+    "path": "research/29-2026-11-06-创作类型与对话历史对照验收.md",
     "aliases": [
       "docs/research/2026-11-06-创作类型与对话历史对照验收.md"
     ]
   },
   {
     "id": "doc-25822bf6a12d",
-    "path": "research/2026-11-06-即梦独立创作项目与积分拆解.md",
+    "path": "research/30-2026-11-06-即梦独立创作项目与积分拆解.md",
     "aliases": [
       "docs/research/2026-11-06-即梦独立创作项目与积分拆解.md"
     ]
   },
   {
     "id": "doc-018704f9c9e1",
-    "path": "research/2026-11-06-对话空态即梦对照与浏览器验收.md",
+    "path": "research/31-2026-11-06-对话空态即梦对照与浏览器验收.md",
     "aliases": [
       "docs/research/2026-11-06-对话空态即梦对照与浏览器验收.md"
     ]
   },
   {
     "id": "doc-d11f9547ed88",
-    "path": "research/2026-11-07-全站工具位置逐项核对.csv",
+    "path": "research/32-2026-11-07-全站工具位置逐项核对.csv",
     "aliases": [
       "docs/research/2026-11-07-全站工具位置逐项核对.csv"
     ]
   },
   {
     "id": "doc-c0de3b287f30",
-    "path": "research/2026-11-07-即梦页面功能与交互逐项核对.md",
+    "path": "research/33-2026-11-07-即梦页面功能与交互逐项核对.md",
     "aliases": [
       "docs/research/2026-11-07-即梦页面功能与交互逐项核对.md"
     ]
   },
   {
     "id": "doc-cbe2b44dfd99",
-    "path": "research/2026-11-07-多媒体参考与风格库实现核对.csv",
+    "path": "research/34-2026-11-07-多媒体参考与风格库实现核对.csv",
     "aliases": [
       "docs/research/2026-11-07-多媒体参考与风格库实现核对.csv"
     ]
   },
   {
     "id": "doc-35a6bd288ae5",
-    "path": "research/2026-11-07-画布组件复用与完整接入评估.md",
+    "path": "research/35-2026-11-07-画布组件复用与完整接入评估.md",
     "aliases": [
       "docs/research/2026-11-07-画布组件复用与完整接入评估.md"
     ]
   },
   {
     "id": "doc-a041a554d9ba",
-    "path": "research/2026-11-07-织光页面与Figma还原核对.md",
+    "path": "research/36-2026-11-07-织光页面与Figma还原核对.md",
     "aliases": [
       "docs/research/2026-11-07-织光页面与Figma还原核对.md"
     ]
   },
   {
     "id": "doc-5abb08b4abd7",
-    "path": "research/2026-11-08-运行版验收记录.csv",
+    "path": "research/37-2026-11-08-运行版验收记录.csv",
     "aliases": [
       "docs/research/2026-11-08-运行版验收记录.csv"
     ]
   },
   {
     "id": "doc-526e5f50a7f9",
-    "path": "research/2026-11-09-模型预设音频与统一计量调研.md",
+    "path": "research/38-2026-11-09-模型预设音频与统一计量调研.md",
     "aliases": [
       "docs/research/2026-11-09-模型预设音频与统一计量调研.md"
     ]
   },
   {
     "id": "doc-0e722460ccb2",
-    "path": "research/2026-11-12-AI短剧平台Agent与交付质量源码复核.md",
+    "path": "research/39-2026-11-12-AI短剧平台Agent与交付质量源码复核.md",
     "aliases": [
       "docs/research/2026-11-12-AI短剧平台Agent与交付质量源码复核.md"
     ]
   },
   {
     "id": "doc-6d5d1805c92c",
-    "path": "research/2026-11-12-Agent费用目标与单镜闭环验证.md",
+    "path": "research/40-2026-11-12-Agent费用目标与单镜闭环验证.md",
     "aliases": [
       "docs/research/2026-11-12-Agent费用目标与单镜闭环验证.md"
     ]
   },
   {
     "id": "doc-666c7acf5944",
-    "path": "research/2026-11-12-即梦多模态创作与Agent服务拆解.md",
+    "path": "research/41-2026-11-12-即梦多模态创作与Agent服务拆解.md",
     "aliases": [
       "docs/research/2026-11-12-即梦多模态创作与Agent服务拆解.md"
     ]
   },
   {
     "id": "doc-908c72db4b73",
-    "path": "research/2026-11-12-富文本与共享创作工具栏核对.md",
+    "path": "research/42-2026-11-12-富文本与共享创作工具栏核对.md",
     "aliases": [
       "docs/research/2026-11-12-富文本与共享创作工具栏核对.md"
     ]
   },
   {
     "id": "doc-24c9bbb45169",
-    "path": "research/2026-11-12-画布图片音频与展开编辑器验收.md",
+    "path": "research/43-2026-11-12-画布图片音频与展开编辑器验收.md",
     "aliases": [
       "docs/research/2026-11-12-画布图片音频与展开编辑器验收.md"
     ]
   },
   {
     "id": "doc-bbc412226634",
-    "path": "research/2026-11-12-画布时间线与主体对照.md",
+    "path": "research/44-2026-11-12-画布时间线与主体对照.md",
     "aliases": [
       "docs/research/2026-11-12-画布时间线与主体对照.md"
     ]
   },
   {
     "id": "doc-708eda631ed3",
-    "path": "research/2026-11-12-短剧制作平台源码与发行包对照调研.md",
+    "path": "research/45-2026-11-12-短剧制作平台源码与发行包对照调研.md",
     "aliases": [
       "docs/research/2026-11-12-短剧制作平台源码与发行包对照调研.md"
     ]
   },
   {
     "id": "doc-3cca50852918",
-    "path": "research/2026-11-12-资产工具栏与素材上传核对.md",
+    "path": "research/46-2026-11-12-资产工具栏与素材上传核对.md",
     "aliases": [
       "docs/research/2026-11-12-资产工具栏与素材上传核对.md"
     ]
   },
   {
     "id": "doc-b4402049c69d",
-    "path": "research/2026-11-13-全局消息通知统一与浏览器验收.md",
+    "path": "research/47-2026-11-13-全局消息通知统一与浏览器验收.md",
     "aliases": [
       "docs/research/2026-11-13-全局消息通知统一与浏览器验收.md"
     ]
   },
   {
     "id": "doc-f7c0590609bb",
-    "path": "research/2026-11-13-文本AI目录恢复验收.md",
+    "path": "research/48-2026-11-13-文本AI目录恢复验收.md",
     "aliases": [
       "docs/research/2026-11-13-文本AI目录恢复验收.md"
     ]
   },
   {
     "id": "doc-c756e37499e6",
-    "path": "research/2026-11-13-模型号池与多供应商路由调研.md",
+    "path": "research/49-2026-11-13-模型号池与多供应商路由调研.md",
     "aliases": [
       "docs/research/2026-11-13-模型号池与多供应商路由调研.md"
     ]
   },
   {
     "id": "doc-fd9c505be98b",
-    "path": "research/2026-11-13-模型号池与销售计费验收.md",
+    "path": "research/50-2026-11-13-模型号池与销售计费验收.md",
     "aliases": [
       "docs/research/2026-11-13-模型号池与销售计费验收.md"
     ]
   },
   {
     "id": "doc-84eb66a5a90f",
-    "path": "research/2026-11-13-模型启用开关与1122验收.md",
+    "path": "research/51-2026-11-13-模型启用开关与1122验收.md",
     "aliases": [
       "docs/research/2026-11-13-模型启用开关与1122验收.md"
     ]
   },
   {
     "id": "doc-88f3e7a91e63",
-    "path": "research/2026-11-13-模型目录恢复与供应商标识验收.md",
+    "path": "research/52-2026-11-13-模型目录恢复与供应商标识验收.md",
     "aliases": [
       "docs/research/2026-11-13-模型目录恢复与供应商标识验收.md"
     ]
   },
   {
     "id": "doc-add8c8324090",
-    "path": "research/2026-11-13-生成任务状态精简与验收.md",
+    "path": "research/53-2026-11-13-生成任务状态精简与验收.md",
     "aliases": [
       "docs/research/2026-11-13-生成任务状态精简与验收.md"
     ]
   },
   {
     "id": "doc-c5dd569b76be",
-    "path": "research/2026-11-13-画布节点统一与默认模型验收.md",
+    "path": "research/54-2026-11-13-画布节点统一与默认模型验收.md",
     "aliases": [
       "docs/research/2026-11-13-画布节点统一与默认模型验收.md"
     ]
   },
   {
     "id": "doc-9689677575df",
-    "path": "research/2026-11-14-Magpie供应商与模型接入实测.md",
+    "path": "research/56-2026-11-14-Magpie供应商与模型接入实测.md",
     "aliases": [
       "docs/research/2026-11-14-Magpie供应商与模型接入实测.md"
     ]
@@ -1417,20 +1417,6 @@
     ]
   },
   {
-    "id": "doc-aced3262dad7",
-    "path": "superpowers/plans/2026-11-14-database-canonical-schema-specification.md",
-    "aliases": [
-      "docs/superpowers/plans/2026-11-14-database-canonical-schema-specification.md"
-    ]
-  },
-  {
-    "id": "doc-4582c43a53c2",
-    "path": "superpowers/specs/2026-11-14-database-canonical-schema-specification-design.md",
-    "aliases": [
-      "docs/superpowers/specs/2026-11-14-database-canonical-schema-specification-design.md"
-    ]
-  },
-  {
     "id": "templates-00",
     "path": "templates/00-模板导航.md",
     "aliases": [
@@ -1460,50 +1446,50 @@
   },
   {
     "id": "doc-0fe86d394156",
-    "path": "templates/编写规范.md",
+    "path": "templates/05-编写规范.md",
     "aliases": [
       "docs/templates/编写规范.md"
     ]
   },
   {
     "id": "skill-project",
-    "path": "skills/workspace-project.md",
+    "path": "skills/01-workspace-project.md",
     "aliases": [],
     "legacyPath": "skills/workspace-project/SKILL.md"
   },
   {
     "id": "skill-contract",
-    "path": "skills/workspace-contract.md",
+    "path": "skills/02-workspace-contract.md",
     "aliases": [],
     "legacyPath": "skills/workspace-contract/SKILL.md"
   },
   {
     "id": "skill-browser",
-    "path": "skills/workspace-browser.md",
+    "path": "skills/03-workspace-browser.md",
     "aliases": [],
     "legacyPath": "skills/workspace-browser/SKILL.md"
   },
   {
     "id": "skill-handoff",
-    "path": "skills/workspace-handoff.md",
+    "path": "skills/04-workspace-handoff.md",
     "aliases": [],
     "legacyPath": "skills/workspace-handoff/SKILL.md"
   },
   {
     "id": "workflow-feature",
-    "path": "workflows/feature.md",
+    "path": "workflows/01-feature.md",
     "aliases": [],
     "legacyPath": "workflows/feature.md"
   },
   {
     "id": "workflow-bugfix",
-    "path": "workflows/bugfix.md",
+    "path": "workflows/02-bugfix.md",
     "aliases": [],
     "legacyPath": "workflows/bugfix.md"
   },
   {
     "id": "workflow-knowledge",
-    "path": "workflows/knowledge.md",
+    "path": "workflows/03-knowledge.md",
     "aliases": [],
     "legacyPath": "workflows/knowledge.md"
   },
@@ -1537,6 +1523,21 @@
   {
     "id": "plan-40",
     "path": "plan/40-Workspace官方Fumadocs执行计划.md",
+    "aliases": []
+  },
+  {
+    "id": "operations-00",
+    "path": "operations/00-部署运维导航.md",
+    "aliases": []
+  },
+  {
+    "id": "skills-00",
+    "path": "skills/00-Skill导航.md",
+    "aliases": []
+  },
+  {
+    "id": "workflows-00",
+    "path": "workflows/00-工作流导航.md",
     "aliases": []
   }
 ]

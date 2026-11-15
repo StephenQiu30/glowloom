@@ -52,7 +52,7 @@ Next 官方页面本次显示最新文档版本为 16.4.6；仓库 `frontend/pac
 
 ## 5. 当前仓库事实与采用边界
 
-在 `ecdea6c3b24a326299477cb8bcba876debe93351` 基线，`git ls-files -z docs` 列出202个受管理文件：199个Markdown、3个CSV；design 39、plan 37、prd 29、requirement 28、research 60、templates 5、superpowers 2，以及根索引和COS说明。数量是新增本专题前的清点，不代表全部都适合公开发布。`docs/.obsidian/` 有本机配置，已被忽略；本轮未读取其内容。没有 `workspace/` 服务目录。
+在 `ecdea6c3b24a326299477cb8bcba876debe93351` 基线，`git ls-files -z docs` 列出202个受管理文件：199个Markdown、3个CSV；design 39、plan 37、prd 29、requirement 28、research 60、templates 5、工具过程记录 2，以及根索引和COS说明。数量是新增本专题前的清点，不代表全部都适合公开发布。`docs/.obsidian/` 有本机配置，已被忽略；本轮未读取其内容。没有 `workspace/` 服务目录。
 
 原工程规范限定 Markdown/Obsidian、没有网站工程。本次 SRC-WS-04 已改变目标方向：同仓独立 Workspace，静态阅读与在线协作分别设计。本轮仍将设计写入当前 docs；实际移动、包清单、Compose、CI、身份接入和持久化均留待实施。
 

@@ -1,6 +1,6 @@
 # Workspace 知识库与研发工作流服务设计
 
-文档状态：技术选型与双构建边界已确认，本地实施依SRC-WS-08；文档底座按SRC-WS-15采用Fumadocs Core／Headless＋shadcn，TTS服务排除。唯一原始需求：[需求28](../requirement/28-Workspace知识库与研发工作流需求.md)，来源 SRC-WS-01～15。外部依据：[Chat4j与静态知识库调研](../research/2026-11-14-Chat4j与Workspace静态知识库调研.md)。已确认方向、设计建议与待确认事项分别标注；发布仍需单独授权。实施状态只见 [BACKLOG](../../../BACKLOG.md#workspace-20261114)。
+文档状态：技术选型与双构建边界已确认，本地实施依SRC-WS-08；文档底座按SRC-WS-15采用Fumadocs Core／Headless＋shadcn，TTS服务排除。唯一原始需求：[需求28](../requirement/28-Workspace知识库与研发工作流需求.md)，来源 SRC-WS-01～15。外部依据：[Chat4j与静态知识库调研](../research/55-2026-11-14-Chat4j与Workspace静态知识库调研.md)。已确认方向、设计建议与待确认事项分别标注；发布仍需单独授权。实施状态只见 [BACKLOG](../../../BACKLOG.md#workspace-20261114)。
 
 ## 1. 摘要
 
@@ -167,7 +167,7 @@ Skill原文只在 `workspace/skills/` 保存；根 `.agents/skills/<name>` 为�
 
 `projects.json` 以当前Git根的相对路径引用四个工程；个人绝对路径、凭据和本机身份不进入共享配置。命令引用以已有包清单／PROJECT为来源，不另维护一份容易漂移的复制命令库。
 
-SRC-WS-05截图的 `code/`、`harness/`、`src/content/` 职责分别映射为本稿工程引用、规则／流程／模板／执行关联、知识正文。逐项映射见[调研第6节](../research/2026-11-14-Chat4j与Workspace静态知识库调研.md#6-新补充的图文与目录映射)。本项目继续区分 `workspace/content/` 原文与 `workspace/src/content/` 解析代码；不为照搬目录而引入第二份BACKLOG、角色权限体系或源码副本。Workspace局部AGENTS只补本服务约束，不复制根规则。
+SRC-WS-05截图的 `code/`、`harness/`、`src/content/` 职责分别映射为本稿工程引用、规则／流程／模板／执行关联、知识正文。逐项映射见[调研第6节](../research/55-2026-11-14-Chat4j与Workspace静态知识库调研.md#6-新补充的图文与目录映射)。本项目继续区分 `workspace/content/` 原文与 `workspace/src/content/` 解析代码；不为照搬目录而引入第二份BACKLOG、角色权限体系或源码副本。Workspace局部AGENTS只补本服务约束，不复制根规则。
 
 ### 7.4 文档迁移合同
 
@@ -176,7 +176,7 @@ SRC-WS-05截图的 `code/`、`harness/`、`src/content/` 职责分别映射为�
 | `docs/requirement`、`design`、`prd`、`plan` | 对应 `workspace/content/` 子目录 | 文件名、编号、稳定ID、来源关系、正文语义保持 |
 | `docs/research`、`templates`                | 对应 `workspace/content/` 子目录 | 保留有效来源、许可、Markdown、CSV及相对依赖  |
 | 根索引、COS说明及其他受管理文档             | 保留相对结构迁入content          | 不以非主链、日期或目录名为理由静默删除       |
-| `docs/superpowers` 等既有材料               | 原相对位置保留并清点             | 不自动升格为长期规则或新产品范围             |
+| 工具生成的临时过程材料               | 不纳入长期知识库             | 不自动升格为长期规则或新产品范围             |
 | 根及各模块工程文档                          | 保留原位置                       | 以allowlist工程资源链接展示，路径与权限检查  |
 | `docs/.obsidian` 等本机配置                 | 不发布、不提交、不自动移动覆盖   | 保持原配置；迁移时单独提示用户更换vault位置  |
 | 缓存、日志、构建产物和临时截图              | 不作为知识正文迁入               | 实际证据按原Plan引用版本化附件或受控外部产物 |

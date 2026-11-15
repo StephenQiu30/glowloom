@@ -11,7 +11,7 @@ test('reads the existing documents through the official layout without login', a
   ).toHaveAttribute('href', '/read/design-43');
   await page.goto('/read/design-43');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'Workspace 知识库与研发工作流服务设计',
+    '43 Workspace 知识库与研发工作流服务设计',
   );
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(page.getByLabel('本机访问令牌')).toHaveCount(0);
@@ -80,4 +80,49 @@ test('keeps the official docs usable on mobile', async ({ page }) => {
       () => document.documentElement.scrollWidth <= innerWidth + 1,
     ),
   ).toBe(true);
+});
+
+test('organizes numbered knowledge and excludes tool process documents', async ({
+  page,
+}) => {
+  await page.goto('/read/doc-e75d48f9905e');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    '01 腾讯云 COS 对象存储',
+  );
+  await expect(page.locator('#nd-sidebar')).toContainText('部署运维');
+  await expect(page.locator('#nd-sidebar')).not.toContainText('Superpowers');
+  expect((await page.request.get('/docs/COS配置说明.md')).status()).toBe(200);
+  for (const id of ['doc-aced3262dad7', 'doc-4582c43a53c2']) {
+    expect((await page.request.get(`/read/${id}`)).status()).toBe(404);
+    expect((await page.request.get(`/raw/${id}.md`)).status()).toBe(404);
+  }
+  const index = await (await page.request.get('/static.json')).json();
+  expect(
+    index.some((entry: { url: string }) =>
+      /doc-aced3262dad7|doc-4582c43a53c2/.test(entry.url),
+    ),
+  ).toBe(false);
+});
+
+test('shows project branding in navigation and browser icons', async ({
+  page,
+}) => {
+  await page.goto('/read');
+  const logo = page.locator('img[src="/brand/logo.svg"]:visible').first();
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveJSProperty('naturalWidth', 32);
+  await expect(page.locator('link[rel="icon"][href^="/icon.svg"]')).toHaveCount(
+    1,
+  );
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveCount(1);
+  for (const path of [
+    '/brand/logo.svg',
+    '/icon.svg',
+    '/favicon.ico',
+    '/apple-icon.png',
+  ]) {
+    expect((await page.request.get(path)).status()).toBe(200);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(logo).toBeVisible();
 });

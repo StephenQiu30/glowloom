@@ -199,4 +199,4 @@
 
 ## 6. 后续评审边界
 
-静态与在线技术栈、双构建边界及PostgreSQL独立schema路线已由SRC-WS-07确认；团队身份接入、容量／保留期、首个研发Agent适配器、迁移窗口及部署入口仍待明确。当前完整范围与待评审项见[设计43](../design/43-Workspace知识库与研发工作流服务设计.md)，外部事实见[Chat4j调研](../research/2026-11-14-Chat4j与Workspace静态知识库调研.md)，实施状态只见 [BACKLOG](../../../BACKLOG.md#workspace-20261114)。
+静态与在线技术栈、双构建边界及PostgreSQL独立schema路线已由SRC-WS-07确认；团队身份接入、容量／保留期、首个研发Agent适配器、迁移窗口及部署入口仍待明确。当前完整范围与待评审项见[设计43](../design/43-Workspace知识库与研发工作流服务设计.md)，外部事实见[Chat4j调研](../research/55-2026-11-14-Chat4j与Workspace静态知识库调研.md)，实施状态只见 [BACKLOG](../../../BACKLOG.md#workspace-20261114)。

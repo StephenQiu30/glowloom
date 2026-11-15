@@ -14,13 +14,17 @@
 
 保留当前主工作树 content 原位，只加入新增元数据、Skill／流程原文及本轮需求链。旧实现、构建产物、缓存和凭据归档到仓库外；保留活动 Meilisearch 数据绑定。移除仅指向旧 Skill 执行目录的发现链接。更新 README、PROJECT 和 Workspace CI；不修改业务实现或数据库结构。
 
+目录整理时先备份并移除工具过程文档及身份索引，将 COS 迁入 operations，补齐文件序号和导航；按已知文件映射更新相对引用及 CSV 链接。由官方 schema 派生标题编号，保持旧 ID 与锚点。检查编号唯一、无缺失身份与断开引用，并确认删除内容退出真实搜索索引。
+
+品牌标识补齐时复用仓库已确认的 SVG／favicon／Apple 图标，独立放入 Workspace，通过官方导航插槽与 Next.js 原生图标约定接入；核对桌面、手机与深浅主题的真实加载。
+
 ## 4. 主工程门禁
 
 在实际 Workspace 目录重新安装依赖并构建，不复用隔离目录的 Next 产物。执行 pnpm lint、pnpm types:check、pnpm format:check、pnpm build。官方搜索同步连接专用 Meilisearch，浏览器只用 docs 的 search-only key。
 
 ## 5. 启动与接受
 
-核对进程归属后停止旧知识站及旧桥，启动标准 Next.js 1130服务；停止隔离预览。执行 pnpm test:e2e，逐项覆盖 PRD 的 AC-FD-01～07；再对全部旧阅读 ID、Markdown raw、CSV 和显式锚点检查。核对原文哈希、并行工作树及旧实现退出情况。
+核对进程归属后停止旧知识站及旧桥，启动标准 Next.js 1130服务；停止隔离预览。执行 pnpm test:e2e，逐项覆盖 PRD 的 AC-FD-01～09；再对全部旧阅读 ID、Markdown raw、CSV 和显式锚点检查。核对原文哈希、并行工作树及旧实现退出情况。
 
 ## 6. 交付边界
 

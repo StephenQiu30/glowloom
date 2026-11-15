@@ -81,6 +81,8 @@ Go 测试统一放在 `backend/tests/<业务模块>/`，通过模块构造函数
 
 项目知识以标准 Markdown／Git 为唯一正文，保留在同仓独立 `workspace/content/`。Workspace 直接采用官方 `create-fumadocs-app`：Next.js、Fumadocs UI（官方 Base UI 实现与 shadcn 主题）、Fumadocs MDX、TypeScript strict、Tailwind、Geist／Neutral、Node24／pnpm 和 Meilisearch。官方组件提供布局、侧栏、目录、代码块、相邻页与搜索，普通 .md 由官方内容源编译，ID 和旧地址通过 slugs／Next.js 原生配置保留。只有标准 Next.js 构建与1130免登录入口，预渲染阅读内容；不另建静态／在线双应用，不保留自研构建、认证、PG 协作、执行桥、任务运行器或 TTS。Skill／工作流仅作为知识文档，代码与授权归原业务工程。浏览器只用 docs 索引 search-only key，管理密钥用于构建后官方索引同步。规则见[设计45](workspace/content/design/45-Workspace官方Fumadocs设计.md)，运行见[服务说明](workspace/README.md)，当前进度与验证边界见 BACKLOG。
 
+知识文档按分类使用唯一的 `NN-名称` 文件编号，Fumadocs 从文件名同步侧栏、页面与搜索标题；已有编号空缺和稳定 ID 保留。COS 等基础设施配置归 `workspace/content/operations/`，工具安装设置与临时过程文档不纳入知识库。维护规则见[编写规范](workspace/content/templates/05-编写规范.md)。
+
 需求、设计、PRD、Plan、长期调研和模板继续各自保留独立文件与导航。原始需求、确认、文件名及稳定 ID 不因整理而删除或覆盖；引用修复不得改变业务含义。技术合同、产品范围和实施步骤各有唯一维护位置，当前调度只在 BACKLOG。根规范和工程 README 保留原位置，Workspace关联工程事实，不复制成第二套权威。知识正文不添加脚本、测试、依赖或构建产物；本机编辑器配置和第三方版权不随整理覆盖或删除。
 
 提交遵循 AGENTS；只包含本任务，报告检查结果、未决项与工作区状态。未经用户要求不提交、推送或发布，不改外部任务系统状态。

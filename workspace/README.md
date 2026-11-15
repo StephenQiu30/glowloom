@@ -15,9 +15,12 @@ pnpm start
 
 浏览器仅使用限定 `docs` 索引、仅允许 search 的查询密钥。管理密钥只放本机 `.env.local` 或发布环境，不进入 `NEXT_PUBLIC_*`，不提交 Git。
 
+导航和浏览器图标沿用项目正式品牌资产，由 Workspace 独立发布；桌面和手机使用同一官方导航配置。
+
 ## 内容
 
-- 原有 `content` 文件保持原文，Skill／工作流原文归入 `content/skills`、`content/workflows`，作为普通知识文档保留。
+- 内容按原始需求、设计、PRD、计划、调研、部署运维、模板、Skill 和工作流分类；工具过程文档不进入发布源。
+- 文件采用分类内唯一的 `NN-名称` 序号，日期置于序号后；侧栏、页面和搜索标题由文件名派生编号。调整路径时保留原文锚点与稳定 ID，并同步引用。COS 配置归入 `content/operations`。
 - `content/document-ids.json` 仅保存稳定 ID、文件和旧地址；通过 Fumadocs 的 slugs 配置沿用 `/read/<id>`。历史地址使用 Next.js 原生重定向。
 - 原始 Markdown 通过官方 Markdown／LLM 路由提供，CSV 使用 public 只读文件链接下载。`/llms.txt` 和 `/llms-full.txt` 使用模板自带实现。
 - 历史文档中的自研协作与双产物方案仅作追溯；当前实现不包含旧登录、PG、提案、执行桥、任务运行器、自研文档引擎或 TTS。

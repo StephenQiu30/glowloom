@@ -11,10 +11,15 @@ const docs = defineDocs({
     files: ['**/*.md'],
     schema: ({ source, path }) =>
       pageSchema.extend({
-        title: pageSchema.shape.title.default(
-          source.match(/^#\s+(.+)$/m)?.[1] ??
-            path.split('/').at(-1)!.replace(/\.md$/, ''),
-        ),
+        title: pageSchema.shape.title
+          .default(
+            source.match(/^#\s+(.+)$/m)?.[1] ??
+              path.split('/').at(-1)!.replace(/\.md$/, ''),
+          )
+          .transform((title) => {
+            const number = path.match(/(?:^|\/)(\d{2})-/)?.[1];
+            return number ? `${number} ${title}` : title;
+          }),
       }),
     postprocess: {
       includeProcessedMarkdown: true,

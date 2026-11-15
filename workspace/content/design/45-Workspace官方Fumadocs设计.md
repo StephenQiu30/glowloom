@@ -16,9 +16,13 @@
 
 content 是唯一知识正文目录，现有 Markdown／CSV 不重写。旧 Skill／工作流 Markdown 原文移入 content/skills 和 content/workflows。缺少 frontmatter 的标题由 Fumadocs collection schema 从现有 H1 取值。document-ids.json 仅登记身份及旧地址；官方 loader slugs 沿用 `/read/<id>`。历史入口由 Next.js 原生重定向承接，CSV 通过 public 中只读符号链接下载；Markdown 使用模板自带 LLM 路由。根规范和业务代码仍由原工程维护，旧引用指向其源文件。
 
+文件按分类使用唯一的 `NN-名称` 序号，保留历史空缺；日期放在序号之后。编号只维护在文件名，由官方 collection schema 派生到侧栏、页面标题、搜索和元数据；原文 H1 与锚点保留。目录调整时同步相对引用、稳定身份路径、原地址和 CSV 附件链接。部署配置归 operations；工具生成的安装设置、临时计划和规格不进入发布源、页面树或搜索。
+
 ## 5. 知识库界面
 
 使用官方 DocsLayout／DocsPage、导航树、TOC、相邻页、代码块、主题、移动侧栏及搜索弹窗。原文中的 H1 映射官方 DocsTitle，避免重复标题。图表只采用官方 Mermaid recipe；普通 .md 内容不作为可执行 MDX。GFM 与显式 HTML 锚点交由官方内容编译扩展处理。
+
+导航通过官方 nav.title 插槽组合现有品牌 SVG 与站点名，使用 Next Image 固定尺寸；Workspace 独立发布品牌资源。浏览器与 Apple 图标使用 Next.js 原生 icon.svg、favicon.ico 和 apple-icon.png 文件约定。标识与业务工程的正式品牌资产保持一致，验证深浅主题及桌面／手机显示。
 
 ## 6. 构建与部署
 
