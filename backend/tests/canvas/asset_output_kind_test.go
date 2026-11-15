@@ -119,7 +119,7 @@ func TestAssetPublicTaskPreservesUnavailableCandidateFactsAndValidSiblings(t *te
 	objects := &downloadFixtureObjects{}
 	downloads := mediaapp.NewAssetDownloads(pgmedia.NewScopedStore(db, mediawire.NewMediaScopeAccess), objects)
 	for _, id := range []uuid.UUID{assets[1], assets[2]} {
-		if file, err := downloads.Open(t.Context(), actor, project, id); file != nil || err == nil {
+		if file, err := downloads.Open(t.Context(), canvasMediaActor(actor), project, id); file != nil || err == nil {
 			t.Fatal("candidate metadata granted unavailable media bytes", file, err)
 		}
 	}

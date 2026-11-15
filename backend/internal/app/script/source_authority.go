@@ -16,6 +16,15 @@ import (
 
 type sourceControl struct{ tx *gorm.DB }
 
+type sourcePublication struct{ store *agentpostgres.Store }
+
+func (p sourcePublication) AuthorizeSourcePublication(ctx context.Context, actor script.Actor, project, key uuid.UUID, hash string) error {
+	if p.store == nil {
+		return script.ErrUnavailable
+	}
+	return OwningError(p.store.AuthorizeSourcePublication(ctx, IdentityActor(actor), project, key, hash))
+}
+
 func (s sourceControl) AuthorizeWorker(ctx context.Context, a identity.Principal, pid uuid.UUID) error {
 	_, err := scopewire.ProvideWorkerProjectContentAccess(s.tx).Authorize(ctx, a, pid, true)
 	return err
@@ -28,5 +37,5 @@ func (s sourceControl) AuthorizeRequest(ctx context.Context, a identity.Principa
 // ProvideSourcePublicationAuthorization joins Agent-origin source plans to
 // durable current Go authority. Human-origin plans retain normal script rules.
 func ProvideSourcePublicationAuthorization(tx *gorm.DB) script.PublicationAuthorization {
-	return agentpostgres.NewStore(tx, func(inner *gorm.DB) agent.ControlAccess { return sourceControl{inner} }, time.Now)
+	return sourcePublication{store: agentpostgres.NewStore(tx, func(inner *gorm.DB) agent.ControlAccess { return sourceControl{inner} }, time.Now)}
 }

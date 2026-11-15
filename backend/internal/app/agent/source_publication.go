@@ -47,7 +47,9 @@ func (in ScriptSourcePublishInput) command(s domain.Scope, key uuid.UUID) script
 	return script.SourceCommand{ProjectID: s.ProjectID, Key: key, RequestID: key, Action: scriptdomain.SourceAction(in.Action), ExpectedRevision: in.ExpectedRevision, BaseVersionID: in.BaseVersionID, LineageID: in.LineageID, RightsConfirmed: in.RightsConfirmed, Sources: sources, Order: in.Order}
 }
 func sourceStore(db *gorm.DB) *scriptpostgres.SourceStore {
-	return scriptpostgres.NewSourceStore(db, func(tx *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations).WithPublicationAuthorization(scriptwire.ProvideSourcePublicationAuthorization)
+	return scriptpostgres.NewSourceStore(db, func(tx *gorm.DB) script.ProjectAccess {
+		return scriptwire.ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(tx))
+	}).WithObjectLocations(scriptwire.ProvideScriptObjectLocations).WithPublicationAuthorization(scriptwire.ProvideSourcePublicationAuthorization)
 }
 
 // WithSourceObjects installs the actual synchronous located byte owner. The
@@ -90,11 +92,11 @@ func (b *Boundary) executeSourcePublication(ctx context.Context, in domain.CallI
 		store := sourceStore(b.db)
 		command := requested.command(s, key)
 		owner := script.NewSourceServiceSharingIO(store, b.sourceObjects, time.Now, b.sourceOwner)
-		receipt, err := owner.Write(ctx, app.Principal(s), command)
+		receipt, err := owner.Write(ctx, scriptwire.Actor(app.Principal(s)), command)
 		if err != nil {
 			hash, hashErr := script.SourceCommandHash(command)
 			if hashErr == nil {
-				prior, readErr := store.FindCommand(ctx, app.Principal(s), s.ProjectID, key, hash)
+				prior, readErr := store.FindCommand(ctx, scriptwire.Actor(app.Principal(s)), s.ProjectID, key, hash)
 				if readErr == nil && prior == nil {
 					return domain.CallResult{Status: "failed", Result: json.RawMessage(`{"code":"script_source_not_published"}`)}, nil
 				}
@@ -115,7 +117,7 @@ func (b *Boundary) executeSourcePublication(ctx context.Context, in domain.CallI
 }
 func (b *Boundary) recoverSourceCall(ctx context.Context, id uuid.UUID) (domain.CallResult, error) {
 	receipt, err := b.Store.RecoverSourceCall(ctx, id, func(tx *gorm.DB, s domain.Scope, key uuid.UUID, hash string) (domain.CallResult, error) {
-		prior, err := sourceStore(tx).FindCommand(ctx, app.Principal(s), s.ProjectID, key, hash)
+		prior, err := sourceStore(tx).FindCommand(ctx, scriptwire.Actor(app.Principal(s)), s.ProjectID, key, hash)
 		if err != nil {
 			return domain.CallResult{}, businessError(err)
 		}
@@ -123,7 +125,7 @@ func (b *Boundary) recoverSourceCall(ctx context.Context, id uuid.UUID) (domain.
 			return domain.CallResult{}, domain.ErrUnavailable
 		}
 		if prior.Receipt == nil {
-			cancelled, err := sourceStore(tx).CancelledPublication(ctx, app.Principal(s), s.ProjectID, key, hash)
+			cancelled, err := sourceStore(tx).CancelledPublication(ctx, scriptwire.Actor(app.Principal(s)), s.ProjectID, key, hash)
 			if err != nil {
 				return domain.CallResult{}, businessError(err)
 			}

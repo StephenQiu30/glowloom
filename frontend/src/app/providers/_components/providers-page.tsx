@@ -46,7 +46,6 @@ import {
 } from "@/components/catalog/mutation";
 import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
-import { ConnectionReleaseReview } from "./connection-release-review";
 import { PresetConnect, usePendingProviderConnection } from "./preset-connect";
 import {
   useConnectionColumns,
@@ -79,9 +78,6 @@ type Confirmation = { preset: API.Preset; action: PresetStateAction };
 type ProvidersPageProps = {
   initialConnection?: string;
   search?: string;
-  initialModel?: string;
-  initialRelease?: string;
-  initialMode?: string;
   onPresetViewChange?: (showingPresets: boolean) => void;
 };
 
@@ -102,9 +98,6 @@ export function ProvidersPage(props: ProvidersPageProps) {
 function ProviderAdministration({
   initialConnection = "",
   search = "",
-  initialModel,
-  initialRelease,
-  initialMode,
   onPresetViewChange,
 }: ProvidersPageProps) {
   const onboardingPending = usePendingProviderConnection();
@@ -159,15 +152,9 @@ function ProviderAdministration({
     });
   const [presets, setPresets] = useState<API.Preset[]>([]);
   const [selected, setSelected] = useState(initialConnection);
-  const [context, setContext] = useState({
-    model: initialModel,
-    release: initialRelease,
-    mode: initialMode,
-  });
   const [renamingConnection, setRenamingConnection] = useState(false);
   const [detailOpen, setDetailOpen] = useState(Boolean(initialConnection));
   const detailContent = useRef<HTMLDivElement>(null);
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [modelTarget, setModelTarget] = useState<{
     row: API.ProviderListItem;
     generation: number;
@@ -190,8 +177,6 @@ function ProviderAdministration({
       modelTrigger.current = null;
     }
   }, [modelTarget, modelTitleId]);
-  const reviewTitleId = useId();
-  const reviewTrigger = useRef<HTMLButtonElement>(null);
   const [connect, setConnect] = useState(false);
   const [connectPreset, setConnectPreset] = useState<string>();
   const connectVisible = useRef(false);
@@ -291,7 +276,6 @@ function ProviderAdministration({
   function openConnection(id: string, trigger: HTMLElement, rename = false) {
     setRenamingConnection(rename);
     overlayTrigger.current = trigger;
-    setContext({ model: undefined, release: undefined, mode: undefined });
     const url = new URL(window.location.href);
     for (const name of ["view", "model", "release", "mode"])
       url.searchParams.delete(name);
@@ -300,25 +284,9 @@ function ProviderAdministration({
     setSelected(id);
     setDetailOpen(true);
   }
-  function openReview(trigger: HTMLButtonElement) {
-    reviewTrigger.current = trigger;
-    setReviewOpen(true);
-  }
-  useEffect(() => {
-    if (reviewOpen) {
-      document.getElementById(reviewTitleId)?.focus();
-    } else if (reviewTrigger.current) {
-      reviewTrigger.current.focus();
-      reviewTrigger.current = null;
-    }
-  }, [reviewOpen, reviewTitleId]);
   function closeDetail(open: boolean) {
     if (!open && modelTarget) {
       closeModel();
-      return;
-    }
-    if (!open && reviewOpen) {
-      setReviewOpen(false);
       return;
     }
     setDetailOpen(open);
@@ -343,7 +311,6 @@ function ProviderAdministration({
     setConnect(false);
     setSelected(id);
     setRenamingConnection(false);
-    setContext({ model: undefined, release: undefined, mode: undefined });
     const url = new URL(window.location.href);
     for (const name of ["view", "model", "release", "mode"])
       url.searchParams.delete(name);
@@ -651,15 +618,7 @@ function ProviderAdministration({
       <Dialog open={detailOpen} onOpenChange={closeDetail}>
         <DialogContent
           ref={detailContent}
-          {...(modelTarget
-            ? { "aria-labelledby": modelTitleId }
-            : reviewOpen
-              ? { "aria-labelledby": reviewTitleId }
-              : {})}
-          aria-describedby={
-            reviewOpen ? `${reviewTitleId}-description` : undefined
-          }
-          showCloseButton={!reviewOpen}
+          {...(modelTarget ? { "aria-labelledby": modelTitleId } : {})}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             restoreFocus();
@@ -673,29 +632,20 @@ function ProviderAdministration({
               title.focus();
             }
           }}
-          className={
-            reviewOpen
-              ? "flex flex-col overflow-hidden border border-border p-4 sm:max-w-[560px] sm:p-6"
-              : "flex flex-col overflow-hidden sm:max-w-[560px] max-md:[&_[data-slot=dialog-close]]:size-11"
-          }
+          className="flex flex-col overflow-hidden sm:max-w-[560px] max-md:[&_[data-slot=dialog-close]]:size-11"
         >
           {selected ? (
             <div
-              hidden={reviewOpen || Boolean(modelTarget)}
-              className={reviewOpen || modelTarget ? "hidden" : "contents"}
+              hidden={Boolean(modelTarget)}
+              className={modelTarget ? "hidden" : "contents"}
             >
               <ConnectionDetail
                 key={`${selected}:${renamingConnection}`}
                 id={selected}
                 Title={DialogTitle}
-                onReview={openReview}
                 onAddModel={openModel}
                 initialRename={renamingConnection}
-                initialModel={context.model}
-                initialRelease={context.release}
-                initialMode={context.mode}
                 revision={refresh}
-                presets={presets}
                 onSaved={() => setRefresh((v) => v + 1)}
               />
             </div>
@@ -719,14 +669,6 @@ function ProviderAdministration({
                 }}
               />
             </>
-          ) : null}
-          {selected && reviewOpen ? (
-            <ConnectionReleaseReview
-              id={selected}
-              titleId={reviewTitleId}
-              onClose={() => setReviewOpen(false)}
-              onSaved={() => setRefresh((value) => value + 1)}
-            />
           ) : null}
         </DialogContent>
       </Dialog>

@@ -1008,32 +1008,36 @@ html:has(.canvas-controls-layout) {
     inset: 0;
     max-height: none;
   }
+  /* Keep the controls together when the node has little room on either side. */
+  .canvas-node-composer[data-slot="popover-content"]:has(
+      .canvas-formal-generator
+    ) {
+    max-height: calc(100dvh - 7.5rem);
+  }
+  .canvas-node-composer[data-side="bottom"]:has(.canvas-formal-generator) {
+    translate: 0
+      min(0px, calc(var(--radix-popover-content-available-height) - 100%));
+  }
+  .canvas-node-composer[data-side="top"]:has(.canvas-formal-generator) {
+    translate: 0
+      max(0px, calc(100% - var(--radix-popover-content-available-height)));
+  }
+  :is(.canvas-node-composer, .canvas-node-sheet)[data-slot]:has(
+      .canvas-formal-generator
+    ) {
+    overflow: visible;
+  }
+  .canvas-formal-generator,
+  .canvas-formal-generator > :has([data-presentation="canvas"]),
+  .canvas-formal-generator [data-presentation="canvas"],
+  .canvas-formal-generator [data-variant="composer"] {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
   .canvas-formal-generator
-    [data-presentation="canvas"]:not([data-expanded])
-    [data-slot="input-group-control"] {
-    max-height: clamp(4rem, 16dvh, 8rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-  .canvas-node-sheet
-    .canvas-formal-generator
-    [data-slot="input-group-control"] {
-    max-height: clamp(4rem, 21dvh, 10rem);
-  }
-  @media (max-height: 420px) and (min-width: 768px) {
-    [data-radix-popper-content-wrapper]:has(
-        > .canvas-node-composer .canvas-formal-generator
-      ):not(:has([data-expanded])) {
-      inset: auto 1rem 3.5rem auto !important;
-      transform: none !important;
-      min-width: 0 !important;
-    }
-    .canvas-node-composer[data-slot="popover-content"]:has(
-        .canvas-formal-generator
-      ):not(:has([data-expanded])) {
-      width: min(var(--spacing-canvas-composer), calc(100dvw - 2rem));
-      max-height: calc(100dvh - 7.5rem);
-    }
+    :is([data-composer-toolbar], [data-slot="input-group-addon"]) {
+    flex-shrink: 0;
   }
   [data-slot="sheet-overlay"]:has(+ .canvas-node-sheet) {
     backdrop-filter: none;
@@ -1813,25 +1817,19 @@ html:has(.canvas-controls-layout) {
 }
 
 /* A node's first paint reserves its ready layout, before async editor modules load. */
-.canvas-formal-generator {
+.canvas-formal-generator .canvas-generator-loading {
   --canvas-editor-height: 202px;
-  min-height: min(
+  height: min(
     var(--canvas-editor-height),
     var(--radix-popover-content-available-height, calc(100dvh - 120px))
   );
 }
 .canvas-formal-generator:is(
-  [data-capability="image"],
-  [data-capability="video"]
-) {
+    [data-capability="image"],
+    [data-capability="video"]
+  )
+  .canvas-generator-loading {
   --canvas-editor-height: 270px;
-}
-.canvas-formal-generator .canvas-generator-loading {
-  height: min(
-    var(--canvas-editor-height),
-    var(--radix-popover-content-available-height, calc(100dvh - 120px))
-  );
-  min-height: 0;
 }
 .canvas-formal-generator [aria-label="生成模型"],
 .canvas-formal-generator [aria-label="重试模型目录"] {

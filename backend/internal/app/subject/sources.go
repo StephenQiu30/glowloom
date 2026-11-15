@@ -142,7 +142,7 @@ func (s sourceAccess) Reference(ctx context.Context, actor identity.Principal, s
 		actor.ScopeID, actor.OrgID = resolved.ID, resolved.PhysicalScopeID
 	}
 	library := pgmedia.NewScopedLibraryStore(s.tx, sourceProjectFactory, time.Now, sourceScopeFactory)
-	file, err := s.objects.query(s.tx, library).Reference(ctx, actor, scope, selection.AssetID)
+	file, err := s.objects.query(s.tx, library).Reference(ctx, sourceMediaActor(actor), scope, selection.AssetID)
 	if err != nil {
 		if errors.Is(err, media.ErrNotFound) {
 			return subjectdomain.MediaFact{}, errors.Join(subject.ErrNotFound, err)
@@ -168,11 +168,11 @@ func (s sourceAccess) Reference(ctx context.Context, actor identity.Principal, s
 type sourceAuthority struct{ tx *gorm.DB }
 
 func sourceScopeFactory(tx *gorm.DB) media.ScopeAccess { return sourceAuthority{tx: tx} }
-func (s sourceAuthority) CheckActor(ctx context.Context, a identity.Principal) error {
-	return pgidentity.NewStore(s.tx).CheckSession(ctx, a, time.Now)
+func (s sourceAuthority) CheckActor(ctx context.Context, a media.Actor) error {
+	return pgidentity.NewStore(s.tx).CheckSession(ctx, sourceIdentityActor(a), time.Now)
 }
-func (s sourceAuthority) AuthorizePersonal(ctx context.Context, a identity.Principal, write bool) error {
-	scope, err := scopewire.ProvideRequestScopeAccess(s.tx).Resolve(ctx, a, a.ScopeID, write)
+func (s sourceAuthority) AuthorizePersonal(ctx context.Context, a media.Actor, write bool) error {
+	scope, err := scopewire.ProvideRequestScopeAccess(s.tx).Resolve(ctx, sourceIdentityActor(a), a.ScopeID, write)
 	if err != nil {
 		return err
 	}
@@ -181,23 +181,23 @@ func (s sourceAuthority) AuthorizePersonal(ctx context.Context, a identity.Princ
 	}
 	return nil
 }
-func (s sourceAuthority) AuthorizeProject(ctx context.Context, a identity.Principal, id uuid.UUID, write bool) error {
-	_, err := scopewire.ProvideProjectContentAccess(s.tx).Authorize(ctx, a, id, write)
+func (s sourceAuthority) AuthorizeProject(ctx context.Context, a media.Actor, id uuid.UUID, write bool) error {
+	_, err := scopewire.ProvideProjectContentAccess(s.tx).Authorize(ctx, sourceIdentityActor(a), id, write)
 	return err
 }
-func (s sourceAuthority) AuthorizeCopyTarget(ctx context.Context, a identity.Principal, id uuid.UUID) error {
+func (s sourceAuthority) AuthorizeCopyTarget(ctx context.Context, a media.Actor, id uuid.UUID) error {
 	return s.AuthorizeProject(ctx, a, id, true)
 }
 
 type sourceProjectAccess struct{ tx *gorm.DB }
 
 func sourceProjectFactory(tx *gorm.DB) media.LibraryProjectAccess { return sourceProjectAccess{tx: tx} }
-func (s sourceProjectAccess) Authorize(ctx context.Context, a identity.Principal, id uuid.UUID, write bool) (media.LibraryProjectFacts, error) {
-	f, err := scopewire.ProvideProjectContentAccess(s.tx).Authorize(ctx, a, id, write)
+func (s sourceProjectAccess) Authorize(ctx context.Context, a media.Actor, id uuid.UUID, write bool) (media.LibraryProjectFacts, error) {
+	f, err := scopewire.ProvideProjectContentAccess(s.tx).Authorize(ctx, sourceIdentityActor(a), id, write)
 	return media.LibraryProjectFacts{ProjectID: f.ProjectID, OrgID: f.OrgID, Revision: f.Revision}, err
 }
-func (s sourceProjectAccess) TouchContent(ctx context.Context, a identity.Principal, id uuid.UUID, rev int64) (int64, error) {
-	return scopewire.ProvideProjectContentAccess(s.tx).TouchContent(ctx, a, id, rev)
+func (s sourceProjectAccess) TouchContent(ctx context.Context, a media.Actor, id uuid.UUID, rev int64) (int64, error) {
+	return scopewire.ProvideProjectContentAccess(s.tx).TouchContent(ctx, sourceIdentityActor(a), id, rev)
 }
 
 func mediaFact(f subjectdomain.MediaFact) media.SubjectSourceFact {

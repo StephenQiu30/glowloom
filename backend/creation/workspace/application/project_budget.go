@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
 	billing "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -43,7 +45,7 @@ func (q *ProjectBudgetQuery) Read(ctx context.Context, actor identity.Principal,
 		return ProjectBudgetView{}, err
 	}
 	if budget.ProjectID != id {
-		return ProjectBudgetView{}, ErrProjectNotFound
+		return ProjectBudgetView{}, workspacesource.ErrProjectNotFound
 	}
 	available, err := budget.AvailableMicros()
 	if err != nil {

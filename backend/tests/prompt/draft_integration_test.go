@@ -14,13 +14,12 @@ import (
 	promptpg "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type draftAccess struct{ tx *gorm.DB }
 
-func (a draftAccess) AuthorizeDraft(ctx context.Context, actor identityapp.Principal, p uuid.UUID, write bool) error {
-	_, err := preferenceProjectAccess(a.tx).Authorize(ctx, actor, p, write)
+func (a draftAccess) AuthorizeDraft(ctx context.Context, actor promptapp.Actor, p uuid.UUID, write bool) error {
+	_, err := preferenceProjectAccess(a.tx).Authorize(ctx, testLegacyPromptActor(actor), p, write)
 	return err
 }
 func draftStore(db *gorm.DB) *promptpg.DraftStore {
@@ -30,44 +29,44 @@ func TestEditorDraftPersistenceCASAndReplay(t *testing.T) {
 	f := newPreferenceFixture(t)
 	store := draftStore(f.db)
 	input := promptapp.DraftWrite{ProjectID: f.project, Key: uuid.New(), Draft: editorDraft(t)}
-	created, err := store.SaveDraft(t.Context(), f.actor, input)
+	created, err := store.SaveDraft(t.Context(), testPromptActor(f.actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	replay, err := store.SaveDraft(t.Context(), f.actor, input)
+	replay, err := store.SaveDraft(t.Context(), testPromptActor(f.actor), input)
 	if err != nil || created.DraftID != replay.DraftID {
 		t.Fatal("create replay", err)
 	}
 	in := promptapp.DraftWrite{ProjectID: f.project, DraftID: created.DraftID, ExpectedRevision: 1, Key: uuid.New(), Draft: editorDraft(t)}
 	in.Draft.LabelState.HighWater["image"] = 1
 	in.Draft.LabelState.Allocations["removed"] = domain.LabelAllocation{LabelKind: "image", Ordinal: 1}
-	saved, err := store.SaveDraft(t.Context(), f.actor, in)
+	saved, err := store.SaveDraft(t.Context(), testPromptActor(f.actor), in)
 	if err != nil || saved.Revision != 2 || saved.DraftHash == created.DraftHash || saved.InputHash != created.InputHash {
 		t.Fatal("metadata write", err, saved)
 	}
-	replay, err = store.SaveDraft(t.Context(), f.actor, in)
+	replay, err = store.SaveDraft(t.Context(), testPromptActor(f.actor), in)
 	if err != nil || replay.Revision != 2 {
 		t.Fatal("replay before CAS", err)
 	}
 	in.Draft.Document.Content[0].Content[0].Text = "another body"
-	if _, err = store.SaveDraft(t.Context(), f.actor, in); !errors.Is(err, promptapp.ErrIdempotencyConflict) {
+	if _, err = store.SaveDraft(t.Context(), testPromptActor(f.actor), in); !errors.Is(err, promptapp.ErrIdempotencyConflict) {
 		t.Fatal("changed body", err)
 	}
 	in.Key = uuid.New()
-	if _, err = store.SaveDraft(t.Context(), f.actor, in); !errors.Is(err, promptapp.ErrRevisionConflict) {
+	if _, err = store.SaveDraft(t.Context(), testPromptActor(f.actor), in); !errors.Is(err, promptapp.ErrRevisionConflict) {
 		t.Fatal("CAS", err)
 	}
 	in.ExpectedRevision = 2
 	in.Draft = editorDraft(t)
-	if _, err = store.SaveDraft(t.Context(), f.actor, in); !errors.Is(err, domain.ErrLabelConflict) {
+	if _, err = store.SaveDraft(t.Context(), testPromptActor(f.actor), in); !errors.Is(err, domain.ErrLabelConflict) {
 		t.Fatal("tombstones reclaimed", err)
 	}
 	actor := f.actor
 	actor.ID = uuid.New()
-	if _, err = store.ReadDraft(t.Context(), actor, f.project, created.DraftID); err == nil {
+	if _, err = store.ReadDraft(t.Context(), testPromptActor(actor), f.project, created.DraftID); err == nil {
 		t.Fatal("other actor read private draft")
 	}
-	list, err := store.ListDrafts(t.Context(), f.actor, f.project, "")
+	list, err := store.ListDrafts(t.Context(), testPromptActor(f.actor), f.project, "")
 	if err != nil || len(list.Items) != 1 {
 		t.Fatal("cross-device discovery", err)
 	}
@@ -75,7 +74,7 @@ func TestEditorDraftPersistenceCASAndReplay(t *testing.T) {
 func TestEditorDraftConcurrentWriters(t *testing.T) {
 	f := newPreferenceFixture(t)
 	store := draftStore(f.db)
-	created, err := store.SaveDraft(t.Context(), f.actor, promptapp.DraftWrite{ProjectID: f.project, Key: uuid.New(), Draft: editorDraft(t)})
+	created, err := store.SaveDraft(t.Context(), testPromptActor(f.actor), promptapp.DraftWrite{ProjectID: f.project, Key: uuid.New(), Draft: editorDraft(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +84,7 @@ func TestEditorDraftConcurrentWriters(t *testing.T) {
 		d := editorDraft(t)
 		d.Document.Content[0].Content[0].Text = word
 		wg.Go(func() {
-			_, err := store.SaveDraft(t.Context(), f.actor, promptapp.DraftWrite{ProjectID: f.project, DraftID: created.DraftID, ExpectedRevision: 1, Key: uuid.New(), Draft: d})
+			_, err := store.SaveDraft(t.Context(), testPromptActor(f.actor), promptapp.DraftWrite{ProjectID: f.project, DraftID: created.DraftID, ExpectedRevision: 1, Key: uuid.New(), Draft: d})
 			results <- err
 		})
 	}
@@ -135,23 +134,23 @@ func TestEditorUploadRecoveryIsPrivateAndReauthorized(t *testing.T) {
 	if err := f.db.Exec(`INSERT INTO media.upload_request(project_id,principal_id,request_key,sha256,file_name,byte_size,asset_id,response) VALUES(?,?,?,repeat('a',64),'recovery.png',50,?,'{}')`, f.project, f.actor.ID, attempt, asset).Error; err != nil {
 		t.Fatal(err)
 	}
-	out, err := store.ResolveUpload(t.Context(), f.actor, f.project, attempt)
+	out, err := store.ResolveUpload(t.Context(), testPromptActor(f.actor), f.project, attempt)
 	if err != nil || !out.Found || out.Source == nil || out.Source.SourceID != asset.String() {
 		t.Fatal("recover original attempt", out, err)
 	}
-	out, err = store.ResolveUpload(t.Context(), f.actor, f.project, uuid.New())
+	out, err = store.ResolveUpload(t.Context(), testPromptActor(f.actor), f.project, uuid.New())
 	if err != nil || out.Found {
 		t.Fatal("unknown attempt must not guess", out, err)
 	}
 	other := f.actor
 	other.ID = uuid.New()
-	if out, err = store.ResolveUpload(t.Context(), other, f.project, attempt); err == nil && out.Found {
+	if out, err = store.ResolveUpload(t.Context(), testPromptActor(other), f.project, attempt); err == nil && out.Found {
 		t.Fatal("exposed another actor's upload")
 	}
 	if err = f.db.Exec(`UPDATE media.media_asset SET is_delete=true WHERE id=?`, asset).Error; err != nil {
 		t.Fatal(err)
 	}
-	out, err = store.ResolveUpload(t.Context(), f.actor, f.project, attempt)
+	out, err = store.ResolveUpload(t.Context(), testPromptActor(f.actor), f.project, attempt)
 	if err != nil || out.Found {
 		t.Fatal("deleted asset restored", out, err)
 	}

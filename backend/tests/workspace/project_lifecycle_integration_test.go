@@ -9,9 +9,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -60,14 +64,14 @@ func TestProjectLifecyclePersistsReplayRecoveryAndScope(t *testing.T) {
 	}
 	changed := archive
 	changed.Action = "unarchive"
-	if _, err := service.Change(ctx, actor, changed); !errors.Is(err, workspaceapp.ErrIdempotencyConflict) {
+	if _, err := service.Change(ctx, actor, changed); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatalf("same key different action %v", err)
 	}
 	deleted, err := service.Change(ctx, actor, projectChange(id, 3, "delete"))
 	if err != nil || !deleted.Project.IsDelete || deleted.Project.PurgeAfter == nil || deleted.Project.Status != "archived" {
 		t.Fatalf("delete %+v err=%v", deleted, err)
 	}
-	if _, err := service.Get(ctx, actor, id); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := service.Get(ctx, actor, id); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("deleted read %v", err)
 	}
 	restored, err := service.Change(ctx, actor, projectChange(id, 4, "restore"))
@@ -84,7 +88,7 @@ func TestProjectLifecyclePersistsReplayRecoveryAndScope(t *testing.T) {
 		t.Fatalf("no-op %+v err=%v", p, err)
 	}
 	other := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
-	if _, err := service.Get(ctx, other, id); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := service.Get(ctx, other, id); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("crossorg %v", err)
 	}
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
@@ -101,7 +105,7 @@ func TestProjectLifecycleRejectsMissingWorkEvidenceAndStaleCAS(t *testing.T) {
 	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor, "16:9", "realistic", nil))
 	input := projectChange(id, 1, "delete")
 	service := workspaceapp.NewProjectLifecycle(workspaceStore(db), time.Now)
-	if _, err := service.Change(ctx, actor, input); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := service.Change(ctx, actor, input); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatalf("missing guard %v", err)
 	}
 	service = workspaceapp.NewProjectLifecycle(lifecycleStore(db, fixedProjectWork{blocked: true}), time.Now)

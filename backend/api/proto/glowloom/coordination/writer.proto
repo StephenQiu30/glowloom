@@ -92,6 +92,9 @@ enum ErrorReason {
   ERROR_REASON_NOT_FOUND = 5;
   ERROR_REASON_COMMITTED = 6;
   ERROR_REASON_FROZEN = 7;
+  // Identity credential policy failures retain their public HTTP distinctions.
+  ERROR_REASON_CSRF_INVALID = 8;
+  ERROR_REASON_ACCESS_EXPIRED = 9;
 }
 
 // Failure carries closed reasons only, never SQL, tokens or caller content.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
@@ -23,13 +24,13 @@ type canvasSubjectSources struct {
 	calls      int
 }
 
-func (s *canvasSubjectSources) ResolveSubject(_ context.Context, a identity.Principal, p uuid.UUID, _, _ string) (promptdomain.ReferenceSource, bool, error) {
+func (s *canvasSubjectSources) ResolveSubject(_ context.Context, a promptapp.Actor, p uuid.UUID, _, _ string) (promptdomain.ReferenceSource, bool, error) {
 	if a.ID != s.actor.ID || a.ScopeID != s.actor.ScopeID || p != s.project {
 		return promptdomain.ReferenceSource{}, false, promptdomain.ErrReferenceUnavailable
 	}
 	return s.source, s.found, s.err
 }
-func (s *canvasSubjectSources) ValidateBinding(context.Context, identity.Principal, uuid.UUID, promptdomain.SourceMedia, bool) error {
+func (s *canvasSubjectSources) ValidateBinding(context.Context, promptapp.Actor, uuid.UUID, promptdomain.SourceMedia, bool) error {
 	s.calls++
 	return s.bindingErr
 }

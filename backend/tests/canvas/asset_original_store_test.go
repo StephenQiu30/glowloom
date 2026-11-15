@@ -40,7 +40,7 @@ func TestCanvasAssetOriginalRechecksRealOwnerSessionAfterObjectOpen(t *testing.T
 	asset := seedCanvasMedia(t, db, project, "image")
 	objects := &downloadFixtureObjects{}
 	downloads := mediaapp.NewAssetDownloads(pgmedia.NewScopedStore(db, mediawire.NewMediaScopeAccess), objects)
-	file, err := downloads.Open(t.Context(), actor, project, asset)
+	file, err := downloads.Open(t.Context(), canvasMediaActor(actor), project, asset)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestCanvasAssetOriginalRechecksRealOwnerSessionAfterObjectOpen(t *testing.T
 		t.Fatal("real authorized owner original missing", err)
 	}
 	other, _ := seedCanvasActor(t, db)
-	if _, err := downloads.Open(t.Context(), other, project, asset); err == nil || objects.calls != 1 {
+	if _, err := downloads.Open(t.Context(), canvasMediaActor(other), project, asset); err == nil || objects.calls != 1 {
 		t.Fatal("cross-owner download opened physical object", err)
 	}
 	objects.closed = false
@@ -59,7 +59,7 @@ func TestCanvasAssetOriginalRechecksRealOwnerSessionAfterObjectOpen(t *testing.T
 			t.Fatal(err)
 		}
 	}
-	file, err = downloads.Open(t.Context(), actor, project, asset)
+	file, err = downloads.Open(t.Context(), canvasMediaActor(actor), project, asset)
 	if file != nil || !errors.Is(err, identity.ErrSessionInvalid) || !objects.closed {
 		t.Fatal("session revocation after open streamed bytes or leaked reader", file, err)
 	}
@@ -69,7 +69,7 @@ func TestCanvasAssetOriginalUnconfiguredTransportFailsClosed(t *testing.T) {
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	asset := seedCanvasMedia(t, db, project, "image")
-	if file, err := mediawire.ProvideAssetDownloads(db, nil).Open(t.Context(), actor, project, asset); file != nil || !errors.Is(err, mediaapp.ErrUnavailable) {
+	if file, err := mediawire.ProvideAssetDownloads(db, nil).Open(t.Context(), canvasMediaActor(actor), project, asset); file != nil || !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("missing transport admitted stream", file, err)
 	}
 }

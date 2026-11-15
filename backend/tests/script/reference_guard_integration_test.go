@@ -35,7 +35,7 @@ func scriptMediaReference(ctx context.Context, db *gorm.DB, actor identityapp.Pr
 	var found bool
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		found, err = pg.NewMediaReferenceGuard(tx, scriptFixtureProjectAccess(tx)).HasMediaReferences(ctx, actor, project, asset)
+		found, err = pg.NewMediaReferenceGuard(tx, scriptFixtureProjectAccess(tx)).HasMediaReferences(ctx, scriptActor(actor), project, asset)
 		return err
 	})
 	return found, err
@@ -62,7 +62,7 @@ func scriptReferenceMutation(t *testing.T, owner *gorm.DB, actor identityapp.Pri
 	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("guard mutation fixture lacks actual nonowner", role, err)
 	}
-	return pg.NewMediaReferenceGuard(tx, scriptFixtureProjectAccess(tx)).HasMediaReferences(t.Context(), actor, project, asset)
+	return pg.NewMediaReferenceGuard(tx, scriptFixtureProjectAccess(tx)).HasMediaReferences(t.Context(), scriptActor(actor), project, asset)
 }
 
 type failedReferenceObjects struct{ app.PrivateObjects }
@@ -76,7 +76,7 @@ func scriptReferencePendingPlan(t *testing.T, db, owner *gorm.DB, actor identity
 	objects := failedReferenceObjects{scriptPrivateObjects(t, db)}
 	_, command := sourceCommand()
 	command.ProjectID = project
-	if _, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), actor, command); err == nil {
+	if _, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), scriptActor(actor), command); err == nil {
 		t.Fatal("synthetic object failure was swallowed")
 	}
 	var plan string
@@ -233,7 +233,7 @@ func TestScriptMediaReferenceGuardPGActualOriginalAndCompleteImportHistory(t *te
 	document := scriptDocument(t, db, objects, actor, project, "原件历史.txt", []byte("第一章\n甲😀乙"))
 	imports := app.NewImportService(scriptImportStore(db, objects), time.Now)
 	command := app.ImportCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{document}, RightsConfirmed: true}
-	queued, err := imports.Create(t.Context(), actor, command)
+	queued, err := imports.Create(t.Context(), scriptActor(actor), command)
 	if err != nil || queued.Status != "queued" {
 		t.Fatal("actual original admission", queued, err)
 	}
@@ -241,7 +241,7 @@ func TestScriptMediaReferenceGuardPGActualOriginalAndCompleteImportHistory(t *te
 		t.Fatal("queued original document lost pin", found, err)
 	}
 	cancelKey := uuid.New()
-	if _, err := imports.Control(t.Context(), actor, app.ImportControl{ProjectID: project, JobID: queued.ID, Action: "cancel", ExpectedRevision: queued.Revision, Key: cancelKey, RequestID: uuid.New()}); err != nil {
+	if _, err := imports.Control(t.Context(), scriptActor(actor), app.ImportControl{ProjectID: project, JobID: queued.ID, Action: "cancel", ExpectedRevision: queued.Revision, Key: cancelKey, RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
 	worker := scriptImportWorker(t, db, objects, extract.NewExtractor())
@@ -252,19 +252,19 @@ func TestScriptMediaReferenceGuardPGActualOriginalAndCompleteImportHistory(t *te
 		t.Fatal("stopped unpublished import fabricated permanent pin", found, err)
 	}
 	command.Key, command.RequestID = uuid.New(), uuid.New()
-	published, err := imports.Create(t.Context(), actor, command)
+	published, err := imports.Create(t.Context(), scriptActor(actor), command)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Execute(t.Context(), importDelivery(t, owner, actor, command.Key)); err != nil {
 		t.Fatal(err)
 	}
-	published, err = imports.Get(t.Context(), actor, project, published.ID)
+	published, err = imports.Get(t.Context(), scriptActor(actor), project, published.ID)
 	if err != nil || published.Status != "succeeded" || published.LatestVersionID == nil || len(published.Files) != 1 || published.Files[0].LineageID == nil {
 		t.Fatal("actual immutable source publication", published, err)
 	}
 	sources := app.NewSourceService(scriptStore(db), scriptPrivateObjects(t, db), time.Now)
-	if _, err := sources.Write(t.Context(), actor, app.SourceCommand{ProjectID: project, ExpectedRevision: published.LatestScriptRevision, BaseVersionID: published.LatestVersionID, LineageID: published.Files[0].LineageID, Action: "delete", RightsConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
+	if _, err := sources.Write(t.Context(), scriptActor(actor), app.SourceCommand{ProjectID: project, ExpectedRevision: published.LatestScriptRevision, BaseVersionID: published.LatestVersionID, LineageID: published.Files[0].LineageID, Action: "delete", RightsConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
 	if found, err := scriptMediaReference(t.Context(), db, actor, project, document); err != nil || !found {
@@ -280,7 +280,7 @@ func TestScriptMediaReferenceGuardPGCallerTransactionAndCurrentScope(t *testing.
 	if found, err := scriptMediaReference(t.Context(), db, actor, project, asset); err != nil || found {
 		t.Fatal("authorized empty history", found, err)
 	}
-	if _, err := pg.NewMediaReferenceGuard(db, scriptFixtureProjectAccess(db)).HasMediaReferences(t.Context(), actor, project, asset); err == nil {
+	if _, err := pg.NewMediaReferenceGuard(db, scriptFixtureProjectAccess(db)).HasMediaReferences(t.Context(), scriptActor(actor), project, asset); err == nil {
 		t.Fatal("guard accepted connection pool instead of owning transaction")
 	}
 	if _, err := scriptMediaReference(t.Context(), db, actor, foreign, asset); err == nil {

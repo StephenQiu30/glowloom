@@ -16,7 +16,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -123,7 +122,7 @@ func packageSameJob(a, b application.PackageJob) bool {
 }
 
 // AuthorizePackage keeps body admission on the established current ownership path.
-func (s *PackageStore) AuthorizePackage(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, write bool) (string, error) {
+func (s *PackageStore) AuthorizePackage(ctx context.Context, actor application.Actor, scope domain.LibraryScope, write bool) (string, error) {
 	if s == nil || s.db == nil || scope.Validate() != nil {
 		return "", application.ErrUnavailable
 	}
@@ -150,7 +149,7 @@ func packageCommandLock(tx *gorm.DB, actor, key uuid.UUID) error {
 }
 
 // FindPackageImport reauthorizes before permanent actor/key replay.
-func (s *PackageStore) FindPackageImport(ctx context.Context, actor identityapp.Principal, in application.PackageImportRequest) (application.PackageJob, *application.PackagePlan, bool, error) {
+func (s *PackageStore) FindPackageImport(ctx context.Context, actor application.Actor, in application.PackageImportRequest) (application.PackageJob, *application.PackagePlan, bool, error) {
 	var job application.PackageJob
 	var plan *application.PackagePlan
 	found := false
@@ -207,7 +206,7 @@ func (s *PackageStore) FindPackageImport(ctx context.Context, actor identityapp.
 	return job, plan, found, err
 }
 
-func (s *PackageStore) scopeLock(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, write bool) (libraryRow, application.LibraryProjectFacts, error) {
+func (s *PackageStore) scopeLock(ctx context.Context, tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, write bool) (libraryRow, application.LibraryProjectFacts, error) {
 	if err := s.requireCurrentActor(tx, actor); err != nil {
 		return libraryRow{}, application.LibraryProjectFacts{}, err
 	}
@@ -234,7 +233,7 @@ func (s *PackageStore) scopeLock(ctx context.Context, tx *gorm.DB, actor identit
 }
 
 // AdmitPackageImport stores every immutable intent before private object writes.
-func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor identityapp.Principal, in application.PackageImportRequest, plan application.PackagePlan) (application.PackageJob, error) {
+func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor application.Actor, in application.PackageImportRequest, plan application.PackagePlan) (application.PackageJob, error) {
 	var result application.PackageJob
 	if s == nil || s.db == nil || in.Validate() != nil {
 		return result, application.ErrUnavailable
@@ -349,7 +348,7 @@ func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor identityapp
 	return result, err
 }
 
-func (s *PackageStore) readPackage(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, lock bool) (packageJobRow, application.PackagePlan, error) {
+func (s *PackageStore) readPackage(tx *gorm.DB, actor application.Actor, id uuid.UUID, lock bool) (packageJobRow, application.PackagePlan, error) {
 	var row packageJobRow
 	query := tx.Where("id = ? AND org_id = ? AND actor_id = ?", id, actor.OrgID, actor.ID)
 	if lock {
@@ -370,7 +369,7 @@ func (s *PackageStore) readPackage(tx *gorm.DB, actor identityapp.Principal, id 
 }
 
 // GetPackage cannot expose another actor's source manifest or old receipt.
-func (s *PackageStore) GetPackage(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (application.PackageJob, error) {
+func (s *PackageStore) GetPackage(ctx context.Context, actor application.Actor, id uuid.UUID) (application.PackageJob, error) {
 	var result application.PackageJob
 	if s == nil || s.db == nil || id == uuid.Nil {
 		return result, application.ErrUnavailable
@@ -393,7 +392,7 @@ func (s *PackageStore) GetPackage(ctx context.Context, actor identityapp.Princip
 }
 
 // ListPackages applies current actor/org/scope filtering before stable paging.
-func (s *PackageStore) ListPackages(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, page, size int) (application.PackagePage, error) {
+func (s *PackageStore) ListPackages(ctx context.Context, actor application.Actor, scope domain.LibraryScope, page, size int) (application.PackagePage, error) {
 	result := application.PackagePage{CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID, Scope: scope, Page: page, PageSize: size, Jobs: []application.PackageJob{}}
 	if s == nil || s.db == nil {
 		return result, application.ErrUnavailable
@@ -427,19 +426,19 @@ func (s *PackageStore) ListPackages(ctx context.Context, actor identityapp.Princ
 
 // WithPackageImport locks current project, library and batch throughout object
 // verification. Connection loss releases the locks but retains admission/intents.
-func (s *PackageStore) WithPackageImport(ctx context.Context, actor identityapp.Principal, id uuid.UUID, verify func(application.PackagePlan) error) (application.PackageJob, error) {
+func (s *PackageStore) WithPackageImport(ctx context.Context, actor application.Actor, id uuid.UUID, verify func(application.PackagePlan) error) (application.PackageJob, error) {
 	return s.runPackage(ctx, actor, id, false, nil, verify)
 }
 
 // ControlPackageImport owns permanent current-head recovery and cancellation.
-func (s *PackageStore) ControlPackageImport(ctx context.Context, actor identityapp.Principal, id uuid.UUID, command application.PackageControl, cancel bool, work func(application.PackagePlan) error) (application.PackageJob, error) {
+func (s *PackageStore) ControlPackageImport(ctx context.Context, actor application.Actor, id uuid.UUID, command application.PackageControl, cancel bool, work func(application.PackagePlan) error) (application.PackageJob, error) {
 	if command.Validate() != nil {
 		return application.PackageJob{}, application.ErrInvalidPackage
 	}
 	return s.runPackage(ctx, actor, id, cancel, &command, work)
 }
 
-func packageReplayCommand(tx *gorm.DB, actor identityapp.Principal, key, id uuid.UUID, hash, action string) (*application.PackageJob, error) {
+func packageReplayCommand(tx *gorm.DB, actor application.Actor, key, id uuid.UUID, hash, action string) (*application.PackageJob, error) {
 	var row packageCommandRecord
 	read := tx.Where("actor_id = ? AND idem_key = ?", actor.ID, key).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
@@ -458,7 +457,7 @@ func packageReplayCommand(tx *gorm.DB, actor identityapp.Principal, key, id uuid
 	return &job, nil
 }
 
-func savePackageCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string, job application.PackageJob) (application.PackageJob, error) {
+func savePackageCommand(tx *gorm.DB, actor application.Actor, key uuid.UUID, hash, action string, job application.PackageJob) (application.PackageJob, error) {
 	prior, err := packageReplayCommand(tx, actor, key, job.ID, hash, action)
 	if err != nil {
 		return job, err
@@ -475,7 +474,7 @@ func savePackageCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID,
 	return job, err
 }
 
-func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Principal, id uuid.UUID, cancel bool, command *application.PackageControl, work func(application.PackagePlan) error) (application.PackageJob, error) {
+func (s *PackageStore) runPackage(ctx context.Context, actor application.Actor, id uuid.UUID, cancel bool, command *application.PackageControl, work func(application.PackagePlan) error) (application.PackageJob, error) {
 	var result application.PackageJob
 	if s == nil || s.db == nil || id == uuid.Nil || work == nil {
 		return result, application.ErrUnavailable
@@ -677,7 +676,7 @@ func publishPackage(tx *gorm.DB, library libraryRow, plan application.PackagePla
 var _ application.PackageRepository = (*PackageStore)(nil)
 
 // HasInflightPackageWork is the owning lifecycle port for every unknown batch.
-func (s *PackageStore) HasInflightPackageWork(ctx context.Context, actor identityapp.Principal, project uuid.UUID) (bool, error) {
+func (s *PackageStore) HasInflightPackageWork(ctx context.Context, actor application.Actor, project uuid.UUID) (bool, error) {
 	var busy bool
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
@@ -698,7 +697,7 @@ func (s *PackageStore) HasInflightPackageWork(ctx context.Context, actor identit
 
 // HasInflightLibraryPackageWork is the owning guard for either authorized library.
 // It never calls the project guard factory and can use the caller's transaction.
-func (s *PackageStore) HasInflightLibraryPackageWork(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope) (bool, error) {
+func (s *PackageStore) HasInflightLibraryPackageWork(ctx context.Context, actor application.Actor, scope domain.LibraryScope) (bool, error) {
 	if s == nil || s.db == nil || s.library == nil {
 		return false, application.ErrUnavailable
 	}
@@ -715,7 +714,7 @@ func (s *PackageStore) HasInflightLibraryPackageWork(ctx context.Context, actor 
 }
 
 // HasPackageReferences protects every unpublished reserved asset identity.
-func (s *PackageStore) HasPackageReferences(ctx context.Context, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {
+func (s *PackageStore) HasPackageReferences(ctx context.Context, actor application.Actor, project, asset uuid.UUID) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
@@ -745,7 +744,7 @@ func (s *PackageStore) HasPackageReferences(ctx context.Context, actor identitya
 }
 
 // InspectPackageExport holds current authorized rows while all actual bytes read.
-func (s *PackageStore) InspectPackageExport(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, consume func(application.PackageExport) error) error {
+func (s *PackageStore) InspectPackageExport(ctx context.Context, actor application.Actor, scope domain.LibraryScope, consume func(application.PackageExport) error) error {
 	if s == nil || s.db == nil || consume == nil {
 		return application.ErrUnavailable
 	}

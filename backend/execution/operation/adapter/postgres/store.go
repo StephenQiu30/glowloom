@@ -31,6 +31,7 @@ type Store struct {
 	db                         *gorm.DB
 	requestAccess              ProjectAccessFactory
 	workerAccess               ProjectAccessFactory
+	localWorkerAuthority       func(context.Context, *gorm.DB, uuid.UUID, bool) error
 	platformAccess             PlatformAccessFactory
 	editorSnapshots            func(*gorm.DB) application.EditorSnapshots
 	promptCompiler             func(*gorm.DB) application.QuotePromptCompiler

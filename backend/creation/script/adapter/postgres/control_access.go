@@ -8,14 +8,12 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // readWithControls derives action flags from the same live project authority as
 // commands. Try the strongest lock first so a read never upgrades FOR SHARE.
-func readWithControls(ctx context.Context, db *gorm.DB, factory ProjectAccessFactory, actor identity.Principal, project uuid.UUID, use func(*gorm.DB, bool) error) error {
+func readWithControls(ctx context.Context, db *gorm.DB, factory ProjectAccessFactory, actor application.Actor, project uuid.UUID, use func(*gorm.DB, bool) error) error {
 	if db == nil || factory == nil {
 		return application.ErrUnavailable
 	}
@@ -27,7 +25,7 @@ func readWithControls(ctx context.Context, db *gorm.DB, factory ProjectAccessFac
 		facts, err := access.Authorize(ctx, actor, project, true)
 		writable := err == nil
 		if err != nil {
-			if !errors.Is(err, workspace.ErrScopeNotFound) && !errors.Is(err, workspace.ErrProjectNotFound) && !errors.Is(err, workspacedomain.ErrProjectStateConflict) {
+			if !errors.Is(err, application.ErrNotFound) && !errors.Is(err, workspacedomain.ErrProjectStateConflict) {
 				return err
 			}
 			facts, err = access.Authorize(ctx, actor, project, false)

@@ -105,7 +105,7 @@ func (r purgeJobRow) scope() domain.LibraryScope {
 	return domain.LibraryScope{Kind: domain.LibraryKind(r.ScopeKind), ProjectID: r.ProjectID}
 }
 
-func (s *PurgeStore) access(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
+func (s *PurgeStore) access(ctx context.Context, tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
 	return (&LibraryStore{project: s.project, scopeAuthority: s.scopeAuthority}).authorize(ctx, tx, actor, scope, write)
 }
 func purgeLock(tx *gorm.DB, actor, key uuid.UUID) error {
@@ -119,7 +119,7 @@ func purgeHash(value any) (string, error) {
 	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:]), nil
 }
-func purgeReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash string, action application.PurgeAction) (*domain.PurgeJob, error) {
+func purgeReplay(tx *gorm.DB, actor application.Actor, key uuid.UUID, hash string, action application.PurgeAction) (*domain.PurgeJob, error) {
 	var row purgeCommandRecord
 	read := tx.Where("actor_id = ? AND idem_key = ?", actor.ID, key).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
@@ -137,7 +137,7 @@ func purgeReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash s
 	}
 	return &result, nil
 }
-func (s *PurgeStore) readJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, lock bool) (purgeJobRow, error) {
+func (s *PurgeStore) readJob(tx *gorm.DB, actor application.Actor, id uuid.UUID, lock bool) (purgeJobRow, error) {
 	var row purgeJobRow
 	query := tx.Where("id = ? AND actor_id = ? AND org_id = ?", id, actor.ID, actor.OrgID)
 	if lock {
@@ -176,7 +176,7 @@ func purgeView(tx *gorm.DB, row purgeJobRow) (domain.PurgeJob, error) {
 }
 
 // GetPurge checks current authority before returning creator-scoped safe facts.
-func (s *PurgeStore) GetPurge(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (domain.PurgeJob, error) {
+func (s *PurgeStore) GetPurge(ctx context.Context, actor application.Actor, id uuid.UUID) (domain.PurgeJob, error) {
 	var result domain.PurgeJob
 	if s == nil || s.db == nil {
 		return result, application.ErrUnavailable
@@ -200,7 +200,7 @@ func (s *PurgeStore) GetPurge(ctx context.Context, actor identityapp.Principal, 
 
 // HasInflightWork is consumed by the workspace lifecycle guard under its project
 // lock. An unconfirmed physical worker blocks regardless of displayed status.
-func (s *PurgeStore) HasInflightWork(ctx context.Context, actor identityapp.Principal, project uuid.UUID) (bool, error) {
+func (s *PurgeStore) HasInflightWork(ctx context.Context, actor application.Actor, project uuid.UUID) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
@@ -214,7 +214,7 @@ func (s *PurgeStore) HasInflightWork(ctx context.Context, actor identityapp.Prin
 	return count > 0, err
 }
 
-func (s *PurgeStore) scopeBusy(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, library uuid.UUID) error {
+func (s *PurgeStore) scopeBusy(ctx context.Context, tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, library uuid.UUID) error {
 	blocked := false
 	if scope.Kind == domain.LibraryProject {
 		if s.guards == nil || s.guards(tx) == nil {
@@ -257,7 +257,7 @@ func (s *PurgeStore) scopeBusy(ctx context.Context, tx *gorm.DB, actor identitya
 // PurgeTopic carries permanent owning commands, not model generation operations.
 const PurgeTopic = "glowloom.media.purge_command.v1"
 
-func recordPurgeCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash string, action application.PurgeAction, job domain.PurgeJob, emit bool) error {
+func recordPurgeCommand(tx *gorm.DB, actor application.Actor, key uuid.UUID, hash string, action application.PurgeAction, job domain.PurgeJob, emit bool) error {
 	response, err := json.Marshal(job)
 	if err != nil || len(response) > 1<<20 {
 		return application.ErrUnavailable

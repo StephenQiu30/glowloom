@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -47,7 +49,7 @@ func TestJianyingLaunchPostgresAuthorityIdentityExpiryAndCleanup(t *testing.T) {
 	asset.Width, asset.Height, asset.ByteSize, asset.SHA256 = input.Width, input.Height, input.ByteSize, &input.SHA256
 	asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
 	asset = mediaFixtureAssetLocation(t, db, asset)
-	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := mediaTestStore(db).CreateAsset(t.Context(), mediaActor(actor), asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := owner.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
@@ -63,7 +65,9 @@ func TestJianyingLaunchPostgresAuthorityIdentityExpiryAndCleanup(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = provider.Remove(context.Background(), asset.ObjectKey) })
 	objects := mediatoolRoutedObjects(t, db)
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaTestStore(tx)))
+	}
 	canvases := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := canvases.Create(t.Context(), actor, projectID, uuid.NewString(), canvasapp.CreateInput{Name: "Native launch integration"})
 	if err != nil {
@@ -76,10 +80,16 @@ func TestJianyingLaunchPostgresAuthorityIdentityExpiryAndCleanup(t *testing.T) {
 	}
 	store := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
 		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
 	workerStore := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx)) }))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
+			return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaWorkerStore(tx)))
+		}))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaWorkerStore(tx)))
+	})
 	job, err := store.Create(t.Context(), actor, projectID, uuid.New(), toolapp.CreateInput{CanvasID: doc.ID, NodeID: node.ID, Revision: saved.Revision, OutputKind: tool.OutputJianying, Settings: &tool.ExportSettings{FileName: "原生票据测试", Destination: "local", Resolution: 720}})
 	if err != nil {
 		t.Fatal(err)

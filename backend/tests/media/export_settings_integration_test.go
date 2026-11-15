@@ -67,7 +67,7 @@ func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T
 	download := &mediaapp.Downloaded{File: file, Size: int64(source.Len()), MIMEType: "image/png", SHA256: hex.EncodeToString(sha[:])}
 	defer func() { _ = download.Close() }()
 	upload := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
-	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "synthetic.png"}, File: download, LocalReviewConfirmed: true})
+	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "synthetic.png"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,9 @@ func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T
 	timeline.Clips[0].Kind = "image"
 	timeline.Clips[0].AssetID = &uploaded.Asset.ID
 	timeline.ImportedAssets = []uuid.UUID{uploaded.Asset.ID}
-	canvasService := canvasfixture.NewService(mediaCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }))
+	canvasService := canvasfixture.NewService(mediaCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaTestStore(tx)))
+	}))
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "时间线设置"})
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +146,7 @@ func TestTimelineExportSettingsDurableReplayAndAutomaticPublication(t *testing.T
 	if err != nil || result.Status != tool.Succeeded || result.AssetID == nil {
 		t.Fatalf("automatic publication %+v %v", result, err)
 	}
-	asset, err := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), actor, project, *result.AssetID)
+	asset, err := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), mediaActor(actor), project, *result.AssetID)
 	if err != nil || asset.FileName != "时间线验证.mp4" || asset.Width == nil || *asset.Width != 854 || asset.Height == nil || *asset.Height != 480 {
 		t.Fatalf("referenceable settings output %+v %v", asset, err)
 	}
@@ -169,7 +171,9 @@ func TestTimelineExportHistoryRestoresNewestCreatedJob(t *testing.T) {
 	timeline.Clips[0].Kind = "subtitle"
 	timeline.Clips[0].AssetID = nil
 	timeline.Clips[0].Text = "历史"
-	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
 	input := toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1, Settings: &tool.ExportSettings{FileName: "历史"}}
 	first, err := store.Create(t.Context(), actor, project, uuid.New(), input)
 	if err != nil {

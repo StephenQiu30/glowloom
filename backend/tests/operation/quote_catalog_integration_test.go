@@ -5,14 +5,15 @@ import (
 	"testing"
 	"time"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -110,7 +111,7 @@ func TestReadCurrentQuoteCatalogTracksPublishedVersionsAndAvailability(t *testin
 	assertCatalog(&version2, &price2)
 
 	foreign, _ := operationStoreProject(t, database)
-	if _, _, err := store.ReadCurrentQuoteCatalog(t.Context(), foreign, quoted, now); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, _, err := store.ReadCurrentQuoteCatalog(t.Context(), foreign, quoted, now); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("foreign organization catalog read = %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {

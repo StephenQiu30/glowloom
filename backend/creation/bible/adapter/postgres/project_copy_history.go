@@ -9,13 +9,11 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-func readBibleHistory(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, project uuid.UUID) (application.CopyHistory, error) {
+func readBibleHistory(ctx context.Context, tx *gorm.DB, actor application.Actor, project uuid.UUID) (application.CopyHistory, error) {
 	history := application.CopyHistory{}
-	b := &bound{tx: tx.WithContext(ctx), actor: actor, project: workspaceapp.ProjectContentAccess{ProjectID: project, OrgID: actor.OrgID}}
+	b := &bound{tx: tx.WithContext(ctx), actor: actor, project: application.ProjectFacts{ProjectID: project, OrgID: actor.OrgID}}
 	for _, kind := range []domain.Kind{domain.KindCharacter, domain.KindLocation, domain.KindProp} {
 		headTable, versionTable, confirmationTable, err := tables(kind)
 		if err != nil {
@@ -81,11 +79,11 @@ func readBibleHistory(ctx context.Context, tx *gorm.DB, actor identityapp.Princi
 	return application.CanonicalCopyHistory(history)
 }
 
-func insertBibleHistory(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, project uuid.UUID, h application.CopyHistory) error {
+func insertBibleHistory(ctx context.Context, tx *gorm.DB, actor application.Actor, project uuid.UUID, h application.CopyHistory) error {
 	if _, err := application.ValidateCopyHistory(h, actor.OrgID, project); err != nil {
 		return err
 	}
-	b := &bound{tx: tx.WithContext(ctx), actor: actor, project: workspaceapp.ProjectContentAccess{ProjectID: project, OrgID: actor.OrgID}}
+	b := &bound{tx: tx.WithContext(ctx), actor: actor, project: application.ProjectFacts{ProjectID: project, OrgID: actor.OrgID}}
 	for _, head := range h.Heads {
 		table, _, _, err := tables(head.Kind)
 		if err != nil {

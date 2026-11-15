@@ -11,8 +11,9 @@ import (
 
 	http "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 )
 
 type scopeFailureStore struct {
@@ -20,8 +21,8 @@ type scopeFailureStore struct {
 	failure error
 }
 
-func (s scopeFailureStore) Confirmations(_ context.Context, _ identity.Principal, _ uuid.UUID, _ uuid.UUID, _ int64, _ int) (application.ConfirmationPage, error) {
-	return application.ConfirmationPage{}, s.failure
+func (s scopeFailureStore) Confirmations(_ context.Context, _ application.Actor, _ uuid.UUID, _ uuid.UUID, _ int64, _ int) (application.ConfirmationPage, error) {
+	return application.ConfirmationPage{}, scriptwire.OwningError(s.failure)
 }
 func TestScopeAuthorizationHTTPErrorChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -33,7 +34,9 @@ func TestScopeAuthorizationHTTPErrorChain(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			failure := errors.Join(errors.New("consumer failure"), test.cause)
 			router := gin.New()
-			http.NewVersionHandler(application.NewHistoryService(scopeFailureStore{failure: failure}, nil), nil).Register(router.Group("/api"))
+			http.NewVersionHandler(application.NewHistoryService(scopeFailureStore{failure: failure}, nil), nil, func(*gin.Context) (application.Actor, error) {
+				return application.Actor{ID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1}, nil
+			}).Register(router.Group("/api"))
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), "GET", "/api/projects/"+uuid.NewString()+"/script-versions/"+uuid.NewString()+"/split-confirmations", nil))
 			if w.Code != test.status {

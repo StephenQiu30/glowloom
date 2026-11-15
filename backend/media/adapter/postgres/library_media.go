@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -20,7 +19,7 @@ var _ application.LibraryMediaReader = (*LibraryStore)(nil)
 
 // FindLibraryMedia uses actor -> project -> library -> original/rendition locks.
 // Catalog trash remains previewable; removed items and unreviewed files do not.
-func (s *LibraryStore) FindLibraryMedia(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) (application.LibraryMediaFile, error) {
+func (s *LibraryStore) FindLibraryMedia(ctx context.Context, actor application.Actor, scope domain.LibraryScope, id uuid.UUID) (application.LibraryMediaFile, error) {
 	if id == uuid.Nil {
 		return application.LibraryMediaFile{}, application.ErrNotFound
 	}

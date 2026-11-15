@@ -12,7 +12,7 @@ func TestMediaPurgeRuntimeCannotRewriteOwnershipFrozenKeysOrPermanentReceipts(t 
 	db := libraryRuntimeDB(t)
 	actor, _, in, _, _ := purgeBinaryFixture(t, db)
 	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	job, err := repo.CreatePurge(t.Context(), actor, in)
+	job, err := repo.CreatePurge(t.Context(), mediaActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestMediaPurgeRuntimeCannotRewriteOwnershipFrozenKeysOrPermanentReceipts(t 
 	if !errors.As(err, &failure) || failure.Code != "42501" {
 		t.Fatal("permanent purge receipt was mutable even by fixture owner", err)
 	}
-	if _, err := repo.GetPurge(t.Context(), actor, job.ID); err != nil {
+	if _, err := repo.GetPurge(t.Context(), mediaActor(actor), job.ID); err != nil {
 		t.Fatal("rejected writes changed current permanent job", err)
 	}
 }

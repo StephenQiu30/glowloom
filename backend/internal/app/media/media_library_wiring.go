@@ -4,16 +4,23 @@ import (
 	"context"
 	"errors"
 
-	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -47,11 +54,11 @@ func provideMediaLibraryWorkGuards(tx *gorm.DB) mediaapp.LibraryWorkGuards {
 	return mediaLibraryWorkGuards{guard: boundProjectWorkGuard(tx)}
 }
 
-func (g mediaLibraryWorkGuards) HasInflightProjectWork(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (bool, error) {
+func (g mediaLibraryWorkGuards) HasInflightProjectWork(ctx context.Context, actor mediaapp.Actor, projectID uuid.UUID) (bool, error) {
 	if g.guard == nil {
 		return false, mediaapp.ErrUnavailable
 	}
-	active, err := g.guard.HasInflightWork(ctx, actor, projectID)
+	active, err := g.guard.HasInflightWork(ctx, IdentityActor(actor), projectID)
 	return active, mediaLibraryProjectError(err)
 }
 
@@ -65,16 +72,16 @@ func NewMediaLibraryWorkerProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAcce
 	return mediaLibraryProjectAccess{store: scopewire.ProvideWorkerProjectContentAccess(tx)}
 }
 
-func (a mediaLibraryProjectAccess) Authorize(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
-	facts, err := a.store.Authorize(ctx, actor, projectID, write)
+func (a mediaLibraryProjectAccess) Authorize(ctx context.Context, actor mediaapp.Actor, projectID uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
+	facts, err := a.store.Authorize(ctx, IdentityActor(actor), projectID, write)
 	if err != nil {
 		return mediaapp.LibraryProjectFacts{}, mediaLibraryProjectError(err)
 	}
 	return mediaapp.LibraryProjectFacts{ProjectID: facts.ProjectID, OrgID: facts.OrgID, Revision: facts.Revision}, nil
 }
 
-func (a mediaLibraryProjectAccess) TouchContent(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, expected int64) (int64, error) {
-	revision, err := a.store.TouchContent(ctx, actor, projectID, expected)
+func (a mediaLibraryProjectAccess) TouchContent(ctx context.Context, actor mediaapp.Actor, projectID uuid.UUID, expected int64) (int64, error) {
+	revision, err := a.store.TouchContent(ctx, IdentityActor(actor), projectID, expected)
 	return revision, mediaLibraryProjectError(err)
 }
 
@@ -82,9 +89,11 @@ func mediaLibraryProjectError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, identityapp.ErrSessionInvalid), errors.Is(err, identityapp.ErrForbidden), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+	case errors.Is(err, identityapp.ErrSessionInvalid), errors.Is(err, identityapp.ErrForbidden):
+		return OwningError(err)
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return err
-	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
+	case errors.Is(err, workspacesource.ErrScopeNotFound), errors.Is(err, workspacesource.ErrProjectNotFound):
 		return errors.Join(mediaapp.ErrNotFound, err)
 	case errors.Is(err, workspacedomain.ErrProjectRevisionConflict):
 		return errors.Join(mediaapp.ErrLibraryConflict, err)

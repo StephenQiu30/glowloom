@@ -5,20 +5,31 @@ import (
 	"context"
 	"errors"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
+	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
+
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
+
 	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+
 	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+
 	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -32,8 +43,11 @@ type operationProjectAccess struct {
 
 func (a operationProjectAccess) AuthorizeOperation(ctx context.Context, actor identity.Principal, project uuid.UUID, write bool) error {
 	_, err := a.store.Authorize(ctx, actor, project, write)
-	if a.worker && (errors.Is(err, identity.ErrForbidden) || errors.Is(err, workspace.ErrScopeNotFound) || errors.Is(err, workspace.ErrProjectNotFound)) {
+	if a.worker && (errors.Is(err, identity.ErrForbidden) || errors.Is(err, workspacesource.ErrScopeNotFound) || errors.Is(err, workspacesource.ErrProjectNotFound)) {
 		return operation.ErrExecutionAuthorityRevoked
+	}
+	if errors.Is(err, workspacesource.ErrScopeNotFound) || errors.Is(err, workspacesource.ErrProjectNotFound) {
+		return errors.Join(operation.ErrPublicNotFound, err)
 	}
 	return err
 }
@@ -48,7 +62,7 @@ func (a operationProjectAccess) CanPublishHistory(ctx context.Context, actor ide
 		return false, nil
 	}
 	scope, err := a.scopes.Resolve(ctx, actor, actor.ScopeID, true)
-	if errors.Is(err, workspace.ErrScopeNotFound) || errors.Is(err, identity.ErrForbidden) {
+	if errors.Is(err, workspacesource.ErrScopeNotFound) || errors.Is(err, identity.ErrForbidden) {
 		return false, nil
 	}
 	if err != nil {
@@ -83,11 +97,15 @@ func ProvideOperationStore(db *gorm.DB) *pgoperation.Store {
 
 // ProvidePromptPreferenceStore assembles prompt preferences with operation authority.
 func ProvidePromptPreferenceStore(db *gorm.DB) *pgprompt.Store {
-	return pgprompt.NewScopedStore(db, func(tx *gorm.DB) prompt.ActorAccess { return pgidentity.NewStore(tx) })
+	return pgprompt.NewScopedStore(db, promptwire.SessionAccess)
 }
 
 func (a operationProjectAccess) AuthorizeCatalog(ctx context.Context, actor identity.Principal, project uuid.UUID) error {
-	return a.AuthorizeOperation(ctx, actor, project, false)
+	err := a.AuthorizeOperation(ctx, actor, project, false)
+	if errors.Is(err, operation.ErrPublicNotFound) {
+		return errors.Join(catalog.ErrModelCatalogProjectNotFound, err)
+	}
+	return err
 }
 
 // NewCatalogStore composes current platform sessions and project scope authorization.

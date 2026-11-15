@@ -210,7 +210,7 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			var release sync.Once
 			defer func() { release.Do(func() { close(resume) }); cancel(); workers.Wait() }()
 			service := canvasfixture.NewService(pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
-				return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)), read: read, resume: resume}
+				return pausedMediaReference{reader: canvasLegacyMedia(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))), read: read, resume: resume}
 			}, mediawire.NewCanvasProjectAccess))
 			doc, err := service.Create(ctx, actor, project, uuid.NewString(), application.CreateInput{Name: "截图授权事务"})
 			if err != nil {
@@ -282,7 +282,7 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			if err := <-mutated; err != nil {
 				t.Fatalf("media updater did not resume: %v", err)
 			}
-			if _, err := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess)).Reference(ctx, actor, project, asset); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess)).Reference(ctx, canvasMediaActor(actor), project, asset); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatalf("later media state bypassed current authorization: %v", err)
 			}
 		})

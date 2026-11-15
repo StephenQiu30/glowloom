@@ -74,6 +74,36 @@ func DefinitionFor(operation string) (Definition, bool) {
 	return Definition{}, false
 }
 
+// ValidateFrozen checks a self-contained baseline without looking up today's
+// content. The accepted compiler recognizes only the original operation contract.
+func (d Definition) ValidateFrozen() error {
+	switch d.Operation {
+	case "chapter_assets_extract", "character_extract", "character_turnaround", "storyboard_plan", "storyboard_repair", "storyboard_first_frame", "storyboard_video", "short_drama_outline", "skill_draft":
+	default:
+		return ErrInvalidCustomization
+	}
+	if d.TemplateVersion != 1 || d.Variables == nil || len(d.Variables) > 64 || strings.TrimSpace(d.DefaultContent) == "" || strings.TrimSpace(d.OutputContract) == "" {
+		return ErrInvalidCustomization
+	}
+	for _, value := range []string{d.Operation, d.Label, d.Category, d.Description, d.OutputType, d.SchemaKey, d.DefaultContent, d.OutputContract} {
+		if !utf8.ValidString(value) || strings.ContainsRune(value, 0) || len(value) > 768<<10 {
+			return ErrInvalidCustomization
+		}
+	}
+	seen := make(map[string]bool, len(d.Variables))
+	for _, variable := range d.Variables {
+		if strings.TrimSpace(variable.Label) == "" || !utf8.ValidString(variable.Label) || strings.ContainsRune(variable.Label, 0) || !placeholderPattern.MatchString(variable.Placeholder) || placeholderPattern.FindString(variable.Placeholder) != variable.Placeholder || seen[variable.Placeholder] {
+			return ErrInvalidCustomization
+		}
+		seen[variable.Placeholder] = true
+	}
+	hash := sha256.Sum256([]byte(d.DefaultContent + "\x00" + d.OutputContract))
+	if d.TemplateID != promptTemplateID(d.Operation, hash) {
+		return ErrInvalidCustomization
+	}
+	return validateFrozenContent(d, Rewrite, d.DefaultContent)
+}
+
 // Customization contains only the personal creative layer and its stable revision.
 type Customization struct {
 	ID             uuid.UUID `json:"id"`
@@ -90,7 +120,14 @@ var placeholderPattern = regexp.MustCompile(`\{\{[^{}]+\}\}`)
 // ValidateContent rejects unsupported operations, modes, and template variables.
 func ValidateContent(operation string, mode Mode, content string) error {
 	definition, ok := DefinitionFor(operation)
-	if !ok || !utf8.ValidString(content) || utf8.RuneCountInString(content) > 12000 {
+	if !ok {
+		return ErrInvalidCustomization
+	}
+	return validateFrozenContent(definition, mode, content)
+}
+
+func validateFrozenContent(definition Definition, mode Mode, content string) error {
+	if !utf8.ValidString(content) || utf8.RuneCountInString(content) > 12000 {
 		return ErrInvalidCustomization
 	}
 	switch mode {
@@ -129,6 +166,14 @@ func (c Customization) Validate() error {
 	return ValidateContent(c.Operation, c.Mode, c.Content)
 }
 
+// ValidateAgainst checks a stored creative layer using its frozen baseline.
+func (c Customization) ValidateAgainst(definition Definition) error {
+	if definition.ValidateFrozen() != nil || c.Operation != definition.Operation || c.ID == uuid.Nil || c.BaseTemplateID == uuid.Nil || c.Revision < 1 || c.UpdateTime.IsZero() {
+		return ErrInvalidCustomization
+	}
+	return validateFrozenContent(definition, c.Mode, c.Content)
+}
+
 // Compiled is the immutable prompt evidence to freeze in a generating operation.
 type Compiled struct {
 	Content               string
@@ -144,6 +189,16 @@ func Compile(operation string, customization *Customization, values map[string]s
 	if !ok {
 		return Compiled{}, ErrInvalidCustomization
 	}
+	return CompileDefinition(definition, customization, values)
+}
+
+// CompileDefinition renders an immutable server-owned baseline snapshot. It never
+// resolves today's definition or preference when replaying an accepted source.
+func CompileDefinition(definition Definition, customization *Customization, values map[string]string) (Compiled, error) {
+	if definition.ValidateFrozen() != nil {
+		return Compiled{}, ErrInvalidCustomization
+	}
+	operation := definition.Operation
 	const maxCompiledBytes = 1024 * 1024
 	contextBytes := 0
 	for key, value := range values {
@@ -159,7 +214,7 @@ func Compile(operation string, customization *Customization, values map[string]s
 	creative := definition.DefaultContent
 	compiled := Compiled{TemplateID: definition.TemplateID}
 	if customization != nil {
-		if customization.Operation != operation || customization.Validate() != nil {
+		if customization.Operation != operation || customization.ValidateAgainst(definition) != nil {
 			return Compiled{}, ErrInvalidCustomization
 		}
 		compiled.CustomizationID, compiled.CustomizationRevision = customization.ID, customization.Revision

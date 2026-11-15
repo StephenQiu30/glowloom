@@ -8,13 +8,16 @@ import (
 	"io"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
@@ -26,14 +29,14 @@ func (s *Store) CreateProjectWithEvents(ctx context.Context, actor identityapp.P
 
 // CreateProjectIdempotently atomically commits or replays the original project
 // snapshot under the shared actor/key lock used by public canvas commands.
-func (s *Store) CreateProjectIdempotently(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent, request application.ProjectCreationRequest) (domain.Project, error) {
+func (s *Store) CreateProjectIdempotently(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent, request workspacesource.ProjectCreationRequest) (domain.Project, error) {
 	if request.Key == uuid.Nil || len(request.Hash) != 64 {
-		return domain.Project{}, application.ErrInvalidCreateProject
+		return domain.Project{}, workspacesource.ErrInvalidCreateProject
 	}
 	return s.createProject(ctx, actor, project, events, &request)
 }
 
-func (s *Store) createProject(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent, request *application.ProjectCreationRequest) (domain.Project, error) {
+func (s *Store) createProject(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent, request *workspacesource.ProjectCreationRequest) (domain.Project, error) {
 	if s == nil || s.db == nil {
 		return domain.Project{}, ErrUnavailable
 	}
@@ -44,7 +47,7 @@ func (s *Store) createProject(ctx context.Context, actor identityapp.Principal, 
 		project.Status != "active" || project.Revision != 1 || project.AllowOverseasModels ||
 		project.IsDelete || project.ArchivedAt != nil || project.DeleteTime != nil ||
 		project.PurgeAfter != nil || !validProjectCreatedEvents(actor, project, events) {
-		return domain.Project{}, application.ErrInvalidCreateProject
+		return domain.Project{}, workspacesource.ErrInvalidCreateProject
 	}
 	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		(actor.ScopeID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1) {

@@ -11,19 +11,29 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -53,7 +63,7 @@ func coverTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {
 
 func coverStore(db *gorm.DB) *workspacepg.Store {
 	return workspaceStoreWithCover(db, folderWork, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
-		return mediaapp.NewAssetQuery(workspaceMediaStore(tx))
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(workspaceMediaStore(tx)))
 	})
 }
 
@@ -125,10 +135,10 @@ func TestProjectCoverPGCurrentOwnershipReplayAndUnavailable(t *testing.T) {
 	if _, err := s.Change(ctx, actor, coverChange(project, 4, &asset)); !errors.Is(err, workspaceapp.ErrProjectCoverUnavailable) {
 		t.Fatal("invalid cover no-op accepted", err)
 	}
-	if _, err := workspaceapp.NewProjectLifecycle(workspaceStore(db), time.Now).Get(ctx, actor, project); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := workspaceapp.NewProjectLifecycle(workspaceStore(db), time.Now).Get(ctx, actor, project); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatal("missing cover owner presented empty", err)
 	}
-	if _, err := workspaceapp.NewListProjectsQuery(workspaceStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{Limit: 50}); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := workspaceapp.NewListProjectsQuery(workspaceStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{Limit: 50}); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatal("list missing owner", err)
 	}
 	if _, err := s.Change(ctx, actor, coverChange(project, 4, nil)); err != nil {
@@ -179,11 +189,11 @@ func TestProjectCoverHTTPActualReviewedUploadNullableAndRefresh(t *testing.T) {
 	defer func() { _ = file.Close() }()
 	mediaStore := workspaceMediaStore(db)
 	upload := businessFixtureUploads(t, db, mediaStore, mediaflow.FFUploadProber{})
-	result, err := businessFixtureUpload(ctx, t, upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "正式主图.png"}, File: file, LocalReviewConfirmed: true})
+	result, err := businessFixtureUpload(ctx, t, upload, mediaapp.UploadInput{Actor: mediaBoundaryActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "正式主图.png"}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual reviewed source upload", err)
 	}
-	asset, err := mediaStore.FindAsset(ctx, actor, project, result.Asset.ID)
+	asset, err := mediaStore.FindAsset(ctx, mediaBoundaryActor(actor), project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

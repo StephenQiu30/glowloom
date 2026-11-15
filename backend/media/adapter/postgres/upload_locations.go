@@ -10,7 +10,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -121,7 +120,7 @@ func (s *StorageRoutes) ConfirmUploadRemoval(ctx context.Context, location domai
 // acceptUploadLocations is part of the existing asset/receipt transaction. A
 // cleanup worker and acceptance contend on the same location row; an accepted
 // object cannot later be removed through upload compensation.
-func acceptUploadLocations(tx *gorm.DB, actor identityapp.Principal, r application.UploadRequest, asset domain.MediaAsset, rends []domain.Rendition, accepted uuid.UUID) error {
+func acceptUploadLocations(tx *gorm.DB, actor application.Actor, r application.UploadRequest, asset domain.MediaAsset, rends []domain.Rendition, accepted uuid.UUID) error {
 	if r.Target == nil {
 		if asset.ObjectLocation != nil {
 			return application.ErrInvalidUpload

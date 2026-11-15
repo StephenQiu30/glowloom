@@ -5,6 +5,7 @@ import (
 	"math"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
@@ -29,7 +30,7 @@ func ProjectContentChangedEvent(actor identityapp.Principal, project uuid.UUID, 
 	}
 	id := uuid.New()
 	payload, err := json.Marshal(map[string]any{
-		"event_id": id, "event_type": projectChangedTopic, "occurred_at": now.UTC(),
+		"event_id": id, "event_type": workspacesource.ProjectChangedTopic, "occurred_at": now.UTC(),
 		"org_id": actor.OrgID, "project_id": project,
 		"actor":     map[string]any{"kind": "user", "id": actor.ID},
 		"aggregate": map[string]any{"type": "project", "id": project, "revision": revision},
@@ -38,5 +39,5 @@ func ProjectContentChangedEvent(actor identityapp.Principal, project uuid.UUID, 
 	if err != nil {
 		return identityapp.OutboxEvent{}, err
 	}
-	return identityapp.OutboxEvent{ID: id, Topic: projectChangedTopic, PartitionKey: project.String(), Payload: payload}, nil
+	return identityapp.OutboxEvent{ID: id, Topic: workspacesource.ProjectChangedTopic, PartitionKey: project.String(), Payload: payload}, nil
 }

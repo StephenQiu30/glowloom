@@ -11,23 +11,22 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
-func (s *PurgeStore) workerActor(tx *gorm.DB, id uuid.UUID) (identityapp.Principal, error) {
+func (s *PurgeStore) workerActor(tx *gorm.DB, id uuid.UUID) (application.Actor, error) {
 	var row struct {
 		ActorID, OrgID uuid.UUID
 	}
 	read := tx.Table("media.purge_job").Select("actor_id", "org_id").Where("id = ?", id).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
-		return identityapp.Principal{}, application.ErrNotFound
+		return application.Actor{}, application.ErrNotFound
 	}
 	if read.Error != nil {
-		return identityapp.Principal{}, read.Error
+		return application.Actor{}, read.Error
 	}
-	return identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}, nil
+	return application.Actor{ID: row.ActorID, OrgID: row.OrgID}, nil
 }
 
 func (s *PurgeStore) withLease(ctx context.Context, lease application.PurgeLease, ended bool, consume func(*gorm.DB, purgeJobRow, libraryRow, application.LibraryProjectFacts) error) error {
@@ -309,7 +308,7 @@ func (s *PurgeStore) FailPurgeItem(ctx context.Context, lease application.PurgeL
 
 // requirePurgeUnreferenced runs after validatePurgeItem has locked the original.
 // Avatar owners retain references after account/team deletion and do not grant access.
-func (s *PurgeStore) requirePurgeUnreferenced(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, row purgeJobRow, frozen application.FrozenPurgeItem) error {
+func (s *PurgeStore) requirePurgeUnreferenced(ctx context.Context, tx *gorm.DB, actor application.Actor, row purgeJobRow, frozen application.FrozenPurgeItem) error {
 	if frozen.Asset == nil {
 		return nil
 	}

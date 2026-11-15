@@ -5,7 +5,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
@@ -386,7 +385,11 @@ func (h *Handler) Voices(c *gin.Context) {
 	if c.Query("cursor") != "" {
 		after = &cursor
 	}
-	page, err := h.service.Voices(c.Request.Context(), identityhttp.Principal(c), pid, limit, after)
+	actor, ok := h.actor(c)
+	if !ok {
+		return
+	}
+	page, err := h.service.Voices(c.Request.Context(), actor, pid, limit, after)
 	if err != nil {
 		writeError(c, err)
 		return

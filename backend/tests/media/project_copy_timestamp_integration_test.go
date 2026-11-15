@@ -14,7 +14,7 @@ func TestProjectCopyMediaVerificationPreservesTimestampInstantsAcrossSessionTime
 	objects := glbTestObjects(t)
 	actor, binding, snapshot, _ := seedCopyMedia(t, database, objects)
 	transfer := mediaapp.NewRoutedProjectCopyTransfer(mediaCopyStore(database), mediaFixtureCopyObjects(t, database), t.TempDir())
-	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := transfer.Transfer(t.Context(), mediaActor(actor), binding, snapshot); err != nil {
 		t.Fatal("transfer synthetic copy", err)
 	}
 	var receipt mediaapp.ProjectCopyReceipt
@@ -23,7 +23,7 @@ func TestProjectCopyMediaVerificationPreservesTimestampInstantsAcrossSessionTime
 			return err
 		}
 		var err error
-		receipt, err = mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		receipt, err = mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal("register complete metadata under UTC", err)
@@ -34,7 +34,7 @@ func TestProjectCopyMediaVerificationPreservesTimestampInstantsAcrossSessionTime
 				if err := tx.Exec(`SELECT set_config('TimeZone', ?, true)`, zone).Error; err != nil {
 					return err
 				}
-				actual, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+				actual, err := mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 				if err == nil && actual != receipt {
 					t.Fatal("session timezone changed frozen content receipt")
 				}
@@ -50,7 +50,7 @@ func TestProjectCopyMediaVerificationPreservesTimestampInstantsAcrossSessionTime
 		}
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 		return err
 	}); !errors.Is(err, mediaapp.ErrObjectMismatch) {
 		t.Fatal("actual changed timestamp must remain a mismatched copy", err)

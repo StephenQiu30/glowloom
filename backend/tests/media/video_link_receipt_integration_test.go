@@ -21,7 +21,7 @@ func TestVideoLinkReceiptActualPGScopeFingerprintAndRemoval(t *testing.T) {
 	store := mediaTestStore(db)
 	key := uuid.New()
 	name := "video-link-" + strings.Repeat("a", 64) + ".mp4"
-	if _, found, err := store.LookupPersonalVideoLink(t.Context(), actor, key, name); err != nil || found {
+	if _, found, err := store.LookupPersonalVideoLink(t.Context(), mediaActor(actor), key, name); err != nil || found {
 		t.Fatal("new personal library cannot start", found, err)
 	}
 	id, location := uuid.New(), uuid.New()
@@ -57,29 +57,29 @@ func TestVideoLinkReceiptActualPGScopeFingerprintAndRemoval(t *testing.T) {
 	if err := db.Exec(`INSERT INTO media.upload_request(project_id,personal_org_id,principal_id,request_key,sha256,file_name,byte_size,asset_id,response)VALUES(NULL,?,?,?,?,?,1,?,?::jsonb)`, actor.OrgID, actor.ID, forgedKey, sha, name, id, string(body)).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.LookupPersonalVideoLink(t.Context(), actor, forgedKey, name); !errors.Is(err, mediaapp.ErrUploadConflict) {
+	if _, _, err := store.LookupPersonalVideoLink(t.Context(), mediaActor(actor), forgedKey, name); !errors.Is(err, mediaapp.ErrUploadConflict) {
 		t.Fatal("local upload forged successful link provenance", err)
 	}
-	result, found, err := store.LookupPersonalVideoLink(t.Context(), actor, key, name)
+	result, found, err := store.LookupPersonalVideoLink(t.Context(), mediaActor(actor), key, name)
 	if err != nil || !found || result.Asset.ID != id {
 		t.Fatal("receipt not recovered", found, err)
 	}
-	if _, _, err := store.LookupPersonalVideoLink(t.Context(), actor, key, "different-source.mp4"); !errors.Is(err, mediaapp.ErrUploadConflict) {
+	if _, _, err := store.LookupPersonalVideoLink(t.Context(), mediaActor(actor), key, "different-source.mp4"); !errors.Is(err, mediaapp.ErrUploadConflict) {
 		t.Fatal("changed share page replayed", err)
 	}
-	if _, found, err := store.LookupPersonalVideoLink(t.Context(), foreign, key, name); err != nil || found {
+	if _, found, err := store.LookupPersonalVideoLink(t.Context(), mediaActor(foreign), key, name); err != nil || found {
 		t.Fatal("foreign receipt exposed", found, err)
 	}
 	if err := db.Table("media.library_item").Where("id=?", id).Update("catalog_state", "removed").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.LookupPersonalVideoLink(t.Context(), actor, key, name); !errors.Is(err, mediaapp.ErrUploadConflict) {
+	if _, _, err := store.LookupPersonalVideoLink(t.Context(), mediaActor(actor), key, name); !errors.Is(err, mediaapp.ErrUploadConflict) {
 		t.Fatal("removed library item replayed", err)
 	}
 	if err := db.Table("identity.user").Where("id=?", actor.ID).Update("status", "disabled").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.LookupPersonalVideoLink(t.Context(), actor, key, name); err == nil {
+	if _, _, err := store.LookupPersonalVideoLink(t.Context(), mediaActor(actor), key, name); err == nil {
 		t.Fatal("revoked actor replayed receipt")
 	}
 }

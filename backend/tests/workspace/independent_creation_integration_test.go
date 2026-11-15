@@ -13,9 +13,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -48,7 +52,7 @@ func TestIndependentCreationScopeAndCanvasListing(t *testing.T) {
 	require.NotEqual(t, a.id, otherContext.ID)
 
 	command := workspace.NewCreateProjectCommand(store, time.Now)
-	input := workspace.CreateProjectInput{
+	input := workspacesource.CreateProjectInput{
 		IndependentCanvas: true, Name: "独立画布", AspectRatio: "16:9",
 		StyleType: "realistic", RequestID: uuid.NewString(),
 	}

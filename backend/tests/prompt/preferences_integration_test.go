@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
@@ -20,12 +21,18 @@ import (
 	"gorm.io/gorm/logger"
 
 	prompthttp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/http"
+
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/http"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
@@ -111,7 +118,7 @@ func TestWorkspaceModelDefaultsPersistAndGuard(t *testing.T) {
 	}
 	changed := input
 	changed.DefaultModels = map[string]string{}
-	if _, err := service.Save(t.Context(), f.actor, changed); !errors.Is(err, workspaceapp.ErrIdempotencyConflict) {
+	if _, err := service.Save(t.Context(), f.actor, changed); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatal("different body reused a request key", err)
 	}
 	changed.IdempotencyKey = uuid.New()
@@ -127,7 +134,7 @@ func TestWorkspaceModelDefaultsPersistAndGuard(t *testing.T) {
 		t.Fatal("disabled model accepted", err)
 	}
 	other := newPreferenceFixture(t)
-	if _, err := service.Read(t.Context(), other.actor, f.project); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := service.Read(t.Context(), other.actor, f.project); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatal("cross-organization project disclosed", err)
 	}
 	if err := f.db.Exec(`UPDATE workspace.project SET status='archived' WHERE id=?`, f.project).Error; err != nil {
@@ -144,7 +151,11 @@ func TestWorkspaceModelDefaultsPersistAndGuard(t *testing.T) {
 }
 
 func TestPromptPreferencesPersistenceConcurrencyAndIsolation(t *testing.T) {
-	f := newPreferenceFixture(t)
+	legacy := newPreferenceFixture(t)
+	f := struct {
+		db    *gorm.DB
+		actor promptapp.Actor
+	}{db: legacy.db, actor: testPromptActor(legacy.actor)}
 	service := promptapp.NewPreferences(preferenceStore(f.db), time.Now)
 	definition, _ := domain.DefinitionFor("short_drama_outline")
 	input := promptapp.SaveInput{Operation: definition.Operation, Mode: domain.Append, Content: "保持 {{章节数量}} 章节的悬念", BaseTemplateID: definition.TemplateID, ExpectedRevision: 0, IdempotencyKey: uuid.New(), RequestID: uuid.NewString()}
@@ -183,7 +194,7 @@ func TestPromptPreferencesPersistenceConcurrencyAndIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	otherActor = identityfixture.Session(t, f.db, otherActor)
-	otherPreferences, err := service.List(t.Context(), otherActor)
+	otherPreferences, err := service.List(t.Context(), testPromptActor(otherActor))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,21 +238,11 @@ func TestPromptPreferencesPersistenceConcurrencyAndIsolation(t *testing.T) {
 
 func TestPromptPreferenceAuditFailureRollsBack(t *testing.T) {
 	f := newPreferenceFixture(t)
-	name := "prefs_fault_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	statement := fmt.Sprintf(`CREATE FUNCTION infra.%s() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
-	 IF NEW.payload->'actor'->>'id'='%s' AND NEW.payload->'data'->>'action'='prompt.customization_saved' THEN RAISE EXCEPTION 'synthetic preference audit failure'; END IF; RETURN NEW; END $$;
-	 CREATE TRIGGER %s BEFORE INSERT ON infra.outbox FOR EACH ROW EXECUTE FUNCTION infra.%s()`, name, f.actor.ID, name, name)
-	if err := f.db.Exec(statement).Error; err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := f.db.Exec(fmt.Sprintf(`DROP TRIGGER %s ON infra.outbox; DROP FUNCTION infra.%s()`, name, name)).Error; err != nil {
-			t.Error(err)
-		}
-	})
+	// Fail the actual Outbox INSERT without fixture DDL; keep the rollback
+	// assertions for the preference and idempotency records unchanged.
 	definition, _ := domain.DefinitionFor("skill_draft")
 	key := uuid.New()
-	_, err := promptapp.NewPreferences(preferenceStore(f.db), time.Now).Save(t.Context(), f.actor, promptapp.SaveInput{Operation: definition.Operation, Mode: domain.Append, Content: "合成不可写审计", BaseTemplateID: definition.TemplateID, IdempotencyKey: key, RequestID: uuid.NewString()})
+	_, err := promptapp.NewPreferences(invalidPreferenceAuditStore{Store: preferenceStore(f.db)}, time.Now).Save(t.Context(), testPromptActor(f.actor), promptapp.SaveInput{Operation: definition.Operation, Mode: domain.Append, Content: "合成不可写审计", BaseTemplateID: definition.TemplateID, IdempotencyKey: key, RequestID: uuid.NewString()})
 	if err == nil {
 		t.Fatal("fault did not stop preference commit")
 	}
@@ -256,7 +257,7 @@ func preferenceRouter(f preferenceFixture) *gin.Engine {
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	router.Use(func(c *gin.Context) { c.Set("principal", f.actor) })
 	group := router.Group("/api")
-	prompthttp.NewHandler(promptapp.NewPreferences(preferenceStore(f.db), time.Now)).Register(group)
+	prompthttp.NewHandler(promptapp.NewPreferences(preferenceStore(f.db), time.Now), promptHTTPActor).Register(group)
 	workspacehttp.NewModelDefaultsHandler(workspaceapp.NewModelDefaultsService(preferenceWorkspaceStore(f.db), time.Now)).Register(group)
 	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{}).Register(group)
 	return router
@@ -324,7 +325,7 @@ func TestPreferenceApplicationRoleAndOutdatedBaseline(t *testing.T) {
 	})
 	prompts := promptapp.NewPreferences(preferenceStore(database), time.Now)
 	definition, _ := domain.DefinitionFor("storyboard_plan")
-	saved, err := prompts.Save(t.Context(), f.actor, promptapp.SaveInput{Operation: definition.Operation, Mode: domain.Rewrite, Content: "合成替换创作模板", BaseTemplateID: definition.TemplateID, IdempotencyKey: uuid.New(), RequestID: uuid.NewString()})
+	saved, err := prompts.Save(t.Context(), testPromptActor(f.actor), promptapp.SaveInput{Operation: definition.Operation, Mode: domain.Rewrite, Content: "合成替换创作模板", BaseTemplateID: definition.TemplateID, IdempotencyKey: uuid.New(), RequestID: uuid.NewString()})
 	if err != nil {
 		t.Fatal("application role cannot persist its granted preference", err)
 	}
@@ -332,7 +333,7 @@ func TestPreferenceApplicationRoleAndOutdatedBaseline(t *testing.T) {
 	if err := f.db.Exec(`UPDATE workspace.prompt_customization SET base_template_id=? WHERE id=?`, oldBase, saved.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	preferences, err := prompts.List(t.Context(), f.actor)
+	preferences, err := prompts.List(t.Context(), testPromptActor(f.actor))
 	if err != nil {
 		t.Fatal(err)
 	}

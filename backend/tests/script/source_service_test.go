@@ -65,16 +65,16 @@ type sourcePersistence struct {
 	begins, finishes int
 }
 
-func (s *sourcePersistence) LoadBase(context.Context, identityapp.Principal, uuid.UUID, *uuid.UUID) (app.SourceBase, error) {
+func (s *sourcePersistence) LoadBase(context.Context, app.Actor, uuid.UUID, *uuid.UUID) (app.SourceBase, error) {
 	return s.base, nil
 }
-func (s *sourcePersistence) FindCommand(_ context.Context, _ identityapp.Principal, _, _ uuid.UUID, hash string) (*app.PendingWrite, error) {
+func (s *sourcePersistence) FindCommand(_ context.Context, _ app.Actor, _, _ uuid.UUID, hash string) (*app.PendingWrite, error) {
 	if s.pending != nil && s.pending.Plan.RequestHash != hash {
 		return nil, app.ErrIdempotencyConflict
 	}
 	return s.pending, nil
 }
-func (s *sourcePersistence) BeginWrite(_ context.Context, _ identityapp.Principal, plan app.WritePlan) (app.PendingWrite, error) {
+func (s *sourcePersistence) BeginWrite(_ context.Context, _ app.Actor, plan app.WritePlan) (app.PendingWrite, error) {
 	s.begins++
 	if s.pending == nil {
 		locations := make(map[string]uuid.UUID, len(plan.Objects))
@@ -92,7 +92,7 @@ func (s *sourcePersistence) BeginWrite(_ context.Context, _ identityapp.Principa
 	}
 	return *s.pending, nil
 }
-func (s *sourcePersistence) FinishWrite(_ context.Context, _ identityapp.Principal, plan app.WritePlan) (app.SourceReceipt, error) {
+func (s *sourcePersistence) FinishWrite(_ context.Context, _ app.Actor, plan app.WritePlan) (app.SourceReceipt, error) {
 	s.finishes++
 	r := app.SourceReceipt{ScriptRevision: 1, ProjectRevision: 2, VersionID: plan.Version.ID, SplitSetID: plan.Candidate.ID, Mappings: plan.Mappings, Changed: true}
 	s.pending.Receipt = &r
@@ -111,7 +111,7 @@ func TestScriptWriteUnknownPutReplaysOriginalManifestWithoutDuplicateVersion(t *
 	objects := &sourceObjects{data: make(map[string][]byte), uncertain: true}
 	clock := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
 	service := app.NewSourceService(store, objects, func() time.Time { return clock })
-	if _, err := service.Write(t.Context(), actor, input); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if _, err := service.Write(t.Context(), scriptActor(actor), input); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal("unknown write accepted", err)
 	}
 	if store.finishes != 0 || store.pending == nil || len(store.pending.Plan.Objects) != 4 {
@@ -123,17 +123,17 @@ func TestScriptWriteUnknownPutReplaysOriginalManifestWithoutDuplicateVersion(t *
 	original := store.pending.Plan.Version
 	clock = clock.Add(time.Hour)
 	objects.uncertain = false
-	result, err := service.Write(t.Context(), actor, input)
+	result, err := service.Write(t.Context(), scriptActor(actor), input)
 	if err != nil || result.VersionID != original.ID || objects.puts != 4 || store.finishes != 1 {
 		t.Fatal("original unknown replay", result, objects.puts, store.finishes, err)
 	}
 	input.RequestID = uuid.New()
-	replay, err := service.Write(t.Context(), actor, input)
+	replay, err := service.Write(t.Context(), scriptActor(actor), input)
 	if err != nil || replay.VersionID != result.VersionID || store.finishes != 1 {
 		t.Fatal("trace changed permanent receipt", replay, err)
 	}
 	input.Sources[0].Title = "另一个标题"
-	if _, err := service.Write(t.Context(), actor, input); !errors.Is(err, app.ErrIdempotencyConflict) {
+	if _, err := service.Write(t.Context(), scriptActor(actor), input); !errors.Is(err, app.ErrIdempotencyConflict) {
 		t.Fatal("same key changed input", err)
 	}
 }
@@ -144,7 +144,7 @@ func TestScriptAtomicImportRejectsWholeBatchBeforeObjectOrCommand(t *testing.T) 
 	input.Sources = append(input.Sources, app.SourceInput{Kind: "chapter", Title: "坏章节", Status: "draft", Document: domain.RichDocument{Type: "image"}})
 	store := &sourcePersistence{}
 	objects := &sourceObjects{data: make(map[string][]byte)}
-	if _, err := app.NewSourceService(store, objects, time.Now).Write(t.Context(), actor, input); err == nil || objects.puts != 0 || store.begins != 0 || store.finishes != 0 {
+	if _, err := app.NewSourceService(store, objects, time.Now).Write(t.Context(), scriptActor(actor), input); err == nil || objects.puts != 0 || store.begins != 0 || store.finishes != 0 {
 		t.Fatal("partial chapter import", err, objects.puts, store.begins)
 	}
 }
@@ -154,24 +154,24 @@ func TestScriptUnknownObjectMismatchNeverOverwritesOrPublishes(t *testing.T) {
 	store := &sourcePersistence{}
 	objects := &sourceObjects{data: make(map[string][]byte), uncertain: true}
 	service := app.NewSourceService(store, objects, time.Now)
-	if _, err := service.Write(t.Context(), actor, input); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if _, err := service.Write(t.Context(), scriptActor(actor), input); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal(err)
 	}
 	key := store.pending.Plan.Objects[0].LocationID.String()
 	objects.data[key] = []byte("foreign digest")
 	objects.uncertain = false
-	if _, err := service.Write(t.Context(), actor, input); !errors.Is(err, app.ErrObjectMismatch) || store.finishes != 0 || string(objects.data[key]) != "foreign digest" {
+	if _, err := service.Write(t.Context(), scriptActor(actor), input); !errors.Is(err, app.ErrObjectMismatch) || store.finishes != 0 || string(objects.data[key]) != "foreign digest" {
 		t.Fatal("mismatch overwritten", err)
 	}
 }
 
-func (s *sourcePersistence) ClaimSourceIO(context.Context, identityapp.Principal, app.WritePlan, uuid.UUID, time.Time) error {
+func (s *sourcePersistence) ClaimSourceIO(context.Context, app.Actor, app.WritePlan, uuid.UUID, time.Time) error {
 	return nil
 }
-func (s *sourcePersistence) BeginSourceObject(context.Context, identityapp.Principal, app.WritePlan, uuid.UUID, domain.ObjectFact) error {
+func (s *sourcePersistence) BeginSourceObject(context.Context, app.Actor, app.WritePlan, uuid.UUID, domain.ObjectFact) error {
 	return nil
 }
-func (s *sourcePersistence) ConfirmSourceObject(context.Context, identityapp.Principal, app.WritePlan, uuid.UUID, domain.ObjectFact) error {
+func (s *sourcePersistence) ConfirmSourceObject(context.Context, app.Actor, app.WritePlan, uuid.UUID, domain.ObjectFact) error {
 	return nil
 }
 func (s *sourcePersistence) EndSourceIO(context.Context, app.WritePlan, uuid.UUID, bool, time.Time) error {

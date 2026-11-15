@@ -7,8 +7,11 @@ import (
 
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
 
@@ -57,7 +60,7 @@ func TestProjectLifecycleStoreRequiresCopyEvidenceBeforeRecovery(t *testing.T) {
 				want error
 			}{
 				{"copy active", fixedProjectWork{blocked: true}, domain.ErrProjectHasInflightOperations},
-				{"copy unreadable", fixedProjectWork{err: workspaceapp.ErrProjectDependencyUnavailable}, workspaceapp.ErrProjectDependencyUnavailable},
+				{"copy unreadable", fixedProjectWork{err: workspacesource.ErrProjectDependencyUnavailable}, workspacesource.ErrProjectDependencyUnavailable},
 			} {
 				t.Run(test.name, func(t *testing.T) {
 					input := projectChange(id, saved.Project.Revision, action)

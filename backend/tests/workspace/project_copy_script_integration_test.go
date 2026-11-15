@@ -7,17 +7,26 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -110,14 +119,16 @@ func (o scriptCopyContractOwner) FinishCleanup(ctx context.Context, actor identi
 		return err
 	}
 	if o.cleanupBlocked != nil && *o.cleanupBlocked {
-		return workspaceapp.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	return nil
 }
 
 func scriptCopyContractStore(db *gorm.DB, factory workspacepg.ProjectCopyScriptOwnerFactory) *workspacepg.ProjectCopyStore {
 	return workspacepg.NewScopedProjectCopyStoreWithScript(db, workspaceRequestScope, workspaceWorkerScope, folderWork, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
-		return workspaceapp.ProjectCopyOwners{Media: workspaceMediaCopyStore(tx), Budget: workspaceCopyBudgetStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx}, Canvas: workspaceCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(workspaceMediaStore(tx)) }, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
+		return workspaceapp.ProjectCopyOwners{Media: workspaceMediaCopyStore(tx), Budget: workspaceCopyBudgetStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx}, Canvas: workspaceCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
+			return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(workspaceMediaStore(tx)))
+		}, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
 			return privateCopyReference{owner: workspaceMediaCopyStore(tx), binding: mediaapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}}
 		})}
 	}, factory)
@@ -156,7 +167,7 @@ func TestProjectCopyScriptPGOwnStageReceiptAndPublicationFence(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := projectCopyStore(db).CompleteScript(ctx, actor, job.ID, worker); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := projectCopyStore(db).CompleteScript(ctx, actor, job.ID, worker); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatal("missing owning module bypassed", err)
 	}
 	corrupt = true
@@ -190,7 +201,7 @@ func TestProjectCopyScriptPGOwnStageReceiptAndPublicationFence(t *testing.T) {
 func TestProjectCopyScriptPGMissingOwnerRollsBackAdmissionAndCleanupWaits(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor, source := lifecycleActorProject(ctx, t, owner)
-	if _, err := scriptCopyContractStore(db, nil).Create(ctx, actor, copyInput(source), time.Now()); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := scriptCopyContractStore(db, nil).Create(ctx, actor, copyInput(source), time.Now()); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatal("nil configured script owner accepted", err)
 	}
 	var counts struct{ Targets, Jobs int64 }

@@ -17,6 +17,9 @@ const (
 	RevokeSessionRequest SessionRevocationAction = "revoke_session"
 	// RevokeOtherSessionsRequest freezes the original set excluding its requester.
 	RevokeOtherSessionsRequest SessionRevocationAction = "revoke_others"
+	// RevokeRefreshReuseRequest closes only the exact session of an expired parent.
+	// No HTTP caller can select this internal purpose.
+	RevokeRefreshReuseRequest SessionRevocationAction = "refresh_reuse"
 )
 
 // SessionCredentialKind identifies an existing credential's digest convention.
@@ -64,8 +67,11 @@ func (in SessionRevocationInput) Validate() error {
 		return ErrSessionInvalid
 	}
 	switch in.Action {
-	case RevokeSessionRequest:
+	case RevokeSessionRequest, RevokeRefreshReuseRequest:
 		if in.TargetID == uuid.Nil {
+			return ErrSessionInvalid
+		}
+		if in.Action == RevokeRefreshReuseRequest && (len(in.Proofs) != 1 || in.Proofs[0].Kind != SessionCredentialRefresh || (in.Primary != "" && in.Primary != SessionCredentialRefresh)) {
 			return ErrSessionInvalid
 		}
 	case RevokeOtherSessionsRequest:
@@ -113,8 +119,8 @@ func (r SessionRevocationRequest) Validate() error {
 		return ErrSessionRevocationUnavailable
 	}
 	switch r.Action {
-	case RevokeSessionRequest:
-		if r.TargetID == uuid.Nil || len(r.Revocations) != 1 || r.Revocations[0].SessionID != r.TargetID {
+	case RevokeSessionRequest, RevokeRefreshReuseRequest:
+		if r.TargetID == uuid.Nil || len(r.Revocations) != 1 || r.Revocations[0].SessionID != r.TargetID || (r.Action == RevokeRefreshReuseRequest && r.TargetID != r.RequestSessionID) {
 			return ErrSessionRevocationUnavailable
 		}
 	case RevokeOtherSessionsRequest:
@@ -157,27 +163,37 @@ type SessionRevocationAuthenticator interface {
 
 func sessionRevocationInput(credentials SessionRevocationCredentials, key uuid.UUID, action SessionRevocationAction, target uuid.UUID) (SessionRevocationInput, error) {
 	in := SessionRevocationInput{Key: key, Action: action, TargetID: target}
+	proofs, err := sessionRevocationProofs(credentials)
+	if err != nil {
+		return in, err
+	}
+	in.Proofs = proofs
+	return in, in.Validate()
+}
+
+func sessionRevocationProofs(credentials SessionRevocationCredentials) ([]SessionRevocationProof, error) {
 	if credentials.LegacyToken != "" && (credentials.AccessToken != "" || credentials.RefreshToken != "") {
-		return in, ErrSessionInvalid
+		return nil, ErrSessionInvalid
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(credentials.CSRFToken)
 	if err != nil || len(raw) != 32 {
-		return in, ErrSessionCSRFInvalid
+		return nil, ErrSessionCSRFInvalid
 	}
 	csrf := sha256.Sum256([]byte(credentials.CSRFToken))
+	var proofs []SessionRevocationProof
 	add := func(kind SessionCredentialKind, digest []byte) {
-		in.Proofs = append(in.Proofs, SessionRevocationProof{Kind: kind, TokenDigest: digest, CSRFHash: append([]byte(nil), csrf[:]...)})
+		proofs = append(proofs, SessionRevocationProof{Kind: kind, TokenDigest: digest, CSRFHash: append([]byte(nil), csrf[:]...)})
 	}
 	if credentials.LegacyToken != "" {
 		digest, err := refreshDigest(credentials.LegacyToken)
 		if err != nil {
-			return in, err
+			return nil, err
 		}
 		add(SessionCredentialLegacy, digest)
 	} else {
 		if credentials.AccessToken != "" {
 			if len(credentials.AccessToken) > 16<<10 {
-				return in, ErrSessionInvalid
+				return nil, ErrSessionInvalid
 			}
 			digest := sha256.Sum256([]byte(credentials.AccessToken))
 			add(SessionCredentialAccess, digest[:])
@@ -186,10 +202,10 @@ func sessionRevocationInput(credentials SessionRevocationCredentials, key uuid.U
 			digest, err := refreshDigest(credentials.RefreshToken)
 			if err == nil {
 				add(SessionCredentialRefresh, digest)
-			} else if len(in.Proofs) == 0 {
-				return in, err
+			} else if len(proofs) == 0 {
+				return nil, err
 			}
 		}
 	}
-	return in, in.Validate()
+	return proofs, nil
 }

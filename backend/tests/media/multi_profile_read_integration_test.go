@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -28,9 +27,9 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 	store := routingMediaStore(db)
 	service := mediaapp.NewRoutedUploadService(store, store, pgmedia.NewUploadAdmission(store), routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, &persistedRoutedUpload{locations: routes}, time.Now)
 	input := uploadInput(t)
-	input.Actor = actor
+	input.Actor = mediaActor(actor)
 	input.Request.ProjectID = project
-	target, err := service.BeginUpload(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, input.Request.Key)
+	target, err := service.BeginUpload(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, input.Request.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,11 +41,11 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, "read-cos-"+uuid.NewString(), "cos-main")); err != nil {
 		t.Fatal(err)
 	}
-	asset, err := store.FindAsset(t.Context(), actor, project, uploaded.Asset.ID)
+	asset, err := store.FindAsset(t.Context(), mediaActor(actor), project, uploaded.Asset.ID)
 	if err != nil || asset.ObjectLocation == nil || asset.ObjectLocation.Ref.ProfileID != "cos-first" || asset.ObjectLocation.Ref.Bucket != "storage-test-1250000000" {
 		t.Fatal("asset reader lost historical identity", err)
 	}
-	rends, err := store.FindRenditions(t.Context(), actor, project, uploaded.Asset.ID)
+	rends, err := store.FindRenditions(t.Context(), mediaActor(actor), project, uploaded.Asset.ID)
 	if err != nil || len(rends) != 2 {
 		t.Fatal("rendition reader", err)
 	}
@@ -58,13 +57,13 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 	library := pgmedia.NewScopedLibraryStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, time.Now, func(*gorm.DB) mediaapp.ScopeAccess { return routingScopeStub{} })
 	for _, read := range []func() (mediaapp.LibraryMediaFile, error){
 		func() (mediaapp.LibraryMediaFile, error) {
-			return library.FindLibraryMedia(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, asset.ID)
+			return library.FindLibraryMedia(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, asset.ID)
 		},
 		func() (mediaapp.LibraryMediaFile, error) {
-			return library.ReadReferenceFactSource(t.Context(), actor, project, asset.ID, domain.KindImage)
+			return library.ReadReferenceFactSource(t.Context(), mediaActor(actor), project, asset.ID, domain.KindImage)
 		},
 		func() (mediaapp.LibraryMediaFile, error) {
-			return library.ReadFrozenReferenceFactSource(t.Context(), actor, project, asset.ID, domain.KindImage)
+			return library.ReadFrozenReferenceFactSource(t.Context(), mediaActor(actor), project, asset.ID, domain.KindImage)
 		},
 	} {
 		file, err := read()
@@ -83,16 +82,16 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 // source rows, acceptance, location joins and object facts use real PostgreSQL.
 type routingProjectAccess struct{}
 
-func (routingProjectAccess) Authorize(_ context.Context, actor identityapp.Principal, project uuid.UUID, _ bool) (mediaapp.LibraryProjectFacts, error) {
+func (routingProjectAccess) Authorize(_ context.Context, actor mediaapp.Actor, project uuid.UUID, _ bool) (mediaapp.LibraryProjectFacts, error) {
 	return mediaapp.LibraryProjectFacts{ProjectID: project, OrgID: actor.OrgID, Revision: 1}, nil
 }
-func (routingProjectAccess) TouchContent(context.Context, identityapp.Principal, uuid.UUID, int64) (int64, error) {
+func (routingProjectAccess) TouchContent(context.Context, mediaapp.Actor, uuid.UUID, int64) (int64, error) {
 	return 0, mediaapp.ErrUnavailable
 }
 
 type emptyLocationIntents struct{}
 
-func (emptyLocationIntents) StorageUsageLocations(context.Context, identityapp.Principal, domain.LibraryScope) ([]domain.ObjectRef, error) {
+func (emptyLocationIntents) StorageUsageLocations(context.Context, mediaapp.Actor, domain.LibraryScope) ([]domain.ObjectRef, error) {
 	return nil, nil
 }
 
@@ -105,9 +104,9 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 	store := routingMediaStore(db)
 	service := mediaapp.NewRoutedUploadService(store, store, pgmedia.NewUploadAdmission(store), routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, &persistedRoutedUpload{locations: routes}, time.Now)
 	input := uploadInput(t)
-	input.Actor = actor
+	input.Actor = mediaActor(actor)
 	input.Request.ProjectID = project
-	target, err := service.BeginUpload(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, input.Request.Key)
+	target, err := service.BeginUpload(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, input.Request.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +118,7 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 	buckets := []mediaapp.StorageUsageBucket{{ProfileID: "cos-first", Bucket: "storage-test-1250000000"}, {ProfileID: "cos-main", Bucket: "storage-test-123"}}
 	source := pgmedia.NewRoutedStorageUsageStore(library, buckets, func(*gorm.DB) mediaapp.StorageUsageLocationSource { return emptyLocationIntents{} })
 	called := false
-	err = source.InspectStorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(in mediaapp.StorageUsageInventory) error {
+	err = source.InspectStorageUsage(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(in mediaapp.StorageUsageInventory) error {
 		called = true
 		if len(in.Locations) != 3 || len(in.PhysicalPrefixes) != 2 {
 			t.Fatal("inventory omitted saved identities")

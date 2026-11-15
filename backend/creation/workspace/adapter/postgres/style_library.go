@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -52,12 +54,12 @@ type styleLibraryRow struct {
 func (row styleLibraryRow) detail(a identity.Principal) (app.StyleLibraryDetail, error) {
 	refs := []uuid.UUID{}
 	if json.Unmarshal([]byte(row.Images), &refs) != nil || refs == nil || len(refs) > 4 || row.ID == uuid.Nil || row.Revision < 1 {
-		return app.StyleLibraryDetail{}, app.ErrProjectDependencyUnavailable
+		return app.StyleLibraryDetail{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	seen := map[uuid.UUID]bool{}
 	for _, id := range refs {
 		if id == uuid.Nil || seen[id] {
-			return app.StyleLibraryDetail{}, app.ErrProjectDependencyUnavailable
+			return app.StyleLibraryDetail{}, workspacesource.ErrProjectDependencyUnavailable
 		}
 		seen[id] = true
 	}
@@ -74,7 +76,7 @@ func (row styleLibraryRow) detail(a identity.Principal) (app.StyleLibraryDetail,
 func (s *StyleLibraryStore) ListStyleLibrary(ctx context.Context, a identity.Principal, in app.StyleLibraryFilter) (app.StyleLibraryPage, error) {
 	out := app.StyleLibraryPage{Items: []app.StyleLibraryEntry{}}
 	if s == nil || s.db == nil {
-		return out, app.ErrProjectDependencyUnavailable
+		return out, workspacesource.ErrProjectDependencyUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.authorize(ctx, tx, a, false); err != nil {
@@ -147,7 +149,7 @@ func readLibraryStyle(tx *gorm.DB, a identity.Principal, id uuid.UUID, deleted, 
 		return row, r.Error
 	}
 	if r.RowsAffected != 1 {
-		return row, app.ErrStylePresetNotFound
+		return row, workspacesource.ErrStylePresetNotFound
 	}
 	return row, nil
 }
@@ -188,7 +190,7 @@ func (s *StyleLibraryStore) imageProofs(ctx context.Context, tx *gorm.DB, a iden
 func (s *StyleLibraryStore) ReadStyleLibrary(ctx context.Context, a identity.Principal, id uuid.UUID) (app.StyleLibraryDetail, error) {
 	var out app.StyleLibraryDetail
 	if s == nil || s.db == nil {
-		return out, app.ErrProjectDependencyUnavailable
+		return out, workspacesource.ErrProjectDependencyUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.authorize(ctx, tx, a, false); err != nil {
@@ -217,7 +219,7 @@ func (s *StyleLibraryStore) ReadStyleLibrary(ctx context.Context, a identity.Pri
 func (s *StyleLibraryStore) ChangeStyleLibrary(ctx context.Context, a identity.Principal, in app.StyleLibraryMutation) (app.StyleLibraryChangeResult, error) {
 	var out app.StyleLibraryChangeResult
 	if s == nil || s.db == nil {
-		return out, app.ErrProjectDependencyUnavailable
+		return out, workspacesource.ErrProjectDependencyUnavailable
 	}
 	canonical := in
 	canonical.RequestID = ""
@@ -250,17 +252,17 @@ func (s *StyleLibraryStore) ChangeStyleLibrary(ctx context.Context, a identity.P
 		}
 		if r.RowsAffected == 1 {
 			if receipt.OrgID != a.OrgID || receipt.OwnerScopeID != a.ScopeID || receipt.RequestSHA256 != hash {
-				return app.ErrIdempotencyConflict
+				return workspacesource.ErrIdempotencyConflict
 			}
 			row, err := readLibraryStyle(tx, a, receipt.PresetID, true, false)
 			if err != nil {
 				return err
 			}
 			if row.OwnerUserID == nil || *row.OwnerUserID != a.ID {
-				return app.ErrStylePresetNotFound
+				return workspacesource.ErrStylePresetNotFound
 			}
 			if json.Unmarshal(receipt.ResponseBody, &out) != nil || out.RequestID != in.IdempotencyKey || out.Action != in.Action || out.Preset.ID != receipt.PresetID || !out.Preset.Owned {
-				return app.ErrProjectDependencyUnavailable
+				return workspacesource.ErrProjectDependencyUnavailable
 			}
 			return nil
 		}
@@ -283,7 +285,7 @@ func (s *StyleLibraryStore) ChangeStyleLibrary(ctx context.Context, a identity.P
 				return r.Error
 			}
 			if r.RowsAffected != 1 {
-				return app.ErrProjectDependencyUnavailable
+				return workspacesource.ErrProjectDependencyUnavailable
 			}
 		} else {
 			row, err := readLibraryStyle(tx, a, id, false, true)
@@ -291,7 +293,7 @@ func (s *StyleLibraryStore) ChangeStyleLibrary(ctx context.Context, a identity.P
 				return err
 			}
 			if row.OwnerUserID == nil || *row.OwnerUserID != a.ID {
-				return app.ErrStylePresetNotFound
+				return workspacesource.ErrStylePresetNotFound
 			}
 			if row.Revision != in.ExpectedRevision {
 				return app.ErrStyleLibraryRevision
@@ -377,10 +379,10 @@ func NewStyleMediaGuard(tx *gorm.DB) *StyleMediaGuard { return &StyleMediaGuard{
 // HasRetainedMediaReference protects current and historical style image pins.
 func (g *StyleMediaGuard) HasRetainedMediaReference(ctx context.Context, id uuid.UUID) (bool, error) {
 	if g == nil || g.db == nil || g.db.Statement == nil || id == uuid.Nil {
-		return false, app.ErrProjectDependencyUnavailable
+		return false, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if _, ok := g.db.Statement.ConnPool.(gorm.TxCommitter); !ok {
-		return false, app.ErrProjectDependencyUnavailable
+		return false, workspacesource.ErrProjectDependencyUnavailable
 	}
 	var found bool
 	err := g.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM workspace.style_preset_reference WHERE asset_id=?) OR EXISTS(SELECT 1 FROM workspace.style_preset WHERE reference_asset_ids @> ARRAY[?::uuid])`, id, id).Scan(&found).Error

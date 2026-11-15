@@ -31,6 +31,7 @@ type providerCallRow struct {
 	ResponseSummary       []byte
 	Usage                 []byte
 	CostMicros            *int64
+	ProcurementCostMicros *int64
 	DispatchStartedAt     *time.Time
 	Receipt               []byte
 }
@@ -336,7 +337,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			SELECT id, create_time::text AS create_time, outcome, provider_task_id,
 			       request_summary, request_key, model_profile_version_id,
 			       price_rule_version_id, dispatch_started_at, receipt,
-			       response_summary, usage, cost_micros
+			       response_summary, usage, cost_micros, procurement_cost_micros
 			FROM operation.provider_call
 			WHERE project_id = ?::uuid AND operation_id = ?::uuid
 			  AND action = ? AND attempt = ? AND NOT is_delete
@@ -433,7 +434,27 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 				summary["provider_request_id"] = previous.RequestID
 			}
 		}
-		state, err := json.Marshal(summary)
+		var previousSummary map[string]json.RawMessage
+		if len(call.ResponseSummary) > 0 && string(call.ResponseSummary) != "null" {
+			if err := json.Unmarshal(call.ResponseSummary, &previousSummary); err != nil {
+				return err
+			}
+		}
+		observation := previousSummary["supplier_observation"]
+		mergedSummary := make(map[string]any, len(summary)+1)
+		for key, value := range summary {
+			mergedSummary[key] = value
+		}
+		if len(observation) > 0 {
+			mergedSummary["supplier_observation"] = observation
+			if input.State == application.ProviderCallStateNotSubmitted {
+				return application.ErrProviderCallConflict
+			}
+			if len(input.Usage) == 0 {
+				input.Usage = call.Usage
+			}
+		}
+		state, err := json.Marshal(mergedSummary)
 		if err != nil {
 			return fmt.Errorf("encode provider result state: %w", err)
 		}
@@ -444,7 +465,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 				return fmt.Errorf("encode provider receipt: %w", err)
 			}
 		}
-		if len(call.ResponseSummary) != 0 {
+		if len(previousSummary["state"]) != 0 {
 			if call.Outcome == input.Outcome && jsonEqual(call.ResponseSummary, state) &&
 				sameOptionalString(call.ProviderTaskID, input.ProviderTaskID) &&
 				jsonEqual(call.Usage, input.Usage) && jsonEqual(call.Receipt, receipt) {
@@ -475,19 +496,36 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			cost = &zero
 		case input.Managed || input.Action == "query" && (input.State == application.ProviderCallStateSucceeded || input.State == application.ProviderCallStateFailed) ||
 			input.Action == "cancel" && input.State == application.ProviderCallStateCancelled:
-			priced, procurement, err := priceProviderUsage(tx, input.OperationID, op.ModelProfileVersionID, op.PriceRuleVersionID,
-				op.Mode, op.Params, input.Usage, call.DispatchStartedAt, receivedAt)
+			var priced int64
+			var procurement *int64
+			var err error
+			if len(observation) > 0 {
+				var original supplierObservationRecord
+				if json.Unmarshal(observation, &original) != nil || original.Original.Validate() != nil || original.Original.Identity.OperationID != input.OperationID || original.ModelVersionID != *op.ModelProfileVersionID || original.PriceVersionID != *op.PriceRuleVersionID {
+					return application.ErrProviderCallConflict
+				}
+				if !receivedAt.IsZero() && !receivedAt.Equal(original.Original.ReceivedAt) {
+					return application.ErrProviderCallConflict
+				}
+				route, routeErr := observedSupplierRoute(tx, original)
+				if routeErr != nil {
+					return routeErr
+				}
+				priced, procurement, err = priceProviderUsageAtRoute(tx, input.OperationID, &original.ModelVersionID, &original.PriceVersionID, original.Mode, original.Params, input.Usage, &original.DispatchStartedAt, original.Original.ReceivedAt, &route)
+			} else {
+				priced, procurement, err = priceProviderUsage(tx, input.OperationID, op.ModelProfileVersionID, op.PriceRuleVersionID, op.Mode, op.Params, input.Usage, call.DispatchStartedAt, receivedAt)
+			}
 			if err != nil {
 				return err
 			}
 			var previous []providerCallRow
 			if err := tx.Raw(`
 				SELECT id, provider_task_id, usage, cost_micros FROM operation.provider_call
-				WHERE project_id = ?::uuid AND operation_id = ?::uuid AND id <> ?::uuid
+				WHERE project_id = ?::uuid AND operation_id = ?::uuid AND (create_time,id) < (?::timestamptz,?::uuid)
 				  AND action IN ('query', 'cancel')
-				  AND response_summary ->> 'state' IN ('succeeded', 'failed', 'cancelled')
+				  AND (response_summary ->> 'state' IN ('succeeded', 'failed', 'cancelled') OR response_summary#>>'{supplier_observation,original,state}'='succeeded')
 				  AND cost_micros IS NOT NULL AND NOT is_delete
-			`, op.ProjectID.String(), input.OperationID.String(), call.ID.String()).Scan(&previous).Error; err != nil {
+			`, op.ProjectID.String(), input.OperationID.String(), call.CreateTime, call.ID.String()).Scan(&previous).Error; err != nil {
 				return fmt.Errorf("read prior provider charge: %w", err)
 			}
 			if len(previous) != 0 {
@@ -507,6 +545,22 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		default:
 			zero := int64(0)
 			cost = &zero
+		}
+		// A later archive/transfer failure cannot revoke an already established
+		// supplier charge. Only matching conclusive pricing can extend these facts.
+		if len(observation) > 0 {
+			if call.CostMicros != nil {
+				if input.Managed && cost != nil && *cost != *call.CostMicros {
+					return application.ErrProviderCallConflict
+				}
+				cost = call.CostMicros
+			}
+			if call.ProcurementCostMicros != nil {
+				if input.Managed && procurementCost != nil && *procurementCost != *call.ProcurementCostMicros {
+					return application.ErrProviderCallConflict
+				}
+				procurementCost = call.ProcurementCostMicros
+			}
 		}
 		result = tx.Exec(`
 			UPDATE operation.provider_call
@@ -528,6 +582,14 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 
 func priceProviderUsage(tx *gorm.DB, operationID uuid.UUID, modelVersionID, priceID *uuid.UUID,
 	mode string, params, rawUsage []byte, startedAt *time.Time, receivedAt time.Time,
+) (int64, *int64, error) {
+	return priceProviderUsageAtRoute(tx, operationID, modelVersionID, priceID, mode, params, rawUsage, startedAt, receivedAt, nil)
+}
+
+type providerUsageRoute struct{ ProcurementID, VersionID uuid.UUID }
+
+func priceProviderUsageAtRoute(tx *gorm.DB, operationID uuid.UUID, modelVersionID, priceID *uuid.UUID,
+	mode string, params, rawUsage []byte, startedAt *time.Time, receivedAt time.Time, frozenRoute *providerUsageRoute,
 ) (int64, *int64, error) {
 	if len(rawUsage) == 0 || modelVersionID == nil || priceID == nil {
 		return 0, nil, application.ErrProviderCostUnknown
@@ -563,8 +625,10 @@ func priceProviderUsage(tx *gorm.DB, operationID uuid.UUID, modelVersionID, pric
 		return 0, nil, err
 	}
 	actualModelVersion := *modelVersionID
-	var route struct{ ProcurementID, VersionID uuid.UUID }
-	if err := tx.Raw(`SELECT COALESCE(retry.procurement_price_id,d.procurement_price_id) AS procurement_id,r.model_version_id AS version_id FROM operation.route_delivery d LEFT JOIN operation.route_retry retry ON retry.operation_id=d.operation_id JOIN catalog.model_release r ON r.id=COALESCE(retry.release_id,d.release_id) WHERE d.operation_id=?`, operationID).Scan(&route).Error; err != nil {
+	var route providerUsageRoute
+	if frozenRoute != nil {
+		route = *frozenRoute
+	} else if err := tx.Raw(`SELECT COALESCE(retry.procurement_price_id,d.procurement_price_id) AS procurement_id,r.model_version_id AS version_id FROM operation.route_delivery d LEFT JOIN operation.route_retry retry ON retry.operation_id=d.operation_id JOIN catalog.model_release r ON r.id=COALESCE(retry.release_id,d.release_id) WHERE d.operation_id=?`, operationID).Scan(&route).Error; err != nil {
 		return 0, nil, err
 	}
 	if route.ProcurementID != uuid.Nil {

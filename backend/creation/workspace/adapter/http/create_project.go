@@ -1,6 +1,8 @@
 package http
 
 import (
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -8,25 +10,16 @@ import (
 	"errors"
 	"strconv"
 
+	projecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/httpprojects"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
-
-// CreateProjectRequest contains only user-editable creation specifications.
-type CreateProjectRequest struct {
-	StyleKey      *string    `json:"style_key" maxLength:"50" extensions:"x-nullable"`
-	Name          string     `json:"name" binding:"required" minLength:"1" maxLength:"50"`
-	Description   string     `json:"description"`
-	AspectRatio   string     `json:"aspect_ratio" binding:"required" enums:"9:16,16:9,1:1"`
-	StyleType     string     `json:"style_type" enums:"realistic,stylized"`
-	StyleSubtype  string     `json:"style_subtype,omitempty" enums:"anime_jp,guofeng_xianxia,cartoon_3d,manhwa"`
-	StylePresetID *uuid.UUID `json:"style_preset_id,omitempty"`
-}
 
 // Create atomically registers a project with a zero budget and durable events.
 // @Summary 创建项目
@@ -35,8 +28,8 @@ type CreateProjectRequest struct {
 // @Accept json
 // @Produce json
 // @Param Idempotency-Key header string true "持久创建回执的 UUID 幂等键"
-// @Param body body CreateProjectRequest true "项目规格"
-// @Success 201 {object} application.CreatedProject
+// @Param body body projecthttp.CreateProjectRequest true "项目规格"
+// @Success 201 {object} workspacesource.CreatedProject
 // @Failure 409 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
@@ -55,15 +48,15 @@ func (h *Handler) Create(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param Idempotency-Key header string true "创建命令 UUID"
-// @Param body body CreateProjectRequest true "画布初始规格"
-// @Success 201 {object} application.CreatedProject
+// @Param body body projecthttp.CreateProjectRequest true "画布初始规格"
+// @Success 201 {object} workspacesource.CreatedProject
 // @Router /api/independent-canvases [post]
 func (h *Handler) CreateIndependentCanvas(c *gin.Context) {
 	h.createProject(c, true)
 }
 
 func (h *Handler) createProject(c *gin.Context, independent bool) {
-	var body CreateProjectRequest
+	var body projecthttp.CreateProjectRequest
 	if !httpapi.Decode(c, &body) {
 		return
 	}
@@ -72,7 +65,7 @@ func (h *Handler) createProject(c *gin.Context, independent bool) {
 		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
 		return
 	}
-	input := application.CreateProjectInput{IndependentCanvas: independent, StyleKey: body.StyleKey, Name: body.Name, Description: body.Description, AspectRatio: body.AspectRatio, StyleType: body.StyleType, StyleSubtype: body.StyleSubtype, RequestID: c.GetString("request_id")}
+	input := workspacesource.CreateProjectInput{IndependentCanvas: independent, StyleKey: body.StyleKey, Name: body.Name, Description: body.Description, AspectRatio: body.AspectRatio, StyleType: body.StyleType, StyleSubtype: body.StyleSubtype, RequestID: c.GetString("request_id")}
 	if body.StylePresetID != nil {
 		if *body.StylePresetID == uuid.Nil {
 			httpapi.WriteProblem(c, 422, "invalid_request", nil)
@@ -184,11 +177,11 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrScopeNotFound), errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound):
+	case errors.Is(err, workspacesource.ErrScopeNotFound), errors.Is(err, workspacesource.ErrProjectNotFound), errors.Is(err, workspacesource.ErrStylePresetNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
-	case errors.Is(err, application.ErrIdempotencyConflict):
+	case errors.Is(err, workspacesource.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_key_reused", nil)
-	case errors.Is(err, application.ErrStylePresetMismatch), errors.Is(err, application.ErrInvalidCreateProject), errors.Is(err, application.ErrInvalidStylePresetList):
+	case errors.Is(err, workspacesource.ErrStylePresetMismatch), errors.Is(err, workspacesource.ErrInvalidCreateProject), errors.Is(err, application.ErrInvalidStylePresetList):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)

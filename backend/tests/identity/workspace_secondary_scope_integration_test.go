@@ -13,12 +13,20 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceevent "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/event"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	domain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
@@ -51,7 +59,7 @@ func TestSecondaryFoldersBindSelectedScope(t *testing.T) {
 	if page, err := store.ListFolders(t.Context(), other, workspace.FolderListInput{Limit: 20}); err != nil || len(page.Items) != 0 {
 		t.Fatalf("personal listed team folders: %+v %v", page, err)
 	}
-	if _, err := store.ChangeFolder(t.Context(), other, in, time.Now()); !errors.Is(err, workspace.ErrIdempotencyConflict) {
+	if _, err := store.ChangeFolder(t.Context(), other, in, time.Now()); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatalf("cross-scope receipt: %v", err)
 	}
 	if _, err := pgworkspace.NewScopedStore(tx, requests, nil, nil).ListProjectsForActor(t.Context(), other, workspace.ListProjectsInput{Limit: 20, FolderID: &saved.Folder.ID}); !errors.Is(err, domain.ErrProjectFolderNotFound) {
@@ -116,7 +124,7 @@ func TestSecondaryCopySessionScopeAndWorkerFence(t *testing.T) {
 	if _, err := requests(tx).Resolve(t.Context(), other, other.ScopeID, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Find(t.Context(), other, job.ID); !errors.Is(err, workspace.ErrProjectNotFound) {
+	if _, err := store.Find(t.Context(), other, job.ID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("different valid scope copy read: %v", err)
 	}
 	if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=now() WHERE id=?`, actor.SessionID).Error; err != nil {
@@ -144,10 +152,10 @@ func TestSecondaryCopySessionScopeAndWorkerFence(t *testing.T) {
 		t.Fatal(err)
 	}
 	called := false
-	if err := store.UseAttempt(t.Context(), worker, job.ID, nonce, "media", func(workspace.ProjectCopyOwners, domain.ProjectCopyJob) error { called = true; return nil }); !errors.Is(err, workspace.ErrScopeNotFound) || called {
+	if err := store.UseAttempt(t.Context(), worker, job.ID, nonce, "media", func(workspace.ProjectCopyOwners, domain.ProjectCopyJob) error { called = true; return nil }); !errors.Is(err, workspacesource.ErrScopeNotFound) || called {
 		t.Fatalf("revoked callback: %v %v", err, called)
 	}
-	if _, err := store.Fail(t.Context(), worker, job.ID, nonce, "denied", false, false); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := store.Fail(t.Context(), worker, job.ID, nonce, "denied", false, false); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("revoked writeback: %v", err)
 	}
 	stopped, err := store.StopAttempt(t.Context(), workspace.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: nonce}, "revoked", false, false)

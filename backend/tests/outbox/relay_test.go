@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
+	application "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox"
 )
 
 type memoryStore struct {

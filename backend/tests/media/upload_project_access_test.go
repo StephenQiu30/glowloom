@@ -31,8 +31,8 @@ type routingUploadAccess struct {
 	projects *pgworkspace.ProjectContentAccessStore
 }
 
-func (a routingUploadAccess) AuthorizeUploadProject(ctx context.Context, actor identity.Principal, id uuid.UUID) (string, error) {
-	return a.projects.AuthorizeUploadProject(ctx, actor, id)
+func (a routingUploadAccess) AuthorizeUploadProject(ctx context.Context, actor media.Actor, id uuid.UUID) (string, error) {
+	return a.projects.AuthorizeUploadProject(ctx, mediaIdentityActor(actor), id)
 }
 func (a routingUploadAccess) AwaitUploadProjectCommit(ctx context.Context, id uuid.UUID) error {
 	return a.projects.AwaitUploadProjectCommit(ctx, id)
@@ -75,12 +75,12 @@ func (p *uploadPortTx) Rollback() error { p.rollbacks++; return nil }
 type uploadProjectPort struct {
 	routingScopeStub
 	authorizations, waits int
-	actor                 identity.Principal
+	actor                 media.Actor
 	project               uuid.UUID
 	rejection             error
 }
 
-func (a *uploadProjectPort) AuthorizeUploadProject(_ context.Context, actor identity.Principal, project uuid.UUID) (string, error) {
+func (a *uploadProjectPort) AuthorizeUploadProject(_ context.Context, actor media.Actor, project uuid.UUID) (string, error) {
 	a.authorizations++
 	a.actor, a.project = actor, project
 	return "", a.rejection
@@ -121,7 +121,7 @@ func TestUploadProjectPortFailsClosedBeforeMediaSQL(t *testing.T) {
 			if cleanup {
 				_, err = store.UploadAssetExists(t.Context(), project, uuid.New())
 			} else {
-				_, err = store.AuthorizeUpload(t.Context(), actor, project)
+				_, err = store.AuthorizeUpload(t.Context(), mediaActor(actor), project)
 			}
 			if !errors.Is(err, rejected) || port.project != project || factoryCalls != 1 || pool.queries != 0 || pool.commits != 0 || pool.rollbacks != 1 {
 				t.Fatalf("authority bypass: error=%v project=%v factory=%d SQL=%d commits=%d rollbacks=%d", err, port.project, factoryCalls, pool.queries, pool.commits, pool.rollbacks)
@@ -130,7 +130,7 @@ func TestUploadProjectPortFailsClosedBeforeMediaSQL(t *testing.T) {
 				if port.authorizations != 0 || port.waits != 1 {
 					t.Fatal("unknown commit cleanup was coupled to new upload authorization")
 				}
-			} else if port.authorizations != 1 || port.waits != 0 || port.actor != actor {
+			} else if port.authorizations != 1 || port.waits != 0 || port.actor != mediaActor(actor) {
 				t.Fatal("upload did not pass the original actor to its authority")
 			}
 		})
@@ -140,7 +140,7 @@ func TestUploadProjectPortFailsClosedBeforeMediaSQL(t *testing.T) {
 func TestUploadProjectPortRejectsMissingCapability(t *testing.T) {
 	database, pool := uploadPortDB(t)
 	store := pgmedia.NewScopedStore(database, func(*gorm.DB) media.ScopeAccess { return routingScopeStub{} })
-	if _, err := store.AuthorizeUpload(t.Context(), identity.Principal{}, uuid.New()); !errors.Is(err, media.ErrUnavailable) {
+	if _, err := store.AuthorizeUpload(t.Context(), mediaActor(identity.Principal{}), uuid.New()); !errors.Is(err, media.ErrUnavailable) {
 		t.Fatalf("missing upload authority accepted: %v", err)
 	}
 	if _, err := store.UploadAssetExists(t.Context(), uuid.New(), uuid.New()); !errors.Is(err, media.ErrUnavailable) {

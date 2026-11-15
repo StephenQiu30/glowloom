@@ -10,7 +10,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -19,7 +18,7 @@ import (
 // binding, but retains current authorization and exact original/rendition locks.
 // A soft-deleted original has a changed revision and needs a separate retained
 // history proof; this reader never infers that change to be the old evidence.
-func (s *LibraryStore) ReadFrozenReferenceFactSource(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, kind domain.Kind) (application.LibraryMediaFile, error) {
+func (s *LibraryStore) ReadFrozenReferenceFactSource(ctx context.Context, actor application.Actor, project, id uuid.UUID, kind domain.Kind) (application.LibraryMediaFile, error) {
 	if project == uuid.Nil || id == uuid.Nil || kind != domain.KindImage && kind != domain.KindAudio {
 		return application.LibraryMediaFile{}, application.ErrNotFound
 	}

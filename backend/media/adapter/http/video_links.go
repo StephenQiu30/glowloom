@@ -8,26 +8,26 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // VideoLinkImporter returns only actual authorized personal-library media.
 type VideoLinkImporter interface {
-	Import(context.Context, identity.Principal, uuid.UUID, uuid.UUID, application.VideoLinkRequest) (application.PersonalUploadResult, error)
+	Import(context.Context, application.Actor, uuid.UUID, uuid.UUID, application.VideoLinkRequest) (application.PersonalUploadResult, error)
 }
 
 // VideoLinkHandler bounds simultaneous synchronous public link imports.
 type VideoLinkHandler struct {
+	resolve ActorResolver
+
 	service VideoLinkImporter
 	slots   chan struct{}
 }
 
 // NewVideoLinkHandler permits two concurrent imports per application process.
-func NewVideoLinkHandler(service VideoLinkImporter) *VideoLinkHandler {
-	return &VideoLinkHandler{service: service, slots: make(chan struct{}, 2)}
+func NewVideoLinkHandler(service VideoLinkImporter, resolve ActorResolver) *VideoLinkHandler {
+	return &VideoLinkHandler{resolve: resolve, service: service, slots: make(chan struct{}, 2)}
 }
 
 // Register installs the authenticated personal-library route.
@@ -52,6 +52,11 @@ func (h *VideoLinkHandler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/video-links [post]
 func (h *VideoLinkHandler) Import(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.service == nil {
 		httpapi.WriteProblem(c, 503, "video_link_unavailable", nil)
 		return
@@ -87,7 +92,7 @@ func (h *VideoLinkHandler) Import(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer cancel()
-	result, err := h.service.Import(ctx, identityhttp.Principal(c), key, requestID, input)
+	result, err := h.service.Import(ctx, actor, key, requestID, input)
 	if err != nil {
 		switch {
 		case errors.Is(err, application.ErrInvalidVideoLink):

@@ -9,9 +9,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -45,7 +50,7 @@ func TestScopeRejectsRevokedSession(t *testing.T) {
 func (a testScopeActor) CheckActive(ctx context.Context, id uuid.UUID) error {
 	err := a.store.CheckActive(ctx, id)
 	if errors.Is(err, identity.ErrForbidden) {
-		return workspace.ErrScopeNotFound
+		return workspacesource.ErrScopeNotFound
 	}
 	return err
 }
@@ -83,13 +88,13 @@ func TestScopeRechecksDurableMembership(t *testing.T) {
 	if _, err := access.Resolve(t.Context(), actor, scopeA, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := access.Resolve(t.Context(), platform, scopeA, false); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := access.Resolve(t.Context(), platform, scopeA, false); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatal("platform authority exposed private content")
 	}
 	if err := tx.Exec(`UPDATE workspace.team_member SET status='removed',auth_epoch=auth_epoch+1 WHERE team_id=? AND user_id=?`, teamA, actor).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := access.Resolve(t.Context(), actor, scopeA, false); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := access.Resolve(t.Context(), actor, scopeA, false); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatal("cached membership survived removal")
 	}
 	for _, scope := range []uuid.UUID{scopeB, personal} {
@@ -101,7 +106,7 @@ func TestScopeRechecksDurableMembership(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, scope := range []uuid.UUID{scopeB, personal} {
-		if _, err := access.Resolve(t.Context(), actor, scope, false); !errors.Is(err, workspace.ErrScopeNotFound) {
+		if _, err := access.Resolve(t.Context(), actor, scope, false); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 			t.Fatal("global disable failed to revoke scope")
 		}
 	}

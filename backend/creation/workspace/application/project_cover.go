@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -34,7 +36,7 @@ func FreezeProjectCover(ctx context.Context, reader ProjectCoverReference, actor
 		return ErrProjectCoverUnavailable
 	}
 	if reader == nil {
-		return ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	fact, err := reader.Reference(ctx, actor, project, *asset)
 	if err != nil {
@@ -44,7 +46,7 @@ func FreezeProjectCover(ctx context.Context, reader ProjectCoverReference, actor
 		if errors.Is(err, identityapp.ErrForbidden) {
 			return err
 		}
-		return fmt.Errorf("%w: verify project cover: %w", ErrProjectDependencyUnavailable, err)
+		return fmt.Errorf("%w: verify project cover: %w", workspacesource.ErrProjectDependencyUnavailable, err)
 	}
 	if fact.ID != *asset || fact.ProjectID != project || fact.Kind != "image" || fact.Revision < 1 {
 		return ErrProjectCoverUnavailable

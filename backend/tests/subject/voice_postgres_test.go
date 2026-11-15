@@ -156,7 +156,7 @@ func (f *voicePGFixture) Publish(ctx context.Context, w subject.VoiceWork, r sub
 		return w.Job, err
 	}
 	return f.store.CompleteWith(ctx, w, r, func(tx *gorm.DB) (subject.VoiceJobResult, error) {
-		summary, err := pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess).AcceptPersonalGeneratedAudio(ctx, identity.Principal{ID: w.Job.CurrentActorID, OrgID: w.Owner.PersonalOrgID, ScopeID: w.Owner.PersonalScopeID}, prepared)
+		summary, err := pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess).AcceptPersonalGeneratedAudio(ctx, mediaBoundaryActor(identity.Principal{ID: w.Job.CurrentActorID, OrgID: w.Owner.PersonalOrgID, ScopeID: w.Owner.PersonalScopeID}), prepared)
 		if err != nil {
 			return subject.VoiceJobResult{}, err
 		}

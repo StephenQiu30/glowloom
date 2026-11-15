@@ -15,7 +15,6 @@ import (
 	"gorm.io/gorm/clause"
 
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -45,7 +44,7 @@ func NewScopedStore(db *gorm.DB, scopes ScopeAccessFactory) *Store {
 
 // CreateAsset records metadata for a new upload or generated result. Object
 // transfer and ingest are separate steps; this method does not mark it ready.
-func (s *Store) CreateAsset(ctx context.Context, actor identityapp.Principal, asset domain.MediaAsset) error {
+func (s *Store) CreateAsset(ctx context.Context, actor application.Actor, asset domain.MediaAsset) error {
 	if s == nil || s.db == nil {
 		return ErrUnavailable
 	}
@@ -73,13 +72,13 @@ func (s *Store) CreateAsset(ctx context.Context, actor identityapp.Principal, as
 
 // FindAsset returns one visible asset after rechecking the current actor and
 // project. A caller cannot discover another project's asset by its ID.
-func (s *Store) FindAsset(ctx context.Context, actor identityapp.Principal, projectID, assetID uuid.UUID) (domain.MediaAsset, error) {
+func (s *Store) FindAsset(ctx context.Context, actor application.Actor, projectID, assetID uuid.UUID) (domain.MediaAsset, error) {
 	return s.findAsset(ctx, actor, projectID, assetID, true)
 }
 
 // findAsset keeps the original current-facts reader available only to owning
 // consumers of already frozen evidence. Ordinary public reads require visibility.
-func (s *Store) findAsset(ctx context.Context, actor identityapp.Principal, projectID, assetID uuid.UUID, newBinding bool) (domain.MediaAsset, error) {
+func (s *Store) findAsset(ctx context.Context, actor application.Actor, projectID, assetID uuid.UUID, newBinding bool) (domain.MediaAsset, error) {
 	if s == nil || s.db == nil {
 		return domain.MediaAsset{}, ErrUnavailable
 	}
@@ -123,7 +122,7 @@ func (s *Store) findAsset(ctx context.Context, actor identityapp.Principal, proj
 
 // AddRendition appends a derived object only after checking the parent asset's
 // project scope. The parent foreign key carries that scope in the database.
-func (s *Store) AddRendition(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, rendition domain.Rendition) error {
+func (s *Store) AddRendition(ctx context.Context, actor application.Actor, projectID uuid.UUID, rendition domain.Rendition) error {
 	if s == nil || s.db == nil {
 		return ErrUnavailable
 	}
@@ -163,7 +162,7 @@ func (s *Store) AddRendition(ctx context.Context, actor identityapp.Principal, p
 }
 
 // FindRenditions returns the visible derived objects of a scoped parent.
-func (s *Store) FindRenditions(ctx context.Context, actor identityapp.Principal, projectID, assetID uuid.UUID) ([]domain.Rendition, error) {
+func (s *Store) FindRenditions(ctx context.Context, actor application.Actor, projectID, assetID uuid.UUID) ([]domain.Rendition, error) {
 	if s == nil || s.db == nil {
 		return nil, ErrUnavailable
 	}
@@ -202,7 +201,7 @@ func (s *Store) FindRenditions(ctx context.Context, actor identityapp.Principal,
 	return result, nil
 }
 
-func (s scopeAuthority) visibleAssetKey(tx *gorm.DB, actor identityapp.Principal, projectID, assetID uuid.UUID) (string, error) {
+func (s scopeAuthority) visibleAssetKey(tx *gorm.DB, actor application.Actor, projectID, assetID uuid.UUID) (string, error) {
 	if projectID == uuid.Nil || assetID == uuid.Nil {
 		return "", ErrNotFound
 	}
@@ -322,7 +321,7 @@ func (r renditionRow) domain() domain.Rendition {
 }
 
 // ListReadyAssets uses an ID keyset after rechecking current actor and project visibility.
-func (s *Store) ListReadyAssets(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, kind string, after uuid.UUID, limit int) ([]domain.MediaAsset, error) {
+func (s *Store) ListReadyAssets(ctx context.Context, actor application.Actor, projectID uuid.UUID, kind string, after uuid.UUID, limit int) ([]domain.MediaAsset, error) {
 	if s == nil || s.db == nil {
 		return nil, ErrUnavailable
 	}

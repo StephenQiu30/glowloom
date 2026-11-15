@@ -8,8 +8,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ErrVoiceConflict prevents stale updates and conflicting request replays.
@@ -53,11 +51,11 @@ type VoicePage struct {
 
 // VoiceLibrary keeps authorization, source validation and writes in one transaction.
 type VoiceLibrary interface {
-	ListSystemVoices(context.Context, identity.Principal, uuid.UUID) ([]SystemVoice, error)
-	FavoriteSystemVoice(context.Context, identity.Principal, uuid.UUID, string, bool) error
-	CreateVoice(context.Context, identity.Principal, uuid.UUID, VoiceCreate) (VoiceProfile, error)
-	ListVoices(context.Context, identity.Principal, uuid.UUID, uuid.UUID) (VoicePage, error)
-	UpdateVoice(context.Context, identity.Principal, uuid.UUID, uuid.UUID, VoiceUpdate) (VoiceProfile, error)
+	ListSystemVoices(context.Context, Actor, uuid.UUID) ([]SystemVoice, error)
+	FavoriteSystemVoice(context.Context, Actor, uuid.UUID, string, bool) error
+	CreateVoice(context.Context, Actor, uuid.UUID, VoiceCreate) (VoiceProfile, error)
+	ListVoices(context.Context, Actor, uuid.UUID, uuid.UUID) (VoicePage, error)
+	UpdateVoice(context.Context, Actor, uuid.UUID, uuid.UUID, VoiceUpdate) (VoiceProfile, error)
 }
 
 // ValidateReferenceVoice rejects unconsented or unsuitable audio before persistence.

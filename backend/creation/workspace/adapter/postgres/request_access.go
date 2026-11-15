@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -21,18 +22,18 @@ func NewScopedStore(db *gorm.DB, scopes RequestScopeFactory, work ProjectWorkFac
 
 func (s *Store) requireScope(ctx context.Context, tx *gorm.DB, actor identity.Principal, write bool) error {
 	if s.scopes == nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	authority := s.scopes(tx)
 	if authority == nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	scope, err := authority.Resolve(ctx, actor, actor.ScopeID, write)
 	if err != nil {
 		return err
 	}
 	if scope.ID != actor.ScopeID || scope.PhysicalScopeID != actor.OrgID {
-		return application.ErrScopeNotFound
+		return workspacesource.ErrScopeNotFound
 	}
 	return nil
 }
@@ -58,7 +59,7 @@ func (s *Store) authorizeProject(ctx context.Context, tx *gorm.DB, actor identit
 		return fmt.Errorf("authorize project scope: %w", read.Error)
 	}
 	if read.RowsAffected != 1 {
-		return application.ErrProjectNotFound
+		return workspacesource.ErrProjectNotFound
 	}
 	return nil
 }

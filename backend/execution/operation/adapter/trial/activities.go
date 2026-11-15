@@ -17,8 +17,8 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 
 	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialseal"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/codex"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -38,14 +38,21 @@ type Results interface {
 	Get(context.Context, mediadomain.ObjectRef) (io.ReadCloser, error)
 }
 
+// GeneratedMedia reads legacy supplier bytes through an explicitly injected owner.
+type GeneratedMedia interface {
+	Read(context.Context, catalogdomain.ProviderConfig, string, string, string) ([]byte, int64, error)
+	ReadAudio(context.Context, catalogdomain.ProviderConfig, string, string) ([]byte, int64, error)
+}
+
 // Runner performs one bounded dispatch or a read-only recovery.
 type Runner struct {
-	Store    Bindings
-	Objects  Results
-	Launcher codex.Launcher
-	WorkRoot string
-	Keys     *credentialseal.Unsealer
-	Cloud    application.GenerationProvider
+	Store     Bindings
+	Objects   Results
+	Launcher  codex.Launcher
+	WorkRoot  string
+	Keys      *credentialseal.Unsealer
+	Cloud     application.GenerationProvider
+	Generated GeneratedMedia
 }
 
 // Run rechecks authority and never retries a generation submission.
@@ -82,6 +89,10 @@ func (r *Runner) Run(ctx context.Context, input application.TrialInput) (applica
 	}
 	binding, err := r.Store.Binding(ctx, input)
 	if err != nil || r.Keys == nil {
+		return result, nil
+	}
+	if r.Generated == nil && (input.Request.Kind == "video" || binding.Config.AdapterKey == "volcengine_music") {
+		result.ErrorCode = "trial_result_unavailable"
 		return result, nil
 	}
 	result.ConfigVersionID = binding.ConfigID
@@ -137,12 +148,16 @@ func (r *Runner) Run(ctx context.Context, input application.TrialInput) (applica
 			mime = generated.Images[0].MediaType
 			err = validateImage(data, mime)
 		case len(generated.URLs) == 1 && binding.Config.AdapterKey == "volcengine_music":
-			data, _, err = managed.NewVideos().ReadAudio(ctx, binding.Config, result.TaskID, generated.URLs[0])
+			data, _, err = r.Generated.ReadAudio(ctx, binding.Config, result.TaskID, generated.URLs[0])
 			mime = "audio/mpeg"
 		case len(generated.Audio) == 1:
 			data, mime = generated.Audio[0].Bytes, generated.Audio[0].MediaType
 		case len(generated.URLs) == 1:
-			data, _, err = managed.NewVideos().Read(ctx, binding.Config, result.TaskID, generated.URLs[0], providerKey)
+			if r.Generated == nil {
+				err = application.ErrInvalidProviderCall
+			} else {
+				data, _, err = r.Generated.Read(ctx, binding.Config, result.TaskID, generated.URLs[0], providerKey)
+			}
 			mime = "video/mp4"
 		default:
 			err = application.ErrInvalidProviderCall

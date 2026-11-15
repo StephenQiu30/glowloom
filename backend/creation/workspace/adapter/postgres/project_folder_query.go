@@ -5,18 +5,20 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // ListFolders reads bounded directory facts and reauthorizes every cover.
 func (s *FolderStore) ListFolders(ctx context.Context, actor identityapp.Principal, in application.FolderListInput) (application.FolderListPage, error) {
 	if s == nil || s.db == nil {
-		return application.FolderListPage{}, application.ErrProjectDependencyUnavailable
+		return application.FolderListPage{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if in.Limit < 1 || in.Limit > 200 {
 		return application.FolderListPage{}, domain.ErrInvalidProjectFolder

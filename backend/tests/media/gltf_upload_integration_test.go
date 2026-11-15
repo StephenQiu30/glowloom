@@ -104,8 +104,8 @@ func TestGLBUploadRealHTTPPrivateStorageReplayAndAuthorization(t *testing.T) {
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewUploadHandler(service).Register(group)
-	mediahttp.NewHandler(query).Register(group)
+	mediahttp.NewUploadHandler(service, fixtureIdentityMediaActor).Register(group)
+	mediahttp.NewHandler(query, fixtureIdentityMediaActor).Register(group)
 	data := glbBytes(t, glbDocument(), glbGeometry())
 	key := uuid.New()
 	response := httptest.NewRecorder()
@@ -117,7 +117,7 @@ func TestGLBUploadRealHTTPPrivateStorageReplayAndAuthorization(t *testing.T) {
 	if json.Unmarshal(response.Body.Bytes(), &result) != nil || result.Asset.Kind != "model" || result.Asset.MIMEType != "model/gltf-binary" || result.Asset.Width != nil || result.Asset.Height != nil || result.Asset.DurationMS != nil {
 		t.Fatal("model metadata contract")
 	}
-	asset, err := store.FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := store.FindAsset(t.Context(), mediaActor(actor), project, result.Asset.ID)
 	if err != nil || !asset.CanReference() || asset.Kind != domain.KindModel || asset.Codec == nil || *asset.Codec != "glb2" {
 		t.Fatalf("formal referenceable model: %v", err)
 	}
@@ -128,11 +128,11 @@ func TestGLBUploadRealHTTPPrivateStorageReplayAndAuthorization(t *testing.T) {
 			t.Error("clean exact test model object")
 		}
 	})
-	rends, err := store.FindRenditions(t.Context(), actor, project, asset.ID)
+	rends, err := store.FindRenditions(t.Context(), mediaActor(actor), project, asset.ID)
 	if err != nil || len(rends) != 0 {
 		t.Fatalf("model has fabricated renditions: %v count=%d", err, len(rends))
 	}
-	preview, err := query.Preview(t.Context(), actor, project, asset.ID)
+	preview, err := query.Preview(t.Context(), mediaActor(actor), project, asset.ID)
 	if err != nil || preview.Asset.Kind != "model" {
 		t.Fatalf("model preview: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestGLBUploadRealHTTPPrivateStorageReplayAndAuthorization(t *testing.T) {
 	if err != nil || served.StatusCode != 200 || !bytes.Equal(data, got) || hex.EncodeToString(gotHash[:]) != hex.EncodeToString(wantHash[:]) {
 		t.Fatal("private model retrieval differs from uploaded original")
 	}
-	if _, err := query.Reference(t.Context(), actor, otherProject, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := query.Reference(t.Context(), mediaActor(actor), otherProject, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("foreign model reference: %v", err)
 	}
 	for i := 0; i < 2; i++ {
@@ -202,7 +202,7 @@ func TestGLBUploadRealHTTPPrivateStorageReplayAndAuthorization(t *testing.T) {
 	if err := database.Exec(`UPDATE workspace.project SET status='archived' WHERE id=?`, project).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := query.Preview(t.Context(), actor, project, asset.ID); err != nil {
+	if _, err := query.Preview(t.Context(), mediaActor(actor), project, asset.ID); err != nil {
 		t.Fatalf("archived project retains read-only preview=%v", err)
 	}
 	archived := httptest.NewRecorder()

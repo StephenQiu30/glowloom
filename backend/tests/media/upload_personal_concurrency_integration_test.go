@@ -25,7 +25,7 @@ func TestPersonalUploadConcurrentAcceptanceHasOneOriginalAndLibraryRevision(t *t
 			service := mediaFixtureMockUpload(t, db, store, store, gate, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 			inputs := []mediaapp.UploadInput{uploadInput(t), uploadInput(t)}
 			for i := range inputs {
-				inputs[i].Actor = actor
+				inputs[i].Actor = mediaActor(actor)
 				inputs[i].Request.ProjectID = uuid.Nil
 			}
 			if sameKey {
@@ -80,7 +80,7 @@ func TestPersonalUploadRechecksRevocationBeforePublishing(t *testing.T) {
 	}()
 	service := mediaFixtureMockUpload(t, db, store, store, probe, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = uuid.Nil
 	if result, err := fixturePersonalUpload(t.Context(), service, in); err == nil || result.Asset.ID != uuid.Nil || len(objects.items) != 0 {
 		t.Fatal("mid upload revoked actor published", err, len(objects.items))

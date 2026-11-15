@@ -8,11 +8,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -54,18 +58,18 @@ func TestOperationScopeFixturesInRollbackTransaction(t *testing.T) {
 	if peer.ScopeID == actor.ScopeID || peer.OrgID != actor.OrgID {
 		t.Fatal("peer fixture lacks a distinct personal scope in the same organization")
 	}
-	if _, err := store.FindOperation(t.Context(), peer, project, operationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.FindOperation(t.Context(), peer, project, operationID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("other personal scope operation error = %v", err)
 	}
 	withoutSession := actor
 	withoutSession.SessionID = uuid.Nil
-	if _, err := store.FindOperation(t.Context(), withoutSession, project, operationID); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, err := store.FindOperation(t.Context(), withoutSession, project, operationID); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("sessionless operation error = %v", err)
 	}
 	if err := tx.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := ingest.FindOutput(t.Context(), operationID, 1); !errors.Is(err, pgmedia.ErrNotFound) || !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, _, err := ingest.FindOutput(t.Context(), operationID, 1); !errors.Is(err, pgmedia.ErrNotFound) || !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatal("disabled ingest worker retained output access", err)
 	}
 }

@@ -18,23 +18,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
-
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
-
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+
 	mediapg "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -129,7 +131,7 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 		baseRouter.ServeHTTP(w, r)
 	})
 	created := mediaCompositionRequest(t, fixture.router, http.MethodPost, "/api/projects", map[string]string{"name": "素材组合验收 " + uuid.NewString()[:8], "aspect_ratio": "16:9", "style_type": "realistic"})
-	var project workspaceapp.CreatedProject
+	var project workspacesource.CreatedProject
 	if created.Code != 201 || json.Unmarshal(created.Body.Bytes(), &project) != nil || project.ID == uuid.Nil {
 		t.Fatal("formal project creation", created.Code)
 	}
@@ -151,7 +153,7 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 	t.Cleanup(func() { _ = file.Close() })
 	store := mediapg.NewScopedStore(fixture.runtime, app.NewMediaScopeAccess)
 	uploads := businessFixtureUploads(t, fixture.owner, store, mediaflow.FFUploadProber{})
-	uploaded, err := businessFixtureUpload(t.Context(), t, uploads, mediaapp.UploadInput{Actor: fixture.actor, Request: mediaapp.UploadRequest{ProjectID: fixture.project, Key: uuid.New(), FileName: "组合验证.png", RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true})
+	uploaded, err := businessFixtureUpload(t.Context(), t, uploads, mediaapp.UploadInput{Actor: mediaBoundaryActor(fixture.actor), Request: mediaapp.UploadRequest{ProjectID: fixture.project, Key: uuid.New(), FileName: "组合验证.png", RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual reviewed private upload", err)
 	}

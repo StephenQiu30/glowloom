@@ -8,7 +8,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 const (
@@ -30,7 +29,7 @@ func NewMediaReferenceGuard(tx *gorm.DB, access application.ProjectAccess) *Medi
 
 // HasMediaReferences includes retained immutable appearances and sample voices.
 // It performs no media reads, object I/O or content mutation.
-func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {
+func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor application.Actor, project, asset uuid.UUID) (bool, error) {
 	if g == nil || g.tx == nil || g.tx.Statement == nil || g.access == nil || project == uuid.Nil || asset == uuid.Nil {
 		return false, application.ErrUnavailable
 	}

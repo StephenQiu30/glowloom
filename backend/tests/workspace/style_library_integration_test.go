@@ -13,15 +13,25 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
+
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -195,7 +205,7 @@ func TestStyleLibraryTeamOwnershipAndSessionRecheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Read(ctx, member, out.Preset.ID); !errors.Is(err, app.ErrStylePresetNotFound) {
+	if _, err := s.Read(ctx, member, out.Preset.ID); !errors.Is(err, workspacesource.ErrStylePresetNotFound) {
 		t.Fatalf("same-scope peer read owned prompt: %v", err)
 	}
 	page, err := s.List(ctx, member, app.StyleLibraryFilter{})

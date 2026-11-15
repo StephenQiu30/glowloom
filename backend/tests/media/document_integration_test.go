@@ -63,11 +63,11 @@ func documentUpload(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	result, err := fixtureProjectUpload(t.Context(), documentUploadService(t, db, objects), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
+	result, err := fixtureProjectUpload(t.Context(), documentUploadService(t, db, objects), mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("document actual reviewed upload", err)
 	}
-	asset, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := mediaTestStore(db).FindAsset(t.Context(), mediaActor(actor), project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,9 +86,9 @@ func documentRouter(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewUploadHandler(documentUploadService(t, db, objects)).Register(group)
-	mediahttp.NewHandler(mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute)).Register(group)
-	mediahttp.NewDocumentHandler(mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), mediaFixtureReadObjects(t))).Register(group)
+	mediahttp.NewUploadHandler(documentUploadService(t, db, objects), fixtureIdentityMediaActor).Register(group)
+	mediahttp.NewHandler(mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute), fixtureIdentityMediaActor).Register(group)
+	mediahttp.NewDocumentHandler(mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), mediaFixtureReadObjects(t)), fixtureIdentityMediaActor).Register(group)
 	return router
 }
 
@@ -144,7 +144,7 @@ func TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment(t *t
 			if json.Unmarshal(out.Body.Bytes(), &result) != nil || result.Asset.Kind != "document" || result.Asset.Width != nil || result.Asset.DurationMS != nil {
 				t.Fatal("safe formal document projection")
 			}
-			asset, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+			asset, err := mediaTestStore(db).FindAsset(t.Context(), mediaActor(actor), project, result.Asset.ID)
 			if err != nil || asset.Codec == nil || asset.SHA256 == nil {
 				t.Fatal("durable document facts", err)
 			}
@@ -153,7 +153,7 @@ func TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment(t *t
 				defer cancel()
 				_ = objects.Remove(ctx, asset.ObjectKey)
 			})
-			rends, err := mediaTestStore(db).FindRenditions(t.Context(), actor, project, asset.ID)
+			rends, err := mediaTestStore(db).FindRenditions(t.Context(), mediaActor(actor), project, asset.ID)
 			if err != nil || len(rends) != 0 {
 				t.Fatal("document fake rendition", err)
 			}
@@ -185,21 +185,21 @@ func TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment(t *t
 				t.Fatal("cross-project attachment", wrong.Code)
 			}
 			query := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute)
-			if _, err := query.Reference(t.Context(), actor, project, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := query.Reference(t.Context(), mediaActor(actor), project, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("document canvas reference", err)
 			}
 		})
 	}
 	query := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute)
-	page, err := query.List(t.Context(), actor, project, "document", "", 1)
+	page, err := query.List(t.Context(), mediaActor(actor), project, "document", "", 1)
 	if err != nil || len(page.Items) != 1 || page.NextCursor == nil {
 		t.Fatal("document page1", err)
 	}
-	next, err := query.List(t.Context(), actor, project, "document", *page.NextCursor, 1)
+	next, err := query.List(t.Context(), mediaActor(actor), project, "document", *page.NextCursor, 1)
 	if err != nil || len(next.Items) != 1 || next.Items[0].ID == page.Items[0].ID {
 		t.Fatal("document page2", err)
 	}
-	page, err = query.List(t.Context(), actor, project, "", "", 50)
+	page, err = query.List(t.Context(), mediaActor(actor), project, "", "", 50)
 	if err != nil || len(page.Items) != 0 {
 		t.Fatal("default canvas library leaked document", err)
 	}
@@ -212,11 +212,11 @@ func TestDocumentSourcesPGReauthorizationFrozenCASAndActualObjectHash(t *testing
 	data := []byte("可靠原文")
 	result := documentUpload(t, db, objects, actor, project, "剧本.txt", data)
 	reader := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), mediaFixtureReadObjects(t))
-	frozen, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID})
+	frozen, err := reader.Freeze(t.Context(), mediaActor(actor), project, []uuid.UUID{result.Asset.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	file, err := reader.Open(t.Context(), actor, project, frozen[0])
+	file, err := reader.Open(t.Context(), mediaActor(actor), project, frozen[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,27 +224,27 @@ func TestDocumentSourcesPGReauthorizationFrozenCASAndActualObjectHash(t *testing
 	if err := owner.Exec(`UPDATE media.media_asset SET revision=revision+1 WHERE id=?`, result.Asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := reader.Open(t.Context(), actor, project, frozen[0]); !errors.Is(err, mediaapp.ErrDocumentSourceConflict) {
+	if _, err := reader.Open(t.Context(), mediaActor(actor), project, frozen[0]); !errors.Is(err, mediaapp.ErrDocumentSourceConflict) {
 		t.Fatal("stale original source", err)
 	}
-	frozen, err = reader.Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID})
+	frozen, err = reader.Freeze(t.Context(), mediaActor(actor), project, []uuid.UUID{result.Asset.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	asset, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := mediaTestStore(db).FindAsset(t.Context(), mediaActor(actor), project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := objects.Put(t.Context(), asset.ObjectKey, bytes.NewReader([]byte("恶意变更")), 12, asset.MimeType); err != nil {
 		t.Fatal("mutate only scoped synthetic bytes", err)
 	}
-	if _, err := reader.Open(t.Context(), actor, project, frozen[0]); !errors.Is(err, mediaapp.ErrObjectMismatch) {
+	if _, err := reader.Open(t.Context(), mediaActor(actor), project, frozen[0]); !errors.Is(err, mediaapp.ErrObjectMismatch) {
 		t.Fatal("object SHA mismatch", err)
 	}
 	if err := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID}); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, err := reader.Freeze(t.Context(), mediaActor(actor), project, []uuid.UUID{result.Asset.ID}); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("stale actor eligibility", err)
 	}
 }
@@ -281,7 +281,7 @@ func TestDocumentHTTPLifecycleAndContainerRejectsBeforePublishing(t *testing.T) 
 	if malformed.Code != 415 {
 		t.Fatal("malformed container HTTP boundary", malformed.Code)
 	}
-	page, err := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute).List(t.Context(), actor, project, "document", "", 100)
+	page, err := mediaapp.NewRoutedAssetQuery(mediaTestStore(db), mediaFixtureReadObjects(t), 5*time.Minute).List(t.Context(), mediaActor(actor), project, "document", "", 100)
 	if err != nil || len(page.Items) != 1 {
 		t.Fatal("invalid document published", err)
 	}
@@ -305,7 +305,7 @@ func TestDocumentSourcesPGSharedLocksRetainFrozenFactsUntilOwningCommit(t *testi
 		t.Fatal(tx.Error)
 	}
 	defer func() { _ = tx.Rollback().Error }()
-	frozen, err := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(tx), mediaFixtureReadObjects(t)).Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID})
+	frozen, err := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(tx), mediaFixtureReadObjects(t)).Freeze(t.Context(), mediaActor(actor), project, []uuid.UUID{result.Asset.ID})
 	if err != nil || len(frozen) != 1 {
 		t.Fatal("owning source freeze", err)
 	}
@@ -357,7 +357,7 @@ func TestDocumentSourcesPGSharedLocksRetainFrozenFactsUntilOwningCommit(t *testi
 
 type documentUnknownUpload struct{ mediaapp.UploadRepository }
 
-func (r documentUnknownUpload) CommitUpload(ctx context.Context, actor identityapp.Principal, in mediaapp.UploadRequest, asset domain.MediaAsset, rends []domain.Rendition) (mediaapp.UploadResult, error) {
+func (r documentUnknownUpload) CommitUpload(ctx context.Context, actor mediaapp.Actor, in mediaapp.UploadRequest, asset domain.MediaAsset, rends []domain.Rendition) (mediaapp.UploadResult, error) {
 	if _, err := r.UploadRepository.CommitUpload(ctx, actor, in, asset, rends); err != nil {
 		return mediaapp.UploadResult{}, err
 	}
@@ -373,7 +373,7 @@ func TestDocumentActualUploadUnknownCommitPreservesOriginalAndPermanentReplay(t 
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	in := mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.txt"}, File: file, LocalReviewConfirmed: true}
+	in := mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.txt"}, File: file, LocalReviewConfirmed: true}
 	store := mediaTestStore(db)
 	service := mediaFixtureRoutedUpload(t, db, documentUnknownUpload{store}, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	if _, err := fixtureProjectUpload(t.Context(), service, in); !errors.Is(err, io.ErrUnexpectedEOF) {
@@ -387,7 +387,7 @@ func TestDocumentActualUploadUnknownCommitPreservesOriginalAndPermanentReplay(t 
 	if err != nil || !reflect.DeepEqual(first, second) {
 		t.Fatal("permanent source receipt changed", err)
 	}
-	asset, err := store.FindAsset(t.Context(), actor, project, first.Asset.ID)
+	asset, err := store.FindAsset(t.Context(), mediaActor(actor), project, first.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,11 +397,11 @@ func TestDocumentActualUploadUnknownCommitPreservesOriginalAndPermanentReplay(t 
 		_ = objects.Remove(ctx, asset.ObjectKey)
 	})
 	reader := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), mediaFixtureReadObjects(t))
-	frozen, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{asset.ID})
+	frozen, err := reader.Freeze(t.Context(), mediaActor(actor), project, []uuid.UUID{asset.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	actual, err := reader.Open(t.Context(), actor, project, frozen[0])
+	actual, err := reader.Open(t.Context(), mediaActor(actor), project, frozen[0])
 	if err != nil {
 		t.Fatal("unknown upload cleaned durable original", err)
 	}

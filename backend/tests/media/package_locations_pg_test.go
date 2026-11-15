@@ -119,7 +119,7 @@ func TestPackageLocatedPGSDKWholeSetReplayDefaultSwitchAndPurge(t *testing.T) {
 	in := media.PackageImportRequest{Scope: scope, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	job, err := service.Import(ctx, actor, in, packageDownloaded(t, data))
+	job, err := service.Import(ctx, mediaActor(actor), in, packageDownloaded(t, data))
 	if err != nil || job.Status != "succeeded" {
 		t.Fatal("native package import", job, err)
 	}
@@ -133,11 +133,11 @@ func TestPackageLocatedPGSDKWholeSetReplayDefaultSwitchAndPurge(t *testing.T) {
 	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, owner, "fixture-"+uuid.NewString(), newID)); err != nil {
 		t.Fatal(err)
 	}
-	replay, err := service.Import(ctx, actor, in, packageDownloaded(t, data))
+	replay, err := service.Import(ctx, mediaActor(actor), in, packageDownloaded(t, data))
 	if err != nil || replay.ID != job.ID || len(old.objects) != 4 || len(newer.objects) != 0 {
 		t.Fatal("permanent replay repinned or wrote objects", err)
 	}
-	exported, err := service.Export(ctx, actor, scope)
+	exported, err := service.Export(ctx, mediaActor(actor), scope)
 	if err != nil {
 		t.Fatal("located export after switch", err)
 	}
@@ -147,11 +147,11 @@ func TestPackageLocatedPGSDKWholeSetReplayDefaultSwitchAndPurge(t *testing.T) {
 		t.Fatal(err)
 	}
 	library := mediaLibraryStore(runtime, libraryTestAccess, time.Now)
-	if _, err := library.ApplyLibraryCommand(ctx, actor, media.LibraryCommand{Scope: scope, Action: "recycle_items", Key: uuid.New(), ExpectedRevision: 1, Items: []media.LibraryItemRevision{{ID: assetRow.ID, Revision: 1}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(ctx, mediaActor(actor), media.LibraryCommand{Scope: scope, Action: "recycle_items", Key: uuid.New(), ExpectedRevision: 1, Items: []media.LibraryItemRevision{{ID: assetRow.ID, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	purge := mediaPurgeStore(runtime, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	purgeJob, err := purge.CreatePurge(ctx, actor, media.PurgeInput{Scope: scope, Items: []media.LibraryItemRevision{{ID: assetRow.ID, Revision: 2}}, ExpectedRevision: 2, PermanentDeleteConfirmed: true, Key: uuid.New()})
+	purgeJob, err := purge.CreatePurge(ctx, mediaActor(actor), media.PurgeInput{Scope: scope, Items: []media.LibraryItemRevision{{ID: assetRow.ID, Revision: 2}}, ExpectedRevision: 2, PermanentDeleteConfirmed: true, Key: uuid.New()})
 	if err != nil {
 		t.Fatal("located purge admission", err)
 	}
@@ -225,7 +225,7 @@ func TestPackageLocatedCancellationChecksBytesAndRetiresOnlyOwnUnpublishedSet(t 
 	failure := &failPackageAfterArchive{PackageObjects: objects, LocatedPackageObjects: objects}
 	service := media.NewLibraryPackageService(repo, uploads, failure, time.Now)
 	in := media.PackageImportRequest{Scope: scope, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
-	job, err := service.Import(t.Context(), actor, in, packageDownloaded(t, data))
+	job, err := service.Import(t.Context(), mediaActor(actor), in, packageDownloaded(t, data))
 	if err != nil || job.Status != "needs_reconciliation" || len(old.objects) != 1 {
 		t.Fatal("failed write was published or forgotten", job, err)
 	}
@@ -243,7 +243,7 @@ func TestPackageLocatedCancellationChecksBytesAndRetiresOnlyOwnUnpublishedSet(t 
 	bad.body = []byte("different archive bytes")
 	old.objects[key] = bad
 	old.mu.Unlock()
-	cancelled, err := service.Cancel(t.Context(), actor, job.ID, media.PackageControl{ExpectedRevision: job.Revision, Key: uuid.New(), RequestID: uuid.New()})
+	cancelled, err := service.Cancel(t.Context(), mediaActor(actor), job.ID, media.PackageControl{ExpectedRevision: job.Revision, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || cancelled.Status != "needs_reconciliation" || len(old.objects) != 1 {
 		t.Fatal("mismatched bytes were deleted", cancelled, err)
 	}
@@ -263,7 +263,7 @@ func TestPackageLocatedCancellationChecksBytesAndRetiresOnlyOwnUnpublishedSet(t 
 	case <-t.Context().Done():
 		t.Fatal(t.Context().Err())
 	}
-	cancelled, err = service.Cancel(t.Context(), actor, job.ID, media.PackageControl{ExpectedRevision: job.Revision, Key: uuid.New(), RequestID: uuid.New()})
+	cancelled, err = service.Cancel(t.Context(), mediaActor(actor), job.ID, media.PackageControl{ExpectedRevision: job.Revision, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || cancelled.Status != "cancelled" || len(old.objects) != 0 || len(newer.objects) != 0 {
 		t.Fatal("own unpublished cleanup remained pinned", cancelled, err)
 	}

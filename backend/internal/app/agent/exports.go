@@ -19,7 +19,7 @@ import (
 
 func exportStore(tx *gorm.DB) *pgtool.Store {
 	return pgtool.NewStore(tx, func(inner *gorm.DB) mediatool.TimelineReader { return canvas.NewTimelineReader(canvasStore(inner)) }, func(inner *gorm.DB) mediatool.DerivedMedia {
-		return media.NewDerivedService(pgmedia.NewScopedStore(inner, mediawire.NewMediaWorkerScopeAccess))
+		return mediawire.LegacyDerivedMedia(media.NewDerivedService(pgmedia.NewScopedStore(inner, mediawire.NewMediaWorkerScopeAccess)))
 	}).WithStorageAdmission(func(inner *gorm.DB) mediatool.ToolStorageLedger { return pgmedia.NewStorageRoutes(inner) })
 }
 func exportTools() []toolBinding {

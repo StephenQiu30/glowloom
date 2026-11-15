@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // AdoptCommand binds the selected formal version to both current heads and explicit impact intent.
@@ -35,7 +34,7 @@ type AdoptReceipt struct {
 
 // AdoptStore owns publication, current authority, CAS and permanent command replay.
 type AdoptStore interface {
-	Adopt(context.Context, identityapp.Principal, AdoptCommand, time.Time) (AdoptReceipt, error)
+	Adopt(context.Context, Actor, AdoptCommand, time.Time) (AdoptReceipt, error)
 }
 
 // AdoptService admits confirmed content without pretending missing downstream owners are empty.
@@ -50,7 +49,7 @@ func NewAdoptService(store AdoptStore, now func() time.Time) *AdoptService {
 }
 
 // Adopt preserves old adopted/episode/structure facts when necessary evidence is missing.
-func (s *AdoptService) Adopt(ctx context.Context, actor identityapp.Principal, input AdoptCommand) (AdoptReceipt, error) {
+func (s *AdoptService) Adopt(ctx context.Context, actor Actor, input AdoptCommand) (AdoptReceipt, error) {
 	if s == nil || s.store == nil || s.now == nil {
 		return AdoptReceipt{}, ErrUnavailable
 	}

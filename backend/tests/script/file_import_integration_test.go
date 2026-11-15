@@ -32,7 +32,7 @@ func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 	repo := scriptFixtureMediaStore(db)
 	upload := mediaapp.NewRoutedUploadService(repo, repo, pgmedia.NewUploadAdmission(repo), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(scriptFixtureRegistry(t), pgmedia.NewStorageRoutes(db)), time.Now)
 	key := uuid.New()
-	target, err := upload.BeginUpload(t.Context(), actor, mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}, key)
+	target, err := upload.BeginUpload(t.Context(), scriptMediaActor(actor), mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,11 +45,11 @@ func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 			t.Error(err)
 		}
 	}()
-	result, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Target: &target, Request: mediaapp.UploadRequest{ProjectID: project, Key: key, RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
+	result, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: scriptMediaActor(actor), Target: &target, Request: mediaapp.UploadRequest{ProjectID: project, Key: key, RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	asset, err := scriptFixtureMediaStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := scriptFixtureMediaStore(db).FindAsset(t.Context(), scriptMediaActor(actor), project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,8 +64,8 @@ func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 }
 
 func scriptImportStore(db *gorm.DB, _ *objectstorage.Client) *pg.ImportStore {
-	return scriptFixtureImportStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureProjectAccess(tx) }, func(tx *gorm.DB) app.SourceAssetReader {
-		return mediaapp.NewRoutedDocumentSources(scriptFixtureDocumentStore(tx), nil)
+	return scriptFixtureImportStore(db, scriptFixtureProjectAccess, func(tx *gorm.DB) app.SourceAssetReader {
+		return scriptDocumentSources{sources: mediaapp.NewRoutedDocumentSources(scriptFixtureDocumentStore(tx), nil)}
 	})
 }
 
@@ -77,15 +77,15 @@ func TestScriptFileImportPGAdmissionFreezeReplayAndProjectFence(t *testing.T) {
 	two := scriptDocument(t, db, storage, actor, pid, "第二章.txt", []byte{0xff, 0xfe, 0x2d, 0x4e, 0x87, 0x65})
 	service := app.NewImportService(scriptImportStore(db, storage), time.Now)
 	input := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{two, one}, RightsConfirmed: true}
-	accepted, err := service.Create(t.Context(), actor, input)
+	accepted, err := service.Create(t.Context(), scriptActor(actor), input)
 	if err != nil || accepted.Status != "queued" || len(accepted.Files) != 2 || accepted.Files[0].AssetID != two {
 		t.Fatal("ordered freeze", accepted, err)
 	}
-	replay, err := app.NewImportService(scriptFixtureImportStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureProjectAccess(tx) }, nil), time.Now).Create(t.Context(), actor, input)
+	replay, err := app.NewImportService(scriptFixtureImportStore(db, scriptFixtureProjectAccess, nil), time.Now).Create(t.Context(), scriptActor(actor), input)
 	if err != nil || replay.ID != accepted.ID || replay.Revision != 1 {
 		t.Fatal("disabled runtime must preserve durable replay", replay, err)
 	}
-	page, err := service.List(t.Context(), actor, pid, 0, 100)
+	page, err := service.List(t.Context(), scriptActor(actor), pid, 0, 100)
 	if err != nil || len(page.Items) != 1 || page.CurrentActorID != actor.ID || page.CurrentOrgID != actor.OrgID {
 		t.Fatal("refresh recovery", page, err)
 	}
@@ -94,14 +94,14 @@ func TestScriptFileImportPGAdmissionFreezeReplayAndProjectFence(t *testing.T) {
 	}
 	_, write := sourceCommand()
 	write.ProjectID = pid
-	if _, err := app.NewSourceService(scriptStore(db), &sourceObjects{data: make(map[string][]byte)}, time.Now).Write(t.Context(), actor, write); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if _, err := app.NewSourceService(scriptStore(db), &sourceObjects{data: make(map[string][]byte)}, time.Now).Write(t.Context(), scriptActor(actor), write); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal("editor bypassed active import", err)
 	}
-	if blocked, err := scriptStore(db).HasInflightWork(t.Context(), actor, pid); err != nil || !blocked {
+	if blocked, err := scriptStore(db).HasInflightWork(t.Context(), scriptActor(actor), pid); err != nil || !blocked {
 		t.Fatal("project lifecycle ignored import", blocked, err)
 	}
 	input.Key = uuid.New()
-	if _, err := service.Create(t.Context(), actor, input); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if _, err := service.Create(t.Context(), scriptActor(actor), input); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal("parallel import", err)
 	}
 	if err := db.Exec(`UPDATE script.import_file SET sha256=? WHERE job_id=?`, "0123456789012345678901234567890123456789012345678901234567890123", accepted.ID).Error; err == nil {
@@ -110,7 +110,7 @@ func TestScriptFileImportPGAdmissionFreezeReplayAndProjectFence(t *testing.T) {
 	if err := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Get(t.Context(), actor, pid, accepted.ID); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, err := service.Get(t.Context(), scriptActor(actor), pid, accepted.ID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked source owner", err)
 	}
 }
@@ -137,9 +137,9 @@ func scriptImportWorker(t *testing.T, db *gorm.DB, storage *objectstorage.Client
 func scriptImportWorkerWithObjects(t *testing.T, db *gorm.DB, storage *objectstorage.Client, extractor app.SourceExtractor, objects app.PrivateObjects) *app.ImportWorker {
 	store := scriptImportStore(db, storage)
 	sources := app.NewSourceService(scriptStore(db), objects, time.Now)
-	return app.NewImportWorker(store, mediaapp.NewRoutedDocumentSources(scriptFixtureWorkerDocumentStore(db), mediaobjects.NewRoutedReadObjects(scriptFixtureRegistry(t))), extractor, func(a app.ImportAuthority) *app.SourceService {
-		return app.NewSourceServiceSharingIO(pg.NewImportSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureWorkerAccess(tx) }, a).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), objects, time.Now, sources)
-	}, app.NewSourceRecovery(pg.NewImportRecoveryStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureWorkerAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), sources, time.Now), time.Now)
+	return app.NewImportWorker(store, scriptDocumentSources{sources: mediaapp.NewRoutedDocumentSources(scriptFixtureWorkerDocumentStore(db), mediaobjects.NewRoutedReadObjects(scriptFixtureRegistry(t)))}, extractor, func(a app.ImportAuthority) *app.SourceService {
+		return app.NewSourceServiceSharingIO(pg.NewImportSourceStore(db, scriptFixtureWorkerAccess, a).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), objects, time.Now, sources)
+	}, app.NewSourceRecovery(pg.NewImportRecoveryStore(db, scriptFixtureWorkerAccess).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), sources, time.Now), time.Now)
 }
 
 func recoverableSourceExitFault(t *testing.T, owner *gorm.DB, actor uuid.UUID) func() {
@@ -175,7 +175,7 @@ func TestScriptFileImportPGPublicationExitProofFailureStillJoinsAndCleansExactOb
 	file := scriptDocument(t, db, storage, actor, pid, "实际退出.txt", []byte("已有冻结字节"))
 	service := app.NewImportService(scriptImportStore(db, storage), time.Now)
 	in := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{file}, RightsConfirmed: true}
-	accepted, err := service.Create(t.Context(), actor, in)
+	accepted, err := service.Create(t.Context(), scriptActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func TestScriptFileImportPGPublicationExitProofFailureStillJoinsAndCleansExactOb
 		t.Fatal("RETURNNULL not exercised", ioState, err)
 	}
 	release()
-	current, err := service.Get(t.Context(), admin, pid, accepted.ID)
+	current, err := service.Get(t.Context(), scriptActor(admin), pid, accepted.ID)
 	if err != nil || current.ActiveIO || !current.NeedsReconciliation {
 		t.Fatal("outer exit fact", current, err)
 	}
@@ -200,13 +200,13 @@ func TestScriptFileImportPGPublicationExitProofFailureStillJoinsAndCleansExactOb
 		t.Fatal(err)
 	}
 	control := app.ImportControl{ProjectID: pid, JobID: accepted.ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: current.Revision, Action: "cancel"}
-	if _, err := service.Control(t.Context(), admin, control); err != nil {
+	if _, err := service.Control(t.Context(), scriptActor(admin), control); err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Control(t.Context(), importDelivery(t, owner, admin, control.Key)); err != nil {
 		t.Fatal(err)
 	}
-	after, err := service.Get(t.Context(), admin, pid, accepted.ID)
+	after, err := service.Get(t.Context(), scriptActor(admin), pid, accepted.ID)
 	if err != nil || after.Status != "cancel_requested" || !after.NeedsReconciliation || after.ActiveIO {
 		t.Fatal("outer exit cannot skip remote-write drain", after, err)
 	}
@@ -217,13 +217,13 @@ func TestScriptFileImportPGPublicationExitProofFailureStillJoinsAndCleansExactOb
 	reconcile.RequestID = uuid.New()
 	reconcile.Action = "reconcile"
 	reconcile.ExpectedRevision = after.Revision
-	if _, err := service.Control(t.Context(), admin, reconcile); err != nil {
+	if _, err := service.Control(t.Context(), scriptActor(admin), reconcile); err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Control(t.Context(), importDelivery(t, owner, admin, reconcile.Key)); err != nil {
 		t.Fatal(err)
 	}
-	after, err = service.Get(t.Context(), admin, pid, accepted.ID)
+	after, err = service.Get(t.Context(), scriptActor(admin), pid, accepted.ID)
 	if err != nil || after.Status != "cancelled" || after.NeedsReconciliation || after.ActiveIO {
 		t.Fatal("actual source exit proof was lost between services", after, err)
 	}
@@ -247,7 +247,7 @@ func TestScriptFileImportPGWorkerActualOriginalRichVersionAndImmutableAttempt(t 
 	second := scriptDocument(t, db, storage, actor, pid, "第二章.txt", []byte{0xff, 0xfe, 0x2d, 0x4e, 0x87, 0x65})
 	service := app.NewImportService(scriptImportStore(db, storage), time.Now)
 	input := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{first, second}, RightsConfirmed: true}
-	accepted, err := service.Create(t.Context(), actor, input)
+	accepted, err := service.Create(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,16 +256,16 @@ func TestScriptFileImportPGWorkerActualOriginalRichVersionAndImmutableAttempt(t 
 	if err := worker.Execute(t.Context(), delivery); err != nil {
 		t.Fatal("actual file worker", err)
 	}
-	current, err := service.Get(t.Context(), actor, pid, accepted.ID)
+	current, err := service.Get(t.Context(), scriptActor(actor), pid, accepted.ID)
 	if err != nil || current.Status != "succeeded" || current.ActiveIO || current.NeedsReconciliation || current.LatestScriptRevision != 1 || current.LatestVersionID == nil {
 		t.Fatal("published complete batch", current, err)
 	}
-	base, err := scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
+	base, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil || len(base.Sources) != 2 || base.Sources[0].Origin != "file" || *base.Sources[0].MediaAssetID != first || *base.Sources[1].MediaAssetID != second || base.Sources[1].Provenance.Encoding != "utf-16le" {
 		t.Fatal("formal file provenance", base, err)
 	}
 	sourceService := app.NewSourceService(scriptStore(db), scriptPrivateObjects(t, db), time.Now)
-	text, err := sourceService.VersionText(t.Context(), actor, pid, *current.LatestVersionID)
+	text, err := sourceService.VersionText(t.Context(), scriptActor(actor), pid, *current.LatestVersionID)
 	if err != nil || text != "甲😀\n乙 \n\n中文" {
 		t.Fatalf("canonical file text %q %v", text, err)
 	}
@@ -324,39 +324,39 @@ func TestScriptFileImportPGPartialRetryKeepsLineageAndOriginalFrozenOrder(t *tes
 	extractor := &failImportFileOnce{original: extract.NewExtractor()}
 	worker := scriptImportWorker(t, db, storage, extractor)
 	in := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{first, second}, RightsConfirmed: true}
-	accepted, err := service.Create(t.Context(), actor, in)
+	accepted, err := service.Create(t.Context(), scriptActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Execute(t.Context(), importDelivery(t, owner, actor, in.Key)); err != nil {
 		t.Fatal(err)
 	}
-	partial, err := service.Get(t.Context(), actor, pid, accepted.ID)
+	partial, err := service.Get(t.Context(), scriptActor(actor), pid, accepted.ID)
 	if err != nil || partial.Status != "partial" || !partial.Retryable || partial.Files[0].Status != "failed" || partial.Files[1].SourceID == nil {
 		t.Fatal("transparent partial", partial, err)
 	}
-	adminView, err := service.Get(t.Context(), scriptAdmin(t, owner, actor.OrgID), pid, accepted.ID)
+	adminView, err := service.Get(t.Context(), scriptActor(scriptAdmin(t, owner, actor.OrgID)), pid, accepted.ID)
 	if err != nil || !adminView.CanControl || adminView.Retryable {
 		t.Fatal("administrator received creator-only retry gate", adminView, err)
 	}
 	secondID := *partial.Files[1].SourceID
 	firstVersion := *partial.LatestVersionID
 	retry := app.ImportControl{ProjectID: pid, JobID: accepted.ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: partial.Revision, Action: "retry"}
-	if _, err := service.Control(t.Context(), actor, retry); err != nil {
+	if _, err := service.Control(t.Context(), scriptActor(actor), retry); err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Execute(t.Context(), importDelivery(t, owner, actor, retry.Key)); err != nil {
 		t.Fatal("retry only failed file", err)
 	}
-	current, err := service.Get(t.Context(), actor, pid, accepted.ID)
+	current, err := service.Get(t.Context(), scriptActor(actor), pid, accepted.ID)
 	if err != nil || current.Status != "succeeded" || current.Attempt != 2 || extractor.calls != 3 || *current.Files[1].SourceID != secondID {
 		t.Fatal("reimported success or changed lineage", current, extractor.calls, err)
 	}
-	base, err := scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
+	base, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil || len(base.Sources) != 2 || *base.Sources[0].MediaAssetID != first || *base.Sources[1].MediaAssetID != second {
 		t.Fatal("retry lost original file order", base, err)
 	}
-	history, err := scriptStore(db).LoadBase(t.Context(), actor, pid, &firstVersion)
+	history, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, &firstVersion)
 	if err != nil || len(history.Sources) != 1 || history.Sources[0].ID != secondID {
 		t.Fatal("partial history overwritten", history, err)
 	}
@@ -378,7 +378,7 @@ func TestScriptFileImportPGQueuedAdminCancelRevokedCreatorAndPermanentDelivery(t
 	store := scriptImportStore(db, storage)
 	service := app.NewImportService(store, time.Now)
 	in := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{file}, RightsConfirmed: true}
-	accepted, err := service.Create(t.Context(), actor, in)
+	accepted, err := service.Create(t.Context(), scriptActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +386,7 @@ func TestScriptFileImportPGQueuedAdminCancelRevokedCreatorAndPermanentDelivery(t
 		t.Fatal(err)
 	}
 	cancel := app.ImportControl{ProjectID: pid, JobID: accepted.ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: accepted.Revision, Action: "cancel"}
-	response, err := service.Control(t.Context(), admin, cancel)
+	response, err := service.Control(t.Context(), scriptActor(admin), cancel)
 	if err != nil || response.Status != "cancel_requested" {
 		t.Fatal("admin intent", response, err)
 	}
@@ -400,25 +400,25 @@ func TestScriptFileImportPGQueuedAdminCancelRevokedCreatorAndPermanentDelivery(t
 	if err := worker.Control(t.Context(), delivery); err != nil {
 		t.Fatal("revoked creator queued cleanup", err)
 	}
-	current, err := service.Get(t.Context(), admin, pid, accepted.ID)
+	current, err := service.Get(t.Context(), scriptActor(admin), pid, accepted.ID)
 	if err != nil || current.Status != "cancelled" || current.NeedsReconciliation || current.ActiveIO {
 		t.Fatal("false cancelled", current, err)
 	}
-	replay, err := service.Control(t.Context(), admin, cancel)
+	replay, err := service.Control(t.Context(), scriptActor(admin), cancel)
 	if err != nil || replay.Revision != response.Revision || replay.Status != response.Status {
 		t.Fatal("rewritten202", replay, err)
 	}
 	if err := store.FailImportWorkflow(t.Context(), app.ImportWork{JobID: accepted.ID, Attempt: 1}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	after, err := service.Get(t.Context(), admin, pid, accepted.ID)
+	after, err := service.Get(t.Context(), scriptActor(admin), pid, accepted.ID)
 	if err != nil || after.Status != "cancelled" || after.Revision != current.Revision {
 		t.Fatal("late workflow regressed cancelled", after, err)
 	}
 	if sources, versions, _ := scriptCounts(t, owner, pid); sources != 0 || versions != 0 {
 		t.Fatal("admin published", sources, versions)
 	}
-	if blocked, err := scriptStore(db).HasInflightWork(t.Context(), admin, pid); err != nil || blocked {
+	if blocked, err := scriptStore(db).HasInflightWork(t.Context(), scriptActor(admin), pid); err != nil || blocked {
 		t.Fatal("cancelled fence", blocked, err)
 	}
 }
@@ -444,7 +444,7 @@ func TestScriptFileImportPGActiveCancellationJoinsActualExtractionAndLostOwnerSt
 		file := scriptDocument(t, db, storage, actor, pid, "取消.txt", []byte("尚未发表"))
 		service := app.NewImportService(scriptImportStore(db, storage), time.Now)
 		in := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{file}, RightsConfirmed: true}
-		accepted, err := service.Create(t.Context(), actor, in)
+		accepted, err := service.Create(t.Context(), scriptActor(actor), in)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -469,12 +469,12 @@ func TestScriptFileImportPGActiveCancellationJoinsActualExtractionAndLostOwnerSt
 		case <-time.After(5 * time.Second):
 			t.Fatal("extractor not active")
 		}
-		active, err := service.Get(t.Context(), actor, pid, accepted.ID)
+		active, err := service.Get(t.Context(), scriptActor(actor), pid, accepted.ID)
 		if err != nil || !active.ActiveIO {
 			t.Fatal(active, err)
 		}
 		control := app.ImportControl{ProjectID: pid, JobID: accepted.ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: active.Revision, Action: "cancel"}
-		if _, err := service.Control(t.Context(), actor, control); err != nil {
+		if _, err := service.Control(t.Context(), scriptActor(actor), control); err != nil {
 			t.Fatal(err)
 		}
 		if err := worker.Control(t.Context(), importDelivery(t, owner, actor, control.Key)); err != nil {
@@ -493,7 +493,7 @@ func TestScriptFileImportPGActiveCancellationJoinsActualExtractionAndLostOwnerSt
 		default:
 			t.Fatal("cancel before actual exit")
 		}
-		current, err := service.Get(t.Context(), actor, pid, accepted.ID)
+		current, err := service.Get(t.Context(), scriptActor(actor), pid, accepted.ID)
 		if err != nil || current.Status != "cancelled" || current.ActiveIO || current.NeedsReconciliation {
 			t.Fatal("joined cancellation", current, err)
 		}
@@ -506,7 +506,7 @@ func TestScriptFileImportPGActiveCancellationJoinsActualExtractionAndLostOwnerSt
 		store := scriptImportStore(db, storage)
 		service := app.NewImportService(store, time.Now)
 		in := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{file}, RightsConfirmed: true}
-		accepted, err := service.Create(t.Context(), actor, in)
+		accepted, err := service.Create(t.Context(), scriptActor(actor), in)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -516,18 +516,18 @@ func TestScriptFileImportPGActiveCancellationJoinsActualExtractionAndLostOwnerSt
 		if err := store.FailImportWorkflow(t.Context(), app.ImportWork{JobID: accepted.ID, Attempt: 1}, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		current, err := service.Get(t.Context(), actor, pid, accepted.ID)
+		current, err := service.Get(t.Context(), scriptActor(actor), pid, accepted.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
 		control := app.ImportControl{ProjectID: pid, JobID: accepted.ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: current.Revision, Action: "cancel"}
-		if _, err := service.Control(t.Context(), actor, control); err != nil {
+		if _, err := service.Control(t.Context(), scriptActor(actor), control); err != nil {
 			t.Fatal(err)
 		}
 		if err := scriptImportWorker(t, db, storage, extract.NewExtractor()).Control(t.Context(), importDelivery(t, owner, actor, control.Key)); err != nil {
 			t.Fatal(err)
 		}
-		after, err := service.Get(t.Context(), actor, pid, accepted.ID)
+		after, err := service.Get(t.Context(), scriptActor(actor), pid, accepted.ID)
 		if err != nil || after.Status == "cancelled" || !after.ActiveIO || !after.NeedsReconciliation || after.Retryable {
 			t.Fatal("missing local registry invented cessation", after, err)
 		}
@@ -549,7 +549,7 @@ func TestScriptFileImportPGOuterExitProofFailureRecoversOnlyJoinedPermanentContr
 	store := scriptImportStore(db, storage)
 	service := app.NewImportService(store, time.Now)
 	input := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{file}, RightsConfirmed: true}
-	accepted, err := service.Create(t.Context(), actor, input)
+	accepted, err := service.Create(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -576,7 +576,7 @@ func TestScriptFileImportPGOuterExitProofFailureRecoversOnlyJoinedPermanentContr
 	if err := worker.Execute(t.Context(), importDelivery(t, owner, actor, input.Key)); err == nil {
 		t.Fatal("zero-row exit fault was not exercised")
 	}
-	before, err := service.Get(t.Context(), admin, pid, accepted.ID)
+	before, err := service.Get(t.Context(), scriptActor(admin), pid, accepted.ID)
 	if err != nil || !before.ActiveIO {
 		t.Fatal(before, err)
 	}
@@ -585,7 +585,7 @@ func TestScriptFileImportPGOuterExitProofFailureRecoversOnlyJoinedPermanentContr
 		t.Fatal(err)
 	}
 	control := app.ImportControl{ProjectID: pid, JobID: accepted.ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: before.Revision, Action: "cancel"}
-	if _, err := service.Control(t.Context(), admin, control); err != nil {
+	if _, err := service.Control(t.Context(), scriptActor(admin), control); err != nil {
 		t.Fatal(err)
 	}
 	delivery := importDelivery(t, owner, admin, control.Key)
@@ -597,7 +597,7 @@ func TestScriptFileImportPGOuterExitProofFailureRecoversOnlyJoinedPermanentContr
 	if err := worker.Control(t.Context(), delivery); err != nil {
 		t.Fatal(err)
 	}
-	current, err := service.Get(t.Context(), admin, pid, accepted.ID)
+	current, err := service.Get(t.Context(), scriptActor(admin), pid, accepted.ID)
 	if err != nil || current.Status != "cancelled" || current.ActiveIO || current.NeedsReconciliation {
 		t.Fatal("joined exit cannot be recorded", current, err)
 	}

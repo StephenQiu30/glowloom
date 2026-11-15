@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -40,10 +41,10 @@ func (s *Store) ReadCreationRecovery(ctx context.Context, actor identity.Princip
 			return fmt.Errorf("decode creation recovery: %w", err)
 		}
 		if original.ID == uuid.Nil || original.ID != receipt.ProjectID || original.CanvasID == uuid.Nil || original.OwnerID != actor.ID || len(receipt.RequestHash) != 64 {
-			return application.ErrProjectDependencyUnavailable
+			return workspacesource.ErrProjectDependencyUnavailable
 		}
 		if original.OrgID != actor.OrgID {
-			return application.ErrProjectNotFound
+			return workspacesource.ErrProjectNotFound
 		}
 		var current struct {
 			ID, InitialCanvasID uuid.UUID
@@ -55,7 +56,7 @@ func (s *Store) ReadCreationRecovery(ctx context.Context, actor identity.Princip
 			return read.Error
 		}
 		if read.RowsAffected != 1 {
-			return application.ErrProjectNotFound
+			return workspacesource.ErrProjectNotFound
 		}
 		if current.IsDelete {
 			return application.ErrCreationTargetUnavailable

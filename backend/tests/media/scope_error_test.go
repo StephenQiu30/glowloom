@@ -8,8 +8,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	http "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -20,8 +23,8 @@ type scopeFailureStore struct {
 	failure error
 }
 
-func (s scopeFailureStore) ListLibrary(_ context.Context, _ identity.Principal, _ domain.LibraryScope, _ application.LibraryQuery) (application.LibraryPage, error) {
-	return application.LibraryPage{}, s.failure
+func (s scopeFailureStore) ListLibrary(_ context.Context, _ application.Actor, _ domain.LibraryScope, _ application.LibraryQuery) (application.LibraryPage, error) {
+	return application.LibraryPage{}, mediawire.OwningError(s.failure)
 }
 func TestScopeAuthorizationHTTPErrorChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -29,11 +32,11 @@ func TestScopeAuthorizationHTTPErrorChain(t *testing.T) {
 		name   string
 		cause  error
 		status int
-	}{{"removed membership", workspace.ErrScopeNotFound, 404}, {"revoked exact session", identity.ErrSessionInvalid, 401}, {"authority unavailable", errors.New("authority unavailable"), 503}} {
+	}{{"removed membership", workspacesource.ErrScopeNotFound, 404}, {"revoked exact session", identity.ErrSessionInvalid, 401}, {"authority unavailable", errors.New("authority unavailable"), 503}} {
 		t.Run(test.name, func(t *testing.T) {
 			failure := errors.Join(errors.New("consumer failure"), test.cause)
 			router := gin.New()
-			http.NewLibraryHandler(scopeFailureStore{failure: failure}).Register(router.Group("/api"))
+			http.NewLibraryHandler(scopeFailureStore{failure: failure}, staticMediaActor).Register(router.Group("/api"))
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), "GET", "/api/media/library", nil))
 			if w.Code != test.status {

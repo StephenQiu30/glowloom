@@ -19,6 +19,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
@@ -30,11 +31,11 @@ func uploadHTTPRouter(repo *uploadRepoFake, prober mediaapp.Prober) *gin.Engine 
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) {
-		c.Set("principal", identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: identitydomain.RoleProducer})
+		c.Set("principal", mediaActor(identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1, Role: identitydomain.RoleProducer}))
 		c.Next()
 	})
 	service := unitRoutedUploadService(repo, nil, prober, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{})
-	mediahttp.NewUploadHandler(service).Register(group)
+	mediahttp.NewUploadHandler(service, fixtureMediaActor).Register(group)
 	group.POST("/json", func(c *gin.Context) {
 		var input struct {
 			Name string `json:"name"`
@@ -135,7 +136,7 @@ func TestUploadHTTPAuthorizesAndChecksOriginBeforeReadingBody(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := &unreadUploadBody{}
-			router := uploadHTTPRouter(&uploadRepoFake{authorizeErr: tc.authErr}, mediaflow.FFUploadProber{})
+			router := uploadHTTPRouter(&uploadRepoFake{authorizeErr: mediawire.OwningError(tc.authErr)}, mediaflow.FFUploadProber{})
 			req := httptest.NewRequestWithContext(t.Context(), "POST", "/api/projects/"+uuid.NewString()+"/media/uploads", body)
 			req.Header.Set("Origin", tc.origin)
 			req.Header.Set("Idempotency-Key", uuid.NewString())

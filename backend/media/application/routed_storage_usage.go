@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -30,7 +29,7 @@ func NewStorageUsageReader(source StorageUsageSource, objects PhysicalStorageUsa
 	return &StorageUsageReader{source: source, physicalObjects: objects, clock: clock}
 }
 
-func (s *StorageUsageReader) physicalStorageUsage(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope) (StorageUsage, error) {
+func (s *StorageUsageReader) physicalStorageUsage(ctx context.Context, actor Actor, scope domain.LibraryScope) (StorageUsage, error) {
 	if s.source == nil {
 		return StorageUsage{}, ErrUnavailable
 	}
@@ -141,5 +140,5 @@ type StorageUsageBucket struct {
 
 // StorageUsageLocationSource supplies scope-authorized intents from installed owners.
 type StorageUsageLocationSource interface {
-	StorageUsageLocations(context.Context, identityapp.Principal, domain.LibraryScope) ([]domain.ObjectRef, error)
+	StorageUsageLocations(context.Context, Actor, domain.LibraryScope) ([]domain.ObjectRef, error)
 }

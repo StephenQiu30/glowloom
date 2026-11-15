@@ -21,7 +21,6 @@ import (
 	scriptpg "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
 	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
@@ -52,14 +51,14 @@ func bibleObjects(t *testing.T) *objectstorage.Client {
 
 type characterBridge struct{ references *pg.References }
 
-func (b characterBridge) Reference(ctx context.Context, a identityapp.Principal, p, id uuid.UUID, v *uuid.UUID) (scriptapp.CharacterReference, error) {
-	fact, err := b.references.Reference(ctx, a, p, id, v)
+func (b characterBridge) Reference(ctx context.Context, a scriptapp.Actor, p, id uuid.UUID, v *uuid.UUID) (scriptapp.CharacterReference, error) {
+	fact, err := b.references.Reference(ctx, bibleActor(scriptwire.IdentityActor(a)), p, id, v)
 	return scriptapp.CharacterReference{CharacterID: fact.CharacterID, VersionID: fact.VersionID, Revision: fact.Revision}, err
 }
 
 func characterScriptStore(db *gorm.DB) *scriptpg.SourceStore {
-	return scriptpg.NewSourceStoreWithCharacters(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }, func(tx *gorm.DB) scriptapp.CharacterReferences {
-		return characterBridge{pg.NewReferences(tx, bibleFixtureProjectAccess(tx))}
+	return scriptpg.NewSourceStoreWithCharacters(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleScriptAccess(bibleFixtureProjectAccess(tx)) }, func(tx *gorm.DB) scriptapp.CharacterReferences {
+		return characterBridge{pg.NewReferences(tx, bibleFixtureContentAccess(tx))}
 	}).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }
 
@@ -69,41 +68,41 @@ func TestBiblePGScriptImmutableBindingDoesNotMutateRequestAndPinnedHistory(t *te
 	objects := scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db))
 	store := characterScriptStore(db)
 	sources := scriptapp.NewSourceService(store, objects, time.Now)
-	saved, err := sources.Write(t.Context(), actor, scriptapp.SourceCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Action: "create", RightsConfirmed: true, Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "第一章", Status: "draft", Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "王总：你好"}}}}}}}})
+	saved, err := sources.Write(t.Context(), bibleScriptActor(actor), scriptapp.SourceCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Action: "create", RightsConfirmed: true, Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "第一章", Status: "draft", Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "王总：你好"}}}}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	view, err := store.Episodes(t.Context(), actor, project, saved.VersionID)
+	view, err := store.Episodes(t.Context(), bibleScriptActor(actor), project, saved.VersionID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	formal, err := store.ConfirmSplit(t.Context(), actor, scriptapp.SplitCommand{ProjectID: project, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 1, ExpectedSplitRevision: 0, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}, time.Now())
+	formal, err := store.ConfirmSplit(t.Context(), bibleScriptActor(actor), scriptapp.SplitCommand{ProjectID: project, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 1, ExpectedSplitRevision: 0, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	bible := app.NewService(bibleStore(db), time.Now)
-	character, err := bible.Change(t.Context(), actor, createCharacter(project))
+	character, err := bible.Change(t.Context(), bibleActor(actor), createCharacter(project))
 	if err != nil {
 		t.Fatal(err)
 	}
 	confirmation := app.Command{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Kind: domain.KindCharacter, Action: "confirm", EntryID: character.EntryID, ExpectedRevision: 1}
-	if _, err := bible.Change(t.Context(), actor, confirmation); err != nil {
+	if _, err := bible.Change(t.Context(), bibleActor(actor), confirmation); err != nil {
 		t.Fatal(err)
 	}
 	sceneKey, lineKey := uuid.New(), uuid.New()
 	input := scriptapp.StructureCommand{ProjectID: project, EpisodeID: formal.Episodes[0].ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 2, ExpectedEpisodeRevision: 1, Document: scriptdomain.StructureDocument{Scenes: []scriptdomain.StructureScene{{Key: sceneKey, SeqNo: 1, Heading: "客厅", Start: 0, End: 5, Items: []scriptdomain.StructureItem{{Type: "line", Key: lineKey, Kind: "dialogue", Speaker: "王总", CharacterID: &character.EntryID, Content: "你好", Start: 0, End: 5}}}}}}
-	legacy := scriptpg.NewSourceStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
-	if _, err := legacy.SaveStructure(t.Context(), actor, input, time.Now()); !errors.Is(err, scriptapp.ErrContextUnavailable) {
+	legacy := scriptpg.NewSourceStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleScriptAccess(bibleFixtureProjectAccess(tx)) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
+	if _, err := legacy.SaveStructure(t.Context(), bibleScriptActor(actor), input, time.Now()); !errors.Is(err, scriptapp.ErrContextUnavailable) {
 		t.Fatal("missing Bible owner guessed success", err)
 	}
-	first, err := store.SaveStructure(t.Context(), actor, input, time.Now())
+	first, err := store.SaveStructure(t.Context(), bibleScriptActor(actor), input, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if input.Document.Scenes[0].Items[0].CharacterVersionID != nil {
 		t.Fatal("owner silently mutated original request/idempotency body")
 	}
-	replay, err := store.SaveStructure(t.Context(), actor, input, time.Now())
+	replay, err := store.SaveStructure(t.Context(), bibleScriptActor(actor), input, time.Now())
 	if err != nil || replay.StructureID != first.StructureID {
 		t.Fatal("original request cannot replay", replay, err)
 	}
@@ -116,7 +115,7 @@ func TestBiblePGScriptImmutableBindingDoesNotMutateRequestAndPinnedHistory(t *te
 		t.Fatal("actual immutable binding", original, err)
 	}
 	err = db.Transaction(func(tx *gorm.DB) error {
-		return scriptpg.NewBibleScopes(tx, bibleFixtureProjectAccess(tx)).ValidateLookScopes(t.Context(), actor, project, []scriptapp.BibleLookScope{{EpisodeID: formal.Episodes[0].ID, SceneKey: &sceneKey}})
+		return scriptpg.NewBibleScopes(tx, bibleScriptAccess(bibleFixtureProjectAccess(tx))).ValidateLookScopes(t.Context(), bibleScriptActor(actor), project, []scriptapp.BibleLookScope{{EpisodeID: formal.Episodes[0].ID, SceneKey: &sceneKey}})
 	})
 	if !errors.Is(err, scriptapp.ErrNotFound) {
 		t.Fatal("candidate scene counted confirmed", err)
@@ -127,26 +126,26 @@ func TestBiblePGScriptImmutableBindingDoesNotMutateRequestAndPinnedHistory(t *te
 	confirm.ExpectedEpisodeRevision = 2
 	confirm.BaseStructureVersionNo = 1
 	confirm.Document = scriptdomain.StructureDocument{}
-	if _, err := store.ConfirmStructure(t.Context(), actor, confirm, time.Now()); err != nil {
+	if _, err := store.ConfirmStructure(t.Context(), bibleScriptActor(actor), confirm, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	err = db.Transaction(func(tx *gorm.DB) error {
-		return scriptpg.NewBibleScopes(tx, bibleFixtureProjectAccess(tx)).ValidateLookScopes(t.Context(), actor, project, []scriptapp.BibleLookScope{{EpisodeID: formal.Episodes[0].ID, SceneKey: &sceneKey}})
+		return scriptpg.NewBibleScopes(tx, bibleScriptAccess(bibleFixtureProjectAccess(tx))).ValidateLookScopes(t.Context(), bibleScriptActor(actor), project, []scriptapp.BibleLookScope{{EpisodeID: formal.Episodes[0].ID, SceneKey: &sceneKey}})
 	})
 	if err != nil {
 		t.Fatal("confirmed real scope", err)
 	}
-	changed, err := bible.Change(t.Context(), actor, app.Command{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Kind: domain.KindCharacter, Action: "update", EntryID: character.EntryID, ExpectedRevision: 2, Character: &app.CharacterInput{Name: "新王总"}})
+	changed, err := bible.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Kind: domain.KindCharacter, Action: "update", EntryID: character.EntryID, ExpectedRevision: 2, Character: &app.CharacterInput{Name: "新王总"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	confirmation.Key = uuid.New()
 	confirmation.ExpectedRevision = 3
-	if _, err := bible.Change(t.Context(), actor, confirmation); err != nil {
+	if _, err := bible.Change(t.Context(), bibleActor(actor), confirmation); err != nil {
 		t.Fatal(err)
 	}
 	err = db.Transaction(func(tx *gorm.DB) error {
-		fact, err := pg.NewReferences(tx, bibleFixtureProjectAccess(tx)).Reference(t.Context(), actor, project, character.EntryID, &character.VersionID)
+		fact, err := pg.NewReferences(tx, bibleFixtureContentAccess(tx)).Reference(t.Context(), bibleActor(actor), project, character.EntryID, &character.VersionID)
 		if err != nil {
 			return err
 		}

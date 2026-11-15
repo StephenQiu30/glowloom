@@ -18,7 +18,7 @@ func TestMediaPurgeActualDatabasePrivateObjectsAndUnknownRecovery(t *testing.T) 
 			db := libraryRuntimeDB(t)
 			actor, _, in, keys, objects := purgeBinaryFixture(t, db)
 			repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-			job, err := repo.CreatePurge(t.Context(), actor, in)
+			job, err := repo.CreatePurge(t.Context(), mediaActor(actor), in)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -26,7 +26,7 @@ func TestMediaPurgeActualDatabasePrivateObjectsAndUnknownRecovery(t *testing.T) 
 			run := currenttask.PurgeHandler(mediaapp.NewPurgeWorker(repo.Worker, private), repo.Worker)
 			ctx := t.Context()
 			taskfixture.RunWork(t, db, currenttask.Purge, map[string]any{"job_id": job.ID}, run)
-			current, err := repo.GetPurge(ctx, actor, job.ID)
+			current, err := repo.GetPurge(ctx, mediaActor(actor), job.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -35,11 +35,11 @@ func TestMediaPurgeActualDatabasePrivateObjectsAndUnknownRecovery(t *testing.T) 
 					t.Fatal("unknown actual deletion fabricated a terminal result", current)
 				}
 				key := uuid.New()
-				if _, err := repo.ControlPurge(ctx, actor, job.ID, key, current.Revision, "reconcile"); err != nil {
+				if _, err := repo.ControlPurge(ctx, mediaActor(actor), job.ID, key, current.Revision, "reconcile"); err != nil {
 					t.Fatal(err)
 				}
 				taskfixture.RunWork(t, db, currenttask.Purge, map[string]any{"job_id": job.ID, "attempt": 2}, run)
-				current, err = repo.GetPurge(ctx, actor, job.ID)
+				current, err = repo.GetPurge(ctx, mediaActor(actor), job.ID)
 				if err != nil {
 					t.Fatal(err)
 				}

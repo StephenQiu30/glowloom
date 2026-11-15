@@ -3,77 +3,23 @@ package application
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
-
-const (
-	projectChangedTopic = "glowloom.workspace.project_changed.v1"
-	projectAuditTopic   = "glowloom.audit.recorded.v1"
-)
-
-// ErrInvalidCreateProject means the create command or committed result is invalid.
-var ErrInvalidCreateProject = errors.New("invalid create-project command")
-
-// ErrIdempotencyConflict means a creation key was used for another request.
-var ErrIdempotencyConflict = errors.New("project idempotency key reused")
 
 // CreateProjectStore rechecks current rights and commits the project, its zero
 // budget, and both durable events in one transaction.
 type CreateProjectStore interface {
 	CreateProjectWithEvents(context.Context, identityapp.Principal, domain.Project, []identityapp.OutboxEvent) (domain.Project, error)
-	CreateProjectIdempotently(context.Context, identityapp.Principal, domain.Project, []identityapp.OutboxEvent, ProjectCreationRequest) (domain.Project, error)
-}
-
-// ProjectCreationRequest identifies one public creation and its durable receipt.
-type ProjectCreationRequest struct {
-	Key  uuid.UUID
-	Hash string
-}
-
-// CreateProjectInput contains the specifications chosen for a new project.
-type CreateProjectInput struct {
-	IndependentCanvas bool
-	StyleKey          *string
-	Name              string
-	Description       string
-	AspectRatio       string
-	StyleType         string
-	StyleSubtype      string
-	StylePresetID     uuid.UUID
-	RequestID         string
-}
-
-// CreatedProject is the safe application result of project registration.
-type CreatedProject struct {
-	CoverAssetID        *uuid.UUID `json:"cover_asset_id,omitempty"`
-	ID                  uuid.UUID  `json:"id"`
-	OrgID               uuid.UUID  `json:"org_id"`
-	CanvasID            uuid.UUID  `json:"canvas_id" binding:"required"`
-	StyleKey            *string    `json:"style_key" extensions:"x-nullable"`
-	Name                string     `json:"name"`
-	Description         string     `json:"description"`
-	AspectRatio         string     `json:"aspect_ratio"`
-	StyleType           string     `json:"style_type"`
-	StyleSubtype        string     `json:"style_subtype,omitempty"`
-	StylePresetID       *uuid.UUID `json:"style_preset_id,omitempty"`
-	Resolution          string     `json:"resolution"`
-	AllowOverseasModels bool       `json:"allow_overseas_models"`
-	Status              string     `json:"status"`
-	Revision            int64      `json:"revision"`
-	CreateTime          time.Time  `json:"create_time"`
-	UpdateTime          time.Time  `json:"update_time"`
+	CreateProjectIdempotently(context.Context, identityapp.Principal, domain.Project, []identityapp.OutboxEvent, workspacesource.ProjectCreationRequest) (domain.Project, error)
 }
 
 // CreateProjectCommand registers a project with its zero budget and events.
@@ -88,51 +34,36 @@ func NewCreateProjectCommand(store CreateProjectStore, now func() time.Time) *Cr
 }
 
 // Execute validates the actor and immutable specifications before writing.
-func (c *CreateProjectCommand) Execute(ctx context.Context, actor identityapp.Principal, input CreateProjectInput) (CreatedProject, error) {
+func (c *CreateProjectCommand) Execute(ctx context.Context, actor identityapp.Principal, input workspacesource.CreateProjectInput) (workspacesource.CreatedProject, error) {
 	return c.execute(ctx, actor, input, nil)
 }
 
 // ExecuteIdempotent is the public creation entry point. The request identifier
 // belongs to the audit; it does not change the logical request fingerprint.
-func (c *CreateProjectCommand) ExecuteIdempotent(ctx context.Context, actor identityapp.Principal, key uuid.UUID, input CreateProjectInput) (CreatedProject, error) {
+func (c *CreateProjectCommand) ExecuteIdempotent(ctx context.Context, actor identityapp.Principal, key uuid.UUID, input workspacesource.CreateProjectInput) (workspacesource.CreatedProject, error) {
 	if key == uuid.Nil {
-		return CreatedProject{}, ErrInvalidCreateProject
+		return workspacesource.CreatedProject{}, workspacesource.ErrInvalidCreateProject
 	}
-	body, err := json.Marshal(struct {
-		OrgID         uuid.UUID
-		ScopeID       uuid.UUID
-		Name          string
-		Description   string
-		AspectRatio   string
-		StyleType     string
-		StyleSubtype  string
-		StylePresetID uuid.UUID
-		StyleKey      *string
-	}{actor.OrgID, actor.ScopeID, input.Name, input.Description, input.AspectRatio, input.StyleType, input.StyleSubtype, input.StylePresetID, input.StyleKey})
+	hash, err := workspacesource.ProjectCreationSHA256(actor.OrgID, actor.ScopeID, input)
 	if err != nil {
-		return CreatedProject{}, fmt.Errorf("encode project creation request: %w", err)
+		return workspacesource.CreatedProject{}, err
 	}
-	contract := "POST /api/projects\x00"
-	if input.IndependentCanvas {
-		contract = "POST /api/independent-canvases\x00"
-	}
-	hash := sha256.Sum256(append([]byte(contract), body...))
-	return c.execute(ctx, actor, input, &ProjectCreationRequest{Key: key, Hash: hex.EncodeToString(hash[:])})
+	return c.execute(ctx, actor, input, &workspacesource.ProjectCreationRequest{Key: key, Hash: hash})
 }
 
-func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Principal, input CreateProjectInput, request *ProjectCreationRequest) (CreatedProject, error) {
+func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Principal, input workspacesource.CreateProjectInput, request *workspacesource.ProjectCreationRequest) (workspacesource.CreatedProject, error) {
 	if c == nil || c.store == nil || c.now == nil {
-		return CreatedProject{}, ErrInvalidCreateProject
+		return workspacesource.CreatedProject{}, workspacesource.ErrInvalidCreateProject
 	}
 	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		(actor.ScopeID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1) {
-		return CreatedProject{}, identityapp.ErrForbidden
+		return workspacesource.CreatedProject{}, identityapp.ErrForbidden
 	}
 	requestID, err := uuid.Parse(input.RequestID)
 	name := strings.TrimSpace(input.Name)
 	if err != nil || requestID == uuid.Nil || requestID.String() != input.RequestID ||
 		!utf8.ValidString(name) || !utf8.ValidString(input.Description) {
-		return CreatedProject{}, ErrInvalidCreateProject
+		return workspacesource.CreatedProject{}, workspacesource.ErrInvalidCreateProject
 	}
 	if input.StyleType == "" {
 		input.StyleType = "realistic"
@@ -145,15 +76,15 @@ func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Pr
 		Resolution: "1080p", Status: "active", Revision: 1,
 	}
 	if err := project.Validate(); err != nil {
-		return CreatedProject{}, ErrInvalidCreateProject
+		return workspacesource.CreatedProject{}, workspacesource.ErrInvalidCreateProject
 	}
 	occurredAt := c.now().UTC()
 	if occurredAt.IsZero() {
-		return CreatedProject{}, ErrInvalidCreateProject
+		return workspacesource.CreatedProject{}, workspacesource.ErrInvalidCreateProject
 	}
 	events, err := projectCreatedEvents(actor, project, input.RequestID, occurredAt)
 	if err != nil {
-		return CreatedProject{}, fmt.Errorf("build project events: %w", err)
+		return workspacesource.CreatedProject{}, fmt.Errorf("build project events: %w", err)
 	}
 	var saved domain.Project
 	if request == nil {
@@ -162,7 +93,7 @@ func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Pr
 		saved, err = c.store.CreateProjectIdempotently(ctx, actor, project, events, *request)
 	}
 	if err != nil {
-		return CreatedProject{}, fmt.Errorf("create project with events: %w", err)
+		return workspacesource.CreatedProject{}, fmt.Errorf("create project with events: %w", err)
 	}
 	if saved.IndependentCanvas != project.IndependentCanvas || saved.OwnerID != actor.ID || saved.CanvasID == uuid.Nil || (request == nil && saved.CanvasID != project.CanvasID) || !equalStyleKey(saved.StyleKey, project.StyleKey) || saved.ID == uuid.Nil || (request == nil && saved.ID != project.ID) || saved.OrgID != project.OrgID || saved.Name != project.Name ||
 		saved.Description != project.Description || saved.AspectRatio != project.AspectRatio ||
@@ -171,14 +102,14 @@ func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Pr
 		saved.AllowOverseasModels || saved.Status != "active" || saved.Revision != 1 ||
 		saved.IsDelete || saved.ArchivedAt != nil || saved.DeleteTime != nil ||
 		saved.PurgeAfter != nil || saved.CreateTime.IsZero() || saved.UpdateTime.IsZero() {
-		return CreatedProject{}, ErrInvalidCreateProject
+		return workspacesource.CreatedProject{}, workspacesource.ErrInvalidCreateProject
 	}
 	var stylePresetID *uuid.UUID
 	if saved.StylePresetID != uuid.Nil {
 		id := saved.StylePresetID
 		stylePresetID = &id
 	}
-	return CreatedProject{
+	return workspacesource.CreatedProject{
 		ID: saved.ID, OrgID: saved.OrgID, CanvasID: saved.CanvasID, StyleKey: saved.StyleKey, Name: saved.Name, Description: saved.Description,
 		AspectRatio: saved.AspectRatio, StyleType: saved.StyleType,
 		StyleSubtype: saved.StyleSubtype, StylePresetID: stylePresetID,
@@ -193,46 +124,13 @@ func equalStyleKey(a, b *string) bool {
 }
 
 func projectCreatedEvents(actor identityapp.Principal, project domain.Project, requestID string, occurredAt time.Time) ([]identityapp.OutboxEvent, error) {
-	changeID, auditID := uuid.New(), uuid.New()
-	change, err := json.Marshal(map[string]any{
-		"event_id": changeID, "event_type": projectChangedTopic,
-		"occurred_at": occurredAt, "org_id": actor.OrgID, "project_id": project.ID,
-		"actor":     map[string]any{"kind": "user", "id": actor.ID},
-		"aggregate": map[string]any{"type": "project", "id": project.ID, "revision": project.Revision},
-		"data":      map[string]any{"change": "created"},
-	})
+	events, err := workspacesource.ProjectCreatedEvents(actor.ID, actor.OrgID, project, requestID, occurredAt, uuid.New(), uuid.New())
 	if err != nil {
-		return nil, fmt.Errorf("encode project changed event: %w", err)
+		return nil, err
 	}
-	after := map[string]any{
-		"aspect_ratio": project.AspectRatio, "style_type": project.StyleType,
-		"status": project.Status, "revision": project.Revision,
+	out := make([]identityapp.OutboxEvent, 0, len(events))
+	for _, event := range events {
+		out = append(out, identityapp.OutboxEvent{ID: event.ID, Topic: event.Topic, PartitionKey: event.PartitionKey, Payload: event.Payload})
 	}
-	if project.StyleKey != nil {
-		after["style_key"] = *project.StyleKey
-	}
-	if project.StyleSubtype != "" {
-		after["style_subtype"] = project.StyleSubtype
-	}
-	if project.StylePresetID != uuid.Nil {
-		after["style_preset_id"] = project.StylePresetID
-	}
-	audit, err := json.Marshal(map[string]any{
-		"event_id": auditID, "event_type": projectAuditTopic,
-		"occurred_at": occurredAt, "org_id": actor.OrgID, "project_id": project.ID,
-		"actor":     map[string]any{"kind": "user", "id": actor.ID},
-		"aggregate": map[string]any{"type": "audit", "id": auditID},
-		"data": map[string]any{
-			"action": "project.created", "object": map[string]any{"type": "project", "id": project.ID},
-			"request_id": requestID, "after": after,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("encode project created audit: %w", err)
-	}
-	key := project.ID.String()
-	return []identityapp.OutboxEvent{
-		{ID: changeID, Topic: projectChangedTopic, PartitionKey: key, Payload: change},
-		{ID: auditID, Topic: projectAuditTopic, PartitionKey: key, Payload: audit},
-	}, nil
+	return out, nil
 }

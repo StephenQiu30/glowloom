@@ -21,7 +21,6 @@ import (
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
@@ -41,7 +40,7 @@ type mediaReferenceOwners struct {
 	retained []retainedMediaOwner
 }
 
-func (g mediaReferenceOwners) HasMediaReferences(ctx context.Context, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {
+func (g mediaReferenceOwners) HasMediaReferences(ctx context.Context, actor mediaapp.Actor, project, asset uuid.UUID) (bool, error) {
 	used := false
 	for _, owner := range g.retained {
 		if owner == nil {
@@ -94,12 +93,12 @@ func provideMediaReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 // through Bible, script, or unpublished package reference readers.
 func provideMediaReferenceOwnersWithAccess(tx *gorm.DB, access *pgworkspace.ProjectContentAccessStore, project pgmedia.LibraryProjectAccessFactory, scopes pgmedia.ScopeAccessFactory) mediaapp.LibraryReferences {
 	return mediaReferenceOwners{retained: []retainedMediaOwner{pgsubject.NewMediaGuard(tx), pgworkspace.NewStyleMediaGuard(tx), pgcatalog.NewProviderLogoReferences(tx)}, avatars: []avatarReferenceOwner{pgidentity.NewAvatarReferences(tx), pgworkspace.NewTeamAvatarReferences(tx)}, owners: []mediaapp.LibraryReferences{
-		pgworkspace.NewScopedMediaReferenceGuard(tx, access),
-		pgcanvas.NewScopedMediaReferenceGuard(tx, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }),
-		pgoperation.NewScopedMediaReferenceGuard(tx, func(*gorm.DB) operationapp.ProjectAccess { return operationwire.ContentProjectAccess(access) }),
-		pgbible.NewMediaReferenceGuard(tx, access),
-		pgscript.NewMediaReferenceGuard(tx, access),
-		pgmediatool.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))),
+		legacyMediaReference{owner: pgworkspace.NewScopedMediaReferenceGuard(tx, access)},
+		legacyMediaReference{owner: pgcanvas.NewScopedMediaReferenceGuard(tx, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} })},
+		legacyMediaReference{owner: pgoperation.NewScopedMediaReferenceGuard(tx, func(*gorm.DB) operationapp.ProjectAccess { return operationwire.ContentProjectAccess(access) })},
+		bibleReferenceOwner{owner: pgbible.NewMediaReferenceGuard(tx, bibleReferenceAccess{access: access})},
+		scriptMediaReference{owner: pgscript.NewMediaReferenceGuard(tx, scriptReferenceAccess{access: access})},
+		legacyMediaReference{owner: pgmediatool.NewRetainedMediaReader(tx, LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))))},
 		mediaPackageReferences{store: pgmedia.NewScopedPackageStore(tx, project, provideMediaLibraryWorkGuards, time.Now, scopes)},
 	}}
 }

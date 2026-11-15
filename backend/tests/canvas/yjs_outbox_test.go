@@ -11,7 +11,7 @@ import (
 
 	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	outbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
+	outbox "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

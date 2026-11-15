@@ -9,9 +9,13 @@ import (
 
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
 
@@ -100,7 +104,7 @@ func TestProjectFolderServiceRejectsUntrustedOwnerResponse(t *testing.T) {
 	input := workspaceapp.FolderChangeInput{Action: "create", Name: &name, IdempotencyKey: uuid.New(), RequestID: uuid.NewString()}
 	store := &folderBoundaryStore{}
 	service := workspaceapp.NewProjectFolders(store, time.Now)
-	if _, err := service.Change(context.Background(), actor, input); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := service.Change(context.Background(), actor, input); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatalf("incomplete response accepted: %v", err)
 	}
 	bad := input

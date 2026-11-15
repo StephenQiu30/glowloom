@@ -8,17 +8,24 @@ import (
 	"testing"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
@@ -121,10 +128,10 @@ func TestBillingStoreScopesBudgetAndLedgerToLiveProject(t *testing.T) {
 		{"wrong project ID", actor, otherProjectID},
 	} {
 		t.Run(scoped.name, func(t *testing.T) {
-			if _, err := store.FindBudget(t.Context(), scoped.actor, scoped.projectID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+			if _, err := store.FindBudget(t.Context(), scoped.actor, scoped.projectID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 				t.Fatalf("budget visibility error = %v", err)
 			}
-			if _, err := store.FindLedgerEntry(t.Context(), scoped.actor, scoped.projectID, entryID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+			if _, err := store.FindLedgerEntry(t.Context(), scoped.actor, scoped.projectID, entryID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 				t.Fatalf("ledger visibility error = %v", err)
 			}
 		})
@@ -137,10 +144,10 @@ func TestBillingStoreScopesBudgetAndLedgerToLiveProject(t *testing.T) {
 	if err := database.Exec(`UPDATE workspace.project SET is_delete = true, delete_time = now(), purge_after = now() + interval '30 days' WHERE id = ?::uuid`, projectID.String()).Error; err != nil {
 		t.Fatalf("mark project deleted: %v", err)
 	}
-	if _, err := store.FindBudget(t.Context(), actor, projectID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.FindBudget(t.Context(), actor, projectID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("deleted project budget error = %v", err)
 	}
-	if _, err := store.FindLedgerEntry(t.Context(), actor, projectID, entryID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.FindLedgerEntry(t.Context(), actor, projectID, entryID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("deleted project ledger error = %v", err)
 	}
 }

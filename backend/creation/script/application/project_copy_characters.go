@@ -6,8 +6,6 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ProjectCopyCharacterReference preserves a historical identity and an optional immutable pin.
@@ -21,7 +19,7 @@ type ProjectCopyCharacterMapping struct{ Source, Target ProjectCopyCharacterRefe
 
 // ProjectCopyCharacters freezes only the Bible owner's validated historical mappings in caller SQL.
 type ProjectCopyCharacters interface {
-	FreezeCharacters(context.Context, identityapp.Principal, ProjectCopyBinding, []ProjectCopyCharacterReference) ([]ProjectCopyCharacterMapping, error)
+	FreezeCharacters(context.Context, Actor, ProjectCopyBinding, []ProjectCopyCharacterReference) ([]ProjectCopyCharacterMapping, error)
 }
 
 type characterCopyKey struct{ identity, version uuid.UUID }

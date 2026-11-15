@@ -131,7 +131,7 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 			for i := range demands {
 				ordered[i] = demands[i].WalletDemand
 			}
-			walletBlock, err := walletQuoteBlock(s.billingStore(tx).CheckWalletQuoteInTransaction(tx, input.ProjectID, ordered))
+			walletBlock, err := walletQuoteBlock(s.billingStore(tx).CheckWalletQuoteInTransaction(tx, input.ProjectID, ordered, actor.ScopeID))
 			if err != nil {
 				return err
 			}

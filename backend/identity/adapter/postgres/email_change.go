@@ -12,10 +12,18 @@ import (
 )
 
 // EmailChangeStore serializes address reservation with all other identity writes.
-type EmailChangeStore struct{ db *gorm.DB }
+type EmailChangeStore struct {
+	db     *gorm.DB
+	source bool
+}
 
 // NewEmailChangeStore binds account operations to the supplied transaction boundary.
 func NewEmailChangeStore(db *gorm.DB) *EmailChangeStore { return &EmailChangeStore{db: db} }
+
+// NewSourceEmailChangeStore requires the actual restricted Identity root pool.
+func NewSourceEmailChangeStore(db *gorm.DB) *EmailChangeStore {
+	return &EmailChangeStore{db: db, source: true}
+}
 
 type emailChangeTx struct {
 	*emailAuthTx
@@ -28,7 +36,7 @@ func (t *emailChangeTx) Session() domain.AuthSession { return t.session }
 
 // EmailChangeTransaction follows settings -> account -> session -> proof lock order.
 func (s *EmailChangeStore) EmailChangeTransaction(ctx context.Context, a application.Principal, clock func() time.Time, run func(application.EmailChangeTx) error) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	runTx := func(tx *gorm.DB) error {
 		base := &emailAuthTx{authTx: &authTx{db: tx}}
 		if _, err := base.RegistrationEnabled(); err != nil {
 			return err
@@ -41,8 +49,17 @@ func (s *EmailChangeStore) EmailChangeTransaction(ctx context.Context, a applica
 		if err := tx.Raw(`SELECT * FROM identity.user_session WHERE id=?`, a.SessionID).Scan(&session).Error; err != nil {
 			return err
 		}
+		if s.source {
+			if err := requireOpenAccountHead(tx, u.ID); err != nil {
+				return err
+			}
+		}
 		return run(&emailChangeTx{emailAuthTx: base, user: u, session: session})
-	})
+	}
+	if s.source {
+		return identityWriterTransaction(ctx, s.db, runTx)
+	}
+	return s.db.WithContext(ctx).Transaction(runTx)
 }
 func (t *emailChangeTx) ProofSubmitted(id uuid.UUID) (bool, error) {
 	var ok bool

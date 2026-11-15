@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/callbacks"
@@ -52,7 +54,7 @@ func depthLockFixture(t *testing.T) (*depthHTTPFixture, tooldomain.DepthJob) {
 	sha := strings.Repeat("a", 64)
 	a.Width, a.Height, a.DurationMS, a.SHA256 = &width, &height, &duration, &sha
 	a = mediaFixtureAssetLocation(t, tx, a)
-	if err := mediaTestStore(tx).CreateAsset(t.Context(), actor, a); err != nil {
+	if err := mediaTestStore(tx).CreateAsset(t.Context(), mediaActor(actor), a); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, a.ID).Error; err != nil {
@@ -97,7 +99,7 @@ func depthObserveLocks(t *testing.T, f *depthHTTPFixture, events *[]string, afte
 	t.Cleanup(func() { _ = f.db.Callback().Query().Remove(name) })
 	return mediatoolDepthStore(f.db, nil, func(tx *gorm.DB) toolapp.DepthDerivedMedia {
 		// Keep the actual app worker scope factory; the wrapper only observes it.
-		return &depthLockMedia{DepthDerivedMedia: mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess)), events: events, after: after, tx: tx}
+		return &depthLockMedia{DepthDerivedMedia: mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess))), events: events, after: after, tx: tx}
 	})
 }
 

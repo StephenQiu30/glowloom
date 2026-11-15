@@ -52,7 +52,17 @@ func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, pro
 		if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
-		result := tx.Raw(`
+		var owner string
+		if err := tx.Raw(`SELECT infra.runtime_owner()`).Scan(&owner).Error; err != nil {
+			return err
+		}
+		var result *gorm.DB
+		if owner == "execution" {
+			// Current scope/project/organization permission was checked above through
+			// the injected Creation authority. Only local budget facts are read here.
+			result = tx.Raw(`SELECT id,project_id,limit_micros,reserved_micros,settled_micros,is_overrun,revision FROM billing.budget WHERE project_id=? AND NOT is_delete`, projectID).Scan(&budget)
+		} else {
+			result = tx.Raw(`
 			SELECT b.id, b.project_id, b.limit_micros, b.reserved_micros,
 			       b.settled_micros, b.is_overrun, b.revision
 			FROM billing.budget AS b
@@ -60,6 +70,7 @@ func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, pro
 			WHERE b.project_id = ?::uuid AND p.org_id = ?::uuid
 			  AND NOT b.is_delete AND NOT p.is_delete
 		`, projectID.String(), actor.OrgID.String()).Scan(&budget)
+		}
 		if result.Error != nil {
 			return fmt.Errorf("read budget: %w", result.Error)
 		}

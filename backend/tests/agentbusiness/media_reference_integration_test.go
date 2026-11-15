@@ -23,6 +23,8 @@ import (
 	"gorm.io/gorm"
 
 	agentdomain "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -298,9 +300,9 @@ func referenceAssetFixture(t *testing.T, db *gorm.DB, grant agentdomain.Grant, e
 	sum := sha256.Sum256(body)
 	digest := hex.EncodeToString(sum[:])
 	id, location := uuid.New(), uuid.New()
-	profile := "agent-reference-" + uuid.NewString()[:8]
+	profile := "agent-reference-fixture"
 	ref := mediadomain.ObjectRef{ProfileID: profile, Bucket: "agent-references", Key: "projects/" + grant.Scope.ProjectID.String() + "/" + kind + "/2026/11/" + id.String() + "." + extension}
-	if err := db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'cos','http://127.0.0.1','http://127.0.0.1','us-east-1',?,'',?)`, profile, ref.Bucket, agentdomain.ContentHash(profile)).Error; err != nil {
+	if err := pgmedia.NewStorageRoutes(db).RegisterProfiles(t.Context(), []mediaapp.StorageProfile{{ID: profile, Provider: "cos", Endpoint: "http://127.0.0.1:2", SigningEndpoint: "http://127.0.0.1:2", Region: "us-east-1", Bucket: ref.Bucket}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type)VALUES(?,?,?,?,'accepted',?,?,?)`, location, profile, ref.Bucket, ref.Key, len(body), digest, mime).Error; err != nil {

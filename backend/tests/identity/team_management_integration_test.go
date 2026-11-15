@@ -8,10 +8,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 )
 
@@ -49,13 +53,13 @@ func TestTeamCreationAndMemberProjection(t *testing.T) {
 	if err != nil || replay.ID != team.ID {
 		t.Fatal("team retry duplicated creation", err)
 	}
-	if _, err := teams.Create(t.Context(), admin, key, "Different team"); !errors.Is(err, workspace.ErrIdempotencyConflict) {
+	if _, err := teams.Create(t.Context(), admin, key, "Different team"); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatalf("key reused with new request: %v", err)
 	}
 	if err := tx.Exec(`INSERT INTO workspace.team_member(team_id,user_id,role,status,joined_at,source) VALUES(?,?,'member','active',?,'invited')`, team.ID, member.ID, now).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := teams.Read(t.Context(), outsider, team.ID); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := teams.Read(t.Context(), outsider, team.ID); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("outsider can read team: %v", err)
 	}
 	public, err := teams.Members(t.Context(), member, team.ID)
@@ -127,7 +131,7 @@ func TestTeamMembershipRevokesOnlyOneTeam(t *testing.T) {
 	if err := svc.ChangeMember(t.Context(), admin, a.ID, member.ID, 1, "suspend", "Access temporarily suspended"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Read(t.Context(), member, a.ID); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := svc.Read(t.Context(), member, a.ID); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("suspended member still has access: %v", err)
 	}
 	if _, err := svc.Read(t.Context(), member, b.ID); err != nil {

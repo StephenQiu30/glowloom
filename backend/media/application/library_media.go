@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -23,7 +22,7 @@ type LibraryMediaFile struct {
 // LibraryMediaReader rechecks the current closed scope, catalog visibility and
 // original eligibility while holding the owning project/library/media locks.
 type LibraryMediaReader interface {
-	FindLibraryMedia(context.Context, identityapp.Principal, domain.LibraryScope, uuid.UUID) (LibraryMediaFile, error)
+	FindLibraryMedia(context.Context, Actor, domain.LibraryScope, uuid.UUID) (LibraryMediaFile, error)
 }
 
 // LibraryRenditionPreview is an expiring lease, never durable catalog metadata.
@@ -55,7 +54,7 @@ type LibraryMediaQuery struct {
 func NewRoutedLibraryMediaQuery(reader LibraryMediaReader, signer ObjectSigner, objects ObjectReader, ttl time.Duration) *LibraryMediaQuery {
 	return &LibraryMediaQuery{reader: reader, objectSigner: signer, objectReader: objects, previewTTL: ttl}
 }
-func (q *LibraryMediaQuery) source(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) (LibraryMediaFile, error) {
+func (q *LibraryMediaQuery) source(ctx context.Context, actor Actor, scope domain.LibraryScope, id uuid.UUID) (LibraryMediaFile, error) {
 	if q == nil || q.reader == nil {
 		return LibraryMediaFile{}, ErrUnavailable
 	}
@@ -77,7 +76,7 @@ func (q *LibraryMediaQuery) source(ctx context.Context, actor identityapp.Princi
 }
 
 // Preview excludes documents and plaintext; the attachment route owns originals.
-func (q *LibraryMediaQuery) Preview(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) (LibraryMediaPreview, error) {
+func (q *LibraryMediaQuery) Preview(ctx context.Context, actor Actor, scope domain.LibraryScope, id uuid.UUID) (LibraryMediaPreview, error) {
 	file, err := q.source(ctx, actor, scope, id)
 	if err != nil {
 		return LibraryMediaPreview{}, err
@@ -117,7 +116,7 @@ func (q *LibraryMediaQuery) Preview(ctx context.Context, actor identityapp.Princ
 
 // Download verifies the entire bounded original against its owning SHA before
 // streaming an attachment. The caller owns and must close its temporary file.
-func (q *LibraryMediaQuery) Download(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) (*Downloaded, LibraryAssetSummary, error) {
+func (q *LibraryMediaQuery) Download(ctx context.Context, actor Actor, scope domain.LibraryScope, id uuid.UUID) (*Downloaded, LibraryAssetSummary, error) {
 	source, err := q.source(ctx, actor, scope, id)
 	if err != nil {
 		return nil, LibraryAssetSummary{}, err

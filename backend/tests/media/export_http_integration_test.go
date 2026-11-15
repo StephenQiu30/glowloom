@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	tooltask "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
@@ -78,7 +80,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	defer func() { _ = download.Close() }()
 	mediaStore := mediaTestStore(db)
 	upload := mediaFixtureRoutedUpload(t, db, mediaStore, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
-	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.png"}, File: download, LocalReviewConfirmed: true})
+	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.png"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +99,9 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 			}
 		}
 	})
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaTestStore(tx)))
+	}
 	canvasStore := mediaCanvasStore(db, mediaFactory)
 	canvasService := canvasfixture.NewService(canvasStore)
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Export real fixture"})
@@ -117,10 +121,16 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	}
 	store := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
 		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
 	workerStore := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx)) }))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
+			return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaWorkerStore(tx)))
+		}))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaWorkerStore(tx)))
+	})
 	query := toolapp.NewRoutedExportQuery(store, mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute)
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
@@ -182,7 +192,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	if err != nil || rendered.Status != tooldomain.ReviewRequired || rendered.AssetID == nil || rendered.SHA256 == nil {
 		t.Fatalf("real render %+v %v", rendered, err)
 	}
-	if _, err := mediaapp.NewRoutedAssetQuery(mediaStore, mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), actor, project, *rendered.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewRoutedAssetQuery(mediaStore, mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), mediaActor(actor), project, *rendered.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("unreviewed output referenceable %v", err)
 	}
 	before := request("GET", jobURL+"/download"+scope, uuid.Nil, nil)

@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"time"
 
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // AuthorizeDerivedProject checks local media tool access within its transaction.
-func (s *Store) AuthorizeDerivedProject(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool) error {
+func (s *Store) AuthorizeDerivedProject(ctx context.Context, actor mediaapp.Actor, project uuid.UUID, write bool) error {
 	if s == nil || s.db == nil {
 		return ErrUnavailable
 	}
@@ -29,7 +30,7 @@ func (s *Store) AuthorizeDerivedProject(ctx context.Context, actor identityapp.P
 }
 
 // StoreDerived records checked private bytes and real previews awaiting review.
-func (s *Store) StoreDerived(ctx context.Context, actor identityapp.Principal, asset domain.MediaAsset, renditions []domain.Rendition) error {
+func (s *Store) StoreDerived(ctx context.Context, actor mediaapp.Actor, asset domain.MediaAsset, renditions []domain.Rendition) error {
 	if s == nil || s.db == nil {
 		return ErrUnavailable
 	}
@@ -70,7 +71,7 @@ func (s *Store) StoreDerived(ctx context.Context, actor identityapp.Principal, a
 }
 
 // ReviewDerived accepts only the current produced bytes after human inspection.
-func (s *Store) ReviewDerived(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, sha string, now time.Time) error {
+func (s *Store) ReviewDerived(ctx context.Context, actor mediaapp.Actor, project, id uuid.UUID, sha string, now time.Time) error {
 	if s == nil || s.db == nil {
 		return ErrUnavailable
 	}
@@ -97,7 +98,7 @@ func (s *Store) ReviewDerived(ctx context.Context, actor identityapp.Principal, 
 }
 
 // RejectDerived makes a cancelled, unreviewed artifact permanently unavailable.
-func (s *Store) RejectDerived(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, reason string, now time.Time) error {
+func (s *Store) RejectDerived(ctx context.Context, actor mediaapp.Actor, project, id uuid.UUID, reason string, now time.Time) error {
 	if s == nil || s.db == nil {
 		return ErrUnavailable
 	}
@@ -114,7 +115,7 @@ func (s *Store) RejectDerived(ctx context.Context, actor identityapp.Principal, 
 
 // FinalizeDerived inherits reference eligibility only after checking every source
 // in the publication transaction. No user inspection or consent is invented.
-func (s *Store) FinalizeDerived(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, sha string, sources []uuid.UUID, now time.Time) error {
+func (s *Store) FinalizeDerived(ctx context.Context, actor mediaapp.Actor, project, id uuid.UUID, sha string, sources []uuid.UUID, now time.Time) error {
 	if s == nil || s.db == nil {
 		return ErrUnavailable
 	}

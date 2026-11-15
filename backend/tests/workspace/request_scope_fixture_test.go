@@ -9,17 +9,29 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 )
 
@@ -86,7 +98,7 @@ func workspaceCopyStore(db *gorm.DB, work pgworkspace.ProjectWorkFactory, owners
 type workspaceBillingCopyAccess struct{ tx *gorm.DB }
 
 func (a workspaceBillingCopyAccess) AuthorizeBilling(ctx context.Context, actor identityapp.Principal, project uuid.UUID, _ bool) error {
-	return app.NewMediaWorkerScopeAccess(a.tx).AuthorizeCopyTarget(ctx, actor, project)
+	return app.NewMediaWorkerScopeAccess(a.tx).AuthorizeCopyTarget(ctx, mediaBoundaryActor(actor), project)
 }
 
 func workspaceCopyBudgetStore(tx *gorm.DB) *pgbilling.Store {
@@ -106,7 +118,7 @@ func (a workspaceOperationAccess) AuthorizeOperation(ctx context.Context, actor 
 		access = pgworkspace.NewWorkerProjectContentAccessStore(a.tx, workspaceWorkerScope(a.tx))
 	}
 	_, err := access.Authorize(ctx, actor, project, write)
-	if a.worker && (errors.Is(err, identityapp.ErrForbidden) || errors.Is(err, workspaceapp.ErrScopeNotFound) || errors.Is(err, workspaceapp.ErrProjectNotFound)) {
+	if a.worker && (errors.Is(err, identityapp.ErrForbidden) || errors.Is(err, workspacesource.ErrScopeNotFound) || errors.Is(err, workspacesource.ErrProjectNotFound)) {
 		return operationapp.ErrExecutionAuthorityRevoked
 	}
 	return err
@@ -161,15 +173,15 @@ func TestWorkspaceFixtureBindsLiveSessionAndExplicitOwnerScope(t *testing.T) {
 	if _, err := store.FindProject(ctx, actor, project); err != nil {
 		t.Fatal("current session cannot read its explicit project", err)
 	}
-	if _, err := pgworkspace.NewStore(tx).FindProject(ctx, actor, project); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := pgworkspace.NewStore(tx).FindProject(ctx, actor, project); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatal("missing scope dependency did not fail closed", err)
 	}
-	if _, err := store.FindProject(ctx, other, project); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.FindProject(ctx, other, project); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatal("another personal scope read the project", err)
 	}
 	forged := actor
 	forged.ScopeID = other.ScopeID
-	if _, err := store.FindProject(ctx, forged, project); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, err := store.FindProject(ctx, forged, project); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatal("forged selected scope was trusted", err)
 	}
 	stale := actor

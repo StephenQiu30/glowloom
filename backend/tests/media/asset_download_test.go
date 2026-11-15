@@ -25,14 +25,14 @@ type originalReadStore struct {
 	change func(*domain.MediaAsset)
 }
 
-func (r *originalReadStore) FindAsset(_ context.Context, _ identityapp.Principal, _, _ uuid.UUID) (domain.MediaAsset, error) {
+func (r *originalReadStore) FindAsset(_ context.Context, _ mediaapp.Actor, _, _ uuid.UUID) (domain.MediaAsset, error) {
 	r.reads++
 	if r.reads == 2 && r.change != nil {
 		r.change(&r.asset)
 	}
 	return r.asset, nil
 }
-func (r *originalReadStore) ListReadyAssets(context.Context, identityapp.Principal, uuid.UUID, string, uuid.UUID, int) ([]domain.MediaAsset, error) {
+func (r *originalReadStore) ListReadyAssets(context.Context, mediaapp.Actor, uuid.UUID, string, uuid.UUID, int) ([]domain.MediaAsset, error) {
 	return nil, nil
 }
 func TestAssetOriginalRequiresCurrentEligibleIdentityAndSavedLocation(t *testing.T) {
@@ -42,7 +42,7 @@ func TestAssetOriginalRequiresCurrentEligibleIdentityAndSavedLocation(t *testing
 	a.ObjectLocation = readLocation("cos-archive", a.ObjectKey)
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
 	repo := &originalReadStore{asset: a}
-	file, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID)
+	file, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestAssetOriginalRequiresCurrentEligibleIdentityAndSavedLocation(t *testing
 	}
 	for _, change := range []func(*domain.MediaAsset){func(a *domain.MediaAsset) { a.Revision++ }, func(a *domain.MediaAsset) { a.IsDelete = true }, func(a *domain.MediaAsset) { a.ProjectID = uuid.New() }, func(a *domain.MediaAsset) { a.ObjectLocation = readLocation("cos-main", a.ObjectKey) }} {
 		repo = &originalReadStore{asset: a, change: change}
-		if file, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); file != nil || !errors.Is(err, mediaapp.ErrOriginalChanged) {
+		if file, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID); file != nil || !errors.Is(err, mediaapp.ErrOriginalChanged) {
 			t.Fatal("changed fact streamed", err)
 		}
 	}
@@ -62,14 +62,14 @@ func TestAssetOriginalRequiresCurrentEligibleIdentityAndSavedLocation(t *testing
 		change(&bad)
 		repo = &originalReadStore{asset: bad}
 		before := objects.calls
-		if file, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); file != nil || !errors.Is(err, mediaapp.ErrNotFound) || objects.calls != before {
+		if file, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID); file != nil || !errors.Is(err, mediaapp.ErrNotFound) || objects.calls != before {
 			t.Fatal("ineligible original opened", err)
 		}
 	}
 	a.ObjectLocation = nil
 	repo = &originalReadStore{asset: a}
 	before := objects.calls
-	if _, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrNotFound) || objects.calls != before {
+	if _, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrNotFound) || objects.calls != before {
 		t.Fatal("legacy bucket guessed", err)
 	}
 }
@@ -83,7 +83,7 @@ func TestAssetOriginalSavedLocationAndAttachmentHeaders(t *testing.T) {
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
 	query := mediaapp.NewAssetDownloads(&originalReadStore{asset: a}, objects)
 	router := gin.New()
-	mediahttp.NewAssetDownloadHandler(query).Register(router.Group("/api"))
+	mediahttp.NewAssetDownloadHandler(query, staticMediaActor).Register(router.Group("/api"))
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/projects/"+a.ProjectID.String()+"/media/"+a.ID.String()+"/original", nil))
 	if response.Code != 200 || response.Body.String() != string(data) || objects.calls != 1 || response.Header().Get("Cache-Control") != "private, no-store" || response.Header().Get("X-Content-Type-Options") != "nosniff" {
@@ -93,7 +93,7 @@ func TestAssetOriginalSavedLocationAndAttachmentHeaders(t *testing.T) {
 	if err != nil || disposition != "attachment" || strings.ContainsAny(params["filename"], "/\\\r\n") {
 		t.Fatal("unsafe attachment filename", disposition, params, err)
 	}
-	if _, err := mediaapp.NewAssetDownloads(&originalReadStore{asset: a}, nil).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := mediaapp.NewAssetDownloads(&originalReadStore{asset: a}, nil).Open(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("missing registry accepted", err)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -26,28 +25,28 @@ func (s scopeAuthority) accessScope(tx *gorm.DB) (application.ScopeAccess, error
 	}
 	return a, nil
 }
-func (s scopeAuthority) requireCurrentActor(tx *gorm.DB, actor identity.Principal) error {
+func (s scopeAuthority) requireCurrentActor(tx *gorm.DB, actor application.Actor) error {
 	a, err := s.accessScope(tx)
 	if err != nil {
 		return err
 	}
 	return a.CheckActor(tx.Statement.Context, actor)
 }
-func (s scopeAuthority) requireProject(tx *gorm.DB, actor identity.Principal, id uuid.UUID, write bool) error {
+func (s scopeAuthority) requireProject(tx *gorm.DB, actor application.Actor, id uuid.UUID, write bool) error {
 	a, err := s.accessScope(tx)
 	if err != nil {
 		return err
 	}
 	return a.AuthorizeProject(tx.Statement.Context, actor, id, write)
 }
-func (s scopeAuthority) requirePersonal(tx *gorm.DB, actor identity.Principal, write bool) error {
+func (s scopeAuthority) requirePersonal(tx *gorm.DB, actor application.Actor, write bool) error {
 	a, err := s.accessScope(tx)
 	if err != nil {
 		return err
 	}
 	return a.AuthorizePersonal(tx.Statement.Context, actor, write)
 }
-func (s scopeAuthority) requireCopyTarget(tx *gorm.DB, actor identity.Principal, id uuid.UUID) error {
+func (s scopeAuthority) requireCopyTarget(tx *gorm.DB, actor application.Actor, id uuid.UUID) error {
 	a, err := s.accessScope(tx)
 	if err != nil {
 		return err

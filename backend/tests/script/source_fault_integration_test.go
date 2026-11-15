@@ -47,7 +47,7 @@ func TestScriptSourcePGMissingFormalInsertRollsBackWholePublication(t *testing.T
 			in.ProjectID = pid
 			release := scriptNullInsert(t, owner, table, "project_id", pid)
 			service := app.NewSourceService(scriptStore(db), objects, time.Now)
-			if _, err := service.Write(t.Context(), actor, in); err == nil {
+			if _, err := service.Write(t.Context(), scriptActor(actor), in); err == nil {
 				t.Fatal("missing immutable row published a successful receipt")
 			}
 			s, v, c := scriptCounts(t, owner, pid)
@@ -65,7 +65,7 @@ func TestScriptSourcePGMissingFormalInsertRollsBackWholePublication(t *testing.T
 				t.Fatalf("incomplete publication escaped rollback: sources=%d versions=%d command=%d revision=%d events=%d receipts=%d", s, v, c, revision, events, receipts)
 			}
 			release()
-			if _, err := service.Write(t.Context(), actor, in); err != nil {
+			if _, err := service.Write(t.Context(), scriptActor(actor), in); err != nil {
 				t.Fatal("original key recovery", err)
 			}
 		})
@@ -83,11 +83,11 @@ func TestScriptReviewPGMissingEpisodeOrLineRollsBackWholeConfirmation(t *testing
 			_, input := sourceCommand()
 			input.ProjectID = pid
 			input.Sources[0].Document = domain.RichDocument{Type: "doc", Content: []domain.RichDocument{{Type: "paragraph", Content: []domain.RichDocument{{Type: "text", Text: "走进客厅\n你好😀 "}}}}}
-			saved, err := sources.Write(t.Context(), actor, input)
+			saved, err := sources.Write(t.Context(), scriptActor(actor), input)
 			if err != nil {
 				t.Fatal(err)
 			}
-			view, err := store.Episodes(t.Context(), actor, pid, saved.VersionID)
+			view, err := store.Episodes(t.Context(), scriptActor(actor), pid, saved.VersionID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -95,7 +95,7 @@ func TestScriptReviewPGMissingEpisodeOrLineRollsBackWholeConfirmation(t *testing
 			if table == "script.episode" {
 				scriptNullInsert(t, owner, table, "project_id", pid)
 			}
-			formal, err := store.ConfirmSplit(t.Context(), actor, command, time.Now().UTC())
+			formal, err := store.ConfirmSplit(t.Context(), scriptActor(actor), command, time.Now().UTC())
 			expectedRevision := int64(1)
 			if table == "script.episode" {
 				if err == nil {
@@ -108,7 +108,7 @@ func TestScriptReviewPGMissingEpisodeOrLineRollsBackWholeConfirmation(t *testing
 				expectedRevision = 2
 				scriptNullInsert(t, owner, table, "project_id", pid)
 				structure := app.StructureCommand{ProjectID: pid, EpisodeID: formal.Episodes[0].ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 2, ExpectedEpisodeRevision: 1, Document: manualStructure()}
-				if _, err := app.NewEpisodeService(store, sources, time.Now).SaveStructure(t.Context(), actor, structure); err == nil {
+				if _, err := app.NewEpisodeService(store, sources, time.Now).SaveStructure(t.Context(), scriptActor(actor), structure); err == nil {
 					t.Fatal("structured source omitted action line")
 				}
 			}
@@ -130,14 +130,14 @@ func TestScriptSourcePGMissingRequestNamespaceNeverCreatesIntentOrObjects(t *tes
 	_, input := sourceCommand()
 	input.ProjectID = pid
 	release := scriptNullInsert(t, owner, "script.request", "project_id", pid)
-	if _, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), actor, input); err == nil {
+	if _, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), scriptActor(actor), input); err == nil {
 		t.Fatal("source accepted without permanent cross-command scope")
 	}
 	if s, v, c := scriptCounts(t, owner, pid); s != 0 || v != 0 || c != 0 || objects.puts != 0 {
 		t.Fatal("namespace failure wrote intent or private objects", s, v, c, objects.puts)
 	}
 	release()
-	if _, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), actor, input); err != nil {
+	if _, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), scriptActor(actor), input); err != nil {
 		t.Fatal("original key after proven rollback", err)
 	}
 }

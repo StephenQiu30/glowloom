@@ -3,20 +3,19 @@ package postgres
 import (
 	"context"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 )
 
 // PersonalScopeID reads a mapping, not authority. Callers must subsequently Resolve
 // this exact scope in the same transaction before using any personal resource.
 func (s *ScopeStore) PersonalScopeID(ctx context.Context, actor uuid.UUID) (uuid.UUID, error) {
 	if s == nil || s.db == nil || s.db.Statement == nil || s.actors == nil {
-		return uuid.Nil, application.ErrScopeNotFound
+		return uuid.Nil, workspacesource.ErrScopeNotFound
 	}
 	if _, ok := s.db.Statement.ConnPool.(gorm.TxCommitter); !ok {
-		return uuid.Nil, application.ErrScopeNotFound
+		return uuid.Nil, workspacesource.ErrScopeNotFound
 	}
 	if err := s.actors(s.db).CheckActive(ctx, actor); err != nil {
 		return uuid.Nil, err
@@ -27,7 +26,7 @@ func (s *ScopeStore) PersonalScopeID(ctx context.Context, actor uuid.UUID) (uuid
 		return uuid.Nil, r.Error
 	}
 	if r.RowsAffected != 1 {
-		return uuid.Nil, application.ErrScopeNotFound
+		return uuid.Nil, workspacesource.ErrScopeNotFound
 	}
 	return row.ID, nil
 }

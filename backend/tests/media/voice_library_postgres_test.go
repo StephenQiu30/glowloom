@@ -21,59 +21,59 @@ func TestVoiceLibraryPostgresPersistence(t *testing.T) {
 	id := uuid.New()
 	asset := domain.MediaAsset{ID: id, ProjectID: pid, Kind: domain.KindAudio, Origin: domain.OriginUpload, Status: domain.StatusUploading, ObjectKey: "projects/" + pid.String() + "/audio/2026/10/" + id.String() + ".wav", FileName: "voice.wav", MimeType: "audio/wav", ByteSize: 144044, DurationMS: &duration, ModerationStatus: domain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
 	asset = mediaFixtureAssetLocation(t, db, asset)
-	if err := s.CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := s.CreateAsset(t.Context(), mediaActor(actor), asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, id).Error; err != nil {
 		t.Fatal(err)
 	}
 	input := application.VoiceCreate{RequestID: uuid.New(), Name: "回归音色", VoiceTags: application.VoiceTags{Gender: "男声", Language: "中文", Style: "旁白"}, AssetID: id, Consent: true}
-	voice, err := s.CreateVoice(t.Context(), actor, pid, input)
+	voice, err := s.CreateVoice(t.Context(), mediaActor(actor), pid, input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if voice.Gender != "男声" || voice.Language != "中文" || voice.Age != "未标注" {
 		t.Fatal("voice metadata not persisted", voice)
 	}
-	replay, err := s.CreateVoice(t.Context(), actor, pid, input)
+	replay, err := s.CreateVoice(t.Context(), mediaActor(actor), pid, input)
 	if err != nil || replay.ID != voice.ID {
 		t.Fatal("idempotency", err)
 	}
 	input.Name = "冲突"
-	if _, err = s.CreateVoice(t.Context(), actor, pid, input); !errors.Is(err, application.ErrVoiceConflict) {
+	if _, err = s.CreateVoice(t.Context(), mediaActor(actor), pid, input); !errors.Is(err, application.ErrVoiceConflict) {
 		t.Fatal("conflicting replay", err)
 	}
-	if _, err = s.CreateVoice(t.Context(), other, otherPID, application.VoiceCreate{RequestID: uuid.New(), Name: "跨项目", AssetID: id, Consent: true}); err == nil {
+	if _, err = s.CreateVoice(t.Context(), mediaActor(other), otherPID, application.VoiceCreate{RequestID: uuid.New(), Name: "跨项目", AssetID: id, Consent: true}); err == nil {
 		t.Fatal("foreign source accepted")
 	}
-	if _, err = s.ListVoices(t.Context(), other, pid, uuid.Nil); err == nil {
+	if _, err = s.ListVoices(t.Context(), mediaActor(other), pid, uuid.Nil); err == nil {
 		t.Fatal("foreign owner read")
 	}
-	page, err := s.ListVoices(t.Context(), actor, pid, uuid.Nil)
+	page, err := s.ListVoices(t.Context(), mediaActor(actor), pid, uuid.Nil)
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != voice.ID {
 		t.Fatal("readback", page, err)
 	}
-	updated, err := s.UpdateVoice(t.Context(), actor, pid, voice.ID, application.VoiceUpdate{Revision: voice.Revision, Name: "已改名", Favorite: true})
+	updated, err := s.UpdateVoice(t.Context(), mediaActor(actor), pid, voice.ID, application.VoiceUpdate{Revision: voice.Revision, Name: "已改名", Favorite: true})
 	if err != nil || !updated.Favorite || updated.Revision != 2 {
 		t.Fatal("update", err)
 	}
-	if _, err = s.UpdateVoice(t.Context(), actor, pid, voice.ID, application.VoiceUpdate{Revision: voice.Revision, Name: "旧修订"}); !errors.Is(err, application.ErrVoiceConflict) {
+	if _, err = s.UpdateVoice(t.Context(), mediaActor(actor), pid, voice.ID, application.VoiceUpdate{Revision: voice.Revision, Name: "旧修订"}); !errors.Is(err, application.ErrVoiceConflict) {
 		t.Fatal("stale write", err)
 	}
-	if err = s.FavoriteSystemVoice(t.Context(), actor, pid, application.SystemVoices()[0].ID, true); err != nil {
+	if err = s.FavoriteSystemVoice(t.Context(), mediaActor(actor), pid, application.SystemVoices()[0].ID, true); err != nil {
 		t.Fatal(err)
 	}
-	system, err := s.ListSystemVoices(t.Context(), actor, pid)
+	system, err := s.ListSystemVoices(t.Context(), mediaActor(actor), pid)
 	if err != nil || !system[0].Favorite {
 		t.Fatal("system favorite readback", err)
 	}
-	if err = s.FavoriteSystemVoice(t.Context(), actor, pid, "invented-speaker", true); !errors.Is(err, application.ErrInvalidQuery) {
+	if err = s.FavoriteSystemVoice(t.Context(), mediaActor(actor), pid, "invented-speaker", true); !errors.Is(err, application.ErrInvalidQuery) {
 		t.Fatal("unverified speaker accepted", err)
 	}
-	if _, err = s.UpdateVoice(t.Context(), actor, pid, voice.ID, application.VoiceUpdate{Revision: updated.Revision, Name: updated.Name, Delete: true}); err != nil {
+	if _, err = s.UpdateVoice(t.Context(), mediaActor(actor), pid, voice.ID, application.VoiceUpdate{Revision: updated.Revision, Name: updated.Name, Delete: true}); err != nil {
 		t.Fatal(err)
 	}
-	page, err = s.ListVoices(t.Context(), actor, pid, uuid.Nil)
+	page, err = s.ListVoices(t.Context(), mediaActor(actor), pid, uuid.Nil)
 	if err != nil || len(page.Items) != 0 {
 		t.Fatal("delete", err)
 	}
@@ -89,7 +89,10 @@ func TestVoiceLibraryPostgresPersistence(t *testing.T) {
 	}
 	results := make(chan result, 8)
 	for range 8 {
-		go func() { v, e := s.CreateVoice(t.Context(), actor, pid, concurrent); results <- result{v, e} }()
+		go func() {
+			v, e := s.CreateVoice(t.Context(), mediaActor(actor), pid, concurrent)
+			results <- result{v, e}
+		}()
 	}
 	var first uuid.UUID
 	var concurrentErrors []error

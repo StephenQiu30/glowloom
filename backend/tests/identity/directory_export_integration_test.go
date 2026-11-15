@@ -14,6 +14,7 @@ import (
 
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 )
 
 // This double deliberately performs no external object writes.
@@ -117,7 +118,7 @@ func TestDirectoryExportPostgresSnapshotStatisticsAndRevocation(t *testing.T) {
 		t.Fatal("deleted action projection", err)
 	}
 	objects := &directoryTestObjects{values: map[string][]byte{}}
-	exports := identity.NewRoutedDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), objects, func() time.Time { return now })
+	exports := identity.NewRoutedDirectoryExport(pgidentity.NewDirectoryExportStore(tx, mediawire.NewIdentityExportLedger), completionProtector(t), objects, func() time.Time { return now })
 	filter := identity.ExportFilter{Search: label, Status: "deleted"}
 	key := uuid.New()
 	job, err := exports.Create(t.Context(), actor, nil, filter, key)
@@ -177,7 +178,7 @@ func TestDirectoryExportTeamRoleFilterAndIndependentAuthority(t *testing.T) {
 	if err != nil || view.TotalMembers != 1 || view.MemberStates["suspended"] != 1 {
 		t.Fatalf("member filtered stats %+v %v", view, err)
 	}
-	exports := identity.NewRoutedDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), &directoryTestObjects{values: map[string][]byte{}}, func() time.Time { return now })
+	exports := identity.NewRoutedDirectoryExport(pgidentity.NewDirectoryExportStore(tx, mediawire.NewIdentityExportLedger), completionProtector(t), &directoryTestObjects{values: map[string][]byte{}}, func() time.Time { return now })
 	job, err := exports.Create(t.Context(), target, &team, identity.ExportFilter{Role: "member", Status: "suspended"}, uuid.New())
 	if err != nil || job.RowCount != 1 {
 		t.Fatal("member role filter lost", err)
@@ -246,7 +247,7 @@ func TestDirectoryExportRestrictedApplicationRole(t *testing.T) {
 		t.Fatal("runtime role lacks export privileges", err)
 	}
 	objects := &directoryTestObjects{values: map[string][]byte{}}
-	service := identity.NewRoutedDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), objects, func() time.Time { return now })
+	service := identity.NewRoutedDirectoryExport(pgidentity.NewDirectoryExportStore(tx, mediawire.NewIdentityExportLedger), completionProtector(t), objects, func() time.Time { return now })
 	job, err := service.Create(t.Context(), actor, nil, identity.ExportFilter{Search: "governance-admin@example.invalid"}, uuid.New())
 	if err != nil {
 		t.Fatal("restricted role create", err)

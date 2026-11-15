@@ -4,21 +4,22 @@ import (
 	"context"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func (s *ProjectCopyStore) bibleOwner(tx *gorm.DB, job domain.ProjectCopyJob, worker uuid.UUID, phase string) (application.ProjectCopyBibleOwner, error) {
 	if s.bible == nil {
-		return nil, application.ErrProjectDependencyUnavailable
+		return nil, workspacesource.ErrProjectDependencyUnavailable
 	}
 	owner := s.bible(tx, application.ProjectCopyAuthority{Binding: copyBinding(job), ActorID: job.ExecutionActor(), WorkerID: worker, SourceRevision: job.SourceRevision, Phase: bibleCopyPhase(phase), Bible: job.Manifest.Bible}, copyMediaSnapshot(job))
 	if owner == nil {
-		return nil, application.ErrProjectDependencyUnavailable
+		return nil, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return owner, nil
 }
@@ -26,7 +27,7 @@ func (s *ProjectCopyStore) bibleOwner(tx *gorm.DB, job domain.ProjectCopyJob, wo
 // CompleteBible registers the full Bible history and advances the same worker atomically.
 func (s *ProjectCopyStore) CompleteBible(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID) (domain.ProjectCopyJob, error) {
 	if s == nil || s.db == nil {
-		return domain.ProjectCopyJob{}, application.ErrProjectDependencyUnavailable
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

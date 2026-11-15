@@ -7,6 +7,8 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
@@ -18,6 +20,10 @@ type TeamGovernance struct{ db *gorm.DB }
 // NewTeamGovernance binds the workspace gateway to the caller existing transaction.
 func NewTeamGovernance(tx *gorm.DB) *TeamGovernance { return &TeamGovernance{db: tx} }
 
+func (g *TeamGovernance) lockManagement() error {
+	return g.db.Exec(`SELECT pg_advisory_xact_lock(hashtextextended('creation.team_management',0))`).Error
+}
+
 // AccountAccessChanged invalidates team access versions and freezes teams lacking an available administrator.
 func (g *TeamGovernance) AccountAccessChanged(user uuid.UUID, now time.Time) error {
 	return g.db.Exec(`UPDATE workspace.team t SET governance_blocked=t.governance_blocked OR NOT EXISTS(SELECT 1 FROM workspace.team_member m JOIN identity."user" u ON u.id=m.user_id WHERE m.team_id=t.id AND m.role='team_admin' AND m.status='active' AND u.status='active' AND NOT u.is_delete AND u.email_verified_at IS NOT NULL),auth_epoch=t.auth_epoch+1,revision=t.revision+1,update_time=? WHERE EXISTS(SELECT 1 FROM workspace.team_member m WHERE m.team_id=t.id AND m.user_id=? AND m.status<>'removed')`, now, user).Error
@@ -25,6 +31,9 @@ func (g *TeamGovernance) AccountAccessChanged(user uuid.UUID, now time.Time) err
 
 // PrepareTransfer checks current team and membership authority under the shared governance lock.
 func (g *TeamGovernance) PrepareTransfer(team, source, target uuid.UUID, takeover bool, revision int64) (int64, int64, error) {
+	if err := g.lockManagement(); err != nil {
+		return 0, 0, err
+	}
 	var row struct {
 		Status            string
 		GovernanceBlocked bool
@@ -35,7 +44,7 @@ func (g *TeamGovernance) PrepareTransfer(team, source, target uuid.UUID, takeove
 		return 0, 0, r.Error
 	}
 	if r.RowsAffected != 1 {
-		return 0, 0, application.ErrScopeNotFound
+		return 0, 0, workspacesource.ErrScopeNotFound
 	}
 	if row.Revision != revision {
 		return 0, 0, domain.ErrRevisionConflict
@@ -72,6 +81,9 @@ func (g *TeamGovernance) PrepareTransfer(team, source, target uuid.UUID, takeove
 
 // AcceptTransfer atomically promotes the target and completes the recorded team handover.
 func (g *TeamGovernance) AcceptTransfer(p identity.AuthorityProposal, now time.Time) error {
+	if err := g.lockManagement(); err != nil {
+		return err
+	}
 	if p.TeamID == nil || p.TeamRevision == nil {
 		return identity.ErrGovernanceConflict
 	}
@@ -117,6 +129,9 @@ func (g *TeamGovernance) AcceptTransfer(p identity.AuthorityProposal, now time.T
 
 // CheckInvitation checks current invitation policy and returns any removed membership version.
 func (g *TeamGovernance) CheckInvitation(team, actor uuid.UUID, email, role string) (*int64, error) {
+	if err := g.lockManagement(); err != nil {
+		return nil, err
+	}
 	if role != "member" && role != "team_admin" {
 		return nil, identity.ErrInvalidGovernance
 	}
@@ -132,6 +147,9 @@ func (g *TeamGovernance) CheckInvitation(team, actor uuid.UUID, email, role stri
 
 // CheckPlatformInvitation checks team policy and target membership without inventing membership for the platform actor.
 func (g *TeamGovernance) CheckPlatformInvitation(team uuid.UUID, email, role string) (*int64, error) {
+	if err := g.lockManagement(); err != nil {
+		return nil, err
+	}
 	if role != "member" && role != "team_admin" {
 		return nil, identity.ErrInvalidGovernance
 	}
@@ -164,6 +182,9 @@ func (g *TeamGovernance) CheckPlatformInvitation(team uuid.UUID, email, role str
 
 // AcceptInvitation joins only the verified addressed account after rechecking team authority.
 func (g *TeamGovernance) AcceptInvitation(i identity.Invitation, user uuid.UUID, now time.Time) error {
+	if err := g.lockManagement(); err != nil {
+		return err
+	}
 	if i.TeamID == nil || i.TeamRole == nil {
 		return identity.ErrGovernanceConflict
 	}
@@ -198,6 +219,9 @@ func (g *TeamGovernance) AcceptInvitation(i identity.Invitation, user uuid.UUID,
 
 // AuthorizeInvitations checks management authority without requiring invitations to be enabled.
 func (g *TeamGovernance) AuthorizeInvitations(team, actor uuid.UUID) error {
+	if err := g.lockManagement(); err != nil {
+		return err
+	}
 	var allowed bool
 	if err := g.db.Raw(`SELECT EXISTS(SELECT 1 FROM workspace.team t JOIN workspace.team_member m ON m.team_id=t.id WHERE t.id=? AND t.status IN ('active','archived') AND m.user_id=? AND m.status='active' AND m.role='team_admin')`, team, actor).Scan(&allowed).Error; err != nil {
 		return err

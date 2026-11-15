@@ -131,10 +131,19 @@ func (s *SessionRevocationStore) CompleteSessionRevocation(ctx context.Context, 
 		if err != nil {
 			return err
 		}
+		reason, requestID := "durable writer acknowledgements", saved.Control.CoordinationID.String()
+		var reuse struct{ IdemKey uuid.UUID }
+		read := tx.Raw(`SELECT r.idem_key FROM identity.session_revocation_request r JOIN identity.session_revocation_request_target t ON t.request_id=r.id WHERE t.session_id=? AND r.account_id=? AND r.request_session_id=? AND r.action='refresh_reuse' ORDER BY r.requested_at,r.id LIMIT 1`, saved.SessionID, saved.AccountID, saved.SessionID).Scan(&reuse)
+		if read.Error != nil {
+			return fmt.Errorf("read original refresh reuse audit: %w", read.Error)
+		}
+		if read.RowsAffected == 1 {
+			reason, requestID = "refresh reuse", reuse.IdemKey.String()
+		}
 		// The immutable source IDs survive physical account/session cleanup. Nullable
 		// audit references are resolved locally; safe_diff retains the original IDs.
 		if err := tx.Exec(`INSERT INTO identity.security_event(id,actor_id,target_user_id,scope_kind,action,result,reason,request_id,safe_diff,created_at)
-			VALUES (?,(SELECT id FROM identity."user" WHERE id=?),(SELECT id FROM identity."user" WHERE id=?),'self','session.revoked','success','durable writer acknowledgements',?,?::jsonb,?)`, uuid.New(), saved.AccountID, saved.AccountID, saved.Control.CoordinationID.String(), string(diff), now.UTC()).Error; err != nil {
+			VALUES (?,(SELECT id FROM identity."user" WHERE id=?),(SELECT id FROM identity."user" WHERE id=?),'self','session.revoked','success',?,?,?::jsonb,?)`, uuid.New(), saved.AccountID, saved.AccountID, reason, requestID, string(diff), now.UTC()).Error; err != nil {
 			return fmt.Errorf("audit completed session revocation: %w", err)
 		}
 		updated := tx.Exec(`UPDATE identity.session_revocation SET completed_at=? WHERE session_id=? AND coordination_id=? AND completed_at IS NULL`, now.UTC(), saved.SessionID, saved.Control.CoordinationID)

@@ -7,11 +7,17 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -30,14 +36,14 @@ type mediaPackageWorkGuard struct{ store *pgmedia.PackageStore }
 
 func (g mediaPackageWorkGuard) HasInflightWork(ctx context.Context, actor identityapp.Principal, project uuid.UUID) (bool, error) {
 	if g.store == nil {
-		return false, workspaceapp.ErrProjectDependencyUnavailable
+		return false, workspacesource.ErrProjectDependencyUnavailable
 	}
-	return g.store.HasInflightProjectLifecycleWork(ctx, actor, project)
+	return g.store.HasInflightProjectLifecycleWork(ctx, Actor(actor), project)
 }
 
 type mediaPackageReferences struct{ store *pgmedia.PackageStore }
 
-func (g mediaPackageReferences) HasMediaReferences(ctx context.Context, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {
+func (g mediaPackageReferences) HasMediaReferences(ctx context.Context, actor mediaapp.Actor, project, asset uuid.UUID) (bool, error) {
 	if g.store == nil {
 		return false, mediaapp.ErrUnavailable
 	}

@@ -159,7 +159,7 @@ func TestNativeStorageUsagePGSDKIncludesHistoricalProfilesWholeScopeAndPackageAr
 	packageObjects := mediaobjects.NewRoutedPackageObjects(registry, pgmedia.NewStorageRoutes(runtime))
 	packageStore := mediaPackageStore(runtime, libraryTestAccess, transferTestGuards, time.Now).WithObjectLocations()
 	packages := media.NewLibraryPackageService(packageStore, uploads, packageObjects, time.Now)
-	job, err := packages.Import(t.Context(), actor, media.PackageImportRequest{Scope: domain.LibraryScope{Kind: domain.LibraryPersonal}, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, packageFilesZIP(t, []packageFixtureFile{{"image", "usage.png", "image/png", uploadPNG(t)}})))
+	job, err := packages.Import(t.Context(), mediaActor(actor), media.PackageImportRequest{Scope: domain.LibraryScope{Kind: domain.LibraryPersonal}, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, packageFilesZIP(t, []packageFixtureFile{{"image", "usage.png", "image/png", uploadPNG(t)}})))
 	if err != nil || job.Status != "succeeded" {
 		t.Fatal(job, err)
 	}
@@ -174,7 +174,7 @@ func TestNativeStorageUsagePGSDKIncludesHistoricalProfilesWholeScopeAndPackageAr
 	if err := owner.Raw(`SELECT id FROM media.media_asset WHERE personal_actor_id=?`, actor.ID).Scan(&catalogAsset).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mediaLibraryStore(runtime, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, media.LibraryCommand{Scope: domain.LibraryScope{Kind: domain.LibraryPersonal}, Key: uuid.New(), Action: "recycle_items", ExpectedRevision: 1, Items: []media.LibraryItemRevision{{ID: catalogAsset.ID, Revision: 1}}}); err != nil {
+	if _, err := mediaLibraryStore(runtime, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), mediaActor(actor), media.LibraryCommand{Scope: domain.LibraryScope{Kind: domain.LibraryPersonal}, Key: uuid.New(), Action: "recycle_items", ExpectedRevision: 1, Items: []media.LibraryItemRevision{{ID: catalogAsset.ID, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	old := cfg.Profiles[oldID]
@@ -186,7 +186,7 @@ func TestNativeStorageUsagePGSDKIncludesHistoricalProfilesWholeScopeAndPackageAr
 	}
 	t.Cleanup(readRegistry.Close)
 	reader := mediawire.ProvideRoutedMediaStorageUsage(runtime, readRegistry, &cfg)
-	got, err := reader.StorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal})
+	got, err := reader.StorageUsage(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryPersonal})
 	if err != nil || got.UsedBytes != expected || got.ObjectCount != expectedCount || got.LimitBytes != nil {
 		t.Fatal("whole physical inventory", got, expected, expectedCount, err)
 	}
@@ -194,7 +194,7 @@ func TestNativeStorageUsagePGSDKIncludesHistoricalProfilesWholeScopeAndPackageAr
 	firstInventory.mu.Lock()
 	firstInventory.failStat = unknown
 	firstInventory.mu.Unlock()
-	failed, err := reader.StorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal})
+	failed, err := reader.StorageUsage(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryPersonal})
 	if !errors.Is(err, media.ErrUnavailable) || failed.UsedBytes != 0 || failed.ObjectCount != 0 {
 		t.Fatal("unknown stat failure became absence/subtotal", failed, err)
 	}
@@ -202,7 +202,7 @@ func TestNativeStorageUsagePGSDKIncludesHistoricalProfilesWholeScopeAndPackageAr
 	firstInventory.failStat = ""
 	firstInventory.failList = base
 	firstInventory.mu.Unlock()
-	if result, err := reader.StorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}); !errors.Is(err, media.ErrUnavailable) || result.UsedBytes != 0 {
+	if result, err := reader.StorageUsage(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryPersonal}); !errors.Is(err, media.ErrUnavailable) || result.UsedBytes != 0 {
 		t.Fatal("old profile list failure ignored", result, err)
 	}
 	firstInventory.mu.Lock()
@@ -212,14 +212,14 @@ func TestNativeStorageUsagePGSDKIncludesHistoricalProfilesWholeScopeAndPackageAr
 	projectBase := "projects/" + project.String() + "/"
 	put(oldID, projectBase+"transcriptions/final.json", []byte("project transcript"), true, "unknown")
 	put(newID, projectBase+"script/orphan.json", []byte("project script"), false, "")
-	got, err = reader.StorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project})
+	got, err = reader.StorageUsage(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project})
 	if err != nil || got.UsedBytes != int64(len("project transcript")+len("project script")) || got.ObjectCount != 2 {
 		t.Fatal("whole project namespace", got, err)
 	}
 	firstInventory.mu.Lock()
 	before := firstInventory.calls
 	firstInventory.mu.Unlock()
-	if _, err := reader.StorageUsage(t.Context(), foreign, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}); err == nil {
+	if _, err := reader.StorageUsage(t.Context(), mediaActor(foreign), domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}); err == nil {
 		t.Fatal("foreign project usage disclosed")
 	}
 	firstInventory.mu.Lock()
@@ -244,7 +244,7 @@ func TestNativeStorageUsagePGSDKIncludesHistoricalProfilesWholeScopeAndPackageAr
 		t.Fatal(err)
 	}
 	t.Cleanup(driftRegistry.Close)
-	if got, err := mediawire.ProvideRoutedMediaStorageUsage(runtime, driftRegistry, &driftCfg).StorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}); !errors.Is(err, media.ErrStorageNotReady) || got.UsedBytes != 0 {
+	if got, err := mediawire.ProvideRoutedMediaStorageUsage(runtime, driftRegistry, &driftCfg).StorageUsage(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryPersonal}); !errors.Is(err, media.ErrStorageNotReady) || got.UsedBytes != 0 {
 		t.Fatal("rebound profile was queried as original resource", got, err)
 	}
 	driftInventory.mu.Lock()
@@ -299,14 +299,14 @@ func TestNativeStorageUsageRetiredProfileDoesNotBlockAuthorizedEmptyScope(t *tes
 		t.Fatal(err)
 	}
 	library := mediaLibraryStore(runtime, libraryTestAccess, time.Now)
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, media.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &asset, ExpectedItemRevision: 1, Metadata: &media.LibraryMetadata{Title: "Synthetic text", Category: "material", Tags: []string{}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), media.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &asset, ExpectedItemRevision: 1, Metadata: &media.LibraryMetadata{Title: "Synthetic text", Category: "material", Tags: []string{}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, media.LibraryCommand{Scope: scope, Action: "recycle_items", Key: uuid.New(), ExpectedRevision: 1, Items: []media.LibraryItemRevision{{ID: asset, Revision: 2}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), media.LibraryCommand{Scope: scope, Action: "recycle_items", Key: uuid.New(), ExpectedRevision: 1, Items: []media.LibraryItemRevision{{ID: asset, Revision: 2}}}); err != nil {
 		t.Fatal(err)
 	}
 	purge := mediaPurgeStore(runtime, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	job, err := purge.CreatePurge(t.Context(), actor, media.PurgeInput{Scope: scope, ExpectedRevision: 2, Items: []media.LibraryItemRevision{{ID: asset, Revision: 3}}, PermanentDeleteConfirmed: true, Key: uuid.New()})
+	job, err := purge.CreatePurge(t.Context(), mediaActor(actor), media.PurgeInput{Scope: scope, ExpectedRevision: 2, Items: []media.LibraryItemRevision{{ID: asset, Revision: 3}}, PermanentDeleteConfirmed: true, Key: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func TestNativeStorageUsageRetiredProfileDoesNotBlockAuthorizedEmptyScope(t *tes
 		t.Fatal(err)
 	}
 	t.Cleanup(readRegistry.Close)
-	usage, err := mediawire.ProvideRoutedMediaStorageUsage(runtime, readRegistry, &cfg).StorageUsage(t.Context(), actor, scope)
+	usage, err := mediawire.ProvideRoutedMediaStorageUsage(runtime, readRegistry, &cfg).StorageUsage(t.Context(), mediaActor(actor), scope)
 	if err != nil || usage.UsedBytes != 0 || usage.ObjectCount != 0 {
 		t.Fatal("retired physical proof demanded disabled historical access", usage, err)
 	}

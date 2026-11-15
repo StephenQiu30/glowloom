@@ -12,12 +12,11 @@ import (
 
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type locatedSourcePersistence struct{ sourcePersistence }
 
-func (s *locatedSourcePersistence) BeginWrite(ctx context.Context, actor identity.Principal, p app.WritePlan) (app.PendingWrite, error) {
+func (s *locatedSourcePersistence) BeginWrite(ctx context.Context, actor app.Actor, p app.WritePlan) (app.PendingWrite, error) {
 	for i := range p.Objects {
 		p.Objects[i].LocationID = uuid.NewSHA1(p.Command.Key, []byte(p.Objects[i].Key))
 	}
@@ -60,7 +59,7 @@ func TestScriptLocatedObjectsKeepSemanticManifestAndNeverFallBackToBareKey(t *te
 	actor, cmd := sourceCommand()
 	store := &locatedSourcePersistence{}
 	objects := &locatedSourceObjects{data: map[uuid.UUID][]byte{}}
-	got, err := app.NewSourceService(store, objects, time.Now).Write(t.Context(), actor, cmd)
+	got, err := app.NewSourceService(store, objects, time.Now).Write(t.Context(), scriptActor(actor), cmd)
 	if err != nil || got.VersionID == uuid.Nil || objects.bare != 0 || len(objects.data) != 4 {
 		t.Fatal("script lost fixed identity between admission and I/O", err, objects.bare, len(objects.data))
 	}

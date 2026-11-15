@@ -37,7 +37,7 @@ func (r copiedCanvasMedia) Reference(ctx context.Context, actor identityapp.Prin
 	if projectID != r.binding.TargetProjectID {
 		return mediaapp.AssetSummary{}, mediaapp.ErrNotFound
 	}
-	return r.store.ReferenceCopiedAsset(ctx, actor, r.binding, assetID)
+	return r.store.ReferenceCopiedAsset(ctx, mediawire.Actor(actor), r.binding, assetID)
 }
 
 // ProvideProjectCopyStore assembles request-authorized project copy storage.
@@ -64,7 +64,7 @@ func provideProjectCopyStore(database *gorm.DB, scopes pgmedia.ScopeAccessFactor
 			}
 			canvas := pgcanvas.NewScopedProjectCopyStore(tx,
 				func(mediaTx *gorm.DB) canvasapp.MediaReader {
-					return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes))
+					return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes)))
 				},
 				func(mediaTx *gorm.DB, binding canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
 					return copiedCanvasMedia{store: pgmedia.NewScopedProjectCopyStore(mediaTx, scopes), binding: mediaapp.ProjectCopyBinding{
@@ -88,7 +88,7 @@ func provideProjectCopyStore(database *gorm.DB, scopes pgmedia.ScopeAccessFactor
 type copyBudgetAccess struct{ access mediaapp.ScopeAccess }
 
 func (a copyBudgetAccess) AuthorizeBilling(ctx context.Context, actor identityapp.Principal, project uuid.UUID, _ bool) error {
-	return a.access.AuthorizeCopyTarget(ctx, actor, project)
+	return a.access.AuthorizeCopyTarget(ctx, mediawire.Actor(actor), project)
 }
 
 // ProvideProjectCopyWorker routes every owned private object by its frozen location.

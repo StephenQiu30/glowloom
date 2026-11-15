@@ -20,8 +20,8 @@ func scriptReviewRouter(sources *app.SourceService, episodes *app.EpisodeService
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	g := router.Group("/api")
 	g.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	scripthttp.NewSourceHandler(sources).Register(g)
-	scripthttp.NewReviewHandler(episodes, history).Register(g)
+	scripthttp.NewSourceHandler(sources, scriptHTTPActor).Register(g)
+	scripthttp.NewReviewHandler(episodes, history, scriptHTTPActor).Register(g)
 	return router
 }
 func TestScriptReviewHTTPRealRulesManualHistoryAndTypedImpact(t *testing.T) {
@@ -51,7 +51,7 @@ func TestScriptReviewHTTPRealRulesManualHistoryAndTypedImpact(t *testing.T) {
 			t.Fatal("history list", route, r.Code, r.Body.String())
 		}
 	}
-	base, err := store.LoadBase(t.Context(), actor, pid, nil)
+	base, err := store.LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ProjectCopyAccessFactory binds the workspace-minted phase and worker to each own transaction.
@@ -40,7 +39,7 @@ func NewProjectCopyStoreWithCharacters(db *gorm.DB, access ProjectCopyAccessFact
 	return &ProjectCopyStore{db: db, access: access, characters: characters}
 }
 
-func (s *ProjectCopyStore) authorize(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, b application.ProjectCopyBinding) error {
+func (s *ProjectCopyStore) authorize(ctx context.Context, tx *gorm.DB, actor application.Actor, b application.ProjectCopyBinding) error {
 	if s.access == nil {
 		return application.ErrUnavailable
 	}
@@ -53,7 +52,7 @@ func (s *ProjectCopyStore) authorize(ctx context.Context, tx *gorm.DB, actor ide
 	}
 	return access.Authorize(ctx, actor, b, true)
 }
-func (s *ProjectCopyStore) ownTransaction(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, caller bool, f func(*gorm.DB) error) error {
+func (s *ProjectCopyStore) ownTransaction(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, caller bool, f func(*gorm.DB) error) error {
 	if s == nil || s.db == nil || s.db.Statement == nil {
 		return application.ErrUnavailable
 	}
@@ -85,7 +84,7 @@ func copySnapshot(m application.ProjectCopyManifest) (application.ProjectCopySna
 }
 
 // Freeze runs on the admission transaction after the trusted target has been minted.
-func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, assets map[uuid.UUID]uuid.UUID, at time.Time) (application.ProjectCopySnapshot, error) {
+func (s *ProjectCopyStore) Freeze(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, assets map[uuid.UUID]uuid.UUID, at time.Time) (application.ProjectCopySnapshot, error) {
 	var result application.ProjectCopySnapshot
 	err := s.ownTransaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		if err := rejectPendingWrite(tx, b.OrgID, b.SourceProjectID); err != nil {
@@ -194,7 +193,7 @@ func readCopyManifest(tx *gorm.DB, b application.ProjectCopyBinding, snapshot ap
 }
 
 // Manifest rechecks the current actual worker before exposing private frozen facts.
-func (s *ProjectCopyStore) Manifest(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyManifest, error) {
+func (s *ProjectCopyStore) Manifest(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyManifest, error) {
 	var m application.ProjectCopyManifest
 	err := s.ownTransaction(ctx, actor, b, false, func(tx *gorm.DB) error { var err error; m, err = readCopyManifest(tx, b, snapshot); return err })
 	return m, err
@@ -226,7 +225,7 @@ func exactCopyObject(tx *gorm.DB, b application.ProjectCopyBinding, snapshot app
 }
 
 // BeginObject durably records the exact owned key before any remote put attempt.
-func (s *ProjectCopyStore) BeginObject(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact) error {
+func (s *ProjectCopyStore) BeginObject(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact) error {
 	return s.ownTransaction(ctx, actor, b, false, func(tx *gorm.DB) error {
 		state, err := exactCopyObject(tx, b, snapshot, fact)
 		if err != nil {
@@ -245,7 +244,7 @@ func (s *ProjectCopyStore) BeginObject(ctx context.Context, actor identityapp.Pr
 }
 
 // CompleteObject records a real full read proof; absent/removed objects cannot be published.
-func (s *ProjectCopyStore) CompleteObject(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact) error {
+func (s *ProjectCopyStore) CompleteObject(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact) error {
 	return s.ownTransaction(ctx, actor, b, false, func(tx *gorm.DB) error {
 		state, err := exactCopyObject(tx, b, snapshot, fact)
 		if err != nil {
@@ -283,7 +282,7 @@ func copyObjectsComplete(tx *gorm.DB, snapshot application.ProjectCopySnapshot, 
 }
 
 // Register preserves every immutable history row and verifies actual replayed target facts.
-func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyReceipt, error) {
+func (s *ProjectCopyStore) Register(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyReceipt, error) {
 	var receipt application.ProjectCopyReceipt
 	err := s.ownTransaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		m, err := readCopyManifest(tx, b, snapshot)
@@ -369,7 +368,7 @@ func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Princ
 }
 
 // BeginCleanup selects only this unpublished target's frozen owned object intents.
-func (s *ProjectCopyStore) BeginCleanup(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) ([]application.ProjectCopyObject, error) {
+func (s *ProjectCopyStore) BeginCleanup(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) ([]application.ProjectCopyObject, error) {
 	var result []application.ProjectCopyObject
 	err := s.ownTransaction(ctx, actor, b, false, func(tx *gorm.DB) error {
 		m, err := readCopyManifest(tx, b, snapshot)
@@ -392,7 +391,7 @@ func (s *ProjectCopyStore) BeginCleanup(ctx context.Context, actor identityapp.P
 }
 
 // BeginCleanupObject freezes a matching actual digest before attempting removal.
-func (s *ProjectCopyStore) BeginCleanupObject(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact) error {
+func (s *ProjectCopyStore) BeginCleanupObject(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact) error {
 	ready := true
 	err := s.ownTransaction(ctx, actor, b, false, func(tx *gorm.DB) error {
 		if _, err := exactCopyObject(tx, b, snapshot, fact); err != nil {
@@ -420,7 +419,7 @@ func (s *ProjectCopyStore) BeginCleanupObject(ctx context.Context, actor identit
 }
 
 // CompleteCleanupObject retains absence proof while leaving historical SQL immutable.
-func (s *ProjectCopyStore) CompleteCleanupObject(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact) error {
+func (s *ProjectCopyStore) CompleteCleanupObject(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact) error {
 	return s.ownTransaction(ctx, actor, b, false, func(tx *gorm.DB) error {
 		state, err := exactCopyObject(tx, b, snapshot, fact)
 		if err != nil {
@@ -439,7 +438,7 @@ func (s *ProjectCopyStore) CompleteCleanupObject(ctx context.Context, actor iden
 }
 
 // FinishCleanup runs in the coordinator transaction only after every actual absence proof.
-func (s *ProjectCopyStore) FinishCleanup(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) error {
+func (s *ProjectCopyStore) FinishCleanup(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) error {
 	return s.ownTransaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		if _, err := readCopyManifest(tx, b, snapshot); err != nil {
 			return err

@@ -14,6 +14,7 @@ import (
 	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 
 // Store is consumed only by the credential-owning worker.
@@ -35,11 +36,6 @@ type SubjectInputSigner interface {
 	ManagedSubjectMediaReference(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (application.ProviderReference, error)
 }
 
-// VideoReader downloads approved content with the original credential when needed.
-type VideoReader interface {
-	Read(context.Context, catalogdomain.ProviderConfig, string, string, string) ([]byte, int64, error)
-}
-
 // ProjectInputSigner preserves exact same-project media and its physical location.
 type ProjectInputSigner interface {
 	ManagedProjectMediaReference(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (application.ProviderReference, bool, error)
@@ -52,11 +48,23 @@ type Activities struct {
 	client  application.GenerationProvider
 	results *application.ManagedResults
 	video   VideoReader
+	files   GeneratedFiles
 }
 
 // NewActivities explicitly injects private persistence, HTTP and media dependencies.
 func NewActivities(store Store, keys Unsealer, client application.GenerationProvider, results *application.ManagedResults, video VideoReader) *Activities {
 	return &Activities{store: store, keys: keys, client: client, results: results, video: video}
+}
+
+// NewOwnedActivities requires Media-owned staging and raw authenticated downloads.
+func NewOwnedActivities(store Store, keys Unsealer, client application.GenerationProvider, results *application.ManagedResults, files GeneratedFiles) (*Activities, error) {
+	if store == nil || keys == nil || client == nil || results == nil || !results.UsesOwnedArtifacts() || files == nil {
+		return nil, application.ErrInvalidProviderCall
+	}
+	if _, ok := store.(application.SupplierObservations); !ok {
+		return nil, application.ErrInvalidProviderCall
+	}
+	return &Activities{store: store, keys: keys, client: client, results: results, files: files}, nil
 }
 
 // Step never resubmits a claimed operation, even after a timeout or worker crash.
@@ -86,6 +94,19 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	}
 	if input.Action == "query" && (saved == nil || saved.TaskID == "") {
 		return unknown, nil
+	}
+	if input.Action == "submit" && a.results.UsesOwnedArtifacts() {
+		// Existing paid recovery above remains available. A missing Execution
+		// input grant cannot authorize a new claim or classify old costs as zero.
+		for _, frozen := range loaded.Inputs {
+			if frozen.MediaAssetID != nil || frozen.MaskAssetID != nil || frozen.RefType == "subject_media" || frozen.RefType == "media_asset" {
+				return unknown, application.ErrFrozenReferenceUnavailable
+			}
+		}
+	}
+	observer, ok := a.store.(application.SupplierObservations)
+	if !ok {
+		return unknown, application.ErrInvalidProviderCall
 	}
 	if input.Action == "submit" {
 		claim, claimErr := a.store.ClaimProviderDispatch(ctx, identity)
@@ -156,6 +177,40 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	if result.HTTPStatus != 0 {
 		defer func() { output.HTTPStatus, output.ProviderLogID = result.HTTPStatus, result.ProviderLogID }()
 	}
+	if result.Outcome != application.ProviderOutcomeNotSubmitted {
+		if receivedAt == nil {
+			stamp := time.Now().UTC()
+			receivedAt = &stamp
+		}
+		attempt := int32(1)
+		if input.Action == "query" {
+			attempt = loaded.LastQueryAttempt
+		}
+		observationOutcome := result.Outcome
+		taskID := result.TaskID
+		if input.Action == "query" {
+			if taskID == "" {
+				taskID = saved.TaskID
+			}
+			if observationOutcome == "" {
+				switch result.State {
+				case application.ProviderTaskSucceeded:
+					observationOutcome = application.ProviderOutcomeCompleted
+				case application.ProviderTaskPending, application.ProviderTaskRunning:
+					observationOutcome = application.ProviderOutcomeAccepted
+				default:
+					observationOutcome = application.ProviderOutcomeUnknown
+				}
+			}
+		}
+		observed := application.SupplierObservation{Identity: identity, CallAction: input.Action, CallAttempt: attempt, ReceivedAt: *receivedAt, Outcome: observationOutcome, State: result.State, TaskID: taskID, HTTPStatus: result.HTTPStatus, ProviderLogID: result.ProviderLogID, ProviderTerminalCode: result.ProviderTerminalCode, SupplierUsage: append([]byte(nil), result.Usage...), ImageCount: len(result.Images), AudioCount: len(result.Audio), URLCount: len(result.URLs), TextPresent: result.Text != ""}
+		if job, ok := taskruntime.CurrentJob(ctx); ok {
+			observed.Worker = &application.SupplierObservationWorker{Kind: job.Kind, BusinessID: job.BusinessID, Owner: job.Owner, Epoch: job.Epoch}
+		}
+		if err := observer.RecordSupplierObservation(ctx, observed); err != nil {
+			return unknown, err
+		}
+	}
 	switch result.Outcome {
 	case application.ProviderOutcomeNotSubmitted:
 		return application.ManagedProgress{State: application.ManagedProgressState(result.Outcome), ErrorCode: result.ErrorCode}, nil
@@ -196,10 +251,25 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		}
 		evidence.Artifacts = append(evidence.Artifacts, output)
 	}
-	if op.Capability == "audio.generate" && config.AdapterKey == "volcengine_music" {
-		reader, ok := a.video.(interface {
-			ReadAudio(context.Context, catalogdomain.ProviderConfig, string, string) ([]byte, int64, error)
-		})
+	if op.Capability == "audio.generate" && config.AdapterKey == "volcengine_music" && a.files != nil {
+		if len(result.URLs) != 1 || len(evidence.Artifacts) != 0 {
+			return unknown, application.ErrInvalidProviderCall
+		}
+		file, err := a.files.Music(ctx, config, result.TaskID, result.URLs[0])
+		if err != nil {
+			return unknown, err
+		}
+		output, err := a.stageDownloaded(ctx, identity, file)
+		if err != nil {
+			return unknown, err
+		}
+		if output.MIME != "audio/mpeg" || output.DurationMS <= 0 {
+			return unknown, application.ErrInvalidProviderCall
+		}
+		duration = output.DurationMS
+		evidence.Artifacts = append(evidence.Artifacts, output)
+	} else if op.Capability == "audio.generate" && config.AdapterKey == "volcengine_music" {
+		reader, ok := a.video.(AudioReader)
 		if !ok || len(result.URLs) != 1 || len(evidence.Artifacts) != 0 {
 			return unknown, application.ErrInvalidProviderCall
 		}
@@ -214,7 +284,24 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		}
 		evidence.Artifacts = append(evidence.Artifacts, output)
 	}
-	if op.Capability == "video.generate" {
+	if op.Capability == "video.generate" && a.files != nil {
+		if len(result.URLs) != 1 {
+			return unknown, application.ErrInvalidProviderCall
+		}
+		file, err := a.files.Video(ctx, config, result.TaskID, result.URLs[0], providerKey)
+		if err != nil {
+			return unknown, err
+		}
+		output, err := a.stageDownloaded(ctx, identity, file)
+		if err != nil {
+			return unknown, err
+		}
+		if output.MIME != "video/mp4" || output.DurationMS <= 0 {
+			return unknown, application.ErrInvalidProviderCall
+		}
+		duration = output.DurationMS
+		evidence.Artifacts = append(evidence.Artifacts, output)
+	} else if op.Capability == "video.generate" {
 		if len(result.URLs) != 1 || a.video == nil {
 			return unknown, application.ErrInvalidProviderCall
 		}

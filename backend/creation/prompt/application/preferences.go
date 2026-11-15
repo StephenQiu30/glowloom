@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 var (
@@ -47,8 +46,8 @@ type SaveInput struct {
 
 // Store persists only the current workspace actor's preferences and durable events.
 type Store interface {
-	ReadCustomizations(context.Context, identityapp.Principal) ([]domain.Customization, error)
-	SaveCustomization(context.Context, identityapp.Principal, SaveInput, domain.Customization, identityapp.OutboxEvent) (domain.Customization, error)
+	ReadCustomizations(context.Context, Actor) ([]domain.Customization, error)
+	SaveCustomization(context.Context, Actor, SaveInput, domain.Customization, PreferenceAudit) (domain.Customization, error)
 }
 
 // Preferences reads and saves personal creative policy beneath server-owned constraints.
@@ -63,12 +62,12 @@ func NewPreferences(store Store, now func() time.Time) *Preferences {
 }
 
 // List returns all immutable definitions even before a personal preference exists.
-func (p *Preferences) List(ctx context.Context, actor identityapp.Principal) ([]Preference, error) {
+func (p *Preferences) List(ctx context.Context, actor Actor) ([]Preference, error) {
 	if p == nil || p.store == nil {
 		return nil, domain.ErrInvalidCustomization
 	}
 	if !canCustomize(actor) {
-		return nil, identityapp.ErrForbidden
+		return nil, ErrForbidden
 	}
 	customizations, err := p.store.ReadCustomizations(ctx, actor)
 	if err != nil {
@@ -98,12 +97,12 @@ func (p *Preferences) List(ctx context.Context, actor identityapp.Principal) ([]
 }
 
 // Save retains a guarded personal layer; it does not run or authorize generation.
-func (p *Preferences) Save(ctx context.Context, actor identityapp.Principal, input SaveInput) (domain.Customization, error) {
+func (p *Preferences) Save(ctx context.Context, actor Actor, input SaveInput) (domain.Customization, error) {
 	if p == nil || p.store == nil || p.now == nil {
 		return domain.Customization{}, domain.ErrInvalidCustomization
 	}
 	if !canCustomize(actor) {
-		return domain.Customization{}, identityapp.ErrForbidden
+		return domain.Customization{}, ErrForbidden
 	}
 	input.Content = strings.TrimSpace(input.Content)
 	definition, found := domain.DefinitionFor(input.Operation)
@@ -137,7 +136,7 @@ func (p *Preferences) Save(ctx context.Context, actor identityapp.Principal, inp
 	if err != nil {
 		return domain.Customization{}, fmt.Errorf("encode prompt preference audit: %w", err)
 	}
-	saved, err := p.store.SaveCustomization(ctx, actor, input, customization, identityapp.OutboxEvent{ID: eventID, Topic: "glowloom.audit.recorded.v1", PartitionKey: actor.OrgID.String(), Payload: payload})
+	saved, err := p.store.SaveCustomization(ctx, actor, input, customization, PreferenceAudit{ID: eventID, Payload: payload})
 	if err != nil {
 		return domain.Customization{}, fmt.Errorf("save workspace prompt preference: %w", err)
 	}
@@ -148,6 +147,6 @@ func (p *Preferences) Save(ctx context.Context, actor identityapp.Principal, inp
 	return saved, nil
 }
 
-func canCustomize(actor identityapp.Principal) bool {
+func canCustomize(actor Actor) bool {
 	return actor.ID != uuid.Nil && actor.OrgID != uuid.Nil
 }

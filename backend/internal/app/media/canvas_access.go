@@ -33,7 +33,7 @@ func navigation(tx *gorm.DB) ProjectNavigation {
 	return projectNavigationOf(tx)
 }
 
-func (a mediaScopeAccess) ReadProjectPresentation(ctx context.Context, actor identity.Principal, id uuid.UUID) (canvasapp.ProjectPresentation, error) {
+func (a canvasProjectAccess) ReadProjectPresentation(ctx context.Context, actor identity.Principal, id uuid.UUID) (canvasapp.ProjectPresentation, error) {
 	facts, err := navigation(a.tx).ReadProjectNavigation(ctx, actor, id)
 	if err != nil {
 		return canvasapp.ProjectPresentation{}, err
@@ -41,9 +41,13 @@ func (a mediaScopeAccess) ReadProjectPresentation(ctx context.Context, actor ide
 	return canvasapp.ProjectPresentation{MainCanvasID: facts.MainCanvasID, Name: facts.Name, Status: canvasapp.ProjectPresentationStatus(facts.Status), OwnerName: facts.OwnerName}, nil
 }
 
-func (a mediaScopeAccess) MarkProjectContentChanged(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
+func (a canvasProjectAccess) MarkProjectContentChanged(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
 	return navigation(a.tx).MarkProjectContentChanged(ctx, actor, id)
 }
+
+// canvasProjectAccess is the legacy Canvas composition adapter. Its Principal
+// contract stays separate when Media consumes its own minimal Actor reference.
+type canvasProjectAccess struct{ mediaScopeAccess }
 
 // canvasScopedAccess preserves the injected media authorization for internal consumers.
 type canvasScopedAccess struct {
@@ -53,7 +57,7 @@ type canvasScopedAccess struct {
 
 // NewWorkerCanvasProjectAccess binds internal canvas consumers to worker scope checks.
 func NewWorkerCanvasProjectAccess(tx *gorm.DB) canvasapp.ProjectAccess {
-	return mediaScopeAccess{tx: tx, worker: true}
+	return canvasProjectAccess{mediaScopeAccess{tx: tx, worker: true}}
 }
 
 // NewCanvasProjectAccessWithScope preserves the caller's authorization factory and adds workspace presentation ports.
@@ -65,9 +69,22 @@ func (a canvasScopedAccess) ReadProjectPresentation(ctx context.Context, actor i
 	if err := a.AuthorizeProject(ctx, actor, id, false); err != nil {
 		return canvasapp.ProjectPresentation{}, err
 	}
-	return (mediaScopeAccess{tx: a.tx}).ReadProjectPresentation(ctx, actor, id)
+	return (canvasProjectAccess{mediaScopeAccess{tx: a.tx}}).ReadProjectPresentation(ctx, actor, id)
 }
 
 func (a canvasScopedAccess) MarkProjectContentChanged(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
 	return navigation(a.tx).MarkProjectContentChanged(ctx, actor, id)
+}
+
+func (a canvasProjectAccess) AuthorizeProject(ctx context.Context, actor identity.Principal, id uuid.UUID, write bool) error {
+	return a.mediaScopeAccess.AuthorizeProject(ctx, Actor(actor), id, write)
+}
+func (a canvasProjectAccess) AuthorizeCopyTarget(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
+	return a.mediaScopeAccess.AuthorizeCopyTarget(ctx, Actor(actor), id)
+}
+func (a canvasScopedAccess) AuthorizeProject(ctx context.Context, actor identity.Principal, id uuid.UUID, write bool) error {
+	return a.ScopeAccess.AuthorizeProject(ctx, Actor(actor), id, write)
+}
+func (a canvasScopedAccess) AuthorizeCopyTarget(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
+	return a.ScopeAccess.AuthorizeCopyTarget(ctx, Actor(actor), id)
 }

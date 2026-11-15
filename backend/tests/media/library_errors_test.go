@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -22,13 +21,13 @@ import (
 
 type unavailableLibrary struct{}
 
-func (unavailableLibrary) ListLibrary(context.Context, identity.Principal, domain.LibraryScope, mediaapp.LibraryQuery) (mediaapp.LibraryPage, error) {
+func (unavailableLibrary) ListLibrary(context.Context, mediaapp.Actor, domain.LibraryScope, mediaapp.LibraryQuery) (mediaapp.LibraryPage, error) {
 	return mediaapp.LibraryPage{}, fmt.Errorf("private diagnostic: %w", &pgconn.PgError{Code: "40001", Message: "private SQL values"})
 }
-func (unavailableLibrary) LibraryDetail(context.Context, identity.Principal, domain.LibraryScope, uuid.UUID) (mediaapp.LibraryItemDetail, error) {
+func (unavailableLibrary) LibraryDetail(context.Context, mediaapp.Actor, domain.LibraryScope, uuid.UUID) (mediaapp.LibraryItemDetail, error) {
 	return mediaapp.LibraryItemDetail{}, mediaapp.ErrUnavailable
 }
-func (unavailableLibrary) ApplyLibraryCommand(context.Context, identity.Principal, mediaapp.LibraryCommand) (mediaapp.LibraryReceipt, error) {
+func (unavailableLibrary) ApplyLibraryCommand(context.Context, mediaapp.Actor, mediaapp.LibraryCommand) (mediaapp.LibraryReceipt, error) {
 	return mediaapp.LibraryReceipt{}, mediaapp.ErrUnavailable
 }
 func TestLibraryDependencyErrorLogsSQLStateWithoutPrivateDetails(t *testing.T) {
@@ -37,7 +36,7 @@ func TestLibraryDependencyErrorLogsSQLStateWithoutPrivateDetails(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	router := gin.New()
-	mediahttp.NewLibraryHandler(unavailableLibrary{}).Register(router.Group("/api"))
+	mediahttp.NewLibraryHandler(unavailableLibrary{}, staticMediaActor).Register(router.Group("/api"))
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), "GET", "/api/media/library?scope=personal&page=1&page_size=12", nil))
 	if response.Code != 503 {

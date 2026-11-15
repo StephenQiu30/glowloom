@@ -37,7 +37,7 @@ func TestCanvasSubjectConnectionPostgresFreezeReadbackAndUndo(t *testing.T) {
 	localAsset := subjectFixtureMedia(t, owner, actor, project, "image")
 	newStore := func() *canvaspg.Store {
 		return canvaspg.NewScopedStore(runtime, func(tx *gorm.DB) canvasapp.MediaReader {
-			return mediaapp.NewAssetQuery(mediapg.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
+			return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediapg.NewScopedStore(tx, mediawire.NewMediaScopeAccess)))
 		}, mediawire.NewCanvasProjectAccess).WithSubjectSources(subjectwire.NewPromptSources)
 	}
 	writer := canvasfixture.NewEditService(newStore())
@@ -80,7 +80,7 @@ func TestCanvasSubjectConnectionPostgresFreezeReadbackAndUndo(t *testing.T) {
 	inputReader := promptpg.NewDraftStore(runtime, promptwire.DraftAccess).WithSubjectSources(subjectwire.NewPromptSources)
 	input := func(d canvas.Document) prompt.Draft {
 		t.Helper()
-		v, err := inputReader.ReadInput(t.Context(), actor, project, pointer(d), false)
+		v, err := inputReader.ReadInput(t.Context(), subjectPromptActor(actor), project, pointer(d), false)
 		if err != nil {
 			t.Fatal("read formal input", err)
 		}
@@ -106,10 +106,10 @@ func TestCanvasSubjectConnectionPostgresFreezeReadbackAndUndo(t *testing.T) {
 	if pointer(saved).InputRevision != 2 || len(frozen.References) != 1 || frozen.References[0].Source.SourceVersion != pin.VersionID.String() || frozen.References[0].Source.Description != "连线固定旧主体" || len(frozen.References[0].Source.Media) != 1 {
 		t.Fatal("pin did not compile", frozen)
 	}
-	if _, err := inputReader.ReadInput(t.Context(), actor, foreign, pointer(saved), false); err == nil {
+	if _, err := inputReader.ReadInput(t.Context(), subjectPromptActor(actor), foreign, pointer(saved), false); err == nil {
 		t.Fatal("foreign project accepted")
 	}
-	if _, err := inputReader.ReadInput(t.Context(), actor, project, pointer(empty), true); err == nil {
+	if _, err := inputReader.ReadInput(t.Context(), subjectPromptActor(actor), project, pointer(empty), true); err == nil {
 		t.Fatal("old target input accepted")
 	}
 	// Library head changes do not silently replace the frozen library version.
@@ -164,7 +164,7 @@ func TestCanvasSubjectConnectionPostgresFreezeReadbackAndUndo(t *testing.T) {
 		t.Fatal("target readback", copiedDoc, err)
 	}
 	copyPointer := prompt.InputSource{Kind: "canvas_input", CanvasID: destination.ID, CanvasRevision: copiedDoc.Revision, NodeID: ids[target.ID], InputRevision: 1}
-	copyInput, err := inputReader.ReadInput(t.Context(), actor, project, copyPointer, false)
+	copyInput, err := inputReader.ReadInput(t.Context(), subjectPromptActor(actor), project, copyPointer, false)
 	if err != nil || len(copyInput.References) != 1 || copyInput.References[0].Source.SourceID != ids[source.ID].String() || copyInput.References[0].Source.SourceVersion != "1" || copyInput.References[0].Source.Media[0].SourceID != localAsset.AssetID.String() {
 		t.Fatal("copied subject input", copyInput, err)
 	}
@@ -184,7 +184,7 @@ func TestCanvasSubjectConnectionPostgresFreezeReadbackAndUndo(t *testing.T) {
 	}
 	copyPointer.CanvasRevision = copiedDoc.Revision
 	copyPointer.InputRevision = 2
-	copyInput, err = inputReader.ReadInput(t.Context(), actor, project, copyPointer, false)
+	copyInput, err = inputReader.ReadInput(t.Context(), subjectPromptActor(actor), project, copyPointer, false)
 	if err != nil || copyInput.References[0].Source.SourceVersion != "2" {
 		t.Fatal("copy undo stale local reference", copyInput, err)
 	}
@@ -230,7 +230,7 @@ func TestCanvasSubjectConnectionPostgresFreezeReadbackAndUndo(t *testing.T) {
 	if len(historical.Edges) != 1 || pointer(historical).InputRevision != 6 || input(historical).References[0].Source.SourceVersion != "5" {
 		t.Fatal("history reused target or source revision", historical)
 	}
-	if _, err := inputReader.ReadInput(t.Context(), actor, project, pointer(again), true); err == nil {
+	if _, err := inputReader.ReadInput(t.Context(), subjectPromptActor(actor), project, pointer(again), true); err == nil {
 		t.Fatal("pre-restore quote remained executable")
 	}
 	if err := owner.Raw(`SELECT draft FROM canvas.node_input WHERE node_id=? AND input_revision=6`, target.ID).Scan(&snapshot).Error; err != nil {
@@ -242,7 +242,7 @@ func TestCanvasSubjectConnectionPostgresFreezeReadbackAndUndo(t *testing.T) {
 	if err := owner.Exec(`UPDATE media.media_asset SET status='rejected',moderation_status='rejected' WHERE id=?`, localAsset.AssetID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := inputReader.ReadInput(t.Context(), actor, project, pointer(historical), false); err == nil {
+	if _, err := inputReader.ReadInput(t.Context(), subjectPromptActor(actor), project, pointer(historical), false); err == nil {
 		t.Fatal("revoked source quoted")
 	}
 }

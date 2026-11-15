@@ -19,6 +19,7 @@ import (
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
@@ -27,8 +28,8 @@ type actualScriptCopyAccess struct {
 	owner *workspacepg.ProjectCopyAccessStore
 }
 
-func (a actualScriptCopyAccess) Authorize(ctx context.Context, actor identityapp.Principal, b app.ProjectCopyBinding, target bool) error {
-	return a.owner.Authorize(ctx, actor, workspaceapp.ProjectCopyBinding(b), target)
+func (a actualScriptCopyAccess) Authorize(ctx context.Context, actor app.Actor, b app.ProjectCopyBinding, target bool) error {
+	return scriptwire.OwningError(a.owner.Authorize(ctx, scriptIdentityActor(actor), workspaceapp.ProjectCopyBinding(b), target))
 }
 func actualScriptCopyStore(db *gorm.DB, authority workspaceapp.ProjectCopyAuthority) *scriptpg.ProjectCopyStore {
 	return scriptpg.NewProjectCopyStore(db, func(tx *gorm.DB) app.ProjectCopyAccess {
@@ -42,23 +43,25 @@ func ownScriptSnapshot(s workspacedomain.ProjectCopyScriptSnapshot) app.ProjectC
 	return app.ProjectCopySnapshot{ID: s.ID, ManifestSHA256: s.ManifestSHA256, ContentSHA256: s.ContentSHA256, Counts: app.ScriptCopyCounts(s.Counts)}
 }
 func (o actualScriptHistoryOwner) ReferencedMedia(ctx context.Context, a identityapp.Principal, b workspaceapp.ProjectCopyBinding) ([]uuid.UUID, error) {
-	return o.store.ReferencedMedia(ctx, a, app.ProjectCopyBinding(b))
+	return o.store.ReferencedMedia(ctx, scriptActor(a), app.ProjectCopyBinding(b))
 }
 func (o actualScriptHistoryOwner) Freeze(ctx context.Context, a identityapp.Principal, b workspaceapp.ProjectCopyBinding, m map[uuid.UUID]uuid.UUID, now time.Time) (workspacedomain.ProjectCopyScriptSnapshot, error) {
-	s, err := o.store.Freeze(ctx, a, app.ProjectCopyBinding(b), m, now)
+	s, err := o.store.Freeze(ctx, scriptActor(a), app.ProjectCopyBinding(b), m, now)
 	return workspacedomain.ProjectCopyScriptSnapshot{ID: s.ID, ManifestSHA256: s.ManifestSHA256, ContentSHA256: s.ContentSHA256, Counts: workspacedomain.ProjectCopyScriptCounts(s.Counts)}, err
 }
 func (o actualScriptHistoryOwner) Register(ctx context.Context, a identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyScriptSnapshot) (workspacedomain.ProjectCopyScriptReceipt, error) {
-	r, err := o.store.Register(ctx, a, app.ProjectCopyBinding(b), ownScriptSnapshot(s))
+	r, err := o.store.Register(ctx, scriptActor(a), app.ProjectCopyBinding(b), ownScriptSnapshot(s))
 	return workspacedomain.ProjectCopyScriptReceipt{ManifestSHA256: r.ManifestSHA256, ContentSHA256: r.ContentSHA256, Counts: workspacedomain.ProjectCopyScriptCounts(r.Counts)}, err
 }
 func (o actualScriptHistoryOwner) FinishCleanup(ctx context.Context, a identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyScriptSnapshot) error {
-	return o.store.FinishCleanup(ctx, a, app.ProjectCopyBinding(b), ownScriptSnapshot(s))
+	return o.store.FinishCleanup(ctx, scriptActor(a), app.ProjectCopyBinding(b), ownScriptSnapshot(s))
 }
 func workspaceWithActualScript(db *gorm.DB) *workspacepg.ProjectCopyStore {
-	return scriptFixtureWorkspaceCopyWithScript(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard { return scriptStore(tx) }, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
+	return scriptFixtureWorkspaceCopyWithScript(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
+		return scriptWorkGuard(scriptStore(tx).HasInflightWork)
+	}, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 		return workspaceapp.ProjectCopyOwners{Media: scriptFixtureMediaCopyStore(tx), Budget: scriptFixtureBudgetStore(tx), Canvas: scriptFixtureCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
-			return mediaapp.NewAssetQuery(scriptFixtureWorkerMediaStore(tx))
+			return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(scriptFixtureWorkerMediaStore(tx)))
 		}, nil)}
 	}, func(tx *gorm.DB, a workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
 		return actualScriptHistoryOwner{actualScriptCopyStore(tx, a)}
@@ -74,22 +77,22 @@ func historyForCopy(t *testing.T, db, owner *gorm.DB, objects app.PrivateObjects
 	input.Sources[0].Document = domain.RichDocument{Type: "doc", Content: []domain.RichDocument{{Type: "paragraph", Content: []domain.RichDocument{{Type: "text", Text: "走进客厅\n你好😀 "}}}}}
 	html := "<p>走进客厅\n你好😀 </p>"
 	input.Sources[0].OriginalHTML = &html
-	saved, err := sources.Write(t.Context(), actor, input)
+	saved, err := sources.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	view, err := store.Episodes(t.Context(), actor, pid, saved.VersionID)
+	view, err := store.Episodes(t.Context(), scriptActor(actor), pid, saved.VersionID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	formal, err := store.ConfirmSplit(t.Context(), actor, app.SplitCommand{ProjectID: pid, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 1, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}, time.Now().UTC())
+	formal, err := store.ConfirmSplit(t.Context(), scriptActor(actor), app.SplitCommand{ProjectID: pid, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 1, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
 	episode := formal.Episodes[0]
 	episodes := app.NewEpisodeService(store, sources, time.Now)
 	command := app.StructureCommand{ProjectID: pid, EpisodeID: episode.ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 2, ExpectedEpisodeRevision: 1, Document: manualStructure()}
-	first, err := episodes.SaveStructure(t.Context(), actor, command)
+	first, err := episodes.SaveStructure(t.Context(), scriptActor(actor), command)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +101,7 @@ func historyForCopy(t *testing.T, db, owner *gorm.DB, objects app.PrivateObjects
 	command.ExpectedEpisodeRevision = 2
 	command.BaseStructureVersionNo = first.VersionNo
 	command.Document.Scenes[0].Items[1].Content = "旧稿保留😀"
-	if _, err := episodes.SaveStructure(t.Context(), actor, command); err != nil {
+	if _, err := episodes.SaveStructure(t.Context(), scriptActor(actor), command); err != nil {
 		t.Fatal(err)
 	}
 	input.Key = uuid.New()
@@ -111,7 +114,7 @@ func historyForCopy(t *testing.T, db, owner *gorm.DB, objects app.PrivateObjects
 	input.Sources[0].Title = "第二稿"
 	input.Sources[0].OriginalHTML = nil
 	input.Sources[0].Document.Content[0].Content[0].Marks = []domain.RichMark{{Type: "bold"}}
-	if _, err := sources.Write(t.Context(), actor, input); err != nil {
+	if _, err := sources.Write(t.Context(), scriptActor(actor), input); err != nil {
 		t.Fatal(err)
 	}
 	return actor, pid
@@ -156,13 +159,13 @@ func TestScriptCopyPGPrivateObjectsAllHistoricalRowsAndReplay(t *testing.T) {
 		t.Fatal("not full own history", counts)
 	}
 	transfer, b, snapshot := scriptCopyTransfer(db, job, worker, false, objects)
-	if _, err := transfer.Transfer(t.Context(), actor, b, snapshot); err != nil {
+	if _, err := transfer.Transfer(t.Context(), scriptActor(actor), b, snapshot); err != nil {
 		t.Fatal("actual private objects", err)
 	}
 	if _, err := store.CompleteScript(t.Context(), actor, job.ID, worker); err != nil {
 		t.Fatal("register all historical rows", err)
 	}
-	if _, err := scriptStore(db).LoadBase(t.Context(), actor, job.TargetProjectID, nil); !errors.Is(err, app.ErrNotFound) {
+	if _, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), job.TargetProjectID, nil); !errors.Is(err, app.ErrNotFound) {
 		t.Fatal("copying content exposed", err)
 	}
 	if _, err := store.CompleteCanvases(t.Context(), actor, job.ID, worker); err != nil {
@@ -172,11 +175,11 @@ func TestScriptCopyPGPrivateObjectsAllHistoricalRowsAndReplay(t *testing.T) {
 	if err != nil || job.Status != "succeeded" {
 		t.Fatal("actual complete history publication", job.Status, err)
 	}
-	copied, err := scriptStore(db).LoadBase(t.Context(), actor, job.TargetProjectID, nil)
+	copied, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), job.TargetProjectID, nil)
 	if err != nil || len(copied.Sources) != 1 || copied.Sources[0].Title != "第二稿" {
 		t.Fatal("published draft", copied, err)
 	}
-	versions, err := app.NewHistoryService(scriptStore(db), app.NewSourceService(scriptStore(db), objects, time.Now)).Versions(t.Context(), actor, job.TargetProjectID, 0, 100)
+	versions, err := app.NewHistoryService(scriptStore(db), app.NewSourceService(scriptStore(db), objects, time.Now)).Versions(t.Context(), scriptActor(actor), job.TargetProjectID, 0, 100)
 	if err != nil || len(versions.Items) != 2 {
 		t.Fatal("old history lost", versions, err)
 	}
@@ -225,7 +228,7 @@ func TestScriptCopyPGWorkerFenceUnknownPutAndActualPrivateCleanup(t *testing.T) 
 	actor, pid := historyForCopy(t, db, owner, objects)
 	store, job, worker := startActualScriptCopy(t, db, owner, actor, pid)
 	stale, b, snapshot := scriptCopyTransfer(db, job, uuid.New(), false, objects)
-	if _, err := stale.Transfer(t.Context(), actor, b, snapshot); !errors.Is(err, workspacedomain.ErrProjectCopyWorkerConflict) {
+	if _, err := stale.Transfer(t.Context(), scriptActor(actor), b, snapshot); !errors.Is(err, workspacedomain.ErrProjectCopyWorkerConflict) {
 		t.Fatal("stale worker admitted", err)
 	}
 	var started int64
@@ -234,7 +237,7 @@ func TestScriptCopyPGWorkerFenceUnknownPutAndActualPrivateCleanup(t *testing.T) 
 	}
 	loss := neverScriptPut{PrivateObjects: objects}
 	transfer, _, _ := scriptCopyTransfer(db, job, worker, false, loss)
-	if _, err := transfer.Transfer(t.Context(), actor, b, snapshot); err == nil {
+	if _, err := transfer.Transfer(t.Context(), scriptActor(actor), b, snapshot); err == nil {
 		t.Fatal("unknown put became success")
 	} else {
 		var fact *app.ProjectCopyTransferError
@@ -251,14 +254,14 @@ func TestScriptCopyPGWorkerFenceUnknownPutAndActualPrivateCleanup(t *testing.T) 
 		t.Fatal(err)
 	}
 	cleanup, _, _ := scriptCopyTransfer(db, job, worker, true, objects)
-	if err := cleanup.Cleanup(t.Context(), actor, b, snapshot); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if err := cleanup.Cleanup(t.Context(), scriptActor(actor), b, snapshot); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal("missing unknown put was treated as stopped", err)
 	}
 	if _, err := store.FinishCancelled(t.Context(), actor, job.ID, worker); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal("unknown own objects released fence", err)
 	}
 	authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding(b), ActorID: actor.ID, WorkerID: worker, SourceRevision: job.SourceRevision, Phase: "cleanup"}
-	manifest, err := actualScriptCopyStore(db, authority).Manifest(t.Context(), actor, b, snapshot)
+	manifest, err := actualScriptCopyStore(db, authority).Manifest(t.Context(), scriptActor(actor), b, snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +276,7 @@ func TestScriptCopyPGWorkerFenceUnknownPutAndActualPrivateCleanup(t *testing.T) 
 	if err := sourceReader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := cleanup.Cleanup(t.Context(), actor, b, snapshot); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if err := cleanup.Cleanup(t.Context(), scriptActor(actor), b, snapshot); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal("late bytes must first enter the original bounded cleanup window", err)
 	}
 	assertScriptFixtureObjectPresent(t, objects, object.Target)
@@ -284,7 +287,7 @@ func TestScriptCopyPGWorkerFenceUnknownPutAndActualPrivateCleanup(t *testing.T) 
 	// Transfer returned before cancellation; model only the natural remote-write
 	// protection expiring, then let the original owner verify and remove bytes.
 	expireScriptFixtureDrain(t, owner, drain.StorageIntentID)
-	if err := cleanup.Cleanup(t.Context(), actor, b, snapshot); err != nil {
+	if err := cleanup.Cleanup(t.Context(), scriptActor(actor), b, snapshot); err != nil {
 		t.Fatal("same frozen object appeared; explicit exact cleanup", err)
 	}
 	if _, err := store.FinishCancelled(t.Context(), actor, job.ID, worker); err != nil {
@@ -304,7 +307,7 @@ func TestScriptCopyPGTransferRechecksCanonicalSourceSemanticsBeforeTargetPut(t *
 	db, owner := scriptTestDB(t)
 	objects := scriptPrivateObjects(t, db)
 	actor, pid := historyForCopy(t, db, owner, objects)
-	base, err := scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
+	base, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +334,7 @@ func TestScriptCopyPGTransferRechecksCanonicalSourceSemanticsBeforeTargetPut(t *
 		t.Fatal(err)
 	}
 
-	base, err = scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
+	base, err = scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +347,7 @@ func TestScriptCopyPGTransferRechecksCanonicalSourceSemanticsBeforeTargetPut(t *
 	}
 	_, job, worker := startActualScriptCopy(t, db, owner, actor, pid)
 	transfer, b, snapshot := scriptCopyTransfer(db, job, worker, false, objects)
-	if _, err := transfer.Transfer(t.Context(), actor, b, snapshot); !errors.Is(err, app.ErrObjectMismatch) {
+	if _, err := transfer.Transfer(t.Context(), scriptActor(actor), b, snapshot); !errors.Is(err, app.ErrObjectMismatch) {
 		t.Fatal("rich hash alone accepted wrong canonical plain content", err)
 	}
 	var started int64
@@ -368,14 +371,14 @@ func TestScriptCopyPGReferencedMediaIncludesOldHistoryWithTrustedAdmissionOnly(t
 	}
 	b := app.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: pid, TargetProjectID: uuid.New()}
 	authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding(b), ActorID: actor.ID, SourceRevision: revision, Phase: "freeze"}
-	if _, err := actualScriptCopyStore(db, authority).ReferencedMedia(t.Context(), actor, b); !errors.Is(err, app.ErrUnavailable) {
+	if _, err := actualScriptCopyStore(db, authority).ReferencedMedia(t.Context(), scriptActor(actor), b); !errors.Is(err, app.ErrUnavailable) {
 		t.Fatal("pool mimicked owning admission", err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`INSERT INTO workspace.project(id,org_id,owner_scope_id,name,description,aspect_ratio,style_type,resolution,status,revision,default_models) VALUES(?,?,?,'own reference target','','16:9','realistic','1080p','copying',1,'{}')`, b.TargetProjectID, b.OrgID, actor.ScopeID).Error; err != nil {
 			return err
 		}
-		refs, err := actualScriptCopyStore(tx, authority).ReferencedMedia(t.Context(), actor, b)
+		refs, err := actualScriptCopyStore(tx, authority).ReferencedMedia(t.Context(), scriptActor(actor), b)
 		if err != nil || len(refs) != 1 || refs[0] != asset {
 			t.Fatal("historical file references and dedup", refs, err)
 		}
@@ -385,7 +388,7 @@ func TestScriptCopyPGReferencedMediaIncludesOldHistoryWithTrustedAdmissionOnly(t
 		}
 		altered := b
 		altered.SourceProjectID = uuid.New()
-		if _, err := actualScriptCopyStore(tx, authority).ReferencedMedia(t.Context(), actor, altered); err == nil {
+		if _, err := actualScriptCopyStore(tx, authority).ReferencedMedia(t.Context(), scriptActor(actor), altered); err == nil {
 			t.Fatal("unminted binding accepted")
 		}
 		return nil
@@ -396,7 +399,7 @@ func TestScriptCopyPGReferencedMediaIncludesOldHistoryWithTrustedAdmissionOnly(t
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := actualScriptCopyStore(tx, authority).ReferencedMedia(t.Context(), actor, b)
+		_, err := actualScriptCopyStore(tx, authority).ReferencedMedia(t.Context(), scriptActor(actor), b)
 		return err
 	}); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("old creator authority accepted", err)
@@ -408,7 +411,7 @@ type alteredCopyManifest struct {
 	alter func(*app.ProjectCopyManifest)
 }
 
-func (s alteredCopyManifest) Manifest(ctx context.Context, a identityapp.Principal, b app.ProjectCopyBinding, snapshot app.ProjectCopySnapshot) (app.ProjectCopyManifest, error) {
+func (s alteredCopyManifest) Manifest(ctx context.Context, a app.Actor, b app.ProjectCopyBinding, snapshot app.ProjectCopySnapshot) (app.ProjectCopyManifest, error) {
 	m, err := s.ProjectCopyStore.Manifest(ctx, a, b, snapshot)
 	if err == nil {
 		s.alter(&m)
@@ -449,7 +452,7 @@ func TestScriptCopyPGConsumerRejectsVersionTextAndRichObjectBeforeAnyTargetPut(t
 					}
 				}
 			}}
-			_, err := app.NewProjectCopy(frozen, objects).Transfer(t.Context(), actor, b, snapshot)
+			_, err := app.NewProjectCopy(frozen, objects).Transfer(t.Context(), scriptActor(actor), b, snapshot)
 			if err == nil {
 				t.Fatal("wrong actual version object accepted")
 			}

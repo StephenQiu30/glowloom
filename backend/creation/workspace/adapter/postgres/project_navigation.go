@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -24,7 +25,7 @@ func (s *Store) ReadProjectNavigation(ctx context.Context, actor identity.Princi
 		return result, fmt.Errorf("read project navigation: %w", read.Error)
 	}
 	if read.RowsAffected != 1 {
-		return result, application.ErrProjectNotFound
+		return result, workspacesource.ErrProjectNotFound
 	}
 	return result, nil
 }

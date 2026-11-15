@@ -16,6 +16,7 @@ import (
 // ValidateSubjectNodes reauthorizes every fixed version and all its media through
 // the subject owner. It deliberately does not reuse previously accepted proofs.
 func ValidateSubjectNodes(ctx context.Context, actor identity.Principal, project uuid.UUID, nodes []domain.Node, sources prompt.SubjectSources) error {
+	sourceActor := prompt.Actor{ID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, SessionID: actor.SessionID, CredentialEpoch: actor.CredentialEpoch}
 	for _, node := range nodes {
 		pin := node.Config.Subject
 		if pin == nil || pin.SubjectID == nil && pin.VersionID == nil {
@@ -24,7 +25,7 @@ func ValidateSubjectNodes(ctx context.Context, actor identity.Principal, project
 		if sources == nil || pin.SubjectID == nil || pin.VersionID == nil {
 			return promptdomain.ErrReferenceUnavailable
 		}
-		source, found, err := sources.ResolveSubject(ctx, actor, project, pin.SubjectID.String(), pin.VersionID.String())
+		source, found, err := sources.ResolveSubject(ctx, sourceActor, project, pin.SubjectID.String(), pin.VersionID.String())
 		if err != nil {
 			return fmt.Errorf("%w: %w", promptdomain.ErrReferenceUnavailable, err)
 		}
@@ -56,7 +57,7 @@ func ValidateSubjectNodes(ctx context.Context, actor identity.Principal, project
 			if media.BindingID == "" {
 				return promptdomain.ErrReferenceUnavailable
 			}
-			if err := sources.ValidateBinding(ctx, actor, project, media, false); err != nil {
+			if err := sources.ValidateBinding(ctx, sourceActor, project, media, false); err != nil {
 				return fmt.Errorf("%w: %w", promptdomain.ErrReferenceUnavailable, err)
 			}
 		}

@@ -29,7 +29,7 @@ import (
 	billingevent "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/event"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
 	billingredis "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/redis"
-	managedprovider "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/settlement"
 	operationstaging "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
@@ -37,14 +37,15 @@ import (
 	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
 	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	maintenanceapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/application"
-	kafkaoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/kafka"
 	pgoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
-	outboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
 	redisrealtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/redis"
 	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
+	outboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox"
+	kafkaoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/kafka"
+	pgoutboxrelay "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediastaged "github.com/StephenQiu30/glowloom-server/backend/media/adapter/staged"
@@ -94,7 +95,7 @@ func buildBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Conne
 		handlers = maintenancetask.Handlers(service)
 		handlers[workspacetask.Retention] = workspacetask.RetentionHandler(NewProjectRetention(dbConn.DB))
 		operationStore := operationwire.ProvideOperationStore(dbConn.DB)
-		finalizer := operationwire.NewOperationFinalizer(dbConn.DB, operationStore, pgbilling.NewStore(dbConn.DB))
+		finalizer := settlement.NewOperationFinalizer(dbConn.DB, operationStore, pgbilling.NewStore(dbConn.DB))
 		var recovery *operationapp.ProviderStageService
 		objects, err := subjectwire.OpenObjects(cfg)
 		if err != nil {
@@ -127,7 +128,7 @@ func buildBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Conne
 		}
 
 		managedResults := operationapp.NewRoutedManagedResults(operationstaging.NewRoutedFactory(registry, pgmedia.NewStorageRoutes(dbConn.DB)), operationwire.ProvideOperationStore(dbConn.DB))
-		managedIngest := managedprovider.NewRoutedIngestActivities(dbConn.DB, registry, managedResults, mediawire.NewMediaWorkerScopeAccess, operationwire.ProvideOperationStore(dbConn.DB))
+		managedIngest := operationwire.NewRoutedIngestActivities(dbConn.DB, registry, managedResults, mediawire.NewMediaWorkerScopeAccess, operationwire.ProvideOperationStore(dbConn.DB))
 		operationtask.RegisterMedia(handlers, operationwire.ProvideOperationStore(dbConn.DB), activities, managedIngest)
 		exportRenderer, err := toolff.NewRenderer(mediaflow.FFProber{})
 		if err != nil {
@@ -213,7 +214,7 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		realtimeConsumer.Close()
 		return nil, nil, fmt.Errorf("configure relay credit consumer: %w", err)
 	}
-	relay := outboxapp.NewRelay(pgoutbox.NewStore(dbConn.DB), kafkaoutbox.NewPublisher(kafkaConn.Client))
+	relay := outboxapp.NewRelay(pgoutboxrelay.NewStore(dbConn.DB), kafkaoutbox.NewPublisher(kafkaConn.Client))
 	runtime := &relayRuntime{outbox: relay, realtime: realtimeConsumer, audit: auditConsumer, credit: creditConsumer}
 	stopStorageRuntime, err := startStorageRuntime(ctx, cfg, false, dbConn.DB)
 	if err != nil {

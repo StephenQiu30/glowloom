@@ -5,17 +5,26 @@ import (
 	"errors"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -52,7 +61,7 @@ func (a assetMutationAccess) AuthorizeAssetProject(ctx context.Context, actor id
 
 func assetMutationError(err error) error {
 	switch {
-	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound), errors.Is(err, mediaapp.ErrNotFound):
+	case errors.Is(err, workspacesource.ErrScopeNotFound), errors.Is(err, workspacesource.ErrProjectNotFound), errors.Is(err, mediaapp.ErrNotFound):
 		return canvasapp.ErrNotFound
 	case errors.Is(err, workspacedomain.ErrProjectRevisionConflict):
 		return &canvasapp.AssetActionError{Code: "project_revision_conflict"}

@@ -9,26 +9,38 @@ import (
 	"testing"
 	"time"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
+
 	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
+
 	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+
 	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+
 	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+
 	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
+
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
+
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -50,11 +62,7 @@ func actualSubjectDraftStore(db *gorm.DB) *pgprompt.DraftStore {
 }
 
 func actualSubjectOperationStore(db *gorm.DB, objects subjectwire.Objects) *pgoperation.Store {
-	return pgoperation.NewScopedStoreWithEditor(db, func(tx *gorm.DB) operation.QuotePromptCompiler {
-		return prompt.NewCompiler(operationwire.ProvidePromptPreferenceStore(tx))
-	}, func(tx *gorm.DB) operation.EditorSnapshots {
-		return actualSubjectDraftStore(tx)
-	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(tx *gorm.DB) operation.ExecutionAvailability { return pgcatalog.NewStore(tx) }).WithSubjectMedia(func(tx *gorm.DB) operation.SubjectMediaAccess {
+	return pgoperation.NewScopedStoreWithEditor(db, operationwire.ProvidePromptCompiler, operationwire.ProvidePromptEditor, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(tx *gorm.DB) operation.ExecutionAvailability { return pgcatalog.NewStore(tx) }).WithSubjectMedia(func(tx *gorm.DB) operation.SubjectMediaAccess {
 		return subjectwire.NewGenerationAccess(tx, objects)
 	})
 }
@@ -131,7 +139,7 @@ func newActualSubjectGeneration(t *testing.T) actualSubjectGeneration {
 	if err := runtime.Transaction(func(tx *gorm.DB) error {
 		var known bool
 		var err error
-		source, known, err = subjectwire.NewPromptSources(tx).ResolveSubject(t.Context(), actor, project, saved.ID.String(), saved.VersionID.String())
+		source, known, err = subjectwire.NewPromptSources(tx).ResolveSubject(t.Context(), subjectPromptActor(actor), project, saved.ID.String(), saved.VersionID.String())
 		if err == nil && !known {
 			t.Fatal("new subject was misclassified as legacy")
 		}
@@ -146,11 +154,11 @@ func newActualSubjectGeneration(t *testing.T) actualSubjectGeneration {
 		LabelState: promptdomain.LabelState{HighWater: map[string]int64{"image": 0, "video": 0, "audio": 0, "subject": 1}, Allocations: map[string]promptdomain.LabelAllocation{"subject-ref": {LabelKind: "subject", Ordinal: 1}}},
 	}
 	drafts := actualSubjectDraftStore(runtime)
-	snapshot, err := drafts.SaveDraft(t.Context(), actor, prompt.DraftWrite{ProjectID: project, Key: uuid.New(), Draft: draft})
+	snapshot, err := drafts.SaveDraft(t.Context(), subjectPromptActor(actor), prompt.DraftWrite{ProjectID: project, Key: uuid.New(), Draft: draft})
 	if err != nil {
 		t.Fatal("save real subject draft", err)
 	}
-	readback, err := drafts.ReadDraft(t.Context(), actor, project, snapshot.DraftID)
+	readback, err := drafts.ReadDraft(t.Context(), subjectPromptActor(actor), project, snapshot.DraftID)
 	if err != nil || readback.Draft.References[0].Source.Media[0].BindingID != saved.Primary.BindingID.String() {
 		t.Fatal("draft lost immutable binding", err)
 	}
@@ -266,7 +274,7 @@ func TestActualSubjectConfirmationRejectsMissingTamperedAndRevokedBindings(t *te
 			if err := f.owner.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=(SELECT team_id FROM workspace.creation_scope WHERE id=?) AND user_id=?`, f.actor.ScopeID, f.actor.ID).Error; err != nil {
 				t.Fatal(err)
 			}
-		}, workspace.ErrScopeNotFound},
+		}, workspacesource.ErrScopeNotFound},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			f := newActualSubjectGeneration(t)

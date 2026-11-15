@@ -11,8 +11,10 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
@@ -150,16 +152,16 @@ func TestOperationStoresHideOtherProjectsAndRevokedActors(t *testing.T) {
 		{"wrong project", actor, otherProjectID},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := store.FindBatch(t.Context(), tc.actor, tc.projectID, batchID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+			if _, err := store.FindBatch(t.Context(), tc.actor, tc.projectID, batchID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 				t.Fatalf("batch visibility: %v", err)
 			}
-			if _, err := store.FindOperation(t.Context(), tc.actor, tc.projectID, operationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+			if _, err := store.FindOperation(t.Context(), tc.actor, tc.projectID, operationID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 				t.Fatalf("operation visibility: %v", err)
 			}
-			if _, err := store.FindOperationInputs(t.Context(), tc.actor, tc.projectID, operationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+			if _, err := store.FindOperationInputs(t.Context(), tc.actor, tc.projectID, operationID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 				t.Fatalf("input visibility: %v", err)
 			}
-			if _, err := billingStore.FindReservation(t.Context(), tc.actor, tc.projectID, reservationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+			if _, err := billingStore.FindReservation(t.Context(), tc.actor, tc.projectID, reservationID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 				t.Fatalf("reservation visibility: %v", err)
 			}
 		})
@@ -190,13 +192,13 @@ func TestOperationStoresHideOtherProjectsAndRevokedActors(t *testing.T) {
 	`, projectID.String()).Error; err != nil {
 		t.Fatalf("soft delete project: %v", err)
 	}
-	if _, err := store.FindBatch(t.Context(), actor, projectID, batchID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.FindBatch(t.Context(), actor, projectID, batchID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("deleted project batch: %v", err)
 	}
-	if _, err := store.FindOperationInputs(t.Context(), actor, projectID, operationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.FindOperationInputs(t.Context(), actor, projectID, operationID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("deleted project input: %v", err)
 	}
-	if _, err := billingStore.FindReservation(t.Context(), actor, projectID, reservationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := billingStore.FindReservation(t.Context(), actor, projectID, reservationID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("deleted project reservation: %v", err)
 	}
 }

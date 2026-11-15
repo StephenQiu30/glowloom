@@ -20,7 +20,7 @@ func recoveryRouter(service *app.SourceRecovery, actor identityapp.Principal) *g
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	g := router.Group("/api")
 	g.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	scripthttp.NewSourceRecoveryHandler(service).Register(g)
+	scripthttp.NewSourceRecoveryHandler(service, scriptHTTPActor).Register(g)
 	return router
 }
 func TestScriptSourceRecoveryHTTPCurrentScopeAndPermanent202IsNotCompletion(t *testing.T) {
@@ -33,7 +33,7 @@ func TestScriptSourceRecoveryHTTPCurrentScopeAndPermanent202IsNotCompletion(t *t
 	recovery := app.NewSourceRecovery(store, sources, time.Now)
 	_, input := sourceCommand()
 	input.ProjectID = pid
-	if _, err := sources.Write(t.Context(), creator, input); err == nil {
+	if _, err := sources.Write(t.Context(), scriptActor(creator), input); err == nil {
 		t.Fatal("fault did not retain intent")
 	}
 	plan := pendingScriptPlan(t, owner, pid)

@@ -35,7 +35,7 @@ func (s *PlatformDirectoryStore) UserStatistics(ctx context.Context, actor appli
 // MemberStatistics counts member states from one team-scoped filtered SQL snapshot.
 func (s *PlatformDirectoryStore) MemberStatistics(ctx context.Context, actor application.Principal, team uuid.UUID, f application.ExportFilter, clock func() time.Time) (application.MemberStatistics, error) {
 	value := application.MemberStatistics{TeamID: team, Filter: f, MemberStates: map[string]int{"active": 0, "suspended": 0, "removed": 0}}
-	err := NewDirectoryExportStore(s.db).Transaction(ctx, func(tx application.ExportTx) error {
+	err := NewDirectoryExportStore(s.db, nil).Transaction(ctx, func(tx application.ExportTx) error {
 		if _, err := tx.Authorize(actor, &team, 0, false, clock); err != nil {
 			return err
 		}

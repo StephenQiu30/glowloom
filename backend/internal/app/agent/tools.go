@@ -29,6 +29,7 @@ import (
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
@@ -67,7 +68,7 @@ func decode(raw json.RawMessage, out any) error {
 }
 func canvasStore(tx *gorm.DB) *pgcanvas.Store {
 	return pgcanvas.NewScopedStore(tx, func(inner *gorm.DB) canvas.MediaReader {
-		return media.NewAssetQuery(pgmedia.NewScopedStore(inner, mediawire.NewMediaWorkerScopeAccess))
+		return mediawire.LegacyAssetReader(media.NewAssetQuery(pgmedia.NewScopedStore(inner, mediawire.NewMediaWorkerScopeAccess)))
 	}, newCanvasAccess)
 }
 func canvasService(tx *gorm.DB) *canvas.Service { return canvas.NewService(canvasStore(tx)) }
@@ -82,7 +83,7 @@ func operationStoreWithCreditSaga(tx *gorm.DB, enabled bool) *pgoperation.Store 
 	return operationStore(tx).WithCreditOperationSaga(enabled)
 }
 func scriptService(tx *gorm.DB) *script.SourceService {
-	return script.NewSourceService(pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(inner) }), nil, time.Now)
+	return script.NewSourceService(pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess { return scriptwire.ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(inner)) }), nil, time.Now)
 }
 
 type subjectScope struct{ tx *gorm.DB }
@@ -162,7 +163,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return scriptService(tx).Workspace(ctx, app.Principal(s), s.ProjectID)
+			return scriptService(tx).Workspace(ctx, scriptwire.Actor(app.Principal(s)), s.ProjectID)
 		}),
 		tool("script_sources", "分页读取冻结的剧本素材元数据", "read", `{"type":"object","properties":{"version_id":{"type":"string","format":"uuid"},"after":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -173,7 +174,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return scriptService(tx).Sources(ctx, app.Principal(s), s.ProjectID, in.VersionID, in.After, in.Limit)
+			return scriptService(tx).Sources(ctx, scriptwire.Actor(app.Principal(s)), s.ProjectID, in.VersionID, in.After, in.Limit)
 		}),
 		tool("media_list", "分页读取项目正式媒体素材", "read", `{"type":"object","properties":{"kind":{"type":"string"},"cursor":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -184,7 +185,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return media.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaWorkerScopeAccess)).List(ctx, app.Principal(s), s.ProjectID, in.Kind, in.Cursor, in.Limit)
+			return media.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaWorkerScopeAccess)).List(ctx, mediawire.Actor(app.Principal(s)), s.ProjectID, in.Kind, in.Cursor, in.Limit)
 		}),
 		tool("subject_list", "查询当前创作空间的正式主体", "read", `{"type":"object","properties":{"query":{"type":"string"},"page":{"type":"integer","minimum":1},"page_size":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {

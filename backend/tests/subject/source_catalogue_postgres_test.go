@@ -112,20 +112,20 @@ type catalogueAccess struct {
 	target, personal identity.Principal
 }
 
-func (a catalogueAccess) CheckActor(_ context.Context, actor identity.Principal) error {
-	if actor != a.target && actor != a.personal {
+func (a catalogueAccess) CheckActor(_ context.Context, actor media.Actor) error {
+	if actor != mediaBoundaryActor(a.target) && actor != mediaBoundaryActor(a.personal) {
 		return identity.ErrForbidden
 	}
 	return nil
 }
-func (a catalogueAccess) AuthorizePersonal(_ context.Context, actor identity.Principal, _ bool) error {
-	if actor != a.personal {
+func (a catalogueAccess) AuthorizePersonal(_ context.Context, actor media.Actor, _ bool) error {
+	if actor != mediaBoundaryActor(a.personal) {
 		return identity.ErrForbidden
 	}
 	return nil
 }
-func (a catalogueAccess) AuthorizeProject(_ context.Context, actor identity.Principal, id uuid.UUID, write bool) error {
-	if actor != a.target {
+func (a catalogueAccess) AuthorizeProject(_ context.Context, actor media.Actor, id uuid.UUID, write bool) error {
+	if actor != mediaBoundaryActor(a.target) {
 		return identity.ErrForbidden
 	}
 	var found int64
@@ -138,14 +138,14 @@ func (a catalogueAccess) AuthorizeProject(_ context.Context, actor identity.Prin
 	}
 	return nil
 }
-func (a catalogueAccess) AuthorizeCopyTarget(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
+func (a catalogueAccess) AuthorizeCopyTarget(ctx context.Context, actor media.Actor, id uuid.UUID) error {
 	return a.AuthorizeProject(ctx, actor, id, true)
 }
-func (a catalogueAccess) Authorize(ctx context.Context, actor identity.Principal, id uuid.UUID, write bool) (media.LibraryProjectFacts, error) {
+func (a catalogueAccess) Authorize(ctx context.Context, actor media.Actor, id uuid.UUID, write bool) (media.LibraryProjectFacts, error) {
 	err := a.AuthorizeProject(ctx, actor, id, write)
 	return media.LibraryProjectFacts{ProjectID: id, OrgID: actor.OrgID, Revision: 1}, err
 }
-func (catalogueAccess) TouchContent(context.Context, identity.Principal, uuid.UUID, int64) (int64, error) {
+func (catalogueAccess) TouchContent(context.Context, media.Actor, uuid.UUID, int64) (int64, error) {
 	return 0, media.ErrUnavailable
 }
 
@@ -241,49 +241,49 @@ func TestSubjectCatalogueRealPostgresMixedPagingProvenanceAndLegacyMetadata(t *t
 		t.Fatal(err)
 	}
 	query := media.SubjectCatalogueQuery{Kind: "image", Page: 1, PageSize: 2}
-	page, err := store.List(t.Context(), target, query)
+	page, err := store.List(t.Context(), mediaBoundaryActor(target), query)
 	if err != nil || page.Total != 4 || len(page.Items) != 2 || page.Items[0].ID != upload || page.Items[1].ID != upscale.id || page.Items[0].Revision != 1 || page.Items[0].Title != "旧元数据标题" || !page.Items[0].Favorite {
 		t.Fatal("mixed global first page/legacy metadata", page, err)
 	}
 	query.Page = 2
-	page, err = store.List(t.Context(), target, query)
+	page, err = store.List(t.Context(), mediaBoundaryActor(target), query)
 	if err != nil || page.Total != 4 || len(page.Items) != 2 || page.Items[0].ID != modeUpscale.id || page.Items[1].ID != normal.id {
 		t.Fatal("mixed global second page", page, err)
 	}
 	query.Page = 1
 	query.Quality = "upscaled"
-	page, err = store.List(t.Context(), target, query)
+	page, err = store.List(t.Context(), mediaBoundaryActor(target), query)
 	if err != nil || page.Total != 2 || len(page.Items) != 2 || !page.Items[0].Upscaled || page.Items[0].ID == upload {
 		t.Fatal("native resolution was mistaken for processed upscale", page, err)
 	}
 	query.Quality = ""
 	query.FavoriteOnly = true
-	page, err = store.List(t.Context(), target, query)
+	page, err = store.List(t.Context(), mediaBoundaryActor(target), query)
 	if err != nil || page.Total != 2 || len(page.Items) != 2 {
 		t.Fatal("mixed favorites were not filtered before paging", page, err)
 	}
 	query.FavoriteOnly = false
 	query.Kind = "video"
 	query.Quality = "upscaled"
-	page, err = store.List(t.Context(), target, query)
+	page, err = store.List(t.Context(), mediaBoundaryActor(target), query)
 	if err != nil || page.Total != 1 || page.Items[0].ID != video.id {
 		t.Fatal("real video upscale source", page, err)
 	}
 	for _, hidden := range []output{other, foreign, deleted, trashed} {
-		if _, err := store.Detail(t.Context(), target, hidden.id); !errors.Is(err, media.ErrNotFound) {
+		if _, err := store.Detail(t.Context(), mediaBoundaryActor(target), hidden.id); !errors.Is(err, media.ErrNotFound) {
 			t.Fatal("confirmer/foreign/deleted/trashed result exposed", hidden, err)
 		}
 	}
-	item, err := store.Detail(t.Context(), target, upload)
+	item, err := store.Detail(t.Context(), mediaBoundaryActor(target), upload)
 	if err != nil || item.ID != upload || item.ID == metadata || item.Media.ID != upload || item.Source != "personal_asset" {
 		t.Fatal("personal source identity used metadata id", item, err)
 	}
-	file, err := store.FindLibraryMedia(t.Context(), personal, mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}, upload)
+	file, err := store.FindLibraryMedia(t.Context(), mediaBoundaryActor(personal), mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}, upload)
 	if err != nil || file.Asset.ID != upload || file.Asset.Personal == nil || file.Asset.Personal.ActorID != target.ID {
 		t.Fatal("legacy metadata preview could not resolve original by asset", err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		selected, err := pgmedia.NewSubjectSourceStore(tx, library).FindSubjectSource(t.Context(), personal, mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}, upload)
+		selected, err := pgmedia.NewSubjectSourceStore(tx, library).FindSubjectSource(t.Context(), mediaBoundaryActor(personal), mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}, upload)
 		if err == nil && selected.Asset.ID != upload {
 			return errors.New("selection loaded metadata identity")
 		}
@@ -291,22 +291,22 @@ func TestSubjectCatalogueRealPostgresMixedPagingProvenanceAndLegacyMetadata(t *t
 	}); err != nil {
 		t.Fatal("legacy metadata original adoption failed", err)
 	}
-	if _, err := store.Detail(t.Context(), target, metadata); !errors.Is(err, media.ErrNotFound) {
+	if _, err := store.Detail(t.Context(), mediaBoundaryActor(target), metadata); !errors.Is(err, media.ErrNotFound) {
 		t.Fatal("metadata id became public source identity", err)
 	}
 	if err := database.Exec(`UPDATE workspace.project SET status='archived' WHERE id=?`, project).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Detail(t.Context(), target, normal.id); err != nil {
+	if _, err := store.Detail(t.Context(), mediaBoundaryActor(target), normal.id); err != nil {
 		t.Fatal("archived read/source eligibility drifted", err)
 	}
-	if _, err := store.FindLibraryMedia(t.Context(), target, mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}, normal.asset); err != nil {
+	if _, err := store.FindLibraryMedia(t.Context(), mediaBoundaryActor(target), mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}, normal.asset); err != nil {
 		t.Fatal("archived original read failed", err)
 	}
 	if err := database.Exec(`UPDATE operation.operation_output SET id=? WHERE id=?`, upload, normal.id).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Detail(t.Context(), target, upload); !errors.Is(err, media.ErrUnavailable) {
+	if _, err := store.Detail(t.Context(), mediaBoundaryActor(target), upload); !errors.Is(err, media.ErrUnavailable) {
 		t.Fatal("colliding source id selected arbitrary owner", err)
 	}
 }

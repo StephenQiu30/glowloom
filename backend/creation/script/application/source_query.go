@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // SourceSummary is the safe lazy-list metadata, excluding object locations and bodies.
@@ -51,7 +50,7 @@ type SourcePage struct {
 }
 
 // Workspace returns revision zero for an empty project without any side effect.
-func (s *SourceService) Workspace(ctx context.Context, actor identityapp.Principal, project uuid.UUID) (WorkspaceView, error) {
+func (s *SourceService) Workspace(ctx context.Context, actor Actor, project uuid.UUID) (WorkspaceView, error) {
 	if s == nil || s.store == nil {
 		return WorkspaceView{}, ErrUnavailable
 	}
@@ -67,7 +66,7 @@ func summary(record domain.SourceRecord, position int) SourceSummary {
 }
 
 // Sources pages frozen metadata; no original or rich bytes are fetched for the list.
-func (s *SourceService) Sources(ctx context.Context, actor identityapp.Principal, project uuid.UUID, version *uuid.UUID, after, limit int) (SourcePage, error) {
+func (s *SourceService) Sources(ctx context.Context, actor Actor, project uuid.UUID, version *uuid.UUID, after, limit int) (SourcePage, error) {
 	if s == nil || s.store == nil {
 		return SourcePage{}, ErrUnavailable
 	}
@@ -97,7 +96,7 @@ func (s *SourceService) Sources(ctx context.Context, actor identityapp.Principal
 }
 
 // Source reauthorizes and proves selected private rich bytes before returning text.
-func (s *SourceService) Source(ctx context.Context, actor identityapp.Principal, project, lineage uuid.UUID, version *uuid.UUID) (SourceDetail, error) {
+func (s *SourceService) Source(ctx context.Context, actor Actor, project, lineage uuid.UUID, version *uuid.UUID) (SourceDetail, error) {
 	if s == nil || s.store == nil || s.objects == nil {
 		return SourceDetail{}, ErrUnavailable
 	}

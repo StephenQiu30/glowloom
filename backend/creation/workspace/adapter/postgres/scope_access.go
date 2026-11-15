@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -34,7 +35,7 @@ func NewRequestScopeStore(db *gorm.DB, sessions SessionActorAccessFactory) *Scop
 func (s *ScopeStore) LoadRequestScopeFacts(ctx context.Context, actor identity.Principal, scope uuid.UUID, clock func() time.Time) (application.ScopeFacts, error) {
 	var facts application.ScopeFacts
 	if s.sessions == nil {
-		return facts, application.ErrScopeNotFound
+		return facts, workspacesource.ErrScopeNotFound
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.sessions(tx).CheckSession(ctx, actor, clock); err != nil {
@@ -66,13 +67,13 @@ func (s *ScopeStore) LoadScopeFacts(ctx context.Context, actor, scope uuid.UUID)
 			return fmt.Errorf("read creation scope: %w", r.Error)
 		}
 		if r.RowsAffected != 1 {
-			return application.ErrScopeNotFound
+			return workspacesource.ErrScopeNotFound
 		}
 		if facts.Scope.Kind == "personal" {
 			return nil
 		}
 		if facts.Scope.TeamID == nil {
-			return application.ErrScopeNotFound
+			return workspacesource.ErrScopeNotFound
 		}
 		var team struct {
 			Status            string
@@ -83,7 +84,7 @@ func (s *ScopeStore) LoadScopeFacts(ctx context.Context, actor, scope uuid.UUID)
 			return fmt.Errorf("read scope team: %w", r.Error)
 		}
 		if r.RowsAffected != 1 {
-			return application.ErrScopeNotFound
+			return workspacesource.ErrScopeNotFound
 		}
 		facts.TeamStatus, facts.GovernanceBlocked = team.Status, team.GovernanceBlocked
 		var member struct{ Status, Role string }
@@ -92,7 +93,7 @@ func (s *ScopeStore) LoadScopeFacts(ctx context.Context, actor, scope uuid.UUID)
 			return fmt.Errorf("read scope membership: %w", r.Error)
 		}
 		if r.RowsAffected != 1 {
-			return application.ErrScopeNotFound
+			return workspacesource.ErrScopeNotFound
 		}
 		facts.MemberStatus, facts.MemberRole = member.Status, member.Role
 		return nil

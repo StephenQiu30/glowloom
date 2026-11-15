@@ -1,9 +1,0 @@
-FROM node:24-bookworm-slim
-ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=1130
-WORKDIR /app
-ARG RELEASE_ID
-RUN test -n "$RELEASE_ID"
-COPY --chown=node:node dist/online/${RELEASE_ID}/ ./
-USER node
-EXPOSE 1130
-CMD ["node", "runtime.ts"]

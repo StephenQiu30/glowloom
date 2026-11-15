@@ -70,7 +70,11 @@ func TestServiceLayoutKeepsOneModuleAndCanonicalSharedSources(t *testing.T) {
 				t.Errorf("directory normalization must not duplicate module definitions: %s", path)
 			}
 			if entry.IsDir() && entry.Name() == "cmd" {
-				t.Errorf("service must not wrap its only entrypoint in another cmd directory: %s", path)
+				if service == "creation" && path == filepath.Join(root, "creation", "cmd") {
+					checkCreationPrograms(t, root, path)
+				} else {
+					t.Errorf("service must not wrap its only entrypoint in another cmd directory: %s", path)
+				}
 			}
 			return nil
 		})
@@ -86,6 +90,24 @@ func TestServiceLayoutKeepsOneModuleAndCanonicalSharedSources(t *testing.T) {
 		if !strings.Contains(string(ignore), "!"+service+"/\n") {
 			t.Errorf("module build context excludes service implementation: %s", service)
 		}
+	}
+}
+
+// Creation has two real programs with separate dependency closures. The pure
+// document processor keeps its original entrypoint and dependency gate.
+func checkCreationPrograms(t *testing.T, root, commandDir string) {
+	t.Helper()
+	for _, name := range []string{"creation/main.go", "creation/app", "creation/cmd/workspace/main.go", "creation/workspace/app", "creation/workspace/Dockerfile"} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(name))); err != nil {
+			t.Errorf("Creation must retain both actual programs: %s: %v", name, err)
+		}
+	}
+	programs, err := os.ReadDir(commandDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(programs) != 1 || !programs[0].IsDir() || programs[0].Name() != "workspace" {
+		t.Error("Creation cmd contains an unreviewed program; only the independent workspace process is accepted")
 	}
 }
 

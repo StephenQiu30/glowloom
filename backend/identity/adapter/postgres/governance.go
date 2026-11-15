@@ -17,13 +17,19 @@ type TeamGovernanceFactory func(*gorm.DB) application.TeamGovernance
 
 // GovernanceStore shares the platform singleton lock with team changes and deletion.
 type GovernanceStore struct {
-	db    *gorm.DB
-	teams TeamGovernanceFactory
+	db     *gorm.DB
+	teams  TeamGovernanceFactory
+	source bool
 }
 
 // NewGovernanceStore injects the existing database and transaction-bound workspace gateway.
 func NewGovernanceStore(db *gorm.DB, teams TeamGovernanceFactory) *GovernanceStore {
 	return &GovernanceStore{db: db, teams: teams}
+}
+
+// NewSourceGovernanceStore enables restricted Identity-only source decisions.
+func NewSourceGovernanceStore(db *gorm.DB) *GovernanceStore {
+	return &GovernanceStore{db: db, source: true}
 }
 
 type governanceTx struct {
@@ -32,11 +38,12 @@ type governanceTx struct {
 	principal application.Principal
 	settings  application.PlatformSettings
 	teams     application.TeamGovernance
+	source    bool
 }
 
 // GovernanceTransaction holds the shared settings lock before checking current session and authority.
 func (s *GovernanceStore) GovernanceTransaction(ctx context.Context, actor application.Principal, recent bool, clock func() time.Time, run func(application.GovernanceTx) error) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	runTx := func(tx *gorm.DB) error {
 		var settings application.PlatformSettings
 		r := tx.Raw(`SELECT registration_enabled,team_creation_enabled,revision FROM identity.platform_settings WHERE singleton FOR UPDATE`).Scan(&settings)
 		if r.Error != nil {
@@ -49,17 +56,26 @@ func (s *GovernanceStore) GovernanceTransaction(ctx context.Context, actor appli
 		if err != nil {
 			return err
 		}
+		if s.source {
+			if err := requireOpenAccountHead(tx, actor.ID); err != nil {
+				return err
+			}
+		}
 		if recent {
 			if err := NewStore(tx).CheckRecentSession(ctx, actor, clock); err != nil {
 				return err
 			}
 		}
-		g := &governanceTx{authTx: &authTx{db: tx}, actor: user, principal: actor, settings: settings}
+		g := &governanceTx{authTx: &authTx{db: tx}, actor: user, principal: actor, settings: settings, source: s.source}
 		if s.teams != nil {
 			g.teams = s.teams(tx)
 		}
 		return run(g)
-	})
+	}
+	if s.source {
+		return identityWriterTransaction(ctx, s.db, runTx)
+	}
+	return s.db.WithContext(ctx).Transaction(runTx)
 }
 
 // Actor defines the explicit governance contract.
@@ -82,7 +98,11 @@ func (t *governanceTx) TeamGovernance() application.TeamGovernance { return t.te
 // AvailablePlatformAdmins defines the explicit governance contract.
 func (t *governanceTx) AvailablePlatformAdmins() (int64, error) {
 	var n int64
-	err := t.db.Raw(`SELECT count(*) FROM identity."user" WHERE platform_role='platform_admin' AND status='active' AND email_verified_at IS NOT NULL AND NOT is_delete`).Scan(&n).Error
+	query := `SELECT count(*) FROM identity."user" u WHERE platform_role='platform_admin' AND status='active' AND email_verified_at IS NOT NULL AND NOT is_delete`
+	if t.source {
+		query += ` AND NOT EXISTS(SELECT 1 FROM identity.account_qualification_change q WHERE q.target_id=u.id AND q.outcome='pending' AND q.action IN ('disable','delete','revoke_admin'))`
+	}
+	err := t.db.Raw(query).Scan(&n).Error
 	return n, err
 }
 
@@ -90,6 +110,12 @@ func (t *governanceTx) AvailablePlatformAdmins() (int64, error) {
 func (t *governanceTx) ChangeUser(u domain.User, c application.UserGovernanceChange, now time.Time) error {
 	if c.Action == "delete" {
 		deletion := &accountDeletionTx{emailAuthTx: &emailAuthTx{authTx: t.authTx}, user: u}
+		if t.source {
+			if err := deletion.softDeleteIdentity(now); err != nil {
+				return err
+			}
+			return deletion.cancelOwnedGovernance(now)
+		}
 		impact, err := deletion.Impact()
 		if err != nil {
 			return err

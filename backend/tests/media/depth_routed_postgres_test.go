@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -38,9 +40,9 @@ func routedDepthStore(db *gorm.DB, source uuid.UUID, worker bool) *pgtool.DepthS
 		return routedDepthSource{asset: source}
 	}, func(tx *gorm.DB) toolapp.DepthDerivedMedia {
 		if worker {
-			return mediaapp.NewDerivedService(mediaWorkerStore(tx))
+			return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaWorkerStore(tx)))
 		}
-		return mediaapp.NewDerivedService(mediaTestStore(tx))
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
 	}).WithStorageAdmission(func(tx *gorm.DB) toolapp.ToolStorageLedger { return pgmedia.NewStorageRoutes(tx) })
 }
 
@@ -282,7 +284,7 @@ func TestDepthRoutedRealPostgresNativeCOSAtomicLocationsAndRecovery(t *testing.T
 		if err == nil || !failed.NeedsReconciliation || failed.Status == tooldomain.DepthCancelled {
 			t.Fatal("accepted artifact was falsely removed", err)
 		}
-		asset, err := mediaapp.NewDerivedService(mediaTestStore(inner)).Asset(t.Context(), actor, project, *result.AssetID)
+		asset, err := mediaapp.NewDerivedService(mediaTestStore(inner)).Asset(t.Context(), mediaActor(actor), project, *result.AssetID)
 		if err != nil || asset.CanReference() {
 			t.Fatal("cancelled pending artifact became referenceable", err)
 		}

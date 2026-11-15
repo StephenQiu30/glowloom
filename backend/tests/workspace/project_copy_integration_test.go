@@ -8,19 +8,30 @@ import (
 	"testing"
 	"time"
 
-	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediapg "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
 )
 
@@ -33,16 +44,18 @@ func (r privateCopyReference) Reference(ctx context.Context, actor identityapp.P
 	if project != r.binding.TargetProjectID {
 		return mediaapp.AssetSummary{}, mediaapp.ErrNotFound
 	}
-	return r.owner.ReferenceCopiedAsset(ctx, actor, r.binding, asset)
+	return r.owner.ReferenceCopiedAsset(ctx, mediaBoundaryActor(actor), r.binding, asset)
 }
 
 func projectCopyStore(db *gorm.DB) *workspacepg.ProjectCopyStore {
 	return workspaceCopyStore(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-		return owningProjectWork{workspaceOperationStore(tx), workspaceMediaStore(tx), toolpg.NewStore(tx, nil, nil), toolpg.NewTranscriptionStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspaceCopyStore(tx, nil, nil)}
+		return owningProjectWork{workspaceOperationStore(tx), mediaWorkBoundary{owner: workspaceMediaStore(tx)}, toolpg.NewStore(tx, nil, nil), toolpg.NewTranscriptionStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspaceCopyStore(tx, nil, nil)}
 	}, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 		return workspaceapp.ProjectCopyOwners{
 			Media: workspaceMediaCopyStore(tx), Budget: workspaceCopyBudgetStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx},
-			Canvas: workspaceCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(workspaceMediaStore(tx)) }, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
+			Canvas: workspaceCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
+				return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(workspaceMediaStore(tx)))
+			}, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
 				return privateCopyReference{owner: workspaceMediaCopyStore(tx), binding: mediaapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}}
 			}),
 		}
@@ -79,7 +92,7 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 	if err != nil || job.Manifest.Documents != 1 || job.Status != "queued" {
 		t.Fatal("atomic admission", job, err)
 	}
-	if _, err := workspaceStore(db).FindProject(ctx, actor, job.TargetProjectID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := workspaceStore(db).FindProject(ctx, actor, job.TargetProjectID); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatal("copying project visible", err)
 	}
 	var budget struct{ LimitMicros, ReservedMicros, SettledMicros int64 }
@@ -93,7 +106,7 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 	}
 	changed := input
 	changed.TargetName = "不同副本"
-	if _, err := fresh.Create(ctx, actor, changed); !errors.Is(err, workspaceapp.ErrIdempotencyConflict) {
+	if _, err := fresh.Create(ctx, actor, changed); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatal("key reused with different copy", err)
 	}
 	worker := uuid.New()
@@ -174,7 +187,7 @@ func TestProjectCopyAdmissionRollbackScopeAndConcurrentIdempotency(t *testing.T)
 	other, _ := lifecycleActorProject(ctx, t, db)
 	service := workspaceapp.NewProjectCopyService(projectCopyStore(db), time.Now)
 	input := copyInput(project)
-	if _, err := service.Create(ctx, other, input); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := service.Create(ctx, other, input); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatal("foreign source copied", err)
 	}
 	stale := input

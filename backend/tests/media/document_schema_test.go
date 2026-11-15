@@ -66,15 +66,15 @@ func TestDocumentSchemaPreservesLegacyRowsButAllOwningReadsAndCopyFailClosed(t *
 	if err := owner.Exec(`INSERT INTO media.upload_request(project_id,principal_id,request_key,sha256,file_name,byte_size,asset_id,response) VALUES(?,?,?,?,?,1,?,?::jsonb)`, project, actor.ID, key, strings.Repeat("a", 64), "legacy.pdf", id, string(response)).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := mediaTestStore(db).FindUpload(t.Context(), actor, mediaapp.UploadRequest{ProjectID: project, Key: key, RequestID: uuid.New(), SHA256: strings.Repeat("a", 64), FileName: "legacy.pdf", ByteSize: 1}); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, _, err := mediaTestStore(db).FindUpload(t.Context(), mediaActor(actor), mediaapp.UploadRequest{ProjectID: project, Key: key, RequestID: uuid.New(), SHA256: strings.Repeat("a", 64), FileName: "legacy.pdf", ByteSize: 1}); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("legacy invalid document upload receipt bypassed owner closure", err)
 	}
 	reader := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), nil)
-	if _, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{id}); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := reader.Freeze(t.Context(), mediaActor(actor), project, []uuid.UUID{id}); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("legacy invalid document silently exposed", err)
 	}
 	query := mediaapp.NewAssetQuery(mediaTestStore(db))
-	if _, err := query.List(t.Context(), actor, project, "document", "", 50); err == nil {
+	if _, err := query.List(t.Context(), mediaActor(actor), project, "document", "", 50); err == nil {
 		t.Fatal("legacy invalid document silently listed or skipped")
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
@@ -82,7 +82,7 @@ func TestDocumentSchemaPreservesLegacyRowsButAllOwningReadsAndCopyFailClosed(t *
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		_, err := mediaCopyStore(tx).Freeze(t.Context(), mediaActor(actor), binding, time.Now())
 		return err
 	}); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 		t.Fatal("copy silently dropped legacy source", err)

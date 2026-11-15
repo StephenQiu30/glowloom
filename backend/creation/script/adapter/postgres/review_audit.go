@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-func reviewAudit(tx *gorm.DB, actor identityapp.Principal, project, key, request uuid.UUID, action string, revision int64, version uuid.UUID, episode *uuid.UUID, now time.Time) error {
+func reviewAudit(tx *gorm.DB, actor application.Actor, project, key, request uuid.UUID, action string, revision int64, version uuid.UUID, episode *uuid.UUID, now time.Time) error {
 	const topic = "glowloom.audit.recorded.v1"
 	id := uuid.NewSHA1(key, []byte("script-review-audit/"+actor.ID.String()+"/"+action))
 	summary := struct {

@@ -9,10 +9,9 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-func (s *SourceStore) freezeStructureCharacters(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, project uuid.UUID, document *domain.StructureDocument, pinnedOnly bool) error {
+func (s *SourceStore) freezeStructureCharacters(ctx context.Context, tx *gorm.DB, actor application.Actor, project uuid.UUID, document *domain.StructureDocument, pinnedOnly bool) error {
 	// Freeze owned slices so version resolution cannot change a caller's original command hash.
 	encoded, err := json.Marshal(document)
 	if err != nil {

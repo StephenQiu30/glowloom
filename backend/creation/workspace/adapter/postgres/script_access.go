@@ -6,11 +6,12 @@ import (
 	"math"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -51,13 +52,13 @@ func (s *ProjectContentAccessStore) AuthorizeCopyTarget(ctx context.Context, act
 
 func (s *ProjectContentAccessStore) authorizeStatus(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, write, copying bool) (application.ProjectContentAccess, error) {
 	if s == nil || s.tx == nil || s.tx.Statement == nil {
-		return application.ProjectContentAccess{}, application.ErrProjectDependencyUnavailable
+		return application.ProjectContentAccess{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if _, transaction := s.tx.Statement.ConnPool.(gorm.TxCommitter); !transaction {
-		return application.ProjectContentAccess{}, application.ErrProjectDependencyUnavailable
+		return application.ProjectContentAccess{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if s.scopes == nil && s.workers == nil {
-		return application.ProjectContentAccess{}, application.ErrProjectDependencyUnavailable
+		return application.ProjectContentAccess{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	ownerScope := actor.ScopeID
 	if s.workers != nil {
@@ -69,7 +70,7 @@ func (s *ProjectContentAccessStore) authorizeStatus(ctx context.Context, actor i
 			return application.ProjectContentAccess{}, fmt.Errorf("read worker project ownership: %w", read.Error)
 		}
 		if read.RowsAffected != 1 || binding.OwnerScopeID == nil {
-			return application.ProjectContentAccess{}, application.ErrProjectNotFound
+			return application.ProjectContentAccess{}, workspacesource.ErrProjectNotFound
 		}
 		ownerScope = *binding.OwnerScopeID
 		scope, err := s.workers.Resolve(ctx, actor.ID, ownerScope, write)
@@ -77,7 +78,7 @@ func (s *ProjectContentAccessStore) authorizeStatus(ctx context.Context, actor i
 			return application.ProjectContentAccess{}, err
 		}
 		if scope.ID != ownerScope || scope.PhysicalScopeID != actor.OrgID {
-			return application.ProjectContentAccess{}, application.ErrScopeNotFound
+			return application.ProjectContentAccess{}, workspacesource.ErrScopeNotFound
 		}
 	} else {
 		scope, err := s.scopes.Resolve(ctx, actor, ownerScope, write)
@@ -85,11 +86,11 @@ func (s *ProjectContentAccessStore) authorizeStatus(ctx context.Context, actor i
 			return application.ProjectContentAccess{}, err
 		}
 		if scope.ID != ownerScope || scope.PhysicalScopeID != actor.OrgID {
-			return application.ProjectContentAccess{}, application.ErrScopeNotFound
+			return application.ProjectContentAccess{}, workspacesource.ErrScopeNotFound
 		}
 	}
 	if projectID == uuid.Nil {
-		return application.ProjectContentAccess{}, application.ErrProjectNotFound
+		return application.ProjectContentAccess{}, workspacesource.ErrProjectNotFound
 	}
 	query := `SELECT id AS project_id,org_id,owner_scope_id,revision,status FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete`
 	if copying {
@@ -114,13 +115,13 @@ func (s *ProjectContentAccessStore) authorizeStatus(ctx context.Context, actor i
 		return application.ProjectContentAccess{}, fmt.Errorf("authorize script project: %w", read.Error)
 	}
 	if read.RowsAffected != 1 {
-		return application.ProjectContentAccess{}, application.ErrProjectNotFound
+		return application.ProjectContentAccess{}, workspacesource.ErrProjectNotFound
 	}
 	if write && !copying && row.Status != "active" {
 		return application.ProjectContentAccess{}, domain.ErrProjectStateConflict
 	}
 	if row.ProjectID != projectID || row.OrgID != actor.OrgID || row.Revision < 1 {
-		return application.ProjectContentAccess{}, application.ErrProjectDependencyUnavailable
+		return application.ProjectContentAccess{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return row.ProjectContentAccess, nil
 }
@@ -157,7 +158,7 @@ func (s *ProjectContentAccessStore) TouchContent(ctx context.Context, actor iden
 		return 0, fmt.Errorf("persist content invalidation: %w", written.Error)
 	}
 	if written.RowsAffected != 1 {
-		return 0, application.ErrProjectDependencyUnavailable
+		return 0, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return expected + 1, nil
 }
@@ -173,7 +174,7 @@ func (s *ProjectContentAccessStore) OwnerScopeID(ctx context.Context, actor iden
 		return uuid.Nil, r.Error
 	}
 	if r.RowsAffected != 1 || row.OwnerScopeID == uuid.Nil {
-		return uuid.Nil, application.ErrProjectNotFound
+		return uuid.Nil, workspacesource.ErrProjectNotFound
 	}
 	return row.OwnerScopeID, nil
 }

@@ -230,15 +230,11 @@ function Fixture() {
             <SheetHeader className="sr-only">
               <SheetTitle>连接详情</SheetTitle>
               <SheetDescription>
-                管理凭据、模型验证和连接设置。
+                管理凭据、模型接入与连接启停。
               </SheetDescription>
             </SheetHeader>
             <div className="flex min-h-0 flex-1 flex-col p-4 md:p-6">
-              <ConnectionDetail
-                id={id}
-                presets={presets}
-                onSaved={() => undefined}
-              />
+              <ConnectionDetail id={id} onSaved={() => undefined} />
             </div>
           </SheetContent>
         </Sheet>

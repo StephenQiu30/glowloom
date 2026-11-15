@@ -71,14 +71,14 @@ func TestMediaTransferInterruptRetainsUnknownFenceUntilActualCessation(t *testin
 	if err := f.repo.Worker.InterruptTransfer(t.Context(), work); err != nil {
 		t.Fatal(err)
 	}
-	unknown, err := f.repo.GetTransfer(t.Context(), f.actor, f.job.ID)
+	unknown, err := f.repo.GetTransfer(t.Context(), mediaActor(f.actor), f.job.ID)
 	if err != nil || !unknown.NeedsReconciliation || !unknown.ExecutionUnconfirmed || unknown.Status != "needs_reconciliation" {
 		t.Fatal("orchestrator timeout released unconfirmed physical owner", unknown, err)
 	}
 	if _, err := f.repo.Worker.ClaimTransfer(t.Context(), transferExecution(f.job)); !errors.Is(err, domain.ErrTransferConflict) {
 		t.Fatal("unknown physical owner was stolen", err)
 	}
-	if _, err := f.repo.ControlTransfer(t.Context(), f.actor, f.job.ID, uuid.New(), unknown.Revision, "reconcile"); !errors.Is(err, domain.ErrTransferConflict) {
+	if _, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), f.job.ID, uuid.New(), unknown.Revision, "reconcile"); !errors.Is(err, domain.ErrTransferConflict) {
 		t.Fatal("unknown physical owner was considered ended", err)
 	}
 	if err := f.repo.Worker.EndTransferPhysical(t.Context(), lease); err != nil {
@@ -87,11 +87,11 @@ func TestMediaTransferInterruptRetainsUnknownFenceUntilActualCessation(t *testin
 	if err := f.repo.Worker.InterruptTransfer(t.Context(), work); err != nil {
 		t.Fatal(err)
 	}
-	ended, err := f.repo.GetTransfer(t.Context(), f.actor, f.job.ID)
+	ended, err := f.repo.GetTransfer(t.Context(), mediaActor(f.actor), f.job.ID)
 	if err != nil || ended.ExecutionUnconfirmed || !ended.NeedsReconciliation {
 		t.Fatal("late interruption erased actual cessation", ended, err)
 	}
-	queued, err := f.repo.ControlTransfer(t.Context(), f.actor, f.job.ID, uuid.New(), ended.Revision, "reconcile")
+	queued, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), f.job.ID, uuid.New(), ended.Revision, "reconcile")
 	if err != nil || queued.Attempt != 2 {
 		t.Fatal("actual ceased owner could not enter explicit recovery", queued, err)
 	}

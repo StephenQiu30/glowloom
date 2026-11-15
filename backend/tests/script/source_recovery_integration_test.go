@@ -15,7 +15,7 @@ import (
 
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
@@ -40,10 +40,10 @@ func TestScriptSourceRecoveryPGPrivateCancelRevokedCreatorAndImmutableControl(t 
 	recovery := app.NewSourceRecovery(store, sources, time.Now)
 	_, input := sourceCommand()
 	input.ProjectID = pid
-	if _, err := sources.Write(t.Context(), creator, input); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if _, err := sources.Write(t.Context(), scriptActor(creator), input); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal(err)
 	}
-	page, err := recovery.List(t.Context(), admin, pid, 0, 100)
+	page, err := recovery.List(t.Context(), scriptActor(admin), pid, 0, 100)
 	if err != nil || len(page.Items) != 1 || page.CurrentActorID != admin.ID {
 		t.Fatal("safe recovery list", page, err)
 	}
@@ -52,11 +52,11 @@ func TestScriptSourceRecoveryPGPrivateCancelRevokedCreatorAndImmutableControl(t 
 		t.Fatal(err)
 	}
 	command := app.SourceControlCommand{ProjectID: pid, IntentID: intent.ID, Key: uuid.New(), RequestID: uuid.New(), Action: "cancel", ExpectedRevision: intent.Revision}
-	accepted, err := recovery.Control(t.Context(), admin, command)
+	accepted, err := recovery.Control(t.Context(), scriptActor(admin), command)
 	if err != nil {
 		t.Fatal("current admin cancel", err)
 	}
-	current, err := recovery.Get(t.Context(), admin, pid, intent.ID)
+	current, err := recovery.Get(t.Context(), scriptActor(admin), pid, intent.ID)
 	if err != nil || current.Status != "pending" || !current.NeedsReconciliation || current.ActiveIO {
 		t.Fatal("cancel must retain the remote-write drain fence", current, err)
 	}
@@ -68,29 +68,29 @@ func TestScriptSourceRecoveryPGPrivateCancelRevokedCreatorAndImmutableControl(t 
 	reconcile.RequestID = uuid.New()
 	reconcile.Action = "reconcile"
 	reconcile.ExpectedRevision = current.Revision
-	if _, err := recovery.Control(t.Context(), admin, reconcile); err != nil {
+	if _, err := recovery.Control(t.Context(), scriptActor(admin), reconcile); err != nil {
 		t.Fatal(err)
 	}
-	current, err = recovery.Get(t.Context(), admin, pid, intent.ID)
+	current, err = recovery.Get(t.Context(), scriptActor(admin), pid, intent.ID)
 	if err != nil || current.Status != "cancelled" || current.NeedsReconciliation {
 		t.Fatal("actual private cleanup", current, err)
 	}
-	replay, err := recovery.Control(t.Context(), admin, command)
+	replay, err := recovery.Control(t.Context(), scriptActor(admin), command)
 	if err != nil || replay != accepted {
 		t.Fatal("original permanent control response", replay, accepted, err)
 	}
 	if s, v, c := scriptCounts(t, owner, pid); s != 0 || v != 0 || c != 1 {
 		t.Fatal("control published old source", s, v, c)
 	}
-	if blocked, err := store.HasInflightWork(t.Context(), admin, pid); err != nil || blocked {
+	if blocked, err := store.HasInflightWork(t.Context(), scriptActor(admin), pid); err != nil || blocked {
 		t.Fatal("stopped cleanup fence", blocked, err)
 	}
-	if _, err := sources.Write(t.Context(), creator, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, err := sources.Write(t.Context(), scriptActor(creator), input); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("borrowed admin to publish", err)
 	}
 	command.Key = uuid.New()
 	command.ExpectedRevision = current.Revision
-	if _, err := recovery.Control(t.Context(), admin, command); !errors.Is(err, app.ErrConflict) {
+	if _, err := recovery.Control(t.Context(), scriptActor(admin), command); !errors.Is(err, app.ErrConflict) {
 		t.Fatal("terminal cancellation changed", err)
 	}
 }
@@ -123,18 +123,18 @@ func TestScriptSourceRecoveryPGActivePrivateIOCancelJoinsBeforeCleanup(t *testin
 	done := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	go func() { _, err := sources.Write(ctx, creator, input); done <- err }()
+	go func() { _, err := sources.Write(ctx, scriptActor(creator), input); done <- err }()
 	select {
 	case <-paused.started:
 	case <-ctx.Done():
 		t.Fatal("private IO never started")
 	}
-	page, err := recovery.List(t.Context(), admin, pid, 0, 100)
+	page, err := recovery.List(t.Context(), scriptActor(admin), pid, 0, 100)
 	if err != nil || len(page.Items) != 1 {
 		t.Fatal(page, err)
 	}
 	command := app.SourceControlCommand{ProjectID: pid, IntentID: page.Items[0].ID, Key: uuid.New(), RequestID: uuid.New(), Action: "cancel", ExpectedRevision: page.Items[0].Revision}
-	if _, err := recovery.Control(ctx, admin, command); err != nil {
+	if _, err := recovery.Control(ctx, scriptActor(admin), command); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -150,7 +150,7 @@ func TestScriptSourceRecoveryPGActivePrivateIOCancelJoinsBeforeCleanup(t *testin
 	case <-ctx.Done():
 		t.Fatal("source routine leaked")
 	}
-	current, err := recovery.Get(ctx, admin, pid, page.Items[0].ID)
+	current, err := recovery.Get(ctx, scriptActor(admin), pid, page.Items[0].ID)
 	if err != nil || current.Status != "pending" || !current.NeedsReconciliation || current.ActiveIO {
 		t.Fatal("joined SDK still needs remote-write drain", current, err)
 	}
@@ -162,10 +162,10 @@ func TestScriptSourceRecoveryPGActivePrivateIOCancelJoinsBeforeCleanup(t *testin
 	reconcile.RequestID = uuid.New()
 	reconcile.Action = "reconcile"
 	reconcile.ExpectedRevision = current.Revision
-	if _, err := recovery.Control(t.Context(), admin, reconcile); err != nil {
+	if _, err := recovery.Control(t.Context(), scriptActor(admin), reconcile); err != nil {
 		t.Fatal(err)
 	}
-	current, err = recovery.Get(t.Context(), admin, pid, page.Items[0].ID)
+	current, err = recovery.Get(t.Context(), scriptActor(admin), pid, page.Items[0].ID)
 	if err != nil || current.Status != "cancelled" {
 		t.Fatal("joined cleanup", current, err)
 	}
@@ -243,7 +243,7 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 			recovery := app.NewSourceRecovery(store, sources, time.Now)
 			_, input := sourceCommand()
 			input.ProjectID = pid
-			if _, err := sources.Write(t.Context(), creator, input); !errors.Is(err, app.ErrNeedsReconciliation) {
+			if _, err := sources.Write(t.Context(), scriptActor(creator), input); !errors.Is(err, app.ErrNeedsReconciliation) {
 				t.Fatal(err)
 			}
 			plan := pendingScriptPlan(t, owner, pid)
@@ -263,7 +263,7 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 					t.Fatal(err)
 				}
 			}
-			page, err := recovery.List(t.Context(), admin, pid, 0, 100)
+			page, err := recovery.List(t.Context(), scriptActor(admin), pid, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -279,7 +279,7 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 				controller.Role = identitydomain.RoleAdmin
 			}
 			command := app.SourceControlCommand{ProjectID: pid, IntentID: before.ID, Key: uuid.New(), RequestID: uuid.New(), Action: "cancel", ExpectedRevision: before.Revision}
-			_, err = recovery.Control(t.Context(), controller, command)
+			_, err = recovery.Control(t.Context(), scriptActor(controller), command)
 			if scenario == "disabled_controller" || scenario == "spoof_admin_role" {
 				expected := identityapp.ErrSessionInvalid
 				if scenario == "spoof_admin_role" {
@@ -295,14 +295,14 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 			} else if err != nil {
 				t.Fatal("durable acceptance", err)
 			}
-			current, err := recovery.Get(t.Context(), creator, pid, before.ID)
+			current, err := recovery.Get(t.Context(), scriptActor(creator), pid, before.ID)
 			if err != nil || current.Status != "pending" {
 				t.Fatal("unknown physical proof released", current, err)
 			}
 			if scenario != "disabled_controller" && scenario != "spoof_admin_role" && !current.NeedsReconciliation {
 				t.Fatal("unknown fence not visible")
 			}
-			if blocked, err := store.HasInflightWork(t.Context(), creator, pid); err != nil || !blocked {
+			if blocked, err := store.HasInflightWork(t.Context(), scriptActor(creator), pid); err != nil || !blocked {
 				t.Fatal("unknown lifecycle fence", blocked, err)
 			}
 			if s, v, _ := scriptCounts(t, owner, pid); s != 0 || v != 0 {
@@ -324,10 +324,10 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 				recon.Key = uuid.New()
 				recon.Action = "reconcile"
 				recon.ExpectedRevision = current.Revision
-				if _, err := recovery.Control(t.Context(), admin, recon); err != nil {
+				if _, err := recovery.Control(t.Context(), scriptActor(admin), recon); err != nil {
 					t.Fatal(err)
 				}
-				final, err := recovery.Get(t.Context(), creator, pid, before.ID)
+				final, err := recovery.Get(t.Context(), scriptActor(creator), pid, before.ID)
 				if err != nil || final.Status != "cancelled" || final.NeedsReconciliation {
 					t.Fatal("exact delayed object recovery", final, err)
 				}
@@ -375,7 +375,7 @@ func TestScriptSourceRecoveryPGZeroRowFinalizationRollsBackAndCleanupRecovers(t 
 			scriptNullTrigger(t, owner, table, condition)
 			_, input := sourceCommand()
 			input.ProjectID = pid
-			if _, err := sources.Write(t.Context(), creator, input); !errors.Is(err, app.ErrConflict) {
+			if _, err := sources.Write(t.Context(), scriptActor(creator), input); !errors.Is(err, app.ErrConflict) {
 				t.Fatal("zero-row commit accepted", err)
 			}
 			plan := pendingScriptPlan(t, owner, pid)
@@ -388,15 +388,15 @@ func TestScriptSourceRecoveryPGZeroRowFinalizationRollsBackAndCleanupRecovers(t 
 				t.Fatal("zero row project touched", revision, err)
 			}
 			recovery := app.NewSourceRecovery(store, sources, time.Now)
-			page, err := recovery.List(t.Context(), admin, pid, 0, 100)
+			page, err := recovery.List(t.Context(), scriptActor(admin), pid, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
 			command := app.SourceControlCommand{ProjectID: pid, IntentID: page.Items[0].ID, Key: uuid.New(), RequestID: uuid.New(), Action: "cancel", ExpectedRevision: page.Items[0].Revision}
-			if _, err := recovery.Control(t.Context(), admin, command); err != nil {
+			if _, err := recovery.Control(t.Context(), scriptActor(admin), command); err != nil {
 				t.Fatal(err)
 			}
-			current, err := recovery.Get(t.Context(), admin, pid, command.IntentID)
+			current, err := recovery.Get(t.Context(), scriptActor(admin), pid, command.IntentID)
 			if err != nil || current.Status != "pending" || !current.NeedsReconciliation {
 				t.Fatal("unexpired rollback outputs lost their drain fence", current, err)
 			}
@@ -407,10 +407,10 @@ func TestScriptSourceRecoveryPGZeroRowFinalizationRollsBackAndCleanupRecovers(t 
 			reconcile.RequestID = uuid.New()
 			reconcile.Action = "reconcile"
 			reconcile.ExpectedRevision = current.Revision
-			if _, err := recovery.Control(t.Context(), admin, reconcile); err != nil {
+			if _, err := recovery.Control(t.Context(), scriptActor(admin), reconcile); err != nil {
 				t.Fatal(err)
 			}
-			current, err = recovery.Get(t.Context(), admin, pid, command.IntentID)
+			current, err = recovery.Get(t.Context(), scriptActor(admin), pid, command.IntentID)
 			if err != nil || current.Status != "cancelled" {
 				t.Fatal("zero row unpublished cleanup", current, err)
 			}
@@ -428,7 +428,7 @@ func TestScriptSourceRecoveryPGCleanupZeroRowKeepsProofForExplicitReconcile(t *t
 	recovery := app.NewSourceRecovery(store, sources, time.Now)
 	_, input := sourceCommand()
 	input.ProjectID = pid
-	if _, err := sources.Write(t.Context(), creator, input); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if _, err := sources.Write(t.Context(), scriptActor(creator), input); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal(err)
 	}
 	plan := pendingScriptPlan(t, owner, pid)
@@ -454,15 +454,15 @@ func TestScriptSourceRecoveryPGCleanupZeroRowKeepsProofForExplicitReconcile(t *t
 			t.Error(err)
 		}
 	})
-	page, err := recovery.List(t.Context(), admin, pid, 0, 100)
+	page, err := recovery.List(t.Context(), scriptActor(admin), pid, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
 	command := app.SourceControlCommand{ProjectID: pid, IntentID: page.Items[0].ID, Key: uuid.New(), RequestID: uuid.New(), Action: "cancel", ExpectedRevision: page.Items[0].Revision}
-	if _, err := recovery.Control(t.Context(), admin, command); err != nil {
+	if _, err := recovery.Control(t.Context(), scriptActor(admin), command); err != nil {
 		t.Fatal(err)
 	}
-	current, err := recovery.Get(t.Context(), admin, pid, command.IntentID)
+	current, err := recovery.Get(t.Context(), scriptActor(admin), pid, command.IntentID)
 	if err != nil || current.Status != "pending" || !current.NeedsReconciliation {
 		t.Fatal("cleanup zero row cleared fence", current, err)
 	}
@@ -473,7 +473,7 @@ func TestScriptSourceRecoveryPGCleanupZeroRowKeepsProofForExplicitReconcile(t *t
 	probe.RequestID = uuid.New()
 	probe.Action = "reconcile"
 	probe.ExpectedRevision = current.Revision
-	if _, err := recovery.Control(t.Context(), admin, probe); err != nil {
+	if _, err := recovery.Control(t.Context(), scriptActor(admin), probe); err != nil {
 		t.Fatal(err)
 	}
 	reader, absenceErr := privateObjects.GetObject(t.Context(), plan.Objects[0])
@@ -486,7 +486,7 @@ func TestScriptSourceRecoveryPGCleanupZeroRowKeepsProofForExplicitReconcile(t *t
 	if !errors.Is(absenceErr, app.ErrObjectMissing) {
 		t.Fatal("bookkeeping fault did not follow real deletion", absenceErr)
 	}
-	current, err = recovery.Get(t.Context(), admin, pid, command.IntentID)
+	current, err = recovery.Get(t.Context(), scriptActor(admin), pid, command.IntentID)
 	if err != nil || current.Status != "pending" || !current.NeedsReconciliation {
 		t.Fatal("lost deletion receipt cleared cancellation fence", current, err)
 	}
@@ -496,10 +496,10 @@ func TestScriptSourceRecoveryPGCleanupZeroRowKeepsProofForExplicitReconcile(t *t
 	command.Key = uuid.New()
 	command.Action = "reconcile"
 	command.ExpectedRevision = current.Revision
-	if _, err := recovery.Control(t.Context(), admin, command); err != nil {
+	if _, err := recovery.Control(t.Context(), scriptActor(admin), command); err != nil {
 		t.Fatal(err)
 	}
-	current, err = recovery.Get(t.Context(), admin, pid, command.IntentID)
+	current, err = recovery.Get(t.Context(), scriptActor(admin), pid, command.IntentID)
 	if err != nil || current.Status != "cancelled" || current.NeedsReconciliation {
 		t.Fatal("original absent object proof recovery", current, err)
 	}

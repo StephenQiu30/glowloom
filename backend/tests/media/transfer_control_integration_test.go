@@ -24,36 +24,36 @@ func TestMediaTransferQueuedCancellationIsPermanentAndNeverPublishesText(t *test
 	source := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	target := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	text := "真实纯文本，不包含对象"
-	created, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: source, Action: "create_text", Key: uuid.New(), Metadata: &mediaapp.LibraryMetadata{Title: "等待转移", Category: "other", PlainText: &text}})
+	created, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: source, Action: "create_text", Key: uuid.New(), Metadata: &mediaapp.LibraryMetadata{Title: "等待转移", Category: "other", PlainText: &text}})
 	if err != nil || len(created.Items) != 1 {
 		t.Fatal(err)
 	}
 	repo := mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
-	job, err := repo.CreateTransfer(t.Context(), actor, mediaapp.TransferInput{Source: source, Target: target, Key: uuid.New(), ExpectedSourceRevision: 1, ExpectedProjectRevision: 1, Items: []mediaapp.LibraryItemRevision{{ID: created.Items[0].ID, Revision: 1}}})
+	job, err := repo.CreateTransfer(t.Context(), mediaActor(actor), mediaapp.TransferInput{Source: source, Target: target, Key: uuid.New(), ExpectedSourceRevision: 1, ExpectedProjectRevision: 1, Items: []mediaapp.LibraryItemRevision{{ID: created.Items[0].ID, Revision: 1}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	key := uuid.New()
-	cancelled, err := repo.ControlTransfer(t.Context(), actor, job.ID, key, job.Revision, "cancel")
+	cancelled, err := repo.ControlTransfer(t.Context(), mediaActor(actor), job.ID, key, job.Revision, "cancel")
 	if err != nil || cancelled.Status != "cancelled" || cancelled.Items[0].Status != "cancelled" || cancelled.ExecutionUnconfirmed || cancelled.NeedsReconciliation {
 		t.Fatal("queued SQL-only cancellation fabricated physical work", cancelled, err)
 	}
-	replay, err := repo.ControlTransfer(t.Context(), actor, job.ID, key, job.Revision, "cancel")
+	replay, err := repo.ControlTransfer(t.Context(), mediaActor(actor), job.ID, key, job.Revision, "cancel")
 	if err != nil || !reflect.DeepEqual(replay, cancelled) {
 		t.Fatal("permanent cancellation replay changed", replay, err)
 	}
-	if _, err := repo.ControlTransfer(t.Context(), actor, job.ID, key, job.Revision+1, "cancel"); !errors.Is(err, mediaapp.ErrLibraryKeyConflict) {
+	if _, err := repo.ControlTransfer(t.Context(), mediaActor(actor), job.ID, key, job.Revision+1, "cancel"); !errors.Is(err, mediaapp.ErrLibraryKeyConflict) {
 		t.Fatal("same cancellation key accepted another input", err)
 	}
-	page, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), actor, target, libraryQuery())
+	page, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), mediaActor(actor), target, libraryQuery())
 	if err != nil || page.Total != 0 {
 		t.Fatal("cancelled unpublished text leaked into target", page, err)
 	}
-	if _, err := repo.ControlTransfer(t.Context(), actor, job.ID, uuid.New(), cancelled.Revision, "retry"); !errors.Is(err, domain.ErrTransferConflict) {
+	if _, err := repo.ControlTransfer(t.Context(), mediaActor(actor), job.ID, uuid.New(), cancelled.Revision, "retry"); !errors.Is(err, domain.ErrTransferConflict) {
 		t.Fatal("cancelled intent silently restarted", err)
 	}
 	foreign, _ := mediaStoreProject(t, db)
-	if _, err := repo.ControlTransfer(t.Context(), foreign, job.ID, key, job.Revision, "cancel"); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := repo.ControlTransfer(t.Context(), mediaActor(foreign), job.ID, key, job.Revision, "cancel"); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("foreign actor replayed creator's receipt", err)
 	}
 }
@@ -76,7 +76,7 @@ func TestMediaTransferQueuedBinaryCancellationDrainsEveryPhysicalReservation(t *
 	storageProfiles(t, routes)
 	f := newTransferRecoveryFixtureOn(t, db, 2)
 	key := uuid.New()
-	requested, err := f.repo.ControlTransfer(t.Context(), f.actor, f.job.ID, key, f.job.Revision, mediaapp.TransferActionCancel)
+	requested, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), f.job.ID, key, f.job.Revision, mediaapp.TransferActionCancel)
 	if err != nil || requested.Status != domain.TransferStatusCancelRequested || !requested.CancellationRequested {
 		t.Fatal("queued physical reservations were declared cancelled before cleanup", requested, err)
 	}
@@ -109,7 +109,7 @@ func TestMediaTransferQueuedBinaryCancellationDrainsEveryPhysicalReservation(t *
 	if err := db.Table("media.media_asset").Where("id IN ?", []uuid.UUID{*result.Items[0].TargetAssetID, *result.Items[1].TargetAssetID}).Count(&published).Error; err != nil || published != 0 {
 		t.Fatal("cancelled binary was published", published, err)
 	}
-	if replay, err := f.repo.ControlTransfer(t.Context(), f.actor, f.job.ID, key, f.job.Revision, mediaapp.TransferActionCancel); err != nil || !reflect.DeepEqual(replay, requested) {
+	if replay, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), f.job.ID, key, f.job.Revision, mediaapp.TransferActionCancel); err != nil || !reflect.DeepEqual(replay, requested) {
 		t.Fatal("cancelled receipt changed after physical cleanup", replay, err)
 	}
 	environment := storageEnvironmentFixture(t, db, "queued-cancel-readonly-"+uuid.NewString(), "cos-main")

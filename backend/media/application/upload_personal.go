@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -20,14 +19,14 @@ type PersonalUploadResult struct {
 // PersonalUploadRepository owns current identity, permanent receipts and cleanup
 // serialization for the actor's real personal library.
 type PersonalUploadRepository interface {
-	AuthorizePersonalUpload(context.Context, identityapp.Principal) error
-	FindPersonalUpload(context.Context, identityapp.Principal, UploadRequest) (PersonalUploadResult, bool, error)
-	CommitPersonalUpload(context.Context, identityapp.Principal, UploadRequest, domain.MediaAsset, []domain.Rendition) (PersonalUploadResult, error)
+	AuthorizePersonalUpload(context.Context, Actor) error
+	FindPersonalUpload(context.Context, Actor, UploadRequest) (PersonalUploadResult, bool, error)
+	CommitPersonalUpload(context.Context, Actor, UploadRequest, domain.MediaAsset, []domain.Rendition) (PersonalUploadResult, error)
 	PersonalUploadAssetExists(context.Context, domain.PersonalOwnership, uuid.UUID) (bool, error)
 }
 
 // AuthorizePersonal rejects a stale identity before multipart body reading.
-func (s *UploadService) AuthorizePersonal(ctx context.Context, actor identityapp.Principal) error {
+func (s *UploadService) AuthorizePersonal(ctx context.Context, actor Actor) error {
 	if s == nil || s.personal == nil {
 		return ErrUnavailable
 	}

@@ -30,7 +30,7 @@ import (
 )
 
 func provideBibleProjectAccess(tx *gorm.DB) bibleapp.ProjectAccess {
-	return scopewire.ProvideProjectContentAccess(tx)
+	return bibleProjectAccess{access: scopewire.ProvideProjectContentAccess(tx)}
 }
 
 // ProvideBibleStoreWithObjects verifies referenced media through its immutable physical location.
@@ -53,12 +53,12 @@ func ProvideBibleStoreWithObjects(database *gorm.DB, registry *objectstorage.Reg
 
 type bibleCatalogVoices struct{ query *catalogapp.VoiceCatalog }
 
-func (v bibleCatalogVoices) Reference(ctx context.Context, actor identityapp.Principal, project uuid.UUID, selection bibleapp.VoiceSelection) (bibledomain.CatalogVoice, error) {
+func (v bibleCatalogVoices) Reference(ctx context.Context, actor bibleapp.Actor, project uuid.UUID, selection bibleapp.VoiceSelection) (bibledomain.CatalogVoice, error) {
 	params, err := json.Marshal(selection.Params)
 	if err != nil {
 		return bibledomain.CatalogVoice{}, errors.Join(bibledomain.ErrInvalidContent, err)
 	}
-	fact, err := v.query.Reference(ctx, actor, project, catalogapp.VoiceSelection{
+	fact, err := v.query.Reference(ctx, IdentityActor(actor), project, catalogapp.VoiceSelection{
 		ModelKey: selection.ModelKey, ExpectedVersion: selection.ExpectedModelVersion, VoiceKey: selection.VoiceKey, Params: params,
 	})
 	if err != nil {
@@ -71,12 +71,12 @@ func (v bibleCatalogVoices) Reference(ctx context.Context, actor identityapp.Pri
 	return bibledomain.CatalogVoice{ModelKey: fact.ModelKey, ModelVersionID: fact.ModelVersionID, ModelVersion: fact.ModelVersion, VoiceKey: fact.VoiceKey, ParamSchemaSHA256: fact.ParamSchemaSHA256, Params: provided}, nil
 }
 
-func (v bibleCatalogVoices) List(ctx context.Context, actor identityapp.Principal, project uuid.UUID, limit int, after *bibleapp.VoiceCursor) (bibleapp.VoicePage, error) {
+func (v bibleCatalogVoices) List(ctx context.Context, actor bibleapp.Actor, project uuid.UUID, limit int, after *bibleapp.VoiceCursor) (bibleapp.VoicePage, error) {
 	var cursor *catalogapp.VoiceCursor
 	if after != nil {
 		cursor = &catalogapp.VoiceCursor{ModelKey: after.ModelKey, VoiceKey: after.VoiceKey}
 	}
-	page, err := v.query.List(ctx, actor, project, limit, cursor)
+	page, err := v.query.List(ctx, IdentityActor(actor), project, limit, cursor)
 	if err != nil {
 		return bibleapp.VoicePage{}, bibleVoiceError(err)
 	}
@@ -95,7 +95,7 @@ func bibleVoiceError(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, identityapp.ErrForbidden), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		return err
+		return OwningError(err)
 	case errors.Is(err, catalogapp.ErrVoiceModelNotFound), errors.Is(err, catalogapp.ErrModelCatalogProjectNotFound):
 		return errors.Join(bibleapp.ErrNotFound, err)
 	case errors.Is(err, catalogapp.ErrVoiceVersionConflict):
@@ -111,8 +111,8 @@ func bibleVoiceError(err error) error {
 // until the Bible write and all bounded private object reads have finished.
 type bibleMediaReferences struct{ query *mediaapp.ReferenceFactQuery }
 
-func (m bibleMediaReferences) Reference(ctx context.Context, actor identityapp.Principal, projectID, assetID uuid.UUID, kind string) (bibledomain.MediaFact, error) {
-	fact, err := m.query.Reference(ctx, actor, projectID, assetID, mediadomain.Kind(kind))
+func (m bibleMediaReferences) Reference(ctx context.Context, actor bibleapp.Actor, projectID, assetID uuid.UUID, kind string) (bibledomain.MediaFact, error) {
+	fact, err := m.query.Reference(ctx, mediaapp.Actor{ID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, SessionID: actor.SessionID, CredentialEpoch: actor.CredentialEpoch}, projectID, assetID, mediadomain.Kind(kind))
 	if err != nil {
 		return bibledomain.MediaFact{}, bibleMediaError(err)
 	}
@@ -129,7 +129,7 @@ func (m bibleMediaReferences) Reference(ctx context.Context, actor identityapp.P
 	return result, nil
 }
 
-func (m bibleMediaReferences) Verify(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, fact bibledomain.MediaFact) error {
+func (m bibleMediaReferences) Verify(ctx context.Context, actor bibleapp.Actor, projectID uuid.UUID, fact bibledomain.MediaFact) error {
 	if err := fact.Validate(fact.Kind); err != nil {
 		return errors.Join(bibleapp.ErrUnavailable, err)
 	}
@@ -137,7 +137,7 @@ func (m bibleMediaReferences) Verify(ctx context.Context, actor identityapp.Prin
 	if fact.Kind == string(mediadomain.KindImage) {
 		input.RenditionID, input.RenditionSHA256 = &fact.RenditionID, &fact.RenditionSHA256
 	}
-	return bibleMediaError(m.query.VerifyFrozenReference(ctx, actor, projectID, input))
+	return bibleMediaError(m.query.VerifyFrozenReference(ctx, mediaapp.Actor{ID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, SessionID: actor.SessionID, CredentialEpoch: actor.CredentialEpoch}, projectID, input))
 }
 
 func bibleMediaError(err error) error {
@@ -145,7 +145,7 @@ func bibleMediaError(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, identityapp.ErrForbidden), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		return err
+		return OwningError(err)
 	case errors.Is(err, mediaapp.ErrNotFound):
 		return errors.Join(bibleapp.ErrNotFound, err)
 	case errors.Is(err, mediaapp.ErrLibraryConflict), errors.Is(err, mediadomain.ErrMediaStateConflict):
@@ -159,17 +159,17 @@ func bibleMediaError(err error) error {
 
 type bibleScriptScopes struct{ query *pgscript.BibleScopes }
 
-func (s bibleScriptScopes) ValidateScopes(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, scopes []bibledomain.LookScope) error {
+func (s bibleScriptScopes) ValidateScopes(ctx context.Context, actor bibleapp.Actor, projectID uuid.UUID, scopes []bibledomain.LookScope) error {
 	input := make([]scriptapp.BibleLookScope, len(scopes))
 	for i, scope := range scopes {
 		input[i] = scriptapp.BibleLookScope{EpisodeID: scope.EpisodeID, SceneKey: scope.SceneKey}
 	}
-	err := s.query.ValidateLookScopes(ctx, actor, projectID, input)
+	err := s.query.ValidateLookScopes(ctx, scriptwire.Actor(IdentityActor(actor)), projectID, input)
 	switch {
 	case err == nil:
 		return nil
 	case errors.Is(err, identityapp.ErrForbidden), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		return err
+		return OwningError(err)
 	case errors.Is(err, scriptapp.ErrNotFound):
 		return errors.Join(bibleapp.ErrNotFound, err)
 	case errors.Is(err, scriptapp.ErrConflict):
@@ -190,8 +190,8 @@ func ProvideScriptCharacterReferences(tx *gorm.DB) scriptapp.CharacterReferences
 	return scriptCharacterReferences{reader: pgbible.NewReferences(tx, provideBibleProjectAccess(tx))}
 }
 
-func (c scriptCharacterReferences) Reference(ctx context.Context, actor identityapp.Principal, projectID, characterID uuid.UUID, pinnedVersionID *uuid.UUID) (scriptapp.CharacterReference, error) {
-	fact, err := c.reader.Reference(ctx, actor, projectID, characterID, pinnedVersionID)
+func (c scriptCharacterReferences) Reference(ctx context.Context, actor scriptapp.Actor, projectID, characterID uuid.UUID, pinnedVersionID *uuid.UUID) (scriptapp.CharacterReference, error) {
+	fact, err := c.reader.Reference(ctx, Actor(scriptwire.IdentityActor(actor)), projectID, characterID, pinnedVersionID)
 	switch {
 	case err == nil:
 		return scriptapp.CharacterReference{CharacterID: fact.CharacterID, VersionID: fact.VersionID, Revision: fact.Revision}, nil

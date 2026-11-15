@@ -6,16 +6,20 @@ import (
 	"errors"
 	"net/http"
 
-	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	canvaslive "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/websocket"
+
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -48,7 +52,7 @@ func SocketAuthority(db *gorm.DB, auth *identityhttp.EmailAuthHandler) canvasliv
 				writable = true
 				return nil
 			}
-			if !errors.Is(err, workspace.ErrScopeNotFound) && !errors.Is(err, workspacedomain.ErrProjectStateConflict) && !errors.Is(err, identity.ErrForbidden) {
+			if !errors.Is(err, workspacesource.ErrScopeNotFound) && !errors.Is(err, workspacedomain.ErrProjectStateConflict) && !errors.Is(err, identity.ErrForbidden) {
 				return socketScopeError(err)
 			}
 			// Archived/read-only access still needs its own positive read check.
@@ -59,7 +63,7 @@ func SocketAuthority(db *gorm.DB, auth *identityhttp.EmailAuthHandler) canvasliv
 	}
 }
 func socketScopeError(err error) error {
-	if errors.Is(err, workspace.ErrScopeNotFound) || errors.Is(err, workspace.ErrProjectNotFound) {
+	if errors.Is(err, workspacesource.ErrScopeNotFound) || errors.Is(err, workspacesource.ErrProjectNotFound) {
 		return canvasapp.ErrNotFound
 	}
 	return err

@@ -20,7 +20,7 @@ func TestMediaTransferActualPrivateOriginalAndAllRenditionsBecomeIndependentProj
 	base := mediaTestStore(db)
 	uploads := mediaFixtureRoutedUpload(t, db, base, base, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	in := uploadInput(t)
-	in.Actor, in.Request.ProjectID = actor, uuid.Nil
+	in.Actor, in.Request.ProjectID = mediaActor(actor), uuid.Nil
 	upload, err := fixturePersonalUpload(t.Context(), uploads, in)
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func TestMediaTransferActualPrivateOriginalAndAllRenditionsBecomeIndependentProj
 		}
 	})
 	repo := mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
-	job, err := repo.CreateTransfer(t.Context(), actor, mediaapp.TransferInput{Source: domain.LibraryScope{Kind: domain.LibraryPersonal}, Target: domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: 1}}, ExpectedSourceRevision: 1, ExpectedProjectRevision: 1, Key: uuid.New()})
+	job, err := repo.CreateTransfer(t.Context(), mediaActor(actor), mediaapp.TransferInput{Source: domain.LibraryScope{Kind: domain.LibraryPersonal}, Target: domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: 1}}, ExpectedSourceRevision: 1, ExpectedProjectRevision: 1, Key: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,11 +46,11 @@ func TestMediaTransferActualPrivateOriginalAndAllRenditionsBecomeIndependentProj
 	if err != nil || result.Status != "succeeded" || len(result.Items) != 1 || result.Items[0].Status != "succeeded" || result.ExecutionUnconfirmed || result.NeedsReconciliation {
 		t.Fatal("actual scoped transfer", result, err)
 	}
-	asset, err := base.FindAsset(t.Context(), actor, project, *result.Items[0].TargetAssetID)
+	asset, err := base.FindAsset(t.Context(), mediaActor(actor), project, *result.Items[0].TargetAssetID)
 	if err != nil || asset.ID == upload.Asset.ID || !asset.CanReference() || asset.UploadID != nil || asset.SourceOperationID != nil {
 		t.Fatal("target is an independent formal asset", asset, err)
 	}
-	rends, err := base.FindRenditions(t.Context(), actor, project, asset.ID)
+	rends, err := base.FindRenditions(t.Context(), mediaActor(actor), project, asset.ID)
 	if err != nil || len(rends) != 2 {
 		t.Fatal("complete rendition transfer", rends, err)
 	}

@@ -7,8 +7,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -23,10 +25,10 @@ func TestUploadProjectOwnerRejectsMissingTransaction(t *testing.T) {
 		{"not a transaction", pgworkspace.NewProjectContentAccessStore(&gorm.DB{Statement: &gorm.Statement{}})},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := tc.store.AuthorizeUploadProject(t.Context(), identity.Principal{}, uuid.New()); !errors.Is(err, workspace.ErrProjectDependencyUnavailable) {
+			if _, err := tc.store.AuthorizeUploadProject(t.Context(), identity.Principal{}, uuid.New()); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 				t.Fatalf("upload authority without transaction: %v", err)
 			}
-			if err := tc.store.AwaitUploadProjectCommit(t.Context(), uuid.New()); !errors.Is(err, workspace.ErrProjectDependencyUnavailable) {
+			if err := tc.store.AwaitUploadProjectCommit(t.Context(), uuid.New()); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 				t.Fatalf("cleanup without transaction: %v", err)
 			}
 		})

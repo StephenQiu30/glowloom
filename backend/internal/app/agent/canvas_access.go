@@ -3,15 +3,22 @@ package agent
 import (
 	"context"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 )
 
@@ -19,14 +26,14 @@ type workerNavigationScope struct{ tx *gorm.DB }
 
 func (s workerNavigationScope) Resolve(ctx context.Context, a identity.Principal, id uuid.UUID, write bool) (workspacedomain.Scope, error) {
 	if id != a.ScopeID {
-		return workspacedomain.Scope{}, workspace.ErrScopeNotFound
+		return workspacedomain.Scope{}, workspacesource.ErrScopeNotFound
 	}
 	scope, err := scopewire.ProvideScopeAccess(s.tx).Resolve(ctx, a.ID, id, write)
 	if err != nil {
 		return scope, err
 	}
 	if scope.PhysicalScopeID != a.OrgID {
-		return workspacedomain.Scope{}, workspace.ErrScopeNotFound
+		return workspacedomain.Scope{}, workspacesource.ErrScopeNotFound
 	}
 	return scope, nil
 }

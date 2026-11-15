@@ -24,14 +24,14 @@ type linkUploadFixture struct {
 	failure                 error
 }
 
-func (f *linkUploadFixture) AuthorizePersonal(context.Context, identity.Principal) error {
+func (f *linkUploadFixture) AuthorizePersonal(context.Context, mediaapp.Actor) error {
 	f.authorizations++
 	return f.failure
 }
-func (f *linkUploadFixture) BeginUpload(context.Context, identity.Principal, domain.LibraryScope, uuid.UUID) (mediaapp.UploadTarget, error) {
+func (f *linkUploadFixture) BeginUpload(context.Context, mediaapp.Actor, domain.LibraryScope, uuid.UUID) (mediaapp.UploadTarget, error) {
 	return mediaapp.UploadTarget{SessionID: uuid.New(), Policy: mediaapp.UploadPolicy{MaxVideoBytes: 500 << 20}}, nil
 }
-func (f *linkUploadFixture) LookupPersonalVideoLink(context.Context, identity.Principal, uuid.UUID, string) (mediaapp.PersonalUploadResult, bool, error) {
+func (f *linkUploadFixture) LookupPersonalVideoLink(context.Context, mediaapp.Actor, uuid.UUID, string) (mediaapp.PersonalUploadResult, bool, error) {
 	return mediaapp.PersonalUploadResult{Asset: mediaapp.LibraryAssetSummary{ID: uuid.New(), Kind: "video"}}, f.replay, nil
 }
 func (f *linkUploadFixture) UploadPersonal(_ context.Context, in mediaapp.UploadInput) (mediaapp.PersonalUploadResult, error) {
@@ -70,7 +70,7 @@ func TestVideoLinkImportsOnlyRealResolvedBytesAndReplaysWithoutEgress(t *testing
 	service := mediaapp.NewVideoLinkService(upload, resolver)
 	actor := identity.Principal{ID: uuid.New(), OrgID: uuid.New()}
 	key, request := uuid.New(), uuid.New()
-	result, err := service.Import(t.Context(), actor, key, request, mediaapp.VideoLinkRequest{URL: "https://v.douyin.com/abc/", LocalReviewConfirmed: true})
+	result, err := service.Import(t.Context(), mediaActor(actor), key, request, mediaapp.VideoLinkRequest{URL: "https://v.douyin.com/abc/", LocalReviewConfirmed: true})
 	if err != nil || result.Asset.Kind != "video" || upload.uploads != 1 || upload.body != "real downloaded video fixture" {
 		t.Fatal(result, err, upload)
 	}
@@ -78,13 +78,13 @@ func TestVideoLinkImportsOnlyRealResolvedBytesAndReplaysWithoutEgress(t *testing
 		t.Fatal("resolved temporary file remains", err)
 	}
 	upload.replay = true
-	if _, err := service.Import(t.Context(), actor, key, request, mediaapp.VideoLinkRequest{URL: "https://v.douyin.com/abc/", LocalReviewConfirmed: true}); err != nil || resolver.calls != 1 {
+	if _, err := service.Import(t.Context(), mediaActor(actor), key, request, mediaapp.VideoLinkRequest{URL: "https://v.douyin.com/abc/", LocalReviewConfirmed: true}); err != nil || resolver.calls != 1 {
 		t.Fatal("permanent replay fetched network", resolver.calls, err)
 	}
-	if _, err := service.Import(t.Context(), actor, key, request, mediaapp.VideoLinkRequest{URL: "https://example.com/video", LocalReviewConfirmed: true}); err == nil {
+	if _, err := service.Import(t.Context(), mediaActor(actor), key, request, mediaapp.VideoLinkRequest{URL: "https://example.com/video", LocalReviewConfirmed: true}); err == nil {
 		t.Fatal("non-platform source accepted")
 	}
-	if _, err := service.Import(t.Context(), actor, key, request, mediaapp.VideoLinkRequest{URL: "https://v.douyin.com/abc/"}); err == nil {
+	if _, err := service.Import(t.Context(), mediaActor(actor), key, request, mediaapp.VideoLinkRequest{URL: "https://v.douyin.com/abc/"}); err == nil {
 		t.Fatal("unreviewed link accepted")
 	}
 }

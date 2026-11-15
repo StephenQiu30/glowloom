@@ -13,14 +13,12 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // Episodes retains proposed and formal states separately in authorized project scope.
-func (s *SourceStore) Episodes(ctx context.Context, actor identityapp.Principal, project, version uuid.UUID) (application.EpisodeView, error) {
+func (s *SourceStore) Episodes(ctx context.Context, actor application.Actor, project, version uuid.UUID) (application.EpisodeView, error) {
 	var result application.EpisodeView
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		head, err := readVersionHead(tx, actor.OrgID, project, version, false)
 		if err != nil {
 			return err
@@ -40,7 +38,7 @@ func (s *SourceStore) Episodes(ctx context.Context, actor identityapp.Principal,
 }
 
 // Episode resolves only own organization metadata before current project authorization.
-func (s *SourceStore) Episode(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (domain.Episode, error) {
+func (s *SourceStore) Episode(ctx context.Context, actor application.Actor, id uuid.UUID) (domain.Episode, error) {
 	if s == nil || s.db == nil {
 		return domain.Episode{}, application.ErrUnavailable
 	}
@@ -55,7 +53,7 @@ func (s *SourceStore) Episode(ctx context.Context, actor identityapp.Principal, 
 		return domain.Episode{}, application.ErrNotFound
 	}
 	var result domain.Episode
-	err := s.transaction(ctx, actor, row.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, row.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		var err error
 		result, err = readEpisode(tx, actor.OrgID, id, false)
 		return err
@@ -73,7 +71,7 @@ func reviewHash(action string, input any) (string, error) {
 	}
 	return domain.ContentSHA(data), nil
 }
-func replayReview(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID, action, hash string, out any) (bool, error) {
+func replayReview(tx *gorm.DB, actor application.Actor, project, key uuid.UUID, action, hash string, out any) (bool, error) {
 	if err := checkRequestScope(tx, actor, project, key, action, hash); err != nil {
 		return false, err
 	}
@@ -92,7 +90,7 @@ func replayReview(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UU
 	}
 	return true, nil
 }
-func saveReview(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID, action, hash string, result any, now time.Time) error {
+func saveReview(tx *gorm.DB, actor application.Actor, project, key uuid.UUID, action, hash string, result any, now time.Time) error {
 	data, err := json.Marshal(result)
 	if err != nil {
 		return err
@@ -111,7 +109,7 @@ func rejectPendingWrite(tx *gorm.DB, org, project uuid.UUID) error {
 	return rejectPendingImport(tx, org, project, uuid.Nil)
 }
 
-func reviewState(tx *gorm.DB, actor identityapp.Principal, project, version uuid.UUID, revision int64) (domain.ProjectState, error) {
+func reviewState(tx *gorm.DB, actor application.Actor, project, version uuid.UUID, revision int64) (domain.ProjectState, error) {
 	state, err := readState(tx, actor.OrgID, project, true)
 	if err != nil {
 		return state, err
@@ -124,7 +122,7 @@ func reviewState(tx *gorm.DB, actor identityapp.Principal, project, version uuid
 	}
 	return state, nil
 }
-func advanceReview(ctx context.Context, tx *gorm.DB, access application.ProjectAccess, actor identityapp.Principal, project workspaceapp.ProjectContentAccess, scriptRevision int64, now time.Time) (int64, error) {
+func advanceReview(ctx context.Context, tx *gorm.DB, access application.ProjectAccess, actor application.Actor, project application.ProjectFacts, scriptRevision int64, now time.Time) (int64, error) {
 	updated := tx.Model(&scriptProjectStateRow{}).Where("org_id = ? AND project_id = ? AND revision = ?", actor.OrgID, project.ProjectID, scriptRevision).
 		Updates(map[string]any{"revision": scriptRevision + 1, "updated_at": now})
 	if err := exactlyOne(updated); err != nil {
@@ -134,7 +132,7 @@ func advanceReview(ctx context.Context, tx *gorm.DB, access application.ProjectA
 }
 
 // Resplit saves actual rules output as another immutable candidate set.
-func (s *SourceStore) Resplit(ctx context.Context, actor identityapp.Principal, input application.SplitCommand, split domain.SplitResult, now time.Time) (application.SplitReceipt, error) {
+func (s *SourceStore) Resplit(ctx context.Context, actor application.Actor, input application.SplitCommand, split domain.SplitResult, now time.Time) (application.SplitReceipt, error) {
 	var result application.SplitReceipt
 	fingerprint := input
 	fingerprint.RequestID = uuid.Nil
@@ -142,7 +140,7 @@ func (s *SourceStore) Resplit(ctx context.Context, actor identityapp.Principal, 
 	if err != nil {
 		return result, err
 	}
-	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project application.ProjectFacts) error {
 		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "resplit", hash, now); err != nil {
 			return err
 		}
@@ -191,7 +189,7 @@ func (s *SourceStore) Resplit(ctx context.Context, actor identityapp.Principal, 
 }
 
 // ConfirmSplit freezes every current boundary and formal ID, keeping unchanged episodes.
-func (s *SourceStore) ConfirmSplit(ctx context.Context, actor identityapp.Principal, input application.SplitCommand, now time.Time) (application.SplitReceipt, error) {
+func (s *SourceStore) ConfirmSplit(ctx context.Context, actor application.Actor, input application.SplitCommand, now time.Time) (application.SplitReceipt, error) {
 	var result application.SplitReceipt
 	fingerprint := input
 	fingerprint.RequestID = uuid.Nil
@@ -199,7 +197,7 @@ func (s *SourceStore) ConfirmSplit(ctx context.Context, actor identityapp.Princi
 	if err != nil {
 		return result, err
 	}
-	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project application.ProjectFacts) error {
 		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "confirm_split", hash, now); err != nil {
 			return err
 		}
@@ -331,7 +329,7 @@ func (s *SourceStore) ConfirmSplit(ctx context.Context, actor identityapp.Princi
 }
 
 // ReplaySplit returns the first result with current read authority before any body I/O.
-func (s *SourceStore) ReplaySplit(ctx context.Context, actor identityapp.Principal, input application.SplitCommand, action string) (*application.SplitReceipt, error) {
+func (s *SourceStore) ReplaySplit(ctx context.Context, actor application.Actor, input application.SplitCommand, action string) (*application.SplitReceipt, error) {
 	if action != "resplit" && action != "confirm_split" {
 		return nil, domain.ErrInvalidSpan
 	}
@@ -343,7 +341,7 @@ func (s *SourceStore) ReplaySplit(ctx context.Context, actor identityapp.Princip
 	}
 	var result application.SplitReceipt
 	found := false
-	err = s.transaction(ctx, actor, input.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, input.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		var err error
 		found, err = replayReview(tx, actor, input.ProjectID, input.Key, action, hash, &result)
 		return err

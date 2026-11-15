@@ -45,36 +45,36 @@ func TestMediaPackagePersonalUnknownBlocksPurgeUntilActualCancellation(t *testin
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	library := mediaLibraryStore(db, packageTestAccess, time.Now)
 	text := "待清理的实际个人正文"
-	created, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{Title: "个人正文", Category: "material", Tags: []string{}, PlainText: &text}})
+	created, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{Title: "个人正文", Category: "material", Tags: []string{}, PlainText: &text}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	item := created.Items[0].ID
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 1, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: item, Revision: 1}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 1, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: item, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	objects := mediaFixturePackageObjects(t, db)
 	repo, service := packageActualService(t, db, &packageUnknownWrite{packageFixtureObjects: objects}, packageTestAccess)
-	job, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: scope, ExpectedRevision: 2, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, ownPackageZIP(t)))
+	job, err := service.Import(t.Context(), mediaActor(actor), mediaapp.PackageImportRequest{Scope: scope, ExpectedRevision: 2, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, ownPackageZIP(t)))
 	if err != nil || job.Status != "needs_reconciliation" {
 		t.Fatal("actual retained personal package", job, err)
 	}
 	packageCleanup(t, db, repo, objects, actor, scope)
-	if busy, err := repo.HasInflightLibraryPackageWork(t.Context(), actor, scope); err != nil || !busy {
+	if busy, err := repo.HasInflightLibraryPackageWork(t.Context(), mediaActor(actor), scope); err != nil || !busy {
 		t.Fatal("owning personal guard lost the actual unknown batch", busy, err)
 	}
 	foreign, _ := mediaStoreProject(t, db)
-	if busy, err := repo.HasInflightLibraryPackageWork(t.Context(), foreign, scope); err != nil || busy {
+	if busy, err := repo.HasInflightLibraryPackageWork(t.Context(), mediaActor(foreign), scope); err != nil || busy {
 		t.Fatal("foreign personal library discovered another actor's batch", busy, err)
 	}
 	spoof := actor
 	spoof.OrgID = foreign.OrgID
-	if _, err := repo.HasInflightLibraryPackageWork(t.Context(), spoof, scope); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := repo.HasInflightLibraryPackageWork(t.Context(), mediaActor(spoof), scope); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("guard trusted a stale actor/organization declaration", err)
 	}
 	purges := mediaPurgeStore(db, packageTestAccess, transferTestGuards, nil, time.Now)
 	in := mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: item, Revision: 2}}, ExpectedRevision: 2, PermanentDeleteConfirmed: true, Key: uuid.New()}
-	if _, err := purges.CreatePurge(t.Context(), actor, in); !errors.Is(err, domain.ErrPurgeConflict) {
+	if _, err := purges.CreatePurge(t.Context(), mediaActor(actor), in); !errors.Is(err, domain.ErrPurgeConflict) {
 		t.Fatal("unknown personal package did not block purge", err)
 	}
 	var count int64
@@ -83,15 +83,15 @@ func TestMediaPackagePersonalUnknownBlocksPurgeUntilActualCancellation(t *testin
 	}
 	drainFixtureStorageWork(t, packagePurgeDB(t, true), mediaapp.StorageWorkKindPackage, job.ID)
 	_, recovered := packageActualService(t, db, objects, packageTestAccess)
-	cancelled, err := recovered.Cancel(t.Context(), actor, job.ID, mediaapp.PackageControl{ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()})
+	cancelled, err := recovered.Cancel(t.Context(), mediaActor(actor), job.ID, mediaapp.PackageControl{ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || cancelled.Status != "cancelled" {
 		t.Fatal("complete actual absent proof did not close unknown package", cancelled, err)
 	}
-	if busy, err := repo.HasInflightLibraryPackageWork(t.Context(), actor, scope); err != nil || busy {
+	if busy, err := repo.HasInflightLibraryPackageWork(t.Context(), mediaActor(actor), scope); err != nil || busy {
 		t.Fatal("owning personal guard retained a closed batch", busy, err)
 	}
 	in.Key = uuid.New()
-	accepted, err := purges.CreatePurge(t.Context(), actor, in)
+	accepted, err := purges.CreatePurge(t.Context(), mediaActor(actor), in)
 	if err != nil || accepted.Status != "queued" || accepted.Scope.ProjectID != nil {
 		t.Fatal("terminal personal package blocked authorized cleanup", accepted, err)
 	}
@@ -103,12 +103,12 @@ func TestMediaPackagePersonalUnreadableOwnerAndRevokedActorNeverAdmitPurge(t *te
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	library := mediaLibraryStore(db, packageTestAccess, time.Now)
 	text := "仍保留的个人正文"
-	created, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{Title: "正文", Category: "material", Tags: []string{}, PlainText: &text}})
+	created, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{Title: "正文", Category: "material", Tags: []string{}, PlainText: &text}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	id := created.Items[0].ID
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 1, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: id, Revision: 1}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 1, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: id, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	var database string
@@ -125,7 +125,7 @@ func TestMediaPackagePersonalUnreadableOwnerAndRevokedActorNeverAdmitPurge(t *te
 	})
 	purges := mediaPurgeStore(db, packageTestAccess, transferTestGuards, nil, time.Now)
 	in := mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: id, Revision: 2}}, ExpectedRevision: 2, PermanentDeleteConfirmed: true, Key: uuid.New()}
-	if _, err := purges.CreatePurge(t.Context(), actor, in); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := purges.CreatePurge(t.Context(), mediaActor(actor), in); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("unreadable personal package owner was treated as idle", err)
 	}
 	if err := owner.Exec(`GRANT SELECT ON media.package_job TO glowloom_app`).Error; err != nil {
@@ -135,10 +135,10 @@ func TestMediaPackagePersonalUnreadableOwnerAndRevokedActorNeverAdmitPurge(t *te
 		t.Fatal(err)
 	}
 	in.Key = uuid.New()
-	if _, err := purges.CreatePurge(t.Context(), actor, in); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, err := purges.CreatePurge(t.Context(), mediaActor(actor), in); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked current actor admitted permanent cleanup")
 	}
-	if _, err := mediaPackageStore(db, packageTestAccess, nil, time.Now).HasInflightLibraryPackageWork(t.Context(), actor, scope); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, err := mediaPackageStore(db, packageTestAccess, nil, time.Now).HasInflightLibraryPackageWork(t.Context(), mediaActor(actor), scope); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("package reader skipped current actor revocation", err)
 	}
 	var count int64

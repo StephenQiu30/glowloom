@@ -23,6 +23,8 @@ import (
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
@@ -189,10 +191,10 @@ func TestAgentCanvasCommandsRealPostgresYjsReplayConflictAndMediaAdoption(t *tes
 	// A real media record is a fixture; adoption still runs the production owner
 	// authorization/ready/moderation check in the final Yjs commit transaction.
 	asset, location := uuid.New(), uuid.New()
-	profile := "agent-canvas-" + uuid.NewString()
-	bucket := "agent-canvas-" + asset.String()[:8]
+	profile := "agent-canvas-fixture"
+	bucket := "agent-canvas"
 	key := "projects/" + g.Scope.ProjectID.String() + "/image/2026/11/" + asset.String() + ".png"
-	if err := db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'cos','http://127.0.0.1:1','http://127.0.0.1:1','us-east-1',?,'',?)`, profile, bucket, domain.ContentHash(profile)).Error; err != nil {
+	if err := pgmedia.NewStorageRoutes(db).RegisterProfiles(t.Context(), []mediaapp.StorageProfile{{ID: profile, Provider: "cos", Endpoint: "http://127.0.0.1:1", SigningEndpoint: "http://127.0.0.1:1", Region: "us-east-1", Bucket: bucket}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type)VALUES(?,?,?,?,'accepted',1,repeat('a',64),'image/png')`, location, profile, bucket, key).Error; err != nil {

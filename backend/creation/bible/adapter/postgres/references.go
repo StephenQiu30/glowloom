@@ -9,7 +9,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // References resolves confirmed character facts within another owner's exact transaction.
@@ -24,7 +23,7 @@ func NewReferences(tx *gorm.DB, access application.ProjectAccess) *References {
 }
 
 // Reference resolves current redirects or verifies a pinned historically confirmed version.
-func (r *References) Reference(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, pinned *uuid.UUID) (application.CharacterReference, error) {
+func (r *References) Reference(ctx context.Context, actor application.Actor, project, id uuid.UUID, pinned *uuid.UUID) (application.CharacterReference, error) {
 	if r == nil || r.tx == nil || r.access == nil || project == uuid.Nil || id == uuid.Nil || (pinned != nil && *pinned == uuid.Nil) {
 		return application.CharacterReference{}, application.ErrUnavailable
 	}

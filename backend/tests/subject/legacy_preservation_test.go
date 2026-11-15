@@ -59,7 +59,7 @@ func TestLegacyBibleLocationPreservesLongNameHashAndDraftReference(t *testing.T)
 		if _, known, err := newStore.ReadVersionIfKnown(t.Context(), actor, entry, version); err != nil || known {
 			t.Fatal(stage, "legacy identity was taken over by new Subject", known, err)
 		}
-		old, err := biblewire.ProvideBibleStoreWithObjects(runtime, nil, nil).Version(t.Context(), actor, project, bible.KindLocation, entry, version)
+		old, err := biblewire.ProvideBibleStoreWithObjects(runtime, nil, nil).Version(t.Context(), biblewire.Actor(actor), project, bible.KindLocation, entry, version)
 		if err != nil || old.ID != version || old.EntryID != entry || old.Location == nil || old.Location.Name != legacy.Name || old.ContentSHA256 != originalSHA {
 			t.Fatal(stage, "old typed reader truncated or rehashed history", err)
 		}
@@ -79,7 +79,7 @@ func TestLegacyBibleLocationPreservesLongNameHashAndDraftReference(t *testing.T)
 		LabelState: promptdomain.LabelState{HighWater: map[string]int64{"image": 0, "video": 0, "audio": 0, "subject": 1}, Allocations: map[string]promptdomain.LabelAllocation{"legacy-location": {LabelKind: "subject", Ordinal: 1}}},
 	}
 	drafts := actualSubjectDraftStore(runtime)
-	saved, err := drafts.SaveDraft(t.Context(), actor, prompt.DraftWrite{ProjectID: project, Key: uuid.New(), Draft: draft})
+	saved, err := drafts.SaveDraft(t.Context(), subjectPromptActor(actor), prompt.DraftWrite{ProjectID: project, Key: uuid.New(), Draft: draft})
 	if err != nil {
 		t.Fatal("real new-wired draft store rejected no-image legacy source", err)
 	}
@@ -93,11 +93,11 @@ func TestLegacyBibleLocationPreservesLongNameHashAndDraftReference(t *testing.T)
 		t.Fatal("legal new identity did not remain distinct from legacy fallback", known, err)
 	}
 	assertLegacy("after new subject")
-	updated, err := drafts.SaveDraft(t.Context(), actor, prompt.DraftWrite{ProjectID: project, DraftID: saved.DraftID, ExpectedRevision: saved.Revision, Key: uuid.New(), Draft: draft})
+	updated, err := drafts.SaveDraft(t.Context(), subjectPromptActor(actor), prompt.DraftWrite{ProjectID: project, DraftID: saved.DraftID, ExpectedRevision: saved.Revision, Key: uuid.New(), Draft: draft})
 	if err != nil || updated.InputHash != saved.InputHash {
 		t.Fatal("legacy resolver stopped accepting original fixed reference", err)
 	}
-	readback, err := drafts.ReadDraft(t.Context(), actor, project, saved.DraftID)
+	readback, err := drafts.ReadDraft(t.Context(), subjectPromptActor(actor), project, saved.DraftID)
 	if err != nil || len(readback.Draft.References) != 1 {
 		t.Fatal("read original legacy draft", err)
 	}

@@ -20,7 +20,6 @@ import (
 	"gorm.io/gorm"
 
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
@@ -60,7 +59,7 @@ func newProviderLogoFixture(t *testing.T) providerLogoFixture {
 		require.NoError(t, tx.Raw(`SELECT org_id,platform_role,platform_epoch FROM identity."user" WHERE id=?`, actor.ID).Scan(&row).Error)
 		actor.OrgID, actor.PlatformRole, actor.PlatformEpoch = row.OrgID, row.PlatformRole, row.PlatformEpoch
 	}
-	repo := pgmedia.NewProviderLogoStore(tx, func(db *gorm.DB) media.AvatarActorAccess { return pgidentity.NewStore(db) })
+	repo := pgmedia.NewProviderLogoStore(tx, identityAvatarAccess)
 	objects := &avatarMemoryObjects{}
 	service := media.NewRoutedProviderLogoService(repo, objects, func() time.Time { return now })
 	var input bytes.Buffer
@@ -70,7 +69,7 @@ func newProviderLogoFixture(t *testing.T) providerLogoFixture {
 
 func (f providerLogoFixture) upload(t *testing.T) media.LibraryAssetSummary {
 	t.Helper()
-	asset, err := f.service.Upload(t.Context(), f.owner, f.image, "image/png")
+	asset, err := f.service.Upload(t.Context(), identityMediaActor(f.owner), f.image, "image/png")
 	require.NoError(t, err)
 	return asset
 }
@@ -94,7 +93,7 @@ func (s *providerLogoSigner) PresignGet(ctx context.Context, ref mediadomain.Obj
 
 func TestProviderLogoNormalizedUploadAndCurrentBinding(t *testing.T) {
 	f := newProviderLogoFixture(t)
-	_, err := f.service.Upload(t.Context(), f.other, f.image, "image/png")
+	_, err := f.service.Upload(t.Context(), identityMediaActor(f.other), f.image, "image/png")
 	require.ErrorIs(t, err, identity.ErrForbidden)
 	require.Empty(t, f.objects.data, "non-admin must not put an object")
 	asset := f.upload(t)
@@ -114,12 +113,12 @@ func TestProviderLogoNormalizedUploadAndCurrentBinding(t *testing.T) {
 
 	signer := &providerLogoSigner{avatarTestSigner: avatarTestSigner{now: f.now}}
 	query := media.NewProviderLogoQuery(f.repo, signer, func() time.Time { return f.now }, time.Minute)
-	preview, err := query.Read(t.Context(), f.owner, asset.ID)
+	preview, err := query.Read(t.Context(), identityMediaActor(f.owner), asset.ID)
 	require.NoError(t, err)
 	require.Equal(t, asset.ID, preview.Asset.ID)
 	require.NotEmpty(t, preview.URL)
 	require.Equal(t, f.objects.ref, signer.ref)
-	_, err = query.Read(t.Context(), f.other, asset.ID)
+	_, err = query.Read(t.Context(), identityMediaActor(f.other), asset.ID)
 	require.ErrorIs(t, err, media.ErrNotFound)
 	require.Equal(t, 1, signer.calls, "unbound foreign image must not be signed")
 	references := pgcatalog.NewProviderLogoReferences(f.tx)
@@ -127,7 +126,7 @@ func TestProviderLogoNormalizedUploadAndCurrentBinding(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, retained)
 	providerID := f.bind(t, asset.ID)
-	preview, err = query.Read(t.Context(), f.other, asset.ID)
+	preview, err = query.Read(t.Context(), identityMediaActor(f.other), asset.ID)
 	require.NoError(t, err)
 	require.Equal(t, asset.ID, preview.Asset.ID)
 	require.Equal(t, f.objects.ref, signer.ref)
@@ -135,7 +134,7 @@ func TestProviderLogoNormalizedUploadAndCurrentBinding(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, retained, "bound logos survive purge even while their supplier is disabled")
 	require.NoError(t, f.tx.Exec(`UPDATE catalog.provider SET logo_asset_id=NULL WHERE id=?`, providerID).Error)
-	_, err = query.Read(t.Context(), f.other, asset.ID)
+	_, err = query.Read(t.Context(), identityMediaActor(f.other), asset.ID)
 	require.ErrorIs(t, err, media.ErrNotFound)
 	retained, err = references.HasRetainedMediaReference(t.Context(), asset.ID)
 	require.NoError(t, err)
@@ -156,7 +155,7 @@ func TestProviderLogoSigningRechecksBindingAndLiveSession(t *testing.T) {
 				}
 			}}
 			query := media.NewProviderLogoQuery(f.repo, signer, func() time.Time { return f.now }, time.Minute)
-			preview, err := query.Read(t.Context(), f.other, asset.ID)
+			preview, err := query.Read(t.Context(), identityMediaActor(f.other), asset.ID)
 			if race == "unbind" {
 				require.ErrorIs(t, err, media.ErrNotFound)
 			} else {
@@ -164,7 +163,7 @@ func TestProviderLogoSigningRechecksBindingAndLiveSession(t *testing.T) {
 			}
 			require.Empty(t, preview.URL)
 			require.Equal(t, 1, signer.calls)
-			_, err = query.Read(t.Context(), f.other, asset.ID)
+			_, err = query.Read(t.Context(), identityMediaActor(f.other), asset.ID)
 			require.Error(t, err)
 			require.Equal(t, 1, signer.calls)
 		})
@@ -176,7 +175,7 @@ func TestProviderLogoUploadRechecksLivePlatformAuthority(t *testing.T) {
 	f.objects.afterPut = func() {
 		require.NoError(t, f.tx.Exec(`UPDATE identity."user" SET platform_role='creator',platform_epoch=platform_epoch+1 WHERE id=?`, f.owner.ID).Error)
 	}
-	asset, err := f.service.Upload(t.Context(), f.owner, f.image, "image/png")
+	asset, err := f.service.Upload(t.Context(), identityMediaActor(f.owner), f.image, "image/png")
 	require.ErrorIs(t, err, identity.ErrForbidden)
 	require.Equal(t, uuid.Nil, asset.ID)
 	var published int64
@@ -192,7 +191,7 @@ func TestProviderLogoHTTPAuthorizationAndImageLimits(t *testing.T) {
 	query := media.NewProviderLogoQuery(f.repo, signer, func() time.Time { return f.now }, time.Minute)
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	mediahttp.NewProviderLogoHandler(f.service, query).Register(router.Group("/api", func(c *gin.Context) { c.Set("principal", actor) }))
+	mediahttp.NewProviderLogoHandler(f.service, query, identityMediaHTTPActor).Register(router.Group("/api", func(c *gin.Context) { c.Set("principal", actor) }))
 	post := func(content []byte, mime string) *httptest.ResponseRecorder {
 		t.Helper()
 		var body bytes.Buffer

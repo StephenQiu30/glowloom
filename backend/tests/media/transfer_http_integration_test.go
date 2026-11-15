@@ -22,7 +22,7 @@ func transferRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewTransferHandler(mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)).Register(group)
+	mediahttp.NewTransferHandler(mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now), fixtureIdentityMediaActor).Register(group)
 	return router
 }
 

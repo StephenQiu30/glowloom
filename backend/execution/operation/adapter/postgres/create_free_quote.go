@@ -117,7 +117,7 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 		}
 		walletBlock, err := walletQuoteBlock(s.billingStore(tx).CheckWalletQuoteInTransaction(tx, input.ProjectID, []billingapp.WalletDemand{{
 			ModelKey: modelKey, Micros: *item.Operation.QuoteMicros, CommercialPriceReady: ready, ReusedResult: item.Operation.ReusedFromID != nil,
-		}}))
+		}}, actor.ScopeID))
 		if err != nil {
 			return err
 		}

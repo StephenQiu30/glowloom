@@ -4,10 +4,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -31,7 +32,7 @@ func (t *teamTx) LoadPlatformTeam(id uuid.UUID) (application.PlatformTeam, error
 		return out, r.Error
 	}
 	if r.RowsAffected != 1 {
-		return out, application.ErrScopeNotFound
+		return out, workspacesource.ErrScopeNotFound
 	}
 	return out, nil
 }

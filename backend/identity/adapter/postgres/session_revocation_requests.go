@@ -56,13 +56,13 @@ func (s *SessionRevocationStore) PrepareSessionRevocationRequest(ctx context.Con
 			if err := matchSessionRevocationIntent(saved, input); err != nil {
 				return err
 			}
-			if _, err := authenticatedSessionRevocationProofs(tx, actor, input); err != nil {
+			if _, err := authenticatedSessionRevocationProofs(tx, actor, input, clock); err != nil {
 				return err
 			}
 			result = saved
 			return nil
 		}
-		proofs, err := authenticatedSessionRevocationProofs(tx, actor, input)
+		proofs, err := authenticatedSessionRevocationProofs(tx, actor, input, clock)
 		if err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func (s *SessionRevocationStore) PrepareSessionRevocationRequest(ctx context.Con
 			return err
 		}
 		var target *uuid.UUID
-		if input.Action == application.RevokeSessionRequest {
+		if input.Action == application.RevokeSessionRequest || input.Action == application.RevokeRefreshReuseRequest {
 			target = &input.TargetID
 		}
 		if err := tx.Exec(`INSERT INTO identity.session_revocation_request(id,idem_key,account_id,request_session_id,action,target_session_id,requested_at) VALUES (?,?,?,?,?,?,?)`, result.ID, input.Key, actor.ID, actor.SessionID, input.Action, target, now).Error; err != nil {
@@ -120,7 +120,7 @@ func (s *SessionRevocationStore) PrepareSessionRevocationRequest(ctx context.Con
 // authenticatedSessionRevocationProofs runs only after lockSelfActor. Access is
 // trusted exclusively as the authenticator-selected primary; all opaque evidence
 // is checked against this exact locked session, never accepted from a caller UUID.
-func authenticatedSessionRevocationProofs(tx *gorm.DB, actor application.Principal, input application.SessionRevocationInput) ([]application.SessionRevocationProof, error) {
+func authenticatedSessionRevocationProofs(tx *gorm.DB, actor application.Principal, input application.SessionRevocationInput, clock func() time.Time) ([]application.SessionRevocationProof, error) {
 	var session struct {
 		TokenHash       []byte
 		CSRFHash        []byte
@@ -133,7 +133,7 @@ func authenticatedSessionRevocationProofs(tx *gorm.DB, actor application.Princip
 	if read.RowsAffected != 1 {
 		return nil, application.ErrSessionInvalid
 	}
-	if input.Primary == application.SessionCredentialRefresh && (input.Action != application.RevokeSessionRequest || input.TargetID != actor.SessionID) {
+	if input.Primary == application.SessionCredentialRefresh && ((input.Action != application.RevokeSessionRequest && input.Action != application.RevokeRefreshReuseRequest) || input.TargetID != actor.SessionID) {
 		return nil, application.ErrForbidden
 	}
 	var accepted []application.SessionRevocationProof
@@ -154,11 +154,20 @@ func authenticatedSessionRevocationProofs(tx *gorm.DB, actor application.Princip
 			valid = primary && session.ProtocolVersion == 2
 		case application.SessionCredentialRefresh:
 			if session.ProtocolVersion == 2 {
-				var exists bool
-				if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM identity.session_refresh_token WHERE session_id=? AND token_digest=? AND revoked_at IS NULL)`, actor.SessionID, proof.TokenDigest).Scan(&exists).Error; err != nil {
-					return nil, fmt.Errorf("verify original refresh evidence: %w", err)
+				if input.Action == application.RevokeRefreshReuseRequest {
+					parent, err := (&authTx{db: tx}).FindRefresh(proof.TokenDigest, true)
+					if err != nil {
+						return nil, fmt.Errorf("lock original reused parent: %w", err)
+					}
+					now := clock().UTC()
+					valid = parent.SessionID == actor.SessionID && parent.AccountID == actor.ID && parent.RevokedAt == nil && parent.ConsumedAt != nil && !now.Before(parent.IssuedAt) && (parent.ReplayUntil == nil || !now.Before(*parent.ReplayUntil))
+				} else {
+					var exists bool
+					if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM identity.session_refresh_token WHERE session_id=? AND token_digest=? AND revoked_at IS NULL)`, actor.SessionID, proof.TokenDigest).Scan(&exists).Error; err != nil {
+						return nil, fmt.Errorf("verify original refresh evidence: %w", err)
+					}
+					valid = exists
 				}
-				valid = exists
 			}
 		}
 		if primary && !valid {
@@ -183,34 +192,8 @@ func (s *SessionRevocationStore) LoadSessionRevocationRequest(ctx context.Contex
 	}
 	var result application.SessionRevocationRequest
 	err := s.transaction(ctx, func(tx *gorm.DB) error {
-		var matched uuid.UUID
-		knownProof := false
-		for _, proof := range input.Proofs {
-			var rows []struct {
-				ID       uuid.UUID
-				CSRFHash []byte
-			}
-			if err := tx.Raw(`SELECT r.id,p.csrf_hash FROM identity.session_revocation_request r JOIN identity.session_revocation_request_proof p ON p.request_id=r.id WHERE r.idem_key=? AND p.kind=? AND p.token_digest=?`, input.Key, proof.Kind, proof.TokenDigest).Scan(&rows).Error; err != nil {
-				return fmt.Errorf("find original session revocation proof: %w", err)
-			}
-			for _, row := range rows {
-				knownProof = true
-				if subtle.ConstantTimeCompare(row.CSRFHash, proof.CSRFHash) == 1 {
-					if matched != uuid.Nil && matched != row.ID {
-						return application.ErrForbidden
-					}
-					matched = row.ID
-				}
-			}
-		}
-		if matched == uuid.Nil {
-			if knownProof {
-				return application.ErrSessionCSRFInvalid
-			}
-			return writefence.ErrNotFound
-		}
 		var err error
-		result, err = readSessionRevocationRequest(tx, matched, false)
+		result, err = findSessionRevocationProof(tx, input.Key, input.Proofs)
 		if err != nil {
 			return err
 		}

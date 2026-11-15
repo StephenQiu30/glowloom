@@ -74,7 +74,7 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 		CreateTime: now, UpdateTime: now,
 	}
 	asset = mediaFixtureAssetLocation(t, database, asset)
-	if err := store.CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := store.CreateAsset(t.Context(), mediaActor(actor), asset); err != nil {
 		t.Fatalf("create asset: %v", err)
 	}
 	r := domain.Rendition{
@@ -83,7 +83,7 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 		CreateTime: now, UpdateTime: now,
 	}
 	r.ObjectLocation = mediaFixtureRenditionLocation(t, database, r)
-	if err := store.AddRendition(t.Context(), actor, projectID, r); err != nil {
+	if err := store.AddRendition(t.Context(), mediaActor(actor), projectID, r); err != nil {
 		t.Fatalf("add rendition: %v", err)
 	}
 	wrongKey := domain.Rendition{
@@ -91,14 +91,14 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 		ObjectKey:  "projects/" + otherProjectID.String() + "/image/2026/09/" + assetID.String() + "/thumb_640.webp",
 		CreateTime: now, UpdateTime: now,
 	}
-	if err := store.AddRendition(t.Context(), actor, projectID, wrongKey); !errors.Is(err, domain.ErrInvalidRendition) {
+	if err := store.AddRendition(t.Context(), mediaActor(actor), projectID, wrongKey); !errors.Is(err, domain.ErrInvalidRendition) {
 		t.Fatalf("foreign object key accepted: %v", err)
 	}
-	got, err := store.FindAsset(t.Context(), actor, projectID, assetID)
+	got, err := store.FindAsset(t.Context(), mediaActor(actor), projectID, assetID)
 	if err != nil || got.ID != assetID || got.ProjectID != projectID || got.ObjectKey != asset.ObjectKey {
 		t.Fatalf("find asset = %+v: %v", got, err)
 	}
-	rends, err := store.FindRenditions(t.Context(), actor, projectID, assetID)
+	rends, err := store.FindRenditions(t.Context(), mediaActor(actor), projectID, assetID)
 	if err != nil || len(rends) != 1 || rends[0].ID != renditionID {
 		t.Fatalf("find renditions = %+v: %v", rends, err)
 	}
@@ -111,13 +111,13 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 		{"wrong project", actor, otherProjectID},
 	} {
 		t.Run(scope.name, func(t *testing.T) {
-			if _, err := store.FindAsset(t.Context(), scope.actor, scope.projectID, assetID); !errors.Is(err, pgmedia.ErrNotFound) {
+			if _, err := store.FindAsset(t.Context(), mediaActor(scope.actor), scope.projectID, assetID); !errors.Is(err, pgmedia.ErrNotFound) {
 				t.Fatalf("asset scope error = %v", err)
 			}
-			if _, err := store.FindRenditions(t.Context(), scope.actor, scope.projectID, assetID); !errors.Is(err, pgmedia.ErrNotFound) {
+			if _, err := store.FindRenditions(t.Context(), mediaActor(scope.actor), scope.projectID, assetID); !errors.Is(err, pgmedia.ErrNotFound) {
 				t.Fatalf("rendition scope error = %v", err)
 			}
-			if err := store.AddRendition(t.Context(), scope.actor, scope.projectID, domain.Rendition{
+			if err := store.AddRendition(t.Context(), mediaActor(scope.actor), scope.projectID, domain.Rendition{
 				ID: uuid.New(), MediaAssetID: assetID, Kind: domain.RenditionThumb640,
 				ObjectKey: "should-not-exist", CreateTime: now, UpdateTime: now,
 			}); !errors.Is(err, pgmedia.ErrNotFound) && !errors.Is(err, identityapp.ErrSessionInvalid) {
@@ -128,7 +128,7 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatalf("disable actor: %v", err)
 	}
-	if _, err := store.FindAsset(t.Context(), actor, projectID, assetID); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, err := store.FindAsset(t.Context(), mediaActor(actor), projectID, assetID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor read error = %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'active' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
@@ -137,7 +137,7 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 	if err := database.Exec(`UPDATE workspace.project SET is_delete = true WHERE id = ?::uuid`, projectID.String()).Error; err != nil {
 		t.Fatalf("delete project: %v", err)
 	}
-	if _, err := store.FindAsset(t.Context(), actor, projectID, assetID); !errors.Is(err, pgmedia.ErrNotFound) {
+	if _, err := store.FindAsset(t.Context(), mediaActor(actor), projectID, assetID); !errors.Is(err, pgmedia.ErrNotFound) {
 		t.Fatalf("deleted project read error = %v", err)
 	}
 }
@@ -159,18 +159,18 @@ func TestMediaStoreRequiresActiveProjectForCreation(t *testing.T) {
 			CreateTime: now, UpdateTime: now,
 		}
 	}
-	if err := store.CreateAsset(t.Context(), otherActor, makeAsset()); !errors.Is(err, pgmedia.ErrNotFound) {
+	if err := store.CreateAsset(t.Context(), mediaActor(otherActor), makeAsset()); !errors.Is(err, pgmedia.ErrNotFound) {
 		t.Fatalf("foreign actor creation error = %v", err)
 	}
 	wrongKey := makeAsset()
 	wrongKey.ObjectKey = "projects/" + otherActor.OrgID.String() + "/video/2026/09/" + wrongKey.ID.String() + ".mp4"
-	if err := store.CreateAsset(t.Context(), actor, wrongKey); !errors.Is(err, domain.ErrInvalidMediaAsset) {
+	if err := store.CreateAsset(t.Context(), mediaActor(actor), wrongKey); !errors.Is(err, domain.ErrInvalidMediaAsset) {
 		t.Fatalf("foreign object key creation error = %v", err)
 	}
 	if err := database.Exec(`UPDATE workspace.project SET status = 'archived' WHERE id = ?::uuid`, projectID.String()).Error; err != nil {
 		t.Fatalf("archive project: %v", err)
 	}
-	if err := store.CreateAsset(t.Context(), actor, makeAsset()); !errors.Is(err, pgmedia.ErrProjectStateConflict) {
+	if err := store.CreateAsset(t.Context(), mediaActor(actor), makeAsset()); !errors.Is(err, pgmedia.ErrProjectStateConflict) {
 		t.Fatalf("archived project creation error = %v", err)
 	}
 	var count int64
@@ -191,7 +191,7 @@ func TestMediaStoreReturnsEmptyRenditionListForVisibleAsset(t *testing.T) {
 	`, assetID.String(), projectID.String(), keyName, location.ID).Error; err != nil {
 		t.Fatalf("seed asset: %v", err)
 	}
-	rends, err := mediaTestStore(database).FindRenditions(t.Context(), actor, projectID, assetID)
+	rends, err := mediaTestStore(database).FindRenditions(t.Context(), mediaActor(actor), projectID, assetID)
 	if err != nil || len(rends) != 0 {
 		t.Fatalf("empty renditions = %+v: %v", rends, err)
 	}
@@ -231,10 +231,10 @@ func TestMediaStorePreservesGeneratedProvenanceAndRejectsForeignOperation(t *tes
 	}
 	store := mediaTestStore(database)
 	asset = mediaFixtureAssetLocation(t, database, asset)
-	if err := store.CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := store.CreateAsset(t.Context(), mediaActor(actor), asset); err != nil {
 		t.Fatalf("create generated asset: %v", err)
 	}
-	got, err := store.FindAsset(t.Context(), actor, projectID, assetID)
+	got, err := store.FindAsset(t.Context(), mediaActor(actor), projectID, assetID)
 	if err != nil || got.Origin != domain.OriginGenerated || got.SourceOperationID == nil ||
 		*got.SourceOperationID != localOperation || got.ProviderKey == nil || *got.ProviderKey != provider ||
 		got.ModelKey == nil || *got.ModelKey != model || got.Region == nil || *got.Region != region {
@@ -243,10 +243,10 @@ func TestMediaStorePreservesGeneratedProvenanceAndRejectsForeignOperation(t *tes
 	asset.ID = uuid.New()
 	asset.ObjectKey = "projects/" + projectID.String() + "/video/2026/09/" + asset.ID.String() + ".mp4"
 	asset.SourceOperationID = &foreignOperation
-	if err := store.CreateAsset(t.Context(), actor, asset); err == nil {
+	if err := store.CreateAsset(t.Context(), mediaActor(actor), asset); err == nil {
 		t.Fatal("cross-project operation was accepted as generated media source")
 	}
-	if _, err := store.FindAsset(t.Context(), actor, projectID, asset.ID); !errors.Is(err, pgmedia.ErrNotFound) {
+	if _, err := store.FindAsset(t.Context(), mediaActor(actor), projectID, asset.ID); !errors.Is(err, pgmedia.ErrNotFound) {
 		t.Fatalf("failed generated asset persisted: %v", err)
 	}
 }

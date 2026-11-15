@@ -19,7 +19,7 @@ func TestBibleHTTPLookExplicitEmptyScopesRemainReadableWithoutHistoryRewrite(t *
 	db, owner := bibleTestDB(t)
 	actor, project := bibleActorProject(t, owner)
 	service := app.NewService(bibleStore(db), time.Now)
-	first, err := service.Change(t.Context(), actor, createCharacter(project))
+	first, err := service.Change(t.Context(), bibleActor(actor), createCharacter(project))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestBibleHTTPLookExplicitEmptyScopesRemainReadableWithoutHistoryRewrite(t *
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	biblehttp.NewHandler(service).Register(group)
+	biblehttp.NewHandler(service, bibleHTTPActor).Register(group)
 	call := func(method, path, body string) *httptest.ResponseRecorder {
 		request := httptest.NewRequestWithContext(t.Context(), method, path, bytes.NewBufferString(body))
 		request.Header.Set("Content-Type", "application/json")

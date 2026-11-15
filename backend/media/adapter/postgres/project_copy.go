@@ -17,7 +17,6 @@ import (
 	"gorm.io/gorm/clause"
 
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -33,7 +32,7 @@ type ProjectCopyStore struct {
 // NewProjectCopyStore injects an owning coordinator's transaction.
 func NewProjectCopyStore(tx *gorm.DB) *ProjectCopyStore { return &ProjectCopyStore{db: tx} }
 
-func (s scopeAuthority) copyMediaTarget(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding) error {
+func (s scopeAuthority) copyMediaTarget(tx *gorm.DB, actor application.Actor, binding application.ProjectCopyBinding) error {
 	if binding.Validate() != nil || binding.OrgID != actor.OrgID {
 		return application.ErrProjectCopyMediaUnavailable
 	}
@@ -77,13 +76,13 @@ func copyMediaDigest(content application.ProjectMediaCopy, mapping map[uuid.UUID
 }
 
 // Freeze records all live assets or fails on an unavailable item; it never drops one.
-func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time) (application.ProjectCopySnapshot, error) {
+func (s *ProjectCopyStore) Freeze(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, now time.Time) (application.ProjectCopySnapshot, error) {
 	return s.freezeWithReferences(ctx, actor, binding, now, nil)
 }
 
 // FreezeWithReferences adds only explicitly referenced, retained historical
 // documents. Public reads and ordinary project references remain unchanged.
-func (s *ProjectCopyStore) FreezeWithReferences(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID) (application.ProjectCopySnapshot, error) {
+func (s *ProjectCopyStore) FreezeWithReferences(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID) (application.ProjectCopySnapshot, error) {
 	if len(referenced) > 4096 {
 		return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
 	}
@@ -97,7 +96,7 @@ func (s *ProjectCopyStore) FreezeWithReferences(ctx context.Context, actor ident
 	return s.freezeWithReferences(ctx, actor, binding, now, referenced)
 }
 
-func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID) (application.ProjectCopySnapshot, error) {
+func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID) (application.ProjectCopySnapshot, error) {
 	return s.freezeWithReferenceFacts(ctx, actor, binding, now, referenced, nil)
 }
 
@@ -105,7 +104,7 @@ func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor ident
 // complete copy. It must run in the owning admission transaction: all validation
 // failures roll back its snapshot/intents along with the outer command.
 // External Script references remain restricted to documents.
-func (s *ProjectCopyStore) FreezeWithReferenceFacts(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID, facts []application.ReferenceFact) (application.ProjectCopySnapshot, error) {
+func (s *ProjectCopyStore) FreezeWithReferenceFacts(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID, facts []application.ReferenceFact) (application.ProjectCopySnapshot, error) {
 	if len(referenced) > 4096 || len(facts) > 4096 {
 		return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
 	}
@@ -131,7 +130,7 @@ func (s *ProjectCopyStore) FreezeWithReferenceFacts(ctx context.Context, actor i
 	return snapshot, nil
 }
 
-func (s *ProjectCopyStore) freezeWithReferenceFacts(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID, facts []application.ReferenceFact) (application.ProjectCopySnapshot, error) {
+func (s *ProjectCopyStore) freezeWithReferenceFacts(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID, facts []application.ReferenceFact) (application.ProjectCopySnapshot, error) {
 	if s == nil || s.db == nil {
 		return application.ProjectCopySnapshot{}, application.ErrUnavailable
 	}
@@ -313,7 +312,7 @@ func (r copyObjectRow) object() application.ProjectCopyObject {
 	return application.ProjectCopyObject{TargetAssetID: r.TargetAssetID, RenditionKind: r.RenditionKind, SourceObjectKey: r.SourceObjectKey, TargetObjectKey: r.TargetObjectKey, ByteSize: r.ByteSize, ContentType: r.ContentType, SHA256: r.SHA256, Status: r.Status, SourceVerified: r.SourceVerified, WriteStarted: r.WriteStarted}
 }
 
-func (s *ProjectCopyStore) load(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectMediaCopy, error) {
+func (s *ProjectCopyStore) load(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectMediaCopy, error) {
 	tx := s.db.WithContext(ctx)
 	if err := s.copyMediaTarget(tx, actor, binding); err != nil {
 		return application.ProjectMediaCopy{}, err
@@ -349,7 +348,7 @@ func (s *ProjectCopyStore) load(ctx context.Context, actor identityapp.Principal
 }
 
 // Objects returns only snapshot-bound object intents; it accepts no caller object keys.
-func (s *ProjectCopyStore) Objects(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) ([]application.ProjectCopyObject, error) {
+func (s *ProjectCopyStore) Objects(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) ([]application.ProjectCopyObject, error) {
 	if s == nil || s.db == nil {
 		return nil, application.ErrUnavailable
 	}
@@ -394,7 +393,7 @@ func (s *ProjectCopyStore) Objects(ctx context.Context, actor identityapp.Princi
 
 // RecordObjectDigest durably records checked source bytes before the external write.
 // Workspace holds its current worker fence before invoking this transaction method.
-func (s *ProjectCopyStore) RecordObjectDigest(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind, digest string, size int64) error {
+func (s *ProjectCopyStore) RecordObjectDigest(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind, digest string, size int64) error {
 	objects, err := s.Objects(ctx, actor, binding, snapshot)
 	if err != nil {
 		return err
@@ -425,7 +424,7 @@ func (s *ProjectCopyStore) RecordObjectDigest(ctx context.Context, actor identit
 }
 
 // ConfirmObject records a target readback verified against its durable source digest.
-func (s *ProjectCopyStore) ConfirmObject(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind, digest string, size int64) error {
+func (s *ProjectCopyStore) ConfirmObject(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind, digest string, size int64) error {
 	if _, err := s.load(ctx, actor, binding, snapshot); err != nil {
 		return err
 	}
@@ -453,7 +452,7 @@ func (s *ProjectCopyStore) ConfirmObject(ctx context.Context, actor identityapp.
 }
 
 // Register commits ready target metadata only after every object has a verified receipt.
-func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyReceipt, error) {
+func (s *ProjectCopyStore) Register(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyReceipt, error) {
 	content, err := s.load(ctx, actor, binding, snapshot)
 	if err != nil {
 		return application.ProjectCopyReceipt{}, err
@@ -548,7 +547,7 @@ func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Princ
 
 // ReferenceCopiedAsset exposes only receipt-verified assets belonging to this private job.
 // It implements the existing canvas reference shape without enabling public previews.
-func (s *ProjectCopyStore) ReferenceCopiedAsset(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, asset uuid.UUID) (application.AssetSummary, error) {
+func (s *ProjectCopyStore) ReferenceCopiedAsset(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, asset uuid.UUID) (application.AssetSummary, error) {
 	if s == nil || s.db == nil {
 		return application.AssetSummary{}, application.ErrUnavailable
 	}
@@ -581,7 +580,7 @@ func (s *ProjectCopyStore) ReferenceCopiedAsset(ctx context.Context, actor ident
 }
 
 // AuthorizeObjectRemoval checks exact frozen key ownership and all potential metadata conflicts.
-func (s *ProjectCopyStore) AuthorizeObjectRemoval(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind string) error {
+func (s *ProjectCopyStore) AuthorizeObjectRemoval(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind string) error {
 	objects, err := s.Objects(ctx, actor, binding, snapshot)
 	if err != nil {
 		return err
@@ -615,7 +614,7 @@ func (s *ProjectCopyStore) AuthorizeObjectRemoval(ctx context.Context, actor ide
 }
 
 // ConfirmObjectRemoved records an absence checked after deletion by the worker.
-func (s *ProjectCopyStore) ConfirmObjectRemoved(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind string) error {
+func (s *ProjectCopyStore) ConfirmObjectRemoved(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind string) error {
 	if err := s.AuthorizeObjectRemoval(ctx, actor, binding, snapshot, asset, kind); err != nil {
 		return err
 	}
@@ -643,7 +642,7 @@ func (s *ProjectCopyStore) ConfirmObjectRemoved(ctx context.Context, actor ident
 }
 
 // FinishCleanup soft-deletes only registered target facts after every object is absent.
-func (s *ProjectCopyStore) FinishCleanup(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) error {
+func (s *ProjectCopyStore) FinishCleanup(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) error {
 	content, err := s.load(ctx, actor, binding, snapshot)
 	if err != nil {
 		return err
@@ -696,7 +695,7 @@ func (s *ProjectCopyStore) FinishCleanup(ctx context.Context, actor identityapp.
 var _ application.ProjectCopyObjectRepository = (*ProjectCopyStore)(nil)
 
 // BeginObjectWrite commits one conditional-write intent before any external request.
-func (s *ProjectCopyStore) BeginObjectWrite(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind string) error {
+func (s *ProjectCopyStore) BeginObjectWrite(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind string) error {
 	if _, err := s.load(ctx, actor, binding, snapshot); err != nil {
 		return err
 	}

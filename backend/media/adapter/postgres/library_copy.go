@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -22,7 +21,7 @@ type copySourceLibrary struct {
 // Freeze follows the coordinator's project locks with library then metadata
 // locks before any original/rendition lock. Every catalog item is frozen; a
 // missing binary mapping fails closed instead of silently losing its metadata.
-func readCopySourceLibrary(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding) (copySourceLibrary, error) {
+func readCopySourceLibrary(tx *gorm.DB, actor application.Actor, binding application.ProjectCopyBinding) (copySourceLibrary, error) {
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &binding.SourceProjectID}
 	row, err := readLibrary(tx, actor, scope, false)
 	if err != nil {
@@ -57,7 +56,7 @@ func readCopySourceLibrary(tx *gorm.DB, actor identityapp.Principal, binding app
 	return copySourceLibrary{row: row, folders: folders, items: items}, nil
 }
 
-func registerCopiedLibrary(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding, catalog *application.ProjectLibraryCopy) error {
+func registerCopiedLibrary(tx *gorm.DB, actor application.Actor, binding application.ProjectCopyBinding, catalog *application.ProjectLibraryCopy) error {
 	if catalog == nil {
 		return nil
 	}
@@ -117,7 +116,7 @@ func copiedMediaContentBytes(content application.ProjectMediaCopy) ([]byte, erro
 	}{content.Assets, content.Library})
 }
 
-func verifyCopiedLibrary(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding, catalog *application.ProjectLibraryCopy) error {
+func verifyCopiedLibrary(tx *gorm.DB, actor application.Actor, binding application.ProjectCopyBinding, catalog *application.ProjectLibraryCopy) error {
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &binding.TargetProjectID}
 	row, err := readLibrary(tx, actor, scope, false)
 	if err != nil {

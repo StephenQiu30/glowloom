@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
@@ -48,7 +50,7 @@ func (g owningProjectWork) HasInflightWork(ctx context.Context, actor identityap
 
 func owningLifecycleStore(db *gorm.DB) *workspacepg.Store {
 	return workspaceStoreWithWork(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-		return owningProjectWork{workspaceOperationStore(tx), workspaceMediaStore(tx), toolpg.NewStore(tx, nil, nil)}
+		return owningProjectWork{workspaceOperationStore(tx), mediaWorkBoundary{owner: workspaceMediaStore(tx)}, toolpg.NewStore(tx, nil, nil)}
 	})
 }
 
@@ -273,7 +275,7 @@ func TestProjectLifecycleProjectLockSerializesRealMediaAdmission(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	if err := workspaceMediaStore(admission).AuthorizeDerivedProject(ctx, actor, project, true); err != nil {
+	if err := workspaceMediaStore(admission).AuthorizeDerivedProject(ctx, mediaBoundaryActor(actor), project, true); err != nil {
 		t.Fatal(err)
 	}
 	archiveTx := db.WithContext(ctx).Begin()
@@ -311,7 +313,7 @@ func TestProjectLifecycleProjectLockSerializesRealMediaAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	asset.ObjectLocation = &physical
-	if err := workspaceMediaStore(admission).StoreDerived(ctx, actor, asset, nil); err != nil {
+	if err := workspaceMediaStore(admission).StoreDerived(ctx, mediaBoundaryActor(actor), asset, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := admission.Commit().Error; err != nil {
@@ -334,7 +336,7 @@ func TestProjectLifecycleProjectLockSerializesRealMediaAdmission(t *testing.T) {
 	if _, err := workspaceapp.NewProjectLifecycle(owningLifecycleStore(db), time.Now).Change(ctx, actor, projectChange(project, 1, "delete")); err != nil {
 		t.Fatal(err)
 	}
-	if err := workspaceMediaStore(db).AuthorizeDerivedProject(ctx, actor, project, true); !errors.Is(err, mediaapp.ErrNotFound) {
+	if err := workspaceMediaStore(db).AuthorizeDerivedProject(ctx, mediaBoundaryActor(actor), project, true); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("new media admission ignored deletion: %v", err)
 	}
 }
@@ -384,7 +386,9 @@ func TestProjectLifecycleBlocksConfirmedQuoteAndRejectsNewAdmission(t *testing.T
 	// Formal tool admission reaches its real project authorizer before source processing.
 	exports := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader {
 		return canvasapp.NewTimelineReader(workspaceCanvasStore(db, nil))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(workspaceMediaStore(tx)) })
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(workspaceMediaStore(tx)))
+	})
 	if _, err := exports.Create(ctx, actor2, project2, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}); !errors.Is(err, toolapp.ErrConflict) {
 		t.Fatalf("archived export admission: %v", err)
 	}
@@ -472,7 +476,7 @@ func TestProjectLifecycleOperationAndExportAdmissionLocks(t *testing.T) {
 			exports := toolpg.NewStore(tx, func(ownerTx *gorm.DB) toolapp.TimelineReader {
 				return canvasapp.NewTimelineReader(workspaceCanvasStore(ownerTx, nil))
 			}, func(ownerTx *gorm.DB) toolapp.DerivedMedia {
-				return mediaapp.NewDerivedService(workspaceMediaStore(ownerTx))
+				return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(workspaceMediaStore(ownerTx)))
 			})
 			_, err := exports.Create(ctx, actor, project, uuid.New(), toolapp.CreateInput{CanvasID: doc.ID, NodeID: node, Revision: saved.Revision})
 			return err

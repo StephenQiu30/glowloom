@@ -58,7 +58,7 @@ func (b *Boundary) WithMediaObjects(objects media.ObjectReader) *Boundary {
 	return b
 }
 func imageFact(ctx context.Context, db *gorm.DB, s domain.Scope, id uuid.UUID) (mediadomain.MediaAsset, error) {
-	a, err := pgmedia.NewScopedStore(db, mediawire.NewMediaWorkerScopeAccess).FindAsset(ctx, app.Principal(s), s.ProjectID, id)
+	a, err := pgmedia.NewScopedStore(db, mediawire.NewMediaWorkerScopeAccess).FindAsset(ctx, mediawire.Actor(app.Principal(s)), s.ProjectID, id)
 	if err != nil {
 		return a, businessError(err)
 	}

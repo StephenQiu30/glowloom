@@ -27,7 +27,7 @@ func TestLibraryConcurrentIdenticalKeyHasOnePermanentAcceptance(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result, err := store.ApplyLibraryCommand(t.Context(), actor, c)
+			result, err := store.ApplyLibraryCommand(t.Context(), mediaActor(actor), c)
 			if err != nil {
 				failures <- err
 				return
@@ -81,7 +81,7 @@ func TestLibraryZeroRowReceiptRollsBackContentRevisionAndAudit(t *testing.T) {
 	})
 	text := "不能半提交"
 	c := mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "失败", Category: "other"}}
-	if _, err := store.ApplyLibraryCommand(t.Context(), actor, c); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := store.ApplyLibraryCommand(t.Context(), mediaActor(actor), c); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("zero-row permanent receipt reported success", err)
 	}
 	for _, query := range []string{`SELECT count(*) FROM media.library WHERE id=?`, `SELECT count(*) FROM media.library_item WHERE library_id=?`, `SELECT count(*) FROM media.library_command WHERE library_id=?`, `SELECT count(*) FROM audit.audit_log WHERE object_type='media.library' AND object_id=?::text`} {

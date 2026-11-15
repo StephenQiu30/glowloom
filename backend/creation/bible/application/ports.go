@@ -9,8 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 var (
@@ -26,14 +24,14 @@ var (
 
 // ProjectAccess retains the live workspace content lock in the caller's transaction.
 type ProjectAccess interface {
-	Authorize(context.Context, identityapp.Principal, uuid.UUID, bool) (workspaceapp.ProjectContentAccess, error)
-	TouchContent(context.Context, identityapp.Principal, uuid.UUID, int64) (int64, error)
+	Authorize(context.Context, Actor, uuid.UUID, bool) (ProjectFacts, error)
+	TouchContent(context.Context, Actor, uuid.UUID, int64) (int64, error)
 }
 
 // MediaReferences proves current same-project readiness, moderation, consent and actual rendition content.
 type MediaReferences interface {
-	Reference(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string) (domain.MediaFact, error)
-	Verify(context.Context, identityapp.Principal, uuid.UUID, domain.MediaFact) error
+	Reference(context.Context, Actor, uuid.UUID, uuid.UUID, string) (domain.MediaFact, error)
+	Verify(context.Context, Actor, uuid.UUID, domain.MediaFact) error
 }
 
 // VoiceSelection contains user choices, not supplier or credential execution facts.
@@ -46,13 +44,13 @@ type VoiceSelection struct {
 
 // CatalogVoices checks the real configured TTS model and voice schema under current authorization.
 type CatalogVoices interface {
-	Reference(context.Context, identityapp.Principal, uuid.UUID, VoiceSelection) (domain.CatalogVoice, error)
-	List(context.Context, identityapp.Principal, uuid.UUID, int, *VoiceCursor) (VoicePage, error)
+	Reference(context.Context, Actor, uuid.UUID, VoiceSelection) (domain.CatalogVoice, error)
+	List(context.Context, Actor, uuid.UUID, int, *VoiceCursor) (VoicePage, error)
 }
 
 // ScriptScopes proves that appearance applicability refers to actual formal episode/scene identities.
 type ScriptScopes interface {
-	ValidateScopes(context.Context, identityapp.Principal, uuid.UUID, []domain.LookScope) error
+	ValidateScopes(context.Context, Actor, uuid.UUID, []domain.LookScope) error
 }
 
 // ImpactInput describes a real downstream-sensitive change, never a guessed zero count.
@@ -82,15 +80,15 @@ type CharacterUsage struct {
 
 // Impacts reads and applies actual downstream facts within the content transaction.
 type Impacts interface {
-	Read(context.Context, identityapp.Principal, uuid.UUID, ImpactInput) (ImpactProof, error)
-	Apply(context.Context, identityapp.Principal, uuid.UUID, ImpactInput, ImpactProof) error
+	Read(context.Context, Actor, uuid.UUID, ImpactInput) (ImpactProof, error)
+	Apply(context.Context, Actor, uuid.UUID, ImpactInput, ImpactProof) error
 }
 
 // GeneratedResults returns only an actual authorized successful extraction result.
 type GeneratedResults interface {
-	Character(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, uuid.UUID) (CharacterInput, domain.ResultSource, error)
-	Location(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, uuid.UUID) (domain.LocationContent, domain.ResultSource, error)
-	Prop(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, uuid.UUID) (domain.PropContent, domain.ResultSource, error)
+	Character(context.Context, Actor, uuid.UUID, uuid.UUID, uuid.UUID) (CharacterInput, domain.ResultSource, error)
+	Location(context.Context, Actor, uuid.UUID, uuid.UUID, uuid.UUID) (domain.LocationContent, domain.ResultSource, error)
+	Prop(context.Context, Actor, uuid.UUID, uuid.UUID, uuid.UUID) (domain.PropContent, domain.ResultSource, error)
 }
 
 // VoiceCursor identifies a real catalog page position.
@@ -130,14 +128,14 @@ type Receipt struct {
 
 // Transaction exposes only the own records and exact transaction-bound owning ports.
 type Transaction interface {
-	Project() workspaceapp.ProjectContentAccess
+	Project() ProjectFacts
 	Access() ProjectAccess
 	Media() MediaReferences
 	Voices() CatalogVoices
 	Scopes() ScriptScopes
 	Impacts() Impacts
 	Results() GeneratedResults
-	Replay(context.Context, identityapp.Principal, Command, string) (*Receipt, error)
+	Replay(context.Context, Actor, Command, string) (*Receipt, error)
 	Load(context.Context, domain.Kind, uuid.UUID) (domain.Head, domain.Version, error)
 	LoadVersion(context.Context, domain.Kind, uuid.UUID) (domain.Version, error)
 	InsertHead(context.Context, domain.Head) error
@@ -146,17 +144,17 @@ type Transaction interface {
 	Confirm(context.Context, domain.Kind, domain.Confirmation) error
 	Redirect(context.Context, domain.Redirect) error
 	Split(context.Context, domain.Split) error
-	Record(context.Context, identityapp.Principal, Command, string, Receipt, time.Time) error
+	Record(context.Context, Actor, Command, string, Receipt, time.Time) error
 }
 
 // Store owns the transaction and current project/actor authorization before every replay or write.
 type Store interface {
-	Write(context.Context, identityapp.Principal, uuid.UUID, func(Transaction) (Receipt, error)) (Receipt, error)
-	Find(context.Context, identityapp.Principal, uuid.UUID, domain.Kind, uuid.UUID) (Detail, error)
-	Version(context.Context, identityapp.Principal, uuid.UUID, domain.Kind, uuid.UUID, uuid.UUID) (domain.Version, error)
-	List(context.Context, identityapp.Principal, ListInput) (Page, error)
-	History(context.Context, identityapp.Principal, uuid.UUID, domain.Kind, uuid.UUID, int, *HistoryCursor) (HistoryPage, error)
-	Voices(context.Context, identityapp.Principal, uuid.UUID, int, *VoiceCursor) (VoicePage, error)
+	Write(context.Context, Actor, uuid.UUID, func(Transaction) (Receipt, error)) (Receipt, error)
+	Find(context.Context, Actor, uuid.UUID, domain.Kind, uuid.UUID) (Detail, error)
+	Version(context.Context, Actor, uuid.UUID, domain.Kind, uuid.UUID, uuid.UUID) (domain.Version, error)
+	List(context.Context, Actor, ListInput) (Page, error)
+	History(context.Context, Actor, uuid.UUID, domain.Kind, uuid.UUID, int, *HistoryCursor) (HistoryPage, error)
+	Voices(context.Context, Actor, uuid.UUID, int, *VoiceCursor) (VoicePage, error)
 }
 
 // Detail includes stable pointers and the requested identity's complete current content.

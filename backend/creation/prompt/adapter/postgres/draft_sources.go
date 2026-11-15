@@ -12,12 +12,11 @@ import (
 	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ValidateDraftSources rechecks pinned source facts inside the owning save/quote transaction.
 // Pending slots are saveable. Resource readiness is derived exclusively from server rows.
-func ValidateDraftSources(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, d domain.Draft, ready bool, subjects ...application.SubjectSources) error {
+func ValidateDraftSources(tx *gorm.DB, a application.Actor, p uuid.UUID, d domain.Draft, ready bool, subjects ...application.SubjectSources) error {
 	var sourceOwner application.SubjectSources
 	if len(subjects) == 1 {
 		sourceOwner = subjects[0]
@@ -175,7 +174,7 @@ func subjectSource(tx *gorm.DB, p uuid.UUID, sourceID, versionID string) (domain
 }
 
 // ResolveUpload returns only the current actor's original successful upload attempt.
-func (s *DraftStore) ResolveUpload(ctx context.Context, a identityapp.Principal, p, attempt uuid.UUID) (application.UploadResolution, error) {
+func (s *DraftStore) ResolveUpload(ctx context.Context, a application.Actor, p, attempt uuid.UUID) (application.UploadResolution, error) {
 	var out application.UploadResolution
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.authorize(ctx, tx, a, p, false); err != nil {

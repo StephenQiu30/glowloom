@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -19,7 +18,7 @@ import (
 
 type transferTestWorkGuard struct{ media *pgmedia.Store }
 
-func (g transferTestWorkGuard) HasInflightProjectWork(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (bool, error) {
+func (g transferTestWorkGuard) HasInflightProjectWork(ctx context.Context, actor mediaapp.Actor, id uuid.UUID) (bool, error) {
 	return g.media.HasInflightWork(ctx, actor, id)
 }
 func transferTestGuards(tx *gorm.DB) mediaapp.LibraryWorkGuards {
@@ -33,7 +32,7 @@ func TestMediaTransferActualAdmissionPendingVisibilityAndPermanentCurrentScopeRe
 	base := mediaTestStore(db)
 	uploadService := mediaFixtureRoutedUpload(t, db, base, base, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = uuid.Nil
 	upload, err := fixturePersonalUpload(t.Context(), uploadService, in)
 	if err != nil {
@@ -52,28 +51,28 @@ func TestMediaTransferActualAdmissionPendingVisibilityAndPermanentCurrentScopeRe
 	})
 	request := mediaapp.TransferInput{Source: domain.LibraryScope{Kind: domain.LibraryPersonal}, Target: domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: 1}}, ExpectedSourceRevision: 1, ExpectedProjectRevision: 1, Key: uuid.New()}
 	repo := mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
-	job, err := repo.CreateTransfer(t.Context(), actor, request)
+	job, err := repo.CreateTransfer(t.Context(), mediaActor(actor), request)
 	if err != nil || job.Status != "queued" || len(job.Items) != 1 || job.Items[0].TargetAssetID == nil || *job.Items[0].TargetAssetID == upload.Asset.ID {
 		t.Fatal("durable scoped admission", job, err)
 	}
-	page, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), actor, request.Target, libraryQuery())
+	page, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), mediaActor(actor), request.Target, libraryQuery())
 	if err != nil || page.Total != 0 {
 		t.Fatal("unpublished transfer entered ordinary catalog", page, err)
 	}
-	if _, err := base.FindAsset(t.Context(), actor, project, *job.Items[0].TargetAssetID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := base.FindAsset(t.Context(), mediaActor(actor), project, *job.Items[0].TargetAssetID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("pending target became formal reference", err)
 	}
-	replay, err := repo.CreateTransfer(t.Context(), actor, request)
+	replay, err := repo.CreateTransfer(t.Context(), mediaActor(actor), request)
 	if err != nil || !reflect.DeepEqual(job, replay) {
 		t.Fatal("permanent admission replay changed IDs", replay, err)
 	}
 	changed := request
 	changed.ExpectedSourceRevision = 2
-	if _, err := repo.CreateTransfer(t.Context(), actor, changed); !errors.Is(err, mediaapp.ErrLibraryKeyConflict) {
+	if _, err := repo.CreateTransfer(t.Context(), mediaActor(actor), changed); !errors.Is(err, mediaapp.ErrLibraryKeyConflict) {
 		t.Fatal("same key different immutable input accepted", err)
 	}
 	other, _ := mediaStoreProject(t, db)
-	if _, err := repo.GetTransfer(t.Context(), other, job.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := repo.GetTransfer(t.Context(), mediaActor(other), job.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("personal source transfer leaked to another actor", err)
 	}
 }

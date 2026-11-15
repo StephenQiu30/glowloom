@@ -11,14 +11,13 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // LibraryWorkGuards is consulted only for new transfer/purge admission. Publish
 // checks its own durable fence instead of blocking itself through this reader.
 type LibraryWorkGuards interface {
-	HasInflightProjectWork(context.Context, identityapp.Principal, uuid.UUID) (bool, error)
+	HasInflightProjectWork(context.Context, Actor, uuid.UUID) (bool, error)
 }
 
 // TransferInput freezes opposite scopes and every displayed optimistic revision.
@@ -173,10 +172,10 @@ func PrepareTransferItem(job, org, actor uuid.UUID, target domain.LibraryScope, 
 
 // TransferRepository separates public commands from private fenced execution.
 type TransferRepository interface {
-	CreateTransfer(context.Context, identityapp.Principal, TransferInput) (domain.TransferJob, error)
-	GetTransfer(context.Context, identityapp.Principal, uuid.UUID) (domain.TransferJob, error)
-	ListTransfers(context.Context, identityapp.Principal, domain.LibraryScope, int, int) ([]domain.TransferJob, error)
-	ControlTransfer(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, int64, TransferAction) (domain.TransferJob, error)
+	CreateTransfer(context.Context, Actor, TransferInput) (domain.TransferJob, error)
+	GetTransfer(context.Context, Actor, uuid.UUID) (domain.TransferJob, error)
+	ListTransfers(context.Context, Actor, domain.LibraryScope, int, int) ([]domain.TransferJob, error)
+	ControlTransfer(context.Context, Actor, uuid.UUID, uuid.UUID, int64, TransferAction) (domain.TransferJob, error)
 }
 
 // TransferAction is a closed command or work-queue action in the transfer lifecycle.

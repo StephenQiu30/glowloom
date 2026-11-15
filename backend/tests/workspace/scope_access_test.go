@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 )
 
@@ -45,7 +46,7 @@ func TestScopeAccessMatrix(t *testing.T) {
 			if (err == nil) != tc.allowed {
 				t.Fatalf("access=%v, allowed=%v", err, tc.allowed)
 			}
-			if !tc.allowed && !errors.Is(err, application.ErrScopeNotFound) {
+			if !tc.allowed && !errors.Is(err, workspacesource.ErrScopeNotFound) {
 				t.Fatal("scope existence leaked")
 			}
 		})

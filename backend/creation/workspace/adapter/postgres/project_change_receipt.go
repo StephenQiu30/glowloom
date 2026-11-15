@@ -8,16 +8,17 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func decodeProjectChangeReceipt(raw []byte, actor identityapp.Principal, input application.ProjectChangeInput, saved *application.ProjectSnapshot) error {
 	if !utf8.Valid(raw) {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
@@ -25,14 +26,14 @@ func decodeProjectChangeReceipt(raw []byte, actor identityapp.Principal, input a
 		return fmt.Errorf("decode project change receipt: %w", err)
 	}
 	if d.Decode(new(any)) != io.EOF || saved.CoverUnavailable || saved.Project.ID != input.Patch.ProjectID || saved.Project.OrgID != actor.OrgID || saved.Validate() != nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	p := saved.Project
 	if p.Status != "active" && p.Status != "archived" || p.Revision < input.Patch.ExpectedRevision || p.Revision > input.Patch.ExpectedRevision+1 {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	if input.Action != "patch" && p.Revision != input.Patch.ExpectedRevision+1 {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	switch input.Action {
 	case "patch":
@@ -42,23 +43,23 @@ func decodeProjectChangeReceipt(raw []byte, actor identityapp.Principal, input a
 			(input.Patch.StylePresetID != nil && p.StylePresetID != *input.Patch.StylePresetID) ||
 			(input.Patch.AllowOverseasModels != nil && p.AllowOverseasModels != *input.Patch.AllowOverseasModels) ||
 			(input.Patch.SetCover && !application.SameProjectCover(input.Patch.CoverAssetID, p.CoverAssetID)) {
-			return application.ErrProjectDependencyUnavailable
+			return workspacesource.ErrProjectDependencyUnavailable
 		}
 	case "archive":
 		if p.Status != "archived" || p.IsDelete {
-			return application.ErrProjectDependencyUnavailable
+			return workspacesource.ErrProjectDependencyUnavailable
 		}
 	case "unarchive":
 		if p.Status != "active" || p.IsDelete {
-			return application.ErrProjectDependencyUnavailable
+			return workspacesource.ErrProjectDependencyUnavailable
 		}
 	case "delete":
 		if !p.IsDelete {
-			return application.ErrProjectDependencyUnavailable
+			return workspacesource.ErrProjectDependencyUnavailable
 		}
 	case "restore":
 		if p.IsDelete {
-			return application.ErrProjectDependencyUnavailable
+			return workspacesource.ErrProjectDependencyUnavailable
 		}
 	}
 	return nil
@@ -77,7 +78,7 @@ func replayProjectChange(tx *gorm.DB, actor identityapp.Principal, input applica
 	}
 	if read.RowsAffected != 0 {
 		if row.OrgID != actor.OrgID || row.ProjectID != input.Patch.ProjectID || row.Action != input.Action || row.RequestSHA256 != fingerprint || row.StatusCode != 200 {
-			return false, application.ErrIdempotencyConflict
+			return false, workspacesource.ErrIdempotencyConflict
 		}
 		return true, decodeProjectChangeReceipt(row.ResponseBody, actor, input, saved)
 	}
@@ -96,7 +97,7 @@ func replayProjectChange(tx *gorm.DB, actor identityapp.Principal, input applica
 		return false, nil
 	}
 	if legacy.RequestHash != fingerprint || legacy.StatusCode != 200 {
-		return false, application.ErrIdempotencyConflict
+		return false, workspacesource.ErrIdempotencyConflict
 	}
 	if err := decodeProjectChangeReceipt(legacy.ResponseBody, actor, input, saved); err != nil {
 		return false, err
@@ -122,7 +123,7 @@ func insertProjectChangeReceipt(tx *gorm.DB, actor identityapp.Principal, input 
 		return fmt.Errorf("persist permanent project change receipt: %w", result.Error)
 	}
 	if result.RowsAffected != 1 {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	return nil
 }

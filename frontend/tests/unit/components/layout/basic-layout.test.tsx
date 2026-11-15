@@ -344,6 +344,11 @@ it("四页共用导航和账号节点，分组状态独立并在切页和收起�
       selected.querySelector(`svg.lucide-${icon}[aria-hidden="true"]`),
     ).not.toBeNull();
     expect(selected.getAttribute("data-active")).toBe("true");
+    for (const link of within(sidebar).getAllByRole("link")) {
+      if (link !== selected) {
+        expect(link.hasAttribute("data-active")).toBe(false);
+      }
+    }
     expect(
       within(header).queryByRole("link", { name: "积分超市" }) !== null,
     ).toBe(true);

@@ -6,11 +6,10 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ResolveCharacterMappings verifies exact frozen stable/pinned history under trusted caller-owned SQL.
-func (s *ProjectCopyStore) ResolveCharacterMappings(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, refs []application.CharacterCopyReference) ([]application.CharacterCopyMapping, error) {
+func (s *ProjectCopyStore) ResolveCharacterMappings(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, refs []application.CharacterCopyReference) ([]application.CharacterCopyMapping, error) {
 	var result []application.CharacterCopyMapping
 	err := s.transaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		m, err := readBibleManifest(tx, b, snapshot)

@@ -64,7 +64,7 @@ func TestRoutedPreviewUsesSavedProfileAndActualGrantExpiry(t *testing.T) {
 		a.ObjectLocation = readLocation(profile, a.ObjectKey)
 		objects := &routedReadObjects{grants: map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://" + profile + ".invalid/private", ExpiresAt: expiry}}}
 		query := mediaapp.NewRoutedAssetQuery(readStore{asset: a}, objects, time.Minute)
-		got, err := query.Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID)
+		got, err := query.Preview(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID)
 		if err != nil || !got.ExpiresAt.Equal(expiry) || !strings.Contains(got.URL, profile) {
 			t.Fatal("saved profile or real credential expiry lost", err)
 		}
@@ -74,29 +74,29 @@ func TestRoutedPreviewRejectsMissingLocationAndReauthorizesBeforeSigning(t *test
 	a := routedReadImage()
 	objects := &routedReadObjects{}
 	query := mediaapp.NewRoutedAssetQuery(readStore{asset: a}, objects, time.Minute)
-	if _, err := query.Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) || objects.calls != 0 {
+	if _, err := query.Preview(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) || objects.calls != 0 {
 		t.Fatal("unproven legacy location guessed", err)
 	}
 	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	query = mediaapp.NewRoutedAssetQuery(readStore{asset: a, err: identityapp.ErrForbidden}, objects, time.Minute)
-	if _, err := query.Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, identityapp.ErrForbidden) || objects.calls != 0 {
+	if _, err := query.Preview(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID); !errors.Is(err, identityapp.ErrForbidden) || objects.calls != 0 {
 		t.Fatal("revoked actor got new signature", err)
 	}
 	for _, expiry := range []time.Time{time.Now().Add(-time.Minute), time.Now().Add(16 * time.Minute)} {
 		objects.grants = map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://fixture.invalid/private", ExpiresAt: expiry}}
 		query = mediaapp.NewRoutedAssetQuery(readStore{asset: a}, objects, time.Minute)
-		if _, err := query.Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) {
+		if _, err := query.Preview(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) {
 			t.Fatal("invalid lease published", err)
 		}
 	}
-	if _, err := mediaapp.NewAssetQuery(readStore{asset: a}).Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := mediaapp.NewAssetQuery(readStore{asset: a}).Preview(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("routed record fell back to original bucket", err)
 	}
 }
 
 type routedLibraryReader struct{ file mediaapp.LibraryMediaFile }
 
-func (r routedLibraryReader) FindLibraryMedia(context.Context, identityapp.Principal, domain.LibraryScope, uuid.UUID) (mediaapp.LibraryMediaFile, error) {
+func (r routedLibraryReader) FindLibraryMedia(context.Context, mediaapp.Actor, domain.LibraryScope, uuid.UUID) (mediaapp.LibraryMediaFile, error) {
 	return r.file, nil
 }
 func TestRoutedLibraryDownloadNeverFallsBackToSameKeyInAnotherProfile(t *testing.T) {
@@ -109,11 +109,11 @@ func TestRoutedLibraryDownloadNeverFallsBackToSameKeyInAnotherProfile(t *testing
 	repo := routedLibraryReader{file: mediaapp.LibraryMediaFile{Asset: a}}
 	query := mediaapp.NewRoutedLibraryMediaQuery(repo, objects, objects, time.Minute)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &a.ProjectID}
-	if file, _, err := query.Download(t.Context(), identityapp.Principal{}, scope, a.ID); file != nil || !errors.Is(err, mediaapp.ErrUnavailable) || objects.calls != 1 {
+	if file, _, err := query.Download(t.Context(), mediaActor(identityapp.Principal{}), scope, a.ID); file != nil || !errors.Is(err, mediaapp.ErrUnavailable) || objects.calls != 1 {
 		t.Fatal("missing original searched another profile", err)
 	}
 	objects.data[a.ObjectLocation.Ref] = data
-	file, _, err := query.Download(t.Context(), identityapp.Principal{}, scope, a.ID)
+	file, _, err := query.Download(t.Context(), mediaActor(identityapp.Principal{}), scope, a.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestRoutedLibraryDownloadNeverFallsBackToSameKeyInAnotherProfile(t *testing
 		t.Fatal("historical bytes changed", err)
 	}
 	objects.err = errors.New("provider 403")
-	if _, _, err := query.Download(t.Context(), identityapp.Principal{}, scope, a.ID); !errors.Is(err, objects.err) {
+	if _, _, err := query.Download(t.Context(), mediaActor(identityapp.Principal{}), scope, a.ID); !errors.Is(err, objects.err) {
 		t.Fatal("authorization failure lost", err)
 	}
 }
@@ -137,7 +137,7 @@ func TestRoutedLibraryRenditionsKeepIndependentProfilesAndExpiries(t *testing.T)
 	rendExpiry := expiry.Add(-10 * time.Second)
 	objects := &routedReadObjects{grants: map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://old-cos.invalid/original", ExpiresAt: expiry}, rend.ObjectLocation.Ref: {URL: "https://cos.invalid/thumb", ExpiresAt: rendExpiry}}}
 	query := mediaapp.NewRoutedLibraryMediaQuery(routedLibraryReader{file: mediaapp.LibraryMediaFile{Asset: a, Renditions: []domain.Rendition{rend}}}, objects, objects, time.Minute)
-	result, err := query.Preview(t.Context(), identityapp.Principal{}, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &a.ProjectID}, a.ID)
+	result, err := query.Preview(t.Context(), mediaActor(identityapp.Principal{}), domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &a.ProjectID}, a.ID)
 	if err != nil || len(result.Renditions) != 1 || result.URL != "https://old-cos.invalid/original" || !result.ExpiresAt.Equal(expiry) || result.Renditions[0].URL != "https://cos.invalid/thumb" || !result.Renditions[0].ExpiresAt.Equal(rendExpiry) {
 		t.Fatal("original or rendition routed by default or fabricated expiry", err)
 	}
@@ -150,11 +150,11 @@ func TestRoutedDocumentSourceUsesSavedLocationAfterFreeze(t *testing.T) {
 	repo := &documentSourceRepo{assets: []domain.MediaAsset{a}}
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
 	source := mediaapp.NewRoutedDocumentSources(repo, objects)
-	frozen, err := source.Freeze(t.Context(), identityapp.Principal{}, a.ProjectID, []uuid.UUID{a.ID})
+	frozen, err := source.Freeze(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, []uuid.UUID{a.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	file, err := source.Open(t.Context(), identityapp.Principal{}, a.ProjectID, frozen[0])
+	file, err := source.Open(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, frozen[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestRoutedDocumentSourceUsesSavedLocationAfterFreeze(t *testing.T) {
 	if err != nil || !bytes.Equal(got, data) {
 		t.Fatal("frozen source changed", err)
 	}
-	if _, err := mediaapp.NewRoutedDocumentSources(repo, nil).Open(t.Context(), identityapp.Principal{}, a.ProjectID, frozen[0]); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := mediaapp.NewRoutedDocumentSources(repo, nil).Open(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, frozen[0]); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("routed document fell back to original bucket", err)
 	}
 }
@@ -181,10 +181,10 @@ func routedReadImage() domain.MediaAsset {
 
 type routedReferenceReader struct{ file mediaapp.LibraryMediaFile }
 
-func (r routedReferenceReader) ReadReferenceFactSource(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, domain.Kind) (mediaapp.LibraryMediaFile, error) {
+func (r routedReferenceReader) ReadReferenceFactSource(context.Context, mediaapp.Actor, uuid.UUID, uuid.UUID, domain.Kind) (mediaapp.LibraryMediaFile, error) {
 	return r.file, nil
 }
-func (r routedReferenceReader) ReadFrozenReferenceFactSource(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, domain.Kind) (mediaapp.LibraryMediaFile, error) {
+func (r routedReferenceReader) ReadFrozenReferenceFactSource(context.Context, mediaapp.Actor, uuid.UUID, uuid.UUID, domain.Kind) (mediaapp.LibraryMediaFile, error) {
 	return r.file, nil
 }
 func TestRoutedReferenceVerifiesOriginalAndFrozenRenditionLocations(t *testing.T) {
@@ -199,15 +199,15 @@ func TestRoutedReferenceVerifiesOriginalAndFrozenRenditionLocations(t *testing.T
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data, rend.ObjectLocation.Ref: data}}
 	reader := routedReferenceReader{file: mediaapp.LibraryMediaFile{Asset: a, Renditions: []domain.Rendition{rend}}}
 	query := mediaapp.NewRoutedReferenceFactQuery(reader, objects)
-	fact, err := query.Reference(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID, domain.KindImage)
+	fact, err := query.Reference(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID, domain.KindImage)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := query.VerifyFrozenReference(t.Context(), identityapp.Principal{}, a.ProjectID, fact); err != nil {
+	if err := query.VerifyFrozenReference(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, fact); err != nil {
 		t.Fatal("frozen byte verification lost locations", err)
 	}
 	delete(objects.data, rend.ObjectLocation.Ref)
-	if err := query.VerifyFrozenReference(t.Context(), identityapp.Principal{}, a.ProjectID, fact); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if err := query.VerifyFrozenReference(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, fact); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("missing frozen rendition accepted", err)
 	}
 }
@@ -218,13 +218,13 @@ type mutableReadStore struct {
 	onFind func()
 }
 
-func (s *mutableReadStore) FindAsset(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.MediaAsset, error) {
+func (s *mutableReadStore) FindAsset(context.Context, mediaapp.Actor, uuid.UUID, uuid.UUID) (domain.MediaAsset, error) {
 	if s.onFind != nil {
 		s.onFind()
 	}
 	return s.asset, s.err
 }
-func (s *mutableReadStore) ListReadyAssets(context.Context, identityapp.Principal, uuid.UUID, string, uuid.UUID, int) ([]domain.MediaAsset, error) {
+func (s *mutableReadStore) ListReadyAssets(context.Context, mediaapp.Actor, uuid.UUID, string, uuid.UUID, int) ([]domain.MediaAsset, error) {
 	return []domain.MediaAsset{s.asset}, s.err
 }
 func TestRoutedPreviewDoesNotPublishGrantWhenRevokedWhileSigning(t *testing.T) {
@@ -232,7 +232,7 @@ func TestRoutedPreviewDoesNotPublishGrantWhenRevokedWhileSigning(t *testing.T) {
 	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	store := &mutableReadStore{asset: a}
 	objects := &routedReadObjects{grants: map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://fixture.invalid/private", ExpiresAt: time.Now().Add(40 * time.Second)}}, onSign: func() { store.err = identityapp.ErrForbidden }}
-	result, err := mediaapp.NewRoutedAssetQuery(store, objects, time.Minute).Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID)
+	result, err := mediaapp.NewRoutedAssetQuery(store, objects, time.Minute).Preview(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID)
 	if !errors.Is(err, identityapp.ErrForbidden) || result.URL != "" {
 		t.Fatal("revocation during signing still published a new lease", err)
 	}
@@ -243,7 +243,7 @@ type mutableLibraryReader struct {
 	err  error
 }
 
-func (r *mutableLibraryReader) FindLibraryMedia(context.Context, identityapp.Principal, domain.LibraryScope, uuid.UUID) (mediaapp.LibraryMediaFile, error) {
+func (r *mutableLibraryReader) FindLibraryMedia(context.Context, mediaapp.Actor, domain.LibraryScope, uuid.UUID) (mediaapp.LibraryMediaFile, error) {
 	return r.file, r.err
 }
 func TestRoutedLibraryDoesNotPublishGrantWhenRevokedWhileSigning(t *testing.T) {
@@ -251,7 +251,7 @@ func TestRoutedLibraryDoesNotPublishGrantWhenRevokedWhileSigning(t *testing.T) {
 	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	reader := &mutableLibraryReader{file: mediaapp.LibraryMediaFile{Asset: a}}
 	objects := &routedReadObjects{grants: map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://fixture.invalid/private", ExpiresAt: time.Now().Add(40 * time.Second)}}, onSign: func() { reader.err = identityapp.ErrForbidden }}
-	result, err := mediaapp.NewRoutedLibraryMediaQuery(reader, objects, objects, time.Minute).Preview(t.Context(), identityapp.Principal{}, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &a.ProjectID}, a.ID)
+	result, err := mediaapp.NewRoutedLibraryMediaQuery(reader, objects, objects, time.Minute).Preview(t.Context(), mediaActor(identityapp.Principal{}), domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &a.ProjectID}, a.ID)
 	if !errors.Is(err, identityapp.ErrForbidden) || result.URL != "" {
 		t.Fatal("library revocation during signing published a lease", err)
 	}
@@ -271,7 +271,7 @@ func TestRoutedPreviewRejectsLeaseExpiringDuringFinalAuthorization(t *testing.T)
 	objects.onSign = func() {
 		objects.grants[a.ObjectLocation.Ref] = mediaapp.AccessGrant{URL: "https://fixture.invalid/private", ExpiresAt: time.Now().Add(200 * time.Millisecond)}
 	}
-	result, err := mediaapp.NewRoutedAssetQuery(store, objects, time.Minute).Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID)
+	result, err := mediaapp.NewRoutedAssetQuery(store, objects, time.Minute).Preview(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID)
 	if calls != 2 {
 		t.Fatal("expected final authority check")
 	}

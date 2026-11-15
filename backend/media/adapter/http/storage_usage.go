@@ -5,8 +5,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -14,15 +12,18 @@ import (
 
 // StorageUsageQuery exposes a complete authorized inventory, never private keys.
 type StorageUsageQuery interface {
-	StorageUsage(context.Context, identityapp.Principal, domain.LibraryScope) (application.StorageUsage, error)
+	StorageUsage(context.Context, application.Actor, domain.LibraryScope) (application.StorageUsage, error)
 }
 
 // StorageUsageHandler serves actual physical occupancy independently of catalog pages.
-type StorageUsageHandler struct{ usage StorageUsageQuery }
+type StorageUsageHandler struct {
+	resolve ActorResolver
+	usage   StorageUsageQuery
+}
 
 // NewStorageUsageHandler injects the owning physical query.
-func NewStorageUsageHandler(usage StorageUsageQuery) *StorageUsageHandler {
-	return &StorageUsageHandler{usage: usage}
+func NewStorageUsageHandler(usage StorageUsageQuery, resolve ActorResolver) *StorageUsageHandler {
+	return &StorageUsageHandler{resolve: resolve, usage: usage}
 }
 
 // Register installs the complete scoped capacity query.
@@ -44,6 +45,11 @@ func (h *StorageUsageHandler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/storage-usage [get]
 func (h *StorageUsageHandler) Get(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.usage == nil {
 		writeLibraryError(c, application.ErrUnavailable)
 		return
@@ -60,7 +66,7 @@ func (h *StorageUsageHandler) Get(c *gin.Context) {
 		writeLibraryError(c, err)
 		return
 	}
-	result, err := h.usage.StorageUsage(c.Request.Context(), identityhttp.Principal(c), scope)
+	result, err := h.usage.StorageUsage(c.Request.Context(), actor, scope)
 	if err != nil {
 		writeLibraryError(c, err)
 		return

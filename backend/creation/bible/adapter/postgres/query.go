@@ -7,11 +7,10 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // Find reads a stable identity without mutating its current or confirmed pointers.
-func (s *Store) Find(ctx context.Context, actor identityapp.Principal, project uuid.UUID, kind domain.Kind, id uuid.UUID) (application.Detail, error) {
+func (s *Store) Find(ctx context.Context, actor application.Actor, project uuid.UUID, kind domain.Kind, id uuid.UUID) (application.Detail, error) {
 	var result application.Detail
 	err := s.transaction(ctx, actor, project, false, func(b *bound) error {
 		h, v, err := b.Load(ctx, kind, id)
@@ -40,7 +39,7 @@ func (s *Store) Find(ctx context.Context, actor identityapp.Principal, project u
 }
 
 // Version keeps pinned historical identity and media facts unchanged across current redirects.
-func (s *Store) Version(ctx context.Context, actor identityapp.Principal, project uuid.UUID, kind domain.Kind, entry, version uuid.UUID) (domain.Version, error) {
+func (s *Store) Version(ctx context.Context, actor application.Actor, project uuid.UUID, kind domain.Kind, entry, version uuid.UUID) (domain.Version, error) {
 	var result domain.Version
 	err := s.transaction(ctx, actor, project, false, func(b *bound) error {
 		if _, err := b.loadHead(ctx, kind, entry); err != nil {
@@ -60,7 +59,7 @@ func (s *Store) Version(ctx context.Context, actor identityapp.Principal, projec
 }
 
 // List returns bounded stable heads under actual current project authorization.
-func (s *Store) List(ctx context.Context, actor identityapp.Principal, input application.ListInput) (application.Page, error) {
+func (s *Store) List(ctx context.Context, actor application.Actor, input application.ListInput) (application.Page, error) {
 	result := application.Page{Entries: []application.Summary{}, CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID}
 	err := s.transaction(ctx, actor, input.ProjectID, false, func(b *bound) error {
 		table, _, _, err := tables(input.Kind)
@@ -99,7 +98,7 @@ func (s *Store) List(ctx context.Context, actor identityapp.Principal, input app
 }
 
 // History pages full immutable versions in reverse creation order.
-func (s *Store) History(ctx context.Context, actor identityapp.Principal, project uuid.UUID, kind domain.Kind, entry uuid.UUID, limit int, after *application.HistoryCursor) (application.HistoryPage, error) {
+func (s *Store) History(ctx context.Context, actor application.Actor, project uuid.UUID, kind domain.Kind, entry uuid.UUID, limit int, after *application.HistoryCursor) (application.HistoryPage, error) {
 	result := application.HistoryPage{Versions: []domain.Version{}}
 	err := s.transaction(ctx, actor, project, false, func(b *bound) error {
 		if _, err := b.loadHead(ctx, kind, entry); err != nil {
@@ -138,7 +137,7 @@ func (s *Store) History(ctx context.Context, actor identityapp.Principal, projec
 }
 
 // Voices lists only configured catalog facts and never writes built-in candidate seeds.
-func (s *Store) Voices(ctx context.Context, actor identityapp.Principal, project uuid.UUID, limit int, after *application.VoiceCursor) (application.VoicePage, error) {
+func (s *Store) Voices(ctx context.Context, actor application.Actor, project uuid.UUID, limit int, after *application.VoiceCursor) (application.VoicePage, error) {
 	var result application.VoicePage
 	err := s.transaction(ctx, actor, project, false, func(b *bound) error {
 		if b.voices == nil {

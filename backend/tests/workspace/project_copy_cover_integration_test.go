@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
 	"github.com/google/uuid"
@@ -25,7 +27,7 @@ import (
 type actualProjectCopyCoverOwner struct{ tx *gorm.DB }
 
 func (o actualProjectCopyCoverOwner) Freeze(ctx context.Context, actor identityapp.Principal, project uuid.UUID, asset *uuid.UUID) error {
-	return workspaceapp.FreezeProjectCover(ctx, mediaapp.NewAssetQuery(workspaceMediaStore(o.tx)), actor, project, asset)
+	return workspaceapp.FreezeProjectCover(ctx, mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(workspaceMediaStore(o.tx))), actor, project, asset)
 }
 
 func (o actualProjectCopyCoverOwner) Verify(ctx context.Context, actor identityapp.Principal, binding mediaapp.ProjectCopyBinding, expected, actual *uuid.UUID) error {
@@ -44,11 +46,11 @@ func TestProjectCopyCoverRealPrivateImageMappedAndIndependent(t *testing.T) {
 	defer func() { _ = file.Close() }()
 	media := workspaceMediaStore(db)
 	upload := businessFixtureUploads(t, db, media, mediaflow.FFUploadProber{})
-	result, err := businessFixtureUpload(ctx, t, upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: source, Key: uuid.New(), RequestID: uuid.New(), FileName: "复制主图.png"}, File: file, LocalReviewConfirmed: true})
+	result, err := businessFixtureUpload(ctx, t, upload, mediaapp.UploadInput{Actor: mediaBoundaryActor(actor), Request: mediaapp.UploadRequest{ProjectID: source, Key: uuid.New(), RequestID: uuid.New(), FileName: "复制主图.png"}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual reviewed cover image", err)
 	}
-	asset, err := media.FindAsset(ctx, actor, source, result.Asset.ID)
+	asset, err := media.FindAsset(ctx, mediaBoundaryActor(actor), source, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +87,7 @@ func TestProjectCopyCoverRealPrivateImageMappedAndIndependent(t *testing.T) {
 	transfer := mediaapp.NewRoutedProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(copyStore, job.ID, worker, false), mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir())
 	binding := mediaapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}
 	snapshot := mediaapp.ProjectCopySnapshot{ID: job.Manifest.MediaSnapshotID, ManifestSHA256: job.Manifest.MediaSHA256, Assets: job.Manifest.Assets, Renditions: job.Manifest.Renditions}
-	if err := transfer.Transfer(ctx, actor, binding, snapshot); err != nil {
+	if err := transfer.Transfer(ctx, mediaBoundaryActor(actor), binding, snapshot); err != nil {
 		t.Fatal("actual fenced private cover bytes", err)
 	}
 	if _, err := copyStore.CompleteMedia(ctx, actor, job.ID, worker); err != nil {
@@ -121,7 +123,7 @@ func TestProjectCopyCoverRealPrivateImageMappedAndIndependent(t *testing.T) {
 	if err != nil || read.CoverUnavailable || read.Project.CoverAssetID == nil || *read.Project.CoverAssetID != *targetCover {
 		t.Fatal("fresh target cover unavailable or changed", err)
 	}
-	target, err := media.FindAsset(ctx, actor, finished.TargetProjectID, *targetCover)
+	target, err := media.FindAsset(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, *targetCover)
 	if err != nil || target.ObjectKey == asset.ObjectKey || target.ID == asset.ID {
 		t.Fatal("copied cover shared private source identity", err)
 	}

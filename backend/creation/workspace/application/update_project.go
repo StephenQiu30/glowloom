@@ -8,9 +8,10 @@ import (
 	"math"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -18,7 +19,7 @@ import (
 var ErrInvalidUpdateProject = errors.New("invalid update-project command")
 
 // UpdatedProject reuses the safe project response without duplicating its fields.
-type UpdatedProject = CreatedProject
+type UpdatedProject = workspacesource.CreatedProject
 
 // UpdateProjectStore reads the current project and commits its guarded update.
 type UpdateProjectStore interface {
@@ -166,7 +167,7 @@ func projectUpdateSummaries(before, after domain.Project) (map[string]any, map[s
 func projectUpdatedEvents(actor identityapp.Principal, before, after domain.Project, requestID string, occurredAt time.Time) ([]identityapp.OutboxEvent, error) {
 	changeID, auditID := uuid.New(), uuid.New()
 	change, err := json.Marshal(map[string]any{
-		"event_id": changeID, "event_type": projectChangedTopic,
+		"event_id": changeID, "event_type": workspacesource.ProjectChangedTopic,
 		"occurred_at": occurredAt, "org_id": actor.OrgID, "project_id": after.ID,
 		"actor":     map[string]any{"kind": "user", "id": actor.ID},
 		"aggregate": map[string]any{"type": "project", "id": after.ID, "revision": after.Revision},
@@ -177,7 +178,7 @@ func projectUpdatedEvents(actor identityapp.Principal, before, after domain.Proj
 	}
 	oldSummary, newSummary := projectUpdateSummaries(before, after)
 	audit, err := json.Marshal(map[string]any{
-		"event_id": auditID, "event_type": projectAuditTopic,
+		"event_id": auditID, "event_type": workspacesource.ProjectAuditTopic,
 		"occurred_at": occurredAt, "org_id": actor.OrgID, "project_id": after.ID,
 		"actor":     map[string]any{"kind": "user", "id": actor.ID},
 		"aggregate": map[string]any{"type": "audit", "id": auditID},
@@ -191,7 +192,7 @@ func projectUpdatedEvents(actor identityapp.Principal, before, after domain.Proj
 	}
 	key := after.ID.String()
 	return []identityapp.OutboxEvent{
-		{ID: changeID, Topic: projectChangedTopic, PartitionKey: key, Payload: change},
-		{ID: auditID, Topic: projectAuditTopic, PartitionKey: key, Payload: audit},
+		{ID: changeID, Topic: workspacesource.ProjectChangedTopic, PartitionKey: key, Payload: change},
+		{ID: auditID, Topic: workspacesource.ProjectAuditTopic, PartitionKey: key, Payload: audit},
 	}, nil
 }

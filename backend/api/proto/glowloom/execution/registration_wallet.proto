@@ -1,0 +1,24 @@
+syntax = "proto3";
+package glowloom.execution;
+import "glowloom/creation/personal_registration.proto";
+option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/execution;execution";
+
+// Execution retains local wallet responsibility. This is not a Billing service.
+// Only the dedicated Identity service identity may prepare an accepted registration.
+service RegistrationWallet {
+  rpc Prepare(RegistrationWalletRequest) returns (RegistrationWalletReceipt);
+  rpc Resolve(RegistrationWalletRequest) returns (RegistrationWalletReceipt);
+}
+message RegistrationWalletRequest {
+  bytes operation_id = 1;
+  bytes account_id = 2;
+  bytes organization_id = 3;
+  bytes scope_id = 4;
+  string input_sha256 = 5;
+  // Identity attests the exact Creation receipt already durably recorded for
+  // this accepted registration. A missing or unrelated receipt is rejected.
+  glowloom.creation.PersonalRegistrationReceipt creation_ready = 6;
+}
+message RegistrationWalletReceipt {
+  RegistrationWalletRequest command = 1;
+}

@@ -13,7 +13,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -52,7 +51,7 @@ func (r uploadAdmissionRow) target() (application.UploadTarget, error) {
 }
 
 // PinUpload persists the first target and returns that same target on retries.
-func (s *UploadAdmission) PinUpload(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, key uuid.UUID) (application.UploadTarget, error) {
+func (s *UploadAdmission) PinUpload(ctx context.Context, actor application.Actor, scope domain.LibraryScope, key uuid.UUID) (application.UploadTarget, error) {
 	var target application.UploadTarget
 	if s == nil || s.media == nil || s.media.db == nil {
 		return target, application.ErrUnavailable

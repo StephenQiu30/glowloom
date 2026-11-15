@@ -27,13 +27,13 @@ func transferLifecycleFixture(t *testing.T, sourceProject bool) (*gorm.DB, ident
 		in.Source, in.Target, in.ExpectedProjectRevision = projectScope, personal, 2
 	}
 	text := "真实目录文字转移"
-	created, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: in.Source, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "生命周期门禁合成文字", Category: "other", Tags: []string{}}})
+	created, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: in.Source, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "生命周期门禁合成文字", Category: "other", Tags: []string{}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	in.Items = []mediaapp.LibraryItemRevision{{ID: created.Items[0].ID, Revision: 1}}
 	repo := mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
-	job, err := repo.CreateTransfer(t.Context(), actor, in)
+	job, err := repo.CreateTransfer(t.Context(), mediaActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func transferLifecycleFixture(t *testing.T, sourceProject bool) (*gorm.DB, ident
 
 func transferLifecycleService(db *gorm.DB) *workspaceapp.ProjectLifecycle {
 	store := pgworkspace.NewScopedStore(db, mediaWorkspaceRequestScope, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-		return mediaTransferStore(tx, libraryTestAccess, transferTestGuards, time.Now)
+		return mediaWorkBoundary{owner: mediaTransferStore(tx, libraryTestAccess, transferTestGuards, time.Now)}
 	}, nil)
 	return workspaceapp.NewProjectLifecycle(store, time.Now)
 }
@@ -79,11 +79,11 @@ func TestMediaTransferWorkspaceLifecycleActualSourceAndTargetBlockUnsettledWork(
 								t.Fatal(err)
 							}
 						case "cancel_unended":
-							current, err := repo.GetTransfer(t.Context(), actor, job.ID)
+							current, err := repo.GetTransfer(t.Context(), mediaActor(actor), job.ID)
 							if err != nil {
 								t.Fatal(err)
 							}
-							if _, err := repo.ControlTransfer(t.Context(), actor, job.ID, uuid.New(), current.Revision, "cancel"); err != nil {
+							if _, err := repo.ControlTransfer(t.Context(), mediaActor(actor), job.ID, uuid.New(), current.Revision, "cancel"); err != nil {
 								t.Fatal(err)
 							}
 						case "terminal_unconfirmed":
@@ -132,7 +132,7 @@ func TestMediaTransferWorkspaceLifecycleReleasesOnlyRealCompletedOrUnstartedCanc
 			t.Run(name, func(t *testing.T) {
 				db, actor, project, repo, job := transferLifecycleFixture(t, sourceProject)
 				if cancel {
-					result, err := repo.ControlTransfer(t.Context(), actor, job.ID, uuid.New(), job.Revision, "cancel")
+					result, err := repo.ControlTransfer(t.Context(), mediaActor(actor), job.ID, uuid.New(), job.Revision, "cancel")
 					if err != nil || result.Status != "cancelled" {
 						t.Fatal("unstarted cancellation did not settle", result, err)
 					}

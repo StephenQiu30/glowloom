@@ -15,7 +15,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 var errUnavailable = errors.New("prompt preference storage unavailable")
@@ -30,7 +29,7 @@ type Store struct {
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
 
 // ReadCustomizations obtains only the currently authorized workspace actor's data.
-func (s *Store) ReadCustomizations(ctx context.Context, actor identityapp.Principal) ([]domain.Customization, error) {
+func (s *Store) ReadCustomizations(ctx context.Context, actor application.Actor) ([]domain.Customization, error) {
 	if s == nil || s.db == nil {
 		return nil, errUnavailable
 	}
@@ -49,12 +48,12 @@ func (s *Store) ReadCustomizations(ctx context.Context, actor identityapp.Princi
 }
 
 // SaveCustomization rechecks current rights and serializes both first and subsequent writes.
-func (s *Store) SaveCustomization(ctx context.Context, actor identityapp.Principal, input application.SaveInput, desired domain.Customization, event identityapp.OutboxEvent) (domain.Customization, error) {
+func (s *Store) SaveCustomization(ctx context.Context, actor application.Actor, input application.SaveInput, desired domain.Customization, event application.PreferenceAudit) (domain.Customization, error) {
 	if s == nil || s.db == nil {
 		return domain.Customization{}, errUnavailable
 	}
 	if desired.Validate() != nil || desired.Revision != input.ExpectedRevision+1 || input.IdempotencyKey == uuid.Nil ||
-		event.ID == uuid.Nil || event.Topic != "glowloom.audit.recorded.v1" || event.PartitionKey != actor.OrgID.String() || len(event.Payload) == 0 {
+		event.ID == uuid.Nil || len(event.Payload) == 0 {
 		return domain.Customization{}, domain.ErrInvalidCustomization
 	}
 	body, err := json.Marshal(struct {
@@ -111,7 +110,7 @@ func (s *Store) SaveCustomization(ctx context.Context, actor identityapp.Princip
 		if result.RowsAffected != 1 {
 			return application.ErrRevisionConflict
 		}
-		if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, event.ID, event.Topic, event.PartitionKey, string(event.Payload)).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, event.ID, "glowloom.audit.recorded.v1", actor.OrgID.String(), string(event.Payload)).Error; err != nil {
 			return fmt.Errorf("record prompt preference audit: %w", err)
 		}
 		return recordPreference(tx, actor.ID, input.IdempotencyKey, fingerprint, saved)
@@ -126,9 +125,9 @@ func (s *Store) SaveCustomization(ctx context.Context, actor identityapp.Princip
 func NewScopedStore(db *gorm.DB, actors func(*gorm.DB) application.ActorAccess) *Store {
 	return &Store{db: db, actors: actors}
 }
-func (s *Store) requireCurrentActor(tx *gorm.DB, actor identityapp.Principal) error {
+func (s *Store) requireCurrentActor(tx *gorm.DB, actor application.Actor) error {
 	if s.actors == nil || s.actors(tx) == nil {
-		return identityapp.ErrForbidden
+		return application.ErrForbidden
 	}
 	return s.actors(tx).CheckSession(tx.Statement.Context, actor, time.Now)
 }

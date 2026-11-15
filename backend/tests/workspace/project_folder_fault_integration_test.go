@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 )
 
@@ -52,13 +54,13 @@ func TestProjectFolderPGWriteFaultsCannotCommitPartialRecycle(t *testing.T) {
 	in.FolderID = f.ID
 	in.ExpectedRevision = f.Revision
 	missing := workspaceapp.NewProjectFolders(workspaceFolderStore(db, nil, nil), time.Now)
-	if _, err := missing.Change(ctx, actor, in); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := missing.Change(ctx, actor, in); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatalf("missing evidence admitted %v", err)
 	}
 	degraded := workspaceapp.NewProjectFolders(workspaceFolderStore(db, func(*gorm.DB) workspaceapp.ProjectWorkGuard {
-		return fixedProjectWork{err: workspaceapp.ErrProjectDependencyUnavailable}
+		return fixedProjectWork{err: workspacesource.ErrProjectDependencyUnavailable}
 	}, nil), time.Now)
-	if _, err := degraded.Change(ctx, actor, in); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := degraded.Change(ctx, actor, in); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatalf("degraded evidence admitted %v", err)
 	}
 }

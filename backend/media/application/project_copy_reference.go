@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -30,8 +29,8 @@ type ProjectCopyReferenceFiles struct {
 // ProjectCopyReferenceReader is bound by the owning workspace admission or
 // worker fence. It returns actual manifest identities, never caller object keys.
 type ProjectCopyReferenceReader interface {
-	ReadCopyReference(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, ReferenceFact) (ProjectCopyReferenceFiles, error)
-	ReadTransferredCopyReference(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, ReferenceFact) (ProjectCopyReferenceFiles, error)
+	ReadCopyReference(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, ReferenceFact) (ProjectCopyReferenceFiles, error)
+	ReadTransferredCopyReference(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, ReferenceFact) (ProjectCopyReferenceFiles, error)
 }
 
 // ProjectCopyReferenceQuery separates SQL-only admission from actual byte proof.
@@ -102,7 +101,7 @@ func referenceMapping(binding ProjectCopyBinding, fact ReferenceFact, files Proj
 
 // FreezeReferences performs no remote I/O. Expected image digest verification
 // is deferred until the existing media object transfer has actually completed.
-func (q *ProjectCopyReferenceQuery) FreezeReferences(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, facts []ReferenceFact) ([]ProjectCopyReferenceMapping, error) {
+func (q *ProjectCopyReferenceQuery) FreezeReferences(ctx context.Context, actor Actor, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, facts []ReferenceFact) ([]ProjectCopyReferenceMapping, error) {
 	if q == nil || q.repo == nil || binding.Validate() != nil || binding.OrgID != actor.OrgID || len(facts) > 4096 {
 		return nil, ErrProjectCopyMediaUnavailable
 	}
@@ -155,7 +154,7 @@ func verifyReferenceFile(ctx context.Context, objects ObjectReader, file Library
 
 // VerifyTransferred requires registered owning receipts, exact SQL facts, and
 // actual source/target bytes. The caller runs it before publishing its project.
-func (q *ProjectCopyReferenceQuery) VerifyTransferred(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, mappings []ProjectCopyReferenceMapping) error {
+func (q *ProjectCopyReferenceQuery) VerifyTransferred(ctx context.Context, actor Actor, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, mappings []ProjectCopyReferenceMapping) error {
 	if q == nil || q.repo == nil || q.objects == nil || binding.Validate() != nil || binding.OrgID != actor.OrgID || len(mappings) > 4096 {
 		return ErrProjectCopyMediaUnavailable
 	}

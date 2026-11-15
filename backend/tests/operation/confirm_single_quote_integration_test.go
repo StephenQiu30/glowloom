@@ -10,11 +10,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -109,7 +113,7 @@ func TestConfirmSingleQuoteRejectsForeignAndRevokedActors(t *testing.T) {
 		ProjectID: projectID, OperationID: quoted.ID,
 		RequestID: uuid.NewString(),
 	}
-	if _, err := store.ConfirmSingleQuote(t.Context(), foreign, input); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.ConfirmSingleQuote(t.Context(), foreign, input); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("foreign actor = %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {

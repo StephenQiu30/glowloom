@@ -21,7 +21,7 @@ func TestScriptFileImportTaskPGActualPrivateOriginalToVersion(t *testing.T) {
 	store := scriptImportStore(db, storage)
 	service := app.NewImportService(store, time.Now)
 	in := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{file}, RightsConfirmed: true}
-	accepted, err := service.Create(t.Context(), actor, in)
+	accepted, err := service.Create(t.Context(), scriptActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,11 +34,11 @@ func TestScriptFileImportTaskPGActualPrivateOriginalToVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	taskfixture.RunWork(t, db, currenttask.Import, map[string]any{"job_id": accepted.ID}, currenttask.ImportHandler(scriptImportWorker(t, db, storage, extract.NewExtractor()), store))
-	current, err := service.Get(ctx, actor, pid, accepted.ID)
+	current, err := service.Get(ctx, scriptActor(actor), pid, accepted.ID)
 	if err != nil || current.Status != "succeeded" || current.LatestVersionID == nil || current.ActiveIO || current.NeedsReconciliation {
 		t.Fatal("actual workflow durable state", current, err)
 	}
-	replay, err := service.Create(ctx, actor, in)
+	replay, err := service.Create(ctx, scriptActor(actor), in)
 	if err != nil || replay.ID != accepted.ID {
 		t.Fatal("duplicate command", err)
 	}

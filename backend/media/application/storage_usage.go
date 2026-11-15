@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -38,7 +37,7 @@ type StorageUsageInventory struct {
 
 // StorageUsageSource holds current authorization while the exact inventory is read.
 type StorageUsageSource interface {
-	InspectStorageUsage(context.Context, identityapp.Principal, domain.LibraryScope, func(StorageUsageInventory) error) error
+	InspectStorageUsage(context.Context, Actor, domain.LibraryScope, func(StorageUsageInventory) error) error
 }
 
 // StorageUsageObject is private metadata used only to locate an actual object.
@@ -56,7 +55,7 @@ type StorageUsageReader struct {
 }
 
 // StorageUsage never publishes partial results or invents an unconfigured limit.
-func (s *StorageUsageReader) StorageUsage(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope) (StorageUsage, error) {
+func (s *StorageUsageReader) StorageUsage(ctx context.Context, actor Actor, scope domain.LibraryScope) (StorageUsage, error) {
 	if s == nil || s.source == nil || s.physicalObjects == nil {
 		return StorageUsage{}, ErrUnavailable
 	}

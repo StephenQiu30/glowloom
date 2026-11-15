@@ -5,17 +5,16 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 var _ mediaapp.UploadProjectAccess = mediaScopeAccess{}
 
-func (a mediaScopeAccess) AuthorizeUploadProject(ctx context.Context, actor identity.Principal, projectID uuid.UUID) (string, error) {
+func (a mediaScopeAccess) AuthorizeUploadProject(ctx context.Context, actor mediaapp.Actor, projectID uuid.UUID) (string, error) {
 	if err := a.CheckActor(ctx, actor); err != nil {
 		return "", err
 	}
-	aspect, err := a.project().AuthorizeUploadProject(ctx, actor, projectID)
+	aspect, err := a.project().AuthorizeUploadProject(ctx, IdentityActor(actor), projectID)
 	return aspect, mediaLibraryProjectError(err)
 }
 

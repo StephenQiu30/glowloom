@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -12,15 +11,15 @@ import (
 
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 var (
 	// ErrInvalidProjectChange means a public project mutation violates its closed contract.
 	ErrInvalidProjectChange = errors.New("invalid project change")
-	// ErrProjectDependencyUnavailable means required lifecycle evidence cannot be read.
-	ErrProjectDependencyUnavailable = errors.New("project lifecycle dependency unavailable")
 )
 
 // ProjectWorkGuard reads owning modules' durable work while the project is locked.
@@ -93,17 +92,17 @@ func (s *ProjectLifecycle) Get(ctx context.Context, actor identityapp.Principal,
 		return ProjectSnapshot{}, identityapp.ErrForbidden
 	}
 	if projectID == uuid.Nil {
-		return ProjectSnapshot{}, ErrProjectNotFound
+		return ProjectSnapshot{}, workspacesource.ErrProjectNotFound
 	}
 	if s == nil || s.store == nil {
-		return ProjectSnapshot{}, ErrProjectDependencyUnavailable
+		return ProjectSnapshot{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	saved, err := s.store.ReadProjectSnapshot(ctx, actor, projectID)
 	if err != nil {
 		return ProjectSnapshot{}, fmt.Errorf("read project lifecycle: %w", err)
 	}
 	if !validProjectSnapshot(saved, actor, projectID) || saved.Project.IsDelete {
-		return ProjectSnapshot{}, ErrProjectDependencyUnavailable
+		return ProjectSnapshot{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return saved, nil
 }
@@ -117,7 +116,7 @@ func (s *ProjectLifecycle) Change(ctx context.Context, actor identityapp.Princip
 		return ProjectSnapshot{}, err
 	}
 	if s == nil || s.store == nil || s.now == nil {
-		return ProjectSnapshot{}, ErrProjectDependencyUnavailable
+		return ProjectSnapshot{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	now := s.now().UTC()
 	if now.IsZero() {
@@ -128,7 +127,7 @@ func (s *ProjectLifecycle) Change(ctx context.Context, actor identityapp.Princip
 		return ProjectSnapshot{}, fmt.Errorf("change project lifecycle: %w", err)
 	}
 	if !validProjectSnapshot(saved, actor, input.Patch.ProjectID) {
-		return ProjectSnapshot{}, ErrProjectDependencyUnavailable
+		return ProjectSnapshot{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return saved, nil
 }
@@ -137,17 +136,17 @@ func (s *ProjectLifecycle) Change(ctx context.Context, actor identityapp.Princip
 func (s ProjectSnapshot) Validate() error {
 	p := s.Project
 	if (s.CoverUnavailable && p.CoverAssetID == nil) || p.Validate() != nil || p.CreateTime.IsZero() || p.UpdateTime.IsZero() || !validDefaultModels(s.DefaultModels) {
-		return ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	if (p.Status == "archived" && (p.ArchivedAt == nil || p.ArchivedAt.IsZero())) || (p.Status == "active" && p.ArchivedAt != nil) {
-		return ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	if p.IsDelete {
 		if p.DeleteTime == nil || p.PurgeAfter == nil || !p.PurgeAfter.After(*p.DeleteTime) {
-			return ErrProjectDependencyUnavailable
+			return workspacesource.ErrProjectDependencyUnavailable
 		}
 	} else if p.DeleteTime != nil || p.PurgeAfter != nil {
-		return ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	return nil
 }
@@ -250,20 +249,13 @@ func PrepareProjectChange(actor identityapp.Principal, input ProjectChangeInput,
 }
 
 func projectLifecycleEvents(actor identityapp.Principal, action string, before, after domain.Project, requestID string, now time.Time) ([]identityapp.OutboxEvent, error) {
-	changes := map[string]string{"archive": "archived", "unarchive": "unarchived", "delete": "deleted", "restore": "restored"}
-	change := changes[action]
-	changedID, auditID := uuid.New(), uuid.New()
-	changed, err := json.Marshal(map[string]any{"event_id": changedID, "event_type": projectChangedTopic, "occurred_at": now, "org_id": actor.OrgID, "project_id": after.ID, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "project", "id": after.ID, "revision": after.Revision}, "data": map[string]any{"change": change}})
+	events, err := workspacesource.ProjectLifecycleEvents(actor.ID, actor.OrgID, action, before, after, requestID, now, uuid.New(), uuid.New())
 	if err != nil {
-		return nil, fmt.Errorf("encode project lifecycle event: %w", err)
+		return nil, err
 	}
-	audit, err := json.Marshal(map[string]any{"event_id": auditID, "event_type": projectAuditTopic, "occurred_at": now, "org_id": actor.OrgID, "project_id": after.ID, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": auditID}, "data": map[string]any{"action": "project." + change, "object": map[string]any{"type": "project", "id": after.ID}, "request_id": requestID, "before": projectLifecycleSummary(before), "after": projectLifecycleSummary(after)}})
-	if err != nil {
-		return nil, fmt.Errorf("encode project lifecycle audit: %w", err)
+	result := make([]identityapp.OutboxEvent, len(events))
+	for i, event := range events {
+		result[i] = identityapp.OutboxEvent{ID: event.ID, Topic: event.Topic, PartitionKey: event.PartitionKey, Payload: event.Payload}
 	}
-	return []identityapp.OutboxEvent{{ID: changedID, Topic: projectChangedTopic, PartitionKey: after.ID.String(), Payload: changed}, {ID: auditID, Topic: projectAuditTopic, PartitionKey: after.ID.String(), Payload: audit}}, nil
-}
-
-func projectLifecycleSummary(p domain.Project) map[string]any {
-	return map[string]any{"revision": p.Revision, "status": p.Status, "is_delete": p.IsDelete, "archived_at": p.ArchivedAt, "delete_time": p.DeleteTime, "purge_after": p.PurgeAfter}
+	return result, nil
 }

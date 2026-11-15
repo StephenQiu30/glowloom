@@ -54,18 +54,18 @@ func TestUploadAdmissionPersistsAcrossRouteSwitch(t *testing.T) {
 	admission := pgmedia.NewUploadAdmission(routingMediaStore(database))
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	key := uuid.New()
-	first, err := admission.PinUpload(t.Context(), actor, scope, key)
+	first, err := admission.PinUpload(t.Context(), mediaActor(actor), scope, key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "admission-next-"+uuid.NewString(), "cos-main")); err != nil {
 		t.Fatal(err)
 	}
-	retry, err := admission.PinUpload(t.Context(), actor, scope, key)
+	retry, err := admission.PinUpload(t.Context(), mediaActor(actor), scope, key)
 	if err != nil || retry != first {
 		t.Fatal("in-flight target changed", err)
 	}
-	next, err := admission.PinUpload(t.Context(), actor, scope, uuid.New())
+	next, err := admission.PinUpload(t.Context(), mediaActor(actor), scope, uuid.New())
 	if err != nil || next.ProfileID != "cos-main" || next.SessionID == first.SessionID {
 		t.Fatal("new admission ignored active route", err)
 	}
@@ -76,14 +76,14 @@ func TestUploadAdmissionPersistsAcrossRouteSwitch(t *testing.T) {
 // identity integration suite; a nil production authority still fails closed.
 type routingScopeStub struct{}
 
-func (routingScopeStub) CheckActor(context.Context, identityapp.Principal) error { return nil }
-func (routingScopeStub) AuthorizePersonal(context.Context, identityapp.Principal, bool) error {
+func (routingScopeStub) CheckActor(context.Context, mediaapp.Actor) error { return nil }
+func (routingScopeStub) AuthorizePersonal(context.Context, mediaapp.Actor, bool) error {
 	return nil
 }
-func (routingScopeStub) AuthorizeProject(context.Context, identityapp.Principal, uuid.UUID, bool) error {
+func (routingScopeStub) AuthorizeProject(context.Context, mediaapp.Actor, uuid.UUID, bool) error {
 	return nil
 }
-func (routingScopeStub) AuthorizeCopyTarget(context.Context, identityapp.Principal, uuid.UUID) error {
+func (routingScopeStub) AuthorizeCopyTarget(context.Context, mediaapp.Actor, uuid.UUID) error {
 	return nil
 }
 func routingMediaStore(database *gorm.DB) *pgmedia.Store {
@@ -132,10 +132,10 @@ func TestUploadReplayKeepsOriginalLocation(t *testing.T) {
 	objects := &persistedRoutedUpload{locations: routes}
 	service := mediaapp.NewRoutedUploadService(store, store, admission, routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, objects, time.Now)
 	input := uploadInput(t)
-	input.Actor = actor
+	input.Actor = mediaActor(actor)
 	input.Request.ProjectID = project
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	target, err := service.BeginUpload(t.Context(), actor, scope, input.Request.Key)
+	target, err := service.BeginUpload(t.Context(), mediaActor(actor), scope, input.Request.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,12 +175,12 @@ func TestUploadAcceptanceRejectsAnotherActorsAdmission(t *testing.T) {
 	store := routingMediaStore(database)
 	admission := pgmedia.NewUploadAdmission(store)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &ownerProject}
-	stolen, err := admission.PinUpload(t.Context(), owner, scope, uuid.New())
+	stolen, err := admission.PinUpload(t.Context(), mediaActor(owner), scope, uuid.New())
 	if err != nil {
 		t.Fatal(err)
 	}
 	input := uploadInput(t)
-	input.Actor = actor
+	input.Actor = mediaActor(actor)
 	input.Request.ProjectID = project
 	input.Target = &stolen
 	// Fault injection models a corrupted orchestration argument. Acceptance must
@@ -198,10 +198,10 @@ func TestUploadMissingRoutedDependencyDoesNotReadBody(t *testing.T) {
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) {
-		c.Set("principal", identityapp.Principal{ID: uuid.New(), OrgID: uuid.New()})
+		c.Set("principal", identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1})
 		c.Next()
 	})
-	mediahttp.NewUploadHandler(service).Register(group)
+	mediahttp.NewUploadHandler(service, fixtureIdentityMediaActor).Register(group)
 	body := &unreadUploadBody{}
 	request := httptest.NewRequestWithContext(t.Context(), "POST", "/api/projects/"+uuid.NewString()+"/media/uploads", body)
 	request.Header.Set("Content-Type", "multipart/form-data; boundary=x")
@@ -222,11 +222,11 @@ func TestStorageAdmissionSnapshotAndOwnerAreImmutable(t *testing.T) {
 	actor, project := mediaStoreProject(t, database)
 	admission := pgmedia.NewUploadAdmission(routingMediaStore(database))
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	a, err := admission.PinUpload(t.Context(), actor, scope, uuid.New())
+	a, err := admission.PinUpload(t.Context(), mediaActor(actor), scope, uuid.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := admission.PinUpload(t.Context(), actor, scope, uuid.New())
+	b, err := admission.PinUpload(t.Context(), mediaActor(actor), scope, uuid.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestUploadSwitchDuringBodyKeepsPersistentTarget(t *testing.T) {
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewUploadHandler(service).Register(group)
+	mediahttp.NewUploadHandler(service, fixtureIdentityMediaActor).Register(group)
 	request := uploadHTTPRequest(t, []string{"file", "local_review_confirmed=true"})
 	request.URL.Path = "/api/projects/" + project.String() + "/media/uploads"
 	gate := &gateUploadBody{ReadCloser: request.Body, read: make(chan struct{}), release: make(chan struct{})}
@@ -304,7 +304,7 @@ type routedAdmissionFake struct {
 	once    sync.Once
 }
 
-func (a *routedAdmissionFake) PinUpload(_ context.Context, _ identityapp.Principal, _ domain.LibraryScope, key uuid.UUID) (mediaapp.UploadTarget, error) {
+func (a *routedAdmissionFake) PinUpload(_ context.Context, _ mediaapp.Actor, _ domain.LibraryScope, key uuid.UUID) (mediaapp.UploadTarget, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.targets == nil {
@@ -379,10 +379,10 @@ func TestUploadPinsBeforeReadingBody(t *testing.T) {
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) {
-		c.Set("principal", identityapp.Principal{ID: uuid.New(), OrgID: uuid.New()})
+		c.Set("principal", identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1})
 		c.Next()
 	})
-	mediahttp.NewUploadHandler(service).Register(group)
+	mediahttp.NewUploadHandler(service, fixtureIdentityMediaActor).Register(group)
 	request := uploadHTTPRequest(t, []string{"file", "local_review_confirmed=true"})
 	gate := &gateUploadBody{ReadCloser: request.Body, read: make(chan struct{}), release: make(chan struct{})}
 	request.Body = gate

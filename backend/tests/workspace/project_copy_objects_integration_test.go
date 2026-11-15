@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 
@@ -168,7 +170,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 		if err != nil {
 			t.Fatal(err)
 		}
-		result, uploadErr := businessFixtureUpload(ctx, t, upload, ma.UploadInput{Actor: actor, Request: ma.UploadRequest{ProjectID: project, Key: uuid.New(), SHA256: file.SHA256, ByteSize: file.Size, FileName: sample.Name, RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true})
+		result, uploadErr := businessFixtureUpload(ctx, t, upload, ma.UploadInput{Actor: mediaBoundaryActor(actor), Request: ma.UploadRequest{ProjectID: project, Key: uuid.New(), SHA256: file.SHA256, ByteSize: file.Size, FileName: sample.Name, RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true})
 		if err := errors.Join(uploadErr, file.Close()); err != nil {
 			t.Fatal("real source upload", err)
 		}
@@ -188,7 +190,9 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 			}
 		}
 	})
-	canvas := canvasfixture.NewService(workspaceCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return ma.NewAssetQuery(workspaceMediaStore(tx)) }))
+	canvas := canvasfixture.NewService(workspaceCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediawire.LegacyAssetReader(ma.NewAssetQuery(workspaceMediaStore(tx)))
+	}))
 	doc, err := canvas.Create(ctx, actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "全部媒体与导演"})
 	if err != nil {
 		t.Fatal(err)
@@ -242,18 +246,18 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 		t.Fatal("real owning copy execution", finished.Status, finished.FailureCode, err)
 	}
 	query := ma.NewAssetQuery(workspaceMediaStore(db))
-	items, err := query.List(ctx, actor, finished.TargetProjectID, "", "", 100)
+	items, err := query.List(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, "", "", 100)
 	if err != nil || len(items.Items) != 4 {
 		t.Fatal("fresh complete media library", items, err)
 	}
 	var sourceKeys []string
 	for _, sourceAsset := range assets {
-		a, err := workspaceMediaStore(db).FindAsset(ctx, actor, source, sourceAsset)
+		a, err := workspaceMediaStore(db).FindAsset(ctx, mediaBoundaryActor(actor), source, sourceAsset)
 		if err != nil {
 			t.Fatal(err)
 		}
 		sourceKeys = append(sourceKeys, a.ObjectKey)
-		r, err := workspaceMediaStore(db).FindRenditions(ctx, actor, source, sourceAsset)
+		r, err := workspaceMediaStore(db).FindRenditions(ctx, mediaBoundaryActor(actor), source, sourceAsset)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -272,7 +276,7 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 				t.Fatal("copied identity shares source")
 			}
 		}
-		actual, err := workspaceMediaStore(db).FindAsset(ctx, actor, finished.TargetProjectID, asset.ID)
+		actual, err := workspaceMediaStore(db).FindAsset(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, asset.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -284,7 +288,7 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 		if err := errors.Join(readErr, reader.Close()); err != nil || size != actual.ByteSize {
 			t.Fatal("real private original readback", err)
 		}
-		renditions, err := workspaceMediaStore(db).FindRenditions(ctx, actor, finished.TargetProjectID, asset.ID)
+		renditions, err := workspaceMediaStore(db).FindRenditions(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, asset.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -465,7 +469,7 @@ func TestProjectCopyRealNonOwnerPermissionsAndObjectFence(t *testing.T) {
 		binding := ma.ProjectCopyBinding{JobID: job.ID, OrgID: actor.OrgID, SourceProjectID: source, TargetProjectID: job.TargetProjectID}
 		snapshot := ma.ProjectCopySnapshot{ID: job.Manifest.MediaSnapshotID, ManifestSHA256: job.Manifest.MediaSHA256, Assets: job.Manifest.Assets, Renditions: job.Manifest.Renditions}
 		stale := wp.NewProjectCopyMediaObjects(store, job.ID, uuid.New(), false)
-		if _, err := stale.Objects(ctx, actor, binding, snapshot); !errors.Is(err, wd.ErrProjectCopyWorkerConflict) {
+		if _, err := stale.Objects(ctx, mediaBoundaryActor(actor), binding, snapshot); !errors.Is(err, wd.ErrProjectCopyWorkerConflict) {
 			return errors.New("stale object writer admitted")
 		}
 		// Stop this synthetic worker before issuing a new explicit retry; its bytes never started.
@@ -476,7 +480,7 @@ func TestProjectCopyRealNonOwnerPermissionsAndObjectFence(t *testing.T) {
 		if _, err := store.Change(ctx, actor, job.ID, "retry", failed.Revision, uuid.New(), uuid.NewString()); err != nil {
 			return err
 		}
-		if _, err := wp.NewProjectCopyMediaObjects(store, job.ID, claimed.WorkerID, false).Objects(ctx, actor, binding, snapshot); !errors.Is(err, wd.ErrProjectCopyWorkerConflict) {
+		if _, err := wp.NewProjectCopyMediaObjects(store, job.ID, claimed.WorkerID, false).Objects(ctx, mediaBoundaryActor(actor), binding, snapshot); !errors.Is(err, wd.ErrProjectCopyWorkerConflict) {
 			return errors.New("old attempt retains object authority")
 		}
 		finished, err := actualCopyWorker(t, tx, mo.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(tx))).Execute(ctx, wa.ProjectCopyWorkID{OrgID: actor.OrgID, JobID: job.ID, WorkerID: uuid.New()})

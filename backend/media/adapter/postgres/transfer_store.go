@@ -13,7 +13,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -70,7 +69,7 @@ func transferProject(source, target domain.LibraryScope) uuid.UUID {
 	}
 	return uuid.Nil
 }
-func (s *TransferStore) access(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, source, target domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
+func (s *TransferStore) access(ctx context.Context, tx *gorm.DB, actor application.Actor, source, target domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
 	if source.Validate() != nil || target.Validate() != nil || source.Kind == target.Kind || s.project == nil {
 		return application.LibraryProjectFacts{}, application.ErrUnavailable
 	}
@@ -107,7 +106,7 @@ func transferHash(value any) (string, error) {
 func transferLock(tx *gorm.DB, actor, key uuid.UUID) error {
 	return lockStorageIdempotencyKey(tx, storageIdempotencyTransfer, actor, key)
 }
-func (s *TransferStore) transferReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash string, action application.TransferAction) (*domain.TransferJob, error) {
+func (s *TransferStore) transferReplay(tx *gorm.DB, actor application.Actor, key uuid.UUID, hash string, action application.TransferAction) (*domain.TransferJob, error) {
 	var row transferCommandRecord
 	read := tx.Where("actor_id = ? AND idem_key = ?", actor.ID, key).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
@@ -136,7 +135,7 @@ func (s *TransferStore) transferReplay(tx *gorm.DB, actor identityapp.Principal,
 
 // The first ownership check must take the scope lock strength needed by the
 // entire transaction. Concurrent read-to-write upgrades can deadlock.
-func (s *TransferStore) readJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, lock, writeScope bool) (transferJobRow, error) {
+func (s *TransferStore) readJob(tx *gorm.DB, actor application.Actor, id uuid.UUID, lock, writeScope bool) (transferJobRow, error) {
 	var row transferJobRow
 	query := tx.Where("id = ? AND org_id = ? AND actor_id = ?", id, actor.OrgID, actor.ID)
 	if lock {
@@ -188,7 +187,7 @@ func transferView(tx *gorm.DB, row transferJobRow) (domain.TransferJob, error) {
 }
 
 // GetTransfer returns only the authenticated creator's current safe view.
-func (s *TransferStore) GetTransfer(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (domain.TransferJob, error) {
+func (s *TransferStore) GetTransfer(ctx context.Context, actor application.Actor, id uuid.UUID) (domain.TransferJob, error) {
 	var result domain.TransferJob
 	if s == nil || s.db == nil || id == uuid.Nil {
 		return result, application.ErrUnavailable
@@ -212,7 +211,7 @@ func (s *TransferStore) GetTransfer(ctx context.Context, actor identityapp.Princ
 }
 
 // ListTransfers filters creator/organization and the exact authorized scope.
-func (s *TransferStore) ListTransfers(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, page, limit int) ([]domain.TransferJob, error) {
+func (s *TransferStore) ListTransfers(ctx context.Context, actor application.Actor, scope domain.LibraryScope, page, limit int) ([]domain.TransferJob, error) {
 	if s == nil || s.db == nil {
 		return nil, application.ErrUnavailable
 	}
@@ -266,7 +265,7 @@ func (s *TransferStore) ListTransfers(ctx context.Context, actor identityapp.Pri
 	return jobs, err
 }
 
-func (s *TransferStore) ensureTransferLibraries(tx *gorm.DB, actor identityapp.Principal, source, target domain.LibraryScope) (libraryRow, libraryRow, error) {
+func (s *TransferStore) ensureTransferLibraries(tx *gorm.DB, actor application.Actor, source, target domain.LibraryScope) (libraryRow, libraryRow, error) {
 	sourceActor, targetActor, err := s.transferActors(tx, actor, source, target, true)
 	if err != nil {
 		return libraryRow{}, libraryRow{}, err
@@ -321,7 +320,7 @@ func transferFrozenBytes(items []application.FrozenTransferItem) (string, [][]by
 	return hex.EncodeToString(hash[:]), encoded, nil
 }
 
-func transferSourceFile(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) (application.LibraryMediaFile, error) {
+func transferSourceFile(tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, id uuid.UUID) (application.LibraryMediaFile, error) {
 	query := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("id = ? AND personal_actor_id IS NULL AND personal_org_id IS NULL", id)
 	if scope.Kind == domain.LibraryPersonal {
 		query = tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(map[string]any{"id": id, "project_id": nil, "personal_org_id": actor.OrgID, "personal_actor_id": actor.ID})
@@ -363,7 +362,7 @@ func NewScopedTransferStore(db *gorm.DB, project LibraryProjectAccessFactory, gu
 	return s
 }
 
-func (s *TransferStore) transferActors(tx *gorm.DB, actor identityapp.Principal, source, target domain.LibraryScope, write bool) (identityapp.Principal, identityapp.Principal, error) {
+func (s *TransferStore) transferActors(tx *gorm.DB, actor application.Actor, source, target domain.LibraryScope, write bool) (application.Actor, application.Actor, error) {
 	access, err := s.accessScope(tx)
 	if err != nil {
 		return actor, actor, err

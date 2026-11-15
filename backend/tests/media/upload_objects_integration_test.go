@@ -67,7 +67,7 @@ func TestUploadRealCOSOriginalRenditionsAndPreview(t *testing.T) {
 			}
 			defer func() { _ = file.Close() }()
 			in := uploadInput(t)
-			in.Actor = actor
+			in.Actor = mediaActor(actor)
 			in.Request.ProjectID = project
 			in.Request.FileName = tc.name
 			in.File = file
@@ -75,11 +75,11 @@ func TestUploadRealCOSOriginalRenditionsAndPreview(t *testing.T) {
 			if err != nil {
 				t.Fatalf("real %s upload failed: %v", tc.name, err)
 			}
-			asset, err := store.FindAsset(t.Context(), actor, project, result.Asset.ID)
+			asset, err := store.FindAsset(t.Context(), mediaActor(actor), project, result.Asset.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			rends, err := store.FindRenditions(t.Context(), actor, project, result.Asset.ID)
+			rends, err := store.FindRenditions(t.Context(), mediaActor(actor), project, result.Asset.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,7 +105,7 @@ func TestUploadRealCOSOriginalRenditionsAndPreview(t *testing.T) {
 					t.Fatalf("real %s rendition verification failed", rendition.Kind)
 				}
 			}
-			preview, err := mediaapp.NewRoutedAssetQuery(store, mediaFixtureReadObjects(t), 5*time.Minute).Preview(t.Context(), actor, project, result.Asset.ID)
+			preview, err := mediaapp.NewRoutedAssetQuery(store, mediaFixtureReadObjects(t), 5*time.Minute).Preview(t.Context(), mediaActor(actor), project, result.Asset.ID)
 			if err != nil {
 				t.Fatal("authorized preview signing failed")
 			}

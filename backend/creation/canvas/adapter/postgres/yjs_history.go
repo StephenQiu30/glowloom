@@ -190,12 +190,12 @@ func (s *Store) CommitYjsRestore(ctx context.Context, a identity.Principal, base
 		for _, node := range target.Nodes {
 			commands = append(commands, domain.Command{Type: "AddNodes", Nodes: []domain.Node{node}})
 			if node.Config.Composer != nil {
-				if err = pgprompt.ValidateDraftSources(tx, a, p, *node.Config.Composer, false, s.subjectSources(tx)); err != nil {
+				if err = pgprompt.ValidateDraftSources(tx, canvasPromptReference(a), p, *node.Config.Composer, false, s.subjectSources(tx)); err != nil {
 					return err
 				}
 			}
 			if domain.IsDraft(node) && node.Config.Draft.Composer != nil {
-				if err = pgprompt.ValidateDraftSources(tx, a, p, *node.Config.Draft.Composer, false, s.subjectSources(tx)); err != nil {
+				if err = pgprompt.ValidateDraftSources(tx, canvasPromptReference(a), p, *node.Config.Draft.Composer, false, s.subjectSources(tx)); err != nil {
 					return err
 				}
 			}

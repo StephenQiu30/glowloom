@@ -108,7 +108,7 @@ func NewAvatarStore(db *gorm.DB, actors AvatarActorAccessFactory) *AvatarStore {
 	return &AvatarStore{db: db, actors: actors}
 }
 
-func (s *AvatarStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.Principal, clock func() time.Time) error {
+func (s *AvatarStore) authorize(ctx context.Context, tx *gorm.DB, a application.Actor, clock func() time.Time) error {
 	if s.actors == nil {
 		return identityapp.ErrSessionInvalid
 	}
@@ -139,13 +139,13 @@ func (s *AvatarStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.
 }
 
 // AuthorizeAvatar checks current identity and session before decoding.
-func (s *AvatarStore) AuthorizeAvatar(ctx context.Context, a identityapp.Principal, clock func() time.Time) error {
+func (s *AvatarStore) AuthorizeAvatar(ctx context.Context, a application.Actor, clock func() time.Time) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return s.authorize(ctx, tx, a, clock) })
 }
 
 // ReserveAvatarLocation binds the private output to the current route in the
 // same authorized transaction that creates its durable storage work intent.
-func (s *AvatarStore) ReserveAvatarLocation(ctx context.Context, a identityapp.Principal, id uuid.UUID, key string, clock func() time.Time) (domain.ObjectLocation, error) {
+func (s *AvatarStore) ReserveAvatarLocation(ctx context.Context, a application.Actor, id uuid.UUID, key string, clock func() time.Time) (domain.ObjectLocation, error) {
 	var location domain.ObjectLocation
 	if s == nil || s.db == nil || id == uuid.Nil || clock == nil {
 		return location, application.ErrUnavailable
@@ -170,7 +170,7 @@ func avatarStorageOwner(actor, asset uuid.UUID) application.StorageWorkOwner {
 }
 
 // BeginAvatarWrite persists the bounded provider-write deadline before SDK I/O.
-func (s *AvatarStore) BeginAvatarWrite(ctx context.Context, a identityapp.Principal, id uuid.UUID, location domain.ObjectLocation) error {
+func (s *AvatarStore) BeginAvatarWrite(ctx context.Context, a application.Actor, id uuid.UUID, location domain.ObjectLocation) error {
 	routes := NewStorageRoutes(s.db)
 	intent, err := routes.ReadStorageWork(ctx, avatarStorageOwner(a.ID, id))
 	if err != nil {
@@ -180,7 +180,7 @@ func (s *AvatarStore) BeginAvatarWrite(ctx context.Context, a identityapp.Princi
 }
 
 // ConfirmAvatarLocation records provider metadata only after the exact bytes verify.
-func (s *AvatarStore) ConfirmAvatarLocation(ctx context.Context, a identityapp.Principal, id uuid.UUID, location domain.ObjectLocation, info application.ObjectInfo) error {
+func (s *AvatarStore) ConfirmAvatarLocation(ctx context.Context, a application.Actor, id uuid.UUID, location domain.ObjectLocation, info application.ObjectInfo) error {
 	routes := NewStorageRoutes(s.db)
 	intent, err := routes.ReadStorageWork(ctx, avatarStorageOwner(a.ID, id))
 	if err != nil {
@@ -191,7 +191,7 @@ func (s *AvatarStore) ConfirmAvatarLocation(ctx context.Context, a identityapp.P
 
 // CancelAvatarObject retires an uncommitted intent and grants deletion only
 // after the storage ledger's in-flight write drain has completed.
-func (s *AvatarStore) CancelAvatarObject(ctx context.Context, a identityapp.Principal, id uuid.UUID, location domain.ObjectLocation) (bool, error) {
+func (s *AvatarStore) CancelAvatarObject(ctx context.Context, a application.Actor, id uuid.UUID, location domain.ObjectLocation) (bool, error) {
 	var removable bool
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		routes := NewStorageRoutes(tx)
@@ -212,7 +212,7 @@ func (s *AvatarStore) CancelAvatarObject(ctx context.Context, a identityapp.Prin
 }
 
 // ConfirmAvatarRemoval retires the exact location after provider deletion.
-func (s *AvatarStore) ConfirmAvatarRemoval(ctx context.Context, a identityapp.Principal, id uuid.UUID, location domain.ObjectLocation) error {
+func (s *AvatarStore) ConfirmAvatarRemoval(ctx context.Context, a application.Actor, id uuid.UUID, location domain.ObjectLocation) error {
 	routes := NewStorageRoutes(s.db)
 	intent, err := routes.ReadStorageWork(ctx, avatarStorageOwner(a.ID, id))
 	if err != nil {
@@ -222,7 +222,7 @@ func (s *AvatarStore) ConfirmAvatarRemoval(ctx context.Context, a identityapp.Pr
 }
 
 // CommitAvatar repeats current authorization when publishing immutable metadata.
-func (s *AvatarStore) CommitAvatar(ctx context.Context, a identityapp.Principal, m domain.MediaAsset, clock func() time.Time) error {
+func (s *AvatarStore) CommitAvatar(ctx context.Context, a application.Actor, m domain.MediaAsset, clock func() time.Time) error {
 	if m.Validate() != nil || m.Personal == nil || m.Personal.ActorID != a.ID || m.Personal.OrgID != a.OrgID || m.ProjectID != uuid.Nil || m.Kind != domain.KindImage || m.MimeType != "image/png" {
 		return application.ErrInvalidUpload
 	}
@@ -258,7 +258,7 @@ func (s *AvatarStore) AvatarExists(ctx context.Context, id uuid.UUID) (bool, err
 }
 
 // AvatarTransaction keeps identity and avatar locks until preview signing finishes.
-func (s *AvatarStore) AvatarTransaction(ctx context.Context, a identityapp.Principal, clock func() time.Time, run func(domain.MediaAsset) error) error {
+func (s *AvatarStore) AvatarTransaction(ctx context.Context, a application.Actor, clock func() time.Time, run func(domain.MediaAsset) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.authorize(ctx, tx, a, clock); err != nil {
 			return err

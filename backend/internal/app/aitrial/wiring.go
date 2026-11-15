@@ -31,7 +31,7 @@ func RegisterAPI(_ context.Context, group *gin.RouterGroup, db *gorm.DB, registr
 
 // Cloud wires the configured cloud trial executor.
 func Cloud(db *gorm.DB, keys *credentialseal.Unsealer, cloud *providerhttp.Client, registry *objectstorage.Registry) taskruntime.Handler {
-	return Sessions(db, registry).Handler(&trial.Runner{Store: trial.NewStore(db, operationwire.NewCatalogStore(db)), Keys: keys, Cloud: cloud, Objects: NewObjects(registry)})
+	return Sessions(db, registry).Handler(&trial.Runner{Store: trial.NewStore(db, operationwire.NewCatalogStore(db)), Keys: keys, Cloud: cloud, Objects: NewObjects(registry), Generated: operationwire.NewGeneratedVideos()})
 }
 
 // Codex wires the configured Codex trial executor.

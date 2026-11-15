@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	projecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/httpprojects"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
@@ -34,34 +37,6 @@ func (h *ProjectLifecycleHandler) Register(group *gin.RouterGroup) {
 	group.POST("/projects/:pid/unarchive", h.Unarchive)
 	group.DELETE("/projects/:pid", h.Delete)
 	group.POST("/projects/:pid/restore", h.Restore)
-}
-
-// ProjectDetailResponse contains safe settings and actual persisted recovery facts.
-type ProjectDetailResponse struct {
-	LastModifiedAt      *time.Time        `json:"last_modified_at,omitempty"`
-	LastModifiedBasis   *string           `json:"last_modified_basis,omitempty"`
-	CoverAssetID        *uuid.UUID        `json:"cover_asset_id" extensions:"x-nullable"`
-	CoverUnavailable    bool              `json:"cover_unavailable"`
-	ID                  uuid.UUID         `json:"id"`
-	CanvasID            *uuid.UUID        `json:"canvas_id" extensions:"x-nullable"`
-	StyleKey            *string           `json:"style_key" extensions:"x-nullable"`
-	Name                string            `json:"name"`
-	Description         string            `json:"description"`
-	AspectRatio         string            `json:"aspect_ratio"`
-	StyleType           string            `json:"style_type"`
-	StyleSubtype        string            `json:"style_subtype,omitempty"`
-	StylePresetID       *uuid.UUID        `json:"style_preset_id" extensions:"x-nullable"`
-	Resolution          string            `json:"resolution"`
-	AllowOverseasModels bool              `json:"allow_overseas_models"`
-	DefaultModels       map[string]string `json:"default_models" swaggertype:"object,string"`
-	Status              string            `json:"status"`
-	IsDelete            bool              `json:"is_delete"`
-	ArchivedAt          *time.Time        `json:"archived_at" extensions:"x-nullable"`
-	DeleteTime          *time.Time        `json:"delete_time" extensions:"x-nullable"`
-	PurgeAfter          *time.Time        `json:"purge_after" extensions:"x-nullable"`
-	Revision            int64             `json:"revision"`
-	CreateTime          time.Time         `json:"create_time"`
-	UpdateTime          time.Time         `json:"update_time"`
 }
 
 // ProjectUpdateRequest contains only settings mutable after creation.
@@ -111,7 +86,7 @@ type ProjectTransitionRequest struct {
 // @ID getProject
 // @Produce json
 // @Param pid path string true "项目UUID"
-// @Success 200 {object} ProjectDetailResponse
+// @Success 200 {object} projecthttp.ProjectDetailResponse
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -140,7 +115,7 @@ func (h *ProjectLifecycleHandler) Read(c *gin.Context) {
 // @Param pid path string true "项目UUID"
 // @Param Idempotency-Key header string true "UUID幂等键"
 // @Param body body ProjectUpdateRequest true "项目修订与可变设置；零值预设UUID清除预设"
-// @Success 200 {object} ProjectDetailResponse
+// @Success 200 {object} projecthttp.ProjectDetailResponse
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
@@ -168,7 +143,7 @@ func (h *ProjectLifecycleHandler) Update(c *gin.Context) {
 // @Param pid path string true "项目UUID"
 // @Param Idempotency-Key header string true "UUID幂等键"
 // @Param body body ProjectTransitionRequest true "项目修订"
-// @Success 200 {object} ProjectDetailResponse
+// @Success 200 {object} projecthttp.ProjectDetailResponse
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
@@ -186,7 +161,7 @@ func (h *ProjectLifecycleHandler) Archive(c *gin.Context) { h.transition(c, "arc
 // @Param pid path string true "项目UUID"
 // @Param Idempotency-Key header string true "UUID幂等键"
 // @Param body body ProjectTransitionRequest true "项目修订"
-// @Success 200 {object} ProjectDetailResponse
+// @Success 200 {object} projecthttp.ProjectDetailResponse
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
@@ -204,7 +179,7 @@ func (h *ProjectLifecycleHandler) Unarchive(c *gin.Context) { h.transition(c, "u
 // @Param pid path string true "项目UUID"
 // @Param Idempotency-Key header string true "UUID幂等键"
 // @Param body body ProjectTransitionRequest true "项目修订"
-// @Success 200 {object} ProjectDetailResponse
+// @Success 200 {object} projecthttp.ProjectDetailResponse
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
@@ -222,7 +197,7 @@ func (h *ProjectLifecycleHandler) Delete(c *gin.Context) { h.transition(c, "dele
 // @Param pid path string true "项目UUID"
 // @Param Idempotency-Key header string true "UUID幂等键"
 // @Param body body ProjectTransitionRequest true "项目修订"
-// @Success 200 {object} ProjectDetailResponse
+// @Success 200 {object} projecthttp.ProjectDetailResponse
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
@@ -261,15 +236,7 @@ func (h *ProjectLifecycleHandler) change(c *gin.Context, action string, patch ap
 }
 
 func writeProjectSnapshot(c *gin.Context, s application.ProjectSnapshot) {
-	p := s.Project
-	var preset *uuid.UUID
-	if p.StylePresetID != uuid.Nil {
-		id := p.StylePresetID
-		preset = &id
-	}
-	response := ProjectDetailResponse{LastModifiedAt: s.LastModifiedAt, LastModifiedBasis: s.LastModifiedBasis, CoverAssetID: p.CoverAssetID, CoverUnavailable: s.CoverUnavailable, ID: p.ID, CanvasID: projectCanvasID(p.CanvasID), StyleKey: p.StyleKey, Name: p.Name, Description: p.Description, AspectRatio: p.AspectRatio, StyleType: p.StyleType, StyleSubtype: p.StyleSubtype, StylePresetID: preset, Resolution: p.Resolution, AllowOverseasModels: p.AllowOverseasModels, DefaultModels: s.DefaultModels, Status: p.Status, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, Revision: p.Revision, CreateTime: p.CreateTime, UpdateTime: p.UpdateTime}
-	c.Header("Cache-Control", "private, no-store")
-	c.JSON(200, response)
+	projecthttp.WriteProjectDetails(c, workspacesource.ProjectCloseDetails{Project: s.Project, DefaultModels: s.DefaultModels, LastModifiedAt: s.LastModifiedAt, LastModifiedBasis: s.LastModifiedBasis, CoverUnavailable: s.CoverUnavailable})
 }
 
 func writeLifecycleError(c *gin.Context, err error) {
@@ -278,7 +245,7 @@ func writeLifecycleError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrScopeNotFound), errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound):
+	case errors.Is(err, workspacesource.ErrScopeNotFound), errors.Is(err, workspacesource.ErrProjectNotFound), errors.Is(err, workspacesource.ErrStylePresetNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, domain.ErrProjectRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
@@ -290,9 +257,9 @@ func writeLifecycleError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "inflight_work", nil)
 	case errors.Is(err, domain.ErrProjectRestoreExpired):
 		httpapi.WriteProblem(c, 409, "restore_expired", nil)
-	case errors.Is(err, application.ErrIdempotencyConflict):
+	case errors.Is(err, workspacesource.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_key_reused", nil)
-	case errors.Is(err, application.ErrInvalidProjectChange), errors.Is(err, domain.ErrInvalidProject), errors.Is(err, application.ErrStylePresetMismatch):
+	case errors.Is(err, application.ErrInvalidProjectChange), errors.Is(err, domain.ErrInvalidProject), errors.Is(err, workspacesource.ErrStylePresetMismatch):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)

@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -15,12 +14,14 @@ import (
 
 // PurgeHandler exposes durable private-object purges, never object keys.
 type PurgeHandler struct {
+	resolve ActorResolver
+
 	repo application.PurgeRepository
 }
 
 // NewPurgeHandler injects the media owning command and query boundary.
-func NewPurgeHandler(repo application.PurgeRepository) *PurgeHandler {
-	return &PurgeHandler{repo: repo}
+func NewPurgeHandler(repo application.PurgeRepository, resolve ActorResolver) *PurgeHandler {
+	return &PurgeHandler{resolve: resolve, repo: repo}
 }
 
 // Register adds real purge admission, tracking and explicit control actions.
@@ -71,6 +72,11 @@ func purgeKey(c *gin.Context) (uuid.UUID, bool) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/purges [post]
 func (h *PurgeHandler) Create(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.repo == nil {
 		writePurgeError(c, application.ErrUnavailable)
 		return
@@ -88,7 +94,7 @@ func (h *PurgeHandler) Create(c *gin.Context) {
 		return
 	}
 	input.Key = key
-	job, err := h.repo.CreatePurge(c.Request.Context(), identityhttp.Principal(c), input)
+	job, err := h.repo.CreatePurge(c.Request.Context(), actor, input)
 	if err != nil {
 		writePurgeError(c, err)
 		return
@@ -140,7 +146,10 @@ func (h *PurgeHandler) List(c *gin.Context) {
 			*destination = value
 		}
 	}
-	actor := identityhttp.Principal(c)
+	actor, ok := requestActor(c, h.resolve)
+	if !ok {
+		return
+	}
 	items, err := h.repo.ListPurges(c.Request.Context(), actor, scope, page, size)
 	if err != nil {
 		writePurgeError(c, err)
@@ -163,6 +172,11 @@ func (h *PurgeHandler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/purges/{job_id} [get]
 func (h *PurgeHandler) Get(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.repo == nil {
 		writePurgeError(c, application.ErrUnavailable)
 		return
@@ -175,7 +189,7 @@ func (h *PurgeHandler) Get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	job, err := h.repo.GetPurge(c.Request.Context(), identityhttp.Principal(c), id)
+	job, err := h.repo.GetPurge(c.Request.Context(), actor, id)
 	if err != nil {
 		writePurgeError(c, err)
 		return
@@ -185,6 +199,11 @@ func (h *PurgeHandler) Get(c *gin.Context) {
 }
 
 func (h *PurgeHandler) control(c *gin.Context, action application.PurgeAction) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.repo == nil {
 		writePurgeError(c, application.ErrUnavailable)
 		return
@@ -205,7 +224,7 @@ func (h *PurgeHandler) control(c *gin.Context, action application.PurgeAction) {
 	if !httpapi.Decode(c, &request) {
 		return
 	}
-	job, err := h.repo.ControlPurge(c.Request.Context(), identityhttp.Principal(c), id, key, request.Revision, action)
+	job, err := h.repo.ControlPurge(c.Request.Context(), actor, id, key, request.Revision, action)
 	if err != nil {
 		writePurgeError(c, err)
 		return

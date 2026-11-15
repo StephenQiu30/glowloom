@@ -6,13 +6,15 @@ import (
 
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 )
 
 func TestBlankProjectCreatesMatchingMainNameAndActivity(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
-	input := workspaceapp.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()}
+	input := workspacesource.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()}
 	key := uuid.New()
 	command := workspaceapp.NewCreateProjectCommand(workspaceStore(db), time.Now)
 	created, err := command.ExecuteIdempotent(ctx, actor, key, input)

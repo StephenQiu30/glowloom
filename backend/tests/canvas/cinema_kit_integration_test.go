@@ -58,7 +58,7 @@ func TestCinemaKitPostgresYjsSaveEditReadAndDetach(t *testing.T) {
 	inputReader := promptpg.NewDraftStore(runtime, promptwire.DraftAccess)
 	readInput := func(d domain.Document) (prompt.Draft, error) {
 		n := find(d, target.ID)
-		return inputReader.ReadInput(t.Context(), actor, project, prompt.InputSource{Kind: "canvas_input", CanvasID: doc.ID, CanvasRevision: d.Revision, NodeID: target.ID, InputRevision: n.InputRevision}, false)
+		return inputReader.ReadInput(t.Context(), promptActor(actor), project, prompt.InputSource{Kind: "canvas_input", CanvasID: doc.ID, CanvasRevision: d.Revision, NodeID: target.ID, InputRevision: n.InputRevision}, false)
 	}
 	input, err := readInput(first)
 	if err != nil || input.CinemaKit == nil || input.CinemaKit.Camera.FocalLength != "35mm" {

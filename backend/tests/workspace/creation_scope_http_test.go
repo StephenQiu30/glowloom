@@ -9,10 +9,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -28,7 +31,7 @@ func (s *headerScopeResolver) Resolve(_ context.Context, _ identity.Principal, i
 		return domain.Scope{}, s.failure
 	}
 	if id != s.scope.ID {
-		return domain.Scope{}, workspace.ErrScopeNotFound
+		return domain.Scope{}, workspacesource.ErrScopeNotFound
 	}
 	return s.scope, nil
 }
@@ -68,7 +71,7 @@ func TestCreationScopeAuthorityErrorsNeverEnterContentHandler(t *testing.T) {
 		name   string
 		cause  error
 		status int
-	}{{"revoked session", identity.ErrSessionInvalid, 401}, {"removed membership", workspace.ErrScopeNotFound, 404}, {"unavailable authority", errors.New("scope store unavailable"), 503}} {
+	}{{"revoked session", identity.ErrSessionInvalid, 401}, {"removed membership", workspacesource.ErrScopeNotFound, 404}, {"unavailable authority", errors.New("scope store unavailable"), 503}} {
 		t.Run(test.name, func(t *testing.T) {
 			scopes := &headerScopeResolver{scope: domain.Scope{ID: uuid.New()}, failure: test.cause}
 			entered := false

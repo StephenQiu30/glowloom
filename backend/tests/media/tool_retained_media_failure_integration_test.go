@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -73,7 +75,7 @@ func retainedRuntimeRead(t *testing.T, database *gorm.DB, use func(*toolpg.Retai
 		if role != "glowloom_app" {
 			t.Fatal("retained reader requires the actual non-owner role")
 		}
-		return use(toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))))
+		return use(toolpg.NewRetainedMediaReader(tx, mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))))
 	}); err != nil {
 		t.Fatal(err)
 	}

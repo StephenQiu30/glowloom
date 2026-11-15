@@ -55,7 +55,7 @@ func TestScriptFileImportWarningsAreClosedFormalFactsAndNilIsByteCompatible(t *t
 	input.Sources[0].Provenance.Warnings = []domain.SourceExtractionWarning{{Code: "embedded_media_omitted", Count: 1}}
 	store := &sourcePersistence{}
 	objects := &sourceObjects{data: make(map[string][]byte)}
-	if _, err := app.NewSourceService(store, objects, time.Now).Write(t.Context(), actor, input); err == nil || store.begins != 0 || objects.puts != 0 {
+	if _, err := app.NewSourceService(store, objects, time.Now).Write(t.Context(), scriptActor(actor), input); err == nil || store.begins != 0 || objects.puts != 0 {
 		t.Fatal("client invented provenance", err)
 	}
 }

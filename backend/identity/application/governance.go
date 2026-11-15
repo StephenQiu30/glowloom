@@ -102,6 +102,7 @@ type Governance struct {
 	store     GovernanceStore
 	protector ProofProtector
 	now       func() time.Time
+	source    *GovernanceSource
 }
 
 // NewGovernance injects the atomic store, encrypted proof protector and clock.
@@ -135,6 +136,13 @@ func (s *Governance) notify(tx GovernanceTx, recipient, template string, now tim
 	return tx.EnqueueMail(QueuedMail{EventID: id, Template: template, Recipient: recipient, KeyID: s.protector.KeyID(), EncryptedPayload: sealed, CreatedAt: now, ExpiresAt: now.Add(48 * time.Hour)})
 }
 func (s *Governance) mutateUser(ctx context.Context, actor Principal, target uuid.UUID, revision int64, reason string, change UserGovernanceChange) error {
+	if s.source != nil && change.Action != "unlock" && change.Action != "profile_reset" {
+		return ErrPasswordChangeUnavailable
+	}
+	return s.mutateUserPrepared(ctx, actor, target, revision, reason, change, nil)
+}
+
+func (s *Governance) mutateUserPrepared(ctx context.Context, actor Principal, target uuid.UUID, revision int64, reason string, change UserGovernanceChange, prepare func(GovernanceTx, domain.User, time.Time) error) error {
 	reason = strings.TrimSpace(reason)
 	simple := change.Action == "disable" || change.Action == "delete"
 	if simple && target == actor.ID {
@@ -200,30 +208,38 @@ func (s *Governance) mutateUser(ctx context.Context, actor Principal, target uui
 			}
 			change.LoginGuardKey = hex.EncodeToString(s.protector.Digest("login_guard", uuid.Nil, u.Email))
 		}
-		if err := tx.ChangeUser(u, change, now); err != nil {
+		if prepare != nil {
+			return prepare(tx, u, now)
+		}
+		if err := s.applyGovernanceChange(tx, u, change, reason, now); err != nil {
 			return err
-		}
-		if change.Action == "disable" || change.Action == "enable" {
-			if tx.TeamGovernance() == nil {
-				return ErrGovernanceConflict
-			}
-			if err := tx.TeamGovernance().AccountAccessChanged(target, now); err != nil {
-				return err
-			}
-		}
-		if err := tx.AppendGovernanceEvent(&target, nil, "account."+change.Action, reason, now); err != nil {
-			return err
-		}
-		if u.Email != "" {
-			if err := s.notify(tx, u.Email, "account_governance", now); err != nil {
-				return err
-			}
 		}
 		if change.RequestID != uuid.Nil {
 			return tx.SaveUserCommand(receipt, now)
 		}
 		return nil
 	})
+}
+
+func (s *Governance) applyGovernanceChange(tx GovernanceTx, user domain.User, change UserGovernanceChange, reason string, now time.Time) error {
+	if err := tx.ChangeUser(user, change, now); err != nil {
+		return err
+	}
+	if change.Action == "disable" || change.Action == "enable" {
+		if tx.TeamGovernance() == nil {
+			return ErrGovernanceConflict
+		}
+		if err := tx.TeamGovernance().AccountAccessChanged(user.ID, now); err != nil {
+			return err
+		}
+	}
+	if err := tx.AppendGovernanceEvent(&user.ID, nil, "account."+change.Action, reason, now); err != nil {
+		return err
+	}
+	if user.Email != "" {
+		return s.notify(tx, user.Email, "account_governance", now)
+	}
+	return nil
 }
 
 // Disable revokes account access and freezes teams that lose their administrator.

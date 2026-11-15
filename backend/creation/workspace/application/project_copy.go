@@ -9,9 +9,13 @@ import (
 
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -40,15 +44,15 @@ func (i ProjectCopyInput) Validate() error {
 // ProjectCopyMediaOwner retains media-owned snapshots, objects and complete receipts.
 type ProjectCopyMediaOwner interface {
 	mediaapp.ProjectCopyObjectRepository
-	Freeze(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, time.Time) (mediaapp.ProjectCopySnapshot, error)
-	Register(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot) (mediaapp.ProjectCopyReceipt, error)
-	FinishCleanup(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot) error
+	Freeze(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, time.Time) (mediaapp.ProjectCopySnapshot, error)
+	Register(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot) (mediaapp.ProjectCopyReceipt, error)
+	FinishCleanup(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot) error
 }
 
 // ProjectCopyHistoricalMediaOwner freezes explicit retained document references.
 // Ordinary media reads and legacy admissions retain their original live scope.
 type ProjectCopyHistoricalMediaOwner interface {
-	FreezeWithReferences(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, time.Time, []uuid.UUID) (mediaapp.ProjectCopySnapshot, error)
+	FreezeWithReferences(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, time.Time, []uuid.UUID) (mediaapp.ProjectCopySnapshot, error)
 }
 
 // ProjectCopyCanvasOwner owns complete graph snapshots and private graph copies.
@@ -106,7 +110,7 @@ func (s *ProjectCopyService) Create(ctx context.Context, actor identityapp.Princ
 		return domain.ProjectCopyJob{}, err
 	}
 	if s == nil || s.store == nil || s.now == nil {
-		return domain.ProjectCopyJob{}, ErrProjectDependencyUnavailable
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return s.store.Create(ctx, actor, input, s.now().UTC())
 }
@@ -117,7 +121,7 @@ func (s *ProjectCopyService) Get(ctx context.Context, actor identityapp.Principa
 		return domain.ProjectCopyJob{}, identityapp.ErrForbidden
 	}
 	if s == nil || s.store == nil || id == uuid.Nil {
-		return domain.ProjectCopyJob{}, ErrProjectDependencyUnavailable
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return s.store.Find(ctx, actor, id)
 }
@@ -131,7 +135,7 @@ func (s *ProjectCopyService) Change(ctx context.Context, actor identityapp.Princ
 		return domain.ProjectCopyJob{}, domain.ErrInvalidProjectCopy
 	}
 	if s == nil || s.store == nil {
-		return domain.ProjectCopyJob{}, ErrProjectDependencyUnavailable
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	request, err := uuid.Parse(requestID)
 	if err != nil || request == uuid.Nil || request.String() != requestID {

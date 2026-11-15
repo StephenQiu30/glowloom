@@ -42,17 +42,17 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 			var fact mediaapp.ReferenceFact
 			if err := db.Transaction(func(tx *gorm.DB) error {
 				var err error
-				fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, upload.Asset.ID, kind)
+				fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), mediaActor(actor), project, upload.Asset.ID, kind)
 				return err
 			}); err != nil {
 				t.Fatal(err)
 			}
 			base := mediaTestStore(db)
-			asset, err := base.FindAsset(t.Context(), actor, project, fact.AssetID)
+			asset, err := base.FindAsset(t.Context(), mediaActor(actor), project, fact.AssetID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			rends, err := base.FindRenditions(t.Context(), actor, project, fact.AssetID)
+			rends, err := base.FindRenditions(t.Context(), mediaActor(actor), project, fact.AssetID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -75,7 +75,7 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 				t.Fatal(err)
 			}
 			if err := db.Transaction(func(tx *gorm.DB) error {
-				_, err := mediaCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), []uuid.UUID{fact.AssetID})
+				_, err := mediaCopyStore(tx).FreezeWithReferences(t.Context(), mediaActor(actor), binding, time.Now(), []uuid.UUID{fact.AssetID})
 				return err
 			}); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 				t.Fatal("document-only caller was widened", err)
@@ -83,7 +83,7 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 			bad := fact
 			bad.SHA256 = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 			if err := db.Transaction(func(tx *gorm.DB) error {
-				_, err := mediaCopyStore(tx).FreezeWithReferenceFacts(t.Context(), actor, binding, time.Now(), nil, []mediaapp.ReferenceFact{bad})
+				_, err := mediaCopyStore(tx).FreezeWithReferenceFacts(t.Context(), mediaActor(actor), binding, time.Now(), nil, []mediaapp.ReferenceFact{bad})
 				return err
 			}); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 				t.Fatal("mismatched immutable original accepted", err)
@@ -97,11 +97,11 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 			if err := db.Transaction(func(tx *gorm.DB) error {
 				var err error
 				repo := mediaCopyStore(tx)
-				snapshot, err = repo.FreezeWithReferenceFacts(t.Context(), actor, binding, time.Now(), nil, []mediaapp.ReferenceFact{fact})
+				snapshot, err = repo.FreezeWithReferenceFacts(t.Context(), mediaActor(actor), binding, time.Now(), nil, []mediaapp.ReferenceFact{fact})
 				if err != nil {
 					return err
 				}
-				mappings, err = mediaapp.NewProjectCopyReferenceQuery(repo).FreezeReferences(t.Context(), actor, binding, snapshot, []mediaapp.ReferenceFact{fact})
+				mappings, err = mediaapp.NewProjectCopyReferenceQuery(repo).FreezeReferences(t.Context(), mediaActor(actor), binding, snapshot, []mediaapp.ReferenceFact{fact})
 				if err != nil {
 					return err
 				}
@@ -110,10 +110,10 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 				t.Fatal("trusted uncataloged historical source omitted", snapshot, mappings, err)
 			}
 			repo := mediaCopyStore(db)
-			if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+			if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), mediaActor(actor), binding, snapshot); err != nil {
 				t.Fatal(err)
 			}
-			intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
+			intents, err := repo.Objects(t.Context(), mediaActor(actor), binding, snapshot)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -121,15 +121,15 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 				t.Cleanup(func() { _ = objects.Remove(context.Background(), object.TargetObjectKey) })
 			}
 			if err := db.Transaction(func(tx *gorm.DB) error {
-				_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+				_, err := mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 				return err
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if err := mediaapp.NewRoutedProjectCopyReferenceQuery(repo, mediaFixtureReadObjects(t)).VerifyTransferred(t.Context(), actor, binding, snapshot, mappings); err != nil {
+			if err := mediaapp.NewRoutedProjectCopyReferenceQuery(repo, mediaFixtureReadObjects(t)).VerifyTransferred(t.Context(), mediaActor(actor), binding, snapshot, mappings); err != nil {
 				t.Fatal("actual original/rendition retained proof", err)
 			}
-			if _, err := base.FindAsset(t.Context(), actor, project, fact.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := base.FindAsset(t.Context(), mediaActor(actor), project, fact.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("special copy broadened ordinary original read", err)
 			}
 		})
@@ -145,17 +145,17 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 	var fact mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
+		fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), mediaActor(actor), project, upload.Asset.ID, domain.KindImage)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	base := mediaTestStore(db)
-	asset, err := base.FindAsset(t.Context(), actor, project, fact.AssetID)
+	asset, err := base.FindAsset(t.Context(), mediaActor(actor), project, fact.AssetID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rends, err := base.FindRenditions(t.Context(), actor, project, fact.AssetID)
+	rends, err := base.FindRenditions(t.Context(), mediaActor(actor), project, fact.AssetID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 		t.Cleanup(func() { _ = objects.Remove(context.Background(), r.ObjectKey) })
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	if _, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: asset.ID, Revision: 1}}}); err != nil {
+	if _, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: asset.ID, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	deleted, err := asset.Delete(time.Now().UTC())
@@ -182,12 +182,12 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
 		repo := mediaCopyStore(tx)
-		snapshot, err = repo.Freeze(t.Context(), actor, binding, time.Now())
+		snapshot, err = repo.Freeze(t.Context(), mediaActor(actor), binding, time.Now())
 		if err != nil {
 			return err
 		}
 		// No object getter is supplied: admission must remain SQL-only.
-		mapping, err = mediaapp.NewProjectCopyReferenceQuery(repo).FreezeReferences(t.Context(), actor, binding, snapshot, []mediaapp.ReferenceFact{fact})
+		mapping, err = mediaapp.NewProjectCopyReferenceQuery(repo).FreezeReferences(t.Context(), mediaActor(actor), binding, snapshot, []mediaapp.ReferenceFact{fact})
 		if err != nil {
 			return err
 		}
@@ -200,13 +200,13 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 	}
 	repo := mediaCopyStore(db)
 	query := mediaapp.NewRoutedProjectCopyReferenceQuery(repo, mediaFixtureReadObjects(t))
-	if err := query.VerifyTransferred(t.Context(), actor, binding, snapshot, mapping); err == nil {
+	if err := query.VerifyTransferred(t.Context(), mediaActor(actor), binding, snapshot, mapping); err == nil {
 		t.Fatal("unregistered/untransferred references passed verification")
 	}
-	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), mediaActor(actor), binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
-	intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
+	intents, err := repo.Objects(t.Context(), mediaActor(actor), binding, snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,25 +214,25 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 		t.Cleanup(func() { _ = objects.Remove(context.Background(), object.TargetObjectKey) })
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := query.VerifyTransferred(t.Context(), actor, binding, snapshot, mapping); err != nil {
+	if err := query.VerifyTransferred(t.Context(), mediaActor(actor), binding, snapshot, mapping); err != nil {
 		t.Fatal("actual retained bytes and independent target rendition", err)
 	}
 	changed := append([]mediaapp.ProjectCopyReferenceMapping(nil), mapping...)
 	digest := "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 	changed[0].Source.RenditionSHA256 = &digest
 	changed[0].Target.RenditionSHA256 = &digest
-	if err := query.VerifyTransferred(t.Context(), actor, binding, snapshot, changed); !errors.Is(err, mediaapp.ErrObjectMismatch) {
+	if err := query.VerifyTransferred(t.Context(), mediaActor(actor), binding, snapshot, changed); !errors.Is(err, mediaapp.ErrObjectMismatch) {
 		t.Fatal("unproven expected rendition digest became transferred evidence", err)
 	}
 	if err := objects.Remove(t.Context(), intents[0].TargetObjectKey); err != nil {
 		t.Fatal(err)
 	}
-	if err := query.VerifyTransferred(t.Context(), actor, binding, snapshot, mapping); !errors.Is(err, mediaapp.ErrObjectMismatch) {
+	if err := query.VerifyTransferred(t.Context(), mediaActor(actor), binding, snapshot, mapping); !errors.Is(err, mediaapp.ErrObjectMismatch) {
 		t.Fatal("physically missing independent target accepted", err)
 	}
 	if intents[0].RenditionKind != "" {
@@ -244,7 +244,7 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 	if err := objects.Remove(t.Context(), asset.ObjectKey); err != nil {
 		t.Fatal(err)
 	}
-	if err := query.VerifyTransferred(t.Context(), actor, binding, snapshot, mapping); !errors.Is(err, mediaapp.ErrObjectMismatch) {
+	if err := query.VerifyTransferred(t.Context(), mediaActor(actor), binding, snapshot, mapping); !errors.Is(err, mediaapp.ErrObjectMismatch) {
 		t.Fatal("physically missing historical source accepted before publish", err)
 	}
 }

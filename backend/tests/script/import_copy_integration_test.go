@@ -31,24 +31,24 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 	text := scriptDocument(t, db, storage, actor, pid, "当前.txt", txt)
 	imports := app.NewImportService(scriptImportStore(db, storage), time.Now)
 	input := app.ImportCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{document, text}, RightsConfirmed: true}
-	j, err := imports.Create(t.Context(), actor, input)
+	j, err := imports.Create(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := scriptImportWorker(t, db, storage, extract.NewExtractor()).Execute(t.Context(), importDelivery(t, owner, actor, input.Key)); err != nil {
 		t.Fatal(err)
 	}
-	j, err = imports.Get(t.Context(), actor, pid, j.ID)
+	j, err = imports.Get(t.Context(), scriptActor(actor), pid, j.ID)
 	if err != nil || j.Status != "succeeded" {
 		t.Fatal(j, err)
 	}
-	old, err := scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
+	old, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil || len(old.Sources) != 2 || len(old.Sources[0].Provenance.Warnings) != 1 || old.Sources[0].Provenance.Warnings[0].Code != "table_layout_flattened" {
 		t.Fatal("formal extraction facts missing", old, err)
 	}
 	sources := app.NewSourceService(scriptStore(db), objects, time.Now)
 	lineage := old.Sources[0].LineageID
-	deleted, err := sources.Write(t.Context(), actor, app.SourceCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), Action: "delete", ExpectedRevision: j.LatestScriptRevision, BaseVersionID: j.LatestVersionID, LineageID: &lineage})
+	deleted, err := sources.Write(t.Context(), scriptActor(actor), app.SourceCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), Action: "delete", ExpectedRevision: j.LatestScriptRevision, BaseVersionID: j.LatestVersionID, LineageID: &lineage})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 	mt := mediaapp.NewRoutedProjectCopyTransfer(workspacepg.NewProjectCopyMediaObjects(store, job.ID, worker, false), mediaobjects.NewRoutedCopyObjects(scriptFixtureRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir())
 	transferCtx, cancelTransfer := context.WithTimeout(t.Context(), time.Minute)
 	defer cancelTransfer()
-	if err := mt.Transfer(transferCtx, actor, mb, ms); err != nil {
+	if err := mt.Transfer(transferCtx, scriptMediaActor(actor), mb, ms); err != nil {
 		t.Fatal("actual private document transfer", err)
 	}
 	job, err = store.CompleteMedia(t.Context(), actor, job.ID, worker)
@@ -89,7 +89,7 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 		t.Fatal(err)
 	}
 	transfer, b, snapshot := scriptCopyTransfer(db, job, worker, false, objects)
-	if _, err := transfer.Transfer(t.Context(), actor, b, snapshot); err != nil {
+	if _, err := transfer.Transfer(t.Context(), scriptActor(actor), b, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.CompleteScript(t.Context(), actor, job.ID, worker); err != nil {
@@ -114,7 +114,7 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 	if err := json.Unmarshal([]byte(target.Provenance), &provenance); err != nil || len(provenance.Warnings) != 1 || provenance.Warnings[0].Code != "table_layout_flattened" {
 		t.Fatal("copy discarded formal warnings", provenance, err)
 	}
-	media, err := scriptFixtureMediaStore(db).FindAsset(t.Context(), actor, job.TargetProjectID, target.MediaAssetID)
+	media, err := scriptFixtureMediaStore(db).FindAsset(t.Context(), scriptMediaActor(actor), job.TargetProjectID, target.MediaAssetID)
 	if err != nil || media.IsDelete {
 		t.Fatal("retained original not independently ready", media, err)
 	}
@@ -140,7 +140,7 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 			t.Fatal("target lost exact original DOCX", readErr, closeErr)
 		}
 	}
-	current, err := scriptStore(db).LoadBase(t.Context(), actor, job.TargetProjectID, nil)
+	current, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), job.TargetProjectID, nil)
 	if err != nil || len(current.Sources) != 1 || current.Sources[0].Provenance.Encoding != "utf-16le" {
 		t.Fatal("current UTF16 draft lost", current, err)
 	}

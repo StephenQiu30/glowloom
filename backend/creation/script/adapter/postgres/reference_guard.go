@@ -12,7 +12,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 const (
@@ -34,7 +33,7 @@ func NewMediaReferenceGuard(tx *gorm.DB, access application.ProjectAccess) *Medi
 
 // HasMediaReferences reads only script-owned historical and durable recovery facts.
 // Media object state and Library visibility do not substitute for these references.
-func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor identityapp.Principal, project, asset uuid.UUID) (referenced bool, resultErr error) {
+func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor application.Actor, project, asset uuid.UUID) (referenced bool, resultErr error) {
 	if g == nil || g.tx == nil || g.tx.Statement == nil || g.access == nil || project == uuid.Nil || asset == uuid.Nil {
 		return false, application.ErrUnavailable
 	}
@@ -105,7 +104,7 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 		var plan application.WritePlan
 		decoder := json.NewDecoder(strings.NewReader(string(row.Plan)))
 		decoder.DisallowUnknownFields()
-		if decoder.Decode(&plan) != nil || decoder.Decode(new(any)) != io.EOF || plan.Command.ProjectID != project || plan.Command.Key != row.RequestID || validatePlan(identityapp.Principal{ID: row.ActorID, OrgID: actor.OrgID}, plan) != nil {
+		if decoder.Decode(&plan) != nil || decoder.Decode(new(any)) != io.EOF || plan.Command.ProjectID != project || plan.Command.Key != row.RequestID || validatePlan(application.Actor{ID: row.ActorID, OrgID: actor.OrgID}, plan) != nil {
 			return false, application.ErrUnavailable
 		}
 		for _, source := range plan.NewSources {

@@ -49,6 +49,9 @@ func (s *AccountDeletionStore) DeletionTransaction(ctx context.Context, actor ap
 }
 
 func (t *accountDeletionTx) Impact() (application.DeletionImpact, error) {
+	if err := t.db.Exec(`SELECT pg_advisory_xact_lock(hashtextextended('creation.team_management',0))`).Error; err != nil {
+		return application.DeletionImpact{}, err
+	}
 	out := application.DeletionImpact{Revision: t.user.Revision, TeamIDs: []uuid.UUID{}, BlockingDuties: []string{}}
 	if t.user.PlatformRole == "platform_admin" && t.user.Status == domain.StatusActive && !t.user.EmailVerifiedAt.IsZero() {
 		var count int64
@@ -84,7 +87,7 @@ func (t *accountDeletionTx) SoftDelete(now time.Time) error {
 }
 
 // softDelete revokes access only; each caller records its own actor and audit scope.
-func (t *accountDeletionTx) softDelete(now time.Time) error {
+func (t *accountDeletionTx) softDeleteIdentity(now time.Time) error {
 	if t.user.SessionEpoch >= math.MaxInt32 || t.user.Revision >= math.MaxInt32 {
 		return domain.ErrInvalidAccountState
 	}
@@ -101,9 +104,10 @@ func (t *accountDeletionTx) softDelete(now time.Time) error {
 	if err := t.db.Exec(`UPDATE identity.auth_challenge SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL AND consumed_at IS NULL`, now, t.user.ID).Error; err != nil {
 		return err
 	}
-	if err := t.db.Exec(`UPDATE workspace.team SET auth_epoch=auth_epoch+1,revision=revision+1,update_time=? WHERE id IN (SELECT team_id FROM workspace.team_member WHERE user_id=? AND status<>'removed')`, now, t.user.ID).Error; err != nil {
-		return err
-	}
+	return nil
+}
+
+func (t *accountDeletionTx) cancelOwnedGovernance(now time.Time) error {
 	var governance struct{ Invitations, Proposals bool }
 	if err := t.db.Raw(`SELECT to_regclass('identity.invitation') IS NOT NULL AS invitations,to_regclass('identity.authority_proposal') IS NOT NULL AS proposals`).Scan(&governance).Error; err != nil {
 		return err
@@ -118,8 +122,18 @@ func (t *accountDeletionTx) softDelete(now time.Time) error {
 			return err
 		}
 	}
-	if err := t.db.Exec(`UPDATE workspace.team_member SET status='removed',auth_epoch=auth_epoch+1,revision=revision+1,update_time=? WHERE user_id=? AND status<>'removed'`, now, t.user.ID).Error; err != nil {
+	return nil
+}
+
+func (t *accountDeletionTx) softDelete(now time.Time) error {
+	if err := t.softDeleteIdentity(now); err != nil {
 		return err
 	}
-	return nil
+	if err := t.db.Exec(`UPDATE workspace.team SET auth_epoch=auth_epoch+1,revision=revision+1,update_time=? WHERE id IN (SELECT team_id FROM workspace.team_member WHERE user_id=? AND status<>'removed')`, now, t.user.ID).Error; err != nil {
+		return err
+	}
+	if err := t.cancelOwnedGovernance(now); err != nil {
+		return err
+	}
+	return t.db.Exec(`UPDATE workspace.team_member SET status='removed',auth_epoch=auth_epoch+1,revision=revision+1,update_time=? WHERE user_id=? AND status<>'removed'`, now, t.user.ID).Error
 }

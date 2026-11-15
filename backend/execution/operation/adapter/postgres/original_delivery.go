@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -99,7 +98,7 @@ func (s *Store) requireRecoveryRequester(tx *gorm.DB, d application.WorkflowCont
 	}
 	actor.ID, actor.OrgID = d.ActorID, d.OrgID
 	if err := s.requirePublicProject(tx, actor, d.ProjectID, true); err != nil {
-		if errors.Is(err, identity.ErrForbidden) || errors.Is(err, identity.ErrSessionInvalid) || errors.Is(err, workspace.ErrScopeNotFound) || errors.Is(err, workspace.ErrProjectNotFound) || errors.Is(err, application.ErrPublicNotFound) {
+		if errors.Is(err, identity.ErrForbidden) || errors.Is(err, identity.ErrSessionInvalid) || errors.Is(err, application.ErrPublicNotFound) {
 			return application.ErrExecutionAuthorityRevoked
 		}
 		return err

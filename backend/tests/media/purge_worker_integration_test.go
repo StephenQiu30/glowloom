@@ -31,10 +31,10 @@ func purgeBinaryFixture(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.
 	})
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: scope, Key: uuid.New(), Action: "update_item", ItemID: &result.Asset.ID, Metadata: &mediaapp.LibraryMetadata{Title: "仅合成测试原件", Category: "material", Tags: []string{}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: scope, Key: uuid.New(), Action: "update_item", ItemID: &result.Asset.ID, Metadata: &mediaapp.LibraryMetadata{Title: "仅合成测试原件", Category: "material", Tags: []string{}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "recycle_items", ExpectedRevision: 1, Items: []mediaapp.LibraryItemRevision{{ID: result.Asset.ID, Revision: 2}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "recycle_items", ExpectedRevision: 1, Items: []mediaapp.LibraryItemRevision{{ID: result.Asset.ID, Revision: 2}}}); err != nil {
 		t.Fatal(err)
 	}
 	return actor, project, mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: result.Asset.ID, Revision: 3}}, ExpectedRevision: 2, ExpectedProjectRevision: 3, PermanentDeleteConfirmed: true, Key: uuid.New()}, keys, mediaFixturePurgeObjects(t)
@@ -44,7 +44,7 @@ func TestMediaPurgeActualOriginalAndEveryRenditionAbsentBeforeTombstone(t *testi
 	db := libraryRuntimeDB(t)
 	actor, project, in, keys, objects := purgeBinaryFixture(t, db)
 	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	job, err := repo.CreatePurge(t.Context(), actor, in)
+	job, err := repo.CreatePurge(t.Context(), mediaActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestMediaPurgeActualOriginalAndEveryRenditionAbsentBeforeTombstone(t *testi
 	if err := db.Raw(`SELECT title,COALESCE(plain_text,'') AS plain_text,source_label,note,purged_at IS NOT NULL AS purged,catalog_state FROM media.library_item WHERE id=?`, in.Items[0].ID).Scan(&row).Error; err != nil || !row.Purged || row.Title != "已永久清理" || row.CatalogState != "removed" || row.PlainText != "" || row.Note != "" {
 		t.Fatal("visible title/content was not scrubbed", row, err)
 	}
-	if _, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, in.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaTestStore(db).FindAsset(t.Context(), mediaActor(actor), project, in.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("purged original became formally readable", err)
 	}
 	repeated, err := mediaapp.NewPurgeWorker(repo.Worker, objects).Execute(t.Context(), work)
@@ -98,7 +98,7 @@ func TestMediaPurgeActualUnknownDeleteReconcileOriginalIntentAndPermanentKey(t *
 	db := libraryRuntimeDB(t)
 	actor, _, in, keys, objects := purgeBinaryFixture(t, db)
 	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	job, err := repo.CreatePurge(t.Context(), actor, in)
+	job, err := repo.CreatePurge(t.Context(), mediaActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestMediaPurgeActualUnknownDeleteReconcileOriginalIntentAndPermanentKey(t *
 		t.Fatal("unknown cleanup falsely scrubbed full catalog", err)
 	}
 	key := uuid.New()
-	queued, err := repo.ControlPurge(t.Context(), actor, job.ID, key, current.Revision, "reconcile")
+	queued, err := repo.ControlPurge(t.Context(), mediaActor(actor), job.ID, key, current.Revision, "reconcile")
 	if err != nil || queued.Attempt != 2 || queued.Status != "queued" {
 		t.Fatal("exact original cleanup could not resume", queued, err)
 	}
@@ -120,11 +120,11 @@ func TestMediaPurgeActualUnknownDeleteReconcileOriginalIntentAndPermanentKey(t *
 	if err != nil || complete.Status != "succeeded" || unknown.removeCount != len(keys) {
 		t.Fatal("absence receipt retried a destructively completed key", complete, err, unknown.removeCount)
 	}
-	original, err := repo.CreatePurge(t.Context(), actor, in)
+	original, err := repo.CreatePurge(t.Context(), mediaActor(actor), in)
 	if err != nil || original.ID != job.ID || original.Revision != job.Revision {
 		t.Fatal("newer cleanup revised original admission replay", original, err)
 	}
-	replay, err := repo.ControlPurge(t.Context(), actor, job.ID, key, current.Revision, "reconcile")
+	replay, err := repo.ControlPurge(t.Context(), mediaActor(actor), job.ID, key, current.Revision, "reconcile")
 	if err != nil || replay.Revision != queued.Revision {
 		t.Fatal("later physical execution broke permanent reconcile result", replay, err)
 	}
@@ -143,7 +143,7 @@ func TestMediaPurgeFailureReceiptErrorIsReturnedAfterActualPhysicalOwnerEnds(t *
 	db := libraryRuntimeDB(t)
 	actor, _, in, _, objects := purgeBinaryFixture(t, db)
 	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	job, err := repo.CreatePurge(t.Context(), actor, in)
+	job, err := repo.CreatePurge(t.Context(), mediaActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestMediaPurgeFailureReceiptErrorIsReturnedAfterActualPhysicalOwnerEnds(t *
 	if err := db.Raw(`SELECT process_ended FROM media.purge_job WHERE id=?`, job.ID).Scan(&ended).Error; err != nil || !ended {
 		t.Fatal("error returned without actual physical owner cessation", ended, err)
 	}
-	actual, err := repo.GetPurge(t.Context(), actor, job.ID)
+	actual, err := repo.GetPurge(t.Context(), mediaActor(actor), job.ID)
 	if err != nil || actual.Status != "needs_reconciliation" {
 		t.Fatal("unrecorded failure lost its occupied original intent", actual, err)
 	}

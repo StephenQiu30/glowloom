@@ -32,7 +32,7 @@ func TestMediaUploadSchemaPersistsReceiptAndReplay(t *testing.T) {
 	actor, project := mediaStoreProject(t, database)
 	service := mediaFixtureMockUpload(t, database, mediaTestStore(database), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{})
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = project
 	result, err := fixtureProjectUpload(ctx, service, in)
 	if err != nil {

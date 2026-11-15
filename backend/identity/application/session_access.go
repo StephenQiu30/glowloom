@@ -129,8 +129,24 @@ func (a *Auth) lockedPrincipal(tx AuthTx, actor Principal) (domain.User, domain.
 	return u, s, now, nil
 }
 
-// CurrentAccess checks current PG authority even when the optional Redis hint fails.
+// CurrentAccess checks current PG authority and requires the original CSRF proof,
+// even when the optional Redis hint fails.
 func (a *Auth) CurrentAccess(ctx context.Context, token, csrf string, activity SessionActivity) (AuthResult, error) {
+	return a.currentAccess(ctx, token, csrf, activity, true)
+}
+
+// ReadAccessIdentity checks only the current account and exact access session.
+// It has no activity side effect, conveys no scope/platform/write permission,
+// and cannot replace CSRF validation or a command's durable admission.
+func (a *Auth) ReadAccessIdentity(ctx context.Context, token string) (Principal, error) {
+	result, err := a.currentAccess(ctx, token, "", NoActivity, false)
+	if err != nil {
+		return Principal{}, err
+	}
+	return Principal{ID: result.User.ID, SessionID: result.Session.ID, CredentialEpoch: result.User.SessionEpoch}, nil
+}
+
+func (a *Auth) currentAccess(ctx context.Context, token, csrf string, activity SessionActivity, requireCSRF bool) (AuthResult, error) {
 	if !a.sessionVerificationReady() {
 		return AuthResult{}, ErrRefreshDependency
 	}
@@ -151,7 +167,7 @@ func (a *Auth) CurrentAccess(ctx context.Context, token, csrf string, activity S
 		if !now.Before(claims.ExpiresAt) {
 			return ErrAccessExpired
 		}
-		if claims.IssuedAt.Before(s.CreatedAt.Truncate(time.Second)) || claims.IssuedAt.After(now.Add(30*time.Second)) || !csrfProof(csrf, s) {
+		if claims.IssuedAt.Before(s.CreatedAt.Truncate(time.Second)) || claims.IssuedAt.After(now.Add(30*time.Second)) || (requireCSRF && !csrfProof(csrf, s)) {
 			return ErrSessionInvalid
 		}
 		if activity == UserActivity {

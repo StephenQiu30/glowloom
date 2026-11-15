@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -16,7 +15,7 @@ import (
 type TransferLease struct {
 	Work      TransferWorkID
 	Fence     uuid.UUID
-	Actor     identityapp.Principal
+	Actor     Actor
 	Job       domain.TransferJob
 	ItemCount int
 	Done      bool

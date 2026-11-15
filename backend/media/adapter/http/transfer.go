@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -15,12 +14,14 @@ import (
 
 // TransferHandler exposes durable independent media transfers, never object keys.
 type TransferHandler struct {
+	resolve ActorResolver
+
 	repo application.TransferRepository
 }
 
 // NewTransferHandler injects the media owning command and query boundary.
-func NewTransferHandler(repo application.TransferRepository) *TransferHandler {
-	return &TransferHandler{repo: repo}
+func NewTransferHandler(repo application.TransferRepository, resolve ActorResolver) *TransferHandler {
+	return &TransferHandler{resolve: resolve, repo: repo}
 }
 
 // Register adds real transfer admission, tracking and explicit control actions.
@@ -72,6 +73,11 @@ func transferKey(c *gin.Context) (uuid.UUID, bool) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/transfers [post]
 func (h *TransferHandler) Create(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.repo == nil {
 		writeTransferError(c, application.ErrUnavailable)
 		return
@@ -85,7 +91,7 @@ func (h *TransferHandler) Create(c *gin.Context) {
 		return
 	}
 	input.Key = key
-	job, err := h.repo.CreateTransfer(c.Request.Context(), identityhttp.Principal(c), input)
+	job, err := h.repo.CreateTransfer(c.Request.Context(), actor, input)
 	if err != nil {
 		writeTransferError(c, err)
 		return
@@ -137,7 +143,10 @@ func (h *TransferHandler) List(c *gin.Context) {
 			*destination = value
 		}
 	}
-	actor := identityhttp.Principal(c)
+	actor, ok := requestActor(c, h.resolve)
+	if !ok {
+		return
+	}
 	items, err := h.repo.ListTransfers(c.Request.Context(), actor, scope, page, size)
 	if err != nil {
 		writeTransferError(c, err)
@@ -160,6 +169,11 @@ func (h *TransferHandler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/transfers/{job_id} [get]
 func (h *TransferHandler) Get(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.repo == nil {
 		writeTransferError(c, application.ErrUnavailable)
 		return
@@ -172,7 +186,7 @@ func (h *TransferHandler) Get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	job, err := h.repo.GetTransfer(c.Request.Context(), identityhttp.Principal(c), id)
+	job, err := h.repo.GetTransfer(c.Request.Context(), actor, id)
 	if err != nil {
 		writeTransferError(c, err)
 		return
@@ -182,6 +196,11 @@ func (h *TransferHandler) Get(c *gin.Context) {
 }
 
 func (h *TransferHandler) control(c *gin.Context, action application.TransferAction) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.repo == nil {
 		writeTransferError(c, application.ErrUnavailable)
 		return
@@ -202,7 +221,7 @@ func (h *TransferHandler) control(c *gin.Context, action application.TransferAct
 	if !httpapi.Decode(c, &request) {
 		return
 	}
-	job, err := h.repo.ControlTransfer(c.Request.Context(), identityhttp.Principal(c), id, key, request.Revision, action)
+	job, err := h.repo.ControlTransfer(c.Request.Context(), actor, id, key, request.Revision, action)
 	if err != nil {
 		writeTransferError(c, err)
 		return

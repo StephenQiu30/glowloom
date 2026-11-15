@@ -116,7 +116,7 @@ func (s *Store) CreateProviderTrialQuote(ctx context.Context, actor identityapp.
 		item := QuoteItem{Operation: prepared.Operation, Inputs: prepared.Inputs, trial: &trialBinding{ReleaseID: releaseID, Input: input}}
 		walletErr := s.billingStore(tx).CheckWalletQuoteInTransaction(tx, input.ProjectID, []billingapp.WalletDemand{{
 			ModelKey: model.Key, Micros: *item.Operation.QuoteMicros, CommercialPriceReady: true,
-		}})
+		}}, actor.ScopeID)
 		if input.UseQuotedCharge && walletErr != nil {
 			return walletErr
 		}

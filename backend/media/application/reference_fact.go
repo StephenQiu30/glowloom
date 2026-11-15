@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	_ "golang.org/x/image/webp" // Register the existing supported WebP thumbnail decoder.
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -57,7 +56,7 @@ func (q *ReferenceFactQuery) verifyImageRendition(ctx context.Context, r domain.
 // ReferenceFactReader holds current project/library/original eligibility locks.
 // Its owning transaction must remain open during the bounded object reads.
 type ReferenceFactReader interface {
-	ReadReferenceFactSource(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, domain.Kind) (LibraryMediaFile, error)
+	ReadReferenceFactSource(context.Context, Actor, uuid.UUID, uuid.UUID, domain.Kind) (LibraryMediaFile, error)
 }
 
 // ReferenceFactQuery verifies independent original and image rendition bytes.
@@ -100,7 +99,7 @@ func (q *ReferenceFactQuery) verify(ctx context.Context, location *domain.Object
 
 // Reference supports actual image/audio binding facts and rejects hidden library
 // items. Callers freeze the returned safe proof through their own owning write.
-func (q *ReferenceFactQuery) Reference(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, kind domain.Kind) (ReferenceFact, error) {
+func (q *ReferenceFactQuery) Reference(ctx context.Context, actor Actor, project, id uuid.UUID, kind domain.Kind) (ReferenceFact, error) {
 	if q == nil || q.reader == nil || q.objects == nil {
 		return ReferenceFact{}, ErrUnavailable
 	}

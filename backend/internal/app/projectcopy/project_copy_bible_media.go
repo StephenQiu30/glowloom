@@ -13,7 +13,6 @@ import (
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -47,7 +46,7 @@ type projectCopyBibleMedia struct {
 	snapshot mediaapp.ProjectCopySnapshot
 }
 
-func (m projectCopyBibleMedia) FreezeReferences(ctx context.Context, actor identityapp.Principal, b bibleapp.ProjectCopyBinding, facts []bibledomain.MediaFact, assets map[uuid.UUID]uuid.UUID) ([]bibleapp.ReferenceMapping, error) {
+func (m projectCopyBibleMedia) FreezeReferences(ctx context.Context, actor bibleapp.Actor, b bibleapp.ProjectCopyBinding, facts []bibledomain.MediaFact, assets map[uuid.UUID]uuid.UUID) ([]bibleapp.ReferenceMapping, error) {
 	input := make([]mediaapp.ReferenceFact, len(facts))
 	for i, f := range facts {
 		if err := f.Validate(f.Kind); err != nil {
@@ -55,7 +54,7 @@ func (m projectCopyBibleMedia) FreezeReferences(ctx context.Context, actor ident
 		}
 		input[i] = bibleCopyMediaFact(f)
 	}
-	mapped, err := m.query.FreezeReferences(ctx, actor, bibleCopyMediaBinding(b), m.snapshot, input)
+	mapped, err := m.query.FreezeReferences(ctx, mediawire.Actor(projectCopyIdentityActor(actor)), bibleCopyMediaBinding(b), m.snapshot, input)
 	if err != nil {
 		return nil, errors.Join(bibleapp.ErrUnavailable, err)
 	}
@@ -76,11 +75,11 @@ type projectCopyBibleMediaReader struct {
 	authority workspaceapp.ProjectCopyAuthority
 }
 
-func (r projectCopyBibleMediaReader) read(ctx context.Context, actor identityapp.Principal, b mediaapp.ProjectCopyBinding, s mediaapp.ProjectCopySnapshot, f mediaapp.ReferenceFact, transferred bool) (mediaapp.ProjectCopyReferenceFiles, error) {
+func (r projectCopyBibleMediaReader) read(ctx context.Context, actor mediaapp.Actor, b mediaapp.ProjectCopyBinding, s mediaapp.ProjectCopySnapshot, f mediaapp.ReferenceFact, transferred bool) (mediaapp.ProjectCopyReferenceFiles, error) {
 	var result mediaapp.ProjectCopyReferenceFiles
 	err := r.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		binding := workspaceapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}
-		if err := provideCopyAccess(tx, r.authority).Authorize(ctx, actor, binding, true); err != nil {
+		if err := provideCopyAccess(tx, r.authority).Authorize(ctx, mediawire.IdentityActor(actor), binding, true); err != nil {
 			return err
 		}
 		var err error
@@ -94,10 +93,10 @@ func (r projectCopyBibleMediaReader) read(ctx context.Context, actor identityapp
 	})
 	return result, err
 }
-func (r projectCopyBibleMediaReader) ReadCopyReference(ctx context.Context, actor identityapp.Principal, b mediaapp.ProjectCopyBinding, s mediaapp.ProjectCopySnapshot, f mediaapp.ReferenceFact) (mediaapp.ProjectCopyReferenceFiles, error) {
+func (r projectCopyBibleMediaReader) ReadCopyReference(ctx context.Context, actor mediaapp.Actor, b mediaapp.ProjectCopyBinding, s mediaapp.ProjectCopySnapshot, f mediaapp.ReferenceFact) (mediaapp.ProjectCopyReferenceFiles, error) {
 	return r.read(ctx, actor, b, s, f, false)
 }
-func (r projectCopyBibleMediaReader) ReadTransferredCopyReference(ctx context.Context, actor identityapp.Principal, b mediaapp.ProjectCopyBinding, s mediaapp.ProjectCopySnapshot, f mediaapp.ReferenceFact) (mediaapp.ProjectCopyReferenceFiles, error) {
+func (r projectCopyBibleMediaReader) ReadTransferredCopyReference(ctx context.Context, actor mediaapp.Actor, b mediaapp.ProjectCopyBinding, s mediaapp.ProjectCopySnapshot, f mediaapp.ReferenceFact) (mediaapp.ProjectCopyReferenceFiles, error) {
 	return r.read(ctx, actor, b, s, f, true)
 }
 
@@ -106,10 +105,10 @@ type projectCopyBibleTransferredMedia struct {
 	snapshot mediaapp.ProjectCopySnapshot
 }
 
-func (m projectCopyBibleTransferredMedia) VerifyTransferred(ctx context.Context, actor identityapp.Principal, b bibleapp.ProjectCopyBinding, mappings []bibleapp.ReferenceMapping) error {
+func (m projectCopyBibleTransferredMedia) VerifyTransferred(ctx context.Context, actor bibleapp.Actor, b bibleapp.ProjectCopyBinding, mappings []bibleapp.ReferenceMapping) error {
 	input := make([]mediaapp.ProjectCopyReferenceMapping, len(mappings))
 	for i, mapping := range mappings {
 		input[i] = mediaapp.ProjectCopyReferenceMapping{Source: bibleCopyMediaFact(mapping.Source), Target: bibleCopyMediaFact(mapping.Target)}
 	}
-	return m.query.VerifyTransferred(ctx, actor, bibleCopyMediaBinding(b), m.snapshot, input)
+	return m.query.VerifyTransferred(ctx, mediawire.Actor(projectCopyIdentityActor(actor)), bibleCopyMediaBinding(b), m.snapshot, input)
 }

@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package glowloom.execution;
+
+option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/executionwork;executionwork";
+
+import "glowloom/coordination/writer.proto";
+
+// Read-only responsibility inspection after Creation durably closes admission.
+service ProjectWork {
+  rpc ReadProjectWork(ProjectWorkRequest) returns (ProjectWorkSnapshot);
+}
+
+message ProjectWorkRequest {
+  bytes close_id = 1;
+  bytes project_id = 2;
+  bytes organization_id = 3;
+  bytes scope_id = 4;
+  int64 project_epoch = 5;
+  repeated glowloom.coordination.Command commands = 6;
+  string manifest_sha256 = 7;
+}
+
+enum BusinessState {
+  BUSINESS_STATE_UNSPECIFIED = 0;
+  IDLE = 1;
+  BUSY = 2;
+  UNKNOWN = 3;
+}
+
+enum CommandState {
+  COMMAND_STATE_UNSPECIFIED = 0;
+  COMMITTED = 1;
+  FROZEN = 2;
+  ADMITTED = 3;
+  COMMAND_UNKNOWN = 4;
+}
+
+message CommandObservation {
+  glowloom.coordination.Command command = 1;
+  CommandState state = 2;
+  string receipt_sha256 = 3;
+}
+
+message ProjectWorkSnapshot {
+  ProjectWorkRequest request = 1;
+  BusinessState business_state = 2;
+  repeated CommandObservation commands = 3;
+}

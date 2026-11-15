@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
@@ -142,7 +143,7 @@ func (s *TeamDirectory) Detail(ctx context.Context, actor identity.Principal, te
 		return TeamMember{}, err
 	}
 	if len(page.Items) != 1 {
-		return TeamMember{}, ErrScopeNotFound
+		return TeamMember{}, workspacesource.ErrScopeNotFound
 	}
 	return page.Items[0], nil
 }

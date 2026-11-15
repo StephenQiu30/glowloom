@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -31,7 +32,7 @@ func NewScopedMediaReferenceGuard(tx *gorm.DB, access *ProjectContentAccessStore
 // HasMediaReferences includes recycled directories, old covers and retained style presets.
 func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {
 	if g == nil || g.tx == nil || g.access == nil || asset == uuid.Nil {
-		return false, application.ErrProjectDependencyUnavailable
+		return false, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if _, err := g.access.Authorize(ctx, actor, project, false); err != nil {
 		return false, err
@@ -56,7 +57,7 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 		return false, fmt.Errorf("bound permanent workspace reference history: %w", err)
 	}
 	if budget.ProjectFacts > maxFacts || budget.FolderFacts > maxFacts || budget.Bytes > 64<<20 || budget.Largest > 1<<20 {
-		return false, application.ErrProjectDependencyUnavailable
+		return false, workspacesource.ErrProjectDependencyUnavailable
 	}
 	// A concurrent directory writer may append after preflight. Each body is
 	// capped in SQL and each row is consumed immediately through the same
@@ -85,15 +86,15 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 		case "folder":
 			folderFacts++
 		default:
-			return false, application.ErrProjectDependencyUnavailable
+			return false, workspacesource.ErrProjectDependencyUnavailable
 		}
 		if projectFacts > maxFacts || folderFacts > maxFacts || totalBytes > 64<<20 || len(body) == 0 {
-			return false, application.ErrProjectDependencyUnavailable
+			return false, workspacesource.ErrProjectDependencyUnavailable
 		}
 		if family == "project" {
 			var saved application.ProjectSnapshot
 			if decodeWorkspaceReferenceHistory(body, &saved) != nil || saved.Validate() != nil || saved.Project.ID != project || saved.Project.OrgID != actor.OrgID {
-				return false, application.ErrProjectDependencyUnavailable
+				return false, workspacesource.ErrProjectDependencyUnavailable
 			}
 			if saved.Project.CoverAssetID != nil && *saved.Project.CoverAssetID == asset {
 				return true, nil
@@ -103,24 +104,24 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 		switch action {
 		case "create", "patch", "move", "recycle":
 		default:
-			return false, application.ErrProjectDependencyUnavailable
+			return false, workspacesource.ErrProjectDependencyUnavailable
 		}
 		var saved application.FolderChangeResult
 		if decodeWorkspaceReferenceHistory(body, &saved) != nil {
-			return false, application.ErrProjectDependencyUnavailable
+			return false, workspacesource.ErrProjectDependencyUnavailable
 		}
 		if saved.Folder != nil {
 			if saved.Folder.Validate() != nil || saved.Folder.OrgID != actor.OrgID || saved.Folder.ActorID != actorID {
-				return false, application.ErrProjectDependencyUnavailable
+				return false, workspacesource.ErrProjectDependencyUnavailable
 			}
 			if saved.Folder.Cover != nil && saved.Folder.Cover.ProjectID == project && saved.Folder.Cover.AssetID == asset {
 				return true, nil
 			}
 		} else if action != "move" {
-			return false, application.ErrProjectDependencyUnavailable
+			return false, workspacesource.ErrProjectDependencyUnavailable
 		}
 		if saved.Placement != nil && (saved.Placement.Validate() != nil || saved.Placement.OrgID != actor.OrgID || saved.Placement.ActorID != actorID) {
-			return false, application.ErrProjectDependencyUnavailable
+			return false, workspacesource.ErrProjectDependencyUnavailable
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -133,12 +134,12 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 }
 func decodeWorkspaceReferenceHistory(raw []byte, out any) error {
 	if len(raw) == 0 || len(raw) > 1<<20 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if d.Decode(out) != nil || d.Decode(new(any)) != io.EOF {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	return nil
 }

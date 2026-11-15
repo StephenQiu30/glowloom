@@ -23,7 +23,9 @@ import (
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 )
 
 // commandSchema derives nested business argument fields from the consumed Go
@@ -85,8 +87,10 @@ func argumentSchema(t reflect.Type, depth int) map[string]any {
 	}
 }
 func bibleService(tx *gorm.DB) *bible.Service {
-	return bible.NewService(pgbible.NewStore(tx, pgbible.Factories{Access: func(inner *gorm.DB) bible.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(inner) }, Scopes: func(inner *gorm.DB) bible.ScriptScopes {
-		return bibleScopes{pgscript.NewBibleScopes(inner, scopewire.ProvideWorkerProjectContentAccess(inner))}
+	return bible.NewService(pgbible.NewStore(tx, pgbible.Factories{Access: func(inner *gorm.DB) bible.ProjectAccess {
+		return biblewire.ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(inner))
+	}, Scopes: func(inner *gorm.DB) bible.ScriptScopes {
+		return bibleScopes{pgscript.NewBibleScopes(inner, scriptwire.ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(inner)))}
 	}, Results: func(inner *gorm.DB) bible.GeneratedResults { return extractedResults{inner} }}), time.Now)
 }
 
@@ -116,19 +120,19 @@ func (r extractedResults) read(ctx context.Context, a identity.Principal, pid, o
 	}
 	return bibledomain.ResultSource{}, domain.ErrNotFound
 }
-func (r extractedResults) Character(ctx context.Context, a identity.Principal, pid, op, output uuid.UUID) (bible.CharacterInput, bibledomain.ResultSource, error) {
+func (r extractedResults) Character(ctx context.Context, a bible.Actor, pid, op, output uuid.UUID) (bible.CharacterInput, bibledomain.ResultSource, error) {
 	var content bible.CharacterInput
-	source, err := r.read(ctx, a, pid, op, output, &content)
+	source, err := r.read(ctx, biblewire.IdentityActor(a), pid, op, output, &content)
 	return content, source, err
 }
-func (r extractedResults) Location(ctx context.Context, a identity.Principal, pid, op, output uuid.UUID) (bibledomain.LocationContent, bibledomain.ResultSource, error) {
+func (r extractedResults) Location(ctx context.Context, a bible.Actor, pid, op, output uuid.UUID) (bibledomain.LocationContent, bibledomain.ResultSource, error) {
 	var content bibledomain.LocationContent
-	source, err := r.read(ctx, a, pid, op, output, &content)
+	source, err := r.read(ctx, biblewire.IdentityActor(a), pid, op, output, &content)
 	return content, source, err
 }
-func (r extractedResults) Prop(ctx context.Context, a identity.Principal, pid, op, output uuid.UUID) (bibledomain.PropContent, bibledomain.ResultSource, error) {
+func (r extractedResults) Prop(ctx context.Context, a bible.Actor, pid, op, output uuid.UUID) (bibledomain.PropContent, bibledomain.ResultSource, error) {
 	var content bibledomain.PropContent
-	source, err := r.read(ctx, a, pid, op, output, &content)
+	source, err := r.read(ctx, biblewire.IdentityActor(a), pid, op, output, &content)
 	return content, source, err
 }
 
@@ -159,7 +163,7 @@ func creationTools() []toolBinding {
 			in.ProjectID = s.ProjectID
 			in.Key = key
 			in.RequestID = key
-			return bibleService(tx).Change(ctx, app.Principal(s), in)
+			return bibleService(tx).Change(ctx, biblewire.Actor(app.Principal(s)), in)
 		}),
 		tool("script_adopt", "按剧本/分集双版本采用正式剧本版本", "write", commandSchema(script.AdoptCommand{}), func(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, raw json.RawMessage) (any, error) {
 			var in script.AdoptCommand
@@ -172,8 +176,10 @@ func creationTools() []toolBinding {
 			in.ProjectID = s.ProjectID
 			in.Key = key
 			in.RequestID = key
-			store := pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(inner) })
-			return script.NewAdoptService(store, time.Now).Adopt(ctx, app.Principal(s), in)
+			store := pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess {
+				return scriptwire.ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(inner))
+			})
+			return script.NewAdoptService(store, time.Now).Adopt(ctx, scriptwire.Actor(app.Principal(s)), in)
 		}),
 		tool("script_confirm_split", "确认完整分集边界与映射；保留既有正式剧集身份", "write", commandSchema(script.SplitCommand{}), func(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, raw json.RawMessage) (any, error) {
 			var in script.SplitCommand
@@ -186,8 +192,10 @@ func creationTools() []toolBinding {
 			in.ProjectID = s.ProjectID
 			in.Key = key
 			in.RequestID = key
-			store := pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(inner) })
-			return script.NewEpisodeService(store, nil, time.Now).ConfirmSplit(ctx, app.Principal(s), in)
+			store := pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess {
+				return scriptwire.ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(inner))
+			})
+			return script.NewEpisodeService(store, nil, time.Now).ConfirmSplit(ctx, scriptwire.Actor(app.Principal(s)), in)
 		}),
 		tool("operation_quote", "建立真实模型/价格冻结报价，不确认费用；随后必须提交提案并取得用户批准", "write", commandSchema(quoteInput{}), func(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, raw json.RawMessage) (any, error) {
 			var in quoteInput
@@ -283,12 +291,12 @@ var _ app.DecisionValidator = proposalValidator{}
 
 type bibleScopes struct{ reader *pgscript.BibleScopes }
 
-func (s bibleScopes) ValidateScopes(ctx context.Context, actor identity.Principal, pid uuid.UUID, scopes []bibledomain.LookScope) error {
+func (s bibleScopes) ValidateScopes(ctx context.Context, actor bible.Actor, pid uuid.UUID, scopes []bibledomain.LookScope) error {
 	requested := make([]script.BibleLookScope, len(scopes))
 	for i, v := range scopes {
 		requested[i] = script.BibleLookScope{EpisodeID: v.EpisodeID, SceneKey: v.SceneKey}
 	}
-	return s.reader.ValidateLookScopes(ctx, actor, pid, requested)
+	return s.reader.ValidateLookScopes(ctx, scriptwire.Actor(biblewire.IdentityActor(actor)), pid, requested)
 }
 
 type billingAccess struct{ tx *gorm.DB }

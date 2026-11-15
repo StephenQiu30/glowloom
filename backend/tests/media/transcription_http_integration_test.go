@@ -93,7 +93,7 @@ func speechFixtureFrom(t *testing.T, sample, mime, kind string) *speechHTTPFixtu
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	upload := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
-	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: filepath.Base(sample)}, File: download, LocalReviewConfirmed: true})
+	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: filepath.Base(sample)}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual reviewed speech upload", err)
 	}

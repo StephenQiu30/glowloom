@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
@@ -44,10 +45,10 @@ func (q *ProjectCreationRecoveryQuery) Resolve(ctx context.Context, actor identi
 		return ProjectCreationRecovery{}, identity.ErrForbidden
 	}
 	if key == uuid.Nil {
-		return ProjectCreationRecovery{}, ErrInvalidCreateProject
+		return ProjectCreationRecovery{}, workspacesource.ErrInvalidCreateProject
 	}
 	if q == nil || q.store == nil {
-		return ProjectCreationRecovery{}, ErrProjectDependencyUnavailable
+		return ProjectCreationRecovery{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	result, err := q.store.ReadCreationRecovery(ctx, actor, key)
 	if err != nil {
@@ -58,7 +59,7 @@ func (q *ProjectCreationRecoveryQuery) Resolve(ctx context.Context, actor identi
 		valid = *result.ProjectStatus == "active" || *result.ProjectStatus == "archived" || *result.ProjectStatus == "copying"
 	}
 	if !valid {
-		return ProjectCreationRecovery{}, ErrProjectDependencyUnavailable
+		return ProjectCreationRecovery{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return result, nil
 }

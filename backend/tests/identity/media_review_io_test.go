@@ -163,7 +163,7 @@ func TestMediaExportLateRevocationStopsEachObjectWrite(t *testing.T) {
 				t.Fatal(err)
 			}
 			request := func(tx *gorm.DB) tool.DerivedMedia {
-				return media.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, request: factory(tx)} }))
+				return identityDerivedMedia(media.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, request: factory(tx)} })))
 			}
 			store := pgtool.NewStore(tx, func(*gorm.DB) tool.TimelineReader { return reviewScopeTimeline{reviewTimeline(asset.ID)} }, request)
 			store = store.WithStorageAdmission(func(inner *gorm.DB) tool.ToolStorageLedger { return pgmedia.NewStorageRoutes(inner) })
@@ -172,7 +172,7 @@ func TestMediaExportLateRevocationStopsEachObjectWrite(t *testing.T) {
 				t.Fatal(err)
 			}
 			workerStore := pgtool.NewStore(tx, nil, func(tx *gorm.DB) tool.DerivedMedia {
-				return media.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} }))
+				return identityDerivedMedia(media.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} })))
 			})
 			revoke := func() {
 				if err := tx.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
@@ -245,14 +245,14 @@ func TestMediaTranscriptionLateRevocationPreservesCessation(t *testing.T) {
 				t.Fatal(err)
 			}
 			request := pgtool.NewTranscriptionStore(tx, func(*gorm.DB) tool.TranscriptionSourceReader { return reviewScopeSource{asset.ID} }, func(tx *gorm.DB) tool.DerivedMedia {
-				return media.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, request: factory(tx)} }))
+				return identityDerivedMedia(media.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, request: factory(tx)} })))
 			})
 			job, err := request.Create(t.Context(), actor, project, uuid.New(), tool.TranscriptionCreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1, Language: "auto"})
 			if err != nil {
 				t.Fatal(err)
 			}
 			store := pgtool.NewTranscriptionStore(tx, nil, func(tx *gorm.DB) tool.DerivedMedia {
-				return media.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} }))
+				return identityDerivedMedia(media.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} })))
 			})
 			native := &reviewTranscriber{uncertain: uncertain, after: func() {
 				if err := tx.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {

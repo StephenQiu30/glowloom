@@ -12,13 +12,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // ListPurges keeps history creator-scoped and rechecks project read authority.
-func (s *PurgeStore) ListPurges(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, page, size int) ([]domain.PurgeJob, error) {
+func (s *PurgeStore) ListPurges(ctx context.Context, actor application.Actor, scope domain.LibraryScope, page, size int) ([]domain.PurgeJob, error) {
 	if s == nil || s.db == nil {
 		return nil, application.ErrUnavailable
 	}

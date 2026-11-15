@@ -5,11 +5,14 @@ import (
 	"context"
 	"errors"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
@@ -26,10 +29,10 @@ type promptDraftAccess struct {
 	}
 }
 
-func (a promptDraftAccess) AuthorizeDraft(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool) error {
-	_, err := a.store.Authorize(ctx, actor, project, write)
-	if errors.Is(err, workspaceapp.ErrProjectNotFound) || errors.Is(err, workspaceapp.ErrScopeNotFound) {
+func (a promptDraftAccess) AuthorizeDraft(ctx context.Context, actor promptapp.Actor, project uuid.UUID, write bool) error {
+	_, err := a.store.Authorize(ctx, legacyActor(actor), project, write)
+	if errors.Is(err, workspacesource.ErrProjectNotFound) || errors.Is(err, workspacesource.ErrScopeNotFound) {
 		return promptapp.ErrDraftNotFound
 	}
-	return err
+	return AccessError(err)
 }

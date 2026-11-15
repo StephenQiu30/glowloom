@@ -27,7 +27,7 @@ func (s *SessionDirectoryStore) ListSelfSessions(ctx context.Context, actor appl
 			return err
 		}
 		now := clock().UTC()
-		return tx.Raw(`SELECT id,id=? AS current,device_summary,created_at,last_active_at,absolute_expires_at FROM identity.user_session WHERE account_id=? AND credential_revision=? AND revoked_at IS NULL AND created_at<=? AND last_active_at<=? AND ((protocol_version=1 AND last_active_at + interval '12 hours'>?) OR (protocol_version=2 AND idle_timeout_seconds>0 AND last_active_at + idle_timeout_seconds * interval '1 second'>?)) AND absolute_expires_at>? ORDER BY last_active_at DESC,id DESC`, actor.SessionID, actor.ID, actor.CredentialEpoch, now, now, now, now, now).Scan(&out).Error
+		return tx.Raw(`SELECT id,id=? AS current,device_summary,created_at,last_active_at,absolute_expires_at FROM identity.user_session s WHERE account_id=? AND credential_revision=? AND revoked_at IS NULL AND NOT EXISTS(SELECT 1 FROM identity.session_activation a WHERE a.session_id=s.id AND a.completed_at IS NULL) AND NOT EXISTS(SELECT 1 FROM identity.account_qualification_change q WHERE q.replacement_session_id=s.id AND q.outcome='pending') AND created_at<=? AND last_active_at<=? AND ((protocol_version=1 AND last_active_at + interval '12 hours'>?) OR (protocol_version=2 AND idle_timeout_seconds>0 AND last_active_at + idle_timeout_seconds * interval '1 second'>?)) AND absolute_expires_at>? ORDER BY last_active_at DESC,id DESC`, actor.SessionID, actor.ID, actor.CredentialEpoch, now, now, now, now, now).Scan(&out).Error
 	})
 	return out, err
 }

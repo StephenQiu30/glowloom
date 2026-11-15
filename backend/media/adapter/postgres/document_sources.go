@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -23,7 +22,7 @@ func NewDocumentSourceStore(db *gorm.DB) *DocumentSourceStore {
 
 // FindAsset reads an existing exact frozen original. Catalog hiding does not
 // invalidate immutable source bytes; new source admission uses Freeze below.
-func (s *DocumentSourceStore) FindAsset(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (domain.MediaAsset, error) {
+func (s *DocumentSourceStore) FindAsset(ctx context.Context, actor application.Actor, project, id uuid.UUID) (domain.MediaAsset, error) {
 	if s == nil || s.Store == nil {
 		return domain.MediaAsset{}, ErrUnavailable
 	}
@@ -31,7 +30,7 @@ func (s *DocumentSourceStore) FindAsset(ctx context.Context, actor identityapp.P
 }
 
 // FreezeDocumentSources rechecks current actor/project and locks all source assets.
-func (s *DocumentSourceStore) FreezeDocumentSources(ctx context.Context, actor identityapp.Principal, project uuid.UUID, ids []uuid.UUID) ([]domain.MediaAsset, error) {
+func (s *DocumentSourceStore) FreezeDocumentSources(ctx context.Context, actor application.Actor, project uuid.UUID, ids []uuid.UUID) ([]domain.MediaAsset, error) {
 	if s == nil || s.Store == nil || s.db == nil {
 		return nil, ErrUnavailable
 	}

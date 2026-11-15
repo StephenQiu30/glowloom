@@ -26,13 +26,13 @@ func TestNormalizedUploadStoreKeepsOriginalReceiptAndDeduplicatesSource(t *testi
 	store, objects := mediaTestStore(database), &uploadObjectsFake{}
 	service := mediaFixtureMockUpload(t, database, store, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
-	in.Actor, in.Request.ProjectID = actor, project
+	in.Actor, in.Request.ProjectID = mediaActor(actor), project
 	in.File, in.Request.FileName = readUploadWebM(t, uploadWebMFixture(t, "libvpx-vp9", "0.6")), "白膜镜头.webm"
 	first, err := fixtureProjectUpload(t.Context(), service, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	asset, err := store.FindAsset(t.Context(), actor, project, first.Asset.ID)
+	asset, err := store.FindAsset(t.Context(), mediaActor(actor), project, first.Asset.ID)
 	if err != nil || !asset.CanReference() || asset.MimeType != "video/mp4" || asset.Codec == nil || *asset.Codec != "h264" || asset.SHA256 == nil || *asset.SHA256 == in.File.SHA256 {
 		t.Fatalf("real normalized asset=%+v err=%v", asset, err)
 	}
@@ -72,7 +72,7 @@ func TestNormalizedUploadStoreRejectsAbsentForgedAndUnknownConversionProof(t *te
 	store, objects := mediaTestStore(database), &uploadObjectsFake{}
 	record := &uploadRepoFake{}
 	in := uploadInput(t)
-	in.Actor, in.Request.ProjectID = actor, project
+	in.Actor, in.Request.ProjectID = mediaActor(actor), project
 	in.File, in.Request.FileName = readUploadWebM(t, uploadWebMFixture(t, "libvpx", "0.3")), "白膜镜头.webm"
 	service := mediaFixtureMockUpload(t, database, record, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	if _, err := fixtureProjectUpload(t.Context(), service, in); err != nil {
@@ -103,7 +103,7 @@ func TestNormalizedUploadStoreRejectsAbsentForgedAndUnknownConversionProof(t *te
 			}
 			tc.edit(detail)
 			asset.ModerationDetail, _ = json.Marshal(detail)
-			if _, err := store.CommitUpload(t.Context(), actor, request, asset, record.rends); !errors.Is(err, mediaapp.ErrInvalidUpload) {
+			if _, err := store.CommitUpload(t.Context(), mediaActor(actor), request, asset, record.rends); !errors.Is(err, mediaapp.ErrInvalidUpload) {
 				t.Fatalf("forged proof reached persistence: %v", err)
 			}
 		})

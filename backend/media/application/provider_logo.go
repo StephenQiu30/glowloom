@@ -6,13 +6,12 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // ProviderLogoActorAccess checks live platform authority before accepting an image.
 type ProviderLogoActorAccess interface {
-	CheckPlatformSession(context.Context, identityapp.Principal, func() time.Time) error
+	CheckPlatformSession(context.Context, Actor, func() time.Time) error
 }
 
 // NewRoutedProviderLogoService reuses bounded decoding and the durable object ledger.
@@ -24,7 +23,7 @@ func NewRoutedProviderLogoService(repo RoutedAvatarRepository, objects AvatarRou
 
 // ProviderLogoReader authorizes the exact image and its current supplier binding.
 type ProviderLogoReader interface {
-	ProviderLogoTransaction(context.Context, identityapp.Principal, uuid.UUID, func() time.Time, func(domain.MediaAsset) error) error
+	ProviderLogoTransaction(context.Context, Actor, uuid.UUID, func() time.Time, func(domain.MediaAsset) error) error
 }
 
 // ProviderLogoQuery issues short preview leases using the existing sign-and-recheck flow.
@@ -45,11 +44,11 @@ type boundProviderLogoReader struct {
 	id     uuid.UUID
 }
 
-func (r boundProviderLogoReader) AvatarTransaction(ctx context.Context, actor identityapp.Principal, clock func() time.Time, run func(domain.MediaAsset) error) error {
+func (r boundProviderLogoReader) AvatarTransaction(ctx context.Context, actor Actor, clock func() time.Time, run func(domain.MediaAsset) error) error {
 	return r.reader.ProviderLogoTransaction(ctx, actor, r.id, clock, run)
 }
 
-func (q *ProviderLogoQuery) Read(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (AvatarPreview, error) {
+func (q *ProviderLogoQuery) Read(ctx context.Context, actor Actor, id uuid.UUID) (AvatarPreview, error) {
 	if q == nil || q.reader == nil || id == uuid.Nil {
 		return AvatarPreview{}, ErrNotFound
 	}

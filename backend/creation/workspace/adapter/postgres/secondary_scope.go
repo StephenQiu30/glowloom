@@ -3,11 +3,12 @@ package postgres
 import (
 	"context"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -45,11 +46,11 @@ func (s *ProjectCopyStore) authorizedCopy(ctx context.Context, tx *gorm.DB, acto
 		return domain.ProjectCopyJob{}, read.Error
 	}
 	if read.RowsAffected != 1 || candidate.OwnerScopeID == uuid.Nil {
-		return domain.ProjectCopyJob{}, application.ErrProjectNotFound
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectNotFound
 	}
 	if worker {
 		if s.workers == nil || s.workers(tx) == nil {
-			return domain.ProjectCopyJob{}, application.ErrProjectDependencyUnavailable
+			return domain.ProjectCopyJob{}, workspacesource.ErrProjectDependencyUnavailable
 		}
 		if actor.ID != candidate.ActorID {
 			return domain.ProjectCopyJob{}, identity.ErrForbidden
@@ -59,10 +60,10 @@ func (s *ProjectCopyStore) authorizedCopy(ctx context.Context, tx *gorm.DB, acto
 			return domain.ProjectCopyJob{}, err
 		}
 		if scope.PhysicalScopeID != actor.OrgID || scope.ID != candidate.OwnerScopeID {
-			return domain.ProjectCopyJob{}, application.ErrScopeNotFound
+			return domain.ProjectCopyJob{}, workspacesource.ErrScopeNotFound
 		}
 	} else if candidate.OwnerScopeID != actor.ScopeID {
-		return domain.ProjectCopyJob{}, application.ErrProjectNotFound
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectNotFound
 	}
 	job, err := readCopyJob(tx, actor, id, write)
 	if err != nil {
@@ -73,7 +74,7 @@ func (s *ProjectCopyStore) authorizedCopy(ctx context.Context, tx *gorm.DB, acto
 		return job, err
 	}
 	if count != 2 || job.ExecutionActor() != candidate.ActorID {
-		return domain.ProjectCopyJob{}, application.ErrProjectNotFound
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectNotFound
 	}
 	return job, nil
 }

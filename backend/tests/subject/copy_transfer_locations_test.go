@@ -196,7 +196,7 @@ func TestLocatedProjectCopyFreezesTargetAcceptsExactReceiptAndReplays(t *testing
 	var snapshot media.ProjectCopySnapshot
 	if err := f.runtime.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess).WithRoutedStorage().Freeze(t.Context(), f.actor, binding, time.Now())
+		snapshot, err = pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess).WithRoutedStorage().Freeze(t.Context(), mediaBoundaryActor(f.actor), binding, time.Now())
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func TestLocatedProjectCopyFreezesTargetAcceptsExactReceiptAndReplays(t *testing
 		t.Fatal("freeze routed copy", err)
 	}
 	repo := &locatedCopyTransactions{ProjectCopyStore: pgmedia.NewScopedProjectCopyStore(f.runtime, app.NewMediaWorkerScopeAccess).WithRoutedStorage(), db: f.runtime}
-	objects, err := repo.Objects(t.Context(), f.actor, binding, snapshot)
+	objects, err := repo.Objects(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot)
 	if err != nil || len(objects) != 2 || objects[0].SourceLocation == nil || objects[0].TargetLocation == nil || objects[0].TargetLocation.Ref.ProfileID != f.targetProfile || objects[0].SourceLocation.Ref.ProfileID != f.sourceProfile {
 		t.Fatal("frozen physical copy identities missing", err)
 	}
@@ -214,23 +214,23 @@ func TestLocatedProjectCopyFreezesTargetAcceptsExactReceiptAndReplays(t *testing
 	}
 	transfer := media.NewRoutedProjectCopyTransfer(repo, mediaobjects.NewRoutedCopyObjects(f.registry, pgmedia.NewStorageRoutes(f.runtime)), t.TempDir())
 	for range 2 {
-		if err := transfer.Transfer(t.Context(), f.actor, binding, snapshot); err != nil {
+		if err := transfer.Transfer(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot); err != nil {
 			t.Fatal("actual independent SDK copy/recovery", err)
 		}
 	}
 	for range 2 {
-		if _, err := repo.Register(t.Context(), f.actor, binding, snapshot); err != nil {
+		if _, err := repo.Register(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot); err != nil {
 			t.Fatal("atomic media/location acceptance or replay", err)
 		}
 	}
 	digest := hexHash(f.data)
 	fact := media.ReferenceFact{AssetID: f.asset, Revision: 1, Kind: mediadomain.KindImage, SHA256: digest, ByteSize: int64(len(f.data)), RenditionID: &rend, RenditionSHA256: &digest}
 	q := media.NewRoutedProjectCopyReferenceQuery(repo, mediaobjects.NewRoutedReadObjects(f.registry))
-	mappings, e := q.FreezeReferences(t.Context(), f.actor, binding, snapshot, []media.ReferenceFact{fact})
+	mappings, e := q.FreezeReferences(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot, []media.ReferenceFact{fact})
 	if e != nil {
 		t.Fatal("current exact source reference", e)
 	}
-	if e = q.VerifyTransferred(t.Context(), f.actor, binding, snapshot, mappings); e != nil {
+	if e = q.VerifyTransferred(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot, mappings); e != nil {
 		t.Fatal("copied Bible media original and independent thumb bytes", e)
 	}
 	var actual struct {
@@ -273,14 +273,14 @@ func TestLocatedTransferPartialFailureRetainsSourceAndPermanentReplay(t *testing
 		t.Fatal("fixture must retain unmaterialized legacy library", err)
 	}
 	requests := mediawire.ProvideRoutedMediaTransferStore(f.runtime)
-	job, err := requests.CreateTransfer(t.Context(), f.actor, input)
+	job, err := requests.CreateTransfer(t.Context(), mediaBoundaryActor(f.actor), input)
 	if err != nil {
 		t.Fatal("atomic target reservation", err)
 	}
 	foreign := subjectSession(t, f.owner)
 	rejected := input
 	rejected.Key = uuid.New()
-	if _, e := requests.CreateTransfer(t.Context(), foreign, rejected); e == nil {
+	if _, e := requests.CreateTransfer(t.Context(), mediaBoundaryActor(foreign), rejected); e == nil {
 		t.Fatal("foreign project scope accepted")
 	}
 	if err = f.owner.Exec(`UPDATE media.storage_route SET profile_id=?,revision='2' WHERE singleton=1`, f.sourceProfile).Error; err != nil {
@@ -299,7 +299,7 @@ func TestLocatedTransferPartialFailureRetainsSourceAndPermanentReplay(t *testing
 	if _, err = worker.Execute(t.Context(), work); err != nil {
 		t.Fatal("terminal recovery", err)
 	}
-	replay, err := requests.CreateTransfer(t.Context(), f.actor, input)
+	replay, err := requests.CreateTransfer(t.Context(), mediaBoundaryActor(f.actor), input)
 	if err != nil || replay.ID != job.ID {
 		t.Fatal("same command lost original job", err)
 	}

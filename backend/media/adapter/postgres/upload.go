@@ -14,13 +14,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // AuthorizeUpload checks the current actor and active project before body reading.
-func (s *Store) AuthorizeUpload(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (string, error) {
+func (s *Store) AuthorizeUpload(ctx context.Context, actor application.Actor, projectID uuid.UUID) (string, error) {
 	if s == nil || s.db == nil {
 		return "", ErrUnavailable
 	}
@@ -45,7 +44,7 @@ func (s scopeAuthority) uploadProjects(tx *gorm.DB) (application.UploadProjectAc
 	return projects, nil
 }
 
-func (s scopeAuthority) authorizeUpload(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUID) (string, error) {
+func (s scopeAuthority) authorizeUpload(tx *gorm.DB, actor application.Actor, projectID uuid.UUID) (string, error) {
 	projects, err := s.uploadProjects(tx)
 	if err != nil {
 		return "", err
@@ -54,7 +53,7 @@ func (s scopeAuthority) authorizeUpload(tx *gorm.DB, actor identityapp.Principal
 }
 
 // FindUpload returns the durable response only for an identical request body.
-func (s *Store) FindUpload(ctx context.Context, actor identityapp.Principal, r application.UploadRequest) (application.UploadResult, bool, error) {
+func (s *Store) FindUpload(ctx context.Context, actor application.Actor, r application.UploadRequest) (application.UploadResult, bool, error) {
 	if s == nil || s.db == nil {
 		return application.UploadResult{}, false, ErrUnavailable
 	}
@@ -74,7 +73,7 @@ func (s *Store) FindUpload(ctx context.Context, actor identityapp.Principal, r a
 	return result, found, err
 }
 
-func replayUpload(tx *gorm.DB, actor identityapp.Principal, r application.UploadRequest) (application.UploadResult, bool, error) {
+func replayUpload(tx *gorm.DB, actor application.Actor, r application.UploadRequest) (application.UploadResult, bool, error) {
 	var row uploadRequestRecord
 	read := tx.Where(map[string]any{"project_id": r.ProjectID, "principal_id": actor.ID, "request_key": r.Key}).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
@@ -109,7 +108,7 @@ func replayUpload(tx *gorm.DB, actor identityapp.Principal, r application.Upload
 
 // CommitUpload serializes project deduplication and saves assets, renditions,
 // the explicit human declaration, audit and idempotency response atomically.
-func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r application.UploadRequest, asset domain.MediaAsset, renditions []domain.Rendition) (application.UploadResult, error) {
+func (s *Store) CommitUpload(ctx context.Context, actor application.Actor, r application.UploadRequest, asset domain.MediaAsset, renditions []domain.Rendition) (application.UploadResult, error) {
 	if s == nil || s.db == nil {
 		return application.UploadResult{}, ErrUnavailable
 	}
@@ -174,7 +173,7 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 	return result, err
 }
 
-func validateReviewedUpload(actor identityapp.Principal, r application.UploadRequest, asset domain.MediaAsset, renditions []domain.Rendition) error {
+func validateReviewedUpload(actor application.Actor, r application.UploadRequest, asset domain.MediaAsset, renditions []domain.Rendition) error {
 	if err := application.ValidateUploadRequest(r); err != nil {
 		return err
 	}

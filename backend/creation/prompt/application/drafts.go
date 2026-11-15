@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 
 	"github.com/google/uuid"
 )
@@ -41,7 +40,7 @@ type DraftPage struct {
 
 // DraftAccess is the owning project authorization boundary.
 type DraftAccess interface {
-	AuthorizeDraft(context.Context, identityapp.Principal, uuid.UUID, bool) error
+	AuthorizeDraft(context.Context, Actor, uuid.UUID, bool) error
 }
 
 // UploadResolution contains no private upload metadata and is always reauthorized.
@@ -53,9 +52,9 @@ type UploadResolution struct {
 
 // DraftStore owns persistence, discovery and source validation.
 type DraftStore interface {
-	ResolveUpload(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (UploadResolution, error)
-	ValidateFragment(context.Context, identityapp.Principal, uuid.UUID, domain.Draft) error
-	SaveDraft(context.Context, identityapp.Principal, DraftWrite) (DraftSnapshot, error)
-	ReadDraft(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (DraftSnapshot, error)
-	ListDrafts(context.Context, identityapp.Principal, uuid.UUID, string) (DraftPage, error)
+	ResolveUpload(context.Context, Actor, uuid.UUID, uuid.UUID) (UploadResolution, error)
+	ValidateFragment(context.Context, Actor, uuid.UUID, domain.Draft) error
+	SaveDraft(context.Context, Actor, DraftWrite) (DraftSnapshot, error)
+	ReadDraft(context.Context, Actor, uuid.UUID, uuid.UUID) (DraftSnapshot, error)
+	ListDrafts(context.Context, Actor, uuid.UUID, string) (DraftPage, error)
 }

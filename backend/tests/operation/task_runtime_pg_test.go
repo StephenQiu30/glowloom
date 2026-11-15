@@ -73,7 +73,7 @@ func TestOperationTaskRuntimePersistsStagesAndRecoversWithoutPaidReplay(t *testi
 			results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
 			network := &fixtureGeneration{}
 			provider := managed.NewActivities(f.store, fixtureUnsealer{}, network, results, nil)
-			ingest := &interruptedTextIngest{inner: managed.NewRoutedIngestActivities(database, nil, results, nil, f.store), fail: scenario == "ingest_interrupted"}
+			ingest := &interruptedTextIngest{inner: operationLegacyIngest(database, nil, results, nil, f.store), fail: scenario == "ingest_interrupted"}
 			h := map[string]taskruntime.Handler{}
 			task.RegisterFlow(h, f.store, app.NewOperationFinalizer(database, f.store, billingpg.NewStore(database)), nil)
 			var interrupted bool

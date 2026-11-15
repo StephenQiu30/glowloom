@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package glowloom.media;
+
+option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/mediareference;mediareference";
+
+// CreationReferencePins reads existing acquisition evidence for Creation adoption.
+// It cannot acquire, register, bind, release or infer non-adoption from absence.
+service CreationReferencePins {
+  rpc ReadAcquisition(ReferencePinReceiptKey) returns (ReferencePinReceipt);
+}
+
+message ReferencePinReceiptKey {
+  string pin_id = 1;
+  string acquire_command_id = 2;
+  string consumer_command_id = 3;
+  string consumer_command_sha256 = 4;
+  string consumer_resource_id = 5;
+  string scope_id = 6;
+  string project_id = 7;
+}
+
+enum ReferencePinRetention {
+  REFERENCE_PIN_RETENTION_UNSPECIFIED = 0;
+  REFERENCE_PIN_RETENTION_HELD = 1;
+  REFERENCE_PIN_RETENTION_BOUND = 2;
+  REFERENCE_PIN_RETENTION_RELEASED = 3;
+}
+
+message ReferencePinReceipt {
+  ReferencePinReceiptKey key = 1;
+  string asset_id = 2;
+  int64 asset_revision = 3;
+  string media_kind = 4;
+  string snapshot_sha256 = 5;
+  ReferencePinRetention retention = 6;
+}

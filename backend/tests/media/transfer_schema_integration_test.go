@@ -53,7 +53,7 @@ func TestMediaTransferRuntimeCannotRewriteOwnershipFrozenBytesKeysOrReceipts(t *
 			t.Fatal("missing database identity guard", err)
 		}
 	}
-	if _, err := f.repo.GetTransfer(t.Context(), f.actor, f.job.ID); err != nil {
+	if _, err := f.repo.GetTransfer(t.Context(), mediaActor(f.actor), f.job.ID); err != nil {
 		t.Fatal("rejected writes changed current ownership proof", err)
 	}
 }

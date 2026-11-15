@@ -15,6 +15,9 @@ var _ SessionRevocationAuthenticator = (*Auth)(nil)
 // Existing immutable proofs are handled by PublicSessionRevocations before this
 // method; it never authenticates a revoked credential to obtain new authority.
 func (a *Auth) AuthenticateSessionRevocation(ctx context.Context, credentials SessionRevocationCredentials, action SessionRevocationAction, target uuid.UUID) (Principal, SessionCredentialKind, error) {
+	if action == RevokeRefreshReuseRequest && (credentials.LegacyToken != "" || credentials.AccessToken != "" || credentials.RefreshToken == "") {
+		return Principal{}, "", ErrSessionInvalid
+	}
 	if a == nil || !a.emailReady() {
 		return Principal{}, "", ErrRegistrationUnavailable
 	}
@@ -43,7 +46,7 @@ func (a *Auth) AuthenticateSessionRevocation(ctx context.Context, credentials Se
 			return Principal{}, "", err
 		}
 	}
-	if action != RevokeSessionRequest || target == uuid.Nil || credentials.RefreshToken == "" {
+	if (action != RevokeSessionRequest && action != RevokeRefreshReuseRequest) || target == uuid.Nil || credentials.RefreshToken == "" {
 		return Principal{}, "", ErrSessionInvalid
 	}
 	if !a.sessionVerificationReady() {
@@ -79,6 +82,9 @@ func (a *Auth) AuthenticateSessionRevocation(ctx context.Context, credentials Se
 		}
 		if !csrfProof(credentials.CSRFToken, session) {
 			return ErrSessionCSRFInvalid
+		}
+		if action == RevokeRefreshReuseRequest && (refresh.ConsumedAt == nil || (refresh.ReplayUntil != nil && now.Before(*refresh.ReplayUntil))) {
+			return ErrSessionInvalid
 		}
 		result = AuthResult{User: user, Session: session, ServerTime: now}
 		return nil

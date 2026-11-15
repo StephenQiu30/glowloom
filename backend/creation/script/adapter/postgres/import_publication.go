@@ -10,7 +10,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // NewImportSourceStore restricts every write to a permanently claimed import attempt.
@@ -19,7 +18,7 @@ func NewImportSourceStore(db *gorm.DB, access ProjectAccessFactory, authority ap
 	return &SourceStore{db: db, access: access, importAuthority: &authority}
 }
 
-func authorizeImportPublication(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID, a application.ImportAuthority) error {
+func authorizeImportPublication(tx *gorm.DB, actor application.Actor, project uuid.UUID, a application.ImportAuthority) error {
 	if a.JobID == uuid.Nil || a.WorkerID == uuid.Nil || a.PublicationKey == uuid.Nil || a.Attempt < 1 {
 		return domain.ErrInvalidSource
 	}
@@ -45,7 +44,7 @@ func validateImportedPlan(tx *gorm.DB, p application.WritePlan, a application.Im
 	if p.Command.Key != a.PublicationKey || p.Command.Action != domain.SourceActionImport || len(p.NewSources) < 1 {
 		return domain.ErrInvalidSource
 	}
-	r, err := readImport(tx, identityapp.Principal{ID: p.ActorID, OrgID: p.OrgID}, p.Command.ProjectID, a.JobID, true)
+	r, err := readImport(tx, application.Actor{ID: p.ActorID, OrgID: p.OrgID}, p.Command.ProjectID, a.JobID, true)
 	if err != nil {
 		return err
 	}
@@ -118,7 +117,7 @@ func findImportFileResult(results []application.ImportFileResult, position int) 
 	return application.ImportFileResult{}, false
 }
 
-func finishImportedPublication(tx *gorm.DB, actor identityapp.Principal, p application.WritePlan, receipt application.SourceReceipt, a application.ImportAuthority) error {
+func finishImportedPublication(tx *gorm.DB, actor application.Actor, p application.WritePlan, receipt application.SourceReceipt, a application.ImportAuthority) error {
 	if err := validateImportedPlan(tx, p, a); err != nil {
 		return err
 	}

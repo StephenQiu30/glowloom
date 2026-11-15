@@ -9,7 +9,6 @@ import (
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -17,10 +16,10 @@ import (
 
 type personalSourceActor struct{ db *gorm.DB }
 
-func (s personalSourceActor) PersonalSourceActor(ctx context.Context, actor identity.Principal, write bool) (identity.Principal, error) {
-	var result identity.Principal
+func (s personalSourceActor) PersonalSourceActor(ctx context.Context, actor media.Actor, write bool) (media.Actor, error) {
+	var result media.Actor
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := (scopeAccess{tx: tx}).Resolve(ctx, actor, write); err != nil {
+		if _, err := (scopeAccess{tx: tx}).Resolve(ctx, sourceIdentityActor(actor), write); err != nil {
 			return err
 		}
 		store := pgworkspace.NewScopeStore(tx, func(inner *gorm.DB) workspace.ActorAccess { return pgidentity.NewStore(inner) })
@@ -28,7 +27,7 @@ func (s personalSourceActor) PersonalSourceActor(ctx context.Context, actor iden
 		if err != nil {
 			return err
 		}
-		resolved, err := scopewire.ProvideRequestScopeAccess(tx).Resolve(ctx, actor, id, write)
+		resolved, err := scopewire.ProvideRequestScopeAccess(tx).Resolve(ctx, sourceIdentityActor(actor), id, write)
 		if err != nil {
 			return err
 		}

@@ -7,13 +7,12 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ReferencedMedia freezes all historical document references before media admission.
 // The caller's trusted freeze transaction retains the project locks; no body I/O
 // or script snapshot is published by this private owning query.
-func (s *ProjectCopyStore) ReferencedMedia(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding) ([]uuid.UUID, error) {
+func (s *ProjectCopyStore) ReferencedMedia(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding) ([]uuid.UUID, error) {
 	result := make([]uuid.UUID, 0)
 	err := s.ownTransaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		if err := rejectPendingWrite(tx, b.OrgID, b.SourceProjectID); err != nil {

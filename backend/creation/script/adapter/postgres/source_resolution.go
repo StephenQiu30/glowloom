@@ -8,16 +8,14 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // CancelledPublication proves that one original command was never published
 // and its actual I/O plus every original private object has been retired. It is
 // read-only and never resumes publication or invents an absence proof.
-func (s *SourceStore) CancelledPublication(ctx context.Context, actor identity.Principal, project, key uuid.UUID, hash string) (bool, error) {
+func (s *SourceStore) CancelledPublication(ctx context.Context, actor application.Actor, project, key uuid.UUID, hash string) (bool, error) {
 	cancelled := false
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspace.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		prior, err := findCommand(tx, actor, project, key, hash)
 		if err != nil {
 			return err

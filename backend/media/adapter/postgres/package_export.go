@@ -9,14 +9,13 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // packageExportEntries assembles the complete visible catalog from ORM-owned
 // rows while retaining the exact source asset row for subsequent byte reads.
-func packageExportEntries(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, library uuid.UUID) ([]libraryEntryRow, error) {
+func packageExportEntries(tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, library uuid.UUID) ([]libraryEntryRow, error) {
 	var items []libraryItemRow
 	if err := tx.Where("library_id = ? AND purged_at IS NULL", library).Order("id").Limit(application.MaxPackageEntries + 1).Find(&items).Error; err != nil {
 		return nil, err

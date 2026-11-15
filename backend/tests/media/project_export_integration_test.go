@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	tooltask "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
@@ -99,7 +101,7 @@ func TestProjectExportDurableFrozenCanvasArtifactReviewAndUnknownPutRecovery(t *
 		asset.ObjectKey = "projects/" + projectID.String() + "/" + input.Kind + "/2026/10/" + input.AssetID.String() + ext
 		asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
 		asset = mediaFixtureAssetLocation(t, db, asset)
-		if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
+		if err := mediaTestStore(db).CreateAsset(t.Context(), mediaActor(actor), asset); err != nil {
 			t.Fatal(err)
 		}
 		if err := owner.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
@@ -114,7 +116,9 @@ func TestProjectExportDurableFrozenCanvasArtifactReviewAndUnknownPutRecovery(t *
 		}
 		t.Cleanup(func() { _ = provider.Remove(context.Background(), asset.ObjectKey) })
 	}
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaTestStore(tx)))
+	}
 	canvasService := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := canvasService.Create(t.Context(), actor, projectID, uuid.NewString(), canvasapp.CreateInput{Name: "Project export fixture"})
 	if err != nil {
@@ -127,10 +131,16 @@ func TestProjectExportDurableFrozenCanvasArtifactReviewAndUnknownPutRecovery(t *
 	}
 	store := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
 		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
 	workerStore := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx)) }))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
+			return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaWorkerStore(tx)))
+		}))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaWorkerStore(tx)))
+	})
 	request := toolapp.CreateInput{OutputKind: tool.OutputFCPXML, CanvasID: doc.ID, NodeID: node.ID, Revision: saved.Revision}
 	key := uuid.New()
 	job, err := store.Create(t.Context(), actor, projectID, key, request)

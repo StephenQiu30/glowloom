@@ -8,7 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -102,7 +103,7 @@ func TestReadReuseSourceAvailableRechecksMutableOutputs(t *testing.T) {
 	assertAvailable(false)
 
 	foreign, _ := operationStoreProject(t, database)
-	if _, err := store.ReadReuseSourceAvailable(t.Context(), foreign, quoted); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.ReadReuseSourceAvailable(t.Context(), foreign, quoted); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("foreign project source read = %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {

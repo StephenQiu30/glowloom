@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // Service applies closed content actions inside one currently authorized owning transaction.
@@ -22,7 +21,7 @@ type Service struct {
 func NewService(store Store, now func() time.Time) *Service { return &Service{store: store, now: now} }
 
 // Change publishes a new immutable snapshot or an explicit head/confirmation transition.
-func (s *Service) Change(ctx context.Context, actor identityapp.Principal, c Command) (Receipt, error) {
+func (s *Service) Change(ctx context.Context, actor Actor, c Command) (Receipt, error) {
 	if s == nil || s.store == nil || s.now == nil {
 		return Receipt{}, ErrUnavailable
 	}
@@ -182,7 +181,7 @@ func setContent(v *domain.Version, c Command) error {
 	return nil
 }
 
-func changeVersion(ctx context.Context, tx Transaction, actor identityapp.Principal, c Command, v *domain.Version) error {
+func changeVersion(ctx context.Context, tx Transaction, actor Actor, c Command, v *domain.Version) error {
 	switch c.Action {
 	case "create":
 		return nil
@@ -334,7 +333,7 @@ func changeVersion(ctx context.Context, tx Transaction, actor identityapp.Princi
 	}
 }
 
-func validateDependencies(ctx context.Context, tx Transaction, actor identityapp.Principal, project uuid.UUID, v domain.Version) error {
+func validateDependencies(ctx context.Context, tx Transaction, actor Actor, project uuid.UUID, v domain.Version) error {
 	if v.Character == nil {
 		return nil
 	}
@@ -380,7 +379,7 @@ func validateDependencies(ctx context.Context, tx Transaction, actor identityapp
 	return nil
 }
 
-func applyImpact(ctx context.Context, tx Transaction, actor identityapp.Principal, c Command, v domain.Version) error {
+func applyImpact(ctx context.Context, tx Transaction, actor Actor, c Command, v domain.Version) error {
 	if tx.Impacts() == nil {
 		return ErrUnavailable
 	}
@@ -405,7 +404,7 @@ func (e *ImpactConflict) Error() string { return "Bible impact acknowledgment re
 func (e *ImpactConflict) Unwrap() error { return ErrConflict }
 
 // Find reads an identity and resolves only the current confirmed redirect chain.
-func (s *Service) Find(ctx context.Context, actor identityapp.Principal, project uuid.UUID, kind domain.Kind, id uuid.UUID) (Detail, error) {
+func (s *Service) Find(ctx context.Context, actor Actor, project uuid.UUID, kind domain.Kind, id uuid.UUID) (Detail, error) {
 	if s == nil || s.store == nil {
 		return Detail{}, ErrUnavailable
 	}
@@ -416,7 +415,7 @@ func (s *Service) Find(ctx context.Context, actor identityapp.Principal, project
 }
 
 // Version reads a pinned immutable version; a redirect never changes its identity.
-func (s *Service) Version(ctx context.Context, actor identityapp.Principal, project uuid.UUID, kind domain.Kind, id, version uuid.UUID) (domain.Version, error) {
+func (s *Service) Version(ctx context.Context, actor Actor, project uuid.UUID, kind domain.Kind, id, version uuid.UUID) (domain.Version, error) {
 	if s == nil || s.store == nil {
 		return domain.Version{}, ErrUnavailable
 	}
@@ -427,7 +426,7 @@ func (s *Service) Version(ctx context.Context, actor identityapp.Principal, proj
 }
 
 // List returns a bounded project-scoped page without writes or seeds.
-func (s *Service) List(ctx context.Context, actor identityapp.Principal, input ListInput) (Page, error) {
+func (s *Service) List(ctx context.Context, actor Actor, input ListInput) (Page, error) {
 	if s == nil || s.store == nil {
 		return Page{}, ErrUnavailable
 	}
@@ -441,7 +440,7 @@ func (s *Service) List(ctx context.Context, actor identityapp.Principal, input L
 }
 
 // History reads all immutable content through bounded pages.
-func (s *Service) History(ctx context.Context, actor identityapp.Principal, project uuid.UUID, kind domain.Kind, id uuid.UUID, limit int, after *HistoryCursor) (HistoryPage, error) {
+func (s *Service) History(ctx context.Context, actor Actor, project uuid.UUID, kind domain.Kind, id uuid.UUID, limit int, after *HistoryCursor) (HistoryPage, error) {
 	if s == nil || s.store == nil {
 		return HistoryPage{}, ErrUnavailable
 	}
@@ -455,7 +454,7 @@ func (s *Service) History(ctx context.Context, actor identityapp.Principal, proj
 }
 
 // Voices lists real configured choices; missing catalog context is explicit.
-func (s *Service) Voices(ctx context.Context, actor identityapp.Principal, project uuid.UUID, limit int, after *VoiceCursor) (VoicePage, error) {
+func (s *Service) Voices(ctx context.Context, actor Actor, project uuid.UUID, limit int, after *VoiceCursor) (VoicePage, error) {
 	if s == nil || s.store == nil {
 		return VoicePage{}, ErrUnavailable
 	}

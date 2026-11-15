@@ -6,11 +6,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
@@ -141,7 +143,7 @@ func teamProblem(c *gin.Context, err error) {
 		status, code = 403, "reauthentication_required"
 	case errors.Is(err, identity.ErrForbidden), errors.Is(err, application.ErrTeamForbidden):
 		status, code = 403, "forbidden"
-	case errors.Is(err, application.ErrScopeNotFound), errors.Is(err, identity.ErrAvatarUnavailable):
+	case errors.Is(err, workspacesource.ErrScopeNotFound), errors.Is(err, identity.ErrAvatarUnavailable):
 		status, code = 404, "not_found"
 	case errors.Is(err, application.ErrInvalidTeam), errors.Is(err, application.ErrInvalidMemberFilter):
 		status, code = 422, "invalid_request"
@@ -155,7 +157,7 @@ func teamProblem(c *gin.Context, err error) {
 		status, code = 409, "state_conflict"
 	case errors.Is(err, application.ErrLastTeamAdministrator):
 		status, code = 409, "last_team_administrator"
-	case errors.Is(err, application.ErrIdempotencyConflict):
+	case errors.Is(err, workspacesource.ErrIdempotencyConflict):
 		status, code = 409, "idempotency_conflict"
 	}
 	httpapi.WriteProblem(c, status, code, nil)

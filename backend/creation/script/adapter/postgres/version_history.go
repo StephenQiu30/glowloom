@@ -10,14 +10,12 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // Confirmations preserves each immutable boundary/identity decision on the selected version.
-func (s *SourceStore) Confirmations(ctx context.Context, actor identityapp.Principal, project, version uuid.UUID, before int64, limit int) (application.ConfirmationPage, error) {
+func (s *SourceStore) Confirmations(ctx context.Context, actor application.Actor, project, version uuid.UUID, before int64, limit int) (application.ConfirmationPage, error) {
 	result := application.ConfirmationPage{Items: []application.ConfirmationSummary{}}
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		if _, err := readVersion(tx, actor.OrgID, project, version); err != nil {
 			return err
 		}
@@ -50,9 +48,9 @@ func (s *SourceStore) Confirmations(ctx context.Context, actor identityapp.Princ
 }
 
 // Confirmation reads the recorded past snapshot rather than today's episode pointers.
-func (s *SourceStore) Confirmation(ctx context.Context, actor identityapp.Principal, project, version, id uuid.UUID) (domain.SplitConfirmation, error) {
+func (s *SourceStore) Confirmation(ctx context.Context, actor application.Actor, project, version, id uuid.UUID) (domain.SplitConfirmation, error) {
 	var result domain.SplitConfirmation
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		var row scriptSplitConfirmationRow
 		if err := tx.Where("id = ? AND org_id = ? AND project_id = ? AND version_id = ?", id, actor.OrgID, project, version).Take(&row).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {

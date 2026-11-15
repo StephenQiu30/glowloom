@@ -9,16 +9,18 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // ImportHandler exposes durable document import acceptance and exact-key controls.
-type ImportHandler struct{ service *application.ImportService }
+type ImportHandler struct {
+	resolve ActorResolver
+	service *application.ImportService
+}
 
 // NewImportHandler injects the real persistent import use cases.
-func NewImportHandler(service *application.ImportService) *ImportHandler {
-	return &ImportHandler{service: service}
+func NewImportHandler(service *application.ImportService, resolve ActorResolver) *ImportHandler {
+	return &ImportHandler{resolve: resolve, service: service}
 }
 
 // Register installs the complete import refresh and explicit control surface.
@@ -56,6 +58,12 @@ type FileImportControlRequest struct {
 // @Failure 403,404,409,422,503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-file-imports [post]
 func (h *ImportHandler) Create(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var request FileImportRequest
 	if !readJSON(c, &request) {
 		return
@@ -64,7 +72,7 @@ func (h *ImportHandler) Create(c *gin.Context) {
 	if !ok {
 		return
 	}
-	actor := identityhttp.Principal(c)
+
 	if len(request.AssetIDs) == 0 {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
@@ -88,11 +96,17 @@ func (h *ImportHandler) Create(c *gin.Context) {
 // @Failure 403,404,422,503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-file-imports [get]
 func (h *ImportHandler) List(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	actor := identityhttp.Principal(c)
+
 	after, err := strconv.ParseInt(c.DefaultQuery("after", "0"), 10, 64)
 	if err != nil {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
@@ -121,6 +135,12 @@ func (h *ImportHandler) List(c *gin.Context) {
 // @Failure 403,404,422,503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-file-imports/{id} [get]
 func (h *ImportHandler) Get(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -129,7 +149,7 @@ func (h *ImportHandler) Get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	actor := identityhttp.Principal(c)
+
 	job, err := h.service.Get(c.Request.Context(), actor, project, id)
 	if err != nil {
 		scriptProblem(c, err)
@@ -181,6 +201,12 @@ func (h *ImportHandler) Retry(c *gin.Context) { h.control(c, domain.ImportAction
 func (h *ImportHandler) Reconcile(c *gin.Context) { h.control(c, domain.ImportActionReconcile) }
 
 func (h *ImportHandler) control(c *gin.Context, action domain.ImportAction) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var request FileImportControlRequest
 	if !readJSON(c, &request) {
 		return
@@ -193,7 +219,7 @@ func (h *ImportHandler) control(c *gin.Context, action domain.ImportAction) {
 	if !ok {
 		return
 	}
-	actor := identityhttp.Principal(c)
+
 	out, err := h.service.Control(c.Request.Context(), actor, application.ImportControl{ProjectID: project, JobID: id, Key: key, RequestID: requestID, ExpectedRevision: *request.ExpectedRevision, Action: action})
 	if err != nil {
 		scriptProblem(c, err)

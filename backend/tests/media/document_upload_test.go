@@ -69,7 +69,7 @@ func TestDocumentUploadPreservesOriginalBytesWithoutAVRenditions(t *testing.T) {
 				t.Fatalf("actual MIME = %q", file.MIMEType)
 			}
 			repo, objects := &uploadRepoFake{}, &uploadObjectsFake{}
-			in := mediaapp.UploadInput{Actor: identityapp.Principal{ID: uuid.New(), OrgID: uuid.New()}, Request: mediaapp.UploadRequest{ProjectID: uuid.New(), Key: uuid.New(), FileName: tc.name, RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true}
+			in := mediaapp.UploadInput{Actor: mediaActor(identityapp.Principal{ID: uuid.New(), OrgID: uuid.New()}), Request: mediaapp.UploadRequest{ProjectID: uuid.New(), Key: uuid.New(), FileName: tc.name, RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true}
 			service := unitRoutedUploadService(repo, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 			got, err := fixtureProjectUpload(t.Context(), service, in)
 			if err != nil || got.Asset.Kind != "document" || repo.asset.SHA256 == nil || *repo.asset.SHA256 != file.SHA256 || repo.asset.ByteSize != int64(len(tc.data)) || len(repo.rends) != 0 || len(objects.items) != 1 {
@@ -125,16 +125,16 @@ func TestDocumentListIsExplicitAndCannotPreviewOrReferenceCanvas(t *testing.T) {
 	asset := domain.MediaAsset{ID: id, ProjectID: project, Kind: domain.KindDocument, Origin: domain.OriginUpload, Status: domain.StatusReady, ModerationStatus: domain.ModerationPassed, FileName: "剧本.txt", MimeType: "text/plain", ByteSize: 3, Revision: 1, SHA256: &sha, Codec: &codec, CreateTime: now, UpdateTime: now, ObjectKey: "projects/" + project.String() + "/document/2026/10/" + id.String() + ".txt"}
 	signer := &previewSigner{}
 	q := mediaapp.NewRoutedAssetQuery(readStore{asset: asset}, signer, 5*time.Minute)
-	if got, err := q.List(t.Context(), identityapp.Principal{}, project, "document", "", 50); err != nil || len(got.Items) != 1 || got.Items[0].Kind != "document" {
+	if got, err := q.List(t.Context(), mediaActor(identityapp.Principal{}), project, "document", "", 50); err != nil || len(got.Items) != 1 || got.Items[0].Kind != "document" {
 		t.Fatal("explicit document list", got, err)
 	}
-	if _, err := q.List(t.Context(), identityapp.Principal{}, project, "", "", 50); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := q.List(t.Context(), mediaActor(identityapp.Principal{}), project, "", "", 50); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("default list leaked document", err)
 	}
-	if _, err := q.Reference(t.Context(), identityapp.Principal{}, project, id); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := q.Reference(t.Context(), mediaActor(identityapp.Principal{}), project, id); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("document entered canvas media reference", err)
 	}
-	if _, err := q.Preview(t.Context(), identityapp.Principal{}, project, id); !errors.Is(err, mediaapp.ErrNotFound) || signer.calls != 0 {
+	if _, err := q.Preview(t.Context(), mediaActor(identityapp.Principal{}), project, id); !errors.Is(err, mediaapp.ErrNotFound) || signer.calls != 0 {
 		t.Fatal("document got inline private preview", err)
 	}
 }

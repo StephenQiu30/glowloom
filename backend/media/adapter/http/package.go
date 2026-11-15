@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -21,13 +20,15 @@ import (
 
 // PackageHandler owns bounded multipart imports and complete ZIP attachments.
 type PackageHandler struct {
+	resolve ActorResolver
+
 	service *application.LibraryPackageService
 	slots   chan struct{}
 }
 
 // NewPackageHandler caps simultaneous large file commands in this API process.
-func NewPackageHandler(service *application.LibraryPackageService) *PackageHandler {
-	return &PackageHandler{service: service, slots: make(chan struct{}, 2)}
+func NewPackageHandler(service *application.LibraryPackageService, resolve ActorResolver) *PackageHandler {
+	return &PackageHandler{resolve: resolve, service: service, slots: make(chan struct{}, 2)}
 }
 
 // Register installs owning package reads and explicit recovery commands.
@@ -93,6 +94,11 @@ func (h *PackageHandler) begin(c *gin.Context) (func(), bool) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/packages/imports [post]
 func (h *PackageHandler) Import(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	done, ok := h.begin(c)
 	if !ok {
 		return
@@ -114,7 +120,7 @@ func (h *PackageHandler) Import(c *gin.Context) {
 		writePackageError(c, application.ErrInvalidPackage)
 		return
 	}
-	job, err := h.service.Import(c.Request.Context(), identityhttp.Principal(c), in, file)
+	job, err := h.service.Import(c.Request.Context(), actor, in, file)
 	if err != nil {
 		writePackageError(c, err)
 		return
@@ -124,6 +130,11 @@ func (h *PackageHandler) Import(c *gin.Context) {
 }
 
 func (h *PackageHandler) readImport(c *gin.Context) (application.PackageImportRequest, *application.Downloaded, error) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return application.PackageImportRequest{}, nil, application.ErrSessionInvalid
+	}
+
 	var in application.PackageImportRequest
 	if len(c.Request.URL.Query()) != 0 {
 		return in, nil, application.ErrInvalidPackage
@@ -152,7 +163,7 @@ func (h *PackageHandler) readImport(c *gin.Context) (application.PackageImportRe
 	if err != nil || !in.LocalReviewConfirmed || in.Scope.Validate() != nil {
 		return in, nil, application.ErrInvalidPackage
 	}
-	if err := h.service.Authorize(c.Request.Context(), identityhttp.Principal(c), in.Scope, false); err != nil {
+	if err := h.service.Authorize(c.Request.Context(), actor, in.Scope, false); err != nil {
 		return in, nil, err
 	}
 	part, err = r.NextPart()
@@ -219,6 +230,11 @@ func packageQuery(c *gin.Context, paging bool) (domain.LibraryScope, int, int, e
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/packages/imports [get]
 func (h *PackageHandler) List(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.service == nil {
 		writePackageError(c, application.ErrUnavailable)
 		return
@@ -228,7 +244,7 @@ func (h *PackageHandler) List(c *gin.Context) {
 		writePackageError(c, err)
 		return
 	}
-	result, err := h.service.List(c.Request.Context(), identityhttp.Principal(c), scope, page, size)
+	result, err := h.service.List(c.Request.Context(), actor, scope, page, size)
 	if err != nil {
 		writePackageError(c, err)
 		return
@@ -250,6 +266,11 @@ func (h *PackageHandler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/packages/imports/{job_id} [get]
 func (h *PackageHandler) Get(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.service == nil {
 		writePackageError(c, application.ErrUnavailable)
 		return
@@ -262,7 +283,7 @@ func (h *PackageHandler) Get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	job, err := h.service.Get(c.Request.Context(), identityhttp.Principal(c), id)
+	job, err := h.service.Get(c.Request.Context(), actor, id)
 	if err != nil {
 		writePackageError(c, err)
 		return
@@ -308,6 +329,11 @@ func (h *PackageHandler) Reconcile(c *gin.Context) { h.control(c, false) }
 func (h *PackageHandler) Cancel(c *gin.Context) { h.control(c, true) }
 
 func (h *PackageHandler) control(c *gin.Context, cancel bool) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	done, ok := h.begin(c)
 	if !ok {
 		return
@@ -348,9 +374,9 @@ func (h *PackageHandler) control(c *gin.Context, cancel bool) {
 	}
 	var job application.PackageJob
 	if cancel {
-		job, err = h.service.Cancel(c.Request.Context(), identityhttp.Principal(c), id, command)
+		job, err = h.service.Cancel(c.Request.Context(), actor, id, command)
 	} else {
-		job, err = h.service.Reconcile(c.Request.Context(), identityhttp.Principal(c), id, command)
+		job, err = h.service.Reconcile(c.Request.Context(), actor, id, command)
 	}
 	if err != nil {
 		writePackageError(c, err)
@@ -375,6 +401,11 @@ func (h *PackageHandler) control(c *gin.Context, cancel bool) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/packages/export [get]
 func (h *PackageHandler) Export(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	done, ok := h.begin(c)
 	if !ok {
 		return
@@ -385,7 +416,7 @@ func (h *PackageHandler) Export(c *gin.Context) {
 		writePackageError(c, err)
 		return
 	}
-	file, err := h.service.Export(c.Request.Context(), identityhttp.Principal(c), scope)
+	file, err := h.service.Export(c.Request.Context(), actor, scope)
 	if err != nil {
 		writePackageError(c, err)
 		return

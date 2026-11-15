@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -38,14 +40,16 @@ func TestMediaToolRetainedReaderProtectsFrozenSourcesAndUnpublishedDepthObjects(
 	source.SHA256 = &digest
 	source.Status, source.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
 	source = mediaFixtureAssetLocation(t, database, source)
-	if err := mediaTestStore(database).CreateAsset(t.Context(), actor, source); err != nil {
+	if err := mediaTestStore(database).CreateAsset(t.Context(), mediaActor(actor), source); err != nil {
 		t.Fatal(err)
 	}
 	// This fixture isolates owning metadata retention; it does not prove bytes.
 	if err := database.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, source.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := mediatoolExportStore(database, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	store := mediatoolExportStore(database, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
 	job, err := store.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +104,7 @@ func TestMediaToolRetainedReaderProtectsFrozenSourcesAndUnpublishedDepthObjects(
 			if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 				return err
 			}
-			reader := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx)))
+			reader := toolpg.NewRetainedMediaReader(tx, mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx))))
 			found, err := reader.HasMediaReferences(t.Context(), actor, project, id)
 			if err != nil || !found {
 				t.Fatal("lost retained source or pending artifact identity", found, err)
@@ -123,7 +127,7 @@ func TestMediaToolRetainedReaderRejectsUnknownHistoryWithoutSubtotal(t *testing.
 		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
-		reader := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx)))
+		reader := toolpg.NewRetainedMediaReader(tx, mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx))))
 		if found, err := reader.HasMediaReferences(t.Context(), actor, project, uuid.New()); err == nil || found {
 			t.Fatal("unknown frozen history became no references", found, err)
 		}
@@ -136,7 +140,7 @@ func TestMediaToolRetainedReaderRejectsUnknownHistoryWithoutSubtotal(t *testing.
 
 func TestMediaToolRetainedReaderRequiresCurrentAuthorityAndCallerTransaction(t *testing.T) {
 	database, actor, project := retainedToolDatabase(t)
-	if _, err := toolpg.NewRetainedMediaReader(database, mediaapp.NewDerivedService(mediaTestStore(database))).HasMediaReferences(t.Context(), actor, project, uuid.New()); err == nil {
+	if _, err := toolpg.NewRetainedMediaReader(database, mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(database)))).HasMediaReferences(t.Context(), actor, project, uuid.New()); err == nil {
 		t.Fatal("pool accepted")
 	}
 	foreign, _ := mediaStoreProject(t, database)
@@ -144,7 +148,7 @@ func TestMediaToolRetainedReaderRequiresCurrentAuthorityAndCallerTransaction(t *
 		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
-		if _, err := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))).HasMediaReferences(t.Context(), foreign, project, uuid.New()); !errors.Is(err, mediaapp.ErrNotFound) {
+		if _, err := toolpg.NewRetainedMediaReader(tx, mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))).HasMediaReferences(t.Context(), foreign, project, uuid.New()); !errors.Is(err, mediaapp.ErrNotFound) {
 			t.Fatal("foreign project", err)
 		}
 		if _, err := toolpg.NewRetainedMediaReader(tx, nil).HasMediaReferences(t.Context(), actor, project, uuid.New()); err == nil {
@@ -161,7 +165,7 @@ func TestMediaToolRetainedReaderRequiresCurrentAuthorityAndCallerTransaction(t *
 		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
-		_, err := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))).HasMediaReferences(t.Context(), actor, project, uuid.New())
+		_, err := toolpg.NewRetainedMediaReader(tx, mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))).HasMediaReferences(t.Context(), actor, project, uuid.New())
 		if !errors.Is(err, identityapp.ErrSessionInvalid) {
 			t.Fatal("revoked current actor", err)
 		}

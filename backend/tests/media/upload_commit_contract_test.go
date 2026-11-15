@@ -29,14 +29,14 @@ type uploadCommitRepository struct {
 	cleanupLive      atomic.Bool
 }
 
-func (r *uploadCommitRepository) AuthorizeUpload(context.Context, identity.Principal, uuid.UUID) (string, error) {
+func (r *uploadCommitRepository) AuthorizeUpload(context.Context, media.Actor, uuid.UUID) (string, error) {
 	r.authorizations.Add(1)
 	return "16:9", nil
 }
-func (*uploadCommitRepository) FindUpload(context.Context, identity.Principal, media.UploadRequest) (media.UploadResult, bool, error) {
+func (*uploadCommitRepository) FindUpload(context.Context, media.Actor, media.UploadRequest) (media.UploadResult, bool, error) {
 	return media.UploadResult{}, false, nil
 }
-func (r *uploadCommitRepository) CommitUpload(ctx context.Context, _ identity.Principal, _ media.UploadRequest, asset domain.MediaAsset, _ []domain.Rendition) (media.UploadResult, error) {
+func (r *uploadCommitRepository) CommitUpload(ctx context.Context, _ media.Actor, _ media.UploadRequest, asset domain.MediaAsset, _ []domain.Rendition) (media.UploadResult, error) {
 	// In the unknown-receipt case the durable commit precedes revocation; only
 	// its response is delayed. In rejection cases authorization changes first.
 	if r.unknown {
@@ -119,7 +119,7 @@ func TestProjectUploadCommitAuthorityContract(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = file.Close() })
 			input := media.UploadInput{
-				Actor:   identity.Principal{ID: uuid.New(), OrgID: uuid.New()},
+				Actor:   mediaActor(identity.Principal{ID: uuid.New(), OrgID: uuid.New()}),
 				Request: media.UploadRequest{ProjectID: uuid.New(), Key: uuid.New(), FileName: "reference.txt", RequestID: uuid.New()},
 				File:    file, LocalReviewConfirmed: true,
 			}

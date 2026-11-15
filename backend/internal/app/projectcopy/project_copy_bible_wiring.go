@@ -5,21 +5,31 @@ import (
 	"errors"
 	"time"
 
-	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	pgbible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
+
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+
 	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -27,8 +37,8 @@ type projectCopyBibleAccess struct {
 	store *pgworkspace.ProjectCopyAccessStore
 }
 
-func (a projectCopyBibleAccess) Authorize(ctx context.Context, actor identityapp.Principal, b bibleapp.ProjectCopyBinding, target bool) error {
-	return a.store.Authorize(ctx, actor, workspaceapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, target)
+func (a projectCopyBibleAccess) Authorize(ctx context.Context, actor bibleapp.Actor, b bibleapp.ProjectCopyBinding, target bool) error {
+	return a.store.Authorize(ctx, projectCopyIdentityActor(actor), workspaceapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, target)
 }
 func projectCopyBibleBinding(b workspaceapp.ProjectCopyBinding) bibleapp.ProjectCopyBinding {
 	return bibleapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}
@@ -74,7 +84,7 @@ func projectCopyBibleError(err error) error {
 		return &workspaceapp.ProjectCopyBibleTransferError{Code: transfer.Code, NeedsReconciliation: transfer.NeedsReconciliation, Cause: err}
 	}
 	if errors.Is(err, bibleapp.ErrUnavailable) {
-		return errors.Join(workspaceapp.ErrProjectDependencyUnavailable, err)
+		return errors.Join(workspacesource.ErrProjectDependencyUnavailable, err)
 	}
 	return err
 }
@@ -95,7 +105,7 @@ func provideBibleProjectCopyStore(database *gorm.DB, authority workspaceapp.Proj
 type projectCopyBibleOwner struct{ store *pgbible.ProjectCopyStore }
 
 func (o projectCopyBibleOwner) ReferencedMediaFacts(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding) ([]mediaapp.ReferenceFact, error) {
-	facts, err := o.store.ReferencedMediaFacts(ctx, actor, projectCopyBibleBinding(b))
+	facts, err := o.store.ReferencedMediaFacts(ctx, projectCopyBibleActor(actor), projectCopyBibleBinding(b))
 	if err != nil {
 		return nil, projectCopyBibleError(err)
 	}
@@ -106,19 +116,19 @@ func (o projectCopyBibleOwner) ReferencedMediaFacts(ctx context.Context, actor i
 	return result, nil
 }
 func (o projectCopyBibleOwner) Freeze(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, assets map[uuid.UUID]uuid.UUID, at time.Time) (workspacedomain.ProjectCopyBibleSnapshot, error) {
-	s, err := o.store.Freeze(ctx, actor, projectCopyBibleBinding(b), assets, at)
+	s, err := o.store.Freeze(ctx, projectCopyBibleActor(actor), projectCopyBibleBinding(b), assets, at)
 	return workspaceBibleCopySnapshot(s), projectCopyBibleError(err)
 }
 func (o projectCopyBibleOwner) Register(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyBibleSnapshot) (workspacedomain.ProjectCopyBibleReceipt, error) {
-	r, err := o.store.Register(ctx, actor, projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s))
+	r, err := o.store.Register(ctx, projectCopyBibleActor(actor), projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s))
 	return workspaceBibleCopyReceipt(r), projectCopyBibleError(err)
 }
 func (o projectCopyBibleOwner) Verify(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyBibleSnapshot) (workspacedomain.ProjectCopyBibleReceipt, error) {
-	r, err := o.store.Verify(ctx, actor, projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s))
+	r, err := o.store.Verify(ctx, projectCopyBibleActor(actor), projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s))
 	return workspaceBibleCopyReceipt(r), projectCopyBibleError(err)
 }
 func (o projectCopyBibleOwner) FinishCleanup(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyBibleSnapshot) error {
-	return projectCopyBibleError(o.store.Cleanup(ctx, actor, projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s)))
+	return projectCopyBibleError(o.store.Cleanup(ctx, projectCopyBibleActor(actor), projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s)))
 }
 
 type projectCopyBibleTransfer struct {
@@ -129,11 +139,11 @@ type projectCopyBibleTransfer struct {
 }
 
 func (t projectCopyBibleTransfer) Transfer(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyBibleSnapshot) error {
-	return projectCopyBibleError(t.owner.Transfer(ctx, actor, projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s)))
+	return projectCopyBibleError(t.owner.Transfer(ctx, projectCopyBibleActor(actor), projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s)))
 }
 func (t projectCopyBibleTransfer) Cleanup(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyBibleSnapshot) error {
 	return projectCopyBibleError(t.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return provideBibleProjectCopyStore(tx, t.authority, t.snapshot).Cleanup(ctx, actor, projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s))
+		return provideBibleProjectCopyStore(tx, t.authority, t.snapshot).Cleanup(ctx, projectCopyBibleActor(actor), projectCopyBibleBinding(b), bibleOwnerCopySnapshot(s))
 	}))
 }
 func provideProjectCopyBibleTransfer(database *gorm.DB, registry *objectstorage.Registry) workspaceapp.ProjectCopyBibleTransferFactory {

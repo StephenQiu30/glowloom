@@ -21,16 +21,16 @@ func TestScriptEpisodesPGWholeConfirmationHistoryRetainsIdentityAndPreface(t *te
 	input.ProjectID = pid
 	input.Action = "import"
 	input.Sources = append(input.Sources, app.SourceInput{Kind: "episode", Title: "第二集", Status: "draft", Document: domain.RichDocument{Type: "doc", Content: []domain.RichDocument{{Type: "paragraph", Content: []domain.RichDocument{{Type: "text", Text: "中文"}}}}}})
-	saved, err := sourceService.Write(t.Context(), actor, input)
+	saved, err := sourceService.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	view, err := store.Episodes(t.Context(), actor, pid, saved.VersionID)
+	view, err := store.Episodes(t.Context(), scriptActor(actor), pid, saved.VersionID)
 	if err != nil || len(view.Candidate.Boundaries) != 2 || len(view.Episodes) != 0 {
 		t.Fatal("candidate/formal separation", view, err)
 	}
 	confirm := app.SplitCommand{ProjectID: pid, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 1, ExpectedSplitRevision: 0, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}
-	first, err := store.ConfirmSplit(t.Context(), actor, confirm, time.Now().UTC())
+	first, err := store.ConfirmSplit(t.Context(), scriptActor(actor), confirm, time.Now().UTC())
 	if err != nil || len(first.Episodes) != 2 || first.ScriptRevision != 2 || first.Episodes[0].SeqNo != 1 || first.Episodes[0].Start != 0 || first.Episodes[0].End != 5 {
 		t.Fatal("formal complete boundary", first, err)
 	}
@@ -40,11 +40,11 @@ func TestScriptEpisodesPGWholeConfirmationHistoryRetainsIdentityAndPreface(t *te
 	rename.ExpectedSplitRevision = 1
 	rename.Boundaries = append([]domain.EpisodeBoundary(nil), confirm.Boundaries...)
 	rename.Boundaries[0].Title = "新标题"
-	second, err := store.ConfirmSplit(t.Context(), actor, rename, time.Now().UTC())
+	second, err := store.ConfirmSplit(t.Context(), scriptActor(actor), rename, time.Now().UTC())
 	if err != nil || second.SplitSetID != first.SplitSetID || second.Episodes[0].ID != first.Episodes[0].ID || len(second.RenamedIDs) != 1 {
 		t.Fatal("title-only stable identity/fixed first formal set", second, err)
 	}
-	replay, err := store.ConfirmSplit(t.Context(), actor, confirm, time.Now().UTC())
+	replay, err := store.ConfirmSplit(t.Context(), scriptActor(actor), confirm, time.Now().UTC())
 	if err != nil || replay.ScriptRevision != 2 || replay.Episodes[0].Title != first.Episodes[0].Title {
 		t.Fatal("immutable complete original confirmation", replay, err)
 	}
@@ -53,7 +53,7 @@ func TestScriptEpisodesPGWholeConfirmationHistoryRetainsIdentityAndPreface(t *te
 	invalid.ExpectedRevision = 3
 	invalid.ExpectedSplitRevision = 2
 	invalid.Boundaries = invalid.Boundaries[:1]
-	if _, err := store.ConfirmSplit(t.Context(), actor, invalid, time.Now().UTC()); !errors.Is(err, domain.ErrInvalidSpan) {
+	if _, err := store.ConfirmSplit(t.Context(), scriptActor(actor), invalid, time.Now().UTC()); !errors.Is(err, domain.ErrInvalidSpan) {
 		t.Fatal("incomplete boundaries accepted", err)
 	}
 	var count int64
@@ -74,22 +74,22 @@ func TestScriptStructuresPGImmutableCandidatesConfirmAndMissingImpactFence(t *te
 	_, input := sourceCommand()
 	input.ProjectID = pid
 	input.Sources[0].Document = domain.RichDocument{Type: "doc", Content: []domain.RichDocument{{Type: "paragraph", Content: []domain.RichDocument{{Type: "text", Text: "走进客厅\n你好😀 "}}}}}
-	saved, err := sources.Write(t.Context(), actor, input)
+	saved, err := sources.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	view, err := store.Episodes(t.Context(), actor, pid, saved.VersionID)
+	view, err := store.Episodes(t.Context(), scriptActor(actor), pid, saved.VersionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	split := app.SplitCommand{ProjectID: pid, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 1, ExpectedSplitRevision: 0, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}
-	formal, err := store.ConfirmSplit(t.Context(), actor, split, time.Now().UTC())
+	formal, err := store.ConfirmSplit(t.Context(), scriptActor(actor), split, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
 	episodes := app.NewEpisodeService(store, sources, time.Now)
 	save := app.StructureCommand{ProjectID: pid, EpisodeID: formal.Episodes[0].ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 2, ExpectedEpisodeRevision: 1, Document: manualStructure()}
-	first, err := episodes.SaveStructure(t.Context(), actor, save)
+	first, err := episodes.SaveStructure(t.Context(), scriptActor(actor), save)
 	if err != nil || first.VersionNo != 1 || first.ReviewStatus != "candidate" {
 		t.Fatal("actual structure saved", first, err)
 	}
@@ -99,7 +99,7 @@ func TestScriptStructuresPGImmutableCandidatesConfirmAndMissingImpactFence(t *te
 	confirm.ExpectedEpisodeRevision = 2
 	confirm.BaseStructureVersionNo = 1
 	confirm.Document = domain.StructureDocument{}
-	confirmed, err := episodes.ConfirmStructure(t.Context(), actor, confirm)
+	confirmed, err := episodes.ConfirmStructure(t.Context(), scriptActor(actor), confirm)
 	if err != nil || confirmed.ReviewStatus != "confirmed" || confirmed.ScriptRevision != 4 {
 		t.Fatal("first manual confirmation", confirmed, err)
 	}
@@ -108,11 +108,11 @@ func TestScriptStructuresPGImmutableCandidatesConfirmAndMissingImpactFence(t *te
 	save.ExpectedEpisodeRevision = 3
 	save.BaseStructureVersionNo = 1
 	save.Document.Scenes[0].Items[1].Content = "欢迎回来😀"
-	second, err := episodes.SaveStructure(t.Context(), actor, save)
+	second, err := episodes.SaveStructure(t.Context(), scriptActor(actor), save)
 	if err != nil || second.VersionNo != 2 || second.StructureID == first.StructureID {
 		t.Fatal("new immutable candidate", second, err)
 	}
-	current, err := store.Episode(t.Context(), actor, save.EpisodeID)
+	current, err := store.Episode(t.Context(), scriptActor(actor), save.EpisodeID)
 	if err != nil || current.ConfirmedStructureID == nil || *current.ConfirmedStructureID != first.StructureID || *current.CurrentStructureID != second.StructureID {
 		t.Fatal("old confirmed facts overwritten", current, err)
 	}
@@ -120,11 +120,11 @@ func TestScriptStructuresPGImmutableCandidatesConfirmAndMissingImpactFence(t *te
 	confirm.ExpectedRevision = 5
 	confirm.ExpectedEpisodeRevision = 4
 	confirm.BaseStructureVersionNo = 2
-	if _, err := episodes.ConfirmStructure(t.Context(), actor, confirm); !errors.Is(err, app.ErrConfirmationRequired) {
+	if _, err := episodes.ConfirmStructure(t.Context(), scriptActor(actor), confirm); !errors.Is(err, app.ErrConfirmationRequired) {
 		t.Fatal("changed confirmed structure lacks ack", err)
 	}
 	confirm.AckInvalidate = true
-	if _, err := episodes.ConfirmStructure(t.Context(), actor, confirm); !errors.Is(err, app.ErrContextUnavailable) {
+	if _, err := episodes.ConfirmStructure(t.Context(), scriptActor(actor), confirm); !errors.Is(err, app.ErrContextUnavailable) {
 		t.Fatal("missing downstream impact guessed zero", err)
 	}
 	var count int64
@@ -149,29 +149,29 @@ func TestScriptReviewPGAuditZeroRowAndCrossFamilyKeysRollback(t *testing.T) {
 	sources := app.NewSourceService(store, objects, time.Now)
 	_, input := sourceCommand()
 	input.ProjectID = pid
-	saved, err := sources.Write(t.Context(), actor, input)
+	saved, err := sources.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	episodes := app.NewEpisodeService(store, sources, time.Now)
-	view, err := episodes.Episodes(t.Context(), actor, pid, saved.VersionID)
+	view, err := episodes.Episodes(t.Context(), scriptActor(actor), pid, saved.VersionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	confirm := app.SplitCommand{ProjectID: pid, VersionID: saved.VersionID, Key: input.Key, RequestID: uuid.New(), ExpectedRevision: 1, ExpectedSplitRevision: 0, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}
-	if _, err := episodes.ConfirmSplit(t.Context(), actor, confirm); !errors.Is(err, app.ErrIdempotencyConflict) {
+	if _, err := episodes.ConfirmSplit(t.Context(), scriptActor(actor), confirm); !errors.Is(err, app.ErrIdempotencyConflict) {
 		t.Fatal("cross-family key reused", err)
 	}
 	confirm.Key = uuid.New()
 	scriptNullTrigger(t, owner, "infra.outbox", "NEW.partition_key='"+pid.String()+"' AND NEW.payload#>>'{data,action}'='script.split_confirmed'")
-	if _, err := episodes.ConfirmSplit(t.Context(), actor, confirm); !errors.Is(err, app.ErrConflict) {
+	if _, err := episodes.ConfirmSplit(t.Context(), scriptActor(actor), confirm); !errors.Is(err, app.ErrConflict) {
 		t.Fatal("zero-row audit accepted confirmation", err)
 	}
-	state, err := sources.Workspace(t.Context(), actor, pid)
+	state, err := sources.Workspace(t.Context(), scriptActor(actor), pid)
 	if err != nil || state.State.Revision != 1 {
 		t.Fatal("zero-row changed script head", state, err)
 	}
-	current, err := episodes.Episodes(t.Context(), actor, pid, saved.VersionID)
+	current, err := episodes.Episodes(t.Context(), scriptActor(actor), pid, saved.VersionID)
 	if err != nil || len(current.Episodes) != 0 || current.Head.SplitRevision != 0 || current.Head.ConfirmedSetID != nil {
 		t.Fatal("partial formal confirmation", current, err)
 	}

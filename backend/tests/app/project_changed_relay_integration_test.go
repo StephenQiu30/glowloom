@@ -16,13 +16,20 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+
 	redisrealtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/redis"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/sse"
+
 	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -76,7 +83,7 @@ func TestProjectCreateAndUpdateReachSSEThroughRelay(t *testing.T) {
 
 	actor := identityapp.Principal{ID: actorID, OrgID: orgID, Role: identitydomain.RoleProducer}
 	created, err := workspaceapp.NewCreateProjectCommand(pgworkspace.NewStore(dbConn.DB), time.Now).Execute(
-		ctx, actor, workspaceapp.CreateProjectInput{
+		ctx, actor, workspacesource.CreateProjectInput{
 			Name: "Relay 实时项目", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString(),
 		},
 	)

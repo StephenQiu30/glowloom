@@ -5,11 +5,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -27,7 +28,7 @@ func (s *ProjectCopyStore) VerifyDelivery(ctx context.Context, d application.Pro
 			return domain.ErrInvalidProjectCopy
 		}
 		job, err := s.authorizedCopy(ctx, tx, identityapp.Principal{ID: d.ActorID, OrgID: d.OrgID}, d.JobID, true, true)
-		if errors.Is(err, application.ErrScopeNotFound) || errors.Is(err, application.ErrProjectNotFound) || errors.Is(err, identityapp.ErrForbidden) {
+		if errors.Is(err, workspacesource.ErrScopeNotFound) || errors.Is(err, workspacesource.ErrProjectNotFound) || errors.Is(err, identityapp.ErrForbidden) {
 			valid = false
 			return nil
 		}

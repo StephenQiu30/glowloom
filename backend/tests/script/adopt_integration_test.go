@@ -19,31 +19,31 @@ func TestScriptAdoptPGFirstFormalPublicationReplayAndMissingOwnerPreservesOldFac
 	sources := app.NewSourceService(store, objects, time.Now)
 	_, input := sourceCommand()
 	input.ProjectID = pid
-	saved, err := sources.Write(t.Context(), actor, input)
+	saved, err := sources.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	view, err := store.Episodes(t.Context(), actor, pid, saved.VersionID)
+	view, err := store.Episodes(t.Context(), scriptActor(actor), pid, saved.VersionID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	formal, err := store.ConfirmSplit(t.Context(), actor, app.SplitCommand{ProjectID: pid, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 1, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}, time.Now().UTC())
+	formal, err := store.ConfirmSplit(t.Context(), scriptActor(actor), app.SplitCommand{ProjectID: pid, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 1, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
 	adopt := app.NewAdoptService(store, time.Now)
 	command := app.AdoptCommand{ProjectID: pid, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 2, ExpectedSplitRevision: 1}
-	first, err := adopt.Adopt(t.Context(), actor, command)
+	first, err := adopt.Adopt(t.Context(), scriptActor(actor), command)
 	if err != nil || !first.Changed || first.ScriptRevision != 3 || first.ProjectRevision != 4 || first.SplitSetID != formal.SplitSetID || first.PreviousVersionID != nil || len(first.Mappings) != 1 || first.Mappings[0].InheritStatus != "not_inherited" {
 		t.Fatal("first real adopted content", first, err)
 	}
-	repeat, err := app.NewAdoptService(scriptStore(db), time.Now).Adopt(t.Context(), actor, command)
+	repeat, err := app.NewAdoptService(scriptStore(db), time.Now).Adopt(t.Context(), scriptActor(actor), command)
 	if err != nil || repeat.VersionID != first.VersionID || repeat.ScriptRevision != first.ScriptRevision {
 		t.Fatal("permanent original adopt", repeat, err)
 	}
 	command.Key = uuid.New()
 	command.ExpectedRevision = 3
-	same, err := adopt.Adopt(t.Context(), actor, command)
+	same, err := adopt.Adopt(t.Context(), scriptActor(actor), command)
 	if err != nil || same.Changed || !same.Duplicate || same.ScriptRevision != 3 {
 		t.Fatal("same adopted version touch", same, err)
 	}
@@ -55,25 +55,25 @@ func TestScriptAdoptPGFirstFormalPublicationReplayAndMissingOwnerPreservesOldFac
 	input.LineageID = &lineage
 	input.BaseVersionID = &saved.VersionID
 	input.Sources[0].Document = domain.RichDocument{Type: "doc", Content: []domain.RichDocument{{Type: "paragraph", Content: []domain.RichDocument{{Type: "text", Text: "新的正文"}}}}}
-	second, err := sources.Write(t.Context(), actor, input)
+	second, err := sources.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	newView, err := store.Episodes(t.Context(), actor, pid, second.VersionID)
+	newView, err := store.Episodes(t.Context(), scriptActor(actor), pid, second.VersionID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ConfirmSplit(t.Context(), actor, app.SplitCommand{ProjectID: pid, VersionID: second.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 4, CandidateSetID: second.SplitSetID, Boundaries: newView.Candidate.Boundaries}, time.Now().UTC()); err != nil {
+	if _, err := store.ConfirmSplit(t.Context(), scriptActor(actor), app.SplitCommand{ProjectID: pid, VersionID: second.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 4, CandidateSetID: second.SplitSetID, Boundaries: newView.Candidate.Boundaries}, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	command.Key = uuid.New()
 	command.VersionID = second.VersionID
 	command.ExpectedRevision = 5
 	command.AckInvalidate = true
-	if _, err := adopt.Adopt(t.Context(), actor, command); !errors.Is(err, app.ErrContextUnavailable) {
+	if _, err := adopt.Adopt(t.Context(), scriptActor(actor), command); !errors.Is(err, app.ErrContextUnavailable) {
 		t.Fatal("unproved downstream guessed empty", err)
 	}
-	current, err := sources.Workspace(t.Context(), actor, pid)
+	current, err := sources.Workspace(t.Context(), scriptActor(actor), pid)
 	if err != nil || current.State.Revision != 5 || current.State.AdoptedVersionID == nil || *current.State.AdoptedVersionID != saved.VersionID {
 		t.Fatal("old adopted facts changed", current, err)
 	}

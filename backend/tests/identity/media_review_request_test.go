@@ -61,7 +61,7 @@ func TestMediaRequestControlPreservesSessionPrincipal(t *testing.T) {
 			asset := reviewVideo(t, tx, project)
 			scopes := func(tx *gorm.DB) media.ScopeAccess { return mediaScopeTestAccess{tx: tx, request: factory(tx)} }
 			mediaFactory := func(tx *gorm.DB) tool.DerivedMedia {
-				return media.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+				return identityDerivedMedia(media.NewDerivedService(pgmedia.NewScopedStore(tx, scopes)))
 			}
 			source := func(*gorm.DB) tool.TranscriptionSourceReader { return reviewScopeSource{asset.ID} }
 			var action func(identity.Principal) error
@@ -94,7 +94,7 @@ func TestMediaRequestControlPreservesSessionPrincipal(t *testing.T) {
 				}
 			default:
 				store := pgtool.NewDepthStore(tx, source, func(tx *gorm.DB) tool.DepthDerivedMedia {
-					return media.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+					return identityDerivedMedia(media.NewDerivedService(pgmedia.NewScopedStore(tx, scopes)))
 				})
 				job, err := store.Create(t.Context(), actor, project, uuid.New(), tool.DepthCreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
 				if err != nil {

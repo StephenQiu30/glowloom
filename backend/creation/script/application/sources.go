@@ -10,8 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -31,14 +29,14 @@ var (
 
 // ProjectAccess retains workspace locks in the caller-owned transaction.
 type ProjectAccess interface {
-	Authorize(context.Context, identityapp.Principal, uuid.UUID, bool) (workspaceapp.ProjectContentAccess, error)
-	TouchContent(context.Context, identityapp.Principal, uuid.UUID, int64) (int64, error)
+	Authorize(context.Context, Actor, uuid.UUID, bool) (ProjectFacts, error)
+	TouchContent(context.Context, Actor, uuid.UUID, int64) (int64, error)
 }
 
 // SourceAssetReader uses current owning media authorization, never client paths.
 type SourceAssetReader interface {
-	Freeze(context.Context, identityapp.Principal, uuid.UUID, []uuid.UUID) ([]mediaapp.DocumentSource, error)
-	Open(context.Context, identityapp.Principal, uuid.UUID, mediaapp.DocumentSource) (*mediaapp.Downloaded, error)
+	Freeze(context.Context, Actor, uuid.UUID, []uuid.UUID) ([]mediaapp.DocumentSource, error)
+	Open(context.Context, Actor, uuid.UUID, mediaapp.DocumentSource) (*mediaapp.Downloaded, error)
 }
 
 // SourceInput is one complete editor input; legacy HTML is normalized at the adapter.
@@ -116,15 +114,15 @@ type PendingWrite struct {
 // PublicationAuthorization retains an external producer's original durable
 // authority and exact command hash inside each source mutation transaction.
 type PublicationAuthorization interface {
-	AuthorizeSourcePublication(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string) error
+	AuthorizeSourcePublication(context.Context, Actor, uuid.UUID, uuid.UUID, string) error
 }
 
 // SourceStore owns authorized CAS and permanent plans/results in short transactions.
 type SourceStore interface {
-	LoadBase(context.Context, identityapp.Principal, uuid.UUID, *uuid.UUID) (SourceBase, error)
-	FindCommand(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string) (*PendingWrite, error)
-	BeginWrite(context.Context, identityapp.Principal, WritePlan) (PendingWrite, error)
-	FinishWrite(context.Context, identityapp.Principal, WritePlan) (SourceReceipt, error)
+	LoadBase(context.Context, Actor, uuid.UUID, *uuid.UUID) (SourceBase, error)
+	FindCommand(context.Context, Actor, uuid.UUID, uuid.UUID, string) (*PendingWrite, error)
+	BeginWrite(context.Context, Actor, WritePlan) (PendingWrite, error)
+	FinishWrite(context.Context, Actor, WritePlan) (SourceReceipt, error)
 	SourceIOStore
 }
 

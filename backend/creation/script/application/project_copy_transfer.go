@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ProjectCopyTransferError preserves unknown I/O outcomes for the owning coordinator.
@@ -34,7 +33,7 @@ func (p *ProjectCopy) readObject(ctx context.Context, fact domain.ObjectFact) ([
 
 // Transfer reads every frozen original and verifies the canonical semantic content.
 // Remote I/O occurs outside the owning SQL transactions; every proof rechecks fencing.
-func (p *ProjectCopy) Transfer(ctx context.Context, actor identityapp.Principal, b ProjectCopyBinding, snapshot ProjectCopySnapshot) (ProjectCopyReceipt, error) {
+func (p *ProjectCopy) Transfer(ctx context.Context, actor Actor, b ProjectCopyBinding, snapshot ProjectCopySnapshot) (ProjectCopyReceipt, error) {
 	if p == nil || p.store == nil || p.objects == nil {
 		return ProjectCopyReceipt{}, ErrUnavailable
 	}
@@ -155,7 +154,7 @@ func (p *ProjectCopy) verifySemanticHistory(ctx context.Context, h ProjectCopyHi
 
 // Cleanup removes only frozen unpublished target objects after digest ownership proof.
 // A missing unconfirmed put cannot prove that a delayed writer has ceased.
-func (p *ProjectCopy) Cleanup(ctx context.Context, actor identityapp.Principal, b ProjectCopyBinding, snapshot ProjectCopySnapshot) error {
+func (p *ProjectCopy) Cleanup(ctx context.Context, actor Actor, b ProjectCopyBinding, snapshot ProjectCopySnapshot) error {
 	if p == nil || p.store == nil || p.objects == nil {
 		return ErrUnavailable
 	}

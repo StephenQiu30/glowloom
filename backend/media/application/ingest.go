@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/fetch"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -61,25 +61,9 @@ type SourceOperation struct {
 	CreateTime  time.Time
 }
 
-// Downloaded owns a bounded temporary result. Close removes it.
-type Downloaded struct {
-	File     *os.File
-	Size     int64
-	MIMEType string
-	SHA256   string
-}
-
-// Close closes and removes the temporary result file.
-func (d *Downloaded) Close() error {
-	if d == nil || d.File == nil {
-		return nil
-	}
-	name := d.File.Name()
-	closeErr := d.File.Close()
-	removeErr := os.Remove(name)
-	d.File = nil
-	return errors.Join(closeErr, removeErr)
-}
+// Downloaded retains the existing technical file contract for Media consumers.
+// New cross-owner consumers use fetch.Downloaded directly; no business DTO crosses owners.
+type Downloaded = fetch.Downloaded
 
 // ProbeResult is derived from the bytes by ffprobe, never from a URL suffix.
 type ProbeResult struct {

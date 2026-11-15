@@ -4,19 +4,28 @@ import (
 	"context"
 	"fmt"
 
-	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
-	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
+	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+
 	pgmediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
 )
 
@@ -30,7 +39,7 @@ func (g projectWorkGuard) HasInflightWork(ctx context.Context, actor identityapp
 	// Every installed owner is checked; an unreadable owner is never assumed idle.
 	for _, owner := range g.owners {
 		if owner == nil {
-			return false, workspaceapp.ErrProjectDependencyUnavailable
+			return false, workspacesource.ErrProjectDependencyUnavailable
 		}
 		active, err := owner.HasInflightWork(ctx, actor, projectID)
 		if err != nil {
@@ -44,19 +53,19 @@ func (g projectWorkGuard) HasInflightWork(ctx context.Context, actor identityapp
 // ProvideWorkspaceLifecycleStore assembles workspace lifecycle storage.
 func ProvideWorkspaceLifecycleStore(database *gorm.DB) *pgworkspace.Store {
 	return pgworkspace.NewScopedStore(database, scopewire.ProvideRequestScopeAccess, ProvideProjectWorkGuard, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
+		return workspaceMediaQuery{query:mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))}
 	})
 }
 
 // ProvideProjectWorkGuard assembles project lifecycle work guards.
 func ProvideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 	return projectWorkGuard{owners: []workspaceapp.ProjectWorkGuard{
-		operationwire.ProvideOperationStore(tx), pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), pgmediatool.NewStore(tx, nil, nil), mediawire.ProvideMediaTranscriptionStore(tx, false),
+		operationwire.ProvideOperationStore(tx), mediaProjectWorkGuard{owner:pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)}, pgmediatool.NewStore(tx, nil, nil), mediawire.ProvideMediaTranscriptionStore(tx, false),
 		pgworkspace.NewProjectCopyStore(tx, nil, nil),
 		mediawire.ProvideMediaDepthStore(tx, false),
-		scriptwire.ProvideScriptSourceStore(tx),
-		mediawire.ProvideMediaTransferStore(tx),
-		mediawire.ProvideMediaPurgeStore(tx),
+		scriptWorkGuard{store: scriptwire.ProvideScriptSourceStore(tx)},
+		mediaProjectWorkGuard{owner:mediawire.ProvideMediaTransferStore(tx)},
+		mediaProjectWorkGuard{owner:mediawire.ProvideMediaPurgeStore(tx)},
 		mediawire.PackageWorkGuard(tx),
 	}}
 }

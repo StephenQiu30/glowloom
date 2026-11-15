@@ -24,7 +24,7 @@ func TestScriptFileImportHTTPActualAdmissionRefreshPartialRetryAndControls(t *te
 	router := scriptRouter(app.NewSourceService(scriptStore(db), &sourceObjects{data: make(map[string][]byte)}, time.Now), actor)
 	g := router.Group("/api")
 	g.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	scripthttp.NewImportHandler(service).Register(g)
+	scripthttp.NewImportHandler(service, scriptHTTPActor).Register(g)
 	path := "/api/projects/" + pid.String() + "/script-file-imports"
 	rev := int64(0)
 	key := uuid.New()
@@ -72,7 +72,7 @@ func TestScriptFileImportHTTPActualAdmissionRefreshPartialRetryAndControls(t *te
 	foreignRouter := scriptRouter(app.NewSourceService(scriptStore(db), &sourceObjects{data: make(map[string][]byte)}, time.Now), foreign)
 	fg := foreignRouter.Group("/api")
 	fg.Use(func(c *gin.Context) { c.Set("principal", foreign); c.Next() })
-	scripthttp.NewImportHandler(service).Register(fg)
+	scripthttp.NewImportHandler(service, scriptHTTPActor).Register(fg)
 	if hidden := scriptHTTP(t, foreignRouter, "GET", path+"/"+accepted.ID.String(), uuid.Nil, nil); hidden.Code != 404 {
 		t.Fatal("foreign batch exposed", foreignProject, hidden.Code)
 	}

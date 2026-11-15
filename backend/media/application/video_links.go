@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -56,9 +55,9 @@ type VideoLinkResolver interface {
 
 // VideoLinkUploads keeps personal authorization and publication in the media owner.
 type VideoLinkUploads interface {
-	AuthorizePersonal(context.Context, identity.Principal) error
-	BeginUpload(context.Context, identity.Principal, domain.LibraryScope, uuid.UUID) (UploadTarget, error)
-	LookupPersonalVideoLink(context.Context, identity.Principal, uuid.UUID, string) (PersonalUploadResult, bool, error)
+	AuthorizePersonal(context.Context, Actor) error
+	BeginUpload(context.Context, Actor, domain.LibraryScope, uuid.UUID) (UploadTarget, error)
+	LookupPersonalVideoLink(context.Context, Actor, uuid.UUID, string) (PersonalUploadResult, bool, error)
 	UploadPersonal(context.Context, UploadInput) (PersonalUploadResult, error)
 }
 
@@ -75,7 +74,7 @@ func NewVideoLinkService(uploads VideoLinkUploads, resolver VideoLinkResolver) *
 }
 
 // Import returns a current permanent receipt or publishes actual source bytes.
-func (s *VideoLinkService) Import(ctx context.Context, actor identity.Principal, key, requestID uuid.UUID, in VideoLinkRequest) (PersonalUploadResult, error) {
+func (s *VideoLinkService) Import(ctx context.Context, actor Actor, key, requestID uuid.UUID, in VideoLinkRequest) (PersonalUploadResult, error) {
 	if s == nil || s.uploads == nil || s.resolver == nil {
 		return PersonalUploadResult{}, ErrUnavailable
 	}
@@ -125,11 +124,11 @@ func (s *VideoLinkService) Import(ctx context.Context, actor identity.Principal,
 }
 
 type personalVideoLinkReceipts interface {
-	LookupPersonalVideoLink(context.Context, identity.Principal, uuid.UUID, string) (PersonalUploadResult, bool, error)
+	LookupPersonalVideoLink(context.Context, Actor, uuid.UUID, string) (PersonalUploadResult, bool, error)
 }
 
 // LookupPersonalVideoLink reauthorizes an existing receipt before any new egress.
-func (s *UploadService) LookupPersonalVideoLink(ctx context.Context, actor identity.Principal, key uuid.UUID, name string) (PersonalUploadResult, bool, error) {
+func (s *UploadService) LookupPersonalVideoLink(ctx context.Context, actor Actor, key uuid.UUID, name string) (PersonalUploadResult, bool, error) {
 	if s == nil {
 		return PersonalUploadResult{}, false, ErrUnavailable
 	}

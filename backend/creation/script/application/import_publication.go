@@ -10,12 +10,11 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // WriteFiles is a server-only publication contract. Its store must be bound to the
 // exact claimed import; the ordinary source store explicitly rejects file origins.
-func (s *SourceService) WriteFiles(ctx context.Context, actor identityapp.Principal, in SourceCommand, files []PreparedImportFile, rightsAt time.Time, order []uuid.UUID) (SourceReceipt, error) {
+func (s *SourceService) WriteFiles(ctx context.Context, actor Actor, in SourceCommand, files []PreparedImportFile, rightsAt time.Time, order []uuid.UUID) (SourceReceipt, error) {
 	if s == nil || s.store == nil || s.objects == nil || s.now == nil {
 		return SourceReceipt{}, ErrUnavailable
 	}

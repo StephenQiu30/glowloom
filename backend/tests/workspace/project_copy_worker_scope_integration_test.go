@@ -7,7 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -32,7 +33,7 @@ func TestProjectCopyWorkerReadUsesDurableAuthorityWithoutRequestSession(t *testi
 	if worker.ID != actor.ID || worker.OrgID != actor.OrgID || worker.ScopeID != actor.ScopeID || worker.SessionID != uuid.Nil || worker.CredentialEpoch != 0 {
 		t.Fatal("worker authority synthesized or lost request-independent facts", worker)
 	}
-	if _, err := store.Find(ctx, worker, job.ID); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, err := store.Find(ctx, worker, job.ID); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatal("request read accepted a worker without a session", err)
 	}
 	if got, err := store.FindForWorker(ctx, worker, job.ID); err != nil || got.ID != job.ID {
@@ -72,12 +73,12 @@ func TestProjectCopyWorkerReadRechecksCurrentTeamMembership(t *testing.T) {
 		t.Fatal("active team worker read", err)
 	}
 	lifecycleFixtureSQL(t, tx, `UPDATE workspace.team SET status='suspended',resume_status='active' WHERE id=(SELECT team_id FROM workspace.creation_scope WHERE id=?)`, actor.ScopeID)
-	if _, err := store.FindForWorker(ctx, worker, job.ID); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, err := store.FindForWorker(ctx, worker, job.ID); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatal("suspended team retained worker read", err)
 	}
 	lifecycleFixtureSQL(t, tx, `UPDATE workspace.team SET status='active',resume_status=NULL WHERE id=(SELECT team_id FROM workspace.creation_scope WHERE id=?)`, actor.ScopeID)
 	lifecycleFixtureSQL(t, tx, `UPDATE workspace.team_member SET status='removed' WHERE team_id=(SELECT team_id FROM workspace.creation_scope WHERE id=?) AND user_id=?`, actor.ScopeID, actor.ID)
-	if _, err := store.FindForWorker(ctx, worker, job.ID); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, err := store.FindForWorker(ctx, worker, job.ID); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatal("removed team member retained worker read", err)
 	}
 }

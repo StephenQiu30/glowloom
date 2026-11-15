@@ -33,7 +33,7 @@ type videoLinkReceiptFixture struct {
 	result mediaapp.PersonalUploadResult
 }
 
-func (r *videoLinkReceiptFixture) LookupPersonalVideoLink(_ context.Context, _ identity.Principal, key uuid.UUID, name string) (mediaapp.PersonalUploadResult, bool, error) {
+func (r *videoLinkReceiptFixture) LookupPersonalVideoLink(_ context.Context, _ mediaapp.Actor, key uuid.UUID, name string) (mediaapp.PersonalUploadResult, bool, error) {
 	if r.result.Asset.ID == uuid.Nil {
 		return mediaapp.PersonalUploadResult{}, false, nil
 	}
@@ -43,7 +43,7 @@ func (r *videoLinkReceiptFixture) LookupPersonalVideoLink(_ context.Context, _ i
 	return r.result, true, nil
 }
 
-func (r *videoLinkReceiptFixture) CommitPersonalUpload(ctx context.Context, actor identity.Principal, request mediaapp.UploadRequest, asset domain.MediaAsset, renditions []domain.Rendition) (mediaapp.PersonalUploadResult, error) {
+func (r *videoLinkReceiptFixture) CommitPersonalUpload(ctx context.Context, actor mediaapp.Actor, request mediaapp.UploadRequest, asset domain.MediaAsset, renditions []domain.Rendition) (mediaapp.PersonalUploadResult, error) {
 	result, err := r.personalUploadFake.CommitPersonalUpload(ctx, actor, request, asset, renditions)
 	if err == nil {
 		r.name, r.key, r.result = request.FileName, request.Key, result
@@ -103,7 +103,7 @@ func TestVideoLinkFormalUploadPipelineAndOfflineReceiptReplay(t *testing.T) {
 	actor := identity.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: identitydomain.RoleProducer}
 	key := uuid.New()
 	input := mediaapp.VideoLinkRequest{URL: "https://v.douyin.com/fixture/", LocalReviewConfirmed: true}
-	result, err := service.Import(t.Context(), actor, key, uuid.New(), input)
+	result, err := service.Import(t.Context(), mediaActor(actor), key, uuid.New(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestVideoLinkFormalUploadPipelineAndOfflineReceiptReplay(t *testing.T) {
 	}
 	readCount := reads.Load()
 	shutdown()
-	replayed, err := service.Import(t.Context(), actor, key, uuid.New(), input)
+	replayed, err := service.Import(t.Context(), mediaActor(actor), key, uuid.New(), input)
 	if err != nil || replayed.Asset.ID != result.Asset.ID || repo.commits != 1 || reads.Load() != readCount {
 		t.Fatal("receipt replay downloaded again", replayed, err, reads.Load())
 	}
@@ -148,7 +148,7 @@ func TestVideoLinkActualPGUploadUsesCanonicalProjectionForReplay(t *testing.T) {
 	service := mediaapp.NewVideoLinkService(uploads, fixture)
 	key := uuid.New()
 	input := mediaapp.VideoLinkRequest{URL: "https://v.douyin.com/actual-pg/", LocalReviewConfirmed: true}
-	result, err := service.Import(t.Context(), actor, key, uuid.New(), input)
+	result, err := service.Import(t.Context(), mediaActor(actor), key, uuid.New(), input)
 	if err != nil {
 		t.Fatal("actual PostgreSQL publication", err)
 	}
@@ -159,7 +159,7 @@ func TestVideoLinkActualPGUploadUsesCanonicalProjectionForReplay(t *testing.T) {
 	if err := db.Table("media.library_item").Where("asset_id=?", result.Asset.ID).Count(&count).Error; err != nil || count != 0 {
 		t.Fatal("fixture or upload fabricated catalog row", count, err)
 	}
-	detail, err := mediaLibraryStore(db, libraryTestAccess, time.Now).LibraryDetail(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}, result.Asset.ID)
+	detail, err := mediaLibraryStore(db, libraryTestAccess, time.Now).LibraryDetail(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryPersonal}, result.Asset.ID)
 	if err != nil || detail.ID != result.Asset.ID || detail.State != domain.LibraryItemStateActive || detail.Revision != domain.LibraryItemInitialRevision {
 		t.Fatal("canonical library detail missing", detail, err)
 	}
@@ -171,12 +171,12 @@ func TestVideoLinkActualPGUploadUsesCanonicalProjectionForReplay(t *testing.T) {
 		t.Fatal("trusted source provenance missing", source, err)
 	}
 	localRequest := mediaapp.UploadRequest{Key: key, RequestID: uuid.New(), Personal: &domain.PersonalOwnership{OrgID: actor.OrgID, ActorID: actor.ID}, SHA256: source.SHA256, FileName: source.FileName, ByteSize: source.ByteSize}
-	if _, _, err := store.FindPersonalUpload(t.Context(), actor, localRequest); !errors.Is(err, mediaapp.ErrUploadConflict) {
+	if _, _, err := store.FindPersonalUpload(t.Context(), mediaActor(actor), localRequest); !errors.Is(err, mediaapp.ErrUploadConflict) {
 		t.Fatal("local replay impersonated link request", err)
 	}
 	readCount := reads.Load()
 	shutdown()
-	replay, err := service.Import(t.Context(), actor, key, uuid.New(), input)
+	replay, err := service.Import(t.Context(), mediaActor(actor), key, uuid.New(), input)
 	if err != nil || replay.Asset.ID != result.Asset.ID || reads.Load() != readCount {
 		t.Fatal("canonical upload receipt failed replay", replay, err, reads.Load())
 	}
@@ -187,7 +187,7 @@ func TestVideoLinkActualPGUploadUsesCanonicalProjectionForReplay(t *testing.T) {
 	if err := db.Exec(`INSERT INTO media.library_item(id,library_id,asset_id,title,category,position,catalog_state)VALUES(?,?,?,'removed reference','material',0,'removed')`, result.Asset.ID, libraryID, result.Asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Import(t.Context(), actor, key, uuid.New(), input); !errors.Is(err, mediaapp.ErrUploadConflict) {
+	if _, err := service.Import(t.Context(), mediaActor(actor), key, uuid.New(), input); !errors.Is(err, mediaapp.ErrUploadConflict) {
 		t.Fatal("removed canonical entry replayed", err)
 	}
 }

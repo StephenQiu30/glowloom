@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
 	"github.com/google/uuid"
@@ -34,18 +36,20 @@ func transcriptionWorkerStore(db *gorm.DB) *toolpg.TranscriptionStore {
 
 func transcriptionStoreWithScope(db *gorm.DB, scopes pgmedia.ScopeAccessFactory) *toolpg.TranscriptionStore {
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, scopes))
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, scopes)))
 	}
 	return mediatoolTranscriptionStore(db, func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
 		return canvasapp.NewTranscriptionSourceReader(mediaCanvasStoreWithScope(tx, mediaFactory, scopes))
 	}, func(tx *gorm.DB) toolapp.DerivedMedia {
-		return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes)))
 	})
 }
 
 func transcriptionNode(t *testing.T, db *gorm.DB, actor identityapp.Principal, project, asset uuid.UUID, kind string) toolapp.TranscriptionCreateInput {
 	t.Helper()
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaTestStore(tx)))
+	}
 	service := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Actual speech source"})
 	if err != nil {
@@ -74,7 +78,7 @@ func transcriptionPGFixture(t *testing.T) (*gorm.DB, *toolpg.TranscriptionStore,
 	asset.Status = mediadomain.StatusProcessing
 	asset.ModerationStatus = mediadomain.ModerationPending
 	asset = mediaFixtureAssetLocation(t, db, asset)
-	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := mediaTestStore(db).CreateAsset(t.Context(), mediaActor(actor), asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
@@ -240,7 +244,9 @@ func TestTranscriptionMissingConfigRejectsNewJobsButKeepsReceiptsAndRead(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	disabled := mediatoolTranscriptionStore(db, nil, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	disabled := mediatoolTranscriptionStore(db, nil, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
 	if _, err := disabled.Create(t.Context(), actor, project, uuid.New(), input); !errors.Is(err, toolapp.ErrUnavailable) {
 		t.Fatal("unconfigured new speech job admitted", err)
 	}

@@ -4,9 +4,10 @@ import (
 	"context"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -46,11 +47,11 @@ func (s *ProjectCopyService) List(ctx context.Context, actor identityapp.Princip
 		input.Limit = 50
 	}
 	if s == nil || s.store == nil {
-		return ProjectCopyPage{}, ErrProjectDependencyUnavailable
+		return ProjectCopyPage{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	store, ok := s.store.(ProjectCopyListStore)
 	if !ok {
-		return ProjectCopyPage{}, ErrProjectDependencyUnavailable
+		return ProjectCopyPage{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return store.List(ctx, actor, input)
 }

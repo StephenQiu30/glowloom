@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"time"
 
-	task "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	task "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -63,7 +65,7 @@ func readCopyJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, write b
 		return domain.ProjectCopyJob{}, read.Error
 	}
 	if read.RowsAffected != 1 {
-		return domain.ProjectCopyJob{}, application.ErrProjectNotFound
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectNotFound
 	}
 	// Both request reads and writes retain the exact source/target rows before
 	// taking the job lock. Writers acquire the strongest lock on their first read.
@@ -76,14 +78,14 @@ func readCopyJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, write b
 		return domain.ProjectCopyJob{}, err
 	}
 	if len(projects) != 2 {
-		return domain.ProjectCopyJob{}, application.ErrProjectNotFound
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectNotFound
 	}
 	read = tx.Raw(`SELECT `+copyJobColumns+` FROM workspace.project_copy_job WHERE id=? AND org_id=?`+lock, id, actor.OrgID).Scan(&row)
 	if read.Error != nil {
 		return domain.ProjectCopyJob{}, read.Error
 	}
 	if read.RowsAffected != 1 {
-		return domain.ProjectCopyJob{}, application.ErrProjectNotFound
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectNotFound
 	}
 	return row.job()
 }
@@ -100,7 +102,7 @@ func (s *ProjectCopyStore) FindForWorker(ctx context.Context, actor identityapp.
 
 func (s *ProjectCopyStore) find(ctx context.Context, actor identityapp.Principal, id uuid.UUID, worker bool) (domain.ProjectCopyJob, error) {
 	if s == nil || s.db == nil || id == uuid.Nil {
-		return domain.ProjectCopyJob{}, application.ErrProjectDependencyUnavailable
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	var saved domain.ProjectCopyJob
 	err := taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
@@ -222,7 +224,7 @@ func (s *ProjectCopyStore) Claim(ctx context.Context, actor identityapp.Principa
 // The callback must perform database work only; external bytes run after this transaction.
 func (s *ProjectCopyStore) UseAttempt(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID, stage string, use func(application.ProjectCopyOwners, domain.ProjectCopyJob) error) error {
 	if s == nil || s.db == nil || use == nil || worker == uuid.Nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
 		job, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
@@ -278,7 +280,7 @@ func (s *ProjectCopyStore) completeOwner(ctx context.Context, actor identityapp.
 		}
 		saved = before
 		if stage == "media" {
-			receipt, err := owners.Media.Register(ctx, actor, copyMediaBinding(before), copyMediaSnapshot(before))
+			receipt, err := owners.Media.Register(ctx, projectCopyMediaActor(actor), copyMediaBinding(before), copyMediaSnapshot(before))
 			if err != nil {
 				return err
 			}
@@ -353,7 +355,7 @@ func (s *ProjectCopyStore) Publish(ctx context.Context, actor identityapp.Princi
 		if err != nil {
 			return err
 		}
-		media, err := owners.Media.Register(ctx, actor, copyMediaBinding(before), copyMediaSnapshot(before))
+		media, err := owners.Media.Register(ctx, projectCopyMediaActor(actor), copyMediaBinding(before), copyMediaSnapshot(before))
 		if err != nil {
 			return err
 		}
@@ -436,7 +438,7 @@ func (s *ProjectCopyStore) FinishCancelled(ctx context.Context, actor identityap
 		if err != nil {
 			return err
 		}
-		if err := owners.Media.FinishCleanup(ctx, actor, copyMediaBinding(before), copyMediaSnapshot(before)); err != nil {
+		if err := owners.Media.FinishCleanup(ctx, projectCopyMediaActor(actor), copyMediaBinding(before), copyMediaSnapshot(before)); err != nil {
 			return err
 		}
 		if err := owners.Canvas.Cleanup(ctx, actor, copyCanvasBinding(before), copyCanvasSnapshot(before)); err != nil {

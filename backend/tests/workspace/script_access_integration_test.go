@@ -7,15 +7,16 @@ import (
 
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func TestScriptProjectAccessPGRequiresOwningTransactionAndCurrentFacts(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor, project := lifecycleActorProject(ctx, t, owner)
-	if _, err := workspaceProjectAccess(db).Authorize(ctx, actor, project, true); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := workspaceProjectAccess(db).Authorize(ctx, actor, project, true); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatal("project lock escaped its owning transaction", err)
 	}
 	rollback := errors.New("owning script rollback")
@@ -50,7 +51,7 @@ func TestScriptProjectAccessPGRequiresOwningTransactionAndCurrentFacts(t *testin
 			if status == "archived" && readErr != nil {
 				t.Fatal("archived history unreadable", readErr)
 			}
-			if status == "copying" && !errors.Is(readErr, workspaceapp.ErrProjectNotFound) {
+			if status == "copying" && !errors.Is(readErr, workspacesource.ErrProjectNotFound) {
 				t.Fatal("unpublished copy readable", readErr)
 			}
 			if _, writeErr := access.Authorize(ctx, actor, project, true); writeErr == nil {

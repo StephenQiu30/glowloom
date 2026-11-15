@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -57,7 +56,7 @@ func (generatedAudioAuditRecord) TableName() string { return "audit.audit_log" }
 // AcceptPersonalGeneratedAudio runs only on the caller's already-open result
 // transaction. The voice owner verifies its immutable receipt and worker lease;
 // this owner rechecks personal authority and accepts the exact storage output set.
-func (s *Store) AcceptPersonalGeneratedAudio(ctx context.Context, actor identity.Principal, prepared application.PreparedPersonalGeneratedAudio) (application.LibraryAssetSummary, error) {
+func (s *Store) AcceptPersonalGeneratedAudio(ctx context.Context, actor application.Actor, prepared application.PreparedPersonalGeneratedAudio) (application.LibraryAssetSummary, error) {
 	if s == nil || s.db == nil || s.db.Statement == nil {
 		return application.LibraryAssetSummary{}, application.ErrUnavailable
 	}

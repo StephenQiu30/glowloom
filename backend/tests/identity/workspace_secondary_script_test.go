@@ -44,35 +44,35 @@ func TestSecondarySourceRecoveryUsesTeamWriteAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := pgscript.NewSourceStore(tx, func(tx *gorm.DB) script.ProjectAccess {
-		return pgworkspace.NewScopedProjectContentAccessStore(tx, requests(tx))
+		return identityScriptAccess(pgworkspace.NewScopedProjectContentAccessStore(tx, requests(tx)))
 	})
-	record, err := store.SourceWrite(t.Context(), actor, project, id)
+	record, err := store.SourceWrite(t.Context(), identityScriptActor(actor), project, id)
 	if err != nil || !record.View.CanControl {
 		t.Fatalf("active non-author cannot control retained source: %v %+v", err, record.View)
 	}
 	other := actor
 	other.ScopeID = personal
 	other.PlatformRole = "platform_admin"
-	if _, err := store.SourceWrite(t.Context(), other, project, id); err == nil {
+	if _, err := store.SourceWrite(t.Context(), identityScriptActor(other), project, id); err == nil {
 		t.Fatal("valid other scope read source control")
 	}
 	if err := tx.Exec(`UPDATE workspace.team SET status='archived' WHERE id=?`, team).Error; err != nil {
 		t.Fatal(err)
 	}
-	if r, err := store.SourceWrite(t.Context(), actor, project, id); err != nil || r.View.CanControl {
+	if r, err := store.SourceWrite(t.Context(), identityScriptActor(actor), project, id); err != nil || r.View.CanControl {
 		t.Fatalf("archived controls: %v %+v", err, r.View)
 	}
 	if err := tx.Exec(`UPDATE workspace.team SET status='active' WHERE id=?`, team).Error; err != nil {
 		t.Fatal(err)
 	}
 	control := script.SourceControlCommand{ProjectID: project, IntentID: id, Action: "cancel", ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()}
-	if _, err := store.ControlSourceWrite(t.Context(), actor, control, time.Now()); err != nil {
+	if _, err := store.ControlSourceWrite(t.Context(), identityScriptActor(actor), control, time.Now()); err != nil {
 		t.Fatalf("team cancellation: %v", err)
 	}
 	if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=now() WHERE id=?`, actor.SessionID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ControlSourceWrite(t.Context(), actor, control, time.Now()); !errors.Is(err, identity.ErrSessionInvalid) {
+	if _, err := store.ControlSourceWrite(t.Context(), identityScriptActor(actor), control, time.Now()); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatalf("revoked source receipt: %v", err)
 	}
 }
@@ -107,42 +107,42 @@ func TestSecondaryImportControlKeepsRetryActor(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := pgscript.NewImportStoreWithWorkerAccess(tx, func(tx *gorm.DB) script.ProjectAccess {
-		return pgworkspace.NewScopedProjectContentAccessStore(tx, requests(tx))
+		return identityScriptAccess(pgworkspace.NewScopedProjectContentAccessStore(tx, requests(tx)))
 	}, func(tx *gorm.DB) script.ProjectAccess {
-		return pgworkspace.NewWorkerProjectContentAccessStore(tx, secondaryWorkers(tx))
+		return identityScriptAccess(pgworkspace.NewWorkerProjectContentAccessStore(tx, secondaryWorkers(tx)))
 	}, nil)
-	current, err := store.Import(t.Context(), actor, project, job)
+	current, err := store.Import(t.Context(), identityScriptActor(actor), project, job)
 	if err != nil || !current.CanControl || current.Retryable {
 		t.Fatalf("collaborator control flags: %v %+v", err, current)
 	}
 	other := actor
 	other.ScopeID = personal
 	other.PlatformRole = "platform_admin"
-	if _, err := store.Import(t.Context(), other, project, job); err == nil {
+	if _, err := store.Import(t.Context(), identityScriptActor(other), project, job); err == nil {
 		t.Fatal("other scope read import")
 	}
 	if err := tx.Exec(`UPDATE workspace.team SET status='archived' WHERE id=?`, team).Error; err != nil {
 		t.Fatal(err)
 	}
-	if r, err := store.Import(t.Context(), actor, project, job); err != nil || r.CanControl || r.Retryable {
+	if r, err := store.Import(t.Context(), identityScriptActor(actor), project, job); err != nil || r.CanControl || r.Retryable {
 		t.Fatalf("archived import flags: %v %+v", err, r)
 	}
 	if err := tx.Exec(`UPDATE workspace.team SET status='active' WHERE id=?`, team).Error; err != nil {
 		t.Fatal(err)
 	}
 	command := script.ImportControl{ProjectID: project, JobID: job, Action: "retry", ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()}
-	if _, err := store.ControlImport(t.Context(), actor, command, time.Now()); !errors.Is(err, identity.ErrForbidden) {
+	if _, err := store.ControlImport(t.Context(), identityScriptActor(actor), command, time.Now()); !errors.Is(err, script.ErrForbidden) {
 		t.Fatalf("retry took over durable actor: %v", err)
 	}
 	command.Action = "cancel"
 	command.Key = uuid.New()
-	if _, err := store.ControlImport(t.Context(), actor, command, time.Now()); err != nil {
+	if _, err := store.ControlImport(t.Context(), identityScriptActor(actor), command, time.Now()); err != nil {
 		t.Fatalf("collaborator cancellation: %v", err)
 	}
 	if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=now() WHERE id=?`, actor.SessionID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ControlImport(t.Context(), actor, command, time.Now()); !errors.Is(err, identity.ErrSessionInvalid) {
+	if _, err := store.ControlImport(t.Context(), identityScriptActor(actor), command, time.Now()); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatalf("revoked import receipt: %v", err)
 	}
 

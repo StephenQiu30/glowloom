@@ -14,7 +14,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ProjectCopyAccessFactory binds one workspace-minted admission or actual claimed worker to own SQL.
@@ -39,7 +38,7 @@ func NewProjectCopyStore(db *gorm.DB, access ProjectCopyAccessFactory, media Pro
 	return &ProjectCopyStore{db: db, access: access, media: media, scopes: scopes}
 }
 
-func (s *ProjectCopyStore) transaction(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, caller bool, f func(*gorm.DB) error) error {
+func (s *ProjectCopyStore) transaction(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, caller bool, f func(*gorm.DB) error) error {
 	if s == nil || s.db == nil || s.db.Statement == nil || s.access == nil {
 		return application.ErrUnavailable
 	}
@@ -82,7 +81,7 @@ func equalBibleSnapshot(a, b application.ProjectCopySnapshot) bool {
 
 // ReferencedMediaFacts reads every exact historical binding under trusted caller-owned admission SQL.
 // No current Library visibility filter or physical object I/O can drop retained historical evidence.
-func (s *ProjectCopyStore) ReferencedMediaFacts(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding) ([]domain.MediaFact, error) {
+func (s *ProjectCopyStore) ReferencedMediaFacts(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding) ([]domain.MediaFact, error) {
 	var facts []domain.MediaFact
 	err := s.transaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		h, err := readBibleHistory(ctx, tx, actor, b.SourceProjectID)
@@ -96,7 +95,7 @@ func (s *ProjectCopyStore) ReferencedMediaFacts(ctx context.Context, actor ident
 }
 
 // ReferencedMedia returns the deterministic unique asset identities required by all history bindings.
-func (s *ProjectCopyStore) ReferencedMedia(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding) ([]uuid.UUID, error) {
+func (s *ProjectCopyStore) ReferencedMedia(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding) ([]uuid.UUID, error) {
 	facts, err := s.ReferencedMediaFacts(ctx, actor, b)
 	if err != nil {
 		return nil, err
@@ -114,7 +113,7 @@ func (s *ProjectCopyStore) ReferencedMedia(ctx context.Context, actor identityap
 }
 
 // Freeze plans all typed history in the coordinator's admission transaction without remote I/O.
-func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, assets map[uuid.UUID]uuid.UUID, at time.Time) (application.ProjectCopySnapshot, error) {
+func (s *ProjectCopyStore) Freeze(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, assets map[uuid.UUID]uuid.UUID, at time.Time) (application.ProjectCopySnapshot, error) {
 	var result application.ProjectCopySnapshot
 	err := s.transaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		history, err := readBibleHistory(ctx, tx, actor, b.SourceProjectID)
@@ -199,14 +198,14 @@ func readBibleManifest(tx *gorm.DB, b application.ProjectCopyBinding, snapshot a
 }
 
 // Manifest rechecks the exact current claimed worker before returning private frozen content.
-func (s *ProjectCopyStore) Manifest(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.CopyManifest, error) {
+func (s *ProjectCopyStore) Manifest(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.CopyManifest, error) {
 	var manifest application.CopyManifest
 	err := s.transaction(ctx, actor, b, false, func(tx *gorm.DB) error { var err error; manifest, err = readBibleManifest(tx, b, snapshot); return err })
 	return manifest, err
 }
 
 // ConfirmTransfer records actual foreign media verification under a fresh current worker transaction.
-func (s *ProjectCopyStore) ConfirmTransfer(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) error {
+func (s *ProjectCopyStore) ConfirmTransfer(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) error {
 	return s.transaction(ctx, actor, b, false, func(tx *gorm.DB) error {
 		if _, err := readBibleManifest(tx, b, snapshot); err != nil {
 			return err
@@ -242,7 +241,7 @@ func requireBibleCopyProof(tx *gorm.DB, table string, snapshot application.Proje
 	return nil
 }
 
-func verifyBibleTarget(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, b application.ProjectCopyBinding, m application.CopyManifest) error {
+func verifyBibleTarget(ctx context.Context, tx *gorm.DB, actor application.Actor, b application.ProjectCopyBinding, m application.CopyManifest) error {
 	actual, err := readBibleHistory(ctx, tx, actor, b.TargetProjectID)
 	if err != nil {
 		return err
@@ -262,7 +261,7 @@ func verifyBibleTarget(ctx context.Context, tx *gorm.DB, actor identityapp.Princ
 }
 
 // Register inserts and independently rereads all target histories in the coordinator's transaction.
-func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyReceipt, error) {
+func (s *ProjectCopyStore) Register(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyReceipt, error) {
 	var receipt application.ProjectCopyReceipt
 	err := s.transaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		m, err := readBibleManifest(tx, b, snapshot)
@@ -301,7 +300,7 @@ func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Princ
 }
 
 // Verify rereads complete published-to-private-target facts before the coordinator can activate it.
-func (s *ProjectCopyStore) Verify(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyReceipt, error) {
+func (s *ProjectCopyStore) Verify(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectCopyReceipt, error) {
 	var receipt application.ProjectCopyReceipt
 	err := s.transaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		m, err := readBibleManifest(tx, b, snapshot)
@@ -322,7 +321,7 @@ func (s *ProjectCopyStore) Verify(ctx context.Context, actor identityapp.Princip
 
 // Cleanup seals only this job's hidden target history; immutable rows are retained and never published.
 // Physical object cleanup belongs to media. Current authority must prove this target remains copying.
-func (s *ProjectCopyStore) Cleanup(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) error {
+func (s *ProjectCopyStore) Cleanup(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) error {
 	return s.transaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		m, err := readBibleManifest(tx, b, snapshot)
 		if err != nil {

@@ -25,7 +25,7 @@ func holdWallet(tx *gorm.DB, input application.ReserveInput, reservationID uuid.
 	if input.AmountMicros == 0 && input.ReusedResult {
 		return nil
 	}
-	payer, err := walletPayer(tx, input.ProjectID)
+	payer, err := walletPayerForReserve(tx, input)
 	if err != nil {
 		return err
 	}
@@ -108,8 +108,21 @@ func availableWalletLots(tx *gorm.DB, scope uuid.UUID) ([]walletLot, error) {
 
 // CheckWalletQuoteInTransaction simulates the same lot order as confirmation.
 // The caller has already checked project access; confirmation still takes locks.
-func (s *Store) CheckWalletQuoteInTransaction(tx *gorm.DB, projectID uuid.UUID, items []application.WalletDemand) error {
-	scope, err := walletPayer(tx, projectID)
+func (s *Store) CheckWalletQuoteInTransaction(tx *gorm.DB, projectID uuid.UUID, items []application.WalletDemand, sourceScope ...uuid.UUID) error {
+	var owner string
+	if err := tx.Raw(`SELECT infra.runtime_owner()`).Scan(&owner).Error; err != nil {
+		return err
+	}
+	var scope uuid.UUID
+	var err error
+	if owner == "execution" {
+		if len(sourceScope) != 1 {
+			return domain.ErrWalletPayerChanged
+		}
+		scope, err = localWalletPayer(tx, projectID, sourceScope[0])
+	} else {
+		scope, err = walletPayer(tx, projectID)
+	}
 	if err != nil {
 		return err
 	}

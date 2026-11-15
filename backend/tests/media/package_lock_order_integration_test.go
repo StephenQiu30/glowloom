@@ -75,7 +75,7 @@ type packageLockAccess struct {
 	writeEntered          chan struct{}
 }
 
-func (a packageLockAccess) Authorize(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
+func (a packageLockAccess) Authorize(ctx context.Context, actor mediaapp.Actor, project uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
 	if write && a.writeEntered != nil {
 		a.writeEntered <- struct{}{}
 	}
@@ -108,7 +108,7 @@ func TestMediaPackageReplayAndAdmissionUseCommandBeforeProjectLock(t *testing.T)
 	defer cancel()
 	readResult, writeResult := make(chan error, 1), make(chan error, 1)
 	go func() {
-		_, _, found, err := reader.FindPackageImport(ctx, actor, plan.Request)
+		_, _, found, err := reader.FindPackageImport(ctx, mediaActor(actor), plan.Request)
 		if err == nil && found {
 			err = errors.New("initial replay discovered an admission before releasing its project read lock")
 		}
@@ -120,7 +120,7 @@ func TestMediaPackageReplayAndAdmissionUseCommandBeforeProjectLock(t *testing.T)
 		t.Fatal("real project read authorization did not complete", ctx.Err())
 	}
 	go func() {
-		job, err := writer.AdmitPackageImport(ctx, actor, plan.Request, plan)
+		job, err := writer.AdmitPackageImport(ctx, mediaActor(actor), plan.Request, plan)
 		if err == nil && (job.ID != plan.JobID || job.Status != "needs_reconciliation") {
 			err = errors.New("concurrent admission did not retain the complete original job")
 		}
@@ -156,20 +156,20 @@ func TestMediaPackageReplayKeepsOriginalReceiptAndCurrentAuthority(t *testing.T)
 	actor, project := mediaStoreProject(t, db)
 	plan := packageLockPlan(t, actor, project)
 	repo := mediaPackageStore(db, packageTestAccess, transferTestGuards, time.Now)
-	if _, err := repo.AdmitPackageImport(t.Context(), actor, plan.Request, plan); err != nil {
+	if _, err := repo.AdmitPackageImport(t.Context(), mediaActor(actor), plan.Request, plan); err != nil {
 		t.Fatal("complete durable SQL admission", err)
 	}
 	// No private object is written in this SQL protocol test. Unknown verification
 	// records the unchanged job, reserving every declared key for later recovery.
-	original, err := repo.WithPackageImport(t.Context(), actor, plan.JobID, func(mediaapp.PackagePlan) error { return io.ErrUnexpectedEOF })
+	original, err := repo.WithPackageImport(t.Context(), mediaActor(actor), plan.JobID, func(mediaapp.PackagePlan) error { return io.ErrUnexpectedEOF })
 	if err != nil || original.Status != "needs_reconciliation" {
 		t.Fatal("original permanent SQL receipt", err)
 	}
 	text := "后续目录修改"
-	if _, err := mediaLibraryStore(db, packageTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: plan.Request.Scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "新增正文", Category: "material", Tags: []string{}}}); err != nil {
+	if _, err := mediaLibraryStore(db, packageTestAccess, time.Now).ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: plan.Request.Scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "新增正文", Category: "material", Tags: []string{}}}); err != nil {
 		t.Fatal("later authorized catalog change", err)
 	}
-	replay, frozen, found, err := repo.FindPackageImport(t.Context(), actor, plan.Request)
+	replay, frozen, found, err := repo.FindPackageImport(t.Context(), mediaActor(actor), plan.Request)
 	want, _ := json.Marshal(original)
 	got, _ := json.Marshal(replay)
 	if err != nil || !found || frozen == nil || !bytes.Equal(want, got) {
@@ -177,17 +177,17 @@ func TestMediaPackageReplayKeepsOriginalReceiptAndCurrentAuthority(t *testing.T)
 	}
 	changed := plan.Request
 	changed.ArchiveSHA256 = strings.Repeat("b", 64)
-	if _, _, _, err := repo.FindPackageImport(t.Context(), actor, changed); !errors.Is(err, mediaapp.ErrPackageConflict) {
+	if _, _, _, err := repo.FindPackageImport(t.Context(), mediaActor(actor), changed); !errors.Is(err, mediaapp.ErrPackageConflict) {
 		t.Fatal("same command key accepted a changed archive digest", err)
 	}
 	foreign, _ := mediaStoreProject(t, db)
-	if _, _, _, err := repo.FindPackageImport(t.Context(), foreign, plan.Request); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, _, _, err := repo.FindPackageImport(t.Context(), mediaActor(foreign), plan.Request); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("foreign actor discovered a project import", err)
 	}
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal("disable only the isolated fixture actor", err)
 	}
-	if _, _, _, err := repo.FindPackageImport(t.Context(), actor, plan.Request); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, _, _, err := repo.FindPackageImport(t.Context(), mediaActor(actor), plan.Request); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("permanent receipt bypassed current actor revocation", err)
 	}
 }

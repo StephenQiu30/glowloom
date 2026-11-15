@@ -14,7 +14,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // DraftStore persists complete private intent and permanent request receipts.
@@ -41,7 +40,7 @@ func (s *DraftStore) sources(tx *gorm.DB) application.SubjectSources {
 	}
 	return s.subjectSources(tx)
 }
-func (s *DraftStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.Principal, p uuid.UUID, write bool) error {
+func (s *DraftStore) authorize(ctx context.Context, tx *gorm.DB, a application.Actor, p uuid.UUID, write bool) error {
 	if a.ID == uuid.Nil || p == uuid.Nil {
 		return application.ErrDraftNotFound
 	}
@@ -52,7 +51,7 @@ func (s *DraftStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.P
 }
 
 // ReadDraft authorizes before returning the caller-owned draft.
-func (s *DraftStore) ReadDraft(ctx context.Context, a identityapp.Principal, p, id uuid.UUID) (application.DraftSnapshot, error) {
+func (s *DraftStore) ReadDraft(ctx context.Context, a application.Actor, p, id uuid.UUID) (application.DraftSnapshot, error) {
 	var out application.DraftSnapshot
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.authorize(ctx, tx, a, p, false); err != nil {
@@ -84,7 +83,7 @@ func readDraft(tx *gorm.DB, actor, p, id uuid.UUID) (application.DraftSnapshot, 
 }
 
 // SaveDraft replays an exact request or atomically advances the expected revision.
-func (s *DraftStore) SaveDraft(ctx context.Context, a identityapp.Principal, in application.DraftWrite) (application.DraftSnapshot, error) {
+func (s *DraftStore) SaveDraft(ctx context.Context, a application.Actor, in application.DraftWrite) (application.DraftSnapshot, error) {
 	if in.Key == uuid.Nil || in.ExpectedRevision < 0 || in.ExpectedRevision >= math.MaxInt32 || (in.ExpectedRevision > 0 && in.DraftID == uuid.Nil) {
 		return application.DraftSnapshot{}, domain.ErrInvalidDraft
 	}
@@ -167,7 +166,7 @@ func (s *DraftStore) SaveDraft(ctx context.Context, a identityapp.Principal, in 
 }
 
 // ListDrafts discovers only caller-owned drafts with bounded keyset pagination.
-func (s *DraftStore) ListDrafts(ctx context.Context, a identityapp.Principal, p uuid.UUID, cursor string) (application.DraftPage, error) {
+func (s *DraftStore) ListDrafts(ctx context.Context, a application.Actor, p uuid.UUID, cursor string) (application.DraftPage, error) {
 	out := application.DraftPage{Items: []application.DraftSnapshot{}}
 	after := uuid.Nil
 	if cursor != "" {
@@ -202,7 +201,7 @@ func (s *DraftStore) ListDrafts(ctx context.Context, a identityapp.Principal, p 
 }
 
 // ValidateFragment authorizes a clipboard fragment without creating a draft or trusting its URLs/readiness.
-func (s *DraftStore) ValidateFragment(ctx context.Context, a identityapp.Principal, p uuid.UUID, d domain.Draft) error {
+func (s *DraftStore) ValidateFragment(ctx context.Context, a application.Actor, p uuid.UUID, d domain.Draft) error {
 	if err := d.Validate(); err != nil {
 		return err
 	}

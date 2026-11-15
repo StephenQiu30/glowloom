@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
@@ -18,6 +17,44 @@ type GovernanceHandler struct{ service *application.Governance }
 // NewGovernanceHandler injects the governance use cases into HTTP routes.
 func NewGovernanceHandler(service *application.Governance) *GovernanceHandler {
 	return &GovernanceHandler{service: service}
+}
+
+// RegisterSource installs source-coordinated account qualification actions.
+// Original-proof recovery precedes live platform authentication on these commands;
+// new decisions still recheck current roles, recent proof and versions.
+func (h *GovernanceHandler) RegisterSource(api *gin.RouterGroup, sessions *EmailAuthHandler) {
+	group := api.Group("", func(c *gin.Context) { c.Header("Cache-Control", "no-store"); c.Next() }, httpapi.Middleware(sessions.origin))
+	group.GET("/platform/users/:id/commands/:request", sessions.RequireSession(), h.userCommandReceipt)
+	group.POST("/platform/users/:id/revoke-admin", func(c *gin.Context) { h.sourceCommand(c, sessions, "revoke_admin") })
+	group.POST("/platform/users/:id/revoke-sessions", func(c *gin.Context) { h.sourceCommand(c, sessions, "revoke_sessions") })
+	group.POST("/platform/users/:id/disable", func(c *gin.Context) { h.sourceCommand(c, sessions, "disable") })
+	group.POST("/platform/users/:id/enable", func(c *gin.Context) { h.sourceCommand(c, sessions, "enable") })
+	group.POST("/platform/users/:id/delete", func(c *gin.Context) { h.sourceCommand(c, sessions, "delete") })
+}
+
+func (h *GovernanceHandler) sourceCommand(c *gin.Context, sessions *EmailAuthHandler, action string) {
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	var in GovernanceMutation
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	request, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
+	if err != nil || request == uuid.Nil {
+		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
+		return
+	}
+	credential, ok := sessions.originalCredential(c)
+	if !ok {
+		return
+	}
+	if err := h.service.ExecuteSourceCommand(c.Request.Context(), application.GovernanceSourceCommand{RequestID: request, TargetID: id, Revision: in.ExpectedRevision, Action: action, Reason: in.Reason, Credential: credential}); err != nil {
+		governanceProblem(c, err)
+		return
+	}
+	c.Status(204)
 }
 
 // Register requires authenticated session and Origin/CSRF middleware on the supplied group.
@@ -85,6 +122,7 @@ type AuthorityProposalRequest struct {
 }
 
 func governanceProblem(c *gin.Context, err error) {
+	err = mapLegacyGovernanceError(c, err)
 	switch {
 	case errors.Is(err, application.ErrInvalidGovernance):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
@@ -92,13 +130,13 @@ func governanceProblem(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "last_platform_administrator", nil)
 	case errors.Is(err, application.ErrDeletionDuties):
 		httpapi.WriteProblem(c, 409, "deletion_duties", nil)
-	case errors.Is(err, application.ErrGovernanceConflict), errors.Is(err, workspace.ErrTeamStateConflict), errors.Is(err, workspace.ErrTeamCapacity):
+	case errors.Is(err, application.ErrGovernanceConflict):
 		httpapi.WriteProblem(c, 409, "governance_conflict", nil)
-	case errors.Is(err, workspace.ErrTeamRevisionConflict), errors.Is(err, domain.ErrRevisionConflict):
+	case errors.Is(err, domain.ErrRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
-	case errors.Is(err, workspace.ErrTeamForbidden):
+	case errors.Is(err, application.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, workspace.ErrScopeNotFound), errors.Is(err, domain.ErrUserNotFound):
+	case errors.Is(err, domain.ErrUserNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	default:
 		emailAuthProblem(c, err)

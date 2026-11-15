@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // VersionSummary lists independent immutable source, plain and rich fingerprints.
@@ -70,14 +69,14 @@ type EpisodeText struct {
 
 // HistoryStore keeps every query scoped to current owning project authorization.
 type HistoryStore interface {
-	Confirmations(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, int64, int) (ConfirmationPage, error)
-	Confirmation(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, uuid.UUID) (domain.SplitConfirmation, error)
-	Versions(context.Context, identityapp.Principal, uuid.UUID, int64, int) (VersionPage, error)
-	SourceHistory(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, int64, int) (SourceHistoryPage, error)
-	SourceSnapshot(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.SourceRecord, error)
-	Structures(context.Context, identityapp.Principal, uuid.UUID, int64, int) (StructurePage, error)
-	Structure(context.Context, identityapp.Principal, uuid.UUID, int64) (domain.EpisodeStructure, error)
-	Episode(context.Context, identityapp.Principal, uuid.UUID) (domain.Episode, error)
+	Confirmations(context.Context, Actor, uuid.UUID, uuid.UUID, int64, int) (ConfirmationPage, error)
+	Confirmation(context.Context, Actor, uuid.UUID, uuid.UUID, uuid.UUID) (domain.SplitConfirmation, error)
+	Versions(context.Context, Actor, uuid.UUID, int64, int) (VersionPage, error)
+	SourceHistory(context.Context, Actor, uuid.UUID, uuid.UUID, int64, int) (SourceHistoryPage, error)
+	SourceSnapshot(context.Context, Actor, uuid.UUID, uuid.UUID) (domain.SourceRecord, error)
+	Structures(context.Context, Actor, uuid.UUID, int64, int) (StructurePage, error)
+	Structure(context.Context, Actor, uuid.UUID, int64) (domain.EpisodeStructure, error)
+	Episode(context.Context, Actor, uuid.UUID) (domain.Episode, error)
 }
 
 // HistoryService proves selected private source bytes and limits scalar reads.
@@ -92,7 +91,7 @@ func NewHistoryService(store HistoryStore, sources *SourceService) *HistoryServi
 }
 
 // Versions is metadata only, with no side effect on empty projects.
-func (s *HistoryService) Versions(ctx context.Context, actor identityapp.Principal, project uuid.UUID, before int64, limit int) (VersionPage, error) {
+func (s *HistoryService) Versions(ctx context.Context, actor Actor, project uuid.UUID, before int64, limit int) (VersionPage, error) {
 	if s == nil || s.store == nil {
 		return VersionPage{}, ErrUnavailable
 	}
@@ -103,7 +102,7 @@ func (s *HistoryService) Versions(ctx context.Context, actor identityapp.Princip
 }
 
 // SourceHistory preserves the actual chronological lineage rather than current membership.
-func (s *HistoryService) SourceHistory(ctx context.Context, actor identityapp.Principal, project, lineage uuid.UUID, before int64, limit int) (SourceHistoryPage, error) {
+func (s *HistoryService) SourceHistory(ctx context.Context, actor Actor, project, lineage uuid.UUID, before int64, limit int) (SourceHistoryPage, error) {
 	if s == nil || s.store == nil {
 		return SourceHistoryPage{}, ErrUnavailable
 	}
@@ -114,7 +113,7 @@ func (s *HistoryService) SourceHistory(ctx context.Context, actor identityapp.Pr
 }
 
 // SourceSnapshot reads an explicit immutable snapshot, including removed source history.
-func (s *HistoryService) SourceSnapshot(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (SourceSnapshotDetail, error) {
+func (s *HistoryService) SourceSnapshot(ctx context.Context, actor Actor, project, id uuid.UUID) (SourceSnapshotDetail, error) {
 	if s == nil || s.store == nil || s.sources == nil {
 		return SourceSnapshotDetail{}, ErrUnavailable
 	}
@@ -150,7 +149,7 @@ func (s *HistoryService) SourceSnapshot(ctx context.Context, actor identityapp.P
 }
 
 // Structures queries immutable versions through the episode's current project scope.
-func (s *HistoryService) Structures(ctx context.Context, actor identityapp.Principal, episode uuid.UUID, before int64, limit int) (StructurePage, error) {
+func (s *HistoryService) Structures(ctx context.Context, actor Actor, episode uuid.UUID, before int64, limit int) (StructurePage, error) {
 	if s == nil || s.store == nil {
 		return StructurePage{}, ErrUnavailable
 	}
@@ -161,7 +160,7 @@ func (s *HistoryService) Structures(ctx context.Context, actor identityapp.Princ
 }
 
 // Structure returns a selected historical version; zero selects the current head.
-func (s *HistoryService) Structure(ctx context.Context, actor identityapp.Principal, episode uuid.UUID, version int64) (domain.EpisodeStructure, error) {
+func (s *HistoryService) Structure(ctx context.Context, actor Actor, episode uuid.UUID, version int64) (domain.EpisodeStructure, error) {
 	if s == nil || s.store == nil {
 		return domain.EpisodeStructure{}, ErrUnavailable
 	}
@@ -172,7 +171,7 @@ func (s *HistoryService) Structure(ctx context.Context, actor identityapp.Princi
 }
 
 // EpisodeText rejects invalid or oversized ranges before private object access.
-func (s *HistoryService) EpisodeText(ctx context.Context, actor identityapp.Principal, id uuid.UUID, from, to int) (EpisodeText, error) {
+func (s *HistoryService) EpisodeText(ctx context.Context, actor Actor, id uuid.UUID, from, to int) (EpisodeText, error) {
 	if s == nil || s.store == nil || s.sources == nil {
 		return EpisodeText{}, ErrUnavailable
 	}
@@ -195,7 +194,7 @@ func (s *HistoryService) EpisodeText(ctx context.Context, actor identityapp.Prin
 }
 
 // Episode exposes authorized formal metadata, including retained deleted history.
-func (s *HistoryService) Episode(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (domain.Episode, error) {
+func (s *HistoryService) Episode(ctx context.Context, actor Actor, id uuid.UUID) (domain.Episode, error) {
 	if s == nil || s.store == nil {
 		return domain.Episode{}, ErrUnavailable
 	}

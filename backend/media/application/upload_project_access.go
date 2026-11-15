@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // UploadProjectAccess is the upload consumer's narrow Creation authority port.
@@ -18,6 +16,6 @@ import (
 // not require a still-valid session or an active project, and grants no upload
 // authority. A missing or unresolved project must return an error, never absence.
 type UploadProjectAccess interface {
-	AuthorizeUploadProject(context.Context, identity.Principal, uuid.UUID) (string, error)
+	AuthorizeUploadProject(context.Context, Actor, uuid.UUID) (string, error)
 	AwaitUploadProjectCommit(context.Context, uuid.UUID) error
 }

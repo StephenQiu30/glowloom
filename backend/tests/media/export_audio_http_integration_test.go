@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	tooltask "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
@@ -59,7 +61,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	defer func() { _ = download.Close() }()
 	mediaStore := mediaTestStore(db)
 	upload := mediaFixtureRoutedUpload(t, db, mediaStore, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
-	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.mp4"}, File: download, LocalReviewConfirmed: true})
+	uploaded, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.mp4"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +79,9 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 			}
 		}
 	})
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaTestStore(tx)))
+	}
 	canvasService := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Audio export actual fixture"})
 	if err != nil {
@@ -94,10 +98,16 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	}
 	store := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
 		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
 	workerStore := mediatoolExportStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx)) }))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
+			return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaWorkerStore(tx)))
+		}))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaWorkerStore(tx)))
+	})
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	g := router.Group("/api")
@@ -184,13 +194,13 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 			t.Fatal("waveform authorization accepted different project/revision/hash")
 		}
 	}
-	if _, err := mediaapp.NewRoutedAssetQuery(mediaStore, mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), actor, project, *rendered.AssetID); err == nil {
+	if _, err := mediaapp.NewRoutedAssetQuery(mediaStore, mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), mediaActor(actor), project, *rendered.AssetID); err == nil {
 		t.Fatal("unreviewed audio became a canvas reference")
 	}
 	if got := request(http.MethodGet, base+"/download"+scope, nil); got.Code != http.StatusConflict {
 		t.Fatal("unreviewed audio allowed attachment download")
 	}
-	renditions, err := mediaStore.FindRenditions(t.Context(), actor, project, *rendered.AssetID)
+	renditions, err := mediaStore.FindRenditions(t.Context(), mediaActor(actor), project, *rendered.AssetID)
 	if err != nil || len(renditions) != 1 || renditions[0].Kind != mediadomain.RenditionWaveform {
 		t.Fatalf("actual waveform metadata: %+v %v", renditions, err)
 	}
@@ -212,7 +222,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	if result.Code != http.StatusOK || result.Header().Get("Content-Type") != "audio/mp4" || !strings.Contains(result.Header().Get("Content-Disposition"), ".m4a") || hex.EncodeToString(outputHash[:]) != preview.SHA256 {
 		t.Fatalf("actual audio attachment: %d %s", result.Code, result.Header().Get("Content-Type"))
 	}
-	asset, err := mediaapp.NewRoutedAssetQuery(mediaStore, mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), actor, project, *rendered.AssetID)
+	asset, err := mediaapp.NewRoutedAssetQuery(mediaStore, mediaFixtureReadObjects(t), 5*time.Minute).Reference(t.Context(), mediaActor(actor), project, *rendered.AssetID)
 	if err != nil || asset.Kind != "audio" {
 		t.Fatalf("reviewed audio reference: %+v %v", asset, err)
 	}
@@ -234,7 +244,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	silentHash := sha256.Sum256(silentBytes)
 	silentInput := &mediaapp.Downloaded{File: silentFile, Size: int64(len(silentBytes)), MIMEType: "video/mp4", SHA256: hex.EncodeToString(silentHash[:])}
 	defer func() { _ = silentInput.Close() }()
-	silentAsset, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "silent.mp4"}, File: silentInput, LocalReviewConfirmed: true})
+	silentAsset, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "silent.mp4"}, File: silentInput, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}

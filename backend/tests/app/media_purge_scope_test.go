@@ -13,14 +13,19 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -147,7 +152,7 @@ func TestPurgeWorkerUsesCurrentMembershipWithoutRequestSession(t *testing.T) {
 	if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=now() WHERE id=?`, actor.SessionID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.NewMediaLibraryProjectAccess(tx).Authorize(t.Context(), actor, project, true); !errors.Is(err, identity.ErrSessionInvalid) {
+	if _, err := app.NewMediaLibraryProjectAccess(tx).Authorize(t.Context(), mediaBoundaryActor(actor), project, true); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatalf("revoked request session unexpectedly admitted: %v", err)
 	}
 	actor.SessionID = uuid.Nil
@@ -161,7 +166,7 @@ func TestPurgeWorkerUsesCurrentMembershipWithoutRequestSession(t *testing.T) {
 	if err := workerStore.HeartbeatPurge(t.Context(), lease); err != nil {
 		t.Fatalf("worker writeback: %v", err)
 	}
-	if _, err := app.NewMediaWorkerReferenceOwners(tx).HasMediaReferences(t.Context(), actor, project, uuid.New()); err != nil {
+	if _, err := app.NewMediaWorkerReferenceOwners(tx).HasMediaReferences(t.Context(), mediaBoundaryActor(actor), project, uuid.New()); err != nil {
 		t.Fatalf("worker reference factory required session: %v", err)
 	}
 	var leaseBefore time.Time
@@ -171,7 +176,7 @@ func TestPurgeWorkerUsesCurrentMembershipWithoutRequestSession(t *testing.T) {
 	if err := tx.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := workerStore.HeartbeatPurge(t.Context(), lease); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if err := workerStore.HeartbeatPurge(t.Context(), lease); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("removed member retained purge writeback: %v", err)
 	}
 	var leaseAfter time.Time
@@ -181,7 +186,7 @@ func TestPurgeWorkerUsesCurrentMembershipWithoutRequestSession(t *testing.T) {
 	if !leaseAfter.Equal(leaseBefore) {
 		t.Fatal("denied worker changed purge lease")
 	}
-	if _, err := app.NewMediaWorkerReferenceOwners(tx).HasMediaReferences(t.Context(), actor, project, uuid.New()); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := app.NewMediaWorkerReferenceOwners(tx).HasMediaReferences(t.Context(), mediaBoundaryActor(actor), project, uuid.New()); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("removed member retained worker reference access: %v", err)
 	}
 }

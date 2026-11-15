@@ -8,17 +8,19 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // DocumentHandler streams only reauthorized, SHA-verified document originals.
-type DocumentHandler struct{ sources *application.DocumentSources }
+type DocumentHandler struct {
+	resolve ActorResolver
+	sources *application.DocumentSources
+}
 
 // NewDocumentHandler injects the media-owned original reader.
-func NewDocumentHandler(sources *application.DocumentSources) *DocumentHandler {
-	return &DocumentHandler{sources: sources}
+func NewDocumentHandler(sources *application.DocumentSources, resolve ActorResolver) *DocumentHandler {
+	return &DocumentHandler{resolve: resolve, sources: sources}
 }
 
 // Register installs the attachment-only original document route.
@@ -49,7 +51,10 @@ func (h *DocumentHandler) Download(c *gin.Context) {
 	if !ok {
 		return
 	}
-	actor := identityhttp.Principal(c)
+	actor, ok := requestActor(c, h.resolve)
+	if !ok {
+		return
+	}
 	sources, err := h.sources.Freeze(c.Request.Context(), actor, project, []uuid.UUID{assetID})
 	if err != nil {
 		writeError(c, err)

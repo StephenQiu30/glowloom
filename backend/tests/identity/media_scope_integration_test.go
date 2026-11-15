@@ -11,19 +11,31 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+
 	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
+
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
@@ -33,11 +45,11 @@ type mediaScopeTestAccess struct {
 	worker  bool
 }
 
-func (a mediaScopeTestAccess) CheckActor(ctx context.Context, p identity.Principal) error {
+func (a mediaScopeTestAccess) CheckActor(ctx context.Context, p mediaapp.Actor) error {
 	if a.worker {
 		return pgidentity.NewStore(a.tx).CheckActive(ctx, p.ID)
 	}
-	return pgidentity.NewStore(a.tx).CheckSession(ctx, p, time.Now)
+	return pgidentity.NewStore(a.tx).CheckSession(ctx, identityMediaPrincipal(p), time.Now)
 }
 
 var _ mediaapp.UploadProjectAccess = mediaScopeTestAccess{}
@@ -49,22 +61,22 @@ func (a mediaScopeTestAccess) project() *pgworkspace.ProjectContentAccessStore {
 	return pgworkspace.NewScopedProjectContentAccessStore(a.tx, a.request)
 }
 
-func (a mediaScopeTestAccess) AuthorizeUploadProject(ctx context.Context, actor identity.Principal, id uuid.UUID) (string, error) {
+func (a mediaScopeTestAccess) AuthorizeUploadProject(ctx context.Context, actor mediaapp.Actor, id uuid.UUID) (string, error) {
 	if err := a.CheckActor(ctx, actor); err != nil {
 		return "", err
 	}
-	return a.project().AuthorizeUploadProject(ctx, actor, id)
+	return a.project().AuthorizeUploadProject(ctx, identityMediaPrincipal(actor), id)
 }
 
 func (a mediaScopeTestAccess) AwaitUploadProjectCommit(ctx context.Context, id uuid.UUID) error {
 	return a.project().AwaitUploadProjectCommit(ctx, id)
 }
 
-func (a mediaScopeTestAccess) AuthorizeProject(ctx context.Context, p identity.Principal, id uuid.UUID, w bool) error {
-	_, err := a.project().Authorize(ctx, p, id, w)
+func (a mediaScopeTestAccess) AuthorizeProject(ctx context.Context, p mediaapp.Actor, id uuid.UUID, w bool) error {
+	_, err := a.project().Authorize(ctx, identityMediaPrincipal(p), id, w)
 	return err
 }
-func (a mediaScopeTestAccess) AuthorizePersonal(ctx context.Context, p identity.Principal, w bool) error {
+func (a mediaScopeTestAccess) AuthorizePersonal(ctx context.Context, p mediaapp.Actor, w bool) error {
 	var s workspacedomain.Scope
 	var err error
 	if a.worker {
@@ -75,18 +87,18 @@ func (a mediaScopeTestAccess) AuthorizePersonal(ctx context.Context, p identity.
 		}
 		s, err = workspace.NewScopeAccess(store).Resolve(ctx, p.ID, id, w)
 	} else {
-		s, err = a.request.Resolve(ctx, p, p.ScopeID, w)
+		s, err = a.request.Resolve(ctx, identityMediaPrincipal(p), p.ScopeID, w)
 	}
 	if err != nil {
 		return err
 	}
 	if s.Kind != "personal" || s.OwnerUserID == nil || *s.OwnerUserID != p.ID || s.PhysicalScopeID != p.OrgID {
-		return workspace.ErrScopeNotFound
+		return workspacesource.ErrScopeNotFound
 	}
 	return nil
 }
-func (a mediaScopeTestAccess) AuthorizeCopyTarget(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
-	_, err := a.project().AuthorizeCopyTarget(ctx, actor, id)
+func (a mediaScopeTestAccess) AuthorizeCopyTarget(ctx context.Context, actor mediaapp.Actor, id uuid.UUID) error {
+	_, err := a.project().AuthorizeCopyTarget(ctx, identityMediaPrincipal(actor), id)
 	return err
 }
 
@@ -100,7 +112,7 @@ func TestMediaCanvasScopeConsumers(t *testing.T) {
 	}
 	media := pgmedia.NewScopedStore(tx, access)
 	canvas := pgcanvas.NewScopedStore(tx, nil, canvasAccess)
-	if err := media.AuthorizeDerivedProject(t.Context(), actor, project, false); err != nil {
+	if err := media.AuthorizeDerivedProject(t.Context(), identityMediaActor(actor), project, false); err != nil {
 		t.Fatalf("team media read: %v", err)
 	}
 	doc, err := canvas.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Team canvas", Scope: json.RawMessage(`{}`)})
@@ -112,25 +124,25 @@ func TestMediaCanvasScopeConsumers(t *testing.T) {
 	}
 	other := actor
 	other.ScopeID = personal
-	if err = media.AuthorizeDerivedProject(t.Context(), other, project, false); err == nil {
+	if err = media.AuthorizeDerivedProject(t.Context(), identityMediaActor(other), project, false); err == nil {
 		t.Fatal("same physical personal scope read team media")
 	}
 	if _, err = canvas.Get(t.Context(), other, doc.ID); err == nil {
 		t.Fatal("same physical personal scope read team canvas")
 	}
-	if err = media.AuthorizePersonalUpload(t.Context(), actor); err == nil {
+	if err = media.AuthorizePersonalUpload(t.Context(), identityMediaActor(actor)); err == nil {
 		t.Fatal("team scope read personal upload")
 	}
-	if err = media.AuthorizePersonalUpload(t.Context(), other); err != nil {
+	if err = media.AuthorizePersonalUpload(t.Context(), identityMediaActor(other)); err != nil {
 		t.Fatalf("personal upload: %v", err)
 	}
 	if err = tx.Exec(`UPDATE workspace.team SET status='archived' WHERE id=?`, team).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err = media.AuthorizeDerivedProject(t.Context(), actor, project, false); err != nil {
+	if err = media.AuthorizeDerivedProject(t.Context(), identityMediaActor(actor), project, false); err != nil {
 		t.Fatalf("archived read: %v", err)
 	}
-	if err = media.AuthorizeDerivedProject(t.Context(), actor, project, true); err == nil {
+	if err = media.AuthorizeDerivedProject(t.Context(), identityMediaActor(actor), project, true); err == nil {
 		t.Fatal("archived write")
 	}
 	if _, err = canvas.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Denied", Scope: json.RawMessage(`{}`)}); err == nil {
@@ -142,7 +154,7 @@ func TestMediaCanvasScopeConsumers(t *testing.T) {
 	if err = tx.Exec(`UPDATE identity.user_session SET revoked_at=now() WHERE id=?`, actor.SessionID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err = media.AuthorizeDerivedProject(t.Context(), actor, project, false); !errors.Is(err, identity.ErrSessionInvalid) {
+	if err = media.AuthorizeDerivedProject(t.Context(), identityMediaActor(actor), project, false); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatalf("revoked media session: %v", err)
 	}
 	if _, err = canvas.Get(t.Context(), actor, doc.ID); !errors.Is(err, identity.ErrSessionInvalid) {
@@ -151,19 +163,19 @@ func TestMediaCanvasScopeConsumers(t *testing.T) {
 	worker := pgmedia.NewScopedStore(tx, func(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} })
 	actor.SessionID = uuid.Nil
 	actor.ScopeID = uuid.Nil
-	if err = worker.AuthorizeDerivedProject(t.Context(), actor, project, true); err != nil {
+	if err = worker.AuthorizeDerivedProject(t.Context(), identityMediaActor(actor), project, true); err != nil {
 		t.Fatalf("worker independent of expired request: %v", err)
 	}
 	if err = tx.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	actor.PlatformRole = "platform_admin"
-	if err = worker.AuthorizeDerivedProject(t.Context(), actor, project, true); err == nil {
+	if err = worker.AuthorizeDerivedProject(t.Context(), identityMediaActor(actor), project, true); err == nil {
 		t.Fatal("revoked worker published")
 	}
 }
 
-func (a mediaScopeTestAccess) TransferActor(ctx context.Context, p identity.Principal, library mediadomain.LibraryScope, write bool) (identity.Principal, error) {
+func (a mediaScopeTestAccess) TransferActor(ctx context.Context, p mediaapp.Actor, library mediadomain.LibraryScope, write bool) (mediaapp.Actor, error) {
 	if err := a.CheckActor(ctx, p); err != nil {
 		return p, err
 	}
@@ -192,7 +204,7 @@ func (a mediaScopeTestAccess) TransferActor(ctx context.Context, p identity.Prin
 		}
 		p.ScopeID, p.OrgID = s.ID, s.PhysicalScopeID
 	} else {
-		s, err := a.request.Resolve(ctx, p, id, write)
+		s, err := a.request.Resolve(ctx, identityMediaPrincipal(p), id, write)
 		if err != nil {
 			return p, err
 		}
@@ -205,17 +217,17 @@ type mediaLibraryTestAccess struct {
 	owner *pgworkspace.ProjectContentAccessStore
 }
 
-func (a mediaLibraryTestAccess) Authorize(ctx context.Context, p identity.Principal, id uuid.UUID, w bool) (mediaapp.LibraryProjectFacts, error) {
-	f, err := a.owner.Authorize(ctx, p, id, w)
+func (a mediaLibraryTestAccess) Authorize(ctx context.Context, p mediaapp.Actor, id uuid.UUID, w bool) (mediaapp.LibraryProjectFacts, error) {
+	f, err := a.owner.Authorize(ctx, identityMediaPrincipal(p), id, w)
 	return mediaapp.LibraryProjectFacts{ProjectID: f.ProjectID, OrgID: f.OrgID, Revision: f.Revision}, err
 }
-func (a mediaLibraryTestAccess) TouchContent(ctx context.Context, p identity.Principal, id uuid.UUID, r int64) (int64, error) {
-	return a.owner.TouchContent(ctx, p, id, r)
+func (a mediaLibraryTestAccess) TouchContent(ctx context.Context, p mediaapp.Actor, id uuid.UUID, r int64) (int64, error) {
+	return a.owner.TouchContent(ctx, identityMediaPrincipal(p), id, r)
 }
 
 type idleMediaWork struct{}
 
-func (idleMediaWork) HasInflightProjectWork(context.Context, identity.Principal, uuid.UUID) (bool, error) {
+func (idleMediaWork) HasInflightProjectWork(context.Context, mediaapp.Actor, uuid.UUID) (bool, error) {
 	return false, nil
 }
 func installMediaScopeMigration(t *testing.T, tx *gorm.DB) {
@@ -263,7 +275,7 @@ func TestMediaTransferCrossPhysicalScopes(t *testing.T) {
 		t.Fatal(err)
 	}
 	input := mediaapp.TransferInput{Source: source, Target: target, Items: []mediaapp.LibraryItemRevision{{ID: item, Revision: 1}}, ExpectedSourceRevision: 1, ExpectedTargetRevision: 0, ExpectedProjectRevision: 1, Key: uuid.New()}
-	job, err := store.CreateTransfer(t.Context(), actor, input)
+	job, err := store.CreateTransfer(t.Context(), identityMediaActor(actor), input)
 	if err != nil {
 		t.Fatalf("cross physical transfer admission: %v", err)
 	}
@@ -279,10 +291,10 @@ func TestMediaTransferCrossPhysicalScopes(t *testing.T) {
 	if err := tx.RollbackTo("ownership_proof").Error; err != nil {
 		t.Fatal(err)
 	}
-	if replay, err := store.CreateTransfer(t.Context(), actor, input); err != nil || replay.ID != job.ID {
+	if replay, err := store.CreateTransfer(t.Context(), identityMediaActor(actor), input); err != nil || replay.ID != job.ID {
 		t.Fatalf("replay: %v", err)
 	}
-	if _, err := store.GetTransfer(t.Context(), personalActor, job.ID); err == nil {
+	if _, err := store.GetTransfer(t.Context(), identityMediaActor(personalActor), job.ID); err == nil {
 		t.Fatal("wrong selected scope read job")
 	}
 	work := mediaapp.TransferWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()}
@@ -314,7 +326,7 @@ func TestMediaTransferCrossPhysicalScopes(t *testing.T) {
 	}
 	// Transfer the new team item back into the actual personal physical partition.
 	reverse := mediaapp.TransferInput{Source: target, Target: source, Items: []mediaapp.LibraryItemRevision{{ID: job.Items[0].TargetItemID, Revision: 1}}, ExpectedSourceRevision: 1, ExpectedTargetRevision: 1, ExpectedProjectRevision: 2, Key: uuid.New()}
-	back, err := store.CreateTransfer(t.Context(), actor, reverse)
+	back, err := store.CreateTransfer(t.Context(), identityMediaActor(actor), reverse)
 	if err != nil {
 		t.Fatalf("reverse admission: %v", err)
 	}
@@ -367,7 +379,7 @@ func TestMediaTransferCrossPhysicalScopes(t *testing.T) {
 	if err := tx.Exec(`INSERT INTO media.library_item(id,library_id,asset_id,title,category,position) VALUES(?,?,?,'retained image','other',1)`, assetID, projectLibrary, assetID).Error; err != nil {
 		t.Fatal(err)
 	}
-	retained, err := store.WithRoutedStorage().CreateTransfer(t.Context(), actor, mediaapp.TransferInput{
+	retained, err := store.WithRoutedStorage().CreateTransfer(t.Context(), identityMediaActor(actor), mediaapp.TransferInput{
 		Source: target, Target: source,
 		Items:                  []mediaapp.LibraryItemRevision{{ID: assetID, Revision: 1}},
 		ExpectedSourceRevision: 1, ExpectedTargetRevision: 2, ExpectedProjectRevision: 2, Key: uuid.New(),
@@ -405,7 +417,7 @@ func TestMediaTransferCrossPhysicalScopes(t *testing.T) {
 		return pgmedia.NewScopedLibraryStore(inner, projectAccess, time.Now, requestAccess)
 	})
 	seen := false
-	if err := usage.InspectStorageUsage(t.Context(), personalActor, source, func(in mediaapp.StorageUsageInventory) error {
+	if err := usage.InspectStorageUsage(t.Context(), identityMediaActor(personalActor), source, func(in mediaapp.StorageUsageInventory) error {
 		for _, ref := range in.Locations {
 			seen = seen || ref == (mediadomain.ObjectRef{ProfileID: "identity-fixture", Bucket: "identity-fixture", Key: personalKey})
 		}
@@ -430,7 +442,7 @@ func TestMediaToolQueuedDeliveryRechecksAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := pgtool.NewStore(tx, nil, func(tx *gorm.DB) toolapp.DerivedMedia {
-		return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} }))
+		return identityDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} })))
 	})
 	delivery := toolapp.Delivery{WorkID: toolapp.WorkID{JobID: work, Attempt: 1}, EventID: event, RequestID: key, ActorID: actor.ID, OrgID: actor.OrgID, ProjectID: project, Action: "start"}
 	if ok, err := store.VerifyDelivery(t.Context(), delivery); err != nil || !ok {
@@ -442,7 +454,7 @@ func TestMediaToolQueuedDeliveryRechecksAuthority(t *testing.T) {
 	if ok, err := store.VerifyDelivery(t.Context(), delivery); err == nil || ok {
 		t.Fatalf("removed member delivery accepted: %t %v", ok, err)
 	}
-	if _, err := store.Claim(t.Context(), toolapp.WorkID{JobID: work, Attempt: 1, ExecutionID: uuid.New()}); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := store.Claim(t.Context(), toolapp.WorkID{JobID: work, Attempt: 1, ExecutionID: uuid.New()}); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("revoked queued claim: %v", err)
 	}
 }
@@ -455,13 +467,13 @@ func TestTranscriptionStartRechecksRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := pgtool.NewTranscriptionStore(tx, nil, func(tx *gorm.DB) toolapp.DerivedMedia {
-		return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} }))
+		return identityDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} })))
 	})
 	if err := tx.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	err := store.StartInference(t.Context(), toolapp.TranscriptionWorkID{JobID: job, Attempt: 1, ExecutionID: worker})
-	if !errors.Is(err, workspace.ErrScopeNotFound) {
+	if !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("revoked inference submitted: %v", err)
 	}
 }
@@ -484,7 +496,7 @@ func TestMediaAssetLibraryDocumentIsolation(t *testing.T) {
 	asset := mediadomain.MediaAsset{ID: assetID, ProjectID: project, Kind: mediadomain.KindImage, Origin: mediadomain.OriginUpload, Status: mediadomain.StatusUploading, ObjectKey: "projects/" + project.String() + "/image/2026/10/" + assetID.String() + ".png", FileName: "scope.png", MimeType: "image/png", ByteSize: 12, ModerationStatus: mediadomain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
 	locationID := seedIdentityLocation(t, tx, asset.ObjectKey)
 	asset.ObjectLocation = &mediadomain.ObjectLocation{ID: locationID, Ref: mediadomain.ObjectRef{ProfileID: "identity-fixture", Bucket: "identity-fixture", Key: asset.ObjectKey}, State: mediadomain.ObjectLocationAccepted}
-	if err := store.CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := store.CreateAsset(t.Context(), identityMediaActor(actor), asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed',sha256=? WHERE id=?`, sha, assetID).Error; err != nil {
@@ -493,36 +505,51 @@ func TestMediaAssetLibraryDocumentIsolation(t *testing.T) {
 	projectLibrary := mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}
 	personalLibrary := mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}
 	q := mediaapp.LibraryQuery{Page: 1, PageSize: 20, State: "active", Order: "updated_desc"}
-	if found, err := store.FindAsset(t.Context(), actor, project, assetID); err != nil || found.ID != assetID {
+	if found, err := store.FindAsset(t.Context(), identityMediaActor(actor), project, assetID); err != nil || found.ID != assetID {
 		t.Fatalf("asset: %v", err)
 	}
-	if page, err := library.ListLibrary(t.Context(), actor, projectLibrary, q); err != nil || len(page.Items) != 1 {
+	if page, err := library.ListLibrary(t.Context(), identityMediaActor(actor), projectLibrary, q); err != nil || len(page.Items) != 1 {
 		t.Fatalf("library: %d %v", len(page.Items), err)
 	}
-	if _, err := library.FindLibraryMedia(t.Context(), actor, projectLibrary, assetID); err != nil {
+	if _, err := library.FindLibraryMedia(t.Context(), identityMediaActor(actor), projectLibrary, assetID); err != nil {
 		t.Fatalf("download scope: %v", err)
 	}
-	if _, err := packages.AuthorizePackage(t.Context(), actor, projectLibrary, true); err != nil {
+	if _, err := packages.AuthorizePackage(t.Context(), identityMediaActor(actor), projectLibrary, true); err != nil {
 		t.Fatalf("package admission scope: %v", err)
 	}
-	if _, err := packages.AuthorizePackage(t.Context(), personal, projectLibrary, false); err == nil {
+	if _, err := packages.AuthorizePackage(t.Context(), identityMediaActor(personal), projectLibrary, false); err == nil {
 		t.Fatal("foreign scope exported package")
 	}
 
-	if _, err := library.ListLibrary(t.Context(), personal, personalLibrary, q); err != nil {
+	if _, err := library.ListLibrary(t.Context(), identityMediaActor(personal), personalLibrary, q); err != nil {
 		t.Fatalf("personal library: %v", err)
 	}
 	// Same physical partition and a valid personal scope must not reveal project metadata or bytes.
 	reads := []func() error{
-		func() error { _, e := store.FindAsset(t.Context(), personal, project, assetID); return e },
-		func() error { _, e := store.FindRenditions(t.Context(), personal, project, assetID); return e },
-		func() error { _, e := documents.FindAsset(t.Context(), personal, project, assetID); return e },
-		func() error { _, e := library.ListLibrary(t.Context(), personal, projectLibrary, q); return e },
 		func() error {
-			_, e := library.FindLibraryMedia(t.Context(), personal, projectLibrary, assetID)
+			_, e := store.FindAsset(t.Context(), identityMediaActor(personal), project, assetID)
 			return e
 		},
-		func() error { _, e := library.ListLibrary(t.Context(), actor, personalLibrary, q); return e },
+		func() error {
+			_, e := store.FindRenditions(t.Context(), identityMediaActor(personal), project, assetID)
+			return e
+		},
+		func() error {
+			_, e := documents.FindAsset(t.Context(), identityMediaActor(personal), project, assetID)
+			return e
+		},
+		func() error {
+			_, e := library.ListLibrary(t.Context(), identityMediaActor(personal), projectLibrary, q)
+			return e
+		},
+		func() error {
+			_, e := library.FindLibraryMedia(t.Context(), identityMediaActor(personal), projectLibrary, assetID)
+			return e
+		},
+		func() error {
+			_, e := library.ListLibrary(t.Context(), identityMediaActor(actor), personalLibrary, q)
+			return e
+		},
 	}
 	for i, read := range reads {
 		if err := read(); err == nil {
@@ -532,18 +559,18 @@ func TestMediaAssetLibraryDocumentIsolation(t *testing.T) {
 	if err := tx.Exec(`UPDATE workspace.team SET status='archived' WHERE id=?`, team).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := library.FindLibraryMedia(t.Context(), actor, projectLibrary, assetID); err != nil {
+	if _, err := library.FindLibraryMedia(t.Context(), identityMediaActor(actor), projectLibrary, assetID); err != nil {
 		t.Fatalf("archived download: %v", err)
 	}
-	if _, err := packages.AuthorizePackage(t.Context(), actor, projectLibrary, false); err != nil {
+	if _, err := packages.AuthorizePackage(t.Context(), identityMediaActor(actor), projectLibrary, false); err != nil {
 		t.Fatalf("archived package read: %v", err)
 	}
-	if _, err := packages.AuthorizePackage(t.Context(), actor, projectLibrary, true); err == nil {
+	if _, err := packages.AuthorizePackage(t.Context(), identityMediaActor(actor), projectLibrary, true); err == nil {
 		t.Fatal("archived package import")
 	}
 
 	rendition := mediadomain.Rendition{ID: uuid.New(), MediaAssetID: assetID, Kind: mediadomain.RenditionThumb256, ObjectKey: strings.TrimSuffix(asset.ObjectKey, ".png") + "/thumb_256.webp", CreateTime: now, UpdateTime: now}
-	if err := store.AddRendition(t.Context(), actor, project, rendition); err == nil {
+	if err := store.AddRendition(t.Context(), identityMediaActor(actor), project, rendition); err == nil {
 		t.Fatal("archived rendition write")
 	}
 	if err := tx.Exec(`UPDATE workspace.team SET status='active' WHERE id=?`, team).Error; err != nil {
@@ -553,7 +580,7 @@ func TestMediaAssetLibraryDocumentIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor.PlatformRole = "platform_admin"
-	if _, err := store.FindAsset(t.Context(), actor, project, assetID); err == nil {
+	if _, err := store.FindAsset(t.Context(), identityMediaActor(actor), project, assetID); err == nil {
 		t.Fatal("platform admin read NULL ownership")
 	}
 }
@@ -568,7 +595,7 @@ func TestMediaCopyTargetUsesNarrowScope(t *testing.T) {
 	}
 	scopes := func(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeTestAccess{tx: tx, request: factory(tx)} }
 	ordinary := pgmedia.NewScopedStore(tx, scopes)
-	if err := ordinary.AuthorizeDerivedProject(t.Context(), actor, target, false); err == nil {
+	if err := ordinary.AuthorizeDerivedProject(t.Context(), identityMediaActor(actor), target, false); err == nil {
 		t.Fatal("ordinary read exposed copying target")
 	}
 	access := pgworkspace.NewScopedProjectContentAccessStore(tx, factory(tx))
@@ -577,14 +604,14 @@ func TestMediaCopyTargetUsesNarrowScope(t *testing.T) {
 	}
 	copies := pgmedia.NewScopedProjectCopyStore(tx, scopes)
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: source, TargetProjectID: target}
-	if _, err := copies.Freeze(t.Context(), actor, binding, time.Now().UTC().Truncate(time.Microsecond)); err != nil {
+	if _, err := copies.Freeze(t.Context(), identityMediaActor(actor), binding, time.Now().UTC().Truncate(time.Microsecond)); err != nil {
 		t.Fatalf("coordinator target: %v", err)
 	}
 	actor.ScopeID = personal
-	if _, err := copies.Freeze(t.Context(), actor, binding, time.Now()); err == nil {
+	if _, err := copies.Freeze(t.Context(), identityMediaActor(actor), binding, time.Now()); err == nil {
 		t.Fatal("forged binding crossed valid personal scope")
 	}
-	if _, err := pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now()); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), identityMediaActor(actor), binding, time.Now()); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatalf("missing authority: %v", err)
 	}
 }

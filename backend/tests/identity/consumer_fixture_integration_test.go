@@ -51,19 +51,19 @@ func TestConsumerFixturesRequireCurrentSessionAndExplicitPersonalOwnership(t *te
 	locationID := seedIdentityLocation(t, tx, asset.ObjectKey)
 	asset.ObjectLocation = &media.ObjectLocation{ID: locationID, Ref: media.ObjectRef{ProfileID: "identity-fixture", Bucket: "identity-fixture", Key: asset.ObjectKey}, State: media.ObjectLocationAccepted}
 	requests := pgmedia.NewScopedStore(tx, app.NewMediaScopeAccess)
-	if err := requests.CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := requests.CreateAsset(t.Context(), identityMediaActor(actor), asset); err != nil {
 		t.Fatal("media request fixture rejected", err)
 	}
-	if _, err := requests.FindAsset(t.Context(), peer, project, assetID); !errors.Is(err, pgmedia.ErrNotFound) {
+	if _, err := requests.FindAsset(t.Context(), identityMediaActor(peer), project, assetID); !errors.Is(err, pgmedia.ErrNotFound) {
 		t.Fatal("same physical organization exposed a private asset", err)
 	}
 	worker := actor
 	worker.SessionID = uuid.Nil
-	if _, err := requests.FindAsset(t.Context(), worker, project, assetID); !errors.Is(err, identity.ErrSessionInvalid) {
+	if _, err := requests.FindAsset(t.Context(), identityMediaActor(worker), project, assetID); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatal("request accepted absent session", err)
 	}
 	workers := pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess)
-	if _, err := workers.FindAsset(t.Context(), worker, project, assetID); err != nil {
+	if _, err := workers.FindAsset(t.Context(), identityMediaActor(worker), project, assetID); err != nil {
 		t.Fatal("durable worker authority required an HTTP session", err)
 	}
 	if err := tx.Exec(`UPDATE workspace.project SET status='archived' WHERE id=?`, project).Error; err != nil {
@@ -78,10 +78,10 @@ func TestConsumerFixturesRequireCurrentSessionAndExplicitPersonalOwnership(t *te
 	if err := tx.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := requests.FindAsset(t.Context(), actor, project, assetID); !errors.Is(err, identity.ErrSessionInvalid) {
+	if _, err := requests.FindAsset(t.Context(), identityMediaActor(actor), project, assetID); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatal("disabled request actor admitted", err)
 	}
-	if _, err := workers.FindAsset(t.Context(), worker, project, assetID); !errors.Is(err, identity.ErrForbidden) {
+	if _, err := workers.FindAsset(t.Context(), identityMediaActor(worker), project, assetID); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatal("disabled worker actor admitted", err)
 	}
 }

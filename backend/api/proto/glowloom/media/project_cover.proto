@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package glowloom.media;
+
+option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/mediacover;mediacover";
+
+// ProjectCoverStates exposes display facts only after Media has installed the
+// original project closure. It grants no byte access, pin or removal permission.
+service ProjectCoverStates {
+  rpc ReadProjectCover(ProjectCoverRequest) returns (ProjectCoverObservation);
+}
+
+message ProjectCoverRequest {
+  bytes close_id = 1;
+  bytes project_id = 2;
+  bytes organization_id = 3;
+  bytes scope_id = 4;
+  bytes asset_id = 5;
+  int64 project_epoch = 6;
+  bytes coordination_id = 7;
+}
+
+message ProjectCoverObservation {
+  ProjectCoverRequest request = 1;
+  bool available = 2;
+  int64 asset_revision = 3;
+}

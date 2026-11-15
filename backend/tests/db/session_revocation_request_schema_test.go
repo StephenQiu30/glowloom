@@ -22,9 +22,9 @@ func TestPublicSessionRevocationRequestCanonicalSchema(t *testing.T) {
 	}{
 		{"session_revocation_request", 8, []string{
 			"unique (account_id,request_session_id,idem_key)",
-			"action text not null check (action in ('revoke_session','revoke_others'))",
+			"action text not null check (action in ('revoke_session','revoke_others','refresh_reuse'))",
 			"completed_at timestamptz check (completed_at >= requested_at)",
-			"check ((action='revoke_session' and target_session_id is not null) or (action='revoke_others' and target_session_id is null))",
+			"check ((action='revoke_session' and target_session_id is not null) or (action='revoke_others' and target_session_id is null) or (action='refresh_reuse' and target_session_id is not null and target_session_id=request_session_id))",
 		}},
 		{"session_revocation_request_target", 2, []string{
 			"request_id uuid not null references identity.session_revocation_request(id)",

@@ -27,7 +27,6 @@ import (
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -42,12 +41,12 @@ type bibleCopyMedia struct {
 	snapshot mediaapp.ProjectCopySnapshot
 }
 
-func (r bibleCopyMedia) FreezeReferences(ctx context.Context, actor identityapp.Principal, b app.ProjectCopyBinding, facts []domain.MediaFact, assets map[uuid.UUID]uuid.UUID) ([]app.ReferenceMapping, error) {
+func (r bibleCopyMedia) FreezeReferences(ctx context.Context, actor app.Actor, b app.ProjectCopyBinding, facts []domain.MediaFact, assets map[uuid.UUID]uuid.UUID) ([]app.ReferenceMapping, error) {
 	input := make([]mediaapp.ReferenceFact, len(facts))
 	for i, f := range facts {
 		input[i] = referenceFact(f)
 	}
-	rows, err := r.query.FreezeReferences(ctx, actor, bibleMediaBinding(b), r.snapshot, input)
+	rows, err := r.query.FreezeReferences(ctx, bibleMediaActor(bibleIdentityActor(actor)), bibleMediaBinding(b), r.snapshot, input)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +67,7 @@ type bibleTransferredReferences struct {
 	snapshot  mediaapp.ProjectCopySnapshot
 }
 
-func (r bibleTransferredReferences) VerifyTransferred(ctx context.Context, actor identityapp.Principal, b app.ProjectCopyBinding, rows []app.ReferenceMapping) error {
+func (r bibleTransferredReferences) VerifyTransferred(ctx context.Context, actor app.Actor, b app.ProjectCopyBinding, rows []app.ReferenceMapping) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := (bibleCopyAccess{bibleFixtureCopyAccess(tx, r.authority)}).Authorize(ctx, actor, b, true); err != nil {
 			return err
@@ -77,7 +76,7 @@ func (r bibleTransferredReferences) VerifyTransferred(ctx context.Context, actor
 		for i, row := range rows {
 			input[i] = mediaapp.ProjectCopyReferenceMapping{Source: referenceFact(row.Source), Target: referenceFact(row.Target)}
 		}
-		return mediaapp.NewRoutedProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx), mediaobjects.NewRoutedReadObjects(r.objects)).VerifyTransferred(ctx, actor, bibleMediaBinding(b), r.snapshot, input)
+		return mediaapp.NewRoutedProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx), mediaobjects.NewRoutedReadObjects(r.objects)).VerifyTransferred(ctx, bibleMediaActor(bibleIdentityActor(actor)), bibleMediaBinding(b), r.snapshot, input)
 	})
 }
 
@@ -128,35 +127,35 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	}
 	audioID := bibleUploadedMedia(t, db, objects, actor, source, "historical.wav", audioBytes)
 	service := app.NewService(pg.NewStore(db, pg.Factories{
-		Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) },
+		Access: bibleFixtureContentAccess,
 		Media: func(tx *gorm.DB) app.MediaReferences {
 			return actualBibleMedia{mediaapp.NewRoutedReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}
 		},
 	}), time.Now)
-	first, err := service.Change(t.Context(), actor, createCharacter(source))
+	first, err := service.Change(t.Context(), bibleActor(actor), createCharacter(source))
 	if err != nil {
 		t.Fatal(err)
 	}
-	detail, err := service.Find(t.Context(), actor, source, domain.KindCharacter, first.EntryID)
+	detail, err := service.Find(t.Context(), bibleActor(actor), source, domain.KindCharacter, first.EntryID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	look := detail.Current.Character.Looks[0].ID
-	second, err := service.Change(t.Context(), actor, app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "references", EntryID: first.EntryID, ExpectedRevision: first.Revision, LookID: &look, References: []app.ReferenceInput{{Role: domain.RolePrimary, AssetID: imageID}}, Key: uuid.New(), RequestID: uuid.New()})
+	second, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "references", EntryID: first.EntryID, ExpectedRevision: first.Revision, LookID: &look, References: []app.ReferenceInput{{Role: domain.RolePrimary, AssetID: imageID}}, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	third, err := service.Change(t.Context(), actor, app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "voice_bind", EntryID: first.EntryID, ExpectedRevision: second.Revision, Voice: &app.VoiceInput{Kind: domain.VoiceSample, Instructions: "旧声样与素材必须保留", Sample: &app.SampleInput{Name: "历史声样", AssetID: audioID}}, Key: uuid.New(), RequestID: uuid.New()})
+	third, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "voice_bind", EntryID: first.EntryID, ExpectedRevision: second.Revision, Voice: &app.VoiceInput{Kind: domain.VoiceSample, Instructions: "旧声样与素材必须保留", Sample: &app.SampleInput{Name: "历史声样", AssetID: audioID}}, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(t.Context(), actor, app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: third.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
+	if _, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: third.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
 	// The owning soft-delete retains bytes. Version fact rev 1 is not rewritten;
 	// media's explicit retained-history proof relates it to current rev 2.
 	for _, id := range []uuid.UUID{imageID, audioID} {
-		asset, err := bibleFixtureMediaStore(db).FindAsset(t.Context(), actor, source, id)
+		asset, err := bibleFixtureMediaStore(db).FindAsset(t.Context(), bibleMediaActor(actor), source, id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,7 +173,7 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	var media mediaapp.ProjectCopySnapshot
 	var snapshot app.ProjectCopySnapshot
 	if err := db.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
-		facts, err := bibleCopyStore(tx, admission).ReferencedMediaFacts(t.Context(), actor, b)
+		facts, err := bibleCopyStore(tx, admission).ReferencedMediaFacts(t.Context(), bibleActor(actor), b)
 		if err != nil {
 			return err
 		}
@@ -182,11 +181,11 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 		for i, f := range facts {
 			input[i] = referenceFact(f)
 		}
-		media, err = bibleFixtureMediaCopyStore(tx).FreezeWithReferenceFacts(t.Context(), actor, bibleMediaBinding(b), time.Now(), nil, input)
+		media, err = bibleFixtureMediaCopyStore(tx).FreezeWithReferenceFacts(t.Context(), bibleMediaActor(actor), bibleMediaBinding(b), time.Now(), nil, input)
 		if err != nil {
 			return err
 		}
-		snapshot, err = bibleCopyMediaStore(tx, admission, media).Freeze(t.Context(), actor, b, media.AssetMapping, time.Now())
+		snapshot, err = bibleCopyMediaStore(tx, admission, media).Freeze(t.Context(), bibleActor(actor), b, media.AssetMapping, time.Now())
 		return err
 	}); err != nil {
 		t.Fatal("SQL-only all historical media plan", err)
@@ -207,13 +206,13 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	coordinator := bibleCoordinatorObjects(db)
 	repo := workspacepg.NewProjectCopyMediaObjects(coordinator, b.JobID, authority.WorkerID, false)
 	stale := workspacepg.NewProjectCopyMediaObjects(coordinator, b.JobID, uuid.New(), false)
-	if err := mediaapp.NewRoutedProjectCopyTransfer(stale, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir()).Transfer(t.Context(), actor, bibleMediaBinding(b), media); !errors.Is(err, workspacedomain.ErrProjectCopyWorkerConflict) {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(stale, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir()).Transfer(t.Context(), bibleMediaActor(actor), bibleMediaBinding(b), media); !errors.Is(err, workspacedomain.ErrProjectCopyWorkerConflict) {
 		t.Fatal("stale media worker accepted", err)
 	}
-	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir()).Transfer(t.Context(), actor, bibleMediaBinding(b), media); err != nil {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir()).Transfer(t.Context(), bibleMediaActor(actor), bibleMediaBinding(b), media); err != nil {
 		t.Fatal("actual fenced private transfer", err)
 	}
-	intents, err := repo.Objects(t.Context(), actor, bibleMediaBinding(b), media)
+	intents, err := repo.Objects(t.Context(), bibleMediaActor(actor), bibleMediaBinding(b), media)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +228,7 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	var receipt mediaapp.ProjectCopyReceipt
 	if err := coordinator.UseAttempt(t.Context(), actor, b.JobID, authority.WorkerID, "media", func(owners workspaceapp.ProjectCopyOwners, _ workspacedomain.ProjectCopyJob) error {
 		var err error
-		receipt, err = owners.Media.Register(t.Context(), actor, bibleMediaBinding(b), media)
+		receipt, err = owners.Media.Register(t.Context(), bibleMediaActor(actor), bibleMediaBinding(b), media)
 		return err
 	}); err != nil {
 		t.Fatal("actual media registration", err)
@@ -256,7 +255,7 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	if err := objects.Remove(t.Context(), object.TargetObjectKey); err != nil {
 		t.Fatal(err)
 	}
-	err = consumer.Transfer(t.Context(), actor, b, snapshot)
+	err = consumer.Transfer(t.Context(), bibleActor(actor), b, snapshot)
 	var unknown *app.ProjectCopyTransferError
 	if !errors.As(err, &unknown) || !unknown.NeedsReconciliation {
 		t.Fatal("missing private bytes released fence", err)
@@ -271,18 +270,18 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	if err := objects.PutIfAbsent(t.Context(), object.TargetObjectKey, bytes.NewReader(original), int64(len(original)), object.ContentType, *object.SHA256); err != nil {
 		t.Fatal(err)
 	}
-	if err := consumer.Transfer(t.Context(), actor, b, snapshot); err != nil {
+	if err := consumer.Transfer(t.Context(), bibleActor(actor), b, snapshot); err != nil {
 		t.Fatal("exact original object recovery", err)
 	}
 	register := authority
 	register.Phase = "register"
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := bibleCopyMediaStore(tx, register, media).Register(t.Context(), actor, b, snapshot)
+		_, err := bibleCopyMediaStore(tx, register, media).Register(t.Context(), bibleActor(actor), b, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	m, err := copyStore.Manifest(t.Context(), actor, b, snapshot)
+	m, err := copyStore.Manifest(t.Context(), bibleActor(actor), b, snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,23 +301,23 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	cleanup := authority
 	cleanup.Phase = "cleanup"
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return bibleCopyMediaStore(tx, cleanup, media).Cleanup(t.Context(), actor, b, snapshot)
+		return bibleCopyMediaStore(tx, cleanup, media).Cleanup(t.Context(), bibleActor(actor), b, snapshot)
 	}); err != nil {
 		t.Fatal("seal unpublished immutable history", err)
 	}
 	cleanupRepo := workspacepg.NewProjectCopyMediaObjects(coordinator, b.JobID, authority.WorkerID, true)
 	fault := bibleRemoveFault{PhysicalTransferObjects: mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), key: intents[0].TargetObjectKey}
-	err = mediaapp.NewRoutedProjectCopyTransfer(cleanupRepo, fault, t.TempDir()).Cleanup(t.Context(), actor, bibleMediaBinding(b), media)
+	err = mediaapp.NewRoutedProjectCopyTransfer(cleanupRepo, fault, t.TempDir()).Cleanup(t.Context(), bibleMediaActor(actor), bibleMediaBinding(b), media)
 	var removal *mediaapp.ProjectCopyTransferError
 	if !errors.As(err, &removal) || !removal.NeedsReconciliation || removal.Code != "object_remove_unknown" {
 		t.Fatal("unknown removal released cleanup fence", err)
 	}
 	businessExpireStorageWindow(t, owner, b.TargetProjectID)
-	if err := mediaapp.NewRoutedProjectCopyTransfer(cleanupRepo, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir()).Cleanup(t.Context(), actor, bibleMediaBinding(b), media); err != nil {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(cleanupRepo, mediaobjects.NewRoutedCopyObjects(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), t.TempDir()).Cleanup(t.Context(), bibleMediaActor(actor), bibleMediaBinding(b), media); err != nil {
 		t.Fatal("same frozen object cleanup recovery", err)
 	}
 	if err := coordinator.UseAttempt(t.Context(), actor, b.JobID, authority.WorkerID, "cleanup", func(owners workspaceapp.ProjectCopyOwners, _ workspacedomain.ProjectCopyJob) error {
-		return owners.Media.FinishCleanup(t.Context(), actor, bibleMediaBinding(b), media)
+		return owners.Media.FinishCleanup(t.Context(), bibleMediaActor(actor), bibleMediaBinding(b), media)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +333,7 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return bibleCopyMediaStore(tx, cleanup, media).Cleanup(t.Context(), actor, b, snapshot)
+		return bibleCopyMediaStore(tx, cleanup, media).Cleanup(t.Context(), bibleActor(actor), b, snapshot)
 	}); !errors.Is(err, workspacedomain.ErrProjectCopyStateConflict) {
 		t.Fatal("cleanup authorized an active published target", err)
 	}

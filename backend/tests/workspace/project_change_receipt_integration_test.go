@@ -14,7 +14,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -61,7 +64,7 @@ func TestProjectCoverPermanentExpiredLegacyReceiptPromotion(t *testing.T) {
 	}
 	newName := "different request"
 	in.Patch.Name = &newName
-	if _, err := s.Change(ctx, actor, in); !errors.Is(err, workspaceapp.ErrIdempotencyConflict) {
+	if _, err := s.Change(ctx, actor, in); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatal("permanent key reused", err)
 	}
 	for _, mutation := range []string{`UPDATE workspace.project_change_command SET request_sha256=repeat('f',64) WHERE actor_id=? AND idem_key=?`, `DELETE FROM workspace.project_change_command WHERE actor_id=? AND idem_key=?`} {

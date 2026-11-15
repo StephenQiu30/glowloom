@@ -68,11 +68,11 @@ func TestScriptLocatedPGAdmissionHistoryAndReplaySurviveDefaultSwitch(t *testing
 	service := app.NewSourceService(store, objects, time.Now)
 	_, input := sourceCommand()
 	input.ProjectID = project
-	receipt, err := service.Write(t.Context(), actor, input)
+	receipt, err := service.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal("located script write", err)
 	}
-	base, err := store.LoadBase(t.Context(), actor, project, nil)
+	base, err := store.LoadBase(t.Context(), scriptActor(actor), project, nil)
 	if err != nil || len(base.Sources) != 1 || base.Sources[0].Rich.LocationID == uuid.Nil {
 		t.Fatal("history did not retain physical identity", err)
 	}
@@ -85,11 +85,11 @@ func TestScriptLocatedPGAdmissionHistoryAndReplaySurviveDefaultSwitch(t *testing
 	if err != nil || secondNumber <= firstNumber {
 		t.Fatal("default switch did not advance the numeric deployment revision", firstRevision, secondRevision, err)
 	}
-	if _, err := service.Source(t.Context(), actor, project, base.Sources[0].LineageID, nil); err != nil {
+	if _, err := service.Source(t.Context(), scriptActor(actor), project, base.Sources[0].LineageID, nil); err != nil {
 		t.Fatal("historical read followed new default", err)
 	}
 	originalKey := input.Key
-	replayed, err := service.Write(t.Context(), actor, input)
+	replayed, err := service.Write(t.Context(), scriptActor(actor), input)
 	if err != nil || !reflect.DeepEqual(replayed, receipt) || len(objects.data) != 4 || objects.bare != 0 {
 		t.Fatal("old command repinned or rewrote its objects", err)
 	}
@@ -97,7 +97,7 @@ func TestScriptLocatedPGAdmissionHistoryAndReplaySurviveDefaultSwitch(t *testing
 	input.ExpectedRevision = 1
 	input.BaseVersionID = &receipt.VersionID
 	input.Sources[0].Title = "新默认目标"
-	if _, err := service.Write(t.Context(), actor, input); err != nil {
+	if _, err := service.Write(t.Context(), scriptActor(actor), input); err != nil {
 		t.Fatal("new admission did not use the new fixed target", err)
 	}
 	var newCount int

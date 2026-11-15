@@ -125,10 +125,10 @@ func loadShotCandidate(ctx context.Context, tx *gorm.DB, s domain.Scope, in Shot
 		return task, mediadomain.MediaAsset{}, domain.ErrNotFound
 	}
 	repo := pgmedia.NewScopedStore(tx, mediawire.NewMediaWorkerScopeAccess)
-	if _, err = media.NewAssetQuery(repo).Reference(ctx, agentapp.Principal(s), s.ProjectID, assetID); err != nil {
+	if _, err = media.NewAssetQuery(repo).Reference(ctx, mediawire.Actor(agentapp.Principal(s)), s.ProjectID, assetID); err != nil {
 		return task, mediadomain.MediaAsset{}, businessError(err)
 	}
-	asset, err := repo.FindAsset(ctx, agentapp.Principal(s), s.ProjectID, assetID)
+	asset, err := repo.FindAsset(ctx, mediawire.Actor(agentapp.Principal(s)), s.ProjectID, assetID)
 	if err != nil {
 		return task, asset, businessError(err)
 	}

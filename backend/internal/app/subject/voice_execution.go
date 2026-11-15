@@ -11,7 +11,6 @@ import (
 
 	pgsubject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/postgres"
 	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	platform "github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
@@ -104,7 +103,7 @@ func (o *voiceOutputs) Publish(ctx context.Context, work subject.VoiceWork, rece
 		return work.Job, err
 	}
 	return o.store.CompleteWith(ctx, work, receipt, func(tx *gorm.DB) (subject.VoiceJobResult, error) {
-		actor := identity.Principal{ID: work.Job.CurrentActorID, ScopeID: work.Owner.PersonalScopeID, OrgID: work.Owner.PersonalOrgID}
+		actor := media.Actor{ID: work.Job.CurrentActorID, ScopeID: work.Owner.PersonalScopeID, OrgID: work.Owner.PersonalOrgID}
 		summary, err := pgmedia.NewScopedStore(tx, func(tx *gorm.DB) media.ScopeAccess { return voicePersonalAuthority{tx: tx} }).AcceptPersonalGeneratedAudio(ctx, actor, prepared)
 		if err != nil {
 			return subject.VoiceJobResult{}, err
@@ -115,10 +114,10 @@ func (o *voiceOutputs) Publish(ctx context.Context, work subject.VoiceWork, rece
 
 type voicePersonalAuthority struct{ tx *gorm.DB }
 
-func (a voicePersonalAuthority) CheckActor(ctx context.Context, p identity.Principal) error {
+func (a voicePersonalAuthority) CheckActor(ctx context.Context, p media.Actor) error {
 	return a.AuthorizePersonal(ctx, p, false)
 }
-func (a voicePersonalAuthority) AuthorizePersonal(ctx context.Context, p identity.Principal, write bool) error {
+func (a voicePersonalAuthority) AuthorizePersonal(ctx context.Context, p media.Actor, write bool) error {
 	scope, err := scopewire.ProvideScopeAccess(a.tx).Resolve(ctx, p.ID, p.ScopeID, write)
 	if err != nil {
 		return err
@@ -128,10 +127,10 @@ func (a voicePersonalAuthority) AuthorizePersonal(ctx context.Context, p identit
 	}
 	return nil
 }
-func (a voicePersonalAuthority) AuthorizeProject(context.Context, identity.Principal, uuid.UUID, bool) error {
+func (a voicePersonalAuthority) AuthorizeProject(context.Context, media.Actor, uuid.UUID, bool) error {
 	return media.ErrNotFound
 }
-func (a voicePersonalAuthority) AuthorizeCopyTarget(context.Context, identity.Principal, uuid.UUID) error {
+func (a voicePersonalAuthority) AuthorizeCopyTarget(context.Context, media.Actor, uuid.UUID) error {
 	return media.ErrNotFound
 }
 

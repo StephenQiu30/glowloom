@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -14,12 +13,12 @@ import (
 // binding. Catalog visibility is distinct from original eligibility. The caller
 // must keep its owning transaction open throughout the bounded object reads.
 type FrozenReferenceFactReader interface {
-	ReadFrozenReferenceFactSource(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, domain.Kind) (LibraryMediaFile, error)
+	ReadFrozenReferenceFactSource(context.Context, Actor, uuid.UUID, uuid.UUID, domain.Kind) (LibraryMediaFile, error)
 }
 
 // VerifyFrozenReference checks an existing proof against exact current media
 // facts and actual private bytes; it cannot form or update a new binding.
-func (q *ReferenceFactQuery) VerifyFrozenReference(ctx context.Context, actor identityapp.Principal, project uuid.UUID, fact ReferenceFact) error {
+func (q *ReferenceFactQuery) VerifyFrozenReference(ctx context.Context, actor Actor, project uuid.UUID, fact ReferenceFact) error {
 	if q == nil || q.reader == nil || q.objects == nil {
 		return ErrUnavailable
 	}

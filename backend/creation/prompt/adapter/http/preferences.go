@@ -9,17 +9,18 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // Handler exposes personal preferences without administrator operations.
-type Handler struct{ preferences *application.Preferences }
+type Handler struct {
+	preferences *application.Preferences
+	resolve     ActorResolver
+}
 
-// NewHandler injects the workspace preference use cases.
-func NewHandler(preferences *application.Preferences) *Handler {
-	return &Handler{preferences: preferences}
+// NewHandler injects preference use cases and server-side identity resolution.
+func NewHandler(preferences *application.Preferences, resolve ActorResolver) *Handler {
+	return &Handler{preferences: preferences, resolve: resolve}
 }
 
 // Register installs actor-scoped reads and guarded replacement/reset commands.
@@ -51,7 +52,12 @@ type SaveRequest struct {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/settings/prompt-preferences [get]
 func (h *Handler) List(c *gin.Context) {
-	preferences, err := h.preferences.List(c.Request.Context(), identityhttp.Principal(c))
+	actor, err := requestActor(c, h.resolve)
+	if err != nil {
+		writePreferenceError(c, err)
+		return
+	}
+	preferences, err := h.preferences.List(c.Request.Context(), actor)
 	if err != nil {
 		writePreferenceError(c, err)
 		return
@@ -86,7 +92,12 @@ func (h *Handler) Save(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	customization, err := h.preferences.Save(c.Request.Context(), identityhttp.Principal(c), application.SaveInput{
+	actor, err := requestActor(c, h.resolve)
+	if err != nil {
+		writePreferenceError(c, err)
+		return
+	}
+	customization, err := h.preferences.Save(c.Request.Context(), actor, application.SaveInput{
 		Operation: c.Param("operation"), Mode: body.Mode, Content: body.Content, BaseTemplateID: baseline,
 		ExpectedRevision: *body.ExpectedRevision, IdempotencyKey: key, RequestID: c.GetString("request_id"),
 	})
@@ -100,9 +111,9 @@ func (h *Handler) Save(c *gin.Context) {
 
 func writePreferenceError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, identityapp.ErrSessionInvalid):
+	case errors.Is(err, application.ErrSessionInvalid):
 		httpapi.WriteProblem(c, 401, "session_invalid", nil)
-	case errors.Is(err, identityapp.ErrForbidden):
+	case errors.Is(err, application.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)

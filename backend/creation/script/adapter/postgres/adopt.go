@@ -10,14 +10,12 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // Adopt publishes only a fully confirmed own version and preserves prior adopted facts.
 // Replacing an existing adopted version requires downstream owners that are not yet
 // wired here; their absence is explicit rather than a fabricated empty impact set.
-func (s *SourceStore) Adopt(ctx context.Context, actor identityapp.Principal, input application.AdoptCommand, now time.Time) (application.AdoptReceipt, error) {
+func (s *SourceStore) Adopt(ctx context.Context, actor application.Actor, input application.AdoptCommand, now time.Time) (application.AdoptReceipt, error) {
 	var result application.AdoptReceipt
 	fingerprint := input
 	fingerprint.RequestID = [16]byte{}
@@ -25,7 +23,7 @@ func (s *SourceStore) Adopt(ctx context.Context, actor identityapp.Principal, in
 	if err != nil {
 		return result, err
 	}
-	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project application.ProjectFacts) error {
 		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "adopt", hash, now); err != nil {
 			return err
 		}

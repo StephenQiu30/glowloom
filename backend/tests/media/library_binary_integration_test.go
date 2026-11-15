@@ -26,11 +26,11 @@ func TestLibraryActualReviewedProjectImageUsesLegacyIdentityAndSeparateMetadata(
 	}
 	upload := documentUpload(t, db, objects, actor, project, "actual-source.png", data.Bytes())
 	media := mediaTestStore(db)
-	before, err := media.FindAsset(t.Context(), actor, project, upload.Asset.ID)
+	before, err := media.FindAsset(t.Context(), mediaActor(actor), project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rends, err := media.FindRenditions(t.Context(), actor, project, before.ID)
+	rends, err := media.FindRenditions(t.Context(), mediaActor(actor), project, before.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,43 +45,43 @@ func TestLibraryActualReviewedProjectImageUsesLegacyIdentityAndSeparateMetadata(
 	})
 	store := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	page, err := store.ListLibrary(t.Context(), actor, scope, libraryQuery())
+	page, err := store.ListLibrary(t.Context(), mediaActor(actor), scope, libraryQuery())
 	if err != nil || page.Total != 1 || page.Items[0].ID != before.ID || page.Items[0].Revision != 1 || page.Items[0].Media == nil || *page.Items[0].Media.Width != 3 {
 		t.Fatal("legacy image not shown with its real identity", page, err)
 	}
-	changed, err := store.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: scope, Key: uuid.New(), Action: "update_item", ItemID: &before.ID, Metadata: &mediaapp.LibraryMetadata{Title: "目录展示标题", Category: "prop", Tags: []string{"道具"}, SourceLabel: "用户填写来源", Note: "可编辑备注"}})
+	changed, err := store.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: scope, Key: uuid.New(), Action: "update_item", ItemID: &before.ID, Metadata: &mediaapp.LibraryMetadata{Title: "目录展示标题", Category: "prop", Tags: []string{"道具"}, SourceLabel: "用户填写来源", Note: "可编辑备注"}})
 	if err != nil || changed.Items[0].Revision != 2 {
 		t.Fatal("classify real image", changed, err)
 	}
-	after, err := media.FindAsset(t.Context(), actor, project, before.ID)
+	after, err := media.FindAsset(t.Context(), mediaActor(actor), project, before.ID)
 	if err != nil || !reflect.DeepEqual(before, after) {
 		t.Fatal("catalog metadata changed original/review/execution facts", err)
 	}
-	trash, err := store.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 1, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: before.ID, Revision: 2}}})
+	trash, err := store.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 1, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: before.ID, Revision: 2}}})
 	if err != nil || trash.Revision != 2 {
 		t.Fatal("catalog trash", err)
 	}
-	active, err := store.ListLibrary(t.Context(), actor, scope, libraryQuery())
+	active, err := store.ListLibrary(t.Context(), mediaActor(actor), scope, libraryQuery())
 	if err != nil || active.Total != 0 {
 		t.Fatal("trashed catalog item remained visible", active, err)
 	}
 	q := libraryQuery()
 	q.State = "trashed"
-	trashed, err := store.ListLibrary(t.Context(), actor, scope, q)
+	trashed, err := store.ListLibrary(t.Context(), mediaActor(actor), scope, q)
 	if err != nil || trashed.Total != 1 || trashed.Items[0].TrashedAt == nil {
 		t.Fatal("trash page lost original", trashed, err)
 	}
-	if _, err := media.FindAsset(t.Context(), actor, project, before.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := media.FindAsset(t.Context(), mediaActor(actor), project, before.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("catalog trash remained available for ordinary binding", err)
 	}
-	retained, err := store.FindLibraryMedia(t.Context(), actor, scope, before.ID)
+	retained, err := store.FindLibraryMedia(t.Context(), mediaActor(actor), scope, before.ID)
 	if err != nil || !reflect.DeepEqual(before, retained.Asset) || !reflect.DeepEqual(rends, retained.Renditions) {
 		t.Fatal("catalog trash changed retained original or rendition facts", err)
 	}
-	if _, err := store.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 2, Action: "restore_items", Items: []mediaapp.LibraryItemRevision{{ID: before.ID, Revision: 3}}}); err != nil {
+	if _, err := store.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 2, Action: "restore_items", Items: []mediaapp.LibraryItemRevision{{ID: before.ID, Revision: 3}}}); err != nil {
 		t.Fatal("restore catalog", err)
 	}
-	restored, err := media.FindAsset(t.Context(), actor, project, before.ID)
+	restored, err := media.FindAsset(t.Context(), mediaActor(actor), project, before.ID)
 	if err != nil || !reflect.DeepEqual(before, restored) {
 		t.Fatal("catalog restore did not release the unchanged original", err)
 	}

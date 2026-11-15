@@ -10,13 +10,16 @@ import (
 	"io"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -104,11 +107,11 @@ func copyCanvasSnapshot(job domain.ProjectCopyJob) canvasapp.ProjectCopySnapshot
 
 func (s *ProjectCopyStore) transactionOwners(tx *gorm.DB) (application.ProjectCopyOwners, error) {
 	if s.owners == nil {
-		return application.ProjectCopyOwners{}, application.ErrProjectDependencyUnavailable
+		return application.ProjectCopyOwners{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	owners := s.owners(tx)
 	if owners.Media == nil || owners.Canvas == nil || owners.Budget == nil {
-		return application.ProjectCopyOwners{}, application.ErrProjectDependencyUnavailable
+		return application.ProjectCopyOwners{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return owners, nil
 }
@@ -128,7 +131,7 @@ func copyPresets(tx *gorm.DB, source domain.Project, job uuid.UUID, target uuid.
 	selected := uuid.Nil
 	for _, row := range rows {
 		if row.ProjectID != nil && *row.ProjectID != source.ID {
-			return nil, uuid.Nil, application.ErrStylePresetNotFound
+			return nil, uuid.Nil, workspacesource.ErrStylePresetNotFound
 		}
 		preset := domain.StylePreset{ID: uuid.NewSHA1(job, []byte("preset/"+row.ID.String())), OrgID: source.OrgID, ProjectID: target, Name: row.Name, StyleType: row.StyleType, PromptFragment: row.PromptFragment, NegativePrompt: row.NegativePrompt}
 		if row.StyleSubtype != nil {
@@ -146,14 +149,14 @@ func copyPresets(tx *gorm.DB, source domain.Project, job uuid.UUID, target uuid.
 		}
 		if row.ID == source.StylePresetID {
 			if preset.StyleType != source.StyleType || preset.StyleSubtype != source.StyleSubtype {
-				return nil, uuid.Nil, application.ErrStylePresetMismatch
+				return nil, uuid.Nil, workspacesource.ErrStylePresetMismatch
 			}
 			selected = preset.ID
 		}
 		presets = append(presets, preset)
 	}
 	if source.StylePresetID != uuid.Nil && selected == uuid.Nil {
-		return nil, uuid.Nil, application.ErrStylePresetNotFound
+		return nil, uuid.Nil, workspacesource.ErrStylePresetNotFound
 	}
 	return presets, selected, nil
 }
@@ -214,7 +217,7 @@ func persistCopySettings(tx *gorm.DB, snapshot copyWorkspaceSnapshot) error {
 // Create atomically freezes every owner and records one invisible target with a zero budget.
 func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Principal, input application.ProjectCopyInput, now time.Time) (domain.ProjectCopyJob, error) {
 	if s == nil || s.db == nil || s.work == nil || input.Validate() != nil || now.IsZero() {
-		return domain.ProjectCopyJob{}, application.ErrProjectDependencyUnavailable
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	fingerprint, err := copyFingerprint(input)
 	if err != nil {
@@ -245,13 +248,13 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		}
 		if replayed.RowsAffected == 1 {
 			if accepted.OwnerScopeID != actor.ScopeID {
-				return application.ErrIdempotencyConflict
+				return workspacesource.ErrIdempotencyConflict
 			}
 			if _, err := s.authorizedCopy(ctx, tx, actor, accepted.ID, true, false); err != nil {
 				return err
 			}
 			if accepted.RequestSHA256 != fingerprint || copyJSON(accepted.AdmissionResponse, &saved) != nil || saved.Validate() != nil {
-				return application.ErrIdempotencyConflict
+				return workspacesource.ErrIdempotencyConflict
 			}
 			return nil
 		}
@@ -260,7 +263,7 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		if existing == 1 {
-			return application.ErrIdempotencyConflict
+			return workspacesource.ErrIdempotencyConflict
 		}
 		if err := (&Store{scopes: s.requests}).authorizeProject(ctx, tx, actor, input.SourceProjectID, true); err != nil {
 			return err
@@ -281,7 +284,7 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		}
 		guard := s.work(tx)
 		if guard == nil {
-			return application.ErrProjectDependencyUnavailable
+			return workspacesource.ErrProjectDependencyUnavailable
 		}
 		blocking, err := guard.HasInflightWork(ctx, actor, input.SourceProjectID)
 		if err != nil {
@@ -332,7 +335,7 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		}
 		if source.Project.CoverAssetID != nil {
 			if owners.Cover == nil {
-				return application.ErrProjectDependencyUnavailable
+				return workspacesource.ErrProjectDependencyUnavailable
 			}
 			if err := owners.Cover.Freeze(ctx, actor, source.Project.ID, source.Project.CoverAssetID); err != nil {
 				return err

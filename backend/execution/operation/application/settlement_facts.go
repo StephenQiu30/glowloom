@@ -8,10 +8,11 @@ import (
 
 // SettlementFacts contains no prompt, media, output or private event data.
 type SettlementFacts struct {
-	Status     domain.Status
-	ProjectID  uuid.UUID
-	Capability string
-	Region     *string
-	ModelKey   string
-	PriceUnit  string
+	OrganizationID uuid.UUID
+	Status         domain.Status
+	ProjectID      uuid.UUID
+	Capability     string
+	Region         *string
+	ModelKey       string
+	PriceUnit      string
 }

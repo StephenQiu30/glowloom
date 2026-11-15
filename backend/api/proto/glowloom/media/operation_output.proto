@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package glowloom.media;
+
+option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/mediapublication;mediapublication";
+
+import "glowloom/coordination/writer.proto";
+
+// OperationOutputs is an owner protocol, never a public or normalization RPC.
+service OperationOutputs {
+  // One immutable header then bounded byte chunks. EOF and final RPC status are required.
+  rpc PublishOperationOutput(stream PublishOperationOutputFrame) returns (OperationOutputReceipt);
+  // Recovery addresses precisely the original command; no absence implies deletion.
+  rpc ResolveOperationOutput(OutputPublication) returns (OperationOutputReceipt);
+}
+
+// OutputDeliveryProof is hosted by Execution; Media may only query an already
+// persisted and attempted original publication, never create or retry work.
+service OutputDeliveryProof {
+  rpc VerifyOutputPublication(OutputPublication) returns (OutputPublication);
+}
+
+message OutputProviderEvidence {
+  string request_key = 1;
+  int32 attempt = 2;
+  string manifest_sha256 = 3;
+  string usage_sha256 = 4;
+  string supplier_usage_sha256 = 5;
+  int64 actual_cost_micros = 6;
+}
+message OutputWorkerEvidence {
+  bytes task_id = 1;
+  string owner = 2;
+  int64 epoch = 3;
+  string task_kind = 4;
+}
+message OperationOutputIdentity {
+  bytes operation_id = 1;
+  bytes output_id = 2;
+  bytes project_id = 3;
+  bytes scope_id = 4;
+  int32 sequence = 5;
+  repeated int32 sequences = 6;
+  int64 byte_size = 7;
+  string sha256 = 8;
+  string mime_type = 9;
+  string kind = 10;
+  string provider_key = 11;
+  string model_key = 12;
+  string region = 13;
+  string aspect_ratio = 14;
+  OutputProviderEvidence provider = 15;
+  OutputWorkerEvidence worker = 16;
+}
+message OutputPublication {
+  glowloom.coordination.Command command = 1;
+  OperationOutputIdentity output = 2;
+}
+message PublishOperationOutputFrame {
+  oneof payload {
+    OutputPublication publication = 1;
+    bytes chunk = 2;
+  }
+}
+message OperationOutputReceipt {
+  bytes command_id = 1;
+  string request_sha256 = 2;
+  string payload_sha256 = 3;
+  OperationOutputIdentity output = 4;
+  bytes asset_id = 5;
+  int64 asset_revision = 6;
+  string moderation_status = 7;
+  bytes moderation_detail_json = 8;
+  string state = 9;
+}

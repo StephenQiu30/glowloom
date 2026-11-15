@@ -15,7 +15,7 @@ import (
 )
 
 // ResolveCanvasSubject expands only the exact saved local input in the authorized project.
-func (g generationAccess) ResolveCanvasSubject(ctx context.Context, actor identity.Principal, project uuid.UUID, id, version string) (promptdomain.ReferenceSource, error) {
+func (g generationAccess) resolvePromptCanvasSubject(ctx context.Context, actor identity.Principal, project uuid.UUID, id, version string) (promptdomain.ReferenceSource, error) {
 	out := promptdomain.ReferenceSource{Kind: "canvas_subject", SourceID: id, SourceVersion: version, Media: []promptdomain.SourceMedia{}}
 	nodeID, e1 := uuid.Parse(id)
 	revision, e2 := strconv.ParseInt(version, 10, 64)

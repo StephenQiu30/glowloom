@@ -6,12 +6,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // FreezeConversationInput requires ready=true, unlike saveable clipboard fragments.
-func (s *DraftStore) FreezeConversationInput(ctx context.Context, a identity.Principal, p uuid.UUID, d domain.Draft) (domain.ConversationInput, error) {
+func (s *DraftStore) FreezeConversationInput(ctx context.Context, a application.Actor, p uuid.UUID, d domain.Draft) (domain.ConversationInput, error) {
 	input, err := domain.NewConversationInput(d)
 	if err != nil {
 		return input, err
@@ -26,7 +26,7 @@ func (s *DraftStore) FreezeConversationInput(ctx context.Context, a identity.Pri
 }
 
 // CheckConversationSources checks current read authority for all referenced draft sources.
-func (s *DraftStore) CheckConversationSources(ctx context.Context, a identity.Principal, p uuid.UUID, d domain.Draft) error {
+func (s *DraftStore) CheckConversationSources(ctx context.Context, a application.Actor, p uuid.UUID, d domain.Draft) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.authorize(ctx, tx, a, p, false); err != nil {
 			return err

@@ -7,19 +7,19 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // VersionHandler exposes selected-version reads and actual confirmed-version adoption.
 type VersionHandler struct {
+	resolve ActorResolver
 	history *application.HistoryService
 	adopt   *application.AdoptService
 }
 
 // NewVersionHandler injects authorized immutable reads and formal adoption.
-func NewVersionHandler(history *application.HistoryService, adopt *application.AdoptService) *VersionHandler {
-	return &VersionHandler{history: history, adopt: adopt}
+func NewVersionHandler(history *application.HistoryService, adopt *application.AdoptService, resolve ActorResolver) *VersionHandler {
+	return &VersionHandler{resolve: resolve, history: history, adopt: adopt}
 }
 
 // Register adds only implemented version/confirmation endpoints.
@@ -50,6 +50,12 @@ type AdoptVersionRequest struct {
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-versions/{vid}/source-text [get]
 func (h *VersionHandler) Text(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -64,7 +70,7 @@ func (h *VersionHandler) Text(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	out, err := h.history.VersionText(c.Request.Context(), identityhttp.Principal(c), pid, vid, from, to)
+	out, err := h.history.VersionText(c.Request.Context(), actor, pid, vid, from, to)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -87,6 +93,12 @@ func (h *VersionHandler) Text(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-versions/{vid}/adopt [post]
 func (h *VersionHandler) Adopt(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var input AdoptVersionRequest
 	if !readJSON(c, &input) {
 		return
@@ -103,7 +115,7 @@ func (h *VersionHandler) Adopt(c *gin.Context) {
 		scriptProblem(c, domain.ErrInvalidSpan)
 		return
 	}
-	out, err := h.adopt.Adopt(c.Request.Context(), identityhttp.Principal(c), application.AdoptCommand{ProjectID: command.ProjectID, VersionID: vid, Key: command.Key, RequestID: command.RequestID, ExpectedRevision: command.ExpectedRevision, ExpectedSplitRevision: *input.ExpectedSplitRevision, AckInvalidate: input.AckInvalidate})
+	out, err := h.adopt.Adopt(c.Request.Context(), actor, application.AdoptCommand{ProjectID: command.ProjectID, VersionID: vid, Key: command.Key, RequestID: command.RequestID, ExpectedRevision: command.ExpectedRevision, ExpectedSplitRevision: *input.ExpectedSplitRevision, AckInvalidate: input.AckInvalidate})
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -123,6 +135,12 @@ func (h *VersionHandler) Adopt(c *gin.Context) {
 // @Success 200 {object} application.ConfirmationPage
 // @Router /api/projects/{pid}/script-versions/{vid}/split-confirmations [get]
 func (h *VersionHandler) Confirmations(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -135,7 +153,7 @@ func (h *VersionHandler) Confirmations(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.history.Confirmations(c.Request.Context(), identityhttp.Principal(c), pid, vid, before, limit)
+	out, err := h.history.Confirmations(c.Request.Context(), actor, pid, vid, before, limit)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -154,6 +172,12 @@ func (h *VersionHandler) Confirmations(c *gin.Context) {
 // @Success 200 {object} domain.SplitConfirmation
 // @Router /api/projects/{pid}/script-versions/{vid}/split-confirmations/{cid} [get]
 func (h *VersionHandler) Confirmation(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -166,7 +190,7 @@ func (h *VersionHandler) Confirmation(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.history.Confirmation(c.Request.Context(), identityhttp.Principal(c), pid, vid, cid)
+	out, err := h.history.Confirmation(c.Request.Context(), actor, pid, vid, cid)
 	if err != nil {
 		scriptProblem(c, err)
 		return

@@ -8,14 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 var (
@@ -30,35 +28,7 @@ var (
 )
 
 // OutlineOptions preserves the seven choices offered by the fixed source page.
-type OutlineOptions struct {
-	ChapterCount   string `json:"chapter_count" binding:"required" enums:"3,5,8,10"`
-	Structure      string `json:"structure" binding:"required" enums:"单线推进,双线并行,群像多线,反转嵌套"`
-	WordCount      string `json:"word_count" binding:"required" enums:"500,800,1200,2000"`
-	Perspective    string `json:"perspective" binding:"required" enums:"第三人称,第一人称,多视角"`
-	Tone           string `json:"tone" binding:"required" enums:"平稳叙事,轻松喜剧,紧张悬疑,热血成长,甜宠治愈"`
-	CharacterScale string `json:"character_scale" binding:"required" enums:"2 个,3-4 个,5-6 个"`
-	ChapterLength  string `json:"chapter_length" binding:"required" enums:"短,中,长"`
-}
-
-func (o OutlineOptions) valid() bool {
-	for _, choice := range []struct {
-		value   string
-		allowed []string
-	}{
-		{o.ChapterCount, []string{"3", "5", "8", "10"}},
-		{o.Structure, []string{"单线推进", "双线并行", "群像多线", "反转嵌套"}},
-		{o.WordCount, []string{"500", "800", "1200", "2000"}},
-		{o.Perspective, []string{"第三人称", "第一人称", "多视角"}},
-		{o.Tone, []string{"平稳叙事", "轻松喜剧", "紧张悬疑", "热血成长", "甜宠治愈"}},
-		{o.CharacterScale, []string{"2 个", "3-4 个", "5-6 个"}},
-		{o.ChapterLength, []string{"短", "中", "长"}},
-	} {
-		if !slices.Contains(choice.allowed, choice.value) {
-			return false
-		}
-	}
-	return true
-}
+type OutlineOptions = domain.OutlineOptions
 
 // TemplateRequest selects one immutable baseline without accepting runtime overrides.
 type TemplateRequest struct {
@@ -75,7 +45,7 @@ func (r TemplateRequest) ValidateFor(capability string) error {
 		return ErrTemplateInvalid
 	}
 	if r.Operation == "short_drama_outline" {
-		if r.Outline == nil || !r.Outline.valid() {
+		if r.Outline == nil || !r.Outline.Valid() {
 			return ErrTemplateInvalid
 		}
 	} else if r.Outline != nil {
@@ -138,7 +108,7 @@ type Preparation struct {
 
 // CustomizationReader is the only preference capability consumed by the compiler.
 type CustomizationReader interface {
-	ReadCustomizations(context.Context, identityapp.Principal) ([]domain.Customization, error)
+	ReadCustomizations(context.Context, Actor) ([]domain.Customization, error)
 }
 
 // Compiler retains the source video bypass and freezes only explicitly selected policy.
@@ -148,12 +118,12 @@ type Compiler struct{ reader CustomizationReader }
 func NewCompiler(reader CustomizationReader) *Compiler { return &Compiler{reader: reader} }
 
 // Prepare validates current selection and authorized context before producing final text.
-func (c *Compiler) Prepare(ctx context.Context, actor identityapp.Principal, request TemplateRequest, runtime RuntimeContext) (Preparation, error) {
+func (c *Compiler) Prepare(ctx context.Context, actor Actor, request TemplateRequest, runtime RuntimeContext) (Preparation, error) {
 	if err := ctx.Err(); err != nil {
 		return Preparation{}, fmt.Errorf("prepare template context: %w", err)
 	}
 	if !canCustomize(actor) {
-		return Preparation{}, identityapp.ErrForbidden
+		return Preparation{}, ErrForbidden
 	}
 	if err := request.ValidateFor(runtime.Capability); err != nil {
 		return Preparation{}, err
@@ -185,7 +155,7 @@ func (c *Compiler) Prepare(ctx context.Context, actor identityapp.Principal, req
 	}
 	customizations, err := c.reader.ReadCustomizations(ctx, actor)
 	if err != nil {
-		if !errors.Is(err, identityapp.ErrForbidden) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		if !errors.Is(err, ErrForbidden) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			return Preparation{}, fmt.Errorf("%w: read template customization: %w", ErrTemplateUnavailable, err)
 		}
 		return Preparation{}, fmt.Errorf("read template customization: %w", err)

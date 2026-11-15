@@ -20,10 +20,10 @@ func TestMediaCopyFixtureOpensTransactionAndRejectsMissingActor(t *testing.T) {
 	actor := identityapp.Principal{ID: uuid.New(), OrgID: uuid.New()}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: uuid.New(), TargetProjectID: uuid.New()}
 	snapshot := mediaapp.ProjectCopySnapshot{}
-	if _, err := pgmedia.NewScopedProjectCopyStore(database, app.NewMediaWorkerScopeAccess).Objects(t.Context(), actor, binding, snapshot); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := pgmedia.NewScopedProjectCopyStore(database, app.NewMediaWorkerScopeAccess).Objects(t.Context(), mediaActor(actor), binding, snapshot); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("owner repository accepted a pool without coordinator transaction", err)
 	}
-	if _, err := mediaCopyStore(database).Objects(t.Context(), actor, binding, snapshot); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := mediaCopyStore(database).Objects(t.Context(), mediaActor(actor), binding, snapshot); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatal("fixture failed to check the current actor in its transaction", err)
 	}
 }
@@ -45,18 +45,18 @@ func TestMediaCopyFixtureRechecksOwnerInRollbackTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := mediaCopyStore(tx)
-	snapshot, err := repo.Freeze(t.Context(), actor, binding, time.Now())
+	snapshot, err := repo.Freeze(t.Context(), mediaActor(actor), binding, time.Now())
 	if err != nil {
 		t.Fatal("freeze the empty synthetic source", err)
 	}
 	actor.SessionID = uuid.Nil
-	if objects, err := repo.Objects(t.Context(), actor, binding, snapshot); err != nil || len(objects) != 0 {
+	if objects, err := repo.Objects(t.Context(), mediaActor(actor), binding, snapshot); err != nil || len(objects) != 0 {
 		t.Fatal("current durable owner lost its frozen object set", err)
 	}
 	if err := tx.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.Objects(t.Context(), actor, binding, snapshot); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := repo.Objects(t.Context(), mediaActor(actor), binding, snapshot); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatal("disabled owner retained frozen object access", err)
 	}
 }

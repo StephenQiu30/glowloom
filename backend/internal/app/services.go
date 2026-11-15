@@ -7,6 +7,7 @@ import (
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/settlement"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
@@ -75,7 +76,7 @@ func NewMediaWorkerReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 
 // NewOperationFinalizer assembles operation finalization dependencies.
 func NewOperationFinalizer(db *gorm.DB, operation *pgoperation.Store, billing *pgbilling.Store) operationflow.OperationFinalizer {
-	return operationwire.NewOperationFinalizer(db, operation, billing)
+	return settlement.NewOperationFinalizer(db, operation, billing)
 }
 
 // NewCatalogStore assembles the operation-facing catalog store.

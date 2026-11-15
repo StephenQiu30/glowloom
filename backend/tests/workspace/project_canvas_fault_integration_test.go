@@ -8,11 +8,14 @@ import (
 	"testing"
 	"time"
 
-	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 )
 
@@ -41,7 +44,7 @@ func TestCreationRecoveryRejectsBrokenMainAndCorruptReceipt(t *testing.T) {
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
 	key := uuid.New()
 	query := workspaceapp.NewProjectCreationRecoveryQuery(workspaceStore(db))
-	created, err := workspaceapp.NewCreateProjectCommand(workspaceStore(db), time.Now).ExecuteIdempotent(ctx, actor, key, workspaceapp.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
+	created, err := workspaceapp.NewCreateProjectCommand(workspaceStore(db), time.Now).ExecuteIdempotent(ctx, actor, key, workspacesource.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +60,7 @@ func TestCreationRecoveryRejectsBrokenMainAndCorruptReceipt(t *testing.T) {
 	if err := db.Exec(`UPDATE workspace.project_creation_receipt SET response_body='{}'::jsonb WHERE actor_id=? AND idem_key=?`, actor.ID, key).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := query.Resolve(ctx, actor, key); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := query.Resolve(ctx, actor, key); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatalf("corrupt receipt: %v", err)
 	}
 }
@@ -81,7 +84,7 @@ func TestBlankCreationRollsBackWhenFinalReceiptCannotBeWritten(t *testing.T) {
 	if err := db.Exec(fmt.Sprintf(`CREATE TRIGGER %s BEFORE INSERT ON workspace.project_creation_receipt FOR EACH ROW EXECUTE FUNCTION workspace.%s()`, trigger, function)).Error; err != nil {
 		t.Fatal(err)
 	}
-	_, err := workspaceapp.NewCreateProjectCommand(workspaceStore(db), time.Now).ExecuteIdempotent(ctx, actor, key, workspaceapp.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
+	_, err := workspaceapp.NewCreateProjectCommand(workspaceStore(db), time.Now).ExecuteIdempotent(ctx, actor, key, workspacesource.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
 	if err == nil {
 		t.Fatal("receipt failure accepted")
 	}
@@ -100,12 +103,12 @@ func TestCreationRecoveryDoesNotExposeReceiptInAnotherOwnedScope(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
 	key := uuid.New()
-	_, err := workspaceapp.NewCreateProjectCommand(workspaceStore(db), time.Now).ExecuteIdempotent(ctx, actor, key, workspaceapp.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
+	_, err := workspaceapp.NewCreateProjectCommand(workspaceStore(db), time.Now).ExecuteIdempotent(ctx, actor, key, workspacesource.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	teamActor := workspaceTeamActor(t, db, actor)
-	if _, err := workspaceapp.NewProjectCreationRecoveryQuery(workspaceStore(db)).Resolve(ctx, teamActor, key); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := workspaceapp.NewProjectCreationRecoveryQuery(workspaceStore(db)).Resolve(ctx, teamActor, key); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("receipt exposed across owned scopes: %v", err)
 	}
 }
@@ -113,7 +116,7 @@ func TestCreationRecoveryDoesNotExposeReceiptInAnotherOwnedScope(t *testing.T) {
 func TestProjectRenameAndCanvasSaveAvoidLockUpgrade(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
-	project, err := workspaceapp.NewCreateProjectCommand(workspaceStore(db), time.Now).ExecuteIdempotent(ctx, actor, uuid.New(), workspaceapp.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
+	project, err := workspaceapp.NewCreateProjectCommand(workspaceStore(db), time.Now).ExecuteIdempotent(ctx, actor, uuid.New(), workspacesource.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@ import (
 // The caller must authorize this exact project/scope and hold its row lock in
 // the injected transaction. Library access is deliberately not used here: it
 // hides recycled projects, while lifecycle restoration must inspect their work.
-func (s *PackageStore) HasInflightProjectLifecycleWork(ctx context.Context, actor identityapp.Principal, project uuid.UUID) (bool, error) {
+func (s *PackageStore) HasInflightProjectLifecycleWork(ctx context.Context, actor application.Actor, project uuid.UUID) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}

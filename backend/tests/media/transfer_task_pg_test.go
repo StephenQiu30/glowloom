@@ -112,30 +112,30 @@ func TestMediaTransferActualDatabasePrivateObjectsCancellationAndRecovery(t *tes
 				case <-ctx.Done():
 					t.Fatal("actual conditional write did not run", ctx.Err())
 				}
-				current, err := f.repo.GetTransfer(ctx, f.actor, f.job.ID)
+				current, err := f.repo.GetTransfer(ctx, mediaActor(f.actor), f.job.ID)
 				if err != nil {
 					t.Fatal(err)
 				}
 				key := uuid.New()
-				requested, err := f.repo.ControlTransfer(ctx, f.actor, current.ID, key, current.Revision, "cancel")
+				requested, err := f.repo.ControlTransfer(ctx, mediaActor(f.actor), current.ID, key, current.Revision, "cancel")
 				if err != nil || !requested.CancellationRequested {
 					t.Fatal(requested, err)
 				}
 				taskfixture.WaitWork(t, f.db, currenttask.Transfer, active, 20*time.Second)
-				current, err = f.repo.GetTransfer(ctx, f.actor, f.job.ID)
+				current, err = f.repo.GetTransfer(ctx, mediaActor(f.actor), f.job.ID)
 				if err != nil || current.Status != "needs_reconciliation" || current.ExecutionUnconfirmed || !current.CancellationRequested {
 					t.Fatal("real stopped write lost cancellation or became published", current, err)
 				}
 				drainFixtureTransfer(t, libraryOwnerDB(t), f.job.ID)
 				recoveryKey := uuid.New()
-				recovery, err := f.repo.ControlTransfer(ctx, f.actor, current.ID, recoveryKey, current.Revision, "reconcile")
+				recovery, err := f.repo.ControlTransfer(ctx, mediaActor(f.actor), current.ID, recoveryKey, current.Revision, "reconcile")
 				if err != nil || !recovery.CancellationRequested {
 					t.Fatal("explicit recovery lost cancellation intent", recovery, err)
 				}
 				active = taskfixture.StartWork(t, f.db, currenttask.Transfer, map[string]any{"job_id": f.job.ID, "attempt": recovery.Attempt}, run)
 			}
 			taskfixture.WaitWork(t, f.db, currenttask.Transfer, active, 30*time.Second)
-			result, err := f.repo.GetTransfer(ctx, f.actor, f.job.ID)
+			result, err := f.repo.GetTransfer(ctx, mediaActor(f.actor), f.job.ID)
 			if err != nil {
 				t.Fatal(err)
 			}

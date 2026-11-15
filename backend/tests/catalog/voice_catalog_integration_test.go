@@ -6,12 +6,12 @@ import (
 	"errors"
 	"testing"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/paramvalidation"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/paramvalidation"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 )
@@ -70,7 +70,7 @@ func TestVoiceCatalogPGCurrentConfigurationScopeAndNonOwnerLocks(t *testing.T) {
 			}
 		}
 		_, err = q.List(ctx, actor, foreignProject, 10, nil)
-		if !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+		if !errors.Is(err, workspacesource.ErrProjectNotFound) {
 			t.Fatalf("foreign project catalog disclosed: %v", err)
 		}
 		page, err := q.List(ctx, actor, project, 1, &catalogapp.VoiceCursor{ModelKey: prefix + "-a", VoiceKey: "a_voice"})

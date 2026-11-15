@@ -264,13 +264,22 @@ type settlementEventData struct {
 }
 
 func insertSettlementEvent(tx *gorm.DB, input application.SettleInput, result application.SettleResult, budget domain.Budget, availableMicros int64, becameLow, wasOverrun bool) error {
-	var project struct{ OrgID uuid.UUID }
-	row := tx.Raw(`SELECT org_id FROM workspace.project WHERE id = ?::uuid`, input.ProjectID.String()).Scan(&project)
-	if row.Error != nil {
-		return fmt.Errorf("read settlement organization: %w", row.Error)
-	}
-	if row.RowsAffected != 1 || project.OrgID == uuid.Nil {
-		return ErrNotFound
+	project := struct{ OrgID uuid.UUID }{OrgID: input.OrganizationID}
+	if project.OrgID == uuid.Nil {
+		var owner string
+		if err := tx.Raw(`SELECT infra.runtime_owner()`).Scan(&owner).Error; err != nil {
+			return err
+		}
+		if owner == "execution" {
+			return application.ErrInvalidSettlement
+		}
+		row := tx.Raw(`SELECT org_id FROM workspace.project WHERE id = ?::uuid`, input.ProjectID.String()).Scan(&project)
+		if row.Error != nil {
+			return fmt.Errorf("read settlement organization: %w", row.Error)
+		}
+		if row.RowsAffected != 1 || project.OrgID == uuid.Nil {
+			return ErrNotFound
+		}
 	}
 	data := settlementEventData{
 		OperationID: input.OperationID, ActualCostMicros: input.ActualCostMicros,

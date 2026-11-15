@@ -20,7 +20,7 @@ import (
 func provideMediaToolSourceWithAccess(tx *gorm.DB, scopes pgmedia.ScopeAccessFactory) toolapp.TranscriptionSourceReader {
 	return canvasapp.NewTranscriptionSourceReader(pgcanvas.NewScopedStore(tx,
 		func(mediaTx *gorm.DB) canvasapp.MediaReader {
-			return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes))
+			return LegacyAssetReader(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes)))
 		}, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }))
 }
 
@@ -40,7 +40,7 @@ func ProvideMediaDepthStoreWithAccess(database *gorm.DB, enabled bool, scopes pg
 	}
 	return pgtool.NewDepthStore(database, source,
 		func(tx *gorm.DB) toolapp.DepthDerivedMedia {
-			return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+			return LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes)))
 		})
 }
 

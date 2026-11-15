@@ -58,7 +58,7 @@ func seedCopyMedia(t *testing.T, database *gorm.DB, objects *objectstorage.Clien
 	var snapshot mediaapp.ProjectCopySnapshot
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), mediaActor(actor), binding, time.Now())
 		if err != nil {
 			return err
 		}
@@ -66,7 +66,7 @@ func seedCopyMedia(t *testing.T, database *gorm.DB, objects *objectstorage.Clien
 	}); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := mediaCopyStore(database).Objects(t.Context(), actor, binding, snapshot)
+	rows, err := mediaCopyStore(database).Objects(t.Context(), mediaActor(actor), binding, snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,17 +92,17 @@ func TestProjectCopyMediaRealObjectsRegistrationAndCleanup(t *testing.T) {
 	actor, binding, snapshot, keys := seedCopyMedia(t, database, objects)
 	repo := mediaCopyStore(database)
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 		return err
 	}); !errors.Is(err, mediaapp.ErrObjectMismatch) {
 		t.Fatal("metadata registered before object receipts", err)
 	}
 	staging := t.TempDir()
 	transfer := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, database), staging)
-	if err := transfer.Transfer(fixtureCopyContext(t), actor, binding, snapshot); err != nil {
+	if err := transfer.Transfer(fixtureCopyContext(t), mediaActor(actor), binding, snapshot); err != nil {
 		t.Fatal("actual object transfer", err)
 	}
-	intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
+	intents, err := repo.Objects(t.Context(), mediaActor(actor), binding, snapshot)
 	if err != nil || len(intents) != 2 {
 		t.Fatal("original/rendition receipt incomplete", intents, err)
 	}
@@ -126,28 +126,28 @@ func TestProjectCopyMediaRealObjectsRegistrationAndCleanup(t *testing.T) {
 	var receipt mediaapp.ProjectCopyReceipt
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		receipt, err = mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		receipt, err = mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 		return err
 	}); err != nil || receipt.Assets != 1 || receipt.Renditions != 1 {
 		t.Fatal("atomic real copy registration", receipt, err)
 	}
 	for _, targetAsset := range snapshot.AssetMapping {
-		if _, err := mediaTestStore(database).FindAsset(t.Context(), actor, binding.TargetProjectID, targetAsset); !errors.Is(err, mediaapp.ErrNotFound) {
+		if _, err := mediaTestStore(database).FindAsset(t.Context(), mediaActor(actor), binding.TargetProjectID, targetAsset); !errors.Is(err, mediaapp.ErrNotFound) {
 			t.Fatal("unpublished copy media visible", err)
 		}
-		if ref, err := repo.ReferenceCopiedAsset(t.Context(), actor, binding, targetAsset); err != nil || ref.ID != targetAsset {
+		if ref, err := repo.ReferenceCopiedAsset(t.Context(), mediaActor(actor), binding, targetAsset); err != nil || ref.ID != targetAsset {
 			t.Fatal("owning copy reader lost ready private media", ref, err)
 		}
 	}
-	if err := transfer.Transfer(fixtureCopyContext(t), actor, binding, snapshot); err != nil {
+	if err := transfer.Transfer(fixtureCopyContext(t), mediaActor(actor), binding, snapshot); err != nil {
 		t.Fatal("verified exact-key replay", err)
 	}
 	prepareFixtureCopyCleanup(t, libraryOwnerDB(t), binding, snapshot)
-	if err := transfer.Cleanup(t.Context(), actor, binding, snapshot); err != nil {
+	if err := transfer.Cleanup(t.Context(), mediaActor(actor), binding, snapshot); err != nil {
 		t.Fatal("verified private cleanup", err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		return mediaCopyStore(tx).FinishCleanup(t.Context(), actor, binding, snapshot)
+		return mediaCopyStore(tx).FinishCleanup(t.Context(), mediaActor(actor), binding, snapshot)
 	}); err != nil {
 		t.Fatal("owner metadata cleanup", err)
 	}
@@ -181,7 +181,7 @@ func TestProjectCopyMediaRealUnknownWriteAndCollisionRecovery(t *testing.T) {
 			actor, binding, snapshot, _ := seedCopyMedia(t, database, objects)
 			repo := mediaCopyStore(database)
 			adapter := mediaFixtureCopyObjects(t, database)
-			intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
+			intents, err := repo.Objects(t.Context(), mediaActor(actor), binding, snapshot)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -193,16 +193,16 @@ func TestProjectCopyMediaRealUnknownWriteAndCollisionRecovery(t *testing.T) {
 			}
 			transfer := mediaapp.NewRoutedProjectCopyTransfer(repo, &copyUnknownWrite{PhysicalTransferObjects: adapter}, t.TempDir())
 			var failure *mediaapp.ProjectCopyTransferError
-			err = transfer.Transfer(fixtureCopyContext(t), actor, binding, snapshot)
+			err = transfer.Transfer(fixtureCopyContext(t), mediaActor(actor), binding, snapshot)
 			if !errors.As(err, &failure) || !failure.NeedsReconciliation {
 				t.Fatal("unknown write/collision reported success", err)
 			}
-			intents, err = repo.Objects(t.Context(), actor, binding, snapshot)
+			intents, err = repo.Objects(t.Context(), mediaActor(actor), binding, snapshot)
 			if err != nil || intents[0].Status != "pending" || !intents[0].SourceVerified {
 				t.Fatal("unknown outcome lost durable pre-write receipt", intents, err)
 			}
 			if collision {
-				err := mediaapp.NewRoutedProjectCopyTransfer(repo, adapter, t.TempDir()).Cleanup(t.Context(), actor, binding, snapshot)
+				err := mediaapp.NewRoutedProjectCopyTransfer(repo, adapter, t.TempDir()).Cleanup(t.Context(), mediaActor(actor), binding, snapshot)
 				if err == nil {
 					t.Fatal("unverified collision deleted")
 				}
@@ -214,7 +214,7 @@ func TestProjectCopyMediaRealUnknownWriteAndCollisionRecovery(t *testing.T) {
 			}
 			// This is an explicit owner-layer recovery fixture; the workspace
 			// worker's claim/CAS and reconciliation boundary is tested separately.
-			if err := mediaapp.NewRoutedProjectCopyTransfer(repo, adapter, t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+			if err := mediaapp.NewRoutedProjectCopyTransfer(repo, adapter, t.TempDir()).Transfer(t.Context(), mediaActor(actor), binding, snapshot); err != nil {
 				t.Fatal("same immutable keys not recoverable", err)
 			}
 		})

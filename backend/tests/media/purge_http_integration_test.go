@@ -24,7 +24,7 @@ func purgeRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewPurgeHandler(mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)).Register(group)
+	mediahttp.NewPurgeHandler(mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now), fixtureIdentityMediaActor).Register(group)
 	return router
 }
 
@@ -93,7 +93,7 @@ func TestMediaPurgeHTTPActualExplicitConfirmationClosedScopesAndOriginalRecovery
 	if repeated := libraryHTTPRequest(t, purgeRouter(db, actor), http.MethodPost, path+"/"+job.ID.String()+"/cancel", control, key); repeated.Code != 202 || !bytes.Equal(cancel.Body.Bytes(), repeated.Body.Bytes()) {
 		t.Fatal("permanent HTTP cancel recovery", repeated.Code)
 	}
-	if _, err := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now).GetPurge(t.Context(), actor, job.ID); err != nil {
+	if _, err := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now).GetPurge(t.Context(), mediaActor(actor), job.ID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -102,7 +102,7 @@ func TestMediaPurgeHTTPActualUnknownRequiresExplicitReconcileRevision(t *testing
 	db := libraryRuntimeDB(t)
 	actor, _, in, _, objects := purgeBinaryFixture(t, db)
 	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	job, err := repo.CreatePurge(t.Context(), actor, in)
+	job, err := repo.CreatePurge(t.Context(), mediaActor(actor), in)
 	if err != nil {
 		t.Fatal(err)
 	}

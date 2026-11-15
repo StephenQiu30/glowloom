@@ -7,16 +7,18 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // SourceRecoveryHandler exposes permanent explicit recovery of unpublished writes.
-type SourceRecoveryHandler struct{ service *application.SourceRecovery }
+type SourceRecoveryHandler struct {
+	resolve ActorResolver
+	service *application.SourceRecovery
+}
 
 // NewSourceRecoveryHandler injects the shared synchronous I/O owner's recovery use case.
-func NewSourceRecoveryHandler(service *application.SourceRecovery) *SourceRecoveryHandler {
-	return &SourceRecoveryHandler{service: service}
+func NewSourceRecoveryHandler(service *application.SourceRecovery, resolve ActorResolver) *SourceRecoveryHandler {
+	return &SourceRecoveryHandler{resolve: resolve, service: service}
 }
 
 // Register adds only the four actual intent query/control endpoints.
@@ -55,6 +57,12 @@ func pageQuery(c *gin.Context, cursor string) (int64, int, bool) {
 // @Failure 404 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-source-writes [get]
 func (h *SourceRecoveryHandler) List(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -63,7 +71,7 @@ func (h *SourceRecoveryHandler) List(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.service.List(c.Request.Context(), identityhttp.Principal(c), project, after, limit)
+	result, err := h.service.List(c.Request.Context(), actor, project, after, limit)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -82,6 +90,12 @@ func (h *SourceRecoveryHandler) List(c *gin.Context) {
 // @Failure 404 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-source-writes/{wid} [get]
 func (h *SourceRecoveryHandler) Get(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -90,7 +104,7 @@ func (h *SourceRecoveryHandler) Get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.service.Get(c.Request.Context(), identityhttp.Principal(c), project, id)
+	result, err := h.service.Get(c.Request.Context(), actor, project, id)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -137,6 +151,12 @@ func (h *SourceRecoveryHandler) Reconcile(c *gin.Context) {
 }
 
 func (h *SourceRecoveryHandler) control(c *gin.Context, action domain.SourceControlAction) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var request SourceControlRequest
 	if !readJSON(c, &request) {
 		return
@@ -149,7 +169,7 @@ func (h *SourceRecoveryHandler) control(c *gin.Context, action domain.SourceCont
 	if !ok {
 		return
 	}
-	result, err := h.service.Control(c.Request.Context(), identityhttp.Principal(c), application.SourceControlCommand{ProjectID: project, IntentID: id, Key: key, RequestID: requestID, Action: action, ExpectedRevision: *request.ExpectedRevision})
+	result, err := h.service.Control(c.Request.Context(), actor, application.SourceControlCommand{ProjectID: project, IntentID: id, Key: key, RequestID: requestID, Action: action, ExpectedRevision: *request.ExpectedRevision})
 	if err != nil {
 		scriptProblem(c, err)
 		return

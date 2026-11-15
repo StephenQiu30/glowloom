@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -30,7 +29,7 @@ func NewRoutedStorageUsageStore(library *LibraryStore, buckets []application.Sto
 }
 
 // InspectStorageUsage holds the owning authority locks through the entire inventory.
-func (s *RoutedStorageUsageStore) InspectStorageUsage(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, consume func(application.StorageUsageInventory) error) error {
+func (s *RoutedStorageUsageStore) InspectStorageUsage(ctx context.Context, actor application.Actor, scope domain.LibraryScope, consume func(application.StorageUsageInventory) error) error {
 	if s == nil || s.library == nil || s.intents == nil || consume == nil || len(s.buckets) < 1 || len(s.buckets) > 16 {
 		return application.ErrUnavailable
 	}
@@ -110,7 +109,7 @@ func (s *RoutedStorageUsageStore) InspectStorageUsage(ctx context.Context, actor
 	})
 }
 
-func storageUsageMediaLocations(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope) ([]domain.ObjectRef, error) {
+func storageUsageMediaLocations(tx *gorm.DB, actor application.Actor, scope domain.LibraryScope) ([]domain.ObjectRef, error) {
 	var assetFilter string
 	var assetArgs []any
 	if scope.Kind == domain.LibraryProject {

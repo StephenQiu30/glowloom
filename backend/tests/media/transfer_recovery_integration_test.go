@@ -57,7 +57,7 @@ func newTransferRecoveryFixtureOn(t *testing.T, db *gorm.DB, count int) transfer
 		}
 		t.Cleanup(func() { _ = file.Close() })
 		in.File, in.Request.FileName = file, "转移.png"
-		in.Actor, in.Request.ProjectID = actor, uuid.Nil
+		in.Actor, in.Request.ProjectID = mediaActor(actor), uuid.Nil
 		result, err := fixturePersonalUpload(t.Context(), uploads, in)
 		if err != nil {
 			t.Fatal(err)
@@ -65,7 +65,7 @@ func newTransferRecoveryFixtureOn(t *testing.T, db *gorm.DB, count int) transfer
 		input.Items = append(input.Items, mediaapp.LibraryItemRevision{ID: result.Asset.ID, Revision: 1})
 	}
 	repo := mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
-	job, err := repo.CreateTransfer(t.Context(), actor, input)
+	job, err := repo.CreateTransfer(t.Context(), mediaActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,12 +112,12 @@ func TestMediaTransferUnknownWriteReconcilesExactObjectsAndPermanentReceipts(t *
 	if err != nil || unknown.Status != "needs_reconciliation" || !unknown.NeedsReconciliation || unknown.ExecutionUnconfirmed || unknown.Items[0].Status != "needs_reconciliation" {
 		t.Fatal("unknown physical write was treated as terminal", unknown, err)
 	}
-	if _, err := f.repo.ControlTransfer(t.Context(), f.actor, unknown.ID, uuid.New(), unknown.Revision, "retry"); !errors.Is(err, domain.ErrTransferConflict) {
+	if _, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), unknown.ID, uuid.New(), unknown.Revision, "retry"); !errors.Is(err, domain.ErrTransferConflict) {
 		t.Fatal("unsafe unknown write was automatically retried", err)
 	}
 	physicalBefore := transferOutputFacts(t, f.db, f.job.ID)
 	key := uuid.New()
-	reconcile, err := f.repo.ControlTransfer(t.Context(), f.actor, unknown.ID, key, unknown.Revision, "reconcile")
+	reconcile, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), unknown.ID, key, unknown.Revision, "reconcile")
 	if err != nil || reconcile.Attempt != 2 || reconcile.Items[0].TargetItemID != unknown.Items[0].TargetItemID {
 		t.Fatal("reconciliation changed independent target identity", reconcile, err)
 	}
@@ -128,14 +128,14 @@ func TestMediaTransferUnknownWriteReconcilesExactObjectsAndPermanentReceipts(t *
 	if err != nil || result.Status != "succeeded" || result.NeedsReconciliation || objects.writes != 3 {
 		t.Fatal("actual existing original was not read back before remaining renditions", result, objects.writes, err)
 	}
-	replay, err := f.repo.ControlTransfer(t.Context(), f.actor, unknown.ID, key, unknown.Revision, "reconcile")
+	replay, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), unknown.ID, key, unknown.Revision, "reconcile")
 	if err != nil || !reflect.DeepEqual(replay, reconcile) {
 		t.Fatal("original recovery receipt was rewritten by later progress", replay, err)
 	}
-	if _, err := f.repo.ControlTransfer(t.Context(), f.actor, unknown.ID, key, unknown.Revision+1, "reconcile"); !errors.Is(err, mediaapp.ErrLibraryKeyConflict) {
+	if _, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), unknown.ID, key, unknown.Revision+1, "reconcile"); !errors.Is(err, mediaapp.ErrLibraryKeyConflict) {
 		t.Fatal("permanent recovery key accepted a different body", err)
 	}
-	original, err := f.repo.CreateTransfer(t.Context(), f.actor, f.input)
+	original, err := f.repo.CreateTransfer(t.Context(), mediaActor(f.actor), f.input)
 	if err != nil || !reflect.DeepEqual(original, f.job) {
 		t.Fatal("original admission receipt changed after completion", original, err)
 	}
@@ -151,7 +151,7 @@ func TestMediaTransferCancellationCleansUnknownObjectsAndPreservesPublishedRows(
 				t.Fatal(unknown, err)
 			}
 			key := uuid.New()
-			requested, err := f.repo.ControlTransfer(t.Context(), f.actor, unknown.ID, key, unknown.Revision, "cancel")
+			requested, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), unknown.ID, key, unknown.Revision, "cancel")
 			if err != nil || !requested.CancellationRequested || requested.Status != "cancel_requested" {
 				t.Fatal("cancel intent was not retained independently", requested, err)
 			}
@@ -174,14 +174,14 @@ func TestMediaTransferCancellationCleansUnknownObjectsAndPreservesPublishedRows(
 					t.Fatal("cleanup touched published output or retained unpublished output", row.ItemIndex, exists, err)
 				}
 			}
-			replay, err := f.repo.ControlTransfer(t.Context(), f.actor, unknown.ID, key, unknown.Revision, "cancel")
+			replay, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), unknown.ID, key, unknown.Revision, "cancel")
 			if err != nil || !reflect.DeepEqual(replay, requested) {
 				t.Fatal("cancel receipt changed after cleanup", replay, err)
 			}
-			if _, err := f.repo.ControlTransfer(t.Context(), f.actor, unknown.ID, key, unknown.Revision+1, "cancel"); !errors.Is(err, mediaapp.ErrLibraryKeyConflict) {
+			if _, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), unknown.ID, key, unknown.Revision+1, "cancel"); !errors.Is(err, mediaapp.ErrLibraryKeyConflict) {
 				t.Fatal("cancel key accepted another revision", err)
 			}
-			if _, err := f.repo.ControlTransfer(t.Context(), f.actor, result.ID, uuid.New(), result.Revision, "retry"); !errors.Is(err, domain.ErrTransferConflict) {
+			if _, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), result.ID, uuid.New(), result.Revision, "retry"); !errors.Is(err, domain.ErrTransferConflict) {
 				t.Fatal("permanent cancellation resumed copying", err)
 			}
 		})
@@ -329,7 +329,7 @@ func TestMediaTransferPartialFailureCleansOnlyFailedItemAndRetriesSameIdentity(t
 			if err := f.db.Raw(`SELECT frozen FROM media.transfer_item WHERE job_id=? AND item_index=1`, f.job.ID).Row().Scan(&frozenBefore); err != nil {
 				t.Fatal(err)
 			}
-			retry, err := f.repo.ControlTransfer(t.Context(), f.actor, partial.ID, uuid.New(), partial.Revision, "retry")
+			retry, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), partial.ID, uuid.New(), partial.Revision, "retry")
 			if err != nil || retry.Attempt != partial.Attempt+1 || retry.Items[1].TargetItemID != partial.Items[1].TargetItemID {
 				t.Fatal("retry changed target identity", retry, err)
 			}
@@ -373,7 +373,7 @@ func TestMediaTransferPartialFailureCleansOnlyFailedItemAndRetriesSameIdentity(t
 			if err := f.db.Raw(`SELECT frozen FROM media.transfer_item WHERE job_id=? AND item_index=1`, f.job.ID).Row().Scan(&frozenAfter); err != nil || !bytes.Equal(frozenBefore, frozenAfter) {
 				t.Fatal("retry rewrote original admission", err)
 			}
-			if replay, err := f.repo.CreateTransfer(t.Context(), f.actor, f.input); err != nil || !reflect.DeepEqual(replay, f.job) {
+			if replay, err := f.repo.CreateTransfer(t.Context(), mediaActor(f.actor), f.input); err != nil || !reflect.DeepEqual(replay, f.job) {
 				t.Fatal("retry changed permanent admission receipt", replay, err)
 			}
 			if _, err := f.repo.Worker.ClaimTransfer(t.Context(), transferExecution(f.job)); !errors.Is(err, domain.ErrTransferConflict) {
@@ -406,7 +406,7 @@ func TestMediaTransferMissingRenditionRetainsDebtUntilWriteFenceDrains(t *testin
 	if exists, err := f.objects.Exists(t.Context(), targetOriginal); err != nil || !exists {
 		t.Fatal("live write fence allowed premature physical cleanup", exists, err)
 	}
-	if _, err := f.repo.ControlTransfer(t.Context(), f.actor, result.ID, uuid.New(), result.Revision, "retry"); !errors.Is(err, domain.ErrTransferConflict) {
+	if _, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), result.ID, uuid.New(), result.Revision, "retry"); !errors.Is(err, domain.ErrTransferConflict) {
 		t.Fatal("unreconciled physical debt accepted retry", err)
 	}
 }

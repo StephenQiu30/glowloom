@@ -15,14 +15,13 @@ import (
 
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ErrInputStale identifies a saved source revision conflict.
 var ErrInputStale = domain.ErrInputStale
 
 // ReadInput retains owner share locks through the caller's transaction; confirm permits layout-only changes.
-func (s *DraftStore) ReadInput(ctx context.Context, a identityapp.Principal, p uuid.UUID, source domain.InputSource, confirm bool) (domain.Draft, error) {
+func (s *DraftStore) ReadInput(ctx context.Context, a application.Actor, p uuid.UUID, source domain.InputSource, confirm bool) (domain.Draft, error) {
 	var out domain.Draft
 	if !source.Valid() {
 		return out, domain.ErrInvalidDraft
@@ -96,7 +95,7 @@ func (s *DraftStore) ReadInput(ctx context.Context, a identityapp.Principal, p u
 }
 
 // AuthorizeOwner deliberately ignores content readiness so unresolved submissions remain discoverable after edits.
-func (s *DraftStore) AuthorizeOwner(ctx context.Context, a identityapp.Principal, p uuid.UUID, source domain.InputSource) error {
+func (s *DraftStore) AuthorizeOwner(ctx context.Context, a application.Actor, p uuid.UUID, source domain.InputSource) error {
 	if !source.Valid() {
 		return domain.ErrInvalidDraft
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ProjectCopyBinding identifies one trusted workspace job and its private unpublished target.
@@ -15,7 +14,7 @@ type ProjectCopyBinding struct{ JobID, OrgID, SourceProjectID, TargetProjectID u
 
 // ProjectCopyAccess rechecks actual admission or the claimed worker within each owning transaction.
 type ProjectCopyAccess interface {
-	Authorize(context.Context, identityapp.Principal, ProjectCopyBinding, bool) error
+	Authorize(context.Context, Actor, ProjectCopyBinding, bool) error
 }
 
 // ReferenceMapping carries the media owner's exact source and target asset/rendition facts.
@@ -33,18 +32,18 @@ type ScopeMapping struct {
 
 // ProjectCopyMedia reads only the media owner's frozen copy plan; admission never performs remote I/O.
 type ProjectCopyMedia interface {
-	FreezeReferences(context.Context, identityapp.Principal, ProjectCopyBinding, []domain.MediaFact, map[uuid.UUID]uuid.UUID) ([]ReferenceMapping, error)
+	FreezeReferences(context.Context, Actor, ProjectCopyBinding, []domain.MediaFact, map[uuid.UUID]uuid.UUID) ([]ReferenceMapping, error)
 }
 
 // ProjectCopyScopes plans exact script applicability identities before either content owner publishes.
 type ProjectCopyScopes interface {
-	RemapLookScopes(context.Context, identityapp.Principal, ProjectCopyBinding, []domain.LookScope) ([]ScopeMapping, error)
+	RemapLookScopes(context.Context, Actor, ProjectCopyBinding, []domain.LookScope) ([]ScopeMapping, error)
 }
 
 // TransferredReferences verifies actual independent private bytes under the current claimed worker.
 // This method runs outside the Bible SQL transaction and cannot publish the target.
 type TransferredReferences interface {
-	VerifyTransferred(context.Context, identityapp.Principal, ProjectCopyBinding, []ReferenceMapping) error
+	VerifyTransferred(context.Context, Actor, ProjectCopyBinding, []ReferenceMapping) error
 }
 
 // CopyCounts enumerates every actual historical content entity, excluding commands and execution facts.
@@ -132,13 +131,13 @@ type CopyManifest struct {
 
 // ProjectCopyStore owns private content planning/proof and exact caller transaction registration.
 type ProjectCopyStore interface {
-	ReferencedMedia(context.Context, identityapp.Principal, ProjectCopyBinding) ([]uuid.UUID, error)
-	Freeze(context.Context, identityapp.Principal, ProjectCopyBinding, map[uuid.UUID]uuid.UUID, time.Time) (ProjectCopySnapshot, error)
-	Manifest(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) (CopyManifest, error)
-	ConfirmTransfer(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) error
-	Register(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) (ProjectCopyReceipt, error)
-	Verify(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) (ProjectCopyReceipt, error)
-	Cleanup(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) error
+	ReferencedMedia(context.Context, Actor, ProjectCopyBinding) ([]uuid.UUID, error)
+	Freeze(context.Context, Actor, ProjectCopyBinding, map[uuid.UUID]uuid.UUID, time.Time) (ProjectCopySnapshot, error)
+	Manifest(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) (CopyManifest, error)
+	ConfirmTransfer(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) error
+	Register(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) (ProjectCopyReceipt, error)
+	Verify(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) (ProjectCopyReceipt, error)
+	Cleanup(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) error
 }
 
 // ProjectCopy verifies foreign-owned physical media before SQL-only own history registration.
@@ -163,7 +162,7 @@ func NewProjectCopy(store ProjectCopyStore, media TransferredReferences) *Projec
 }
 
 // Transfer verifies actual target bytes, then records proof under a fresh current worker authorization.
-func (c *ProjectCopy) Transfer(ctx context.Context, actor identityapp.Principal, b ProjectCopyBinding, s ProjectCopySnapshot) error {
+func (c *ProjectCopy) Transfer(ctx context.Context, actor Actor, b ProjectCopyBinding, s ProjectCopySnapshot) error {
 	if c == nil || c.store == nil {
 		return ErrUnavailable
 	}
@@ -183,7 +182,7 @@ func (c *ProjectCopy) Transfer(ctx context.Context, actor identityapp.Principal,
 }
 
 // Cleanup seals only unpublished own history; physical objects remain solely media-owned.
-func (c *ProjectCopy) Cleanup(ctx context.Context, actor identityapp.Principal, b ProjectCopyBinding, s ProjectCopySnapshot) error {
+func (c *ProjectCopy) Cleanup(ctx context.Context, actor Actor, b ProjectCopyBinding, s ProjectCopySnapshot) error {
 	if c == nil || c.store == nil {
 		return ErrUnavailable
 	}

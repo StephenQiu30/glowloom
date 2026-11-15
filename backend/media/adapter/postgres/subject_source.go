@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -35,7 +34,7 @@ func (s *SubjectSourceStore) inTransaction() bool {
 
 // FindSubjectSource rejects trashed/unavailable entries before the ordinary
 // current-owner media loader verifies all private file and rendition facts.
-func (s *SubjectSourceStore) FindSubjectSource(ctx context.Context, actor identity.Principal, scope domain.LibraryScope, id uuid.UUID) (application.LibraryMediaFile, error) {
+func (s *SubjectSourceStore) FindSubjectSource(ctx context.Context, actor application.Actor, scope domain.LibraryScope, id uuid.UUID) (application.LibraryMediaFile, error) {
 	if !s.inTransaction() || s.library == nil || id == uuid.Nil {
 		return application.LibraryMediaFile{}, application.ErrUnavailable
 	}

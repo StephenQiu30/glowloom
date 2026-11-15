@@ -13,7 +13,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
-func (s *Store) voiceAuthority(tx *gorm.DB, actor identity.Principal, pid uuid.UUID, write bool) error {
+func (s *Store) voiceAuthority(tx *gorm.DB, actor application.Actor, pid uuid.UUID, write bool) error {
 	if actor.ID == uuid.Nil || pid == uuid.Nil {
 		return identity.ErrForbidden
 	}
@@ -24,7 +24,7 @@ func (s *Store) voiceAuthority(tx *gorm.DB, actor identity.Principal, pid uuid.U
 }
 
 // CreateVoice atomically binds a currently usable project audio asset to its owner.
-func (s *Store) CreateVoice(ctx context.Context, actor identity.Principal, pid uuid.UUID, in application.VoiceCreate) (application.VoiceProfile, error) {
+func (s *Store) CreateVoice(ctx context.Context, actor application.Actor, pid uuid.UUID, in application.VoiceCreate) (application.VoiceProfile, error) {
 	var out application.VoiceProfile
 	if err := in.Normalize(); err != nil {
 		return out, err
@@ -79,7 +79,7 @@ func (s *Store) CreateVoice(ctx context.Context, actor identity.Principal, pid u
 }
 
 // ListVoices paginates private saved references independently of model availability.
-func (s *Store) ListVoices(ctx context.Context, actor identity.Principal, pid, after uuid.UUID) (application.VoicePage, error) {
+func (s *Store) ListVoices(ctx context.Context, actor application.Actor, pid, after uuid.UUID) (application.VoicePage, error) {
 	out := application.VoicePage{Items: []application.VoiceProfile{}}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.voiceAuthority(tx, actor, pid, false); err != nil {
@@ -104,7 +104,7 @@ func (s *Store) ListVoices(ctx context.Context, actor identity.Principal, pid, a
 }
 
 // UpdateVoice serializes edits; deletion retains the idempotency receipt and source.
-func (s *Store) UpdateVoice(ctx context.Context, actor identity.Principal, pid, id uuid.UUID, in application.VoiceUpdate) (application.VoiceProfile, error) {
+func (s *Store) UpdateVoice(ctx context.Context, actor application.Actor, pid, id uuid.UUID, in application.VoiceUpdate) (application.VoiceProfile, error) {
 	var out application.VoiceProfile
 	if !application.ValidVoiceName(in.Name) || in.Revision < 1 {
 		return out, application.ErrInvalidQuery
@@ -136,7 +136,7 @@ func (s *Store) UpdateVoice(ctx context.Context, actor identity.Principal, pid, 
 }
 
 // ListSystemVoices combines the public catalog with private persisted favorites.
-func (s *Store) ListSystemVoices(ctx context.Context, actor identity.Principal, pid uuid.UUID) ([]application.SystemVoice, error) {
+func (s *Store) ListSystemVoices(ctx context.Context, actor application.Actor, pid uuid.UUID) ([]application.SystemVoice, error) {
 	out := application.SystemVoices()
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.voiceAuthority(tx, actor, pid, false); err != nil {
@@ -159,7 +159,7 @@ func (s *Store) ListSystemVoices(ctx context.Context, actor identity.Principal, 
 }
 
 // FavoriteSystemVoice uses an absolute value so unknown receipts can be replayed.
-func (s *Store) FavoriteSystemVoice(ctx context.Context, actor identity.Principal, pid uuid.UUID, key string, favorite bool) error {
+func (s *Store) FavoriteSystemVoice(ctx context.Context, actor application.Actor, pid uuid.UUID, key string, favorite bool) error {
 	valid := false
 	for _, v := range application.SystemVoices() {
 		if v.ID == key {

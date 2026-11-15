@@ -16,7 +16,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -30,13 +29,13 @@ func TestUploadStorePersistsHumanEvidenceAndExactReplay(t *testing.T) {
 	objects := &uploadObjectsFake{}
 	service := mediaFixtureMockUpload(t, database, store, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = project
 	first, err := fixtureProjectUpload(t.Context(), service, in)
 	if err != nil {
 		t.Fatalf("first upload: %v", err)
 	}
-	asset, err := store.FindAsset(t.Context(), actor, project, first.Asset.ID)
+	asset, err := store.FindAsset(t.Context(), mediaActor(actor), project, first.Asset.ID)
 	if err != nil || !asset.CanReference() || asset.Origin != domain.OriginUpload || asset.SourceOperationID != nil || asset.ContainsRealPerson {
 		t.Fatalf("uploaded asset=%+v err=%v", asset, err)
 	}
@@ -62,7 +61,7 @@ func TestUploadStorePersistsHumanEvidenceAndExactReplay(t *testing.T) {
 		t.Fatalf("transaction counts=%+v err=%v", counts, err)
 	}
 	query := mediaapp.NewAssetQuery(store)
-	if result, err := query.Reference(t.Context(), actor, project, first.Asset.ID); err != nil || result.ID != first.Asset.ID {
+	if result, err := query.Reference(t.Context(), mediaActor(actor), project, first.Asset.ID); err != nil || result.ID != first.Asset.ID {
 		t.Fatalf("canvas eligibility=%+v err=%v", result, err)
 	}
 	if len(objects.items) != 3 {
@@ -80,7 +79,7 @@ func TestUploadStoreConcurrentKeysHaveOneOwnedObjectSet(t *testing.T) {
 			service := mediaFixtureMockUpload(t, database, mediaTestStore(database), nil, gate, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 			inputs := []mediaapp.UploadInput{uploadInput(t), uploadInput(t)}
 			for i := range inputs {
-				inputs[i].Actor = actor
+				inputs[i].Actor = mediaActor(actor)
 				inputs[i].Request.ProjectID = project
 			}
 			if sameKey {
@@ -135,7 +134,7 @@ func TestUploadStoreRechecksArchiveAndRejectsForeignProject(t *testing.T) {
 	actor, project := mediaStoreProject(t, database)
 	foreign, _ := mediaStoreProject(t, database)
 	store := mediaTestStore(database)
-	if _, err := store.AuthorizeUpload(t.Context(), foreign, project); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := store.AuthorizeUpload(t.Context(), mediaActor(foreign), project); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("foreign project upload permission=%v", err)
 	}
 	objects := &uploadObjectsFake{}
@@ -144,7 +143,7 @@ func TestUploadStoreRechecksArchiveAndRejectsForeignProject(t *testing.T) {
 	}}
 	service := mediaFixtureMockUpload(t, database, store, nil, prober, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = project
 	if _, err := fixtureProjectUpload(t.Context(), service, in); !errors.Is(err, pgmedia.ErrProjectStateConflict) {
 		t.Fatalf("mid-upload archive error=%v", err)
@@ -160,7 +159,7 @@ func TestUploadStoreDifferentHashCannotRewriteReceipt(t *testing.T) {
 	actor, project := mediaStoreProject(t, database)
 	service := mediaFixtureMockUpload(t, database, mediaTestStore(database), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{})
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = project
 	if _, err := fixtureProjectUpload(t.Context(), service, in); err != nil {
 		t.Fatal(err)
@@ -189,7 +188,7 @@ type delayedUploadCommit struct {
 	done      chan struct{}
 }
 
-func (r *delayedUploadCommit) CommitUpload(_ context.Context, actor identityapp.Principal, request mediaapp.UploadRequest, asset domain.MediaAsset, rends []domain.Rendition) (mediaapp.UploadResult, error) {
+func (r *delayedUploadCommit) CommitUpload(_ context.Context, actor mediaapp.Actor, request mediaapp.UploadRequest, asset domain.MediaAsset, rends []domain.Rendition) (mediaapp.UploadResult, error) {
 	r.started.Store(true)
 	go func() {
 		defer close(r.done)
@@ -231,7 +230,7 @@ func TestUploadCleanupWaitsForPendingRealCommit(t *testing.T) {
 	objects := &uploadObjectsFake{}
 	service := mediaFixtureMockUpload(t, database, repo, nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = project
 	completed := make(chan error, 1)
 	requestDone := make(chan struct{})
@@ -295,7 +294,7 @@ func TestUploadStoreAuditFailureRollsBackPublication(t *testing.T) {
 	objects := &uploadObjectsFake{}
 	service := mediaFixtureMockUpload(t, database, mediaTestStore(database), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = project
 	if result, err := fixtureProjectUpload(t.Context(), service, in); err == nil || result.Asset.ID != uuid.Nil {
 		t.Fatalf("audit failure appeared successful: %+v err=%v", result, err)

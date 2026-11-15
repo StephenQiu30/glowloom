@@ -13,8 +13,6 @@ import (
 	"github.com/google/uuid"
 
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -25,13 +23,15 @@ const uploadEnvelopeBytes int64 = 64 << 10
 // UploadHandler admits at most two synchronous uploads in this local process.
 // The route owns multipart parsing; ordinary JSON routes keep Decode's 1MiB cap.
 type UploadHandler struct {
+	resolve ActorResolver
+
 	service *application.UploadService
 	slots   chan struct{}
 }
 
 // NewUploadHandler creates the local process's bounded multipart admission gate.
-func NewUploadHandler(service *application.UploadService) *UploadHandler {
-	return &UploadHandler{service: service, slots: make(chan struct{}, 2)}
+func NewUploadHandler(service *application.UploadService, resolve ActorResolver) *UploadHandler {
+	return &UploadHandler{resolve: resolve, service: service, slots: make(chan struct{}, 2)}
 }
 
 // Register installs only the explicit multipart route in the protected API group.
@@ -69,12 +69,17 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 }
 
 func (h *UploadHandler) receiveUpload(c *gin.Context, project uuid.UUID, personal bool) {
-	h.receiveUploadFor(c, identityhttp.Principal(c), project, personal)
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
+	h.receiveUploadFor(c, actor, project, personal)
 }
 
 // UploadPersonalFor reuses bounded multipart admission for a server-resolved
 // personal source. Only composition code may supply this authorized principal.
-func (h *UploadHandler) UploadPersonalFor(c *gin.Context, actor identityapp.Principal) {
+func (h *UploadHandler) UploadPersonalFor(c *gin.Context, actor application.Actor) {
 	if len(c.Request.URL.Query()) != 0 {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
@@ -82,7 +87,7 @@ func (h *UploadHandler) UploadPersonalFor(c *gin.Context, actor identityapp.Prin
 	h.receiveUploadFor(c, actor, uuid.Nil, true)
 }
 
-func (h *UploadHandler) receiveUploadFor(c *gin.Context, actor identityapp.Principal, project uuid.UUID, personal bool) {
+func (h *UploadHandler) receiveUploadFor(c *gin.Context, actor application.Actor, project uuid.UUID, personal bool) {
 	key, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
 	if err != nil || key == uuid.Nil {
 		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)

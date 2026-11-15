@@ -13,17 +13,16 @@ import (
 	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // This explicit protocol fixture proves the consumer's acknowledgment contract,
 // not actual downstream impact. Production still refuses an absent owning port.
 type bibleImpactProtocol struct{ proof app.ImpactProof }
 
-func (p bibleImpactProtocol) Read(context.Context, identityapp.Principal, uuid.UUID, app.ImpactInput) (app.ImpactProof, error) {
+func (p bibleImpactProtocol) Read(context.Context, app.Actor, uuid.UUID, app.ImpactInput) (app.ImpactProof, error) {
 	return p.proof, nil
 }
-func (p bibleImpactProtocol) Apply(_ context.Context, _ identityapp.Principal, _ uuid.UUID, _ app.ImpactInput, proof app.ImpactProof) error {
+func (p bibleImpactProtocol) Apply(_ context.Context, _ app.Actor, _ uuid.UUID, _ app.ImpactInput, proof app.ImpactProof) error {
 	if proof != p.proof {
 		return app.ErrConflict
 	}
@@ -38,11 +37,11 @@ func TestBiblePGRedirectSplitPinnedVersionsAndCompleteCopyHistory(t *testing.T) 
 		t.Helper()
 		input := createCharacter(project)
 		input.Character.Name = name
-		result, err := service.Change(t.Context(), actor, input)
+		result, err := service.Change(t.Context(), bibleActor(actor), input)
 		if err != nil {
 			t.Fatal(err)
 		}
-		confirmed, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: result.EntryID, ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()})
+		confirmed, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: result.EntryID, ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -51,12 +50,12 @@ func TestBiblePGRedirectSplitPinnedVersionsAndCompleteCopyHistory(t *testing.T) 
 	a, b := createConfirmed("王总"), createConfirmed("王先生")
 	expected := b.Revision
 	merge := app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "merge", EntryID: a.EntryID, ExpectedRevision: a.Revision, TargetID: &b.EntryID, ExpectedTargetRevision: &expected, Key: uuid.New(), RequestID: uuid.New()}
-	if _, err := service.Change(t.Context(), actor, merge); !errors.Is(err, app.ErrUnavailable) {
+	if _, err := service.Change(t.Context(), bibleActor(actor), merge); !errors.Is(err, app.ErrUnavailable) {
 		t.Fatal("missing actual downstream owner reported zero", err)
 	}
 	proof := app.ImpactProof{SHA256: strings.Repeat("b", 64), Revision: 1}
-	protocol := app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Impacts: func(_ *gorm.DB) app.Impacts { return bibleImpactProtocol{proof} }}), time.Now)
-	if _, err := protocol.Change(t.Context(), actor, merge); err == nil {
+	protocol := app.NewService(pg.NewStore(db, pg.Factories{Access: bibleFixtureContentAccess, Impacts: func(_ *gorm.DB) app.Impacts { return bibleImpactProtocol{proof} }}), time.Now)
+	if _, err := protocol.Change(t.Context(), bibleActor(actor), merge); err == nil {
 		t.Fatal("downstream evidence published without acknowledgment")
 	} else {
 		var required *app.ImpactConflict
@@ -65,17 +64,17 @@ func TestBiblePGRedirectSplitPinnedVersionsAndCompleteCopyHistory(t *testing.T) 
 		}
 	}
 	merge.AcknowledgedImpact = &proof
-	merged, err := protocol.Change(t.Context(), actor, merge)
+	merged, err := protocol.Change(t.Context(), bibleActor(actor), merge)
 	if err != nil || merged.RedirectID == nil || *merged.RedirectID != b.EntryID {
 		t.Fatal("permanent redirect", merged, err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		refs := pg.NewReferences(tx, bibleFixtureProjectAccess(tx))
-		current, err := refs.Reference(t.Context(), actor, project, a.EntryID, nil)
+		refs := pg.NewReferences(tx, bibleFixtureContentAccess(tx))
+		current, err := refs.Reference(t.Context(), bibleActor(actor), project, a.EntryID, nil)
 		if err != nil || current.CharacterID != b.EntryID || current.VersionID != b.VersionID {
 			t.Fatal("current alias does not follow confirmed redirect", current, err)
 		}
-		pinned, err := refs.Reference(t.Context(), actor, project, a.EntryID, &a.VersionID)
+		pinned, err := refs.Reference(t.Context(), bibleActor(actor), project, a.EntryID, &a.VersionID)
 		if err != nil || pinned.CharacterID != a.EntryID || pinned.VersionID != a.VersionID {
 			t.Fatal("merge rewrote pinned history", pinned, err)
 		}
@@ -83,7 +82,7 @@ func TestBiblePGRedirectSplitPinnedVersionsAndCompleteCopyHistory(t *testing.T) 
 	}); err != nil {
 		t.Fatal(err)
 	}
-	child, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "split", EntryID: b.EntryID, ExpectedRevision: b.Revision, Character: &app.CharacterInput{Name: "独立人物", Aliases: []string{"少年王总"}}, Key: uuid.New(), RequestID: uuid.New()})
+	child, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "split", EntryID: b.EntryID, ExpectedRevision: b.Revision, Character: &app.CharacterInput{Name: "独立人物", Aliases: []string{"少年王总"}}, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || child.CreatedEntryID == nil || child.CreatedVersionID == nil || *child.CreatedEntryID == b.EntryID {
 		t.Fatal("split did not create independent immutable identity", child, err)
 	}
@@ -92,13 +91,13 @@ func TestBiblePGRedirectSplitPinnedVersionsAndCompleteCopyHistory(t *testing.T) 
 	if snapshot.Counts.Characters != 3 || snapshot.Counts.CharacterVersions != 3 || snapshot.Counts.CharacterConfirmations != 2 || snapshot.Counts.Redirects != 1 || snapshot.Counts.Splits != 1 {
 		t.Fatal("redirect/split historical closure omitted", snapshot.Counts)
 	}
-	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), bibleActor(actor), binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	register := authority
 	register.Phase = "register"
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := bibleCopyStore(tx, register).Register(t.Context(), actor, binding, snapshot)
+		_, err := bibleCopyStore(tx, register).Register(t.Context(), bibleActor(actor), binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)

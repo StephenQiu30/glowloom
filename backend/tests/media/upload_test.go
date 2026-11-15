@@ -19,8 +19,6 @@ import (
 
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -50,17 +48,17 @@ type uploadAdmissionFake struct {
 	target mediaapp.UploadTarget
 }
 
-func (a uploadAdmissionFake) PinUpload(context.Context, identityapp.Principal, domain.LibraryScope, uuid.UUID) (mediaapp.UploadTarget, error) {
+func (a uploadAdmissionFake) PinUpload(context.Context, mediaapp.Actor, domain.LibraryScope, uuid.UUID) (mediaapp.UploadTarget, error) {
 	return a.target, nil
 }
 
-func (r *uploadRepoFake) AuthorizeUpload(context.Context, identityapp.Principal, uuid.UUID) (string, error) {
+func (r *uploadRepoFake) AuthorizeUpload(context.Context, mediaapp.Actor, uuid.UUID) (string, error) {
 	return "16:9", r.authorizeErr
 }
-func (*uploadRepoFake) FindUpload(context.Context, identityapp.Principal, mediaapp.UploadRequest) (mediaapp.UploadResult, bool, error) {
+func (*uploadRepoFake) FindUpload(context.Context, mediaapp.Actor, mediaapp.UploadRequest) (mediaapp.UploadResult, bool, error) {
 	return mediaapp.UploadResult{}, false, nil
 }
-func (r *uploadRepoFake) CommitUpload(_ context.Context, _ identityapp.Principal, _ mediaapp.UploadRequest, a domain.MediaAsset, rends []domain.Rendition) (mediaapp.UploadResult, error) {
+func (r *uploadRepoFake) CommitUpload(_ context.Context, _ mediaapp.Actor, _ mediaapp.UploadRequest, a domain.MediaAsset, rends []domain.Rendition) (mediaapp.UploadResult, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.commits++
@@ -120,7 +118,7 @@ func uploadInput(t *testing.T) mediaapp.UploadInput {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = file.Close() })
-	return mediaapp.UploadInput{Actor: identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: identitydomain.RoleProducer},
+	return mediaapp.UploadInput{Actor: mediaapp.Actor{ID: uuid.New(), OrgID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1},
 		Request: mediaapp.UploadRequest{ProjectID: uuid.New(), Key: uuid.New(), FileName: "参考.png", RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true}
 }
 

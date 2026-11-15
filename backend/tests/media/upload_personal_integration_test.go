@@ -26,7 +26,7 @@ func TestPersonalUploadActualPrivateObjectsClosedScopeAndPermanentReplay(t *test
 	store := mediaTestStore(db)
 	service := mediaFixtureRoutedUpload(t, db, store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = uuid.Nil
 	first, err := fixturePersonalUpload(t.Context(), service, in)
 	if err != nil || first.Asset.ID == uuid.Nil {
@@ -88,25 +88,25 @@ func TestPersonalUploadActualPrivateObjectsClosedScopeAndPermanentReplay(t *test
 	if json.Unmarshal(row.ModerationDetail, &review) != nil || review.PrincipalID != actor.ID || review.SHA256 != in.File.SHA256 || !review.RightsConfirmed || !review.NoAuthorizationRequiredRealPerson {
 		t.Fatal("personal review not exact", review)
 	}
-	if _, err := store.FindAsset(t.Context(), actor, project, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := store.FindAsset(t.Context(), mediaActor(actor), project, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("project ordinary media read accepted personal", err)
 	}
-	if _, err := mediaapp.NewAssetQuery(store).Reference(t.Context(), actor, project, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewAssetQuery(store).Reference(t.Context(), mediaActor(actor), project, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("personal became formal project reference", err)
 	}
 	catalog := mediaLibraryStore(db, libraryTestAccess, time.Now)
-	page, err := catalog.ListLibrary(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}, libraryQuery())
+	page, err := catalog.ListLibrary(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryPersonal}, libraryQuery())
 	if err != nil || page.Total != 1 || page.Items[0].AssetID == nil || *page.Items[0].AssetID != first.Asset.ID || page.Revision != 1 {
 		t.Fatal("actual personal library missing upload", page, err)
 	}
-	if _, err := catalog.LibraryDetail(t.Context(), foreign, domain.LibraryScope{Kind: domain.LibraryPersonal}, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := catalog.LibraryDetail(t.Context(), mediaActor(foreign), domain.LibraryScope{Kind: domain.LibraryPersonal}, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("foreign user can read personal catalog", err)
 	}
 	req := in.Request
 	req.Personal = &domain.PersonalOwnership{OrgID: actor.OrgID, ActorID: actor.ID}
 	req.SHA256 = in.File.SHA256
 	req.ByteSize = in.File.Size
-	if _, _, err := store.FindPersonalUpload(t.Context(), foreign, req); !errors.Is(err, mediaapp.ErrInvalidUpload) {
+	if _, _, err := store.FindPersonalUpload(t.Context(), mediaActor(foreign), req); !errors.Is(err, mediaapp.ErrInvalidUpload) {
 		t.Fatal("foreign identity can replay personal receipt", err)
 	}
 	payload, _ := json.Marshal(first)

@@ -8,6 +8,8 @@ import (
 	"io"
 	"testing"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -83,7 +85,7 @@ func TestRoutedTranscriptionActualPostgresCOSAndFFmpegAcceptsOneFrozenArtifact(t
 			scopes = app.NewMediaWorkerScopeAccess
 		}
 		return mediatoolTranscriptionStore(runtime, func(*gorm.DB) tool.TranscriptionSourceReader { return routedSpeechSource{asset} }, func(tx *gorm.DB) tool.DerivedMedia {
-			return media.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+			return mediawire.LegacyDerivedMedia(media.NewDerivedService(pgmedia.NewScopedStore(tx, scopes)))
 		}).WithStorageAdmission(func(tx *gorm.DB) tool.ToolStorageLedger { return pgmedia.NewStorageRoutes(tx) })
 	}
 	store, workerStore := makeStore(false), makeStore(true)

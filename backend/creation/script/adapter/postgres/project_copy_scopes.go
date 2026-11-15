@@ -6,12 +6,11 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // RemapLookScopes plans complete historical formal identities under trusted caller-owned admission SQL.
 // It neither reads remote objects nor creates content, jobs or confirmation facts.
-func (s *ProjectCopyStore) RemapLookScopes(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, scopes []application.BibleLookScope) ([]application.CopyLookScopeMapping, error) {
+func (s *ProjectCopyStore) RemapLookScopes(ctx context.Context, actor application.Actor, b application.ProjectCopyBinding, scopes []application.BibleLookScope) ([]application.CopyLookScopeMapping, error) {
 	var result []application.CopyLookScopeMapping
 	err := s.ownTransaction(ctx, actor, b, true, func(tx *gorm.DB) error {
 		if err := rejectPendingWrite(tx, b.OrgID, b.SourceProjectID); err != nil {

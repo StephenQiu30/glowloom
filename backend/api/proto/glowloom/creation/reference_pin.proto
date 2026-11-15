@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package glowloom.creation;
+
+option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/creationreference;creationreference";
+
+import "glowloom/coordination/writer.proto";
+
+// New Media acquisitions require the original target-Media Identity admission
+// followed by current Creation resource policy. This grants no content adoption.
+service ReferencePinAdmissions {
+  rpc AdmitAcquisition(ReferencePinAdmissionRequest) returns (ReferencePinAdmission);
+}
+
+message ReferencePinAdmissionRequest {
+  glowloom.coordination.Command command = 1;
+  string scope_id = 2;
+  string project_id = 3;
+}
+
+message ReferencePinAdmission {
+  ReferencePinAdmissionRequest request = 1;
+  string account_id = 2;
+  string session_id = 3;
+  string physical_scope_id = 4;
+}
+
+// ReferencePinConsumptions reads the original Creation source decision for Media.
+// It cannot adopt, unfreeze, cancel or remove any source reference.
+service ReferencePinConsumptions {
+  rpc ReadConsumption(ReferencePinConsumptionKey) returns (ReferencePinConsumption);
+}
+
+message ReferencePinConsumptionKey {
+  string pin_id = 1;
+  string acquire_command_id = 2;
+  string source_command_id = 3;
+  string source_command_sha256 = 4;
+  string handoff_id = 5;
+  string scope_id = 6;
+  string project_id = 7;
+  string asset_id = 8;
+  int64 asset_revision = 9;
+  string media_kind = 10;
+  string pin_snapshot_sha256 = 11;
+}
+
+enum ReferencePinConsumptionOutcome {
+  REFERENCE_PIN_CONSUMPTION_OUTCOME_UNSPECIFIED = 0;
+  REFERENCE_PIN_CONSUMPTION_OUTCOME_ADOPTED = 1;
+  REFERENCE_PIN_CONSUMPTION_OUTCOME_NOT_ADOPTED_FROZEN = 2;
+}
+
+message ReferencePinConsumption {
+  ReferencePinConsumptionKey key = 1;
+  ReferencePinConsumptionOutcome outcome = 2;
+  string source_snapshot_sha256 = 3;
+}

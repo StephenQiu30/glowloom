@@ -12,8 +12,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ImportSourcesFactory retains media frozen-original locks in the owner transaction.
@@ -37,17 +35,17 @@ func NewImportStoreWithWorkerAccess(db *gorm.DB, access, workers ProjectAccessFa
 	return &ImportStore{db: db, access: access, workerAccess: workers, sources: sources}
 }
 
-func (s *ImportStore) workerTransaction(ctx context.Context, actor identityapp.Principal, project uuid.UUID, f func(*gorm.DB) error) error {
+func (s *ImportStore) workerTransaction(ctx context.Context, actor application.Actor, project uuid.UUID, f func(*gorm.DB) error) error {
 	if s.workerAccess == nil {
 		return application.ErrUnavailable
 	}
-	return NewSourceStore(s.db, s.workerAccess).transaction(ctx, actor, project, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	return NewSourceStore(s.db, s.workerAccess).transaction(ctx, actor, project, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		return f(tx)
 	})
 }
 
-func (s *ImportStore) transaction(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool, f func(*gorm.DB) error) error {
-	return NewSourceStore(s.db, s.access).transaction(ctx, actor, project, write, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+func (s *ImportStore) transaction(ctx context.Context, actor application.Actor, project uuid.UUID, write bool, f func(*gorm.DB) error) error {
+	return NewSourceStore(s.db, s.access).transaction(ctx, actor, project, write, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		return f(tx)
 	})
 }
@@ -57,7 +55,7 @@ func importHash(in any) (string, error) {
 	return domain.ContentSHA(data), err
 }
 
-func importReplay(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID, action, hash string) (application.ImportJob, bool, error) {
+func importReplay(tx *gorm.DB, actor application.Actor, project, key uuid.UUID, action, hash string) (application.ImportJob, bool, error) {
 	if err := checkRequestScope(tx, actor, project, key, "file_import_"+action, hash); err != nil {
 		return application.ImportJob{}, false, err
 	}
@@ -80,7 +78,7 @@ func importReplay(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UU
 }
 
 // CreateImport commits all frozen inputs and the command outbox without content writes.
-func (s *ImportStore) CreateImport(ctx context.Context, actor identityapp.Principal, in application.ImportCommand, now time.Time) (application.ImportJob, error) {
+func (s *ImportStore) CreateImport(ctx context.Context, actor application.Actor, in application.ImportCommand, now time.Time) (application.ImportJob, error) {
 	var result application.ImportJob
 	hashed := in
 	hashed.RequestID = uuid.Nil
@@ -195,7 +193,7 @@ func insertImportAttempt(tx *gorm.DB, id uuid.UUID, attempt int, revision int64,
 }
 
 // ListImports provides a current scoped recovery path after unknown acceptance.
-func (s *ImportStore) ListImports(ctx context.Context, actor identityapp.Principal, project uuid.UUID, after int64, limit int) (application.ImportPage, error) {
+func (s *ImportStore) ListImports(ctx context.Context, actor application.Actor, project uuid.UUID, after int64, limit int) (application.ImportPage, error) {
 	page := application.ImportPage{CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID, Items: []application.ImportJob{}}
 	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
 		var rows []scriptImportJobRow
@@ -222,7 +220,7 @@ func (s *ImportStore) ListImports(ctx context.Context, actor identityapp.Princip
 }
 
 // Import exposes actual file outcomes, excluding object keys and editable bodies.
-func (s *ImportStore) Import(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (application.ImportJob, error) {
+func (s *ImportStore) Import(ctx context.Context, actor application.Actor, project, id uuid.UUID) (application.ImportJob, error) {
 	var result application.ImportJob
 	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
 		r, err := readImport(tx, actor, project, id, false)
@@ -235,7 +233,7 @@ func (s *ImportStore) Import(ctx context.Context, actor identityapp.Principal, p
 }
 
 // ControlImport admits exact current controller intent without publishing old content.
-func (s *ImportStore) ControlImport(ctx context.Context, actor identityapp.Principal, in application.ImportControl, now time.Time) (application.ImportJob, error) {
+func (s *ImportStore) ControlImport(ctx context.Context, actor application.Actor, in application.ImportControl, now time.Time) (application.ImportJob, error) {
 	var result application.ImportJob
 	hashed := in
 	hashed.RequestID = uuid.Nil
@@ -260,7 +258,7 @@ func (s *ImportStore) ControlImport(ctx context.Context, actor identityapp.Princ
 			return err
 		}
 		if in.Action == domain.ImportActionRetry && actor.ID != r.Actor.ID {
-			return identityapp.ErrForbidden
+			return application.ErrForbidden
 		}
 		if r.Job.Revision != in.ExpectedRevision {
 			return application.ErrConflict

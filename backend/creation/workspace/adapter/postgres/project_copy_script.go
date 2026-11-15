@@ -4,11 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -18,11 +19,11 @@ func copyBinding(job domain.ProjectCopyJob) application.ProjectCopyBinding {
 
 func (s *ProjectCopyStore) scriptOwner(tx *gorm.DB, job domain.ProjectCopyJob, worker uuid.UUID, phase string) (application.ProjectCopyScriptOwner, error) {
 	if s.script == nil {
-		return nil, application.ErrProjectDependencyUnavailable
+		return nil, workspacesource.ErrProjectDependencyUnavailable
 	}
 	owner := s.script(tx, application.ProjectCopyAuthority{Binding: copyBinding(job), ActorID: job.ExecutionActor(), WorkerID: worker, SourceRevision: job.SourceRevision, Phase: phase, Bible: job.Manifest.Bible})
 	if owner == nil {
-		return nil, application.ErrProjectDependencyUnavailable
+		return nil, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return owner, nil
 }
@@ -30,7 +31,7 @@ func (s *ProjectCopyStore) scriptOwner(tx *gorm.DB, job domain.ProjectCopyJob, w
 // CompleteScript registers the full target history and advances the same worker atomically.
 func (s *ProjectCopyStore) CompleteScript(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID) (domain.ProjectCopyJob, error) {
 	if s == nil || s.db == nil {
-		return domain.ProjectCopyJob{}, application.ErrProjectDependencyUnavailable
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

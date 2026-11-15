@@ -38,8 +38,14 @@ func NewSelfProfileHandler(profiles *application.SelfProfile) *SelfProfileHandle
 
 // Register requires the email session middleware on the supplied group.
 func (h *SelfProfileHandler) Register(group *gin.RouterGroup) {
-	group.GET("/me", h.read)
+	h.RegisterReadAndPreferences(group)
 	group.PATCH("/me", h.update)
+}
+
+// RegisterReadAndPreferences installs complete Identity-only responsibilities.
+// Avatar profile writes use their separate Media binding composition.
+func (h *SelfProfileHandler) RegisterReadAndPreferences(group *gin.RouterGroup) {
+	group.GET("/me", h.read)
 	group.GET("/me/preferences", h.preferences)
 	group.PATCH("/me/preferences", h.updatePreferences)
 }

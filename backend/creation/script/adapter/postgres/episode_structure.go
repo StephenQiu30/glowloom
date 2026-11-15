@@ -11,8 +11,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func readStructure(tx *gorm.DB, org, project, id uuid.UUID) (domain.EpisodeStructure, error) {
@@ -26,7 +24,7 @@ func readStructure(tx *gorm.DB, org, project, id uuid.UUID) (domain.EpisodeStruc
 	return row.structure()
 }
 
-func episodeReviewState(tx *gorm.DB, actor identityapp.Principal, input application.StructureCommand) (domain.ProjectState, domain.Episode, error) {
+func episodeReviewState(tx *gorm.DB, actor application.Actor, input application.StructureCommand) (domain.ProjectState, domain.Episode, error) {
 	state, err := readState(tx, actor.OrgID, input.ProjectID, true)
 	if err != nil {
 		return state, domain.Episode{}, err
@@ -95,7 +93,7 @@ func insertStructure(tx *gorm.DB, s domain.EpisodeStructure) error {
 }
 
 // SaveStructure commits one new immutable manual version without overwriting confirmation.
-func (s *SourceStore) SaveStructure(ctx context.Context, actor identityapp.Principal, input application.StructureCommand, now time.Time) (application.StructureReceipt, error) {
+func (s *SourceStore) SaveStructure(ctx context.Context, actor application.Actor, input application.StructureCommand, now time.Time) (application.StructureReceipt, error) {
 	var result application.StructureReceipt
 	fingerprint := input
 	fingerprint.RequestID = uuid.Nil
@@ -103,7 +101,7 @@ func (s *SourceStore) SaveStructure(ctx context.Context, actor identityapp.Princ
 	if err != nil {
 		return result, err
 	}
-	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project application.ProjectFacts) error {
 		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "save_structure", hash, now); err != nil {
 			return err
 		}
@@ -158,7 +156,7 @@ func (s *SourceStore) SaveStructure(ctx context.Context, actor identityapp.Princ
 }
 
 // ConfirmStructure requires current formal identity and no unresolved source lines.
-func (s *SourceStore) ConfirmStructure(ctx context.Context, actor identityapp.Principal, input application.StructureCommand, now time.Time) (application.StructureReceipt, error) {
+func (s *SourceStore) ConfirmStructure(ctx context.Context, actor application.Actor, input application.StructureCommand, now time.Time) (application.StructureReceipt, error) {
 	var result application.StructureReceipt
 	fingerprint := input
 	fingerprint.RequestID = uuid.Nil
@@ -166,7 +164,7 @@ func (s *SourceStore) ConfirmStructure(ctx context.Context, actor identityapp.Pr
 	if err != nil {
 		return result, err
 	}
-	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, access application.ProjectAccess, project application.ProjectFacts) error {
 		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "confirm_structure", hash, now); err != nil {
 			return err
 		}
@@ -217,7 +215,7 @@ func (s *SourceStore) ConfirmStructure(ctx context.Context, actor identityapp.Pr
 }
 
 // ReplayStructure returns a current-authorized permanent result without fetching bodies.
-func (s *SourceStore) ReplayStructure(ctx context.Context, actor identityapp.Principal, input application.StructureCommand, action string) (*application.StructureReceipt, error) {
+func (s *SourceStore) ReplayStructure(ctx context.Context, actor application.Actor, input application.StructureCommand, action string) (*application.StructureReceipt, error) {
 	if action != "save_structure" && action != "confirm_structure" {
 		return nil, domain.ErrInvalidStructure
 	}
@@ -229,7 +227,7 @@ func (s *SourceStore) ReplayStructure(ctx context.Context, actor identityapp.Pri
 	}
 	var result application.StructureReceipt
 	found := false
-	err = s.transaction(ctx, actor, input.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, input.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		var err error
 		found, err = replayReview(tx, actor, input.ProjectID, input.Key, action, hash, &result)
 		return err

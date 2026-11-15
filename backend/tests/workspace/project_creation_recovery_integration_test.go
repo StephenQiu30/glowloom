@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 )
 
@@ -24,7 +26,7 @@ func TestProjectCreationRecoveryNeverCreatesAndReadsCurrentTarget(t *testing.T) 
 	if err := db.Raw(`SELECT count(*) FROM workspace.project WHERE owner_id=?`, actor.ID).Scan(&count).Error; err != nil || count != 0 {
 		t.Fatalf("query wrote objects: %d %v", count, err)
 	}
-	created, err := workspaceapp.NewCreateProjectCommand(store, time.Now).ExecuteIdempotent(ctx, actor, key, workspaceapp.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
+	created, err := workspaceapp.NewCreateProjectCommand(store, time.Now).ExecuteIdempotent(ctx, actor, key, workspacesource.CreateProjectInput{Name: "未命名画布", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -23,7 +22,7 @@ type derivedObjectRecord struct {
 }
 
 // AuthorizeDerivedRemoval checks real metadata ownership without exposing keys.
-func (s *Store) AuthorizeDerivedRemoval(ctx context.Context, actor identityapp.Principal, in application.DerivedRemoval) error {
+func (s *Store) AuthorizeDerivedRemoval(ctx context.Context, actor application.Actor, in application.DerivedRemoval) error {
 	if s == nil || s.db == nil {
 		return ErrUnavailable
 	}

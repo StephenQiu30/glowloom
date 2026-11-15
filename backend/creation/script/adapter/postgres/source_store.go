@@ -15,8 +15,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ProjectAccessFactory binds workspace authorization to the exact script transaction.
@@ -46,7 +44,7 @@ func NewSourceStoreWithCharacters(db *gorm.DB, access ProjectAccessFactory, char
 	return &SourceStore{db: db, access: access, characters: characters}
 }
 
-func (s *SourceStore) transaction(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool, f func(*gorm.DB, application.ProjectAccess, workspaceapp.ProjectContentAccess) error) error {
+func (s *SourceStore) transaction(ctx context.Context, actor application.Actor, project uuid.UUID, write bool, f func(*gorm.DB, application.ProjectAccess, application.ProjectFacts) error) error {
 	if s == nil || s.db == nil || s.access == nil {
 		return application.ErrUnavailable
 	}
@@ -56,7 +54,7 @@ func (s *SourceStore) transaction(ctx context.Context, actor identityapp.Princip
 			return application.ErrUnavailable
 		}
 		facts, err := access.Authorize(ctx, actor, project, write)
-		if errors.Is(err, workspaceapp.ErrProjectNotFound) || errors.Is(err, workspaceapp.ErrScopeNotFound) {
+		if errors.Is(err, application.ErrNotFound) {
 			return errors.Join(application.ErrNotFound, err)
 		}
 		if err != nil {
@@ -75,9 +73,9 @@ func (s *SourceStore) transaction(ctx context.Context, actor identityapp.Princip
 }
 
 // LoadBase reads explicit old versions or the current draft without creating a head.
-func (s *SourceStore) LoadBase(ctx context.Context, actor identityapp.Principal, project uuid.UUID, version *uuid.UUID) (application.SourceBase, error) {
+func (s *SourceStore) LoadBase(ctx context.Context, actor application.Actor, project uuid.UUID, version *uuid.UUID) (application.SourceBase, error) {
 	var result application.SourceBase
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		state, err := readState(tx, actor.OrgID, project, false)
 		if err != nil {
 			return err
@@ -105,11 +103,11 @@ func (s *SourceStore) LoadBase(ctx context.Context, actor identityapp.Principal,
 // registerCommand runs after write authorization holds the workspace project lock.
 // The unique immutable request records scope/hash; it must never require UPDATE
 // permission just to serialize a write which is already locked by its owner.
-func registerCommand(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID, action, hash string, now time.Time) error {
+func registerCommand(tx *gorm.DB, actor application.Actor, project, key uuid.UUID, action, hash string, now time.Time) error {
 	return registerRequest(tx, actor, project, key, action, hash, now)
 }
 
-func findCommand(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID, hash string) (*application.PendingWrite, error) {
+func findCommand(tx *gorm.DB, actor application.Actor, project, key uuid.UUID, hash string) (*application.PendingWrite, error) {
 	if err := checkRequestScope(tx, actor, project, key, "", hash); err != nil {
 		return nil, err
 	}
@@ -143,9 +141,9 @@ func findCommand(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUI
 }
 
 // FindCommand reauthorizes before replay; a new trace ID cannot alter its first result.
-func (s *SourceStore) FindCommand(ctx context.Context, actor identityapp.Principal, project, key uuid.UUID, hash string) (*application.PendingWrite, error) {
+func (s *SourceStore) FindCommand(ctx context.Context, actor application.Actor, project, key uuid.UUID, hash string) (*application.PendingWrite, error) {
 	var result *application.PendingWrite
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		var err error
 		result, err = findCommand(tx, actor, project, key, hash)
 		return err
@@ -153,7 +151,7 @@ func (s *SourceStore) FindCommand(ctx context.Context, actor identityapp.Princip
 	return result, err
 }
 
-func validatePlan(actor identityapp.Principal, p application.WritePlan) error {
+func validatePlan(actor application.Actor, p application.WritePlan) error {
 	if p.ActorID != actor.ID || p.OrgID != actor.OrgID || p.Command.ProjectID == uuid.Nil || p.Command.Key == uuid.Nil || p.Command.ExpectedRevision < 0 || p.CreatedAt.IsZero() || len(p.RequestHash) != 64 || len(p.Command.Sources) != 0 {
 		return domain.ErrInvalidSource
 	}
@@ -194,17 +192,17 @@ func checkHead(state domain.ProjectState, p application.WritePlan) error {
 }
 
 // BeginWrite freezes the original server-chosen IDs and object digest intents atomically.
-func (s *SourceStore) BeginWrite(ctx context.Context, actor identityapp.Principal, p application.WritePlan) (application.PendingWrite, error) {
+func (s *SourceStore) BeginWrite(ctx context.Context, actor application.Actor, p application.WritePlan) (application.PendingWrite, error) {
 	var result application.PendingWrite
 	if err := validatePlan(actor, p); err != nil {
 		return result, err
 	}
 	for _, source := range p.NewSources {
 		if source.Origin == domain.SourceOriginFile && s.importAuthority == nil {
-			return result, identityapp.ErrForbidden
+			return result, application.ErrForbidden
 		}
 	}
-	err := s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		if err := registerCommand(tx, actor, p.Command.ProjectID, p.Command.Key, "source_"+string(p.Command.Action), p.RequestHash, p.CreatedAt); err != nil {
 			return err
 		}
@@ -282,9 +280,9 @@ func (s *SourceStore) BeginWrite(ctx context.Context, actor identityapp.Principa
 }
 
 // FinishWrite commits all immutable sources/version, both heads, events and first receipt.
-func (s *SourceStore) FinishWrite(ctx context.Context, actor identityapp.Principal, p application.WritePlan) (application.SourceReceipt, error) {
+func (s *SourceStore) FinishWrite(ctx context.Context, actor application.Actor, p application.WritePlan) (application.SourceReceipt, error) {
 	var result application.SourceReceipt
-	err := s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, access application.ProjectAccess, project workspaceapp.ProjectContentAccess) error {
+	err := s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, access application.ProjectAccess, project application.ProjectFacts) error {
 		if err := registerCommand(tx, actor, p.Command.ProjectID, p.Command.Key, "source_"+string(p.Command.Action), p.RequestHash, p.CreatedAt); err != nil {
 			return err
 		}

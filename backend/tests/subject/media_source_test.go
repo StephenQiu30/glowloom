@@ -23,7 +23,7 @@ type subjectSourceReader struct {
 	err  error
 }
 
-func (r *subjectSourceReader) FindSubjectSource(context.Context, identity.Principal, mediadomain.LibraryScope, uuid.UUID) (media.LibraryMediaFile, error) {
+func (r *subjectSourceReader) FindSubjectSource(context.Context, media.Actor, mediadomain.LibraryScope, uuid.UUID) (media.LibraryMediaFile, error) {
 	return r.file, r.err
 }
 func (r *subjectSourceReader) ReadBoundSubjectSource(context.Context, uuid.UUID) (media.LibraryMediaFile, error) {
@@ -70,16 +70,16 @@ func TestSubjectSourceUsesOriginalPersonalBytesWithoutProjectReferenceGate(t *te
 	}
 	query := media.NewRoutedSubjectSourceQuery(reader, objects, objects)
 	scope := mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}
-	file, err := query.Reference(t.Context(), actor, scope, reader.file.Asset.ID)
+	file, err := query.Reference(t.Context(), mediaBoundaryActor(actor), scope, reader.file.Asset.ID)
 	if err != nil || file.Asset.ID != reader.file.Asset.ID || objects.reads != 1 || objects.closed != 1 {
 		t.Fatal("personal original adoption", err)
 	}
 	objects.data[0] ^= 1
-	if _, err := query.Reference(t.Context(), actor, scope, reader.file.Asset.ID); !errors.Is(err, media.ErrObjectMismatch) {
+	if _, err := query.Reference(t.Context(), mediaBoundaryActor(actor), scope, reader.file.Asset.ID); !errors.Is(err, media.ErrObjectMismatch) {
 		t.Fatal("same-length original corruption was accepted", err)
 	}
 	objects.data = objects.data[:len(objects.data)-1]
-	if _, err := query.Reference(t.Context(), actor, scope, reader.file.Asset.ID); !errors.Is(err, media.ErrObjectMismatch) {
+	if _, err := query.Reference(t.Context(), mediaBoundaryActor(actor), scope, reader.file.Asset.ID); !errors.Is(err, media.ErrObjectMismatch) {
 		t.Fatal("truncated original was accepted", err)
 	}
 	if objects.reads != objects.closed {
@@ -88,11 +88,11 @@ func TestSubjectSourceUsesOriginalPersonalBytesWithoutProjectReferenceGate(t *te
 	other := actor
 	other.ID = uuid.New()
 	before := objects.reads
-	if _, err := query.Reference(t.Context(), other, scope, reader.file.Asset.ID); !errors.Is(err, media.ErrNotFound) || objects.reads != before {
+	if _, err := query.Reference(t.Context(), mediaBoundaryActor(other), scope, reader.file.Asset.ID); !errors.Is(err, media.ErrNotFound) || objects.reads != before {
 		t.Fatal("foreign personal source exposed bytes", err)
 	}
 	reader.err = media.ErrNotFound
-	if _, err := query.Reference(t.Context(), actor, scope, reader.file.Asset.ID); !errors.Is(err, media.ErrNotFound) || objects.reads != before {
+	if _, err := query.Reference(t.Context(), mediaBoundaryActor(actor), scope, reader.file.Asset.ID); !errors.Is(err, media.ErrNotFound) || objects.reads != before {
 		t.Fatal("source-library rejection was bypassed", err)
 	}
 }

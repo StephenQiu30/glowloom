@@ -111,6 +111,19 @@ func trialRunnerFixture(t *testing.T) (*trial.Runner, *trialCloud, *trialObjects
 	cloud, objects := &trialCloud{}, &trialObjects{}
 	return &trial.Runner{Store: store, Cloud: cloud, Objects: objects, Keys: unseal}, cloud, objects, in
 }
+func TestTrialRunnerMissingGeneratedMediaRefusesBeforeSupplierSend(t *testing.T) {
+	runner, cloud, _, input := trialRunnerFixture(t)
+	input.Request.Kind = "video"
+	input.Request.Mode = "text2video"
+	input.OutputRef.Key = application.TrialObjectKey(input, 1)
+	require.NoError(t, input.Request.Validate())
+	result, err := runner.Run(t.Context(), input)
+	require.NoError(t, err)
+	require.Equal(t, "failed", result.State)
+	require.Equal(t, "trial_result_unavailable", result.ErrorCode)
+	require.Zero(t, cloud.submits)
+}
+
 func TestTrialRunnerStoresOneImageAndRecoversLostUploadReceiptWithoutInference(t *testing.T) {
 	r, cloud, objects, input := trialRunnerFixture(t)
 	var data bytes.Buffer

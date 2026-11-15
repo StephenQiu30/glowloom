@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -24,13 +23,13 @@ type personalUploadFake struct {
 	existsErr error
 }
 
-func (*personalUploadFake) AuthorizePersonalUpload(context.Context, identityapp.Principal) error {
+func (*personalUploadFake) AuthorizePersonalUpload(context.Context, mediaapp.Actor) error {
 	return nil
 }
-func (*personalUploadFake) FindPersonalUpload(context.Context, identityapp.Principal, mediaapp.UploadRequest) (mediaapp.PersonalUploadResult, bool, error) {
+func (*personalUploadFake) FindPersonalUpload(context.Context, mediaapp.Actor, mediaapp.UploadRequest) (mediaapp.PersonalUploadResult, bool, error) {
 	return mediaapp.PersonalUploadResult{}, false, nil
 }
-func (r *personalUploadFake) CommitPersonalUpload(_ context.Context, _ identityapp.Principal, _ mediaapp.UploadRequest, asset domain.MediaAsset, _ []domain.Rendition) (mediaapp.PersonalUploadResult, error) {
+func (r *personalUploadFake) CommitPersonalUpload(_ context.Context, _ mediaapp.Actor, _ mediaapp.UploadRequest, asset domain.MediaAsset, _ []domain.Rendition) (mediaapp.PersonalUploadResult, error) {
 	r.asset = asset
 	r.commits++
 	return mediaapp.PersonalUploadResult{Asset: mediaapp.PersonalUploadSummary(asset)}, r.commitErr

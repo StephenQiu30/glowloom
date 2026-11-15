@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -72,7 +74,7 @@ func transcriptionLockFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uu
 	asset.DurationMS, asset.SHA256 = &duration, &sha
 	asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
 	asset = mediaFixtureAssetLocation(t, tx, asset)
-	if err := mediaTestStore(tx).CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := mediaTestStore(tx).CreateAsset(t.Context(), mediaActor(actor), asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
@@ -81,7 +83,7 @@ func transcriptionLockFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uu
 	requests := mediatoolTranscriptionStore(tx, func(*gorm.DB) toolapp.TranscriptionSourceReader {
 		return transcriptionLockSource{asset: asset.ID}
 	}, func(db *gorm.DB) toolapp.DerivedMedia {
-		return mediaapp.NewDerivedService(pgmedia.NewScopedStore(db, app.NewMediaScopeAccess))
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(db, app.NewMediaScopeAccess)))
 	})
 	job, err := requests.Create(t.Context(), actor, project, uuid.New(), toolapp.TranscriptionCreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1, Language: "auto"})
 	if err != nil {
@@ -89,7 +91,7 @@ func transcriptionLockFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uu
 	}
 	var events []string
 	workers := mediatoolTranscriptionStore(tx, nil, func(db *gorm.DB) toolapp.DerivedMedia {
-		return transcriptionPermissionTrace{DerivedMedia: mediaapp.NewDerivedService(pgmedia.NewScopedStore(db, app.NewMediaWorkerScopeAccess)), events: &events}
+		return transcriptionPermissionTrace{DerivedMedia: mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(db, app.NewMediaWorkerScopeAccess))), events: &events}
 	})
 	callback := "test:transcription-job-lock-" + job.ID.String()
 	if err := tx.Callback().Query().After("gorm:query").Register(callback, func(query *gorm.DB) {
@@ -218,7 +220,7 @@ func TestTranscriptionWorkerRejectsChangedAuthorityBinding(t *testing.T) {
 			}
 			changed := mediatoolTranscriptionStore(tx, nil, func(db *gorm.DB) toolapp.DerivedMedia {
 				return transcriptionPermissionTrace{
-					DerivedMedia: mediaapp.NewDerivedService(pgmedia.NewScopedStore(db, app.NewMediaWorkerScopeAccess)),
+					DerivedMedia: mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(db, app.NewMediaWorkerScopeAccess))),
 					events:       events,
 					afterAuthorize: func() error {
 						return db.Exec(`UPDATE mediatool.transcription_job SET actor_id=? WHERE id=?`, uuid.New(), owner.JobID).Error

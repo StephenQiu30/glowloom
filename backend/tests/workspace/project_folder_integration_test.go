@@ -7,16 +7,25 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
 )
 
@@ -45,12 +54,12 @@ func folderTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {
 }
 
 func folderWork(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-	return owningProjectWork{workspaceOperationStore(tx), workspaceMediaStore(tx), toolpg.NewStore(tx, nil, nil), toolpg.NewTranscriptionStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspaceCopyStore(tx, nil, nil)}
+	return owningProjectWork{workspaceOperationStore(tx), mediaWorkBoundary{owner: workspaceMediaStore(tx)}, toolpg.NewStore(tx, nil, nil), toolpg.NewTranscriptionStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspaceCopyStore(tx, nil, nil)}
 }
 
 func folderStore(db *gorm.DB) *workspacepg.FolderStore {
 	return workspaceFolderStore(db, folderWork, func(tx *gorm.DB) workspaceapp.FolderMediaReader {
-		return mediaapp.NewAssetQuery(workspaceMediaStore(tx))
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(workspaceMediaStore(tx)))
 	})
 }
 
@@ -145,7 +154,7 @@ func TestProjectFolderPGPlacementPaginationAndDurableIdentity(t *testing.T) {
 	changed := rename
 	different := "同键异输入"
 	changed.Name = &different
-	if _, err = service.Change(ctx, actor, changed); !errors.Is(err, workspaceapp.ErrIdempotencyConflict) {
+	if _, err = service.Change(ctx, actor, changed); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatalf("changed receipt %v", err)
 	}
 	var projectRev int64
@@ -353,10 +362,10 @@ func TestProjectFolderPGConcurrentPermanentCommandsAndCurrentOrganization(t *tes
 		t.Fatalf("concurrent duplicate commit %+v %v", totals, err)
 	}
 	lifecycleFixtureSQL(t, owner, `UPDATE workspace.team SET status='suspended',resume_status='active' WHERE id=(SELECT team_id FROM workspace.creation_scope WHERE id=?)`, actor.ScopeID)
-	if _, err := service.Change(ctx, actor, in); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, err := service.Change(ctx, actor, in); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("suspended team scope replay %v", err)
 	}
-	if _, err := service.List(ctx, actor, workspaceapp.FolderListInput{Limit: 50}); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, err := service.List(ctx, actor, workspaceapp.FolderListInput{Limit: 50}); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("disabled org list %v", err)
 	}
 }

@@ -117,7 +117,7 @@ func TestStorageEnvironmentReplayAndSwitchPreserveInflightTargets(t *testing.T) 
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	admission := pgmedia.NewUploadAdmission(routingMediaStore(db))
 	key := uuid.New()
-	upload, err := admission.PinUpload(t.Context(), actor, scope, key)
+	upload, err := admission.PinUpload(t.Context(), mediaActor(actor), scope, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,11 +149,11 @@ func TestStorageEnvironmentReplayAndSwitchPreserveInflightTargets(t *testing.T) 
 	if err != nil || saved != work {
 		t.Fatal("switch rebound existing work", err)
 	}
-	retry, err := admission.PinUpload(t.Context(), actor, scope, key)
+	retry, err := admission.PinUpload(t.Context(), mediaActor(actor), scope, key)
 	if err != nil || retry != upload {
 		t.Fatal("switch rebound existing upload", err)
 	}
-	fresh, err := admission.PinUpload(t.Context(), actor, scope, uuid.New())
+	fresh, err := admission.PinUpload(t.Context(), mediaActor(actor), scope, uuid.New())
 	if err != nil || fresh.ProfileID != "cos-main" {
 		t.Fatal("new upload missed new route", err)
 	}

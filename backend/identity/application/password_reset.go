@@ -17,6 +17,13 @@ import (
 const unavailableArgonHash = "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 func (a *Auth) loginEmail(ctx context.Context, email, password string, persistent bool, source string) (AuthResult, error) {
+	if a.activation != nil {
+		return AuthResult{}, ErrSessionActivation
+	}
+	return a.loginEmailPrepared(ctx, email, password, persistent, source, nil)
+}
+
+func (a *Auth) loginEmailPrepared(ctx context.Context, email, password string, persistent bool, source string, prepare func(AuthTx, AuthResult) error) (AuthResult, error) {
 	if !a.emailReady() {
 		return AuthResult{}, ErrRegistrationUnavailable
 	}
@@ -94,6 +101,9 @@ func (a *Auth) loginEmail(ctx context.Context, email, password string, persisten
 		if err != nil {
 			return err
 		}
+		if prepare != nil {
+			return prepare(tx, result)
+		}
 		return tx.AppendAuthEvent(u.ID, "logged_in", now)
 	})
 	if err != nil {
@@ -166,6 +176,13 @@ func (a *Auth) StartPasswordReset(ctx context.Context, email, source string) (Re
 
 // CompletePasswordReset consumes a bound proof and revokes all old sessions atomically.
 func (a *Auth) CompletePasswordReset(ctx context.Context, token, password, confirmation string) error {
+	if a.passwordResets != nil {
+		return ErrPasswordChangeUnavailable
+	}
+	return a.completePasswordResetPrepared(ctx, token, password, confirmation, nil)
+}
+
+func (a *Auth) completePasswordResetPrepared(ctx context.Context, token, password, confirmation string, prepare func(EmailTx, domain.User, domain.EmailChallenge, string, time.Time) error) error {
 	if !a.emailReady() {
 		return ErrRegistrationUnavailable
 	}
@@ -206,34 +223,14 @@ func (a *Auth) CompletePasswordReset(ctx context.Context, token, password, confi
 		if err != nil {
 			return err
 		}
-		u.PasswordHash = hash
-		u.SessionEpoch++
-		u.Revision++
-		u.PasswordChangedAt = now
-		u.MustChangePassword = false
-		u.FailedLoginCount = 0
-		u.LockedUntil = time.Time{}
-		if err := tx.UpdateAccount(u); err != nil {
-			return err
+		if prepare != nil {
+			return prepare(tx, u, c, hash, now)
 		}
-		if err := tx.RevokeAccountSessions(u.ID, now); err != nil {
-			return err
-		}
-		guardKey := hex.EncodeToString(a.email.protector.Digest("login_guard", uuid.Nil, u.Email))
-		if _, err := tx.Guard(guardKey); err != nil {
-			return err
-		}
-		if err := tx.SaveGuard(guardKey, domain.LoginGuard{}); err != nil {
+		if err := a.applyResetPassword(tx, u, hash, now); err != nil {
 			return err
 		}
 		c.ConsumedAt = &now
-		if err := tx.SaveChallenge(c); err != nil {
-			return err
-		}
-		if err := tx.AppendAuthEvent(u.ID, "password_changed", now); err != nil {
-			return err
-		}
-		return a.queueEmail(tx, "password_changed", u.Email, map[string]string{}, now, now.Add(24*time.Hour))
+		return tx.SaveChallenge(c)
 	})
 }
 

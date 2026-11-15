@@ -24,7 +24,7 @@ func personalUploadRouter(t *testing.T, db *gorm.DB, actor identityapp.Principal
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
 	store := mediaTestStore(db)
 	service := mediaFixtureMockUpload(t, db, store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
-	mediahttp.NewUploadHandler(service).Register(group)
+	mediahttp.NewUploadHandler(service, fixtureIdentityMediaActor).Register(group)
 	return router
 }
 func TestPersonalUploadHTTPCurrentActorStrictBodyAndFreshRouterReplay(t *testing.T) {

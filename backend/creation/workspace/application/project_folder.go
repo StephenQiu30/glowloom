@@ -6,10 +6,12 @@ import (
 	"math"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -114,20 +116,20 @@ func (s *ProjectFolders) Change(ctx context.Context, actor identityapp.Principal
 		return FolderChangeResult{}, err
 	}
 	if s == nil || s.store == nil || s.now == nil {
-		return FolderChangeResult{}, ErrProjectDependencyUnavailable
+		return FolderChangeResult{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	out, err := s.store.ChangeFolder(ctx, actor, in, s.now().UTC())
 	if err != nil {
 		return FolderChangeResult{}, fmt.Errorf("change project folder: %w", err)
 	}
 	if out.Folder == nil && out.Placement == nil || in.Action == "move" && out.Placement == nil || in.Action != "move" && out.Folder == nil {
-		return FolderChangeResult{}, ErrProjectDependencyUnavailable
+		return FolderChangeResult{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if f := out.Folder; f != nil && (f.Validate() != nil || f.OrgID != actor.OrgID || f.ActorID != actor.ID) {
-		return FolderChangeResult{}, ErrProjectDependencyUnavailable
+		return FolderChangeResult{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if p := out.Placement; p != nil && (p.Validate() != nil || p.OrgID != actor.OrgID || p.ActorID != actor.ID || p.ProjectID != in.ProjectID) {
-		return FolderChangeResult{}, ErrProjectDependencyUnavailable
+		return FolderChangeResult{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return out, nil
 }
@@ -144,24 +146,24 @@ func (s *ProjectFolders) List(ctx context.Context, actor identityapp.Principal, 
 		return FolderListPage{}, domain.ErrInvalidProjectFolder
 	}
 	if s == nil || s.store == nil {
-		return FolderListPage{}, ErrProjectDependencyUnavailable
+		return FolderListPage{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	out, err := s.store.ListFolders(ctx, actor, in)
 	if err != nil {
 		return FolderListPage{}, err
 	}
 	if len(out.Items) > in.Limit || out.Next != nil && len(out.Items) == 0 {
-		return FolderListPage{}, ErrProjectDependencyUnavailable
+		return FolderListPage{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	for _, item := range out.Items {
 		if item.Folder.Validate() != nil || item.Folder.OrgID != actor.OrgID || item.Folder.ActorID != actor.ID || item.Folder.IsDelete || item.ProjectCount < 0 {
-			return FolderListPage{}, ErrProjectDependencyUnavailable
+			return FolderListPage{}, workspacesource.ErrProjectDependencyUnavailable
 		}
 	}
 	if out.Next != nil {
 		last := out.Items[len(out.Items)-1].Folder
 		if out.Next.ID != last.ID || !out.Next.UpdateTime.Equal(last.UpdateTime) {
-			return FolderListPage{}, ErrProjectDependencyUnavailable
+			return FolderListPage{}, workspacesource.ErrProjectDependencyUnavailable
 		}
 	}
 	if out.Items == nil {

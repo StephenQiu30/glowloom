@@ -20,11 +20,19 @@ type AvatarAccessFactory func(*gorm.DB) application.AvatarAccess
 type SelfProfileStore struct {
 	db      *gorm.DB
 	avatars AvatarAccessFactory
+	source  bool
 }
 
 // NewSelfProfileStore constructs SelfProfileStore with explicit caller-supplied dependencies.
 func NewSelfProfileStore(db *gorm.DB, avatars AvatarAccessFactory) *SelfProfileStore {
 	return &SelfProfileStore{db: db, avatars: avatars}
+}
+
+// NewSourceSelfProfileStore serves owned account reads/preferences under current
+// account/session source heads. Avatar binding needs its separate Media contract;
+// this constructor never introduces a remote callback inside the SQL transaction.
+func NewSourceSelfProfileStore(db *gorm.DB) *SelfProfileStore {
+	return &SelfProfileStore{db: db, source: true}
 }
 
 type selfProfileTx struct {
@@ -70,17 +78,26 @@ func lockSelfActor(tx *gorm.DB, actor application.Principal, clock func() time.T
 
 // ProfileTransaction keeps identity checks and profile updates under the same locks.
 func (s *SelfProfileStore) ProfileTransaction(ctx context.Context, actor application.Principal, clock func() time.Time, run func(application.SelfProfileTx) error) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	runTx := func(tx *gorm.DB) error {
 		u, err := lockSelfActor(tx, actor, clock)
 		if err != nil {
 			return err
+		}
+		if s.source {
+			if _, err := readOpenSessionAuthorities(tx, actor); err != nil {
+				return err
+			}
 		}
 		state := &selfProfileTx{db: tx, user: u}
 		if s.avatars != nil {
 			state.avatars = s.avatars(tx)
 		}
 		return run(state)
-	})
+	}
+	if s.source {
+		return identityWriterTransaction(ctx, s.db, runTx)
+	}
+	return s.db.WithContext(ctx).Transaction(runTx)
 }
 func (t *selfProfileTx) ValidateAvatar(ctx context.Context, id uuid.UUID) error {
 	if t.avatars == nil {

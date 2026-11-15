@@ -1,17 +1,10 @@
 "use client";
-import { ConnectionTests } from "./connection-tests";
 import { ConnectionLogoEditor } from "./connection-logo-editor";
 import useSWR from "swr";
 import { useSession } from "@/components/auth/session";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
 import { LoadingState } from "@/components/layout/loading-state";
 import { ContentState } from "@/components/layout/content-state";
-import { ChevronDown, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import {
   InputGroup,
@@ -33,64 +26,38 @@ import {
 import type { DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useState, useId } from "react";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Toolbar } from "@/components/ui/toolbar";
 import { Spinner } from "@/components/ui/spinner";
-import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
 import { RequestError } from "@/lib/request";
 import {
   getAdminProvider,
-  getProviderConfig,
   setAdminCredential,
-  previewProviderUpgrade,
-  applyProviderPreset,
-  listProviderCredentials,
-  updateAdminPoolKey,
-  disableAdminCredential,
   updateAdminProvider,
 } from "@/api/settings";
 import {
-  catalogMessage,
   MutationStatus,
   useCatalogMutation,
 } from "@/components/catalog/mutation";
 
 export function ConnectionDetail({
   id,
-  presets,
   onSaved,
-  onReview,
   onAddModel,
   revision = 0,
   initialRename = false,
-  initialModel,
-  initialRelease,
-  initialMode,
   Title = "h2",
 }: {
   id: string;
   revision?: number;
   initialRename?: boolean;
-  initialModel?: string;
-  initialRelease?: string;
-  initialMode?: string;
   Title?: typeof DialogTitle | "h2";
-  presets: API.Preset[];
   onSaved: () => void;
-  onReview?: (trigger: HTMLButtonElement) => void;
   onAddModel?: (row: API.ProviderListItem, trigger: HTMLButtonElement) => void;
 }) {
   const formFieldId = useId();
@@ -100,11 +67,6 @@ export function ConnectionDetail({
   const [visible, setVisible] = useState(false);
   const [renaming, setRenaming] = useState(initialRename);
   const [editKey, setEditKey] = useState(false);
-  const [advanced, setAdvanced] = useState(false);
-  const [error, setError] = useState("");
-  const [target, setTarget] = useState("");
-  const [preview, setPreview] = useState<API.ConfigUpgradePreview | null>(null);
-  const [resolution, setResolution] = useState("");
   const {
     data: detail,
     error: detailError,
@@ -114,27 +76,8 @@ export function ConnectionDetail({
     () => getAdminProvider({ id }),
     { keepPreviousData: true },
   );
-  const {
-    data: settings,
-    error: settingsError,
-    mutate: reloadSettings,
-  } = useSWR(
-    advanced ? ["admin-provider-settings", actor.id, id, revision] : null,
-    async () => {
-      const [config, credentials] = await Promise.all([
-        getProviderConfig({ id }).catch((error) => {
-          if (error instanceof RequestError && error.status === 404)
-            return null;
-          throw error;
-        }),
-        listProviderCredentials({ id }),
-      ]);
-      return { config, credentials };
-    },
-  );
   function refresh() {
     void mutate();
-    if (advanced) void reloadSettings();
     onSaved();
   }
   const mutation = useCatalogMutation(refresh, `connection.${id}`);
@@ -153,8 +96,6 @@ export function ConnectionDetail({
   const musicCredential = provider?.adapter_key === "volcengine_music";
   const archived = provider?.status === "archived";
   const name = providerConnectionName(provider) ?? "";
-  const config = settings?.config;
-  const credentials = settings?.credentials ?? [];
 
   const archiveAction = provider ? (
     <AlertDialog>
@@ -253,11 +194,6 @@ export function ConnectionDetail({
           ) : null}
           {mutation.message || mutation.pending ? (
             <MutationStatus mutation={mutation} inline />
-          ) : null}
-          {error ? (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
           ) : null}
           {renaming ? (
             <form
@@ -445,6 +381,36 @@ export function ConnectionDetail({
               </Button>
             </div>
           )}
+          <Field
+            orientation="horizontal"
+            className="pr-3"
+            data-disabled={keyBusy || archived || undefined}
+            aria-busy={mutation.busy}
+          >
+            <FieldLabel
+              htmlFor={`${formFieldId}-enabled`}
+              className="min-h-11 flex-1"
+            >
+              启用连接
+            </FieldLabel>
+            <Switch
+              id={`${formFieldId}-enabled`}
+              checked={provider.status === "active"}
+              disabled={keyBusy || archived}
+              onCheckedChange={(checked) =>
+                void mutation.run("provider.update", id, (requestID) =>
+                  updateAdminProvider(
+                    { id },
+                    {
+                      expected_revision: provider.revision,
+                      status: checked ? "active" : "disabled",
+                    },
+                    { headers: { "Idempotency-Key": requestID } },
+                  ),
+                )
+              }
+            />
+          </Field>
           <Toolbar aria-label="连接操作" className="flex-wrap">
             <Button variant="outline" size="toolbar" asChild>
               <Link href={`/models?provider=${encodeURIComponent(id)}`}>
@@ -477,403 +443,6 @@ export function ConnectionDetail({
             ) : null}
             {archived ? archiveAction : null}
           </Toolbar>
-          {credentialID && !archived ? (
-            <>
-              <Separator />
-              <ConnectionTests
-                id={id}
-                adapter={provider.adapter_key}
-                credentialID={credentialID}
-                revision={revision}
-                onSaved={refresh}
-                initialModel={initialModel}
-                initialRelease={initialRelease}
-                initialMode={initialMode}
-              />
-            </>
-          ) : null}
-          <Collapsible open={advanced} onOpenChange={setAdvanced}>
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="ghost"
-                className="group w-full justify-between px-0"
-              >
-                连接设置
-                <ChevronDown
-                  data-icon="inline-end"
-                  className="transition-transform group-data-[state=open]:rotate-180"
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="flex flex-col gap-4">
-              {provider && !archived && (
-                <form
-                  key={provider.revision}
-                  className="grid gap-2"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const values = new FormData(event.currentTarget);
-                    void mutation.run("provider.update", id, (requestID) =>
-                      updateAdminProvider(
-                        { id },
-                        {
-                          expected_revision: provider.revision,
-                          quota_group: String(
-                            values.get("quota_group") ?? "",
-                          ).trim(),
-                          concurrency_limit: Number(
-                            values.get("concurrency_limit"),
-                          ),
-                          rate_limit_per_min: Number(
-                            values.get("rate_limit_per_min"),
-                          ),
-                        },
-                        { headers: { "Idempotency-Key": requestID } },
-                      ),
-                    );
-                  }}
-                >
-                  <Field>
-                    <FieldLabel>
-                      共享额度账号组
-                      <Input
-                        name="quota_group"
-                        maxLength={80}
-                        defaultValue={provider.quota_group ?? ""}
-                        placeholder="留空使用独立额度"
-                      />
-                    </FieldLabel>
-                  </Field>
-                  <Field>
-                    <FieldLabel>
-                      最大并发
-                      <Input
-                        type="number"
-                        name="concurrency_limit"
-                        required
-                        min={1}
-                        defaultValue={provider.concurrency_limit}
-                      />
-                    </FieldLabel>
-                  </Field>
-                  <Field>
-                    <FieldLabel>
-                      每分钟请求上限
-                      <Input
-                        type="number"
-                        name="rate_limit_per_min"
-                        required
-                        min={1}
-                        defaultValue={provider.rate_limit_per_min}
-                      />
-                    </FieldLabel>
-                  </Field>
-                  <Button size="sm" variant="outline" disabled={mutation.busy}>
-                    保存额度
-                  </Button>
-                </form>
-              )}
-              <Toolbar aria-label="连接维护" className="flex-wrap">
-                {!archived && onReview && (
-                  <Button
-                    variant="outline"
-                    type="button"
-                    className="max-md:min-h-11"
-                    onClick={(event) => onReview(event.currentTarget)}
-                  >
-                    发布复核
-                  </Button>
-                )}
-                {provider?.status === "active" ? (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="toolbar">
-                        停用连接
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>停用连接？</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          停用后不能创建新任务，已有任务仍可恢复。
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>取消</AlertDialogCancel>
-                        <AlertDialogAction
-                          variant="outline"
-                          disabled={mutation.busy}
-                          onClick={() =>
-                            void mutation.run(
-                              "provider.update",
-                              id,
-                              (requestID) =>
-                                updateAdminProvider(
-                                  { id },
-                                  {
-                                    expected_revision: provider.revision,
-                                    status: "disabled",
-                                  },
-                                  { headers: { "Idempotency-Key": requestID } },
-                                ),
-                            )
-                          }
-                        >
-                          停用连接（停止新任务）
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                ) : null}
-                {!archived ? archiveAction : null}
-              </Toolbar>
-              {settingsError ? (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    {catalogMessage(settingsError)}
-                  </AlertDescription>
-                </Alert>
-              ) : null}
-              {!settings && !settingsError ? (
-                <LoadingState>正在加载连接设置…</LoadingState>
-              ) : null}
-              {config ? (
-                <div className="flex flex-col gap-4">
-                  <FieldGroup>
-                    <Field>
-                      <FieldLabel>当前预设</FieldLabel>
-                      <p className="text-sm break-all">
-                        {presets.find(
-                          (p) => p.version_id === config.preset_version_id,
-                        )?.document?.name ?? "当前预设不可用"}
-                      </p>
-                    </Field>
-                    <Field>
-                      <FieldLabel>服务端点</FieldLabel>
-                      <p className="text-sm break-all">
-                        {config.config?.base_url ?? "未知"}
-                      </p>
-                    </Field>
-                  </FieldGroup>
-                  <h3 className="font-medium">配置升级</h3>
-                  <p className="text-xs text-muted-foreground">
-                    已发布模型和历史任务继续使用原配置。
-                  </p>
-                  <Field>
-                    <FieldLabel htmlFor={`${formFieldId}-field-2`}>
-                      <span>更新为</span>
-                    </FieldLabel>
-                    <Select
-                      value={target}
-                      onValueChange={(value) => {
-                        setTarget(value);
-                        setPreview(null);
-                      }}
-                    >
-                      <SelectTrigger
-                        id={`${formFieldId}-field-2`}
-                        className="mt-1 h-10 w-full"
-                      >
-                        <SelectValue placeholder="选择预设" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {presets
-                            .filter(
-                              (p) =>
-                                !p.archived &&
-                                !p.emergency_disabled &&
-                                p.document?.config?.adapter_key ===
-                                  provider?.adapter_key,
-                            )
-                            .map((p) =>
-                              p.version_id ? (
-                                <SelectItem
-                                  key={p.version_id}
-                                  value={p.version_id}
-                                >
-                                  {p.document?.name ?? p.slug}
-                                  {p.updated_at
-                                    ? ` · ${new Date(p.updated_at).toLocaleDateString("zh-CN")}`
-                                    : ""}
-                                </SelectItem>
-                              ) : null,
-                            )}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Button
-                    variant="outline"
-                    disabled={!target || mutation.busy}
-                    onClick={async () => {
-                      try {
-                        const result = await previewProviderUpgrade(
-                          { id },
-                          {
-                            expected_revision: provider?.revision,
-                            expected_config_id: config.id,
-                            preset_version_id: target,
-                          },
-                        );
-                        setPreview(result);
-                        setResolution(JSON.stringify(result.proposed, null, 2));
-                      } catch (error) {
-                        setError(catalogMessage(error));
-                      }
-                    }}
-                  >
-                    预览差异
-                  </Button>
-                  {preview ? (
-                    <>
-                      <p className="text-sm">
-                        {preview.conflicts?.length
-                          ? `需处理冲突：${preview.conflicts.join("、")}`
-                          : "没有覆盖冲突。请确认最终配置。"}
-                      </p>
-                      <Field>
-                        <FieldLabel htmlFor={`${formFieldId}-field-3`}>
-                          <span>最终配置</span>
-                        </FieldLabel>
-                        <Textarea
-                          id={`${formFieldId}-field-3`}
-                          className="mt-1 min-h-48 w-full"
-                          value={resolution}
-                          onChange={(e) => setResolution(e.target.value)}
-                        />
-                      </Field>
-                      <Button
-                        disabled={mutation.busy}
-                        onClick={async () => {
-                          try {
-                            const resolved: API.ProviderConfig =
-                              JSON.parse(resolution);
-                            await mutation.run(
-                              "config.upgrade",
-                              id,
-                              (requestID) =>
-                                applyProviderPreset(
-                                  { id },
-                                  {
-                                    request_id: requestID,
-                                    preview_hash: preview.hash,
-                                    upgrade: {
-                                      expected_revision: provider?.revision,
-                                      expected_config_id: config.id,
-                                      preset_version_id: target,
-                                    },
-                                    resolution: resolved,
-                                  },
-                                ),
-                            );
-                          } catch (error) {
-                            setError(catalogMessage(error));
-                          }
-                        }}
-                      >
-                        应用已确认配置
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {credentials.length ? (
-                <section
-                  className="flex flex-col gap-3"
-                  aria-label="Key 轮换记录"
-                >
-                  <h3 className="font-medium">Key 记录</h3>
-                  {credentials.map((key) => (
-                    <div
-                      key={key.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded border p-3 text-sm"
-                    >
-                      <span>
-                        {key.status === "active"
-                          ? "已配置"
-                          : key.status === "draining"
-                            ? key.pool_enabled
-                              ? "号池可选"
-                              : "仅供已有任务恢复"
-                            : "已停用"}
-                        {key.create_time
-                          ? ` · ${new Date(key.create_time).toLocaleString("zh-CN")}`
-                          : ""}
-                      </span>
-                      {key.status === "draining" && key.id && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={mutation.busy}
-                          onClick={() =>
-                            void mutation.run("pool.key", key.id!, (request) =>
-                              updateAdminPoolKey(
-                                { id, credential_id: key.id! },
-                                {
-                                  enabled: !key.pool_enabled,
-                                  request_id: request,
-                                },
-                              ),
-                            )
-                          }
-                        >
-                          {key.pool_enabled ? "停止接新单" : "加入号池"}
-                        </Button>
-                      )}
-
-                      {key.status !== "disabled" ? (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button type="button" variant="ghost">
-                              紧急停用
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                紧急停用此 Key？
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                绑定此 Key 的任务将无法查询。停用后不可撤销。
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>取消</AlertDialogCancel>
-                              <AlertDialogAction
-                                variant="destructive"
-                                size="sm"
-                                disabled={mutation.busy}
-                                onClick={() =>
-                                  mutation.run(
-                                    "credential.disable",
-                                    key.id!,
-                                    (request) =>
-                                      disableAdminCredential(
-                                        { id, credential_id: key.id! },
-                                        {
-                                          headers: {
-                                            "Idempotency-Key": request,
-                                          },
-                                        },
-                                      ),
-                                  )
-                                }
-                              >
-                                确认停用此 Key
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      ) : null}
-                    </div>
-                  ))}
-                </section>
-              ) : null}
-            </CollapsibleContent>
-          </Collapsible>
         </>
       )}
     </div>

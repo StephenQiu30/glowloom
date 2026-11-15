@@ -18,6 +18,10 @@ var ErrInvalidReserveInput = errors.New("invalid operation reserve input")
 // operation confirmation coordinator. The caller owns the transaction and
 // must lock and recheck the quoted operation before reserving its amount.
 type ReserveInput struct {
+	// SourceScopeID is read from Creation's immutable accepted input by the
+	// Operation coordinator in the same guarded funding Tx. It is never a
+	// caller-supplied scope or permission to spend, and cannot bypass authorizers.
+	SourceScopeID        uuid.UUID `json:"-"`
 	Actor                identityapp.Principal
 	ProjectID            uuid.UUID
 	OperationID          uuid.UUID

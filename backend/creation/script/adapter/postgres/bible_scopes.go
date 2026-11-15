@@ -8,7 +8,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // BibleScopes reads only formal script identities under the caller's current project lock.
@@ -23,7 +22,7 @@ func NewBibleScopes(tx *gorm.DB, access application.ProjectAccess) *BibleScopes 
 }
 
 // ValidateLookScopes verifies current formal episodes and confirmed stable scene keys.
-func (s *BibleScopes) ValidateLookScopes(ctx context.Context, actor identityapp.Principal, project uuid.UUID, scopes []application.BibleLookScope) error {
+func (s *BibleScopes) ValidateLookScopes(ctx context.Context, actor application.Actor, project uuid.UUID, scopes []application.BibleLookScope) error {
 	if s == nil || s.tx == nil || s.access == nil {
 		return application.ErrContextUnavailable
 	}

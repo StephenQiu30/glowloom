@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -29,7 +28,7 @@ type pendingPersonalCommit struct {
 	keys                             []string
 }
 
-func (r *pendingPersonalCommit) CommitPersonalUpload(_ context.Context, actor identityapp.Principal, request mediaapp.UploadRequest, a domain.MediaAsset, rends []domain.Rendition) (mediaapp.PersonalUploadResult, error) {
+func (r *pendingPersonalCommit) CommitPersonalUpload(_ context.Context, actor mediaapp.Actor, request mediaapp.UploadRequest, a domain.MediaAsset, rends []domain.Rendition) (mediaapp.PersonalUploadResult, error) {
 	r.started.Store(true)
 	r.keys = []string{a.ObjectKey}
 	for _, rend := range rends {
@@ -75,7 +74,7 @@ func TestPersonalUploadCleanupJoinsUnknownRealCommitBeforeObjectRemoval(t *testi
 	objects := glbTestObjects(t)
 	service := mediaFixtureRoutedUpload(t, db, repo.Store, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = uuid.Nil
 	result := make(chan error, 1)
 	joined := make(chan struct{})
@@ -147,7 +146,7 @@ func TestPersonalUploadZeroRowReceiptRollsBackObjectsAndAudit(t *testing.T) {
 	store := mediaTestStore(db)
 	service := mediaFixtureMockUpload(t, db, store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects)
 	in := uploadInput(t)
-	in.Actor = actor
+	in.Actor = mediaActor(actor)
 	in.Request.ProjectID = uuid.Nil
 	if result, err := fixturePersonalUpload(t.Context(), service, in); err == nil || result.Asset.ID != uuid.Nil {
 		t.Fatal("zero row receipt returned success", err)

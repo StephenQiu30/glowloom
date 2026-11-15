@@ -27,12 +27,10 @@ func bibleClosedHistoryDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 }
 
 func bibleClosedService(t *testing.T, db *gorm.DB, _ *objectstorage.Client) *app.Service {
-	return app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess {
-		return bibleFixtureProjectAccess(tx)
-	}, Media: func(tx *gorm.DB) app.MediaReferences {
+	return app.NewService(pg.NewStore(db, pg.Factories{Access: bibleFixtureContentAccess, Media: func(tx *gorm.DB) app.MediaReferences {
 		return actualBibleMedia{mediaapp.NewRoutedReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}
 	}, Scopes: func(tx *gorm.DB) app.ScriptScopes {
-		return currentBibleScopes{scriptpg.NewBibleScopes(tx, bibleFixtureProjectAccess(tx))}
+		return currentBibleScopes{scriptpg.NewBibleScopes(tx, bibleScriptAccess(bibleFixtureProjectAccess(tx)))}
 	}}), time.Now)
 }
 
@@ -41,11 +39,11 @@ func bibleClosedCharacter(t *testing.T, db, owner *gorm.DB) (identityapp.Princip
 	objects := bibleObjects(t)
 	fixture := coordinatedContentFixture(t, db, owner, objects)
 	service := bibleClosedService(t, db, objects)
-	detail, err := service.Find(t.Context(), fixture.actor, fixture.project, domain.KindCharacter, fixture.character)
+	detail, err := service.Find(t.Context(), bibleActor(fixture.actor), fixture.project, domain.KindCharacter, fixture.character)
 	if err != nil || detail.Current.Character.Voice == nil || len(detail.Current.Character.Looks[0].AppliesTo) != 1 {
 		t.Fatal("actual materialized voice and formal scene fixture", err)
 	}
-	if _, err := service.Change(t.Context(), fixture.actor, app.Command{ProjectID: fixture.project, Kind: domain.KindCharacter, Action: "confirm", EntryID: fixture.character, ExpectedRevision: detail.Head.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
+	if _, err := service.Change(t.Context(), bibleActor(fixture.actor), app.Command{ProjectID: fixture.project, Kind: domain.KindCharacter, Action: "confirm", EntryID: fixture.character, ExpectedRevision: detail.Head.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal("actual latest version confirmation", err)
 	}
 	return fixture.actor, detail.Current
@@ -81,23 +79,23 @@ func bibleClosedReaders(t *testing.T, tx *gorm.DB, actor identityapp.Principal, 
 		read func() error
 	}{
 		{"version", func() error {
-			_, err := store.Version(t.Context(), actor, version.ProjectID, version.Kind, version.EntryID, version.ID)
+			_, err := store.Version(t.Context(), bibleActor(actor), version.ProjectID, version.Kind, version.EntryID, version.ID)
 			return err
 		}},
 		{"detail", func() error {
-			_, err := store.Find(t.Context(), actor, version.ProjectID, version.Kind, version.EntryID)
+			_, err := store.Find(t.Context(), bibleActor(actor), version.ProjectID, version.Kind, version.EntryID)
 			return err
 		}},
 		{"list", func() error {
-			_, err := store.List(t.Context(), actor, app.ListInput{ProjectID: version.ProjectID, Kind: version.Kind, Limit: 100})
+			_, err := store.List(t.Context(), bibleActor(actor), app.ListInput{ProjectID: version.ProjectID, Kind: version.Kind, Limit: 100})
 			return err
 		}},
 		{"history", func() error {
-			_, err := store.History(t.Context(), actor, version.ProjectID, version.Kind, version.EntryID, 100, nil)
+			_, err := store.History(t.Context(), bibleActor(actor), version.ProjectID, version.Kind, version.EntryID, 100, nil)
 			return err
 		}},
 		{"confirmed_reference", func() error {
-			_, err := pg.NewReferences(tx, bibleFixtureProjectAccess(tx)).Reference(t.Context(), actor, version.ProjectID, version.EntryID, &version.ID)
+			_, err := pg.NewReferences(tx, bibleFixtureContentAccess(tx)).Reference(t.Context(), bibleActor(actor), version.ProjectID, version.EntryID, &version.ID)
 			return err
 		}},
 	}
@@ -210,7 +208,7 @@ func TestBibleMaterializedClosedPGResultSourceAcceptedFieldsAndUnknown(t *testin
 			}, func(tx *gorm.DB) {
 				bibleClosedReaders(t, tx, actor, version, unknown)
 				if !unknown {
-					loaded, err := bibleStore(tx).Version(t.Context(), actor, version.ProjectID, version.Kind, version.EntryID, version.ID)
+					loaded, err := bibleStore(tx).Version(t.Context(), bibleActor(actor), version.ProjectID, version.Kind, version.EntryID, version.ID)
 					if err != nil || loaded.Result == nil || *loaded.Result != source || loaded.ContentSHA256 != version.ContentSHA256 {
 						t.Fatal("accepted provenance fields or immutable body digest lost", err)
 					}
@@ -243,19 +241,19 @@ func TestBibleMaterializedClosedPGEmptyScopeRepresentationsPreserveHistory(t *te
 	db, owner := bibleClosedHistoryDB(t)
 	actor, project := bibleActorProject(t, owner)
 	service := app.NewService(bibleStore(db), time.Now)
-	created, err := service.Change(t.Context(), actor, createCharacter(project))
+	created, err := service.Change(t.Context(), bibleActor(actor), createCharacter(project))
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "look_create", EntryID: created.EntryID, ExpectedRevision: created.Revision, Look: &app.LookInput{Name: "空范围造型", AppliesTo: []domain.LookScope{}}, Key: uuid.New(), RequestID: uuid.New()})
+	_, err = service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "look_create", EntryID: created.EntryID, ExpectedRevision: created.Revision, Look: &app.LookInput{Name: "空范围造型", AppliesTo: []domain.LookScope{}}, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	detail, err := service.Find(t.Context(), actor, project, domain.KindCharacter, created.EntryID)
+	detail, err := service.Find(t.Context(), bibleActor(actor), project, domain.KindCharacter, created.EntryID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: created.EntryID, ExpectedRevision: detail.Head.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
+	if _, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: created.EntryID, ExpectedRevision: detail.Head.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
 	var before struct{ Content, SHA, Scopes string }

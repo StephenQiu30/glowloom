@@ -16,29 +16,55 @@ import (
 
 // Run owns the gateway listener until cancellation or a serving failure.
 func Run(ctx context.Context, cfg Config, logger *zap.Logger) error {
+	if err := cfg.validate(cfg.HTTPAddr); err != nil {
+		return fmt.Errorf("configure gateway: %w", err)
+	}
+	if logger == nil {
+		return errors.New("gateway requires a logger")
+	}
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
 		return fmt.Errorf("listen gateway: %w", err)
 	}
-	logger.Info("gateway listening", zap.String("addr", listener.Addr().String()))
-	return Serve(ctx, listener, cfg.BackendOrigin, logger)
+	mode := "four-owner"
+	if !cfg.Origins.Configured() {
+		mode = "pre-migration"
+	}
+	logger.Info("gateway listening", zap.String("addr", listener.Addr().String()), zap.String("mode", mode))
+	return ServeConfig(ctx, listener, cfg, logger)
 }
 
-// Serve owns listener and serves the public proxy without starting business
-// runtimes. Cancelling ctx also closes active SSE and upgraded connections via
-// their request contexts; HTTP shutdown alone does not close hijacked sockets.
+// Serve serves the explicitly selected pre-migration single-backend mode.
 func Serve(ctx context.Context, listener net.Listener, origin string, logger *zap.Logger) error {
+	return ServeConfig(ctx, listener, Config{BackendOrigin: origin}, logger)
+}
+
+// ServeConfig owns listener without starting business runtimes. Cancellation
+// reaches active SSE and upgraded connections; shutdown and handler joins share
+// a bounded deadline because HTTP shutdown alone does not join hijacked sockets.
+func ServeConfig(ctx context.Context, listener net.Listener, cfg Config, logger *zap.Logger) error {
 	defer func() { _ = listener.Close() }()
-	handler, cleanup, err := proxygateway.NewHandler(origin, logger)
+	if err := cfg.validate(listener.Addr().String()); err != nil {
+		return fmt.Errorf("configure gateway: %w", err)
+	}
+	var handler http.Handler
+	var cleanup func()
+	var err error
+	if cfg.Origins.Configured() {
+		handler, cleanup, err = proxygateway.NewDomainHandler(cfg.Origins, logger)
+	} else {
+		handler, cleanup, err = proxygateway.NewHandler(cfg.BackendOrigin, logger)
+	}
 	if err != nil {
 		return fmt.Errorf("configure gateway: %w", err)
 	}
 	defer cleanup()
 	lifetime, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var active sync.WaitGroup
 	var admission sync.Mutex
+	active := 0
 	stopping := false
+	joined := make(chan struct{})
 	tracked := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		admission.Lock()
 		if stopping {
@@ -46,14 +72,24 @@ func Serve(ctx context.Context, listener net.Listener, origin string, logger *za
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		active.Add(1)
+		active++
 		admission.Unlock()
-		defer active.Done()
+		defer func() {
+			admission.Lock()
+			defer admission.Unlock()
+			active--
+			if stopping && active == 0 {
+				close(joined)
+			}
+		}()
 		handler.ServeHTTP(w, r)
 	})
 	stopRequests := func() {
 		admission.Lock()
 		stopping = true
+		if active == 0 {
+			close(joined)
+		}
 		admission.Unlock()
 		cancel()
 	}
@@ -63,8 +99,8 @@ func Serve(ctx context.Context, listener net.Listener, origin string, logger *za
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 		BaseContext:       func(net.Listener) context.Context { return lifetime },
-		// No overall ReadTimeout/WriteTimeout: uploads and long-lived streams
-		// retain the business owner's limits and request cancellation contract.
+		// No overall ReadTimeout/WriteTimeout: retain owner limits for uploads
+		// and long-lived streams together with request cancellation.
 	}
 	done := make(chan error, 1)
 	go func() {
@@ -74,12 +110,11 @@ func Serve(ctx context.Context, listener net.Listener, origin string, logger *za
 		}
 		done <- err
 	}()
+	var serveErr error
+	served := false
 	select {
-	case err := <-done:
-		stopRequests()
-		_ = server.Close()
-		active.Wait()
-		return err
+	case serveErr = <-done:
+		served = true
 	case <-ctx.Done():
 	}
 	stopRequests()
@@ -89,9 +124,18 @@ func Serve(ctx context.Context, listener net.Listener, origin string, logger *za
 	if shutdownErr != nil {
 		_ = server.Close()
 	}
-	serveErr := <-done
-	// Also join hijacked handlers: net/http.Shutdown does not wait for them.
-	active.Wait()
+	if !served {
+		select {
+		case serveErr = <-done:
+		case <-shutdown.Done():
+			return fmt.Errorf("join gateway listener: %w", shutdown.Err())
+		}
+	}
+	select {
+	case <-joined:
+	case <-shutdown.Done():
+		return fmt.Errorf("join gateway handlers: %w", shutdown.Err())
+	}
 	if shutdownErr != nil {
 		return fmt.Errorf("shutdown gateway: %w", shutdownErr)
 	}

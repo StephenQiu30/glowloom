@@ -47,7 +47,7 @@ func (s canvasCopySources) authorize(ctx context.Context, actor identity.Princip
 	return actor, nil
 }
 
-func (s canvasCopySources) ResolveSubject(ctx context.Context, actor identity.Principal, project uuid.UUID, id, version string) (promptdomain.ReferenceSource, bool, error) {
+func (s canvasCopySources) resolvePromptSubject(ctx context.Context, actor identity.Principal, project uuid.UUID, id, version string) (promptdomain.ReferenceSource, bool, error) {
 	out := promptdomain.ReferenceSource{Kind: "subject", SourceID: id, SourceVersion: version, Media: []promptdomain.SourceMedia{}}
 	actor, err := s.authorize(ctx, actor, project)
 	if err != nil {
@@ -70,10 +70,10 @@ func (s canvasCopySources) ResolveSubject(ctx context.Context, actor identity.Pr
 	return out, true, nil
 }
 
-func (s canvasCopySources) ValidateBinding(ctx context.Context, actor identity.Principal, project uuid.UUID, media promptdomain.SourceMedia, ready bool) error {
+func (s canvasCopySources) validatePromptBinding(ctx context.Context, actor identity.Principal, project uuid.UUID, media promptdomain.SourceMedia, ready bool) error {
 	actor, err := s.authorize(ctx, actor, project)
 	if err != nil {
 		return err
 	}
-	return (generationAccess{tx: s.tx}).ValidateBinding(ctx, actor, s.binding.SourceProjectID, media, ready)
+	return (generationAccess{tx: s.tx}).validatePromptBinding(ctx, actor, s.binding.SourceProjectID, media, ready)
 }

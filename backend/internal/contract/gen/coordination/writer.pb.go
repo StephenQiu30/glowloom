@@ -246,6 +246,9 @@ const (
 	ErrorReason_ERROR_REASON_NOT_FOUND   ErrorReason = 5
 	ErrorReason_ERROR_REASON_COMMITTED   ErrorReason = 6
 	ErrorReason_ERROR_REASON_FROZEN      ErrorReason = 7
+	// Identity credential policy failures retain their public HTTP distinctions.
+	ErrorReason_ERROR_REASON_CSRF_INVALID   ErrorReason = 8
+	ErrorReason_ERROR_REASON_ACCESS_EXPIRED ErrorReason = 9
 )
 
 // Enum value maps for ErrorReason.
@@ -259,16 +262,20 @@ var (
 		5: "ERROR_REASON_NOT_FOUND",
 		6: "ERROR_REASON_COMMITTED",
 		7: "ERROR_REASON_FROZEN",
+		8: "ERROR_REASON_CSRF_INVALID",
+		9: "ERROR_REASON_ACCESS_EXPIRED",
 	}
 	ErrorReason_value = map[string]int32{
-		"ERROR_REASON_UNSPECIFIED": 0,
-		"ERROR_REASON_INVALID":     1,
-		"ERROR_REASON_FENCED":      2,
-		"ERROR_REASON_CONFLICT":    3,
-		"ERROR_REASON_STALE":       4,
-		"ERROR_REASON_NOT_FOUND":   5,
-		"ERROR_REASON_COMMITTED":   6,
-		"ERROR_REASON_FROZEN":      7,
+		"ERROR_REASON_UNSPECIFIED":    0,
+		"ERROR_REASON_INVALID":        1,
+		"ERROR_REASON_FENCED":         2,
+		"ERROR_REASON_CONFLICT":       3,
+		"ERROR_REASON_STALE":          4,
+		"ERROR_REASON_NOT_FOUND":      5,
+		"ERROR_REASON_COMMITTED":      6,
+		"ERROR_REASON_FROZEN":         7,
+		"ERROR_REASON_CSRF_INVALID":   8,
+		"ERROR_REASON_ACCESS_EXPIRED": 9,
 	}
 )
 
@@ -811,7 +818,7 @@ const file_glowloom_coordination_writer_proto_rawDesc = "" +
 	"\x19COMMAND_STATE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16COMMAND_STATE_ADMITTED\x10\x01\x12\x1b\n" +
 	"\x17COMMAND_STATE_COMMITTED\x10\x02\x12\x18\n" +
-	"\x14COMMAND_STATE_FROZEN\x10\x03*\xe2\x01\n" +
+	"\x14COMMAND_STATE_FROZEN\x10\x03*\xa2\x02\n" +
 	"\vErrorReason\x12\x1c\n" +
 	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14ERROR_REASON_INVALID\x10\x01\x12\x17\n" +
@@ -820,7 +827,9 @@ const file_glowloom_coordination_writer_proto_rawDesc = "" +
 	"\x12ERROR_REASON_STALE\x10\x04\x12\x1a\n" +
 	"\x16ERROR_REASON_NOT_FOUND\x10\x05\x12\x1a\n" +
 	"\x16ERROR_REASON_COMMITTED\x10\x06\x12\x17\n" +
-	"\x13ERROR_REASON_FROZEN\x10\a2\xc1\x01\n" +
+	"\x13ERROR_REASON_FROZEN\x10\a\x12\x1d\n" +
+	"\x19ERROR_REASON_CSRF_INVALID\x10\b\x12\x1f\n" +
+	"\x1bERROR_REASON_ACCESS_EXPIRED\x10\t2\xc1\x01\n" +
 	"\vWriterFence\x12X\n" +
 	"\aInstall\x12%.glowloom.coordination.InstallRequest\x1a&.glowloom.coordination.InstallResponse\x12X\n" +
 	"\aResolve\x12%.glowloom.coordination.ResolveRequest\x1a&.glowloom.coordination.ResolveResponseBaZ_github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/coordination;coordinationb\x06proto3"

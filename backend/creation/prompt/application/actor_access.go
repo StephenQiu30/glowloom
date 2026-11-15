@@ -3,11 +3,9 @@ package application
 import (
 	"context"
 	"time"
-
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ActorAccess retains the exact account session in the preference transaction.
 type ActorAccess interface {
-	CheckSession(context.Context, identity.Principal, func() time.Time) error
+	CheckSession(context.Context, Actor, func() time.Time) error
 }

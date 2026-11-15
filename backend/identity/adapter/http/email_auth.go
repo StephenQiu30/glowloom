@@ -139,7 +139,14 @@ func NewEmailAuthHandler(auth *application.Auth, origin string, secure bool) *Em
 }
 
 // Register installs email authentication and recovery endpoints.
-func (h *EmailAuthHandler) Register(api *gin.RouterGroup) {
+func (h *EmailAuthHandler) Register(api *gin.RouterGroup) { h.register(api, true) }
+
+// RegisterPreparedSessions exposes the completed registration/session owner slice.
+// Account and credential changes retain their existing owner until their source
+// qualification barriers and original-request recovery are ready for cutover.
+func (h *EmailAuthHandler) RegisterPreparedSessions(api *gin.RouterGroup) { h.register(api, false) }
+
+func (h *EmailAuthHandler) register(api *gin.RouterGroup, credentials bool) {
 	routes := api.Group("", func(c *gin.Context) { c.Header("Cache-Control", "no-store"); c.Next() }, httpapi.Middleware(h.origin))
 	routes.POST("/registrations", h.start)
 	routes.POST("/registrations/:id/resend", h.resend)
@@ -149,10 +156,16 @@ func (h *EmailAuthHandler) Register(api *gin.RouterGroup) {
 	routes.GET("/session", h.current)
 	routes.POST("/session/refresh", h.refresh)
 	routes.POST("/session/upgrade", h.upgrade)
-	routes.POST("/password-resets", h.resetStart)
-	routes.POST("/password-resets/complete", h.resetComplete)
+	if credentials {
+		routes.POST("/password-resets", h.resetStart)
+		routes.POST("/password-resets/complete", h.resetComplete)
+		if h.auth.PasswordChangesReady() {
+			routes.POST("/me/password", h.passwordCommand)
+		} else {
+			routes.POST("/me/password", h.authenticated(), h.password)
+		}
+	}
 	routes.POST("/me/reauthentication", h.authenticated(), h.reauthenticate)
-	routes.POST("/me/password", h.authenticated(), h.password)
 	routes.DELETE("/sessions/:id", h.revokeSession)
 	if h.publicRevocations != nil {
 		routes.POST("/me/sessions/revoke-others", h.revokeOtherSessionsPublic)
@@ -378,7 +391,12 @@ func (h *EmailAuthHandler) login(c *gin.Context) {
 	if !httpapi.Decode(c, &input) {
 		return
 	}
-	r, err := h.auth.LoginFrom(c.Request.Context(), input.Email, input.Password, input.Persistent, requestSource(c))
+	requestID, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
+	if err != nil || requestID == uuid.Nil {
+		emailAuthProblem(c, application.ErrSessionActivation)
+		return
+	}
+	r, err := h.auth.LoginFromCommand(c.Request.Context(), requestID, input.Email, input.Password, input.Persistent, requestSource(c))
 	h.respond(c, r, err, 201)
 }
 
@@ -429,7 +447,18 @@ func (h *EmailAuthHandler) resetComplete(c *gin.Context) {
 	if !httpapi.Decode(c, &input) {
 		return
 	}
-	if err := h.auth.CompletePasswordReset(c.Request.Context(), input.Token, input.Password, input.Confirmation); err != nil {
+	var err error
+	if h.auth.PasswordResetsReady() {
+		request, parseErr := uuid.Parse(c.GetHeader("Idempotency-Key"))
+		if parseErr != nil || request == uuid.Nil {
+			httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
+			return
+		}
+		err = h.auth.CompletePasswordResetCommand(c.Request.Context(), request, input.Token, input.Password, input.Confirmation)
+	} else {
+		err = h.auth.CompletePasswordReset(c.Request.Context(), input.Token, input.Password, input.Confirmation)
+	}
+	if err != nil {
 		emailAuthProblem(c, err)
 		return
 	}

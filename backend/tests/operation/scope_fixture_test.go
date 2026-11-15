@@ -9,17 +9,33 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
+	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
@@ -30,8 +46,11 @@ type operationProjectAccess struct {
 
 func (a operationProjectAccess) AuthorizeOperation(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool) error {
 	_, err := a.store.Authorize(ctx, actor, project, write)
-	if a.worker && (errors.Is(err, identityapp.ErrForbidden) || errors.Is(err, workspaceapp.ErrScopeNotFound) || errors.Is(err, workspaceapp.ErrProjectNotFound)) {
+	if a.worker && (errors.Is(err, identityapp.ErrForbidden) || errors.Is(err, workspacesource.ErrScopeNotFound) || errors.Is(err, workspacesource.ErrProjectNotFound)) {
 		return operationapp.ErrExecutionAuthorityRevoked
+	}
+	if errors.Is(err, workspacesource.ErrScopeNotFound) || errors.Is(err, workspacesource.ErrProjectNotFound) {
+		return errors.Join(operationapp.ErrPublicNotFound, err)
 	}
 	return err
 }
@@ -60,6 +79,12 @@ func operationWorkerAccess(tx *gorm.DB) operationapp.ProjectAccess {
 
 func operationPlatformAccess(tx *gorm.DB) operationapp.PlatformAccess { return pgidentity.NewStore(tx) }
 
+func operationLegacyIngest(database *gorm.DB, registry *objectstorage.Registry, results *operationapp.ManagedResults, scopes pgmedia.ScopeAccessFactory, store managed.IngestStore) *managed.IngestActivities {
+	return operationwire.NewRoutedIngestActivities(database, registry, results, scopes, store)
+}
+
+func operationLegacyVideos() managed.VideoReader { return operationwire.NewGeneratedVideos() }
+
 func operationStore(database *gorm.DB) *pgoperation.Store {
 	return pgoperation.NewScopedStore(database, operationRequestAccess, operationWorkerAccess, operationPlatformAccess).WithExecutionAvailability(fixtureExecutionAvailability)
 }
@@ -71,7 +96,7 @@ func operationBillingStore(database *gorm.DB) *pgbilling.Store {
 }
 
 func operationPromptStore(database *gorm.DB) *pgprompt.Store {
-	return pgprompt.NewScopedStore(database, func(tx *gorm.DB) promptapp.ActorAccess { return pgidentity.NewStore(tx) })
+	return pgprompt.NewScopedStore(database, promptwire.SessionAccess)
 }
 
 // operationReviewerSession gives a synthetic reviewer explicit team membership;

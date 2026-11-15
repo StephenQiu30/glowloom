@@ -6,11 +6,14 @@ import (
 	"errors"
 	"strconv"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
@@ -265,11 +268,11 @@ func styleLibraryError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identity.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, app.ErrScopeNotFound), errors.Is(err, app.ErrStylePresetNotFound):
+	case errors.Is(err, workspacesource.ErrScopeNotFound), errors.Is(err, workspacesource.ErrStylePresetNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, app.ErrInvalidStyleLibrary):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
-	case errors.Is(err, app.ErrIdempotencyConflict):
+	case errors.Is(err, workspacesource.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_key_reused", nil)
 	case errors.Is(err, app.ErrStyleLibraryRevision):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)

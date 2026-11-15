@@ -11,11 +11,17 @@ import (
 
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -70,7 +76,7 @@ func TestProjectCoverFreezeMapAndPublicationClosedIdentities(t *testing.T) {
 	if err := workspaceapp.FreezeProjectCover(t.Context(), nil, actor, source, nil); err != nil {
 		t.Fatal("nil legacy cover requires owner", err)
 	}
-	if err := workspaceapp.FreezeProjectCover(t.Context(), nil, actor, source, &asset); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if err := workspaceapp.FreezeProjectCover(t.Context(), nil, actor, source, &asset); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatal("missing owner accepted", err)
 	}
 	if _, err := workspaceapp.MapProjectCover(&asset, nil); !errors.Is(err, workspaceapp.ErrProjectCoverUnavailable) {

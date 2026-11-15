@@ -4,21 +4,21 @@ import (
 	"context"
 	"fmt"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // MarkProjectContentChanged must participate in the consumer's already-authorized write transaction.
 func (s *Store) MarkProjectContentChanged(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
 	if s == nil || s.db == nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	if _, ok := s.db.Statement.ConnPool.(gorm.TxCommitter); !ok {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	if err := s.requireScope(ctx, s.db, actor, true); err != nil {
 		return err
@@ -28,7 +28,7 @@ func (s *Store) MarkProjectContentChanged(ctx context.Context, actor identity.Pr
 		return err
 	}
 	if !present {
-		return application.ErrProjectNotFound
+		return workspacesource.ErrProjectNotFound
 	}
 	return markProjectActivity(s.db.WithContext(ctx), id, "content")
 }
@@ -39,7 +39,7 @@ func markProjectActivity(tx *gorm.DB, id uuid.UUID, basis string) error {
 		return fmt.Errorf("update project activity: %w", result.Error)
 	}
 	if result.RowsAffected != 1 {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	return nil
 }

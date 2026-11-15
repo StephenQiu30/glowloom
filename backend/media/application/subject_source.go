@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -17,7 +16,7 @@ import (
 // ReadBoundSubjectSource is private server composition: its caller must first
 // select an immutable binding under the subject owner's current authority.
 type SubjectSourceReader interface {
-	FindSubjectSource(context.Context, identity.Principal, domain.LibraryScope, uuid.UUID) (LibraryMediaFile, error)
+	FindSubjectSource(context.Context, Actor, domain.LibraryScope, uuid.UUID) (LibraryMediaFile, error)
 	ReadBoundSubjectSource(context.Context, uuid.UUID) (LibraryMediaFile, error)
 }
 
@@ -58,7 +57,7 @@ func subjectEligible(file LibraryMediaFile) bool {
 }
 
 // Reference verifies original bytes only after source-library authorization.
-func (q *SubjectSourceQuery) Reference(ctx context.Context, actor identity.Principal, scope domain.LibraryScope, id uuid.UUID) (LibraryMediaFile, error) {
+func (q *SubjectSourceQuery) Reference(ctx context.Context, actor Actor, scope domain.LibraryScope, id uuid.UUID) (LibraryMediaFile, error) {
 	if q == nil || q.reader == nil || scope.Validate() != nil || id == uuid.Nil {
 		return LibraryMediaFile{}, ErrInvalidQuery
 	}

@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"fmt"
+
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 )
 
 // ProjectRetentionStore owns durable expired deletion jobs and locked cleanup.
@@ -22,7 +24,7 @@ func NewProjectRetention(store ProjectRetentionStore) *ProjectRetention {
 // Run performs bounded work so cancellation and retries remain under workflow ownership.
 func (s *ProjectRetention) Run(ctx context.Context, limit int) (int, error) {
 	if s == nil || s.store == nil || limit < 1 || limit > 500 {
-		return 0, ErrProjectDependencyUnavailable
+		return 0, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if _, err := s.store.EnqueueExpired(ctx, limit); err != nil {
 		return 0, fmt.Errorf("queue project retention: %w", err)

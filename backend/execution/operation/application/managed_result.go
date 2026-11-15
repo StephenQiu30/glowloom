@@ -13,10 +13,11 @@ import (
 
 // ManagedArtifact identifies private bytes without exposing a signed URL.
 type ManagedArtifact struct {
-	Sequence int    `json:"sequence"`
-	Size     int64  `json:"size"`
-	MIME     string `json:"mime"`
-	SHA256   string `json:"sha256"`
+	Sequence   int    `json:"sequence"`
+	Size       int64  `json:"size"`
+	MIME       string `json:"mime"`
+	SHA256     string `json:"sha256"`
+	DurationMS int64  `json:"duration_ms,omitempty"`
 }
 
 // ManagedResultState distinguishes a recoverable accepted task from terminal output.
@@ -96,6 +97,7 @@ type ManagedResultRepository interface {
 
 // ManagedResults stages manifests independently of database acknowledgements.
 type ManagedResults struct {
+	owned   *ArtifactDelivery
 	factory ProviderStagingFactory
 	objects ProviderStagingObjects
 	repo    ManagedResultRepository
@@ -105,6 +107,18 @@ type ManagedResults struct {
 func NewManagedResults(objects ProviderStagingObjects, repo ManagedResultRepository) *ManagedResults {
 	return &ManagedResults{objects: objects, repo: repo}
 }
+
+// NewOwnedManagedResults keeps manifests inside Execution and original bytes inside Media.
+// The old routed constructor remains until its actual runtime has equivalent acceptance.
+func NewOwnedManagedResults(repo ManagedResultRepository, artifacts *ArtifactDelivery) (*ManagedResults, error) {
+	if repo == nil || artifacts == nil || artifacts.repo == nil || artifacts.media == nil {
+		return nil, ErrInvalidProviderCall
+	}
+	return &ManagedResults{repo: repo, owned: artifacts}, nil
+}
+
+// UsesOwnedArtifacts reports the explicit opaque Media staging configuration.
+func (s *ManagedResults) UsesOwnedArtifacts() bool { return s != nil && s.owned != nil }
 
 // NewRoutedManagedResults scopes artifact and manifest I/O to the admitted operation.
 func NewRoutedManagedResults(factory ProviderStagingFactory, repo ManagedResultRepository) *ManagedResults {
@@ -134,6 +148,9 @@ func managedArtifactKey(i ProviderDispatchIdentity, seq int) string {
 
 // StageArtifact creates immutable private bytes before the manifest is committed.
 func (s *ManagedResults) StageArtifact(ctx context.Context, i ProviderDispatchIdentity, seq int, data []byte, mime string) (ManagedArtifact, error) {
+	if s != nil && s.owned != nil {
+		return s.owned.Stage(ctx, i, seq, data, mime)
+	}
 	if s != nil && s.factory != nil {
 		scoped, err := s.scoped(ctx, i)
 		if err != nil {
@@ -151,8 +168,27 @@ func (s *ManagedResults) StageArtifact(ctx context.Context, i ProviderDispatchId
 	return a, nil
 }
 
+// StageSource streams checked raw bytes only through Media-owned staging.
+func (s *ManagedResults) StageSource(ctx context.Context, i ProviderDispatchIdentity, raw ManagedArtifact, source io.Reader) (ManagedArtifact, error) {
+	if s == nil || s.owned == nil {
+		return ManagedArtifact{}, ErrInvalidProviderCall
+	}
+	return s.owned.StageSource(ctx, i, raw, source)
+}
+
 // Save publishes a complete private manifest then records it in the database.
 func (s *ManagedResults) Save(ctx context.Context, r ManagedResult) error {
+	if s != nil && s.owned != nil {
+		if r.Validate() != nil {
+			return ErrInvalidProviderCall
+		}
+		for _, a := range r.Artifacts {
+			if err := s.owned.Verify(ctx, r.Identity, a); err != nil {
+				return err
+			}
+		}
+		return s.repo.SaveManagedResult(ctx, r)
+	}
 	if s != nil && s.factory != nil {
 		scoped, err := s.scoped(ctx, r.Identity)
 		if err != nil {
@@ -185,6 +221,37 @@ func (s *ManagedResults) Verify(ctx context.Context, i ProviderDispatchIdentity)
 }
 
 func (s *ManagedResults) recover(ctx context.Context, i ProviderDispatchIdentity, persist bool) (*ManagedResult, error) {
+	if s != nil && s.owned != nil {
+		result, err := s.repo.ReadManagedResult(ctx, i)
+		if err != nil {
+			return nil, err
+		}
+		if result != nil {
+			for _, a := range result.Artifacts {
+				if err := s.owned.Verify(ctx, i, a); err != nil {
+					return nil, err
+				}
+			}
+			return result, nil
+		}
+		if persist {
+			if err := s.owned.Recover(ctx, i); err != nil {
+				return nil, err
+			}
+		}
+		if source, ok := s.repo.(SupplierObservationReader); ok {
+			observation, err := source.ReadSupplierObservation(ctx, i)
+			if err != nil {
+				return nil, err
+			}
+			// A saved original task can be queried read-only. Missing original
+			// synchronous bytes cannot be reconstructed by another paid request.
+			if observation != nil && observation.TaskID != "" && (observation.Outcome == ProviderOutcomeAccepted || observation.Outcome == ProviderOutcomeCompleted) {
+				return &ManagedResult{Identity: i, State: ManagedResultAccepted, TaskID: observation.TaskID}, nil
+			}
+		}
+		return nil, nil
+	}
 	if s != nil && s.factory != nil {
 		scoped, err := s.scoped(ctx, i)
 		if err != nil {
@@ -244,6 +311,26 @@ func (s *ManagedResults) recover(ctx context.Context, i ProviderDispatchIdentity
 
 // ReadArtifact verifies server-derived object metadata and bounded bytes.
 func (s *ManagedResults) ReadArtifact(ctx context.Context, i ProviderDispatchIdentity, seq int) (ManagedArtifact, []byte, error) {
+	if s != nil && s.owned != nil {
+		r, err := s.repo.ReadManagedResult(ctx, i)
+		if err != nil {
+			return ManagedArtifact{}, nil, err
+		}
+		if r == nil || r.State != ManagedResultSucceeded || seq < 1 || seq > len(r.Artifacts) {
+			return ManagedArtifact{}, nil, ErrProviderCallConflict
+		}
+		a := r.Artifacts[seq-1]
+		body, err := s.owned.Open(ctx, i, a)
+		if err != nil {
+			return ManagedArtifact{}, nil, err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(body, a.Size+1))
+		closeErr := body.Close()
+		if readErr != nil || closeErr != nil || int64(len(data)) != a.Size || imageDigest(data) != a.SHA256 {
+			return ManagedArtifact{}, nil, ErrProviderCallConflict
+		}
+		return a, data, nil
+	}
 	if s != nil && s.factory != nil {
 		scoped, err := s.scoped(ctx, i)
 		if err != nil {

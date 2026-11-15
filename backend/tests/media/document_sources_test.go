@@ -35,10 +35,10 @@ type documentSourceRepo struct {
 	err    error
 }
 
-func (r *documentSourceRepo) FreezeDocumentSources(context.Context, identityapp.Principal, uuid.UUID, []uuid.UUID) ([]domain.MediaAsset, error) {
+func (r *documentSourceRepo) FreezeDocumentSources(context.Context, mediaapp.Actor, uuid.UUID, []uuid.UUID) ([]domain.MediaAsset, error) {
 	return r.assets, r.err
 }
-func (r *documentSourceRepo) FindAsset(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.MediaAsset, error) {
+func (r *documentSourceRepo) FindAsset(context.Context, mediaapp.Actor, uuid.UUID, uuid.UUID) (domain.MediaAsset, error) {
 	return r.assets[0], r.err
 }
 
@@ -63,7 +63,7 @@ func TestDocumentSourcesFreezeIdentityOrderAndExactOriginalRead(t *testing.T) {
 	b.ObjectLocation = readLocation("cos-first", b.ObjectKey)
 	repo, objects := &documentSourceRepo{assets: []domain.MediaAsset{b, a}}, &documentSourceObjects{data: data}
 	reader := mediaapp.NewRoutedDocumentSources(repo, objects)
-	got, err := reader.Freeze(t.Context(), identityapp.Principal{}, a.ProjectID, []uuid.UUID{a.ID, b.ID})
+	got, err := reader.Freeze(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, []uuid.UUID{a.ID, b.ID})
 	if err != nil || len(got) != 2 || got[0].AssetID != a.ID || got[1].AssetID != b.ID || objects.calls != 0 {
 		t.Fatal("freeze preserves ordered facts without object I/O", got, err)
 	}
@@ -72,7 +72,7 @@ func TestDocumentSourcesFreezeIdentityOrderAndExactOriginalRead(t *testing.T) {
 		t.Fatal("source leaked private location")
 	}
 	repo.assets = []domain.MediaAsset{a}
-	file, err := reader.Open(t.Context(), identityapp.Principal{}, a.ProjectID, got[0])
+	file, err := reader.Open(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, got[0])
 	if err != nil || file.Size != int64(len(data)) || file.SHA256 != *a.SHA256 || objects.key != a.ObjectKey {
 		t.Fatal("verified private original", file, err)
 	}
@@ -120,12 +120,12 @@ func TestDocumentSourcesRejectChangedScopeFactsAndPrivateBytes(t *testing.T) {
 			a := sourceDocumentAsset(data)
 			repo, objects := &documentSourceRepo{assets: []domain.MediaAsset{a}}, &documentSourceObjects{data: bytes.Clone(data)}
 			reader := mediaapp.NewRoutedDocumentSources(repo, objects)
-			frozen, err := reader.Freeze(t.Context(), identityapp.Principal{}, a.ProjectID, []uuid.UUID{a.ID})
+			frozen, err := reader.Freeze(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, []uuid.UUID{a.ID})
 			if err != nil {
 				t.Fatal(err)
 			}
 			tc.change(&repo.assets[0], &frozen[0], objects)
-			if file, err := reader.Open(t.Context(), identityapp.Principal{}, a.ProjectID, frozen[0]); !errors.Is(err, tc.want) || file != nil || objects.calls != tc.calls {
+			if file, err := reader.Open(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, frozen[0]); !errors.Is(err, tc.want) || file != nil || objects.calls != tc.calls {
 				t.Fatal("invalid source accepted", err, objects.calls)
 			}
 		})
@@ -137,17 +137,17 @@ func TestDocumentSourcesRejectInvalidBatchAndCancelledReadBeforeObjectGet(t *tes
 	repo, objects := &documentSourceRepo{assets: []domain.MediaAsset{a}}, &documentSourceObjects{}
 	reader := mediaapp.NewRoutedDocumentSources(repo, objects)
 	for _, ids := range [][]uuid.UUID{nil, {uuid.Nil}, {a.ID, a.ID}, make([]uuid.UUID, 201)} {
-		if _, err := reader.Freeze(t.Context(), identityapp.Principal{}, a.ProjectID, ids); !errors.Is(err, mediaapp.ErrInvalidQuery) {
+		if _, err := reader.Freeze(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, ids); !errors.Is(err, mediaapp.ErrInvalidQuery) {
 			t.Fatal("invalid source batch", err)
 		}
 	}
-	frozen, err := reader.Freeze(t.Context(), identityapp.Principal{}, a.ProjectID, []uuid.UUID{a.ID})
+	frozen, err := reader.Freeze(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, []uuid.UUID{a.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := reader.Open(ctx, identityapp.Principal{}, a.ProjectID, frozen[0]); !errors.Is(err, context.Canceled) || objects.calls != 0 {
+	if _, err := reader.Open(ctx, mediaActor(identityapp.Principal{}), a.ProjectID, frozen[0]); !errors.Is(err, context.Canceled) || objects.calls != 0 {
 		t.Fatal("cancel reached private object I/O", err, objects.calls)
 	}
 }

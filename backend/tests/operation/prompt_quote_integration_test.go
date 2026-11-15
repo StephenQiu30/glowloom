@@ -8,23 +8,28 @@ import (
 	"time"
 	"unicode/utf8"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
+	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 )
 
 func templateQuoteStore(database *gorm.DB) *pgoperation.Store {
-	return pgoperation.NewScopedStoreWithEditor(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
-		return promptapp.NewCompiler(operationPromptStore(tx))
-	}, nil, operationRequestAccess, operationWorkerAccess, operationPlatformAccess).WithExecutionAvailability(fixtureExecutionAvailability)
+	return pgoperation.NewScopedStoreWithEditor(database, operationwire.ProvidePromptCompiler, nil, operationRequestAccess, operationWorkerAccess, operationPlatformAccess).WithExecutionAvailability(fixtureExecutionAvailability)
 }
 
 func seedTemplateQuoteCatalog(t *testing.T, database *gorm.DB, projectID uuid.UUID) string {
@@ -61,7 +66,7 @@ func templateQuoteInput(projectID uuid.UUID, modelKey string) operationapp.Creat
 func saveQuoteCustomization(t *testing.T, database *gorm.DB, actor identityapp.Principal, revision int64, content string) {
 	t.Helper()
 	definition, _ := promptdomain.DefinitionFor("skill_draft")
-	_, err := promptapp.NewPreferences(operationPromptStore(database), time.Now).Save(t.Context(), actor, promptapp.SaveInput{
+	_, err := promptapp.NewPreferences(operationPromptStore(database), time.Now).Save(t.Context(), operationPromptActor(actor), promptapp.SaveInput{
 		Operation: definition.Operation, Mode: promptdomain.Append, Content: content, BaseTemplateID: definition.TemplateID,
 		ExpectedRevision: revision, IdempotencyKey: uuid.New(), RequestID: uuid.NewString(),
 	})
@@ -117,7 +122,7 @@ func TestTemplateQuoteAuthorityFailureAndBatchAtomicity(t *testing.T) {
 	input := templateQuoteInput(projectID, modelKey)
 	store := templateQuoteStore(database)
 	foreign, _ := operationStoreProject(t, database)
-	if _, err := store.CreateFreeQuote(t.Context(), foreign, input); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.CreateFreeQuote(t.Context(), foreign, input); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatal("foreign actor compiled project context", err)
 	}
 	if _, err := operationStore(database).CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, promptapp.ErrTemplateUnavailable) {

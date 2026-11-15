@@ -16,19 +16,19 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/extract"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // SourceHandler serves persistent source editing and selected private bodies.
-type SourceHandler struct{ service *application.SourceService }
+type SourceHandler struct {
+	resolve ActorResolver
+	service *application.SourceService
+}
 
 // NewSourceHandler injects the actual object/persistence source use case.
-func NewSourceHandler(service *application.SourceService) *SourceHandler {
-	return &SourceHandler{service: service}
+func NewSourceHandler(service *application.SourceService, resolve ActorResolver) *SourceHandler {
+	return &SourceHandler{resolve: resolve, service: service}
 }
 
 // Register uses non-colon command paths compatible with Gin's parameter router.
@@ -171,11 +171,11 @@ func scriptProblem(c *gin.Context, err error) {
 		meta = map[string]any{"affected_episodes": impact.Affected}
 	}
 	switch {
-	case errors.Is(err, identityapp.ErrSessionInvalid):
+	case errors.Is(err, application.ErrSessionInvalid):
 		httpapi.WriteProblem(c, 401, "unauthorized", nil)
-	case errors.Is(err, identityapp.ErrForbidden):
+	case errors.Is(err, application.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, application.ErrNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
+	case errors.Is(err, application.ErrNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrConfirmationRequired):
 		httpapi.WriteProblem(c, 409, "confirmation_required", meta)
@@ -217,11 +217,17 @@ func versionQuery(c *gin.Context) (*uuid.UUID, bool) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-workspace [get]
 func (h *SourceHandler) Workspace(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	result, err := h.service.Workspace(c.Request.Context(), identityhttp.Principal(c), pid)
+	result, err := h.service.Workspace(c.Request.Context(), actor, pid)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -242,6 +248,12 @@ func (h *SourceHandler) Workspace(c *gin.Context) {
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-sources [get]
 func (h *SourceHandler) List(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -251,7 +263,6 @@ func (h *SourceHandler) List(c *gin.Context) {
 		return
 	}
 	after, limit := 0, 50
-	var err error
 	if raw := c.Query("after"); raw != "" {
 		after, err = strconv.Atoi(raw)
 		if err != nil {
@@ -270,7 +281,7 @@ func (h *SourceHandler) List(c *gin.Context) {
 		scriptProblem(c, domain.ErrInvalidSource)
 		return
 	}
-	result, err := h.service.Sources(c.Request.Context(), identityhttp.Principal(c), pid, version, after, limit)
+	result, err := h.service.Sources(c.Request.Context(), actor, pid, version, after, limit)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -291,6 +302,12 @@ func (h *SourceHandler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-sources/{lineage} [get]
 func (h *SourceHandler) Get(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -303,7 +320,7 @@ func (h *SourceHandler) Get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.service.Source(c.Request.Context(), identityhttp.Principal(c), pid, lineage, version)
+	result, err := h.service.Source(c.Request.Context(), actor, pid, lineage, version)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -312,6 +329,12 @@ func (h *SourceHandler) Get(c *gin.Context) {
 }
 
 func (h *SourceHandler) writeOne(c *gin.Context, action domain.SourceAction) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var request SourceWriteRequest
 	if !readJSON(c, &request) {
 		return
@@ -334,7 +357,7 @@ func (h *SourceHandler) writeOne(c *gin.Context, action domain.SourceAction) {
 	}
 	input.RightsConfirmed = request.RightsConfirmed
 	input.Sources = []application.SourceInput{source}
-	result, err := h.service.Write(c.Request.Context(), identityhttp.Principal(c), input)
+	result, err := h.service.Write(c.Request.Context(), actor, input)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -390,6 +413,12 @@ func (h *SourceHandler) Update(c *gin.Context) { h.writeOne(c, domain.SourceActi
 // @Failure 409 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-sources/{lineage} [delete]
 func (h *SourceHandler) Delete(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var r SourceDeleteRequest
 	if !readJSON(c, &r) {
 		return
@@ -403,7 +432,7 @@ func (h *SourceHandler) Delete(c *gin.Context) {
 		return
 	}
 	input.LineageID = &lineage
-	result, err := h.service.Write(c.Request.Context(), identityhttp.Principal(c), input)
+	result, err := h.service.Write(c.Request.Context(), actor, input)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -425,6 +454,12 @@ func (h *SourceHandler) Delete(c *gin.Context) {
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-sources/import [post]
 func (h *SourceHandler) Import(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var r SourceImportRequest
 	if !readJSON(c, &r) {
 		return
@@ -446,7 +481,7 @@ func (h *SourceHandler) Import(c *gin.Context) {
 		}
 		input.Sources = append(input.Sources, source)
 	}
-	result, err := h.service.Write(c.Request.Context(), identityhttp.Principal(c), input)
+	result, err := h.service.Write(c.Request.Context(), actor, input)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -469,6 +504,12 @@ func (h *SourceHandler) Import(c *gin.Context) {
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-sources/reorder [post]
 func (h *SourceHandler) Reorder(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var r SourceReorderRequest
 	if !readJSON(c, &r) {
 		return
@@ -478,7 +519,7 @@ func (h *SourceHandler) Reorder(c *gin.Context) {
 		return
 	}
 	input.Order = r.Order
-	result, err := h.service.Write(c.Request.Context(), identityhttp.Principal(c), input)
+	result, err := h.service.Write(c.Request.Context(), actor, input)
 	if err != nil {
 		scriptProblem(c, err)
 		return

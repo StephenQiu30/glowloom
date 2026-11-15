@@ -272,11 +272,20 @@ func appendWorkflowSpecialEvent(tx *gorm.DB, row workflowTransitionRow, topic st
 
 func encodeWorkflowEvent(tx *gorm.DB, row workflowTransitionRow, eventID uuid.UUID, topic string, data any) ([]byte, error) {
 	var project struct{ OrgID uuid.UUID }
-	result := tx.Raw(`SELECT org_id FROM workspace.project WHERE id = ?::uuid`, row.ProjectID.String()).Scan(&project)
+	var owner string
+	if err := tx.Raw(`SELECT infra.runtime_owner()`).Scan(&owner).Error; err != nil {
+		return nil, err
+	}
+	var result *gorm.DB
+	if owner == "execution" {
+		result = tx.Raw(`SELECT (snapshot->>'org_id')::uuid AS org_id FROM operation.frozen_input_acceptance WHERE operation_id=? AND snapshot->>'project_id'=?`, row.ID, row.ProjectID.String()).Scan(&project)
+	} else {
+		result = tx.Raw(`SELECT org_id FROM workspace.project WHERE id = ?::uuid`, row.ProjectID).Scan(&project)
+	}
 	if result.Error != nil {
 		return nil, fmt.Errorf("read workflow event organization: %w", result.Error)
 	}
-	if result.RowsAffected != 1 {
+	if result.RowsAffected != 1 || project.OrgID == uuid.Nil {
 		return nil, ErrNotFound
 	}
 	payload, err := json.Marshal(struct {

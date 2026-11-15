@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"maps"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -177,7 +179,7 @@ func replayDefaults(tx *gorm.DB, actor, key uuid.UUID, fingerprint string, saved
 		return false, nil
 	}
 	if row.RequestHash != fingerprint || row.StatusCode != 200 {
-		return false, application.ErrIdempotencyConflict
+		return false, workspacesource.ErrIdempotencyConflict
 	}
 	if err := json.Unmarshal(row.ResponseBody, saved); err != nil || saved.ProjectID == uuid.Nil || saved.DefaultModels == nil {
 		return false, application.ErrInvalidModelDefaults
@@ -200,7 +202,7 @@ func recordDefaults(tx *gorm.DB, actor, key uuid.UUID, fingerprint string, saved
 		return fmt.Errorf("record defaults receipt: %w", result.Error)
 	}
 	if result.RowsAffected != 1 {
-		return application.ErrIdempotencyConflict
+		return workspacesource.ErrIdempotencyConflict
 	}
 	return nil
 }

@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -30,7 +29,7 @@ func (w *packageOutputWriter) Write(data []byte) (int, error) {
 
 // Export reads the complete authorized snapshot and every original's actual SHA.
 // Missing/private unreadable bytes reject the whole ZIP, never a partial export.
-func (s *LibraryPackageService) Export(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope) (*Downloaded, error) {
+func (s *LibraryPackageService) Export(ctx context.Context, actor Actor, scope domain.LibraryScope) (*Downloaded, error) {
 	if s == nil || s.repo == nil || s.objects == nil {
 		return nil, ErrUnavailable
 	}

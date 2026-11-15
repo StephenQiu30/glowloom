@@ -2,18 +2,14 @@ package application
 
 import (
 	"context"
-	"errors"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
-
-// ErrScopeNotFound deliberately hides private scope existence.
-var ErrScopeNotFound = errors.New("creation scope not found")
 
 // ActorAccess checks live account eligibility without granting a content role.
 type ActorAccess interface {
@@ -43,7 +39,7 @@ func NewScopeAccess(store ScopeFactsStore) *ScopeAccess { return &ScopeAccess{st
 // Platform governance authority is intentionally absent from this interface.
 func (s *ScopeAccess) Resolve(ctx context.Context, actor, scope uuid.UUID, write bool) (domain.Scope, error) {
 	if actor == uuid.Nil || scope == uuid.Nil {
-		return domain.Scope{}, ErrScopeNotFound
+		return domain.Scope{}, workspacesource.ErrScopeNotFound
 	}
 	facts, err := s.store.LoadScopeFacts(ctx, actor, scope)
 	if err != nil {
@@ -54,19 +50,19 @@ func (s *ScopeAccess) Resolve(ctx context.Context, actor, scope uuid.UUID, write
 
 func resolveScopeFacts(facts ScopeFacts, actor, scope uuid.UUID, write bool) (domain.Scope, error) {
 	if !facts.ActorAvailable || facts.Scope.ID != scope {
-		return domain.Scope{}, ErrScopeNotFound
+		return domain.Scope{}, workspacesource.ErrScopeNotFound
 	}
 	switch facts.Scope.Kind {
 	case "personal":
 		if facts.Scope.OwnerUserID == nil || *facts.Scope.OwnerUserID != actor || facts.Scope.TeamID != nil {
-			return domain.Scope{}, ErrScopeNotFound
+			return domain.Scope{}, workspacesource.ErrScopeNotFound
 		}
 	case "team":
 		if facts.Scope.TeamID == nil || *facts.Scope.TeamID == uuid.Nil || facts.Scope.OwnerUserID != nil || facts.MemberStatus != "active" || (facts.MemberRole != "member" && facts.MemberRole != "team_admin") || (facts.TeamStatus != "active" && facts.TeamStatus != "archived") || (write && (facts.TeamStatus != "active" || facts.GovernanceBlocked)) {
-			return domain.Scope{}, ErrScopeNotFound
+			return domain.Scope{}, workspacesource.ErrScopeNotFound
 		}
 	default:
-		return domain.Scope{}, ErrScopeNotFound
+		return domain.Scope{}, workspacesource.ErrScopeNotFound
 	}
 	return facts.Scope, nil
 }
@@ -97,7 +93,7 @@ func NewRequestScopeAccess(store RequestScopeFactsStore, now func() time.Time) *
 // Resolve requires the exact live session before evaluating scope membership.
 func (s *RequestScopeAccess) Resolve(ctx context.Context, actor identity.Principal, scope uuid.UUID, write bool) (domain.Scope, error) {
 	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1 || scope == uuid.Nil {
-		return domain.Scope{}, ErrScopeNotFound
+		return domain.Scope{}, workspacesource.ErrScopeNotFound
 	}
 	facts, err := s.store.LoadRequestScopeFacts(ctx, actor, scope, s.now)
 	if err != nil {

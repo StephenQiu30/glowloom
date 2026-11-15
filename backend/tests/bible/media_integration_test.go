@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
 
 	"github.com/google/uuid"
@@ -22,7 +24,6 @@ import (
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -33,12 +34,12 @@ type bibleLibraryAccess struct {
 	owner *workspacepg.ProjectContentAccessStore
 }
 
-func (a bibleLibraryAccess) Authorize(ctx context.Context, actor identityapp.Principal, p uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
-	f, err := a.owner.Authorize(ctx, actor, p, write)
+func (a bibleLibraryAccess) Authorize(ctx context.Context, actor mediaapp.Actor, p uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
+	f, err := a.owner.Authorize(ctx, mediawire.IdentityActor(actor), p, write)
 	return mediaapp.LibraryProjectFacts{ProjectID: f.ProjectID, OrgID: f.OrgID, Revision: f.Revision}, err
 }
-func (a bibleLibraryAccess) TouchContent(ctx context.Context, actor identityapp.Principal, p uuid.UUID, r int64) (int64, error) {
-	return a.owner.TouchContent(ctx, actor, p, r)
+func (a bibleLibraryAccess) TouchContent(ctx context.Context, actor mediaapp.Actor, p uuid.UUID, r int64) (int64, error) {
+	return a.owner.TouchContent(ctx, mediawire.IdentityActor(actor), p, r)
 }
 func bibleLibraryFactory(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 	return bibleLibraryAccess{bibleFixtureProjectAccess(tx)}
@@ -66,12 +67,12 @@ func referenceFact(f domain.MediaFact) mediaapp.ReferenceFact {
 
 type actualBibleMedia struct{ owner *mediaapp.ReferenceFactQuery }
 
-func (a actualBibleMedia) Reference(ctx context.Context, actor identityapp.Principal, p, id uuid.UUID, kind string) (domain.MediaFact, error) {
-	f, err := a.owner.Reference(ctx, actor, p, id, mediadomain.Kind(kind))
+func (a actualBibleMedia) Reference(ctx context.Context, actor app.Actor, p, id uuid.UUID, kind string) (domain.MediaFact, error) {
+	f, err := a.owner.Reference(ctx, bibleMediaActor(bibleIdentityActor(actor)), p, id, mediadomain.Kind(kind))
 	return mediaFact(f), err
 }
-func (a actualBibleMedia) Verify(ctx context.Context, actor identityapp.Principal, p uuid.UUID, f domain.MediaFact) error {
-	return a.owner.VerifyFrozenReference(ctx, actor, p, referenceFact(f))
+func (a actualBibleMedia) Verify(ctx context.Context, actor app.Actor, p uuid.UUID, f domain.MediaFact) error {
+	return a.owner.VerifyFrozenReference(ctx, bibleMediaActor(bibleIdentityActor(actor)), p, referenceFact(f))
 }
 
 func bibleUploadedMedia(t *testing.T, db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal, project uuid.UUID, name string, body []byte) uuid.UUID {
@@ -86,15 +87,15 @@ func bibleUploadedMedia(t *testing.T, db *gorm.DB, objects *objectstorage.Client
 		}
 	})
 	uploader := businessFixtureUploads(t, db, bibleFixtureMediaStore(db), mediaflow.FFUploadProber{})
-	result, err := businessFixtureUpload(t.Context(), t, uploader, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: input, LocalReviewConfirmed: true})
+	result, err := businessFixtureUpload(t.Context(), t, uploader, mediaapp.UploadInput{Actor: bibleMediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: input, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual owner-reviewed upload", err)
 	}
-	asset, err := bibleFixtureMediaStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := bibleFixtureMediaStore(db).FindAsset(t.Context(), bibleMediaActor(actor), project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rends, err := bibleFixtureMediaStore(db).FindRenditions(t.Context(), actor, project, asset.ID)
+	rends, err := bibleFixtureMediaStore(db).FindRenditions(t.Context(), bibleMediaActor(actor), project, asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,15 +139,15 @@ func TestBiblePGActualSixImageRolesSampleAndFrozenTrashBoundaries(t *testing.T) 
 		t.Fatal(err)
 	}
 	audioID := bibleUploadedMedia(t, db, objects, actor, project, "voice.wav", audioBytes)
-	factories := pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Media: func(tx *gorm.DB) app.MediaReferences {
+	factories := pg.Factories{Access: bibleFixtureContentAccess, Media: func(tx *gorm.DB) app.MediaReferences {
 		return actualBibleMedia{mediaapp.NewRoutedReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}
 	}}
 	service := app.NewService(pg.NewStore(db, factories), time.Now)
-	first, err := service.Change(t.Context(), actor, createCharacter(project))
+	first, err := service.Change(t.Context(), bibleActor(actor), createCharacter(project))
 	if err != nil {
 		t.Fatal(err)
 	}
-	detail, err := service.Find(t.Context(), actor, project, domain.KindCharacter, first.EntryID)
+	detail, err := service.Find(t.Context(), bibleActor(actor), project, domain.KindCharacter, first.EntryID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,15 +156,15 @@ func TestBiblePGActualSixImageRolesSampleAndFrozenTrashBoundaries(t *testing.T) 
 	for _, role := range []domain.ImageRole{domain.RolePrimary, domain.RoleFront, domain.RoleSide, domain.RoleBack, domain.RoleTurnaround, domain.RoleExpression} {
 		refs = append(refs, app.ReferenceInput{Role: role, AssetID: imageID})
 	}
-	second, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "references", EntryID: first.EntryID, ExpectedRevision: 1, LookID: &look, References: refs, Key: uuid.New(), RequestID: uuid.New()})
+	second, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "references", EntryID: first.EntryID, ExpectedRevision: 1, LookID: &look, References: refs, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil {
 		t.Fatal("actual image reference consumer", err)
 	}
-	third, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "voice_bind", EntryID: first.EntryID, ExpectedRevision: 2, Voice: &app.VoiceInput{Kind: domain.VoiceSample, Instructions: "轻声说话，保留停顿。", Sample: &app.SampleInput{Name: "角色声样", AssetID: audioID}}, Key: uuid.New(), RequestID: uuid.New()})
+	third, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "voice_bind", EntryID: first.EntryID, ExpectedRevision: 2, Voice: &app.VoiceInput{Kind: domain.VoiceSample, Instructions: "轻声说话，保留停顿。", Sample: &app.SampleInput{Name: "角色声样", AssetID: audioID}}, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil {
 		t.Fatal("actual audio sample consumer", err)
 	}
-	current, err := service.Find(t.Context(), actor, project, domain.KindCharacter, first.EntryID)
+	current, err := service.Find(t.Context(), bibleActor(actor), project, domain.KindCharacter, first.EntryID)
 	if err != nil || len(current.Current.Character.Looks[0].References) != 6 || current.Current.Character.Voice.Sample.Media.AssetID != audioID || current.Current.Character.Voice.Kind != domain.VoiceSample {
 		t.Fatal("typed roles/sample lost", err)
 	}
@@ -172,13 +173,13 @@ func TestBiblePGActualSixImageRolesSampleAndFrozenTrashBoundaries(t *testing.T) 
 			t.Fatal("original masquerades as image rendition")
 		}
 	}
-	old, err := service.Version(t.Context(), actor, project, domain.KindCharacter, first.EntryID, second.VersionID)
+	old, err := service.Version(t.Context(), bibleActor(actor), project, domain.KindCharacter, first.EntryID, second.VersionID)
 	if err != nil || old.Character.Voice != nil {
 		t.Fatal("sample rewrote prior immutable version", err)
 	}
 	library := bibleFixtureLibraryStore(db, bibleLibraryFactory, time.Now)
 	scope := mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}
-	page, err := library.ListLibrary(t.Context(), actor, scope, mediaapp.LibraryQuery{Page: 1, PageSize: 100, State: mediadomain.LibraryItemStateActive, Order: "updated_desc"})
+	page, err := library.ListLibrary(t.Context(), bibleMediaActor(actor), scope, mediaapp.LibraryQuery{Page: 1, PageSize: 100, State: mediadomain.LibraryItemStateActive, Order: "updated_desc"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,13 +192,13 @@ func TestBiblePGActualSixImageRolesSampleAndFrozenTrashBoundaries(t *testing.T) 
 	if item.ID == uuid.Nil {
 		t.Fatal("uploaded reference is absent from current library")
 	}
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, ExpectedRevision: page.Revision, Action: "recycle_items", Key: uuid.New(), Items: []mediaapp.LibraryItemRevision{item}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), bibleMediaActor(actor), mediaapp.LibraryCommand{Scope: scope, ExpectedRevision: page.Revision, Action: "recycle_items", Key: uuid.New(), Items: []mediaapp.LibraryItemRevision{item}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: third.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
+	if _, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: third.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal("catalog trash revoked frozen historical evidence", err)
 	}
-	if _, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "references", EntryID: first.EntryID, ExpectedRevision: 4, LookID: &look, References: refs, Key: uuid.New(), RequestID: uuid.New()}); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "references", EntryID: first.EntryID, ExpectedRevision: 4, LookID: &look, References: refs, Key: uuid.New(), RequestID: uuid.New()}); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("hidden catalog promoted into new binding", err)
 	}
 	var objectKey string
@@ -207,7 +208,7 @@ func TestBiblePGActualSixImageRolesSampleAndFrozenTrashBoundaries(t *testing.T) 
 	if err := objects.Remove(t.Context(), objectKey); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: 4, Key: uuid.New(), RequestID: uuid.New()}); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: 4, Key: uuid.New(), RequestID: uuid.New()}); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("missing private rendition published as confirmed", err)
 	}
 }

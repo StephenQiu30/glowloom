@@ -12,12 +12,11 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // CharacterUsageReader is the downstream projection required by soft deletion.
 type CharacterUsageReader interface {
-	Read(context.Context, identityapp.Principal, uuid.UUID, []uuid.UUID) (application.CharacterUsage, error)
+	Read(context.Context, application.Actor, uuid.UUID, []uuid.UUID) (application.CharacterUsage, error)
 }
 
 // DeletionImpacts checks deletion only; it must not silently implement merge or look changes.
@@ -33,7 +32,7 @@ func NewDeletionImpacts(tx *gorm.DB, access application.ProjectAccess, usage Cha
 }
 
 // Read freezes the complete current reference evidence without modifying history.
-func (d *DeletionImpacts) Read(ctx context.Context, actor identityapp.Principal, project uuid.UUID, input application.ImpactInput) (application.ImpactProof, error) {
+func (d *DeletionImpacts) Read(ctx context.Context, actor application.Actor, project uuid.UUID, input application.ImpactInput) (application.ImpactProof, error) {
 	result := application.ImpactProof{}
 	if d == nil || d.tx == nil || d.access == nil || d.usage == nil || input.Action != "delete" || !input.Kind.Valid() || input.EntryID == uuid.Nil || input.VersionID == uuid.Nil || input.LookID != nil {
 		return result, application.ErrUnavailable
@@ -101,7 +100,7 @@ func (d *DeletionImpacts) Read(ctx context.Context, actor identityapp.Principal,
 
 // Apply rechecks the accepted facts while the project write lock is still held.
 // Historical records need no mutation: the Bible head controls future admission.
-func (d *DeletionImpacts) Apply(ctx context.Context, actor identityapp.Principal, project uuid.UUID, input application.ImpactInput, proof application.ImpactProof) error {
+func (d *DeletionImpacts) Apply(ctx context.Context, actor application.Actor, project uuid.UUID, input application.ImpactInput, proof application.ImpactProof) error {
 	current, err := d.Read(ctx, actor, project, input)
 	if err != nil {
 		return err

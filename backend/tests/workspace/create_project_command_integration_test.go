@@ -13,14 +13,19 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
-func projectCreateIntegrationInput(presetID uuid.UUID) workspaceapp.CreateProjectInput {
-	return workspaceapp.CreateProjectInput{
+func projectCreateIntegrationInput(presetID uuid.UUID) workspacesource.CreateProjectInput {
+	return workspacesource.CreateProjectInput{
 		Name: "逆光", Description: "项目说明仅留在项目表",
 		AspectRatio: "16:9", StyleType: "stylized", StyleSubtype: "guofeng_xianxia",
 		StylePresetID: presetID, RequestID: uuid.NewString(),
@@ -222,7 +227,7 @@ func TestCreateProjectCommandRechecksCurrentActorAndOrganization(t *testing.T) {
 	forged.OrgID = actor.OrgID
 	input := projectCreateIntegrationInput(uuid.Nil)
 	input.Name = "伪造组织"
-	if _, err := command.Execute(ctx, forged, input); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, err := command.Execute(ctx, forged, input); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("forged organization result = %v, want current scope rejection", err)
 	}
 	if count := countProjectsNamed(ctx, t, database, actor.OrgID, input.Name); count != 0 {
@@ -237,7 +242,7 @@ func TestCreateProjectCommandRechecksCurrentActorAndOrganization(t *testing.T) {
 		want       error
 	}{
 		{"disabled actor", `UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, `UPDATE identity."user" SET status = 'active' WHERE id = ?::uuid`, actor.ID, identityapp.ErrSessionInvalid},
-		{"suspended team scope", `UPDATE workspace.team SET status = 'suspended', resume_status = 'active' WHERE id = (SELECT team_id FROM workspace.creation_scope WHERE id = ?::uuid)`, `UPDATE workspace.team SET status = 'active', resume_status = NULL WHERE id = (SELECT team_id FROM workspace.creation_scope WHERE id = ?::uuid)`, actor.ScopeID, workspaceapp.ErrScopeNotFound},
+		{"suspended team scope", `UPDATE workspace.team SET status = 'suspended', resume_status = 'active' WHERE id = (SELECT team_id FROM workspace.creation_scope WHERE id = ?::uuid)`, `UPDATE workspace.team SET status = 'active', resume_status = NULL WHERE id = (SELECT team_id FROM workspace.creation_scope WHERE id = ?::uuid)`, actor.ScopeID, workspacesource.ErrScopeNotFound},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if err := database.WithContext(ctx).Exec(test.change, test.identifier.String()).Error; err != nil {
@@ -353,7 +358,7 @@ func TestCreateProjectStoreRejectsTamperedEventsBeforeWriting(t *testing.T) {
 			}
 			test.change(t, capture.events)
 			_, err = workspaceStore(database).CreateProjectWithEvents(ctx, actor, capture.project, capture.events)
-			if !errors.Is(err, workspaceapp.ErrInvalidCreateProject) {
+			if !errors.Is(err, workspacesource.ErrInvalidCreateProject) {
 				t.Fatalf("tampered event result = %v, want invalid command", err)
 			}
 			projectCount, budgetCount := projectAndBudgetCount(ctx, t, database, capture.project.ID)

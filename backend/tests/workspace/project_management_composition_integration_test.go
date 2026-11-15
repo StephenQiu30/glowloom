@@ -5,7 +5,10 @@ import (
 	"testing"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
 )
 
@@ -23,7 +26,7 @@ func TestProjectManagementComposedOwnersRestoreRecycledProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
-	if _, err := service.Change(ctx, other, projectChange(id, deleted.Project.Revision, "restore")); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := service.Change(ctx, other, projectChange(id, deleted.Project.Revision, "restore")); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("cross scope restore: %v", err)
 	}
 	restored, err := service.Change(ctx, actor, projectChange(id, deleted.Project.Revision, "restore"))

@@ -23,7 +23,7 @@ func TestGIFActualPrivateUploadReviewThumbnailsAndCompleteIndependentCopy(t *tes
 	data := uploadGIF(t, 3)
 	asset := documentUpload(t, db, objects, actor, project, "完整动画.gif", data)
 	store := mediaTestStore(db)
-	original, err := store.FindAsset(t.Context(), actor, project, asset.Asset.ID)
+	original, err := store.FindAsset(t.Context(), mediaActor(actor), project, asset.Asset.ID)
 	if err != nil || original.MimeType != "image/gif" || original.Codec == nil || *original.Codec != "gif" || original.SHA256 == nil || original.Width == nil || *original.Width != 3 || original.Height == nil || *original.Height != 4 || original.DurationMS != nil {
 		t.Fatal("formal GIF original facts", original, err)
 	}
@@ -44,7 +44,7 @@ func TestGIFActualPrivateUploadReviewThumbnailsAndCompleteIndependentCopy(t *tes
 	if err != nil || len(decoded.Image) != 3 {
 		t.Fatal("actual stored GIF is not complete animation", err)
 	}
-	rends, err := store.FindRenditions(t.Context(), actor, project, original.ID)
+	rends, err := store.FindRenditions(t.Context(), mediaActor(actor), project, original.ID)
 	if err != nil || len(rends) != 2 {
 		t.Fatal("GIF real first-frame thumbnails missing", err)
 	}
@@ -68,7 +68,7 @@ func TestGIFActualPrivateUploadReviewThumbnailsAndCompleteIndependentCopy(t *tes
 	var snapshot mediaapp.ProjectCopySnapshot
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), mediaActor(actor), binding, time.Now())
 		if err != nil {
 			return err
 		}
@@ -77,10 +77,10 @@ func TestGIFActualPrivateUploadReviewThumbnailsAndCompleteIndependentCopy(t *tes
 		t.Fatal("complete GIF owning snapshot", snapshot, err)
 	}
 	repo := mediaCopyStore(db)
-	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), mediaActor(actor), binding, snapshot); err != nil {
 		t.Fatal("GIF full private bytes transfer", err)
 	}
-	intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
+	intents, err := repo.Objects(t.Context(), mediaActor(actor), binding, snapshot)
 	if err != nil || len(intents) != 3 {
 		t.Fatal("complete independent GIF and previews", intents, err)
 	}
@@ -95,7 +95,7 @@ func TestGIFActualPrivateUploadReviewThumbnailsAndCompleteIndependentCopy(t *tes
 		}
 	})
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal("register real independent GIF assets", err)

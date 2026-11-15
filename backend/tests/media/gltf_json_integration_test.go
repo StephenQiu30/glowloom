@@ -39,8 +39,8 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewUploadHandler(service).Register(group)
-	mediahttp.NewHandler(query).Register(group)
+	mediahttp.NewUploadHandler(service, fixtureIdentityMediaActor).Register(group)
+	mediahttp.NewHandler(query, fixtureIdentityMediaActor).Register(group)
 	body := gltfJSONBytes(t, gltfJSONDocument(t))
 	key := uuid.New()
 	response := httptest.NewRecorder()
@@ -49,7 +49,7 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 	if response.Code != 201 || json.Unmarshal(response.Body.Bytes(), &result) != nil || result.Asset.Kind != "model" || result.Asset.MIMEType != "model/gltf+json" {
 		t.Fatal("formal JSON model upload failed", response.Code, response.Body.String())
 	}
-	original, err := store.FindAsset(t.Context(), actor, project, result.Asset.ID)
+	original, err := store.FindAsset(t.Context(), mediaActor(actor), project, result.Asset.ID)
 	if err != nil || original.Codec == nil || *original.Codec != "gltf2" || original.SHA256 == nil || original.ByteSize != int64(len(body)) || original.Width != nil || original.Height != nil {
 		t.Fatal("JSON model acquired fake binary or image facts", original, err)
 	}
@@ -63,7 +63,7 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 	if json.Unmarshal(original.ModerationDetail, &review) != nil || review.PrincipalID != actor.ID || review.SHA256 != *original.SHA256 || !review.RightsConfirmed || review.Normalization != nil {
 		t.Fatal("JSON original review did not bind its exact uploaded bytes", review)
 	}
-	preview, err := query.Preview(t.Context(), actor, project, original.ID)
+	preview, err := query.Preview(t.Context(), mediaActor(actor), project, original.ID)
 	if err != nil || preview.Asset.MIMEType != "model/gltf+json" {
 		t.Fatal("private model preview missing", err)
 	}
@@ -80,10 +80,10 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 	if served.StatusCode != 200 || readErr != nil || closeErr != nil || !bytes.Equal(actual, body) {
 		t.Fatal("private JSON original changed format or bytes", served.StatusCode, readErr, closeErr)
 	}
-	if _, err := query.Reference(t.Context(), actor, foreignProject, original.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := query.Reference(t.Context(), mediaActor(actor), foreignProject, original.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("foreign project obtained model reference", err)
 	}
-	rends, err := store.FindRenditions(t.Context(), actor, project, original.ID)
+	rends, err := store.FindRenditions(t.Context(), mediaActor(actor), project, original.ID)
 	if err != nil || len(rends) != 0 {
 		t.Fatal("JSON model acquired fabricated thumbnail", err)
 	}
@@ -117,7 +117,7 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 	var snapshot mediaapp.ProjectCopySnapshot
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), mediaActor(actor), binding, time.Now())
 		if err != nil {
 			return err
 		}
@@ -126,16 +126,16 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 		t.Fatal("complete JSON model Copy snapshot failed", snapshot, err)
 	}
 	repo := mediaCopyStore(db)
-	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, db), t.TempDir()).Transfer(t.Context(), mediaActor(actor), binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
-	intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
+	intents, err := repo.Objects(t.Context(), mediaActor(actor), binding, snapshot)
 	if err != nil || len(intents) != 1 {
 		t.Fatal("independent JSON model original incomplete", intents, err)
 	}
 	keys = append(keys, intents[0].TargetObjectKey)
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -157,16 +157,16 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	personal, err := fixturePersonalUpload(t.Context(), service, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{Key: uuid.New(), RequestID: uuid.New(), FileName: "个人JSON场景.gltf"}, File: file, LocalReviewConfirmed: true})
+	personal, err := fixturePersonalUpload(t.Context(), service, mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{Key: uuid.New(), RequestID: uuid.New(), FileName: "个人JSON场景.gltf"}, File: file, LocalReviewConfirmed: true})
 	if err != nil || personal.Asset.MIMEType != "model/gltf+json" || personal.Asset.Kind != "model" {
 		t.Fatal("same personal pipeline lost JSON model facts", personal, err)
 	}
-	p, err := mediaLibraryStore(db, libraryTestAccess, time.Now).FindLibraryMedia(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}, personal.Asset.ID)
+	p, err := mediaLibraryStore(db, libraryTestAccess, time.Now).FindLibraryMedia(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryPersonal}, personal.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	keys = append(keys, p.Asset.ObjectKey)
-	if _, err := query.Reference(t.Context(), actor, project, personal.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := query.Reference(t.Context(), mediaActor(actor), project, personal.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("personal JSON original bypassed project Transfer", err)
 	}
 }
@@ -186,11 +186,11 @@ func TestGLTFJSONSchemaFactsAndRetainedOriginalContract(t *testing.T) {
 	}
 	defer func() { _ = file.Close() }()
 	service := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), nil, mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
-	result, err := fixtureProjectUpload(t.Context(), service, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "约束模型.gltf"}, File: file, LocalReviewConfirmed: true})
+	result, err := fixtureProjectUpload(t.Context(), service, mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "约束模型.gltf"}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	asset, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := mediaTestStore(db).FindAsset(t.Context(), mediaActor(actor), project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

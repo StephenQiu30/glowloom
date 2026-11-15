@@ -22,7 +22,7 @@ type ProjectCopyBibleOwner interface {
 
 // ProjectCopyReferenceMediaOwner accepts only exact owning historical media facts.
 type ProjectCopyReferenceMediaOwner interface {
-	FreezeWithReferenceFacts(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, time.Time, []uuid.UUID, []mediaapp.ReferenceFact) (mediaapp.ProjectCopySnapshot, error)
+	FreezeWithReferenceFacts(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, time.Time, []uuid.UUID, []mediaapp.ReferenceFact) (mediaapp.ProjectCopySnapshot, error)
 }
 
 // ProjectCopyBibleTransfer verifies actual media outside the SQL transaction.

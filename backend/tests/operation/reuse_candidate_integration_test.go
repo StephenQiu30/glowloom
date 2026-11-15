@@ -7,8 +7,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -95,7 +97,7 @@ func TestFindReusableCompletedRequiresSameProjectAndSafeOutputs(t *testing.T) {
 	if err := database.Exec(`UPDATE workspace.project SET is_delete = true, delete_time = now(), purge_after = now() + interval '30 days' WHERE id = ?::uuid`, projectID.String()).Error; err != nil {
 		t.Fatalf("delete project: %v", err)
 	}
-	if _, err := store.FindReusableCompleted(t.Context(), actor, projectID, hash); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.FindReusableCompleted(t.Context(), actor, projectID, hash); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("deleted project reuse = %v, want no candidate", err)
 	}
 }

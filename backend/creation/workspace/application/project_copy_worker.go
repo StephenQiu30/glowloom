@@ -5,10 +5,12 @@ import (
 	"errors"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -103,7 +105,7 @@ func (w *ProjectCopyWorker) finishFailure(ctx context.Context, id ProjectCopyWor
 // Execute keeps one synchronous worker until publication, verified cleanup or a persisted failure.
 func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (domain.ProjectCopyJob, error) {
 	if w == nil || w.store == nil || w.transfer == nil || w.now == nil || id.OrgID == uuid.Nil || id.JobID == uuid.Nil || id.WorkerID == uuid.Nil {
-		return domain.ProjectCopyJob{}, ErrProjectDependencyUnavailable
+		return domain.ProjectCopyJob{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	actor, err := w.store.WorkerActor(ctx, id.OrgID, id.JobID)
 	if err != nil {
@@ -140,9 +142,9 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 		case "media":
 			transfer := w.transfer(job, id.WorkerID, false)
 			if transfer == nil {
-				return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+				return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 			}
-			err = transfer.Transfer(ctx, actor, binding, snapshot)
+			err = transfer.Transfer(ctx, mediaapp.Actor{ID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, SessionID: actor.SessionID, CredentialEpoch: actor.CredentialEpoch}, binding, snapshot)
 			if err == nil {
 				job, err = w.store.CompleteMedia(ctx, actor, id.JobID, id.WorkerID)
 			}
@@ -151,11 +153,11 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 		case "bible":
 			store, ok := w.store.(ProjectCopyBibleExecutionStore)
 			if !ok || w.bible == nil || job.Manifest.Bible == nil {
-				return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+				return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 			}
 			transfer := w.bible(job, id.WorkerID, false)
 			if transfer == nil {
-				return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+				return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 			}
 			err = transfer.Transfer(ctx, actor, ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, *job.Manifest.Bible)
 			if err == nil {
@@ -163,11 +165,11 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 			}
 		case "script":
 			if w.script == nil || job.Manifest.Script == nil {
-				return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+				return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 			}
 			transfer := w.script(job, id.WorkerID, false)
 			if transfer == nil {
-				return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+				return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 			}
 			err = transfer.Transfer(ctx, actor, ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, *job.Manifest.Script)
 			if err == nil {
@@ -176,11 +178,11 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 		case "finalizing":
 			if job.Manifest.Bible != nil {
 				if w.bible == nil {
-					return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+					return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 				}
 				transfer := w.bible(job, id.WorkerID, false)
 				if transfer == nil {
-					return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+					return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 				}
 				err = transfer.Transfer(ctx, actor, ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, *job.Manifest.Bible)
 			}
@@ -190,26 +192,26 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 		case "cleanup":
 			transfer := w.transfer(job, id.WorkerID, true)
 			if transfer == nil {
-				return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+				return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 			}
-			err = transfer.Cleanup(ctx, actor, binding, snapshot)
+			err = transfer.Cleanup(ctx, mediaapp.Actor{ID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, SessionID: actor.SessionID, CredentialEpoch: actor.CredentialEpoch}, binding, snapshot)
 			if err == nil && job.Manifest.Script != nil {
 				if w.script == nil {
-					return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+					return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 				}
 				scriptTransfer := w.script(job, id.WorkerID, true)
 				if scriptTransfer == nil {
-					return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+					return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 				}
 				err = scriptTransfer.Cleanup(ctx, actor, ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, *job.Manifest.Script)
 			}
 			if err == nil && job.Manifest.Bible != nil {
 				if w.bible == nil {
-					return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+					return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 				}
 				bibleTransfer := w.bible(job, id.WorkerID, true)
 				if bibleTransfer == nil {
-					return w.finishFailure(ctx, id, ErrProjectDependencyUnavailable)
+					return w.finishFailure(ctx, id, workspacesource.ErrProjectDependencyUnavailable)
 				}
 				err = bibleTransfer.Cleanup(ctx, actor, ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, *job.Manifest.Bible)
 			}

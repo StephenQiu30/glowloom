@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -48,7 +50,7 @@ func TestExportWorkerLocksAuthorityBeforeJob(t *testing.T) {
 	timeline.Clips[0].AssetID, timeline.Clips[0].Text = nil, "Caption fixture"
 	reader := func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }
 	requests := mediatoolExportStore(tx, reader, func(db *gorm.DB) toolapp.DerivedMedia {
-		return mediaapp.NewDerivedService(mediaTestStore(db))
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(db)))
 	})
 	job, err := requests.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
 	if err != nil {
@@ -70,7 +72,7 @@ func TestExportWorkerLocksAuthorityBeforeJob(t *testing.T) {
 		}
 	})
 	workers := mediatoolExportStore(tx, reader, func(db *gorm.DB) toolapp.DerivedMedia {
-		return exportAuthorityTrace{DerivedMedia: mediaapp.NewDerivedService(mediaWorkerStore(db)), events: &events}
+		return exportAuthorityTrace{DerivedMedia: mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaWorkerStore(db))), events: &events}
 	})
 	check := func(name string) {
 		t.Helper()

@@ -3,12 +3,14 @@ package http
 import (
 	"errors"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
@@ -107,11 +109,11 @@ func writeDefaultsError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrScopeNotFound), errors.Is(err, application.ErrProjectNotFound):
+	case errors.Is(err, workspacesource.ErrScopeNotFound), errors.Is(err, workspacesource.ErrProjectNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, domain.ErrProjectRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
-	case errors.Is(err, application.ErrIdempotencyConflict):
+	case errors.Is(err, workspacesource.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_conflict", nil)
 	case errors.Is(err, domain.ErrProjectStateConflict):
 		httpapi.WriteProblem(c, 409, "project_archived", nil)

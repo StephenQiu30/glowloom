@@ -91,12 +91,12 @@ func TestPersonalGeneratedAudioAcceptJoinsCallerTransactionAndStableReceipt(t *t
 	runtime, owner := subjectPostgres(t)
 	actor := subjectSession(t, owner)
 	prepared := preparedVoiceFixture(t, runtime, owner, actor)
-	if _, err := pgmedia.NewScopedStore(runtime, app.NewMediaWorkerScopeAccess).AcceptPersonalGeneratedAudio(t.Context(), actor, prepared); !errors.Is(err, media.ErrUnavailable) {
+	if _, err := pgmedia.NewScopedStore(runtime, app.NewMediaWorkerScopeAccess).AcceptPersonalGeneratedAudio(t.Context(), mediaBoundaryActor(actor), prepared); !errors.Is(err, media.ErrUnavailable) {
 		t.Fatal("accepted generated media without the business transaction", err)
 	}
 	rollback := errors.New("caller job completion rolled back")
 	accept := func(tx *gorm.DB) error {
-		got, err := pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess).AcceptPersonalGeneratedAudio(t.Context(), actor, prepared)
+		got, err := pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess).AcceptPersonalGeneratedAudio(t.Context(), mediaBoundaryActor(actor), prepared)
 		if err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ func TestPersonalGeneratedAudioAcceptJoinsCallerTransactionAndStableReceipt(t *t
 	bad := prepared
 	bad.Request.Provenance.ReceiptSHA256 = strings.Repeat("b", 64)
 	if err := runtime.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess).AcceptPersonalGeneratedAudio(t.Context(), actor, bad)
+		_, err := pgmedia.NewScopedStore(tx, app.NewMediaWorkerScopeAccess).AcceptPersonalGeneratedAudio(t.Context(), mediaBoundaryActor(actor), bad)
 		return err
 	}); err == nil {
 		t.Fatal("changed fixed receipt replay was accepted")

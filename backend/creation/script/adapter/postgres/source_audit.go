@@ -7,10 +7,9 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-func sourceAudit(tx *gorm.DB, actor identityapp.Principal, p application.WritePlan, result application.SourceReceipt) error {
+func sourceAudit(tx *gorm.DB, actor application.Actor, p application.WritePlan, result application.SourceReceipt) error {
 	const topic = "glowloom.audit.recorded.v1"
 	id := uuid.NewSHA1(p.Command.Key, []byte("script-source-audit/"+actor.ID.String()))
 	summary := struct {

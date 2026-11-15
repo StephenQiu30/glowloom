@@ -7,17 +7,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // AssetDownloadHandler exposes attachment-only image/video/audio originals.
-type AssetDownloadHandler struct{ downloads *application.AssetDownloads }
+type AssetDownloadHandler struct {
+	resolve   ActorResolver
+	downloads *application.AssetDownloads
+}
 
 // NewAssetDownloadHandler injects the original-object owner.
-func NewAssetDownloadHandler(downloads *application.AssetDownloads) *AssetDownloadHandler {
-	return &AssetDownloadHandler{downloads: downloads}
+func NewAssetDownloadHandler(downloads *application.AssetDownloads, resolve ActorResolver) *AssetDownloadHandler {
+	return &AssetDownloadHandler{resolve: resolve, downloads: downloads}
 }
 
 // Register installs the project original route without replacing document download.
@@ -40,6 +42,11 @@ func (h *AssetDownloadHandler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/media/{asset_id}/original [get]
 func (h *AssetDownloadHandler) Download(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -48,7 +55,7 @@ func (h *AssetDownloadHandler) Download(c *gin.Context) {
 	if !ok {
 		return
 	}
-	file, err := h.downloads.Open(c.Request.Context(), identityhttp.Principal(c), project, id)
+	file, err := h.downloads.Open(c.Request.Context(), actor, project, id)
 	if err != nil {
 		if errors.Is(err, application.ErrOriginalChanged) {
 			httpapi.WriteProblem(c, http.StatusConflict, "media_original_changed", nil)

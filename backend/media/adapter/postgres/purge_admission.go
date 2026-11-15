@@ -8,14 +8,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // CreatePurge freezes SQL ownership before dispatch. Current authority precedes
 // permanent replay; only new commands evaluate the displayed catalog revisions.
-func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principal, in application.PurgeInput) (domain.PurgeJob, error) {
+func (s *PurgeStore) CreatePurge(ctx context.Context, actor application.Actor, in application.PurgeInput) (domain.PurgeJob, error) {
 	var result domain.PurgeJob
 	if s == nil || s.db == nil {
 		return result, application.ErrUnavailable

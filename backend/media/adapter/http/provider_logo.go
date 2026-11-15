@@ -6,20 +6,21 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // ProviderLogoHandler exposes normalized supplier image uploads and previews.
 type ProviderLogoHandler struct {
+	resolve ActorResolver
+
 	upload *AvatarHandler
 	query  *application.ProviderLogoQuery
 }
 
 // NewProviderLogoHandler injects the shared image pipeline and authorized query.
-func NewProviderLogoHandler(service *application.AvatarService, query *application.ProviderLogoQuery) *ProviderLogoHandler {
-	return &ProviderLogoHandler{upload: NewAvatarHandler(service, nil), query: query}
+func NewProviderLogoHandler(service *application.AvatarService, query *application.ProviderLogoQuery, resolve ActorResolver) *ProviderLogoHandler {
+	return &ProviderLogoHandler{resolve: resolve, upload: NewAvatarHandler(service, nil, resolve), query: query}
 }
 
 // Register requires current session and CSRF middleware on the supplied group.
@@ -48,13 +49,18 @@ func (h *ProviderLogoHandler) Upload(c *gin.Context) { h.upload.upload(c) }
 // @Success 200 {object} application.AvatarPreview
 // @Router /api/provider-logos/{id} [get]
 func (h *ProviderLogoHandler) Read(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	c.Header("Cache-Control", "private, no-store")
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil || id == uuid.Nil {
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 		return
 	}
-	out, err := h.query.Read(c.Request.Context(), identityhttp.Principal(c), id)
+	out, err := h.query.Read(c.Request.Context(), actor, id)
 	if errors.Is(err, application.ErrNotFound) {
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 		return

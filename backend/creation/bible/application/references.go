@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // CharacterReference freezes one confirmed stable character and immutable version.
@@ -17,5 +15,5 @@ type CharacterReference struct {
 
 // CharacterReferenceReader is the own read boundary for explicit outer-layer conversion.
 type CharacterReferenceReader interface {
-	Reference(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, *uuid.UUID) (CharacterReference, error)
+	Reference(context.Context, Actor, uuid.UUID, uuid.UUID, *uuid.UUID) (CharacterReference, error)
 }

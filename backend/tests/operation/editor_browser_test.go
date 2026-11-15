@@ -55,8 +55,10 @@ func TestEditorBrowserFixture(t *testing.T) {
 	api.GET("/session", func(c *gin.Context) {
 		c.JSON(200, gin.H{"actor": gin.H{"id": actor.ID, "org_id": actor.OrgID, "role": actor.Role}, "session_id": uuid.NewString()})
 	})
-	mediahttp.NewHandler(mediaapp.NewAssetQuery(mediapg.NewScopedStore(db, app.NewMediaScopeAccess))).Register(api)
-	prompthttp.NewDraftHandler(editorDraftStore(db)).Register(api)
+	mediahttp.NewHandler(mediaapp.NewAssetQuery(mediapg.NewScopedStore(db, app.NewMediaScopeAccess)), func(*gin.Context) (mediaapp.Actor, error) {
+		return mediaapp.Actor{ID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, SessionID: actor.SessionID, CredentialEpoch: actor.CredentialEpoch, PlatformEpoch: actor.PlatformEpoch}, nil
+	}).Register(api)
+	prompthttp.NewDraftHandler(editorDraftStore(db).DraftStore, operationPromptHTTPActor).Register(api)
 	store := editorOperationStore(db)
 	operationhttp.NewSubmissionHandler(store).Register(api)
 	operationhttp.NewHandler(operationhttp.Dependencies{FreeQuote: operationapp.NewCreateFreeQuoteCommand(store), Confirm: operationapp.NewConfirmSingleQuoteCommand(store), Query: operationapp.NewPublicQuery(store)}).Register(api)

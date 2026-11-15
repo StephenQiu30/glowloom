@@ -74,7 +74,7 @@ func bibleFixtureWorkspaceCopyWithBible(db *gorm.DB, work workspacepg.ProjectWor
 type bibleFixtureCopyBudgetAccess struct{ tx *gorm.DB }
 
 func (a bibleFixtureCopyBudgetAccess) AuthorizeBilling(ctx context.Context, actor identityapp.Principal, project uuid.UUID, _ bool) error {
-	return composition.NewMediaWorkerScopeAccess(a.tx).AuthorizeCopyTarget(ctx, actor, project)
+	return composition.NewMediaWorkerScopeAccess(a.tx).AuthorizeCopyTarget(ctx, bibleMediaActor(actor), project)
 }
 func bibleFixtureBudgetStore(db *gorm.DB) *billingpg.Store {
 	return billingpg.NewScopedStore(db, func(tx *gorm.DB) billingapp.ProjectAccess { return bibleFixtureCopyBudgetAccess{tx} })
@@ -114,7 +114,7 @@ func bibleFixtureTeamAdmin(t *testing.T, db *gorm.DB, actor identityapp.Principa
 }
 
 func bibleFixtureImportStore(db *gorm.DB, request scriptpg.ProjectAccessFactory, sources scriptpg.ImportSourcesFactory) *scriptpg.ImportStore {
-	return scriptpg.NewImportStoreWithWorkerAccess(db, request, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureWorkerAccess(tx) }, sources)
+	return scriptpg.NewImportStoreWithWorkerAccess(db, request, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleScriptAccess(bibleFixtureWorkerAccess(tx)) }, sources)
 }
 
 func bibleFixtureWorkerMediaStore(db *gorm.DB) *mediapg.Store {

@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -24,7 +24,7 @@ func (s *ProjectContentAccessStore) AuthorizeUploadProject(ctx context.Context, 
 	var row struct{ AspectRatio string }
 	read := s.tx.WithContext(ctx).Table("workspace.project").Select("aspect_ratio").Where("id = ? AND org_id = ?", projectID, actor.OrgID).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
-		return "", application.ErrProjectNotFound
+		return "", workspacesource.ErrProjectNotFound
 	}
 	if read.Error != nil {
 		return "", fmt.Errorf("read upload project aspect: %w", read.Error)
@@ -37,15 +37,15 @@ func (s *ProjectContentAccessStore) AuthorizeUploadProject(ctx context.Context, 
 // revoked callers can have committed assets whose objects must not be removed.
 func (s *ProjectContentAccessStore) AwaitUploadProjectCommit(ctx context.Context, projectID uuid.UUID) error {
 	if s == nil || s.tx == nil || s.tx.Statement == nil || projectID == uuid.Nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	if _, transaction := s.tx.Statement.ConnPool.(gorm.TxCommitter); !transaction {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	var row struct{ ID uuid.UUID }
 	read := s.tx.WithContext(ctx).Table("workspace.project").Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", projectID).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	if read.Error != nil {
 		return fmt.Errorf("await project upload commit: %w", read.Error)

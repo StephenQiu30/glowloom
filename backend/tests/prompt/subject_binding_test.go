@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	promptpg "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 )
@@ -21,10 +21,10 @@ type subjectSourceOwner struct {
 	calls                  int
 }
 
-func (o *subjectSourceOwner) ResolveSubject(context.Context, identity.Principal, uuid.UUID, string, string) (domain.ReferenceSource, bool, error) {
+func (o *subjectSourceOwner) ResolveSubject(context.Context, promptapp.Actor, uuid.UUID, string, string) (domain.ReferenceSource, bool, error) {
 	return o.source, true, o.resolveErr
 }
-func (o *subjectSourceOwner) ValidateBinding(context.Context, identity.Principal, uuid.UUID, domain.SourceMedia, bool) error {
+func (o *subjectSourceOwner) ValidateBinding(context.Context, promptapp.Actor, uuid.UUID, domain.SourceMedia, bool) error {
 	o.calls++
 	return o.bindingErr
 }
@@ -36,7 +36,7 @@ func TestUnifiedSubjectDraftRequiresOwningBindingProof(t *testing.T) {
 	d.LabelState.HighWater["subject"] = 1
 	d.LabelState.Allocations["ref"] = domain.LabelAllocation{LabelKind: "subject", Ordinal: 1}
 	tx := &gorm.DB{Statement: &gorm.Statement{Context: t.Context()}}
-	actor := identity.Principal{ID: uuid.New(), ScopeID: uuid.New()}
+	actor := promptapp.Actor{ID: uuid.New(), ScopeID: uuid.New()}
 	project := uuid.New()
 	if err := promptpg.ValidateDraftSources(tx, actor, project, d, false); !errors.Is(err, domain.ErrReferenceUnavailable) {
 		t.Fatalf("missing owner did not fail closed: %v", err)

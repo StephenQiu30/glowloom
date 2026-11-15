@@ -33,7 +33,7 @@ func guardedBibleReference(ctx context.Context, db *gorm.DB, actor identityapp.P
 	var found bool
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		found, err = pg.NewMediaReferenceGuard(tx, bibleFixtureProjectAccess(tx)).HasMediaReferences(ctx, actor, project, asset)
+		found, err = pg.NewMediaReferenceGuard(tx, bibleFixtureContentAccess(tx)).HasMediaReferences(ctx, bibleActor(actor), project, asset)
 		return err
 	})
 	return found, err
@@ -42,7 +42,7 @@ func guardedScriptReference(ctx context.Context, db *gorm.DB, actor identityapp.
 	var found bool
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		found, err = scriptpg.NewMediaReferenceGuard(tx, bibleFixtureProjectAccess(tx)).HasMediaReferences(ctx, actor, project, asset)
+		found, err = scriptpg.NewMediaReferenceGuard(tx, bibleScriptAccess(bibleFixtureProjectAccess(tx))).HasMediaReferences(ctx, bibleScriptActor(actor), project, asset)
 		return err
 	})
 	return found, err
@@ -52,21 +52,21 @@ func TestBibleMediaReferencePGProtectsOldLooksAndRemovedSampleBinding(t *testing
 	db, owner := bibleReferenceDB(t)
 	objects := bibleObjects(t)
 	c := coordinatedContentFixture(t, db, owner, objects)
-	service := app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Media: func(tx *gorm.DB) app.MediaReferences {
+	service := app.NewService(pg.NewStore(db, pg.Factories{Access: bibleFixtureContentAccess, Media: func(tx *gorm.DB) app.MediaReferences {
 		return actualBibleMedia{mediaapp.NewRoutedReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}
 	}, Scopes: func(tx *gorm.DB) app.ScriptScopes {
-		return currentBibleScopes{scriptpg.NewBibleScopes(tx, bibleFixtureProjectAccess(tx))}
+		return currentBibleScopes{scriptpg.NewBibleScopes(tx, bibleScriptAccess(bibleFixtureProjectAccess(tx)))}
 	}}), time.Now)
-	detail, err := service.Find(t.Context(), c.actor, c.project, domain.KindCharacter, c.character)
+	detail, err := service.Find(t.Context(), bibleActor(c.actor), c.project, domain.KindCharacter, c.character)
 	if err != nil {
 		t.Fatal(err)
 	}
 	lookID := detail.Current.Character.Looks[0].ID
-	removed, err := service.Change(t.Context(), c.actor, app.Command{ProjectID: c.project, Kind: domain.KindCharacter, Action: "references", EntryID: c.character, ExpectedRevision: detail.Head.Revision, LookID: &lookID, References: []app.ReferenceInput{}, Key: uuid.New(), RequestID: uuid.New()})
+	removed, err := service.Change(t.Context(), bibleActor(c.actor), app.Command{ProjectID: c.project, Kind: domain.KindCharacter, Action: "references", EntryID: c.character, ExpectedRevision: detail.Head.Revision, LookID: &lookID, References: []app.ReferenceInput{}, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(t.Context(), c.actor, app.Command{ProjectID: c.project, Kind: domain.KindCharacter, Action: "voice_unbind", EntryID: c.character, ExpectedRevision: removed.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
+	if _, err := service.Change(t.Context(), bibleActor(c.actor), app.Command{ProjectID: c.project, Kind: domain.KindCharacter, Action: "voice_unbind", EntryID: c.character, ExpectedRevision: removed.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
 	for _, asset := range []uuid.UUID{c.image, c.audio} {
@@ -80,8 +80,8 @@ func TestBibleMediaReferencePGProtectsOldLooksAndRemovedSampleBinding(t *testing
 }
 
 func guardedImportStore(t *testing.T, db *gorm.DB, _ *objectstorage.Client) *scriptpg.ImportStore {
-	return bibleFixtureImportStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }, func(tx *gorm.DB) scriptapp.SourceAssetReader {
-		return mediaapp.NewRoutedDocumentSources(bibleFixtureDocumentStore(tx), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))
+	return bibleFixtureImportStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleScriptAccess(bibleFixtureProjectAccess(tx)) }, func(tx *gorm.DB) scriptapp.SourceAssetReader {
+		return bibleDocumentSources{mediaapp.NewRoutedDocumentSources(bibleFixtureDocumentStore(tx), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}
 	})
 }
 
@@ -91,7 +91,7 @@ func TestScriptMediaReferencePGProtectsQueuedDocumentBeforeSourcePublication(t *
 	actor, project := bibleActorProject(t, owner)
 	document := bibleUploadedMedia(t, db, objects, actor, project, "待导入.txt", []byte("第一章\n王总：你好😀"))
 	service := scriptapp.NewImportService(guardedImportStore(t, db, objects), time.Now)
-	accepted, err := service.Create(t.Context(), actor, scriptapp.ImportCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{document}, RightsConfirmed: true})
+	accepted, err := service.Create(t.Context(), bibleScriptActor(actor), scriptapp.ImportCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{document}, RightsConfirmed: true})
 	if err != nil || accepted.Status != "queued" {
 		t.Fatal("actual durable admission", accepted, err)
 	}
@@ -106,9 +106,9 @@ func TestScriptMediaReferencePGProtectsQueuedDocumentBeforeSourcePublication(t *
 
 func guardedImportWorker(t *testing.T, db *gorm.DB, objects *objectstorage.Client) *scriptapp.ImportWorker {
 	private := scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db))
-	access := func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureWorkerAccess(tx) }
+	access := func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleScriptAccess(bibleFixtureWorkerAccess(tx)) }
 	sources := scriptapp.NewSourceService(scriptpg.NewSourceStore(db, access).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), private, time.Now)
-	return scriptapp.NewImportWorker(guardedImportStore(t, db, objects), mediaapp.NewRoutedDocumentSources(bibleFixtureWorkerDocumentStore(db), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t))), scriptextract.NewExtractor(), func(a scriptapp.ImportAuthority) *scriptapp.SourceService {
+	return scriptapp.NewImportWorker(guardedImportStore(t, db, objects), bibleDocumentSources{mediaapp.NewRoutedDocumentSources(bibleFixtureWorkerDocumentStore(db), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))}, scriptextract.NewExtractor(), func(a scriptapp.ImportAuthority) *scriptapp.SourceService {
 		return scriptapp.NewSourceServiceSharingIO(scriptpg.NewImportSourceStore(db, access, a).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), private, time.Now, sources)
 	}, scriptapp.NewSourceRecovery(scriptpg.NewImportRecoveryStore(db, access).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), sources, time.Now), time.Now)
 }
@@ -136,12 +136,12 @@ func TestScriptMediaReferencePGCancelledUnpublishedAndDeletedPublishedSources(t 
 	document := bibleUploadedMedia(t, db, objects, actor, project, "原件历史.txt", []byte("第一章\n甲😀乙"))
 	service := scriptapp.NewImportService(guardedImportStore(t, db, objects), time.Now)
 	create := scriptapp.ImportCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{document}, RightsConfirmed: true}
-	queued, err := service.Create(t.Context(), actor, create)
+	queued, err := service.Create(t.Context(), bibleScriptActor(actor), create)
 	if err != nil {
 		t.Fatal(err)
 	}
 	key := uuid.New()
-	if _, err := service.Control(t.Context(), actor, scriptapp.ImportControl{ProjectID: project, JobID: queued.ID, Action: "cancel", ExpectedRevision: queued.Revision, Key: key, RequestID: uuid.New()}); err != nil {
+	if _, err := service.Control(t.Context(), bibleScriptActor(actor), scriptapp.ImportControl{ProjectID: project, JobID: queued.ID, Action: "cancel", ExpectedRevision: queued.Revision, Key: key, RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
 	worker := guardedImportWorker(t, db, objects)
@@ -152,19 +152,19 @@ func TestScriptMediaReferencePGCancelledUnpublishedAndDeletedPublishedSources(t 
 		t.Fatal("stopped cancelled import invented a permanent source reference", found, err)
 	}
 	create.Key, create.RequestID = uuid.New(), uuid.New()
-	published, err := service.Create(t.Context(), actor, create)
+	published, err := service.Create(t.Context(), bibleScriptActor(actor), create)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Execute(t.Context(), guardedImportDelivery(t, owner, actor, create.Key)); err != nil {
 		t.Fatal(err)
 	}
-	published, err = service.Get(t.Context(), actor, project, published.ID)
+	published, err = service.Get(t.Context(), bibleScriptActor(actor), project, published.ID)
 	if err != nil || published.Status != "succeeded" || published.LatestVersionID == nil || published.Files[0].LineageID == nil {
 		t.Fatal("formal document publication", published, err)
 	}
-	sources := scriptapp.NewSourceService(scriptpg.NewSourceStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), time.Now)
-	if _, err := sources.Write(t.Context(), actor, scriptapp.SourceCommand{ProjectID: project, ExpectedRevision: published.LatestScriptRevision, BaseVersionID: published.LatestVersionID, LineageID: published.Files[0].LineageID, Action: "delete", RightsConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
+	sources := scriptapp.NewSourceService(scriptpg.NewSourceStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleScriptAccess(bibleFixtureProjectAccess(tx)) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db)), time.Now)
+	if _, err := sources.Write(t.Context(), bibleScriptActor(actor), scriptapp.SourceCommand{ProjectID: project, ExpectedRevision: published.LatestScriptRevision, BaseVersionID: published.LatestVersionID, LineageID: published.Files[0].LineageID, Action: "delete", RightsConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
 	if found, err := guardedScriptReference(t.Context(), db, actor, project, document); err != nil || !found {
@@ -181,9 +181,9 @@ func TestBibleScriptMediaReferencePGCurrentScopeAndCallerTransaction(t *testing.
 		query func(context.Context, *gorm.DB, identityapp.Principal, uuid.UUID, uuid.UUID) (bool, error)
 		pool  func(context.Context) (bool, error)
 	}{{"bible", guardedBibleReference, func(ctx context.Context) (bool, error) {
-		return pg.NewMediaReferenceGuard(db, bibleFixtureProjectAccess(db)).HasMediaReferences(ctx, actor, project, uuid.New())
+		return pg.NewMediaReferenceGuard(db, bibleFixtureContentAccess(db)).HasMediaReferences(ctx, bibleActor(actor), project, uuid.New())
 	}}, {"script", guardedScriptReference, func(ctx context.Context) (bool, error) {
-		return scriptpg.NewMediaReferenceGuard(db, bibleFixtureProjectAccess(db)).HasMediaReferences(ctx, actor, project, uuid.New())
+		return scriptpg.NewMediaReferenceGuard(db, bibleScriptAccess(bibleFixtureProjectAccess(db))).HasMediaReferences(ctx, bibleScriptActor(actor), project, uuid.New())
 	}}}
 	for _, query := range queries {
 		t.Run(query.name, func(t *testing.T) {
@@ -244,8 +244,8 @@ func TestScriptMediaReferencePGCorruptRecoverableWriteCannotBecomeNoReference(t 
 	db, owner := bibleReferenceDB(t)
 	actor, project := bibleActorProject(t, owner)
 	key := uuid.New()
-	source := scriptapp.NewSourceService(scriptpg.NewSourceStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), failedGuardWriteObjects{scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db))}, time.Now)
-	_, err := source.Write(t.Context(), actor, scriptapp.SourceCommand{ProjectID: project, Action: "create", RightsConfirmed: true, Key: key, RequestID: uuid.New(), Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "仍待核验的原稿", Status: "draft", Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "保留正文"}}}}}}}})
+	source := scriptapp.NewSourceService(scriptpg.NewSourceStore(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleScriptAccess(bibleFixtureProjectAccess(tx)) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations), failedGuardWriteObjects{scriptobjects.NewRoutedStorage(businessStorageRegistry(t), pgmedia.NewStorageRoutes(db))}, time.Now)
+	_, err := source.Write(t.Context(), bibleScriptActor(actor), scriptapp.SourceCommand{ProjectID: project, Action: "create", RightsConfirmed: true, Key: key, RequestID: uuid.New(), Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "仍待核验的原稿", Status: "draft", Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "保留正文"}}}}}}}})
 	if err == nil {
 		t.Fatal("synthetic object failure was swallowed")
 	}
@@ -343,11 +343,11 @@ func TestBibleMediaReferencePGBoundedCompleteHistory(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			actor, project := bibleActorProject(t, owner)
 			service := app.NewService(bibleStore(db), time.Now)
-			created, err := service.Change(t.Context(), actor, createCharacter(project))
+			created, err := service.Change(t.Context(), bibleActor(actor), createCharacter(project))
 			if err != nil {
 				t.Fatal(err)
 			}
-			detail, err := service.Find(t.Context(), actor, project, domain.KindCharacter, created.EntryID)
+			detail, err := service.Find(t.Context(), bibleActor(actor), project, domain.KindCharacter, created.EntryID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -372,7 +372,7 @@ func TestBibleMediaReferencePGBoundedCompleteHistory(t *testing.T) {
 			if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 				t.Fatal("history guard lacks actual nonowner", role, err)
 			}
-			found, err := pg.NewMediaReferenceGuard(tx, bibleFixtureProjectAccess(tx)).HasMediaReferences(t.Context(), actor, project, asset)
+			found, err := pg.NewMediaReferenceGuard(tx, bibleFixtureContentAccess(tx)).HasMediaReferences(t.Context(), bibleActor(actor), project, asset)
 			if !errors.Is(err, app.ErrUnavailable) || found {
 				t.Fatal("oversized complete history was not rejected before materialization", found, err)
 			}

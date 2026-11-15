@@ -4,18 +4,17 @@ package postgres
 import (
 	"errors"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"gorm.io/gorm"
-
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 )
 
 var (
 	// ErrProjectNotFound hides projects outside the current organization.
-	ErrProjectNotFound = application.ErrProjectNotFound
+	ErrProjectNotFound = workspacesource.ErrProjectNotFound
 	// ErrStylePresetNotFound hides unavailable presets outside the current scope.
-	ErrStylePresetNotFound = application.ErrStylePresetNotFound
+	ErrStylePresetNotFound = workspacesource.ErrStylePresetNotFound
 	// ErrStylePresetMismatch means a visible preset does not match the project style.
-	ErrStylePresetMismatch = application.ErrStylePresetMismatch
+	ErrStylePresetMismatch = workspacesource.ErrStylePresetMismatch
 	// ErrBudgetNotFound hides budgets outside the current project scope.
 	ErrBudgetNotFound = errors.New("budget not found")
 	// ErrUnavailable means the store was constructed without a database handle.

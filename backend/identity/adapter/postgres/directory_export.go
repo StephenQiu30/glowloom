@@ -15,18 +15,35 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
-// DirectoryExportStore uses the existing identity database and private export table.
-type DirectoryExportStore struct{ db *gorm.DB }
+// ExportObjectLedger supplies only the storage effects used by an export.
+// Its legacy factory binds local operations to the supplied transaction; it must
+// not perform network I/O. Independent Media uses its durable command contract.
+type ExportObjectLedger interface {
+	application.RoutedExportTx
+	application.RoutedExportLocationStore
+}
+
+// ExportObjectLedgerFactory binds an explicitly injected, local storage ledger.
+type ExportObjectLedgerFactory func(*gorm.DB) ExportObjectLedger
+
+// DirectoryExportStore owns identity records, not Media routing or credentials.
+type DirectoryExportStore struct {
+	db      *gorm.DB
+	objects ExportObjectLedgerFactory
+}
 
 // NewDirectoryExportStore does not migrate or open any external connection.
-func NewDirectoryExportStore(db *gorm.DB) *DirectoryExportStore { return &DirectoryExportStore{db: db} }
+// A nil ledger supports identity-only reads; storage operations fail closed.
+func NewDirectoryExportStore(db *gorm.DB, objects ExportObjectLedgerFactory) *DirectoryExportStore {
+	return &DirectoryExportStore{db: db, objects: objects}
+}
 
-type exportTx struct{ db *gorm.DB }
+type exportTx struct {
+	db      *gorm.DB
+	objects application.RoutedExportTx
+}
 
 type platformSettingsRecord struct{ Singleton bool }
 
@@ -78,7 +95,11 @@ func (s *DirectoryExportStore) Transaction(ctx context.Context, run func(applica
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("singleton = ?", true).Take(&settings).Error; err != nil {
 			return err
 		}
-		return run(&exportTx{db: tx})
+		bound := &exportTx{db: tx}
+		if s.objects != nil {
+			bound.objects = s.objects(tx)
+		}
+		return run(bound)
 	}, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 }
 func (t *exportTx) Authorize(actor application.Principal, team *uuid.UUID, revision int64, recent bool, clock func() time.Time) (int64, error) {
@@ -202,95 +223,42 @@ func exportObjectKey(id uuid.UUID) string {
 	return "private/identity/directory-exports/" + id.String() + ".enc"
 }
 
-func exportStorageOwner(job application.DirectoryExportJob) mediaapp.StorageWorkOwner {
-	return mediaapp.StorageWorkOwner{Kind: mediaapp.StorageWorkKindExport, OwnerID: job.ActorID, WorkID: job.ID}
-}
-
-func exportLocationRef(location application.ExportObjectLocation) mediadomain.ObjectRef {
-	return mediadomain.ObjectRef{ProfileID: location.ProfileID, Bucket: location.Bucket, Key: location.Key}
-}
-
-func exportDomainLocation(location application.ExportObjectLocation) mediadomain.ObjectLocation {
-	return mediadomain.ObjectLocation{ID: location.ID, Ref: exportLocationRef(location)}
-}
-
 func (t *exportTx) PinExportObject(ctx context.Context, job application.DirectoryExportJob) (application.ExportObjectLocation, error) {
-	if job.ObjectID == nil || job.ID == uuid.Nil || job.ActorID == uuid.Nil {
+	if t.objects == nil {
 		return application.ExportObjectLocation{}, application.ErrExportUnavailable
 	}
-	routes := pgmedia.NewStorageRoutes(t.db)
-	intent, err := routes.PinStorageWork(ctx, exportStorageOwner(job))
-	if err != nil {
-		return application.ExportObjectLocation{}, err
-	}
-	location, err := routes.ReserveWorkLocation(ctx, intent.ID, exportObjectKey(*job.ObjectID))
-	if err != nil {
-		return application.ExportObjectLocation{}, err
-	}
-	return application.ExportObjectLocation{ID: location.ID, IntentID: intent.ID, ProfileID: location.Ref.ProfileID, Bucket: location.Ref.Bucket, Key: location.Ref.Key}, nil
-}
-
-func (t *exportTx) exportWork(ctx context.Context, job application.DirectoryExportJob) (mediaapp.StorageWorkIntent, mediadomain.ObjectLocation, error) {
-	if job.ObjectLocation == nil || job.ObjectLocation.ID == uuid.Nil || job.ObjectLocation.IntentID == uuid.Nil {
-		return mediaapp.StorageWorkIntent{}, mediadomain.ObjectLocation{}, application.ErrExportUnavailable
-	}
-	routes := pgmedia.NewStorageRoutes(t.db)
-	intent, err := routes.ReadStorageWork(ctx, exportStorageOwner(job))
-	if err != nil {
-		return intent, mediadomain.ObjectLocation{}, err
-	}
-	if intent.ID != job.ObjectLocation.IntentID || intent.ProfileID != job.ObjectLocation.ProfileID || intent.Bucket != job.ObjectLocation.Bucket {
-		return intent, mediadomain.ObjectLocation{}, application.ErrExportUnavailable
-	}
-	location, err := routes.ReadLocation(ctx, job.ObjectLocation.ID)
-	if err != nil {
-		return intent, location, err
-	}
-	if location.Ref != exportLocationRef(*job.ObjectLocation) {
-		return intent, location, application.ErrExportUnavailable
-	}
-	return intent, location, nil
+	return t.objects.PinExportObject(ctx, job)
 }
 
 func (t *exportTx) BeginExportObjectWrite(ctx context.Context, job application.DirectoryExportJob, deadline time.Time) error {
-	intent, location, err := t.exportWork(ctx, job)
-	if err != nil {
-		return err
+	if t.objects == nil {
+		return application.ErrExportUnavailable
 	}
-	bounded, cancel := context.WithDeadline(ctx, deadline)
-	defer cancel()
-	return pgmedia.NewStorageRoutes(t.db).BeginWorkWrite(bounded, intent.ID, location)
+	return t.objects.BeginExportObjectWrite(ctx, job, deadline)
 }
 
 func (t *exportTx) ConfirmExportObject(ctx context.Context, job application.DirectoryExportJob, info application.ExportObjectInfo) error {
-	intent, location, err := t.exportWork(ctx, job)
-	if err != nil {
-		return err
+	if t.objects == nil {
+		return application.ErrExportUnavailable
 	}
-	return pgmedia.NewStorageRoutes(t.db).ConfirmWorkLocation(ctx, intent.ID, location, mediaapp.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256})
+	return t.objects.ConfirmExportObject(ctx, job, info)
 }
 
 func (t *exportTx) AcceptExportObject(ctx context.Context, job application.DirectoryExportJob) error {
-	intent, location, err := t.exportWork(ctx, job)
-	if err != nil {
-		return err
+	if t.objects == nil {
+		return application.ErrExportUnavailable
 	}
-	return pgmedia.NewStorageRoutes(t.db).AcceptStorageWork(ctx, intent.ID, []uuid.UUID{location.ID})
+	return t.objects.AcceptExportObject(ctx, job)
 }
 
 func (t *exportTx) CancelExportObject(ctx context.Context, job application.DirectoryExportJob) error {
 	if job.ObjectLocation == nil || job.ObjectLocation.IntentID == uuid.Nil {
 		return nil
 	}
-	routes := pgmedia.NewStorageRoutes(t.db)
-	intent, err := routes.ReadStorageWork(ctx, exportStorageOwner(job))
-	if err != nil {
-		return err
-	}
-	if intent.ID != job.ObjectLocation.IntentID {
+	if t.objects == nil {
 		return application.ErrExportUnavailable
 	}
-	return routes.CancelStorageWork(ctx, intent.ID)
+	return t.objects.CancelExportObject(ctx, job)
 }
 
 // BeginExportObjectRemoval confirms the job has expired, then grants provider
@@ -317,53 +285,29 @@ func (s *DirectoryExportStore) BeginExportObjectRemoval(ctx context.Context, cla
 		if job.ObjectLocation == nil || job.ObjectLocation.IntentID == uuid.Nil {
 			return application.ErrExportUnavailable
 		}
-		location = *job.ObjectLocation
-		routes := pgmedia.NewStorageRoutes(tx)
-		physical, err := routes.ReadLocation(ctx, location.ID)
-		if err != nil {
-			return err
-		}
-		if physical.Ref != exportLocationRef(location) {
+		if s.objects == nil {
 			return application.ErrExportUnavailable
 		}
-		if physical.State == mediadomain.ObjectLocationDeleted {
-			removable = true
-			return nil
-		}
-		intent, err := routes.ReadStorageWork(ctx, exportStorageOwner(job))
-		if err != nil {
-			return err
-		}
-		if intent.ID != location.IntentID {
+		ledger := s.objects(tx)
+		if ledger == nil {
 			return application.ErrExportUnavailable
 		}
-		switch intent.State {
-		case mediaapp.StorageWorkOpen:
-			if err := routes.CancelStorageWork(ctx, intent.ID); err != nil {
-				return err
-			}
-			removable, err = routes.BeginWorkRemoval(ctx, intent.ID, physical)
-			return err
-		case mediaapp.StorageWorkCancelled:
-			removable, err = routes.BeginWorkRemoval(ctx, intent.ID, physical)
-			return err
-		case mediaapp.StorageWorkAccepted:
-			removable, err = routes.BeginAcceptedWorkRemoval(ctx, intent.ID, physical)
-			return err
-		default:
-			return application.ErrExportUnavailable
-		}
+		location, removable, err = ledger.BeginExportObjectRemoval(ctx, job)
+		return err
 	})
 	return location, removable, err
 }
 
 // ConfirmExportObjectRemoval retires the exact row only after provider deletion.
-func (s *DirectoryExportStore) ConfirmExportObjectRemoval(ctx context.Context, _ application.DirectoryExportJob, location application.ExportObjectLocation) error {
-	if s == nil || s.db == nil || location.ID == uuid.Nil || location.IntentID == uuid.Nil {
+func (s *DirectoryExportStore) ConfirmExportObjectRemoval(ctx context.Context, job application.DirectoryExportJob, location application.ExportObjectLocation) error {
+	if s == nil || s.db == nil || s.objects == nil || location.ID == uuid.Nil || location.IntentID == uuid.Nil {
 		return application.ErrExportUnavailable
 	}
-	routes := pgmedia.NewStorageRoutes(s.db.WithContext(ctx))
-	return routes.ConfirmWorkRemoval(ctx, location.IntentID, exportDomainLocation(location))
+	ledger := s.objects(s.db.WithContext(ctx))
+	if ledger == nil {
+		return application.ErrExportUnavailable
+	}
+	return ledger.ConfirmExportObjectRemoval(ctx, job, location)
 }
 
 // Pending lists a bounded batch without retaining locks across object I/O.

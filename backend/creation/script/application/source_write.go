@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type objectBytes struct {
@@ -80,7 +79,7 @@ func ValidateSourceCommand(input SourceCommand) error {
 
 // Write publishes a complete immutable draft only after every private byte proof.
 // Uncertain object or commit outcomes retain the original plan and request key.
-func (s *SourceService) Write(ctx context.Context, actor identityapp.Principal, input SourceCommand) (SourceReceipt, error) {
+func (s *SourceService) Write(ctx context.Context, actor Actor, input SourceCommand) (SourceReceipt, error) {
 	if s == nil || s.store == nil || s.objects == nil || s.now == nil {
 		return SourceReceipt{}, ErrUnavailable
 	}
@@ -113,7 +112,7 @@ func (s *SourceService) Write(ctx context.Context, actor identityapp.Principal, 
 	return s.writePrepared(ctx, actor, plan, objects)
 }
 
-func (s *SourceService) writePrepared(ctx context.Context, actor identityapp.Principal, plan WritePlan, objects []objectBytes) (SourceReceipt, error) {
+func (s *SourceService) writePrepared(ctx context.Context, actor Actor, plan WritePlan, objects []objectBytes) (SourceReceipt, error) {
 	staged, err := s.store.BeginWrite(ctx, actor, plan)
 	if err != nil {
 		return SourceReceipt{}, err
@@ -231,7 +230,7 @@ func frozenObject(project, id uuid.UUID, name, mime string, data []byte) domain.
 	return domain.ObjectFact{Key: "projects/" + project.String() + "/script/" + id.String() + "/" + name, SHA256: domain.ContentSHA(data), ByteSize: int64(len(data)), MIME: mime}
 }
 
-func (s *SourceService) prepareWrite(ctx context.Context, actor identityapp.Principal, input SourceCommand, hash string, base SourceBase, now time.Time) (WritePlan, []objectBytes, error) {
+func (s *SourceService) prepareWrite(ctx context.Context, actor Actor, input SourceCommand, hash string, base SourceBase, now time.Time) (WritePlan, []objectBytes, error) {
 	plan := WritePlan{Command: input, RequestHash: hash, ActorID: actor.ID, OrgID: actor.OrgID, CreatedAt: now, NewSources: make([]domain.SourceRecord, 0), Mappings: make([]SourceChange, 0), Objects: make([]domain.ObjectFact, 0)}
 	plan.Command.Sources = nil
 	records := slices.Clone(base.Sources)
@@ -339,7 +338,7 @@ func sourceDocument(r domain.SourceRecord, d domain.RichDocument) domain.SourceD
 	return domain.SourceDocument{ID: r.ID, LineageID: r.LineageID, PreviousID: r.PreviousID, Revision: r.Revision, Kind: r.Kind, Title: r.Title, Status: r.Status, Document: d}
 }
 
-func makeSource(project uuid.UUID, actor identityapp.Principal, id, lineage uuid.UUID, previous *uuid.UUID, revision int64, input SourceInput, now time.Time) (domain.SourceRecord, domain.SourceDocument, []objectBytes, error) {
+func makeSource(project uuid.UUID, actor Actor, id, lineage uuid.UUID, previous *uuid.UUID, revision int64, input SourceInput, now time.Time) (domain.SourceRecord, domain.SourceDocument, []objectBytes, error) {
 	canonical, err := input.Document.CanonicalJSON()
 	if err != nil {
 		return domain.SourceRecord{}, domain.SourceDocument{}, nil, err

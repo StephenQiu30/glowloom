@@ -9,8 +9,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -81,7 +83,7 @@ func TestOperationMediaReferenceGuardRequiresCallerTransactionAndCurrentScope(t 
 		t.Fatal("pool accepted")
 	}
 	foreign, _ := operationStoreProject(t, database)
-	if _, err := operationReferenceCheck(t, database, foreign, project, uuid.New()); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := operationReferenceCheck(t, database, foreign, project, uuid.New()); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatal("foreign scope", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {

@@ -11,7 +11,6 @@ import (
 
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type compilerReader struct {
@@ -20,7 +19,7 @@ type compilerReader struct {
 	calls int
 }
 
-func (r *compilerReader) ReadCustomizations(ctx context.Context, _ identityapp.Principal) ([]domain.Customization, error) {
+func (r *compilerReader) ReadCustomizations(ctx context.Context, _ promptapp.Actor) ([]domain.Customization, error) {
 	r.calls++
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -53,8 +52,8 @@ func templateRuntime(operation string) promptapp.RuntimeContext {
 	return runtime
 }
 
-func compilerActor() identityapp.Principal {
-	return identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: "producer"}
+func compilerActor() promptapp.Actor {
+	return promptapp.Actor{ID: uuid.New(), OrgID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1}
 }
 
 func TestTemplateCompilerPreservesAllDeclaredOperationsAndInput(t *testing.T) {
@@ -134,7 +133,7 @@ func TestTemplateCompilerValidatesClosedOptionsAndOwnership(t *testing.T) {
 	request = templateRequest("skill_draft")
 	actor := compilerActor()
 	actor.ID = uuid.Nil
-	if _, err := promptapp.NewCompiler(reader).Prepare(t.Context(), actor, request, templateRuntime(request.Operation)); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := promptapp.NewCompiler(reader).Prepare(t.Context(), actor, request, templateRuntime(request.Operation)); !errors.Is(err, promptapp.ErrForbidden) {
 		t.Fatal("unauthorized principal accepted", err)
 	}
 	if _, err := promptapp.NewCompiler(reader).Prepare(t.Context(), compilerActor(), request, templateRuntime("storyboard_first_frame")); !errors.Is(err, promptapp.ErrTemplateInvalid) {

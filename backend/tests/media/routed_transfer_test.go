@@ -61,27 +61,27 @@ func (o *locatedTransferMemory) Remove(_ context.Context, ref domain.ObjectRef) 
 
 type routedCopyRepo struct{ object mediaapp.ProjectCopyObject }
 
-func (r *routedCopyRepo) Objects(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot) ([]mediaapp.ProjectCopyObject, error) {
+func (r *routedCopyRepo) Objects(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot) ([]mediaapp.ProjectCopyObject, error) {
 	return []mediaapp.ProjectCopyObject{r.object}, nil
 }
-func (r *routedCopyRepo) RecordObjectDigest(_ context.Context, _ identityapp.Principal, _ mediaapp.ProjectCopyBinding, _ mediaapp.ProjectCopySnapshot, _ uuid.UUID, _, sha string, size int64) error {
+func (r *routedCopyRepo) RecordObjectDigest(_ context.Context, _ mediaapp.Actor, _ mediaapp.ProjectCopyBinding, _ mediaapp.ProjectCopySnapshot, _ uuid.UUID, _, sha string, size int64) error {
 	r.object.SHA256 = &sha
 	r.object.ByteSize = &size
 	r.object.SourceVerified = true
 	return nil
 }
-func (r *routedCopyRepo) BeginObjectWrite(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot, uuid.UUID, string) error {
+func (r *routedCopyRepo) BeginObjectWrite(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot, uuid.UUID, string) error {
 	r.object.WriteStarted = true
 	return nil
 }
-func (r *routedCopyRepo) ConfirmObject(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot, uuid.UUID, string, string, int64) error {
+func (r *routedCopyRepo) ConfirmObject(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot, uuid.UUID, string, string, int64) error {
 	r.object.Status = "verified"
 	return nil
 }
-func (r *routedCopyRepo) AuthorizeObjectRemoval(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot, uuid.UUID, string) error {
+func (r *routedCopyRepo) AuthorizeObjectRemoval(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot, uuid.UUID, string) error {
 	return nil
 }
-func (r *routedCopyRepo) ConfirmObjectRemoved(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot, uuid.UUID, string) error {
+func (r *routedCopyRepo) ConfirmObjectRemoved(context.Context, mediaapp.Actor, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot, uuid.UUID, string) error {
 	r.object.Status = "removed"
 	return nil
 }
@@ -96,16 +96,16 @@ func TestRoutedTransferCopiesSameKeyBetweenProfilesAndCleansOnlyTarget(t *testin
 	actor := identityapp.Principal{OrgID: uuid.New()}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: uuid.New(), TargetProjectID: uuid.New()}
 	service := mediaapp.NewRoutedProjectCopyTransfer(repo, objects, t.TempDir())
-	if err := service.Transfer(t.Context(), actor, binding, mediaapp.ProjectCopySnapshot{}); err != nil {
+	if err := service.Transfer(t.Context(), mediaActor(actor), binding, mediaapp.ProjectCopySnapshot{}); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(objects.data[target.Ref], data) || !bytes.Equal(objects.data[source.Ref], data) {
 		t.Fatal("source or target physical bytes changed")
 	}
-	if err := service.Transfer(t.Context(), actor, binding, mediaapp.ProjectCopySnapshot{}); err != nil {
+	if err := service.Transfer(t.Context(), mediaActor(actor), binding, mediaapp.ProjectCopySnapshot{}); err != nil {
 		t.Fatal("restarted readback", err)
 	}
-	if err := service.Cleanup(t.Context(), actor, binding, mediaapp.ProjectCopySnapshot{}); err != nil {
+	if err := service.Cleanup(t.Context(), mediaActor(actor), binding, mediaapp.ProjectCopySnapshot{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, exists := objects.data[target.Ref]; exists || !bytes.Equal(objects.data[source.Ref], data) {

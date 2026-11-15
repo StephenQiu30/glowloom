@@ -12,8 +12,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 func sourceIntentID(p application.WritePlan) uuid.UUID {
@@ -74,11 +72,11 @@ func exactlyOne(result *gorm.DB) error {
 }
 
 // ClaimSourceIO requires an actual prior exit before a new call may own I/O.
-func (s *SourceStore) ClaimSourceIO(ctx context.Context, actor identityapp.Principal, p application.WritePlan, owner uuid.UUID, now time.Time) error {
+func (s *SourceStore) ClaimSourceIO(ctx context.Context, actor application.Actor, p application.WritePlan, owner uuid.UUID, now time.Time) error {
 	if owner == uuid.Nil {
 		return domain.ErrInvalidSource
 	}
-	return s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	return s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		prior, err := findCommand(tx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash)
 		if err != nil {
 			return err
@@ -107,8 +105,8 @@ func (s *SourceStore) ClaimSourceIO(ctx context.Context, actor identityapp.Princ
 }
 
 // BeginSourceObject freezes mutation admission before the synchronous private call.
-func (s *SourceStore) BeginSourceObject(ctx context.Context, actor identityapp.Principal, p application.WritePlan, owner uuid.UUID, f domain.ObjectFact) error {
-	return s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+func (s *SourceStore) BeginSourceObject(ctx context.Context, actor application.Actor, p application.WritePlan, owner uuid.UUID, f domain.ObjectFact) error {
+	return s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		if err := requireSourceIO(tx, p, &owner, false); err != nil {
 			return err
 		}
@@ -129,8 +127,8 @@ func (s *SourceStore) BeginSourceObject(ctx context.Context, actor identityapp.P
 }
 
 // ConfirmSourceObject records only an actual full read size and digest proof.
-func (s *SourceStore) ConfirmSourceObject(ctx context.Context, actor identityapp.Principal, p application.WritePlan, owner uuid.UUID, f domain.ObjectFact) error {
-	return s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+func (s *SourceStore) ConfirmSourceObject(ctx context.Context, actor application.Actor, p application.WritePlan, owner uuid.UUID, f domain.ObjectFact) error {
+	return s.commandTransaction(ctx, actor, p.Command.ProjectID, p.Command.Key, p.RequestHash, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		if err := requireSourceIO(tx, p, &owner, false); err != nil {
 			return err
 		}

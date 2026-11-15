@@ -73,7 +73,7 @@ func (t *authTx) AccountByEmail(email string) (domain.User, error) {
 // EmailReserved includes deleted identities; deletion never releases the mailbox.
 func (t *authTx) EmailReserved(email string) (bool, error) {
 	var reserved bool
-	err := t.db.Raw(`SELECT EXISTS(SELECT 1 FROM identity."user" WHERE email_key=?)`, email).Scan(&reserved).Error
+	err := t.db.Raw(`SELECT EXISTS(SELECT 1 FROM identity."user" WHERE email_key=?) OR EXISTS(SELECT 1 FROM identity.registration_preparation WHERE email_key=?) OR EXISTS(SELECT 1 FROM identity.account_qualification_change WHERE action='email_change' AND outcome='pending' AND candidate->>'NewEmail'=?)`, email, email, email).Scan(&reserved).Error
 	return reserved, err
 }
 
@@ -142,19 +142,27 @@ func (t *authTx) SaveBudget(key string, b domain.EmailBudget) error {
 }
 
 func (t *authTx) CreatePersonalAccount(u domain.User) error {
+	if err := t.db.Exec(`INSERT INTO workspace.organization(id,name) VALUES(?,'个人创作空间')`, u.OrgID).Error; err != nil {
+		return fmt.Errorf("insert personal storage scope: %w", err)
+	}
+	if err := t.insertVerifiedAccount(u); err != nil {
+		return err
+	}
+	if err := t.db.Exec(`INSERT INTO workspace.creation_scope(id,kind,owner_user_id,physical_scope_id) VALUES(?,'personal',?,?)`, uuid.New(), u.ID, u.OrgID).Error; err != nil {
+		return fmt.Errorf("insert personal creation scope: %w", err)
+	}
+	return nil
+}
+
+// insertVerifiedAccount writes only Identity facts after resource preparation.
+func (t *authTx) insertVerifiedAccount(u domain.User) error {
 	theme := u.Theme
 	if theme == "" {
 		theme = domain.DefaultTheme
 	}
-	if err := t.db.Exec(`INSERT INTO workspace.organization(id,name) VALUES(?,'个人创作空间')`, u.OrgID).Error; err != nil {
-		return fmt.Errorf("insert personal storage scope: %w", err)
-	}
 	if err := t.db.Exec(`INSERT INTO identity."user"(id,org_id,login_name,email_key,email_verified_at,email_version,display_name,role,platform_role,platform_epoch,status,password_hash,must_change_password,password_changed_at,session_epoch,revision,terms_version,terms_accepted_at,theme)
 	VALUES(?,?,?,?,?,?,?,'producer','creator',1,'active',?,false,?,1,1,?,?,?)`, u.ID, u.OrgID, u.LoginName, u.Email, u.EmailVerifiedAt, u.EmailVersion, u.DisplayName, u.PasswordHash, u.PasswordChangedAt, u.TermsVersion, u.TermsAcceptedAt, theme).Error; err != nil {
 		return fmt.Errorf("insert verified identity: %w", err)
-	}
-	if err := t.db.Exec(`INSERT INTO workspace.creation_scope(id,kind,owner_user_id,physical_scope_id) VALUES(?,'personal',?,?)`, uuid.New(), u.ID, u.OrgID).Error; err != nil {
-		return fmt.Errorf("insert personal creation scope: %w", err)
 	}
 	return nil
 }

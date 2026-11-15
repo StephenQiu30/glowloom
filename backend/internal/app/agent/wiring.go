@@ -18,6 +18,7 @@ import (
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 )
 
 // Boundary owns the business services and formal command adapters.
@@ -66,7 +67,7 @@ func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 			if err != nil {
 				return err
 			}
-			script, err := scriptService(tx).Workspace(ctx, app.Principal(s), s.ProjectID)
+			script, err := scriptService(tx).Workspace(ctx, scriptwire.Actor(app.Principal(s)), s.ProjectID)
 			if err != nil {
 				return err
 			}

@@ -37,7 +37,18 @@ func (s *Store) requireProject(tx *gorm.DB, actor identity.Principal, project uu
 	return s.requestAccess(tx).AuthorizeOperation(tx.Statement.Context, actor, project, write)
 }
 
+// WithLocalWorkerAuthority returns a copy bound to an Execution-local admitted
+// effect guard. The callback must perform only local checks in the supplied Tx.
+func (s *Store) WithLocalWorkerAuthority(guard func(context.Context, *gorm.DB, uuid.UUID, bool) error) *Store {
+	bound := *s
+	bound.localWorkerAuthority = guard
+	return &bound
+}
+
 func (s *Store) requireWorker(tx *gorm.DB, operation uuid.UUID, write bool) error {
+	if s.localWorkerAuthority != nil {
+		return s.localWorkerAuthority(tx.Statement.Context, tx, operation, write)
+	}
 	if s.workerAccess == nil || s.workerAccess(tx) == nil {
 		return identity.ErrForbidden
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ProjectCopyBinding is trusted workspace evidence; no public handler accepts it.
@@ -46,7 +45,7 @@ type ProjectCopyReceipt struct {
 // ProjectCopyAccess verifies the workspace-minted admission or actual worker fence.
 // Its factory binds the current own SQL transaction and the exact trusted job mode.
 type ProjectCopyAccess interface {
-	Authorize(context.Context, identityapp.Principal, ProjectCopyBinding, bool) error
+	Authorize(context.Context, Actor, ProjectCopyBinding, bool) error
 }
 
 // ProjectCopyScene retains the actual row UUID and all scene metadata/order.
@@ -120,15 +119,15 @@ type ProjectCopyManifest struct {
 
 // ProjectCopyStore owns every copy intent and rechecks the current worker between I/O.
 type ProjectCopyStore interface {
-	Freeze(context.Context, identityapp.Principal, ProjectCopyBinding, map[uuid.UUID]uuid.UUID, time.Time) (ProjectCopySnapshot, error)
-	Manifest(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) (ProjectCopyManifest, error)
-	BeginObject(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, domain.ObjectFact) error
-	CompleteObject(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, domain.ObjectFact) error
-	Register(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) (ProjectCopyReceipt, error)
-	BeginCleanup(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) ([]ProjectCopyObject, error)
-	BeginCleanupObject(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, domain.ObjectFact) error
-	CompleteCleanupObject(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, domain.ObjectFact) error
-	FinishCleanup(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) error
+	Freeze(context.Context, Actor, ProjectCopyBinding, map[uuid.UUID]uuid.UUID, time.Time) (ProjectCopySnapshot, error)
+	Manifest(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) (ProjectCopyManifest, error)
+	BeginObject(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, domain.ObjectFact) error
+	CompleteObject(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, domain.ObjectFact) error
+	Register(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) (ProjectCopyReceipt, error)
+	BeginCleanup(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) ([]ProjectCopyObject, error)
+	BeginCleanupObject(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, domain.ObjectFact) error
+	CompleteCleanupObject(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, domain.ObjectFact) error
+	FinishCleanup(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) error
 }
 
 // ProjectCopy coordinates SQL-owned immutable history and actual private object transfers.

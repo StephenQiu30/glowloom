@@ -28,21 +28,21 @@ func TestMediaGenericReferenceRejectsCatalogTrashRemovalAndCancelledPurge(t *tes
 			actor, project, input, _, _ := purgeBinaryFixture(t, db)
 			library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 			if phase == "removed" {
-				restored, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: input.Scope, Key: uuid.New(), Action: "restore_items", ExpectedRevision: 2, Items: input.Items})
+				restored, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: input.Scope, Key: uuid.New(), Action: "restore_items", ExpectedRevision: 2, Items: input.Items})
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: input.Scope, Key: uuid.New(), Action: "remove_items", ExpectedRevision: restored.Revision, Items: []mediaapp.LibraryItemRevision{{ID: input.Items[0].ID, Revision: restored.Items[0].Revision}}}); err != nil {
+				if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: input.Scope, Key: uuid.New(), Action: "remove_items", ExpectedRevision: restored.Revision, Items: []mediaapp.LibraryItemRevision{{ID: input.Items[0].ID, Revision: restored.Items[0].Revision}}}); err != nil {
 					t.Fatal(err)
 				}
 			}
 			if phase == "cancelled" {
 				repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-				job, err := repo.CreatePurge(t.Context(), actor, input)
+				job, err := repo.CreatePurge(t.Context(), mediaActor(actor), input)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := repo.ControlPurge(t.Context(), actor, job.ID, uuid.New(), job.Revision, "cancel"); err != nil {
+				if _, err := repo.ControlPurge(t.Context(), mediaActor(actor), job.ID, uuid.New(), job.Revision, "cancel"); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -51,40 +51,40 @@ func TestMediaGenericReferenceRejectsCatalogTrashRemovalAndCancelledPurge(t *tes
 				t.Fatal("catalog-only hiding must retain the reviewed original", deleted, err)
 			}
 			store := mediaTestStore(db)
-			if _, err := store.FindAsset(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := store.FindAsset(t.Context(), mediaActor(actor), project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("hidden retained original formed a new ordinary binding", err)
 			}
-			if _, err := store.FindRenditions(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := store.FindRenditions(t.Context(), mediaActor(actor), project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("hidden retained original exposed ordinary renditions", err)
 			}
 			signer := &purgePreviewSigner{}
 			query := mediaapp.NewRoutedAssetQuery(store, signer, 5*time.Minute)
-			if _, err := query.Reference(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := query.Reference(t.Context(), mediaActor(actor), project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("hidden retained original formed a new canvas/generation/cover binding", err)
 			}
-			if _, err := query.Preview(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) || signer.calls != 0 {
+			if _, err := query.Preview(t.Context(), mediaActor(actor), project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) || signer.calls != 0 {
 				t.Fatal("ordinary preview leased hidden retained bytes", err, signer.calls)
 			}
-			page, err := query.List(t.Context(), actor, project, "image", "", 20)
+			page, err := query.List(t.Context(), mediaActor(actor), project, "image", "", 20)
 			if err != nil || len(page.Items) != 0 {
 				t.Fatal("formal picker offered catalog-hidden media", page, err)
 			}
 			if phase != "removed" {
-				if _, err := library.FindLibraryMedia(t.Context(), actor, input.Scope, input.Items[0].ID); err != nil {
+				if _, err := library.FindLibraryMedia(t.Context(), mediaActor(actor), input.Scope, input.Items[0].ID); err != nil {
 					t.Fatal("trash viewer lost eligible original after cancel", err)
 				}
-				detail, err := library.LibraryDetail(t.Context(), actor, input.Scope, input.Items[0].ID)
+				detail, err := library.LibraryDetail(t.Context(), mediaActor(actor), input.Scope, input.Items[0].ID)
 				if err != nil {
 					t.Fatal(err)
 				}
-				p, err := library.ListLibrary(t.Context(), actor, input.Scope, libraryQuery())
+				p, err := library.ListLibrary(t.Context(), mediaActor(actor), input.Scope, libraryQuery())
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: input.Scope, Key: uuid.New(), Action: "restore_items", ExpectedRevision: p.Revision, Items: []mediaapp.LibraryItemRevision{{ID: detail.ID, Revision: detail.Revision}}}); err != nil {
+				if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: input.Scope, Key: uuid.New(), Action: "restore_items", ExpectedRevision: p.Revision, Items: []mediaapp.LibraryItemRevision{{ID: detail.ID, Revision: detail.Revision}}}); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := query.Reference(t.Context(), actor, project, input.Items[0].ID); err != nil {
+				if _, err := query.Reference(t.Context(), mediaActor(actor), project, input.Items[0].ID); err != nil {
 					t.Fatal("actual restore did not release the new-binding gate", err)
 				}
 			}
@@ -99,17 +99,17 @@ func TestMediaDocumentNewFreezeRejectsHiddenCatalogButKeepsFrozenOriginal(t *tes
 	body := []byte("只能由既有不可变剧本证据读回的原文")
 	upload := documentUpload(t, db, objects, actor, project, "frozen-document.txt", body)
 	reader := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(db), mediaFixtureReadObjects(t))
-	frozen, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{upload.Asset.ID})
+	frozen, err := reader.Freeze(t.Context(), mediaActor(actor), project, []uuid.UUID{upload.Asset.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	for i, action := range []mediaapp.LibraryAction{mediaapp.LibraryActionRecycleItems, mediaapp.LibraryActionRestoreItems, mediaapp.LibraryActionRemoveItems} {
-		if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: action, ExpectedRevision: int64(i), Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: int64(i) + 1}}}); err != nil {
+		if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: action, ExpectedRevision: int64(i), Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: int64(i) + 1}}}); err != nil {
 			t.Fatal(action, err)
 		}
-		original, err := reader.Open(t.Context(), actor, project, frozen[0])
+		original, err := reader.Open(t.Context(), mediaActor(actor), project, frozen[0])
 		if err != nil {
 			t.Fatal("catalog-only state invalidated frozen source bytes", action, err)
 		}
@@ -118,7 +118,7 @@ func TestMediaDocumentNewFreezeRejectsHiddenCatalogButKeepsFrozenOriginal(t *tes
 		if readErr != nil || closeErr != nil || !bytes.Equal(actual, body) {
 			t.Fatal("frozen original changed", readErr, closeErr)
 		}
-		_, err = reader.Freeze(t.Context(), actor, project, []uuid.UUID{upload.Asset.ID})
+		_, err = reader.Freeze(t.Context(), mediaActor(actor), project, []uuid.UUID{upload.Asset.ID})
 		if action == "restore_items" {
 			if err != nil {
 				t.Fatal("restored source cannot form a new admission", err)
@@ -134,7 +134,7 @@ func TestMediaPurgeReservationRejectsInconsistentCatalogAndOriginalFlags(t *test
 	owner := libraryOwnerDB(t)
 	actor, project, input, _, _ := purgeBinaryFixture(t, db)
 	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-	if _, err := repo.CreatePurge(t.Context(), actor, input); err != nil {
+	if _, err := repo.CreatePurge(t.Context(), mediaActor(actor), input); err != nil {
 		t.Fatal(err)
 	}
 	// This owner-only synthetic fault proves that reservation is independently
@@ -145,7 +145,7 @@ func TestMediaPurgeReservationRejectsInconsistentCatalogAndOriginalFlags(t *test
 	if err := owner.Exec(`UPDATE media.library_item SET catalog_state='active',trashed_at=NULL WHERE id=?`, input.Items[0].ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaTestStore(db).FindAsset(t.Context(), mediaActor(actor), project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("physical reservation was replaced by mutable visibility flags", err)
 	}
 }
@@ -156,11 +156,11 @@ func TestMediaPurgeGenericReferencePreviewAndRenditionsRejectReservedOriginals(t
 			db := libraryRuntimeDB(t)
 			actor, project, input, _, objects := purgeBinaryFixture(t, db)
 			library := mediaLibraryStore(db, libraryTestAccess, time.Now)
-			if _, err := library.FindLibraryMedia(t.Context(), actor, input.Scope, input.Items[0].ID); err != nil {
+			if _, err := library.FindLibraryMedia(t.Context(), mediaActor(actor), input.Scope, input.Items[0].ID); err != nil {
 				t.Fatal("trash preview before physical admission must remain available", err)
 			}
 			repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
-			job, err := repo.CreatePurge(t.Context(), actor, input)
+			job, err := repo.CreatePurge(t.Context(), mediaActor(actor), input)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -172,25 +172,25 @@ func TestMediaPurgeGenericReferencePreviewAndRenditionsRejectReservedOriginals(t
 				}
 			}
 			base := mediaTestStore(db)
-			if _, err := base.FindAsset(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := base.FindAsset(t.Context(), mediaActor(actor), project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("accepted physical purge still allowed ordinary new reference", err)
 			}
-			if _, err := base.FindRenditions(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := base.FindRenditions(t.Context(), mediaActor(actor), project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("new rendition read bypassed reserved parent", err)
 			}
 			signer := &purgePreviewSigner{}
 			query := mediaapp.NewRoutedAssetQuery(base, signer, 5*time.Minute)
-			if _, err := query.Reference(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := query.Reference(t.Context(), mediaActor(actor), project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("new canvas/generation/cover reference bypassed physical reservation", err)
 			}
-			if _, err := query.Preview(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) || signer.calls != 0 {
+			if _, err := query.Preview(t.Context(), mediaActor(actor), project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) || signer.calls != 0 {
 				t.Fatal("reserved bytes acquired a new lease", err, signer.calls)
 			}
-			page, err := query.List(t.Context(), actor, project, "image", "", 20)
+			page, err := query.List(t.Context(), mediaActor(actor), project, "image", "", 20)
 			if err != nil || len(page.Items) != 0 {
 				t.Fatal("formal picker offered reserved original", page, err)
 			}
-			if _, err := library.FindLibraryMedia(t.Context(), actor, input.Scope, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := library.FindLibraryMedia(t.Context(), mediaActor(actor), input.Scope, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("library trash preview formed a new lease during purge", err)
 			}
 		})

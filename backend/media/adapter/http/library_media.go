@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -15,12 +14,14 @@ import (
 
 // LibraryMediaHandler exposes only reauthorized leases or verified attachments.
 type LibraryMediaHandler struct {
+	resolve ActorResolver
+
 	query *application.LibraryMediaQuery
 }
 
 // NewLibraryMediaHandler injects media-owned scope and private-byte verification.
-func NewLibraryMediaHandler(query *application.LibraryMediaQuery) *LibraryMediaHandler {
-	return &LibraryMediaHandler{query: query}
+func NewLibraryMediaHandler(query *application.LibraryMediaQuery, resolve ActorResolver) *LibraryMediaHandler {
+	return &LibraryMediaHandler{resolve: resolve, query: query}
 }
 
 // Register keeps file effects separate from editable metadata commands.
@@ -59,6 +60,11 @@ func libraryFileScope(c *gin.Context) (domain.LibraryScope, uuid.UUID, bool) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/items/{item_id}/preview [get]
 func (h *LibraryMediaHandler) Preview(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	scope, item, ok := libraryFileScope(c)
 	if !ok {
 		return
@@ -67,7 +73,7 @@ func (h *LibraryMediaHandler) Preview(c *gin.Context) {
 		writeLibraryError(c, application.ErrUnavailable)
 		return
 	}
-	result, err := h.query.Preview(c.Request.Context(), identityhttp.Principal(c), scope, item)
+	result, err := h.query.Preview(c.Request.Context(), actor, scope, item)
 	if err != nil {
 		writeLibraryError(c, err)
 		return
@@ -91,6 +97,11 @@ func (h *LibraryMediaHandler) Preview(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/items/{item_id}/download [get]
 func (h *LibraryMediaHandler) Download(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	scope, item, ok := libraryFileScope(c)
 	if !ok {
 		return
@@ -99,7 +110,7 @@ func (h *LibraryMediaHandler) Download(c *gin.Context) {
 		writeLibraryError(c, application.ErrUnavailable)
 		return
 	}
-	file, asset, err := h.query.Download(c.Request.Context(), identityhttp.Principal(c), scope, item)
+	file, asset, err := h.query.Download(c.Request.Context(), actor, scope, item)
 	if err != nil {
 		writeLibraryError(c, err)
 		return

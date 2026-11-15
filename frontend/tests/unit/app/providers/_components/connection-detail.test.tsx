@@ -72,9 +72,7 @@ it("Key 只进入提交请求，同页重新打开恢复只查询安全回执", 
   api.save.mockRejectedValue(new RequestError("request_unconfirmed"));
   api.receipt.mockResolvedValue({ result: { id: "saved" } });
   const onSaved = vi.fn();
-  const view = render(
-    <ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />,
-  );
+  const view = render(<ConnectionDetail id="connection" onSaved={onSaved} />);
   const input = await screen.findByLabelText("API Key");
   expect(screen.queryByRole("tablist")).toBeNull();
   expect(api.config).not.toHaveBeenCalled();
@@ -94,30 +92,12 @@ it("Key 只进入提交请求，同页重新打开恢复只查询安全回执", 
   expect(stored).toContain("credential.set");
   expect(stored).not.toContain("fixture-secret");
   view.unmount();
-  render(<ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />);
+  render(<ConnectionDetail id="connection" onSaved={onSaved} />);
   fireEvent.click(await screen.findByRole("button", { name: "查询回执" }));
   await waitFor(() => expect(api.receipt).toHaveBeenCalledOnce());
   expect(api.save).toHaveBeenCalledOnce();
   expect(onSaved).toHaveBeenCalledOnce();
   expect(pageBusinessMemory.length).toBe(0);
-});
-it("旧 Key 可单独停用，当前 Key 不受影响", async () => {
-  api.keys.mockResolvedValue([
-    { id: "old-key", last4: "1234", status: "draining" },
-    { id: "active-key", last4: "5678", status: "active" },
-  ]);
-  api.disable.mockResolvedValue({ id: "old-key", status: "disabled" });
-  render(<ConnectionDetail id="connection" presets={[]} onSaved={() => {}} />);
-  fireEvent.click(await screen.findByRole("button", { name: "连接设置" }));
-  fireEvent.click(
-    (await screen.findAllByRole("button", { name: "紧急停用" }))[0],
-  );
-  fireEvent.click(screen.getByRole("button", { name: "确认停用此 Key" }));
-  await waitFor(() => expect(api.disable).toHaveBeenCalledOnce());
-  expect(api.disable.mock.calls[0][0]).toEqual({
-    id: "connection",
-    credential_id: "old-key",
-  });
 });
 
 it("向导的 Key 写入未确认时，详情禁止绕过并使用原回执恢复", async () => {
@@ -138,7 +118,7 @@ it("向导的 Key 写入未确认时，详情禁止绕过并使用原回执恢�
     },
   });
   const onSaved = vi.fn();
-  render(<ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />);
+  render(<ConnectionDetail id="connection" onSaved={onSaved} />);
   const input = await screen.findByLabelText("API Key");
   expect((input as HTMLInputElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "查询回执" }));
@@ -152,7 +132,7 @@ it("已配置密钥只提供更换入口，轮换输入和记录不显示尾号"
     credential: { id: "key", status: "active", last4: "abcd" },
   });
   api.keys.mockResolvedValue([{ id: "key", status: "active", last4: "5678" }]);
-  render(<ConnectionDetail id="connection" presets={[]} onSaved={() => {}} />);
+  render(<ConnectionDetail id="connection" onSaved={() => {}} />);
   const replace = await screen.findByRole("button", { name: "更换 Key" });
   expect(screen.queryByText(/abcd|5678|••••/)).toBeNull();
   fireEvent.click(replace);
@@ -168,7 +148,7 @@ it("在连接详情顶部重命名未启用的连接", async () => {
     revision: 2,
   });
   const onSaved = vi.fn();
-  render(<ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />);
+  render(<ConnectionDetail id="connection" onSaved={onSaved} />);
   fireEvent.click(await screen.findByRole("button", { name: "编辑名称" }));
   const input = await screen.findByLabelText("连接名称");
   fireEvent.change(input, { target: { value: "OpenRouter 备用" } });
@@ -195,7 +175,7 @@ it("接入模型使用已读取的连接与凭据，不跳转或发起验证", a
   render(
     <ConnectionDetail
       id="connection"
-      presets={[]}
+
       onSaved={() => {}}
       onAddModel={onAddModel}
     />,
@@ -232,7 +212,7 @@ it("模型保存刷新连接时保留原触发按钮，避免返回焦点丢失"
       <ConnectionDetail
         id="connection"
         revision={revision}
-        presets={[]}
+
         onSaved={() => {}}
         onAddModel={onAddModel}
       />
@@ -252,4 +232,76 @@ it("模型保存刷新连接时保留原触发按钮，避免返回焦点丢失"
   expect(screen.getByRole("button", { name: "接入模型" })).toBe(trigger);
   await act(async () => finish(detail));
   expect(screen.getByRole("button", { name: "接入模型" })).toBe(trigger);
+});
+
+it.each(["disabled", "active"])(
+  "Switch 从 %s 状态提交启停并显示服务器回写",
+  async (status) => {
+    const next = status === "active" ? "disabled" : "active";
+    api.detail.mockResolvedValue({
+      provider: { id: "connection", name: "OpenRouter", status, revision: 3 },
+      credential: { id: "credential", status: "active" },
+    });
+    api.update.mockImplementation(async () => {
+      api.detail.mockResolvedValue({
+        provider: {
+          id: "connection",
+          name: "OpenRouter",
+          status: next,
+          revision: 4,
+        },
+        credential: { id: "credential", status: "active" },
+      });
+      return { id: "connection", status: next, revision: 4 };
+    });
+    render(<ConnectionDetail id="connection" onSaved={() => {}} />);
+    const control = await screen.findByRole("switch", { name: "启用连接" });
+    expect(control.getAttribute("aria-checked")).toBe(
+      String(status === "active"),
+    );
+    expect(screen.queryByRole("button", { name: "连接诊断" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "连接设置" })).toBeNull();
+    fireEvent.click(control);
+    await waitFor(() => expect(api.update).toHaveBeenCalledOnce());
+    expect(api.update).toHaveBeenCalledWith(
+      { id: "connection" },
+      { expected_revision: 3, status: next },
+      { headers: { "Idempotency-Key": expect.any(String) } },
+    );
+    await waitFor(() =>
+      expect(control.getAttribute("aria-checked")).toBe(
+        String(next === "active"),
+      ),
+    );
+    expect(api.config).not.toHaveBeenCalled();
+    expect(api.keys).not.toHaveBeenCalled();
+  },
+);
+
+it("启停保存期间阻止重复请求，失败不伪造新状态", async () => {
+  api.detail.mockResolvedValue({
+    provider: {
+      id: "connection",
+      name: "OpenRouter",
+      status: "active",
+      revision: 3,
+    },
+    credential: { id: "credential", status: "active" },
+  });
+  let reject!: (error: unknown) => void;
+  api.update.mockImplementation(
+    () =>
+      new Promise((_, fail) => {
+        reject = fail;
+      }),
+  );
+  render(<ConnectionDetail id="connection" onSaved={() => {}} />);
+  const control = await screen.findByRole("switch", { name: "启用连接" });
+  fireEvent.click(control);
+  await waitFor(() => expect(control.hasAttribute("disabled")).toBe(true));
+  fireEvent.click(control);
+  expect(api.update).toHaveBeenCalledOnce();
+  expect(control.getAttribute("aria-checked")).toBe("true");
+  await act(async () => reject(new RequestError("revision_conflict", 409)));
+  expect(control.getAttribute("aria-checked")).toBe("true");
 });

@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -113,7 +112,7 @@ type ImportFileResult struct {
 // ImportRecord carries private durable facts only within this owning module.
 type ImportRecord struct {
 	Job            ImportJob
-	Actor          identityapp.Principal
+	Actor          Actor
 	Files          []FrozenImportFile
 	Results        []ImportFileResult
 	BaseVersionID  *uuid.UUID
@@ -124,10 +123,10 @@ type ImportRecord struct {
 
 // ImportStore keeps command admission and read/control contracts in owner transactions.
 type ImportStore interface {
-	CreateImport(context.Context, identityapp.Principal, ImportCommand, time.Time) (ImportJob, error)
-	ListImports(context.Context, identityapp.Principal, uuid.UUID, int64, int) (ImportPage, error)
-	Import(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (ImportJob, error)
-	ControlImport(context.Context, identityapp.Principal, ImportControl, time.Time) (ImportJob, error)
+	CreateImport(context.Context, Actor, ImportCommand, time.Time) (ImportJob, error)
+	ListImports(context.Context, Actor, uuid.UUID, int64, int) (ImportPage, error)
+	Import(context.Context, Actor, uuid.UUID, uuid.UUID) (ImportJob, error)
+	ControlImport(context.Context, Actor, ImportControl, time.Time) (ImportJob, error)
 }
 
 // ImportService never parses originals in a public request or launches detached work.
@@ -142,7 +141,7 @@ func NewImportService(store ImportStore, now func() time.Time) *ImportService {
 }
 
 // Create admits an exact ordered batch; no source version is published at acceptance.
-func (s *ImportService) Create(ctx context.Context, actor identityapp.Principal, in ImportCommand) (ImportJob, error) {
+func (s *ImportService) Create(ctx context.Context, actor Actor, in ImportCommand) (ImportJob, error) {
 	if s == nil || s.store == nil || s.now == nil {
 		return ImportJob{}, ErrUnavailable
 	}
@@ -156,7 +155,7 @@ func (s *ImportService) Create(ctx context.Context, actor identityapp.Principal,
 }
 
 // List makes unknown acceptance recoverable after an authorized refresh.
-func (s *ImportService) List(ctx context.Context, actor identityapp.Principal, project uuid.UUID, after int64, limit int) (ImportPage, error) {
+func (s *ImportService) List(ctx context.Context, actor Actor, project uuid.UUID, after int64, limit int) (ImportPage, error) {
 	if s == nil || s.store == nil {
 		return ImportPage{}, ErrUnavailable
 	}
@@ -167,7 +166,7 @@ func (s *ImportService) List(ctx context.Context, actor identityapp.Principal, p
 }
 
 // Get returns the current owning facts after current project authorization.
-func (s *ImportService) Get(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (ImportJob, error) {
+func (s *ImportService) Get(ctx context.Context, actor Actor, project, id uuid.UUID) (ImportJob, error) {
 	if s == nil || s.store == nil {
 		return ImportJob{}, ErrUnavailable
 	}
@@ -178,7 +177,7 @@ func (s *ImportService) Get(ctx context.Context, actor identityapp.Principal, pr
 }
 
 // Control records explicit intent; only a proven stopped consumer may cancel or retry.
-func (s *ImportService) Control(ctx context.Context, actor identityapp.Principal, in ImportControl) (ImportJob, error) {
+func (s *ImportService) Control(ctx context.Context, actor Actor, in ImportControl) (ImportJob, error) {
 	if s == nil || s.store == nil || s.now == nil {
 		return ImportJob{}, ErrUnavailable
 	}

@@ -71,12 +71,12 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 		if err != nil {
 			t.Fatal(err)
 		}
-		result, err := businessFixtureUpload(ctx, t, upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: source, Key: uuid.New(), RequestID: uuid.New(), FileName: sample.name}, File: file, LocalReviewConfirmed: true})
+		result, err := businessFixtureUpload(ctx, t, upload, mediaapp.UploadInput{Actor: mediaBoundaryActor(actor), Request: mediaapp.UploadRequest{ProjectID: source, Key: uuid.New(), RequestID: uuid.New(), FileName: sample.name}, File: file, LocalReviewConfirmed: true})
 		_ = file.Close()
 		if err != nil {
 			t.Fatal("real source document upload", err)
 		}
-		asset, err := store.FindAsset(ctx, actor, source, result.Asset.ID)
+		asset, err := store.FindAsset(ctx, mediaBoundaryActor(actor), source, result.Asset.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -94,11 +94,11 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 	}
 	reader := mediaapp.NewRoutedDocumentSources(workspaceMediaDocumentStore(db), mediaobjects.NewRoutedReadObjects(businessStorageRegistry(t)))
 	query := mediaapp.NewAssetQuery(store)
-	page, err := query.List(ctx, actor, finished.TargetProjectID, "document", "", 100)
+	page, err := query.List(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, "document", "", 100)
 	if err != nil || len(page.Items) != 2 {
 		t.Fatal("fresh published document listing", err)
 	}
-	defaultPage, err := query.List(ctx, actor, finished.TargetProjectID, "", "", 100)
+	defaultPage, err := query.List(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, "", "", 100)
 	if err != nil || len(defaultPage.Items) != 0 {
 		t.Fatal("copied documents entered canvas list", err)
 	}
@@ -106,7 +106,7 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 		if _, shared := sourceAssets[item.ID]; shared {
 			t.Fatal("copied document shared source ID")
 		}
-		asset, err := store.FindAsset(ctx, actor, finished.TargetProjectID, item.ID)
+		asset, err := store.FindAsset(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, item.ID)
 		if err != nil || asset.UploadID != nil || asset.SourceOperationID != nil {
 			t.Fatal("published independent document facts", err)
 		}
@@ -122,18 +122,18 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 		if sourceID == uuid.Nil {
 			t.Fatal("copied original SHA changed")
 		}
-		sourceAsset, err := store.FindAsset(ctx, actor, source, sourceID)
+		sourceAsset, err := store.FindAsset(ctx, mediaBoundaryActor(actor), source, sourceID)
 		if err != nil || sourceAsset.ObjectKey == asset.ObjectKey {
 			t.Fatal("copied original key shared", err)
 		}
 		if err := objects.Remove(ctx, sourceAsset.ObjectKey); err != nil {
 			t.Fatal("remove only synthetic source object", err)
 		}
-		frozen, err := reader.Freeze(ctx, actor, finished.TargetProjectID, []uuid.UUID{asset.ID})
+		frozen, err := reader.Freeze(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, []uuid.UUID{asset.ID})
 		if err != nil {
 			t.Fatal(err)
 		}
-		file, err := reader.Open(ctx, actor, finished.TargetProjectID, frozen[0])
+		file, err := reader.Open(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, frozen[0])
 		if err != nil {
 			t.Fatal("independent copied original lost", err)
 		}
@@ -142,10 +142,10 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 		if err != nil || !bytes.Equal(actual, sourceAssets[sourceID]) {
 			t.Fatal("actual copied original bytes differ", err)
 		}
-		if _, err := query.Reference(ctx, actor, finished.TargetProjectID, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+		if _, err := query.Reference(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 			t.Fatal("copied document got canvas reference", err)
 		}
-		rends, err := store.FindRenditions(ctx, actor, finished.TargetProjectID, asset.ID)
+		rends, err := store.FindRenditions(ctx, mediaBoundaryActor(actor), finished.TargetProjectID, asset.ID)
 		if err != nil || len(rends) != 0 {
 			t.Fatal("copy invented document renditions", err)
 		}

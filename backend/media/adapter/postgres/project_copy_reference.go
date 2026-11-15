@@ -11,12 +11,11 @@ import (
 	"gorm.io/gorm/clause"
 
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
-func (s scopeAuthority) copyReferenceAccess(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding) error {
+func (s scopeAuthority) copyReferenceAccess(tx *gorm.DB, actor application.Actor, binding application.ProjectCopyBinding) error {
 	if binding.Validate() != nil || actor.OrgID != binding.OrgID {
 		return application.ErrProjectCopyMediaUnavailable
 	}
@@ -51,7 +50,7 @@ func (s scopeAuthority) copyReferenceAccess(tx *gorm.DB, actor identityapp.Princ
 
 // ReadCopyReference reads only SQL. The trusted manifest and its actual object
 // mapping determine target identities; rendition digests are not manufactured.
-func (s *ProjectCopyStore) ReadCopyReference(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact application.ReferenceFact) (application.ProjectCopyReferenceFiles, error) {
+func (s *ProjectCopyStore) ReadCopyReference(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact application.ReferenceFact) (application.ProjectCopyReferenceFiles, error) {
 	var result application.ProjectCopyReferenceFiles
 	if s == nil || s.db == nil {
 		return result, application.ErrUnavailable
@@ -141,7 +140,7 @@ func (s *ProjectCopyStore) ReadCopyReference(ctx context.Context, actor identity
 
 // ReadTransferredCopyReference requires owning registration/object receipts
 // and exact current target facts. The caller separately proves actual bytes.
-func (s *ProjectCopyStore) ReadTransferredCopyReference(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact application.ReferenceFact) (application.ProjectCopyReferenceFiles, error) {
+func (s *ProjectCopyStore) ReadTransferredCopyReference(ctx context.Context, actor application.Actor, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact application.ReferenceFact) (application.ProjectCopyReferenceFiles, error) {
 	result, err := s.ReadCopyReference(ctx, actor, binding, snapshot, fact)
 	if err != nil {
 		return result, err

@@ -10,8 +10,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -75,7 +78,7 @@ func verifyCopyPlacementScope(ctx context.Context, t *testing.T, db, owner *gorm
 		t.Fatalf("revoked current actor replayed old acceptance %v", err)
 	}
 	_, foreignSource := lifecycleActorProject(ctx, t, owner)
-	if _, err = service.Create(ctx, actor, copyInput(foreignSource)); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err = service.Create(ctx, actor, copyInput(foreignSource)); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("cross organization source copied %v", err)
 	}
 }

@@ -13,7 +13,6 @@ import (
 
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -21,7 +20,7 @@ import (
 
 type avatarReferenceTestOwners struct{ tx *gorm.DB }
 
-func (o avatarReferenceTestOwners) HasMediaReferences(ctx context.Context, _ identity.Principal, _ uuid.UUID, asset uuid.UUID) (bool, error) {
+func (o avatarReferenceTestOwners) HasMediaReferences(ctx context.Context, _ mediaapp.Actor, _ uuid.UUID, asset uuid.UUID) (bool, error) {
 	a, err := pgidentity.NewAvatarReferences(o.tx).HasAvatarReference(ctx, asset)
 	if err != nil {
 		return false, err
@@ -88,7 +87,7 @@ func TestMediaPurgeProtectsRetainedAvatars(t *testing.T) {
 			}
 		}
 		input.Key = uuid.New()
-		job, err := store.CreatePurge(t.Context(), actor, input)
+		job, err := store.CreatePurge(t.Context(), identityMediaActor(actor), input)
 		if err != nil {
 			t.Fatalf("%s: %v", binding, err)
 		}
@@ -103,7 +102,7 @@ func TestMediaPurgeProtectsRetainedAvatars(t *testing.T) {
 		}
 	}
 	input.Key = uuid.New()
-	job, err := store.CreatePurge(t.Context(), actor, input)
+	job, err := store.CreatePurge(t.Context(), identityMediaActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}

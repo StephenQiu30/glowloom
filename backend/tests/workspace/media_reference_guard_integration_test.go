@@ -10,8 +10,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -91,7 +94,7 @@ func TestWorkspaceMediaReferenceGuardRequiresCurrentScopeAndCallerTransaction(t 
 		t.Fatal("pool accepted")
 	}
 	foreign := insertWorkspaceActor(t.Context(), t, db, insertWorkspaceOrganization(t.Context(), t, db))
-	if _, err := workspaceReferenceCheck(t, db, foreign, project, uuid.New()); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := workspaceReferenceCheck(t, db, foreign, project, uuid.New()); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatal("foreign owning scope", err)
 	}
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {

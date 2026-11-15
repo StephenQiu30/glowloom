@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
@@ -110,7 +111,7 @@ func (s *StyleLibrary) List(ctx context.Context, a identity.Principal, in StyleL
 		return StyleLibraryPage{}, identity.ErrForbidden
 	}
 	if s == nil || s.store == nil {
-		return StyleLibraryPage{}, ErrProjectDependencyUnavailable
+		return StyleLibraryPage{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	in.Query = strings.TrimSpace(in.Query)
 	if strings.ContainsRune(in.Query, 0) || !utf8.ValidString(in.Query) || utf8.RuneCountInString(in.Query) > 100 || in.Limit < 0 || in.Limit > 100 || (in.Category != "" && !validLibraryCategory(in.Category)) || (in.After != nil && (in.After.ID == uuid.Nil || strings.ContainsRune(in.After.Name, 0) || !utf8.ValidString(in.After.Name) || len(in.After.Name) > 4096)) {
@@ -135,7 +136,7 @@ func (s *StyleLibrary) Read(ctx context.Context, a identity.Principal, id uuid.U
 		return StyleLibraryDetail{}, identity.ErrForbidden
 	}
 	if s == nil || s.store == nil {
-		return StyleLibraryDetail{}, ErrProjectDependencyUnavailable
+		return StyleLibraryDetail{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if id == uuid.Nil {
 		return StyleLibraryDetail{}, ErrInvalidStyleLibrary
@@ -149,7 +150,7 @@ func (s *StyleLibrary) Change(ctx context.Context, a identity.Principal, in Styl
 		return StyleLibraryChangeResult{}, identity.ErrForbidden
 	}
 	if s == nil || s.store == nil {
-		return StyleLibraryChangeResult{}, ErrProjectDependencyUnavailable
+		return StyleLibraryChangeResult{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	in.PromptFragment = strings.TrimSpace(in.PromptFragment)

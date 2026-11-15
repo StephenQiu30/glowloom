@@ -11,11 +11,9 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-func reuseOrNumberVersion(tx *gorm.DB, actor identityapp.Principal, state domain.ProjectState, p *application.WritePlan) error {
+func reuseOrNumberVersion(tx *gorm.DB, actor application.Actor, state domain.ProjectState, p *application.WritePlan) error {
 	var existing versionRow
 	err := tx.Where("org_id = ? AND project_id = ? AND source_manifest_sha256 = ?", actor.OrgID, p.Command.ProjectID, p.Version.SourceManifestSHA256).Take(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -66,7 +64,7 @@ func requirePendingSource(tx *gorm.DB, p application.WritePlan) error {
 	}
 	return nil
 }
-func finishReusedWrite(ctx context.Context, tx *gorm.DB, access application.ProjectAccess, actor identityapp.Principal, project workspaceapp.ProjectContentAccess, state domain.ProjectState, p application.WritePlan) (application.SourceReceipt, error) {
+func finishReusedWrite(ctx context.Context, tx *gorm.DB, access application.ProjectAccess, actor application.Actor, project application.ProjectFacts, state domain.ProjectState, p application.WritePlan) (application.SourceReceipt, error) {
 	result := application.SourceReceipt{ScriptRevision: state.Revision, ProjectRevision: project.Revision, VersionID: p.Version.ID, SplitSetID: p.Candidate.ID, Mappings: p.Mappings, Changed: !p.HeadUnchanged, Duplicate: true}
 	if !p.HeadUnchanged {
 		if err := exactlyOne(tx.Model(&scriptProjectStateRow{}).Where("org_id = ? AND project_id = ? AND revision = ?", actor.OrgID, p.Command.ProjectID, state.Revision).

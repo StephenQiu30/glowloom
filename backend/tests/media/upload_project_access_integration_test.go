@@ -17,19 +17,19 @@ func TestUploadProjectCleanupSurvivesRevocationAndArchive(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
 	store := mediaTestStore(database)
-	if aspect, err := store.AuthorizeUpload(t.Context(), actor, project); err != nil || aspect != "16:9" {
+	if aspect, err := store.AuthorizeUpload(t.Context(), mediaActor(actor), project); err != nil || aspect != "16:9" {
 		t.Fatalf("active project lost upload access/aspect: aspect=%q error=%v", aspect, err)
 	}
 	if err := database.Exec(`UPDATE workspace.project SET status='archived' WHERE id=?`, project).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.AuthorizeUpload(t.Context(), actor, project); !errors.Is(err, mediadomain.ErrMediaStateConflict) {
+	if _, err := store.AuthorizeUpload(t.Context(), mediaActor(actor), project); !errors.Is(err, mediadomain.ErrMediaStateConflict) {
 		t.Fatalf("archived project lost its existing conflict error: %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.AuthorizeUpload(t.Context(), actor, project); err == nil {
+	if _, err := store.AuthorizeUpload(t.Context(), mediaActor(actor), project); err == nil {
 		t.Fatal("a revoked actor retained new upload authority")
 	}
 	if present, err := store.UploadAssetExists(t.Context(), project, uuid.New()); err != nil || present {

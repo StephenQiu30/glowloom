@@ -26,7 +26,6 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
@@ -218,7 +217,7 @@ func TestMediaPackageProductionRouterActualBothScopesCompleteUsageAndAllSixRoute
 
 type packageCompositionIdleGuard struct{}
 
-func (packageCompositionIdleGuard) HasInflightProjectWork(context.Context, identityapp.Principal, uuid.UUID) (bool, error) {
+func (packageCompositionIdleGuard) HasInflightProjectWork(context.Context, mediaapp.Actor, uuid.UUID) (bool, error) {
 	return false, nil
 }
 
@@ -251,7 +250,7 @@ func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClos
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	job, err := service.Import(t.Context(), f.actor, in, file)
+	job, err := service.Import(t.Context(), mediaBoundaryActor(f.actor), in, file)
 	if err != nil || job.Status != "needs_reconciliation" {
 		t.Fatal("actual unknown private package", job, err)
 	}
@@ -307,12 +306,12 @@ func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClos
 		t.Fatal(err)
 	}
 	actual := mediaapp.NewLibraryPackageService(repo, uploads, objects, time.Now)
-	cancelled, err := actual.Cancel(t.Context(), f.actor, job.ID, mediaapp.PackageControl{ExpectedRevision: job.Revision, Key: uuid.New(), RequestID: uuid.New()})
+	cancelled, err := actual.Cancel(t.Context(), mediaBoundaryActor(f.actor), job.ID, mediaapp.PackageControl{ExpectedRevision: job.Revision, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || cancelled.Status != "needs_reconciliation" {
 		t.Fatal("remote write window did not retain package cleanup", cancelled, err)
 	}
 	businessExpireStorageWindow(t, f.owner, job.ID)
-	cancelled, err = actual.Cancel(t.Context(), f.actor, job.ID, mediaapp.PackageControl{ExpectedRevision: cancelled.Revision, Key: uuid.New(), RequestID: uuid.New()})
+	cancelled, err = actual.Cancel(t.Context(), mediaBoundaryActor(f.actor), job.ID, mediaapp.PackageControl{ExpectedRevision: cancelled.Revision, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || cancelled.Status != "cancelled" {
 		t.Fatal("actual unknown package cleanup after drain", cancelled, err)
 	}

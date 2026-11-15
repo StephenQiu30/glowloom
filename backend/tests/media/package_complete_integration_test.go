@@ -17,7 +17,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -76,7 +75,7 @@ func TestMediaPackageActualAllAcceptedKindsSourceZIPExactOriginalsAndIndependent
 	}
 	data := packageFilesZIP(t, files)
 	in := mediaapp.PackageImportRequest{Scope: scope, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
-	job, err := service.Import(t.Context(), actor, in, packageDownloaded(t, data))
+	job, err := service.Import(t.Context(), mediaActor(actor), in, packageDownloaded(t, data))
 	if err != nil || job.Status != "succeeded" || job.ItemCount != len(files) {
 		t.Fatal("whole kinds package", job, err)
 	}
@@ -145,7 +144,7 @@ func TestMediaPackageActualAllAcceptedKindsSourceZIPExactOriginalsAndIndependent
 			t.Fatal("unclosed frozen identity accepted")
 		}
 	}
-	exported, err := service.Export(t.Context(), actor, scope)
+	exported, err := service.Export(t.Context(), mediaActor(actor), scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +168,7 @@ func TestMediaPackageSourceV1ActualImportNeverPromotesSourceConsentOrURLs(t *tes
 	image := uploadPNG(t)
 	data := packageZIP(t, []string{"assets.json", "files/original.png"}, [][]byte{sourcePackageManifest(t, image), image}, false)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
-	job, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: scope, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, data))
+	job, err := service.Import(t.Context(), mediaActor(actor), mediaapp.PackageImportRequest{Scope: scope, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, data))
 	if err == nil && job.Status == "succeeded" {
 		t.Fatal("upstream asset package was imported")
 	}
@@ -189,7 +188,7 @@ func TestMediaPackageCompleteTrashExportOriginalMissingFailsWholeAndRetainsCatal
 	actor, project := mediaStoreProject(t, db)
 	repo, service := packageActualService(t, db, objects, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	job, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, ownPackageZIP(t)))
+	job, err := service.Import(t.Context(), mediaActor(actor), mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, ownPackageZIP(t)))
 	if err != nil || job.Status != "succeeded" {
 		t.Fatal(job, err)
 	}
@@ -207,7 +206,7 @@ func TestMediaPackageCompleteTrashExportOriginalMissingFailsWholeAndRetainsCatal
 	}); err != nil {
 		t.Fatal(err)
 	}
-	export, err := service.Export(t.Context(), actor, scope)
+	export, err := service.Export(t.Context(), mediaActor(actor), scope)
 	if err != nil {
 		t.Fatal("retained trash rejected", err)
 	}
@@ -224,7 +223,7 @@ func TestMediaPackageCompleteTrashExportOriginalMissingFailsWholeAndRetainsCatal
 		}
 	}
 	personal := domain.LibraryScope{Kind: domain.LibraryPersonal}
-	personalImport, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: personal, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, export)
+	personalImport, err := service.Import(t.Context(), mediaActor(actor), mediaapp.PackageImportRequest{Scope: personal, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, export)
 	_ = export.Close()
 	if err != nil || personalImport.Status != "succeeded" {
 		t.Fatal("trash round trip", personalImport, err)
@@ -237,14 +236,14 @@ func TestMediaPackageCompleteTrashExportOriginalMissingFailsWholeAndRetainsCatal
 	if err := glbTestObjects(t).Remove(t.Context(), key); err != nil {
 		t.Fatal(err)
 	}
-	if failed, err := service.Export(t.Context(), actor, scope); err == nil || failed != nil {
+	if failed, err := service.Export(t.Context(), mediaActor(actor), scope); err == nil || failed != nil {
 		t.Fatal("missing trash original yielded partial export", err)
 	}
 }
 
 type packageFailedTouch struct{ mediaapp.LibraryProjectAccess }
 
-func (a packageFailedTouch) TouchContent(context.Context, identityapp.Principal, uuid.UUID, int64) (int64, error) {
+func (a packageFailedTouch) TouchContent(context.Context, mediaapp.Actor, uuid.UUID, int64) (int64, error) {
 	return 0, mediaapp.ErrUnavailable
 }
 
@@ -257,7 +256,7 @@ func TestMediaPackageAtomicPublicationOutboxFailureLeavesNoHalfLibraryAndSameKey
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	in := mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
 	file := packageDownloaded(t, ownPackageZIP(t))
-	if _, err := service.Import(t.Context(), actor, in, file); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := service.Import(t.Context(), mediaActor(actor), in, file); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("publication fault absent", err)
 	}
 	keys := packageCleanup(t, db, repo, objects, actor, scope)
@@ -281,7 +280,7 @@ func TestMediaPackageAtomicPublicationOutboxFailureLeavesNoHalfLibraryAndSameKey
 		}
 	}
 	_, recoveredService := packageActualService(t, db, objects, packageTestAccess)
-	job, err := recoveredService.Import(t.Context(), actor, in, file)
+	job, err := recoveredService.Import(t.Context(), mediaActor(actor), in, file)
 	if err != nil || job.Status != "succeeded" || job.LibraryRevision != 1 || job.ProjectRevision != 2 {
 		t.Fatal("original key recovery", job, err)
 	}

@@ -4,6 +4,7 @@ package mail
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -32,6 +33,8 @@ type SMTPConfig struct {
 	Host                                                           string
 	Port                                                           int
 	TLSMode, Username, Password, FromEmail, FromName, PublicOrigin string
+	// RootCAs is the explicitly configured SMTP trust pool, never a user input.
+	RootCAs *x509.CertPool `json:"-"`
 }
 
 // Sender submits identity messages over authenticated encrypted SMTP.
@@ -140,7 +143,7 @@ func (s *Sender) Send(ctx context.Context, event uuid.UUID, template, recipient 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	address := net.JoinHostPort(s.config.Host, strconv.Itoa(s.config.Port))
-	tlsConfig := &tls.Config{ServerName: s.config.Host, MinVersion: tls.VersionTLS12}
+	tlsConfig := &tls.Config{ServerName: s.config.Host, MinVersion: tls.VersionTLS12, RootCAs: s.config.RootCAs}
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	var conn net.Conn
 	if s.config.TLSMode == "tls" {

@@ -10,7 +10,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -47,7 +46,7 @@ type libraryRow struct {
 
 func (libraryRow) TableName() string { return "media.library" }
 
-func (s *LibraryStore) authorize(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
+func (s *LibraryStore) authorize(ctx context.Context, tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
 	if scope.Kind == domain.LibraryPersonal {
 		return application.LibraryProjectFacts{}, s.requirePersonal(tx, actor, write)
 	}
@@ -68,7 +67,7 @@ func (s *LibraryStore) authorize(ctx context.Context, tx *gorm.DB, actor identit
 	return facts, nil
 }
 
-func readLibrary(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, write bool) (libraryRow, error) {
+func readLibrary(tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, write bool) (libraryRow, error) {
 	id, err := scope.Identity(actor.OrgID, actor.ID)
 	if err != nil {
 		return libraryRow{}, err
@@ -142,7 +141,7 @@ func libraryFolders(tx *gorm.DB, id uuid.UUID, write bool) ([]domain.LibraryFold
 	return folders, nil
 }
 
-func (s *LibraryStore) read(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, consume func(*gorm.DB, libraryRow) error) error {
+func (s *LibraryStore) read(ctx context.Context, actor application.Actor, scope domain.LibraryScope, consume func(*gorm.DB, libraryRow) error) error {
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}

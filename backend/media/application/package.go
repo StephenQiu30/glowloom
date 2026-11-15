@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -113,14 +112,14 @@ type PackagePlan struct {
 // Admission is committed before any object I/O. WithPackageImport retains the
 // scope/job locks until the callback and one atomic publication transaction end.
 type PackageRepository interface {
-	AuthorizePackage(context.Context, identityapp.Principal, domain.LibraryScope, bool) (string, error)
-	FindPackageImport(context.Context, identityapp.Principal, PackageImportRequest) (PackageJob, *PackagePlan, bool, error)
-	AdmitPackageImport(context.Context, identityapp.Principal, PackageImportRequest, PackagePlan) (PackageJob, error)
-	WithPackageImport(context.Context, identityapp.Principal, uuid.UUID, func(PackagePlan) error) (PackageJob, error)
-	ControlPackageImport(context.Context, identityapp.Principal, uuid.UUID, PackageControl, bool, func(PackagePlan) error) (PackageJob, error)
-	GetPackage(context.Context, identityapp.Principal, uuid.UUID) (PackageJob, error)
-	ListPackages(context.Context, identityapp.Principal, domain.LibraryScope, int, int) (PackagePage, error)
-	InspectPackageExport(context.Context, identityapp.Principal, domain.LibraryScope, func(PackageExport) error) error
+	AuthorizePackage(context.Context, Actor, domain.LibraryScope, bool) (string, error)
+	FindPackageImport(context.Context, Actor, PackageImportRequest) (PackageJob, *PackagePlan, bool, error)
+	AdmitPackageImport(context.Context, Actor, PackageImportRequest, PackagePlan) (PackageJob, error)
+	WithPackageImport(context.Context, Actor, uuid.UUID, func(PackagePlan) error) (PackageJob, error)
+	ControlPackageImport(context.Context, Actor, uuid.UUID, PackageControl, bool, func(PackagePlan) error) (PackageJob, error)
+	GetPackage(context.Context, Actor, uuid.UUID) (PackageJob, error)
+	ListPackages(context.Context, Actor, domain.LibraryScope, int, int) (PackagePage, error)
+	InspectPackageExport(context.Context, Actor, domain.LibraryScope, func(PackageExport) error) error
 }
 
 // PackageExport freezes the complete scoped catalog and original-file facts.

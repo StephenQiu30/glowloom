@@ -95,6 +95,9 @@ func (a *Auth) UpgradeLegacy(ctx context.Context, token, csrf, source string, op
 		if !csrfProof(csrf, s) {
 			return ErrSessionCSRFInvalid
 		}
+		if e = a.checkCurrentSessionSources(tx, u, s); e != nil {
+			return e
+		}
 		if e = tx.UpgradeLegacySession(s.ID, u.ID, digest); e != nil {
 			return e
 		}

@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -28,10 +29,10 @@ func NewProjectCopyAccessStore(tx *gorm.DB, authority application.ProjectCopyAut
 // Authorize requires current workspace authority for the exact private copy scope.
 func (s *ProjectCopyAccessStore) Authorize(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, _ bool) error {
 	if s == nil || s.tx == nil || s.tx.Statement == nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	if _, transaction := s.tx.Statement.ConnPool.(gorm.TxCommitter); !transaction {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	a := s.authority
 	if binding != a.Binding || binding.JobID == uuid.Nil || binding.OrgID != actor.OrgID || a.ActorID != actor.ID || binding.SourceProjectID == uuid.Nil || binding.TargetProjectID == uuid.Nil || binding.SourceProjectID == binding.TargetProjectID || a.SourceRevision < 1 {
@@ -65,7 +66,7 @@ func (s *ProjectCopyAccessStore) Authorize(ctx context.Context, actor identityap
 		return fmt.Errorf("lock copying project scope: %w", read.Error)
 	}
 	if len(projects) != 2 {
-		return application.ErrProjectNotFound
+		return workspacesource.ErrProjectNotFound
 	}
 	for _, project := range projects {
 		if project.IsDelete || project.ID == binding.TargetProjectID && project.Status != "copying" || project.ID == binding.SourceProjectID && project.Status != "active" && project.Status != "archived" {

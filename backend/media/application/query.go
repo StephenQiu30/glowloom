@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -22,8 +21,8 @@ var (
 
 // AssetReader reads current authorized facts. Implementations retain transaction locks for references.
 type AssetReader interface {
-	FindAsset(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.MediaAsset, error)
-	ListReadyAssets(context.Context, identityapp.Principal, uuid.UUID, string, uuid.UUID, int) ([]domain.MediaAsset, error)
+	FindAsset(context.Context, Actor, uuid.UUID, uuid.UUID) (domain.MediaAsset, error)
+	ListReadyAssets(context.Context, Actor, uuid.UUID, string, uuid.UUID, int) ([]domain.MediaAsset, error)
 }
 
 // AssetSummary deliberately excludes object keys, supplier facts and consent details.
@@ -77,14 +76,14 @@ func eligible(a domain.MediaAsset) bool {
 }
 
 // Reference rechecks current project ownership and eligibility before a durable binding.
-func (q *AssetQuery) Reference(ctx context.Context, a identityapp.Principal, p, id uuid.UUID) (AssetSummary, error) {
+func (q *AssetQuery) Reference(ctx context.Context, a Actor, p, id uuid.UUID) (AssetSummary, error) {
 	asset, err := q.reference(ctx, a, p, id)
 	if err != nil {
 		return AssetSummary{}, err
 	}
 	return summary(asset), nil
 }
-func (q *AssetQuery) reference(ctx context.Context, a identityapp.Principal, p, id uuid.UUID) (domain.MediaAsset, error) {
+func (q *AssetQuery) reference(ctx context.Context, a Actor, p, id uuid.UUID) (domain.MediaAsset, error) {
 	if q == nil || q.store == nil {
 		return domain.MediaAsset{}, ErrUnavailable
 	}
@@ -102,7 +101,7 @@ func (q *AssetQuery) reference(ctx context.Context, a identityapp.Principal, p, 
 }
 
 // List defaults to canvas media; documents require the explicit document filter.
-func (q *AssetQuery) List(ctx context.Context, a identityapp.Principal, p uuid.UUID, kind, cursor string, limit int) (AssetPage, error) {
+func (q *AssetQuery) List(ctx context.Context, a Actor, p uuid.UUID, kind, cursor string, limit int) (AssetPage, error) {
 	if q == nil || q.store == nil {
 		return AssetPage{}, ErrUnavailable
 	}
@@ -141,7 +140,7 @@ func (q *AssetQuery) List(ctx context.Context, a identityapp.Principal, p uuid.U
 }
 
 // Preview authorizes before asking the signer for a ten-minute URL.
-func (q *AssetQuery) Preview(ctx context.Context, a identityapp.Principal, p, id uuid.UUID) (Preview, error) {
+func (q *AssetQuery) Preview(ctx context.Context, a Actor, p, id uuid.UUID) (Preview, error) {
 	asset, err := q.reference(ctx, a, p, id)
 	if err != nil {
 		return Preview{}, err

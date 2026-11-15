@@ -14,14 +14,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // The binary half retains existing asset identities without creating metadata
 // on reads. The text half has no fake media asset, object key or project ID.
-func libraryEntries(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) *gorm.DB {
+func libraryEntries(tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, id uuid.UUID) *gorm.DB {
 	assetEntries := tx.Table("media.media_asset AS a").
 		Select("COALESCE(i.id, a.id) AS id, a.id AS asset_id, i.folder_id AS folder_id, NULL::text AS plain_text, a.kind AS kind, LEFT(COALESCE(i.title, NULLIF(a.file_name, ''), a.kind), 240) AS title, COALESCE(i.category, ?) AS category, COALESCE(i.tags, '[]'::jsonb) AS tags, COALESCE(i.source_label, '') AS source_label, COALESCE(i.note, '') AS note, COALESCE(i.favorite, false) AS favorite, COALESCE(i.catalog_state, ?) AS catalog_state, i.trashed_at AS trashed_at, COALESCE(i.position, 0) AS position, COALESCE(i.revision, ?) AS revision, COALESCE(i.create_time, a.create_time) AS create_time, COALESCE(i.update_time, a.update_time) AS update_time, a.mime_type AS mime_type, to_jsonb(a) AS asset_facts", domain.LibraryItemCategoryMaterial, domain.LibraryItemStateActive, domain.LibraryItemInitialRevision).
 		Joins("LEFT JOIN media.library_item AS i ON i.library_id = ? AND i.asset_id = a.id", id).
@@ -146,7 +145,7 @@ func libraryFilters(q application.LibraryQuery, now time.Time) (string, []any) {
 
 // ListLibrary applies all filtering and the selected order before pagination.
 // Facets describe the full authorized scope/state, independently of page filters.
-func (s *LibraryStore) ListLibrary(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, q application.LibraryQuery) (application.LibraryPage, error) {
+func (s *LibraryStore) ListLibrary(ctx context.Context, actor application.Actor, scope domain.LibraryScope, q application.LibraryQuery) (application.LibraryPage, error) {
 	if q.Validate(scope) != nil {
 		return application.LibraryPage{}, domain.ErrInvalidLibrary
 	}
@@ -223,7 +222,7 @@ func (s *LibraryStore) ListLibrary(ctx context.Context, actor identityapp.Princi
 }
 
 // LibraryDetail returns one current scoped entry; file preview is separately authorized.
-func (s *LibraryStore) LibraryDetail(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, id uuid.UUID) (application.LibraryItemDetail, error) {
+func (s *LibraryStore) LibraryDetail(ctx context.Context, actor application.Actor, scope domain.LibraryScope, id uuid.UUID) (application.LibraryItemDetail, error) {
 	if id == uuid.Nil {
 		return application.LibraryItemDetail{}, application.ErrNotFound
 	}

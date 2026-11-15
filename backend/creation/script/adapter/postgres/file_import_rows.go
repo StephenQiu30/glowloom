@@ -13,12 +13,11 @@ import (
 	task "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/task"
 	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
-func readImport(tx *gorm.DB, actor identityapp.Principal, project, id uuid.UUID, lock bool) (scriptapp.ImportRecord, error) {
+func readImport(tx *gorm.DB, actor scriptapp.Actor, project, id uuid.UUID, lock bool) (scriptapp.ImportRecord, error) {
 	var job scriptImportJobRow
 	if err := tx.Where("org_id = ? AND project_id = ? AND id = ?", actor.OrgID, project, id).Take(&job).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -39,7 +38,7 @@ func readImport(tx *gorm.DB, actor identityapp.Principal, project, id uuid.UUID,
 		return scriptapp.ImportRecord{}, err
 	}
 	record := scriptapp.ImportRecord{
-		Actor:          identityapp.Principal{ID: job.ActorID, OrgID: job.OrgID},
+		Actor:          scriptapp.Actor{ID: job.ActorID, OrgID: job.OrgID},
 		BaseVersionID:  attempt.BaseVersionID,
 		PublicationKey: attempt.PublicationKey,
 		OwnerID:        state.IOOwnerID,
@@ -166,7 +165,7 @@ func updateImportState(tx *gorm.DB, job scriptapp.ImportJob, owner *uuid.UUID, i
 // ImportCommandTopic is the sole new command topic produced by document imports.
 const ImportCommandTopic = "glowloom.script.import_command.v1"
 
-func recordImportCommand(tx *gorm.DB, actor identityapp.Principal, key, request uuid.UUID, action, hash string, revision int64, job scriptapp.ImportJob, emit string, now time.Time) error {
+func recordImportCommand(tx *gorm.DB, actor scriptapp.Actor, key, request uuid.UUID, action, hash string, revision int64, job scriptapp.ImportJob, emit string, now time.Time) error {
 	id := uuid.NewSHA1(key, []byte("script-file-import/"+actor.ID.String()+"/"+emit))
 	delivery := scriptapp.ImportDelivery{ImportWork: scriptapp.ImportWork{JobID: job.ID, Attempt: job.Attempt}, EventID: id, RequestID: key, ActorID: actor.ID, OrgID: actor.OrgID, ProjectID: job.ProjectID, Action: domain.ImportAction(emit)}
 	payload, err := json.Marshal(struct {
@@ -200,7 +199,7 @@ func recordImportCommand(tx *gorm.DB, actor identityapp.Principal, key, request 
 	return importAudit(tx, actor, key, request, action, job, now)
 }
 
-func importAudit(tx *gorm.DB, actor identityapp.Principal, key, request uuid.UUID, action string, job scriptapp.ImportJob, now time.Time) error {
+func importAudit(tx *gorm.DB, actor scriptapp.Actor, key, request uuid.UUID, action string, job scriptapp.ImportJob, now time.Time) error {
 	const topic = "glowloom.audit.recorded.v1"
 	id := uuid.NewSHA1(key, []byte("script-file-import-audit/"+actor.ID.String()+"/"+action))
 	summary := map[string]any{"id": job.ID, "revision": job.Revision, "attempt": job.Attempt, "status": job.Status, "stage": job.Stage, "file_count": len(job.Files), "script_revision": job.LatestScriptRevision}

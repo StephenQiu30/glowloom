@@ -7,10 +7,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-func mergeCharacter(ctx context.Context, tx Transaction, actor identityapp.Principal, c Command, h *domain.Head, v domain.Version, now time.Time) error {
+func mergeCharacter(ctx context.Context, tx Transaction, actor Actor, c Command, h *domain.Head, v domain.Version, now time.Time) error {
 	if h.ConfirmedVersionID == nil || *h.ConfirmedVersionID != v.ID {
 		return ErrConflict
 	}
@@ -35,7 +34,7 @@ func mergeCharacter(ctx context.Context, tx Transaction, actor identityapp.Princ
 	return tx.Redirect(ctx, domain.Redirect{ID: uuid.New(), SourceID: h.ID, TargetID: target.ID, SourceVersionID: v.ID, TargetVersionID: version.ID, ActorID: actor.ID, CreatedAt: now})
 }
 
-func splitCharacter(ctx context.Context, tx Transaction, actor identityapp.Principal, c Command, parent domain.Version, now time.Time) (domain.Head, domain.Version, error) {
+func splitCharacter(ctx context.Context, tx Transaction, actor Actor, c Command, parent domain.Version, now time.Time) (domain.Head, domain.Version, error) {
 	child := domain.Head{ID: uuid.New(), OrgID: actor.OrgID, ProjectID: c.ProjectID, Kind: domain.KindCharacter, Revision: 1, CreatedAt: now, UpdatedAt: now}
 	v := domain.Version{ID: uuid.New(), EntryID: child.ID, OrgID: child.OrgID, ProjectID: child.ProjectID, Kind: child.Kind, Number: 1, ActorID: actor.ID, CreatedAt: now, Origin: domain.OriginManual}
 	if err := setContent(&v, c); err != nil {

@@ -109,7 +109,7 @@ func queueOperationCreditFreeze(tx *gorm.DB, input application.ReserveInput) err
 	if input.AmountMicros == 0 && input.ReusedResult {
 		return nil
 	}
-	payer, err := walletPayer(tx, input.ProjectID)
+	payer, err := walletPayerForReserve(tx, input)
 	if err != nil {
 		return err
 	}

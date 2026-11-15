@@ -129,7 +129,7 @@ func sourceMedia(binding subjectdomain.Binding) promptdomain.SourceMedia {
 	return promptdomain.SourceMedia{SourceID: binding.Media.AssetID.String(), SourceVersion: strconv.FormatInt(binding.Media.Revision, 10), MediaKind: binding.Media.Kind, BindingID: binding.ID.String()}
 }
 
-func (g generationAccess) ResolveSubject(ctx context.Context, a identity.Principal, project uuid.UUID, id, version string) (promptdomain.ReferenceSource, bool, error) {
+func (g generationAccess) resolvePromptSubject(ctx context.Context, a identity.Principal, project uuid.UUID, id, version string) (promptdomain.ReferenceSource, bool, error) {
 	out := promptdomain.ReferenceSource{Kind: "subject", SourceID: id, SourceVersion: version, Media: []promptdomain.SourceMedia{}}
 	if _, err := scopewire.ProvideProjectContentAccess(g.tx).Authorize(ctx, a, project, false); err != nil {
 		return out, true, err
@@ -147,7 +147,7 @@ func (g generationAccess) ResolveSubject(ctx context.Context, a identity.Princip
 	return out, true, nil
 }
 
-func (g generationAccess) ValidateBinding(ctx context.Context, a identity.Principal, project uuid.UUID, m promptdomain.SourceMedia, _ bool) error {
+func (g generationAccess) validatePromptBinding(ctx context.Context, a identity.Principal, project uuid.UUID, m promptdomain.SourceMedia, _ bool) error {
 	id, err := uuid.Parse(m.BindingID)
 	if err != nil {
 		return promptdomain.ErrReferenceUnavailable

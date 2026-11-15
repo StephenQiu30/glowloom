@@ -3,11 +3,12 @@ package postgres
 import (
 	"context"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -28,7 +29,7 @@ func verifyCopyProjectCover(ctx context.Context, tx *gorm.DB, actor identityapp.
 		return nil
 	}
 	if owner == nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	return owner.Verify(ctx, actor, copyMediaBinding(job), frozen.Target.CoverAssetID, actual.CoverAssetID)
 }
@@ -44,7 +45,7 @@ func bindCopyProjectCover(ctx context.Context, tx *gorm.DB, actor identityapp.Pr
 		return nil
 	}
 	if owner == nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	if err := owner.Verify(ctx, actor, copyMediaBinding(job), frozen.Target.CoverAssetID, frozen.Target.CoverAssetID); err != nil {
 		return err

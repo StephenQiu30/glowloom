@@ -5,16 +5,21 @@ import (
 	"database/sql"
 	"errors"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	billinghttp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/http"
+
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+
 	billingredis "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/redis"
+
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 )
 
@@ -24,7 +29,7 @@ func walletReader(db *gorm.DB, redisClient *redis.Client) billinghttp.WalletRead
 		var view billingapp.WalletView
 		err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			scope, err := scopewire.ProvideRequestScopeAccess(tx).Resolve(ctx, actor, actor.ScopeID, false)
-			if errors.Is(err, workspaceapp.ErrScopeNotFound) {
+			if errors.Is(err, workspacesource.ErrScopeNotFound) {
 				return identityapp.ErrForbidden
 			}
 			if err != nil {

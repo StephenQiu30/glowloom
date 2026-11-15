@@ -8,15 +8,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type filterFailureStore struct{ workspace.TeamStore }
 
 func (filterFailureStore) TeamTransaction(context.Context, identity.Principal, func() time.Time, func(workspace.TeamTx) error) error {
-	return workspace.ErrScopeNotFound
+	return workspacesource.ErrScopeNotFound
 }
 
 func TestPlatformTeamFilterRequiredQueries(t *testing.T) {

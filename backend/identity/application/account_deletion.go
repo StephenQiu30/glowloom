@@ -47,9 +47,10 @@ type AccountDeletionStore interface {
 
 // AccountDeletion retains records and resources; only identity and access change.
 type AccountDeletion struct {
-	auth  *Auth
-	store AccountDeletionStore
-	now   func() time.Time
+	auth   *Auth
+	store  AccountDeletionStore
+	now    func() time.Time
+	source *selfDeletionSource
 }
 
 // NewAccountDeletion constructs AccountDeletion with explicit caller-supplied dependencies.
@@ -60,7 +61,7 @@ func NewAccountDeletion(auth *Auth, store AccountDeletionStore, now func() time.
 // Preview reports duties and the version required for confirmation.
 func (s *AccountDeletion) Preview(ctx context.Context, actor Principal) (DeletionImpact, error) {
 	var impact DeletionImpact
-	err := s.store.DeletionTransaction(ctx, actor, s.now, func(tx AccountDeletionTx) error {
+	err := s.preflightTransaction(ctx, actor, func(tx AccountDeletionTx) error {
 		var err error
 		impact, err = tx.Impact()
 		return err
@@ -88,7 +89,7 @@ func (s *AccountDeletion) Start(ctx context.Context, actor Principal, source str
 		return RegistrationStart{}, ErrRegistrationUnavailable
 	}
 	op := uuid.New()
-	err := s.store.DeletionTransaction(ctx, actor, s.now, func(tx AccountDeletionTx) error {
+	err := s.preflightTransaction(ctx, actor, func(tx AccountDeletionTx) error {
 		now := s.now().UTC()
 		if err := checkDeletion(tx, now); err != nil {
 			return err
@@ -119,6 +120,13 @@ func (s *AccountDeletion) Start(ctx context.Context, actor Principal, source str
 
 // Confirm consumes the proof and soft-deletes the identity atomically.
 func (s *AccountDeletion) Confirm(ctx context.Context, actor Principal, revision int64, op uuid.UUID, code string) error {
+	if s.source != nil {
+		return ErrPasswordChangeUnavailable
+	}
+	return s.confirmPrepared(ctx, actor, revision, op, code, nil)
+}
+
+func (s *AccountDeletion) confirmPrepared(ctx context.Context, actor Principal, revision int64, op uuid.UUID, code string, prepare func(AccountDeletionTx, domain.User, time.Time) error) error {
 	if !s.auth.emailReady() {
 		return ErrRegistrationUnavailable
 	}
@@ -171,6 +179,9 @@ func (s *AccountDeletion) Confirm(ctx context.Context, actor Principal, revision
 		c.ConsumedAt = &now
 		if err := tx.SaveChallenge(c); err != nil {
 			return err
+		}
+		if prepare != nil {
+			return prepare(tx, u, now)
 		}
 		return tx.SoftDelete(now)
 	})

@@ -8,6 +8,7 @@ import (
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
 
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 
@@ -93,13 +94,14 @@ func TestOperationMissingConfirmedActorFailsClosed(t *testing.T) {
 }
 func TestPromptPreferencesDoNotRequireLegacyRole(t *testing.T) {
 	tx, a, _, _, _, _ := projectConsumerFixture(t)
-	if _, err := pgprompt.NewScopedStore(tx, func(db *gorm.DB) prompt.ActorAccess { return pgidentity.NewStore(db) }).ReadCustomizations(t.Context(), a); err != nil {
+	actor := prompt.Actor{ID: a.ID, OrgID: a.OrgID, ScopeID: a.ScopeID, SessionID: a.SessionID, CredentialEpoch: a.CredentialEpoch}
+	if _, err := pgprompt.NewScopedStore(tx, promptwire.SessionAccess).ReadCustomizations(t.Context(), actor); err != nil {
 		t.Fatalf("active self preferences require legacy role: %v", err)
 	}
 	if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=now() WHERE id=?`, a.SessionID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pgprompt.NewScopedStore(tx, func(db *gorm.DB) prompt.ActorAccess { return pgidentity.NewStore(db) }).ReadCustomizations(t.Context(), a); err == nil {
+	if _, err := pgprompt.NewScopedStore(tx, promptwire.SessionAccess).ReadCustomizations(t.Context(), actor); err == nil {
 		t.Fatal("revoked exact session read preferences")
 	}
 }

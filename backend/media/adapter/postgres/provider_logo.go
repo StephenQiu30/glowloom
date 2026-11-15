@@ -9,7 +9,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -30,7 +29,7 @@ func uploadEventAction(logo bool) string {
 
 // ProviderLogoTransaction permits owner previews and authenticated reads of bound logos.
 // It rechecks live sessions, purpose and bindings on both sides of URL signing.
-func (s *AvatarStore) ProviderLogoTransaction(ctx context.Context, actor identityapp.Principal, id uuid.UUID, clock func() time.Time, run func(domain.MediaAsset) error) error {
+func (s *AvatarStore) ProviderLogoTransaction(ctx context.Context, actor application.Actor, id uuid.UUID, clock func() time.Time, run func(domain.MediaAsset) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := NewAvatarStore(tx, s.actors).authorize(ctx, tx, actor, clock); err != nil {
 			return err

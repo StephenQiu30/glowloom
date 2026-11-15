@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // ImportAuthority permits only one claimed publication using a permanent server key.
@@ -32,7 +31,7 @@ type ImportWorkerStore interface {
 	FinishImport(context.Context, ImportWork, uuid.UUID, string, bool, time.Time) error
 	EndImportIO(context.Context, ImportWork, uuid.UUID, bool, time.Time) error
 	ProveImportStop(context.Context, ImportDelivery, uuid.UUID, time.Time) error
-	ImportControlRecord(context.Context, ImportDelivery) (ImportRecord, identityapp.Principal, error)
+	ImportControlRecord(context.Context, ImportDelivery) (ImportRecord, Actor, error)
 	FinishImportControl(context.Context, ImportDelivery, bool, time.Time) error
 	FailImportWorkflow(context.Context, ImportWork, time.Time) error
 	ImportWorkState(context.Context, ImportWork) (ImportJob, error)
@@ -141,7 +140,7 @@ func (w *ImportWorker) Execute(ctx context.Context, d ImportDelivery) (err error
 				result = ImportFileResult{Position: file.Position, Status: domain.ImportFileStatusFailed, FailureCode: importFailureCode(readErr), Warnings: []ExtractionWarning{}}
 			}
 		}
-		if readErr != nil && (ioCtx.Err() != nil || errors.Is(readErr, identityapp.ErrForbidden) || errors.Is(readErr, ErrUnavailable)) {
+		if readErr != nil && (ioCtx.Err() != nil || errors.Is(readErr, ErrForbidden) || errors.Is(readErr, ErrUnavailable)) {
 			return readErr
 		}
 		if found {
@@ -200,7 +199,7 @@ type PreparedImportFile struct {
 	Title     string
 }
 
-func (w *ImportWorker) extractFile(ctx context.Context, actor identityapp.Principal, project uuid.UUID, file FrozenImportFile) (out PreparedImportFile, err error) {
+func (w *ImportWorker) extractFile(ctx context.Context, actor Actor, project uuid.UUID, file FrozenImportFile) (out PreparedImportFile, err error) {
 	download, err := w.sources.Open(ctx, actor, project, file.Source)
 	if err != nil {
 		return out, err
@@ -254,7 +253,7 @@ func importFailureCode(err error) string {
 	switch {
 	case err == nil:
 		return ""
-	case errors.Is(err, identityapp.ErrForbidden):
+	case errors.Is(err, ErrForbidden):
 		return "import_actor_forbidden"
 	case errors.Is(err, ErrConflict):
 		return "script_revision_conflict"

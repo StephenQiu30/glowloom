@@ -5,21 +5,22 @@ import (
 	"errors"
 	"strconv"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-
 	"github.com/gin-gonic/gin"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // Handler is the media query HTTP adapter.
-type Handler struct{ query *application.AssetQuery }
+type Handler struct {
+	resolve ActorResolver
+	query   *application.AssetQuery
+}
 
 // NewHandler injects the authorized media query.
-func NewHandler(query *application.AssetQuery) *Handler { return &Handler{query: query} }
+func NewHandler(query *application.AssetQuery, resolve ActorResolver) *Handler {
+	return &Handler{resolve: resolve, query: query}
+}
 
 // Register installs workspace project-scoped reads.
 func (h *Handler) Register(group *gin.RouterGroup) {
@@ -43,6 +44,11 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/media [get]
 func (h *Handler) List(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	p, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -56,7 +62,7 @@ func (h *Handler) List(c *gin.Context) {
 			return
 		}
 	}
-	page, err := h.query.List(c.Request.Context(), identityhttp.Principal(c), p, c.Query("kind"), c.Query("cursor"), limit)
+	page, err := h.query.List(c.Request.Context(), actor, p, c.Query("kind"), c.Query("cursor"), limit)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -78,6 +84,11 @@ func (h *Handler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/media/{asset_id}/preview [get]
 func (h *Handler) Preview(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	p, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -86,7 +97,7 @@ func (h *Handler) Preview(c *gin.Context) {
 	if !ok {
 		return
 	}
-	preview, err := h.query.Preview(c.Request.Context(), identityhttp.Principal(c), p, asset)
+	preview, err := h.query.Preview(c.Request.Context(), actor, p, asset)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -96,11 +107,11 @@ func (h *Handler) Preview(c *gin.Context) {
 }
 func writeError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, application.ErrNotFound):
+	case errors.Is(err, application.ErrNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
-	case errors.Is(err, identityapp.ErrSessionInvalid):
+	case errors.Is(err, application.ErrSessionInvalid):
 		httpapi.WriteProblem(c, 401, "unauthorized", nil)
-	case errors.Is(err, identityapp.ErrForbidden):
+	case errors.Is(err, application.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrInvalidQuery):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)

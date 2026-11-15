@@ -7,13 +7,13 @@ import (
 	"gorm.io/gorm"
 
 	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // resolveGraphSubjectPins expands only references derived from the locked graph.
 // Ordinary user-authored references continue to require complete exact source facts.
-func (s *DraftStore) resolveGraphSubjectPins(ctx context.Context, tx *gorm.DB, actor identity.Principal, project uuid.UUID, graph canvas.Document, node canvas.Node, draft *domain.Draft) error {
+func (s *DraftStore) resolveGraphSubjectPins(ctx context.Context, tx *gorm.DB, actor application.Actor, project uuid.UUID, graph canvas.Document, node canvas.Node, draft *domain.Draft) error {
 	refs, err := canvas.SubjectConnectionReferences(graph, node)
 	if err != nil {
 		return err

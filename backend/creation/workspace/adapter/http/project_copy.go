@@ -9,15 +9,19 @@ import (
 	"strconv"
 	"unicode/utf8"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -191,7 +195,7 @@ func writeCopyError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound), errors.Is(err, domain.ErrProjectFolderNotFound):
+	case errors.Is(err, workspacesource.ErrProjectNotFound), errors.Is(err, workspacesource.ErrStylePresetNotFound), errors.Is(err, domain.ErrProjectFolderNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, domain.ErrProjectRevisionConflict), errors.Is(err, domain.ErrProjectFolderRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
@@ -205,7 +209,7 @@ func writeCopyError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "consent_context_unavailable", nil)
 	case errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable):
 		httpapi.WriteProblem(c, 409, "copy_media_unavailable", nil)
-	case errors.Is(err, application.ErrIdempotencyConflict):
+	case errors.Is(err, workspacesource.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 422, "idempotency_key_reused", nil)
 	case errors.Is(err, domain.ErrInvalidProjectCopy), errors.Is(err, canvasdomain.ErrInvalidProjectCopy):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)

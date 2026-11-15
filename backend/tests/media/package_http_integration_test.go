@@ -36,7 +36,7 @@ func packageTestAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 	return packageTestProjectAccess{libraryTestAccess(tx)}
 }
 
-func (a packageTestProjectAccess) Authorize(ctx context.Context, actor identityapp.Principal, id uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
+func (a packageTestProjectAccess) Authorize(ctx context.Context, actor mediaapp.Actor, id uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
 	facts, err := a.LibraryProjectAccess.Authorize(ctx, actor, id, write)
 	if errors.Is(err, workspacedomain.ErrProjectStateConflict) {
 		err = errors.Join(domain.ErrMediaStateConflict, err)
@@ -60,7 +60,7 @@ func packageRouter(actor identityapp.Principal, service *mediaapp.LibraryPackage
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewPackageHandler(service).Register(group)
+	mediahttp.NewPackageHandler(service, fixtureIdentityMediaActor).Register(group)
 	return router
 }
 
@@ -101,7 +101,7 @@ func packageHTTPImport(t *testing.T, router *gin.Engine, path string, request []
 
 func packageCleanup(t *testing.T, db *gorm.DB, _ *pgmedia.PackageStore, _ mediaapp.PackageObjects, actor identityapp.Principal, scope domain.LibraryScope) []string {
 	t.Helper()
-	locations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), actor, scope)
+	locations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), mediaActor(actor), scope)
 	keys := make([]string, 0, len(locations))
 	for _, ref := range locations {
 		if ref.Validate() != nil {
@@ -251,7 +251,7 @@ func TestMediaPackageHTTPCancelUnknownRetainsReservationOriginalReceiptAndFullAb
 	repo, service := packageActualService(t, db, unknown, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	in := mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
-	job, err := service.Import(t.Context(), actor, in, packageDownloaded(t, ownPackageZIP(t)))
+	job, err := service.Import(t.Context(), mediaActor(actor), in, packageDownloaded(t, ownPackageZIP(t)))
 	if err != nil || job.Status != "needs_reconciliation" {
 		t.Fatal(job, err)
 	}
@@ -267,7 +267,7 @@ func TestMediaPackageHTTPCancelUnknownRetainsReservationOriginalReceiptAndFullAb
 	if first.Code != 202 || json.Unmarshal(first.Body.Bytes(), &current) != nil || current.Status != "needs_reconciliation" {
 		t.Fatal("uncertain removal reported cancelled", first.Code, first.Body.String())
 	}
-	if busy, err := repo.HasInflightPackageWork(t.Context(), actor, project); err != nil || !busy {
+	if busy, err := repo.HasInflightPackageWork(t.Context(), mediaActor(actor), project); err != nil || !busy {
 		t.Fatal("unknown cleanup released reservation", busy, err)
 	}
 	if replay := libraryHTTPRequest(t, router, http.MethodPost, path, body, key); replay.Code != 202 || !bytes.Equal(first.Body.Bytes(), replay.Body.Bytes()) {
@@ -282,10 +282,10 @@ func TestMediaPackageHTTPCancelUnknownRetainsReservationOriginalReceiptAndFullAb
 			t.Fatal("cancelled with retained object", exists, err)
 		}
 	}
-	if busy, err := repo.HasInflightPackageWork(t.Context(), actor, project); err != nil || busy {
+	if busy, err := repo.HasInflightPackageWork(t.Context(), mediaActor(actor), project); err != nil || busy {
 		t.Fatal("cancelled batch busy", busy, err)
 	}
-	if _, err := service.Get(t.Context(), actor, job.ID); err != nil {
+	if _, err := service.Get(t.Context(), mediaActor(actor), job.ID); err != nil {
 		t.Fatal(err)
 	}
 	var assets int64
@@ -298,7 +298,7 @@ func TestMediaPackageHTTPCancelUnknownRetainsReservationOriginalReceiptAndFullAb
 	if response := libraryHTTPRequest(t, router, http.MethodPost, strings.TrimSuffix(path, "cancel")+"reconcile", body, key); response.Code != 409 {
 		t.Fatal("same key different action accepted", response.Code)
 	}
-	if _, err := service.Reconcile(t.Context(), actor, job.ID, mediaapp.PackageControl{ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()}); !errors.Is(err, mediaapp.ErrPackageConflict) {
+	if _, err := service.Reconcile(t.Context(), mediaActor(actor), job.ID, mediaapp.PackageControl{ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()}); !errors.Is(err, mediaapp.ErrPackageConflict) {
 		t.Fatal("stale terminal head accepted", err)
 	}
 }

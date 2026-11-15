@@ -63,12 +63,12 @@ func TestScriptImportDeliveryRevocationInRollbackTransaction(t *testing.T) {
 	}
 	store := scriptImportStore(tx, nil)
 	service := app.NewImportService(store, time.Now)
-	job, err := service.Create(t.Context(), actor, app.ImportCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{asset}, RightsConfirmed: true})
+	job, err := service.Create(t.Context(), scriptActor(actor), app.ImportCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), AssetIDs: []uuid.UUID{asset}, RightsConfirmed: true})
 	if err != nil {
 		t.Fatal("admit synthetic SQL-only document", err)
 	}
 	command := app.ImportControl{ProjectID: project, JobID: job.ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: job.Revision, Action: "cancel"}
-	if _, err := service.Control(t.Context(), controller, command); err != nil {
+	if _, err := service.Control(t.Context(), scriptActor(controller), command); err != nil {
 		t.Fatal(err)
 	}
 	delivery := importDelivery(t, tx, controller, command.Key)

@@ -6,12 +6,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
-func (s *PurgeStore) cancelPendingItem(ctx context.Context, tx *gorm.DB, row purgeJobRow, actor identityapp.Principal, index int, library libraryRow, facts application.LibraryProjectFacts) (bool, error) {
+func (s *PurgeStore) cancelPendingItem(ctx context.Context, tx *gorm.DB, row purgeJobRow, actor application.Actor, index int, library libraryRow, facts application.LibraryProjectFacts) (bool, error) {
 	state, frozen, err := readPurgeItem(tx, row.ID, index)
 	if err != nil {
 		return false, err
@@ -50,7 +49,7 @@ func (s *PurgeStore) cancelPendingItem(ctx context.Context, tx *gorm.DB, row pur
 
 // ControlPurge is permanent and currently authorized. Cancel never recreates
 // deleted bytes: any started item must finish its original cleanup instead.
-func (s *PurgeStore) ControlPurge(ctx context.Context, actor identityapp.Principal, id, key uuid.UUID, revision int64, action application.PurgeAction) (domain.PurgeJob, error) {
+func (s *PurgeStore) ControlPurge(ctx context.Context, actor application.Actor, id, key uuid.UUID, revision int64, action application.PurgeAction) (domain.PurgeJob, error) {
 	var result domain.PurgeJob
 	if s == nil || s.db == nil {
 		return result, application.ErrUnavailable

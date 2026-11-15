@@ -19,13 +19,17 @@ import (
 )
 
 type publicQuoteStore struct {
-	input operationapp.CreateFreeQuoteInput
-	calls int
+	input   operationapp.CreateFreeQuoteInput
+	calls   int
+	failure error
 }
 
 func (s *publicQuoteStore) CreateFreeQuote(_ context.Context, _ identityapp.Principal, input operationapp.CreateFreeQuoteInput) (operationapp.CreateFreeQuoteResult, error) {
 	s.input = input
 	s.calls++
+	if s.failure != nil {
+		return operationapp.CreateFreeQuoteResult{}, s.failure
+	}
 	return operationapp.CreateFreeQuoteResult{OperationID: uuid.New(), QuoteMicros: 12, QuoteDetail: json.RawMessage(`{"outputs":1}`), AvailableMicros: 100, ExpiresAt: time.Now().Add(time.Minute), Confirmable: true}, nil
 }
 
@@ -69,6 +73,40 @@ func TestPublicFreeQuoteRejectsUnknownFieldsAndWrongOrigin(t *testing.T) {
 		if res.Code != tc.want || store.calls != 0 {
 			t.Fatalf("unsafe quote reached persistence: %d %s", res.Code, res.Body)
 		}
+	}
+}
+
+func TestPublicFreeQuotePreservesFrozenCompilationFailureStatus(t *testing.T) {
+	for _, test := range []struct {
+		failure error
+		status  int
+		code    string
+	}{
+		{operationapp.ErrFrozenTemplateInvalid, 422, "template_invalid"},
+		{operationapp.ErrFrozenTemplateChanged, 409, "template_changed"},
+		{operationapp.ErrFrozenTemplateContextUnavailable, 409, "context_unavailable"},
+		{operationapp.ErrFrozenReferenceUnavailable, 422, "reference_unavailable"},
+		{operationapp.ErrFrozenCompilerUnsupported, 422, "invalid_request"},
+		{operationapp.ErrQuoteSourceStale, 409, "canvas_revision_conflict"},
+	} {
+		t.Run(test.code, func(t *testing.T) {
+			store := &publicQuoteStore{failure: test.failure}
+			router := gin.New()
+			router.Use(httpapi.Middleware("http://localhost:3000"))
+			router.Use(func(c *gin.Context) {
+				c.Set("principal", identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: identitydomain.RoleProducer})
+			})
+			operationhttp.NewHandler(operationhttp.Dependencies{FreeQuote: operationapp.NewCreateFreeQuoteCommand(store)}).Register(router.Group("/api"))
+			request := httptest.NewRequestWithContext(t.Context(), "POST", "/api/projects/"+uuid.NewString()+"/free-operations", strings.NewReader(`{"model_key":"fixture","capability":"image.generate","mode":"text_to_image","prompt":"fixture","params":{},"output_count":1,"force_regenerate":true}`))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Origin", "http://localhost:3000")
+			request.Header.Set("Idempotency-Key", uuid.NewString())
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != test.status || !strings.Contains(response.Body.String(), `"code":"`+test.code+`"`) || store.calls != 1 {
+				t.Fatalf("status=%d body=%s calls=%d", response.Code, response.Body.String(), store.calls)
+			}
+		})
 	}
 }
 

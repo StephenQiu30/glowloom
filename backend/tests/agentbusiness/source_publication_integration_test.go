@@ -66,8 +66,8 @@ func (s *sourceBytes) RemoveObject(_ context.Context, f scriptdomain.ObjectFact)
 }
 func sourceRoute(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	profile := "agent-script-" + uuid.NewString()[:8]
-	if err := db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'cos','http://127.0.0.1','http://127.0.0.1','us-east-1','agent-script','',?)`, profile, domain.ContentHash(profile)).Error; err != nil {
+	profile := "agent-script-fixture"
+	if err := pgmedia.NewStorageRoutes(db).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profile, Provider: "cos", Endpoint: "http://127.0.0.1:3", SigningEndpoint: "http://127.0.0.1:3", Region: "us-east-1", Bucket: "agent-script"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id)VALUES(1,?,?) ON CONFLICT(singleton)DO UPDATE SET revision=EXCLUDED.revision,profile_id=EXCLUDED.profile_id`, "1", profile).Error; err != nil {
@@ -170,8 +170,10 @@ func TestSourcePublicationStopDuringObjectIOCannotPublishOrReplaceUnknownIntent(
 	if err := json.Unmarshal(row.Plan, &plan); err != nil {
 		t.Fatal(err)
 	}
-	store := sourcepostgres.NewSourceStore(db, func(tx *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(tx) }).WithPublicationAuthorization(scriptwire.ProvideSourcePublicationAuthorization)
-	if _, err := store.FinishWrite(t.Context(), agentapp.Principal(g.Scope), plan); !errors.Is(err, domain.ErrTerminal) {
+	store := sourcepostgres.NewSourceStore(db, func(tx *gorm.DB) script.ProjectAccess {
+		return agentScriptAccess(scopewire.ProvideWorkerProjectContentAccess(tx))
+	}).WithPublicationAuthorization(scriptwire.ProvideSourcePublicationAuthorization)
+	if _, err := store.FinishWrite(t.Context(), agentScriptActor(agentapp.Principal(g.Scope)), plan); !errors.Is(err, domain.ErrTerminal) {
 		t.Fatal("generic source owner bypassed Stop", err)
 	}
 }
@@ -205,15 +207,15 @@ func TestCancelledOriginalSourceProofClosesUnknownCallWithoutReexecuting(t *test
 	store := sourceStoreForFixture(restrictedSourceRuntime(t))
 	owner := script.NewSourceService(store, objects, time.Now)
 	recovery := script.NewSourceRecovery(store, owner, time.Now)
-	page, err := recovery.List(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, 0, 10)
+	page, err := recovery.List(t.Context(), agentScriptActor(agentapp.Principal(g.Scope)), g.Scope.ProjectID, 0, 10)
 	if err != nil || len(page.Items) != 1 {
 		t.Fatal(page, err)
 	}
 	command := script.SourceControlCommand{ProjectID: g.Scope.ProjectID, IntentID: page.Items[0].ID, Key: uuid.New(), RequestID: uuid.New(), Action: "cancel", ExpectedRevision: page.Items[0].Revision}
-	if _, err := recovery.Control(t.Context(), agentapp.Principal(g.Scope), command); err != nil {
+	if _, err := recovery.Control(t.Context(), agentScriptActor(agentapp.Principal(g.Scope)), command); err != nil {
 		t.Fatal(err)
 	}
-	current, err := recovery.Get(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, command.IntentID)
+	current, err := recovery.Get(t.Context(), agentScriptActor(agentapp.Principal(g.Scope)), g.Scope.ProjectID, command.IntentID)
 	if err != nil || current.Status != "pending" || !current.NeedsReconciliation || len(objects.data) != 1 {
 		t.Fatal("bounded unknown write was deleted early", current, len(objects.data), err)
 	}
@@ -243,10 +245,10 @@ func TestCancelledOriginalSourceProofClosesUnknownCallWithoutReexecuting(t *test
 	command.Key = uuid.New()
 	command.RequestID = uuid.New()
 	command.ExpectedRevision = current.Revision
-	if _, err := recovery.Control(t.Context(), agentapp.Principal(g.Scope), command); err != nil {
+	if _, err := recovery.Control(t.Context(), agentScriptActor(agentapp.Principal(g.Scope)), command); err != nil {
 		t.Fatal(err)
 	}
-	current, err = recovery.Get(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, command.IntentID)
+	current, err = recovery.Get(t.Context(), agentScriptActor(agentapp.Principal(g.Scope)), g.Scope.ProjectID, command.IntentID)
 	if err != nil || current.Status != "cancelled" || len(objects.data) != 0 {
 		t.Fatal("formal cleanup not complete", current, len(objects.data), err)
 	}
@@ -261,7 +263,9 @@ func TestCancelledOriginalSourceProofClosesUnknownCallWithoutReexecuting(t *test
 	}
 }
 func sourceStoreForFixture(db *gorm.DB) *sourcepostgres.SourceStore {
-	return sourcepostgres.NewSourceStore(db, func(tx *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(tx) }).WithPublicationAuthorization(scriptwire.ProvideSourcePublicationAuthorization).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
+	return sourcepostgres.NewSourceStore(db, func(tx *gorm.DB) script.ProjectAccess {
+		return agentScriptAccess(scopewire.ProvideWorkerProjectContentAccess(tx))
+	}).WithPublicationAuthorization(scriptwire.ProvideSourcePublicationAuthorization).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }
 
 func TestSourcePublicationActualCOSBytesAndSavedHistory(t *testing.T) {
@@ -286,7 +290,10 @@ func TestSourcePublicationActualCOSBytesAndSavedHistory(t *testing.T) {
 		t.Fatal("isolated loopback object fixture required")
 	}
 	db, b, _, _, g := realCanvasBoundary(t)
-	profileID := "agent-source-" + domain.ContentHash(settings.Endpoint + "/" + settings.Bucket)[:12]
+	// The loopback COS fixture is one physical resource per endpoint. Reuse
+	// the suite's immutable profile; each project still has distinct object keys.
+	settings.Bucket = "shot-delivery-1250000000"
+	profileID := "test-main"
 	input := config.ObjectStorageConfig{SchemaVersion: 1, Revision: "1", DefaultWriteProfile: profileID,
 		Upload:   config.StorageUploadPolicy{Mode: config.StorageUploadRelay, SignedURLTTL: time.Minute, SessionTTL: time.Hour, StagingRetention: 24 * time.Hour, MultipartThresholdBytes: 8 << 20, PartSizeBytes: 5 << 20, PartConcurrency: 1},
 		Access:   config.StorageAccessPolicy{PreviewTTL: time.Minute, MaxSignedURLTTL: 15 * time.Minute},
@@ -337,7 +344,7 @@ func TestSourcePublicationActualCOSBytesAndSavedHistory(t *testing.T) {
 	if status != 200 || first.Status != "completed" {
 		t.Fatal("official object publication", status, message)
 	}
-	base, err := sourceStoreForFixture(runtime).LoadBase(t.Context(), agentapp.Principal(g.Scope), g.Scope.ProjectID, nil)
+	base, err := sourceStoreForFixture(runtime).LoadBase(t.Context(), agentScriptActor(agentapp.Principal(g.Scope)), g.Scope.ProjectID, nil)
 	if err != nil || len(base.Sources) != 1 || base.Sources[0].Rich.LocationID == uuid.Nil {
 		t.Fatal("saved history missing", base, err)
 	}

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -31,15 +33,19 @@ func TestExportDurableCancelGateRejectsChangedReplayAndForeignRead(t *testing.T)
 	asset.SHA256 = &sha
 	asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
 	asset = mediaFixtureAssetLocation(t, db, asset)
-	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := mediaTestStore(db).CreateAsset(t.Context(), mediaActor(actor), asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	freeze := &fixedTimeline{timeline: timeline}
-	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
-	workerStore := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
+	workerStore := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaWorkerStore(tx)))
+	})
 	input := toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}
 	key := uuid.New()
 	job, err := store.Create(t.Context(), actor, project, key, input)
@@ -100,8 +106,12 @@ func TestExportCancellationCannotBorrowAnotherWorkersCessation(t *testing.T) {
 	timeline.Clips[0].Kind = "subtitle"
 	timeline.Clips[0].AssetID = nil
 	timeline.Clips[0].Text = "caption"
-	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
-	workerStore := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
+	workerStore := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaWorkerStore(tx)))
+	})
 	job, err := store.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -183,13 +193,15 @@ func TestExportRejectsUnverifiableRealPersonConsentBeforeQueueing(t *testing.T) 
 	asset.Status = mediadomain.StatusProcessing
 	asset.ModerationStatus = mediadomain.ModerationPending
 	asset = mediaFixtureAssetLocation(t, db, asset)
-	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := mediaTestStore(db).CreateAsset(t.Context(), mediaActor(actor), asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	store := mediatoolExportStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
 	if _, err := store.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}); !errors.Is(err, toolapp.ErrNotFound) {
 		t.Fatalf("unknown consent registry bypassed: %v", err)
 	}

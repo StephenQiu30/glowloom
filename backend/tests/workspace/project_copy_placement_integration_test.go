@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 )
@@ -99,7 +101,7 @@ func TestProjectCopyPlacementPGAtomicFreezePublicationAndReplay(t *testing.T) {
 	expect := *input.Placement
 	expect.ExpectedFolderRevision++
 	changed.Placement = &expect
-	if _, err = service.Create(ctx, actor, changed); !errors.Is(err, workspaceapp.ErrIdempotencyConflict) {
+	if _, err = service.Create(ctx, actor, changed); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatalf("same key changed placement accepted %v", err)
 	}
 	var recorded struct{ WorkspaceSnapshot json.RawMessage }

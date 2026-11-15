@@ -7,8 +7,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // PublicationAuthorizationFactory binds a producer's durable authority port to
@@ -20,7 +18,7 @@ func (s *SourceStore) WithPublicationAuthorization(f PublicationAuthorizationFac
 	s.publication = f
 	return s
 }
-func (s *SourceStore) commandTransaction(ctx context.Context, actor identity.Principal, project, key uuid.UUID, hash string, write bool, f func(*gorm.DB, application.ProjectAccess, workspace.ProjectContentAccess) error) error {
+func (s *SourceStore) commandTransaction(ctx context.Context, actor application.Actor, project, key uuid.UUID, hash string, write bool, f func(*gorm.DB, application.ProjectAccess, application.ProjectFacts) error) error {
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}

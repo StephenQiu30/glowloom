@@ -9,14 +9,12 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // Versions pages immutable chronological metadata without retrieving private bodies.
-func (s *SourceStore) Versions(ctx context.Context, actor identityapp.Principal, project uuid.UUID, before int64, limit int) (application.VersionPage, error) {
+func (s *SourceStore) Versions(ctx context.Context, actor application.Actor, project uuid.UUID, before int64, limit int) (application.VersionPage, error) {
 	result := application.VersionPage{Items: []application.VersionSummary{}}
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		query := tx.Model(&scriptVersionSummaryRow{}).Where("org_id = ? AND project_id = ?", actor.OrgID, project)
 		if before > 0 {
 			query = query.Where("version_no < ?", before)
@@ -39,9 +37,9 @@ func (s *SourceStore) Versions(ctx context.Context, actor identityapp.Principal,
 }
 
 // SourceHistory reads every snapshot in a lineage, independent of current version membership.
-func (s *SourceStore) SourceHistory(ctx context.Context, actor identityapp.Principal, project, lineage uuid.UUID, before int64, limit int) (application.SourceHistoryPage, error) {
+func (s *SourceStore) SourceHistory(ctx context.Context, actor application.Actor, project, lineage uuid.UUID, before int64, limit int) (application.SourceHistoryPage, error) {
 	result := application.SourceHistoryPage{Items: []application.SourceSummary{}}
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		query := tx.Model(&scriptSourceSummaryRow{}).Where("org_id = ? AND project_id = ? AND source_lineage_id = ?", actor.OrgID, project, lineage)
 		if before > 0 {
 			query = query.Where("source_revision < ?", before)
@@ -67,9 +65,9 @@ func (s *SourceStore) SourceHistory(ctx context.Context, actor identityapp.Princ
 }
 
 // SourceSnapshot reads a selected immutable row after current owning authorization.
-func (s *SourceStore) SourceSnapshot(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (domain.SourceRecord, error) {
+func (s *SourceStore) SourceSnapshot(ctx context.Context, actor application.Actor, project, id uuid.UUID) (domain.SourceRecord, error) {
 	var result domain.SourceRecord
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		rows, err := readSources(tx, actor.OrgID, project, []uuid.UUID{id})
 		if err != nil {
 			return err
@@ -84,13 +82,13 @@ func (s *SourceStore) SourceSnapshot(ctx context.Context, actor identityapp.Prin
 }
 
 // Structures pages immutable structure metadata scoped through the episode owner.
-func (s *SourceStore) Structures(ctx context.Context, actor identityapp.Principal, id uuid.UUID, before int64, limit int) (application.StructurePage, error) {
+func (s *SourceStore) Structures(ctx context.Context, actor application.Actor, id uuid.UUID, before int64, limit int) (application.StructurePage, error) {
 	result := application.StructurePage{Items: []application.StructureSummary{}}
 	e, err := s.Episode(ctx, actor, id)
 	if err != nil {
 		return result, err
 	}
-	err = s.transaction(ctx, actor, e.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, e.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		query := tx.Model(&scriptStructureSummaryRow{}).Where("org_id = ? AND project_id = ? AND episode_id = ?", actor.OrgID, e.ProjectID, id)
 		if before > 0 {
 			query = query.Where("version_no < ?", before)
@@ -113,13 +111,13 @@ func (s *SourceStore) Structures(ctx context.Context, actor identityapp.Principa
 }
 
 // Structure preserves every historical body and selects only the exact episode relationship.
-func (s *SourceStore) Structure(ctx context.Context, actor identityapp.Principal, id uuid.UUID, version int64) (domain.EpisodeStructure, error) {
+func (s *SourceStore) Structure(ctx context.Context, actor application.Actor, id uuid.UUID, version int64) (domain.EpisodeStructure, error) {
 	var result domain.EpisodeStructure
 	e, err := s.Episode(ctx, actor, id)
 	if err != nil {
 		return result, err
 	}
-	err = s.transaction(ctx, actor, e.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, e.ProjectID, false, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		selected := e.CurrentStructureID
 		if version > 0 {
 			var row scriptStructureSummaryRow

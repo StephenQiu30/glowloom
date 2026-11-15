@@ -26,11 +26,11 @@ func ProvideMediaExportStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAc
 		func(tx *gorm.DB) toolapp.TimelineReader {
 			return canvasapp.NewTimelineReader(pgcanvas.NewScopedStore(tx,
 				func(mediaTx *gorm.DB) canvasapp.MediaReader {
-					return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes))
+					return LegacyAssetReader(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes)))
 				}, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }))
 		},
 		func(tx *gorm.DB) toolapp.DerivedMedia {
-			return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+			return LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes)))
 		})
 }
 

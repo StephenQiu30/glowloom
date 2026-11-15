@@ -53,7 +53,7 @@ func scriptRouter(service *app.SourceService, actor identityapp.Principal) *gin.
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	scripthttp.NewSourceHandler(service).Register(group)
+	scripthttp.NewSourceHandler(service, scriptHTTPActor).Register(group)
 	return router
 }
 func scriptHTTP(t *testing.T, router http.Handler, method, path string, key uuid.UUID, body any) *httptest.ResponseRecorder {
@@ -94,7 +94,7 @@ func TestScriptSourceHTTPPrivateHTMLRichAndPermanentRecovery(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &receipt); err != nil {
 		t.Fatal(err)
 	}
-	base, err := scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
+	base, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,20 +162,20 @@ func TestScriptSourcePGActualUnknownPrivatePutFenceAndSameKeyRecovery(t *testing
 	_, input := sourceCommand()
 	input.ProjectID = pid
 	service := app.NewSourceService(scriptStore(db), loss, time.Now)
-	if _, err := service.Write(t.Context(), actor, input); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if _, err := service.Write(t.Context(), scriptActor(actor), input); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal("actual unknown put published", err)
 	}
 	if s, v, c := scriptCounts(t, owner, pid); s != 0 || v != 0 || c != 1 {
 		t.Fatal("unknown transaction facts", s, v, c)
 	}
-	if blocked, err := scriptStore(db).HasInflightWork(t.Context(), actor, pid); err != nil || !blocked {
+	if blocked, err := scriptStore(db).HasInflightWork(t.Context(), scriptActor(actor), pid); err != nil || !blocked {
 		t.Fatal("lost put lifecycle fence", blocked, err)
 	}
-	receipt, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), actor, input)
+	receipt, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), scriptActor(actor), input)
 	if err != nil || receipt.ScriptRevision != 1 {
 		t.Fatal("actual same-key recovery", receipt, err)
 	}
-	base, err := scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
+	base, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestScriptSourcePGActualUnknownPrivatePutFenceAndSameKeyRecovery(t *testing
 			}
 		}
 	})
-	if blocked, err := scriptStore(db).HasInflightWork(t.Context(), actor, pid); err != nil || blocked {
+	if blocked, err := scriptStore(db).HasInflightWork(t.Context(), scriptActor(actor), pid); err != nil || blocked {
 		t.Fatal("completed original intent still fenced", blocked, err)
 	}
 	if s, v, c := scriptCounts(t, owner, pid); s != 1 || v != 1 || c != 1 {

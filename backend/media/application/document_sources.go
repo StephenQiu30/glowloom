@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -32,8 +31,8 @@ type DocumentSource struct {
 // DocumentSourceStore freezes source rows in an injected owning transaction.
 // Implementations hold asset, actor and project SHARE locks until its commit.
 type DocumentSourceStore interface {
-	FreezeDocumentSources(context.Context, identityapp.Principal, uuid.UUID, []uuid.UUID) ([]domain.MediaAsset, error)
-	FindAsset(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.MediaAsset, error)
+	FreezeDocumentSources(context.Context, Actor, uuid.UUID, []uuid.UUID) ([]domain.MediaAsset, error)
+	FindAsset(context.Context, Actor, uuid.UUID, uuid.UUID) (domain.MediaAsset, error)
 }
 
 // DocumentSources owns authorization and exact bounded original-byte reads.
@@ -57,7 +56,7 @@ func documentSource(asset domain.MediaAsset) (DocumentSource, error) {
 
 // Freeze returns 1..200 unique eligible sources in the requested order.
 // Script injects its admission transaction to retain all row locks through commit.
-func (s *DocumentSources) Freeze(ctx context.Context, actor identityapp.Principal, project uuid.UUID, ids []uuid.UUID) ([]DocumentSource, error) {
+func (s *DocumentSources) Freeze(ctx context.Context, actor Actor, project uuid.UUID, ids []uuid.UUID) ([]DocumentSource, error) {
 	if s == nil || s.store == nil {
 		return nil, ErrUnavailable
 	}
@@ -104,7 +103,7 @@ func (s *DocumentSources) Freeze(ctx context.Context, actor identityapp.Principa
 
 // Open reauthorizes and compares every frozen fact before fetching private bytes.
 // The caller owns the returned temporary original and must Close it.
-func (s *DocumentSources) Open(ctx context.Context, actor identityapp.Principal, project uuid.UUID, source DocumentSource) (*Downloaded, error) {
+func (s *DocumentSources) Open(ctx context.Context, actor Actor, project uuid.UUID, source DocumentSource) (*Downloaded, error) {
 	if s == nil || s.store == nil || s.objects == nil {
 		return nil, ErrUnavailable
 	}

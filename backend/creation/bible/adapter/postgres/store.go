@@ -4,7 +4,6 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -13,8 +12,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // Factories bind each actual owner to the current Bible SQL transaction.
@@ -38,8 +35,8 @@ func NewStore(db *gorm.DB, factories Factories) *Store { return &Store{db: db, f
 
 type bound struct {
 	tx      *gorm.DB
-	actor   identityapp.Principal
-	project workspaceapp.ProjectContentAccess
+	actor   application.Actor
+	project application.ProjectFacts
 	access  application.ProjectAccess
 	media   application.MediaReferences
 	voices  application.CatalogVoices
@@ -48,7 +45,7 @@ type bound struct {
 	results application.GeneratedResults
 }
 
-func (s *Store) transaction(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool, f func(*bound) error) error {
+func (s *Store) transaction(ctx context.Context, actor application.Actor, project uuid.UUID, write bool, f func(*bound) error) error {
 	if s == nil || s.db == nil || s.factories.Access == nil {
 		return application.ErrUnavailable
 	}
@@ -58,9 +55,6 @@ func (s *Store) transaction(ctx context.Context, actor identityapp.Principal, pr
 			return application.ErrUnavailable
 		}
 		facts, err := access.Authorize(ctx, actor, project, write)
-		if errors.Is(err, workspaceapp.ErrProjectNotFound) || errors.Is(err, workspaceapp.ErrScopeNotFound) {
-			return errors.Join(application.ErrNotFound, err)
-		}
 		if err != nil {
 			return err
 		}
@@ -88,19 +82,19 @@ func (s *Store) transaction(ctx context.Context, actor identityapp.Principal, pr
 }
 
 // Write holds current workspace authorization throughout content, invalidation and receipt persistence.
-func (s *Store) Write(ctx context.Context, actor identityapp.Principal, project uuid.UUID, f func(application.Transaction) (application.Receipt, error)) (application.Receipt, error) {
+func (s *Store) Write(ctx context.Context, actor application.Actor, project uuid.UUID, f func(application.Transaction) (application.Receipt, error)) (application.Receipt, error) {
 	var result application.Receipt
 	err := s.transaction(ctx, actor, project, true, func(tx *bound) error { var err error; result, err = f(tx); return err })
 	return result, err
 }
 
-func (b *bound) Project() workspaceapp.ProjectContentAccess { return b.project }
-func (b *bound) Access() application.ProjectAccess          { return b.access }
-func (b *bound) Media() application.MediaReferences         { return b.media }
-func (b *bound) Voices() application.CatalogVoices          { return b.voices }
-func (b *bound) Scopes() application.ScriptScopes           { return b.scopes }
-func (b *bound) Impacts() application.Impacts               { return b.impacts }
-func (b *bound) Results() application.GeneratedResults      { return b.results }
+func (b *bound) Project() application.ProjectFacts     { return b.project }
+func (b *bound) Access() application.ProjectAccess     { return b.access }
+func (b *bound) Media() application.MediaReferences    { return b.media }
+func (b *bound) Voices() application.CatalogVoices     { return b.voices }
+func (b *bound) Scopes() application.ScriptScopes      { return b.scopes }
+func (b *bound) Impacts() application.Impacts          { return b.impacts }
+func (b *bound) Results() application.GeneratedResults { return b.results }
 
 func exactlyOne(write *gorm.DB) error {
 	if write.Error != nil {
@@ -126,7 +120,7 @@ func tables(kind domain.Kind) (string, string, string, error) {
 }
 
 // Replay verifies a permanent key's entire scope after live authorization.
-func (b *bound) Replay(ctx context.Context, actor identityapp.Principal, c application.Command, hash string) (*application.Receipt, error) {
+func (b *bound) Replay(ctx context.Context, actor application.Actor, c application.Command, hash string) (*application.Receipt, error) {
 	if actor.ID != b.actor.ID || actor.OrgID != b.actor.OrgID || c.ProjectID != b.project.ProjectID {
 		return nil, application.ErrUnavailable
 	}
@@ -202,7 +196,7 @@ func (b *bound) Split(ctx context.Context, r domain.Split) error {
 }
 
 // Record persists a small original response and a safe audit event in the same transaction.
-func (b *bound) Record(ctx context.Context, actor identityapp.Principal, c application.Command, hash string, r application.Receipt, now time.Time) error {
+func (b *bound) Record(ctx context.Context, actor application.Actor, c application.Command, hash string, r application.Receipt, now time.Time) error {
 	response, err := json.Marshal(r)
 	if err != nil || len(response) > 16384 {
 		return application.ErrUnavailable

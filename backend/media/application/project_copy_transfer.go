@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -27,12 +26,12 @@ func (e *ProjectCopyTransferError) Unwrap() error { return e.Cause }
 // Production wiring must inject the coordinator's fenced transaction bridge;
 // a media store on an unrestricted database is not an authorized worker.
 type ProjectCopyObjectRepository interface {
-	Objects(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot) ([]ProjectCopyObject, error)
-	RecordObjectDigest(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string, string, int64) error
-	BeginObjectWrite(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string) error
-	ConfirmObject(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string, string, int64) error
-	AuthorizeObjectRemoval(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string) error
-	ConfirmObjectRemoved(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string) error
+	Objects(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot) ([]ProjectCopyObject, error)
+	RecordObjectDigest(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string, string, int64) error
+	BeginObjectWrite(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string) error
+	ConfirmObject(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string, string, int64) error
+	AuthorizeObjectRemoval(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string) error
+	ConfirmObjectRemoved(context.Context, Actor, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string) error
 }
 
 // PhysicalTransferObjects requires a complete source or target location at every I/O.
@@ -106,7 +105,7 @@ func (s *ProjectCopyTransfer) verifyTarget(ctx context.Context, object ProjectCo
 	return verifyTransferredObject(ctx, s.objects, s.physical, object)
 }
 
-func (s *ProjectCopyTransfer) transferObject(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, object ProjectCopyObject) error {
+func (s *ProjectCopyTransfer) transferObject(ctx context.Context, actor Actor, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, object ProjectCopyObject) error {
 	return transferPrivateObject(ctx, s.objects, s.physical, s.tempDir, object,
 		func(sha string, size int64) error {
 			return s.repo.RecordObjectDigest(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind, sha, size)
@@ -122,7 +121,7 @@ func (s *ProjectCopyTransfer) transferObject(ctx context.Context, actor identity
 
 // Transfer copies the entire frozen object set with receipt-before-write ordering.
 // Recovery calls use exactly these same keys after workspace claims reconciliation.
-func (s *ProjectCopyTransfer) Transfer(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot) error {
+func (s *ProjectCopyTransfer) Transfer(ctx context.Context, actor Actor, binding ProjectCopyBinding, snapshot ProjectCopySnapshot) error {
 	if s == nil || s.repo == nil || s.objects == nil && s.physical == nil || binding.Validate() != nil || binding.OrgID != actor.OrgID {
 		return ErrUnavailable
 	}
@@ -140,7 +139,7 @@ func (s *ProjectCopyTransfer) Transfer(ctx context.Context, actor identityapp.Pr
 
 // Cleanup removes only this snapshot's private keys after ownership/digest checks.
 // Missing objects still require a durable removal receipt; an unknown collision fails closed.
-func (s *ProjectCopyTransfer) Cleanup(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot) error {
+func (s *ProjectCopyTransfer) Cleanup(ctx context.Context, actor Actor, binding ProjectCopyBinding, snapshot ProjectCopySnapshot) error {
 	if s == nil || s.repo == nil || s.objects == nil && s.physical == nil || binding.Validate() != nil || binding.OrgID != actor.OrgID {
 		return ErrUnavailable
 	}

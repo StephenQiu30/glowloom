@@ -34,7 +34,7 @@ func libraryPersonalFixture(t *testing.T, db *gorm.DB, objects *objectstorage.Cl
 	defer func() { _ = file.Close() }()
 	store := mediaTestStore(db)
 	service := mediaFixtureRoutedUpload(t, db, store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
-	uploaded, err := fixturePersonalUpload(t.Context(), service, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
+	uploaded, err := fixturePersonalUpload(t.Context(), service, mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func libraryMediaRouter(t *testing.T, db *gorm.DB, _ *objectstorage.Client, acto
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewLibraryMediaHandler(mediaapp.NewRoutedLibraryMediaQuery(mediaLibraryStore(db, libraryTestAccess, time.Now), mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute)).Register(group)
+	mediahttp.NewLibraryMediaHandler(mediaapp.NewRoutedLibraryMediaQuery(mediaLibraryStore(db, libraryTestAccess, time.Now), mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute), fixtureIdentityMediaActor).Register(group)
 	return router
 }
 func TestLibraryMediaActualScopedSignedPreviewsAndAttachmentOnlyDocument(t *testing.T) {
@@ -113,7 +113,7 @@ func TestLibraryMediaDownloadRejectsCorruptBytesAndStorageFactsNeverEnterMetadat
 		t.Fatal(err)
 	}
 	query := mediaapp.NewRoutedLibraryMediaQuery(mediaLibraryStore(db, libraryTestAccess, time.Now), mediaFixtureReadObjects(t), mediaFixtureReadObjects(t), 5*time.Minute)
-	file, asset, err := query.Download(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}, uploaded.Asset.ID)
+	file, asset, err := query.Download(t.Context(), mediaActor(actor), domain.LibraryScope{Kind: domain.LibraryPersonal}, uploaded.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

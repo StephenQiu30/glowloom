@@ -6,11 +6,12 @@ import (
 	"math"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -54,7 +55,7 @@ func (s *FolderStore) moveProjectFolder(ctx context.Context, tx *gorm.DB, actor 
 		return application.FolderChangeResult{}, err
 	}
 	if project.Project.IsDelete {
-		return application.FolderChangeResult{}, application.ErrProjectNotFound
+		return application.FolderChangeResult{}, workspacesource.ErrProjectNotFound
 	}
 	if err := project.Project.CanWrite(); err != nil {
 		return application.FolderChangeResult{}, err
@@ -111,11 +112,11 @@ func (s *FolderStore) recycleFolder(ctx context.Context, tx *gorm.DB, actor iden
 		return application.FolderChangeResult{}, domain.ErrProjectFolderRevisionConflict
 	}
 	if s.work == nil {
-		return application.FolderChangeResult{}, application.ErrProjectDependencyUnavailable
+		return application.FolderChangeResult{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	guard := s.work(tx)
 	if guard == nil {
-		return application.FolderChangeResult{}, application.ErrProjectDependencyUnavailable
+		return application.FolderChangeResult{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	// Lock even already-deleted members so concurrent Restore cannot slip into
 	// an unobserved gap between the membership query and the lifecycle update.

@@ -14,13 +14,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
-type videoLinkImportFixture func(context.Context, identity.Principal, uuid.UUID, uuid.UUID, application.VideoLinkRequest) (application.PersonalUploadResult, error)
+type videoLinkImportFixture func(context.Context, application.Actor, uuid.UUID, uuid.UUID, application.VideoLinkRequest) (application.PersonalUploadResult, error)
 
-func (f videoLinkImportFixture) Import(ctx context.Context, actor identity.Principal, key, request uuid.UUID, in application.VideoLinkRequest) (application.PersonalUploadResult, error) {
+func (f videoLinkImportFixture) Import(ctx context.Context, actor application.Actor, key, request uuid.UUID, in application.VideoLinkRequest) (application.PersonalUploadResult, error) {
 	return f(ctx, actor, key, request, in)
 }
 func videoLinkRouter(service mediahttp.VideoLinkImporter) *gin.Engine {
@@ -28,10 +27,10 @@ func videoLinkRouter(service mediahttp.VideoLinkImporter) *gin.Engine {
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("request_id", uuid.NewString())
-		c.Set("principal", identity.Principal{ID: uuid.New(), OrgID: uuid.New()})
+		c.Set("principal", application.Actor{ID: uuid.New(), OrgID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1})
 		c.Next()
 	})
-	mediahttp.NewVideoLinkHandler(service).Register(router.Group("/api"))
+	mediahttp.NewVideoLinkHandler(service, fixtureMediaActor).Register(router.Group("/api"))
 	return router
 }
 func videoLinkRequest(body string, key bool) *nethttp.Request {
@@ -46,7 +45,7 @@ func videoLinkRequest(body string, key bool) *nethttp.Request {
 func TestVideoLinkHTTPReturnsRealReceiptAndExplicitFailures(t *testing.T) {
 	id := uuid.New()
 	calls := 0
-	router := videoLinkRouter(videoLinkImportFixture(func(_ context.Context, actor identity.Principal, key, request uuid.UUID, in application.VideoLinkRequest) (application.PersonalUploadResult, error) {
+	router := videoLinkRouter(videoLinkImportFixture(func(_ context.Context, actor application.Actor, key, request uuid.UUID, in application.VideoLinkRequest) (application.PersonalUploadResult, error) {
 		calls++
 		if actor.ID == uuid.Nil || key == uuid.Nil || request == uuid.Nil || !in.LocalReviewConfirmed {
 			t.Fatal("identity or review missing")
@@ -86,7 +85,7 @@ func TestVideoLinkHTTPBoundsConcurrentEgress(t *testing.T) {
 	started := make(chan struct{}, 2)
 	release := make(chan struct{})
 	done := make(chan struct{}, 2)
-	router := videoLinkRouter(videoLinkImportFixture(func(ctx context.Context, _ identity.Principal, _, _ uuid.UUID, _ application.VideoLinkRequest) (application.PersonalUploadResult, error) {
+	router := videoLinkRouter(videoLinkImportFixture(func(ctx context.Context, _ application.Actor, _, _ uuid.UUID, _ application.VideoLinkRequest) (application.PersonalUploadResult, error) {
 		started <- struct{}{}
 		select {
 		case <-release:

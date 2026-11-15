@@ -24,7 +24,7 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 	actor, project := mediaStoreProject(t, database)
 	body := []byte("历史原件\n角色：保留它。\n")
 	upload := documentUpload(t, database, objects, actor, project, "历史.txt", body)
-	source, err := mediaTestStore(database).FindAsset(t.Context(), actor, project, upload.Asset.ID)
+	source, err := mediaTestStore(database).FindAsset(t.Context(), mediaActor(actor), project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,10 +36,10 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 		t.Fatal(err)
 	}
 	store := mediaTestStore(database)
-	if _, err := store.FindAsset(t.Context(), actor, project, source.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := store.FindAsset(t.Context(), mediaActor(actor), project, source.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("ordinary read exposed deleted historical document", err)
 	}
-	if _, err := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(database), mediaFixtureReadObjects(t)).Freeze(t.Context(), actor, project, []uuid.UUID{source.ID}); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(database), mediaFixtureReadObjects(t)).Freeze(t.Context(), mediaActor(actor), project, []uuid.UUID{source.ID}); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("ordinary script source freeze exposed retired original", err)
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
@@ -49,7 +49,7 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 	var frozen mediaapp.ProjectCopySnapshot
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		frozen, err = mediaCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), []uuid.UUID{source.ID})
+		frozen, err = mediaCopyStore(tx).FreezeWithReferences(t.Context(), mediaActor(actor), binding, time.Now(), []uuid.UUID{source.ID})
 		if err != nil {
 			return err
 		}
@@ -62,11 +62,11 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 	}
 	copyStore := mediaCopyStore(database)
 	transfer := mediaapp.NewRoutedProjectCopyTransfer(copyStore, mediaFixtureCopyObjects(t, database), t.TempDir())
-	if err := transfer.Transfer(t.Context(), actor, binding, frozen); err != nil {
+	if err := transfer.Transfer(t.Context(), mediaActor(actor), binding, frozen); err != nil {
 		t.Fatal("actual SHA verified retained original transfer", err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, frozen)
+		_, err := mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, frozen)
 		return err
 	}); err != nil {
 		t.Fatal("register target facts", err)
@@ -77,7 +77,7 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 		t.Fatal(err)
 	}
 	targetID := frozen.AssetMapping[source.ID]
-	target, err := store.FindAsset(t.Context(), actor, binding.TargetProjectID, targetID)
+	target, err := store.FindAsset(t.Context(), mediaActor(actor), binding.TargetProjectID, targetID)
 	if err != nil || target.IsDelete || target.ObjectKey == source.ObjectKey || target.SHA256 == nil || *target.SHA256 != *source.SHA256 {
 		t.Fatal("new independent target missing its exact original facts", err)
 	}
@@ -92,11 +92,11 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 		t.Fatal("remove only this synthetic source object")
 	}
 	docs := mediaapp.NewRoutedDocumentSources(mediaDocumentStore(database), mediaFixtureReadObjects(t))
-	facts, err := docs.Freeze(t.Context(), actor, binding.TargetProjectID, []uuid.UUID{targetID})
+	facts, err := docs.Freeze(t.Context(), mediaActor(actor), binding.TargetProjectID, []uuid.UUID{targetID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	file, err := docs.Open(t.Context(), actor, binding.TargetProjectID, facts[0])
+	file, err := docs.Open(t.Context(), mediaActor(actor), binding.TargetProjectID, facts[0])
 	if err != nil {
 		t.Fatal("independent document download after source removal", err)
 	}
@@ -129,7 +129,7 @@ func TestProjectCopyRetainedReferencesMissingForeignAndDuplicateFailAtomically(t
 			t.Fatal(err)
 		}
 		if err := database.Transaction(func(tx *gorm.DB) error {
-			_, err := mediaCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), refs)
+			_, err := mediaCopyStore(tx).FreezeWithReferences(t.Context(), mediaActor(actor), binding, time.Now(), refs)
 			return err
 		}); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 			t.Fatal("invalid retained reference admitted", err)

@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -16,7 +15,7 @@ import (
 // A nil project means an already-authorized personal library; only avatar owners
 // apply there. This port never grants access to an asset or a library.
 type LibraryReferences interface {
-	HasMediaReferences(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (bool, error)
+	HasMediaReferences(context.Context, Actor, uuid.UUID, uuid.UUID) (bool, error)
 }
 
 // PurgeInput binds an explicitly confirmed permanent deletion to visible CAS.
@@ -57,10 +56,10 @@ type FrozenPurgeItem struct {
 
 // PurgeRepository owns public permanent commands and current authorized reads.
 type PurgeRepository interface {
-	CreatePurge(context.Context, identityapp.Principal, PurgeInput) (domain.PurgeJob, error)
-	GetPurge(context.Context, identityapp.Principal, uuid.UUID) (domain.PurgeJob, error)
-	ListPurges(context.Context, identityapp.Principal, domain.LibraryScope, int, int) ([]domain.PurgeJob, error)
-	ControlPurge(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, int64, PurgeAction) (domain.PurgeJob, error)
+	CreatePurge(context.Context, Actor, PurgeInput) (domain.PurgeJob, error)
+	GetPurge(context.Context, Actor, uuid.UUID) (domain.PurgeJob, error)
+	ListPurges(context.Context, Actor, domain.LibraryScope, int, int) ([]domain.PurgeJob, error)
+	ControlPurge(context.Context, Actor, uuid.UUID, uuid.UUID, int64, PurgeAction) (domain.PurgeJob, error)
 }
 
 // PurgeAction is a closed command or work-queue action in the purge lifecycle.
@@ -93,7 +92,7 @@ type PurgeDelivery struct {
 // PurgeLease binds private operations to a real creator and current SQL fence.
 type PurgeLease struct {
 	Work      PurgeWorkID
-	Actor     identityapp.Principal
+	Actor     Actor
 	Scope     domain.LibraryScope
 	Fence     uuid.UUID
 	ItemCount int

@@ -118,7 +118,7 @@ func cleanupTestStore(t *testing.T) (*pgidentity.DirectoryExportStore, *cleanupS
 	if err != nil {
 		t.Fatal(err)
 	}
-	return pgidentity.NewDirectoryExportStore(gdb), state
+	return pgidentity.NewDirectoryExportStore(gdb, nil), state
 }
 func TestDirectoryExportCleanupObjectIOOutsideSQLTransaction(t *testing.T) {
 	store, state := cleanupTestStore(t)

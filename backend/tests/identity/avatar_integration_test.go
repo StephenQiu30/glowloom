@@ -70,14 +70,14 @@ func TestAvatarProfileBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.OrgID = owner.OrgID
-	repo := pgmedia.NewAvatarStore(tx, func(ownerTx *gorm.DB) media.AvatarActorAccess { return pgidentity.NewStore(ownerTx) })
+	repo := pgmedia.NewAvatarStore(tx, identityAvatarAccess)
 	objects := &avatarMemoryObjects{}
 	s := media.NewRoutedAvatarService(repo, objects, func() time.Time { return now })
 	var input bytes.Buffer
 	if err := png.Encode(&input, image.NewNRGBA(image.Rect(0, 0, 2, 3))); err != nil {
 		t.Fatal(err)
 	}
-	out, err := s.Upload(t.Context(), a, input.Bytes(), "image/png")
+	out, err := s.Upload(t.Context(), identityMediaActor(a), input.Bytes(), "image/png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestAvatarProfileBinding(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.Upload(t.Context(), a, input.Bytes(), "image/png"); !errors.Is(err, identity.ErrSessionInvalid) {
+	if _, err := s.Upload(t.Context(), identityMediaActor(a), input.Bytes(), "image/png"); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatal("revocation raced publication", err)
 	}
 	assertAvatarCancelledWriteRetained(t, tx, repo, a, objects)
@@ -129,14 +129,14 @@ func TestAvatarSessionAndStorageFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.OrgID = owner.OrgID
-	repo := pgmedia.NewAvatarStore(tx, func(ownerTx *gorm.DB) media.AvatarActorAccess { return pgidentity.NewStore(ownerTx) })
+	repo := pgmedia.NewAvatarStore(tx, identityAvatarAccess)
 	obj := &avatarMemoryObjects{statErr: errors.New("stored object inaccessible")}
 	s := media.NewRoutedAvatarService(repo, obj, func() time.Time { return now })
 	var input bytes.Buffer
 	if err := png.Encode(&input, image.NewNRGBA(image.Rect(0, 0, 2, 3))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Upload(t.Context(), a, input.Bytes(), "image/png"); err == nil {
+	if _, err := s.Upload(t.Context(), identityMediaActor(a), input.Bytes(), "image/png"); err == nil {
 		t.Fatal("unverified storage published")
 	}
 	var count int64
@@ -146,7 +146,7 @@ func TestAvatarSessionAndStorageFailures(t *testing.T) {
 		t.Fatal("failed storage registered")
 	}
 	a.SessionID = uuid.New()
-	if err := s.Authorize(t.Context(), a); !errors.Is(err, identity.ErrSessionInvalid) {
+	if err := s.Authorize(t.Context(), identityMediaActor(a)); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatal("invented session authorized", err)
 	}
 }
@@ -180,14 +180,14 @@ func TestAvatarPreviewRechecksAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.OrgID = owner.OrgID
-	repo := pgmedia.NewAvatarStore(tx, func(db *gorm.DB) media.AvatarActorAccess { return pgidentity.NewStore(db) })
+	repo := pgmedia.NewAvatarStore(tx, identityAvatarAccess)
 	objects := &avatarMemoryObjects{}
 	s := media.NewRoutedAvatarService(repo, objects, func() time.Time { return now })
 	var input bytes.Buffer
 	if err := png.Encode(&input, image.NewNRGBA(image.Rect(0, 0, 2, 3))); err != nil {
 		t.Fatal(err)
 	}
-	out, err := s.Upload(t.Context(), a, input.Bytes(), "image/png")
+	out, err := s.Upload(t.Context(), identityMediaActor(a), input.Bytes(), "image/png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestAvatarPreviewRechecksAuthority(t *testing.T) {
 	}
 	signer := &avatarTestSigner{now: now}
 	q := media.NewRoutedAvatarQuery(repo, signer, func() time.Time { return now }, time.Minute)
-	preview, err := q.Read(t.Context(), a)
+	preview, err := q.Read(t.Context(), identityMediaActor(a))
 	if err != nil || preview.Asset.ID != out.ID || preview.URL == "" || !preview.ExpiresAt.Equal(now.Add(time.Minute)) {
 		t.Fatal("bound avatar preview failed", err)
 	}
@@ -208,12 +208,12 @@ func TestAvatarPreviewRechecksAuthority(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	preview, err = q.Read(t.Context(), a)
+	preview, err = q.Read(t.Context(), identityMediaActor(a))
 	if !errors.Is(err, identity.ErrSessionInvalid) || preview.URL != "" {
 		t.Fatal("revocation during signing exposed preview", err)
 	}
 	calls := signer.calls
-	if _, err := q.Read(t.Context(), a); !errors.Is(err, identity.ErrSessionInvalid) || signer.calls != calls {
+	if _, err := q.Read(t.Context(), identityMediaActor(a)); !errors.Is(err, identity.ErrSessionInvalid) || signer.calls != calls {
 		t.Fatal("revoked actor minted another preview", err)
 	}
 }
@@ -228,13 +228,13 @@ func TestAvatarHTTPReadsBoundAvatar(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.OrgID = owner.OrgID
-	repo := pgmedia.NewAvatarStore(tx, func(db *gorm.DB) media.AvatarActorAccess { return pgidentity.NewStore(db) })
+	repo := pgmedia.NewAvatarStore(tx, identityAvatarAccess)
 	s := media.NewRoutedAvatarService(repo, &avatarMemoryObjects{}, func() time.Time { return now })
 	var imageBytes bytes.Buffer
 	if err := png.Encode(&imageBytes, image.NewNRGBA(image.Rect(0, 0, 3, 4))); err != nil {
 		t.Fatal(err)
 	}
-	out, err := s.Upload(t.Context(), a, imageBytes.Bytes(), "image/png")
+	out, err := s.Upload(t.Context(), identityMediaActor(a), imageBytes.Bytes(), "image/png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func TestAvatarHTTPReadsBoundAvatar(t *testing.T) {
 	r := gin.New()
 	signer := &avatarTestSigner{now: now}
 	q := media.NewRoutedAvatarQuery(repo, signer, func() time.Time { return now }, time.Minute)
-	mediahttp.NewAvatarHandler(s, q).Register(r.Group("/api", func(c *gin.Context) { c.Set("principal", a) }))
+	mediahttp.NewAvatarHandler(s, q, identityMediaHTTPActor).Register(r.Group("/api", func(c *gin.Context) { c.Set("principal", a) }))
 	call := func() *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), "GET", "/api/me/avatar", nil))
@@ -291,7 +291,7 @@ func assertAvatarCancelledWriteRetained(t *testing.T, tx *gorm.DB, repo *pgmedia
 		t.Fatal("failed avatar lost durable cancelled write fence", result.Error)
 	}
 	location := mediadomain.ObjectLocation{ID: row.ID, Ref: mediadomain.ObjectRef{ProfileID: row.ProfileID, Bucket: row.Bucket, Key: row.ObjectKey}}
-	if allowed, err := repo.CancelAvatarObject(t.Context(), actor, row.WorkID, location); err != nil || allowed {
+	if allowed, err := repo.CancelAvatarObject(t.Context(), identityMediaActor(actor), row.WorkID, location); err != nil || allowed {
 		t.Fatal("write fence granted premature removal", err)
 	}
 }

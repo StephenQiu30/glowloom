@@ -12,12 +12,7 @@ import (
 )
 
 var (
-	// ErrProjectNotFound hides projects outside the caller's current organization.
-	ErrProjectNotFound = errors.New("project not found")
-	// ErrStylePresetNotFound hides unavailable or out-of-scope presets.
-	ErrStylePresetNotFound = errors.New("style preset not found")
-	// ErrStylePresetMismatch means a visible preset has different specifications.
-	ErrStylePresetMismatch = errors.New("style preset does not match project style")
+
 	// ErrInvalidStylePresetList means a public preset filter or cursor is invalid.
 	ErrInvalidStylePresetList = errors.New("invalid style preset list")
 )

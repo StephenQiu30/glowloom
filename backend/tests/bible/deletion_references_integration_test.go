@@ -82,18 +82,18 @@ func TestSubjectDeletionRechecksRealReferencesAndRestoresIdentity(t *testing.T) 
 	db, owner := deletionDatabase(t)
 	actor, project := bibleActorProject(t, owner)
 	service := app.NewService(deletionStore(db), time.Now)
-	created, err := service.Change(t.Context(), actor, createCharacter(project))
+	created, err := service.Change(t.Context(), bibleActor(actor), createCharacter(project))
 	if err != nil {
 		t.Fatal(err)
 	}
-	confirmed, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, EntryID: created.EntryID, Action: "confirm", ExpectedRevision: created.Revision, Key: uuid.New(), RequestID: uuid.New()})
+	confirmed, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, EntryID: created.EntryID, Action: "confirm", ExpectedRevision: created.Revision, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	command := app.Command{ProjectID: project, Kind: domain.KindCharacter, EntryID: created.EntryID, Action: "delete", ExpectedRevision: confirmed.Revision, Key: uuid.New(), RequestID: uuid.New()}
 	proof := func() app.ImpactProof {
 		t.Helper()
-		_, err := service.Change(t.Context(), actor, command)
+		_, err := service.Change(t.Context(), bibleActor(actor), command)
 		var impact *app.ImpactConflict
 		if !errors.As(err, &impact) {
 			t.Fatalf("expected impact: %v", err)
@@ -120,18 +120,18 @@ func TestSubjectDeletionRechecksRealReferencesAndRestoresIdentity(t *testing.T) 
 		t.Fatal(historical)
 	}
 	command.AcknowledgedImpact = &historical
-	deleted, err := service.Change(t.Context(), actor, command)
+	deleted, err := service.Change(t.Context(), bibleActor(actor), command)
 	if err != nil {
 		t.Fatal(err)
 	}
-	replay, err := service.Change(t.Context(), actor, command)
+	replay, err := service.Change(t.Context(), bibleActor(actor), command)
 	if err != nil || !reflect.DeepEqual(replay, deleted) {
 		t.Fatalf("permanent delete replay: %v", err)
 	}
 	checkReference := func(wantDeleted bool) {
 		t.Helper()
 		err := db.Transaction(func(tx *gorm.DB) error {
-			_, err := pg.NewReferences(tx, bibleFixtureProjectAccess(tx)).Reference(t.Context(), actor, project, created.EntryID, &created.VersionID)
+			_, err := pg.NewReferences(tx, bibleFixtureContentAccess(tx)).Reference(t.Context(), bibleActor(actor), project, created.EntryID, &created.VersionID)
 			return err
 		})
 		if wantDeleted && !errors.Is(err, app.ErrNotFound) || !wantDeleted && err != nil {
@@ -139,7 +139,7 @@ func TestSubjectDeletionRechecksRealReferencesAndRestoresIdentity(t *testing.T) 
 		}
 	}
 	checkReference(true)
-	restored, err := app.NewService(deletionStore(db), time.Now).Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, EntryID: created.EntryID, Action: "restore", ExpectedRevision: deleted.Revision, Key: uuid.New(), RequestID: uuid.New()})
+	restored, err := app.NewService(deletionStore(db), time.Now).Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Kind: domain.KindCharacter, EntryID: created.EntryID, Action: "restore", ExpectedRevision: deleted.Revision, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || restored.VersionID != created.VersionID {
 		t.Fatalf("restore identity/version: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestSubjectDeletionRechecksRealReferencesAndRestoresIdentity(t *testing.T) 
 		t.Fatalf("history changed: %d %v", lines, err)
 	}
 	foreign, _ := bibleActorProject(t, owner)
-	if _, err := service.Change(t.Context(), foreign, command); err == nil {
+	if _, err := service.Change(t.Context(), bibleActor(foreign), command); err == nil {
 		t.Fatal("cross-org deletion allowed")
 	}
 }
@@ -158,11 +158,11 @@ func TestSubjectDeletionAliasImpactAndAuditRollback(t *testing.T) {
 	db, owner := deletionDatabase(t)
 	actor, project := bibleActorProject(t, owner)
 	service := app.NewService(deletionStore(db), time.Now)
-	target, err := service.Change(t.Context(), actor, createCharacter(project))
+	target, err := service.Change(t.Context(), bibleActor(actor), createCharacter(project))
 	if err != nil {
 		t.Fatal(err)
 	}
-	alias, err := service.Change(t.Context(), actor, createCharacter(project))
+	alias, err := service.Change(t.Context(), bibleActor(actor), createCharacter(project))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,17 +171,17 @@ func TestSubjectDeletionAliasImpactAndAuditRollback(t *testing.T) {
 	}
 	seedDialogue(t, owner, actor, project, alias.EntryID, alias.VersionID)
 	command := app.Command{ProjectID: project, Kind: domain.KindCharacter, EntryID: target.EntryID, Action: "delete", ExpectedRevision: target.Revision, Key: uuid.New(), RequestID: uuid.New()}
-	_, err = service.Change(t.Context(), actor, command)
+	_, err = service.Change(t.Context(), bibleActor(actor), command)
 	var impact *app.ImpactConflict
 	if !errors.As(err, &impact) || impact.Proof.Aliases != 1 || impact.Proof.CurrentLines != 1 {
 		t.Fatalf("alias reference omitted: %+v %v", impact, err)
 	}
 	command.AcknowledgedImpact = &impact.Proof
 	failed := app.NewService(failingAuditStore{deletionStore(db)}, time.Now)
-	if _, err := failed.Change(t.Context(), actor, command); err == nil {
+	if _, err := failed.Change(t.Context(), bibleActor(actor), command); err == nil {
 		t.Fatal("audit failure accepted deletion")
 	}
-	detail, err := service.Find(t.Context(), actor, project, domain.KindCharacter, target.EntryID)
+	detail, err := service.Find(t.Context(), bibleActor(actor), project, domain.KindCharacter, target.EntryID)
 	if err != nil || detail.Head.Deleted || detail.Head.Revision != target.Revision {
 		t.Fatalf("partial deletion persisted: %v", err)
 	}
@@ -194,13 +194,13 @@ func TestSubjectDeletionAliasImpactAndAuditRollback(t *testing.T) {
 // Fault injection returns an audit failure after real writes, inside the real transaction.
 type failingAuditStore struct{ app.Store }
 
-func (s failingAuditStore) Write(ctx context.Context, actor identityapp.Principal, project uuid.UUID, f func(app.Transaction) (app.Receipt, error)) (app.Receipt, error) {
+func (s failingAuditStore) Write(ctx context.Context, actor app.Actor, project uuid.UUID, f func(app.Transaction) (app.Receipt, error)) (app.Receipt, error) {
 	return s.Store.Write(ctx, actor, project, func(tx app.Transaction) (app.Receipt, error) { return f(failingAuditTransaction{tx}) })
 }
 
 type failingAuditTransaction struct{ app.Transaction }
 
-func (t failingAuditTransaction) Record(ctx context.Context, actor identityapp.Principal, c app.Command, hash string, r app.Receipt, now time.Time) error {
+func (t failingAuditTransaction) Record(ctx context.Context, actor app.Actor, c app.Command, hash string, r app.Receipt, now time.Time) error {
 	if err := t.Transaction.Record(ctx, actor, c, hash, r, now); err != nil {
 		return err
 	}

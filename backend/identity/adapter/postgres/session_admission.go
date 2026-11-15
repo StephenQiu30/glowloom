@@ -52,6 +52,12 @@ func (s *SessionAdmissionStore) RegisterSessionCommand(ctx context.Context, acto
 		if _, err := lockSelfActor(tx, actor, clock); err != nil {
 			return err
 		}
-		return pgfence.NewAuthorityStore(tx).Register(ctx, tx, command, target)
+		if err := requireExistingAdmissionProof(ctx, tx, command.ID, target); err != nil {
+			return err
+		}
+		if err := pgfence.NewAuthorityStore(tx).Register(ctx, tx, command, target); err != nil {
+			return err
+		}
+		return recordSessionAdmission(ctx, tx, actor, command, target)
 	})
 }

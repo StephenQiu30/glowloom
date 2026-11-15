@@ -27,6 +27,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/http"
 	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
@@ -316,14 +317,14 @@ func assertSubjectPromptSource(t *testing.T, runtime *gorm.DB, objects subjectwi
 	t.Helper()
 	if err := runtime.Transaction(func(tx *gorm.DB) error {
 		sources := subjectwire.NewPromptSources(tx)
-		source, known, err := sources.ResolveSubject(t.Context(), actor, project, detail.ID.String(), detail.VersionID.String())
+		source, known, err := sources.ResolveSubject(t.Context(), subjectPromptActor(actor), project, detail.ID.String(), detail.VersionID.String())
 		if err != nil || !known || len(source.Media) != 1 || source.Media[0].BindingID != detail.Primary.BindingID.String() {
 			t.Fatal("prompt did not preserve exact binding", known, err)
 		}
 		validator := subjectwire.NewGenerationAccess(tx, objects).(interface {
-			ValidateBinding(context.Context, identity.Principal, uuid.UUID, promptdomain.SourceMedia, bool) error
+			ValidateBinding(context.Context, promptapp.Actor, uuid.UUID, promptdomain.SourceMedia, bool) error
 		})
-		if err := validator.ValidateBinding(t.Context(), actor, project, source.Media[0], false); err != nil {
+		if err := validator.ValidateBinding(t.Context(), subjectPromptActor(actor), project, source.Media[0], false); err != nil {
 			return err
 		}
 		return nil
@@ -341,21 +342,21 @@ func TestSubjectAppSourceLibraryKeepsTeamBrowsingPersonal(t *testing.T) {
 	_, teamB := subjectTeam(t, owner, a, b)
 	library := subjectwire.NewSourceLibrary(runtime, storage.objects, time.Minute)
 	query := media.SubjectCatalogueQuery{Kind: "image", Page: 1, PageSize: 12}
-	page, err := library.List(t.Context(), teamB, query)
+	page, err := library.List(t.Context(), mediaBoundaryActor(teamB), query)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != assetB || page.CurrentActorID != b.ID || page.CurrentScopeID != teamB.ScopeID || page.Items[0].Source != "personal_asset" || page.Items[0].ProjectID != nil {
 		t.Fatal("team source page did not retain caller personal ownership", page.Total, err)
 	}
 	if !page.Capabilities.UpscaledFilter {
 		t.Fatal("real source upscale filter missing")
 	}
-	detail, err := library.Detail(t.Context(), teamB, assetB)
+	detail, err := library.Detail(t.Context(), mediaBoundaryActor(teamB), assetB)
 	if err != nil || detail.ID != assetB || detail.Media.MIMEType != "image/png" || detail.Media.Origin != "upload" {
 		t.Fatal("own personal source detail", err)
 	}
-	if _, err := library.Detail(t.Context(), teamB, assetA); !errors.Is(err, media.ErrNotFound) {
+	if _, err := library.Detail(t.Context(), mediaBoundaryActor(teamB), assetA); !errors.Is(err, media.ErrNotFound) {
 		t.Fatal("team source picker exposed another member's source detail", err)
 	}
-	preview, err := library.Preview(t.Context(), teamB, assetB)
+	preview, err := library.Preview(t.Context(), mediaBoundaryActor(teamB), assetB)
 	if err != nil || preview.Asset.ID != assetB || preview.URL == "" {
 		t.Fatal("own personal source preview", err)
 	}
@@ -372,10 +373,10 @@ func TestSubjectAppSourceLibraryKeepsTeamBrowsingPersonal(t *testing.T) {
 	if response.StatusCode != 200 || readErr != nil || closeErr != nil || !bytes.Equal(data, originalB) {
 		t.Fatal("source preview signed a different member's original", readErr, closeErr)
 	}
-	if _, err := library.Preview(t.Context(), teamB, assetA); !errors.Is(err, media.ErrNotFound) {
+	if _, err := library.Preview(t.Context(), mediaBoundaryActor(teamB), assetA); !errors.Is(err, media.ErrNotFound) {
 		t.Fatal("team source picker signed another member's original", err)
 	}
-	derived, err := library.SourceActor(t.Context(), teamB, true)
+	derived, err := library.SourceActor(t.Context(), mediaBoundaryActor(teamB), true)
 	if err != nil || derived.ID != b.ID || derived.SessionID != b.SessionID || derived.OrgID != b.OrgID || derived.ScopeID != b.ScopeID {
 		t.Fatal("upload authority did not derive original personal actor", err)
 	}
@@ -392,16 +393,16 @@ func TestSubjectAppSourceLibraryKeepsTeamBrowsingPersonal(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := storage.count()
-	if _, err := library.List(t.Context(), teamB, query); err == nil {
+	if _, err := library.List(t.Context(), mediaBoundaryActor(teamB), query); err == nil {
 		t.Fatal("revoked target membership retained source listing")
 	}
-	if _, err := library.Detail(t.Context(), teamB, assetB); err == nil {
+	if _, err := library.Detail(t.Context(), mediaBoundaryActor(teamB), assetB); err == nil {
 		t.Fatal("revoked target membership retained source detail")
 	}
-	if _, err := library.Preview(t.Context(), teamB, assetB); err == nil {
+	if _, err := library.Preview(t.Context(), mediaBoundaryActor(teamB), assetB); err == nil {
 		t.Fatal("revoked target membership retained source preview")
 	}
-	if _, err := library.SourceActor(t.Context(), teamB, true); err == nil || storage.count() != before {
+	if _, err := library.SourceActor(t.Context(), mediaBoundaryActor(teamB), true); err == nil || storage.count() != before {
 		t.Fatal("revoked target admitted upload or read private objects", err)
 	}
 	upload = httptest.NewRecorder()
@@ -419,7 +420,7 @@ type subjectUploadCapture struct {
 	calls          int
 }
 
-func (u *subjectUploadCapture) UploadPersonalFor(c *gin.Context, actor identity.Principal) {
+func (u *subjectUploadCapture) UploadPersonalFor(c *gin.Context, actor media.Actor) {
 	u.calls++
 	current := identityhttp.Principal(c)
 	if current != u.target || actor.ID != u.source.ID || actor.ScopeID != u.source.ScopeID || actor.OrgID != u.source.OrgID || actor.SessionID != u.source.SessionID {

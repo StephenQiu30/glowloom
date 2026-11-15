@@ -18,6 +18,7 @@ import (
 	identitypg "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	mediapg "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -28,11 +29,11 @@ func scriptFixtureRequestScope(tx *gorm.DB) workspaceapp.RequestScopeResolver {
 func scriptFixtureWorkerScope(tx *gorm.DB) workspaceapp.WorkerScopeResolver {
 	return workspaceapp.NewScopeAccess(workspacepg.NewScopeStore(tx, func(db *gorm.DB) workspaceapp.ActorAccess { return identitypg.NewStore(db) }))
 }
-func scriptFixtureProjectAccess(tx *gorm.DB) *workspacepg.ProjectContentAccessStore {
-	return workspacepg.NewScopedProjectContentAccessStore(tx, scriptFixtureRequestScope(tx))
+func scriptFixtureProjectAccess(tx *gorm.DB) scriptapp.ProjectAccess {
+	return scriptwire.ProjectAccess(workspacepg.NewScopedProjectContentAccessStore(tx, scriptFixtureRequestScope(tx)))
 }
-func scriptFixtureWorkerAccess(tx *gorm.DB) *workspacepg.ProjectContentAccessStore {
-	return workspacepg.NewWorkerProjectContentAccessStore(tx, scriptFixtureWorkerScope(tx))
+func scriptFixtureWorkerAccess(tx *gorm.DB) scriptapp.ProjectAccess {
+	return scriptwire.ProjectAccess(workspacepg.NewWorkerProjectContentAccessStore(tx, scriptFixtureWorkerScope(tx)))
 }
 func scriptFixtureCopyAccess(tx *gorm.DB, authority workspaceapp.ProjectCopyAuthority) *workspacepg.ProjectCopyAccessStore {
 	return workspacepg.NewScopedProjectCopyAccessStore(tx, authority, scriptFixtureRequestScope, scriptFixtureWorkerScope)
@@ -61,7 +62,7 @@ func scriptFixtureWorkspaceCopyWithScript(db *gorm.DB, work workspacepg.ProjectW
 type scriptFixtureCopyBudgetAccess struct{ tx *gorm.DB }
 
 func (a scriptFixtureCopyBudgetAccess) AuthorizeBilling(ctx context.Context, actor identityapp.Principal, project uuid.UUID, _ bool) error {
-	return mediawire.NewMediaWorkerScopeAccess(a.tx).AuthorizeCopyTarget(ctx, actor, project)
+	return mediawire.NewMediaWorkerScopeAccess(a.tx).AuthorizeCopyTarget(ctx, scriptMediaActor(actor), project)
 }
 func scriptFixtureBudgetStore(db *gorm.DB) *billingpg.Store {
 	return billingpg.NewScopedStore(db, func(tx *gorm.DB) billingapp.ProjectAccess { return scriptFixtureCopyBudgetAccess{tx} })
@@ -101,7 +102,7 @@ func scriptFixtureTeamAdmin(t *testing.T, db *gorm.DB, actor identityapp.Princip
 }
 
 func scriptFixtureImportStore(db *gorm.DB, request scriptpg.ProjectAccessFactory, sources scriptpg.ImportSourcesFactory) *scriptpg.ImportStore {
-	return scriptpg.NewImportStoreWithWorkerAccess(db, request, func(tx *gorm.DB) scriptapp.ProjectAccess { return scriptFixtureWorkerAccess(tx) }, sources)
+	return scriptpg.NewImportStoreWithWorkerAccess(db, request, scriptFixtureWorkerAccess, sources)
 }
 
 // scriptFixtureNonmember has a valid session but no membership in the selected team.

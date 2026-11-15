@@ -24,8 +24,8 @@ type bibleCopyAccess struct {
 	owner *workspacepg.ProjectCopyAccessStore
 }
 
-func (a bibleCopyAccess) Authorize(ctx context.Context, actor identityapp.Principal, b app.ProjectCopyBinding, target bool) error {
-	return a.owner.Authorize(ctx, actor, workspaceapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, target)
+func (a bibleCopyAccess) Authorize(ctx context.Context, actor app.Actor, b app.ProjectCopyBinding, target bool) error {
+	return a.owner.Authorize(ctx, bibleIdentityActor(actor), workspaceapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, target)
 }
 func bibleCopyStore(db *gorm.DB, authority workspaceapp.ProjectCopyAuthority) *pg.ProjectCopyStore {
 	return pg.NewProjectCopyStore(db, func(tx *gorm.DB) app.ProjectCopyAccess {
@@ -70,7 +70,7 @@ func freezeBibleCopy(t *testing.T, db *gorm.DB, actor identityapp.Principal, b a
 	var snapshot app.ProjectCopySnapshot
 	if err := db.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = bibleCopyStore(tx, admission).Freeze(t.Context(), actor, b, nil, time.Now())
+		snapshot, err = bibleCopyStore(tx, admission).Freeze(t.Context(), bibleActor(actor), b, nil, time.Now())
 		return err
 	}); err != nil {
 		t.Fatal("own admission", err)
@@ -82,15 +82,15 @@ func TestBibleCopyPGCompleteHistoryIndependentRereadAndRuntimeACL(t *testing.T) 
 	db, owner := bibleTestDB(t)
 	actor, source := bibleActorProject(t, owner)
 	service := app.NewService(bibleStore(db), time.Now)
-	first, err := service.Change(t.Context(), actor, createCharacter(source))
+	first, err := service.Change(t.Context(), bibleActor(actor), createCharacter(source))
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := service.Change(t.Context(), actor, app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "update", EntryID: first.EntryID, ExpectedRevision: first.Revision, Key: uuid.New(), RequestID: uuid.New(), Character: &app.CharacterInput{Name: "历史角色", Description: " 原文\n👩🏽‍🚀 "}})
+	second, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "update", EntryID: first.EntryID, ExpectedRevision: first.Revision, Key: uuid.New(), RequestID: uuid.New(), Character: &app.CharacterInput{Name: "历史角色", Description: " 原文\n👩🏽‍🚀 "}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(t.Context(), actor, app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: second.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
+	if _, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: second.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
 	for _, kind := range []domain.Kind{domain.KindLocation, domain.KindProp} {
@@ -100,7 +100,7 @@ func TestBibleCopyPGCompleteHistoryIndependentRereadAndRuntimeACL(t *testing.T) 
 		} else {
 			c.Prop = &domain.PropContent{Name: "铜钥匙", Prompt: "原始物件"}
 		}
-		if _, err := service.Change(t.Context(), actor, c); err != nil {
+		if _, err := service.Change(t.Context(), bibleActor(actor), c); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -109,7 +109,7 @@ func TestBibleCopyPGCompleteHistoryIndependentRereadAndRuntimeACL(t *testing.T) 
 	if snapshot.Counts.Characters != 1 || snapshot.Counts.CharacterVersions != 2 || snapshot.Counts.Locations != 1 || snapshot.Counts.Props != 1 || snapshot.Counts.LookVersions != 2 || len(snapshot.Versions) != 4 {
 		t.Fatal("partial history", snapshot.Counts)
 	}
-	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), actor, b, snapshot); err != nil {
+	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), bibleActor(actor), b, snapshot); err != nil {
 		t.Fatal("empty-media proof", err)
 	}
 	register := authority
@@ -119,7 +119,7 @@ func TestBibleCopyPGCompleteHistoryIndependentRereadAndRuntimeACL(t *testing.T) 
 			if err := tx.Exec(`SET LOCAL TIME ZONE 'Asia/Shanghai'`).Error; err != nil {
 				return err
 			}
-			_, err := bibleCopyStore(tx, register).Register(t.Context(), actor, b, snapshot)
+			_, err := bibleCopyStore(tx, register).Register(t.Context(), bibleActor(actor), b, snapshot)
 			return err
 		})
 	}
@@ -129,7 +129,7 @@ func TestBibleCopyPGCompleteHistoryIndependentRereadAndRuntimeACL(t *testing.T) 
 	if err := apply(); err != nil {
 		t.Fatal("exact reread replay", err)
 	}
-	if _, err := service.Find(t.Context(), actor, b.TargetProjectID, domain.KindCharacter, snapshot.Identities[0].TargetID); err == nil {
+	if _, err := service.Find(t.Context(), bibleActor(actor), b.TargetProjectID, domain.KindCharacter, snapshot.Identities[0].TargetID); err == nil {
 		t.Fatal("unpublished content became ordinary readable")
 	}
 	if err := db.Exec(`UPDATE bible.copy_snapshot SET content_sha256=? WHERE id=?`, strings.Repeat("b", 64), snapshot.ID).Error; err == nil {
@@ -149,7 +149,7 @@ func TestBibleCopyPGCompleteHistoryIndependentRereadAndRuntimeACL(t *testing.T) 
 func TestBibleCopyPGSourceCorruptionWorkerFenceAndZeroRowRollback(t *testing.T) {
 	db, owner := bibleTestDB(t)
 	actor, source := bibleActorProject(t, owner)
-	first, err := app.NewService(bibleStore(db), time.Now).Change(t.Context(), actor, createCharacter(source))
+	first, err := app.NewService(bibleStore(db), time.Now).Change(t.Context(), bibleActor(actor), createCharacter(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,10 +157,10 @@ func TestBibleCopyPGSourceCorruptionWorkerFenceAndZeroRowRollback(t *testing.T) 
 	snapshot := freezeBibleCopy(t, db, actor, b, authority)
 	stale := authority
 	stale.WorkerID = uuid.New()
-	if err := app.NewProjectCopy(bibleCopyStore(db, stale), nil).Transfer(t.Context(), actor, b, snapshot); !errors.Is(err, workspacedomain.ErrProjectCopyWorkerConflict) {
+	if err := app.NewProjectCopy(bibleCopyStore(db, stale), nil).Transfer(t.Context(), bibleActor(actor), b, snapshot); !errors.Is(err, workspacedomain.ErrProjectCopyWorkerConflict) {
 		t.Fatal("stale worker accepted", err)
 	}
-	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), actor, b, snapshot); err != nil {
+	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), bibleActor(actor), b, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	register := authority
@@ -181,7 +181,7 @@ func TestBibleCopyPGSourceCorruptionWorkerFenceAndZeroRowRollback(t *testing.T) 
 		}
 	})
 	err = db.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
-		_, err := bibleCopyStore(tx, register).Register(t.Context(), actor, b, snapshot)
+		_, err := bibleCopyStore(tx, register).Register(t.Context(), bibleActor(actor), b, snapshot)
 		return err
 	})
 	if !errors.Is(err, app.ErrConflict) {
@@ -199,7 +199,7 @@ func TestBibleCopyPGSourceCorruptionWorkerFenceAndZeroRowRollback(t *testing.T) 
 	admission.Phase = "freeze"
 	admission.WorkerID = uuid.Nil
 	err = db.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
-		_, err := bibleCopyStore(tx, admission).Freeze(t.Context(), actor, other, nil, time.Now())
+		_, err := bibleCopyStore(tx, admission).Freeze(t.Context(), bibleActor(actor), other, nil, time.Now())
 		return err
 	})
 	if !errors.Is(err, domain.ErrCorruptHistory) {

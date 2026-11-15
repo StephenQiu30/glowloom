@@ -20,7 +20,7 @@ import (
 // TransferTopic identifies media-owned permanent commands, never paid operations.
 const TransferTopic = "glowloom.media.transfer_command.v1"
 
-func recordTransferCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash string, action, emit application.TransferAction, emitEvent bool, job domain.TransferJob) error {
+func recordTransferCommand(tx *gorm.DB, actor application.Actor, key uuid.UUID, hash string, action, emit application.TransferAction, emitEvent bool, job domain.TransferJob) error {
 	response, err := json.Marshal(job)
 	if err != nil || len(response) > 1<<20 {
 		return application.ErrUnavailable
@@ -78,7 +78,7 @@ func recordTransferCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UU
 
 // CreateTransfer accepts bytes-free SQL facts and permanent target identities.
 // Authorization precedes replay, but replay never reruns later catalog CAS.
-func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Principal, in application.TransferInput) (domain.TransferJob, error) {
+func (s *TransferStore) CreateTransfer(ctx context.Context, actor application.Actor, in application.TransferInput) (domain.TransferJob, error) {
 	var result domain.TransferJob
 	if s == nil || s.db == nil {
 		return result, application.ErrUnavailable
@@ -263,7 +263,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 
 // HasInflightWork is consumed by workspace lifecycle and other admission guards.
 // It reads actual transfer state for every creator in the already locked project.
-func (s *TransferStore) HasInflightWork(ctx context.Context, actor identityapp.Principal, project uuid.UUID) (bool, error) {
+func (s *TransferStore) HasInflightWork(ctx context.Context, actor application.Actor, project uuid.UUID) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}

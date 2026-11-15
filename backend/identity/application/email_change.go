@@ -35,9 +35,10 @@ type EmailChangeStore interface {
 
 // EmailChange owns one session-bound pair of mailbox proofs.
 type EmailChange struct {
-	auth  *Auth
-	store EmailChangeStore
-	now   func() time.Time
+	auth   *Auth
+	store  EmailChangeStore
+	now    func() time.Time
+	source *EmailChangeSource
 }
 
 // NewEmailChange injects existing identity proof and encrypted mail dependencies.
@@ -198,6 +199,13 @@ func (s *EmailChange) Verify(ctx context.Context, a Principal, op uuid.UUID, sid
 
 // Complete changes only credentials, preserving all resource ownership and memberships.
 func (s *EmailChange) Complete(ctx context.Context, a Principal, op uuid.UUID, revision int64) error {
+	if s.source != nil {
+		return ErrPasswordChangeUnavailable
+	}
+	return s.completePrepared(ctx, a, op, revision, nil)
+}
+
+func (s *EmailChange) completePrepared(ctx context.Context, a Principal, op uuid.UUID, revision int64, prepare func(EmailChangeTx, domain.User, domain.EmailChallenge, domain.EmailChallenge, time.Time) error) error {
 	if !s.auth.emailReady() {
 		return ErrRegistrationUnavailable
 	}
@@ -242,16 +250,23 @@ func (s *EmailChange) Complete(ctx context.Context, a Principal, op uuid.UUID, r
 		if u.EmailVersion >= math.MaxInt32 || u.SessionEpoch >= math.MaxInt32 || u.Revision >= math.MaxInt32 {
 			return domain.ErrInvalidAccountState
 		}
-		if err := tx.ChangeEmail(next.EmailKey, revision, now); err != nil {
+		if prepare != nil {
+			return prepare(tx, u, old, next, now)
+		}
+		return s.applyEmailChange(tx, old.EmailKey, next.EmailKey, revision, now)
+	})
+}
+
+func (s *EmailChange) applyEmailChange(tx EmailChangeTx, old, next string, revision int64, now time.Time) error {
+	if err := tx.ChangeEmail(next, revision, now); err != nil {
+		return err
+	}
+	for _, address := range []string{old, next} {
+		if err := s.auth.queueEmail(tx, "email_changed", address, map[string]string{}, now, now.Add(24*time.Hour)); err != nil {
 			return err
 		}
-		for _, address := range []string{old.EmailKey, next.EmailKey} {
-			if err := s.auth.queueEmail(tx, "email_changed", address, map[string]string{}, now, now.Add(24*time.Hour)); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // Cancel revokes the matching operation without changing the account.

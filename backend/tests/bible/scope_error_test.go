@@ -10,10 +10,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	http "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
+	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 )
 
 type scopeFailureStore struct {
@@ -21,8 +25,8 @@ type scopeFailureStore struct {
 	failure error
 }
 
-func (s scopeFailureStore) List(_ context.Context, _ identity.Principal, _ application.ListInput) (application.Page, error) {
-	return application.Page{}, s.failure
+func (s scopeFailureStore) List(_ context.Context, _ application.Actor, _ application.ListInput) (application.Page, error) {
+	return application.Page{}, biblewire.OwningError(s.failure)
 }
 func TestScopeAuthorizationHTTPErrorChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -30,11 +34,13 @@ func TestScopeAuthorizationHTTPErrorChain(t *testing.T) {
 		name   string
 		cause  error
 		status int
-	}{{"removed membership", workspace.ErrScopeNotFound, 404}, {"revoked exact session", identity.ErrSessionInvalid, 401}, {"authority unavailable", errors.New("authority unavailable"), 503}} {
+	}{{"removed membership", workspacesource.ErrScopeNotFound, 404}, {"revoked exact session", identity.ErrSessionInvalid, 401}, {"authority unavailable", errors.New("authority unavailable"), 503}} {
 		t.Run(test.name, func(t *testing.T) {
 			failure := errors.Join(errors.New("consumer failure"), test.cause)
+			actor := identity.Principal{ID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1}
 			router := gin.New()
-			http.NewHandler(application.NewService(scopeFailureStore{failure: failure}, time.Now)).Register(router.Group("/api"))
+			router.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
+			http.NewHandler(application.NewService(scopeFailureStore{failure: failure}, time.Now), bibleHTTPActor).Register(router.Group("/api"))
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), "GET", "/api/projects/"+uuid.NewString()+"/bible/character", nil))
 			if w.Code != test.status {

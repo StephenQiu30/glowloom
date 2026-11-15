@@ -8,19 +8,19 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // ReviewHandler serves actual rules/manual editing and immutable history only.
 type ReviewHandler struct {
+	resolve  ActorResolver
 	episodes *application.EpisodeService
 	history  *application.HistoryService
 }
 
 // NewReviewHandler injects actual formal review and the authorized private-history reader.
-func NewReviewHandler(episodes *application.EpisodeService, history *application.HistoryService) *ReviewHandler {
-	return &ReviewHandler{episodes: episodes, history: history}
+func NewReviewHandler(episodes *application.EpisodeService, history *application.HistoryService, resolve ActorResolver) *ReviewHandler {
+	return &ReviewHandler{resolve: resolve, episodes: episodes, history: history}
 }
 
 // Register keeps Gin command components literal and distinct from wildcard identifiers.
@@ -83,6 +83,12 @@ type StructureDetail struct {
 // @Success 200 {object} application.VersionPage
 // @Router /api/projects/{pid}/script-versions [get]
 func (h *ReviewHandler) Versions(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -91,7 +97,7 @@ func (h *ReviewHandler) Versions(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.history.Versions(c.Request.Context(), identityhttp.Principal(c), pid, before, limit)
+	out, err := h.history.Versions(c.Request.Context(), actor, pid, before, limit)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -111,6 +117,12 @@ func (h *ReviewHandler) Versions(c *gin.Context) {
 // @Success 200 {object} application.SourceHistoryPage
 // @Router /api/projects/{pid}/script-sources/{lineage}/history [get]
 func (h *ReviewHandler) SourceHistory(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -123,7 +135,7 @@ func (h *ReviewHandler) SourceHistory(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.history.SourceHistory(c.Request.Context(), identityhttp.Principal(c), pid, id, before, limit)
+	out, err := h.history.SourceHistory(c.Request.Context(), actor, pid, id, before, limit)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -141,6 +153,12 @@ func (h *ReviewHandler) SourceHistory(c *gin.Context) {
 // @Success 200 {object} application.SourceSnapshotDetail
 // @Router /api/projects/{pid}/script-source-snapshots/{sid} [get]
 func (h *ReviewHandler) SourceSnapshot(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -149,7 +167,7 @@ func (h *ReviewHandler) SourceSnapshot(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.history.SourceSnapshot(c.Request.Context(), identityhttp.Principal(c), pid, id)
+	out, err := h.history.SourceSnapshot(c.Request.Context(), actor, pid, id)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -167,6 +185,12 @@ func (h *ReviewHandler) SourceSnapshot(c *gin.Context) {
 // @Success 200 {object} application.EpisodeView
 // @Router /api/projects/{pid}/episodes [get]
 func (h *ReviewHandler) Episodes(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -179,7 +203,7 @@ func (h *ReviewHandler) Episodes(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	out, err := h.episodes.Episodes(c.Request.Context(), identityhttp.Principal(c), pid, *version)
+	out, err := h.episodes.Episodes(c.Request.Context(), actor, pid, *version)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -215,6 +239,12 @@ func (h *ReviewHandler) Resplit(c *gin.Context) { h.split(c, false) }
 // @Router /api/projects/{pid}/episodes/split/confirm [post]
 func (h *ReviewHandler) ConfirmSplit(c *gin.Context) { h.split(c, true) }
 func (h *ReviewHandler) split(c *gin.Context, confirm bool) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var r SplitReviewRequest
 	if !readJSON(c, &r) {
 		return
@@ -229,11 +259,10 @@ func (h *ReviewHandler) split(c *gin.Context, confirm bool) {
 	}
 	input := application.SplitCommand{ProjectID: base.ProjectID, VersionID: r.VersionID, Key: base.Key, RequestID: base.RequestID, ExpectedRevision: base.ExpectedRevision, ExpectedSplitRevision: *r.ExpectedSplitRevision, CandidateSetID: r.CandidateSetID, Boundaries: r.Boundaries, Preface: r.Preface, AckInvalidate: r.AckInvalidate}
 	var out application.SplitReceipt
-	var err error
 	if confirm {
-		out, err = h.episodes.ConfirmSplit(c.Request.Context(), identityhttp.Principal(c), input)
+		out, err = h.episodes.ConfirmSplit(c.Request.Context(), actor, input)
 	} else {
-		out, err = h.episodes.Resplit(c.Request.Context(), identityhttp.Principal(c), input)
+		out, err = h.episodes.Resplit(c.Request.Context(), actor, input)
 	}
 	if err != nil {
 		scriptProblem(c, err)
@@ -253,6 +282,12 @@ func (h *ReviewHandler) split(c *gin.Context, confirm bool) {
 // @Success 200 {object} application.EpisodeText
 // @Router /api/episodes/{eid}/source-text [get]
 func (h *ReviewHandler) SourceText(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	id, ok := httpapi.PathUUID(c, "eid")
 	if !ok {
 		return
@@ -263,7 +298,7 @@ func (h *ReviewHandler) SourceText(c *gin.Context) {
 		scriptProblem(c, domain.ErrInvalidSpan)
 		return
 	}
-	out, err := h.history.EpisodeText(c.Request.Context(), identityhttp.Principal(c), id, from, to)
+	out, err := h.history.EpisodeText(c.Request.Context(), actor, id, from, to)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -292,6 +327,12 @@ func (h *ReviewHandler) Structure(c *gin.Context) { h.structure(c, 0) }
 // @Success 200 {object} application.StructurePage
 // @Router /api/episodes/{eid}/structure/versions [get]
 func (h *ReviewHandler) StructureVersions(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	id, ok := httpapi.PathUUID(c, "eid")
 	if !ok {
 		return
@@ -300,7 +341,7 @@ func (h *ReviewHandler) StructureVersions(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.history.Structures(c.Request.Context(), identityhttp.Principal(c), id, before, limit)
+	out, err := h.history.Structures(c.Request.Context(), actor, id, before, limit)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -326,11 +367,17 @@ func (h *ReviewHandler) StructureVersion(c *gin.Context) {
 	h.structure(c, version)
 }
 func (h *ReviewHandler) structure(c *gin.Context, version int64) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	id, ok := httpapi.PathUUID(c, "eid")
 	if !ok {
 		return
 	}
-	actor := identityhttp.Principal(c)
+
 	e, err := h.history.Episode(c.Request.Context(), actor, id)
 	if err != nil {
 		scriptProblem(c, err)
@@ -356,6 +403,12 @@ func (h *ReviewHandler) structure(c *gin.Context, version int64) {
 // @Success 200 {object} application.StructureReceipt
 // @Router /api/episodes/{eid}/structure [post]
 func (h *ReviewHandler) SaveStructure(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var r StructureSaveRequest
 	if !readJSON(c, &r) {
 		return
@@ -369,7 +422,7 @@ func (h *ReviewHandler) SaveStructure(c *gin.Context) {
 		return
 	}
 	input.Document = *r.Document
-	out, err := h.episodes.SaveStructure(c.Request.Context(), identityhttp.Principal(c), input)
+	out, err := h.episodes.SaveStructure(c.Request.Context(), actor, input)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -391,6 +444,12 @@ func (h *ReviewHandler) SaveStructure(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/episodes/{eid}/structure/confirm [post]
 func (h *ReviewHandler) ConfirmStructure(c *gin.Context) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return
+	}
+
 	var r StructureConfirmRequest
 	if !readJSON(c, &r) {
 		return
@@ -400,7 +459,7 @@ func (h *ReviewHandler) ConfirmStructure(c *gin.Context) {
 		return
 	}
 	input.AckInvalidate = r.AckInvalidate
-	out, err := h.episodes.ConfirmStructure(c.Request.Context(), identityhttp.Principal(c), input)
+	out, err := h.episodes.ConfirmStructure(c.Request.Context(), actor, input)
 	if err != nil {
 		scriptProblem(c, err)
 		return
@@ -408,6 +467,12 @@ func (h *ReviewHandler) ConfirmStructure(c *gin.Context) {
 	c.JSON(200, out)
 }
 func (h *ReviewHandler) structureCommand(c *gin.Context, revision, episodeRevision, baseVersion *int64) (application.StructureCommand, bool) {
+	actor, err := resolveActor(c, h.resolve)
+	if err != nil {
+		scriptProblem(c, err)
+		return application.StructureCommand{}, false
+	}
+
 	if revision == nil || episodeRevision == nil || baseVersion == nil {
 		scriptProblem(c, domain.ErrInvalidStructure)
 		return application.StructureCommand{}, false
@@ -416,7 +481,7 @@ func (h *ReviewHandler) structureCommand(c *gin.Context, revision, episodeRevisi
 	if !ok {
 		return application.StructureCommand{}, false
 	}
-	actor := identityhttp.Principal(c)
+
 	e, err := h.history.Episode(c.Request.Context(), actor, id)
 	if err != nil {
 		scriptProblem(c, err)

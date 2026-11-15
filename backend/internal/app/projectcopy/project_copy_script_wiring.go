@@ -5,18 +5,27 @@ import (
 	"errors"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
+
 	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
+
 	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 )
 
@@ -24,8 +33,8 @@ type projectCopyScriptAccess struct {
 	store *pgworkspace.ProjectCopyAccessStore
 }
 
-func (a projectCopyScriptAccess) Authorize(ctx context.Context, actor identityapp.Principal, b scriptapp.ProjectCopyBinding, target bool) error {
-	return a.store.Authorize(ctx, actor, workspaceapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, target)
+func (a projectCopyScriptAccess) Authorize(ctx context.Context, actor scriptapp.Actor, b scriptapp.ProjectCopyBinding, target bool) error {
+	return scriptwire.OwningError(a.store.Authorize(ctx, scriptwire.IdentityActor(actor), workspaceapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, target))
 }
 
 func projectCopyScriptBinding(b workspaceapp.ProjectCopyBinding) scriptapp.ProjectCopyBinding {
@@ -54,7 +63,7 @@ func projectCopyScriptError(err error) error {
 		return &workspaceapp.ProjectCopyScriptTransferError{Code: transfer.Code, NeedsReconciliation: transfer.NeedsReconciliation, Cause: err}
 	}
 	if errors.Is(err, scriptapp.ErrUnavailable) || errors.Is(err, scriptapp.ErrContextUnavailable) {
-		return errors.Join(workspaceapp.ErrProjectDependencyUnavailable, err)
+		return errors.Join(workspacesource.ErrProjectDependencyUnavailable, err)
 	}
 	return err
 }
@@ -68,28 +77,28 @@ func provideScriptProjectCopyStore(database *gorm.DB, authority workspaceapp.Pro
 type projectCopyScriptOwner struct{ store *pgscript.ProjectCopyStore }
 
 func (o projectCopyScriptOwner) ReferencedMedia(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding) ([]uuid.UUID, error) {
-	ids, err := o.store.ReferencedMedia(ctx, actor, projectCopyScriptBinding(b))
+	ids, err := o.store.ReferencedMedia(ctx, scriptwire.Actor(actor), projectCopyScriptBinding(b))
 	return ids, projectCopyScriptError(err)
 }
 
 func (o projectCopyScriptOwner) Freeze(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, assets map[uuid.UUID]uuid.UUID, at time.Time) (workspacedomain.ProjectCopyScriptSnapshot, error) {
-	s, err := o.store.Freeze(ctx, actor, projectCopyScriptBinding(b), assets, at)
+	s, err := o.store.Freeze(ctx, scriptwire.Actor(actor), projectCopyScriptBinding(b), assets, at)
 	return workspacedomain.ProjectCopyScriptSnapshot{ID: s.ID, ManifestSHA256: s.ManifestSHA256, ContentSHA256: s.ContentSHA256, Counts: projectCopyScriptCounts(s.Counts)}, projectCopyScriptError(err)
 }
 
 func (o projectCopyScriptOwner) Register(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyScriptSnapshot) (workspacedomain.ProjectCopyScriptReceipt, error) {
-	r, err := o.store.Register(ctx, actor, projectCopyScriptBinding(b), scriptProjectCopySnapshot(s))
+	r, err := o.store.Register(ctx, scriptwire.Actor(actor), projectCopyScriptBinding(b), scriptProjectCopySnapshot(s))
 	return projectCopyScriptReceipt(r), projectCopyScriptError(err)
 }
 
 func (o projectCopyScriptOwner) FinishCleanup(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyScriptSnapshot) error {
-	return projectCopyScriptError(o.store.FinishCleanup(ctx, actor, projectCopyScriptBinding(b), scriptProjectCopySnapshot(s)))
+	return projectCopyScriptError(o.store.FinishCleanup(ctx, scriptwire.Actor(actor), projectCopyScriptBinding(b), scriptProjectCopySnapshot(s)))
 }
 
 type projectCopyScriptTransfer struct{ owner *scriptapp.ProjectCopy }
 
 func (t projectCopyScriptTransfer) Transfer(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyScriptSnapshot) error {
-	r, err := t.owner.Transfer(ctx, actor, projectCopyScriptBinding(b), scriptProjectCopySnapshot(s))
+	r, err := t.owner.Transfer(ctx, scriptwire.Actor(actor), projectCopyScriptBinding(b), scriptProjectCopySnapshot(s))
 	if err != nil {
 		return projectCopyScriptError(err)
 	}
@@ -101,7 +110,7 @@ func (t projectCopyScriptTransfer) Transfer(ctx context.Context, actor identitya
 }
 
 func (t projectCopyScriptTransfer) Cleanup(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s workspacedomain.ProjectCopyScriptSnapshot) error {
-	return projectCopyScriptError(t.owner.Cleanup(ctx, actor, projectCopyScriptBinding(b), scriptProjectCopySnapshot(s)))
+	return projectCopyScriptError(t.owner.Cleanup(ctx, scriptwire.Actor(actor), projectCopyScriptBinding(b), scriptProjectCopySnapshot(s)))
 }
 
 func withScriptCopyLocations(store *pgscript.ProjectCopyStore) *pgscript.ProjectCopyStore {

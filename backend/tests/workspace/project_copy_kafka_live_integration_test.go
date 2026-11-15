@@ -18,11 +18,11 @@ import (
 
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	copyevent "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/event"
-	outkafka "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/kafka"
-	outpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
-	outapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
+	outapp "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox"
+	outkafka "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/kafka"
+	outpg "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )

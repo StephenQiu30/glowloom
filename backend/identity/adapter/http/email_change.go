@@ -22,6 +22,17 @@ func NewEmailChangeHandler(s *application.EmailChange, secure bool) *EmailChange
 	return &EmailChangeHandler{service: s, secure: secure}
 }
 
+// RegisterSource keeps live authentication on proof management and allows only
+// exact original-proof recovery on the accepted completion endpoint.
+func (h *EmailChangeHandler) RegisterSource(api *gin.RouterGroup, sessions *EmailAuthHandler) {
+	group := api.Group("", func(c *gin.Context) { c.Header("Cache-Control", "no-store"); c.Next() }, httpapi.Middleware(sessions.origin))
+	live := group.Group("", sessions.RequireSession())
+	live.POST("/me/email-change", h.start)
+	live.POST("/me/email-change/:id/verify", h.verify)
+	live.DELETE("/me/email-change/:id", h.cancel)
+	group.POST("/me/email-change/:id/complete", func(c *gin.Context) { h.completeSource(c, sessions) })
+}
+
 // Register requires current email-session and CSRF middleware on group.
 func (h *EmailChangeHandler) Register(group *gin.RouterGroup) {
 	group.POST("/me/email-change", h.start)
@@ -139,6 +150,37 @@ func (h *EmailChangeHandler) verify(c *gin.Context) {
 // @Failure 422 {object} httpapi.Problem
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/me/email-change/{id}/complete [post]
+func (h *EmailChangeHandler) completeSource(c *gin.Context, sessions *EmailAuthHandler) {
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	var in EmailChangeCompleteRequest
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	revision, err := strconv.ParseInt(in.ExpectedRevision, 10, 64)
+	if err != nil || revision < 1 {
+		httpapi.WriteProblem(c, 422, "invalid_request", nil)
+		return
+	}
+	request, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
+	if err != nil || request == uuid.Nil {
+		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
+		return
+	}
+	credential, ok := sessions.originalCredential(c)
+	if !ok {
+		return
+	}
+	if err := h.service.CompleteCommand(c.Request.Context(), application.EmailChangeCommand{RequestID: request, OperationID: id, Revision: revision, Credential: credential}); err != nil {
+		emailChangeProblem(c, err)
+		return
+	}
+	clearSessionCookies(c, h.secure)
+	c.Status(204)
+}
+
 func (h *EmailChangeHandler) complete(c *gin.Context) {
 	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {

@@ -5,17 +5,23 @@ import (
 	"errors"
 	"time"
 
-	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -33,15 +39,17 @@ func NewMediaWorkerScopeAccess(tx *gorm.DB) mediaapp.ScopeAccess {
 }
 
 // NewCanvasProjectAccess binds canvas access to the current request authority.
-func NewCanvasProjectAccess(tx *gorm.DB) canvasapp.ProjectAccess { return mediaScopeAccess{tx: tx} }
-
-func (a mediaScopeAccess) CheckActor(ctx context.Context, actor identity.Principal) error {
-	if a.worker {
-		return pgidentity.NewStore(a.tx).CheckActive(ctx, actor.ID)
-	}
-	return pgidentity.NewStore(a.tx).CheckSession(ctx, actor, time.Now)
+func NewCanvasProjectAccess(tx *gorm.DB) canvasapp.ProjectAccess {
+	return canvasProjectAccess{mediaScopeAccess{tx: tx}}
 }
-func (a mediaScopeAccess) AuthorizePersonal(ctx context.Context, actor identity.Principal, write bool) error {
+
+func (a mediaScopeAccess) CheckActor(ctx context.Context, actor mediaapp.Actor) error {
+	if a.worker {
+		return OwningError(pgidentity.NewStore(a.tx).CheckActive(ctx, actor.ID))
+	}
+	return OwningError(pgidentity.NewStore(a.tx).CheckSession(ctx, IdentityActor(actor), time.Now))
+}
+func (a mediaScopeAccess) AuthorizePersonal(ctx context.Context, actor mediaapp.Actor, write bool) error {
 	id := actor.ScopeID
 	if a.worker {
 		var err error
@@ -60,14 +68,14 @@ func (a mediaScopeAccess) AuthorizePersonal(ctx context.Context, actor identity.
 		}
 		owner, kind, physical = s.OwnerUserID, s.Kind, s.PhysicalScopeID
 	} else {
-		s, err := scopewire.ProvideRequestScopeAccess(a.tx).Resolve(ctx, actor, id, write)
+		s, err := scopewire.ProvideRequestScopeAccess(a.tx).Resolve(ctx, IdentityActor(actor), id, write)
 		if err != nil {
 			return mediaLibraryProjectError(err)
 		}
 		owner, kind, physical = s.OwnerUserID, s.Kind, s.PhysicalScopeID
 	}
 	if owner == nil || *owner != actor.ID || kind != "personal" || physical != actor.OrgID {
-		return errors.Join(mediaapp.ErrNotFound, workspaceapp.ErrScopeNotFound)
+		return errors.Join(mediaapp.ErrNotFound, workspacesource.ErrScopeNotFound)
 	}
 	return nil
 }
@@ -77,28 +85,28 @@ func (a mediaScopeAccess) project() *pgworkspace.ProjectContentAccessStore {
 	}
 	return scopewire.ProvideProjectContentAccess(a.tx)
 }
-func (a mediaScopeAccess) AuthorizeProject(ctx context.Context, actor identity.Principal, id uuid.UUID, write bool) error {
-	_, err := a.project().Authorize(ctx, actor, id, write)
+func (a mediaScopeAccess) AuthorizeProject(ctx context.Context, actor mediaapp.Actor, id uuid.UUID, write bool) error {
+	_, err := a.project().Authorize(ctx, IdentityActor(actor), id, write)
 	return mediaLibraryProjectError(err)
 }
-func (a mediaScopeAccess) AuthorizeCopyTarget(ctx context.Context, actor identity.Principal, id uuid.UUID) error {
-	_, err := a.project().AuthorizeCopyTarget(ctx, actor, id)
+func (a mediaScopeAccess) AuthorizeCopyTarget(ctx context.Context, actor mediaapp.Actor, id uuid.UUID) error {
+	_, err := a.project().AuthorizeCopyTarget(ctx, IdentityActor(actor), id)
 	return mediaLibraryProjectError(err)
 }
 
 // TransferActor separates the private personal mapping from the project's scope.
-func (a mediaScopeAccess) TransferActor(ctx context.Context, actor identity.Principal, library mediadomain.LibraryScope, write bool) (identity.Principal, error) {
+func (a mediaScopeAccess) TransferActor(ctx context.Context, actor mediaapp.Actor, library mediadomain.LibraryScope, write bool) (mediaapp.Actor, error) {
 	if err := a.CheckActor(ctx, actor); err != nil {
 		return actor, err
 	}
 	if library.Kind == mediadomain.LibraryProject {
-		facts, err := a.project().Authorize(ctx, actor, *library.ProjectID, write)
+		facts, err := a.project().Authorize(ctx, IdentityActor(actor), *library.ProjectID, write)
 		if err != nil {
 			return actor, mediaLibraryProjectError(err)
 		}
 		actor.OrgID = facts.OrgID
 		if a.worker {
-			id, err := a.project().OwnerScopeID(ctx, actor, *library.ProjectID, write)
+			id, err := a.project().OwnerScopeID(ctx, IdentityActor(actor), *library.ProjectID, write)
 			if err != nil {
 				return actor, err
 			}
@@ -120,7 +128,7 @@ func (a mediaScopeAccess) TransferActor(ctx context.Context, actor identity.Prin
 		}
 		actor.ScopeID, actor.OrgID = scope.ID, scope.PhysicalScopeID
 	} else {
-		scope, err := scopewire.ProvideRequestScopeAccess(a.tx).Resolve(ctx, actor, id, write)
+		scope, err := scopewire.ProvideRequestScopeAccess(a.tx).Resolve(ctx, IdentityActor(actor), id, write)
 		if err != nil {
 			return actor, mediaLibraryProjectError(err)
 		}

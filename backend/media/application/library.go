@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -252,7 +251,7 @@ type LibraryReceipt struct {
 
 // LibraryRepository owns complete scoped reads and one atomic permanent command.
 type LibraryRepository interface {
-	ListLibrary(context.Context, identityapp.Principal, domain.LibraryScope, LibraryQuery) (LibraryPage, error)
-	LibraryDetail(context.Context, identityapp.Principal, domain.LibraryScope, uuid.UUID) (LibraryItemDetail, error)
-	ApplyLibraryCommand(context.Context, identityapp.Principal, LibraryCommand) (LibraryReceipt, error)
+	ListLibrary(context.Context, Actor, domain.LibraryScope, LibraryQuery) (LibraryPage, error)
+	LibraryDetail(context.Context, Actor, domain.LibraryScope, uuid.UUID) (LibraryItemDetail, error)
+	ApplyLibraryCommand(context.Context, Actor, LibraryCommand) (LibraryReceipt, error)
 }

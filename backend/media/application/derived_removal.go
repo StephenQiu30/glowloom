@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // DerivedRemoval binds cleanup to an unpublished result and its original proof.
@@ -19,7 +17,7 @@ type DerivedRemoval struct {
 }
 
 // AuthorizeRemoval refuses objects already owned by any other asset or ready result.
-func (s *DerivedService) AuthorizeRemoval(ctx context.Context, actor identityapp.Principal, in DerivedRemoval) error {
+func (s *DerivedService) AuthorizeRemoval(ctx context.Context, actor Actor, in DerivedRemoval) error {
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}

@@ -5,24 +5,23 @@ import (
 	"net/url"
 	"strconv"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // LibraryHandler exposes only the current caller's closed personal/project scope.
-type LibraryHandler struct{ library application.LibraryRepository }
+type LibraryHandler struct {
+	resolve ActorResolver
+	library application.LibraryRepository
+}
 
 // NewLibraryHandler injects the owning catalog commands and full-page reads.
-func NewLibraryHandler(library application.LibraryRepository) *LibraryHandler {
-	return &LibraryHandler{library: library}
+func NewLibraryHandler(library application.LibraryRepository, resolve ActorResolver) *LibraryHandler {
+	return &LibraryHandler{resolve: resolve, library: library}
 }
 
 // Register installs metadata reads and permanent commands; file handling stays
@@ -126,6 +125,11 @@ func libraryPageQuery(query url.Values, scope domain.LibraryScope) (application.
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library [get]
 func (h *LibraryHandler) List(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.library == nil {
 		writeLibraryError(c, application.ErrUnavailable)
 		return
@@ -140,7 +144,7 @@ func (h *LibraryHandler) List(c *gin.Context) {
 		writeLibraryError(c, err)
 		return
 	}
-	page, err := h.library.ListLibrary(c.Request.Context(), identityhttp.Principal(c), scope, query)
+	page, err := h.library.ListLibrary(c.Request.Context(), actor, scope, query)
 	if err != nil {
 		writeLibraryError(c, err)
 		return
@@ -164,6 +168,11 @@ func (h *LibraryHandler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/items/{item_id} [get]
 func (h *LibraryHandler) Detail(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.library == nil {
 		writeLibraryError(c, application.ErrUnavailable)
 		return
@@ -183,7 +192,7 @@ func (h *LibraryHandler) Detail(c *gin.Context) {
 	if !ok {
 		return
 	}
-	detail, err := h.library.LibraryDetail(c.Request.Context(), identityhttp.Principal(c), scope, item)
+	detail, err := h.library.LibraryDetail(c.Request.Context(), actor, scope, item)
 	if err != nil {
 		writeLibraryError(c, err)
 		return
@@ -208,6 +217,11 @@ func (h *LibraryHandler) Detail(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/media/library/commands [post]
 func (h *LibraryHandler) Command(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	if h == nil || h.library == nil {
 		writeLibraryError(c, application.ErrUnavailable)
 		return
@@ -222,7 +236,7 @@ func (h *LibraryHandler) Command(c *gin.Context) {
 		return
 	}
 	command.Key = key
-	result, err := h.library.ApplyLibraryCommand(c.Request.Context(), identityhttp.Principal(c), command)
+	result, err := h.library.ApplyLibraryCommand(c.Request.Context(), actor, command)
 	if err != nil {
 		writeLibraryError(c, err)
 		return
@@ -233,11 +247,11 @@ func (h *LibraryHandler) Command(c *gin.Context) {
 
 func writeLibraryError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, identityapp.ErrSessionInvalid):
+	case errors.Is(err, application.ErrSessionInvalid):
 		httpapi.WriteProblem(c, 401, "unauthorized", nil)
-	case errors.Is(err, identityapp.ErrForbidden):
+	case errors.Is(err, application.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, application.ErrNotFound):
+	case errors.Is(err, application.ErrNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrLibraryKeyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_conflict", nil)

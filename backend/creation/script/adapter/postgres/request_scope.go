@@ -9,10 +9,9 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-func checkRequestScope(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID, action, hash string) error {
+func checkRequestScope(tx *gorm.DB, actor application.Actor, project, key uuid.UUID, action, hash string) error {
 	var row scriptRequestRow
 	if err := tx.Where("actor_id = ? AND request_id = ?", actor.ID, key).Take(&row).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
@@ -24,7 +23,7 @@ func checkRequestScope(tx *gorm.DB, actor identityapp.Principal, project, key uu
 	}
 	return nil
 }
-func registerRequest(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUID, action, hash string, now time.Time) error {
+func registerRequest(tx *gorm.DB, actor application.Actor, project, key uuid.UUID, action, hash string, now time.Time) error {
 	if err := checkRequestScope(tx, actor, project, key, action, hash); err != nil {
 		return err
 	}

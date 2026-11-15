@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -20,7 +19,7 @@ type SourceHandler struct {
 
 // SourceUploader shares the process's existing multipart admission gate.
 type SourceUploader interface {
-	UploadPersonalFor(*gin.Context, identity.Principal)
+	UploadPersonalFor(*gin.Context, media.Actor)
 }
 
 // NewSourceHandler injects real source queries and the existing bounded uploader.
@@ -36,8 +35,17 @@ func (h *SourceHandler) Register(group *gin.RouterGroup) {
 	group.POST("/subjects/sources/uploads", h.Upload)
 }
 
+func mediaSourceActor(c *gin.Context) media.Actor {
+	actor := currentActor(c)
+	return media.Actor{ID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, SessionID: actor.SessionID, CredentialEpoch: actor.CredentialEpoch, PlatformEpoch: actor.PlatformEpoch}
+}
+
 func sourceError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, media.ErrSessionInvalid):
+		httpapi.WriteProblem(c, 401, "session_invalid", nil)
+	case errors.Is(err, media.ErrForbidden):
+		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, media.ErrInvalidQuery), errors.Is(err, mediadomain.ErrInvalidLibrary):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	case errors.Is(err, media.ErrNotFound):
@@ -94,7 +102,7 @@ func (h *SourceHandler) List(c *gin.Context) {
 		sourceError(c, media.ErrInvalidQuery)
 		return
 	}
-	result, err := h.sources.List(c.Request.Context(), currentActor(c), input)
+	result, err := h.sources.List(c.Request.Context(), mediaSourceActor(c), input)
 	if err != nil {
 		sourceError(c, err)
 		return
@@ -121,7 +129,7 @@ func (h *SourceHandler) Detail(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.sources.Detail(c.Request.Context(), currentActor(c), id)
+	result, err := h.sources.Detail(c.Request.Context(), mediaSourceActor(c), id)
 	if err != nil {
 		sourceError(c, err)
 		return
@@ -148,7 +156,7 @@ func (h *SourceHandler) Preview(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.sources.Preview(c.Request.Context(), currentActor(c), id)
+	result, err := h.sources.Preview(c.Request.Context(), mediaSourceActor(c), id)
 	if err != nil {
 		sourceError(c, err)
 		return
@@ -171,7 +179,7 @@ func (h *SourceHandler) Preview(c *gin.Context) {
 // @Failure 403 {object} httpapi.Problem
 // @Router /api/subjects/sources/uploads [post]
 func (h *SourceHandler) Upload(c *gin.Context) {
-	actor, err := h.sources.SourceActor(c.Request.Context(), currentActor(c), true)
+	actor, err := h.sources.SourceActor(c.Request.Context(), mediaSourceActor(c), true)
 	if err != nil {
 		sourceError(c, err)
 		return

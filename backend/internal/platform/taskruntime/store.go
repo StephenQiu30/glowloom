@@ -261,6 +261,10 @@ func (s *Store) retry(ctx context.Context, j Job) error {
 
 type claimKey struct{}
 
+// CurrentJob exposes only the immutable current claim evidence to owner adapters.
+// A caller must still Fence this evidence inside its business commit transaction.
+func CurrentJob(ctx context.Context) (Job, bool) { j, ok := ctx.Value(claimKey{}).(Job); return j, ok }
+
 // Transaction checks the lease before committing domain progress. Side effects
 // keep their own idempotency keys. The lease row is locked only at the end of
 // the transaction to avoid blocking renewal during domain work.

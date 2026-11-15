@@ -58,6 +58,9 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 	var result application.ConfirmSingleQuoteResult
 	var stale error
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.checkAcceptedOperationFunding(ctx, tx, input.OperationID); err != nil {
+			return err
+		}
 		if err := s.requireProject(tx, actor, input.ProjectID, true); err != nil {
 			return err
 		}
@@ -168,7 +171,11 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 				return fmt.Errorf("decode frozen billing strategy: %w", err)
 			}
 		}
-		reserve, err := s.billingStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{Actor: actor,
+		sourceScope, err := s.acceptedPayerScope(ctx, tx, quoted.ID, quoted.ProjectID)
+		if err != nil {
+			return err
+		}
+		reserve, err := s.billingStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{Actor: actor, SourceScopeID: sourceScope,
 			ProjectID: quoted.ProjectID, OperationID: quoted.ID, ActorID: actor.ID,
 			AmountMicros: *quoted.QuoteMicros, WholeCredits: costs.WholeCredits, CommercialPriceReady: commercial, ReusedResult: quoted.ReusedFromID != nil, ModelKey: &model.ModelKey,
 			Region: quoted.Region, OccurredAt: confirmedAt,

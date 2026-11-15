@@ -166,7 +166,7 @@ func TestExplicitRecoverReopensParkedDeliveryWithoutProviderDispatch(t *testing.
 	require.NotNil(t, job, "explicit recover must reopen parked original delivery")
 	require.Greater(t, job.Epoch, int64(3))
 	h := map[string]taskruntime.Handler{}
-	operationflow.RegisterMedia(h, f.store, nil, managed.NewRoutedIngestActivities(db, nil, results, nil, f.store))
+	operationflow.RegisterMedia(h, f.store, nil, operationLegacyIngest(db, nil, results, nil, f.store))
 	_, err = h["operation.ingest"](t.Context(), *job)
 	require.NoError(t, err)
 	var outputs, submits int64

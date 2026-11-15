@@ -5,14 +5,8 @@ import { PageLayout } from "@/components/layout/page-layout";
 import { ProvidersPage } from "./providers-page";
 export function ProvidersWorkspace({
   initialConnection,
-  initialModel,
-  initialRelease,
-  initialMode,
 }: {
   initialConnection?: string;
-  initialModel?: string;
-  initialRelease?: string;
-  initialMode?: string;
 }) {
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [connections, setConnections] = useState({ draft: "", query: "" });
@@ -36,9 +30,6 @@ export function ProvidersWorkspace({
     >
       <ProvidersPage
         initialConnection={initialConnection}
-        initialModel={initialModel}
-        initialRelease={initialRelease}
-        initialMode={initialMode}
         search={search.query}
         onPresetViewChange={setPresetsOpen}
       />

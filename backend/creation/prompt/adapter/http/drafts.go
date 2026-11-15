@@ -3,22 +3,24 @@ package http
 import (
 	"errors"
 
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // DraftHandler exposes atomic private draft persistence.
-type DraftHandler struct{ store application.DraftStore }
+type DraftHandler struct {
+	store   application.DraftStore
+	resolve ActorResolver
+}
 
-// NewDraftHandler injects authorized draft storage.
-func NewDraftHandler(store application.DraftStore) *DraftHandler { return &DraftHandler{store} }
+// NewDraftHandler injects authorized draft storage and server-side identity resolution.
+func NewDraftHandler(store application.DraftStore, resolve ActorResolver) *DraftHandler {
+	return &DraftHandler{store: store, resolve: resolve}
+}
 
 // Register installs authenticated project draft routes.
 func (h *DraftHandler) Register(g *gin.RouterGroup) {
@@ -84,7 +86,12 @@ func (h *DraftHandler) write(c *gin.Context, create bool) {
 		writeDraftError(c, domain.ErrInvalidDraft)
 		return
 	}
-	out, err := h.store.SaveDraft(c.Request.Context(), identityhttp.Principal(c), application.DraftWrite{ProjectID: p, DraftID: id, ExpectedRevision: body.ExpectedRevision, Key: key, Draft: body.Draft})
+	actor, err := requestActor(c, h.resolve)
+	if err != nil {
+		writeDraftError(c, err)
+		return
+	}
+	out, err := h.store.SaveDraft(c.Request.Context(), actor, application.DraftWrite{ProjectID: p, DraftID: id, ExpectedRevision: body.ExpectedRevision, Key: key, Draft: body.Draft})
 	if err != nil {
 		writeDraftError(c, err)
 		return
@@ -110,7 +117,12 @@ func (h *DraftHandler) ReadDraft(c *gin.Context) {
 		writeDraftError(c, domain.ErrInvalidDraft)
 		return
 	}
-	out, err := h.store.ReadDraft(c.Request.Context(), identityhttp.Principal(c), p, id)
+	actor, err := requestActor(c, h.resolve)
+	if err != nil {
+		writeDraftError(c, err)
+		return
+	}
+	out, err := h.store.ReadDraft(c.Request.Context(), actor, p, id)
 	if err != nil {
 		writeDraftError(c, err)
 		return
@@ -135,7 +147,12 @@ func (h *DraftHandler) ListDrafts(c *gin.Context) {
 		writeDraftError(c, domain.ErrInvalidDraft)
 		return
 	}
-	out, err := h.store.ListDrafts(c.Request.Context(), identityhttp.Principal(c), p, c.Query("cursor"))
+	actor, err := requestActor(c, h.resolve)
+	if err != nil {
+		writeDraftError(c, err)
+		return
+	}
+	out, err := h.store.ListDrafts(c.Request.Context(), actor, p, c.Query("cursor"))
 	if err != nil {
 		writeDraftError(c, err)
 		return
@@ -145,11 +162,11 @@ func (h *DraftHandler) ListDrafts(c *gin.Context) {
 }
 func writeDraftError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, identityapp.ErrSessionInvalid):
+	case errors.Is(err, application.ErrSessionInvalid):
 		httpapi.WriteProblem(c, 401, "unauthorized", nil)
-	case errors.Is(err, identityapp.ErrForbidden):
+	case errors.Is(err, application.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, application.ErrDraftNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
+	case errors.Is(err, workspacesource.ErrScopeNotFound), errors.Is(err, application.ErrDraftNotFound), errors.Is(err, workspacesource.ErrProjectNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
@@ -188,7 +205,12 @@ func (h *DraftHandler) ValidateFragment(c *gin.Context) {
 	if !httpapi.Decode(c, &draft) {
 		return
 	}
-	if err := h.store.ValidateFragment(c.Request.Context(), identityhttp.Principal(c), p, draft); err != nil {
+	actor, err := requestActor(c, h.resolve)
+	if err != nil {
+		writeDraftError(c, err)
+		return
+	}
+	if err := h.store.ValidateFragment(c.Request.Context(), actor, p, draft); err != nil {
 		writeDraftError(c, err)
 		return
 	}
@@ -214,7 +236,12 @@ func (h *DraftHandler) ResolveUpload(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.store.ResolveUpload(c.Request.Context(), identityhttp.Principal(c), p, attempt)
+	actor, err := requestActor(c, h.resolve)
+	if err != nil {
+		writeDraftError(c, err)
+		return
+	}
+	out, err := h.store.ResolveUpload(c.Request.Context(), actor, p, attempt)
 	if err != nil {
 		writeDraftError(c, err)
 		return

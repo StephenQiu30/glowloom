@@ -18,7 +18,6 @@ import (
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp" // Register the allowed WebP decoder.
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -131,13 +130,13 @@ func (w *avatarWriter) Write(b []byte) (int, error) {
 
 // AvatarActorAccess consumes the identity-owned live-session authority.
 type AvatarActorAccess interface {
-	CheckSession(context.Context, identityapp.Principal, func() time.Time) error
+	CheckSession(context.Context, Actor, func() time.Time) error
 }
 
 // AvatarRepository publishes only service-reencoded, account-owned images.
 type AvatarRepository interface {
-	AuthorizeAvatar(context.Context, identityapp.Principal, func() time.Time) error
-	CommitAvatar(context.Context, identityapp.Principal, domain.MediaAsset, func() time.Time) error
+	AuthorizeAvatar(context.Context, Actor, func() time.Time) error
+	CommitAvatar(context.Context, Actor, domain.MediaAsset, func() time.Time) error
 	AvatarExists(context.Context, uuid.UUID) (bool, error)
 }
 
@@ -145,11 +144,11 @@ type AvatarRepository interface {
 // uncertain provider outcomes in the shared object-location ledger.
 type RoutedAvatarRepository interface {
 	AvatarRepository
-	ReserveAvatarLocation(context.Context, identityapp.Principal, uuid.UUID, string, func() time.Time) (domain.ObjectLocation, error)
-	BeginAvatarWrite(context.Context, identityapp.Principal, uuid.UUID, domain.ObjectLocation) error
-	ConfirmAvatarLocation(context.Context, identityapp.Principal, uuid.UUID, domain.ObjectLocation, ObjectInfo) error
-	CancelAvatarObject(context.Context, identityapp.Principal, uuid.UUID, domain.ObjectLocation) (bool, error)
-	ConfirmAvatarRemoval(context.Context, identityapp.Principal, uuid.UUID, domain.ObjectLocation) error
+	ReserveAvatarLocation(context.Context, Actor, uuid.UUID, string, func() time.Time) (domain.ObjectLocation, error)
+	BeginAvatarWrite(context.Context, Actor, uuid.UUID, domain.ObjectLocation) error
+	ConfirmAvatarLocation(context.Context, Actor, uuid.UUID, domain.ObjectLocation, ObjectInfo) error
+	CancelAvatarObject(context.Context, Actor, uuid.UUID, domain.ObjectLocation) (bool, error)
+	ConfirmAvatarRemoval(context.Context, Actor, uuid.UUID, domain.ObjectLocation) error
 }
 
 // AvatarRoutedStorage performs provider-independent operations on exact saved refs.
@@ -181,7 +180,7 @@ func NewRoutedAvatarService(repo RoutedAvatarRepository, objects AvatarRoutedSto
 }
 
 // Authorize rejects invalid live sessions before reading an upload body.
-func (s *AvatarService) Authorize(ctx context.Context, a identityapp.Principal) error {
+func (s *AvatarService) Authorize(ctx context.Context, a Actor) error {
 	if s == nil || s.repo == nil || s.objects == nil && s.routedObjects == nil {
 		return ErrUnavailable
 	}
@@ -189,7 +188,7 @@ func (s *AvatarService) Authorize(ctx context.Context, a identityapp.Principal) 
 }
 
 // Upload returns an eligible asset; binding still uses identity's profile CAS.
-func (s *AvatarService) Upload(ctx context.Context, a identityapp.Principal, data []byte, mime string) (LibraryAssetSummary, error) {
+func (s *AvatarService) Upload(ctx context.Context, a Actor, data []byte, mime string) (LibraryAssetSummary, error) {
 	if err := s.Authorize(ctx, a); err != nil {
 		return LibraryAssetSummary{}, err
 	}
@@ -283,7 +282,7 @@ func (s *AvatarService) Upload(ctx context.Context, a identityapp.Principal, dat
 
 // AvatarReader loads only the current account's bound, eligible avatar.
 type AvatarReader interface {
-	AvatarTransaction(context.Context, identityapp.Principal, func() time.Time, func(domain.MediaAsset) error) error
+	AvatarTransaction(context.Context, Actor, func() time.Time, func(domain.MediaAsset) error) error
 }
 
 // AvatarPreview contains a short-lived private URL without exposing its object key.
@@ -308,7 +307,7 @@ func NewRoutedAvatarQuery(reader AvatarReader, signer ObjectSigner, now func() t
 }
 
 // Read grants a configured preview lease for the currently bound avatar.
-func (q *AvatarQuery) Read(ctx context.Context, a identityapp.Principal) (AvatarPreview, error) {
+func (q *AvatarQuery) Read(ctx context.Context, a Actor) (AvatarPreview, error) {
 	if q == nil || q.reader == nil || q.signer == nil || q.now == nil || q.ttl < time.Second || q.ttl > 15*time.Minute {
 		return AvatarPreview{}, ErrUnavailable
 	}

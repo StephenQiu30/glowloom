@@ -18,17 +18,16 @@ import (
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type editorAccess struct{ tx *gorm.DB }
 
-func (a editorAccess) AuthorizeDraft(ctx context.Context, actor identityapp.Principal, p uuid.UUID, write bool) error {
-	_, err := operationProjectContentAccess(a.tx).Authorize(ctx, actor, p, write)
+func (a editorAccess) AuthorizeDraft(ctx context.Context, actor promptapp.Actor, p uuid.UUID, write bool) error {
+	_, err := operationProjectContentAccess(a.tx).Authorize(ctx, operationPromptIdentity(actor), p, write)
 	return err
 }
-func editorDraftStore(db *gorm.DB) *pgprompt.DraftStore {
-	return pgprompt.NewDraftStore(db, func(tx *gorm.DB) promptapp.DraftAccess { return editorAccess{tx} })
+func editorDraftStore(db *gorm.DB) *operationEditorPromptStore {
+	return &operationEditorPromptStore{DraftStore: pgprompt.NewDraftStore(db, func(tx *gorm.DB) promptapp.DraftAccess { return editorAccess{tx} })}
 }
 func editorOperationStore(db *gorm.DB) *pgoperation.Store {
 	return pgoperation.NewScopedStoreWithEditor(db, nil, func(tx *gorm.DB) operationapp.EditorSnapshots { return editorDraftStore(tx) }, operationRequestAccess, operationWorkerAccess, operationPlatformAccess).WithExecutionAvailability(fixtureExecutionAvailability)

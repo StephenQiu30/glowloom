@@ -14,6 +14,8 @@ var ErrInvalidSettlement = errors.New("invalid operation settlement")
 // SettleInput contains frozen facts supplied by the operation transaction
 // coordinator. The caller owns the transaction and the terminal state write.
 type SettleInput struct {
+	// OrganizationID is the immutable Creation reporting receipt, never inferred from scope.
+	OrganizationID   uuid.UUID
 	ProjectID        uuid.UUID
 	OperationID      uuid.UUID
 	ActualCostMicros int64

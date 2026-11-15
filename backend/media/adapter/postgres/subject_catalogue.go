@@ -10,7 +10,6 @@ import (
 
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -63,7 +62,7 @@ func (r subjectCatalogueRow) item() (application.SubjectSourceItem, error) {
 
 // subjectSourceOperations combines immutable receipts written by prompt submission
 // and quote creation. The confirming actor is deliberately not an ownership source.
-func subjectSourceOperations(tx *gorm.DB, actor identity.Principal) *gorm.DB {
+func subjectSourceOperations(tx *gorm.DB, actor application.Actor) *gorm.DB {
 	promptSubmissions := tx.Table("operation.prompt_submission AS ps").
 		Select("ps.operation_id::text AS operation_id").
 		Joins("JOIN operation.operation AS submitted ON submitted.id = ps.operation_id AND submitted.project_id = ps.project_id").
@@ -81,7 +80,7 @@ func subjectSourceOperations(tx *gorm.DB, actor identity.Principal) *gorm.DB {
 	return tx.Table("(?) AS source_operation_ids", gorm.Expr("(?) UNION (?) UNION (?)", promptSubmissions, quoteOperation, quoteItems))
 }
 
-func subjectCatalogue(tx *gorm.DB, actor, personal identity.Principal, library uuid.UUID) *gorm.DB {
+func subjectCatalogue(tx *gorm.DB, actor, personal application.Actor, library uuid.UUID) *gorm.DB {
 	personalEntries := tx.Table("(?) AS entries", libraryEntries(tx, personal, domain.LibraryScope{Kind: domain.LibraryPersonal}, library)).
 		Select("entries.asset_id AS id, ? AS source, NULL::uuid AS project_id, entries.revision, entries.favorite, false AS upscaled, entries.title, entries.kind, entries.create_time, entries.update_time, entries.asset_facts, concat_ws(' ', entries.title, entries.note, entries.source_label, entries.tags::text) AS search_text", application.SubjectSourcePersonalAsset).
 		Where("entries.asset_id IS NOT NULL AND entries.catalog_state = ?", domain.LibraryItemStateActive).
@@ -138,7 +137,7 @@ func filterSubjectCatalogue(query *gorm.DB, input application.SubjectCatalogueQu
 	return query
 }
 
-func (s *SubjectCatalogueStore) read(ctx context.Context, actor identity.Principal, consume func(*gorm.DB, identity.Principal, uuid.UUID) error) error {
+func (s *SubjectCatalogueStore) read(ctx context.Context, actor application.Actor, consume func(*gorm.DB, application.Actor, uuid.UUID) error) error {
 	if s == nil || s.db == nil || s.library == nil || s.actors == nil {
 		return application.ErrUnavailable
 	}
@@ -168,7 +167,7 @@ func (s *SubjectCatalogueStore) read(ctx context.Context, actor identity.Princip
 	})
 }
 
-func (s *SubjectCatalogueStore) projects(ctx context.Context, tx, query *gorm.DB, actor identity.Principal) error {
+func (s *SubjectCatalogueStore) projects(ctx context.Context, tx, query *gorm.DB, actor application.Actor) error {
 	var projects []uuid.UUID
 	if err := query.Where("project_id IS NOT NULL").Distinct("project_id").Order("project_id").Pluck("project_id", &projects).Error; err != nil {
 		return fmt.Errorf("read subject source projects: %w", err)
@@ -182,12 +181,12 @@ func (s *SubjectCatalogueStore) projects(ctx context.Context, tx, query *gorm.DB
 }
 
 // List authorizes and filters both owning sources before count and stable paging.
-func (s *SubjectCatalogueStore) List(ctx context.Context, actor identity.Principal, input application.SubjectCatalogueQuery) (application.SubjectSourcePage, error) {
+func (s *SubjectCatalogueStore) List(ctx context.Context, actor application.Actor, input application.SubjectCatalogueQuery) (application.SubjectSourcePage, error) {
 	if err := input.Validate(); err != nil {
 		return application.SubjectSourcePage{}, err
 	}
 	var page application.SubjectSourcePage
-	err := s.read(ctx, actor, func(tx *gorm.DB, personal identity.Principal, library uuid.UUID) error {
+	err := s.read(ctx, actor, func(tx *gorm.DB, personal application.Actor, library uuid.UUID) error {
 		page = application.SubjectSourcePage{CurrentActorID: actor.ID, CurrentScopeID: actor.ScopeID, Items: []application.SubjectSourceItem{}, Page: input.Page, PageSize: input.PageSize, Capabilities: application.SubjectSourceCapabilities{UpscaledFilter: true}}
 		if err := s.projects(ctx, tx, filterSubjectCatalogue(subjectCatalogue(tx, actor, personal, library), input), actor); err != nil {
 			return err
@@ -221,12 +220,12 @@ func (s *SubjectCatalogueStore) List(ctx context.Context, actor identity.Princip
 }
 
 // Detail resolves only one source ID under fresh initiator and owner authority.
-func (s *SubjectCatalogueStore) Detail(ctx context.Context, actor identity.Principal, id uuid.UUID) (application.SubjectSourceItem, error) {
+func (s *SubjectCatalogueStore) Detail(ctx context.Context, actor application.Actor, id uuid.UUID) (application.SubjectSourceItem, error) {
 	if id == uuid.Nil {
 		return application.SubjectSourceItem{}, application.ErrNotFound
 	}
 	var item application.SubjectSourceItem
-	err := s.read(ctx, actor, func(tx *gorm.DB, personal identity.Principal, library uuid.UUID) error {
+	err := s.read(ctx, actor, func(tx *gorm.DB, personal application.Actor, library uuid.UUID) error {
 		var rows []subjectCatalogueRow
 		if err := subjectCatalogue(tx, actor, personal, library).Where("id = ?", id).Limit(2).Find(&rows).Error; err != nil {
 			return fmt.Errorf("read subject source: %w", err)
@@ -255,7 +254,7 @@ var _ application.SubjectCatalogue = (*SubjectCatalogueStore)(nil)
 // Catalogue metadata IDs are not media identities. This reader is composed
 // only behind SubjectLibrary's source proof and does not
 // alter ordinary media routes or infer generation ownership from project access.
-func (s *SubjectCatalogueStore) FindLibraryMedia(ctx context.Context, actor identity.Principal, scope domain.LibraryScope, id uuid.UUID) (application.LibraryMediaFile, error) {
+func (s *SubjectCatalogueStore) FindLibraryMedia(ctx context.Context, actor application.Actor, scope domain.LibraryScope, id uuid.UUID) (application.LibraryMediaFile, error) {
 	if s == nil || s.library == nil || id == uuid.Nil {
 		return application.LibraryMediaFile{}, application.ErrNotFound
 	}

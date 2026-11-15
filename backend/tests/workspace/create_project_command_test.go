@@ -10,11 +10,17 @@ import (
 
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
@@ -39,12 +45,12 @@ func (s *createProjectCommandStore) CreateProjectWithEvents(_ context.Context, a
 	return project, nil
 }
 
-func (s *createProjectCommandStore) CreateProjectIdempotently(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent, _ workspaceapp.ProjectCreationRequest) (domain.Project, error) {
+func (s *createProjectCommandStore) CreateProjectIdempotently(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent, _ workspacesource.ProjectCreationRequest) (domain.Project, error) {
 	return s.CreateProjectWithEvents(ctx, actor, project, events)
 }
 
-func createProjectCommandInput() workspaceapp.CreateProjectInput {
-	return workspaceapp.CreateProjectInput{
+func createProjectCommandInput() workspacesource.CreateProjectInput {
+	return workspacesource.CreateProjectInput{
 		Name: " 逆光 ", Description: "短剧项目", AspectRatio: "16:9",
 		StyleType: "stylized", StyleSubtype: "guofeng_xianxia",
 		StylePresetID: uuid.New(), RequestID: uuid.NewString(),
@@ -147,21 +153,21 @@ func TestCreateProjectCommandRejectsInvalidCallerAndInputBeforeStorage(t *testin
 	for _, tc := range []struct {
 		name   string
 		actor  identityapp.Principal
-		change func(*workspaceapp.CreateProjectInput)
+		change func(*workspacesource.CreateProjectInput)
 		want   error
 	}{
 		{"missing actor", identityapp.Principal{OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, nil, identityapp.ErrForbidden},
 		{"missing organization", identityapp.Principal{ID: actor.ID, Role: identitydomain.RoleProducer}, nil, identityapp.ErrForbidden},
 		{"missing session and scope", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID}, nil, identityapp.ErrForbidden},
-		{"blank name", actor, func(v *workspaceapp.CreateProjectInput) { v.Name = " \t" }, workspaceapp.ErrInvalidCreateProject},
-		{"long name", actor, func(v *workspaceapp.CreateProjectInput) { v.Name = strings.Repeat("剧", 51) }, workspaceapp.ErrInvalidCreateProject},
-		{"invalid aspect", actor, func(v *workspaceapp.CreateProjectInput) { v.AspectRatio = "2:3" }, workspaceapp.ErrInvalidCreateProject},
-		{"stylized without subtype", actor, func(v *workspaceapp.CreateProjectInput) { v.StyleSubtype = "" }, workspaceapp.ErrInvalidCreateProject},
-		{"realistic with subtype", actor, func(v *workspaceapp.CreateProjectInput) { v.StyleType = "realistic" }, workspaceapp.ErrInvalidCreateProject},
-		{"invalid subtype", actor, func(v *workspaceapp.CreateProjectInput) { v.StyleSubtype = "other" }, workspaceapp.ErrInvalidCreateProject},
-		{"missing request ID", actor, func(v *workspaceapp.CreateProjectInput) { v.RequestID = "" }, workspaceapp.ErrInvalidCreateProject},
-		{"invalid request ID", actor, func(v *workspaceapp.CreateProjectInput) { v.RequestID = "not-a-uuid" }, workspaceapp.ErrInvalidCreateProject},
-		{"nil request ID", actor, func(v *workspaceapp.CreateProjectInput) { v.RequestID = uuid.Nil.String() }, workspaceapp.ErrInvalidCreateProject},
+		{"blank name", actor, func(v *workspacesource.CreateProjectInput) { v.Name = " \t" }, workspacesource.ErrInvalidCreateProject},
+		{"long name", actor, func(v *workspacesource.CreateProjectInput) { v.Name = strings.Repeat("剧", 51) }, workspacesource.ErrInvalidCreateProject},
+		{"invalid aspect", actor, func(v *workspacesource.CreateProjectInput) { v.AspectRatio = "2:3" }, workspacesource.ErrInvalidCreateProject},
+		{"stylized without subtype", actor, func(v *workspacesource.CreateProjectInput) { v.StyleSubtype = "" }, workspacesource.ErrInvalidCreateProject},
+		{"realistic with subtype", actor, func(v *workspacesource.CreateProjectInput) { v.StyleType = "realistic" }, workspacesource.ErrInvalidCreateProject},
+		{"invalid subtype", actor, func(v *workspacesource.CreateProjectInput) { v.StyleSubtype = "other" }, workspacesource.ErrInvalidCreateProject},
+		{"missing request ID", actor, func(v *workspacesource.CreateProjectInput) { v.RequestID = "" }, workspacesource.ErrInvalidCreateProject},
+		{"invalid request ID", actor, func(v *workspacesource.CreateProjectInput) { v.RequestID = "not-a-uuid" }, workspacesource.ErrInvalidCreateProject},
+		{"nil request ID", actor, func(v *workspacesource.CreateProjectInput) { v.RequestID = uuid.Nil.String() }, workspacesource.ErrInvalidCreateProject},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &createProjectCommandStore{}
@@ -177,7 +183,7 @@ func TestCreateProjectCommandRejectsInvalidCallerAndInputBeforeStorage(t *testin
 	}
 	store := &createProjectCommandStore{}
 	_, err := workspaceapp.NewCreateProjectCommand(store, func() time.Time { return time.Time{} }).Execute(t.Context(), actor, valid)
-	if !errors.Is(err, workspaceapp.ErrInvalidCreateProject) || store.called != 0 {
+	if !errors.Is(err, workspacesource.ErrInvalidCreateProject) || store.called != 0 {
 		t.Fatalf("zero clock reached store: err=%v writes=%d", err, store.called)
 	}
 }

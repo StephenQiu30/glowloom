@@ -1361,11 +1361,10 @@ function EditorWorkspace({
       <PromptEditor
         inputGroup={compact}
         editable={!suspended && (!frozen || session?.composing === true)}
-        className={
-          compact
-            ? "max-h-80 min-h-16 overflow-y-auto"
-            : "max-h-80 min-h-24 overflow-y-auto"
-        }
+        className={cn(
+          compact ? "min-h-16" : "min-h-24",
+          presentation !== "canvas" && "max-h-80 overflow-y-auto",
+        )}
         placeholder={
           seed.creationType === "music"
             ? draft.mode === "music_song" &&
@@ -2073,7 +2072,7 @@ function EditorWorkspace({
             <div
               className={cn(
                 presentation === "home" ? "creation-ready-body" : "min-w-0",
-                full &&
+                (full || presentation === "canvas") &&
                   presentation !== "home" &&
                   "flex min-h-0 flex-1 flex-col",
               )}
@@ -2106,8 +2105,10 @@ function EditorWorkspace({
                   presentation === "home"
                     ? "creation-ready-prompt"
                     : "min-h-20 w-full flex-1 px-4 py-2 [&_.tiptap]:min-h-16 [&_.tiptap]:outline-none",
+                  presentation === "canvas" &&
+                    "max-h-80 min-h-0 [scrollbar-width:none] overflow-y-auto overscroll-contain",
                   full &&
-                    "min-h-0 flex-1 overflow-y-auto [&_.tiptap]:max-h-none [&_.tiptap]:min-h-full [&_.tiptap]:overflow-visible",
+                    "max-h-none min-h-0 flex-1 overflow-y-auto [&_.tiptap]:max-h-none [&_.tiptap]:min-h-full [&_.tiptap]:overflow-visible",
                 )}
               >
                 {promptControl}

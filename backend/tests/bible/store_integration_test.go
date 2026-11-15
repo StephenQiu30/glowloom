@@ -78,7 +78,7 @@ func bibleActorProject(t *testing.T, owner *gorm.DB) (identityapp.Principal, uui
 }
 
 func bibleStore(db *gorm.DB) *pg.Store {
-	return pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }})
+	return pg.NewStore(db, pg.Factories{Access: bibleFixtureContentAccess})
 }
 
 func createCharacter(project uuid.UUID) app.Command {
@@ -89,42 +89,42 @@ func TestBiblePGNoSeedImmutableVersionsPermanentReplayAndCAS(t *testing.T) {
 	db, owner := bibleTestDB(t)
 	actor, project := bibleActorProject(t, owner)
 	service := app.NewService(bibleStore(db), time.Now)
-	page, err := service.List(t.Context(), actor, app.ListInput{ProjectID: project, Kind: domain.KindCharacter})
+	page, err := service.List(t.Context(), bibleActor(actor), app.ListInput{ProjectID: project, Kind: domain.KindCharacter})
 	if err != nil || len(page.Entries) != 0 || page.CurrentActorID != actor.ID {
 		t.Fatal("empty read", page, err)
 	}
 	input := createCharacter(project)
-	first, err := service.Change(t.Context(), actor, input)
+	first, err := service.Change(t.Context(), bibleActor(actor), input)
 	if err != nil || first.Revision != 1 || first.VersionNumber != 1 || first.ProjectRevision != 2 {
 		t.Fatal("create", first, err)
 	}
-	detail, err := service.Find(t.Context(), actor, project, domain.KindCharacter, first.EntryID)
+	detail, err := service.Find(t.Context(), bibleActor(actor), project, domain.KindCharacter, first.EntryID)
 	if err != nil || detail.Current.Character.Name != "王总" || len(detail.Current.Character.Looks) != 1 || !detail.Current.Character.Looks[0].Default {
 		t.Fatal("detail", detail, err)
 	}
 	update := app.Command{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Kind: domain.KindCharacter, Action: "update", EntryID: first.EntryID, ExpectedRevision: 1, Character: &app.CharacterInput{Name: "王总", Description: "  新设定\n正文  ", Aliases: []string{"小王"}}}
-	second, err := service.Change(t.Context(), actor, update)
+	second, err := service.Change(t.Context(), bibleActor(actor), update)
 	if err != nil || second.VersionNumber != 2 || second.VersionID == first.VersionID || second.Revision != 2 {
 		t.Fatal("update", second, err)
 	}
-	old, err := service.Version(t.Context(), actor, project, domain.KindCharacter, first.EntryID, first.VersionID)
+	old, err := service.Version(t.Context(), bibleActor(actor), project, domain.KindCharacter, first.EntryID, first.VersionID)
 	if err != nil || old.Character.Description != "" {
 		t.Fatal("history rewritten", old, err)
 	}
-	replay, err := app.NewService(bibleStore(db), time.Now).Change(t.Context(), actor, input)
+	replay, err := app.NewService(bibleStore(db), time.Now).Change(t.Context(), bibleActor(actor), input)
 	if err != nil || replay != first {
 		t.Fatal("permanent receipt", replay, err)
 	}
 	input.Character.Name = "different"
-	if _, err := service.Change(t.Context(), actor, input); !errors.Is(err, app.ErrIdempotencyConflict) {
+	if _, err := service.Change(t.Context(), bibleActor(actor), input); !errors.Is(err, app.ErrIdempotencyConflict) {
 		t.Fatal("same key changed input", err)
 	}
 	update.Key = uuid.New()
-	if _, err := service.Change(t.Context(), actor, update); !errors.Is(err, app.ErrConflict) {
+	if _, err := service.Change(t.Context(), bibleActor(actor), update); !errors.Is(err, app.ErrConflict) {
 		t.Fatal("stale", err)
 	}
 	confirmation := app.Command{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: 2}
-	confirmed, err := service.Change(t.Context(), actor, confirmation)
+	confirmed, err := service.Change(t.Context(), bibleActor(actor), confirmation)
 	if err != nil || confirmed.Revision != 3 || confirmed.ConfirmedVersionID == nil || *confirmed.ConfirmedVersionID != second.VersionID {
 		t.Fatal("confirmation", confirmed, err)
 	}
@@ -134,7 +134,7 @@ func TestBiblePGNoSeedImmutableVersionsPermanentReplayAndCAS(t *testing.T) {
 	if err := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(t.Context(), actor, confirmation); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, err := service.Change(t.Context(), bibleActor(actor), confirmation); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("replay bypassed live actor", err)
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -304,7 +303,7 @@ func (r *IngestRepository) authorizeOperation(tx *gorm.DB, id uuid.UUID, write b
 	if read.Error != nil {
 		return read.Error
 	}
-	return r.requireProject(tx, identityapp.Principal{ID: *row.ConfirmedBy, OrgID: row.OrgID}, row.ProjectID, write)
+	return r.requireProject(tx, application.Actor{ID: *row.ConfirmedBy, OrgID: row.OrgID}, row.ProjectID, write)
 }
 
 // LoadOperation authorizes the durable confirming actor before any object I/O.

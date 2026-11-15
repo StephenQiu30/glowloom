@@ -6,12 +6,16 @@ import (
 	"errors"
 	"time"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -20,7 +24,7 @@ type scopeActorAccess struct{ store *pgidentity.Store }
 func (a scopeActorAccess) CheckActive(ctx context.Context, id uuid.UUID) error {
 	err := a.store.CheckActive(ctx, id)
 	if errors.Is(err, identityapp.ErrForbidden) {
-		return workspaceapp.ErrScopeNotFound
+		return workspacesource.ErrScopeNotFound
 	}
 	return err
 }

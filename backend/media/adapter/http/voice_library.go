@@ -6,18 +6,19 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // VoiceLibraryHandler exposes private reference management without provider calls.
-type VoiceLibraryHandler struct{ library application.VoiceLibrary }
+type VoiceLibraryHandler struct {
+	resolve ActorResolver
+	library application.VoiceLibrary
+}
 
 // NewVoiceLibraryHandler injects the transaction-owning voice library.
-func NewVoiceLibraryHandler(library application.VoiceLibrary) *VoiceLibraryHandler {
-	return &VoiceLibraryHandler{library: library}
+func NewVoiceLibraryHandler(library application.VoiceLibrary, resolve ActorResolver) *VoiceLibraryHandler {
+	return &VoiceLibraryHandler{resolve: resolve, library: library}
 }
 
 // Register installs authenticated project routes.
@@ -41,7 +42,7 @@ func voiceResponse(c *gin.Context, value any, err error) {
 		status, code = 404, "voice_not_found"
 	case errors.Is(err, application.ErrVoiceConflict):
 		status, code = 409, "voice_revision_conflict"
-	case errors.Is(err, identity.ErrForbidden):
+	case errors.Is(err, application.ErrForbidden):
 		status, code = 403, "forbidden"
 	}
 	httpapi.WriteProblem(c, status, code, nil)
@@ -57,6 +58,11 @@ func voiceResponse(c *gin.Context, value any, err error) {
 // @Success 200 {object} application.VoicePage
 // @Router /api/projects/{pid}/voice-library [get]
 func (h *VoiceLibraryHandler) list(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -70,7 +76,7 @@ func (h *VoiceLibraryHandler) list(c *gin.Context) {
 			return
 		}
 	}
-	out, err := h.library.ListVoices(c.Request.Context(), identityhttp.Principal(c), pid, cursor)
+	out, err := h.library.ListVoices(c.Request.Context(), actor, pid, cursor)
 	voiceResponse(c, out, err)
 }
 
@@ -85,6 +91,11 @@ func (h *VoiceLibraryHandler) list(c *gin.Context) {
 // @Success 200 {object} application.VoiceProfile
 // @Router /api/projects/{pid}/voice-library [post]
 func (h *VoiceLibraryHandler) create(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -93,7 +104,7 @@ func (h *VoiceLibraryHandler) create(c *gin.Context) {
 	if !httpapi.Decode(c, &in) {
 		return
 	}
-	out, err := h.library.CreateVoice(c.Request.Context(), identityhttp.Principal(c), pid, in)
+	out, err := h.library.CreateVoice(c.Request.Context(), actor, pid, in)
 	voiceResponse(c, out, err)
 }
 
@@ -109,6 +120,11 @@ func (h *VoiceLibraryHandler) create(c *gin.Context) {
 // @Success 200 {object} application.VoiceProfile
 // @Router /api/projects/{pid}/voice-library/{vid} [patch]
 func (h *VoiceLibraryHandler) update(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -121,7 +137,7 @@ func (h *VoiceLibraryHandler) update(c *gin.Context) {
 	if !httpapi.Decode(c, &in) {
 		return
 	}
-	out, err := h.library.UpdateVoice(c.Request.Context(), identityhttp.Principal(c), pid, id, in)
+	out, err := h.library.UpdateVoice(c.Request.Context(), actor, pid, id, in)
 	voiceResponse(c, out, err)
 }
 
@@ -134,11 +150,16 @@ func (h *VoiceLibraryHandler) update(c *gin.Context) {
 // @Success 200 {array} application.SystemVoice
 // @Router /api/projects/{pid}/system-voices [get]
 func (h *VoiceLibraryHandler) system(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	out, err := h.library.ListSystemVoices(c.Request.Context(), identityhttp.Principal(c), pid)
+	out, err := h.library.ListSystemVoices(c.Request.Context(), actor, pid)
 	voiceResponse(c, out, err)
 }
 
@@ -154,6 +175,11 @@ func (h *VoiceLibraryHandler) system(c *gin.Context) {
 // @Success 200 {object} VoiceFavoriteRequest
 // @Router /api/projects/{pid}/system-voices/{speaker}/favorite [put]
 func (h *VoiceLibraryHandler) favorite(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
@@ -162,7 +188,7 @@ func (h *VoiceLibraryHandler) favorite(c *gin.Context) {
 	if !httpapi.Decode(c, &in) {
 		return
 	}
-	err := h.library.FavoriteSystemVoice(c.Request.Context(), identityhttp.Principal(c), pid, c.Param("speaker"), in.Favorite)
+	err := h.library.FavoriteSystemVoice(c.Request.Context(), actor, pid, c.Param("speaker"), in.Favorite)
 	voiceResponse(c, in, err)
 }
 

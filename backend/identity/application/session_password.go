@@ -2,8 +2,6 @@ package application
 
 import (
 	"context"
-	"math"
-	"time"
 
 	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 )
@@ -37,6 +35,9 @@ func (a *Auth) ReauthenticateCurrent(ctx context.Context, actor Principal, passw
 
 // ChangePasswordCurrent rotates credentials and this device atomically.
 func (a *Auth) ChangePasswordCurrent(ctx context.Context, actor Principal, epoch int64, current, next, confirmation string) (AuthResult, error) {
+	if a.passwordChanges != nil {
+		return AuthResult{}, ErrPasswordChangeUnavailable
+	}
 	if !a.emailReady() {
 		return AuthResult{}, ErrRegistrationUnavailable
 	}
@@ -78,28 +79,8 @@ func (a *Auth) ChangePasswordCurrent(ctx context.Context, actor Principal, epoch
 		if err != nil {
 			return err
 		}
-		if u.SessionEpoch >= math.MaxInt32 || u.Revision >= math.MaxInt32 {
-			return domain.ErrInvalidAccountState
-		}
-		u.PasswordHash = h
-		u.SessionEpoch++
-		u.Revision++
-		u.MustChangePassword = false
-		u.PasswordChangedAt = now
-		if err = tx.UpdateAccount(u); err != nil {
-			return err
-		}
-		if err = tx.RevokeAccountSessions(u.ID, now); err != nil {
-			return err
-		}
-		result, err = a.newSession(tx, u, s.Persistent, now)
-		if err != nil {
-			return err
-		}
-		if err = tx.AppendAuthEvent(u.ID, "password_changed", now); err != nil {
-			return err
-		}
-		return a.queueEmail(tx, "password_changed", u.Email, map[string]string{}, now, now.Add(24*time.Hour))
+		result, err = a.replacePassword(tx, u, s.Persistent, h, now)
+		return err
 	})
 	if err != nil {
 		return AuthResult{}, err

@@ -17,7 +17,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -35,7 +34,7 @@ func libraryCommandLock(tx *gorm.DB, actor, key uuid.UUID) error {
 	return lockStorageIdempotencyKey(tx, storageIdempotencyLibrary, actor, key)
 }
 
-func libraryReplay(tx *gorm.DB, actor identityapp.Principal, c application.LibraryCommand, hash string) (*application.LibraryReceipt, error) {
+func libraryReplay(tx *gorm.DB, actor application.Actor, c application.LibraryCommand, hash string) (*application.LibraryReceipt, error) {
 	var row libraryCommandRecord
 	read := tx.Where(map[string]any{"actor_id": actor.ID, "idem_key": c.Key}).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
@@ -64,7 +63,7 @@ func sameScopeProject(a, b *uuid.UUID) bool {
 // ApplyLibraryCommand checks current authorization before permanent replay. New
 // acceptance takes project then library locks; a read replay uses a separate
 // transaction so two producers never upgrade competing project share locks.
-func (s *LibraryStore) ApplyLibraryCommand(ctx context.Context, actor identityapp.Principal, c application.LibraryCommand) (application.LibraryReceipt, error) {
+func (s *LibraryStore) ApplyLibraryCommand(ctx context.Context, actor application.Actor, c application.LibraryCommand) (application.LibraryReceipt, error) {
 	if s == nil || s.db == nil {
 		return application.LibraryReceipt{}, application.ErrUnavailable
 	}
@@ -194,7 +193,7 @@ func libraryFolderExists(folders []domain.LibraryFolder, id *uuid.UUID) bool {
 	return id == nil || slices.ContainsFunc(folders, func(f domain.LibraryFolder) bool { return f.ID == *id })
 }
 
-func applyLibraryFolder(tx *gorm.DB, actor identityapp.Principal, c application.LibraryCommand, library uuid.UUID, folders []domain.LibraryFolder, now time.Time, result *application.LibraryReceipt) error {
+func applyLibraryFolder(tx *gorm.DB, actor application.Actor, c application.LibraryCommand, library uuid.UUID, folders []domain.LibraryFolder, now time.Time, result *application.LibraryReceipt) error {
 	var folder domain.LibraryFolder
 	if c.Action == application.LibraryActionCreateFolder {
 		if len(folders) >= 4096 {
@@ -289,7 +288,7 @@ func (r libraryItemRow) item() (domain.LibraryItem, error) {
 	return i, nil
 }
 
-func lockLibraryItems(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, library uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]domain.LibraryItem, error) {
+func lockLibraryItems(tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, library uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]domain.LibraryItem, error) {
 	if err := requireNoPurgeReservation(tx, ids); err != nil {
 		return nil, err
 	}
@@ -401,7 +400,7 @@ func persistLibraryItem(tx *gorm.DB, item domain.LibraryItem, previous int64) er
 	return requireOne(tx.Model(&libraryItemRow{}).Where(map[string]any{"id": item.ID, "library_id": item.LibraryID, "revision": previous}).Updates(values), application.ErrLibraryConflict)
 }
 
-func applyLibraryItems(tx *gorm.DB, actor identityapp.Principal, c application.LibraryCommand, library uuid.UUID, folders []domain.LibraryFolder, now time.Time, result *application.LibraryReceipt) error {
+func applyLibraryItems(tx *gorm.DB, actor application.Actor, c application.LibraryCommand, library uuid.UUID, folders []domain.LibraryFolder, now time.Time, result *application.LibraryReceipt) error {
 	var targets []application.LibraryItemRevision
 	switch {
 	case c.Action == application.LibraryActionCreateText:

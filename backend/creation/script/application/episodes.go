@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // VersionHead contains only current split selection; immutable confirmations retain history.
@@ -84,14 +83,14 @@ type StructureReceipt struct {
 
 // EpisodeStore owns scoped split/structure transactions and immutable receipts.
 type EpisodeStore interface {
-	ReplaySplit(context.Context, identityapp.Principal, SplitCommand, string) (*SplitReceipt, error)
-	ReplayStructure(context.Context, identityapp.Principal, StructureCommand, string) (*StructureReceipt, error)
-	Episodes(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (EpisodeView, error)
-	Resplit(context.Context, identityapp.Principal, SplitCommand, domain.SplitResult, time.Time) (SplitReceipt, error)
-	ConfirmSplit(context.Context, identityapp.Principal, SplitCommand, time.Time) (SplitReceipt, error)
-	Episode(context.Context, identityapp.Principal, uuid.UUID) (domain.Episode, error)
-	SaveStructure(context.Context, identityapp.Principal, StructureCommand, time.Time) (StructureReceipt, error)
-	ConfirmStructure(context.Context, identityapp.Principal, StructureCommand, time.Time) (StructureReceipt, error)
+	ReplaySplit(context.Context, Actor, SplitCommand, string) (*SplitReceipt, error)
+	ReplayStructure(context.Context, Actor, StructureCommand, string) (*StructureReceipt, error)
+	Episodes(context.Context, Actor, uuid.UUID, uuid.UUID) (EpisodeView, error)
+	Resplit(context.Context, Actor, SplitCommand, domain.SplitResult, time.Time) (SplitReceipt, error)
+	ConfirmSplit(context.Context, Actor, SplitCommand, time.Time) (SplitReceipt, error)
+	Episode(context.Context, Actor, uuid.UUID) (domain.Episode, error)
+	SaveStructure(context.Context, Actor, StructureCommand, time.Time) (StructureReceipt, error)
+	ConfirmStructure(context.Context, Actor, StructureCommand, time.Time) (StructureReceipt, error)
 }
 
 // EpisodeService executes actual rules/manual review without a placeholder model runner.
@@ -107,7 +106,7 @@ func NewEpisodeService(store EpisodeStore, sources *SourceService, now func() ti
 }
 
 // VersionText fetches and proves the canonical immutable version body.
-func (s *SourceService) VersionText(ctx context.Context, actor identityapp.Principal, project, version uuid.UUID) (string, error) {
+func (s *SourceService) VersionText(ctx context.Context, actor Actor, project, version uuid.UUID) (string, error) {
 	if s == nil || s.store == nil || s.objects == nil {
 		return "", ErrUnavailable
 	}
@@ -126,7 +125,7 @@ func (s *SourceService) VersionText(ctx context.Context, actor identityapp.Princ
 }
 
 // Episodes returns only current authorized candidate/formal facts of this immutable version.
-func (s *EpisodeService) Episodes(ctx context.Context, actor identityapp.Principal, project, version uuid.UUID) (EpisodeView, error) {
+func (s *EpisodeService) Episodes(ctx context.Context, actor Actor, project, version uuid.UUID) (EpisodeView, error) {
 	if s == nil || s.store == nil {
 		return EpisodeView{}, ErrUnavailable
 	}
@@ -138,7 +137,7 @@ func validSplitCommand(input SplitCommand) bool {
 }
 
 // Resplit reads actual canonical bytes; it cannot label a model response as rules.
-func (s *EpisodeService) Resplit(ctx context.Context, actor identityapp.Principal, input SplitCommand) (SplitReceipt, error) {
+func (s *EpisodeService) Resplit(ctx context.Context, actor Actor, input SplitCommand) (SplitReceipt, error) {
 	if s == nil || s.store == nil || s.sources == nil || s.now == nil {
 		return SplitReceipt{}, ErrUnavailable
 	}
@@ -164,7 +163,7 @@ func (s *EpisodeService) Resplit(ctx context.Context, actor identityapp.Principa
 }
 
 // ConfirmSplit retains a complete reviewed boundary/identity history.
-func (s *EpisodeService) ConfirmSplit(ctx context.Context, actor identityapp.Principal, input SplitCommand) (SplitReceipt, error) {
+func (s *EpisodeService) ConfirmSplit(ctx context.Context, actor Actor, input SplitCommand) (SplitReceipt, error) {
 	if s == nil || s.store == nil || s.now == nil {
 		return SplitReceipt{}, ErrUnavailable
 	}
@@ -182,7 +181,7 @@ func (s *EpisodeService) ConfirmSplit(ctx context.Context, actor identityapp.Pri
 }
 
 // SaveStructure preserves explicit scene/action/dialogue interleaving as a new candidate.
-func (s *EpisodeService) SaveStructure(ctx context.Context, actor identityapp.Principal, input StructureCommand) (StructureReceipt, error) {
+func (s *EpisodeService) SaveStructure(ctx context.Context, actor Actor, input StructureCommand) (StructureReceipt, error) {
 	if s == nil || s.store == nil || s.now == nil {
 		return StructureReceipt{}, ErrUnavailable
 	}
@@ -203,7 +202,7 @@ func (s *EpisodeService) SaveStructure(ctx context.Context, actor identityapp.Pr
 }
 
 // ConfirmStructure publishes only a reviewed current formal structure with owning evidence.
-func (s *EpisodeService) ConfirmStructure(ctx context.Context, actor identityapp.Principal, input StructureCommand) (StructureReceipt, error) {
+func (s *EpisodeService) ConfirmStructure(ctx context.Context, actor Actor, input StructureCommand) (StructureReceipt, error) {
 	if s == nil || s.store == nil || s.now == nil {
 		return StructureReceipt{}, ErrUnavailable
 	}
@@ -223,7 +222,7 @@ func (s *EpisodeService) ConfirmStructure(ctx context.Context, actor identityapp
 	return s.store.ConfirmStructure(ctx, actor, input, s.now().UTC().Truncate(time.Microsecond))
 }
 
-func (s *EpisodeService) proveEpisodeText(ctx context.Context, actor identityapp.Principal, project, episodeID uuid.UUID) error {
+func (s *EpisodeService) proveEpisodeText(ctx context.Context, actor Actor, project, episodeID uuid.UUID) error {
 	if s.sources == nil {
 		return ErrUnavailable
 	}

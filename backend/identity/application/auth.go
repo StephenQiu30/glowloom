@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,6 +54,11 @@ type AuthTx interface {
 type Auth struct {
 	now                func() time.Time
 	email              *emailRuntime
+	registration       *RegistrationPreparationCoordinator
+	activation         *SessionActivations
+	sessionRevocations *PublicSessionRevocations
+	passwordChanges    *PasswordChanges
+	passwordResets     *PasswordResets
 	security           *sessionSecurity
 	legacyUpgradeUntil time.Time
 }
@@ -128,6 +132,9 @@ func (a *Auth) Logout(ctx context.Context, token string, id uuid.UUID) error {
 
 // ChangePassword rotates this device and revokes all previous credential sessions.
 func (a *Auth) ChangePassword(ctx context.Context, token string, revision int64, current, password, confirmation string) (AuthResult, error) {
+	if a.passwordChanges != nil {
+		return AuthResult{}, ErrPasswordChangeUnavailable
+	}
 	if password != confirmation {
 		return AuthResult{}, domain.ErrInvalidProfile
 	}
@@ -154,28 +161,8 @@ func (a *Auth) ChangePassword(ctx context.Context, token string, revision int64,
 		if err != nil {
 			return err
 		}
-		if user.SessionEpoch >= math.MaxInt32 || user.Revision >= math.MaxInt32 {
-			return domain.ErrInvalidAccountState
-		}
-		user.PasswordHash = hash
-		user.SessionEpoch++
-		user.Revision++
-		user.MustChangePassword = false
-		user.PasswordChangedAt = now
-		if err := tx.UpdateAccount(user); err != nil {
-			return err
-		}
-		if err := tx.RevokeAccountSessions(user.ID, now); err != nil {
-			return err
-		}
-		result, err = a.newSession(tx, user, session.Persistent, now)
-		if err != nil {
-			return err
-		}
-		if err := tx.AppendAuthEvent(user.ID, "password_changed", now); err != nil {
-			return err
-		}
-		return a.queueEmail(tx, "password_changed", user.Email, map[string]string{}, now, now.Add(24*time.Hour))
+		result, err = a.replacePassword(tx, user, session.Persistent, hash, now)
+		return err
 	})
 	if err != nil {
 		return AuthResult{}, err

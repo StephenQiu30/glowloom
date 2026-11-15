@@ -73,7 +73,7 @@ func RegisterProvider(ctx context.Context, handlers map[string]taskruntime.Handl
 	voiceExecution := subjectwire.NewVoiceExecutionWithObjects(database, subjectObjects, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, unsealer, doubao.NewSpeech(providerhttp.NewClient(&http.Client{})))
 	handlers[subjecttask.Voice] = subjecttask.VoiceHandler(voiceExecution)
 	results := operationapp.NewRoutedManagedResults(staging.NewRoutedFactory(registry, pgmedia.NewStorageRoutes(database)), store)
-	execution := managedprovider.NewActivities(store, unsealer, providerhttp.NewClient(&http.Client{}), results, managedprovider.NewVideos())
+	execution := managedprovider.NewActivities(store, unsealer, providerhttp.NewClient(&http.Client{}), results, operationwire.NewGeneratedVideos())
 	operationtask.RegisterProvider(handlers, store, execution)
 	if cfg.Env == "local" {
 		handlers[trialtask.Cloud] = trialwire.Cloud(database, unsealer, providerhttp.NewClient(&http.Client{}), registry)

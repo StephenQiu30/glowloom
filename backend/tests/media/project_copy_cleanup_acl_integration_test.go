@@ -55,21 +55,21 @@ func TestProjectCopyCleanupKeepsSourceMetadataAndObjects(t *testing.T) {
 	}
 	repo := mediaCopyStore(database)
 	transfer := mediaapp.NewRoutedProjectCopyTransfer(repo, mediaFixtureCopyObjects(t, database), t.TempDir())
-	if err := transfer.Transfer(fixtureCopyContext(t), actor, binding, snapshot); err != nil {
+	if err := transfer.Transfer(fixtureCopyContext(t), mediaActor(actor), binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), mediaActor(actor), binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	prepareFixtureCopyCleanup(t, libraryOwnerDB(t), binding, snapshot)
-	if err := transfer.Cleanup(t.Context(), actor, binding, snapshot); err != nil {
+	if err := transfer.Cleanup(t.Context(), mediaActor(actor), binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		return mediaCopyStore(tx).FinishCleanup(t.Context(), actor, binding, snapshot)
+		return mediaCopyStore(tx).FinishCleanup(t.Context(), mediaActor(actor), binding, snapshot)
 	}); err != nil {
 		t.Fatal("actual nonowner cleanup", err)
 	}

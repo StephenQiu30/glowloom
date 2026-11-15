@@ -23,7 +23,7 @@ func TestMediaTransferRevokedActorCannotReadReplayRecoverOrPublishUnknownObjects
 		t.Fatal(unknown, err)
 	}
 	key := uuid.New()
-	requested, err := f.repo.ControlTransfer(t.Context(), f.actor, unknown.ID, key, unknown.Revision, "reconcile")
+	requested, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), unknown.ID, key, unknown.Revision, "reconcile")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,10 +36,10 @@ func TestMediaTransferRevokedActorCannotReadReplayRecoverOrPublishUnknownObjects
 		}
 	})
 	checks := []func() error{
-		func() error { _, err := f.repo.GetTransfer(t.Context(), f.actor, unknown.ID); return err },
-		func() error { _, err := f.repo.CreateTransfer(t.Context(), f.actor, f.input); return err },
+		func() error { _, err := f.repo.GetTransfer(t.Context(), mediaActor(f.actor), unknown.ID); return err },
+		func() error { _, err := f.repo.CreateTransfer(t.Context(), mediaActor(f.actor), f.input); return err },
 		func() error {
-			_, err := f.repo.ControlTransfer(t.Context(), f.actor, unknown.ID, key, unknown.Revision, "reconcile")
+			_, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), unknown.ID, key, unknown.Revision, "reconcile")
 			return err
 		},
 		func() error {
@@ -141,10 +141,10 @@ func TestMediaTransferControlZeroRowsRollsBackEveryPermanentReceiptAndState(t *t
 					}
 				})
 				key := uuid.New()
-				if _, err := f.repo.ControlTransfer(t.Context(), f.actor, before.ID, key, before.Revision, action); err == nil {
+				if _, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), before.ID, key, before.Revision, action); err == nil {
 					t.Fatal("zero-row owning write fabricated successful command")
 				}
-				after, err := f.repo.GetTransfer(t.Context(), f.actor, before.ID)
+				after, err := f.repo.GetTransfer(t.Context(), mediaActor(f.actor), before.ID)
 				if err != nil || !reflect.DeepEqual(before, after) {
 					t.Fatal("zero-row command leaked state", after, err)
 				}
@@ -155,7 +155,7 @@ func TestMediaTransferControlZeroRowsRollsBackEveryPermanentReceiptAndState(t *t
 				if err := remove(); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := f.repo.ControlTransfer(t.Context(), f.actor, before.ID, key, before.Revision, action); err != nil {
+				if _, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), before.ID, key, before.Revision, action); err != nil {
 					t.Fatal("rolled-back original key could not be accepted", err)
 				}
 			})

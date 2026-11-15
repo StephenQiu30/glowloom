@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-func replayProjectCreation(tx *gorm.DB, actor identityapp.Principal, request application.ProjectCreationRequest, saved *domain.Project) (bool, error) {
+func replayProjectCreation(tx *gorm.DB, actor identityapp.Principal, request workspacesource.ProjectCreationRequest, saved *domain.Project) (bool, error) {
 	var locked int
 	if err := tx.Raw(`SELECT 1 FROM pg_advisory_xact_lock(69360,hashtext(?))`, actor.ID.String()+":"+request.Key.String()).Scan(&locked).Error; err != nil {
 		return false, fmt.Errorf("lock project creation key: %w", err)
@@ -30,13 +30,13 @@ func replayProjectCreation(tx *gorm.DB, actor identityapp.Principal, request app
 		return false, nil
 	}
 	if row.RequestHash != request.Hash {
-		return false, application.ErrIdempotencyConflict
+		return false, workspacesource.ErrIdempotencyConflict
 	}
 	if err := json.Unmarshal(row.ResponseBody, saved); err != nil {
 		return false, fmt.Errorf("decode project creation receipt: %w", err)
 	}
 	if saved.ID == uuid.Nil || saved.OrgID != actor.OrgID || saved.OwnerID != actor.ID || saved.CanvasID == uuid.Nil {
-		return false, application.ErrInvalidCreateProject
+		return false, workspacesource.ErrInvalidCreateProject
 	}
 	// Recheck visibility even for a replay. Later edits never replace the first
 	// response, but a deleted or moved project cannot be disclosed from a receipt.
@@ -51,7 +51,7 @@ func replayProjectCreation(tx *gorm.DB, actor identityapp.Principal, request app
 	return true, nil
 }
 
-func recordProjectCreation(tx *gorm.DB, actor identityapp.Principal, request application.ProjectCreationRequest, saved domain.Project) error {
+func recordProjectCreation(tx *gorm.DB, actor identityapp.Principal, request workspacesource.ProjectCreationRequest, saved domain.Project) error {
 	body, err := json.Marshal(saved)
 	if err != nil {
 		return fmt.Errorf("encode project creation receipt: %w", err)

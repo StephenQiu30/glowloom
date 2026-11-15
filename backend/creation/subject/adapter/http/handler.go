@@ -4,13 +4,14 @@ package http
 import (
 	"errors"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
@@ -54,7 +55,7 @@ func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalid):
 		status, code = 422, "invalid_request"
-	case errors.Is(err, application.ErrNotFound), errors.Is(err, workspace.ErrScopeNotFound):
+	case errors.Is(err, application.ErrNotFound), errors.Is(err, workspacesource.ErrScopeNotFound):
 		status, code = 404, "not_found"
 	case errors.Is(err, application.ErrConflict):
 		status, code = 409, "revision_conflict"

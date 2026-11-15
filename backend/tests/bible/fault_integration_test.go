@@ -8,9 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 )
 
 func TestBiblePGExactlyOneFaultsRollbackContentReceiptAndWorkspace(t *testing.T) {
@@ -23,7 +24,7 @@ func TestBiblePGExactlyOneFaultsRollbackContentReceiptAndWorkspace(t *testing.T)
 			var initial app.Receipt
 			var err error
 			if table == "bible.character_confirmation" {
-				initial, err = service.Change(t.Context(), actor, input)
+				initial, err = service.Change(t.Context(), bibleActor(actor), input)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -44,7 +45,7 @@ func TestBiblePGExactlyOneFaultsRollbackContentReceiptAndWorkspace(t *testing.T)
 					t.Error(err)
 				}
 			})
-			if _, err := service.Change(t.Context(), actor, input); !errors.Is(err, app.ErrConflict) && (table != "infra.outbox" || !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable)) {
+			if _, err := service.Change(t.Context(), bibleActor(actor), input); !errors.Is(err, app.ErrConflict) && (table != "infra.outbox" || !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable)) {
 				t.Fatal("zero-row accepted", err)
 			}
 			var revision int64
@@ -70,7 +71,7 @@ func TestBiblePGExactlyOneFaultsRollbackContentReceiptAndWorkspace(t *testing.T)
 				t.Fatal("partial identity", heads)
 			}
 			if initial.EntryID != uuid.Nil {
-				detail, err := service.Find(t.Context(), actor, project, domain.KindCharacter, initial.EntryID)
+				detail, err := service.Find(t.Context(), bibleActor(actor), project, domain.KindCharacter, initial.EntryID)
 				if err != nil || detail.Head.Revision != 1 || detail.Head.ConfirmedVersionID != nil {
 					t.Fatal("partial confirmation", detail, err)
 				}
@@ -83,7 +84,7 @@ func TestBiblePGConcurrentCASHasOneVersionAndNoLosingReceipts(t *testing.T) {
 	db, owner := bibleTestDB(t)
 	actor, project := bibleActorProject(t, owner)
 	service := app.NewService(bibleStore(db), time.Now)
-	first, err := service.Change(t.Context(), actor, createCharacter(project))
+	first, err := service.Change(t.Context(), bibleActor(actor), createCharacter(project))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestBiblePGConcurrentCASHasOneVersionAndNoLosingReceipts(t *testing.T) {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			_, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Kind: domain.KindCharacter, Action: "update", EntryID: first.EntryID, ExpectedRevision: 1, Character: &app.CharacterInput{Name: "并发修改"}})
+			_, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Kind: domain.KindCharacter, Action: "update", EntryID: first.EntryID, ExpectedRevision: 1, Character: &app.CharacterInput{Name: "并发修改"}})
 			results <- err
 		}()
 	}
@@ -133,39 +134,39 @@ func TestBiblePGLocationPropAndAppearanceStableIdentityHistory(t *testing.T) {
 		} else {
 			c.Prop = &domain.PropContent{Name: "银色戒指", Description: "刻纹", Prompt: "金属"}
 		}
-		r, err := service.Change(t.Context(), actor, c)
+		r, err := service.Change(t.Context(), bibleActor(actor), c)
 		if err != nil {
 			t.Fatal(kind, err)
 		}
-		if _, err := service.Version(t.Context(), actor, project, kind, r.EntryID, r.VersionID); err != nil {
+		if _, err := service.Version(t.Context(), bibleActor(actor), project, kind, r.EntryID, r.VersionID); err != nil {
 			t.Fatal(err)
 		}
 	}
 	c := createCharacter(project)
-	first, err := service.Change(t.Context(), actor, c)
+	first, err := service.Change(t.Context(), bibleActor(actor), c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	detail, err := service.Find(t.Context(), actor, project, domain.KindCharacter, first.EntryID)
+	detail, err := service.Find(t.Context(), bibleActor(actor), project, domain.KindCharacter, first.EntryID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	originalLook := detail.Current.Character.Looks[0].ID
 	create := app.Command{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Kind: domain.KindCharacter, Action: "look_create", EntryID: first.EntryID, ExpectedRevision: 1, Look: &app.LookInput{Name: "正式服装", Default: true}}
-	second, err := service.Change(t.Context(), actor, create)
+	second, err := service.Change(t.Context(), bibleActor(actor), create)
 	if err != nil {
 		t.Fatal(err)
 	}
-	old, err := service.Version(t.Context(), actor, project, domain.KindCharacter, first.EntryID, first.VersionID)
+	old, err := service.Version(t.Context(), bibleActor(actor), project, domain.KindCharacter, first.EntryID, first.VersionID)
 	if err != nil || !old.Character.Looks[0].Default || old.Character.Looks[0].ID != originalLook {
 		t.Fatal("old look changed", old, err)
 	}
-	current, err := service.Find(t.Context(), actor, project, domain.KindCharacter, first.EntryID)
+	current, err := service.Find(t.Context(), bibleActor(actor), project, domain.KindCharacter, first.EntryID)
 	if err != nil || len(current.Current.Character.Looks) != 2 || current.Current.Character.Looks[0].ID != originalLook || current.Current.Character.Looks[0].Default {
 		t.Fatal("stable looks", current, err)
 	}
 	missing := app.Command{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Kind: domain.KindCharacter, Action: "look_delete", EntryID: first.EntryID, ExpectedRevision: second.Revision, LookID: &originalLook}
-	if _, err := service.Change(t.Context(), actor, missing); !errors.Is(err, app.ErrUnavailable) {
+	if _, err := service.Change(t.Context(), bibleActor(actor), missing); !errors.Is(err, app.ErrUnavailable) {
 		t.Fatal("fabricated downstream impact", err)
 	}
 }

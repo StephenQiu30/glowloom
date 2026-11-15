@@ -11,23 +11,22 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
-func (s *TransferStore) workerActor(tx *gorm.DB, id uuid.UUID) (identityapp.Principal, error) {
+func (s *TransferStore) workerActor(tx *gorm.DB, id uuid.UUID) (application.Actor, error) {
 	var row struct {
 		ActorID, OrgID uuid.UUID
 	}
 	read := tx.Model(&transferJobRow{}).Select("actor_id", "org_id").Where("id = ?", id).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
-		return identityapp.Principal{}, application.ErrNotFound
+		return application.Actor{}, application.ErrNotFound
 	}
 	if read.Error != nil {
-		return identityapp.Principal{}, read.Error
+		return application.Actor{}, read.Error
 	}
-	return identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}, nil
+	return application.Actor{ID: row.ActorID, OrgID: row.OrgID}, nil
 }
 
 func (s *TransferStore) withLease(ctx context.Context, lease application.TransferLease, ended, allowCancel bool, consume func(*gorm.DB, transferJobRow, libraryRow, libraryRow) error) error {
@@ -196,7 +195,7 @@ func readTransferItem(tx *gorm.DB, id uuid.UUID, index int) (transferItemRow, ap
 	return row, item, nil
 }
 
-func validateTransferSource(tx *gorm.DB, actor identityapp.Principal, row transferJobRow, source libraryRow, item application.FrozenTransferItem) error {
+func validateTransferSource(tx *gorm.DB, actor application.Actor, row transferJobRow, source libraryRow, item application.FrozenTransferItem) error {
 	scope, _ := row.scopes()
 	if row.SourceOrgID == nil || row.SourceScopeID == nil {
 		return application.ErrNotFound

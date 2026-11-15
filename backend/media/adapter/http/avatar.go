@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -19,13 +18,15 @@ import (
 
 // AvatarHandler receives one bounded image for the current account.
 type AvatarHandler struct {
+	resolve ActorResolver
+
 	service *application.AvatarService
 	query   *application.AvatarQuery
 }
 
 // NewAvatarHandler injects the media-owned avatar pipeline.
-func NewAvatarHandler(s *application.AvatarService, q *application.AvatarQuery) *AvatarHandler {
-	return &AvatarHandler{service: s, query: q}
+func NewAvatarHandler(s *application.AvatarService, q *application.AvatarQuery, resolve ActorResolver) *AvatarHandler {
+	return &AvatarHandler{resolve: resolve, service: s, query: q}
 }
 
 // Register requires current session and CSRF middleware.
@@ -51,7 +52,10 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 	c.Header("Cache-Control", "private, no-store")
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	actor := identityhttp.Principal(c)
+	actor, ok := requestActor(c, h.resolve)
+	if !ok {
+		return
+	}
 	if err := h.service.Authorize(ctx, actor); err != nil {
 		uploadError(c, err)
 		return
@@ -114,8 +118,13 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/me/avatar [get]
 func (h *AvatarHandler) read(c *gin.Context) {
+	actor, actorOK := requestActor(c, h.resolve)
+	if !actorOK {
+		return
+	}
+
 	c.Header("Cache-Control", "private, no-store")
-	out, err := h.query.Read(c.Request.Context(), identityhttp.Principal(c))
+	out, err := h.query.Read(c.Request.Context(), actor)
 	if errors.Is(err, identityapp.ErrAvatarUnavailable) {
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 		return

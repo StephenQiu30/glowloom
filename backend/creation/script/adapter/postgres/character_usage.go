@@ -12,7 +12,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // CharacterUsage contains a digest of immutable lines and their current owning heads.
@@ -24,7 +23,7 @@ type CharacterUsage struct {
 
 // ReadCharacterUsage runs under the caller's project content lock. Historical
 // structures remain intact; deletion only prevents future character admission.
-func (s *BibleScopes) ReadCharacterUsage(ctx context.Context, actor identityapp.Principal, project uuid.UUID, ids []uuid.UUID) (result CharacterUsage, resultErr error) {
+func (s *BibleScopes) ReadCharacterUsage(ctx context.Context, actor application.Actor, project uuid.UUID, ids []uuid.UUID) (result CharacterUsage, resultErr error) {
 	if s == nil || s.tx == nil || s.access == nil || len(ids) == 0 {
 		return result, application.ErrContextUnavailable
 	}

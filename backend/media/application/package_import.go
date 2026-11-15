@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -71,7 +70,7 @@ func NewLibraryPackageService(repo PackageRepository, uploads *UploadService, ob
 }
 
 // Authorize checks current access before reading a potentially large archive.
-func (s *LibraryPackageService) Authorize(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, write bool) error {
+func (s *LibraryPackageService) Authorize(ctx context.Context, actor Actor, scope domain.LibraryScope, write bool) error {
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}
@@ -80,7 +79,7 @@ func (s *LibraryPackageService) Authorize(ctx context.Context, actor identityapp
 }
 
 // Get exposes current durable state with current actor/scope authorization.
-func (s *LibraryPackageService) Get(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (PackageJob, error) {
+func (s *LibraryPackageService) Get(ctx context.Context, actor Actor, id uuid.UUID) (PackageJob, error) {
 	if s == nil || s.repo == nil {
 		return PackageJob{}, ErrUnavailable
 	}
@@ -88,7 +87,7 @@ func (s *LibraryPackageService) Get(ctx context.Context, actor identityapp.Princ
 }
 
 // List returns the current actor's durable import history in one authorized scope.
-func (s *LibraryPackageService) List(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, page, size int) (PackagePage, error) {
+func (s *LibraryPackageService) List(ctx context.Context, actor Actor, scope domain.LibraryScope, page, size int) (PackagePage, error) {
 	if s == nil || s.repo == nil {
 		return PackagePage{}, ErrUnavailable
 	}
@@ -111,7 +110,7 @@ func DecodePackageControl(data []byte) (PackageControl, error) {
 
 // Import validates the whole input before durable admission or any object write.
 // Unknown I/O returns the original needs_reconciliation job, never partial assets.
-func (s *LibraryPackageService) Import(ctx context.Context, actor identityapp.Principal, in PackageImportRequest, file *Downloaded) (PackageJob, error) {
+func (s *LibraryPackageService) Import(ctx context.Context, actor Actor, in PackageImportRequest, file *Downloaded) (PackageJob, error) {
 	if s == nil || s.repo == nil || s.uploads == nil || s.objects == nil || file == nil || file.File == nil {
 		return PackageJob{}, ErrUnavailable
 	}
@@ -170,7 +169,7 @@ func (s *LibraryPackageService) Import(ctx context.Context, actor identityapp.Pr
 }
 
 // Reconcile resumes from the exact retained source ZIP and immutable output plan.
-func (s *LibraryPackageService) Reconcile(ctx context.Context, actor identityapp.Principal, id uuid.UUID, commands ...PackageControl) (PackageJob, error) {
+func (s *LibraryPackageService) Reconcile(ctx context.Context, actor Actor, id uuid.UUID, commands ...PackageControl) (PackageJob, error) {
 	if s == nil || s.repo == nil || s.uploads == nil || s.objects == nil {
 		return PackageJob{}, ErrUnavailable
 	}
@@ -201,7 +200,7 @@ func (s *LibraryPackageService) Reconcile(ctx context.Context, actor identityapp
 
 // Cancel removes only the unpublished batch's predeclared immutable keys.
 // Any uncertain removal leaves the batch reserved and recoverable.
-func (s *LibraryPackageService) Cancel(ctx context.Context, actor identityapp.Principal, id uuid.UUID, commands ...PackageControl) (PackageJob, error) {
+func (s *LibraryPackageService) Cancel(ctx context.Context, actor Actor, id uuid.UUID, commands ...PackageControl) (PackageJob, error) {
 	if s == nil || s.repo == nil || s.objects == nil {
 		return PackageJob{}, ErrUnavailable
 	}
@@ -263,7 +262,7 @@ func (s *LibraryPackageService) Cancel(ctx context.Context, actor identityapp.Pr
 	})
 }
 
-func (s *LibraryPackageService) packageControl(ctx context.Context, actor identityapp.Principal, id uuid.UUID, commands []PackageControl) (PackageControl, error) {
+func (s *LibraryPackageService) packageControl(ctx context.Context, actor Actor, id uuid.UUID, commands []PackageControl) (PackageControl, error) {
 	if len(commands) > 1 {
 		return PackageControl{}, ErrInvalidPackage
 	}
@@ -289,7 +288,7 @@ func (p *preparedPackage) close() {
 	}
 }
 
-func (s *UploadService) preparePackage(ctx context.Context, actor identityapp.Principal, in PackageImportRequest, input *Downloaded, aspect string, now time.Time) (*preparedPackage, error) {
+func (s *UploadService) preparePackage(ctx context.Context, actor Actor, in PackageImportRequest, input *Downloaded, aspect string, now time.Time) (*preparedPackage, error) {
 	if s == nil || s.prober == nil || s.normalizer == nil || s.renderer == nil || now.IsZero() {
 		return nil, ErrUnavailable
 	}

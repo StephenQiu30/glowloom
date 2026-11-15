@@ -28,7 +28,7 @@ func TestCanvasSubjectLocalPostgresRevisionAndSources(t *testing.T) {
 	foreign := subjectProject(t, owner, actor)
 	primary := subjectFixtureMedia(t, owner, actor, project, "image")
 	store := canvaspg.NewScopedStore(runtime, func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(mediapg.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediapg.NewScopedStore(tx, mediawire.NewMediaScopeAccess)))
 	}, mediawire.NewCanvasProjectAccess).WithSubjectSources(subjectwire.NewPromptSources)
 	writer := canvasfixture.NewEditService(store)
 	doc, err := writer.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "局部主体"})
@@ -49,7 +49,7 @@ func TestCanvasSubjectLocalPostgresRevisionAndSources(t *testing.T) {
 		var source promptdomain.ReferenceSource
 		err := runtime.Transaction(func(tx *gorm.DB) error {
 			var e error
-			source, e = subjectwire.NewPromptSources(tx).(promptapp.CanvasSubjectSources).ResolveCanvasSubject(t.Context(), actor, p, node.ID.String(), strconv.FormatInt(revision, 10))
+			source, e = subjectwire.NewPromptSources(tx).(promptapp.CanvasSubjectSources).ResolveCanvasSubject(t.Context(), subjectPromptActor(actor), p, node.ID.String(), strconv.FormatInt(revision, 10))
 			return e
 		})
 		return source, err
@@ -60,7 +60,7 @@ func TestCanvasSubjectLocalPostgresRevisionAndSources(t *testing.T) {
 	}
 	validate := func(source promptdomain.ReferenceSource) error {
 		return runtime.Transaction(func(tx *gorm.DB) error {
-			return promptpg.ValidateDraftSources(tx, actor, project, promptdomain.Draft{References: []promptdomain.Reference{{Source: source}}}, true, subjectwire.NewPromptSources(tx))
+			return promptpg.ValidateDraftSources(tx, subjectPromptActor(actor), project, promptdomain.Draft{References: []promptdomain.Reference{{Source: source}}}, true, subjectwire.NewPromptSources(tx))
 		})
 	}
 	if err := validate(first); err != nil {

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -58,9 +60,9 @@ func TestRoutedTimelineExportRealPostgresNativeCOSAndFFmpeg(t *testing.T) {
 	makeStore := func(worker bool) *pgtool.Store {
 		return mediatoolExportStore(runtime, func(*gorm.DB) tool.TimelineReader { return freeze }, func(tx *gorm.DB) tool.DerivedMedia {
 			if worker {
-				return media.NewDerivedService(mediaWorkerStore(tx))
+				return mediawire.LegacyDerivedMedia(media.NewDerivedService(mediaWorkerStore(tx)))
 			}
-			return media.NewDerivedService(mediaTestStore(tx))
+			return mediawire.LegacyDerivedMedia(media.NewDerivedService(mediaTestStore(tx)))
 		}).WithStorageAdmission(func(tx *gorm.DB) tool.ToolStorageLedger { return pgmedia.NewStorageRoutes(tx) })
 	}
 	store := makeStore(false)

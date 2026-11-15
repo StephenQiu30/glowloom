@@ -12,20 +12,19 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 var _ application.PersonalUploadRepository = (*Store)(nil)
 
-func personalUploadRequest(actor identityapp.Principal, r application.UploadRequest) error {
+func personalUploadRequest(actor application.Actor, r application.UploadRequest) error {
 	if application.ValidateUploadRequest(r) != nil || r.ProjectID != uuid.Nil || r.Personal == nil || r.Personal.OrgID != actor.OrgID || r.Personal.ActorID != actor.ID {
 		return application.ErrInvalidUpload
 	}
 	return nil
 }
-func sameUploadOwnership(actor identityapp.Principal, r application.UploadRequest, a domain.MediaAsset) bool {
+func sameUploadOwnership(actor application.Actor, r application.UploadRequest, a domain.MediaAsset) bool {
 	if r.Personal == nil {
 		return a.Personal == nil && r.ProjectID != uuid.Nil
 	}
@@ -37,7 +36,7 @@ func personalUploadLock(tx *gorm.DB, owner domain.PersonalOwnership) error {
 }
 
 // AuthorizePersonalUpload rechecks the current actor without inventing a project.
-func (s *Store) AuthorizePersonalUpload(ctx context.Context, actor identityapp.Principal) error {
+func (s *Store) AuthorizePersonalUpload(ctx context.Context, actor application.Actor) error {
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
@@ -45,7 +44,7 @@ func (s *Store) AuthorizePersonalUpload(ctx context.Context, actor identityapp.P
 }
 
 // FindPersonalUpload checks current authorization before reading a scoped receipt.
-func (s *Store) FindPersonalUpload(ctx context.Context, actor identityapp.Principal, r application.UploadRequest) (application.PersonalUploadResult, bool, error) {
+func (s *Store) FindPersonalUpload(ctx context.Context, actor application.Actor, r application.UploadRequest) (application.PersonalUploadResult, bool, error) {
 	if s == nil || s.db == nil {
 		return application.PersonalUploadResult{}, false, application.ErrUnavailable
 	}
@@ -70,7 +69,7 @@ func (s *Store) FindPersonalUpload(ctx context.Context, actor identityapp.Princi
 	})
 	return result, found, err
 }
-func replayPersonalUpload(tx *gorm.DB, actor identityapp.Principal, r application.UploadRequest) (application.PersonalUploadResult, bool, error) {
+func replayPersonalUpload(tx *gorm.DB, actor application.Actor, r application.UploadRequest) (application.PersonalUploadResult, bool, error) {
 	var row uploadRequestRecord
 	read := tx.Where(map[string]any{"project_id": nil, "personal_org_id": actor.OrgID, "principal_id": actor.ID, "request_key": r.Key}).Take(&row)
 	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
@@ -107,7 +106,7 @@ func replayPersonalUpload(tx *gorm.DB, actor identityapp.Principal, r applicatio
 
 // CommitPersonalUpload preserves all project, metadata and byte ownership.
 // Actor -> scoped admission -> library -> original locks serialize deduplication.
-func (s *Store) CommitPersonalUpload(ctx context.Context, actor identityapp.Principal, r application.UploadRequest, a domain.MediaAsset, renditions []domain.Rendition) (application.PersonalUploadResult, error) {
+func (s *Store) CommitPersonalUpload(ctx context.Context, actor application.Actor, r application.UploadRequest, a domain.MediaAsset, renditions []domain.Rendition) (application.PersonalUploadResult, error) {
 	if s == nil || s.db == nil {
 		return application.PersonalUploadResult{}, application.ErrUnavailable
 	}

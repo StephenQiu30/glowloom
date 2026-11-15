@@ -20,7 +20,7 @@ type usageSource struct {
 	err       error
 }
 
-func (s usageSource) InspectStorageUsage(_ context.Context, _ identityapp.Principal, _ domain.LibraryScope, consume func(mediaapp.StorageUsageInventory) error) error {
+func (s usageSource) InspectStorageUsage(_ context.Context, _ mediaapp.Actor, _ domain.LibraryScope, consume func(mediaapp.StorageUsageInventory) error) error {
 	if s.err != nil {
 		return s.err
 	}
@@ -53,7 +53,7 @@ func TestMediaStorageUsageCountsActualUniqueObjectsAndKeepsUnconfiguredLimitNull
 	source := usageSource{inventory: mediaapp.StorageUsageInventory{LibraryID: id, PhysicalPrefixes: []mediaapp.StorageUsagePrefix{{ProfileID: "cos-first", Bucket: "storage-test-1250000000", Prefix: prefix}}, Locations: []domain.ObjectRef{usageRef(one), usageRef(absent)}}}
 	objects := &usageObjects{listed: []mediaapp.StorageUsageObject{{Ref: usageRef(one), ByteSize: 9000}, {Ref: usageRef(two), ByteSize: 8000}}, sizes: map[domain.ObjectRef]int64{usageRef(one): 21, usageRef(two): 35}}
 	reader := mediaapp.NewStorageUsageReader(source, objects, func() time.Time { return domainNow })
-	result, err := reader.StorageUsage(t.Context(), actor, scope)
+	result, err := reader.StorageUsage(t.Context(), mediaActor(actor), scope)
 	if err != nil || result.UsedBytes != 56 || result.ObjectCount != 2 || result.LimitBytes != nil || result.CurrentActorID != actor.ID || result.CurrentOrgID != actor.OrgID || result.CalculatedAt != domainNow || len(objects.checked) != 3 {
 		t.Fatal("listing sizes or duplicate catalog links became accounting truth", result, objects.checked, err)
 	}
@@ -74,17 +74,17 @@ func TestMediaStorageUsageRejectsPartialForeignOverflowAndMissingAuthorities(t *
 	} {
 		t.Run(name, func(t *testing.T) {
 			reader := mediaapp.NewStorageUsageReader(usageSource{inventory: mediaapp.StorageUsageInventory{LibraryID: id, PhysicalPrefixes: []mediaapp.StorageUsagePrefix{{ProfileID: "cos-first", Bucket: "storage-test-1250000000", Prefix: prefix}}}}, objects, time.Now)
-			result, err := reader.StorageUsage(t.Context(), actor, scope)
+			result, err := reader.StorageUsage(t.Context(), mediaActor(actor), scope)
 			if !errors.Is(err, mediaapp.ErrUnavailable) || !reflect.DeepEqual(result, mediaapp.StorageUsage{}) {
 				t.Fatal("invalid inventory returned partial totals", result, err)
 			}
 		})
 	}
 	reader := mediaapp.NewStorageUsageReader(usageSource{err: identityapp.ErrForbidden}, &usageObjects{}, time.Now)
-	if _, err := reader.StorageUsage(t.Context(), actor, scope); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := reader.StorageUsage(t.Context(), mediaActor(actor), scope); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatal("authorizer failure was weakened", err)
 	}
-	if _, err := mediaapp.NewStorageUsageReader(nil, nil, time.Now).StorageUsage(t.Context(), actor, scope); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := mediaapp.NewStorageUsageReader(nil, nil, time.Now).StorageUsage(t.Context(), mediaActor(actor), scope); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("missing owner returned zero", err)
 	}
 }

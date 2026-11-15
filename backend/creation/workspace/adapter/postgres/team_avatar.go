@@ -1,9 +1,10 @@
 package postgres
 
 import (
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -33,7 +34,7 @@ func (t *teamTx) BoundTeamAvatar(team uuid.UUID, member *uuid.UUID, platform boo
 				return application.TeamAvatarObject{}, err
 			}
 			if len(rows) != 1 {
-				return application.TeamAvatarObject{}, application.ErrScopeNotFound
+				return application.TeamAvatarObject{}, workspacesource.ErrScopeNotFound
 			}
 			id = rows[0].AvatarID
 		}

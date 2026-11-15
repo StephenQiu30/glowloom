@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -53,7 +54,7 @@ func (s *ProjectCopyStore) Change(ctx context.Context, actor identityapp.Princip
 		}
 		if read.RowsAffected == 1 {
 			if recorded.RequestSHA256 != fingerprint || copyJSON(recorded.ResponseBody, &saved) != nil || saved.Validate() != nil || saved.OrgID != actor.OrgID || saved.ID != id {
-				return application.ErrIdempotencyConflict
+				return workspacesource.ErrIdempotencyConflict
 			}
 			return nil
 		}
@@ -62,7 +63,7 @@ func (s *ProjectCopyStore) Change(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		if existing == 1 {
-			return application.ErrIdempotencyConflict
+			return workspacesource.ErrIdempotencyConflict
 		}
 		if before.Revision != expected {
 			return domain.ErrProjectRevisionConflict
@@ -106,7 +107,7 @@ func (s *ProjectCopyStore) Change(ctx context.Context, actor identityapp.Princip
 // HasInflightWork protects both source pins and an unpublished target during lifecycle changes.
 func (s *ProjectCopyStore) HasInflightWork(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (bool, error) {
 	if s == nil || s.db == nil || actor.OrgID == uuid.Nil || projectID == uuid.Nil {
-		return false, application.ErrProjectDependencyUnavailable
+		return false, workspacesource.ErrProjectDependencyUnavailable
 	}
 	var present bool
 	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM workspace.project_copy_job WHERE org_id=? AND (source_project_id=? OR target_project_id=?) AND status NOT IN ('succeeded','cancelled'))`, actor.OrgID, projectID, projectID).Scan(&present).Error

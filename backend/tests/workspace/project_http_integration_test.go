@@ -21,9 +21,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
@@ -69,7 +74,7 @@ func TestProjectHTTPCreatePersistsFirstResponseAcrossConcurrentRequests(t *testi
 		})
 	}
 	wait.Wait()
-	var created workspaceapp.CreatedProject
+	var created workspacesource.CreatedProject
 	for i, response := range responses {
 		if response.Code != 201 {
 			t.Fatalf("create response %d: status=%d body=%s", i, response.Code, response.Body.String())
@@ -183,7 +188,7 @@ func TestProjectHTTPCreateRechecksScopeAndRollsBackReceiptFailure(t *testing.T) 
 			}
 		})
 	}
-	var project workspaceapp.CreatedProject
+	var project workspacesource.CreatedProject
 	if err := json.Unmarshal(created.Body.Bytes(), &project); err != nil {
 		t.Fatal(err)
 	}

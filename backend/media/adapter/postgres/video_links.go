@@ -7,14 +7,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // LookupPersonalVideoLink recovers only the current actor's exact share-page
 // fingerprint and currently visible completed upload. No network retry is needed.
-func (s *Store) LookupPersonalVideoLink(ctx context.Context, actor identity.Principal, key uuid.UUID, name string) (application.PersonalUploadResult, bool, error) {
+func (s *Store) LookupPersonalVideoLink(ctx context.Context, actor application.Actor, key uuid.UUID, name string) (application.PersonalUploadResult, bool, error) {
 	if s == nil || s.db == nil {
 		return application.PersonalUploadResult{}, false, application.ErrUnavailable
 	}

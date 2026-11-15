@@ -12,12 +12,20 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -40,13 +48,13 @@ func TestTeamAvatarBindingSurvivesUploaderDeparture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo := pgmedia.NewAvatarStore(tx, func(db *gorm.DB) media.AvatarActorAccess { return pgidentity.NewStore(db) })
+	repo := pgmedia.NewAvatarStore(tx, identityAvatarAccess)
 	uploads := media.NewRoutedAvatarService(repo, &avatarMemoryObjects{}, func() time.Time { return now })
 	var input bytes.Buffer
 	if err := png.Encode(&input, image.NewNRGBA(image.Rect(0, 0, 2, 3))); err != nil {
 		t.Fatal(err)
 	}
-	asset, err := uploads.Upload(t.Context(), owner, input.Bytes(), "image/png")
+	asset, err := uploads.Upload(t.Context(), identityMediaActor(owner), input.Bytes(), "image/png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +81,7 @@ func TestTeamAvatarBindingSurvivesUploaderDeparture(t *testing.T) {
 	if err != nil || preview.AssetID != asset.ID {
 		t.Fatalf("departed uploader broke team avatar: %+v %v", preview, err)
 	}
-	if _, err = query.Read(t.Context(), owner, team.ID, nil, false); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err = query.Read(t.Context(), owner, team.ID, nil, false); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("departed member retained avatar access: %v", err)
 	}
 	if _, err = query.Read(t.Context(), platform, team.ID, nil, true); err != nil {

@@ -31,7 +31,7 @@ func ProvideMediaTranscriptionStoreWithAccess(database *gorm.DB, enabled bool, s
 	}
 	return pgtool.NewTranscriptionStore(database, source,
 		func(tx *gorm.DB) toolapp.DerivedMedia {
-			return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+			return LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes)))
 		})
 }
 

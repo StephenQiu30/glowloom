@@ -15,9 +15,14 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	domain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
@@ -94,7 +99,7 @@ func TestSecondaryCopyListLockOrder(t *testing.T) {
 			// The page-wide path must retain current scope/session gates, including empty pages.
 			other := actor
 			other.ScopeID = personal
-			if _, err := store.List(t.Context(), other, workspace.ProjectCopyListInput{SourceProjectID: source, Limit: 2}); !errors.Is(err, workspace.ErrProjectNotFound) {
+			if _, err := store.List(t.Context(), other, workspace.ProjectCopyListInput{SourceProjectID: source, Limit: 2}); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 				t.Errorf("wrong scope empty page: %v", err)
 			}
 			empty, err := store.List(t.Context(), actor, workspace.ProjectCopyListInput{SourceProjectID: high, Limit: 2})
@@ -117,7 +122,7 @@ func TestSecondaryCopyListLockOrder(t *testing.T) {
 			if err := tx.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
 				t.Fatal(err)
 			}
-			if _, err := store.List(t.Context(), actor, workspace.ProjectCopyListInput{SourceProjectID: source, Limit: 2}); !errors.Is(err, workspace.ErrScopeNotFound) {
+			if _, err := store.List(t.Context(), actor, workspace.ProjectCopyListInput{SourceProjectID: source, Limit: 2}); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 				t.Errorf("revoked membership: %v", err)
 			}
 			if err := tx.Exec(`UPDATE workspace.team_member SET status='active' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {

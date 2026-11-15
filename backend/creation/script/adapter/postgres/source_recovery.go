@@ -14,11 +14,9 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-func (s *SourceStore) sourceWriteRecord(tx *gorm.DB, actor identityapp.Principal, project, id uuid.UUID, lock bool) (application.SourceIntentRecord, error) {
+func (s *SourceStore) sourceWriteRecord(tx *gorm.DB, actor application.Actor, project, id uuid.UUID, lock bool) (application.SourceIntentRecord, error) {
 	var state scriptCommandStateRow
 	query := tx.Model(&scriptCommandStateRow{}).Where("id = ?", id)
 	if lock {
@@ -105,7 +103,7 @@ func importPublicationExists(tx *gorm.DB, actor, org, project, publicationKey uu
 }
 
 // ListSourceWrites lists current scoped intents so an unknown response can be recovered.
-func (s *SourceStore) ListSourceWrites(ctx context.Context, actor identityapp.Principal, project uuid.UUID, after int64, limit int) (application.SourceWritePage, error) {
+func (s *SourceStore) ListSourceWrites(ctx context.Context, actor application.Actor, project uuid.UUID, after int64, limit int) (application.SourceWritePage, error) {
 	result := application.SourceWritePage{CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID, Items: []application.SourceWriteIntent{}}
 	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
 		importAttempts := tx.Model(&scriptImportAttemptRow{}).
@@ -147,7 +145,7 @@ func (s *SourceStore) ListSourceWrites(ctx context.Context, actor identityapp.Pr
 }
 
 // SourceWrite never exposes the private plan through the public handler.
-func (s *SourceStore) SourceWrite(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (application.SourceIntentRecord, error) {
+func (s *SourceStore) SourceWrite(ctx context.Context, actor application.Actor, project, id uuid.UUID) (application.SourceIntentRecord, error) {
 	var result application.SourceIntentRecord
 	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
 		var err error
@@ -163,7 +161,7 @@ func controlHash(input application.SourceControlCommand) (string, error) {
 	data, err := json.Marshal(input)
 	return domain.ContentSHA(data), err
 }
-func (s *SourceStore) controlProof(tx *gorm.DB, actor identityapp.Principal, input application.SourceControlCommand) (application.SourceIntentRecord, error) {
+func (s *SourceStore) controlProof(tx *gorm.DB, actor application.Actor, input application.SourceControlCommand) (application.SourceIntentRecord, error) {
 	hash, err := controlHash(input)
 	if err != nil {
 		return application.SourceIntentRecord{}, err
@@ -183,19 +181,19 @@ func (s *SourceStore) controlProof(tx *gorm.DB, actor identityapp.Principal, inp
 		return r, err
 	}
 	if !r.View.CanControl {
-		return r, identityapp.ErrForbidden
+		return r, application.ErrForbidden
 	}
 	return r, nil
 }
 
 // ControlSourceWrite freezes current authorization and the original acceptance in one transaction.
-func (s *SourceStore) ControlSourceWrite(ctx context.Context, actor identityapp.Principal, input application.SourceControlCommand, now time.Time) (application.SourceControlReceipt, error) {
+func (s *SourceStore) ControlSourceWrite(ctx context.Context, actor application.Actor, input application.SourceControlCommand, now time.Time) (application.SourceControlReceipt, error) {
 	var result application.SourceControlReceipt
 	hash, err := controlHash(input)
 	if err != nil {
 		return result, err
 	}
-	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err = s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		if err := registerCommand(tx, actor, input.ProjectID, input.Key, "source_control_"+string(input.Action), hash, now); err != nil {
 			return err
 		}
@@ -257,8 +255,8 @@ func (s *SourceStore) ControlSourceWrite(ctx context.Context, actor identityapp.
 }
 
 // ProveSourceStop requires the exact current controller and the joined I/O nonce.
-func (s *SourceStore) ProveSourceStop(ctx context.Context, actor identityapp.Principal, input application.SourceControlCommand, owner uuid.UUID, now time.Time) error {
-	return s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+func (s *SourceStore) ProveSourceStop(ctx context.Context, actor application.Actor, input application.SourceControlCommand, owner uuid.UUID, now time.Time) error {
+	return s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		r, err := s.controlProof(tx, actor, input)
 		if err != nil {
 			return err
@@ -275,7 +273,7 @@ func (s *SourceStore) ProveSourceStop(ctx context.Context, actor identityapp.Pri
 	})
 }
 
-func (s *SourceStore) authorizeRemoval(tx *gorm.DB, actor identityapp.Principal, input application.SourceControlCommand, f domain.ObjectFact) error {
+func (s *SourceStore) authorizeRemoval(tx *gorm.DB, actor application.Actor, input application.SourceControlCommand, f domain.ObjectFact) error {
 	r, err := s.controlProof(tx, actor, input)
 	if err != nil {
 		return err
@@ -303,15 +301,15 @@ func (s *SourceStore) authorizeRemoval(tx *gorm.DB, actor identityapp.Principal,
 }
 
 // AuthorizeSourceRemoval fences cancellation against publication and all formal history references.
-func (s *SourceStore) AuthorizeSourceRemoval(ctx context.Context, actor identityapp.Principal, input application.SourceControlCommand, f domain.ObjectFact) error {
-	return s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+func (s *SourceStore) AuthorizeSourceRemoval(ctx context.Context, actor application.Actor, input application.SourceControlCommand, f domain.ObjectFact) error {
+	return s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		return s.authorizeRemoval(tx, actor, input, f)
 	})
 }
 
 // ConfirmSourceRemoval records only a subsequent actual absence proof.
-func (s *SourceStore) ConfirmSourceRemoval(ctx context.Context, actor identityapp.Principal, input application.SourceControlCommand, f domain.ObjectFact, now time.Time) error {
-	return s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+func (s *SourceStore) ConfirmSourceRemoval(ctx context.Context, actor application.Actor, input application.SourceControlCommand, f domain.ObjectFact, now time.Time) error {
+	return s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		if err := s.authorizeRemoval(tx, actor, input, f); err != nil {
 			return err
 		}
@@ -332,8 +330,8 @@ func (s *SourceStore) ConfirmSourceRemoval(ctx context.Context, actor identityap
 }
 
 // FinishSourceControl cannot publish old content or remove a fence lacking physical proof.
-func (s *SourceStore) FinishSourceControl(ctx context.Context, actor identityapp.Principal, input application.SourceControlCommand, uncertain bool, now time.Time) error {
-	return s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+func (s *SourceStore) FinishSourceControl(ctx context.Context, actor application.Actor, input application.SourceControlCommand, uncertain bool, now time.Time) error {
+	return s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		r, err := s.controlProof(tx, actor, input)
 		if err != nil {
 			return err
@@ -374,9 +372,9 @@ func (s *SourceStore) FinishSourceControl(ctx context.Context, actor identityapp
 }
 
 // BeginSourceRemoval freezes the verified digest before any physical delete.
-func (s *SourceStore) BeginSourceRemoval(ctx context.Context, actor identityapp.Principal, input application.SourceControlCommand, f domain.ObjectFact, now time.Time) error {
+func (s *SourceStore) BeginSourceRemoval(ctx context.Context, actor application.Actor, input application.SourceControlCommand, f domain.ObjectFact, now time.Time) error {
 	ready := true
-	err := s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := s.transaction(ctx, actor, input.ProjectID, true, func(tx *gorm.DB, _ application.ProjectAccess, _ application.ProjectFacts) error {
 		if err := s.authorizeRemoval(tx, actor, input, f); err != nil {
 			return err
 		}

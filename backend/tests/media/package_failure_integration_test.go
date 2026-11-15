@@ -37,23 +37,23 @@ func TestMediaPackageUnknownBeforeArchiveSameOriginalKeyRecoversAndPriorReceiptD
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	in := mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
 	input := packageDownloaded(t, ownPackageZIP(t))
-	first, err := failedService.Import(t.Context(), actor, in, input)
+	first, err := failedService.Import(t.Context(), mediaActor(actor), in, input)
 	if err != nil || first.Status != "needs_reconciliation" {
 		t.Fatal(first, err)
 	}
 	packageCleanup(t, db, repo, objects, actor, scope)
 	_, service := packageActualService(t, db, objects, packageTestAccess)
-	head, err := service.Reconcile(t.Context(), actor, first.ID, mediaapp.PackageControl{ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()})
+	head, err := service.Reconcile(t.Context(), mediaActor(actor), first.ID, mediaapp.PackageControl{ExpectedRevision: 1, Key: uuid.New(), RequestID: uuid.New()})
 	if err != nil || head.Status != "needs_reconciliation" {
 		t.Fatal("missing archive misreported success", head, err)
 	}
-	replayed, err := service.Import(t.Context(), actor, in, input)
+	replayed, err := service.Import(t.Context(), mediaActor(actor), in, input)
 	a, _ := json.Marshal(first)
 	b, _ := json.Marshal(replayed)
 	if err != nil || !bytes.Equal(a, b) {
 		t.Fatal("original sealed import response changed", replayed, err)
 	}
-	current, err := service.Get(t.Context(), actor, first.ID)
+	current, err := service.Get(t.Context(), mediaActor(actor), first.ID)
 	if err != nil || current.Status != "succeeded" || current.ID != first.ID || current.Revision != 2 {
 		t.Fatal("resubmitted exact source did not recover original batch", current, err)
 	}
@@ -78,7 +78,7 @@ func TestMediaPackageRejectedCompleteBatchNeverWritesAnArchiveOrPartialAsset(t *
 		{"document", "active.docx", domain.MIMEDOCX, documentDOCX(t, map[string]string{"word/vbaProject.bin": "active"})},
 	} {
 		files := []packageFixtureFile{{"image", "valid.png", "image/png", uploadPNG(t)}, bad}
-		if _, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, packageFilesZIP(t, files))); err == nil {
+		if _, err := service.Import(t.Context(), mediaActor(actor), mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, packageFilesZIP(t, files))); err == nil {
 			t.Fatal("unsupported byte closure accepted", bad.name)
 		}
 	}
@@ -102,7 +102,7 @@ func TestMediaPackageSchemaFrozenSQLAndTerminalCommandAreImmutable(t *testing.T)
 	repo, service := packageActualService(t, db, objects, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	in := mediaapp.PackageImportRequest{Scope: scope, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
-	job, err := service.Import(t.Context(), actor, in, packageDownloaded(t, ownPackageZIP(t)))
+	job, err := service.Import(t.Context(), mediaActor(actor), in, packageDownloaded(t, ownPackageZIP(t)))
 	if err != nil || job.Status != "succeeded" {
 		t.Fatal(job, err)
 	}
@@ -118,10 +118,10 @@ func TestMediaPackageSchemaFrozenSQLAndTerminalCommandAreImmutable(t *testing.T)
 	if err := owner.Exec(`UPDATE media.package_command SET response='{}'::bytea WHERE actor_id=? AND idem_key=?`, actor.ID, in.Key).Error; err == nil {
 		t.Fatal("permanent command trigger absent")
 	}
-	if current, err := service.Get(t.Context(), actor, job.ID); err != nil || current.ID != job.ID {
+	if current, err := service.Get(t.Context(), mediaActor(actor), job.ID); err != nil || current.ID != job.ID {
 		t.Fatal("rejected writes damaged package owner", current, err)
 	}
-	if _, err := service.Import(t.Context(), actor, in, packageDownloaded(t, ownPackageZIP(t))); !errors.Is(err, mediaapp.ErrPackageConflict) {
+	if _, err := service.Import(t.Context(), mediaActor(actor), in, packageDownloaded(t, ownPackageZIP(t))); !errors.Is(err, mediaapp.ErrPackageConflict) {
 		t.Fatal("different retained source ZIP shared same command", err)
 	}
 }
@@ -143,12 +143,12 @@ func TestMediaPackageProjectFolderEightLevelsCompleteMappingAndPersonalDepthReje
 	m.Items = append(m.Items, mediaapp.LibraryPackageItem{ID: "nested", Kind: "text", State: "active", Metadata: mediaapp.LibraryMetadata{Title: "正文", Category: "other", Tags: []string{}, FolderID: parent, PlainText: &text}})
 	body, _ := json.Marshal(m)
 	input := packageDownloaded(t, packageZIP(t, []string{"manifest.json"}, [][]byte{body}, false))
-	job, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, input)
+	job, err := service.Import(t.Context(), mediaActor(actor), mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, input)
 	if err != nil || job.Status != "succeeded" || job.FolderCount != 8 {
 		t.Fatal("complete accepted depth", job, err)
 	}
 	packageCleanup(t, db, repo, objects, actor, scope)
-	export, err := service.Export(t.Context(), actor, scope)
+	export, err := service.Export(t.Context(), mediaActor(actor), scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestMediaPackageProjectFolderEightLevelsCompleteMappingAndPersonalDepthReje
 	if err != nil || len(archive.Manifest.Folders) != 8 || len(archive.Manifest.Items) != 1 {
 		t.Fatal("complete tree export", err)
 	}
-	if _, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: domain.LibraryScope{Kind: domain.LibraryPersonal}, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, export); !errors.Is(err, mediaapp.ErrInvalidPackage) {
+	if _, err := service.Import(t.Context(), mediaActor(actor), mediaapp.PackageImportRequest{Scope: domain.LibraryScope{Kind: domain.LibraryPersonal}, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, export); !errors.Is(err, mediaapp.ErrInvalidPackage) {
 		t.Fatal("personal flattening discarded source tree", err)
 	}
 }

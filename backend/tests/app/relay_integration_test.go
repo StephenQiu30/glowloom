@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	outboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
 	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	outboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
 )
 

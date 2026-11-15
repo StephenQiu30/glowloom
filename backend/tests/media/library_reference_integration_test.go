@@ -37,7 +37,7 @@ func TestLibraryNewAudioBindingUsesOnlyActualOriginalProof(t *testing.T) {
 	var fact mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindAudio)
+		fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), mediaActor(actor), project, upload.Asset.ID, domain.KindAudio)
 		return err
 	}); err != nil || fact.Kind != domain.KindAudio || fact.RenditionID != nil || fact.RenditionSHA256 != nil || fact.AssetID != upload.Asset.ID {
 		t.Fatal("actual audio proof invented an image rendition", fact, err)
@@ -46,7 +46,7 @@ func TestLibraryNewAudioBindingUsesOnlyActualOriginalProof(t *testing.T) {
 	if fact.SHA256 != hex.EncodeToString(sha[:]) || fact.ByteSize != int64(len(body)) {
 		t.Fatal("audio proof does not describe actual source", fact)
 	}
-	rends, err := mediaTestStore(db).FindRenditions(t.Context(), actor, project, upload.Asset.ID)
+	rends, err := mediaTestStore(db).FindRenditions(t.Context(), mediaActor(actor), project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,11 +61,11 @@ func TestLibraryNewBindingActualOriginalAndDistinctRenditionProof(t *testing.T) 
 	actor, project := mediaStoreProject(t, db)
 	upload := documentUpload(t, db, objects, actor, project, "binding.png", uploadPNG(t))
 	store := mediaTestStore(db)
-	asset, err := store.FindAsset(t.Context(), actor, project, upload.Asset.ID)
+	asset, err := store.FindAsset(t.Context(), mediaActor(actor), project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rends, err := store.FindRenditions(t.Context(), actor, project, asset.ID)
+	rends, err := store.FindRenditions(t.Context(), mediaActor(actor), project, asset.ID)
 	if err != nil || len(rends) != 2 {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestLibraryNewBindingActualOriginalAndDistinctRenditionProof(t *testing.T) 
 	query := func() error {
 		return db.Transaction(func(tx *gorm.DB) error {
 			var err error
-			fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), actor, project, asset.ID, domain.KindImage)
+			fact, err = mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).Reference(t.Context(), mediaActor(actor), project, asset.ID, domain.KindImage)
 			return err
 		})
 	}
@@ -123,18 +123,18 @@ func TestLibraryNewBindingActualOriginalAndDistinctRenditionProof(t *testing.T) 
 	}
 	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: asset.ID, Revision: 1}}}); err != nil {
+	if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: asset.ID, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := query(); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("recycled catalog formed a new entity binding", err)
 	}
-	if _, err := mediaapp.NewAssetQuery(store).Reference(t.Context(), actor, project, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewAssetQuery(store).Reference(t.Context(), mediaActor(actor), project, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("ordinary reference bypassed catalog trash", err)
 	}
 	// Existing evidence is verified through its owning reader and actual bytes.
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).VerifyFrozenReference(t.Context(), actor, project, frozen)
+		return mediaapp.NewRoutedReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), mediaFixtureReadObjects(t)).VerifyFrozenReference(t.Context(), mediaActor(actor), project, frozen)
 	}); err != nil {
 		t.Fatal("catalog trash invalidated the unchanged frozen proof", err)
 	}

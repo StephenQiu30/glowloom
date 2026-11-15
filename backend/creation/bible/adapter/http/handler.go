@@ -7,24 +7,24 @@ import (
 	"errors"
 	"strconv"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // Handler injects the formal Bible use case; it neither creates seeds nor executes providers.
-type Handler struct{ service *application.Service }
+type Handler struct {
+	service *application.Service
+	resolve ActorResolver
+}
 
-// NewHandler injects the persistent current-authorized application service.
-func NewHandler(service *application.Service) *Handler { return &Handler{service: service} }
+// NewHandler injects the persistent service and server-side actor resolver.
+func NewHandler(service *application.Service, resolve ActorResolver) *Handler {
+	return &Handler{service: service, resolve: resolve}
+}
 
 // Register installs the complete typed content routes under the protected API group.
 func (h *Handler) Register(g *gin.RouterGroup) {
@@ -170,7 +170,11 @@ func lookID(c *gin.Context, input *application.Command) bool {
 	return true
 }
 func (h *Handler) change(c *gin.Context, input application.Command) {
-	result, err := h.service.Change(c.Request.Context(), identityhttp.Principal(c), input)
+	actor, ok := h.actor(c)
+	if !ok {
+		return
+	}
+	result, err := h.service.Change(c.Request.Context(), actor, input)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -182,15 +186,15 @@ func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.As(err, &impact):
 		httpapi.WriteProblem(c, 409, "impact_acknowledgment_required", map[string]any{"impact": impact.Proof})
-	case errors.Is(err, identityapp.ErrSessionInvalid):
+	case errors.Is(err, application.ErrSessionInvalid):
 		httpapi.WriteProblem(c, 401, "unauthorized", nil)
-	case errors.Is(err, identityapp.ErrForbidden):
+	case errors.Is(err, application.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, application.ErrNotFound):
+	case errors.Is(err, application.ErrNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_conflict", nil)
-	case errors.Is(err, application.ErrConflict), errors.Is(err, workspacedomain.ErrProjectRevisionConflict), errors.Is(err, workspacedomain.ErrProjectStateConflict):
+	case errors.Is(err, application.ErrConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
 	case errors.Is(err, domain.ErrInvalidContent):
 		httpapi.WriteProblem(c, 422, "invalid_bible_content", nil)
@@ -255,7 +259,11 @@ func (h *Handler) List(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	page, err := h.service.List(c.Request.Context(), identityhttp.Principal(c), application.ListInput{ProjectID: pid, Kind: kind, Limit: limit, After: after, Deleted: deleted == "true"})
+	actor, ok := h.actor(c)
+	if !ok {
+		return
+	}
+	page, err := h.service.List(c.Request.Context(), actor, application.ListInput{ProjectID: pid, Kind: kind, Limit: limit, After: after, Deleted: deleted == "true"})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -281,7 +289,11 @@ func (h *Handler) Get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.service.Find(c.Request.Context(), identityhttp.Principal(c), pid, kind, id)
+	actor, ok := h.actor(c)
+	if !ok {
+		return
+	}
+	result, err := h.service.Find(c.Request.Context(), actor, pid, kind, id)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -314,7 +326,11 @@ func (h *Handler) History(c *gin.Context) {
 	if c.Query("cursor") != "" {
 		after = &cursor
 	}
-	page, err := h.service.History(c.Request.Context(), identityhttp.Principal(c), pid, kind, id, limit, after)
+	actor, ok := h.actor(c)
+	if !ok {
+		return
+	}
+	page, err := h.service.History(c.Request.Context(), actor, pid, kind, id, limit, after)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -346,7 +362,11 @@ func (h *Handler) Version(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	result, err := h.service.Version(c.Request.Context(), identityhttp.Principal(c), pid, kind, id, version)
+	actor, ok := h.actor(c)
+	if !ok {
+		return
+	}
+	result, err := h.service.Version(c.Request.Context(), actor, pid, kind, id, version)
 	if err != nil {
 		writeError(c, err)
 		return

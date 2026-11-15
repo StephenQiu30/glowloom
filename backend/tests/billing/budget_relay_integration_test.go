@@ -14,11 +14,11 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	kafkaoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/kafka"
-	pgoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
-	outboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
+	outboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox"
+	kafkaoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/kafka"
+	pgoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/postgres"
 )
 
 const budgetLowTopic = "glowloom.billing.budget_low.v1"

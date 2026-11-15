@@ -8,12 +8,11 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // HasInflightWork retains lifecycle fencing while any source write lacks a receipt.
 // The caller already holds current workspace authorization and its project lock.
-func (s *SourceStore) HasInflightWork(ctx context.Context, actor identityapp.Principal, project uuid.UUID) (bool, error) {
+func (s *SourceStore) HasInflightWork(ctx context.Context, actor application.Actor, project uuid.UUID) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}

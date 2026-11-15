@@ -8,8 +8,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 )
 
@@ -45,10 +49,10 @@ func TestProjectScopeDoesNotFollowPhysicalOrganization(t *testing.T) {
 	}
 	scopes := workspace.NewRequestScopeAccess(pgworkspace.NewRequestScopeStore(tx, func(tx *gorm.DB) workspace.SessionActorAccess { return pgidentity.NewStore(tx) }), func() time.Time { return now })
 	access := pgworkspace.NewScopedProjectContentAccessStore(tx, scopes)
-	if _, err := pgworkspace.NewScopedProjectContentAccessStore(tx, nil).Authorize(t.Context(), actor, project, false); !errors.Is(err, workspace.ErrProjectDependencyUnavailable) {
+	if _, err := pgworkspace.NewScopedProjectContentAccessStore(tx, nil).Authorize(t.Context(), actor, project, false); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatalf("missing scope authority used legacy access: %v", err)
 	}
-	if _, err := access.Authorize(t.Context(), actor, project, false); !errors.Is(err, workspace.ErrProjectNotFound) {
+	if _, err := access.Authorize(t.Context(), actor, project, false); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("personal scope reached a team project through shared physical storage: %v", err)
 	}
 	actor.ScopeID = teamScope
@@ -58,7 +62,7 @@ func TestProjectScopeDoesNotFollowPhysicalOrganization(t *testing.T) {
 	if err := tx.Exec(`UPDATE workspace.team_member SET status='removed',auth_epoch=auth_epoch+1 WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := access.Authorize(t.Context(), actor, project, false); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := access.Authorize(t.Context(), actor, project, false); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("removed membership retained project access: %v", err)
 	}
 }

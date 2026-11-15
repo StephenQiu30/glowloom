@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -57,7 +58,7 @@ func (r lifecycleProjectRow) snapshot() (application.ProjectSnapshot, error) {
 	p.StyleKey = r.StyleKey
 	result := application.ProjectSnapshot{Project: p}
 	if err := json.Unmarshal([]byte(r.DefaultModels), &result.DefaultModels); err != nil || result.DefaultModels == nil {
-		return application.ProjectSnapshot{}, application.ErrProjectDependencyUnavailable
+		return application.ProjectSnapshot{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if err := result.Validate(); err != nil {
 		return application.ProjectSnapshot{}, err
@@ -180,11 +181,11 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 				}
 			}
 			if s.work == nil {
-				return application.ErrProjectDependencyUnavailable
+				return workspacesource.ErrProjectDependencyUnavailable
 			}
 			guard := s.work(tx)
 			if guard == nil {
-				return application.ErrProjectDependencyUnavailable
+				return workspacesource.ErrProjectDependencyUnavailable
 			}
 			blocking, err = guard.HasInflightWork(ctx, actor, current.Project.ID)
 			if err != nil {
@@ -231,7 +232,7 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 				return fmt.Errorf("persist project lifecycle event: %w", result.Error)
 			}
 			if result.RowsAffected != 1 {
-				return application.ErrProjectDependencyUnavailable
+				return workspacesource.ErrProjectDependencyUnavailable
 			}
 		}
 		saved, err = readLifecycleProject(tx, actor.OrgID, after.ID, true)

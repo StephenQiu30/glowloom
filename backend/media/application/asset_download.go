@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -55,7 +54,7 @@ type originalStream struct {
 // Open never selects a default route for an existing persisted location. The
 // second owner read fences scope/session revocation, replacement and deletion
 // before the HTTP handler emits headers or bytes.
-func (s *AssetDownloads) Open(ctx context.Context, actor identity.Principal, project, id uuid.UUID) (*AssetOriginal, error) {
+func (s *AssetDownloads) Open(ctx context.Context, actor Actor, project, id uuid.UUID) (*AssetOriginal, error) {
 	if s == nil || s.store == nil || s.objects == nil {
 		return nil, ErrUnavailable
 	}

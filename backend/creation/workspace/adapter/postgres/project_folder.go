@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -46,7 +47,7 @@ func (s *FolderStore) requireScope(ctx context.Context, tx *gorm.DB, actor ident
 // Copy admission must take the same lock before its source project FOR UPDATE.
 func LockProjectLibrary(ctx context.Context, tx *gorm.DB, actor identityapp.Principal) error {
 	if tx == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.ScopeID == uuid.Nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	var locked int
 	if err := tx.WithContext(ctx).Raw(`SELECT 1 FROM pg_advisory_xact_lock(69370,hashtext(?))`, actor.ScopeID.String()+":"+actor.ID.String()).Scan(&locked).Error; err != nil {
@@ -70,7 +71,7 @@ func (r folderRow) folder() (domain.ProjectFolder, error) {
 	if r.CoverProjectID != nil && r.CoverAssetID != nil {
 		f.Cover = &domain.FolderCover{ProjectID: *r.CoverProjectID, AssetID: *r.CoverAssetID}
 	} else if r.CoverProjectID != nil || r.CoverAssetID != nil {
-		return f, application.ErrProjectDependencyUnavailable
+		return f, workspacesource.ErrProjectDependencyUnavailable
 	}
 	return f, f.Validate()
 }
@@ -94,7 +95,7 @@ func readFolder(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, deleted 
 // ChangeFolder commits all project transitions, assignments and receipts atomically.
 func (s *FolderStore) ChangeFolder(ctx context.Context, actor identityapp.Principal, in application.FolderChangeInput, now time.Time) (application.FolderChangeResult, error) {
 	if s == nil || s.db == nil || now.IsZero() {
-		return application.FolderChangeResult{}, application.ErrProjectDependencyUnavailable
+		return application.FolderChangeResult{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	if err := in.Validate(); err != nil {
 		return application.FolderChangeResult{}, err
@@ -136,7 +137,7 @@ func (s *FolderStore) ChangeFolder(ctx context.Context, actor identityapp.Princi
 		}
 		if read.RowsAffected == 1 {
 			if receipt.OrgID != actor.OrgID || receipt.OwnerScopeID != actor.ScopeID || receipt.RequestSHA256 != fingerprint {
-				return application.ErrIdempotencyConflict
+				return workspacesource.ErrIdempotencyConflict
 			}
 			if err := json.Unmarshal(receipt.ResponseBody, &out); err != nil {
 				return fmt.Errorf("decode directory receipt: %w", err)
@@ -183,11 +184,11 @@ func (s *FolderStore) requireCover(ctx context.Context, tx *gorm.DB, actor ident
 		return nil
 	}
 	if s.media == nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	reader := s.media(tx)
 	if reader == nil {
-		return application.ErrProjectDependencyUnavailable
+		return workspacesource.ErrProjectDependencyUnavailable
 	}
 	asset, err := reader.Reference(ctx, actor, cover.ProjectID, cover.AssetID)
 	if err != nil {

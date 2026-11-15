@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -40,12 +40,12 @@ func TestBillingScopeFixturesInRollbackTransaction(t *testing.T) {
 	if peer.ScopeID == actor.ScopeID || peer.OrgID != actor.OrgID {
 		t.Fatal("peer fixture lacks a distinct personal scope in the same organization")
 	}
-	if _, err := store.FindBudget(ctx, peer, project); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.FindBudget(ctx, peer, project); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("other personal scope budget error = %v", err)
 	}
 	withoutSession := actor
 	withoutSession.SessionID = uuid.Nil
-	if _, err := store.FindBudget(ctx, withoutSession, project); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+	if _, err := store.FindBudget(ctx, withoutSession, project); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("sessionless budget error = %v", err)
 	}
 }

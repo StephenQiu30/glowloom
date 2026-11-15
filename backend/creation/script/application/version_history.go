@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // VersionText is a bounded canonical slice available before formal episode identities exist.
@@ -36,7 +35,7 @@ type ConfirmationPage struct {
 }
 
 // VersionText proves the immutable object's SHA before returning a Unicode-scalar slice.
-func (s *HistoryService) VersionText(ctx context.Context, actor identityapp.Principal, project, version uuid.UUID, from, to int) (VersionText, error) {
+func (s *HistoryService) VersionText(ctx context.Context, actor Actor, project, version uuid.UUID, from, to int) (VersionText, error) {
 	if s == nil || s.sources == nil {
 		return VersionText{}, ErrUnavailable
 	}
@@ -55,7 +54,7 @@ func (s *HistoryService) VersionText(ctx context.Context, actor identityapp.Prin
 }
 
 // Confirmations pages every past partition result rather than reconstructing current heads.
-func (s *HistoryService) Confirmations(ctx context.Context, actor identityapp.Principal, project, version uuid.UUID, before int64, limit int) (ConfirmationPage, error) {
+func (s *HistoryService) Confirmations(ctx context.Context, actor Actor, project, version uuid.UUID, before int64, limit int) (ConfirmationPage, error) {
 	if s == nil || s.store == nil {
 		return ConfirmationPage{}, ErrUnavailable
 	}
@@ -66,7 +65,7 @@ func (s *HistoryService) Confirmations(ctx context.Context, actor identityapp.Pr
 }
 
 // Confirmation returns only the exact immutable version/confirmation relationship.
-func (s *HistoryService) Confirmation(ctx context.Context, actor identityapp.Principal, project, version, id uuid.UUID) (domain.SplitConfirmation, error) {
+func (s *HistoryService) Confirmation(ctx context.Context, actor Actor, project, version, id uuid.UUID) (domain.SplitConfirmation, error) {
 	if s == nil || s.store == nil {
 		return domain.SplitConfirmation{}, ErrUnavailable
 	}

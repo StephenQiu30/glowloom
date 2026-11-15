@@ -80,7 +80,7 @@ func scriptActorProject(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.
 	return actor, pid
 }
 func scriptStore(db *gorm.DB) *pg.SourceStore {
-	return pg.NewSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureProjectAccess(tx) }).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
+	return pg.NewSourceStore(db, scriptFixtureProjectAccess).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }
 func scriptCounts(t *testing.T, db *gorm.DB, pid uuid.UUID) (int64, int64, int64) {
 	t.Helper()
@@ -101,7 +101,7 @@ func TestScriptSourcePGImmutableFormatHistoryReplayAndActualCAS(t *testing.T) {
 	actor, pid := scriptActorProject(t, owner)
 	objects := &sourceObjects{data: make(map[string][]byte)}
 	service := app.NewSourceService(scriptStore(db), objects, time.Now)
-	base, err := scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
+	base, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil || base.State.Revision != 0 || base.Version != nil {
 		t.Fatal("empty GET", base, err)
 	}
@@ -110,11 +110,11 @@ func TestScriptSourcePGImmutableFormatHistoryReplayAndActualCAS(t *testing.T) {
 	}
 	_, input := sourceCommand()
 	input.ProjectID = pid
-	first, err := service.Write(t.Context(), actor, input)
+	first, err := service.Write(t.Context(), scriptActor(actor), input)
 	if err != nil || first.ScriptRevision != 1 || first.ProjectRevision != 2 {
 		t.Fatal("first save", first, err)
 	}
-	firstBase, err := scriptStore(db).LoadBase(t.Context(), actor, pid, &first.VersionID)
+	firstBase, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, &first.VersionID)
 	if err != nil || len(firstBase.Sources) != 1 {
 		t.Fatal(err)
 	}
@@ -134,21 +134,21 @@ func TestScriptSourcePGImmutableFormatHistoryReplayAndActualCAS(t *testing.T) {
 	update.BaseVersionID = &first.VersionID
 	update.LineageID = &lineage
 	update.Sources[0].Document.Content[0].Content[0].Marks = []domain.RichMark{{Type: "bold"}}
-	second, err := service.Write(t.Context(), actor, update)
+	second, err := service.Write(t.Context(), scriptActor(actor), update)
 	if err != nil || second.ScriptRevision != 2 || second.VersionID == first.VersionID {
 		t.Fatal("format save", second, err)
 	}
-	secondBase, err := scriptStore(db).LoadBase(t.Context(), actor, pid, nil)
+	secondBase, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, nil)
 	if err != nil || secondBase.Version.ContentHash != firstBase.Version.ContentHash || secondBase.Version.DocumentSHA256 == firstBase.Version.DocumentSHA256 || secondBase.Sources[0].PreviousID == nil || *secondBase.Sources[0].PreviousID != firstBase.Sources[0].ID || secondBase.Sources[0].LineageID != lineage {
 		t.Fatal("format/lineage facts", secondBase, err)
 	}
-	replay, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), actor, input)
+	replay, err := app.NewSourceService(scriptStore(db), objects, time.Now).Write(t.Context(), scriptActor(actor), input)
 	if err != nil || replay.VersionID != first.VersionID || replay.ScriptRevision != 1 {
 		t.Fatal("durable original receipt", replay, err)
 	}
 	stale := update
 	stale.Key = uuid.New()
-	if _, err := service.Write(t.Context(), actor, stale); !errors.Is(err, app.ErrConflict) {
+	if _, err := service.Write(t.Context(), scriptActor(actor), stale); !errors.Is(err, app.ErrConflict) {
 		t.Fatal("stale CAS", err)
 	}
 	if s, v, c := scriptCounts(t, owner, pid); s != 2 || v != 2 || c != 2 {
@@ -175,13 +175,13 @@ func TestScriptSourcePGWholeReorderRightsAndRevokedReplay(t *testing.T) {
 	input.ProjectID = pid
 	input.Action = "import"
 	input.Sources = append(input.Sources, app.SourceInput{Kind: "chapter", Title: "第二章", Status: "ready", Document: domain.RichDocument{Type: "doc", Content: []domain.RichDocument{{Type: "paragraph", Content: []domain.RichDocument{{Type: "text", Text: "中文"}}}}}})
-	saved, err := service.Write(t.Context(), actor, input)
+	saved, err := service.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	order := []uuid.UUID{saved.Mappings[1].LineageID, saved.Mappings[0].LineageID}
 	reorder := app.SourceCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), Action: "reorder", ExpectedRevision: 1, BaseVersionID: &saved.VersionID, Order: order}
-	out, err := service.Write(t.Context(), actor, reorder)
+	out, err := service.Write(t.Context(), scriptActor(actor), reorder)
 	if err != nil || out.ScriptRevision != 2 {
 		t.Fatal("complete reorder", out, err)
 	}
@@ -189,17 +189,17 @@ func TestScriptSourcePGWholeReorderRightsAndRevokedReplay(t *testing.T) {
 	reorder.ExpectedRevision = 2
 	reorder.BaseVersionID = &out.VersionID
 	reorder.Order = order[:1]
-	if _, err := service.Write(t.Context(), actor, reorder); err == nil {
+	if _, err := service.Write(t.Context(), scriptActor(actor), reorder); err == nil {
 		t.Fatal("partial reorder accepted")
 	}
 	foreign, otherPid := scriptActorProject(t, owner)
-	if _, err := scriptStore(db).LoadBase(t.Context(), foreign, pid, nil); !errors.Is(err, app.ErrNotFound) {
+	if _, err := scriptStore(db).LoadBase(t.Context(), scriptActor(foreign), pid, nil); !errors.Is(err, app.ErrNotFound) {
 		t.Fatal("cross org history", otherPid, err)
 	}
 	if err := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Write(context.Background(), actor, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, err := service.Write(context.Background(), scriptActor(actor), input); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked original replay", err)
 	}
 }
@@ -211,7 +211,7 @@ func TestScriptSourcePGPendingWriteRejectsParallelIntentBeforeObject(t *testing.
 	_, input := sourceCommand()
 	input.ProjectID = pid
 	service := app.NewSourceService(scriptStore(db), objects, time.Now)
-	if _, err := service.Write(t.Context(), actor, input); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if _, err := service.Write(t.Context(), scriptActor(actor), input); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal(err)
 	}
 	puts := objects.puts
@@ -219,13 +219,13 @@ func TestScriptSourcePGPendingWriteRejectsParallelIntentBeforeObject(t *testing.
 	another.Key = uuid.New()
 	another.RequestID = uuid.New()
 	objects.uncertain = false
-	if _, err := service.Write(t.Context(), actor, another); !errors.Is(err, app.ErrNeedsReconciliation) {
+	if _, err := service.Write(t.Context(), scriptActor(actor), another); !errors.Is(err, app.ErrNeedsReconciliation) {
 		t.Fatal("parallel pending intent accepted", err)
 	}
 	if s, v, c := scriptCounts(t, owner, pid); s != 0 || v != 0 || c != 1 || objects.puts != puts {
 		t.Fatal("second unknown command or object created", s, v, c, objects.puts, puts)
 	}
-	if _, err := service.Write(t.Context(), actor, input); err != nil {
+	if _, err := service.Write(t.Context(), scriptActor(actor), input); err != nil {
 		t.Fatal("same original key was blocked", err)
 	}
 }
@@ -239,20 +239,20 @@ func TestScriptSourcePGReorderReusesExactManifestWithoutVersionOrObjectDuplicati
 	input.ProjectID = pid
 	input.Action = "import"
 	input.Sources = append(input.Sources, app.SourceInput{Kind: "chapter", Title: "第二章", Status: "draft", Document: domain.RichDocument{Type: "doc", Content: []domain.RichDocument{{Type: "paragraph", Content: []domain.RichDocument{{Type: "text", Text: "第二章"}}}}}})
-	first, err := service.Write(t.Context(), actor, input)
+	first, err := service.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	original := []uuid.UUID{first.Mappings[0].LineageID, first.Mappings[1].LineageID}
 	puts := objects.puts
 	order := app.SourceCommand{ProjectID: pid, Key: uuid.New(), RequestID: uuid.New(), Action: "reorder", ExpectedRevision: 1, BaseVersionID: &first.VersionID, Order: original}
-	same, err := service.Write(t.Context(), actor, order)
+	same, err := service.Write(t.Context(), scriptActor(actor), order)
 	if err != nil || same.Changed || !same.Duplicate || same.VersionID != first.VersionID || same.ScriptRevision != 1 || same.ProjectRevision != 2 || objects.puts != puts {
 		t.Fatal("unchanged complete order duplicated", same, err, objects.puts, puts)
 	}
 	order.Key = uuid.New()
 	order.Order = []uuid.UUID{original[1], original[0]}
-	second, err := service.Write(t.Context(), actor, order)
+	second, err := service.Write(t.Context(), scriptActor(actor), order)
 	if err != nil || second.ScriptRevision != 2 || second.Duplicate {
 		t.Fatal("new order", second, err)
 	}
@@ -261,7 +261,7 @@ func TestScriptSourcePGReorderReusesExactManifestWithoutVersionOrObjectDuplicati
 	order.ExpectedRevision = 2
 	order.BaseVersionID = &second.VersionID
 	order.Order = original
-	reused, err := service.Write(t.Context(), actor, order)
+	reused, err := service.Write(t.Context(), scriptActor(actor), order)
 	if err != nil || !reused.Changed || !reused.Duplicate || reused.VersionID != first.VersionID || reused.ScriptRevision != 3 || reused.ProjectRevision != 4 || objects.puts != puts {
 		t.Fatal("original exact manifest not reused", reused, err, objects.puts, puts)
 	}
@@ -270,11 +270,11 @@ func TestScriptSourcePGReorderReusesExactManifestWithoutVersionOrObjectDuplicati
 	input.BaseVersionID = &first.VersionID
 	input.Action = "create"
 	input.Sources = input.Sources[:1]
-	third, err := service.Write(t.Context(), actor, input)
+	third, err := service.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal("chronological version after old reuse", err)
 	}
-	base, err := scriptStore(db).LoadBase(t.Context(), actor, pid, &third.VersionID)
+	base, err := scriptStore(db).LoadBase(t.Context(), scriptActor(actor), pid, &third.VersionID)
 	if err != nil || base.Version.VersionNo != 3 {
 		t.Fatal("chronological version sequence", base, err)
 	}

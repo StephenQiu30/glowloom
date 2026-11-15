@@ -4,18 +4,19 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // List returns one authorized source's copy jobs, including hidden targets and failures.
 func (s *ProjectCopyStore) List(ctx context.Context, actor identityapp.Principal, input application.ProjectCopyListInput) (application.ProjectCopyPage, error) {
 	if s == nil || s.db == nil || input.Limit < 1 || input.Limit > 100 {
-		return application.ProjectCopyPage{}, application.ErrProjectDependencyUnavailable
+		return application.ProjectCopyPage{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	page := application.ProjectCopyPage{Jobs: []domain.ProjectCopyJob{}}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -71,7 +72,7 @@ func lockCopyPage(tx *gorm.DB, actor identityapp.Principal, source uuid.UUID, ca
 	// Empty pages still authorize their source; archived and deleted projects
 	// remain readable under the existing lifecycle contract.
 	if len(projects) != len(projectIDs) {
-		return nil, application.ErrProjectNotFound
+		return nil, workspacesource.ErrProjectNotFound
 	}
 	jobs := make([]domain.ProjectCopyJob, 0, len(candidates))
 	if len(candidates) == 0 {
@@ -82,7 +83,7 @@ func lockCopyPage(tx *gorm.DB, actor identityapp.Principal, source uuid.UUID, ca
 		return nil, fmt.Errorf("lock copy page jobs: %w", err)
 	}
 	if len(locked) != len(candidates) {
-		return nil, application.ErrProjectNotFound
+		return nil, workspacesource.ErrProjectNotFound
 	}
 	byID := make(map[uuid.UUID]copyJobRow, len(locked))
 	for _, row := range locked {
@@ -92,7 +93,7 @@ func lockCopyPage(tx *gorm.DB, actor identityapp.Principal, source uuid.UUID, ca
 		row, ok := byID[candidate.ID]
 		// Recheck bindings under locks without acquiring any new project locks.
 		if !ok || row.SourceProjectID != candidate.SourceProjectID || row.TargetProjectID != candidate.TargetProjectID || row.ActorID != candidate.ActorID || row.ExecutionActorID != candidate.ExecutionActorID {
-			return nil, application.ErrProjectNotFound
+			return nil, workspacesource.ErrProjectNotFound
 		}
 		job, err := row.job()
 		if err != nil {
@@ -106,7 +107,7 @@ func lockCopyPage(tx *gorm.DB, actor identityapp.Principal, source uuid.UUID, ca
 // WorkerActor restores only the job's current command-bound account, never a synthesized role.
 func (s *ProjectCopyStore) WorkerActor(ctx context.Context, org, id uuid.UUID) (identityapp.Principal, error) {
 	if s == nil || s.db == nil || org == uuid.Nil || id == uuid.Nil {
-		return identityapp.Principal{}, application.ErrProjectDependencyUnavailable
+		return identityapp.Principal{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	var actor identityapp.Principal
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

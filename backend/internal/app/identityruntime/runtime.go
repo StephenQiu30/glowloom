@@ -19,6 +19,7 @@ import (
 	identitymail "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/mail"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
@@ -74,23 +75,25 @@ func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, 
 	invitations := http.NewInvitationHandler(governance)
 	invitations.RegisterPublic(public, cfg.PublicOrigin)
 	return handler, func(group *gin.RouterGroup) {
+		group.Use(http.WithLegacyGovernanceErrors(mapCreationGovernanceError))
 		http.NewSelfProfileHandler(identityapp.NewSelfProfile(pgidentity.NewSelfProfileStore(database, func(tx *gorm.DB) identityapp.AvatarAccess { return pgmedia.NewAvatarAccess(tx) }), now)).Register(group)
 		http.NewEmailChangeHandler(identityapp.NewEmailChange(auth, pgidentity.NewEmailChangeStore(database), now), strings.HasPrefix(cfg.PublicOrigin, "https://")).Register(group)
 		http.NewPlatformPasswordResetHandler(identityapp.NewPlatformPasswordReset(governanceStore, auth, now)).Register(group)
-		avatars := pgmedia.NewAvatarStore(database, func(tx *gorm.DB) mediaapp.AvatarActorAccess { return pgidentity.NewStore(tx) })
+		resolveMediaActor := func(c *gin.Context) (mediaapp.Actor, error) { return mediawire.Actor(http.Principal(c)), nil }
+		avatars := pgmedia.NewAvatarStore(database, mediawire.NewAvatarActorAccess)
 		routedObjects := mediaobjects.NewRoutedReadObjects(registry)
 		avatarService := mediaapp.NewRoutedAvatarService(avatars, routedObjects, now)
 		avatarQuery := mediaapp.NewRoutedAvatarQuery(avatars, routedObjects, now, cfg.ObjectStorage.Access.PreviewTTL)
-		mediahttp.NewAvatarHandler(avatarService, avatarQuery).Register(group)
-		logos := pgmedia.NewProviderLogoStore(database, func(tx *gorm.DB) mediaapp.AvatarActorAccess { return pgidentity.NewStore(tx) })
-		mediahttp.NewProviderLogoHandler(mediaapp.NewRoutedProviderLogoService(logos, routedObjects, now), mediaapp.NewProviderLogoQuery(logos, routedObjects, now, cfg.ObjectStorage.Access.PreviewTTL)).Register(group)
+		mediahttp.NewAvatarHandler(avatarService, avatarQuery, resolveMediaActor).Register(group)
+		logos := pgmedia.NewProviderLogoStore(database, mediawire.NewAvatarActorAccess)
+		mediahttp.NewProviderLogoHandler(mediaapp.NewRoutedProviderLogoService(logos, routedObjects, now), mediaapp.NewProviderLogoQuery(logos, routedObjects, now, cfg.ObjectStorage.Access.PreviewTTL), resolveMediaActor).Register(group)
 		if durable == nil {
 			sessions.Register(group)
 		} else {
 			sessions.RegisterRead(group)
 		}
 		http.NewPlatformDirectoryHandler(identityapp.NewPlatformDirectory(pgidentity.NewPlatformDirectoryStore(database), protector, now)).Register(group)
-		exportStore := pgidentity.NewDirectoryExportStore(database)
+		exportStore := pgidentity.NewDirectoryExportStore(database, mediawire.NewIdentityExportLedger)
 		var exportService *identityapp.DirectoryExport
 		exportObjects := mediaobjects.NewRoutedIdentityExportObjects(registry, exportStore)
 		exportService = identityapp.NewRoutedDirectoryExport(exportStore, protector, exportObjects, now)
@@ -162,7 +165,7 @@ func StartDirectoryExportLoop(ctx context.Context, database *gorm.DB, cfg config
 	if err != nil {
 		return nil, err
 	}
-	store := pgidentity.NewDirectoryExportStore(database)
+	store := pgidentity.NewDirectoryExportStore(database, mediawire.NewIdentityExportLedger)
 	objects := mediaobjects.NewRoutedIdentityExportObjects(registry, store)
 	service := identityapp.NewRoutedDirectoryExport(store, protector, objects, time.Now)
 	return StartExportRunner(ctx, service, logger, 5*time.Second), nil

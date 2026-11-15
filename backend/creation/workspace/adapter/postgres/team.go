@@ -9,6 +9,8 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -53,6 +55,9 @@ func (s *TeamStore) TeamTransaction(ctx context.Context, actor identity.Principa
 		if err := s.actors(tx).CheckSession(ctx, actor, clock); err != nil {
 			return err
 		}
+		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended('creation.team_management',0))`).Error; err != nil {
+			return err
+		}
 		var avatars application.TeamAvatarAccess
 		if s.avatars != nil {
 			avatars = s.avatars(tx)
@@ -93,7 +98,7 @@ func (t *teamTx) CreationReceipt(key uuid.UUID, hash string) (application.Team, 
 		return application.Team{}, false, nil
 	}
 	if row.RequestHash != hash {
-		return application.Team{}, false, application.ErrIdempotencyConflict
+		return application.Team{}, false, workspacesource.ErrIdempotencyConflict
 	}
 	var team application.Team
 	if err := json.Unmarshal(row.ResponseBody, &team); err != nil {
@@ -131,7 +136,7 @@ func (t *teamTx) LoadTeam(id uuid.UUID) (application.Team, error) {
 		return team, r.Error
 	}
 	if r.RowsAffected != 1 {
-		return team, application.ErrScopeNotFound
+		return team, workspacesource.ErrScopeNotFound
 	}
 	err := t.db.Raw(`SELECT count(*) FROM workspace.team_member m JOIN identity."user" u ON u.id=m.user_id WHERE m.team_id=? AND m.status='active' AND u.status='active' AND NOT u.is_delete AND u.email_verified_at IS NOT NULL`, id).Scan(&team.MemberCount).Error
 	return team, err
@@ -164,7 +169,7 @@ func (t *teamTx) Member(team, user uuid.UUID) (application.TeamMemberState, erro
 		return member, r.Error
 	}
 	if r.RowsAffected != 1 {
-		return member, application.ErrScopeNotFound
+		return member, workspacesource.ErrScopeNotFound
 	}
 	return member, nil
 }

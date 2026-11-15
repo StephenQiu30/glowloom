@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	tooltask "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
@@ -65,12 +67,12 @@ func depthStoreWithScope(db *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFa
 	if enabled {
 		source = func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
 			return canvasapp.NewTranscriptionSourceReader(mediaCanvasStoreWithScope(tx, func(db *gorm.DB) canvasapp.MediaReader {
-				return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(db, scopes))
+				return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(db, scopes)))
 			}, scopes))
 		}
 	}
 	return mediatoolDepthStore(db, source, func(tx *gorm.DB) toolapp.DepthDerivedMedia {
-		return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes)))
 	})
 }
 
@@ -81,7 +83,7 @@ func depthHTTP(t *testing.T) *depthHTTPFixture {
 	actor, project := mediaStoreProject(t, db)
 	input := depthTestVideo(t, "30", "2")
 	upload := mediaFixtureRoutedUpload(t, db, mediaTestStore(db), nil, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{})
-	result, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.mp4"}, File: input, LocalReviewConfirmed: true})
+	result, err := fixtureProjectUpload(t.Context(), upload, mediaapp.UploadInput{Actor: mediaActor(actor), Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.mp4"}, File: input, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual private video upload", err)
 	}
@@ -156,7 +158,7 @@ func TestDepthJobActualNativeHTTPPrivateReviewCanvas(t *testing.T) {
 	if rec := f.request(t, "GET", base+"/download"+scope, uuid.Nil, nil); rec.Code != 409 {
 		t.Fatal("pending output downloaded", rec.Code)
 	}
-	if _, err := mediaapp.NewAssetQuery(mediaTestStore(f.db)).Reference(t.Context(), f.actor, f.project, *rendered.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewAssetQuery(mediaTestStore(f.db)).Reference(t.Context(), mediaActor(f.actor), f.project, *rendered.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("pending output referenceable", err)
 	}
 	rec := f.request(t, "GET", base+"/preview"+scope, uuid.Nil, nil)
@@ -192,7 +194,9 @@ func TestDepthJobActualNativeHTTPPrivateReviewCanvas(t *testing.T) {
 	if json.Unmarshal(artifact.Artifact, &frozen) != nil || !frozen.Receipt.Native.ProcessGroupJoined || frozen.Receipt.Output.FrameCount != 60 || len(frozen.Renditions) != 2 {
 		t.Fatal("actual permanent native receipt incomplete")
 	}
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx)) }
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaTestStore(tx)))
+	}
 	service := canvasfixture.NewService(mediaCanvasStore(f.db, mediaFactory))
 	doc, err := service.Get(t.Context(), f.actor, f.input.CanvasID)
 	if err != nil {
@@ -287,7 +291,7 @@ func TestDepthJobActualReconcileAllObjectsThenCancelPendingWithoutInference(t *t
 	if err != nil || cancelled.Status != tooldomain.DepthCancelled || p.calls.Load() != 1 {
 		t.Fatalf("pending physical cleanup %+v %v", cancelled, err)
 	}
-	asset, err := mediaTestStore(f.db).FindAsset(t.Context(), f.actor, f.project, *recovered.AssetID)
+	asset, err := mediaTestStore(f.db).FindAsset(t.Context(), mediaActor(f.actor), f.project, *recovered.AssetID)
 	if err != nil || asset.Status != "rejected" || asset.ModerationStatus != "rejected" {
 		t.Fatal("pending asset not permanently rejected", err)
 	}
@@ -349,7 +353,7 @@ func TestDepthJobActualUnknownPutCancelReconcileWithoutInference(t *testing.T) {
 			t.Fatal("unpublished result retained", err)
 		}
 	}
-	source, err := mediaTestStore(f.db).FindAsset(t.Context(), f.actor, f.project, f.source)
+	source, err := mediaTestStore(f.db).FindAsset(t.Context(), mediaActor(f.actor), f.project, f.source)
 	if err != nil || !source.CanReference() {
 		t.Fatal("source media changed", err)
 	}

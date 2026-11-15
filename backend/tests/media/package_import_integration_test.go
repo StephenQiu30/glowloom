@@ -64,11 +64,11 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	in := mediaapp.PackageImportRequest{Scope: scope, ExpectedRevision: 0, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
 	file := packageDownloaded(t, ownPackageZIP(t))
-	job, err := service.Import(t.Context(), actor, in, file)
+	job, err := service.Import(t.Context(), mediaActor(actor), in, file)
 	if err != nil || job.Status != "succeeded" || job.ItemCount != 2 || job.FolderCount != 1 || job.LibraryRevision != 1 || job.ProjectRevision != 2 {
 		t.Fatal("whole import", job, err)
 	}
-	locations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), actor, scope)
+	locations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), mediaActor(actor), scope)
 	keys := make([]string, 0, len(locations))
 	for _, ref := range locations {
 		if ref.Validate() != nil {
@@ -84,7 +84,7 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 			_ = objects.Remove(context.Background(), key)
 		}
 	})
-	page, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), actor, scope, mediaapp.LibraryQuery{Page: 1, PageSize: 120, State: "active", Order: "name_asc"})
+	page, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), mediaActor(actor), scope, mediaapp.LibraryQuery{Page: 1, PageSize: 120, State: "active", Order: "name_asc"})
 	if err != nil || page.Total != 2 || len(page.Folders) != 1 {
 		t.Fatal("formal full contents", page, err)
 	}
@@ -93,7 +93,7 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 			t.Fatal("source identity or placement leaked", item)
 		}
 	}
-	exported, err := service.Export(t.Context(), actor, scope)
+	exported, err := service.Export(t.Context(), mediaActor(actor), scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,11 +108,11 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 		}
 	}
 	personal := domain.LibraryScope{Kind: domain.LibraryPersonal}
-	personalImport, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: personal, ExpectedRevision: 0, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, exported)
+	personalImport, err := service.Import(t.Context(), mediaActor(actor), mediaapp.PackageImportRequest{Scope: personal, ExpectedRevision: 0, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, exported)
 	if err != nil || personalImport.Status != "succeeded" || personalImport.ID == job.ID {
 		t.Fatal("personal independent round trip", personalImport, err)
 	}
-	plocations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), actor, personal)
+	plocations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), mediaActor(actor), personal)
 	pkeys := make([]string, 0, len(plocations))
 	for _, ref := range plocations {
 		if ref.Validate() != nil {
@@ -133,12 +133,12 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 			t.Fatal(err)
 		}
 	}
-	independent, err := service.Export(t.Context(), actor, personal)
+	independent, err := service.Export(t.Context(), mediaActor(actor), personal)
 	if err != nil {
 		t.Fatal("target depends on fixture source", err)
 	}
 	_ = independent.Close()
-	replay, err := service.Import(t.Context(), actor, in, file)
+	replay, err := service.Import(t.Context(), mediaActor(actor), in, file)
 	if err != nil || replay.ID != job.ID || replay.LibraryRevision != job.LibraryRevision {
 		t.Fatal("permanent replay became a new import", replay, err)
 	}
@@ -174,7 +174,7 @@ func TestMediaPackageUnknownWritePersistsWholeBatchAndReconcilesWithoutNewIdenti
 	unknown := &packageUnknownWrite{packageFixtureObjects: base}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	input := mediaapp.PackageImportRequest{Scope: scope, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
-	job, err := mediaapp.NewLibraryPackageService(repo, uploads, unknown, time.Now).Import(t.Context(), actor, input, packageDownloaded(t, ownPackageZIP(t)))
+	job, err := mediaapp.NewLibraryPackageService(repo, uploads, unknown, time.Now).Import(t.Context(), mediaActor(actor), input, packageDownloaded(t, ownPackageZIP(t)))
 	if err != nil || job.Status != "needs_reconciliation" {
 		t.Fatal("unknown write lost original job", job, err)
 	}
@@ -182,15 +182,15 @@ func TestMediaPackageUnknownWritePersistsWholeBatchAndReconcilesWithoutNewIdenti
 	if err := db.Raw(`SELECT count(*) FROM media.media_asset WHERE project_id=?`, project).Scan(&count).Error; err != nil || count != 0 {
 		t.Fatal("partial package published", count, err)
 	}
-	busy, err := repo.HasInflightPackageWork(t.Context(), actor, project)
+	busy, err := repo.HasInflightPackageWork(t.Context(), mediaActor(actor), project)
 	if err != nil || !busy {
 		t.Fatal("unknown batch did not block lifecycle", busy, err)
 	}
-	recovered, err := mediaapp.NewLibraryPackageService(repo, uploads, base, time.Now).Reconcile(t.Context(), actor, job.ID)
+	recovered, err := mediaapp.NewLibraryPackageService(repo, uploads, base, time.Now).Reconcile(t.Context(), mediaActor(actor), job.ID)
 	if err != nil || recovered.ID != job.ID || recovered.Status != "succeeded" {
 		t.Fatal("original durable recovery", recovered, err)
 	}
-	locations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), actor, scope)
+	locations, err := mediaLibraryStore(db, libraryTestAccess, time.Now).StorageUsageLocations(t.Context(), mediaActor(actor), scope)
 	keys := make([]string, 0, len(locations))
 	for _, ref := range locations {
 		if ref.Validate() != nil {
@@ -206,12 +206,12 @@ func TestMediaPackageUnknownWritePersistsWholeBatchAndReconcilesWithoutNewIdenti
 			_ = objects.Remove(context.Background(), key)
 		}
 	})
-	if busy, err := repo.HasInflightPackageWork(t.Context(), actor, project); err != nil || busy {
+	if busy, err := repo.HasInflightPackageWork(t.Context(), mediaActor(actor), project); err != nil || busy {
 		t.Fatal("completed batch retained work reservation", busy, err)
 	}
 	input.ExpectedRevision = 99
 	input.Key = uuid.New()
-	if _, err := mediaapp.NewLibraryPackageService(repo, uploads, base, time.Now).Import(t.Context(), actor, input, packageDownloaded(t, ownPackageZIP(t))); !errors.Is(err, mediaapp.ErrPackageConflict) {
+	if _, err := mediaapp.NewLibraryPackageService(repo, uploads, base, time.Now).Import(t.Context(), mediaActor(actor), input, packageDownloaded(t, ownPackageZIP(t))); !errors.Is(err, mediaapp.ErrPackageConflict) {
 		t.Fatal("stale scope admitted", err)
 	}
 }

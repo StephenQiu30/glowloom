@@ -24,14 +24,14 @@ func TestScriptVersionHTTPActualCandidateTextConfirmationHistoryAndAdoption(t *t
 	_, input := sourceCommand()
 	input.ProjectID = pid
 	input.Sources[0].Document = domain.RichDocument{Type: "doc", Content: []domain.RichDocument{{Type: "paragraph", Content: []domain.RichDocument{{Type: "text", Text: "甲😀乙"}}}}}
-	saved, err := sources.Write(t.Context(), actor, input)
+	saved, err := sources.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	router := scriptReviewRouter(sources, episodes, history, actor)
 	g := router.Group("/api")
 	g.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	scripthttp.NewVersionHandler(history, app.NewAdoptService(store, time.Now)).Register(g)
+	scripthttp.NewVersionHandler(history, app.NewAdoptService(store, time.Now), scriptHTTPActor).Register(g)
 	path := "/api/projects/" + pid.String() + "/script-versions/" + saved.VersionID.String()
 	text := scriptHTTP(t, router, "GET", path+"/source-text?from=1&to=2", uuid.Nil, nil)
 	var part app.VersionText
@@ -42,12 +42,12 @@ func TestScriptVersionHTTPActualCandidateTextConfirmationHistoryAndAdoption(t *t
 	if invalid.Code != 422 {
 		t.Fatal("oversize range", invalid.Code)
 	}
-	view, err := episodes.Episodes(t.Context(), actor, pid, saved.VersionID)
+	view, err := episodes.Episodes(t.Context(), scriptActor(actor), pid, saved.VersionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	command := app.SplitCommand{ProjectID: pid, VersionID: saved.VersionID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 1, CandidateSetID: saved.SplitSetID, Boundaries: view.Candidate.Boundaries}
-	first, err := episodes.ConfirmSplit(t.Context(), actor, command)
+	first, err := episodes.ConfirmSplit(t.Context(), scriptActor(actor), command)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestScriptVersionHTTPActualCandidateTextConfirmationHistoryAndAdoption(t *t
 	command.ExpectedRevision = 2
 	command.ExpectedSplitRevision = 1
 	command.Boundaries[0].Title = "修改后集名"
-	if _, err := episodes.ConfirmSplit(t.Context(), actor, command); err != nil {
+	if _, err := episodes.ConfirmSplit(t.Context(), scriptActor(actor), command); err != nil {
 		t.Fatal(err)
 	}
 	pageResponse := scriptHTTP(t, router, "GET", path+"/split-confirmations?limit=1", uuid.Nil, nil)
@@ -77,7 +77,7 @@ func TestScriptVersionHTTPActualCandidateTextConfirmationHistoryAndAdoption(t *t
 	foreignRouter := scriptReviewRouter(sources, episodes, history, foreign)
 	fg := foreignRouter.Group("/api")
 	fg.Use(func(c *gin.Context) { c.Set("principal", foreign); c.Next() })
-	scripthttp.NewVersionHandler(history, app.NewAdoptService(store, time.Now)).Register(fg)
+	scripthttp.NewVersionHandler(history, app.NewAdoptService(store, time.Now), scriptHTTPActor).Register(fg)
 	r := scriptHTTP(t, foreignRouter, "GET", path+"/source-text?from=0&to=1", uuid.Nil, nil)
 	if r.Code != 404 {
 		t.Fatal("foreign version body exposed", foreignPid, r.Code)

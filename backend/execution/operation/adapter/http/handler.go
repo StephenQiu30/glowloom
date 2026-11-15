@@ -14,15 +14,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 )
 
@@ -591,11 +593,11 @@ func queryProject(c *gin.Context) (uuid.UUID, bool) {
 }
 func writeError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, promptapp.ErrTemplateInvalid):
+	case errors.Is(err, promptapp.ErrTemplateInvalid), errors.Is(err, application.ErrFrozenTemplateInvalid):
 		httpapi.WriteProblem(c, 422, "template_invalid", nil)
-	case errors.Is(err, promptapp.ErrTemplateChanged):
+	case errors.Is(err, promptapp.ErrTemplateChanged), errors.Is(err, application.ErrFrozenTemplateChanged):
 		httpapi.WriteProblem(c, 409, "template_changed", nil)
-	case errors.Is(err, promptapp.ErrTemplateContextUnavailable):
+	case errors.Is(err, promptapp.ErrTemplateContextUnavailable), errors.Is(err, application.ErrFrozenTemplateContextUnavailable):
 		httpapi.WriteProblem(c, 409, "context_unavailable", nil)
 	case errors.Is(err, application.ErrSubmissionUnresolved):
 		httpapi.WriteProblem(c, 409, "submission_unresolved", nil)
@@ -603,14 +605,12 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "submission_epoch_conflict", nil)
 	case errors.Is(err, application.ErrSubmissionAccepted):
 		httpapi.WriteProblem(c, 409, "submission_already_accepted", nil)
-	case errors.Is(err, promptdomain.ErrReferenceUnavailable):
+	case errors.Is(err, promptdomain.ErrReferenceUnavailable), errors.Is(err, application.ErrFrozenReferenceUnavailable):
 		httpapi.WriteProblem(c, 422, "reference_unavailable", nil)
 	case errors.Is(err, application.ErrPendingConsumption):
 		httpapi.WriteProblem(c, 409, "consumption_pending", nil)
 	case errors.Is(err, application.ErrQuoteSourceStale), errors.Is(err, promptdomain.ErrInputStale):
 		httpapi.WriteProblem(c, 409, "canvas_revision_conflict", nil)
-	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
-		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, identityapp.ErrSessionInvalid):
 		httpapi.WriteProblem(c, 401, "session_invalid", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
@@ -637,7 +637,7 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "state_conflict", nil)
 	case errors.Is(err, application.ErrConfirmationTargetUnavailable):
 		httpapi.WriteProblem(c, 409, "target_unavailable", nil)
-	case errors.Is(err, application.ErrInvalidFreeQuote), errors.Is(err, application.ErrInvalidBatchFreeQuote), errors.Is(err, application.ErrInvalidConfirmSingleQuote), errors.Is(err, application.ErrInvalidConfirmBatchQuote), errors.Is(err, application.ErrInvalidPublicQuery), errors.Is(err, application.ErrInvalidWorkflowControl):
+	case errors.Is(err, application.ErrFrozenCompilerUnsupported), errors.Is(err, application.ErrInvalidFreeQuote), errors.Is(err, application.ErrInvalidBatchFreeQuote), errors.Is(err, application.ErrInvalidConfirmSingleQuote), errors.Is(err, application.ErrInvalidConfirmBatchQuote), errors.Is(err, application.ErrInvalidPublicQuery), errors.Is(err, application.ErrInvalidWorkflowControl):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:
 		httpapi.LogDependencyError(c, err)

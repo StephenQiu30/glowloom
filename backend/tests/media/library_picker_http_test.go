@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -22,7 +21,7 @@ type pickerQueryLibrary struct {
 	query mediaapp.LibraryQuery
 }
 
-func (r *pickerQueryLibrary) ListLibrary(_ context.Context, _ identity.Principal, _ domain.LibraryScope, q mediaapp.LibraryQuery) (mediaapp.LibraryPage, error) {
+func (r *pickerQueryLibrary) ListLibrary(_ context.Context, _ mediaapp.Actor, _ domain.LibraryScope, q mediaapp.LibraryQuery) (mediaapp.LibraryPage, error) {
 	r.calls++
 	r.query = q
 	return mediaapp.LibraryPage{}, nil
@@ -30,7 +29,7 @@ func (r *pickerQueryLibrary) ListLibrary(_ context.Context, _ identity.Principal
 func TestLibraryPickerHTTPStrictQueryBeforeRepository(t *testing.T) {
 	repo := &pickerQueryLibrary{}
 	router := gin.New()
-	mediahttp.NewLibraryHandler(repo).Register(router.Group("/api"))
+	mediahttp.NewLibraryHandler(repo, staticMediaActor).Register(router.Group("/api"))
 	base := "/api/media/library?scope=project&project_id=" + uuid.NewString() + "&kind=image&page=2&page_size=40"
 	valid := "&created_from=2026-10-01T00%3A00%3A00Z&created_before=2026-10-03T00%3A00%3A00Z&origin=upload&resolutions=1K,2K&ratios=16%3A9,1%3A1"
 	response := httptest.NewRecorder()

@@ -73,13 +73,13 @@ func TestResourceInputPostgresVersionsReplayAndSourceAuthorization(t *testing.T)
 			}
 			assertSnapshots(1)
 			source := promptdomain.InputSource{Kind: "canvas_input", CanvasID: doc.ID, NodeID: node.ID, CanvasRevision: read.Revision, InputRevision: 1}
-			if got, err := inputReader.ReadInput(t.Context(), actor, project, source, false); err != nil || !reflect.DeepEqual(got, *draft.Composer) {
+			if got, err := inputReader.ReadInput(t.Context(), promptActor(actor), project, source, false); err != nil || !reflect.DeepEqual(got, *draft.Composer) {
 				t.Fatal("formal input reader cannot read resource", got, err)
 			}
-			if _, err := inputReader.ReadInput(t.Context(), foreign, project, source, false); err == nil {
+			if _, err := inputReader.ReadInput(t.Context(), promptActor(foreign), project, source, false); err == nil {
 				t.Fatal("foreign actor read input")
 			}
-			if _, err := inputReader.ReadInput(t.Context(), actor, foreignProject, source, false); err == nil {
+			if _, err := inputReader.ReadInput(t.Context(), promptActor(actor), foreignProject, source, false); err == nil {
 				t.Fatal("cross-project input read")
 			}
 			layout := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, Operations: []domain.Operation{{Type: "set", NodeID: node.ID, Path: []string{"position"}, Value: raw(`{"x":55,"y":66}`)}}}
@@ -87,10 +87,10 @@ func TestResourceInputPostgresVersionsReplayAndSourceAuthorization(t *testing.T)
 				t.Fatal("layout", r, err)
 			}
 			assertSnapshots(1)
-			if _, err := inputReader.ReadInput(t.Context(), actor, project, source, false); !errors.Is(err, promptdomain.ErrInputStale) {
+			if _, err := inputReader.ReadInput(t.Context(), promptActor(actor), project, source, false); !errors.Is(err, promptdomain.ErrInputStale) {
 				t.Fatal("quote ignored stale canvas revision", err)
 			}
-			if _, err := inputReader.ReadInput(t.Context(), actor, project, source, true); err != nil {
+			if _, err := inputReader.ReadInput(t.Context(), promptActor(actor), project, source, true); err != nil {
 				t.Fatal("confirm rejected unchanged generation input after layout", err)
 			}
 			next := composerNode(t).Config.Draft
@@ -102,7 +102,7 @@ func TestResourceInputPostgresVersionsReplayAndSourceAuthorization(t *testing.T)
 				t.Fatal("change input", r, err)
 			}
 			assertSnapshots(2)
-			if _, err := inputReader.ReadInput(t.Context(), actor, project, source, true); !errors.Is(err, promptdomain.ErrInputStale) {
+			if _, err := inputReader.ReadInput(t.Context(), promptActor(actor), project, source, true); !errors.Is(err, promptdomain.ErrInputStale) {
 				t.Fatal("confirm accepted changed input", err)
 			}
 			if r, err := writer.Submit(t.Context(), actor, doc.ID, uuid.NewString(), change); err != nil || r.Status != "rejected" {
@@ -114,7 +114,7 @@ func TestResourceInputPostgresVersionsReplayAndSourceAuthorization(t *testing.T)
 				t.Fatal("delete input owner", r, err)
 			}
 			assertSnapshots(2)
-			if _, err := inputReader.ReadInput(t.Context(), actor, project, source, true); err == nil {
+			if _, err := inputReader.ReadInput(t.Context(), promptActor(actor), project, source, true); err == nil {
 				t.Fatal("deleted input remained executable")
 			}
 			if r, err := writer.Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, UndoOf: deleteKey}); err != nil || r.Status != "accepted" {
@@ -148,7 +148,7 @@ func TestResourceInputPostgresReadOnlyGraphAdmission(t *testing.T) {
 			}
 			source := promptdomain.InputSource{Kind: "canvas_input", CanvasID: doc.ID, NodeID: node.ID, CanvasRevision: created.Revision, InputRevision: 1}
 			inputReader := promptpg.NewDraftStore(runtime, promptwire.DraftAccess)
-			if _, err := inputReader.ReadInput(t.Context(), actor, project, source, false); err != nil {
+			if _, err := inputReader.ReadInput(t.Context(), promptActor(actor), project, source, false); err != nil {
 				t.Fatal("valid control input rejected", err)
 			}
 			switch mutation {
@@ -165,7 +165,7 @@ func TestResourceInputPostgresReadOnlyGraphAdmission(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, confirm := range []bool{false, true} {
-				if _, err := inputReader.ReadInput(t.Context(), actor, project, source, confirm); err == nil {
+				if _, err := inputReader.ReadInput(t.Context(), promptActor(actor), project, source, confirm); err == nil {
 					t.Fatalf("read-only graph admitted generation input: confirm=%t", confirm)
 				} else if mutation != "archived_project" && !errors.Is(err, promptdomain.ErrInputStale) {
 					t.Fatal("read-only graph must use the recognized source-conflict response", err)

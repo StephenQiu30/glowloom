@@ -19,7 +19,7 @@ func TestMediaTransferActualProjectToPersonalCreatesIndependentOriginalAndRendit
 		t.Fatal(projectResult, err)
 	}
 	input := mediaapp.TransferInput{Source: f.input.Target, Target: f.input.Source, Items: []mediaapp.LibraryItemRevision{{ID: projectResult.Items[0].TargetItemID, Revision: 1}}, ExpectedSourceRevision: 1, ExpectedTargetRevision: 1, ExpectedProjectRevision: 2, Key: uuid.New()}
-	job, err := f.repo.CreateTransfer(t.Context(), f.actor, input)
+	job, err := f.repo.CreateTransfer(t.Context(), mediaActor(f.actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestMediaTransferActualProjectToPersonalCreatesIndependentOriginalAndRendit
 	if err != nil || result.Status != "succeeded" {
 		t.Fatal("actual opposite scope transfer", result, err)
 	}
-	file, err := mediaLibraryStore(f.db, libraryTestAccess, time.Now).FindLibraryMedia(t.Context(), f.actor, input.Target, *result.Items[0].TargetAssetID)
+	file, err := mediaLibraryStore(f.db, libraryTestAccess, time.Now).FindLibraryMedia(t.Context(), mediaActor(f.actor), input.Target, *result.Items[0].TargetAssetID)
 	if err != nil || file.Asset.Personal == nil || file.Asset.Personal.ActorID != f.actor.ID || file.Asset.ProjectID != uuid.Nil || len(file.Renditions) != 2 || file.Asset.ID == f.input.Items[0].ID || file.Asset.ID == projectResult.Items[0].TargetItemID {
 		t.Fatal("independent personal ownership missing", file, err)
 	}
@@ -50,7 +50,7 @@ func TestMediaTransferActualProjectToPersonalCreatesIndependentOriginalAndRendit
 	if err != nil || closeErr != nil || n != file.Asset.ByteSize {
 		t.Fatal("actual personal original bytes", n, err, closeErr)
 	}
-	if _, err := mediaTestStore(f.db).FindAsset(t.Context(), f.actor, *input.Source.ProjectID, file.Asset.ID); err == nil {
+	if _, err := mediaTestStore(f.db).FindAsset(t.Context(), mediaActor(f.actor), *input.Source.ProjectID, file.Asset.ID); err == nil {
 		t.Fatal("personal original leaked into ordinary project reference")
 	}
 	var projectRevision int64
@@ -66,12 +66,12 @@ func TestMediaTransferQueuedSourceAndTargetFolderChangesFailBeforeAnyObjectWrite
 			library := mediaLibraryStore(f.db, libraryTestAccess, time.Now)
 			job := f.job
 			if changeSource {
-				_, err := library.ApplyLibraryCommand(t.Context(), f.actor, mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: f.input.Source, Key: uuid.New(), ExpectedRevision: 1, Action: "update_item", ItemID: &f.input.Items[0].ID, Metadata: &mediaapp.LibraryMetadata{Title: "新分类描述", Category: "other"}})
+				_, err := library.ApplyLibraryCommand(t.Context(), mediaActor(f.actor), mediaapp.LibraryCommand{ExpectedItemRevision: 1, Scope: f.input.Source, Key: uuid.New(), ExpectedRevision: 1, Action: "update_item", ItemID: &f.input.Items[0].ID, Metadata: &mediaapp.LibraryMetadata{Title: "新分类描述", Category: "other"}})
 				if err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				requested, err := f.repo.ControlTransfer(t.Context(), f.actor, job.ID, uuid.New(), job.Revision, "cancel")
+				requested, err := f.repo.ControlTransfer(t.Context(), mediaActor(f.actor), job.ID, uuid.New(), job.Revision, "cancel")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -79,17 +79,17 @@ func TestMediaTransferQueuedSourceAndTargetFolderChangesFailBeforeAnyObjectWrite
 				if err != nil || cancelled.Status != "cancelled" || cancelled.NeedsReconciliation {
 					t.Fatal("queued physical cancellation did not drain before new admission", cancelled, err)
 				}
-				created, err := library.ApplyLibraryCommand(t.Context(), f.actor, mediaapp.LibraryCommand{Scope: f.input.Target, Key: uuid.New(), Action: "create_folder", Folder: &mediaapp.LibraryFolderInput{Name: "目标目录", Style: "cinema", Theme: "obsidian"}})
+				created, err := library.ApplyLibraryCommand(t.Context(), mediaActor(f.actor), mediaapp.LibraryCommand{Scope: f.input.Target, Key: uuid.New(), Action: "create_folder", Folder: &mediaapp.LibraryFolderInput{Name: "目标目录", Style: "cinema", Theme: "obsidian"}})
 				if err != nil || created.Folder == nil {
 					t.Fatal(created, err)
 				}
 				input := f.input
 				input.Key, input.TargetFolderID, input.ExpectedFolderRevision, input.ExpectedTargetRevision, input.ExpectedProjectRevision = uuid.New(), &created.Folder.ID, 1, 1, 2
-				job, err = f.repo.CreateTransfer(t.Context(), f.actor, input)
+				job, err = f.repo.CreateTransfer(t.Context(), mediaActor(f.actor), input)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := library.ApplyLibraryCommand(t.Context(), f.actor, mediaapp.LibraryCommand{Scope: f.input.Target, Key: uuid.New(), ExpectedRevision: 1, Action: "update_folder", FolderID: &created.Folder.ID, ExpectedFolderRevision: 1, Folder: &mediaapp.LibraryFolderInput{Name: "已改名目录", Style: "cinema", Theme: "obsidian"}}); err != nil {
+				if _, err := library.ApplyLibraryCommand(t.Context(), mediaActor(f.actor), mediaapp.LibraryCommand{Scope: f.input.Target, Key: uuid.New(), ExpectedRevision: 1, Action: "update_folder", FolderID: &created.Folder.ID, ExpectedFolderRevision: 1, Folder: &mediaapp.LibraryFolderInput{Name: "已改名目录", Style: "cinema", Theme: "obsidian"}}); err != nil {
 					t.Fatal(err)
 				}
 			}

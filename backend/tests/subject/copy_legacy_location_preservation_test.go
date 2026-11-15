@@ -23,7 +23,7 @@ func TestCompletedCopyKeepsImmutableReceiptAfterRouteSwitch(t *testing.T) {
 	var snapshot media.ProjectCopySnapshot
 	if err := f.runtime.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess).WithRoutedStorage().Freeze(t.Context(), f.actor, binding, time.Now())
+		snapshot, err = pgmedia.NewScopedProjectCopyStore(tx, app.NewMediaWorkerScopeAccess).WithRoutedStorage().Freeze(t.Context(), mediaBoundaryActor(f.actor), binding, time.Now())
 		if err != nil {
 			return err
 		}
@@ -33,10 +33,10 @@ func TestCompletedCopyKeepsImmutableReceiptAfterRouteSwitch(t *testing.T) {
 	}
 	repo := &locatedCopyTransactions{ProjectCopyStore: pgmedia.NewScopedProjectCopyStore(f.runtime, app.NewMediaWorkerScopeAccess).WithRoutedStorage(), db: f.runtime}
 	transfer := media.NewRoutedProjectCopyTransfer(repo, mediaobjects.NewRoutedCopyObjects(f.registry, pgmedia.NewStorageRoutes(f.runtime)), t.TempDir())
-	if err := transfer.Transfer(t.Context(), f.actor, binding, snapshot); err != nil {
+	if err := transfer.Transfer(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
-	before, err := repo.Register(t.Context(), f.actor, binding, snapshot)
+	before, err := repo.Register(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,14 +44,14 @@ func TestCompletedCopyKeepsImmutableReceiptAfterRouteSwitch(t *testing.T) {
 	if err := f.owner.Raw(`SELECT content::text FROM media.project_copy_snapshot WHERE id=?`, snapshot.ID).Scan(&immutableBefore).Error; err != nil {
 		t.Fatal(err)
 	}
-	objectsBefore, err := repo.Objects(t.Context(), f.actor, binding, snapshot)
+	objectsBefore, err := repo.Objects(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot)
 	if err != nil || len(objectsBefore) != 1 {
 		t.Fatal("completed copy lost physical receipt", err)
 	}
 	if err := f.owner.Exec(`UPDATE media.storage_route SET profile_id=?,revision='2' WHERE singleton=1`, f.sourceProfile).Error; err != nil {
 		t.Fatal(err)
 	}
-	after, err := repo.Register(t.Context(), f.actor, binding, snapshot)
+	after, err := repo.Register(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot)
 	if err != nil || after != before {
 		t.Fatal("route change rewrote accepted copy receipt", err, before, after)
 	}
@@ -59,7 +59,7 @@ func TestCompletedCopyKeepsImmutableReceiptAfterRouteSwitch(t *testing.T) {
 	if err := f.owner.Raw(`SELECT content::text FROM media.project_copy_snapshot WHERE id=?`, snapshot.ID).Scan(&immutableAfter).Error; err != nil || immutableAfter != immutableBefore {
 		t.Fatal("immutable content rewritten", err)
 	}
-	objectsAfter, err := repo.Objects(t.Context(), f.actor, binding, snapshot)
+	objectsAfter, err := repo.Objects(t.Context(), mediaBoundaryActor(f.actor), binding, snapshot)
 	if err != nil || len(objectsAfter) != 1 || objectsAfter[0].SourceLocation == nil || objectsAfter[0].TargetLocation == nil || objectsBefore[0].SourceLocation.ID != objectsAfter[0].SourceLocation.ID || objectsBefore[0].TargetLocation.ID != objectsAfter[0].TargetLocation.ID || objectsAfter[0].TargetLocation.Ref.ProfileID != f.targetProfile {
 		t.Fatal("completed physical ownership followed current route", err)
 	}

@@ -59,21 +59,21 @@ func bibleDurableCopyFixture(t *testing.T, db, owner *gorm.DB) (identityapp.Prin
 	t.Helper()
 	actor, source := bibleActorProject(t, owner)
 	service := app.NewService(bibleStore(db), time.Now)
-	first, err := service.Change(t.Context(), actor, createCharacter(source))
+	first, err := service.Change(t.Context(), bibleActor(actor), createCharacter(source))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(t.Context(), actor, app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: first.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
+	if _, err := service.Change(t.Context(), bibleActor(actor), app.Command{ProjectID: source, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: first.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
 	binding, authority := bibleCopyFixture(t, owner, actor, source)
 	snapshot := freezeBibleCopy(t, db, actor, binding, authority)
-	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), bibleActor(actor), binding, snapshot); err != nil {
 		t.Fatal("actual empty-media transfer", err)
 	}
 	authority.Phase = "register"
 	if err := db.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
-		_, err := bibleCopyStore(tx, authority).Register(t.Context(), actor, binding, snapshot)
+		_, err := bibleCopyStore(tx, authority).Register(t.Context(), bibleActor(actor), binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal("actual complete history registration", err)
@@ -91,24 +91,24 @@ func bibleDurableCopyChecks(t *testing.T, actor identityapp.Principal, binding a
 		read func(*gorm.DB) error
 	}{
 		{"manifest", func(tx *gorm.DB) error {
-			_, err := bibleCopyStore(tx, authority).Manifest(t.Context(), actor, binding, snapshot)
+			_, err := bibleCopyStore(tx, authority).Manifest(t.Context(), bibleActor(actor), binding, snapshot)
 			return err
 		}},
 		{"transfer", func(tx *gorm.DB) error {
-			return app.NewProjectCopy(bibleCopyStore(tx, authority), nil).Transfer(t.Context(), actor, binding, snapshot)
+			return app.NewProjectCopy(bibleCopyStore(tx, authority), nil).Transfer(t.Context(), bibleActor(actor), binding, snapshot)
 		}},
 		{"register", func(tx *gorm.DB) error {
-			_, err := bibleCopyStore(tx, authority).Register(t.Context(), actor, binding, snapshot)
+			_, err := bibleCopyStore(tx, authority).Register(t.Context(), bibleActor(actor), binding, snapshot)
 			return err
 		}},
 		{"verify", func(tx *gorm.DB) error {
-			_, err := bibleCopyStore(tx, authority).Verify(t.Context(), actor, binding, snapshot)
+			_, err := bibleCopyStore(tx, authority).Verify(t.Context(), bibleActor(actor), binding, snapshot)
 			return err
 		}},
 		{"cleanup", func(tx *gorm.DB) error {
 			cleanup := authority
 			cleanup.Phase = "cleanup"
-			return bibleCopyStore(tx, cleanup).Cleanup(t.Context(), actor, binding, snapshot)
+			return bibleCopyStore(tx, cleanup).Cleanup(t.Context(), bibleActor(actor), binding, snapshot)
 		}},
 	}
 }
@@ -168,7 +168,7 @@ func TestBibleDurableClosedPGLegacyManifestNilAndProofsUnchanged(t *testing.T) {
 	if err := json.Unmarshal([]byte(original.Manifest), &expected); err != nil {
 		t.Fatal(err)
 	}
-	manifest, err := bibleCopyStore(db, authority).Manifest(t.Context(), actor, binding, snapshot)
+	manifest, err := bibleCopyStore(db, authority).Manifest(t.Context(), bibleActor(actor), binding, snapshot)
 	if err != nil || !reflect.DeepEqual(manifest, expected) || manifest.Source.Versions[0].Result != nil || manifest.Source.Versions[0].Character.Voice != nil {
 		t.Fatal("legal legacy null semantics changed", err)
 	}
@@ -204,7 +204,7 @@ func TestBibleDurableClosedPGLargeCompleteManifestPreservesOriginalContract(t *t
 		command := createCharacter(source)
 		command.Character.Description = text
 		command.Character.Definition = domain.CharacterDefinition{Role: text, Appearance: text, Physique: text, Clothing: text, Personality: text, Props: text, ConsistencyPrompt: text, MultiViewPrompt: text, VoiceLanguage: text, VoiceAge: text, VoiceTimbre: text}
-		if _, err := service.Change(t.Context(), actor, command); err != nil {
+		if _, err := service.Change(t.Context(), bibleActor(actor), command); err != nil {
 			t.Fatal("actual legal individual version", err)
 		}
 	}
@@ -215,16 +215,16 @@ func TestBibleDurableClosedPGLargeCompleteManifestPreservesOriginalContract(t *t
 		t.Fatal("complete manifest did not exceed individual version byte budget", len(original.Manifest))
 	}
 	t.Logf("actual complete original manifest bytes=%d, character versions=%d", len(original.Manifest), snapshot.Counts.CharacterVersions)
-	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), actor, binding, snapshot); err != nil {
+	if err := app.NewProjectCopy(bibleCopyStore(db, authority), nil).Transfer(t.Context(), bibleActor(actor), binding, snapshot); err != nil {
 		t.Fatal("complete manifest transfer rejected legitimate old history", err)
 	}
 	authority.Phase = "register"
 	if err := db.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
 		store := bibleCopyStore(tx, authority)
-		if _, err := store.Register(t.Context(), actor, binding, snapshot); err != nil {
+		if _, err := store.Register(t.Context(), bibleActor(actor), binding, snapshot); err != nil {
 			return err
 		}
-		_, err := store.Verify(t.Context(), actor, binding, snapshot)
+		_, err := store.Verify(t.Context(), bibleActor(actor), binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal("complete manifest registration or reread rejected legitimate old history", err)
@@ -252,7 +252,7 @@ func TestBibleDurableClosedPGReceiptUnknownFields(t *testing.T) {
 	db, owner := bibleTestDB(t)
 	actor, project := bibleActorProject(t, owner)
 	command := createCharacter(project)
-	if _, err := app.NewService(bibleStore(db), time.Now).Change(t.Context(), actor, command); err != nil {
+	if _, err := app.NewService(bibleStore(db), time.Now).Change(t.Context(), bibleActor(actor), command); err != nil {
 		t.Fatal(err)
 	}
 	original := bibleDurableCommandBody(t, owner, actor, command.Key)
@@ -281,7 +281,7 @@ func TestBibleDurableClosedPGReceiptUnknownFields(t *testing.T) {
 					t.Fatal(err)
 				}
 			}, func(tx *gorm.DB) {
-				if _, err := app.NewService(bibleStore(tx), time.Now).Change(t.Context(), actor, command); !errors.Is(err, domain.ErrCorruptHistory) {
+				if _, err := app.NewService(bibleStore(tx), time.Now).Change(t.Context(), bibleActor(actor), command); !errors.Is(err, domain.ErrCorruptHistory) {
 					t.Errorf("unknown durable command response accepted: %v", err)
 				}
 			})
@@ -297,12 +297,12 @@ func TestBibleDurableClosedPGLegacyReceiptPointerNullAndReplayUnchanged(t *testi
 	actor, project := bibleActorProject(t, owner)
 	create := createCharacter(project)
 	service := app.NewService(bibleStore(db), time.Now)
-	created, err := service.Change(t.Context(), actor, create)
+	created, err := service.Change(t.Context(), bibleActor(actor), create)
 	if err != nil {
 		t.Fatal(err)
 	}
 	confirm := app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: created.EntryID, ExpectedRevision: created.Revision, Key: uuid.New(), RequestID: uuid.New()}
-	confirmed, err := service.Change(t.Context(), actor, confirm)
+	confirmed, err := service.Change(t.Context(), bibleActor(actor), confirm)
 	if err != nil || confirmed.ConfirmedVersionID == nil {
 		t.Fatal("actual pointer receipt", err)
 	}
@@ -313,7 +313,7 @@ func TestBibleDurableClosedPGLegacyReceiptPointerNullAndReplayUnchanged(t *testi
 	}{{"nil", create, created}, {"confirmed_pointer", confirm, confirmed}} {
 		t.Run(sample.name, func(t *testing.T) {
 			original := bibleDurableCommandBody(t, owner, actor, sample.command.Key)
-			replay, err := service.Change(t.Context(), actor, sample.command)
+			replay, err := service.Change(t.Context(), bibleActor(actor), sample.command)
 			if err != nil || !reflect.DeepEqual(replay, sample.receipt) {
 				t.Fatal("legal original receipt replay changed", replay, err)
 			}
@@ -336,7 +336,7 @@ func TestBibleDurableClosedPGLegacyReceiptPointerNullAndReplayUnchanged(t *testi
 				}
 			}, func(tx *gorm.DB) {
 				before := bibleDurableCommandBody(t, tx, actor, sample.command.Key)
-				replay, err := app.NewService(bibleStore(tx), time.Now).Change(t.Context(), actor, sample.command)
+				replay, err := app.NewService(bibleStore(tx), time.Now).Change(t.Context(), bibleActor(actor), sample.command)
 				if err != nil || !reflect.DeepEqual(replay, sample.receipt) {
 					t.Fatal("legal explicit-null receipt replay changed", replay, err)
 				}

@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -38,7 +37,7 @@ func requireNoNewMediaPurge(tx *gorm.DB, ids []uuid.UUID) error {
 	return nil
 }
 
-func (s scopeAuthority) projectMediaLibrary(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID) (libraryRow, error) {
+func (s scopeAuthority) projectMediaLibrary(tx *gorm.DB, actor application.Actor, project uuid.UUID) (libraryRow, error) {
 	if err := s.requireProject(tx, actor, project, false); err != nil {
 		return libraryRow{}, err
 	}

@@ -7,15 +7,18 @@ import (
 	"testing"
 	"time"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -352,7 +355,7 @@ func TestCreateFreeQuotePersistsRequestKeyAcrossRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	input.Prompt = "重试的海面"
-	if _, err := store.CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("deleted project quote replay = %v", err)
 	}
 }
@@ -411,7 +414,7 @@ func TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites(t 
 		},
 	}
 	store := operationStore(database)
-	if _, err := store.CreateFreeQuote(t.Context(), foreign, input); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := store.CreateFreeQuote(t.Context(), foreign, input); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("foreign project quote = %v", err)
 	}
 	if err := database.Exec(`UPDATE catalog.model_profile SET status = 'disabled' WHERE id = ?::uuid`, modelID.String()).Error; err != nil {

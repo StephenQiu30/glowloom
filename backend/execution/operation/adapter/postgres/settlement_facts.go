@@ -33,5 +33,23 @@ func (s *Store) ReadSettlementFactsInTransaction(ctx context.Context, tx *gorm.D
 	if r.RowsAffected != 1 {
 		return result, ErrNotFound
 	}
+	var owner string
+	if err := tx.WithContext(ctx).Raw(`SELECT infra.runtime_owner()`).Scan(&owner).Error; err != nil {
+		return result, err
+	}
+	if owner == "execution" {
+		var original struct {
+			OrganizationID uuid.UUID
+			ProjectID      uuid.UUID
+		}
+		source := tx.WithContext(ctx).Raw(`SELECT (snapshot->>'org_id')::uuid AS organization_id,(snapshot->>'project_id')::uuid AS project_id FROM operation.frozen_input_acceptance WHERE operation_id=?`, id).Scan(&original)
+		if source.Error != nil {
+			return result, source.Error
+		}
+		if source.RowsAffected != 1 || original.OrganizationID == uuid.Nil || original.ProjectID != result.ProjectID {
+			return result, application.ErrFrozenInputConflict
+		}
+		result.OrganizationID = original.OrganizationID
+	}
 	return result, nil
 }

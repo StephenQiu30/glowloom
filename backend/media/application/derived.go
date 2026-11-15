@@ -6,20 +6,19 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // DerivedRepository owns authorized metadata and review for local processing.
 // The composition root binds it to the export command's transaction.
 type DerivedRepository interface {
-	AuthorizeDerivedProject(context.Context, identityapp.Principal, uuid.UUID, bool) error
-	FindAsset(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.MediaAsset, error)
-	FindRenditions(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) ([]domain.Rendition, error)
-	StoreDerived(context.Context, identityapp.Principal, domain.MediaAsset, []domain.Rendition) error
-	ReviewDerived(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string, time.Time) error
-	RejectDerived(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string, time.Time) error
-	AuthorizeDerivedRemoval(context.Context, identityapp.Principal, DerivedRemoval) error
+	AuthorizeDerivedProject(context.Context, Actor, uuid.UUID, bool) error
+	FindAsset(context.Context, Actor, uuid.UUID, uuid.UUID) (domain.MediaAsset, error)
+	FindRenditions(context.Context, Actor, uuid.UUID, uuid.UUID) ([]domain.Rendition, error)
+	StoreDerived(context.Context, Actor, domain.MediaAsset, []domain.Rendition) error
+	ReviewDerived(context.Context, Actor, uuid.UUID, uuid.UUID, string, time.Time) error
+	RejectDerived(context.Context, Actor, uuid.UUID, uuid.UUID, string, time.Time) error
+	AuthorizeDerivedRemoval(context.Context, Actor, DerivedRemoval) error
 }
 
 // DerivedService preserves the media ownership boundary for local tool jobs.
@@ -29,7 +28,7 @@ type DerivedService struct{ repo DerivedRepository }
 func NewDerivedService(repo DerivedRepository) *DerivedService { return &DerivedService{repo: repo} }
 
 // AuthorizeProject checks live membership and optional active-project write access.
-func (s *DerivedService) AuthorizeProject(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool) error {
+func (s *DerivedService) AuthorizeProject(ctx context.Context, actor Actor, project uuid.UUID, write bool) error {
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}
@@ -37,7 +36,7 @@ func (s *DerivedService) AuthorizeProject(ctx context.Context, actor identityapp
 }
 
 // Sources returns ready, currently reviewed originals and no arbitrary object key.
-func (s *DerivedService) Sources(ctx context.Context, actor identityapp.Principal, project uuid.UUID, ids []uuid.UUID) ([]domain.MediaAsset, error) {
+func (s *DerivedService) Sources(ctx context.Context, actor Actor, project uuid.UUID, ids []uuid.UUID) ([]domain.MediaAsset, error) {
 	if s == nil || s.repo == nil || len(ids) > 1000 {
 		return nil, ErrInvalidQuery
 	}
@@ -56,7 +55,7 @@ func (s *DerivedService) Sources(ctx context.Context, actor identityapp.Principa
 }
 
 // Store persists a checked output as processing/pending, without fake moderation.
-func (s *DerivedService) Store(ctx context.Context, actor identityapp.Principal, asset domain.MediaAsset, renditions []domain.Rendition) error {
+func (s *DerivedService) Store(ctx context.Context, actor Actor, asset domain.MediaAsset, renditions []domain.Rendition) error {
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}
@@ -82,7 +81,7 @@ func (s *DerivedService) Store(ctx context.Context, actor identityapp.Principal,
 }
 
 // Review records an explicit post-render declaration for the exact output SHA.
-func (s *DerivedService) Review(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, sha string, now time.Time) error {
+func (s *DerivedService) Review(ctx context.Context, actor Actor, project, id uuid.UUID, sha string, now time.Time) error {
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}
@@ -93,7 +92,7 @@ func (s *DerivedService) Review(ctx context.Context, actor identityapp.Principal
 }
 
 // Reject keeps an unreviewed cancelled result private and nonreferenceable.
-func (s *DerivedService) Reject(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, reason string, now time.Time) error {
+func (s *DerivedService) Reject(ctx context.Context, actor Actor, project, id uuid.UUID, reason string, now time.Time) error {
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}
@@ -104,7 +103,7 @@ func (s *DerivedService) Reject(ctx context.Context, actor identityapp.Principal
 }
 
 // Asset returns scoped metadata for an output awaiting explicit owner inspection.
-func (s *DerivedService) Asset(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (domain.MediaAsset, error) {
+func (s *DerivedService) Asset(ctx context.Context, actor Actor, project, id uuid.UUID) (domain.MediaAsset, error) {
 	if s == nil || s.repo == nil {
 		return domain.MediaAsset{}, ErrUnavailable
 	}
@@ -112,7 +111,7 @@ func (s *DerivedService) Asset(ctx context.Context, actor identityapp.Principal,
 }
 
 // Renditions reads scoped private previews for their owning tool's review contract.
-func (s *DerivedService) Renditions(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) ([]domain.Rendition, error) {
+func (s *DerivedService) Renditions(ctx context.Context, actor Actor, project, id uuid.UUID) ([]domain.Rendition, error) {
 	if s == nil || s.repo == nil {
 		return nil, ErrUnavailable
 	}
@@ -121,12 +120,12 @@ func (s *DerivedService) Renditions(ctx context.Context, actor identityapp.Princ
 
 // Finalize publishes a verified deterministic composition of currently approved
 // sources. It records source validation, not a fabricated owner review.
-func (s *DerivedService) Finalize(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, sha string, sources []uuid.UUID, now time.Time) error {
+func (s *DerivedService) Finalize(ctx context.Context, actor Actor, project, id uuid.UUID, sha string, sources []uuid.UUID, now time.Time) error {
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}
 	repo, ok := s.repo.(interface {
-		FinalizeDerived(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string, []uuid.UUID, time.Time) error
+		FinalizeDerived(context.Context, Actor, uuid.UUID, uuid.UUID, string, []uuid.UUID, time.Time) error
 	})
 	if !ok {
 		return ErrUnavailable

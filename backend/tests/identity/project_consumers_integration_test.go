@@ -13,9 +13,14 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
@@ -75,7 +80,7 @@ func TestProjectConsumersUseScopeAndExactSession(t *testing.T) {
 	if err := store.RequireOwnedProject(t.Context(), actor, project); err != nil {
 		t.Fatalf("route scope: %v", err)
 	}
-	if _, err := pgworkspace.NewScopedStore(tx, nil, nil, nil).FindProject(t.Context(), actor, project); !errors.Is(err, workspace.ErrProjectDependencyUnavailable) {
+	if _, err := pgworkspace.NewScopedStore(tx, nil, nil, nil).FindProject(t.Context(), actor, project); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatalf("missing authority did not fail closed: %v", err)
 	}
 	other := actor
@@ -83,21 +88,21 @@ func TestProjectConsumersUseScopeAndExactSession(t *testing.T) {
 	if _, err := factory(tx).Resolve(t.Context(), other, personalScope, false); err != nil {
 		t.Fatalf("personal comparison scope is not valid: %v", err)
 	}
-	if _, err := store.FindProject(t.Context(), other, project); !errors.Is(err, workspace.ErrProjectNotFound) {
+	if _, err := store.FindProject(t.Context(), other, project); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("valid personal scope read team project through physical org: %v", err)
 	}
-	if _, err := pgworkspace.NewScopedProjectContentAccessStore(tx, factory(tx)).TouchContent(t.Context(), other, project, 1); !errors.Is(err, workspace.ErrProjectNotFound) {
+	if _, err := pgworkspace.NewScopedProjectContentAccessStore(tx, factory(tx)).TouchContent(t.Context(), other, project, 1); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("valid personal scope wrote team project: %v", err)
 	}
 	other.ScopeID = uuid.New()
-	if _, err := store.FindProject(t.Context(), other, project); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := store.FindProject(t.Context(), other, project); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("other scope read: %v", err)
 	}
 	if err := tx.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	actor.PlatformRole = "platform_admin"
-	if _, err := store.ListProjectsForActor(t.Context(), actor, workspace.ListProjectsInput{Limit: 20}); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := store.ListProjectsForActor(t.Context(), actor, workspace.ListProjectsInput{Limit: 20}); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("platform administrator bypassed membership: %v", err)
 	}
 	if err := tx.Exec(`UPDATE workspace.team_member SET status='active' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
@@ -150,13 +155,13 @@ func TestQueuedProjectWorkRechecksMembershipAtDispatchAndWriteback(t *testing.T)
 	if _, err := access.Authorize(t.Context(), actor, project, true); err != nil {
 		t.Fatalf("active team worker cannot dispatch: %v", err)
 	}
-	if _, err := pgworkspace.NewScopedProjectContentAccessStore(tx, factory(tx)).Authorize(t.Context(), actor, project, true); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := pgworkspace.NewScopedProjectContentAccessStore(tx, factory(tx)).Authorize(t.Context(), actor, project, true); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("worker was admitted as request: %v", err)
 	}
 	if err := tx.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := access.TouchContent(t.Context(), actor, project, 1); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := access.TouchContent(t.Context(), actor, project, 1); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("removed member wrote worker result: %v", err)
 	}
 	var revision int64
@@ -184,7 +189,7 @@ func TestProjectScopeRejectsUnmappedAndAllowsArchivedReadOnly(t *testing.T) {
 	if err := tx.Exec(`UPDATE workspace.project SET owner_scope_id=NULL WHERE id=?`, project).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := access.Authorize(t.Context(), actor, project, false); !errors.Is(err, workspace.ErrProjectNotFound) {
+	if _, err := access.Authorize(t.Context(), actor, project, false); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("unmapped project readable: %v", err)
 	}
 	if err := tx.Exec(`UPDATE workspace.project SET owner_scope_id=? WHERE id=?`, scope, project).Error; err != nil {
@@ -196,11 +201,11 @@ func TestProjectScopeRejectsUnmappedAndAllowsArchivedReadOnly(t *testing.T) {
 	if _, err := access.Authorize(t.Context(), actor, project, false); err != nil {
 		t.Fatalf("archived scope read denied: %v", err)
 	}
-	if _, err := access.TouchContent(t.Context(), actor, project, 1); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := access.TouchContent(t.Context(), actor, project, 1); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("archived scope writable: %v", err)
 	}
 	actor.OrgID = uuid.New()
-	if _, err := access.Authorize(t.Context(), actor, project, false); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := access.Authorize(t.Context(), actor, project, false); !errors.Is(err, workspacesource.ErrScopeNotFound) {
 		t.Fatalf("forged physical scope accepted: %v", err)
 	}
 }
@@ -250,7 +255,7 @@ func TestCreateProjectPersistsSelectedScopeAndProtectsReplay(t *testing.T) {
 	store := pgworkspace.NewScopedStore(tx, factory, nil, nil)
 	command := workspace.NewCreateProjectCommand(store, time.Now)
 	key := uuid.New()
-	input := workspace.CreateProjectInput{Name: "Retained team work", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()}
+	input := workspacesource.CreateProjectInput{Name: "Retained team work", AspectRatio: "16:9", StyleType: "realistic", RequestID: uuid.NewString()}
 	created, err := command.ExecuteIdempotent(t.Context(), actor, key, input)
 	if err != nil {
 		t.Fatalf("scope-bound creation: %v", err)
@@ -263,7 +268,7 @@ func TestCreateProjectPersistsSelectedScopeAndProtectsReplay(t *testing.T) {
 		t.Fatal("creation did not preserve separate author and scope")
 	}
 	actor.ScopeID = personal.ID
-	if _, err := command.ExecuteIdempotent(t.Context(), actor, key, input); !errors.Is(err, workspace.ErrIdempotencyConflict) {
+	if _, err := command.ExecuteIdempotent(t.Context(), actor, key, input); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatalf("cross-scope replay leaked response: %v", err)
 	}
 }

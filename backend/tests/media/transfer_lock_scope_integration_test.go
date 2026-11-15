@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -22,7 +21,7 @@ type transferProjectLockTrace struct {
 	writes   *[]bool
 }
 
-func (a transferProjectLockTrace) TransferActor(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, write bool) (identityapp.Principal, error) {
+func (a transferProjectLockTrace) TransferActor(ctx context.Context, actor mediaapp.Actor, scope domain.LibraryScope, write bool) (mediaapp.Actor, error) {
 	if scope.Kind == domain.LibraryProject {
 		*a.writes = append(*a.writes, write)
 	}
@@ -52,12 +51,12 @@ func TestMediaTransferScopeLocksStartAtRequiredStrength(t *testing.T) {
 	actor, project := mediaStoreProject(t, tx)
 	personal := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	text := "Synthetic lock-order fixture"
-	created, err := mediaLibraryStore(tx, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: personal, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "Lock fixture", Category: "other", Tags: []string{}}})
+	created, err := mediaLibraryStore(tx, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), mediaActor(actor), mediaapp.LibraryCommand{Scope: personal, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "Lock fixture", Category: "other", Tags: []string{}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	input := mediaapp.TransferInput{Source: personal, Target: domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, Items: []mediaapp.LibraryItemRevision{{ID: created.Items[0].ID, Revision: created.Items[0].Revision}}, ExpectedSourceRevision: created.Revision, ExpectedProjectRevision: 1, Key: uuid.New()}
-	job, err := mediaTransferStore(tx, libraryTestAccess, transferTestGuards, time.Now).CreateTransfer(t.Context(), actor, input)
+	job, err := mediaTransferStore(tx, libraryTestAccess, transferTestGuards, time.Now).CreateTransfer(t.Context(), mediaActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +70,7 @@ func TestMediaTransferScopeLocksStartAtRequiredStrength(t *testing.T) {
 		}
 		writes = nil
 	}
-	if _, err := requests.GetTransfer(t.Context(), actor, job.ID); err != nil {
+	if _, err := requests.GetTransfer(t.Context(), mediaActor(actor), job.ID); err != nil {
 		t.Fatal(err)
 	}
 	checkFirst("query", false)
@@ -93,12 +92,12 @@ func TestMediaTransferScopeLocksStartAtRequiredStrength(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkFirst("lease", true)
-	current, err := requests.GetTransfer(t.Context(), actor, job.ID)
+	current, err := requests.GetTransfer(t.Context(), mediaActor(actor), job.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	checkFirst("running query", false)
-	if _, err := requests.ControlTransfer(t.Context(), actor, job.ID, uuid.New(), current.Revision, "cancel"); err != nil {
+	if _, err := requests.ControlTransfer(t.Context(), mediaActor(actor), job.ID, uuid.New(), current.Revision, "cancel"); err != nil {
 		t.Fatal(err)
 	}
 	checkFirst("control", true)

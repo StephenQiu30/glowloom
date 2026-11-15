@@ -64,7 +64,7 @@ func TestMediaReferenceRemainsLockedUntilCanvasCommit(t *testing.T) {
 	var workers sync.WaitGroup
 	defer func() { cancel(); workers.Wait() }()
 	store := pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
-		return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)), read: read, resume: resume}
+		return pausedMediaReference{reader: canvasLegacyMedia(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))), read: read, resume: resume}
 	}, mediawire.NewCanvasProjectAccess)
 	service := canvasfixture.NewService(store)
 	doc, err := service.Create(ctx, actor, project, uuid.NewString(), application.CreateInput{Name: "绑定提交事务"})
@@ -165,15 +165,15 @@ func TestResourcePersistenceScopesMediaAndSoftDeleteReplay(t *testing.T) {
 	if _, err := service.Get(t.Context(), actor, doc.ID); !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("deleted readable %v", err)
 	}
-	if _, err := pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess).FindAsset(t.Context(), actor, project, asset); err != nil {
+	if _, err := pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess).FindAsset(t.Context(), canvasMediaActor(actor), project, asset); err != nil {
 		t.Fatalf("source media deleted %v", err)
 	}
 	query := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess))
-	page, err := query.List(t.Context(), actor, project, "image", "", 1)
+	page, err := query.List(t.Context(), canvasMediaActor(actor), project, "image", "", 1)
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != asset {
 		t.Fatalf("media list %+v %v", page, err)
 	}
-	if _, err := query.Preview(t.Context(), actor, project, asset); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, err := query.Preview(t.Context(), canvasMediaActor(actor), project, asset); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatalf("nil preview signer %v", err)
 	}
 }

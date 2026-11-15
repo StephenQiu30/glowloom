@@ -10,7 +10,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -18,7 +17,7 @@ import (
 // ReadReferenceFactSource is stricter than preview: only active project catalog
 // originals may form new bindings. Existing historical reference reads retain
 // their separate owning eligibility and do not use this new-binding reader.
-func (s *LibraryStore) ReadReferenceFactSource(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, kind domain.Kind) (application.LibraryMediaFile, error) {
+func (s *LibraryStore) ReadReferenceFactSource(ctx context.Context, actor application.Actor, project, id uuid.UUID, kind domain.Kind) (application.LibraryMediaFile, error) {
 	if project == uuid.Nil || id == uuid.Nil || kind != domain.KindImage && kind != domain.KindAudio {
 		return application.LibraryMediaFile{}, application.ErrNotFound
 	}

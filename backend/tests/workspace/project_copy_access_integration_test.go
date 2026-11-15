@@ -7,8 +7,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -19,7 +22,7 @@ func TestProjectCopyAccessPGAdmissionRetainsTrustedTransactionScope(t *testing.T
 	lifecycleFixtureSQL(t, owner, `UPDATE workspace.project SET status='copying' WHERE id=?`, target)
 	binding := workspaceapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: source, TargetProjectID: target}
 	authority := workspaceapp.ProjectCopyAuthority{Binding: binding, ActorID: actor.ID, SourceRevision: 1, Phase: "freeze"}
-	if err := workspaceCopyAccess(db, authority).Authorize(ctx, actor, binding, false); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if err := workspaceCopyAccess(db, authority).Authorize(ctx, actor, binding, false); !errors.Is(err, workspacesource.ErrProjectDependencyUnavailable) {
 		t.Fatal("pool cannot retain owning copy locks", err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
@@ -39,7 +42,7 @@ func TestProjectCopyAccessPGAdmissionRetainsTrustedTransactionScope(t *testing.T
 		if err := workspaceCopyAccess(tx, stale).Authorize(ctx, actor, binding, false); !errors.Is(err, domain.ErrProjectRevisionConflict) {
 			t.Fatal("unfrozen source revision accepted", err)
 		}
-		if _, err := workspaceProjectAccess(tx).Authorize(ctx, actor, target, false); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+		if _, err := workspaceProjectAccess(tx).Authorize(ctx, actor, target, false); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 			t.Fatal("copy authority changed ordinary target visibility", err)
 		}
 		return nil

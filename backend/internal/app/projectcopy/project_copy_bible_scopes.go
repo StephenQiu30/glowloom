@@ -12,17 +12,17 @@ import (
 	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 )
 
 type projectCopyBibleScopes struct{ store *pgscript.ProjectCopyStore }
 
-func (s projectCopyBibleScopes) RemapLookScopes(ctx context.Context, actor identityapp.Principal, b bibleapp.ProjectCopyBinding, scopes []bibledomain.LookScope) ([]bibleapp.ScopeMapping, error) {
+func (s projectCopyBibleScopes) RemapLookScopes(ctx context.Context, actor bibleapp.Actor, b bibleapp.ProjectCopyBinding, scopes []bibledomain.LookScope) ([]bibleapp.ScopeMapping, error) {
 	input := make([]scriptapp.BibleLookScope, len(scopes))
 	for i, v := range scopes {
 		input[i] = scriptapp.BibleLookScope{EpisodeID: v.EpisodeID, SceneKey: v.SceneKey}
 	}
-	mapped, err := s.store.RemapLookScopes(ctx, actor, scriptapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, input)
+	mapped, err := s.store.RemapLookScopes(ctx, scriptwire.Actor(projectCopyIdentityActor(actor)), scriptapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, input)
 	if err != nil {
 		return nil, projectCopyScriptError(err)
 	}
@@ -38,7 +38,7 @@ type projectCopyScriptCharacters struct {
 	snapshot *workspacedomain.ProjectCopyBibleSnapshot
 }
 
-func (c projectCopyScriptCharacters) FreezeCharacters(ctx context.Context, actor identityapp.Principal, b scriptapp.ProjectCopyBinding, refs []scriptapp.ProjectCopyCharacterReference) ([]scriptapp.ProjectCopyCharacterMapping, error) {
+func (c projectCopyScriptCharacters) FreezeCharacters(ctx context.Context, actor scriptapp.Actor, b scriptapp.ProjectCopyBinding, refs []scriptapp.ProjectCopyCharacterReference) ([]scriptapp.ProjectCopyCharacterMapping, error) {
 	if c.snapshot == nil {
 		return nil, scriptapp.ErrContextUnavailable
 	}
@@ -46,7 +46,7 @@ func (c projectCopyScriptCharacters) FreezeCharacters(ctx context.Context, actor
 	for i, v := range refs {
 		input[i] = bibleapp.CharacterCopyReference{CharacterID: v.CharacterID, VersionID: v.VersionID}
 	}
-	mapped, err := c.store.ResolveCharacterMappings(ctx, actor, bibleapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, bibleOwnerCopySnapshot(*c.snapshot), input)
+	mapped, err := c.store.ResolveCharacterMappings(ctx, projectCopyBibleActor(scriptwire.IdentityActor(actor)), bibleapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, bibleOwnerCopySnapshot(*c.snapshot), input)
 	if err != nil {
 		return nil, projectCopyBibleError(err)
 	}

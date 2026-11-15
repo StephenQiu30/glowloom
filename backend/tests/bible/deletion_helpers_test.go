@@ -9,18 +9,17 @@ import (
 	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	scriptpg "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type deletionUsage struct{ reader *scriptpg.BibleScopes }
 
-func (u deletionUsage) Read(ctx context.Context, actor identityapp.Principal, project uuid.UUID, ids []uuid.UUID) (app.CharacterUsage, error) {
-	fact, err := u.reader.ReadCharacterUsage(ctx, actor, project, ids)
+func (u deletionUsage) Read(ctx context.Context, actor app.Actor, project uuid.UUID, ids []uuid.UUID) (app.CharacterUsage, error) {
+	fact, err := u.reader.ReadCharacterUsage(ctx, bibleScriptActor(bibleIdentityActor(actor)), project, ids)
 	return app.CharacterUsage{SHA256: fact.SHA256, CurrentLines: fact.CurrentLines, HistoricalLines: fact.HistoricalLines}, err
 }
 func deletionStore(db *gorm.DB) *pg.Store {
-	return pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Impacts: func(tx *gorm.DB) app.Impacts {
+	return pg.NewStore(db, pg.Factories{Access: bibleFixtureContentAccess, Impacts: func(tx *gorm.DB) app.Impacts {
 		access := bibleFixtureProjectAccess(tx)
-		return pg.NewDeletionImpacts(tx, access, deletionUsage{scriptpg.NewBibleScopes(tx, access)})
+		return pg.NewDeletionImpacts(tx, bibleContentAccess(access), deletionUsage{scriptpg.NewBibleScopes(tx, bibleScriptAccess(access))})
 	}})
 }

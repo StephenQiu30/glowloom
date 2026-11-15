@@ -19,18 +19,18 @@ import (
 type sourceActorFake struct {
 	personal identity.Principal
 	err      error
-	last     identity.Principal
+	last     media.Actor
 	write    bool
 }
 
-func (s *sourceActorFake) PersonalSourceActor(_ context.Context, actor identity.Principal, write bool) (identity.Principal, error) {
+func (s *sourceActorFake) PersonalSourceActor(_ context.Context, actor media.Actor, write bool) (media.Actor, error) {
 	s.last = actor
 	s.write = write
-	return s.personal, s.err
+	return mediaBoundaryActor(s.personal), s.err
 }
 
 type sourceLibraryFake struct {
-	actor       identity.Principal
+	actor       media.Actor
 	calls       int
 	input       media.SubjectCatalogueQuery
 	detail      *media.SubjectSourceItem
@@ -38,13 +38,13 @@ type sourceLibraryFake struct {
 	disappear   bool
 }
 
-func (s *sourceLibraryFake) List(_ context.Context, actor identity.Principal, q media.SubjectCatalogueQuery) (media.SubjectSourcePage, error) {
+func (s *sourceLibraryFake) List(_ context.Context, actor media.Actor, q media.SubjectCatalogueQuery) (media.SubjectSourcePage, error) {
 	s.calls++
 	s.actor = actor
 	s.input = q
 	return media.SubjectSourcePage{CurrentActorID: actor.ID, CurrentScopeID: actor.ScopeID, Items: []media.SubjectSourceItem{}, Page: q.Page, PageSize: q.PageSize, Capabilities: media.SubjectSourceCapabilities{UpscaledFilter: true}}, nil
 }
-func (s *sourceLibraryFake) Detail(_ context.Context, actor identity.Principal, id uuid.UUID) (media.SubjectSourceItem, error) {
+func (s *sourceLibraryFake) Detail(_ context.Context, actor media.Actor, id uuid.UUID) (media.SubjectSourceItem, error) {
 	s.calls++
 	s.actor = actor
 	s.detailCalls++
@@ -58,14 +58,14 @@ func (s *sourceLibraryFake) Detail(_ context.Context, actor identity.Principal, 
 }
 
 type sourcePreviewFake struct {
-	actor  identity.Principal
+	actor  media.Actor
 	scope  mediadomain.LibraryScope
 	id     uuid.UUID
 	media  media.LibraryAssetSummary
 	onRead func()
 }
 
-func (s *sourcePreviewFake) Preview(_ context.Context, actor identity.Principal, scope mediadomain.LibraryScope, id uuid.UUID) (media.LibraryMediaPreview, error) {
+func (s *sourcePreviewFake) Preview(_ context.Context, actor media.Actor, scope mediadomain.LibraryScope, id uuid.UUID) (media.LibraryMediaPreview, error) {
 	s.actor, s.scope, s.id = actor, scope, id
 	if s.onRead != nil {
 		s.onRead()
@@ -80,12 +80,12 @@ func TestSubjectSourcePreviewResolvesOwnerAndRechecksAfterSigning(t *testing.T) 
 	personal.ScopeID = uuid.New()
 	actor := &sourceActorFake{personal: personal}
 	repo := &sourceLibraryFake{}
-	item, _ := repo.Detail(t.Context(), target, uuid.New())
+	item, _ := repo.Detail(t.Context(), mediaBoundaryActor(target), uuid.New())
 	repo.detail = &item
 	repo.detailCalls = 0
 	files := &sourcePreviewFake{media: item.Media.LibraryAssetSummary}
 	service := media.NewSubjectLibrary(actor, repo, files)
-	if _, err := service.Preview(t.Context(), target, item.ID); err != nil || files.actor != personal || files.scope.Kind != mediadomain.LibraryPersonal || files.id != item.Media.ID {
+	if _, err := service.Preview(t.Context(), mediaBoundaryActor(target), item.ID); err != nil || files.actor != mediaBoundaryActor(personal) || files.scope.Kind != mediadomain.LibraryPersonal || files.id != item.Media.ID {
 		t.Fatal("personal source owner resolution", err)
 	}
 	project := uuid.New()
@@ -93,12 +93,12 @@ func TestSubjectSourcePreviewResolvesOwnerAndRechecksAfterSigning(t *testing.T) 
 	item.Source = "generated_output"
 	item.ProjectID = &project
 	item.Media.Origin = "generated"
-	if _, err := service.Preview(t.Context(), target, item.ID); err != nil || files.actor != target || files.scope.ProjectID == nil || *files.scope.ProjectID != project || files.id != item.Media.ID || files.id == item.ID {
+	if _, err := service.Preview(t.Context(), mediaBoundaryActor(target), item.ID); err != nil || files.actor != mediaBoundaryActor(target) || files.scope.ProjectID == nil || *files.scope.ProjectID != project || files.id != item.Media.ID || files.id == item.ID {
 		t.Fatal("generated output preview trusted source id as asset/owner", err)
 	}
 	repo.detailCalls = 0
 	files.onRead = func() { repo.disappear = true }
-	if _, err := service.Preview(t.Context(), target, item.ID); !errors.Is(err, media.ErrNotFound) {
+	if _, err := service.Preview(t.Context(), mediaBoundaryActor(target), item.ID); !errors.Is(err, media.ErrNotFound) {
 		t.Fatal("source deleted during signing leaked lease", err)
 	}
 }
@@ -111,30 +111,30 @@ func TestSubjectSourcesKeepTargetAuthoritySeparateFromPersonalOwner(t *testing.T
 	actor := &sourceActorFake{personal: personal}
 	repo := &sourceLibraryFake{}
 	service := media.NewSubjectLibrary(actor, repo, nil)
-	page, err := service.List(t.Context(), target, media.SubjectCatalogueQuery{Kind: "image", Page: 2, PageSize: 12, FavoriteOnly: true, Quality: "upscaled"})
-	if err != nil || page.CurrentScopeID != target.ScopeID || page.CurrentActorID != target.ID || repo.actor != target || actor.last != target || !repo.input.FavoriteOnly || repo.input.Page != 2 || repo.input.Quality != "upscaled" {
+	page, err := service.List(t.Context(), mediaBoundaryActor(target), media.SubjectCatalogueQuery{Kind: "image", Page: 2, PageSize: 12, FavoriteOnly: true, Quality: "upscaled"})
+	if err != nil || page.CurrentScopeID != target.ScopeID || page.CurrentActorID != target.ID || repo.actor != mediaBoundaryActor(target) || actor.last != mediaBoundaryActor(target) || !repo.input.FavoriteOnly || repo.input.Page != 2 || repo.input.Quality != "upscaled" {
 		t.Fatalf("source authority/query: %#v, %v", page, err)
 	}
 	if !page.Capabilities.UpscaledFilter {
 		t.Fatal("real operation-based upscale filter unavailable")
 	}
 	actor.err = identity.ErrForbidden
-	if _, err := service.List(t.Context(), target, repo.input); !errors.Is(err, identity.ErrForbidden) || repo.calls != 1 {
+	if _, err := service.List(t.Context(), mediaBoundaryActor(target), repo.input); !errors.Is(err, identity.ErrForbidden) || repo.calls != 1 {
 		t.Fatal("revoked target reached source owner")
 	}
 	actor.err = nil
 	actor.personal.ID = uuid.New()
-	if _, err := service.SourceActor(t.Context(), target, true); !errors.Is(err, media.ErrNotFound) {
+	if _, err := service.SourceActor(t.Context(), mediaBoundaryActor(target), true); !errors.Is(err, media.ErrNotFound) {
 		t.Fatal("server resolver changed actor identity")
 	}
 }
 
 type sourceUploaderFake struct {
 	calls int
-	actor identity.Principal
+	actor media.Actor
 }
 
-func (s *sourceUploaderFake) UploadPersonalFor(c *gin.Context, a identity.Principal) {
+func (s *sourceUploaderFake) UploadPersonalFor(c *gin.Context, a media.Actor) {
 	s.calls++
 	s.actor = a
 	c.Status(201)
@@ -169,7 +169,7 @@ func TestSubjectSourceHTTPRejectsOwnerSelectionAndChecksUploadBeforeBody(t *test
 	}
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), "POST", "/api/subjects/sources/uploads", nil))
-	if recorder.Code != 201 || upload.actor != personal || !actor.write {
+	if recorder.Code != 201 || upload.actor != mediaBoundaryActor(personal) || !actor.write {
 		t.Fatal("upload did not resolve authorized personal owner")
 	}
 	actor.err = identity.ErrForbidden

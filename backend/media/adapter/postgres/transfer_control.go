@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
@@ -14,7 +13,7 @@ import (
 // ControlTransfer records permanent, actor-scoped cancellation and recovery
 // commands. Only an ended execution can be retried or reconciled; an expired
 // lease alone is never proof that an old physical writer has stopped.
-func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.Principal, id, key uuid.UUID, revision int64, action application.TransferAction) (domain.TransferJob, error) {
+func (s *TransferStore) ControlTransfer(ctx context.Context, actor application.Actor, id, key uuid.UUID, revision int64, action application.TransferAction) (domain.TransferJob, error) {
 	var result domain.TransferJob
 	if s == nil || s.db == nil {
 		return result, application.ErrUnavailable

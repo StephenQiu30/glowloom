@@ -35,14 +35,14 @@ func ProvideScriptSourceStore(database *gorm.DB) *pgscript.SourceStore {
 
 // ProvideScriptProjectAccess adapts project authority for scripts.
 func ProvideScriptProjectAccess(tx *gorm.DB) scriptapp.ProjectAccess {
-	return scopewire.ProvideProjectContentAccess(tx)
+	return ProjectAccess(scopewire.ProvideProjectContentAccess(tx))
 }
 
 // ProvideScriptImportStore assembles script import storage.
 func ProvideScriptImportStore(database *gorm.DB) *pgscript.ImportStore {
 	return pgscript.NewImportStoreWithWorkerAccess(database, ProvideScriptProjectAccess, provideScriptWorkerAccess, func(tx *gorm.DB) scriptapp.SourceAssetReader {
 		// Admission freezes media facts in this transaction, without object I/O.
-		return mediaapp.NewRoutedDocumentSources(pgmedia.NewScopedDocumentSourceStore(tx, mediawire.NewMediaScopeAccess), nil)
+		return documentSources{sources: mediaapp.NewRoutedDocumentSources(pgmedia.NewScopedDocumentSourceStore(tx, mediawire.NewMediaScopeAccess), nil)}
 	})
 }
 
@@ -82,11 +82,11 @@ func ProvideScriptImportWorkerWithObjects(database *gorm.DB, registry *objectsto
 	// One worker owns extraction and publication I/O until the synchronous
 	// publication call and its durable exit proof both finish. Recovery runs
 	// after that join and checks the source owner's persistent I/O facts.
-	documents := mediaapp.NewRoutedDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaWorkerScopeAccess), mediaobjects.NewRoutedReadObjects(registry))
+	documents := documentSources{sources: mediaapp.NewRoutedDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaWorkerScopeAccess), mediaobjects.NewRoutedReadObjects(registry))}
 	worker := scriptapp.NewImportWorker(store, documents, extractor, publication, recovery, time.Now)
 	return worker, store
 }
 
 func provideScriptWorkerAccess(tx *gorm.DB) scriptapp.ProjectAccess {
-	return scopewire.ProvideWorkerProjectContentAccess(tx)
+	return ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(tx))
 }

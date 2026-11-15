@@ -8,11 +8,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
@@ -49,7 +50,7 @@ func (s *CopyPrimaryRepairStore) review(ctx context.Context, tx *gorm.DB, job do
 	}
 	inspector := s.canvas(tx)
 	if inspector == nil {
-		return application.CopyPrimaryReview{}, application.ErrProjectDependencyUnavailable
+		return application.CopyPrimaryReview{}, workspacesource.ErrProjectDependencyUnavailable
 	}
 	proof, err := inspector.InspectPrimary(ctx, copyCanvasBinding(job), copyCanvasSnapshot(job))
 	if err != nil {

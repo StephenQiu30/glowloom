@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 // SourceWriteIntent exposes only current authorized recovery metadata.
@@ -75,21 +74,21 @@ type SourceObjectState struct {
 
 // SourceRecoveryStore owns permanent controls and exact unpublished-object fences.
 type SourceRecoveryStore interface {
-	ListSourceWrites(context.Context, identityapp.Principal, uuid.UUID, int64, int) (SourceWritePage, error)
-	SourceWrite(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (SourceIntentRecord, error)
-	ControlSourceWrite(context.Context, identityapp.Principal, SourceControlCommand, time.Time) (SourceControlReceipt, error)
-	ProveSourceStop(context.Context, identityapp.Principal, SourceControlCommand, uuid.UUID, time.Time) error
-	AuthorizeSourceRemoval(context.Context, identityapp.Principal, SourceControlCommand, domain.ObjectFact) error
-	BeginSourceRemoval(context.Context, identityapp.Principal, SourceControlCommand, domain.ObjectFact, time.Time) error
-	ConfirmSourceRemoval(context.Context, identityapp.Principal, SourceControlCommand, domain.ObjectFact, time.Time) error
-	FinishSourceControl(context.Context, identityapp.Principal, SourceControlCommand, bool, time.Time) error
+	ListSourceWrites(context.Context, Actor, uuid.UUID, int64, int) (SourceWritePage, error)
+	SourceWrite(context.Context, Actor, uuid.UUID, uuid.UUID) (SourceIntentRecord, error)
+	ControlSourceWrite(context.Context, Actor, SourceControlCommand, time.Time) (SourceControlReceipt, error)
+	ProveSourceStop(context.Context, Actor, SourceControlCommand, uuid.UUID, time.Time) error
+	AuthorizeSourceRemoval(context.Context, Actor, SourceControlCommand, domain.ObjectFact) error
+	BeginSourceRemoval(context.Context, Actor, SourceControlCommand, domain.ObjectFact, time.Time) error
+	ConfirmSourceRemoval(context.Context, Actor, SourceControlCommand, domain.ObjectFact, time.Time) error
+	FinishSourceControl(context.Context, Actor, SourceControlCommand, bool, time.Time) error
 }
 
 // SourceIOStore records only this synchronous call's actual I/O ownership and exit.
 type SourceIOStore interface {
-	ClaimSourceIO(context.Context, identityapp.Principal, WritePlan, uuid.UUID, time.Time) error
-	BeginSourceObject(context.Context, identityapp.Principal, WritePlan, uuid.UUID, domain.ObjectFact) error
-	ConfirmSourceObject(context.Context, identityapp.Principal, WritePlan, uuid.UUID, domain.ObjectFact) error
+	ClaimSourceIO(context.Context, Actor, WritePlan, uuid.UUID, time.Time) error
+	BeginSourceObject(context.Context, Actor, WritePlan, uuid.UUID, domain.ObjectFact) error
+	ConfirmSourceObject(context.Context, Actor, WritePlan, uuid.UUID, domain.ObjectFact) error
 	EndSourceIO(context.Context, WritePlan, uuid.UUID, bool, time.Time) error
 }
 
@@ -150,7 +149,7 @@ func NewSourceRecovery(store SourceRecoveryStore, sources *SourceService, now fu
 }
 
 // List allows refresh recovery without retaining private bodies or object paths.
-func (s *SourceRecovery) List(ctx context.Context, actor identityapp.Principal, project uuid.UUID, after int64, limit int) (SourceWritePage, error) {
+func (s *SourceRecovery) List(ctx context.Context, actor Actor, project uuid.UUID, after int64, limit int) (SourceWritePage, error) {
 	if s == nil || s.store == nil {
 		return SourceWritePage{}, ErrUnavailable
 	}
@@ -161,7 +160,7 @@ func (s *SourceRecovery) List(ctx context.Context, actor identityapp.Principal, 
 }
 
 // Get returns current state after current project authorization.
-func (s *SourceRecovery) Get(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (SourceWriteIntent, error) {
+func (s *SourceRecovery) Get(ctx context.Context, actor Actor, project, id uuid.UUID) (SourceWriteIntent, error) {
 	if s == nil || s.store == nil {
 		return SourceWriteIntent{}, ErrUnavailable
 	}
@@ -171,7 +170,7 @@ func (s *SourceRecovery) Get(ctx context.Context, actor identityapp.Principal, p
 
 // Control first commits the explicit intent, then attempts bounded owned recovery.
 // Its permanent response remains accepted even when physical proof stays unavailable.
-func (s *SourceRecovery) Control(ctx context.Context, actor identityapp.Principal, input SourceControlCommand) (SourceControlReceipt, error) {
+func (s *SourceRecovery) Control(ctx context.Context, actor Actor, input SourceControlCommand) (SourceControlReceipt, error) {
 	if s == nil || s.store == nil || s.sources == nil || s.sources.objects == nil || s.sources.io == nil || s.now == nil {
 		return SourceControlReceipt{}, ErrUnavailable
 	}
@@ -195,7 +194,7 @@ func (s *SourceRecovery) Control(ctx context.Context, actor identityapp.Principa
 	return receipt, nil
 }
 
-func (s *SourceRecovery) recover(ctx context.Context, actor identityapp.Principal, input SourceControlCommand) error {
+func (s *SourceRecovery) recover(ctx context.Context, actor Actor, input SourceControlCommand) error {
 	r, err := s.store.SourceWrite(ctx, actor, input.ProjectID, input.IntentID)
 	if err != nil {
 		return err

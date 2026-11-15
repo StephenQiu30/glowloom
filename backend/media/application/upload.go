@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -54,9 +53,9 @@ func (r UploadRequest) SourceKind() string {
 
 // UploadRepository authorizes before reading and atomically commits reviewed media.
 type UploadRepository interface {
-	AuthorizeUpload(context.Context, identityapp.Principal, uuid.UUID) (string, error)
-	FindUpload(context.Context, identityapp.Principal, UploadRequest) (UploadResult, bool, error)
-	CommitUpload(context.Context, identityapp.Principal, UploadRequest, domain.MediaAsset, []domain.Rendition) (UploadResult, error)
+	AuthorizeUpload(context.Context, Actor, uuid.UUID) (string, error)
+	FindUpload(context.Context, Actor, UploadRequest) (UploadResult, bool, error)
+	CommitUpload(context.Context, Actor, UploadRequest, domain.MediaAsset, []domain.Rendition) (UploadResult, error)
 	// UploadAssetExists waits for any commit holding this project's upload lock
 	// to finish before establishing whether the owned asset was persisted.
 	UploadAssetExists(context.Context, uuid.UUID, uuid.UUID) (bool, error)
@@ -71,7 +70,7 @@ type UploadObjects interface {
 // UploadInput carries already bounded bytes and the explicit local review declaration.
 type UploadInput struct {
 	Target               *UploadTarget `json:"-"`
-	Actor                identityapp.Principal
+	Actor                Actor
 	Request              UploadRequest
 	File                 *Downloaded
 	LocalReviewConfirmed bool
@@ -90,7 +89,7 @@ type UploadService struct {
 }
 
 // Authorize rejects inaccessible or archived projects without reading the body.
-func (s *UploadService) Authorize(ctx context.Context, actor identityapp.Principal, project uuid.UUID) error {
+func (s *UploadService) Authorize(ctx context.Context, actor Actor, project uuid.UUID) error {
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}

@@ -26,7 +26,7 @@ type stylePersonalImages struct {
 
 func (s stylePersonalImages) Image(ctx context.Context, a identity.Principal, id uuid.UUID) (app.StyleLibraryReference, error) {
 	scope := mediadomain.LibraryScope{Kind: mediadomain.LibraryPersonal}
-	file, err := s.sources.FindSubjectSource(ctx, a, scope, id)
+	file, err := s.sources.FindSubjectSource(ctx, mediawire.Actor(a), scope, id)
 	if err != nil {
 		return app.StyleLibraryReference{}, err
 	}
@@ -38,7 +38,7 @@ func (s stylePersonalImages) Image(ctx context.Context, a identity.Principal, id
 	if err != nil || len(digest) != 32 || strings.ToLower(*asset.SHA256) != *asset.SHA256 {
 		return app.StyleLibraryReference{}, mediaapp.ErrNotFound
 	}
-	item, err := s.library.LibraryDetail(ctx, a, scope, id)
+	item, err := s.library.LibraryDetail(ctx, mediawire.Actor(a), scope, id)
 	if err != nil {
 		return app.StyleLibraryReference{}, err
 	}

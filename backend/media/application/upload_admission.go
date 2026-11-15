@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -60,7 +59,7 @@ type UploadTarget struct {
 
 // UploadAdmission pins authorized idempotent requests before reading their bodies.
 type UploadAdmission interface {
-	PinUpload(context.Context, identityapp.Principal, domain.LibraryScope, uuid.UUID) (UploadTarget, error)
+	PinUpload(context.Context, Actor, domain.LibraryScope, uuid.UUID) (UploadTarget, error)
 }
 
 // RoutedUploadObjects records intent before creating verified immutable bytes.
@@ -95,7 +94,7 @@ func NewRoutedUploadService(
 
 // BeginUpload authorizes again inside the persistent admission transaction. The
 // HTTP handler invokes this after its slot and before MultipartReader or Read.
-func (s *UploadService) BeginUpload(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope, key uuid.UUID) (UploadTarget, error) {
+func (s *UploadService) BeginUpload(ctx context.Context, actor Actor, scope domain.LibraryScope, key uuid.UUID) (UploadTarget, error) {
 	if s == nil {
 		return UploadTarget{}, ErrUnavailable
 	}

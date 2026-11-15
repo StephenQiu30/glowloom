@@ -61,7 +61,7 @@ func referenceLimit(kind mediadomain.Kind) int64 {
 	}
 }
 func referenceFact(ctx context.Context, db *gorm.DB, scope domain.Scope, id uuid.UUID) (mediadomain.MediaAsset, error) {
-	a, err := pgmedia.NewScopedStore(db, mediawire.NewMediaWorkerScopeAccess).FindAsset(ctx, app.Principal(scope), scope.ProjectID, id)
+	a, err := pgmedia.NewScopedStore(db, mediawire.NewMediaWorkerScopeAccess).FindAsset(ctx, mediawire.Actor(app.Principal(scope)), scope.ProjectID, id)
 	if err != nil {
 		return a, businessError(err)
 	}

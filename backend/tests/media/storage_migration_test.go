@@ -28,16 +28,16 @@ func TestStorageFrozenReferenceChecksActualBytesAndProviderFailure(t *testing.T)
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
 	reader := routedReferenceReader{file: mediaapp.LibraryMediaFile{Asset: a}}
 	query := mediaapp.NewRoutedReferenceFactQuery(reader, objects)
-	fact, err := query.Reference(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID, domain.KindAudio)
+	fact, err := query.Reference(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID, domain.KindAudio)
 	if err != nil || fact.SHA256 != *a.SHA256 {
 		t.Fatal("actual bytes not verified", err)
 	}
 	objects.data[a.ObjectLocation.Ref] = bytes.Repeat([]byte("x"), len(data))
-	if _, err := query.Reference(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID, domain.KindAudio); !errors.Is(err, mediaapp.ErrObjectMismatch) {
+	if _, err := query.Reference(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID, domain.KindAudio); !errors.Is(err, mediaapp.ErrObjectMismatch) {
 		t.Fatal("forged metadata accepted", err)
 	}
 	objects.err = errors.New("provider forbidden")
-	if _, err := query.Reference(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID, domain.KindAudio); !errors.Is(err, objects.err) {
+	if _, err := query.Reference(t.Context(), mediaActor(identityapp.Principal{}), a.ProjectID, a.ID, domain.KindAudio); !errors.Is(err, objects.err) {
 		t.Fatal("provider error became absence proof", err)
 	}
 }

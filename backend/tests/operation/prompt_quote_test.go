@@ -16,12 +16,11 @@ import (
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
 type quotePreferenceReader struct{ calls int }
 
-func (r *quotePreferenceReader) ReadCustomizations(context.Context, identityapp.Principal) ([]promptdomain.Customization, error) {
+func (r *quotePreferenceReader) ReadCustomizations(context.Context, promptapp.Actor) ([]promptdomain.Customization, error) {
 	r.calls++
 	return nil, nil
 }
@@ -39,7 +38,7 @@ func templateQuoteFixture(t *testing.T, operation string) (operationapp.CreateFr
 		input.Capability, input.Mode = "video.generate", "text_to_video"
 	}
 	reader := &quotePreferenceReader{}
-	prepared, err := promptapp.NewCompiler(reader).Prepare(t.Context(), identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: "producer"}, *request, promptapp.RuntimeContext{
+	prepared, err := promptapp.NewCompiler(reader).Prepare(t.Context(), promptapp.Actor{ID: uuid.New(), OrgID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1}, *request, promptapp.RuntimeContext{
 		ProjectID: input.ProjectID, Capability: input.Capability, Mode: input.Mode, UserPrompt: input.Prompt,
 	})
 	if err != nil {

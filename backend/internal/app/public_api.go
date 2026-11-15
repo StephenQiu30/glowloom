@@ -43,6 +43,7 @@ import (
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	scripthttp "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/http"
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/http"
 	subjectapp "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
@@ -185,13 +186,13 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	copies := copywire.ProvideProjectCopyStoreWithObjects(database, mediawire.NewMediaScopeAccess)
 	transfers := mediawire.ProvideRoutedMediaTransferStore(database)
 	workspacehttp.NewProjectCopyHandler(workspaceapp.NewProjectCopyService(copies, time.Now)).Register(protected)
-	mediahttp.NewTransferHandler(transfers).Register(protected)
-	mediahttp.NewPurgeHandler(mediawire.ProvideMediaPurgeStore(database)).Register(protected)
+	mediahttp.NewTransferHandler(transfers, resolveLegacyMediaActor).Register(protected)
+	mediahttp.NewPurgeHandler(mediawire.ProvideMediaPurgeStore(database), resolveLegacyMediaActor).Register(protected)
 	usage := mediawire.ProvideRoutedMediaStorageUsage(database, subjectObjects.Registry(), cfg.ObjectStorage)
-	mediahttp.NewStorageUsageHandler(usage).Register(protected)
+	mediahttp.NewStorageUsageHandler(usage, resolveLegacyMediaActor).Register(protected)
 	workspacehttp.NewProjectFolderHandler(workspaceapp.NewProjectFolders(workspacewire.ProvideProjectFolderStore(database), time.Now)).Register(protected)
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)))
 	}
 	canvasStore := pgcanvas.NewScopedStore(database, mediaFactory, mediawire.NewCanvasProjectAccess).WithSubjectSources(subjectwire.NewPromptSources).WithCanvasUsage(canvaswire.NewInformationUsage)
 	canvasService := canvasapp.NewService(canvasStore)
@@ -212,19 +213,19 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	documentReader := pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaScopeAccess)
 	assetQuery := mediaapp.NewRoutedAssetQuery(assetReader, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
 	documents := mediaapp.NewRoutedDocumentSources(documentReader, subjectObjects.Routed)
-	mediahttp.NewHandler(assetQuery).Register(protected)
-	mediahttp.NewVoiceLibraryHandler(assetReader).Register(protected)
-	mediahttp.NewDocumentHandler(documents).Register(protected)
+	mediahttp.NewHandler(assetQuery, resolveLegacyMediaActor).Register(protected)
+	mediahttp.NewVoiceLibraryHandler(assetReader, resolveLegacyMediaActor).Register(protected)
+	mediahttp.NewDocumentHandler(documents, resolveLegacyMediaActor).Register(protected)
 	library := pgmedia.NewScopedLibraryStore(database, mediawire.NewMediaLibraryProjectAccess, time.Now, mediawire.NewMediaScopeAccess)
-	mediahttp.NewLibraryHandler(library).Register(protected)
+	mediahttp.NewLibraryHandler(library, resolveLegacyMediaActor).Register(protected)
 	libraryQuery := mediaapp.NewRoutedLibraryMediaQuery(library, subjectObjects.Routed, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
-	mediahttp.NewLibraryMediaHandler(libraryQuery).Register(protected)
+	mediahttp.NewLibraryMediaHandler(libraryQuery, resolveLegacyMediaActor).Register(protected)
 	scripts := scriptwire.ProvideServicesWithObjects(database, subjectObjects.Registry())
-	scripthttp.NewSourceHandler(scripts.Sources).Register(protected)
-	scripthttp.NewSourceRecoveryHandler(scripts.Recovery).Register(protected)
-	scripthttp.NewReviewHandler(scripts.Episodes, scripts.History).Register(protected)
-	scripthttp.NewVersionHandler(scripts.History, scripts.Adopt).Register(protected)
-	scripthttp.NewImportHandler(scripts.Imports).Register(protected)
+	scripthttp.NewSourceHandler(scripts.Sources, resolveLegacyScriptActor).Register(protected)
+	scripthttp.NewSourceRecoveryHandler(scripts.Recovery, resolveLegacyScriptActor).Register(protected)
+	scripthttp.NewReviewHandler(scripts.Episodes, scripts.History, resolveLegacyScriptActor).Register(protected)
+	scripthttp.NewVersionHandler(scripts.History, scripts.Adopt, resolveLegacyScriptActor).Register(protected)
+	scripthttp.NewImportHandler(scripts.Imports, resolveLegacyScriptActor).Register(protected)
 	modelValidator, err := gltf.NewValidator()
 	if err != nil {
 		return nil, fmt.Errorf("configure model upload validation: %w", err)
@@ -236,15 +237,15 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return nil, fmt.Errorf("configure media normalization: %w", err)
 	}
 	scopedUpload := mediaapp.NewRoutedUploadService(uploadStore, uploadStore, pgmedia.NewUploadAdmission(uploadStore), mediaflow.NewUploadProber(modelValidator), normalizer, mediaflow.FFUploadRenderer{}, mediaobjects.NewRoutedUploadObjects(registry, pgmedia.NewStorageRoutes(database)), time.Now)
-	uploadHandler := mediahttp.NewUploadHandler(scopedUpload)
+	uploadHandler := mediahttp.NewUploadHandler(scopedUpload, resolveLegacyMediaActor)
 	uploadHandler.Register(protected)
 	videoLinks, err := mediaflow.NewPublicVideoLinkResolver(mediaflow.VideoLinkResolverOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("configure public video links: %w", err)
 	}
-	mediahttp.NewVideoLinkHandler(mediaapp.NewVideoLinkService(scopedUpload, videoLinks)).Register(protected)
+	mediahttp.NewVideoLinkHandler(mediaapp.NewVideoLinkService(scopedUpload, videoLinks), resolveLegacyMediaActor).Register(protected)
 	packages := mediawire.ProvideRoutedMediaPackages(database, registry, scopedUpload)
-	mediahttp.NewPackageHandler(packages).Register(protected)
+	mediahttp.NewPackageHandler(packages, resolveLegacyMediaActor).Register(protected)
 	exports := mediawire.ProvideRoutedMediaExportStore(database, mediawire.NewMediaScopeAccess)
 	exportQuery := toolapp.NewRoutedExportQuery(exports, subjectObjects.Routed, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
 	exportQuery.WithLaunchOrigin(cfg.PublicOrigin)
@@ -283,8 +284,8 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure model parameter validation: %w", err)
 	}
-	biblehttp.NewHandler(bibleapp.NewService(biblewire.ProvideBibleStoreWithObjects(database, subjectObjects.Registry(), parameterValidator), time.Now)).Register(protected)
-	mediahttp.NewAssetDownloadHandler(mediawire.ProvideAssetDownloads(database, subjectObjects.Routed)).Register(protected)
+	biblehttp.NewHandler(bibleapp.NewService(biblewire.ProvideBibleStoreWithObjects(database, subjectObjects.Registry(), parameterValidator), time.Now), resolveLegacyBibleActor).Register(protected)
+	mediahttp.NewAssetDownloadHandler(mediawire.ProvideAssetDownloads(database, subjectObjects.Routed), resolveLegacyMediaActor).Register(protected)
 	subjectStore := subjectwire.NewStore(database, subjectObjects)
 	subjecthttp.NewHandler(subjectapp.NewService(subjectStore, time.Now), subjectStore).Register(protected)
 	subjecthttp.NewVoiceHandler(subjectwire.NewVoiceJobs(database)).Register(protected)
@@ -314,8 +315,8 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	}
 	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(catalogStore)).Register(protected)
 	workspacehttp.NewModelDefaultsHandler(workspaceapp.NewModelDefaultsService(workspaceStore, time.Now)).Register(protected)
-	prompthttp.NewHandler(promptapp.NewPreferences(operationwire.ProvidePromptPreferenceStore(database), time.Now)).Register(identityProtected)
-	prompthttp.NewDraftHandler(pgprompt.NewDraftStore(database, promptwire.DraftAccess).WithSubjectSources(subjectwire.NewPromptSources)).Register(protected)
+	prompthttp.NewHandler(promptapp.NewPreferences(operationwire.ProvidePromptPreferenceStore(database), time.Now), resolveLegacyPromptActor).Register(identityProtected)
+	prompthttp.NewDraftHandler(pgprompt.NewDraftStore(database, promptwire.DraftAccess).WithSubjectSources(subjectwire.NewPromptSources), resolveLegacyPromptActor).Register(protected)
 	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{
 		Adapters:          catalogwire.NewAdapterMetadata(catalogStore),
 		Providers:         catalogapp.NewListProvidersQuery(catalogStore),
@@ -333,9 +334,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		SetModelStatus:    catalogapp.NewSetModelStatusCommand(catalogStore, time.Now),
 	}).Register(identityProtected)
 	operations := pgoperation.NewScopedStoreWithEditor(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
-		return promptapp.NewCompiler(operationwire.ProvidePromptPreferenceStore(tx))
+		return operationwire.ProvidePromptCompiler(tx)
 	}, func(tx *gorm.DB) operationapp.EditorSnapshots {
-		return pgprompt.NewDraftStore(tx, promptwire.DraftAccess).WithSubjectSources(subjectwire.NewPromptSources)
+		return operationwire.ProvidePromptEditor(tx)
 	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(tx *gorm.DB) operationapp.ExecutionAvailability {
 		return pgcatalog.NewStore(tx)
 	}).WithCreditOperationSaga(cfg.CreditOperationSagaEnabled).WithSubjectMedia(func(tx *gorm.DB) operationapp.SubjectMediaAccess {
@@ -376,6 +377,54 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		context.AfterFunc(socketLifetime, stopLaunchCleanup)
 	}
 	return router, nil
+}
+
+func resolveLegacyScriptActor(c *gin.Context) (scriptapp.Actor, error) {
+	if c == nil {
+		return scriptapp.Actor{}, scriptapp.ErrSessionInvalid
+	}
+	actor := scriptwire.Actor(identityhttp.Principal(c))
+	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1 {
+		return scriptapp.Actor{}, scriptapp.ErrSessionInvalid
+	}
+	return actor, nil
+}
+
+func resolveLegacyMediaActor(c *gin.Context) (mediaapp.Actor, error) {
+	if c == nil {
+		return mediaapp.Actor{}, mediaapp.ErrSessionInvalid
+	}
+	principal := identityhttp.Principal(c)
+	actor := mediaapp.Actor{ID: principal.ID, OrgID: principal.OrgID, ScopeID: principal.ScopeID, SessionID: principal.SessionID, CredentialEpoch: principal.CredentialEpoch, PlatformEpoch: principal.PlatformEpoch}
+	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1 {
+		return mediaapp.Actor{}, mediaapp.ErrSessionInvalid
+	}
+	return actor, nil
+}
+
+func resolveLegacyPromptActor(c *gin.Context) (promptapp.Actor, error) {
+	if c == nil {
+		return promptapp.Actor{}, promptapp.ErrSessionInvalid
+	}
+	actor := identityhttp.Principal(c)
+	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1 {
+		return promptapp.Actor{}, promptapp.ErrSessionInvalid
+	}
+	return promptapp.Actor{
+		ID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID,
+		SessionID: actor.SessionID, CredentialEpoch: actor.CredentialEpoch,
+	}, nil
+}
+
+func resolveLegacyBibleActor(c *gin.Context) (bibleapp.Actor, error) {
+	if c == nil {
+		return bibleapp.Actor{}, bibleapp.ErrSessionInvalid
+	}
+	actor := identityhttp.Principal(c)
+	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1 {
+		return bibleapp.Actor{}, bibleapp.ErrSessionInvalid
+	}
+	return biblewire.Actor(actor), nil
 }
 
 func creditServiceCallers(configured []config.CreditServiceCaller) ([]billinghttp.CreditServiceCaller, error) {

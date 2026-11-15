@@ -1512,13 +1512,14 @@ CREATE TABLE identity.session_revocation_request (
     idem_key uuid NOT NULL CHECK (idem_key <> '00000000-0000-0000-0000-000000000000'::uuid),
     account_id uuid NOT NULL CHECK (account_id <> '00000000-0000-0000-0000-000000000000'::uuid),
     request_session_id uuid NOT NULL CHECK (request_session_id <> '00000000-0000-0000-0000-000000000000'::uuid),
-    action text NOT NULL CHECK (action IN ('revoke_session','revoke_others')),
+    action text NOT NULL CHECK (action IN ('revoke_session','revoke_others','refresh_reuse')),
     target_session_id uuid CHECK (target_session_id <> '00000000-0000-0000-0000-000000000000'::uuid),
     requested_at timestamptz NOT NULL,
     completed_at timestamptz CHECK (completed_at >= requested_at),
     UNIQUE (account_id,request_session_id,idem_key),
     CHECK ((action='revoke_session' AND target_session_id IS NOT NULL) OR
-           (action='revoke_others' AND target_session_id IS NULL))
+           (action='revoke_others' AND target_session_id IS NULL) OR
+           (action='refresh_reuse' AND target_session_id IS NOT NULL AND target_session_id=request_session_id))
 );
 
 CREATE TABLE identity.session_revocation_request_target (
@@ -5524,8 +5525,9 @@ ALTER TABLE ONLY script.version_source
 ALTER TABLE ONLY script.version_source
     ADD CONSTRAINT version_source_org_id_project_id_version_id_fkey FOREIGN KEY (org_id, project_id, version_id) REFERENCES script.script_version(org_id, project_id, id);
 
-ALTER TABLE ONLY workspace.creation_scope
-    ADD CONSTRAINT creation_scope_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+-- Personal account existence is accepted by Identity's immutable registration
+-- command; Creation commits the exact source receipt with this scope. The account
+-- becomes usable only after Identity has both resource-owner receipts.
 
 ALTER TABLE ONLY workspace.creation_scope
     ADD CONSTRAINT creation_scope_physical_scope_id_fkey FOREIGN KEY (physical_scope_id) REFERENCES workspace.organization(id) ON DELETE RESTRICT;
@@ -7452,8 +7454,10 @@ ALTER TABLE billing.reservation ADD COLUMN whole_credits boolean NOT NULL DEFAUL
 ALTER TABLE operation.provider_call ADD COLUMN procurement_cost_micros bigint CHECK (procurement_cost_micros >= 0);
 GRANT UPDATE (procurement_cost_micros) ON operation.provider_call TO glowloom_app;
 
+-- Execution receives the accepted source registration and exact Creation ready
+-- receipt before preparing this local wallet. It never looks up Creation tables.
 CREATE TABLE billing.wallet_account (
-    scope_id uuid PRIMARY KEY REFERENCES workspace.creation_scope(id),
+    scope_id uuid PRIMARY KEY,
     version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
     created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -8536,3 +8540,770 @@ GRANT SELECT,INSERT ON TABLE identity.session_revocation_request TO glowloom_app
 GRANT UPDATE(completed_at) ON TABLE identity.session_revocation_request TO glowloom_app,glowloom_identity;
 GRANT SELECT,INSERT ON TABLE identity.session_revocation_request_target TO glowloom_app,glowloom_identity;
 GRANT SELECT,INSERT ON TABLE identity.session_revocation_request_proof TO glowloom_app,glowloom_identity;
+
+-- Media-local retention ledger. Other owner identities remain opaque values;
+-- no cross-domain foreign keys, legacy grants or physical routing keys.
+CREATE TABLE media.reference_pin_gate (
+    asset_id uuid PRIMARY KEY REFERENCES media.media_asset(id) ON DELETE RESTRICT,
+    epoch bigint NOT NULL DEFAULT 1 CHECK (epoch > 0),
+    closed boolean NOT NULL DEFAULT false,
+    close_command_id uuid,
+    CHECK (closed = (close_command_id IS NOT NULL))
+);
+CREATE TABLE media.reference_pin (
+    pin_id uuid PRIMARY KEY,
+    consumer text NOT NULL CHECK (consumer IN ('identity','creation','execution')),
+    consumer_command_id uuid NOT NULL,
+    consumer_command_sha256 text NOT NULL CHECK (consumer_command_sha256 ~ '^[0-9a-f]{64}$'),
+    consumer_resource_id uuid NOT NULL,
+    scope_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    asset_id uuid NOT NULL REFERENCES media.reference_pin_gate(asset_id) ON DELETE RESTRICT,
+    location_id uuid NOT NULL REFERENCES media.object_location(id) ON DELETE RESTRICT,
+    byte_size bigint NOT NULL CHECK (byte_size >= 0),
+    sha256 text NOT NULL CHECK (sha256 ~ '^[0-9a-f]{64}$'),
+    asset_revision bigint NOT NULL CHECK (asset_revision > 0),
+    gate_epoch bigint NOT NULL CHECK (gate_epoch > 0),
+    acquire_command_id uuid NOT NULL UNIQUE,
+    facts jsonb NOT NULL CHECK (jsonb_typeof(facts)='object' AND octet_length(facts::text)<=2097152),
+    state text NOT NULL CHECK (state IN ('held','bound','released')),
+    adoption_receipt_sha256 text NOT NULL DEFAULT '' CHECK (adoption_receipt_sha256='' OR adoption_receipt_sha256 ~ '^[0-9a-f]{64}$'),
+    release_receipt_sha256 text NOT NULL DEFAULT '' CHECK (release_receipt_sha256='' OR release_receipt_sha256 ~ '^[0-9a-f]{64}$'),
+    release_outcome text NOT NULL DEFAULT '' CHECK (release_outcome IN ('','not_adopted_frozen','removed')),
+    CHECK (state<>'held' OR adoption_receipt_sha256=''),
+    CHECK (state<>'bound' OR adoption_receipt_sha256<>''),
+    CHECK ((state='released') = (release_receipt_sha256<>'' AND release_outcome<>'')),
+    CHECK (state='released' OR (release_receipt_sha256='' AND release_outcome='')),
+    CHECK (adoption_receipt_sha256='' OR release_outcome<>'not_adopted_frozen')
+);
+CREATE INDEX reference_pin_asset_responsibility ON media.reference_pin(asset_id,state,pin_id);
+
+-- Column ACLs protect identity. This local lifecycle guard also prevents a
+-- runtime SQL error from reopening a gate or resurrecting released responsibility.
+CREATE FUNCTION media.guard_reference_pin_lifecycle() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_TABLE_NAME='reference_pin_gate' THEN
+        IF OLD.closed OR NOT NEW.closed OR NEW.epoch<>OLD.epoch+1 OR NEW.close_command_id IS NULL THEN
+            RAISE EXCEPTION 'reference acquisition closure is permanent' USING ERRCODE='23514';
+        END IF;
+    ELSE
+        IF (OLD.state='released' AND NEW IS DISTINCT FROM OLD)
+           OR (OLD.state='bound' AND NEW.state='held')
+           OR (OLD.adoption_receipt_sha256<>'' AND NEW.adoption_receipt_sha256<>OLD.adoption_receipt_sha256) THEN
+            RAISE EXCEPTION 'reference pin responsibility is monotonic' USING ERRCODE='23514';
+        END IF;
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER reference_pin_gate_lifecycle BEFORE UPDATE ON media.reference_pin_gate
+FOR EACH ROW EXECUTE FUNCTION media.guard_reference_pin_lifecycle();
+CREATE TRIGGER reference_pin_lifecycle BEFORE UPDATE ON media.reference_pin
+FOR EACH ROW EXECUTE FUNCTION media.guard_reference_pin_lifecycle();
+REVOKE ALL ON FUNCTION media.guard_reference_pin_lifecycle() FROM PUBLIC;
+REVOKE ALL ON media.reference_pin_gate,media.reference_pin FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_creation,glowloom_execution;
+GRANT SELECT,INSERT ON media.reference_pin_gate,media.reference_pin TO glowloom_media;
+GRANT UPDATE(epoch,closed,close_command_id) ON media.reference_pin_gate TO glowloom_media;
+GRANT UPDATE(state,adoption_receipt_sha256,release_receipt_sha256,release_outcome) ON media.reference_pin TO glowloom_media;
+
+-- Creation freezes only locally locked source facts. Actor/session/consumer IDs
+-- are opaque identities, never cross-owner foreign keys or authority projections.
+CREATE TABLE workspace.frozen_input_handoff (
+    handoff_id uuid PRIMARY KEY,
+    request_id uuid NOT NULL,
+    command_id uuid NOT NULL UNIQUE,
+    command_sha256 text NOT NULL CHECK (command_sha256 ~ '^[0-9a-f]{64}$'),
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    actor_id uuid NOT NULL,
+    session_id uuid NOT NULL,
+    scope_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    source_key text NOT NULL,
+    source_generation bigint NOT NULL CHECK (source_generation>0),
+    draft_revision bigint NOT NULL CHECK (draft_revision>0),
+    snapshot jsonb NOT NULL CHECK (jsonb_typeof(snapshot)='object' AND octet_length(snapshot::text)<=2097152),
+    snapshot_sha256 text NOT NULL CHECK (snapshot_sha256 ~ '^[0-9a-f]{64}$'),
+    adoption_blocked boolean NOT NULL DEFAULT false,
+    cancel_command jsonb,
+    cancel_receipt jsonb,
+    created_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    UNIQUE(actor_id,project_id,source_key,source_generation),
+    UNIQUE(actor_id,request_id),
+    CHECK (adoption_blocked = (cancel_command IS NOT NULL)),
+    CHECK (cancel_command IS NULL OR jsonb_typeof(cancel_command)='object'),
+    CHECK (cancel_receipt IS NULL OR (adoption_blocked AND jsonb_typeof(cancel_receipt)='object'))
+);
+CREATE FUNCTION workspace.guard_frozen_input_lifecycle() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF (OLD.adoption_blocked AND (NOT NEW.adoption_blocked OR NEW.cancel_command IS DISTINCT FROM OLD.cancel_command))
+       OR (OLD.cancel_receipt IS NOT NULL AND NEW.cancel_receipt IS DISTINCT FROM OLD.cancel_receipt) THEN
+        RAISE EXCEPTION 'frozen input cancellation is permanent' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER frozen_input_lifecycle BEFORE UPDATE ON workspace.frozen_input_handoff
+FOR EACH ROW EXECUTE FUNCTION workspace.guard_frozen_input_lifecycle();
+REVOKE ALL ON FUNCTION workspace.guard_frozen_input_lifecycle() FROM PUBLIC;
+REVOKE ALL ON workspace.frozen_input_handoff FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON workspace.frozen_input_handoff TO glowloom_creation;
+GRANT UPDATE(adoption_blocked,cancel_command,cancel_receipt) ON workspace.frozen_input_handoff TO glowloom_creation;
+
+-- Execution acceptance is an immutable local input identity. It does not create
+-- an operation, quote, reserve funds or replace the existing confirmation path.
+CREATE TABLE operation.frozen_input_acceptance (
+    handoff_id uuid PRIMARY KEY,
+    command_id uuid NOT NULL UNIQUE,
+    command_sha256 text NOT NULL CHECK (command_sha256 ~ '^[0-9a-f]{64}$'),
+    snapshot_sha256 text NOT NULL CHECK (snapshot_sha256 ~ '^[0-9a-f]{64}$'),
+    snapshot jsonb NOT NULL CHECK (jsonb_typeof(snapshot)='object' AND octet_length(snapshot::text)<=2097152),
+    operation_id uuid NOT NULL UNIQUE,
+    submission_id uuid NOT NULL UNIQUE,
+    receipt jsonb NOT NULL CHECK (jsonb_typeof(receipt)='object'),
+    created_at timestamptz NOT NULL DEFAULT statement_timestamp()
+);
+CREATE TABLE operation.frozen_input_cancellation (
+    handoff_id uuid PRIMARY KEY,
+    cancel_command_id uuid NOT NULL UNIQUE,
+    command_id uuid NOT NULL UNIQUE,
+    snapshot_sha256 text NOT NULL CHECK (snapshot_sha256 ~ '^[0-9a-f]{64}$'),
+    proof jsonb NOT NULL CHECK (jsonb_typeof(proof)='object'),
+    created_at timestamptz NOT NULL DEFAULT statement_timestamp()
+);
+REVOKE ALL ON operation.frozen_input_acceptance,operation.frozen_input_cancellation FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_creation,glowloom_media;
+GRANT SELECT,INSERT ON operation.frozen_input_acceptance,operation.frozen_input_cancellation TO glowloom_execution;
+
+-- Accepted registration remains private until both resource owners acknowledge
+-- the exact original command. No user, credential or public preparing state is
+-- exposed by these internal responsibility records.
+CREATE TABLE identity.registration_preparation (
+    operation_id uuid PRIMARY KEY,
+    account_id uuid NOT NULL UNIQUE,
+    organization_id uuid NOT NULL UNIQUE,
+    scope_id uuid NOT NULL UNIQUE,
+    email_key text NOT NULL UNIQUE CHECK (email_key=lower(btrim(email_key)) AND octet_length(email_key) BETWEEN 3 AND 254),
+    input_digest bytea NOT NULL CHECK (octet_length(input_digest)=32),
+    user_snapshot jsonb NOT NULL CHECK (jsonb_typeof(user_snapshot)='object' AND octet_length(user_snapshot::text)<=16384),
+    creation_ready boolean NOT NULL DEFAULT false,
+    wallet_ready boolean NOT NULL DEFAULT false,
+    accepted_at timestamptz NOT NULL,
+    activated_at timestamptz,
+    CHECK (activated_at IS NULL OR (creation_ready AND wallet_ready AND activated_at>=accepted_at))
+);
+REVOKE ALL ON identity.registration_preparation FROM PUBLIC,glowloom_app,glowloom_creation,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON identity.registration_preparation TO glowloom_identity;
+GRANT UPDATE(creation_ready,wallet_ready,activated_at) ON identity.registration_preparation TO glowloom_identity;
+
+-- Creation's original project-create responsibility. A copying project and its
+-- initial canvas stay private until Execution preparation and the original
+-- zero-epoch project control are both durable. No TTL drops unknown work.
+CREATE TABLE workspace.project_preparation (
+    preparation_id uuid PRIMARY KEY,
+    source_command_id uuid NOT NULL UNIQUE,
+    source_sha256 text NOT NULL CHECK (source_sha256 ~ '^[0-9a-f]{64}$'),
+    input_sha256 text NOT NULL CHECK (input_sha256 ~ '^[0-9a-f]{64}$'),
+    command jsonb NOT NULL CHECK (jsonb_typeof(command)='object' AND octet_length(command::text)<=32768),
+    actor_id uuid NOT NULL,
+    session_id uuid NOT NULL,
+    idempotency_key uuid NOT NULL,
+    request_id uuid NOT NULL,
+    scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
+    organization_id uuid NOT NULL REFERENCES workspace.organization(id),
+    scope_revision bigint NOT NULL CHECK (scope_revision>0),
+    project_id uuid NOT NULL UNIQUE,
+    canvas_id uuid NOT NULL UNIQUE,
+    project_snapshot jsonb NOT NULL CHECK (jsonb_typeof(project_snapshot)='object' AND octet_length(project_snapshot::text)<=1048576),
+    initial_coordination_id uuid NOT NULL UNIQUE,
+    wallet_receipt jsonb CHECK (wallet_receipt IS NULL OR (jsonb_typeof(wallet_receipt)='object' AND octet_length(wallet_receipt::text)<=16384)),
+    activation_receipt jsonb CHECK (activation_receipt IS NULL OR (jsonb_typeof(activation_receipt)='object' AND octet_length(activation_receipt::text)<=1048576)),
+    prepared_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    activated_at timestamptz,
+    UNIQUE(actor_id,idempotency_key),
+    CHECK ((activated_at IS NOT NULL)=(activation_receipt IS NOT NULL)),
+    CHECK (activated_at IS NULL OR (wallet_receipt IS NOT NULL AND activated_at>=prepared_at))
+);
+REVOKE ALL ON workspace.project_preparation FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON workspace.project_preparation TO glowloom_creation;
+GRANT UPDATE(wallet_receipt,activation_receipt,activated_at) ON workspace.project_preparation TO glowloom_creation;
+CREATE FUNCTION workspace.keep_project_preparation() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN
+        RAISE EXCEPTION 'project preparation responsibility is retained' USING ERRCODE='23514';
+    END IF;
+    IF (to_jsonb(NEW)-ARRAY['wallet_receipt','activation_receipt','activated_at']) IS DISTINCT FROM
+       (to_jsonb(OLD)-ARRAY['wallet_receipt','activation_receipt','activated_at']) OR
+       (OLD.wallet_receipt IS NOT NULL AND NEW.wallet_receipt IS DISTINCT FROM OLD.wallet_receipt) OR
+       (OLD.activation_receipt IS NOT NULL AND NEW.activation_receipt IS DISTINCT FROM OLD.activation_receipt) OR
+       (OLD.activated_at IS NOT NULL AND NEW.activated_at IS DISTINCT FROM OLD.activated_at) THEN
+        RAISE EXCEPTION 'project preparation identity and decisions are immutable' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END
+$$;
+CREATE TRIGGER project_preparation_immutable BEFORE UPDATE OR DELETE ON workspace.project_preparation
+FOR EACH ROW EXECUTE FUNCTION workspace.keep_project_preparation();
+
+-- Project lifecycle gates retain original responsibility independently of the
+-- project's public status and writer generation. Network probes never hold SQL
+-- locks; busy work reopens this gate without advancing project authority.
+CREATE TABLE workspace.project_closure (
+    id uuid PRIMARY KEY,
+    actor_id uuid NOT NULL,
+    session_id uuid NOT NULL,
+    scope_id uuid NOT NULL,
+    org_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    idempotency_key uuid NOT NULL,
+    source_command jsonb NOT NULL CHECK (jsonb_typeof(source_command)='object'),
+    source_sha256 text NOT NULL CHECK (source_sha256 ~ '^[0-9a-f]{64}$'),
+    spec jsonb NOT NULL CHECK (jsonb_typeof(spec)='object'),
+    cycle bigint NOT NULL CHECK (cycle>0),
+    phase text NOT NULL CHECK (phase IN ('draining','busy','closing','closed','aborting','aborted')),
+    ledger_sha256 text NOT NULL CHECK (ledger_sha256 ~ '^[0-9a-f]{64}$'),
+    result jsonb CHECK (result IS NULL OR jsonb_typeof(result)='object'),
+    accepted_at timestamptz NOT NULL DEFAULT statement_timestamp(),
+    completed_at timestamptz,
+    UNIQUE(actor_id,idempotency_key),
+    CHECK ((phase='closed')=(result IS NOT NULL)),
+    CHECK ((phase IN ('closed','aborted'))=(completed_at IS NOT NULL)),
+    CHECK (completed_at IS NULL OR completed_at>=accepted_at)
+);
+REVOKE ALL ON workspace.project_closure FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON workspace.project_closure TO glowloom_creation;
+GRANT UPDATE(cycle,phase,ledger_sha256,result,completed_at) ON workspace.project_closure TO glowloom_creation;
+CREATE FUNCTION workspace.keep_project_closure() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN
+        RAISE EXCEPTION 'project closure responsibility is retained' USING ERRCODE='23514';
+    END IF;
+    IF (to_jsonb(NEW)-ARRAY['cycle','phase','ledger_sha256','result','completed_at']) IS DISTINCT FROM
+       (to_jsonb(OLD)-ARRAY['cycle','phase','ledger_sha256','result','completed_at']) OR
+       (OLD.phase IN ('closed','aborted') AND NEW IS DISTINCT FROM OLD) OR
+       (NEW.cycle<>OLD.cycle AND NOT (OLD.phase='busy' AND NEW.phase='draining' AND NEW.cycle=OLD.cycle+1)) OR
+       (NEW.ledger_sha256<>OLD.ledger_sha256 AND NOT (OLD.phase='busy' AND NEW.phase='draining' AND NEW.cycle=OLD.cycle+1)) OR
+       (NEW.phase<>OLD.phase AND NOT (
+          (OLD.phase='draining' AND NEW.phase IN ('busy','closing','aborting')) OR
+          (OLD.phase='busy' AND NEW.phase='draining') OR
+          (OLD.phase='closing' AND NEW.phase IN ('closed','aborting')) OR
+          (OLD.phase='aborting' AND NEW.phase='aborted'))) THEN
+        RAISE EXCEPTION 'project closure identity and original decisions are immutable' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END
+$$;
+CREATE TRIGGER project_closure_immutable BEFORE UPDATE OR DELETE ON workspace.project_closure
+FOR EACH ROW EXECUTE FUNCTION workspace.keep_project_closure();
+
+CREATE TABLE workspace.project_admission_gate (
+    project_id uuid PRIMARY KEY,
+    close_id uuid NOT NULL REFERENCES workspace.project_closure(id),
+    cycle bigint NOT NULL CHECK (cycle>0),
+    blocked boolean NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT statement_timestamp()
+);
+REVOKE ALL ON workspace.project_admission_gate FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON workspace.project_admission_gate TO glowloom_creation;
+GRANT UPDATE(close_id,cycle,blocked,updated_at) ON workspace.project_admission_gate TO glowloom_creation;
+CREATE FUNCTION workspace.keep_project_admission_gate() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN
+        RAISE EXCEPTION 'project admission gate is retained' USING ERRCODE='23514';
+    END IF;
+    IF NEW.project_id<>OLD.project_id OR
+       (OLD.blocked AND (NEW.close_id<>OLD.close_id OR NEW.cycle<>OLD.cycle)) THEN
+        RAISE EXCEPTION 'an unresolved project gate keeps its original close identity' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END
+$$;
+CREATE TRIGGER project_admission_gate_identity BEFORE UPDATE OR DELETE ON workspace.project_admission_gate
+FOR EACH ROW EXECUTE FUNCTION workspace.keep_project_admission_gate();
+
+CREATE TABLE workspace.personal_scope_preparation (
+    operation_id uuid PRIMARY KEY,
+    account_id uuid NOT NULL UNIQUE,
+    organization_id uuid NOT NULL UNIQUE REFERENCES workspace.organization(id),
+    scope_id uuid NOT NULL UNIQUE REFERENCES workspace.creation_scope(id),
+    input_sha256 text NOT NULL CHECK (input_sha256 ~ '^[0-9a-f]{64}$'),
+    prepared_at timestamptz NOT NULL DEFAULT statement_timestamp()
+);
+REVOKE ALL ON workspace.personal_scope_preparation FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON workspace.personal_scope_preparation TO glowloom_creation;
+
+CREATE TABLE billing.registration_wallet_preparation (
+    operation_id uuid PRIMARY KEY,
+    account_id uuid NOT NULL UNIQUE,
+    organization_id uuid NOT NULL UNIQUE,
+    scope_id uuid NOT NULL UNIQUE REFERENCES billing.wallet_account(scope_id),
+    input_sha256 text NOT NULL CHECK (input_sha256 ~ '^[0-9a-f]{64}$'),
+    creation_receipt_sha256 text NOT NULL CHECK (creation_receipt_sha256 ~ '^[0-9a-f]{64}$'),
+    prepared_at timestamptz NOT NULL DEFAULT statement_timestamp()
+);
+REVOKE ALL ON billing.registration_wallet_preparation FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_creation,glowloom_media;
+GRANT SELECT,INSERT ON billing.registration_wallet_preparation TO glowloom_execution;
+GRANT INSERT(scope_id) ON billing.wallet_account TO glowloom_execution;
+GRANT INSERT(project_id,scope_id) ON billing.project_wallet TO glowloom_execution;
+
+-- Identity binds the original credential generation to the exact admitted writer.
+-- Historical admissions are immutable; missing bindings cannot be backfilled by
+-- a read or inferred from authority epochs.
+CREATE TABLE identity.session_command_admission (
+    command_id uuid NOT NULL CHECK (command_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    target_writer text NOT NULL CHECK (target_writer IN ('identity','creation','media','execution')),
+    account_id uuid NOT NULL CHECK (account_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    session_id uuid NOT NULL CHECK (session_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    credential_epoch bigint NOT NULL CHECK (credential_epoch>0),
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    authority_set_sha256 text NOT NULL CHECK (authority_set_sha256 ~ '^[0-9a-f]{64}$'),
+    PRIMARY KEY(command_id,target_writer)
+);
+REVOKE ALL ON identity.session_command_admission FROM PUBLIC,glowloom_app,glowloom_creation,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON identity.session_command_admission TO glowloom_identity;
+
+-- Media retains the exact original generation command before streaming object I/O.
+-- Operation/project/scope IDs are opaque: this ledger has no foreign-owner FK.
+CREATE TABLE media.operation_output_receipt (
+    command_id uuid PRIMARY KEY,
+    operation_id uuid NOT NULL,
+    seq_no integer NOT NULL CHECK (seq_no>=0),
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    payload_sha256 text NOT NULL CHECK (payload_sha256 ~ '^[0-9a-f]{64}$'),
+    payload jsonb NOT NULL CHECK (jsonb_typeof(payload)='object' AND octet_length(payload::text)<=65536),
+    asset_id uuid NOT NULL UNIQUE,
+    state text NOT NULL CHECK (state IN ('prepared','published','rejected')),
+    receipt jsonb CHECK (receipt IS NULL OR (jsonb_typeof(receipt)='object' AND octet_length(receipt::text)<=65536)),
+    create_time timestamptz NOT NULL DEFAULT statement_timestamp(),
+    update_time timestamptz NOT NULL DEFAULT statement_timestamp(),
+    UNIQUE(operation_id,seq_no),
+    CHECK ((state='prepared')=(receipt IS NULL))
+);
+CREATE FUNCTION media.guard_operation_output_receipt() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.state<>'prepared' AND NEW IS DISTINCT FROM OLD THEN
+        RAISE EXCEPTION 'published output receipt is immutable' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER operation_output_receipt_lifecycle BEFORE UPDATE ON media.operation_output_receipt
+FOR EACH ROW EXECUTE FUNCTION media.guard_operation_output_receipt();
+REVOKE ALL ON FUNCTION media.guard_operation_output_receipt() FROM PUBLIC;
+REVOKE ALL ON media.operation_output_receipt FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_creation,glowloom_execution;
+GRANT SELECT,INSERT ON media.operation_output_receipt TO glowloom_media;
+GRANT UPDATE(state,receipt,update_time) ON media.operation_output_receipt TO glowloom_media;
+
+-- Execution persists its original output command before any Media request.
+-- Lost ACKs recover this identity; attempts are permanent and never infer absence.
+CREATE TABLE operation.output_delivery (
+    command_id uuid PRIMARY KEY,
+    operation_id uuid NOT NULL REFERENCES operation.operation(id) ON DELETE RESTRICT,
+    seq_no integer NOT NULL CHECK (seq_no>=0),
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    payload_sha256 text NOT NULL CHECK (payload_sha256 ~ '^[0-9a-f]{64}$'),
+    payload jsonb NOT NULL CHECK (jsonb_typeof(payload)='object' AND octet_length(payload::text)<=65536),
+    attempted boolean NOT NULL DEFAULT false,
+    state text NOT NULL CHECK (state IN ('prepared','adopted','rejected')),
+    media_receipt jsonb CHECK (media_receipt IS NULL OR (jsonb_typeof(media_receipt)='object' AND octet_length(media_receipt::text)<=65536)),
+    create_time timestamptz NOT NULL DEFAULT statement_timestamp(),
+    update_time timestamptz NOT NULL DEFAULT statement_timestamp(),
+    UNIQUE(operation_id,seq_no),
+    CHECK ((state='prepared')=(media_receipt IS NULL)),
+    CHECK (state='prepared' OR attempted)
+);
+CREATE FUNCTION operation.guard_output_delivery() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF (OLD.attempted AND NOT NEW.attempted) OR (OLD.state<>'prepared' AND NEW IS DISTINCT FROM OLD) THEN
+        RAISE EXCEPTION 'output delivery responsibility is monotonic' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER output_delivery_lifecycle BEFORE UPDATE ON operation.output_delivery
+FOR EACH ROW EXECUTE FUNCTION operation.guard_output_delivery();
+REVOKE ALL ON FUNCTION operation.guard_output_delivery() FROM PUBLIC;
+REVOKE ALL ON operation.output_delivery FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_creation,glowloom_media;
+GRANT SELECT,INSERT ON operation.output_delivery TO glowloom_execution;
+GRANT UPDATE(attempted,state,media_receipt,update_time) ON operation.output_delivery TO glowloom_execution;
+
+-- A successful password check creates a private session responsibility first.
+-- Credentials are released only after its exact initial source control has four
+-- durable writer ACKs. Original responses remain encrypted and immutable.
+CREATE TABLE identity.session_activation (
+    request_id uuid PRIMARY KEY CHECK (request_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    account_id uuid NOT NULL CHECK (account_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    session_id uuid NOT NULL UNIQUE CHECK (session_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    coordination_id uuid NOT NULL UNIQUE CHECK (coordination_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    input_digest bytea NOT NULL CHECK (octet_length(input_digest)=32),
+    response_key_id text NOT NULL CHECK (octet_length(response_key_id) BETWEEN 1 AND 128 AND response_key_id=btrim(response_key_id)),
+    response_ciphertext bytea NOT NULL CHECK (octet_length(response_ciphertext) BETWEEN 1 AND 65536),
+    accepted_at timestamptz NOT NULL,
+    completed_at timestamptz CHECK (completed_at IS NULL OR completed_at>=accepted_at)
+);
+REVOKE ALL ON identity.session_activation FROM PUBLIC,glowloom_app,glowloom_creation,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON identity.session_activation TO glowloom_identity;
+GRANT UPDATE(completed_at) ON identity.session_activation TO glowloom_identity;
+
+-- Execution's project bootstrap participant retains the original Creation proof.
+-- Preparation creates no credit lot, balance grant, reservation or spending permit.
+-- Opaque Creation IDs have no foreign-owner FK; the private source proof is required.
+CREATE TABLE billing.project_budget_preparation (
+    execution_command_id uuid PRIMARY KEY CHECK (execution_command_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    preparation_id uuid NOT NULL UNIQUE CHECK (preparation_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    source_command_id uuid NOT NULL UNIQUE CHECK (source_command_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    source_sha256 text NOT NULL CHECK (source_sha256 ~ '^[0-9a-f]{64}$'),
+    input_sha256 text NOT NULL CHECK (input_sha256 ~ '^[0-9a-f]{64}$'),
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    project_id uuid NOT NULL UNIQUE CHECK (project_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    organization_id uuid NOT NULL CHECK (organization_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    scope_id uuid NOT NULL REFERENCES billing.wallet_account(scope_id) ON DELETE RESTRICT,
+    budget_id uuid NOT NULL UNIQUE REFERENCES billing.budget(id) ON DELETE RESTRICT,
+    receipt jsonb NOT NULL CHECK (jsonb_typeof(receipt)='object' AND octet_length(receipt::text)<=4096),
+    prepared_at timestamptz NOT NULL DEFAULT statement_timestamp()
+);
+REVOKE ALL ON billing.project_budget_preparation FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_creation,glowloom_media;
+GRANT SELECT,INSERT ON billing.project_budget_preparation TO glowloom_execution;
+
+-- Original account qualification responsibilities are private to Identity.
+-- Source closure and this immutable binding commit together; later phase writes
+-- cannot replace the actor, accepted candidate, input proof or original control.
+CREATE TABLE identity.account_qualification_change (
+    request_id uuid PRIMARY KEY CHECK (request_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    actor_id uuid NOT NULL CHECK (actor_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    actor_session_id uuid CHECK (actor_session_id IS NULL OR actor_session_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    proof_operation_id uuid CHECK (proof_operation_id IS NULL OR proof_operation_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    target_id uuid NOT NULL CHECK (target_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    action text NOT NULL CHECK (action IN ('password_change','password_reset','email_change','disable','enable','delete','self_delete','revoke_admin','revoke_sessions','grant_admin')),
+    input_digest bytea NOT NULL CHECK (octet_length(input_digest)=32),
+    proof_digest bytea NOT NULL CHECK (octet_length(proof_digest)=32),
+    candidate jsonb NOT NULL CHECK (jsonb_typeof(candidate)='object' AND octet_length(candidate::text)<=65536),
+    close_coordination_id uuid NOT NULL UNIQUE CHECK (close_coordination_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    close_expected_epoch bigint NOT NULL CHECK (close_expected_epoch>0),
+    mutation_applied_at timestamptz CHECK (mutation_applied_at IS NULL OR mutation_applied_at>=accepted_at),
+    creation_receipt jsonb CHECK (creation_receipt IS NULL OR (jsonb_typeof(creation_receipt)='object' AND octet_length(creation_receipt::text)<=1048576)),
+    reopen_coordination_id uuid UNIQUE CHECK (reopen_coordination_id IS NULL OR (reopen_coordination_id<>'00000000-0000-0000-0000-000000000000'::uuid AND reopen_coordination_id<>close_coordination_id)),
+    reopen_expected_epoch bigint CHECK (reopen_expected_epoch IS NULL OR reopen_expected_epoch=close_expected_epoch+1),
+    reopen_purpose text CHECK (reopen_purpose IS NULL OR reopen_purpose IN ('credential_replacement','restore_rejection','qualification_restore')),
+    replacement_session_id uuid UNIQUE CHECK (replacement_session_id IS NULL OR replacement_session_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    replacement_coordination_id uuid UNIQUE CHECK (replacement_coordination_id IS NULL OR replacement_coordination_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+    response_key_id text CHECK (response_key_id IS NULL OR (octet_length(response_key_id) BETWEEN 1 AND 128 AND response_key_id=btrim(response_key_id))),
+    response_ciphertext bytea CHECK (response_ciphertext IS NULL OR octet_length(response_ciphertext) BETWEEN 1 AND 65536),
+    outcome text NOT NULL DEFAULT 'pending' CHECK (outcome IN ('pending','accepted','rejected_duties')),
+    accepted_at timestamptz NOT NULL,
+    completed_at timestamptz,
+    CHECK ((action='password_reset' AND actor_session_id IS NULL AND proof_operation_id IS NOT NULL AND actor_id=target_id) OR
+           (action='self_delete' AND actor_session_id IS NOT NULL AND proof_operation_id IS NOT NULL AND actor_id=target_id) OR
+           (action NOT IN ('password_reset','self_delete') AND actor_session_id IS NOT NULL AND proof_operation_id IS NULL)),
+    CHECK (outcome<>'accepted' OR action NOT IN ('password_reset','self_delete') OR mutation_applied_at IS NOT NULL),
+    CHECK ((reopen_coordination_id IS NULL)=(reopen_expected_epoch IS NULL) AND (reopen_coordination_id IS NULL)=(reopen_purpose IS NULL)),
+    CHECK ((replacement_session_id IS NULL)=(replacement_coordination_id IS NULL)),
+    CHECK ((response_key_id IS NULL)=(response_ciphertext IS NULL) AND (response_key_id IS NULL)=(replacement_session_id IS NULL)),
+    CHECK ((outcome='pending' AND completed_at IS NULL) OR (outcome<>'pending' AND completed_at IS NOT NULL AND completed_at>=accepted_at)),
+    CHECK (outcome<>'rejected_duties' OR (reopen_purpose IS NOT NULL AND reopen_purpose='restore_rejection' AND response_ciphertext IS NULL)),
+    CHECK (reopen_purpose IS DISTINCT FROM 'restore_rejection' OR outcome<>'accepted'),
+    CHECK (reopen_purpose IS DISTINCT FROM 'credential_replacement' OR action IN ('password_change','password_reset','email_change')),
+    CHECK (outcome<>'accepted' OR action NOT IN ('disable','enable','delete','self_delete') OR creation_receipt IS NOT NULL)
+);
+CREATE INDEX account_qualification_pending_target ON identity.account_qualification_change(target_id) WHERE outcome='pending';
+CREATE FUNCTION identity.guard_account_qualification_change() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF (OLD.completed_at IS NOT NULL AND NEW IS DISTINCT FROM OLD)
+       OR (OLD.mutation_applied_at IS NOT NULL AND NEW.mutation_applied_at IS DISTINCT FROM OLD.mutation_applied_at)
+       OR (OLD.creation_receipt IS NOT NULL AND NEW.creation_receipt IS DISTINCT FROM OLD.creation_receipt)
+       OR (OLD.reopen_coordination_id IS NOT NULL AND
+           (NEW.reopen_coordination_id IS DISTINCT FROM OLD.reopen_coordination_id OR NEW.reopen_expected_epoch IS DISTINCT FROM OLD.reopen_expected_epoch OR NEW.reopen_purpose IS DISTINCT FROM OLD.reopen_purpose))
+       OR (OLD.response_ciphertext IS NOT NULL AND
+           (NEW.response_ciphertext IS DISTINCT FROM OLD.response_ciphertext OR NEW.response_key_id IS DISTINCT FROM OLD.response_key_id OR NEW.replacement_session_id IS DISTINCT FROM OLD.replacement_session_id OR NEW.replacement_coordination_id IS DISTINCT FROM OLD.replacement_coordination_id)) THEN
+        RAISE EXCEPTION 'account qualification responsibility is immutable' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER account_qualification_lifecycle BEFORE UPDATE ON identity.account_qualification_change
+FOR EACH ROW EXECUTE FUNCTION identity.guard_account_qualification_change();
+REVOKE ALL ON FUNCTION identity.guard_account_qualification_change() FROM PUBLIC;
+REVOKE ALL ON identity.account_qualification_change FROM PUBLIC,glowloom_app,glowloom_creation,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON identity.account_qualification_change TO glowloom_identity;
+GRANT UPDATE(mutation_applied_at,creation_receipt,reopen_coordination_id,reopen_expected_epoch,reopen_purpose,replacement_session_id,replacement_coordination_id,response_key_id,response_ciphertext,outcome,completed_at) ON identity.account_qualification_change TO glowloom_identity;
+
+-- LastTeamAdministrator is an account-qualification purpose, never a session or
+-- general write permit. Creation owns the original team/member snapshot. Explicit
+-- successor reads keep old proofs/commands immutable after a safety revocation.
+CREATE TABLE identity.team_administrator_qualification (
+    id uuid PRIMARY KEY CHECK (id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    request_id uuid NOT NULL REFERENCES identity.account_qualification_change(request_id),
+    team_id uuid NOT NULL CHECK (team_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    candidate_id uuid NOT NULL CHECK (candidate_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    team_snapshot_sha256 text NOT NULL CHECK (team_snapshot_sha256 ~ '^[0-9a-f]{64}$'),
+    qualification_epoch bigint NOT NULL CHECK (qualification_epoch > 0),
+    source_coordination_id uuid NOT NULL CHECK (source_coordination_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    target_writer text NOT NULL DEFAULT 'creation' CHECK (target_writer='creation'),
+    eligible boolean NOT NULL,
+    command_sha256 text NOT NULL CHECK (command_sha256 ~ '^[0-9a-f]{64}$'),
+    authority_set_sha256 text NOT NULL CHECK (authority_set_sha256 ~ '^[0-9a-f]{64}$'),
+    previous_proof_id uuid REFERENCES identity.team_administrator_qualification(id),
+    created_at timestamptz NOT NULL,
+    UNIQUE(request_id,team_id,candidate_id,team_snapshot_sha256,qualification_epoch),
+    CHECK (previous_proof_id IS NULL OR previous_proof_id<>id)
+);
+REVOKE ALL ON identity.team_administrator_qualification FROM PUBLIC,glowloom_app,glowloom_creation,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON identity.team_administrator_qualification TO glowloom_identity;
+
+-- A durable governance latch serializes only team/member management writes. It
+-- never advances a shared scope epoch for preparation or a duties rejection.
+-- Only an actual permanent freeze records a scope-close control in phase.
+CREATE TABLE workspace.account_governance_preparation (
+    request_id uuid PRIMARY KEY CHECK (request_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    account_id uuid NOT NULL CHECK (account_id <> '00000000-0000-0000-0000-000000000000'::uuid),
+    action text NOT NULL CHECK (action IN ('disable','enable','delete')),
+    input_sha256 text NOT NULL CHECK (input_sha256 ~ '^[0-9a-f]{64}$'),
+    identity_close jsonb NOT NULL CHECK (jsonb_typeof(identity_close)='object' AND octet_length(identity_close::text)<=16384),
+    snapshot jsonb NOT NULL CHECK (jsonb_typeof(snapshot)='object' AND octet_length(snapshot::text)<=1048576),
+    phase jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(phase)='object' AND octet_length(phase::text)<=1048576),
+    receipt jsonb CHECK (receipt IS NULL OR (jsonb_typeof(receipt)='object' AND octet_length(receipt::text)<=65536)),
+    verdict text NOT NULL DEFAULT 'pending' CHECK (verdict IN ('pending','ready','rejected_duties')),
+    accepted_at timestamptz NOT NULL,
+    effects_applied_at timestamptz CHECK (effects_applied_at>=accepted_at),
+    completed_at timestamptz CHECK (completed_at>=accepted_at AND (effects_applied_at IS NULL OR completed_at>=effects_applied_at)),
+    CHECK ((verdict='pending' AND receipt IS NULL AND completed_at IS NULL) OR
+           (verdict='ready' AND receipt IS NOT NULL AND effects_applied_at IS NOT NULL AND completed_at IS NOT NULL) OR
+           (verdict='rejected_duties' AND action='delete' AND receipt IS NOT NULL AND effects_applied_at IS NULL AND completed_at IS NOT NULL)),
+    CHECK (verdict<>'rejected_duties' OR NOT (phase ? 'freeze_controls'))
+);
+CREATE INDEX account_governance_pending ON workspace.account_governance_preparation(account_id) WHERE verdict='pending';
+CREATE FUNCTION workspace.guard_account_governance_preparation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF (OLD.completed_at IS NOT NULL AND NEW IS DISTINCT FROM OLD)
+       OR (NEW.request_id IS DISTINCT FROM OLD.request_id OR NEW.account_id IS DISTINCT FROM OLD.account_id OR
+           NEW.action IS DISTINCT FROM OLD.action OR NEW.input_sha256 IS DISTINCT FROM OLD.input_sha256 OR
+           NEW.identity_close IS DISTINCT FROM OLD.identity_close OR NEW.snapshot IS DISTINCT FROM OLD.snapshot OR
+           NEW.accepted_at IS DISTINCT FROM OLD.accepted_at)
+       OR (OLD.effects_applied_at IS NOT NULL AND NEW.effects_applied_at IS DISTINCT FROM OLD.effects_applied_at)
+       OR NOT (NEW.phase @> OLD.phase) THEN
+        RAISE EXCEPTION 'account governance responsibility is immutable' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER account_governance_lifecycle BEFORE UPDATE ON workspace.account_governance_preparation
+FOR EACH ROW EXECUTE FUNCTION workspace.guard_account_governance_preparation();
+REVOKE ALL ON FUNCTION workspace.guard_account_governance_preparation() FROM PUBLIC;
+REVOKE ALL ON workspace.account_governance_preparation FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_media,glowloom_execution;
+GRANT SELECT,INSERT ON workspace.account_governance_preparation TO glowloom_creation;
+GRANT UPDATE(phase,receipt,verdict,effects_applied_at,completed_at) ON workspace.account_governance_preparation TO glowloom_creation;
+
+-- Same-owner management latch. No table privilege is exported to legacy callers.
+-- Statement locking precedes management row locks; the VOLATILE row check uses
+-- a fresh snapshot after any wait, including a statement begun before Prepare.
+CREATE FUNCTION workspace.lock_team_governance_management() RETURNS trigger
+LANGUAGE plpgsql VOLATILE SET search_path=pg_catalog AS $$
+BEGIN
+    PERFORM pg_advisory_xact_lock(hashtextextended('creation.team_management',0));
+    RETURN NULL;
+END $$;
+REVOKE ALL ON FUNCTION workspace.lock_team_governance_management() FROM PUBLIC;
+CREATE FUNCTION workspace.guard_team_governance_management() RETURNS trigger
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,workspace AS $$
+DECLARE
+    team_key uuid;
+    account_key uuid;
+    previous_account_key uuid;
+    marker text;
+    creator_capability boolean;
+    pending record;
+    snapshot_team jsonb;
+    own_effect boolean;
+BEGIN
+    IF TG_TABLE_NAME='team' THEN
+        IF TG_OP='DELETE' THEN
+            team_key:=OLD.id;
+            account_key:=OLD.created_by;
+        ELSE
+            team_key:=NEW.id;
+            account_key:=NEW.created_by;
+            IF TG_OP='UPDATE' THEN previous_account_key:=OLD.created_by; END IF;
+        END IF;
+    ELSE
+        IF TG_OP='DELETE' THEN
+            team_key:=OLD.team_id;
+            account_key:=OLD.user_id;
+        ELSE
+            team_key:=NEW.team_id;
+            account_key:=NEW.user_id;
+            IF TG_OP='UPDATE' THEN previous_account_key:=OLD.user_id; END IF;
+        END IF;
+    END IF;
+    marker:=current_setting('glowloom.creation_governance_request',true);
+    creator_capability:=pg_has_role(session_user,'glowloom_creation','MEMBER') AND
+        NOT pg_has_role(session_user,'glowloom_identity','MEMBER') AND
+        NOT pg_has_role(session_user,'glowloom_media','MEMBER') AND
+        NOT pg_has_role(session_user,'glowloom_execution','MEMBER');
+    FOR pending IN
+        SELECT p.request_id,p.account_id,p.action,p.snapshot
+        FROM workspace.account_governance_preparation p
+        WHERE p.verdict='pending' AND
+          (p.account_id=account_key OR p.account_id=previous_account_key OR
+           EXISTS(SELECT 1 FROM jsonb_array_elements(p.snapshot->'Teams') t WHERE t->>'ID'=team_key::text))
+        ORDER BY p.request_id
+    LOOP
+        SELECT t INTO snapshot_team FROM jsonb_array_elements(pending.snapshot->'Teams') t WHERE t->>'ID'=team_key::text;
+        own_effect:=false;
+        IF creator_capability AND marker=pending.request_id::text AND snapshot_team IS NOT NULL AND TG_OP='UPDATE' THEN
+            IF TG_TABLE_NAME='team' THEN
+                own_effect:=NEW.id=OLD.id AND NEW.created_by=OLD.created_by AND
+                    OLD.revision=(snapshot_team->>'Revision')::bigint AND
+                    OLD.auth_epoch=(snapshot_team->>'AuthEpoch')::bigint;
+            ELSE
+                own_effect:=pending.action='delete' AND NEW.team_id=OLD.team_id AND
+                    NEW.user_id=OLD.user_id AND NEW.user_id=pending.account_id AND NEW.status='removed' AND
+                    OLD.revision=(snapshot_team->'Target'->>'Revision')::bigint AND
+                    OLD.auth_epoch=(snapshot_team->'Target'->>'AuthEpoch')::bigint;
+            END IF;
+        END IF;
+        IF NOT COALESCE(own_effect,false) THEN
+            RAISE EXCEPTION 'team governance responsibility pending' USING ERRCODE='55P03';
+        END IF;
+        snapshot_team:=NULL;
+    END LOOP;
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION workspace.guard_team_governance_management() FROM PUBLIC;
+CREATE TRIGGER team_governance_management_lock BEFORE INSERT OR UPDATE OR DELETE ON workspace.team
+FOR EACH STATEMENT EXECUTE FUNCTION workspace.lock_team_governance_management();
+CREATE TRIGGER team_governance_management_guard BEFORE INSERT OR UPDATE OR DELETE ON workspace.team
+FOR EACH ROW EXECUTE FUNCTION workspace.guard_team_governance_management();
+CREATE TRIGGER team_member_governance_management_lock BEFORE INSERT OR UPDATE OR DELETE ON workspace.team_member
+FOR EACH STATEMENT EXECUTE FUNCTION workspace.lock_team_governance_management();
+CREATE TRIGGER team_member_governance_management_guard BEFORE INSERT OR UPDATE OR DELETE ON workspace.team_member
+FOR EACH ROW EXECUTE FUNCTION workspace.guard_team_governance_management();
+
+-- Original provider-result handoff. No object profile, bucket, key or credential
+-- belongs to Execution. Source bytes are bounded immutable transfer chunks only;
+-- they are deleted solely after the exact durable Media present ACK is adopted.
+CREATE TABLE operation.provider_artifact_delivery (
+    delivery_id uuid PRIMARY KEY,
+    media_command_id uuid NOT NULL UNIQUE,
+    provider_call_id uuid NOT NULL,
+    provider_call_created_at timestamptz NOT NULL,
+    operation_id uuid NOT NULL REFERENCES operation.operation(id) ON DELETE RESTRICT,
+    project_id uuid NOT NULL,
+    call_action text NOT NULL CHECK (call_action IN ('submit','query')),
+    call_attempt integer NOT NULL CHECK (call_attempt>0),
+    request_key text NOT NULL CHECK (octet_length(request_key) BETWEEN 1 AND 256),
+    artifact_seq integer NOT NULL CHECK (artifact_seq>=0),
+    byte_size bigint NOT NULL CHECK (byte_size BETWEEN 1 AND 536870912),
+    sha256 text NOT NULL CHECK (sha256 ~ '^[0-9a-f]{64}$'),
+    manifest_sha256 text NOT NULL CHECK (manifest_sha256 ~ '^[0-9a-f]{64}$'),
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    request jsonb NOT NULL CHECK (jsonb_typeof(request)='object' AND octet_length(request::text)<=65536),
+    chunk_count integer NOT NULL CHECK (chunk_count BETWEEN 1 AND 2048 AND chunk_count=(byte_size+262143)/262144),
+    state text NOT NULL DEFAULT 'collecting' CHECK (state IN ('collecting','prepared','present')),
+    attempted boolean NOT NULL DEFAULT false,
+    sealed_at timestamptz,
+    media_receipt jsonb CHECK (media_receipt IS NULL OR (jsonb_typeof(media_receipt)='object' AND octet_length(media_receipt::text)<=65536)),
+    create_time timestamptz NOT NULL DEFAULT statement_timestamp(),
+    update_time timestamptz NOT NULL DEFAULT statement_timestamp(),
+    FOREIGN KEY(provider_call_id,provider_call_created_at) REFERENCES operation.provider_call(id,create_time) ON DELETE RESTRICT,
+    UNIQUE(provider_call_id,provider_call_created_at,artifact_seq),
+    CHECK ((state='collecting')=(sealed_at IS NULL)),
+    CHECK ((state='present')=(media_receipt IS NOT NULL)),
+    CHECK (NOT attempted OR state<>'collecting')
+);
+CREATE FUNCTION operation.guard_provider_artifact_delivery() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.state='present' AND NEW IS DISTINCT FROM OLD
+       OR OLD.attempted AND NOT NEW.attempted
+       OR OLD.state<>'collecting' AND NEW.state='collecting'
+       OR OLD.sealed_at IS NOT NULL AND NEW.sealed_at IS DISTINCT FROM OLD.sealed_at THEN
+        RAISE EXCEPTION 'provider artifact responsibility is monotonic' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER provider_artifact_delivery_lifecycle BEFORE UPDATE ON operation.provider_artifact_delivery
+FOR EACH ROW EXECUTE FUNCTION operation.guard_provider_artifact_delivery();
+REVOKE ALL ON FUNCTION operation.guard_provider_artifact_delivery() FROM PUBLIC;
+
+CREATE TABLE operation.provider_artifact_chunk (
+    delivery_id uuid NOT NULL REFERENCES operation.provider_artifact_delivery(delivery_id) ON DELETE RESTRICT,
+    seq_no integer NOT NULL CHECK (seq_no>=0),
+    data bytea NOT NULL CHECK (octet_length(data) BETWEEN 1 AND 262144),
+    PRIMARY KEY(delivery_id,seq_no)
+);
+CREATE FUNCTION operation.guard_provider_artifact_chunk() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE parent operation.provider_artifact_delivery; expected_size bigint;
+BEGIN
+    IF TG_OP='DELETE' THEN
+        SELECT * INTO parent FROM operation.provider_artifact_delivery WHERE delivery_id=OLD.delivery_id FOR SHARE;
+        IF parent.state IS DISTINCT FROM 'present' OR parent.media_receipt IS NULL THEN
+            RAISE EXCEPTION 'durable Media ACK required before source chunk removal' USING ERRCODE='23514';
+        END IF;
+        RETURN OLD;
+    END IF;
+    SELECT * INTO parent FROM operation.provider_artifact_delivery WHERE delivery_id=NEW.delivery_id FOR SHARE;
+    IF parent.state IS DISTINCT FROM 'collecting' OR NEW.seq_no>=parent.chunk_count THEN
+        RAISE EXCEPTION 'artifact source is sealed or chunk is outside original manifest' USING ERRCODE='23514';
+    END IF;
+    expected_size:=least(262144::bigint,parent.byte_size-NEW.seq_no::bigint*262144);
+    IF octet_length(NEW.data)<>expected_size THEN
+        RAISE EXCEPTION 'artifact source chunk length mismatch' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER provider_artifact_chunk_insert BEFORE INSERT ON operation.provider_artifact_chunk
+FOR EACH ROW EXECUTE FUNCTION operation.guard_provider_artifact_chunk();
+CREATE TRIGGER provider_artifact_chunk_delete BEFORE DELETE ON operation.provider_artifact_chunk
+FOR EACH ROW EXECUTE FUNCTION operation.guard_provider_artifact_chunk();
+REVOKE ALL ON FUNCTION operation.guard_provider_artifact_chunk() FROM PUBLIC;
+REVOKE ALL ON operation.provider_artifact_delivery,operation.provider_artifact_chunk FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_creation,glowloom_media;
+GRANT SELECT,INSERT ON operation.provider_artifact_delivery,operation.provider_artifact_chunk TO glowloom_execution;
+GRANT UPDATE(state,attempted,sealed_at,media_receipt,update_time) ON operation.provider_artifact_delivery TO glowloom_execution;
+GRANT DELETE ON operation.provider_artifact_chunk TO glowloom_execution;
+
+-- Media's opaque receipt owns the physical staged artifact. The original provider
+-- call identity is opaque foreign-owner evidence, never a cross-owner foreign key.
+CREATE TABLE media.provider_artifact_receipt (
+    command_id uuid PRIMARY KEY,
+    delivery_id uuid NOT NULL UNIQUE,
+    provider_call_id uuid NOT NULL,
+    provider_call_created_at timestamptz NOT NULL,
+    operation_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    call_action text NOT NULL CHECK (call_action IN ('submit','query')),
+    call_attempt integer NOT NULL CHECK (call_attempt>0),
+    request_key text NOT NULL CHECK (octet_length(request_key) BETWEEN 1 AND 256),
+    artifact_seq integer NOT NULL CHECK (artifact_seq>=0),
+    byte_size bigint NOT NULL CHECK (byte_size BETWEEN 1 AND 536870912),
+    sha256 text NOT NULL CHECK (sha256 ~ '^[0-9a-f]{64}$'),
+    manifest_sha256 text NOT NULL CHECK (manifest_sha256 ~ '^[0-9a-f]{64}$'),
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    request jsonb NOT NULL CHECK (jsonb_typeof(request)='object' AND octet_length(request::text)<=65536),
+    storage_work_intent_id uuid NOT NULL REFERENCES media.storage_work_intent(id) ON DELETE RESTRICT,
+    location_id uuid REFERENCES media.object_location(id) ON DELETE RESTRICT,
+    state text NOT NULL DEFAULT 'prepared' CHECK (state IN ('prepared','present')),
+    receipt jsonb CHECK (receipt IS NULL OR (jsonb_typeof(receipt)='object' AND octet_length(receipt::text)<=65536)),
+    create_time timestamptz NOT NULL DEFAULT statement_timestamp(),
+    update_time timestamptz NOT NULL DEFAULT statement_timestamp(),
+    UNIQUE(provider_call_id,provider_call_created_at,artifact_seq),
+    CHECK ((state='present')=(receipt IS NOT NULL)),
+    CHECK (state<>'present' OR location_id IS NOT NULL)
+);
+CREATE FUNCTION media.guard_provider_artifact_receipt() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.state='present' AND NEW IS DISTINCT FROM OLD
+       OR OLD.location_id IS NOT NULL AND NEW.location_id IS DISTINCT FROM OLD.location_id THEN
+        RAISE EXCEPTION 'provider artifact receipt is immutable' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER provider_artifact_receipt_lifecycle BEFORE UPDATE ON media.provider_artifact_receipt
+FOR EACH ROW EXECUTE FUNCTION media.guard_provider_artifact_receipt();
+REVOKE ALL ON FUNCTION media.guard_provider_artifact_receipt() FROM PUBLIC;
+REVOKE ALL ON media.provider_artifact_receipt FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_creation,glowloom_execution;
+GRANT SELECT,INSERT ON media.provider_artifact_receipt TO glowloom_media;
+GRANT UPDATE(state,location_id,receipt,update_time) ON media.provider_artifact_receipt TO glowloom_media;

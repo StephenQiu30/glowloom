@@ -10,11 +10,18 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+
 	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+
 	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+
 	domain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
@@ -23,7 +30,7 @@ type secondaryMedia struct {
 	workspace.ProjectCopyMediaOwner
 }
 
-func (secondaryMedia) Freeze(context.Context, identity.Principal, media.ProjectCopyBinding, time.Time) (media.ProjectCopySnapshot, error) {
+func (secondaryMedia) Freeze(context.Context, media.Actor, media.ProjectCopyBinding, time.Time) (media.ProjectCopySnapshot, error) {
 	return media.ProjectCopySnapshot{ID: uuid.New(), ManifestSHA256: strings.Repeat("a", 64), AssetMapping: map[uuid.UUID]uuid.UUID{}}, nil
 }
 
@@ -75,7 +82,7 @@ func TestSecondaryCopyAdmissionPersistsSelectedScope(t *testing.T) {
 	}
 	other := actor
 	other.ScopeID = personal
-	if _, err := store.Create(t.Context(), other, input, time.Now()); !errors.Is(err, workspace.ErrIdempotencyConflict) {
+	if _, err := store.Create(t.Context(), other, input, time.Now()); !errors.Is(err, workspacesource.ErrIdempotencyConflict) {
 		t.Fatalf("cross-scope replay: %v", err)
 	}
 	authority := workspace.ProjectCopyAuthority{Binding: workspace.ProjectCopyBinding{JobID: saved.ID, OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: saved.TargetProjectID}, ActorID: actor.ID, SourceRevision: 1, Phase: "freeze"}
@@ -83,7 +90,7 @@ func TestSecondaryCopyAdmissionPersistsSelectedScope(t *testing.T) {
 	if err := access.Authorize(t.Context(), actor, authority.Binding, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := access.Authorize(t.Context(), other, authority.Binding, true); !errors.Is(err, workspace.ErrProjectNotFound) {
+	if err := access.Authorize(t.Context(), other, authority.Binding, true); !errors.Is(err, workspacesource.ErrProjectNotFound) {
 		t.Fatalf("child owner wrong-scope binding: %v", err)
 	}
 	if err := tx.Exec(`UPDATE workspace.team SET status='archived' WHERE id=?`, team).Error; err != nil {

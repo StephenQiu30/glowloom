@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -18,7 +20,9 @@ func TestTimelineAutoVideoExportRejectsBeforeJobCreation(t *testing.T) {
 	timeline := exportTimeline(t)
 	timeline.AspectRatio = "auto"
 	reader := &fixedTimeline{timeline: timeline}
-	store := mediatoolExportStore(database, func(*gorm.DB) exportapp.TimelineReader { return reader }, func(tx *gorm.DB) exportapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	store := mediatoolExportStore(database, func(*gorm.DB) exportapp.TimelineReader { return reader }, func(tx *gorm.DB) exportapp.DerivedMedia {
+		return mediawire.LegacyDerivedMedia(mediaapp.NewDerivedService(mediaTestStore(tx)))
+	})
 	_, err := store.Create(t.Context(), actor, project, uuid.New(), exportapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
 	if !errors.Is(err, canvasdomain.ErrTimelineAspectUnresolved) || !errors.Is(err, exportapp.ErrInvalidExport) {
 		t.Fatal("unresolved automatic video accepted", err)

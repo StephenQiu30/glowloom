@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
@@ -22,7 +21,7 @@ const (
 // SubjectSourceActor first authorizes the target space, then resolves only the
 // caller's personal source. It never accepts an owner supplied by the browser.
 type SubjectSourceActor interface {
-	PersonalSourceActor(context.Context, identity.Principal, bool) (identity.Principal, error)
+	PersonalSourceActor(context.Context, Actor, bool) (Actor, error)
 }
 
 // SubjectCatalogueQuery filters the full authorized mixed catalogue before paging.
@@ -107,13 +106,13 @@ type SubjectSourcePage struct {
 
 // SubjectCatalogue owns source selection and proves initiator and current rights.
 type SubjectCatalogue interface {
-	List(context.Context, identity.Principal, SubjectCatalogueQuery) (SubjectSourcePage, error)
-	Detail(context.Context, identity.Principal, uuid.UUID) (SubjectSourceItem, error)
+	List(context.Context, Actor, SubjectCatalogueQuery) (SubjectSourcePage, error)
+	Detail(context.Context, Actor, uuid.UUID) (SubjectSourceItem, error)
 }
 
 // SubjectSourcePreview signs only a server-resolved ordinary media owner.
 type SubjectSourcePreview interface {
-	Preview(context.Context, identity.Principal, domain.LibraryScope, uuid.UUID) (LibraryMediaPreview, error)
+	Preview(context.Context, Actor, domain.LibraryScope, uuid.UUID) (LibraryMediaPreview, error)
 }
 
 // SubjectLibrary shares actual media queries without widening normal routes.
@@ -129,22 +128,22 @@ func NewSubjectLibrary(actor SubjectSourceActor, catalogue SubjectCatalogue, fil
 }
 
 // SourceActor authorizes a target before upload admission reads any bytes.
-func (s *SubjectLibrary) SourceActor(ctx context.Context, actor identity.Principal, write bool) (identity.Principal, error) {
+func (s *SubjectLibrary) SourceActor(ctx context.Context, actor Actor, write bool) (Actor, error) {
 	if s == nil || s.actor == nil {
-		return identity.Principal{}, ErrUnavailable
+		return Actor{}, ErrUnavailable
 	}
 	resolved, err := s.actor.PersonalSourceActor(ctx, actor, write)
 	if err != nil {
-		return identity.Principal{}, err
+		return Actor{}, err
 	}
 	if resolved.ID != actor.ID || resolved.SessionID != actor.SessionID || resolved.ID == uuid.Nil || resolved.ScopeID == uuid.Nil || resolved.OrgID == uuid.Nil {
-		return identity.Principal{}, ErrNotFound
+		return Actor{}, ErrNotFound
 	}
 	return resolved, nil
 }
 
 // List retains target authority before reading a complete mixed catalogue.
-func (s *SubjectLibrary) List(ctx context.Context, actor identity.Principal, query SubjectCatalogueQuery) (SubjectSourcePage, error) {
+func (s *SubjectLibrary) List(ctx context.Context, actor Actor, query SubjectCatalogueQuery) (SubjectSourcePage, error) {
 	_, err := s.SourceActor(ctx, actor, false)
 	if err != nil {
 		return SubjectSourcePage{}, err
@@ -173,7 +172,7 @@ func (s *SubjectLibrary) List(ctx context.Context, actor identity.Principal, que
 }
 
 // Detail checks a currently selectable source instead of trusting a stale card.
-func (s *SubjectLibrary) Detail(ctx context.Context, actor identity.Principal, id uuid.UUID) (SubjectSourceItem, error) {
+func (s *SubjectLibrary) Detail(ctx context.Context, actor Actor, id uuid.UUID) (SubjectSourceItem, error) {
 	_, err := s.SourceActor(ctx, actor, false)
 	if err != nil {
 		return SubjectSourceItem{}, err
@@ -192,7 +191,7 @@ func (s *SubjectLibrary) Detail(ctx context.Context, actor identity.Principal, i
 }
 
 // Preview returns only the source owner's expiring private lease.
-func (s *SubjectLibrary) Preview(ctx context.Context, actor identity.Principal, id uuid.UUID) (LibraryMediaPreview, error) {
+func (s *SubjectLibrary) Preview(ctx context.Context, actor Actor, id uuid.UUID) (LibraryMediaPreview, error) {
 	item, err := s.Detail(ctx, actor, id)
 	if err != nil {
 		return LibraryMediaPreview{}, err
