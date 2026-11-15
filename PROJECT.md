@@ -79,7 +79,7 @@ Go 测试统一放在 `backend/tests/<业务模块>/`，通过模块构造函数
 
 文档使用简短、直接的表述，只保留现行规则、必要条件与验收；重复说明改为来源链接，界面文案遵循[DESIGN 极简呈现](DESIGN.md#极简呈现)。
 
-项目知识以标准Markdown／Git为唯一正文，已经归入同仓独立`workspace/content/`，Workspace服务代码与正文分离。采用Fumadocs Core／Headless文档底座、Next App Router／React／TypeScript strict、Tailwind／本地独立维护的shadcn组件、Geist／Neutral、Node24／pnpm、Meilisearch在线搜索、Pagefind离线导出和Mermaid。`build:static`生成独立export产物，`build:online`生成完整standalone包；阅读和搜索免填写令牌，日常仅运行1130入口，静态导出为替代交付；分别构建与验收，接口／凭据／运行存储不进入静态产物。规则见[设计43](workspace/content/design/43-Workspace知识库与研发工作流服务设计.md)，操作见[服务说明](workspace/README.md)。在线采用本机私有令牌、短期会话、同源／CSRF及受控执行桥；首个主机为Codex app-server。研发记录使用PG独立`dev_workspace` schema与受限角色；现有业务`workspace` schema保持原归属。不建设TTS服务，仅兼容已有授权音频／cue导入与原生播放；实际状态和验证边界只见BACKLOG。 Workspace 自持 components.json、组件、Hook、主题及资源，不从业务前端派生；没有 scripts 目录，能力归属 src/build、src/content、src/narration、src/runtime，薄 CLI 负责参数与装配。项目规范先显式导入受控知识快照；站点与执行桥分别运行，本机组合需显式指定仓库。
+项目知识以标准 Markdown／Git 为唯一正文，保留在同仓独立 `workspace/content/`。Workspace 直接采用官方 `create-fumadocs-app`：Next.js、Fumadocs UI（官方 Base UI 实现与 shadcn 主题）、Fumadocs MDX、TypeScript strict、Tailwind、Geist／Neutral、Node24／pnpm 和 Meilisearch。官方组件提供布局、侧栏、目录、代码块、相邻页与搜索，普通 .md 由官方内容源编译，ID 和旧地址通过 slugs／Next.js 原生配置保留。只有标准 Next.js 构建与1130免登录入口，预渲染阅读内容；不另建静态／在线双应用，不保留自研构建、认证、PG 协作、执行桥、任务运行器或 TTS。Skill／工作流仅作为知识文档，代码与授权归原业务工程。浏览器只用 docs 索引 search-only key，管理密钥用于构建后官方索引同步。规则见[设计45](workspace/content/design/45-Workspace官方Fumadocs设计.md)，运行见[服务说明](workspace/README.md)，当前进度与验证边界见 BACKLOG。
 
 需求、设计、PRD、Plan、长期调研和模板继续各自保留独立文件与导航。原始需求、确认、文件名及稳定 ID 不因整理而删除或覆盖；引用修复不得改变业务含义。技术合同、产品范围和实施步骤各有唯一维护位置，当前调度只在 BACKLOG。根规范和工程 README 保留原位置，Workspace关联工程事实，不复制成第二套权威。知识正文不添加脚本、测试、依赖或构建产物；本机编辑器配置和第三方版权不随整理覆盖或删除。
 

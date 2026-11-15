@@ -132,7 +132,7 @@ frontend/      Next.js 工作台与交互界面
 backend/       单 Go module；服务 owner、legacy API/worker/relay 与数据库定义
 agent/         独立 TypeScript/Pi Durable 服务与 PostgreSQL Storage
 canvas/ 私有 Yjs 协作运行时
-workspace/     知识库、静态阅读与在线研发协作服务（正文在 content/）
+workspace/     官方 Fumadocs 知识库（正文在 content/）
 ```
 
 GitHub 仓库现名为 `StephenQiu30/glowloom`。后端保留根单 Go module `github.com/StephenQiu30/glowloom-server/backend`；legacy 业务命令为 `glowloom`，入口仍为 `backend/cmd/glowloom`。按[设计44 §7.5](workspace/content/design/44-Go微服务架构与技术选型设计.md#75-go-项目结构)，已有实现以服务 owner 归位：
@@ -169,7 +169,7 @@ backend/
 
 文档直接维护 Markdown，按原始需求 → design → PRD → Plan 分层，使用[统一模板](workspace/content/templates/00-模板导航.md)。实施状态统一维护在 BACKLOG；设计、工程验证与产品接受分别记录。
 
-研发知识正文统一在`workspace/content/`，同仓独立Workspace提供静态阅读、Skill、工作流和本机在线协作。入口、构建与配置见[服务说明](workspace/README.md)；实际验证及未覆盖项见[BACKLOG](BACKLOG.md#workspace-20261114)。真实TTS暂不启用。
+研发知识正文统一在 `workspace/content/`，独立 Workspace 直接采用官方 Fumadocs UI／MDX 和 Meilisearch。1130一个免登录阅读入口，Skill／工作流作为文档保留；不提供旧协作运行器或 TTS。启动与部署见[服务说明](workspace/README.md)，实际验证见[BACKLOG](BACKLOG.md#workspace-20261114)。
 
 默认 CI 包含后端全量 Race、隔离 PostgreSQL 集成与协作运行时测试，以及前端全量 Vitest 和含 TypeScript 检查的生产构建。完整质量门禁见 [PROJECT](PROJECT.md#4-质量门禁)。CI 通过不代表真实邮件、供应商或生产环境已通过验收。
 

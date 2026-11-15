@@ -1,10 +1,8 @@
-node_modules
-.build
-dist
-/content/
-test-results
-playwright-report
+content/
+node_modules/
+.next/
+.source/
+.local/
+playwright-report/
+test-results/
 pnpm-lock.yaml
-.local
-
-.vitest/

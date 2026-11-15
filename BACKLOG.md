@@ -62,6 +62,15 @@ Google Go 规范复核不再只看目录和增量 lint：全量首次发现 26 �
 
 ## Workspace知识库与研发工作流（2026-11-14）
 
+2026-11-15 当前方案：用户要求“除了保留我们的content 内容之外，删除所有的实现，然后重新使用正式的 接入我们的 Fumadocs 服务，不要自己从0开始做”。本轮来源链：[需求30](workspace/content/requirement/30-Workspace官方Fumadocs接入需求.md) → [设计45](workspace/content/design/45-Workspace官方Fumadocs设计.md) → [PRD31](workspace/content/prd/31-Workspace官方Fumadocs.md) → [Plan40](workspace/content/plan/40-Workspace官方Fumadocs执行计划.md)。直接采用官方 Next.js／Fumadocs UI／MDX／Meilisearch 模板；以下旧方案记录只供追溯，不再是当前服务能力或验收依据。用户随后授权本次官方 Fumadocs 重建及相关文档、CI 修改提交到 main 并推送；仅提交本任务允许清单，保留并行修改和部署模板删除，不执行远程部署。
+
+已完成主工程替换：直接使用官方 create-fumadocs-app（Next.js＋Fumadocs UI／MDX＋Meilisearch）与官方 shadcn 主题、Mermaid recipe；删除旧 src、tests、运行器、构建／选版、认证、PG 协作、执行桥、TTS 及旧 Skill 发现链接。24项旧根目录内容及本机旧配置／产物移到仓库外归档；活动 Meilisearch 数据目录保持原位。原 content 的212个文件在切换前后哈希一致，保留既有并行文档修改；4份 Skill 与3份工作流原文归入 content，逐字节一致。增加当前需求／设计／PRD／Plan及必要身份／导航元数据，不覆盖既有正文。
+
+主工程已通过 lint、types:check、format:check、build 和3项真实浏览器接受，涵盖免登录阅读、图表、真实 Meilisearch 查询与跳转、手机侧栏、主题和无横溢。219份本地历史内容的阅读／raw、CSV字节、显式锚点与209条旧别名核对通过；10处外部规范引用只验证原工程／原文跳转配置，不代替远程目标内容接受。无前缀相对文件名由薄适配交给官方 source.resolveHref，中文旧地址使用 Next.js 原生编码重定向，不恢复自研解析器。
+
+仅运行标准 Next.js 1130知识站和原独立 Meilisearch；220篇 Markdown 通过官方同步生成搜索记录。浏览器 key 仅允许 docs 索引 search；110份客户端 JS 未发现管理密钥。旧1130服务、执行桥和隔离1140预览均已退出；旧协作入口／任务 API 为404。没有业务数据库操作或 TTS 调用。CI已改为独立 Meilisearch＋官方 Next 构建／浏览器门禁；本轮推送后的远端终态单独核对。备份、逐项兼容和浏览器证据在 `/tmp/glowloom-official-fumadocs-preservation-20261115/`；并行部署模板删除及业务改动继续保留。
+
+
 SRC-WS-17～18：官方CLI已隔离生成并审阅，沿用Fumadocs Core／Headless与shadcn；在线搜索改为按内容摘要分版的私有Meilisearch，同源查询与冻结索引导出，管理／search-only密钥分离。按SRC-WS-18取消知识阅读与搜索的令牌输入，普通访问不跳转登录、不自动授予写权限；协作台和提案／任务／执行继续校验原有会话、CSRF与Origin，不新增角色或配置开关。日常仅1130，静态导出只作离线／替代交付；部署模板删除及其他并行修改保留，TTS关闭。T-WS-21覆盖AC-WS-27～31，本轮按授权仅提交相关修改到main并推送，再核对远端与本机运行状态。
 
 来源链：[原始需求28](workspace/content/requirement/28-Workspace知识库与研发工作流需求.md) → [设计43](workspace/content/design/43-Workspace知识库与研发工作流服务设计.md) → [PRD29](workspace/content/prd/29-Workspace知识库与研发工作流.md) → [Plan38](workspace/content/plan/38-Workspace知识库与研发工作流执行计划.md)。SRC-WS-08授权本地完整实施；SRC-WS-09明确暂不启用真实TTS，不上传声音、不收费合成。SRC-WS-10随后授权仅提交本次实现和文档迁移至main并推送，保留其他并行修改；不含生产部署或业务库操作。

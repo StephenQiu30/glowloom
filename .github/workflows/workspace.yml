@@ -11,34 +11,22 @@ concurrency:
 jobs:
   workspace:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 20
     services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_DB: glowloom_workspace_test_ci
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports: [5432:5432]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s --health-timeout 5s --health-retries 10
       meilisearch:
         image: getmeili/meilisearch:v1.37
         env:
           MEILI_MASTER_KEY: workspace-ci-only-meilisearch-key
-          MEILI_NO_ANALYTICS: true
+          MEILI_NO_ANALYTICS: "true"
         ports: [7700:7700]
     env:
-      WORKSPACE_MEILISEARCH_TEST_HOST: http://127.0.0.1:7700
-      WORKSPACE_MEILISEARCH_TEST_ADMIN_KEY: workspace-ci-only-meilisearch-key
-      GLOWLOOM_WORKSPACE_TEST_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci?options=-c%20role%3Dglowloom_workspace
+      NEXT_PUBLIC_MEILISEARCH_HOST: http://127.0.0.1:7700
+      MEILISEARCH_ADMIN_KEY: workspace-ci-only-meilisearch-key
     defaults:
       run:
         working-directory: workspace
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
@@ -50,27 +38,27 @@ jobs:
           cache_dependency_path: workspace/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - name: Initialize isolated schema from canonical source
+      - name: Prepare isolated search-only key
         run: |
-          psql postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci -X -v ON_ERROR_STOP=1 \
-            -c 'CREATE ROLE glowloom_app NOLOGIN' \
-            -c 'CREATE ROLE glowloom_agent NOLOGIN' \
-            -c 'CREATE ROLE glowloom_identity NOLOGIN' \
-            -c 'CREATE ROLE glowloom_creation NOLOGIN' \
-            -c 'CREATE ROLE glowloom_media NOLOGIN' \
-            -c 'CREATE ROLE glowloom_execution NOLOGIN'
-          psql postgres://postgres@127.0.0.1:5432/glowloom_workspace_test_ci -X --single-transaction -v ON_ERROR_STOP=1 -f ../backend/db/schema.sql
-      - run: pnpm knowledge:sync --repository ..
-      - run: pnpm test && pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:content
-      - name: Build both modes without runtime secrets
-        run: pnpm build:static && pnpm build:online
-      - name: Static browser acceptance
+          curl --fail --silent --retry 20 --retry-connrefused --retry-delay 1 "$NEXT_PUBLIC_MEILISEARCH_HOST/health" > /dev/null
+          node --input-type=module <<'JS'
+          import {appendFileSync} from 'node:fs';
+          import {Meilisearch} from 'meilisearch';
+          const client = new Meilisearch({host: process.env.NEXT_PUBLIC_MEILISEARCH_HOST, apiKey: process.env.MEILISEARCH_ADMIN_KEY});
+          const key = await client.createKey({description: 'Workspace isolated CI search', actions: ['search'], indexes: ['docs'], expiresAt: null});
+          appendFileSync(process.env.GITHUB_ENV, `NEXT_PUBLIC_MEILISEARCH_SEARCH_KEY=${key.key}\n`);
+          JS
+      - run: pnpm lint
+      - run: pnpm types:check
+      - run: pnpm format:check
+      - run: pnpm build
+      - name: Official Fumadocs browser acceptance
         run: |
-          pnpm serve:static --port 1131 > "$RUNNER_TEMP/workspace-static.log" 2>&1 &
+          pnpm start > "$RUNNER_TEMP/workspace-next.log" 2>&1 &
           reader_pid=$!
           trap 'kill "$reader_pid" 2>/dev/null || true' EXIT
-          curl --fail --silent --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:1131/ > /dev/null
-          pnpm exec playwright test tests/browser/static.spec.ts tests/browser/narration.spec.ts tests/browser/interface.spec.ts
+          curl --fail --silent --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:1130/read > /dev/null
+          pnpm test:e2e
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

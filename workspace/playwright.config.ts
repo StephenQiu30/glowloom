@@ -1,13 +1,14 @@
 import { defineConfig } from '@playwright/test';
+
 export default defineConfig({
-  testDir: 'tests/browser',
+  testDir: 'e2e',
   workers: 1,
   timeout: 45000,
-  outputDir: 'test-results',
   reporter: 'line',
   use: {
-    baseURL: process.env.WORKSPACE_TEST_URL ?? 'http://127.0.0.1:1131',
-    viewport: { width: 1460, height: 1040 },
+    baseURL: process.env.WORKSPACE_TEST_URL ?? 'http://127.0.0.1:1130',
+    viewport: { width: 1440, height: 1000 },
+    screenshot: 'only-on-failure',
     launchOptions:
       process.platform === 'darwin'
         ? {
@@ -15,6 +16,5 @@ export default defineConfig({
               '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
           }
         : undefined,
-    screenshot: 'only-on-failure',
   },
 });
