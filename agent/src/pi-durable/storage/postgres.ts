@@ -24,19 +24,13 @@ import type {
   TaskId,
   TaskQuery,
 } from '@earendil-works/pi-durable';
-import { and, eq, lt, sql } from 'drizzle-orm';
 import type { Pool } from 'pg';
 import {
   database,
+  withSavepoint,
   withTransaction,
   type AgentTransaction,
 } from '../../database/connection.js';
-import {
-  publicMessages,
-  runtimeEvents,
-  runtimeRecords,
-  runtimeSessions,
-} from '../../database/schema.js';
 import { publicMessageParts } from '../messages.js';
 import {
   document,
@@ -99,21 +93,17 @@ class PostgresStorage implements Storage {
     const owner = this.writer();
     return withTransaction(this.pool, async (client) => {
       await assertOwnership(client, this.session, owner);
-      const row = (
-        await client
-          .update(runtimeSessions)
-          .set({ last_id: sql`${runtimeSessions.last_id} + 1` })
-          .where(
-            and(
-              eq(runtimeSessions.session_id, this.session),
-              lt(runtimeSessions.last_id, Number.MAX_SAFE_INTEGER),
-            ),
-          )
-          .returning({ last_id: runtimeSessions.last_id })
-      )[0];
-      if (!row) throw new Error('ID space is exhausted');
+      const row = await database(client).runtimeSession.updateManyAndReturn({
+        where: {
+          session_id: this.session,
+          last_id: { lt: BigInt(Number.MAX_SAFE_INTEGER) },
+        },
+        data: { last_id: { increment: 1n } },
+        select: { last_id: true },
+      });
+      if (!row[0]) throw new Error('ID space is exhausted');
       await assertOwnership(client, this.session, owner);
-      return Number(row.last_id) as I;
+      return Number(row[0].last_id) as I;
     });
   }
   async commit(
@@ -133,9 +123,9 @@ class PostgresStorage implements Storage {
           const seqs: Seq[] = [];
           let refused: Error | undefined;
           for (const batch of copy) {
-            const seq = safeSeq(lastSeq + 1);
+            const seq = safeSeq(lastSeq + 1n);
             try {
-              await client.transaction((batchTransaction) =>
+              await withSavepoint(client, (batchTransaction) =>
                 this.storeBatch(batchTransaction, batch, seq),
               );
             } catch (e) {
@@ -143,7 +133,7 @@ class PostgresStorage implements Storage {
               refused = new Error(e.message);
               break;
             }
-            lastSeq = seq;
+            lastSeq = BigInt(seq);
             seqs.push(seq);
           }
           await assertOwnership(client, this.session, owner);
@@ -163,6 +153,7 @@ class PostgresStorage implements Storage {
     batch: readonly StorageWrite[],
     seq: Seq,
   ) {
+    const db = database(client);
     let maxId = 1;
     for (const write of batch) {
       if ('value' in write) {
@@ -182,35 +173,45 @@ class PostgresStorage implements Storage {
             message_parts: parts.map((part) => ({ ...part })),
           }
         : event.payload;
-      await client.insert(runtimeEvents).values({
-        session_id: this.session,
-        commit_seq: seq,
-        event_ordinal: idx + 1,
-        event_type: event.type,
-        payload,
+      await db.runtimeEvent.create({
+        data: {
+          session_id: this.session,
+          commit_seq: BigInt(seq),
+          event_ordinal: idx + 1,
+          event_type: event.type,
+          payload,
+        },
       });
       for (const part of parts) {
-        await client.insert(publicMessages).values({
-          session_id: this.session,
-          run_id: part.run_id,
-          commit_seq: seq,
-          event_ordinal: idx + 1,
-          part_index: part.part_index,
-          message_id: part.message_id,
-          conversation_id: part.conversation_id,
-          sequence: part.sequence,
-          kind: part.kind,
-          content: part.content,
+        await db.publicMessage.create({
+          data: {
+            session_id: this.session,
+            run_id: part.run_id,
+            commit_seq: BigInt(seq),
+            event_ordinal: idx + 1,
+            part_index: part.part_index,
+            message_id: part.message_id,
+            conversation_id: BigInt(part.conversation_id),
+            sequence: part.sequence,
+            kind: part.kind,
+            content: part.content,
+          },
         });
       }
     }
-    await client
-      .update(runtimeSessions)
-      .set({
-        last_id: sql`greatest(${runtimeSessions.last_id}, ${maxId})`,
-        commit_seq: seq,
-      })
-      .where(eq(runtimeSessions.session_id, this.session));
+    // Ownership holds the session row lock for the whole commit transaction.
+    const current = await db.runtimeSession.findUniqueOrThrow({
+      select: { last_id: true },
+      where: { session_id: this.session },
+    });
+    await db.runtimeSession.update({
+      where: { session_id: this.session },
+      data: {
+        last_id:
+          current.last_id > BigInt(maxId) ? current.last_id : BigInt(maxId),
+        commit_seq: BigInt(seq),
+      },
+    });
   }
   async conversation(id: ConversationId, ctx: Context) {
     this.check(ctx);
@@ -276,27 +277,20 @@ class PostgresStorage implements Storage {
       )[0];
     }
     this.check(second);
-    const row = (
-      await database(this.pool)
-        .select({
-          body: runtimeRecords.body,
-          commit_seq: runtimeRecords.commit_seq,
-        })
-        .from(runtimeRecords)
-        .where(
-          and(
-            eq(runtimeRecords.session_id, this.session),
-            eq(runtimeRecords.record_type, 'entry'),
-            eq(runtimeRecords.id, first),
-          ),
-        )
-    )[0];
-    return (
-      row && {
-        entry: JSON.parse(row.body) as EntryRecord,
-        commitSeq: safeSeq(Number(row.commit_seq)),
-      }
-    );
+    const row = await database(this.pool).runtimeRecord.findFirst({
+      select: { body: true, commit_seq: true },
+      where: {
+        session_id: this.session,
+        record_type: 'entry',
+        id: BigInt(first),
+      },
+    });
+    return row
+      ? {
+          entry: JSON.parse(row.body) as EntryRecord,
+          commitSeq: safeSeq(row.commit_seq),
+        }
+      : undefined;
   }
   async findLatestHeadMarker(
     conversationId: ConversationId,
@@ -396,17 +390,15 @@ class PostgresStorage implements Storage {
     ctx: Context,
   ) {
     this.check(ctx);
-    const rows = await database(this.pool)
-      .select({ body: runtimeRecords.body })
-      .from(runtimeRecords)
-      .where(
-        and(
-          eq(runtimeRecords.session_id, this.session),
-          eq(runtimeRecords.conversation_id, conversationId),
-          eq(runtimeRecords.request_key, JSON.stringify(requestId)),
-        ),
-      );
-    return decode<SubmissionRecord>(rows[0]);
+    const row = await database(this.pool).runtimeRecord.findFirst({
+      select: { body: true },
+      where: {
+        session_id: this.session,
+        conversation_id: BigInt(conversationId),
+        request_key: JSON.stringify(requestId),
+      },
+    });
+    return decode<SubmissionRecord>(row);
   }
   async findDocument(
     address: DocumentAddress,
@@ -455,10 +447,10 @@ export async function openReadonlyPostgresStorage(
   pool: Pool,
   sessionId: string,
 ) {
-  const found = await database(pool)
-    .select({ session_id: runtimeSessions.session_id })
-    .from(runtimeSessions)
-    .where(eq(runtimeSessions.session_id, sessionId));
-  if (!found.length) throw new Error('Unknown storage session');
+  const found = await database(pool).runtimeSession.findUnique({
+    select: { session_id: true },
+    where: { session_id: sessionId },
+  });
+  if (!found) throw new Error('Unknown storage session');
   return new PostgresStorage(pool, sessionId, undefined, {});
 }

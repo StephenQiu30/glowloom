@@ -1,7 +1,10 @@
 import type { Pool } from 'pg';
-import { and, asc, gt, inArray, sql } from 'drizzle-orm';
-import { withTransaction } from '../../database/connection.js';
-import { publicMessages, runtimeEvents } from '../../database/schema.js';
+import { sql } from 'kysely';
+import {
+  database,
+  queries,
+  withTransaction,
+} from '../../database/connection.js';
 import { publicMessageParts } from '../../pi-durable/messages.js';
 /** Offline, bounded, restart-safe projection of retained public events. No Harness or business calls. */
 export async function backfillConversationMessages(
@@ -10,61 +13,48 @@ export async function backfillConversationMessages(
 ) {
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 500)
     throw new Error('Invalid backfill batch size');
-  let cursor: [string, number, number] = ['', 0, 0],
+  let cursor: [string, bigint, number] = ['', 0n, 0],
     scanned = 0,
     inserted = 0;
   for (;;) {
-    const batch = await withTransaction(pool, async (db) => {
-      const rows = await db
-        .select({
-          session_id: runtimeEvents.session_id,
-          commit_seq: runtimeEvents.commit_seq,
-          event_ordinal: runtimeEvents.event_ordinal,
-          event_type: runtimeEvents.event_type,
-          payload: runtimeEvents.payload,
-        })
-        .from(runtimeEvents)
+    const batch = await withTransaction(pool, async (connection) => {
+      const rows = await queries(connection)
+        .selectFrom('runtime_events')
+        .select([
+          'session_id',
+          'commit_seq',
+          'event_ordinal',
+          'event_type',
+          'payload',
+        ])
         .where(
-          and(
-            gt(
-              sql`(${runtimeEvents.session_id}, ${runtimeEvents.commit_seq}, ${runtimeEvents.event_ordinal})`,
-              sql`(${cursor[0]}, ${cursor[1]}::bigint, ${cursor[2]}::int)`,
-            ),
-            inArray(runtimeEvents.event_type, ['text', 'operation']),
-          ),
+          sql<boolean>`(session_id, commit_seq, event_ordinal) > (${cursor[0]}, ${cursor[1]}::bigint, ${cursor[2]}::int)`,
         )
-        .orderBy(
-          asc(runtimeEvents.session_id),
-          asc(runtimeEvents.commit_seq),
-          asc(runtimeEvents.event_ordinal),
-        )
-        .limit(batchSize);
+        .where('event_type', 'in', ['text', 'operation'])
+        .orderBy('session_id', 'asc')
+        .orderBy('commit_seq', 'asc')
+        .orderBy('event_ordinal', 'asc')
+        .limit(batchSize)
+        .execute();
       let count = 0;
       for (const row of rows) {
-        for (const part of publicMessageParts(
+        const parts = publicMessageParts(
           { type: row.event_type, payload: row.payload },
-          row.commit_seq,
+          Number(row.commit_seq),
           row.event_ordinal,
-        )) {
-          const result = await db
-            .insert(publicMessages)
-            .values({
-              session_id: row.session_id,
-              commit_seq: row.commit_seq,
-              event_ordinal: row.event_ordinal,
-              ...part,
-            })
-            .onConflictDoNothing({
-              target: [
-                publicMessages.session_id,
-                publicMessages.commit_seq,
-                publicMessages.event_ordinal,
-                publicMessages.part_index,
-              ],
-            })
-            .returning({ message_id: publicMessages.message_id });
-          count += result.length;
-        }
+        );
+        if (!parts.length) continue;
+        const result = await database(connection).publicMessage.createMany({
+          data: parts.map((part) => ({
+            session_id: row.session_id,
+            commit_seq: row.commit_seq,
+            event_ordinal: row.event_ordinal,
+            ...part,
+            conversation_id: BigInt(part.conversation_id),
+          })),
+          skipDuplicates: true,
+        });
+        count += result.count;
       }
       return { rows, count };
     });

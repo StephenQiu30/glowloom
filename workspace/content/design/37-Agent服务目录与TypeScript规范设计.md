@@ -151,7 +151,7 @@ Go 端通过锁定的 `go tool oapi-codegen` 生成当前模型和普通 HTTP �
 | 独立Node/TypeScript服务 | Pi与资源SDK原生TS，独立构建/池/进程，Go只管业务权威 | 不改为Go托管子进程、不按七个角色拆微服务；新增HTTP/授权/恢复边界继续实测 |
 | NestJS + FastifyAdapter | `http/app.ts`已集中Module/Provider/Pipe/Filter、认证hook及DTO，应用与Storage保持普通类 | 官方当前推荐的NodeAdapter是可评估备选，不是已测迁移收益；现有Fastify插件/请求hook/SSE已接线，保留可减少非目标变更；不宣称本项目已做引擎性能比较 |
 | 官方Pi Durable 1.5.0同版包 | 已有Harness、task-owned会话、压缩、事务doc、恢复和官方Storage适配 | 官方API仍属实验性质；锁版本、生产定义及公开API，不自动升级，不再叠加LangGraph/自写循环 |
-| pg + PostgreSQL Storage | 复用现有基础设施与受限schema，owner/epoch与事件投影同事务；不引入第二个ORM | 自定义Storage是项目维护责任，需官方conformance/未知COMMIT/跨进程测试；不把PG可连接当恢复通过 |
+| Prisma + PostgreSQL Storage | Prisma统一普通CRUD与事务，Kysely补齐必要查询；复用受限schema，owner/epoch与事件投影同事务 | 自定义Storage是项目维护责任，需官方conformance/未知COMMIT/跨进程测试；不把PG可连接当恢复通过 |
 | Go数据库worker | 原operation/media/mediatool及taskruntime已承载提交、查询、归档、渲染 | 不重引Temporal、BullMQ或第二套DAG；长等待释放短worker槽，外部在途容量另计 |
 | Swagger/Umi/oapi-codegen | 双向生成及临时重生成比对已存在，关键grant/receipt有运行校验 | 不从零再建接口生成；类型不是深层语义验证，响应分支、空值、金额和状态仍在各边界校验 |
 | Pino / Vitest / tsc / Compose | 已有脱敏、生产编译、隔离测试定义、独立非root镜像和内部端口 | 运行日志需要补wait/branch/call/operation关联与扫描诊断；测试定义、历史CI、容器健康不等于本轮作品接受 |
@@ -190,7 +190,7 @@ Go 端通过锁定的 `go tool oapi-codegen` 生成当前模型和普通 HTTP �
 
 ## 8. 实施与验收
 
-SRC-ATS-ORM-01 沿[设计32 §7.4](32-完整创作AgentHarness与Skill多Agent架构设计.md#74-postgresql-storage所有权与幂等)落实：`database/schema.ts` 为只读写列映射，`database/connection.ts` 负责 ORM 装配和事务资源生命周期；会话及 Storage 依职责构建查询。HTTP/SSE 与生成合同不改变，数据库结构不改变。完整可执行树和锁文件变化会改变冻结定义指纹，发布继续按§7.5收束或核验在途运行，不修改旧 manifest 来强行接续。
+SRC-ATS-ORM-01/02 沿[设计32 §7.4](32-完整创作AgentHarness与Skill多Agent架构设计.md#74-postgresql-storage所有权与幂等)落实：`prisma/schema.prisma` 为客户端映射，`database/schema.ts` 从生成模型派生构建器类型；`database/connection.ts` 装配 Prisma，`database/pg-adapter.ts` 保留损坏连接隔离，`database/query-driver.ts` 只执行 Kysely 编译结果与参数。HTTP/SSE 与生成合同不改变，数据库结构不改变。完整可执行树和锁文件变化会改变冻结定义指纹，发布继续按§7.5收束或核验在途运行，不修改旧 manifest 来强行接续。
 
 | ID | 必须验证的结果 |
 | --- | --- |
@@ -202,6 +202,6 @@ SRC-ATS-ORM-01 沿[设计32 §7.4](32-完整创作AgentHarness与Skill多Agent�
 | ATS-AC-06 | 新生产构建的指纹、存量 run 清单与准入结果可核对。不能直接接续的运行在切换前收束，新版无旧定义加载分支。 |
 | ATS-AC-07 | 冻结锁文件安装、严格类型、lint、格式、测试、API 检查与构建通过。测试装配和生产镜像验证装饰器元数据、启动失败、信号关闭及连接池释放。 |
 | ATS-AC-08 | Umi 客户端独立重生成零差异，核对内部路由覆盖、NodeNext 声明检查、服务身份、取消、超时、大小限制和实际流式语义。 |
-| ATS-AC-09 | NestJS 源码无手写 CRUD/事务语句、原生数据库 query 或 schema executor；ORM 在受限角色的真实隔离 PG 中通过 Storage、幂等、保存点、未知提交、字节预算、微秒分页及真实进程恢复验收。 |
+| ATS-AC-09 | NestJS 普通 CRUD 使用 Prisma，类型化查询绑定当前 Prisma 事务；无手写 CRUD/事务语句、业务原生数据库 query 或 schema executor；ORM 在受限角色的真实隔离 PG 中通过 Storage、幂等、保存点、未知提交、字节预算、微秒分页及真实进程恢复验收。 |
 
 执行步骤见 [Plan28](../plan/28-完整创作Agent与Skill多Agent实施计划.md)，对话验收继续沿 [Plan31](../plan/31-对话工作台与参考输入一致性实施计划.md)。进度见 [BACKLOG](../../../BACKLOG.md#agent-nestjs-migration)。

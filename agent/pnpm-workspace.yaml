@@ -4,3 +4,5 @@ allowBuilds:
   protobufjs: false
   '@scarf/scarf': false
   es5-ext: false
+  '@prisma/engines': false
+  prisma: false

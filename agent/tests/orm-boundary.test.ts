@@ -12,7 +12,10 @@ async function sourceFiles(root: string): Promise<string[]> {
     entries.map((entry) => {
       const path = join(root, entry.name);
       return entry.isDirectory()
-        ? sourceFiles(path)
+        ? entry.name === 'generated' &&
+          relative(sourceRoot, root) === 'database'
+          ? Promise.resolve([])
+          : sourceFiles(path)
         : Promise.resolve(entry.name.endsWith('.ts') ? [path] : []);
     }),
   );
@@ -41,7 +44,11 @@ it('keeps application database operations in ORM builders without schema executo
         ts.isImportDeclaration(node) &&
         ts.isStringLiteral(node.moduleSpecifier)
       ) {
-        if (/drizzle-kit|\/migrator(?:\/|$)/.test(node.moduleSpecifier.text))
+        if (
+          /drizzle-kit|\/migrator(?:\/|$)|^prisma(?:\/|$)/.test(
+            node.moduleSpecifier.text,
+          )
+        )
           reject(node, 'runtime schema/migration executor');
       }
       if (
@@ -56,7 +63,24 @@ it('keeps application database operations in ORM builders without schema executo
         ts.isCallExpression(node) &&
         ts.isPropertyAccessExpression(node.expression)
       ) {
-        if (node.expression.name.text === 'query')
+        const compilerBridge =
+          relative(sourceRoot, path) === 'database/query-driver.ts' &&
+          ['$queryRawUnsafe', '$executeRawUnsafe'].includes(
+            node.expression.name.text,
+          ) &&
+          node.arguments.length === 2 &&
+          node.arguments[0]?.getText(source) === 'compiled.sql' &&
+          node.arguments[1]?.getText(source) === '...compiled.parameters';
+        if (
+          node.expression.name.text === 'query' ||
+          ([
+            '$queryRaw',
+            '$queryRawUnsafe',
+            '$executeRaw',
+            '$executeRawUnsafe',
+          ].includes(node.expression.name.text) &&
+            !compilerBridge)
+        )
           reject(node, 'native query escape hatch');
         if (
           node.expression.name.text === 'raw' &&

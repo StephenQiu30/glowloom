@@ -4,3 +4,5 @@ coverage
 *.log
 .env*
 tests
+.vitest
+src/database/generated

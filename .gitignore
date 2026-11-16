@@ -64,3 +64,7 @@ docker-compose-env.env
 /.obsidian/appearance.json
 
 /workspace/content/.obsidian/
+
+# Prisma client is generated during Agent build.
+/agent/src/database/generated/
+/agent/.vitest/

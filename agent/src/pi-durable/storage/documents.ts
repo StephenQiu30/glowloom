@@ -11,12 +11,12 @@ import {
   type StorageWrite,
   type StoredDocument,
 } from '@earendil-works/pi-durable';
-import { and, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
-import { database, type AgentTransaction } from '../../database/connection.js';
 import {
-  runtimeRecords,
-  runtimeDocumentVersions,
-} from '../../database/schema.js';
+  database,
+  queries,
+  type AgentTransaction,
+} from '../../database/connection.js';
+import type { Prisma } from '../../database/generated/client.js';
 import { decode, indexKey, Refused, type Database } from './records.js';
 
 export function scopeKey(scope: DocumentAddress['scope']): string {
@@ -44,29 +44,25 @@ export async function findDocument(
   address: DocumentAddress,
   at: DocumentPoint,
 ) {
-  const alive =
+  const alive: Prisma.RuntimeRecordWhereInput =
     at === 'current'
-      ? isNull(runtimeRecords.retired_at_seq)
-      : and(
-          lte(runtimeRecords.created_at_seq, at),
-          or(
-            isNull(runtimeRecords.retired_at_seq),
-            gt(runtimeRecords.retired_at_seq, at),
-          ),
-        );
+      ? { retired_at_seq: null }
+      : {
+          created_at_seq: { lte: BigInt(at) },
+          OR: [
+            { retired_at_seq: null },
+            { retired_at_seq: { gt: BigInt(at) } },
+          ],
+        };
   return decode<DocumentRecord>(
-    (
-      await database(db)
-        .select({ body: runtimeRecords.body })
-        .from(runtimeRecords)
-        .where(
-          and(
-            eq(runtimeRecords.session_id, session),
-            eq(runtimeRecords.address_key, addressKey(address)),
-            alive,
-          ),
-        )
-    )[0],
+    await database(db).runtimeRecord.findFirst({
+      select: { body: true },
+      where: {
+        session_id: session,
+        address_key: addressKey(address),
+        ...alive,
+      },
+    }),
   );
 }
 
@@ -76,44 +72,32 @@ export async function document(
   id: DocumentId,
   at: DocumentPoint,
 ): Promise<StoredDocument | undefined> {
-  const db = database(connection);
-  const latest = db
-    .select({
-      version: runtimeDocumentVersions.version,
-      content: runtimeDocumentVersions.content,
-      deltas_since_base: runtimeDocumentVersions.deltas_since_base,
-    })
-    .from(runtimeDocumentVersions)
-    .where(
-      and(
-        eq(runtimeDocumentVersions.session_id, runtimeRecords.session_id),
-        eq(runtimeDocumentVersions.document_id, runtimeRecords.id),
-        at === 'current'
-          ? undefined
-          : lte(runtimeDocumentVersions.commit_seq, at),
-      ),
+  // Keep the record and its latest content in one database snapshot.
+  const row = await queries(connection)
+    .selectFrom('runtime_records as record')
+    .leftJoinLateral(
+      (eb) => {
+        let latest = eb
+          .selectFrom('runtime_document_versions')
+          .select(['version', 'content', 'deltas_since_base'])
+          .whereRef('session_id', '=', 'record.session_id')
+          .whereRef('document_id', '=', 'record.id');
+        if (at !== 'current')
+          latest = latest.where('commit_seq', '<=', BigInt(at));
+        return latest.orderBy('commit_seq', 'desc').limit(1).as('latest');
+      },
+      (join) => join.onTrue(),
     )
-    .orderBy(desc(runtimeDocumentVersions.commit_seq))
-    .limit(1)
-    .as('latest');
-  const row = (
-    await db
-      .select({
-        body: runtimeRecords.body,
-        version: latest.version,
-        content: latest.content,
-        deltas_since_base: latest.deltas_since_base,
-      })
-      .from(runtimeRecords)
-      .leftJoinLateral(latest, sql`true`)
-      .where(
-        and(
-          eq(runtimeRecords.session_id, session),
-          eq(runtimeRecords.id, id),
-          eq(runtimeRecords.record_type, 'document'),
-        ),
-      )
-  )[0];
+    .select([
+      'record.body',
+      'latest.version',
+      'latest.content',
+      'latest.deltas_since_base',
+    ])
+    .where('record.session_id', '=', session)
+    .where('record.id', '=', BigInt(id))
+    .where('record.record_type', '=', 'document')
+    .executeTakeFirst();
   const record = decode<DocumentRecord>(row);
   if (!row || !record) return undefined;
   if (at !== 'current' && latestOnly(record))
@@ -208,35 +192,24 @@ export async function writeDocuments(
   seq: Seq,
   writes: readonly StorageWrite[],
 ) {
+  const db = database(client);
   const actions = await actionsFor(client, session, writes);
   // Free addresses first, so simultaneous retirement/recreation is independent of write order.
   for (const [id, action] of actions) {
     if (!action.retire || action.create) continue;
     const current = await document(client, session, id, 'current');
     if (!current) throw new Refused(`Unknown or retired document: ${id}`);
-    await client
-      .update(runtimeRecords)
-      .set({ retired_at_seq: seq })
-      .where(
-        and(eq(runtimeRecords.session_id, session), eq(runtimeRecords.id, id)),
-      );
+    await db.runtimeRecord.update({
+      where: { session_id_id: { session_id: session, id: BigInt(id) } },
+      data: { retired_at_seq: BigInt(seq) },
+    });
   }
   for (const [id, action] of actions) {
     const { create, content, retire } = action;
-    const old = (
-      await client
-        .select({
-          record_type: runtimeRecords.record_type,
-          body: runtimeRecords.body,
-        })
-        .from(runtimeRecords)
-        .where(
-          and(
-            eq(runtimeRecords.session_id, session),
-            eq(runtimeRecords.id, id),
-          ),
-        )
-    )[0];
+    const old = await db.runtimeRecord.findUnique({
+      select: { record_type: true, body: true },
+      where: { session_id_id: { session_id: session, id: BigInt(id) } },
+    });
     if (create && old)
       throw new Refused(`ID ${id} already belongs to ${old.record_type}`);
     if (!create && old?.record_type !== 'document')
@@ -253,51 +226,36 @@ export async function writeDocuments(
     if (create) {
       if (!retire && (await findDocument(client, session, create, 'current')))
         throw new Refused('Document address already has a current incarnation');
-      await client.insert(runtimeRecords).values({
-        session_id: session,
-        id,
-        record_type: 'document',
-        body,
-        commit_seq: seq,
-        kind_key: indexKey(record.kind),
-        scope_key: scopeKey(record.scope),
-        address_key: addressKey(record),
-        created_at_seq: seq,
-        retired_at_seq: retire ? seq : null,
+      await db.runtimeRecord.create({
+        data: {
+          session_id: session,
+          id: BigInt(id),
+          record_type: 'document',
+          body,
+          commit_seq: BigInt(seq),
+          kind_key: indexKey(record.kind),
+          scope_key: scopeKey(record.scope),
+          address_key: addressKey(record),
+          created_at_seq: BigInt(seq),
+          retired_at_seq: retire ? BigInt(seq) : null,
+        },
       });
     } else if (retire) {
-      await client
-        .update(runtimeRecords)
-        .set({ body })
-        .where(
-          and(
-            eq(runtimeRecords.session_id, session),
-            eq(runtimeRecords.id, id),
-          ),
-        );
+      await db.runtimeRecord.update({
+        where: { session_id_id: { session_id: session, id: BigInt(id) } },
+        data: { body },
+      });
     }
     if (content) {
       let value,
         deltas = 0;
       if (content.kind === 'base') value = content.value;
       else {
-        const latest = (
-          await client
-            .select({
-              version: runtimeDocumentVersions.version,
-              content: runtimeDocumentVersions.content,
-              deltas_since_base: runtimeDocumentVersions.deltas_since_base,
-            })
-            .from(runtimeDocumentVersions)
-            .where(
-              and(
-                eq(runtimeDocumentVersions.session_id, session),
-                eq(runtimeDocumentVersions.document_id, id),
-              ),
-            )
-            .orderBy(desc(runtimeDocumentVersions.commit_seq))
-            .limit(1)
-        )[0];
+        const latest = await db.runtimeDocumentVersion.findFirst({
+          select: { version: true, content: true, deltas_since_base: true },
+          where: { session_id: session, document_id: BigInt(id) },
+          orderBy: { commit_seq: 'desc' },
+        });
         if (!latest) throw new Refused(`Document ${id} delta has no base`);
         if (latest.version !== content.version)
           throw new Refused(
@@ -309,32 +267,24 @@ export async function writeDocuments(
         deltas = latest.deltas_since_base + 1;
       }
       if (latestOnly(record))
-        await client
-          .delete(runtimeDocumentVersions)
-          .where(
-            and(
-              eq(runtimeDocumentVersions.session_id, session),
-              eq(runtimeDocumentVersions.document_id, id),
-            ),
-          );
+        await db.runtimeDocumentVersion.deleteMany({
+          where: { session_id: session, document_id: BigInt(id) },
+        });
       if (!retire || !latestOnly(record))
-        await client.insert(runtimeDocumentVersions).values({
-          session_id: session,
-          document_id: id,
-          commit_seq: seq,
-          version: content.version,
-          content: JSON.stringify(value),
-          deltas_since_base: deltas,
+        await db.runtimeDocumentVersion.create({
+          data: {
+            session_id: session,
+            document_id: BigInt(id),
+            commit_seq: BigInt(seq),
+            version: content.version,
+            content: JSON.stringify(value),
+            deltas_since_base: deltas,
+          },
         });
     } else if (retire && latestOnly(record)) {
-      await client
-        .delete(runtimeDocumentVersions)
-        .where(
-          and(
-            eq(runtimeDocumentVersions.session_id, session),
-            eq(runtimeDocumentVersions.document_id, id),
-          ),
-        );
+      await db.runtimeDocumentVersion.deleteMany({
+        where: { session_id: session, document_id: BigInt(id) },
+      });
     }
   }
 }

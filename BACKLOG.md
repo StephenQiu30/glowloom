@@ -1,5 +1,25 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+## Prisma 数据访问替换与隔离验证（2026-11-16）
+
+SRC-ATS-ORM-02：按用户指定，Agent 普通 CRUD 已改用 Prisma 7.10.1，移除 Drizzle；行锁、租约数据库时钟、条件冲突更新、CTE/LATERAL、窗口预算和微秒游标使用 Kysely 0.28.20，并通过当前 Prisma 客户端/事务执行。私有驱动仅执行构建器编译结果与独立参数，不提供业务原生 SQL 入口。九表客户端映射不改变 PostgreSQL 结构；`backend/db/schema.sql` 仍为唯一结构来源，没有迁移目录、增量 SQL、db push/migrate 或运行时 DDL。文档仍直接位于 `workspace/content`。
+
+事务保留嵌套 callback 保存点、拒绝批次回滚、成功前缀提交、只读 repeatable-read、确认 COMMIT 后通知及未知提交不重放。独立审查发现并修复官方 pg 适配器在控制语句失败后按健康状态释放连接的问题：事务查询、保存点或连接异常均标记 lease，释放时销毁失败连接，保留原始回滚错误。真实 Prisma runtime 的 COMMIT/ROLLBACK 故障注入验证连接销毁、监听器清理及回调仅执行一次。
+
+验证仅使用新建 PG18 集群 `/tmp/glowloom-agent-prisma-pg-20261116` 的三个隔离测试库，受限角色为 `glowloom_agent`；没有读取或修改现有业务库。最终 `pnpm test` 为 **34 文件、197 项全部通过**，包含官方 Storage、网络断连/未知 COMMIT、SIGKILL 恢复、微秒分页、数据库字节预算，以及新增混合查询保存点和适配器故障用例。冻结安装、Prisma validate/generate、Agent typecheck/lint/format、双向 API 检查、生产构建及 `go test ./tests/db -count=1` 通过。Docker 生产镜像 `glowloom-agent:prisma-verification-20261116` 构建成功，使用第三个空隔离库的实际容器 `/healthz` 和 `/readyz` 均返回 200。独立复审未发现未修复的重要问题。
+
+日志为本机 `/tmp/glowloom-prisma-{test-final,boundary,api,docker,install,typecheck-final,lint-final,format-final,schema-gate-final}.log`。验证容器和本轮 PG 集群已停止；本地验证镜像保留。额外检查的 PROJECT 和五份需求/设计/PRD/Plan 文档在 HEAD 基线均已有格式差异，本次未扩大为全篇格式整理；Agent 自身格式门禁通过。
+
+本轮提交范围：根 `.gitignore`、AGENTS、PROJECT 与本清单；Agent 包清单/锁文件/构建与忽略配置、`prisma.config.ts` 和九表映射；`database/{connection,schema,query-driver,pg-adapter}.ts`、`server.ts`、Storage 五文件及 sessions 的 service/runtime/recovery 和 persistence 四文件；ORM 门禁与两个数据库事务/适配器测试；需求22、设计32/37、PRD19 和 Plan28。用户已授权将本轮 Prisma 改动提交到 main 并推送；未修改 Canvas、frontend 或规范性 SQL，不包含部署或现有业务库操作。
+
+上线前核验步骤：
+
+1. 管理员只读比对目标库与规范性 schema，确认 Agent 九表、约束和受限角色权限；本次 Prisma 替换不需要新增结构，不对存量库重放空库 SQL。
+2. 固定 matching Prisma/Client/pg adapter 版本，干净环境冻结安装并生成客户端，运行上述测试和 API 门禁，构建并核验生产镜像；禁止 db push/migrate。
+3. 按设计37核验在途运行与冻结定义指纹，先收束或使用已核验的旧执行版本；不改写旧 manifest 强行续跑新代码。
+4. 在预发布隔离库验证 ready、会话幂等、单批次拒绝、owner fencing、历史消息/微秒游标，以及中断后恢复和未知提交无回执；再按既有发布流程切换镜像。
+5. 发布后观察恢复失败、未知提交、连接错误和池耗尽指标；回退使用此前已验证镜像，数据库结构保持不变。
+
 ## NestJS ORM 与知识库目录整理（2026-11-16）
 
 SRC-ATS-ORM-01：Agent 的九表列映射、CRUD、冲突处理、行锁、CTE/LATERAL、事务及批次保存点已改用 Drizzle ORM 0.45.4，pg 仅保留连接池和驱动。NestJS 源码没有完整手写 SQL、原生 query 或迁移执行器；数据库时钟、JSON、窗口和算术只使用参数化框架表达式。规范性 schema、角色与 HTTP/SSE 合同未改，Canvas 继续不访问数据库。需求22 → 设计32/37 → PRD19 NFR-AH-ORM-01 → Plan28 记录方案。

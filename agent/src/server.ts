@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { disconnectDatabase } from './database/connection.js';
 import pino from 'pino';
 import { loadConfig } from './config.js';
 import { BusinessClient } from './business/client.js';
@@ -54,7 +55,7 @@ const app = await buildApp({
   logger,
   swagger: config.swagger,
 }).catch(async (error: unknown) => {
-  await pool.end();
+  await disconnectDatabase(pool).finally(() => pool.end());
   throw error;
 });
 
@@ -71,7 +72,9 @@ function close(): Promise<void> {
     }, 30000);
     deadline.unref();
     try {
-      await app.close().finally(() => pool.end());
+      await app
+        .close()
+        .finally(() => disconnectDatabase(pool).finally(() => pool.end()));
     } finally {
       clearTimeout(deadline);
     }

@@ -1,34 +1,27 @@
 import { RecoveryStore } from '../recovery.js';
 import { publicState } from '../../pi-durable/events.js';
 import type { Pool } from 'pg';
-import {
-  and,
-  desc,
-  eq,
-  getTableColumns,
-  isNull,
-  lte,
-  ne,
-  sql,
-} from 'drizzle-orm';
+import { sql } from 'kysely';
 import {
   database,
+  queries,
   withTransaction,
   type AgentTransaction,
   type DatabaseConnection,
 } from '../../database/connection.js';
-import {
-  runtimeEvents,
-  serviceControlInbox,
-  serviceRuns,
-  serviceSessions,
-} from '../../database/schema.js';
+import type {
+  ServiceSession,
+  ServiceRun,
+  Prisma,
+} from '../../database/generated/client.js';
+import type { JsonObject } from '@earendil-works/pi-durable';
 import { randomUUID } from 'node:crypto';
 import type {
   CreateSessionInput,
   CreateRunInput,
   ControlInput,
   Identity,
+  AuthorizedInput,
 } from '../types.js';
 import { AgentError } from '../errors.js';
 import {
@@ -40,8 +33,19 @@ import {
 import type { AgentState } from '../../pi-durable/docs.js';
 import { ScopedCursors } from './pagination.js';
 import { readMessagePage } from './message-history.js';
-export type SessionRow = typeof serviceSessions.$inferSelect;
-export type RunRow = typeof serviceRuns.$inferSelect;
+export type SessionRow = ServiceSession;
+export type RunRow = Omit<ServiceRun, 'manifest' | 'input'> & {
+  manifest: FrozenManifest;
+  input: AuthorizedInput | null;
+};
+/** These JSON documents are written and validated at the session input boundary. */
+export function runRow(row: ServiceRun | RunRow): RunRow {
+  return {
+    ...row,
+    manifest: row.manifest as unknown as FrozenManifest,
+    input: row.input as unknown as AuthorizedInput | null,
+  };
+}
 export async function inTransaction<T>(
   pool: Pool,
   work: (client: AgentTransaction) => Promise<T>,
@@ -54,11 +58,16 @@ export class SessionStore {
   constructor(readonly pool: Pool) {}
   async createSession(input: CreateSessionInput) {
     const hash = canonicalHash(input);
-    const id = randomUUID();
-    const [row] = await database(this.pool)
-      .insert(serviceSessions)
-      .values({
-        id,
+    const row = await database(this.pool).serviceSession.upsert({
+      where: {
+        actor_id_project_id_request_id: {
+          actor_id: input.actor_id,
+          project_id: input.project_id,
+          request_id: input.request_id,
+        },
+      },
+      create: {
+        id: randomUUID(),
         actor_id: input.actor_id,
         org_id: input.org_id,
         scope_id: input.scope_id,
@@ -67,17 +76,9 @@ export class SessionStore {
         title: input.title,
         request_id: input.request_id,
         content_hash: hash,
-      })
-      .onConflictDoUpdate({
-        target: [
-          serviceSessions.actor_id,
-          serviceSessions.project_id,
-          serviceSessions.request_id,
-        ],
-        set: { request_id: input.request_id },
-      })
-      .returning();
-    if (!row) throw new Error('Session insert returned no row');
+      },
+      update: { request_id: input.request_id },
+    });
     if (row.content_hash !== hash)
       throw new AgentError('request_identity_conflict');
     if (row.archived_at) throw new AgentError('session_not_found');
@@ -104,32 +105,27 @@ export class SessionStore {
     who: Identity,
     client: DatabaseConnection = this.pool,
   ) {
-    const [row] = await database(client)
-      .select()
-      .from(serviceSessions)
-      .where(
-        and(
-          eq(serviceSessions.id, id),
-          eq(serviceSessions.actor_id, who.actor_id),
-          eq(serviceSessions.project_id, who.project_id),
-          isNull(serviceSessions.archived_at),
-        ),
-      );
-    return row;
+    return (
+      (await database(client).serviceSession.findFirst({
+        where: {
+          id,
+          actor_id: who.actor_id,
+          project_id: who.project_id,
+          archived_at: null,
+        },
+      })) ?? undefined
+    );
   }
   async list(who: Identity) {
-    const rows = await database(this.pool)
-      .select()
-      .from(serviceSessions)
-      .where(
-        and(
-          eq(serviceSessions.actor_id, who.actor_id),
-          eq(serviceSessions.project_id, who.project_id),
-          isNull(serviceSessions.archived_at),
-        ),
-      )
-      .orderBy(desc(serviceSessions.created_at), desc(serviceSessions.id))
-      .limit(100);
+    const rows = await database(this.pool).serviceSession.findMany({
+      where: {
+        actor_id: who.actor_id,
+        project_id: who.project_id,
+        archived_at: null,
+      },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: 100,
+    });
     return rows.map((r) => this.sessionDTO(r));
   }
   async admitRun(
@@ -139,40 +135,35 @@ export class SessionStore {
   ) {
     return inTransaction(this.pool, async (client) => {
       const db = database(client);
-      const [session] = await db
-        .select()
-        .from(serviceSessions)
-        .where(
-          and(
-            eq(serviceSessions.id, id),
-            eq(serviceSessions.actor_id, input.actor_id),
-            eq(serviceSessions.project_id, input.project_id),
-            isNull(serviceSessions.archived_at),
-          ),
-        )
-        .for('update');
+      const session = await queries(client)
+        .selectFrom('service_sessions')
+        .selectAll()
+        .where('id', '=', id)
+        .where('actor_id', '=', input.actor_id)
+        .where('project_id', '=', input.project_id)
+        .where('archived_at', 'is', null)
+        .forUpdate()
+        .executeTakeFirst();
       if (!session) throw new AgentError('session_not_found');
       const hash = canonicalHash(input);
-      const [prior] = await db
-        .select()
-        .from(serviceRuns)
-        .where(
-          and(
-            eq(serviceRuns.session_id, id),
-            eq(serviceRuns.request_id, input.request_id),
-          ),
-        );
+      const prior = await db.serviceRun.findUnique({
+        where: {
+          session_id_request_id: {
+            session_id: id,
+            request_id: input.request_id,
+          },
+        },
+      });
       if (prior) {
         if (prior.content_hash !== hash)
           throw new AgentError('request_identity_conflict');
-        return prior;
+        return runRow(prior);
       }
-      const [last] = await db
-        .select()
-        .from(serviceRuns)
-        .where(eq(serviceRuns.session_id, id))
-        .orderBy(desc(serviceRuns.accepted_revision))
-        .limit(1);
+      const previousRun = await db.serviceRun.findFirst({
+        where: { session_id: id },
+        orderBy: { accepted_revision: 'desc' },
+      });
+      const last = previousRun ? runRow(previousRun) : undefined;
       const view = last ? await this.snapshot(last, client) : undefined;
       if (
         last &&
@@ -205,79 +196,65 @@ export class SessionStore {
       }
       const run = stableId(id, 'run:' + input.request_id);
       const submission = stableId(run, 'submission:initial');
-      const [row] = await db
-        .insert(serviceRuns)
-        .values({
+      const row = await db.serviceRun.create({
+        data: {
           id: run,
           session_id: id,
           request_id: input.request_id,
           content_hash: hash,
           goal: input.goal,
-          manifest,
+          manifest: manifest as unknown as Prisma.InputJsonObject,
           submission_id: submission,
-          accepted_revision: String(revision + 1),
-          input: input.input ?? null,
+          accepted_revision: BigInt(revision + 1),
+          ...(input.input
+            ? { input: input.input as unknown as Prisma.InputJsonObject }
+            : {}),
           retry_of_run_id: input.retry_of_run_id ?? null,
-        })
-        .returning();
-      if (!row) throw new Error('Run insert returned no row');
-      await db
-        .update(serviceSessions)
+        },
+      });
+      await queries(client)
+        .updateTable('service_sessions')
         .set({
-          execution_revision: String(revision + 1),
-          last_input_at: sql`clock_timestamp()`,
+          execution_revision: BigInt(revision + 1),
+          last_input_at: sql<Date>`clock_timestamp()`,
         })
-        .where(eq(serviceSessions.id, id));
-      return row;
+        .where('id', '=', id)
+        .execute();
+      return runRow(row);
     });
   }
   async run(id: string, who: Identity, client: DatabaseConnection = this.pool) {
-    const [row] = await database(client)
-      .select(getTableColumns(serviceRuns))
-      .from(serviceRuns)
+    const row = await queries(client)
+      .selectFrom('service_runs')
       .innerJoin(
-        serviceSessions,
-        eq(serviceSessions.id, serviceRuns.session_id),
+        'service_sessions',
+        'service_sessions.id',
+        'service_runs.session_id',
       )
-      .where(
-        and(
-          eq(serviceRuns.id, id),
-          eq(serviceSessions.actor_id, who.actor_id),
-          eq(serviceSessions.project_id, who.project_id),
-          isNull(serviceSessions.archived_at),
-        ),
-      );
-    return row;
+      .selectAll('service_runs')
+      .where('service_runs.id', '=', id)
+      .where('service_sessions.actor_id', '=', who.actor_id)
+      .where('service_sessions.project_id', '=', who.project_id)
+      .where('service_sessions.archived_at', 'is', null)
+      .executeTakeFirst();
+    return row ? runRow(row) : undefined;
   }
   async snapshot(run: RunRow, client: DatabaseConnection = this.pool) {
     const db = database(client);
-    const [state] = await db
-      .select({ payload: runtimeEvents.payload })
-      .from(runtimeEvents)
-      .where(
-        and(
-          eq(runtimeEvents.session_id, run.session_id),
-          eq(sql<string>`${runtimeEvents.payload}->>'root_run_id'`, run.id),
-          eq(runtimeEvents.event_type, 'agent.state'),
-        ),
-      )
-      .orderBy(
-        desc(runtimeEvents.commit_seq),
-        desc(runtimeEvents.event_ordinal),
-      )
-      .limit(1);
-    const [cursor] = await db
-      .select({
-        commit_seq: runtimeEvents.commit_seq,
-        event_ordinal: runtimeEvents.event_ordinal,
-      })
-      .from(runtimeEvents)
-      .where(eq(runtimeEvents.session_id, run.session_id))
-      .orderBy(
-        desc(runtimeEvents.commit_seq),
-        desc(runtimeEvents.event_ordinal),
-      )
-      .limit(1);
+    const state = await db.runtimeEvent.findFirst({
+      select: { payload: true },
+      where: {
+        session_id: run.session_id,
+        payload: { path: ['root_run_id'], equals: run.id },
+        event_type: 'agent.state',
+      },
+      orderBy: [{ commit_seq: 'desc' }, { event_ordinal: 'desc' }],
+    });
+    const cursor = await db.runtimeEvent.findFirst({
+      select: { commit_seq: true, event_ordinal: true },
+      where: { session_id: run.session_id },
+      orderBy: [{ commit_seq: 'desc' }, { event_ordinal: 'desc' }],
+    });
     const recovery = await new RecoveryStore(client).read(run.id);
     const base = {
       recovery,
@@ -291,7 +268,7 @@ export class SessionStore {
       ...(run.retry_of_run_id ? { retry_of_run_id: run.retry_of_run_id } : {}),
       manifest: run.manifest,
       state: state
-        ? (publicState(state.payload) as Partial<AgentState> &
+        ? (publicState(state.payload as JsonObject) as Partial<AgentState> &
             Pick<AgentState, 'status' | 'execution_revision'>)
         : {
             status: 'accepted',
@@ -301,13 +278,10 @@ export class SessionStore {
         ? `${cursor.commit_seq}:${cursor.event_ordinal}`
         : '0:0',
     };
-    const [who] = await db
-      .select({
-        actor_id: serviceSessions.actor_id,
-        project_id: serviceSessions.project_id,
-      })
-      .from(serviceSessions)
-      .where(eq(serviceSessions.id, run.session_id));
+    const who = await db.serviceSession.findUnique({
+      select: { actor_id: true, project_id: true },
+      where: { id: run.session_id },
+    });
     if (!who) throw new AgentError('session_not_found');
     const messages_page = await readMessagePage(client, this.cursors, run, {
       ...who,
@@ -324,75 +298,54 @@ export class SessionStore {
       65536 -
       baseBytes;
     if (budget < 0) throw new AgentError('snapshot_state_exceeds_limit');
-    // Bound bytes before transferring JSON from PostgreSQL; preserve the same current cursor/state.
-    const recent = db.$with('recent').as(
-      db
-        .select({
-          event_type: runtimeEvents.event_type,
-          payload: runtimeEvents.payload,
-          commit_seq: runtimeEvents.commit_seq,
-          event_ordinal: runtimeEvents.event_ordinal,
-        })
-        .from(runtimeEvents)
-        .where(
-          and(
-            eq(runtimeEvents.session_id, run.session_id),
-            eq(sql<string>`${runtimeEvents.payload}->>'root_run_id'`, run.id),
-            ne(runtimeEvents.event_type, 'agent.state'),
-          ),
-        )
-        .orderBy(
-          desc(runtimeEvents.commit_seq),
-          desc(runtimeEvents.event_ordinal),
-        )
-        .limit(100),
-    );
-    const sized = db.$with('bounded_events').as(
-      db
-        .select({
-          event_type: recent.event_type,
-          payload: recent.payload,
-          commit_seq: recent.commit_seq,
-          event_ordinal: recent.event_ordinal,
-          bytes:
-            sql<number>`sum(octet_length(${recent.payload}::text)+octet_length(${recent.event_type})+64)
-        over (order by ${recent.commit_seq} desc, ${recent.event_ordinal} desc)`.as(
+    // Apply the byte budget in PostgreSQL before transferring any event JSON.
+    const events = await queries(client)
+      .with('recent', (qb) =>
+        qb
+          .selectFrom('runtime_events')
+          .select(['event_type', 'payload', 'commit_seq', 'event_ordinal'])
+          .where('session_id', '=', run.session_id)
+          .where(sql<string>`payload->>'root_run_id'`, '=', run.id)
+          .where('event_type', '!=', 'agent.state')
+          .orderBy('commit_seq', 'desc')
+          .orderBy('event_ordinal', 'desc')
+          .limit(100),
+      )
+      .with('bounded_events', (qb) =>
+        qb
+          .selectFrom('recent')
+          .selectAll()
+          .select(
+            sql<bigint>`sum(octet_length(payload::text)+octet_length(event_type)+64) over (order by commit_seq desc, event_ordinal desc)`.as(
               'bytes',
             ),
-        })
-        .from(recent),
-    );
-    const events = await db
-      .with(recent, sized)
-      .select({ event_type: sized.event_type, payload: sized.payload })
-      .from(sized)
-      .where(lte(sized.bytes, budget))
-      .orderBy(desc(sized.commit_seq), desc(sized.event_ordinal));
+          ),
+      )
+      .selectFrom('bounded_events')
+      .select(['event_type', 'payload'])
+      .where('bytes', '<=', BigInt(budget))
+      .orderBy('commit_seq', 'desc')
+      .orderBy('event_ordinal', 'desc')
+      .execute();
     return { ...base, messages_page, events: events.reverse() };
   }
 
   async acceptControl(input: ControlInput) {
     const hash = canonicalHash(input);
-    const [row] = await database(this.pool)
-      .insert(serviceControlInbox)
-      .values({
+    const row = await database(this.pool).serviceControlInbox.upsert({
+      where: { decision_id: input.decision_id },
+      create: {
         decision_id: input.decision_id,
         root_run_id: input.root_run_id,
-        authorization_revision: String(input.authorization_revision),
+        authorization_revision: BigInt(input.authorization_revision),
         content_hash: hash,
-        input,
-      })
-      .onConflictDoUpdate({
-        target: serviceControlInbox.decision_id,
-        set: { decision_id: input.decision_id },
-      })
-      .returning({
-        content_hash: serviceControlInbox.content_hash,
-        receipt: serviceControlInbox.receipt,
-      });
-    if (!row) throw new Error('Control insert returned no row');
+        input: input as unknown as Prisma.InputJsonObject,
+      },
+      update: { decision_id: input.decision_id },
+      select: { content_hash: true, receipt: true },
+    });
     if (row.content_hash !== hash)
       throw new AgentError('decision_identity_conflict');
-    return row.receipt;
+    return row.receipt as JsonObject | null;
   }
 }

@@ -1,10 +1,6 @@
-import { and, eq, gt, lte, sql } from 'drizzle-orm';
+import { sql } from 'kysely';
 import type { Pool } from 'pg';
-import {
-  database,
-  type DatabaseConnection,
-} from '../../database/connection.js';
-import { runtimeSessions } from '../../database/schema.js';
+import { queries, type DatabaseConnection } from '../../database/connection.js';
 
 export interface SessionOwner {
   readonly id: string;
@@ -19,31 +15,19 @@ function validateLease(ms: number) {
 
 interface LeaseRow {
   owner_id: string;
-  owner_epoch: string;
+  owner_epoch: bigint;
   lease_until: Date;
 }
 function ownerFrom(row?: LeaseRow): SessionOwner {
   if (!row) throw new Error('Session ownership is unavailable or expired');
   return {
     id: row.owner_id,
-    epoch: row.owner_epoch,
+    epoch: row.owner_epoch.toString(),
     leaseUntil: row.lease_until,
   };
 }
 
-const leaseColumns = {
-  owner_id: runtimeSessions.owner_id,
-  owner_epoch: runtimeSessions.owner_epoch,
-  lease_until: runtimeSessions.lease_until,
-};
-function ownership(sessionId: string, owner: SessionOwner) {
-  return and(
-    eq(runtimeSessions.session_id, sessionId),
-    eq(runtimeSessions.owner_id, owner.id),
-    eq(runtimeSessions.owner_epoch, owner.epoch),
-    gt(runtimeSessions.lease_until, sql`clock_timestamp()`),
-  );
-}
+const leaseColumns = ['owner_id', 'owner_epoch', 'lease_until'] as const;
 
 export async function claimSessionOwner(
   pool: Pool,
@@ -52,26 +36,32 @@ export async function claimSessionOwner(
   leaseMs: number,
 ) {
   validateLease(leaseMs);
-  const lease = sql`clock_timestamp() + ${leaseMs} * interval '1 millisecond'`;
-  const rows = await database(pool)
-    .insert(runtimeSessions)
+  const lease = sql<Date>`clock_timestamp() + ${leaseMs} * interval '1 millisecond'`;
+  const row = await queries(pool)
+    .insertInto('runtime_sessions')
     .values({
       session_id: sessionId,
       owner_id: id,
-      owner_epoch: '1',
+      owner_epoch: 1n,
       lease_until: lease,
     })
-    .onConflictDoUpdate({
-      target: runtimeSessions.session_id,
-      set: {
-        owner_id: id,
-        owner_epoch: sql`${runtimeSessions.owner_epoch} + 1`,
-        lease_until: lease,
-      },
-      setWhere: lte(runtimeSessions.lease_until, sql`clock_timestamp()`),
-    })
-    .returning(leaseColumns);
-  return ownerFrom(rows[0]);
+    .onConflict((conflict) =>
+      conflict
+        .column('session_id')
+        .doUpdateSet((eb) => ({
+          owner_id: id,
+          owner_epoch: eb('runtime_sessions.owner_epoch', '+', 1n),
+          lease_until: lease,
+        }))
+        .where(
+          'runtime_sessions.lease_until',
+          '<=',
+          sql<Date>`clock_timestamp()`,
+        ),
+    )
+    .returning(leaseColumns)
+    .executeTakeFirst();
+  return ownerFrom(row);
 }
 
 export async function renewSessionOwner(
@@ -81,14 +71,18 @@ export async function renewSessionOwner(
   leaseMs: number,
 ) {
   validateLease(leaseMs);
-  const rows = await database(pool)
-    .update(runtimeSessions)
+  const row = await queries(pool)
+    .updateTable('runtime_sessions')
     .set({
-      lease_until: sql`clock_timestamp() + ${leaseMs} * interval '1 millisecond'`,
+      lease_until: sql<Date>`clock_timestamp() + ${leaseMs} * interval '1 millisecond'`,
     })
-    .where(ownership(sessionId, owner))
-    .returning(leaseColumns);
-  return ownerFrom(rows[0]);
+    .where('session_id', '=', sessionId)
+    .where('owner_id', '=', owner.id)
+    .where('owner_epoch', '=', BigInt(owner.epoch))
+    .where('lease_until', '>', sql<Date>`clock_timestamp()`)
+    .returning(leaseColumns)
+    .executeTakeFirst();
+  return ownerFrom(row);
 }
 
 export async function releaseSessionOwner(
@@ -96,10 +90,14 @@ export async function releaseSessionOwner(
   sessionId: string,
   owner: SessionOwner,
 ): Promise<void> {
-  await database(pool)
-    .update(runtimeSessions)
-    .set({ lease_until: sql`clock_timestamp()` })
-    .where(ownership(sessionId, owner));
+  await queries(pool)
+    .updateTable('runtime_sessions')
+    .set({ lease_until: sql<Date>`clock_timestamp()` })
+    .where('session_id', '=', sessionId)
+    .where('owner_id', '=', owner.id)
+    .where('owner_epoch', '=', BigInt(owner.epoch))
+    .where('lease_until', '>', sql<Date>`clock_timestamp()`)
+    .execute();
 }
 
 export async function assertOwnership(
@@ -107,11 +105,15 @@ export async function assertOwnership(
   sessionId: string,
   owner: SessionOwner,
 ) {
-  const rows = await database(client)
-    .select({ commit_seq: runtimeSessions.commit_seq })
-    .from(runtimeSessions)
-    .where(ownership(sessionId, owner))
-    .for('update');
-  if (!rows[0]) throw new Error('Session ownership is unavailable or expired');
-  return rows[0].commit_seq;
+  const row = await queries(client)
+    .selectFrom('runtime_sessions')
+    .select('commit_seq')
+    .where('session_id', '=', sessionId)
+    .where('owner_id', '=', owner.id)
+    .where('owner_epoch', '=', BigInt(owner.epoch))
+    .where('lease_until', '>', sql<Date>`clock_timestamp()`)
+    .forUpdate()
+    .executeTakeFirst();
+  if (!row) throw new Error('Session ownership is unavailable or expired');
+  return row.commit_seq;
 }

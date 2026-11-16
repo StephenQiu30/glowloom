@@ -13,7 +13,7 @@
 - 服务/目录/包/Compose/CI 名称统一 agent；TypeScript strict、原生 ESM、Node 24、官方 Pi 1.5.0 同版包、NestJS（Fastify 适配器）、pg、Pino、Vitest、pnpm/tsc；版本与锁定条件见设计32 §7.1.2。
 - agent 独占会话、执行段、计划、owned conversation 与执行恢复；Go 独占身份/scope、审批、预算、模型/业务工具及业务回执。无跨 schema 写入，无 Go 启动 Node。
 - 目标从 Nest Controller/DTO 注解生成内部 OpenAPI 与 Go 客户端，继续由公网 Go 注解生成前端 API。Agent 消费 Go 内部接口的 Umi 生成链见设计37 §7.6。
-- 生产只用 PostgreSQL；唯一结构来源 backend/db/schema.sql。已有库由管理员离线核验及受控变更；仓库不新增增量 SQL、迁移目录或运行时 DDL，不重建既有业务库。Node CRUD 使用 Drizzle ORM，pg 仅为连接池/驱动。
+- 生产只用 PostgreSQL；唯一结构来源 backend/db/schema.sql。已有库由管理员离线核验及受控变更；仓库不新增增量 SQL、迁移目录或运行时 DDL，不重建既有业务库。Node 普通 CRUD 使用 Prisma，必要查询使用同事务 Kysely，pg 仅为连接池/驱动。
 - NestJS 单版本切换。删除旧框架入口、旧 HTTP 合同和生成链，以及旧图、stdio/launcher、旧路由/配置别名、状态翻译、双轨和回退。
 - 普通业务后台任务保留原领域工作/供应商请求/财务回执，以数据库领取、租约、有限重试和到期补扫替代原工作流基础设施；不引入通用 DAG 引擎。
 - 改动前保存工作区路径清单，逐文件保留并行存储/模型/画布/探索页修改；用户未要求新分支或 Git 交付，沿当前工作区实施，禁止 reset/clean/广泛暂存。
@@ -410,7 +410,7 @@ EX-11不是末尾补文档：原意图/资金及完成判定先于自动批量�
 
 SRC-AGH-23已授权R1/R2/R3与Plan33 D1实现和本地验证；原文档调研证据不冒充当前执行结果。实际完成状态、测试命令与未验边界统一见BACKLOG。后续R4～R7、真实供应商与作品接受仍分别留证。
 
-## NestJS ORM 数据访问整理（SRC-ATS-ORM-01，2026-11-16）
+## NestJS ORM 数据访问整理（SRC-ATS-ORM-01/02，2026-11-16）
 
 **目标**：消除 NestJS 手写数据库 CRUD，保持既有持久化与恢复行为；本节授权仅覆盖该工程整理，不启动前文待授权的产品切片。
 
@@ -418,7 +418,7 @@ SRC-AGH-23已授权R1/R2/R3与Plan33 D1实现和本地验证；原文档调研�
 
 **架构与责任文件**：
 
-- `agent/src/database/schema.ts` 映射既有九张 Agent 表；`connection.ts` 装配 Drizzle、管理事务与损坏连接，不执行 DDL。
+- `agent/prisma/schema.prisma` 映射既有九张 Agent 表，构建只运行 `prisma generate`；`database/schema.ts` 从生成模型派生 Kysely 类型，`connection.ts` 装配 Prisma，`pg-adapter.ts` 隔离失败连接，`query-driver.ts` 只执行编译结果和参数，不执行 DDL。
 - `pi-durable/storage/{ownership,records,entries,documents,postgres}.ts` 使用 ORM 读写、锁和嵌套事务；祖先扫描保持单一只读快照及可见性裁剪。
 - `sessions/persistence/*`、`sessions/recovery.ts`、`sessions/{service,runtime}.ts` 使用 ORM 构建授权查询、历史/消息 CTE、有界投影与恢复扫描。
 - 测试增加源码架构门禁与微秒分页；故障注入同时识别 pg 文本与 QueryConfig、大小写及带引号标识符，不放宽故障时点、SIGKILL 或超时断言。
@@ -431,4 +431,4 @@ SRC-AGH-23已授权R1/R2/R3与Plan33 D1实现和本地验证；原文档调研�
 4. 执行完整 typecheck/lint/format/test/build、双向 API 重生成检查及真实子进程恢复，记录实际通过与未验证范围。
 5. 文档直接维护在 `workspace/content/{requirement,design,prd,plan,research}`，不建立 docs 嵌套；结构整理沿 PRD31/Plan40 验证加载、导航、搜索和编辑入口。
 
-执行结果及发布限制仅记 BACKLOG。Drizzle 官方依据：[已有 pg 连接池](https://orm.drizzle.team/docs/connect-overview)、[事务](https://orm.drizzle.team/docs/transactions)、[SELECT 与 CTE](https://orm.drizzle.team/docs/select)、[冲突更新](https://orm.drizzle.team/docs/insert#on-conflict-do-update)；版本以 package/lock 为准，不引入 Kit 或迁移配置。
+执行结果及发布限制仅记 BACKLOG。Prisma 官方依据：[v7 事务](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions)、[7.5 嵌套事务与保存点](https://www.prisma.io/changelog/2026-03-11)、[v7 客户端](https://www.prisma.io/docs/orm/v7/reference/prisma-client-reference)；类型化构建器见 [Kysely](https://kysely.dev/)。包和锁固定匹配的 Prisma/Client/pg adapter 版本，不启用迁移器。验收另需验证普通 Prisma 写入与构建器在嵌套保存点内互相可见、拒绝批次回滚、只读 repeatable-read，以及 COMMIT/ROLLBACK 失败连接销毁。

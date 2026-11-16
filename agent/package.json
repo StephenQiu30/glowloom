@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "pnpm run build && sh -c 'node_modules/.bin/tsc --watch -p tsconfig.build.json & compiler=$!; trap \"kill $compiler 2>/dev/null || true\" EXIT; node --watch --enable-source-maps dist/src/server.js'",
     "start": "node --enable-source-maps dist/src/server.js",
-    "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "pnpm db:generate && tsc --noEmit",
+    "build": "pnpm db:generate && tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "test": "pnpm run build && vitest run",
@@ -20,7 +20,8 @@
     "api:generate": "BUSINESS_API_MODE=generate vitest run tests/business-openapi.test.ts",
     "api:check-go": "sh -ec 'generated=$(mktemp); trap \"rm -f $generated\" EXIT; go -C ../backend tool oapi-codegen -generate types,client -package runtimeclient -o \"$generated\" ../agent/node_modules/.cache/openapi/agent.json; cmp \"$generated\" ../backend/internal/agent/adapter/runtimeclient/generated.go'",
     "api:generate-go": "pnpm run api:schema && go -C ../backend tool oapi-codegen -generate types,client -package runtimeclient -o internal/agent/adapter/runtimeclient/generated.go ../agent/node_modules/.cache/openapi/agent.json",
-    "api:typecheck": "tsc --ignoreConfig --noEmit --skipLibCheck false --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --module NodeNext --moduleResolution NodeNext --target ES2024 --verbatimModuleSyntax --types node src/business/generated/*.ts"
+    "api:typecheck": "tsc --ignoreConfig --noEmit --skipLibCheck false --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --module NodeNext --moduleResolution NodeNext --target ES2024 --verbatimModuleSyntax --types node src/business/generated/*.ts",
+    "db:generate": "prisma generate"
   },
   "dependencies": {
     "@earendil-works/chord": "1.5.0",
@@ -32,10 +33,12 @@
     "@nestjs/core": "12.3.3",
     "@nestjs/platform-fastify": "12.3.3",
     "@nestjs/swagger": "12.1.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
-    "drizzle-orm": "0.45.4",
     "fastify": "5.12.8",
+    "kysely": "0.28.20",
     "pg": "8.23.1",
     "pino": "10.4.0",
     "reflect-metadata": "0.2.2",
@@ -48,6 +51,7 @@
     "@umijs/openapi": "1.14.1",
     "eslint": "10.14.0",
     "prettier": "3.9.9",
+    "prisma": "7.10.1",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1",

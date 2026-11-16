@@ -1,7 +1,7 @@
 import tseslint from 'typescript-eslint';
 
 export default [
-  { ignores: ['node_modules/**', 'dist/**'] },
+  { ignores: ['node_modules/**', 'dist/**', 'src/database/generated/**'] },
   ...tseslint.configs.recommended,
   {
     files: ['src/business/generated/**/*.ts'],

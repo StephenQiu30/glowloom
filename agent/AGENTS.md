@@ -17,7 +17,7 @@
 4. 配置在启动边界读取并校验。连接池、恢复循环和订阅分别有明确的资源所有者。请求路径避免阻塞事件循环，限制请求体、并发、等待和重试。将 `AbortSignal` 传到可取消的调用，收尾等待有界。SSE 断开只关闭订阅。
 5. Pino 日志带排障所需的 request/session/run 标识。脱敏服务令牌、数据库 DSN、提示词、模型输入输出和用户内容。Agent 使用独立 schema 与受限角色，Go 保留身份、预算、审批、模型出站、业务工具和业务数据权威。
 
-6. 数据增删改查、冲突处理、行锁和事务使用 Drizzle ORM；pg 仅管理连接池与底层传输，不直接执行应用 SQL。数据库时钟、JSON、窗口等必要表达式保持参数化；禁止完整 SQL 字符串、原生 query/execute 旁路、自动结构同步与迁移执行器。ORM 表声明只映射查询类型，结构唯一来源仍为 `backend/db/schema.sql`。
+6. 普通数据增删改查使用 Prisma；行锁、数据库时钟、条件冲突更新、JSON/窗口与微秒游标等查询使用 Kysely 类型化构建器，并通过同一 Prisma 客户端/事务执行。pg 仅管理连接池与底层传输，不直接执行应用 SQL。禁止完整手写 SQL、业务原生 query/execute 旁路、自动结构同步与迁移执行器；私有查询驱动仅接收构建器编译结果及独立绑定参数。`prisma/schema.prisma` 仅为客户端映射，`src/database/schema.ts` 从生成模型派生构建器类型；结构唯一来源仍为 `backend/db/schema.sql`。只运行 `prisma generate`，不运行 db push/migrate，不读取业务库生成客户端。
 
 ## 接口生成
 

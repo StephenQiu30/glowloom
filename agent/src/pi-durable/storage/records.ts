@@ -8,23 +8,11 @@ import {
   type StorageWrite,
 } from '@earendil-works/pi-durable';
 import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  isNull,
-  lt,
-  lte,
-  or,
-  type SQL,
-} from 'drizzle-orm';
-import {
   database,
   type DatabaseConnection,
   type AgentTransaction,
 } from '../../database/connection.js';
-import { runtimeRecords } from '../../database/schema.js';
+import type { Prisma } from '../../database/generated/client.js';
 
 export type Database = DatabaseConnection;
 export type RecordWrite = Extract<
@@ -33,14 +21,15 @@ export type RecordWrite = Extract<
 >;
 export type TaskRecord = Extract<RecordWrite, { type: 'task' }>['value'];
 export type BodyRow = { body: string };
-export function decode<T>(row: BodyRow | undefined): T | undefined {
-  return row && (JSON.parse(row.body) as T);
+export function decode<T>(row: BodyRow | null | undefined): T | undefined {
+  return row ? (JSON.parse(row.body) as T) : undefined;
 }
 export function indexKey(value: string | undefined) {
   return value === undefined ? null : JSON.stringify(value);
 }
 export class Refused extends Error {}
-export function safeSeq(n: number): Seq {
+export function safeSeq(value: number | bigint): Seq {
+  const n = Number(value);
   if (!Number.isSafeInteger(n) || n < 1)
     throw new Error('Commit sequence space exhausted');
   return n as Seq;
@@ -53,18 +42,10 @@ export async function record<T>(
   id: number,
 ) {
   return decode<T>(
-    (
-      await database(db)
-        .select({ body: runtimeRecords.body })
-        .from(runtimeRecords)
-        .where(
-          and(
-            eq(runtimeRecords.session_id, session),
-            eq(runtimeRecords.record_type, type),
-            eq(runtimeRecords.id, id),
-          ),
-        )
-    )[0],
+    await database(db).runtimeRecord.findFirst({
+      select: { body: true },
+      where: { session_id: session, record_type: type, id: BigInt(id) },
+    }),
   );
 }
 
@@ -78,45 +59,49 @@ export async function writeRecord(
   const conversation = write.type === 'conversation' ? write.value : undefined;
   const task = write.type === 'task' ? write.value : undefined;
   const submission = write.type === 'submission' ? write.value : undefined;
-  const existing = await client
-    .select({ record_type: runtimeRecords.record_type })
-    .from(runtimeRecords)
-    .where(
-      and(
-        eq(runtimeRecords.session_id, session),
-        eq(runtimeRecords.id, value.id),
-      ),
-    );
-  const prior = existing[0]?.record_type;
+  const db = database(client);
+  const existing = await db.runtimeRecord.findUnique({
+    select: { record_type: true },
+    where: { session_id_id: { session_id: session, id: BigInt(value.id) } },
+  });
+  const prior = existing?.record_type;
   if (prior && (prior !== type || type === 'conversation' || type === 'entry'))
     throw new Refused(`ID ${value.id} already belongs to ${prior}`);
   const mutable = {
     body: JSON.stringify(value),
-    commit_seq: seq,
-    conversation_id: 'conversationId' in value ? value.conversationId : null,
+    commit_seq: BigInt(seq),
+    conversation_id:
+      'conversationId' in value ? BigInt(value.conversationId) : null,
     kind_key: indexKey(task?.kind),
     status: task?.state.status ?? submission?.status ?? null,
     background: task?.background ?? null,
     abort_requested: task?.abortRequested ?? null,
     request_key: indexKey(submission?.requestId),
   };
-  await client
-    .insert(runtimeRecords)
-    .values({
+  await db.runtimeRecord.upsert({
+    where: { session_id_id: { session_id: session, id: BigInt(value.id) } },
+    create: {
       session_id: session,
-      id: value.id,
+      id: BigInt(value.id),
       record_type: type,
       ...mutable,
-      owner_conversation_id: conversation?.owner?.conversationId ?? null,
-      owner_task_id: conversation?.owner?.taskId ?? null,
-      parent_id: conversation?.parent?.conversationId ?? null,
-      parent_at: conversation?.parent?.at ?? null,
-      head_id: write.type === 'entry' ? (write.value.head ?? null) : null,
-    })
-    .onConflictDoUpdate({
-      target: [runtimeRecords.session_id, runtimeRecords.id],
-      set: mutable,
-    });
+      owner_conversation_id: conversation?.owner
+        ? BigInt(conversation.owner.conversationId)
+        : null,
+      owner_task_id: conversation?.owner
+        ? BigInt(conversation.owner.taskId)
+        : null,
+      parent_id: conversation?.parent
+        ? BigInt(conversation.parent.conversationId)
+        : null,
+      parent_at: conversation?.parent ? BigInt(conversation.parent.at) : null,
+      head_id:
+        write.type === 'entry' && write.value.head !== undefined
+          ? BigInt(write.value.head)
+          : null,
+    },
+    update: mutable,
+  });
 }
 
 export interface ScanStart {
@@ -158,19 +143,15 @@ export function page<T extends { id: Id<string> }>(
   return { items, next: { after: last.id, order } };
 }
 
-type FilterColumns = Pick<
-  typeof runtimeRecords.$inferSelect,
-  | 'owner_task_id'
-  | 'owner_conversation_id'
-  | 'conversation_id'
-  | 'kind_key'
-  | 'status'
-  | 'abort_requested'
-  | 'background'
-  | 'scope_key'
->;
 type ScanFilters = {
-  [K in keyof FilterColumns]?: FilterColumns[K] | undefined;
+  owner_task_id?: number | undefined;
+  owner_conversation_id?: number | undefined;
+  conversation_id?: number | undefined;
+  kind_key?: string | null | undefined;
+  status?: string | undefined;
+  abort_requested?: boolean | undefined;
+  background?: boolean | undefined;
+  scope_key?: string | undefined;
 };
 
 export async function scan<T extends { id: Id<string> }>(
@@ -182,45 +163,49 @@ export async function scan<T extends { id: Id<string> }>(
   start: ScanStart,
   at?: Seq | 'current',
 ) {
-  const where: (SQL | undefined)[] = [
-    eq(runtimeRecords.session_id, session),
-    eq(runtimeRecords.record_type, type),
-  ];
-  for (const col of Object.keys(filters) as (keyof ScanFilters)[]) {
-    const value = filters[col];
-    if (value !== undefined)
-      where.push(
-        value === null
-          ? isNull(runtimeRecords[col])
-          : eq(runtimeRecords[col], value),
-      );
-  }
-  if (at === 'current') where.push(isNull(runtimeRecords.retired_at_seq));
+  const where: Prisma.RuntimeRecordWhereInput = {
+    session_id: session,
+    record_type: type,
+    ...(filters.owner_task_id === undefined
+      ? {}
+      : { owner_task_id: BigInt(filters.owner_task_id) }),
+    ...(filters.owner_conversation_id === undefined
+      ? {}
+      : { owner_conversation_id: BigInt(filters.owner_conversation_id) }),
+    ...(filters.conversation_id === undefined
+      ? {}
+      : { conversation_id: BigInt(filters.conversation_id) }),
+    ...(filters.kind_key === undefined ? {} : { kind_key: filters.kind_key }),
+    ...(filters.status === undefined ? {} : { status: filters.status }),
+    ...(filters.abort_requested === undefined
+      ? {}
+      : { abort_requested: filters.abort_requested }),
+    ...(filters.background === undefined
+      ? {}
+      : { background: filters.background }),
+    ...(filters.scope_key === undefined
+      ? {}
+      : { scope_key: filters.scope_key }),
+  };
+  if (at === 'current') where.retired_at_seq = null;
   else if (at !== undefined) {
-    where.push(
-      lte(runtimeRecords.created_at_seq, at),
-      or(
-        isNull(runtimeRecords.retired_at_seq),
-        gt(runtimeRecords.retired_at_seq, at),
-      ),
-    );
+    where.created_at_seq = { lte: BigInt(at) };
+    where.OR = [
+      { retired_at_seq: null },
+      { retired_at_seq: { gt: BigInt(at) } },
+    ];
   }
   if (start.after !== undefined)
-    where.push(
+    where.id =
       start.order === 'ascending'
-        ? gt(runtimeRecords.id, start.after)
-        : lt(runtimeRecords.id, start.after),
-    );
-  const rows = await database(db)
-    .select({ body: runtimeRecords.body })
-    .from(runtimeRecords)
-    .where(and(...where))
-    .orderBy(
-      start.order === 'ascending'
-        ? asc(runtimeRecords.id)
-        : desc(runtimeRecords.id),
-    )
-    .limit(limit + 1);
+        ? { gt: BigInt(start.after) }
+        : { lt: BigInt(start.after) };
+  const rows = await database(db).runtimeRecord.findMany({
+    select: { body: true },
+    where,
+    orderBy: { id: start.order === 'ascending' ? 'asc' : 'desc' },
+    take: limit + 1,
+  });
   return page(
     rows.map((row) => JSON.parse(row.body) as T),
     limit,

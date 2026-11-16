@@ -3,3 +3,5 @@ dist/
 coverage/
 # pnpm owns this file's quoting. Formatting it here is rewritten on the next install.
 pnpm-lock.yaml
+src/database/generated/
+.vitest/

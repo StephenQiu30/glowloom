@@ -2,24 +2,10 @@ import {
   StorageRequestError,
   type EntryRecord,
   type EntryQuery,
-  type Seq,
 } from '@earendil-works/pi-durable';
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  gte,
-  isNotNull,
-  lt,
-  lte,
-  or,
-  type SQL,
-} from 'drizzle-orm';
 import { database } from '../../database/connection.js';
-import { runtimeRecords } from '../../database/schema.js';
-import type { Database, ScanStart } from './records.js';
+import type { Prisma, RuntimeRecord } from '../../database/generated/client.js';
+import { safeSeq, type Database, type ScanStart } from './records.js';
 
 // The caller supplies a repeatable-read transaction so ancestry and entries share
 // the single snapshot previously supplied by the recursive statement.
@@ -32,79 +18,56 @@ export async function visibleEntries(
   headsOnly = false,
 ) {
   const db = database(connection);
-  const ancestry = [];
-  let id: number | null = query.conversationId;
-  let upper = query.maxEntryId ?? Number.MAX_SAFE_INTEGER;
-  const minimum = query.minEntryId ?? 0;
+  const ancestry: Prisma.RuntimeRecordWhereInput[] = [];
+  let id: bigint | null = BigInt(query.conversationId);
+  let upper = BigInt(query.maxEntryId ?? Number.MAX_SAFE_INTEGER);
+  const minimum = BigInt(query.minEntryId ?? 0);
   while (id !== null) {
-    const row:
-      | Pick<
-          typeof runtimeRecords.$inferSelect,
-          'id' | 'parent_id' | 'parent_at'
-        >
-      | undefined = (
-      await db
-        .select({
-          id: runtimeRecords.id,
-          parent_id: runtimeRecords.parent_id,
-          parent_at: runtimeRecords.parent_at,
-        })
-        .from(runtimeRecords)
-        .where(
-          and(
-            eq(runtimeRecords.session_id, session),
-            eq(runtimeRecords.id, id),
-            ancestry.length === 0
-              ? eq(runtimeRecords.record_type, 'conversation')
-              : undefined,
-          ),
-        )
-    )[0];
+    const row: Pick<RuntimeRecord, 'id' | 'parent_id' | 'parent_at'> | null =
+      await db.runtimeRecord.findFirst({
+        select: { id: true, parent_id: true, parent_at: true },
+        where: {
+          session_id: session,
+          id,
+          ...(ancestry.length === 0 ? { record_type: 'conversation' } : {}),
+        },
+      });
     if (!row) {
-      if (id === query.conversationId)
+      if (id === BigInt(query.conversationId))
         throw new StorageRequestError(
           `Unknown conversation: ${query.conversationId}`,
         );
       break;
     }
-    ancestry.push(
-      and(
-        eq(runtimeRecords.conversation_id, row.id),
-        lte(runtimeRecords.id, upper),
-      ),
-    );
+    ancestry.push({ conversation_id: row.id, id: { lte: upper } });
     if (row.parent_at === null || row.parent_at < minimum) break;
-    upper = Math.min(upper, row.parent_at);
+    upper = upper < row.parent_at ? upper : row.parent_at;
     id = row.parent_id;
   }
-  const where: (SQL | undefined)[] = [
-    eq(runtimeRecords.session_id, session),
-    eq(runtimeRecords.record_type, 'entry'),
-    gte(runtimeRecords.id, minimum),
-    or(...ancestry),
-  ];
+  const where: Prisma.RuntimeRecordWhereInput = {
+    session_id: session,
+    record_type: 'entry',
+    id: { gte: minimum },
+    OR: ancestry,
+  };
   if (start.after !== undefined)
-    where.push(
-      start.order === 'ascending'
-        ? gt(runtimeRecords.id, start.after)
-        : lt(runtimeRecords.id, start.after),
-    );
-  if (headsOnly) where.push(isNotNull(runtimeRecords.head_id));
-  const rows = await db
-    .select({
-      body: runtimeRecords.body,
-      commit_seq: runtimeRecords.commit_seq,
-    })
-    .from(runtimeRecords)
-    .where(and(...where))
-    .orderBy(
-      start.order === 'ascending'
-        ? asc(runtimeRecords.id)
-        : desc(runtimeRecords.id),
-    )
-    .limit(limit);
+    where.AND = [
+      {
+        id:
+          start.order === 'ascending'
+            ? { gt: BigInt(start.after) }
+            : { lt: BigInt(start.after) },
+      },
+    ];
+  if (headsOnly) where.head_id = { not: null };
+  const rows = await db.runtimeRecord.findMany({
+    select: { body: true, commit_seq: true },
+    where,
+    orderBy: { id: start.order === 'ascending' ? 'asc' : 'desc' },
+    take: limit,
+  });
   return rows.map((row) => ({
     entry: JSON.parse(row.body) as EntryRecord,
-    commitSeq: row.commit_seq as Seq,
+    commitSeq: safeSeq(row.commit_seq),
   }));
 }

@@ -3,7 +3,8 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@12.4.2 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
-COPY tsconfig.json tsconfig.build.json ./
+COPY tsconfig.json tsconfig.build.json prisma.config.ts ./
+COPY prisma ./prisma
 COPY src ./src
 RUN pnpm build && pnpm prune --prod
 

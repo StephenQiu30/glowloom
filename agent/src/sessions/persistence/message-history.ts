@@ -1,9 +1,9 @@
-import { and, desc, eq, getTableColumns, lt, lte, sql } from 'drizzle-orm';
+import { sql } from 'kysely';
 import {
   database,
+  queries,
   type DatabaseConnection,
 } from '../../database/connection.js';
-import { publicMessages, runtimeEvents } from '../../database/schema.js';
 import type { MessageInput } from '../types.js';
 import { AgentError } from '../errors.js';
 import { eventPosition, type ScopedCursors } from './pagination.js';
@@ -13,18 +13,13 @@ export async function readMessagePage(
   run: { id: string; session_id: string },
   query: MessageInput,
 ) {
-  const db = database(connection);
   const [through, ordinal] = eventPosition(query.through);
-  const [watermark] = await db
-    .select({
-      commit_seq: runtimeEvents.commit_seq,
-      event_ordinal: runtimeEvents.event_ordinal,
-    })
-    .from(runtimeEvents)
-    .where(eq(runtimeEvents.session_id, run.session_id))
-    .orderBy(desc(runtimeEvents.commit_seq), desc(runtimeEvents.event_ordinal))
-    .limit(1);
-  const currentSeq = BigInt(watermark?.commit_seq ?? 0),
+  const watermark = await database(connection).runtimeEvent.findFirst({
+    select: { commit_seq: true, event_ordinal: true },
+    where: { session_id: run.session_id },
+    orderBy: [{ commit_seq: 'desc' }, { event_ordinal: 'desc' }],
+  });
+  const currentSeq = watermark?.commit_seq ?? 0n,
     currentOrdinal = watermark?.event_ordinal ?? 0;
   if (
     BigInt(through) > currentSeq ||
@@ -39,63 +34,54 @@ export async function readMessagePage(
   const before = cursor
     ? (JSON.parse(cursor.before) as [string, number, number])
     : undefined;
-  const candidate = db.$with('candidate').as(
-    db
-      .select(getTableColumns(publicMessages))
-      .from(publicMessages)
-      .where(
-        and(
-          eq(publicMessages.session_id, run.session_id),
-          eq(publicMessages.run_id, run.id),
-          lte(
-            sql`(${publicMessages.commit_seq}, ${publicMessages.event_ordinal})`,
-            sql`(${through}::bigint, ${ordinal}::int)`,
-          ),
-          before
-            ? lt(
-                sql`(${publicMessages.commit_seq}, ${publicMessages.event_ordinal}, ${publicMessages.part_index})`,
-                sql`(${before[0]}::bigint, ${before[1]}::int, ${before[2]}::int)`,
-              )
-            : undefined,
-        ),
-      )
-      .orderBy(
-        desc(publicMessages.commit_seq),
-        desc(publicMessages.event_ordinal),
-        desc(publicMessages.part_index),
-      )
-      .limit((query.limit ?? 50) + 1),
-  );
-  const bounded = db.$with('bounded').as(
-    db
-      .select({
-        message_id: candidate.message_id,
-        run_id: candidate.run_id,
-        conversation_id: candidate.conversation_id,
-        sequence: candidate.sequence,
-        part_index: candidate.part_index,
-        kind: candidate.kind,
-        content: candidate.content,
-        commit_seq: candidate.commit_seq,
-        event_ordinal: candidate.event_ordinal,
-        candidate_count: sql<string>`count(*) over()`.as('candidate_count'),
-        bytes:
-          sql<number>`sum(octet_length(${candidate.content})+1024) over(order by ${candidate.commit_seq} desc, ${candidate.event_ordinal} desc, ${candidate.part_index} desc)`.as(
+  const rows = await queries(connection)
+    .with('candidate', (qb) => {
+      let candidates = qb
+        .selectFrom('public_messages')
+        .selectAll()
+        .where('session_id', '=', run.session_id)
+        .where('run_id', '=', run.id)
+        .where(
+          sql<boolean>`(commit_seq, event_ordinal) <= (${through}::bigint, ${ordinal}::int)`,
+        );
+      if (before)
+        candidates = candidates.where(
+          sql<boolean>`(commit_seq, event_ordinal, part_index) < (${before[0]}::bigint, ${before[1]}::int, ${before[2]}::int)`,
+        );
+      return candidates
+        .orderBy('commit_seq', 'desc')
+        .orderBy('event_ordinal', 'desc')
+        .orderBy('part_index', 'desc')
+        .limit((query.limit ?? 50) + 1);
+    })
+    .with('bounded', (qb) =>
+      qb
+        .selectFrom('candidate')
+        .select([
+          'message_id',
+          'run_id',
+          'conversation_id',
+          'sequence',
+          'part_index',
+          'kind',
+          'content',
+          'commit_seq',
+          'event_ordinal',
+        ])
+        .select([
+          sql<bigint>`count(*) over()`.as('candidate_count'),
+          sql<bigint>`sum(octet_length(content)+1024) over(order by commit_seq desc, event_ordinal desc, part_index desc)`.as(
             'bytes',
           ),
-      })
-      .from(candidate),
-  );
-  const rows = await db
-    .with(candidate, bounded)
-    .select()
-    .from(bounded)
-    .where(lte(bounded.bytes, 1048576))
-    .orderBy(
-      desc(bounded.commit_seq),
-      desc(bounded.event_ordinal),
-      desc(bounded.part_index),
-    );
+        ]),
+    )
+    .selectFrom('bounded')
+    .selectAll()
+    .where('bytes', '<=', 1048576n)
+    .orderBy('commit_seq', 'desc')
+    .orderBy('event_ordinal', 'desc')
+    .orderBy('part_index', 'desc')
+    .execute();
   const page = rows.slice(0, query.limit ?? 50),
     last = page.at(-1);
   const more = last && Number(last.candidate_count) > page.length;
