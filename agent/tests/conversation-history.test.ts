@@ -470,3 +470,50 @@ it('serializes history deletion with admission on the same session', async () =>
     expect(await store.session(session.id, who)).toBeUndefined();
   }
 });
+
+it('retains PostgreSQL microseconds in history cursors across adjacent sessions', async () => {
+  const { store, who, session, history } = await fixture();
+  const ids = [session.id];
+  for (let index = 0; index < 2; index++) {
+    ids.push(
+      (
+        await store.createSession({
+          ...who,
+          request_id: randomUUID(),
+          content_hash: 'a'.repeat(64),
+          title: `精确游标${index}`,
+        })
+      ).id,
+    );
+  }
+  for (const [index, id] of ids.entries()) {
+    await pool.query(
+      'INSERT INTO agent.service_runs(id,session_id,request_id,content_hash,goal,manifest,submission_id,accepted_revision,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,1,$8::timestamptz)',
+      [
+        randomUUID(),
+        id,
+        randomUUID(),
+        'a'.repeat(64),
+        '微秒',
+        manifest,
+        randomUUID(),
+        `2024-01-01T00:00:00.000${index + 1}00Z`,
+      ],
+    );
+  }
+  const first = await history.sessions({ ...who, limit: 1 });
+  const second = await history.sessions({
+    ...who,
+    limit: 1,
+    cursor: first.next_cursor!,
+  });
+  const third = await history.sessions({
+    ...who,
+    limit: 1,
+    cursor: second.next_cursor!,
+  });
+  expect(
+    [...first.items, ...second.items, ...third.items].map(({ id }) => id),
+  ).toEqual(ids.toReversed());
+  expect(third.next_cursor).toBeUndefined();
+});

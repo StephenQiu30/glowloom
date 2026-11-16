@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="#开始开发">开始开发</a> ·
-  <a href="workspace/content/00-文档索引.md">阅读文档</a> ·
+  <a href="workspace/content/index.mdx">阅读文档</a> ·
   <a href="BACKLOG.md">当前进展</a>
 </p>
 
@@ -159,7 +159,7 @@ backend/
 
 | 入口                                                                                                                                                    | 内容                           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| [文档索引](workspace/content/00-文档索引.md)                                                                                                            | 从产品范围进入各主题文档       |
+| [文档索引](workspace/content/index.mdx)                                                                                                            | 从产品范围进入各主题文档       |
 | [产品总览](workspace/content/design/24-产品总览与交付边界设计.md) · [设计导航](workspace/content/design/00-设计导航.md)                                 | 能力范围、技术方案与交付边界   |
 | [工作台与创作入口](workspace/content/design/09-统一顶栏与阶段入口设计.md) · [多参考编辑器](workspace/content/design/06-多参考提示词编辑器调研与设计.md) | 创作流程与交互合同             |
 | [AI 接入](workspace/content/design/07-AI平台接入市场调研与架构设计.md)                                                                                  | 供应商与模型接入方案           |

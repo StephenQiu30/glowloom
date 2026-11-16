@@ -24,7 +24,19 @@ import type {
   TaskId,
   TaskQuery,
 } from '@earendil-works/pi-durable';
-import type { Pool, PoolClient } from 'pg';
+import { and, eq, lt, sql } from 'drizzle-orm';
+import type { Pool } from 'pg';
+import {
+  database,
+  withTransaction,
+  type AgentTransaction,
+} from '../../database/connection.js';
+import {
+  publicMessages,
+  runtimeEvents,
+  runtimeRecords,
+  runtimeSessions,
+} from '../../database/schema.js';
 import { publicMessageParts } from '../messages.js';
 import {
   document,
@@ -44,7 +56,6 @@ import {
   scan,
   scanStart,
   writeRecord,
-  type BodyRow,
   type TaskRecord,
 } from './records.js';
 
@@ -57,45 +68,6 @@ export interface PostgresStorageOptions {
     writes: readonly StorageWrite[],
     seq: Seq,
   ) => readonly RuntimeEvent[];
-}
-
-async function transaction<T>(
-  pool: Pool,
-  work: (client: PoolClient) => Promise<T>,
-) {
-  const client = await pool.connect();
-  let broken = false;
-  let committing = false;
-  // pg rejects the in-flight query and emits an error on the checked-out client.
-  const disconnected = () => {
-    broken = true;
-  };
-  client.on('error', disconnected);
-  try {
-    await client.query('BEGIN');
-    const value = await work(client);
-    committing = true;
-    await client.query('COMMIT');
-    return value;
-  } catch (error) {
-    // COMMIT may already have been made durable when the connection failed. Never replay it.
-    if (committing) {
-      broken = true;
-      throw new Error(
-        'PostgreSQL COMMIT outcome is unknown; reopen and read the durable records',
-        { cause: error },
-      );
-    }
-    try {
-      await client.query('ROLLBACK');
-    } catch {
-      broken = true;
-    }
-    throw error;
-  } finally {
-    client.removeListener('error', disconnected);
-    client.release(broken);
-  }
 }
 
 class PostgresStorage implements Storage {
@@ -125,15 +97,20 @@ class PostgresStorage implements Storage {
   async mintId<I extends Id<string>>(): Promise<I> {
     this.check();
     const owner = this.writer();
-    return transaction(this.pool, async (client) => {
+    return withTransaction(this.pool, async (client) => {
       await assertOwnership(client, this.session, owner);
       const row = (
-        await client.query<{ last_id: string }>(
-          `UPDATE agent.runtime_sessions SET last_id=last_id+1
-        WHERE session_id=$1 AND last_id<9007199254740991 RETURNING last_id`,
-          [this.session],
-        )
-      ).rows[0];
+        await client
+          .update(runtimeSessions)
+          .set({ last_id: sql`${runtimeSessions.last_id} + 1` })
+          .where(
+            and(
+              eq(runtimeSessions.session_id, this.session),
+              lt(runtimeSessions.last_id, Number.MAX_SAFE_INTEGER),
+            ),
+          )
+          .returning({ last_id: runtimeSessions.last_id })
+      )[0];
       if (!row) throw new Error('ID space is exhausted');
       await assertOwnership(client, this.session, owner);
       return Number(row.last_id) as I;
@@ -149,28 +126,30 @@ class PostgresStorage implements Storage {
     const copy = structuredClone(batches);
     const operation = this.commitLine.then(async () => {
       this.check(context);
-      const { seqs, refused } = await transaction(this.pool, async (client) => {
-        let lastSeq = await assertOwnership(client, this.session, owner);
-        const seqs: Seq[] = [];
-        let refused: Error | undefined;
-        for (const batch of copy) {
-          const seq = safeSeq(lastSeq + 1);
-          await client.query('SAVEPOINT pi_batch');
-          try {
-            await this.storeBatch(client, batch, seq);
-          } catch (e) {
-            if (!(e instanceof Refused)) throw e;
-            await client.query('ROLLBACK TO SAVEPOINT pi_batch');
-            refused = new Error(e.message);
-            break;
+      const { seqs, refused } = await withTransaction(
+        this.pool,
+        async (client) => {
+          let lastSeq = await assertOwnership(client, this.session, owner);
+          const seqs: Seq[] = [];
+          let refused: Error | undefined;
+          for (const batch of copy) {
+            const seq = safeSeq(lastSeq + 1);
+            try {
+              await client.transaction((batchTransaction) =>
+                this.storeBatch(batchTransaction, batch, seq),
+              );
+            } catch (e) {
+              if (!(e instanceof Refused)) throw e;
+              refused = new Error(e.message);
+              break;
+            }
+            lastSeq = seq;
+            seqs.push(seq);
           }
-          await client.query('RELEASE SAVEPOINT pi_batch');
-          lastSeq = seq;
-          seqs.push(seq);
-        }
-        await assertOwnership(client, this.session, owner);
-        return { seqs, refused };
-      });
+          await assertOwnership(client, this.session, owner);
+          return { seqs, refused };
+        },
+      );
       seqs.forEach((seq, index) => receive(index, seq));
       return refused
         ? { stored: seqs.length, refused }
@@ -180,7 +159,7 @@ class PostgresStorage implements Storage {
     return operation;
   }
   private async storeBatch(
-    client: PoolClient,
+    client: AgentTransaction,
     batch: readonly StorageWrite[],
     seq: Seq,
   ) {
@@ -197,36 +176,41 @@ class PostgresStorage implements Storage {
     ];
     for (const [idx, event] of events.entries()) {
       const parts = publicMessageParts(event, seq, idx + 1);
-      const payload = parts.length
-        ? { ...event.payload, message_parts: parts }
+      const payload: JsonObject = parts.length
+        ? {
+            ...event.payload,
+            message_parts: parts.map((part) => ({ ...part })),
+          }
         : event.payload;
-      await client.query(
-        `INSERT INTO agent.runtime_events(session_id,commit_seq,event_ordinal,event_type,payload)
-        VALUES($1,$2,$3,$4,$5::jsonb)`,
-        [this.session, seq, idx + 1, event.type, JSON.stringify(payload)],
-      );
+      await client.insert(runtimeEvents).values({
+        session_id: this.session,
+        commit_seq: seq,
+        event_ordinal: idx + 1,
+        event_type: event.type,
+        payload,
+      });
       for (const part of parts) {
-        await client.query(
-          `INSERT INTO agent.public_messages(session_id,run_id,commit_seq,event_ordinal,part_index,message_id,conversation_id,sequence,kind,content) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-          [
-            this.session,
-            part.run_id,
-            seq,
-            idx + 1,
-            part.part_index,
-            part.message_id,
-            part.conversation_id,
-            part.sequence,
-            part.kind,
-            part.content,
-          ],
-        );
+        await client.insert(publicMessages).values({
+          session_id: this.session,
+          run_id: part.run_id,
+          commit_seq: seq,
+          event_ordinal: idx + 1,
+          part_index: part.part_index,
+          message_id: part.message_id,
+          conversation_id: part.conversation_id,
+          sequence: part.sequence,
+          kind: part.kind,
+          content: part.content,
+        });
       }
     }
-    await client.query(
-      'UPDATE agent.runtime_sessions SET last_id=greatest(last_id,$2),commit_seq=$3 WHERE session_id=$1',
-      [this.session, maxId, seq],
-    );
+    await client
+      .update(runtimeSessions)
+      .set({
+        last_id: sql`greatest(${runtimeSessions.last_id}, ${maxId})`,
+        commit_seq: seq,
+      })
+      .where(eq(runtimeSessions.session_id, this.session));
   }
   async conversation(id: ConversationId, ctx: Context) {
     this.check(ctx);
@@ -273,26 +257,40 @@ class PostgresStorage implements Storage {
     if (typeof second === 'number') {
       this.check(ctx);
       return (
-        await visibleEntries(
+        await withTransaction(
           this.pool,
-          this.session,
-          {
-            conversationId: first as ConversationId,
-            minEntryId: second,
-            maxEntryId: second,
-          },
-          1,
-          scanStart(undefined, undefined),
+          (client) =>
+            visibleEntries(
+              client,
+              this.session,
+              {
+                conversationId: first as ConversationId,
+                minEntryId: second,
+                maxEntryId: second,
+              },
+              1,
+              scanStart(undefined, undefined),
+            ),
+          true,
         )
       )[0];
     }
     this.check(second);
     const row = (
-      await this.pool.query<BodyRow & { commit_seq: string }>(
-        "SELECT body,commit_seq FROM agent.runtime_records WHERE session_id=$1 AND record_type='entry' AND id=$2",
-        [this.session, first],
-      )
-    ).rows[0];
+      await database(this.pool)
+        .select({
+          body: runtimeRecords.body,
+          commit_seq: runtimeRecords.commit_seq,
+        })
+        .from(runtimeRecords)
+        .where(
+          and(
+            eq(runtimeRecords.session_id, this.session),
+            eq(runtimeRecords.record_type, 'entry'),
+            eq(runtimeRecords.id, first),
+          ),
+        )
+    )[0];
     return (
       row && {
         entry: JSON.parse(row.body) as EntryRecord,
@@ -311,12 +309,17 @@ class PostgresStorage implements Storage {
         ? { conversationId }
         : { conversationId, maxEntryId: atOrBeforeEntryId };
     const value = (
-      await visibleEntries(
+      await withTransaction(
         this.pool,
-        this.session,
-        query,
-        1,
-        scanStart('descending', undefined),
+        (client) =>
+          visibleEntries(
+            client,
+            this.session,
+            query,
+            1,
+            scanStart('descending', undefined),
+            true,
+          ),
         true,
       )
     )[0];
@@ -330,12 +333,10 @@ class PostgresStorage implements Storage {
   ) {
     this.check(ctx);
     const start = scanStart(q.order, cursor, 'descending');
-    const rows = await visibleEntries(
+    const rows = await withTransaction(
       this.pool,
-      this.session,
-      q,
-      limit + 1,
-      start,
+      (client) => visibleEntries(client, this.session, q, limit + 1, start),
+      true,
     );
     return page(
       rows.map((row) => row.entry),
@@ -395,11 +396,17 @@ class PostgresStorage implements Storage {
     ctx: Context,
   ) {
     this.check(ctx);
-    const result = await this.pool.query<BodyRow>(
-      'SELECT body FROM agent.runtime_records WHERE session_id=$1 AND conversation_id=$2 AND request_key=$3',
-      [this.session, conversationId, indexKey(requestId)],
-    );
-    return decode<SubmissionRecord>(result.rows[0]);
+    const rows = await database(this.pool)
+      .select({ body: runtimeRecords.body })
+      .from(runtimeRecords)
+      .where(
+        and(
+          eq(runtimeRecords.session_id, this.session),
+          eq(runtimeRecords.conversation_id, conversationId),
+          eq(runtimeRecords.request_key, JSON.stringify(requestId)),
+        ),
+      );
+    return decode<SubmissionRecord>(rows[0]);
   }
   async findDocument(
     address: DocumentAddress,
@@ -448,10 +455,10 @@ export async function openReadonlyPostgresStorage(
   pool: Pool,
   sessionId: string,
 ) {
-  const found = await pool.query(
-    'SELECT 1 FROM agent.runtime_sessions WHERE session_id=$1',
-    [sessionId],
-  );
-  if (!found.rowCount) throw new Error('Unknown storage session');
+  const found = await database(pool)
+    .select({ session_id: runtimeSessions.session_id })
+    .from(runtimeSessions)
+    .where(eq(runtimeSessions.session_id, sessionId));
+  if (!found.length) throw new Error('Unknown storage session');
   return new PostgresStorage(pool, sessionId, undefined, {});
 }

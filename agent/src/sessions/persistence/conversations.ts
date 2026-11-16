@@ -1,4 +1,24 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Pool } from 'pg';
+import {
+  and,
+  desc,
+  eq,
+  getTableColumns,
+  isNull,
+  lt,
+  lte,
+  sql,
+} from 'drizzle-orm';
+import {
+  database,
+  type DatabaseConnection,
+} from '../../database/connection.js';
+import {
+  publicMessages,
+  runtimeEvents,
+  serviceRuns,
+  serviceSessions,
+} from '../../database/schema.js';
 import type {
   HistoryInput,
   Identity,
@@ -8,11 +28,39 @@ import type {
 import { AgentError } from '../errors.js';
 import { SessionStore, inTransaction, type RunRow } from './store.js';
 
-type Database = Pool | PoolClient;
+type Database = DatabaseConnection;
 import type { PageCursor } from './pagination.js';
 import { readMessagePage } from './message-history.js';
-const RUN_SUMMARIES = `SELECT r.*,coalesce(e.payload->>'status','accepted') AS public_status FROM agent.service_runs r
- LEFT JOIN LATERAL (SELECT payload FROM agent.runtime_events WHERE session_id=r.session_id::text AND payload->>'root_run_id'=r.id::text AND event_type='agent.state' ORDER BY commit_seq DESC,event_ordinal DESC LIMIT 1) e ON true`;
+function runSummaries(connection: DatabaseConnection) {
+  const db = database(connection);
+  const latest = db
+    .select({ payload: runtimeEvents.payload })
+    .from(runtimeEvents)
+    .where(
+      and(
+        eq(runtimeEvents.session_id, sql`${serviceRuns.session_id}::text`),
+        eq(
+          sql<string>`${runtimeEvents.payload}->>'root_run_id'`,
+          sql`${serviceRuns.id}::text`,
+        ),
+        eq(runtimeEvents.event_type, 'agent.state'),
+      ),
+    )
+    .orderBy(desc(runtimeEvents.commit_seq), desc(runtimeEvents.event_ordinal))
+    .limit(1)
+    .as('latest');
+  return db
+    .select({
+      ...getTableColumns(serviceRuns),
+      public_status:
+        sql<string>`coalesce(${latest.payload}->>'status', 'accepted')`.as(
+          'public_status',
+        ),
+    })
+    .from(serviceRuns)
+    .leftJoinLateral(latest, sql`true`)
+    .$dynamic();
+}
 const terminal = new Set(['completed', 'failed', 'stopped', 'rejected']);
 export function acceptedRun(run: RunRow, status = 'accepted') {
   return {
@@ -42,34 +90,63 @@ export class ConversationStore {
   async sessions(query: HistoryInput) {
     const scope = this.scope('session-history', query);
     const cursor = this.decode(query.cursor, scope);
-    const rows = (
-      await this.pool.query<
-        Parameters<SessionStore['sessionDTO']>[0] & {
-          last_input_at: Date;
-          last_input_cursor: string;
-          snapshot_at: string;
-        }
-      >(
-        `
-      WITH bound AS (SELECT coalesce($3::timestamptz,statement_timestamp()) AS upper), owned AS (
-        SELECT s.id,s.actor_id,s.org_id,s.scope_id,s.project_id,s.canvas_id,s.title,s.pinned,s.execution_revision,s.created_at, max(r.created_at) AS last_input_at FROM agent.service_sessions s
-        JOIN agent.service_runs r ON r.session_id=s.id CROSS JOIN bound
-        WHERE s.actor_id=$1 AND s.project_id=$2 AND s.archived_at IS NULL AND r.created_at<=bound.upper GROUP BY s.id
-      ) SELECT owned.*,bound.upper::text AS snapshot_at,last_input_at::text AS last_input_cursor
-        FROM owned CROSS JOIN bound
-        WHERE ($4::timestamptz IS NULL OR (pinned,last_input_at,id)<($7::boolean,$4::timestamptz,$5::uuid))
-        ORDER BY pinned DESC,last_input_at DESC,id DESC LIMIT $6`,
-        [
-          query.actor_id,
-          query.project_id,
-          cursor?.upper ?? null,
-          cursor?.before ?? null,
-          cursor?.id ?? null,
-          (query.limit ?? 20) + 1,
-          cursor?.pinned ?? false,
-        ],
+    const db = database(this.pool);
+    // Keep the snapshot and keyset timestamps in PostgreSQL text form so
+    // microseconds survive the cursor round trip through JavaScript.
+    const bound = db.$with('bound').as(
+      db
+        .select({
+          upper:
+            sql<string>`coalesce(${cursor?.upper ?? null}::timestamptz,statement_timestamp())::text`.as(
+              'upper',
+            ),
+        })
+        .from(sql`(values (1)) as snapshot_seed(value)`),
+    );
+    const owned = db.$with('owned').as(
+      db
+        .select({
+          ...getTableColumns(serviceSessions),
+          last_input_at: sql<Date>`max(${serviceRuns.created_at})`
+            .mapWith(serviceRuns.created_at)
+            .as('last_input_at'),
+          last_input_cursor:
+            sql<string>`max(${serviceRuns.created_at})::text`.as(
+              'last_input_cursor',
+            ),
+        })
+        .from(serviceSessions)
+        .innerJoin(serviceRuns, eq(serviceRuns.session_id, serviceSessions.id))
+        .crossJoin(bound)
+        .where(
+          and(
+            eq(serviceSessions.actor_id, query.actor_id),
+            eq(serviceSessions.project_id, query.project_id),
+            isNull(serviceSessions.archived_at),
+            lte(serviceRuns.created_at, sql`${bound.upper}::timestamptz`),
+          ),
+        )
+        .groupBy(serviceSessions.id),
+    );
+    const result = await db
+      .with(bound, owned)
+      .select()
+      .from(owned)
+      .crossJoin(bound)
+      .where(
+        cursor
+          ? lt(
+              sql`(${owned.pinned}, ${owned.last_input_at}, ${owned.id})`,
+              sql`(${cursor.pinned ?? false}::boolean, ${cursor.before}::timestamptz, ${cursor.id}::uuid)`,
+            )
+          : undefined,
       )
-    ).rows;
+      .orderBy(desc(owned.pinned), desc(owned.last_input_at), desc(owned.id))
+      .limit((query.limit ?? 20) + 1);
+    const rows = result.map(({ owned: row, bound: snapshot }) => ({
+      ...row,
+      snapshot_at: snapshot.upper,
+    }));
     const more = rows.length > (query.limit ?? 20);
     const items = rows.slice(0, query.limit ?? 20);
     const last = items.at(-1);
@@ -96,47 +173,48 @@ export class ConversationStore {
     if (input.action === 'rename' ? !title : input.title !== undefined)
       throw new AgentError('invalid_session_update');
     return inTransaction(this.pool, async (db) => {
-      type Row = Parameters<SessionStore['sessionDTO']>[0];
-      const session = (
-        await db.query<Row>(
-          'SELECT * FROM agent.service_sessions WHERE id=$1 AND actor_id=$2 AND project_id=$3 AND org_id=$4 AND scope_id=$5 FOR UPDATE',
-          [id, input.actor_id, input.project_id, input.org_id, input.scope_id],
+      const [session] = await db
+        .select()
+        .from(serviceSessions)
+        .where(
+          and(
+            eq(serviceSessions.id, id),
+            eq(serviceSessions.actor_id, input.actor_id),
+            eq(serviceSessions.project_id, input.project_id),
+            eq(serviceSessions.org_id, input.org_id),
+            eq(serviceSessions.scope_id, input.scope_id),
+          ),
         )
-      ).rows[0];
+        .for('update');
       if (!session || (session.archived_at && input.action !== 'delete'))
         throw new AgentError('session_not_found');
       if (session.archived_at) return this.store.sessionDTO(session);
 
       if (input.action === 'delete') {
-        const last = (
-          await db.query<RunRow & { public_status: string }>(
-            RUN_SUMMARIES +
-              ' WHERE r.session_id=$1 ORDER BY r.accepted_revision DESC LIMIT 1',
-            [id],
-          )
-        ).rows[0];
+        const [last] = await runSummaries(db)
+          .where(eq(serviceRuns.session_id, id))
+          .orderBy(desc(serviceRuns.accepted_revision))
+          .limit(1);
         if (last && !terminal.has(last.public_status))
           throw new AgentError('session_has_active_run');
       }
 
-      const row = (
-        await db.query<Row>(
-          `UPDATE agent.service_sessions
-           SET title=coalesce($2,title), pinned=coalesce($3,pinned),
-             archived_at=CASE WHEN $4 THEN clock_timestamp() ELSE archived_at END
-           WHERE id=$1 RETURNING *`,
-          [
-            id,
-            title ?? null,
-            input.action === 'pin'
-              ? true
-              : input.action === 'unpin'
-                ? false
-                : null,
-            input.action === 'delete',
-          ],
-        )
-      ).rows[0]!;
+      const [row] = await db
+        .update(serviceSessions)
+        .set({
+          ...(title !== undefined ? { title } : {}),
+          ...(input.action === 'pin'
+            ? { pinned: true }
+            : input.action === 'unpin'
+              ? { pinned: false }
+              : {}),
+          ...(input.action === 'delete'
+            ? { archived_at: sql`clock_timestamp()` }
+            : {}),
+        })
+        .where(eq(serviceSessions.id, id))
+        .returning();
+      if (!row) throw new Error('Session update returned no row');
       return this.store.sessionDTO(row);
     });
   }
@@ -164,25 +242,32 @@ export class ConversationStore {
         await this.requireSession(id, query, db);
         const scope = this.scope('runs', query, id);
         const cursor = this.decode(query.cursor, scope);
-        const upper =
-          cursor?.upper ??
-          String(
-            (
-              await db.query<{ revision: string }>(
-                'SELECT coalesce(max(accepted_revision),0) AS revision FROM agent.service_runs WHERE session_id=$1',
-                [id],
-              )
-            ).rows[0]!.revision,
-          );
+        const [maximum] = cursor
+          ? []
+          : await db
+              .select({
+                revision:
+                  sql<string>`coalesce(max(${serviceRuns.accepted_revision}),0)::text`.as(
+                    'revision',
+                  ),
+              })
+              .from(serviceRuns)
+              .where(eq(serviceRuns.session_id, id));
+        const upper = cursor?.upper ?? maximum?.revision ?? '0';
         if (!/^\d+$/.test(upper) || (cursor && !/^\d+$/.test(cursor.before)))
           throw new AgentError('invalid_cursor');
-        const rows = (
-          await db.query<RunRow & { public_status?: string }>(
-            RUN_SUMMARIES +
-              ' WHERE r.session_id=$1 AND r.accepted_revision<=$2 AND ($3::bigint IS NULL OR r.accepted_revision<$3) ORDER BY r.accepted_revision DESC LIMIT $4',
-            [id, upper, cursor?.before ?? null, (query.limit ?? 20) + 1],
+        const rows = await runSummaries(db)
+          .where(
+            and(
+              eq(serviceRuns.session_id, id),
+              lte(serviceRuns.accepted_revision, upper),
+              cursor
+                ? lt(serviceRuns.accepted_revision, cursor.before)
+                : undefined,
+            ),
           )
-        ).rows;
+          .orderBy(desc(serviceRuns.accepted_revision))
+          .limit((query.limit ?? 20) + 1);
         const more = rows.length > (query.limit ?? 20),
           page = rows.slice(0, query.limit ?? 20),
           last = page.at(-1);
@@ -208,12 +293,15 @@ export class ConversationStore {
       this.pool,
       async (db) => {
         await this.requireSession(id, who, db);
-        const run = (
-          await db.query<RunRow & { public_status?: string }>(
-            'SELECT * FROM agent.service_runs WHERE session_id=$1 AND request_id=$2',
-            [id, request],
-          )
-        ).rows[0];
+        const [run] = await db
+          .select()
+          .from(serviceRuns)
+          .where(
+            and(
+              eq(serviceRuns.session_id, id),
+              eq(serviceRuns.request_id, request),
+            ),
+          );
         return run ? acceptedRun(run) : undefined;
       },
       true,
@@ -224,13 +312,10 @@ export class ConversationStore {
       this.pool,
       async (db) => {
         await this.requireSession(id, who, db);
-        const run = (
-          await db.query<RunRow & { public_status?: string }>(
-            RUN_SUMMARIES +
-              ' WHERE r.session_id=$1 ORDER BY r.accepted_revision DESC LIMIT 1',
-            [id],
-          )
-        ).rows[0];
+        const [run] = await runSummaries(db)
+          .where(eq(serviceRuns.session_id, id))
+          .orderBy(desc(serviceRuns.accepted_revision))
+          .limit(1);
         if (!run) return {};
         const summary = this.summary(run);
         return {
@@ -263,20 +348,27 @@ export class ConversationStore {
       async (db) => {
         const run = await this.store.run(id, who, db);
         if (!run) throw new AgentError('run_not_found');
-        const rows = (
-          await db.query<{
-            message_id: string;
-            run_id: string;
-            conversation_id: number;
-            sequence: string;
-            part_index: number;
-            kind: string;
-            content: string;
-          }>(
-            'SELECT * FROM agent.public_messages WHERE session_id=$1 AND run_id=$2 AND message_id=$3 ORDER BY part_index',
-            [run.session_id, run.id, messageId],
-          )
-        ).rows;
+        const messageScope = and(
+          eq(publicMessages.session_id, run.session_id),
+          eq(publicMessages.run_id, run.id),
+          eq(publicMessages.message_id, messageId),
+        );
+        const [size] = await db
+          .select({
+            bytes:
+              sql<number>`coalesce(sum(octet_length(${publicMessages.content})),0)`.mapWith(
+                Number,
+              ),
+          })
+          .from(publicMessages)
+          .where(messageScope);
+        if (size && size.bytes > 65536)
+          throw new AgentError('quoted_message_exceeds_limit');
+        const rows = await db
+          .select()
+          .from(publicMessages)
+          .where(messageScope)
+          .orderBy(publicMessages.part_index);
         if (!rows.length) return;
         const content = rows.map((r) => r.content).join('');
         if (Buffer.byteLength(content) > 65536)

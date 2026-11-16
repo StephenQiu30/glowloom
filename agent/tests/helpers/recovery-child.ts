@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { BusinessClient } from '../../src/business/client.js';
 import { SessionRuntime } from '../../src/sessions/runtime.js';
 import type { RunRow } from '../../src/sessions/persistence/store.js';
+import { postgresQueryText } from './postgres-query-text.js';
 
 const pool = new Pool({
   connectionString: process.env.GLOWLOOM_AGENT_TEST_DB_DSN,
@@ -30,7 +31,10 @@ if (faultWindow) {
           if (key === 'query')
             return async (...queryArgs: unknown[]) => {
               const result = await Reflect.apply(query, target, queryArgs);
-              if (!reached && queryArgs[0] === 'COMMIT') {
+              if (
+                !reached &&
+                /^\s*commit\s*;?\s*$/i.test(postgresQueryText(queryArgs[0]))
+              ) {
                 const children = await audit.query<{
                   id: string;
                   owner_task_id: string;

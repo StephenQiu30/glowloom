@@ -190,6 +190,8 @@ Go 端通过锁定的 `go tool oapi-codegen` 生成当前模型和普通 HTTP �
 
 ## 8. 实施与验收
 
+SRC-ATS-ORM-01 沿[设计32 §7.4](32-完整创作AgentHarness与Skill多Agent架构设计.md#74-postgresql-storage所有权与幂等)落实：`database/schema.ts` 为只读写列映射，`database/connection.ts` 负责 ORM 装配和事务资源生命周期；会话及 Storage 依职责构建查询。HTTP/SSE 与生成合同不改变，数据库结构不改变。完整可执行树和锁文件变化会改变冻结定义指纹，发布继续按§7.5收束或核验在途运行，不修改旧 manifest 来强行接续。
+
 | ID | 必须验证的结果 |
 | --- | --- |
 | ATS-AC-01 | 单一 Nest 入口，模块依赖无环。旧启动路径、TypeBox HTTP 合同、配置别名、协议转换和回退路径均已移除。 |
@@ -200,5 +202,6 @@ Go 端通过锁定的 `go tool oapi-codegen` 生成当前模型和普通 HTTP �
 | ATS-AC-06 | 新生产构建的指纹、存量 run 清单与准入结果可核对。不能直接接续的运行在切换前收束，新版无旧定义加载分支。 |
 | ATS-AC-07 | 冻结锁文件安装、严格类型、lint、格式、测试、API 检查与构建通过。测试装配和生产镜像验证装饰器元数据、启动失败、信号关闭及连接池释放。 |
 | ATS-AC-08 | Umi 客户端独立重生成零差异，核对内部路由覆盖、NodeNext 声明检查、服务身份、取消、超时、大小限制和实际流式语义。 |
+| ATS-AC-09 | NestJS 源码无手写 CRUD/事务语句、原生数据库 query 或 schema executor；ORM 在受限角色的真实隔离 PG 中通过 Storage、幂等、保存点、未知提交、字节预算、微秒分页及真实进程恢复验收。 |
 
 执行步骤见 [Plan28](../plan/28-完整创作Agent与Skill多Agent实施计划.md)，对话验收继续沿 [Plan31](../plan/31-对话工作台与参考输入一致性实施计划.md)。进度见 [BACKLOG](../../../BACKLOG.md#agent-nestjs-migration)。

@@ -1,5 +1,13 @@
 # Agent 服务目录与 TypeScript 规范需求
 
+## ORM 数据访问补充（SRC-ATS-ORM-01，2026-11-16）
+
+用户原文：
+
+> 我们的nestjs服务不要手写sql，可以使用orm框架来实现数据的增删改查，减少手写sql造成的不可维护性 同时我们的不需要添加docs这个内容嵌套
+
+确认：NestJS 服务的数据库增删改查、事务、行锁和保存点通过 ORM 完成，不保留直接执行完整 SQL 的旁路；数据库时间、JSON 与窗口统计只使用参数化框架表达式。结构仍以 `backend/db/schema.sql` 为唯一规范性来源，ORM 不自动建表或迁移。Agent 的幂等、owner fencing、未知提交、分页、字节预算及恢复行为保持原合同；Canvas 无数据库职责，不新增数据库连接。文档直接位于 `workspace/content/`，目录专项沿[需求30](30-Workspace官方Fumadocs接入需求.md)维护。
+
 ## 1. 来源
 
 记录日期：2026-11-05 至 2026-11-06。

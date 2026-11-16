@@ -32,6 +32,8 @@ In the project, you can see:
 
 Collections are defined with the [Macro API](https://fumadocs.dev/docs/mdx/macro) in `lib/source.ts`.
 
+Project knowledge lives directly in `content/`, with category folders and `index.mdx` at its root. The collection uses `dir: 'content'`; public reading URLs remain under `/docs`, and GitHub source links use the repository's `workspace/content/` path.
+
 Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
 
 ## Learn More

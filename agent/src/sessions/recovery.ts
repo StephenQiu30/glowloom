@@ -1,4 +1,6 @@
-import type { Pool, PoolClient } from 'pg';
+import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
+import { database, type DatabaseConnection } from '../database/connection.js';
+import { recoveryBackoff } from '../database/schema.js';
 import { recoveryDefaults } from '../config.js';
 
 export const RecoveryKind = { Run: 'run', Control: 'control' } as const;
@@ -28,7 +30,7 @@ export interface RecoveryEvent {
 }
 /** Backoff metadata for existing runs/controls, never another task executor. */
 export class RecoveryStore {
-  constructor(private readonly pool: Pool | PoolClient) {}
+  constructor(private readonly pool: DatabaseConnection) {}
 
   async failed(
     kind: Kind,
@@ -37,40 +39,67 @@ export class RecoveryStore {
     code: Code,
     terminal = false,
   ) {
-    await this.pool.query(
-      `INSERT INTO agent.recovery_backoff(kind,subject_id,root_run_id,attempts,code,next_attempt_at,parked_at)
-       VALUES($1,$2,$3,1,$4,clock_timestamp()+$5*interval '1 millisecond',CASE WHEN $7 THEN clock_timestamp() END)
-       ON CONFLICT(kind,subject_id) DO UPDATE SET
-       attempts=agent.recovery_backoff.attempts+1,code=EXCLUDED.code,
-       next_attempt_at=clock_timestamp()+least($6,$5*power(2,least(agent.recovery_backoff.attempts,16)))*interval '1 millisecond',
-       parked_at=CASE WHEN $7 OR agent.recovery_backoff.attempts+1 >= $8 THEN coalesce(agent.recovery_backoff.parked_at,clock_timestamp()) ELSE NULL END`,
-      [
+    await database(this.pool)
+      .insert(recoveryBackoff)
+      .values({
         kind,
-        subject,
-        root,
+        subject_id: subject,
+        root_run_id: root,
+        attempts: 1,
         code,
-        recoveryDefaults.pollMs,
-        recoveryDefaults.maxBackoffMs,
-        terminal,
-        recoveryDefaults.maxAttempts,
-      ],
-    );
+        next_attempt_at: sql`clock_timestamp()+${recoveryDefaults.pollMs}*interval '1 millisecond'`,
+        parked_at: terminal ? sql`clock_timestamp()` : null,
+      })
+      .onConflictDoUpdate({
+        target: [recoveryBackoff.kind, recoveryBackoff.subject_id],
+        set: {
+          attempts: sql`${recoveryBackoff.attempts}+1`,
+          code,
+          next_attempt_at: sql`clock_timestamp()+least(${recoveryDefaults.maxBackoffMs}, ${recoveryDefaults.pollMs}*power(2,least(${recoveryBackoff.attempts},16)))*interval '1 millisecond'`,
+          parked_at: sql`case when ${terminal} or ${recoveryBackoff.attempts}+1 >= ${recoveryDefaults.maxAttempts} then coalesce(${recoveryBackoff.parked_at},clock_timestamp()) else null end`,
+        },
+      });
   }
   async succeeded(kind: Kind, subject: string) {
-    await this.pool.query(
-      'UPDATE agent.recovery_backoff SET attempts=0,code=NULL,parked_at=NULL,next_attempt_at=clock_timestamp() WHERE kind=$1 AND subject_id=$2',
-      [kind, subject],
-    );
+    await database(this.pool)
+      .update(recoveryBackoff)
+      .set({
+        attempts: 0,
+        code: null,
+        parked_at: null,
+        next_attempt_at: sql`clock_timestamp()`,
+      })
+      .where(
+        and(
+          eq(recoveryBackoff.kind, kind),
+          eq(recoveryBackoff.subject_id, subject),
+        ),
+      );
   }
   async read(root: string): Promise<RecoveryRecord[]> {
-    return (
-      await this.pool.query<RecoveryRecord>(
-        `SELECT kind,subject_id,attempts,code,
-       to_char(next_attempt_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') next_attempt_at,
-       to_char(parked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') parked_at
-       FROM agent.recovery_backoff WHERE root_run_id=$1 AND code IS NOT NULL ORDER BY kind,subject_id`,
-        [root],
+    const rows = await database(this.pool)
+      .select({
+        kind: recoveryBackoff.kind,
+        subject_id: recoveryBackoff.subject_id,
+        attempts: recoveryBackoff.attempts,
+        code: recoveryBackoff.code,
+        next_attempt_at: recoveryBackoff.next_attempt_at,
+        parked_at: recoveryBackoff.parked_at,
+      })
+      .from(recoveryBackoff)
+      .where(
+        and(
+          eq(recoveryBackoff.root_run_id, root),
+          isNotNull(recoveryBackoff.code),
+        ),
       )
-    ).rows;
+      .orderBy(asc(recoveryBackoff.kind), asc(recoveryBackoff.subject_id));
+    return rows.map((row) => ({
+      ...row,
+      kind: row.kind as Kind,
+      code: row.code as Code,
+      next_attempt_at: row.next_attempt_at.toISOString(),
+      parked_at: row.parked_at?.toISOString() ?? null,
+    }));
   }
 }

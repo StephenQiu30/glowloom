@@ -14,6 +14,8 @@
 
 ## 4. 内容与路由
 
+按2026-11-16补充需求，Fumadocs MDX 的 `defineDocs({ dir: 'content' })` 直接加载 `workspace/content/`，分类与首页均位于该目录下；不保留额外 `content/docs/` 层。官方 loader 的 `baseUrl` 仍为 `/docs`，页面相对路径和元数据层级保持原有结构。GitHub 页面入口指向仓库的 `workspace/content/<page.path>`。API 依据：[Fumadocs collections](https://fumadocs.dev/docs/mdx/collections)，具体类型以安装版本为准。
+
 content 是唯一知识正文目录，现有 Markdown／CSV 不重写。旧 Skill／工作流 Markdown 原文移入 content/skills 和 content/workflows。缺少 frontmatter 的标题由 Fumadocs collection schema 从现有 H1 取值。document-ids.json 仅登记身份及旧地址；官方 loader slugs 沿用 `/read/<id>`。历史入口由 Next.js 原生重定向承接，CSV 通过 public 中只读符号链接下载；Markdown 使用模板自带 LLM 路由。根规范和业务代码仍由原工程维护，旧引用指向其源文件。
 
 文件按分类使用唯一的 `NN-名称` 序号，保留历史空缺；日期放在序号之后。编号只维护在文件名，由官方 collection schema 派生到侧栏、页面标题、搜索和元数据；原文 H1 与锚点保留。目录调整时同步相对引用、稳定身份路径、原地址和 CSV 附件链接。部署配置归 operations；工具生成的安装设置、临时计划和规格不进入发布源、页面树或搜索。

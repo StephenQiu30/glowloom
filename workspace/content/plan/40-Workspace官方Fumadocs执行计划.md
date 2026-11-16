@@ -18,6 +18,8 @@
 
 品牌标识补齐时复用仓库已确认的 SVG／favicon／Apple 图标，独立放入 Workspace，通过官方导航插槽与 Next.js 原生图标约定接入；核对桌面、手机与深浅主题的真实加载。
 
+按2026-11-16补充需求，将 `workspace/content/docs/` 内容完整移到 `workspace/content/`，保持文件相对结构；修改官方 collection 的目录与 GitHub 源文件路径，同步仓库引用及首页导航。比对迁移前后文件清单和正文，保留外部调研 URL；通过构建、类型、Lint、浏览器导航／搜索／Markdown／GitHub入口及全量页面请求验证 AC-FD-10。既存源码断链单独记录，不改变其历史调研正文。
+
 ## 4. 主工程门禁
 
 在实际 Workspace 目录重新安装依赖并构建，不复用隔离目录的 Next 产物。执行 pnpm lint、pnpm types:check、pnpm format:check、pnpm build。官方搜索同步连接专用 Meilisearch，浏览器只用 docs 的 search-only key。

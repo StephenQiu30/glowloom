@@ -17,6 +17,8 @@
 4. 配置在启动边界读取并校验。连接池、恢复循环和订阅分别有明确的资源所有者。请求路径避免阻塞事件循环，限制请求体、并发、等待和重试。将 `AbortSignal` 传到可取消的调用，收尾等待有界。SSE 断开只关闭订阅。
 5. Pino 日志带排障所需的 request/session/run 标识。脱敏服务令牌、数据库 DSN、提示词、模型输入输出和用户内容。Agent 使用独立 schema 与受限角色，Go 保留身份、预算、审批、模型出站、业务工具和业务数据权威。
 
+6. 数据增删改查、冲突处理、行锁和事务使用 Drizzle ORM；pg 仅管理连接池与底层传输，不直接执行应用 SQL。数据库时钟、JSON、窗口等必要表达式保持参数化；禁止完整 SQL 字符串、原生 query/execute 旁路、自动结构同步与迁移执行器。ORM 表声明只映射查询类型，结构唯一来源仍为 `backend/db/schema.sql`。
+
 ## 接口生成
 
 - 生成方向与检查见[设计37 §7.6](../workspace/content/design/37-Agent服务目录与TypeScript规范设计.md#76-swagger-与-umi-接口生成)。Agent 注解生成 OpenAPI 供 Go 客户端消费。Go 内部独立 Swagger 经 `@umijs/openapi` 生成 Agent 消费的 TypeScript 请求和类型，位于 `src/business/generated/`。

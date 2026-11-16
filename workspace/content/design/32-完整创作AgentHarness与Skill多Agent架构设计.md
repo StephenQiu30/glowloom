@@ -198,7 +198,7 @@ Skill是方法资源，不是独立执行进程，也不需要每次开启子Age
 | HTTP 传输 | 官方 `FastifyAdapter` 使用 Fastify 5.12.8。内部 JSON HTTP 与 SSE，使用 Node `fetch`、`AbortController`、`Readable`，保留背压与取消。 |
 | DTO 和运行时元数据 | Nest `ValidationPipe`，`class-validator` 0.15.1，`class-transformer` 0.5.1，`reflect-metadata` 0.2.2，`rxjs` 7.8.2。 |
 | Agent 执行 | 官方 Pi Durable 1.5.0，`@earendil-works/pi-durable`、`pi-ai`、`chord`、`pi-coding-agent` 同版。Pi 提供工具循环、子会话和持久化执行，宿主负责 Skill 装载与 PostgreSQL 租约，`pi-coding-agent` 仅使用受控资源 SDK。 |
-| 数据与恢复 | 复用既有 PostgreSQL，CI 隔离库使用 PostgreSQL 18。Node 端 `pg` 8.23.1 与参数化 SQL 实现官方 Storage，使用独立 `agent` schema 和受限角色。事务、owner/epoch fencing、事件与消息投影共用该边界。 |
+| 数据与恢复 | 复用既有 PostgreSQL，CI 隔离库使用 PostgreSQL 18。Node 端以 Drizzle ORM 0.45.4 和 `pg` 8.23.1 驱动实现官方 Storage，使用独立 `agent` schema 和受限角色。CRUD、事务、owner/epoch fencing、事件与消息投影共用该边界，不引入结构生成或自动迁移。 |
 | Agent → Go 的接口生成 | Go 内部业务 Swagger 由 `swag` v1.16.6 从注解离线导出，`@umijs/openapi` 1.14.1 生成 Agent 的 TypeScript 请求与类型。 |
 | Go → Agent 的接口生成 | `@nestjs/swagger` 12.1.0 从 Controller/DTO 生成 OpenAPI 3.0，使用 `oapi-codegen` v2.8.2 生成 Go 请求/响应模型与普通 HTTP 客户端。SSE 保留逐段读取。若开启内部 Swagger UI，使用 `@fastify/static` 10.1.10。 |
 | 鉴权与业务出口 | 双向独立 Bearer token、audience、`node:crypto.timingSafeEqual`。Go 继续负责身份与 scope、run grant、审批、预算、计费、模型出站和业务工具。 |
@@ -267,7 +267,11 @@ HTTP 边界限制 body/frame、并发和等待队列，配置超时、取消、�
 
 ### 7.4 PostgreSQL Storage、所有权与幂等
 
-Agent 通过独立 GLOWLOOM_AGENT_DB_DSN 使用既有 PostgreSQL 实例中的 agent schema。Agent runtime role 无业务表权限；Go role 无 runtime 表权限。结构定义仍以 backend/db/schema.sql 为统一空库来源，单次增量 SQL 由实施审阅；两个服务启动均不建表或修补 schema。
+Agent 通过独立 GLOWLOOM_AGENT_DB_DSN 使用既有 PostgreSQL 实例中的 agent schema。Agent runtime role 无业务表权限；Go role 无 runtime 表权限。结构定义仍以 backend/db/schema.sql 为唯一规范性来源；存量库由管理员离线比对和受控变更，仓库不新增增量 SQL 或迁移目录，两个服务启动均不建表或修补 schema。
+
+SRC-ATS-ORM-01（2026-11-16）：NestJS 数据访问使用 Drizzle ORM，`agent/src/database/schema.ts` 只映射查询列与行类型，不成为第二份结构规范；CRUD、冲突处理、行锁、CTE/LATERAL、事务和批次保存点由 ORM 构建。数据库时钟、JSON 取值、窗口字节预算等使用参数化框架表达式，不拼接完整 SQL、不保留原生 query/execute 旁路，不引入 Drizzle Kit、migrator 或自动结构同步。Pool 仍由进程边界拥有；事务适配保留已确认后通知、未知 COMMIT 不重放、原始错误及坏连接释放语义。bounded Pi bigint 映射 number，owner epoch 及业务修订映射精确十进制字符串；分页时间游标保留数据库微秒，不以 JS Date 的毫秒替代。
+
+祖先可见性按 ORM 逐层读取并在只读 repeatable-read 事务中查询有界 entry 分支，保持原递归语句的同一快照、min/max/父分叉裁剪与稳定排序。深链存在每层往返的成本，不以此迁移宣称性能提升，也不为消除该成本恢复手写查询。数据库字节预算仍在服务器侧过滤，不能改为加载无限消息后再在应用截断。
 
 Pi 没有本项目可直接采用的官方 PostgreSQL Storage。实现其当前公开 Storage 合同，不转换 SQLite SQL、不持久化 MemoryStorage 快照、不维护另一套 Harness。目标表承载 session/业务范围/租约、typed runtime records、commit seq、document history 和已提交事件投影；索引覆盖 request_id 去重、文档地址/历史与稳定扫描。
 

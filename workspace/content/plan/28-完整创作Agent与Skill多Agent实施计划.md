@@ -13,7 +13,7 @@
 - 服务/目录/包/Compose/CI 名称统一 agent；TypeScript strict、原生 ESM、Node 24、官方 Pi 1.5.0 同版包、NestJS（Fastify 适配器）、pg、Pino、Vitest、pnpm/tsc；版本与锁定条件见设计32 §7.1.2。
 - agent 独占会话、执行段、计划、owned conversation 与执行恢复；Go 独占身份/scope、审批、预算、模型/业务工具及业务回执。无跨 schema 写入，无 Go 启动 Node。
 - 目标从 Nest Controller/DTO 注解生成内部 OpenAPI 与 Go 客户端，继续由公网 Go 注解生成前端 API。Agent 消费 Go 内部接口的 Umi 生成链见设计37 §7.6。
-- 生产只用 PostgreSQL；正式空库来源 backend/db/schema.sql。独立增量 SQL 供离线审阅执行；应用启动不执行 DDL，不重建既有业务库。
+- 生产只用 PostgreSQL；唯一结构来源 backend/db/schema.sql。已有库由管理员离线核验及受控变更；仓库不新增增量 SQL、迁移目录或运行时 DDL，不重建既有业务库。Node CRUD 使用 Drizzle ORM，pg 仅为连接池/驱动。
 - NestJS 单版本切换。删除旧框架入口、旧 HTTP 合同和生成链，以及旧图、stdio/launcher、旧路由/配置别名、状态翻译、双轨和回退。
 - 普通业务后台任务保留原领域工作/供应商请求/财务回执，以数据库领取、租约、有限重试和到期补扫替代原工作流基础设施；不引入通用 DAG 引擎。
 - 改动前保存工作区路径清单，逐文件保留并行存储/模型/画布/探索页修改；用户未要求新分支或 Git 交付，沿当前工作区实施，禁止 reset/clean/广泛暂存。
@@ -409,3 +409,26 @@ EX-11不是末尾补文档：原意图/资金及完成判定先于自动批量�
 验收环境必须显式提供隔离`GLOWLOOM_AGENT_TEST_DB_DSN`、业务专用测试DSN和可达对象协议夹具；单镜用`GLOWLOOM_TEST_SHOT_PIPELINE_DB_DSN`，缺变量导致skip时该门记为未验证。不得打印真实DSN/凭据、运行全schema覆盖现有库或用mock替代数据库测试。镜像/定义/角色/schema核对、停新受理、在途/未知费用清结后再单版本切换，不为部署新增兼容引擎。
 
 SRC-AGH-23已授权R1/R2/R3与Plan33 D1实现和本地验证；原文档调研证据不冒充当前执行结果。实际完成状态、测试命令与未验边界统一见BACKLOG。后续R4～R7、真实供应商与作品接受仍分别留证。
+
+## NestJS ORM 数据访问整理（SRC-ATS-ORM-01，2026-11-16）
+
+**目标**：消除 NestJS 手写数据库 CRUD，保持既有持久化与恢复行为；本节授权仅覆盖该工程整理，不启动前文待授权的产品切片。
+
+**唯一来源**：PRD19 NFR-AH-ORM-01，经该 PRD 追溯设计32 §7.4；代码目录规则依设计37 ATS-AC-09。
+
+**架构与责任文件**：
+
+- `agent/src/database/schema.ts` 映射既有九张 Agent 表；`connection.ts` 装配 Drizzle、管理事务与损坏连接，不执行 DDL。
+- `pi-durable/storage/{ownership,records,entries,documents,postgres}.ts` 使用 ORM 读写、锁和嵌套事务；祖先扫描保持单一只读快照及可见性裁剪。
+- `sessions/persistence/*`、`sessions/recovery.ts`、`sessions/{service,runtime}.ts` 使用 ORM 构建授权查询、历史/消息 CTE、有界投影与恢复扫描。
+- 测试增加源码架构门禁与微秒分页；故障注入同时识别 pg 文本与 QueryConfig、大小写及带引号标识符，不放宽故障时点、SIGKILL 或超时断言。
+
+**执行与检查步骤**：
+
+1. 核对完整 schema 与现有 SQL 行为；以冻结 ORM 依赖、列映射及事务适配替换直接 query，不改表结构、角色或入站 DTO。
+2. 运行已有 Storage conformance/网络断连验收，保留 prefix commit、拒绝批次、COMMIT 未知及 owner 失效行为；用受限角色的全新隔离库验证实际 SQL。
+3. 验证会话幂等、控制回执、边界字节预算、微秒级 keyset 游标及恢复扫描；不把过滤转移到无限应用内读取。
+4. 执行完整 typecheck/lint/format/test/build、双向 API 重生成检查及真实子进程恢复，记录实际通过与未验证范围。
+5. 文档直接维护在 `workspace/content/{requirement,design,prd,plan,research}`，不建立 docs 嵌套；结构整理沿 PRD31/Plan40 验证加载、导航、搜索和编辑入口。
+
+执行结果及发布限制仅记 BACKLOG。Drizzle 官方依据：[已有 pg 连接池](https://orm.drizzle.team/docs/connect-overview)、[事务](https://orm.drizzle.team/docs/transactions)、[SELECT 与 CTE](https://orm.drizzle.team/docs/select)、[冲突更新](https://orm.drizzle.team/docs/insert#on-conflict-do-update)；版本以 package/lock 为准，不引入 Kit 或迁移配置。

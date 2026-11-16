@@ -1,5 +1,28 @@
 import { publicState } from '../pi-durable/events.js';
 import type { Pool } from 'pg';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  min,
+  or,
+  sql,
+} from 'drizzle-orm';
+import { database } from '../database/connection.js';
+import {
+  publicMessages,
+  recoveryBackoff,
+  runtimeEvents,
+  runtimeSessions,
+  serviceControlInbox,
+  serviceRuns,
+  serviceSessions,
+} from '../database/schema.js';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type {
   RuntimeEvent,
@@ -65,9 +88,24 @@ export class SessionService implements AgentApplication {
   }
   async ready() {
     try {
-      await this.pool.query(
-        'SELECT s.id,s.pinned,s.archived_at,r.input,r.retry_of_run_id,m.message_id,b.attempts FROM agent.service_sessions s LEFT JOIN agent.service_runs r ON r.session_id=s.id LEFT JOIN agent.public_messages m ON m.run_id=r.id LEFT JOIN agent.recovery_backoff b ON b.root_run_id=r.id LIMIT 0',
-      );
+      await database(this.pool)
+        .select({
+          id: serviceSessions.id,
+          pinned: serviceSessions.pinned,
+          archived_at: serviceSessions.archived_at,
+          input: serviceRuns.input,
+          retry_of_run_id: serviceRuns.retry_of_run_id,
+          message_id: publicMessages.message_id,
+          attempts: recoveryBackoff.attempts,
+        })
+        .from(serviceSessions)
+        .leftJoin(serviceRuns, eq(serviceRuns.session_id, serviceSessions.id))
+        .leftJoin(publicMessages, eq(publicMessages.run_id, serviceRuns.id))
+        .leftJoin(
+          recoveryBackoff,
+          eq(recoveryBackoff.root_run_id, serviceRuns.id),
+        )
+        .limit(0);
       return !this.stopping;
     } catch {
       return false;
@@ -106,11 +144,13 @@ export class SessionService implements AgentApplication {
         const session = await this.store.session(id, who, client);
         if (!session) return undefined;
         const last = (
-          await client.query<RunRow>(
-            'SELECT * FROM agent.service_runs WHERE session_id=$1 ORDER BY accepted_revision DESC LIMIT 1',
-            [id],
-          )
-        ).rows[0];
+          await database(client)
+            .select()
+            .from(serviceRuns)
+            .where(eq(serviceRuns.session_id, id))
+            .orderBy(desc(serviceRuns.accepted_revision))
+            .limit(1)
+        )[0];
         const run = last ? await this.store.snapshot(last, client) : undefined;
         return {
           ...this.store.sessionDTO(session),
@@ -404,10 +444,12 @@ export class SessionService implements AgentApplication {
     input: ControlInput,
     receipt: Record<string, unknown>,
   ) {
-    await this.pool.query(
-      'UPDATE agent.service_control_inbox SET receipt=$2 WHERE decision_id=$1',
-      [input.decision_id, receipt],
-    );
+    await database(this.pool)
+      .update(serviceControlInbox)
+      .set({
+        receipt: receipt as import('@earendil-works/pi-durable').JsonObject,
+      })
+      .where(eq(serviceControlInbox.decision_id, input.decision_id));
     await this.business.receipt(
       input.root_run_id,
       receipt as Parameters<BusinessClient['receipt']>[1],
@@ -430,23 +472,37 @@ export class SessionService implements AgentApplication {
     if (seq > 9007199254740991n || ordinal > 2147483647n)
       throw new AgentError('invalid_event_cursor');
     const row = (
-      await this.pool.query<{ min: string | null }>(
-        'SELECT min(commit_seq)::text min FROM agent.runtime_events WHERE session_id=$1',
-        [run.session_id],
-      )
-    ).rows[0];
+      await database(this.pool)
+        .select({ min: min(runtimeEvents.commit_seq) })
+        .from(runtimeEvents)
+        .where(eq(runtimeEvents.session_id, run.session_id))
+    )[0];
     if (seq > 0n && row?.min && seq < BigInt(row.min))
       throw new AgentError('snapshot_required');
-    const result = await this.pool.query<{
-      commit_seq: string;
-      event_ordinal: number;
-      event_type: string;
-      payload: unknown;
-    }>(
-      "SELECT commit_seq,event_ordinal,event_type,payload FROM agent.runtime_events WHERE session_id=$1 AND (commit_seq,event_ordinal)>($2,$3) AND payload->>'root_run_id'=$4 ORDER BY commit_seq,event_ordinal LIMIT 100",
-      [run.session_id, seq.toString(), ordinal.toString(), id],
-    );
-    return result.rows.map((row) => ({
+    const result = await database(this.pool)
+      .select({
+        commit_seq: runtimeEvents.commit_seq,
+        event_ordinal: runtimeEvents.event_ordinal,
+        event_type: runtimeEvents.event_type,
+        payload: runtimeEvents.payload,
+      })
+      .from(runtimeEvents)
+      .where(
+        and(
+          eq(runtimeEvents.session_id, run.session_id),
+          or(
+            gt(runtimeEvents.commit_seq, Number(seq)),
+            and(
+              eq(runtimeEvents.commit_seq, Number(seq)),
+              gt(runtimeEvents.event_ordinal, Number(ordinal)),
+            ),
+          ),
+          eq(sql<string>`${runtimeEvents.payload}->>'root_run_id'`, id),
+        ),
+      )
+      .orderBy(asc(runtimeEvents.commit_seq), asc(runtimeEvents.event_ordinal))
+      .limit(100);
+    return result.map((row) => ({
       cursor: `${row.commit_seq}:${row.event_ordinal}`,
       type: row.event_type,
       payload:
@@ -497,14 +553,33 @@ export class SessionService implements AgentApplication {
   }
 
   private async scanRecovery() {
-    const controls = await this.pool.query<{ input: ControlInput }>(
-      `SELECT c.input FROM agent.service_control_inbox c
-       LEFT JOIN agent.recovery_backoff b ON b.kind=$1 AND b.subject_id=c.decision_id
-       WHERE c.receipt IS NULL AND b.parked_at IS NULL AND (b.next_attempt_at IS NULL OR b.next_attempt_at<=clock_timestamp())
-       ORDER BY coalesce(b.next_attempt_at,c.created_at),c.decision_id LIMIT $2`,
-      [RecoveryKind.Control, recoveryDefaults.controlBatch],
-    );
-    for (const row of controls.rows) {
+    const db = database(this.pool);
+    const controls = await db
+      .select({ input: serviceControlInbox.input })
+      .from(serviceControlInbox)
+      .leftJoin(
+        recoveryBackoff,
+        and(
+          eq(recoveryBackoff.kind, RecoveryKind.Control),
+          eq(recoveryBackoff.subject_id, serviceControlInbox.decision_id),
+        ),
+      )
+      .where(
+        and(
+          isNull(serviceControlInbox.receipt),
+          isNull(recoveryBackoff.parked_at),
+          or(
+            isNull(recoveryBackoff.next_attempt_at),
+            lte(recoveryBackoff.next_attempt_at, sql<Date>`clock_timestamp()`),
+          ),
+        ),
+      )
+      .orderBy(
+        sql`coalesce(${recoveryBackoff.next_attempt_at}, ${serviceControlInbox.created_at})`,
+        asc(serviceControlInbox.decision_id),
+      )
+      .limit(recoveryDefaults.controlBatch);
+    for (const row of controls) {
       if (this.stopping) return;
       try {
         await this.command(row.input.root_run_id, row.input);
@@ -521,19 +596,105 @@ export class SessionService implements AgentApplication {
         );
       }
     }
-    const runs = await this.pool.query<RunRow>(
-      `SELECT latest.* FROM (SELECT DISTINCT ON(session_id) * FROM agent.service_runs ORDER BY session_id,accepted_revision DESC) latest
-       LEFT JOIN LATERAL (SELECT payload->>'status' status,payload->'delivery_wait'->>'next_wakeup_at' wakeup FROM agent.runtime_events e WHERE e.session_id=latest.session_id::text AND e.payload->>'root_run_id'=latest.id::text AND e.event_type='agent.state' ORDER BY commit_seq DESC,event_ordinal DESC LIMIT 1) state ON true
-       LEFT JOIN agent.runtime_sessions owner ON owner.session_id=latest.session_id::text
-       LEFT JOIN agent.recovery_backoff b ON b.kind=$1 AND b.subject_id=latest.id
-       WHERE (coalesce(state.status,'accepted') IN ('accepted','running') OR
-         (state.status=$2 AND coalesce(state.wakeup,'')<=to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
-       AND (owner.session_id IS NULL OR owner.lease_until<=clock_timestamp())
-       AND b.parked_at IS NULL AND (b.next_attempt_at IS NULL OR b.next_attempt_at<=clock_timestamp())
-       ORDER BY coalesce(b.next_attempt_at,CASE WHEN state.status=$2 THEN state.wakeup::timestamptz ELSE latest.created_at END),latest.id LIMIT $3`,
-      [RecoveryKind.Run, RunStatus.WaitingDelivery, recoveryDefaults.runBatch],
-    );
-    for (const run of runs.rows) {
+    const latest = db
+      .$with('latest')
+      .as(
+        db
+          .selectDistinctOn([serviceRuns.session_id])
+          .from(serviceRuns)
+          .orderBy(
+            asc(serviceRuns.session_id),
+            desc(serviceRuns.accepted_revision),
+          ),
+      );
+    const state = db
+      .select({
+        status: sql<string | null>`${runtimeEvents.payload}->>'status'`.as(
+          'status',
+        ),
+        wakeup: sql<
+          string | null
+        >`${runtimeEvents.payload}->'delivery_wait'->>'next_wakeup_at'`.as(
+          'wakeup',
+        ),
+      })
+      .from(runtimeEvents)
+      .where(
+        and(
+          eq(runtimeEvents.session_id, sql`${latest.session_id}::text`),
+          eq(
+            sql`${runtimeEvents.payload}->>'root_run_id'`,
+            sql`${latest.id}::text`,
+          ),
+          eq(runtimeEvents.event_type, 'agent.state'),
+        ),
+      )
+      .orderBy(
+        desc(runtimeEvents.commit_seq),
+        desc(runtimeEvents.event_ordinal),
+      )
+      .limit(1)
+      .as('state');
+    const runs = await db
+      .with(latest)
+      .select({
+        id: latest.id,
+        session_id: latest.session_id,
+        request_id: latest.request_id,
+        content_hash: latest.content_hash,
+        goal: latest.goal,
+        manifest: latest.manifest,
+        submission_id: latest.submission_id,
+        accepted_revision: latest.accepted_revision,
+        created_at: latest.created_at,
+        input: latest.input,
+        retry_of_run_id: latest.retry_of_run_id,
+      })
+      .from(latest)
+      .leftJoinLateral(state, sql`true`)
+      .leftJoin(
+        runtimeSessions,
+        eq(runtimeSessions.session_id, sql`${latest.session_id}::text`),
+      )
+      .leftJoin(
+        recoveryBackoff,
+        and(
+          eq(recoveryBackoff.kind, RecoveryKind.Run),
+          eq(recoveryBackoff.subject_id, latest.id),
+        ),
+      )
+      .where(
+        and(
+          or(
+            inArray(sql<string>`coalesce(${state.status}, 'accepted')`, [
+              RunStatus.Accepted,
+              RunStatus.Running,
+            ]),
+            and(
+              eq(state.status, RunStatus.WaitingDelivery),
+              lte(
+                sql<string>`coalesce(${state.wakeup}, '')`,
+                sql<string>`to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+              ),
+            ),
+          ),
+          or(
+            isNull(runtimeSessions.session_id),
+            lte(runtimeSessions.lease_until, sql<Date>`clock_timestamp()`),
+          ),
+          isNull(recoveryBackoff.parked_at),
+          or(
+            isNull(recoveryBackoff.next_attempt_at),
+            lte(recoveryBackoff.next_attempt_at, sql<Date>`clock_timestamp()`),
+          ),
+        ),
+      )
+      .orderBy(
+        sql`coalesce(${recoveryBackoff.next_attempt_at}, CASE WHEN ${state.status}=${RunStatus.WaitingDelivery} THEN ${state.wakeup}::timestamptz ELSE ${latest.created_at} END)`,
+        asc(latest.id),
+      )
+      .limit(recoveryDefaults.runBatch);
+    for (const run of runs) {
       if (this.stopping) return;
       if (!hasCurrentDefinitions(run.manifest) || !run.input) {
         await this.noteRecoveryFailure(

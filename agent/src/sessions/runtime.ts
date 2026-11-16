@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 import { loadTrustedExtensions } from '../pi-durable/trusted-extensions.js';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
+import { and, asc, eq, isNotNull, isNull, lte } from 'drizzle-orm';
+import { database } from '../database/connection.js';
+import { runtimeRecords, serviceRuns } from '../database/schema.js';
 import {
   Harness,
   configure,
@@ -91,10 +94,17 @@ export class SessionRuntime {
       leaseMs,
     );
     try {
-      const docs = await pool.query<{ id: string }>(
-        "SELECT id FROM agent.runtime_records WHERE session_id=$1 AND record_type='document' AND kind_key=$2 AND retired_at_seq IS NULL",
-        [run.session_id, JSON.stringify('glowloom.agent')],
-      );
+      const docs = await database(pool)
+        .select({ id: runtimeRecords.id })
+        .from(runtimeRecords)
+        .where(
+          and(
+            eq(runtimeRecords.session_id, run.session_id),
+            eq(runtimeRecords.record_type, 'document'),
+            eq(runtimeRecords.kind_key, JSON.stringify('glowloom.agent')),
+            isNull(runtimeRecords.retired_at_seq),
+          ),
+        );
       const storage = await openPostgresStorage(
         pool,
         run.session_id,
@@ -102,7 +112,7 @@ export class SessionRuntime {
         {
           projectEvents: eventProjection(
             run.id,
-            docs.rows.map((r) => Number(r.id)),
+            docs.map((r) => r.id),
           ),
         },
       );
@@ -305,13 +315,19 @@ export class SessionRuntime {
   async assertSources() {
     // The official transcript may contain inputs from any prior accepted round.
     // Recheck authority without submitting or decoding those inputs again.
-    const history = await this.pool.query<{
-      input: import('./types.js').AuthorizedInput;
-    }>(
-      'SELECT input FROM agent.service_runs WHERE session_id=$1 AND accepted_revision<=$2 AND input IS NOT NULL ORDER BY accepted_revision',
-      [this.run.session_id, this.run.accepted_revision],
-    );
-    for (const { input } of history.rows) {
+    const history = await database(this.pool)
+      .select({ input: serviceRuns.input })
+      .from(serviceRuns)
+      .where(
+        and(
+          eq(serviceRuns.session_id, this.run.session_id),
+          lte(serviceRuns.accepted_revision, this.run.accepted_revision),
+          isNotNull(serviceRuns.input),
+        ),
+      )
+      .orderBy(asc(serviceRuns.accepted_revision));
+    for (const { input } of history) {
+      if (!input) continue;
       const refs = input.draft.references;
       if (
         (Array.isArray(refs) && refs.length > 0) ||

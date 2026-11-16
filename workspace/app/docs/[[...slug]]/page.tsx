@@ -20,6 +20,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
 
   const MDX = page.data.body;
   const markdownUrl = `${page.url}.md`;
+  const RelativeLink = createRelativeLink(source, page);
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
@@ -31,14 +32,23 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
         <MarkdownCopyButton markdownUrl={markdownUrl} />
         <ViewOptionsPopover
           markdownUrl={markdownUrl}
-          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${encodeURI(page.path)}`}
+          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/workspace/content/${encodeURI(page.path)}`}
         />
       </div>
       <DocsBody>
         <MDX
           components={getMDXComponents({
-            // this allows you to link to other pages with relative file paths
-            a: createRelativeLink(source, page),
+            a: ({ href, ...props }) => (
+              <RelativeLink
+                {...props}
+                // Fumadocs resolves file paths prefixed with ./ or ../.
+                href={
+                  href && !/^(?:[a-z][a-z\d+.-]*:|[/.#?])/i.test(href)
+                    ? `./${href}`
+                    : href
+                }
+              />
+            ),
           })}
         />
       </DocsBody>

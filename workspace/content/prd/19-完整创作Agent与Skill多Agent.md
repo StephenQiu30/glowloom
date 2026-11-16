@@ -210,6 +210,8 @@
 
 ## 7. 假设、风险与接受限制
 
+NFR-AH-ORM-01（SRC-ATS-ORM-01）：NestJS 数据读写和事务由 ORM 管理，保持本 PRD 的授权、owner、幂等、控制、恢复、消息预算与游标合同。真实隔离 PG 验收需覆盖官方 Storage、已提交前缀/批次拒绝、未知 COMMIT、StorageFailed 收束、SIGKILL 后同 child 身份恢复，以及同毫秒内多个微秒时间点的连续分页；源码门禁禁止恢复原生 SQL 旁路和应用 DDL。结构来源仍为规范性 schema，发布定义指纹不被此重构绕过。
+
 官方 Pi Durable 为实验 API，自定义 PostgreSQL Storage 与内部 HTTP/流式合同是本项目必须验证的边界；采用官方 Harness 不等于具备原生 PostgreSQL 或跨进程副作用原子性。
 
 设计批准、工程测试、隔离基础设施验证、实际模型计费与完整创作产品接受分别记录。历史测试和原有完成标签只适用其原版本，不能替代本次迁移接受；不因框架安装、fixture 成功或类型检查通过宣布完整 Agent 已完成。

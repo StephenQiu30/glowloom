@@ -1,12 +1,22 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+## NestJS ORM 与知识库目录整理（2026-11-16）
+
+SRC-ATS-ORM-01：Agent 的九表列映射、CRUD、冲突处理、行锁、CTE/LATERAL、事务及批次保存点已改用 Drizzle ORM 0.45.4，pg 仅保留连接池和驱动。NestJS 源码没有完整手写 SQL、原生 query 或迁移执行器；数据库时钟、JSON、窗口和算术只使用参数化框架表达式。规范性 schema、角色与 HTTP/SSE 合同未改，Canvas 继续不访问数据库。需求22 → 设计32/37 → PRD19 NFR-AH-ORM-01 → Plan28 记录方案。
+
+独立 PG18 的两个新隔离测试库以受限 glowloom_agent 角色验证：Agent 全量32文件186项通过，包含39项 Storage conformance/recovery、真实断连/未知 COMMIT、StorageFailed 收束、SIGKILL 后同 child 恢复及新增微秒游标。故障注入识别 pg 文本和 QueryConfig，两种形式均保持原断言和超时。冻结安装、typecheck/lint/format/build、双向 API 重生成与声明检查及 schema source 门禁通过；独立只读审查未发现可行动问题。极深祖先链读取存在按深度往返及 OR 分支成本，已记录，不宣称性能提升。
+
+文档244个原文件已完整移到 workspace/content，移除多余docs层，目录专项见下方 Workspace/PRD31 AC-FD-10/Plan40。最终重建后229阅读页+229 Markdown共458地址全部200，2项Chromium验证导航、搜索、源文件及Markdown入口；Workspace lint/类型/格式/生产构建通过。六处既存历史源码断链及metadataBase默认提示保留在Workspace条目，不混入重写历史调研。
+
+用户随后已授权将本轮 ORM 与目录整理提交到 main 并推送；不包含部署或现有业务库操作。验证只在新隔离集群初始化规范性 schema，临时服务与测试实例已停止，日志位于本机/tmp/glowloom-agent-orm-*与/tmp/glowloom-workspace-flat-*。发布仍需按设计37核验冻结执行定义与在途运行，不修改旧manifest强行接续。
+
 ## Canvas 变更提交授权（2026-11-16）
 
 用户已要求将本条画布任务代码提交到 main 并推送；范围包含编辑器归属整理、共享检查点优化、隔离存量演练、相关测试与文档。提交前复核包边界、完整编辑器类型/lint、运行时测试及 schema 门禁，既有性能与存量证据的生产源码哈希保持一致；本次提交与推送不包含现有业务库变更或生产部署，远程 CI 状态单独核验。
 
 ## Canvas 存量离线转换演练（2026-11-16）
 
-来源：需求10 SRC-SAVE-10 → 设计17 → PRD09 → 计划19；证据与上线前步骤见[调研60](workspace/content/docs/research/60-2026-11-16-画布存量检查点离线转换演练与上线核验.md)、[机器证据](workspace/content/docs/research/60-canvas-offline-upgrade-evidence.json)。旧完整 schema 与旧接受服务生成6画布、17历史；备份还原后的新副本转换为18个精确检查点，23份二进制及全部 metadata、九表摘要不变，原始合成源库复核未变。
+来源：需求10 SRC-SAVE-10 → 设计17 → PRD09 → 计划19；证据与上线前步骤见[调研60](workspace/content/research/60-2026-11-16-画布存量检查点离线转换演练与上线核验.md)、[机器证据](workspace/content/research/60-canvas-offline-upgrade-evidence.json)。旧完整 schema 与旧接受服务生成6画布、17历史；备份还原后的新副本转换为18个精确检查点，23份二进制及全部 metadata、九表摘要不变，原始合成源库复核未变。
 
 锁超时与提交前故障均全回滚；目标三表列/约束/索引/owner/ACL与规范性空库对照通过。演练检出并补齐离线步骤遗漏的glowloom_creation权限；恢复断言按新旧服务既有合同精确保留后分配referenceLabels，不放宽其他历史内容。新服务转换副本与旧版备份副本分别在Race下通过六类跨转换待发、回执、双账号并发、删除/历史恢复及旧epoch/生命周期验证；转换后20组既有Yjs Race、Go vet/lint/格式、schema source与适用漏洞检查通过。
 
@@ -14,7 +24,7 @@
 
 ## Canvas 同步写放大基线与优化（2026-11-16）
 
-来源：需求10 SRC-SAVE-09 → 设计17 → PRD09 → 计划19；完整证据见[调研59](workspace/content/docs/research/59-2026-11-16-画布同步写放大基线与共享检查点验证.md)与[机器样本](workspace/content/docs/research/59-canvas-sync-performance-metrics.json)。50/200/2000 节点、文字/拖动、3 轮各 12 次，前后共 432 次正式服务接受；WAL 减少 30.0%～36.9%，2000 节点 12 次提交约 32.1 → 20.3 MB。首轮大图拖动延迟升高后补做 A→B→B→A 48 次复核，未复现稳定退化；宿主机波动明显，不承诺延迟或并发容量收益。
+来源：需求10 SRC-SAVE-09 → 设计17 → PRD09 → 计划19；完整证据见[调研59](workspace/content/research/59-2026-11-16-画布同步写放大基线与共享检查点验证.md)与[机器样本](workspace/content/research/59-canvas-sync-performance-metrics.json)。50/200/2000 节点、文字/拖动、3 轮各 12 次，前后共 432 次正式服务接受；WAL 减少 30.0%～36.9%，2000 节点 12 次提交约 32.1 → 20.3 MB。首轮大图拖动延迟升高后补做 A→B→B→A 48 次复核，未复现稳定退化；宿主机波动明显，不承诺延迟或并发容量收益。
 
 已实现完整二进制 checkpoint 由当前状态与历史共享引用，保留所有逐 revision JSON 与原二进制绑定、增量、回执及 Outbox；纯因果更新清理无引用旧状态。20 组 Yjs 集成 Race、最终权限/保留专项 Race、Canvas 106 项、类型、Go lint/vet/格式、schema 门禁及适用漏洞检查通过；独立只读审查未发现可行动问题。Canvas 全量格式仍有原有 12 文件问题。NestJS ORM CRUD 与禁止运行时 DDL 的要求已补入仓库规范，Canvas Nest 继续无数据库访问。
 
@@ -22,7 +32,7 @@
 
 ## Canvas编辑器归属与存储压力调研（2026-11-16）
 
-SRC-CAN-16/17：编辑器源码统一到canvas/editor，frontend保留页面和业务接入，未改协作与数据库权威。验收证据归[计划13](workspace/content/docs/plan/13-画布编辑与素材实施计划.md#2026-11-16-编辑器归属整理与存储调研src-can-1617)，SQLite位置与写放大分析归[调研58](workspace/content/docs/research/58-2026-11-16-画布存储压力与SQLite适配评估.md)。已通过前端全量340文件2419项、Canvas核心106项、隔离PG18的7组Yjs集成、本机生产构建及合成交互/standalone验证；镜像验证结果归计划13。本轮不提交、推送或部署。
+SRC-CAN-16/17：编辑器源码统一到canvas/editor，frontend保留页面和业务接入，未改协作与数据库权威。验收证据归[计划13](workspace/content/plan/13-画布编辑与素材实施计划.md#2026-11-16-编辑器归属整理与存储调研src-can-1617)，SQLite位置与写放大分析归[调研58](workspace/content/research/58-2026-11-16-画布存储压力与SQLite适配评估.md)。已通过前端全量340文件2419项、Canvas核心106项、隔离PG18的7组Yjs集成、本机生产构建及合成交互/standalone验证；镜像验证结果归计划13。本轮不提交、推送或部署。
 
 写放大基线及共享检查点优化已由上节和调研59承接；多人同画布负载、锁等待及浏览器成本仍待独立测量，SQLite暂不作为团队画布权威库替换。另记录迁移前即存在的节点拖动Escape取消缺陷：Escape仅清选择，pointerup仍可能落位；应独立补充事务取消回归后修复，本次不混入行为变化。
 
@@ -150,6 +160,8 @@ Identity 原密码变更、匿名密码重置与双邮箱变更已沿原业务�
 <a id="workspace-20261114"></a>
 
 ## Workspace知识库与研发工作流（2026-11-14）
+
+2026-11-16 内容目录整理：按用户要求去掉多余的 `workspace/content/docs/` 层，244个原文件完整移至 `workspace/content/`；官方 collection 直接读取 `content`，保留 `/docs` URL，GitHub入口改为真实仓库路径。同步残余目录引用、旧首页链接与一处BACKLOG相对路径；裸相对文件名只补 `./` 后交给官方链接解析，未改外部来源URL。来源为[需求30](workspace/content/requirement/30-Workspace官方Fumadocs接入需求.md) → [设计45](workspace/content/design/45-Workspace官方Fumadocs设计.md) → [PRD31 AC-FD-10](workspace/content/prd/31-Workspace官方Fumadocs.md) → [Plan40](workspace/content/plan/40-Workspace官方Fumadocs执行计划.md)。本机lint、types:check、format:check、生产build和2项Chromium检查通过；229篇页面及229个Markdown地址全部返回200。2670处本地相对引用核对剩6处既存源码断链（调研35中的4个旧frontend画布路径，以及设计36／44中的旧operation_settlement.go），未扩大修改历史正文。构建仍提示既有metadataBase缺省；本轮未提交、推送或部署。
 
 本轮同时补齐正式品牌 SVG、浏览器及 Apple 图标，通过官方导航插槽和 Next.js 原生图标约定接入。品牌补齐后5项浏览器验收、桌面／手机及深浅主题显示、图标 URL、类型／Lint／格式和精确隔离提交内容的生产构建均已通过，随本任务一并提交。
 
@@ -330,7 +342,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 - `backend/internal/subject/application/service.go`
 - `backend/internal/subject/domain/content.go`
 - `backend/tests/subject/type_test.go`
-- `workspace/content/00-文档索引.md`
+- `workspace/content/index.mdx`
 - `workspace/content/requirement/25-多模态创作与Agent编排需求.md`
 - `workspace/content/research/00-调研导航.md`
 - `workspace/content/research/2026-11-12-即梦多模态创作与Agent服务拆解.md`
@@ -457,7 +469,7 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 | 文件                                                                                                                                                                         | 归属/处理                                             |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | [BACKLOG.md](BACKLOG.md)                                                                                                                                                     | 本轮及此前同目标的状态/行动，保留原有内容；保留工作区 |
-| [workspace/content/00-文档索引.md](workspace/content/00-文档索引.md)                                                                                                         | 更新两条主链及研究入口；保留工作区                    |
+| [workspace/content/index.mdx](workspace/content/index.mdx)                                                                                                         | 更新两条主链及研究入口；保留工作区                    |
 | [workspace/content/requirement/00-需求导航.md](workspace/content/requirement/00-需求导航.md)                                                                                 | 更新来源入口；保留工作区                              |
 | [workspace/content/research/00-调研导航.md](workspace/content/research/00-调研导航.md)                                                                                       | 更新研究入口；保留工作区                              |
 | [workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md](workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md)                                   | 主子/Skill/MCP及阶段产物/交付/后续需求；保留工作区    |
@@ -938,7 +950,7 @@ f075补齐文档角色中文；b7bf以独立文档能力接通对话内补充文
 
 其他现存变更（保留）：
 
-- `workspace/content/00-文档索引.md`
+- `workspace/content/index.mdx`
 - `workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md`
 - `workspace/content/research/00-调研导航.md`
 - `workspace/content/requirement/25-多模态创作与Agent编排需求.md`

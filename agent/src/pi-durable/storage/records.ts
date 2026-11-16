@@ -7,9 +7,26 @@ import {
   type Seq,
   type StorageWrite,
 } from '@earendil-works/pi-durable';
-import type { Pool, PoolClient } from 'pg';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  isNull,
+  lt,
+  lte,
+  or,
+  type SQL,
+} from 'drizzle-orm';
+import {
+  database,
+  type DatabaseConnection,
+  type AgentTransaction,
+} from '../../database/connection.js';
+import { runtimeRecords } from '../../database/schema.js';
 
-export type Database = Pool | PoolClient;
+export type Database = DatabaseConnection;
 export type RecordWrite = Extract<
   StorageWrite,
   { type: 'conversation' | 'entry' | 'task' | 'submission' }
@@ -37,16 +54,22 @@ export async function record<T>(
 ) {
   return decode<T>(
     (
-      await db.query<BodyRow>(
-        'SELECT body FROM agent.runtime_records WHERE session_id=$1 AND record_type=$2 AND id=$3',
-        [session, type, id],
-      )
-    ).rows[0],
+      await database(db)
+        .select({ body: runtimeRecords.body })
+        .from(runtimeRecords)
+        .where(
+          and(
+            eq(runtimeRecords.session_id, session),
+            eq(runtimeRecords.record_type, type),
+            eq(runtimeRecords.id, id),
+          ),
+        )
+    )[0],
   );
 }
 
 export async function writeRecord(
-  client: PoolClient,
+  client: AgentTransaction,
   session: string,
   seq: Seq,
   write: RecordWrite,
@@ -55,39 +78,45 @@ export async function writeRecord(
   const conversation = write.type === 'conversation' ? write.value : undefined;
   const task = write.type === 'task' ? write.value : undefined;
   const submission = write.type === 'submission' ? write.value : undefined;
-  const existing = await client.query<{ record_type: string }>(
-    'SELECT record_type FROM agent.runtime_records WHERE session_id=$1 AND id=$2',
-    [session, value.id],
-  );
-  const prior = existing.rows[0]?.record_type;
+  const existing = await client
+    .select({ record_type: runtimeRecords.record_type })
+    .from(runtimeRecords)
+    .where(
+      and(
+        eq(runtimeRecords.session_id, session),
+        eq(runtimeRecords.id, value.id),
+      ),
+    );
+  const prior = existing[0]?.record_type;
   if (prior && (prior !== type || type === 'conversation' || type === 'entry'))
     throw new Refused(`ID ${value.id} already belongs to ${prior}`);
-  await client.query(
-    `INSERT INTO agent.runtime_records
-    (session_id,id,record_type,body,commit_seq,conversation_id,owner_conversation_id,owner_task_id,parent_id,parent_at,head_id,
-     kind_key,status,background,abort_requested,request_key)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-    ON CONFLICT(session_id,id) DO UPDATE SET body=excluded.body,commit_seq=excluded.commit_seq,conversation_id=excluded.conversation_id,
-      kind_key=excluded.kind_key,status=excluded.status,background=excluded.background,abort_requested=excluded.abort_requested,request_key=excluded.request_key`,
-    [
-      session,
-      value.id,
-      type,
-      JSON.stringify(value),
-      seq,
-      'conversationId' in value ? value.conversationId : null,
-      conversation?.owner?.conversationId,
-      conversation?.owner?.taskId,
-      conversation?.parent?.conversationId,
-      conversation?.parent?.at,
-      write.type === 'entry' ? write.value.head : null,
-      indexKey(task?.kind),
-      task?.state.status ?? submission?.status,
-      task?.background,
-      task?.abortRequested,
-      indexKey(submission?.requestId),
-    ],
-  );
+  const mutable = {
+    body: JSON.stringify(value),
+    commit_seq: seq,
+    conversation_id: 'conversationId' in value ? value.conversationId : null,
+    kind_key: indexKey(task?.kind),
+    status: task?.state.status ?? submission?.status ?? null,
+    background: task?.background ?? null,
+    abort_requested: task?.abortRequested ?? null,
+    request_key: indexKey(submission?.requestId),
+  };
+  await client
+    .insert(runtimeRecords)
+    .values({
+      session_id: session,
+      id: value.id,
+      record_type: type,
+      ...mutable,
+      owner_conversation_id: conversation?.owner?.conversationId ?? null,
+      owner_task_id: conversation?.owner?.taskId ?? null,
+      parent_id: conversation?.parent?.conversationId ?? null,
+      parent_at: conversation?.parent?.at ?? null,
+      head_id: write.type === 'entry' ? (write.value.head ?? null) : null,
+    })
+    .onConflictDoUpdate({
+      target: [runtimeRecords.session_id, runtimeRecords.id],
+      set: mutable,
+    });
 }
 
 export interface ScanStart {
@@ -129,40 +158,71 @@ export function page<T extends { id: Id<string> }>(
   return { items, next: { after: last.id, order } };
 }
 
-// Column names are specified solely by the storage methods. All query values use parameters.
+type FilterColumns = Pick<
+  typeof runtimeRecords.$inferSelect,
+  | 'owner_task_id'
+  | 'owner_conversation_id'
+  | 'conversation_id'
+  | 'kind_key'
+  | 'status'
+  | 'abort_requested'
+  | 'background'
+  | 'scope_key'
+>;
+type ScanFilters = {
+  [K in keyof FilterColumns]?: FilterColumns[K] | undefined;
+};
+
 export async function scan<T extends { id: Id<string> }>(
   db: Database,
   session: string,
   type: string,
-  filters: Record<string, unknown>,
+  filters: ScanFilters,
   limit: number,
   start: ScanStart,
   at?: Seq | 'current',
 ) {
-  const args: unknown[] = [session, type];
-  const where = ['session_id=$1', 'record_type=$2'];
-  for (const [col, value] of Object.entries(filters)) {
-    if (value === undefined) continue;
-    where.push(`${col}=$${args.push(value)}`);
+  const where: (SQL | undefined)[] = [
+    eq(runtimeRecords.session_id, session),
+    eq(runtimeRecords.record_type, type),
+  ];
+  for (const col of Object.keys(filters) as (keyof ScanFilters)[]) {
+    const value = filters[col];
+    if (value !== undefined)
+      where.push(
+        value === null
+          ? isNull(runtimeRecords[col])
+          : eq(runtimeRecords[col], value),
+      );
   }
-  if (at === 'current') where.push('retired_at_seq IS NULL');
+  if (at === 'current') where.push(isNull(runtimeRecords.retired_at_seq));
   else if (at !== undefined) {
-    const p = args.push(at);
     where.push(
-      `created_at_seq <= $${p} AND (retired_at_seq IS NULL OR retired_at_seq > $${p})`,
+      lte(runtimeRecords.created_at_seq, at),
+      or(
+        isNull(runtimeRecords.retired_at_seq),
+        gt(runtimeRecords.retired_at_seq, at),
+      ),
     );
   }
   if (start.after !== undefined)
     where.push(
-      `id ${start.order === 'ascending' ? '>' : '<'} $${args.push(start.after)}`,
+      start.order === 'ascending'
+        ? gt(runtimeRecords.id, start.after)
+        : lt(runtimeRecords.id, start.after),
     );
-  const result = await db.query<BodyRow>(
-    `SELECT body FROM agent.runtime_records WHERE ${where.join(' AND ')}
-    ORDER BY id ${start.order === 'ascending' ? 'ASC' : 'DESC'} LIMIT $${args.push(limit + 1)}`,
-    args,
-  );
+  const rows = await database(db)
+    .select({ body: runtimeRecords.body })
+    .from(runtimeRecords)
+    .where(and(...where))
+    .orderBy(
+      start.order === 'ascending'
+        ? asc(runtimeRecords.id)
+        : desc(runtimeRecords.id),
+    )
+    .limit(limit + 1);
   return page(
-    result.rows.map((row) => JSON.parse(row.body) as T),
+    rows.map((row) => JSON.parse(row.body) as T),
     limit,
     start.order,
   );

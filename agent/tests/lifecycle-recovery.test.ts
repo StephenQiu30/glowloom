@@ -18,6 +18,7 @@ import { testPool } from './storage/database.js';
 import { recoveryDefaults } from '../src/config.js';
 import { RecoveryStore } from '../src/sessions/recovery.js';
 import { recoveryPumpPool } from './helpers/recovery-database.js';
+import { postgresQueryText } from './helpers/postgres-query-text.js';
 
 const scope = () => ({
   actor_id: randomUUID(),
@@ -227,7 +228,9 @@ it('closes a real PG Harness immediately on StorageFailed and releases its owner
             return async (...args: unknown[]) => {
               if (
                 armed &&
-                String(args[0]).includes('INSERT INTO agent.runtime_events')
+                /^\s*insert\s+into\s+agent\.runtime_events\b/i.test(
+                  postgresQueryText(args[0]).replaceAll('"', ''),
+                )
               ) {
                 armed = false;
                 throw Error('faultgate projection unavailable');

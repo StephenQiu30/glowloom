@@ -1,4 +1,10 @@
-import type { Pool, PoolClient } from 'pg';
+import { and, eq, gt, lte, sql } from 'drizzle-orm';
+import type { Pool } from 'pg';
+import {
+  database,
+  type DatabaseConnection,
+} from '../../database/connection.js';
+import { runtimeSessions } from '../../database/schema.js';
 
 export interface SessionOwner {
   readonly id: string;
@@ -25,6 +31,20 @@ function ownerFrom(row?: LeaseRow): SessionOwner {
   };
 }
 
+const leaseColumns = {
+  owner_id: runtimeSessions.owner_id,
+  owner_epoch: runtimeSessions.owner_epoch,
+  lease_until: runtimeSessions.lease_until,
+};
+function ownership(sessionId: string, owner: SessionOwner) {
+  return and(
+    eq(runtimeSessions.session_id, sessionId),
+    eq(runtimeSessions.owner_id, owner.id),
+    eq(runtimeSessions.owner_epoch, owner.epoch),
+    gt(runtimeSessions.lease_until, sql`clock_timestamp()`),
+  );
+}
+
 export async function claimSessionOwner(
   pool: Pool,
   sessionId: string,
@@ -32,17 +52,26 @@ export async function claimSessionOwner(
   leaseMs: number,
 ) {
   validateLease(leaseMs);
-  const result = await pool.query<LeaseRow>(
-    `
-    INSERT INTO agent.runtime_sessions AS s (session_id,owner_id,owner_epoch,lease_until)
-    VALUES ($1,$2,1,clock_timestamp() + $3 * interval '1 millisecond')
-    ON CONFLICT(session_id) DO UPDATE SET owner_id=$2, owner_epoch=s.owner_epoch+1,
-      lease_until=clock_timestamp() + $3 * interval '1 millisecond'
-    WHERE s.lease_until <= clock_timestamp()
-    RETURNING owner_id,owner_epoch,lease_until`,
-    [sessionId, id, leaseMs],
-  );
-  return ownerFrom(result.rows[0]);
+  const lease = sql`clock_timestamp() + ${leaseMs} * interval '1 millisecond'`;
+  const rows = await database(pool)
+    .insert(runtimeSessions)
+    .values({
+      session_id: sessionId,
+      owner_id: id,
+      owner_epoch: '1',
+      lease_until: lease,
+    })
+    .onConflictDoUpdate({
+      target: runtimeSessions.session_id,
+      set: {
+        owner_id: id,
+        owner_epoch: sql`${runtimeSessions.owner_epoch} + 1`,
+        lease_until: lease,
+      },
+      setWhere: lte(runtimeSessions.lease_until, sql`clock_timestamp()`),
+    })
+    .returning(leaseColumns);
+  return ownerFrom(rows[0]);
 }
 
 export async function renewSessionOwner(
@@ -52,13 +81,14 @@ export async function renewSessionOwner(
   leaseMs: number,
 ) {
   validateLease(leaseMs);
-  const result = await pool.query<LeaseRow>(
-    `UPDATE agent.runtime_sessions SET lease_until=clock_timestamp()+ $4 * interval '1 millisecond'
-    WHERE session_id=$1 AND owner_id=$2 AND owner_epoch=$3 AND lease_until>clock_timestamp()
-    RETURNING owner_id,owner_epoch,lease_until`,
-    [sessionId, owner.id, owner.epoch, leaseMs],
-  );
-  return ownerFrom(result.rows[0]);
+  const rows = await database(pool)
+    .update(runtimeSessions)
+    .set({
+      lease_until: sql`clock_timestamp() + ${leaseMs} * interval '1 millisecond'`,
+    })
+    .where(ownership(sessionId, owner))
+    .returning(leaseColumns);
+  return ownerFrom(rows[0]);
 }
 
 export async function releaseSessionOwner(
@@ -66,24 +96,22 @@ export async function releaseSessionOwner(
   sessionId: string,
   owner: SessionOwner,
 ): Promise<void> {
-  await pool.query(
-    `UPDATE agent.runtime_sessions SET lease_until=clock_timestamp()
-    WHERE session_id=$1 AND owner_id=$2 AND owner_epoch=$3 AND lease_until>clock_timestamp()`,
-    [sessionId, owner.id, owner.epoch],
-  );
+  await database(pool)
+    .update(runtimeSessions)
+    .set({ lease_until: sql`clock_timestamp()` })
+    .where(ownership(sessionId, owner));
 }
 
 export async function assertOwnership(
-  client: Pool | PoolClient,
+  client: DatabaseConnection,
   sessionId: string,
   owner: SessionOwner,
 ) {
-  const result = await client.query<{ commit_seq: string }>(
-    `SELECT commit_seq FROM agent.runtime_sessions
-    WHERE session_id=$1 AND owner_id=$2 AND owner_epoch=$3 AND lease_until>clock_timestamp() FOR UPDATE`,
-    [sessionId, owner.id, owner.epoch],
-  );
-  if (!result.rows[0])
-    throw new Error('Session ownership is unavailable or expired');
-  return Number(result.rows[0].commit_seq);
+  const rows = await database(client)
+    .select({ commit_seq: runtimeSessions.commit_seq })
+    .from(runtimeSessions)
+    .where(ownership(sessionId, owner))
+    .for('update');
+  if (!rows[0]) throw new Error('Session ownership is unavailable or expired');
+  return rows[0].commit_seq;
 }

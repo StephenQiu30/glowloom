@@ -6,7 +6,7 @@
 
 已确认规则保留：邮箱 + 密码、注册验证邮箱；个人与团队创作者共用账号，平台管理与团队管理权限分别校验；账号注销采用即时软删除并撤权。当前实施进度、下一步与剩余接受统一见 [BACKLOG](BACKLOG.md)，历史证据保留在[用户系统设计](workspace/content/design/01-用户系统总体设计.md)和[测试与运行设计](workspace/content/design/04-用户系统测试与运行设计.md)。
 
-[文档索引](workspace/content/00-文档索引.md) 为文档入口。原始需求与确认在 workspace/content/requirement 独立保留；按 design → PRD → Plan 分层，技术合同在 design，用户价值、范围及验收在 PRD，实施步骤和实际验证证据在 Plan。每份 PRD 显式指定唯一来源设计，每份 Plan 显式指定唯一来源 PRD；专项技术依赖通过链接展开。设计使用[八节模板](workspace/content/templates/01-设计模板.md)，故事与场景按模板进入对应主题。当前实施进度与调度只在 BACKLOG。已有长期调研保留来源、适用版本与采用边界，研究不等于采用或验收。AGENTS 负责长期协作规则，根 DESIGN 负责共享视觉与交互。完整候选范围见[原始产品范围](workspace/content/requirement/01-产品范围.md)和[总 PRD](workspace/content/prd/10-产品总览与交付边界.md)，不据目录承诺排期或完成。
+[文档索引](workspace/content/index.mdx) 为文档入口。原始需求与确认在 workspace/content/requirement 独立保留；按 design → PRD → Plan 分层，技术合同在 design，用户价值、范围及验收在 PRD，实施步骤和实际验证证据在 Plan。每份 PRD 显式指定唯一来源设计，每份 Plan 显式指定唯一来源 PRD；专项技术依赖通过链接展开。设计使用[八节模板](workspace/content/templates/01-设计模板.md)，故事与场景按模板进入对应主题。当前实施进度与调度只在 BACKLOG。已有长期调研保留来源、适用版本与采用边界，研究不等于采用或验收。AGENTS 负责长期协作规则，根 DESIGN 负责共享视觉与交互。完整候选范围见[原始产品范围](workspace/content/requirement/01-产品范围.md)和[总 PRD](workspace/content/prd/10-产品总览与交付边界.md)，不据目录承诺排期或完成。
 
 ## 2. 可继续使用的工具
 
@@ -14,9 +14,9 @@
 
 Agent Harness 与多 Agent 的已确认目标（2026-11-04，SRC-AGH-12）：同仓库独立 `agent/`，TypeScript strict + 官方 Pi Durable，独立构建/测试/容器与进程；通过当前内部 HTTP/SSE 与 Go 业务 API 交互。Agent 单独拥有会话、运行、计划、子 Agent 和恢复状态；Go 只保留身份/审批/预算/模型出站/工具与业务数据权威，不镜像执行状态、不启动或监督 Node。复用 PostgreSQL，使用独立 `agent` schema 与受限角色；Docker Compose 统一启动。项目移除 Temporal，普通后台任务使用数据库工作记录与 Go worker。新架构无旧实现、兼容/双轨/别名/回退。完整合同见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)；代码与 Compose 已按该合同实施；工程和产品接受分别记录在 BACKLOG，不能由设计推定验证通过。
 
-`agent` 服务与根目录 `agent/`、包名 `agent`（private）、Compose/CI `agent`、镜像 `glowloom/agent` 统一命名。服务使用 Node 24、TypeScript ESM、NestJS 与官方 Fastify 适配器。Controller/DTO 注解生成 OpenAPI，TypeBox 仅用于 Pi 工具参数。Pi Durable、pg、Pino、Vitest 与 pnpm/tsc 延续现有基线。只发布单一 NestJS 实现，移除原生 Fastify 入口、TypeBox HTTP 合同及兼容分支。完整技术栈与版本见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，目标目录和生成链见[设计37](workspace/content/design/37-Agent服务目录与TypeScript规范设计.md)。
+`agent` 服务与根目录 `agent/`、包名 `agent`（private）、Compose/CI `agent`、镜像 `glowloom/agent` 统一命名。服务使用 Node 24、TypeScript ESM、NestJS 与官方 Fastify 适配器。Controller/DTO 注解生成 OpenAPI，TypeBox 仅用于 Pi 工具参数。Pi Durable、Drizzle ORM（pg 驱动）、Pino、Vitest 与 pnpm/tsc 沿用当前包基线；CRUD、行锁和事务由 ORM 构建，列映射不替代规范性 schema，不引入结构生成或迁移执行器。只发布单一 NestJS 实现，移除原生 Fastify 入口、TypeBox HTTP 合同及兼容分支。完整技术栈与版本见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，目标目录和生成链见[设计37](workspace/content/design/37-Agent服务目录与TypeScript规范设计.md)。
 
-`canvas` 服务对应 `canvas/`、Compose 内部地址 `canvas:4400`、镜像 `glowloom/canvas` 与私有包 `@glowloom/canvas`。服务使用 Node 24、NestJS/Fastify、TypeScript ESM 和 Yjs。Go 拥有鉴权、接受与持久化，Canvas 计算候选更新，浏览器只消费共享包的指定子路径。浏览器编辑器统一位于 `canvas/editor/`，通过 `@glowloom/canvas/editor` 及具体子路径由 frontend 编译；应用宿主接入集中于 `frontend/canvas-host.ts`，页面、身份、业务 API 与协作装配仍由 frontend 提供。Node 服务构建只包含 `canvas/src/`，不安装浏览器 peers。目录见[设计17](workspace/content/docs/design/17-画布Yjs协作编辑设计.md)与[编辑器边界](workspace/content/docs/design/10-画布交互设计.md#711-编辑器源码归属src-can-162026-11-16-已确认)。
+`canvas` 服务对应 `canvas/`、Compose 内部地址 `canvas:4400`、镜像 `glowloom/canvas` 与私有包 `@glowloom/canvas`。服务使用 Node 24、NestJS/Fastify、TypeScript ESM 和 Yjs。Go 拥有鉴权、接受与持久化，Canvas 计算候选更新，浏览器只消费共享包的指定子路径。浏览器编辑器统一位于 `canvas/editor/`，通过 `@glowloom/canvas/editor` 及具体子路径由 frontend 编译；应用宿主接入集中于 `frontend/canvas-host.ts`，页面、身份、业务 API 与协作装配仍由 frontend 提供。Node 服务构建只包含 `canvas/src/`，不安装浏览器 peers。目录见[设计17](workspace/content/design/17-画布Yjs协作编辑设计.md)与[编辑器边界](workspace/content/design/10-画布交互设计.md#711-编辑器源码归属src-can-162026-11-16-已确认)。
 
 Harness 按[设计32 §7.6](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)直接组合官方 registry/tool/doc/owned conversation；四个同版 Pi 包中 coding-agent 仅提供受控资源 SDK，不运行 CLI 或第二个 AgentSession。运行固定 manifest、显式角色工具名单，模型/工具出口强制校验 Go 授权；第三方 Skill 脚本走 Go 隔离能力。审批/暂停收束后的 continuation 与崩溃恢复原未决任务分别处理，不自写循环或另造插件加载器。
 
