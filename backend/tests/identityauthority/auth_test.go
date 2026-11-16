@@ -195,7 +195,8 @@ func TestRealAccessExpiryBoundaryAndNoRefreshFallback(t *testing.T) {
 	c, err := authority.NewClient(writefence.WriterMedia, authority.Target{Address: serve(t, s), Token: tokens[writefence.WriterMedia], Transport: insecure.NewCredentials()})
 	require.NoError(t, err)
 	_, err = c.Verify(t.Context(), authority.AccessCredential(f.access, f.csrfAccess))
-	require.ErrorIs(t, err, identity.ErrSessionInvalid)
+	require.ErrorIs(t, err, identity.ErrAccessExpired)
+	require.NotErrorIs(t, err, identity.ErrSessionInvalid)
 	// A refresh-like opaque value is never tried as legacy after access failure.
 	_, err = c.Verify(t.Context(), authority.AccessCredential(f.legacy, f.csrfLegacy))
 	require.ErrorIs(t, err, identity.ErrSessionInvalid)

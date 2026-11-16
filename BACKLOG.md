@@ -6,6 +6,8 @@
 
 完整golangci发现的格式/注释、未使用函数、冗余闭包和等价逻辑表达式均已修复；78个formatter目标中77个与官方formatter结果逐字节一致，另一文件同时修复门禁报告的等价逻辑表达式。全量lint、vet/build、相关六包Race与真实隔离PG18的五组生命周期HTTP/准入测试通过。首次无环境全仓Race中的agentboundary/canvas缺专用DSN，不能称为全量通过；最终接受以推送后完整CI终态为准。证据在/tmp/glowloom-project-ci-20261116；现有业务库未DDL，无付费调用。并行Workspace页面/配置改动和原有package.json保留，不混入本次提交。
 
+首轮修复提交d7733083的远程全量Race进一步暴露三个旧测试合同/夹具问题：访问凭据过期应返回ErrAccessExpired，CSRF不匹配应返回PermissionDenied，多产物交付不能将跨服务协调包在外层事务中。三个失败均先本地复现，再仅修正测试，未放宽生产错误合同、授权或写入围栏。使用隔离PG18、受限owner测试角色和CI同款COS协议夹具后，identityauthority整包Race及两个终态交付集成测试全部通过；全量lint、vet、build亦通过。继续以最新提交的完整远程CI终态验收。
+
 <a id="notifications-20261116"></a>
 
 ## 通知中心与公告管理（2026-11-16）

@@ -71,7 +71,7 @@ func TestServerRejectsWrongCallerCredentialAndCommand(t *testing.T) {
 		{"target", func(r *pb.AdmitSessionCommandRequest) { r.Target = coordination.Writer_WRITER_EXECUTION }, codes.PermissionDenied},
 		{"missing csrf", func(r *pb.AdmitSessionCommandRequest) { r.Credential.CsrfToken = "" }, codes.InvalidArgument},
 		{"bad csrf encoding", func(r *pb.AdmitSessionCommandRequest) { r.Credential.CsrfToken = "bad" }, codes.InvalidArgument},
-		{"wrong csrf", func(r *pb.AdmitSessionCommandRequest) { r.Credential.CsrfToken = strings.Repeat("A", 43) }, codes.Unauthenticated},
+		{"wrong csrf", func(r *pb.AdmitSessionCommandRequest) { r.Credential.CsrfToken = strings.Repeat("A", 43) }, codes.PermissionDenied},
 		{"missing proof", func(r *pb.AdmitSessionCommandRequest) { r.Credential.Proof = nil }, codes.InvalidArgument},
 		{"refresh extension", func(r *pb.AdmitSessionCommandRequest) { unknown(r.Credential) }, codes.InvalidArgument},
 		{"forged principal extension", func(r *pb.AdmitSessionCommandRequest) { unknown(r) }, codes.InvalidArgument},

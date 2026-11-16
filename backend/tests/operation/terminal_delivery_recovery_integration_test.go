@@ -222,9 +222,8 @@ func (f *originalImageGeneration) Submit(context.Context, application.Generation
 }
 
 func TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived(t *testing.T) {
-	db := operationStoreDB(t).Begin()
-	require.NoError(t, db.Error)
-	t.Cleanup(func() { _ = db.Rollback().Error })
+	// Cross-owner coordination must commit its source state before writer calls.
+	db := operationStoreDB(t)
 	f := seedManagedFixture(t, db)
 	i, store := f.identity, f.store
 	require.NoError(t, db.Exec(`UPDATE billing.budget SET limit_micros=100000 WHERE project_id=?`, i.ProjectID).Error)
