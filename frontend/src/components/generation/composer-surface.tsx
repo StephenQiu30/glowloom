@@ -23,7 +23,7 @@ export function ComposerSurface({
     inline.current = container;
     if (!container) return;
     const element = document.createElement("div");
-    element.className = "flex min-h-0 w-full flex-1 flex-col";
+    element.className = "flex min-h-0 w-full min-w-0 flex-1 flex-col";
     (modal.current ?? inline.current)?.appendChild(element);
     setHost(element);
     return () => element.remove();
@@ -76,7 +76,10 @@ export function ComposerSurface({
         }}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
-        <div ref={mountModal} className="flex min-h-0 flex-1 flex-col" />
+        <div
+          ref={mountModal}
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
+        />
       </DialogContent>
       {host && createPortal(children, host)}
     </Dialog>

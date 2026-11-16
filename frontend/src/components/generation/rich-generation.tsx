@@ -1850,7 +1850,7 @@ function EditorWorkspace({
         data-expanded={full || undefined}
         data-presentation={presentation}
         className={cn(
-          "mx-auto flex w-full max-w-5xl flex-col gap-4",
+          "mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-4",
           compact && "gap-2",
           full &&
             (compact ? "min-h-0 flex-1" : "max-h-full overflow-y-auto p-4"),

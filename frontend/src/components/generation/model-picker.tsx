@@ -52,7 +52,7 @@ export function ModelSelectList({
       {...props}
     >
       {!compact && (
-        <div className="px-3 pt-2 pb-1 text-xs text-muted-foreground">
+        <div className="min-w-0 px-3 pt-2 pb-1 text-xs wrap-anywhere text-muted-foreground">
           选择模型{current ? `：${current}` : ""}
         </div>
       )}
@@ -99,13 +99,13 @@ export function ModelSelectOption({
             iconOnly
           />
         )}
-        <span className="min-w-0">
-          <span className="block truncate">
+        <span className="min-w-0 flex-1">
+          <span className="block wrap-anywhere whitespace-normal">
             {name}
             {unavailable && !description ? " · 当前不可用" : ""}
           </span>
           {description && (
-            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+            <span className="mt-0.5 block text-xs wrap-anywhere whitespace-normal text-muted-foreground">
               {description}
             </span>
           )}

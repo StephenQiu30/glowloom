@@ -235,19 +235,20 @@ function ProjectWorkspace({
   }
   const activeTab = tab;
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 pb-8">
-      <header className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="sm" asChild>
+    <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5 pb-8">
+      <header className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:flex sm:flex-wrap">
+        <Button variant="ghost" size="sm" className="row-start-2" asChild>
           <Link href="/short-drama">短剧首页</Link>
         </Button>
-        <h1 className="min-w-0 flex-1 text-xl font-semibold break-words">
+        <h1 className="col-span-2 row-start-1 min-w-0 text-xl font-semibold wrap-anywhere sm:flex-1">
           {project.data.name}
         </h1>
-        <Button variant="outline" asChild>
+        <Button variant="outline" className="row-start-2" asChild>
           <Link href={canvas}>打开短剧画布</Link>
         </Button>
       </header>
       <Tabs
+        className="min-w-0"
         value={activeTab}
         onValueChange={(value) => {
           if (!locked) selectTab(value as Tab);
@@ -255,7 +256,7 @@ function ProjectWorkspace({
       >
         <TabsList
           aria-label="短剧项目阶段"
-          className="h-auto flex-wrap justify-start"
+          className="max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto [&>[data-slot=tabs-trigger]]:h-9 max-md:[&>[data-slot=tabs-trigger]]:h-11"
         >
           <TabsTrigger value="script" disabled={locked}>
             剧本

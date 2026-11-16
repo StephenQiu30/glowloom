@@ -64,7 +64,7 @@ export function GenerationParameters({
   const count = outputCountLimit(maxOutputs);
   return (
     <FieldGroup
-      className={cn("gap-3", !compact && "grid gap-5 sm:grid-cols-2")}
+      className={cn("min-w-0 gap-3", !compact && "grid gap-5 sm:grid-cols-2")}
     >
       {fields
         .filter((field) => field.field !== "output_count")
@@ -95,7 +95,11 @@ export function GenerationParameters({
                   : value,
             });
           return (
-            <Field key={field.field} data-disabled={disabled}>
+            <Field
+              key={field.field}
+              className="min-w-0"
+              data-disabled={disabled}
+            >
               <FieldLabel htmlFor={fieldID}>{label}</FieldLabel>
               {field.field === "speaker" && !field.enum ? (
                 <Select

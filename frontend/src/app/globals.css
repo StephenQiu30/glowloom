@@ -3575,10 +3575,16 @@ button:not(:disabled),
 }
 .composer-popover[data-slot] {
   width: 336px;
-  max-width: calc(100vw - 32px);
+  min-width: 0;
+  max-width: min(
+    calc(100vw - 32px),
+    var(--radix-popover-content-available-width, 100vw)
+  );
   max-height: min(70dvh, var(--radix-popover-content-available-height));
   gap: 8px;
   overflow-y: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
   padding: 16px;
   border-radius: 16px;
   font-size: 14px;
@@ -3617,10 +3623,14 @@ button:not(:disabled),
   background: var(--accent);
 }
 .composer-parameter-options [data-slot="toggle-group-item"] {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 32px;
-  height: 36px;
-  padding-inline: 4px;
+  max-width: 100%;
+  min-height: 36px;
+  height: auto;
+  padding: 8px 4px;
+  overflow-wrap: anywhere;
+  white-space: normal;
   font-size: 14px;
   font-weight: 400;
   line-height: 20px;
@@ -3647,7 +3657,12 @@ button:not(:disabled),
   }
   .composer-popover[data-slot],
   .composer-model-list[data-slot] {
-    max-width: min(288px, calc(100vw - 32px));
+    max-width: min(
+      288px,
+      calc(100vw - 32px),
+      var(--radix-popover-content-available-width, 100vw),
+      var(--radix-select-content-available-width, 100vw)
+    );
   }
   .composer-parameter-options [data-slot="toggle-group-item"] {
     min-height: 44px;

@@ -21,6 +21,7 @@ import type { ParamField } from "@/components/generation/contracts";
 import "../../src/app/globals.css";
 
 document.documentElement.classList.add("dark");
+const stress = new URLSearchParams(location.search).has("stress");
 const fields: ParamField[] = [
   {
     field: "aspect_ratio",
@@ -34,7 +35,7 @@ const fields: ParamField[] = [
     label: "清晰度",
     type: "string",
     component: "select",
-    enum: ["720P"],
+    enum: stress ? ["720P", "1080P", "4096×2160超高清输出"] : ["720P"],
   },
 ];
 const duration: ParamField = {
@@ -48,12 +49,16 @@ const duration: ParamField = {
 };
 const models: API.ModelResponse[] = [
   "样本视频模型",
-  "用于验证截断和手机宽度的很长很长的视频模型名称",
+  stress
+    ? "LongUnbrokenModelNameForResponsiveOverflowAcceptance20261116"
+    : "用于验证截断和手机宽度的很长很长的视频模型名称",
 ].map((name, i) => ({
   id: `model-${i}`,
   key: `model-${i}`,
   display_name: name,
-  provider_name: "隔离界面测试",
+  provider_name: stress
+    ? "LongUnbrokenProviderNameForResponsiveOverflowAcceptance20261116"
+    : "隔离界面测试",
   status: "active",
   provider_status: "active",
   credential_present: true,
@@ -107,14 +112,14 @@ function Fixture() {
             enabled
             disabled={false}
             params={draft.params}
-            maxOutputs={2}
+            maxOutputs={stress ? 8 : 2}
             duration={duration}
             onChange={(params) => setDraft({ ...draft, params })}
           >
             <GenerationParameters
               fields={fields}
               params={draft.params}
-              maxOutputs={2}
+              maxOutputs={stress ? 8 : 2}
               disabled={false}
               compact
               includeOutputCount={false}
