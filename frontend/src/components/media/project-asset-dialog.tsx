@@ -183,7 +183,7 @@ export function ProjectAssetDialog({
           <Tabs
             value={tab}
             onValueChange={(value) => setTab(value as typeof tab)}
-            className="min-h-0 flex-1"
+            className="min-h-0 min-w-0 flex-1"
             inert={confirming}
           >
             <TabsList>
@@ -199,6 +199,7 @@ export function ProjectAssetDialog({
               <div className="canvas-material-filters flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <ToggleGroup
+                    className="max-w-full flex-wrap"
                     type="single"
                     value={kind}
                     onValueChange={(v) => {

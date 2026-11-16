@@ -42,7 +42,7 @@ export function ComposerSurface({
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
-        className="flex h-[min(560px,calc(100dvh-32px))] flex-col overflow-hidden p-0 sm:max-w-5xl"
+        className="flex h-[min(560px,calc(100dvh-32px))] w-[calc(100dvw-32px)] min-w-0 flex-col overflow-y-auto overscroll-contain p-0 sm:max-w-5xl"
         data-canvas-no-zoom
         data-canvas-shortcuts-ignore
         onOpenAutoFocus={(event) => {

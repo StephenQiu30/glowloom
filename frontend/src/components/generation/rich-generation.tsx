@@ -1852,8 +1852,7 @@ function EditorWorkspace({
         className={cn(
           "mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-4",
           compact && "gap-2",
-          full &&
-            (compact ? "min-h-0 flex-1" : "max-h-full overflow-y-auto p-4"),
+          full && (compact ? "flex-1" : "max-h-full overflow-y-auto p-4"),
         )}
       >
         {canvasToolbar}
@@ -2066,15 +2065,17 @@ function EditorWorkspace({
               presentation === "home"
                 ? "creation-input-surface creation-composer creation-composer-ready"
                 : "flex-col items-stretch gap-1",
-              full && "min-h-0 flex-1",
+              full && "flex-1",
             )}
           >
             <div
               className={cn(
                 presentation === "home" ? "creation-ready-body" : "min-w-0",
-                (full || presentation === "canvas") &&
-                  presentation !== "home" &&
-                  "flex min-h-0 flex-1 flex-col",
+                presentation !== "home" &&
+                  (full
+                    ? "flex flex-1 flex-col"
+                    : presentation === "canvas" &&
+                      "flex min-h-0 flex-1 flex-col"),
               )}
             >
               <InputGroupAddon
@@ -2108,7 +2109,7 @@ function EditorWorkspace({
                   presentation === "canvas" &&
                     "max-h-80 min-h-0 [scrollbar-width:none] overflow-y-auto overscroll-contain",
                   full &&
-                    "max-h-none min-h-0 flex-1 overflow-y-auto [&_.tiptap]:max-h-none [&_.tiptap]:min-h-full [&_.tiptap]:overflow-visible",
+                    "max-h-none min-h-20 flex-1 overflow-y-auto [&_.tiptap]:max-h-none [&_.tiptap]:min-h-full [&_.tiptap]:overflow-visible",
                 )}
               >
                 {promptControl}

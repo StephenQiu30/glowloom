@@ -49,7 +49,8 @@ export function ProjectPickerFilters({
           align="end"
           data-canvas-no-zoom
           onMouseDown={(e) => e.stopPropagation()}
-          className="space-y-3"
+          collisionPadding={16}
+          className="max-h-(--radix-popover-content-available-height) max-w-[calc(100dvw-32px)] gap-3 overflow-y-auto overscroll-contain"
         >
           <p className="text-sm font-medium">创建时间</p>
           <Label htmlFor="picker-date-from">开始日期</Label>
@@ -85,7 +86,8 @@ export function ProjectPickerFilters({
           align="end"
           data-canvas-no-zoom
           onMouseDown={(e) => e.stopPropagation()}
-          className="space-y-3"
+          collisionPadding={16}
+          className="max-h-(--radix-popover-content-available-height) max-w-[calc(100dvw-32px)] gap-3 overflow-y-auto overscroll-contain"
         >
           <FilterSelect
             label="素材来源"

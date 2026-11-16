@@ -236,7 +236,7 @@ function PersonalPicker({
         }}
       >
         <DialogContent
-          className="flex max-h-[90dvh] min-h-96 flex-col sm:max-w-4xl"
+          className="personal-reference-dialog flex min-h-0 w-[calc(100dvw-32px)] min-w-0 flex-col sm:max-w-4xl"
           showCloseButton={!confirming}
         >
           <DialogHeader>
@@ -250,7 +250,7 @@ function PersonalPicker({
               setPage(1);
             }}
           >
-            <TabsList>
+            <TabsList className="max-w-full flex-wrap group-data-horizontal/tabs:h-auto">
               {allowedKinds.map((k) => (
                 <TabsTrigger key={k} value={k}>
                   {kindLabels[k] ?? k}
@@ -308,7 +308,7 @@ function PersonalPicker({
               }}
             />
           </div>
-          <div className="min-h-52 flex-1 overflow-y-auto">
+          <div className="personal-reference-content min-h-0 flex-1 overflow-y-auto">
             {!ready ? (
               <ContentState state="loading" title="正在读取素材" />
             ) : result.error ? (
@@ -330,9 +330,9 @@ function PersonalPicker({
                   return (
                     <FieldLabel
                       key={item.id}
-                      className="relative flex cursor-pointer flex-col gap-2 rounded-xl border p-2 has-[[data-state=checked]]:border-primary"
+                      className="relative flex w-full min-w-0 cursor-pointer flex-col gap-2 rounded-xl border p-2 has-[[data-state=checked]]:border-primary"
                     >
-                      <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
+                      <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted">
                         <PersonalMediaPreview
                           itemID={item.id}
                           assetID={item.asset_id}
@@ -340,7 +340,9 @@ function PersonalPicker({
                           kind={item.kind}
                         />
                       </div>
-                      <span className="truncate text-sm">{item.title}</span>
+                      <span className="w-full truncate text-sm">
+                        {item.title}
+                      </span>
                       <Checkbox
                         aria-label={`选择 · ${item.title}`}
                         checked={checked}

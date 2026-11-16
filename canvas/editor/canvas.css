@@ -1025,7 +1025,12 @@ html:has(.canvas-controls-layout) {
   :is(.canvas-node-composer, .canvas-node-sheet)[data-slot]:has(
       .canvas-formal-generator
     ) {
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .canvas-formal-generator {
+    flex: none;
+    min-width: 0;
   }
   .canvas-formal-generator,
   .canvas-formal-generator > :has([data-presentation="canvas"]),
