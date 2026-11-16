@@ -1,5 +1,12 @@
 /** R6 当前设计入口；业务可用性由真实服务决定。 */
 export const screens = [
+  { id: "notifications", name: "通知中心", node: "4060:127006", group: "账号" },
+  {
+    id: "platform/notifications",
+    name: "通知管理",
+    node: "4060:128084",
+    group: "管理",
+  },
   { id: "conversations", name: "对话", node: "3468:96528", group: "创作" },
   { id: "home", name: "创作", node: "1361:26", group: "创作" },
   { id: "explore", name: "探索", node: "1361:272", group: "创作" },
@@ -67,6 +74,8 @@ export function resolveAdminSection(screen: Screen) {
       return "teams";
     case "platform/settings":
       return "settings";
+    case "platform/notifications":
+      return "notifications";
     default:
       return undefined;
   }

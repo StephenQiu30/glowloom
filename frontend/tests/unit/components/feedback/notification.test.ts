@@ -7,7 +7,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("普通结果4秒，错误6秒，带恢复操作的通知持续保留", () => {
+it("短时消息默认5秒，带恢复操作的通知持续保留", () => {
   const success = vi.spyOn(sonner, "success");
   const error = vi.spyOn(sonner, "error");
   toast.success("已保存");
@@ -16,8 +16,8 @@ it("普通结果4秒，错误6秒，带恢复操作的通知持续保留", () =>
     id: "upload-1",
     action: { label: "重试", onClick: vi.fn() },
   });
-  expect(success.mock.calls[0][1]?.duration).toBe(4000);
-  expect(error.mock.calls[0][1]?.duration).toBe(6000);
+  expect(success.mock.calls[0][1]?.duration).toBe(5000);
+  expect(error.mock.calls[0][1]?.duration).toBe(5000);
   expect(error.mock.calls[1][1]).toMatchObject({
     duration: Infinity,
     id: "upload-1",

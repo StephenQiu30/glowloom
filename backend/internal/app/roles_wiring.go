@@ -32,6 +32,9 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/settlement"
 	operationstaging "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	identityevent "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/event"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
@@ -190,7 +193,7 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 	processed := pginbox.NewStore(dbConn.DB)
 	realtimeConsumer, err := kafkainbox.NewConsumer(cfg.KafkaBrokers, realtimeConsumerGroup,
 		[]string{realtime.OperationStatusTopic, realtime.ProjectChangedTopic, realtime.BudgetChangedTopic, realtime.BillingSettledTopic},
-		realtime.NewHandler(processed, redisrealtime.NewSink(redisConn.Client)))
+		identityevent.WithOperationNotifications(realtime.NewHandler(processed, redisrealtime.NewSink(redisConn.Client)), identityapp.NewNotifications(pgidentity.NewNotificationStore(dbConn.DB), time.Now)))
 	if err != nil {
 		return nil, nil, fmt.Errorf("configure relay realtime consumer: %w", err)
 	}

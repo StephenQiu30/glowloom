@@ -9307,3 +9307,93 @@ REVOKE ALL ON FUNCTION media.guard_provider_artifact_receipt() FROM PUBLIC;
 REVOKE ALL ON media.provider_artifact_receipt FROM PUBLIC,glowloom_app,glowloom_identity,glowloom_creation,glowloom_execution;
 GRANT SELECT,INSERT ON media.provider_artifact_receipt TO glowloom_media;
 GRANT UPDATE(state,location_id,receipt,update_time) ON media.provider_artifact_receipt TO glowloom_media;
+
+-- Identity owns announcement revisions, immutable inbox snapshots and display
+-- receipts. Applications never create these structures at startup.
+CREATE TABLE identity.announcement (
+    id uuid PRIMARY KEY,
+    version bigint NOT NULL CHECK (version > 0),
+    draft jsonb NOT NULL CHECK (jsonb_typeof(draft) = 'object'),
+    published_revision bigint,
+    enabled boolean NOT NULL DEFAULT false,
+    created_by uuid NOT NULL REFERENCES identity."user"(id),
+    updated_by uuid NOT NULL REFERENCES identity."user"(id),
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    CHECK (published_revision IS NULL OR published_revision > 0)
+);
+CREATE TABLE identity.announcement_revision (
+    announcement_id uuid NOT NULL REFERENCES identity.announcement(id),
+    revision bigint NOT NULL CHECK (revision > 0),
+    content jsonb NOT NULL CHECK (jsonb_typeof(content) = 'object'),
+    published_at timestamptz NOT NULL,
+    PRIMARY KEY (announcement_id, revision)
+);
+ALTER TABLE identity.announcement ADD CONSTRAINT announcement_published_revision_fk
+    FOREIGN KEY (id,published_revision) REFERENCES identity.announcement_revision(announcement_id,revision);
+CREATE INDEX announcement_updated_idx ON identity.announcement(updated_at DESC,id DESC);
+CREATE TABLE identity.notification_mailbox (
+    account_id uuid PRIMARY KEY REFERENCES identity."user"(id),
+    data_epoch uuid NOT NULL,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    last_seq bigint NOT NULL DEFAULT 0 CHECK (last_seq >= 0)
+);
+CREATE TABLE identity.notification_inbox (
+    id uuid PRIMARY KEY,
+    account_id uuid NOT NULL REFERENCES identity.notification_mailbox(account_id),
+    inbox_seq bigint CHECK (inbox_seq > 0),
+    announcement_id uuid,
+    revision bigint,
+    source_kind text NOT NULL DEFAULT 'announcement' CHECK (source_kind IN ('announcement','operation')),
+    source_id uuid,
+    source_event_id uuid,
+    category text NOT NULL CHECK (category IN ('system','task','collaboration','account')),
+    content jsonb NOT NULL CHECK (jsonb_typeof(content) = 'object'),
+    occurred_at timestamptz NOT NULL,
+    read_at timestamptz,
+    cancelled_at timestamptz,
+    FOREIGN KEY (announcement_id,revision) REFERENCES identity.announcement_revision(announcement_id,revision),
+    UNIQUE (account_id,inbox_seq),
+    UNIQUE (account_id,announcement_id,revision),
+    CHECK ((source_kind='announcement' AND announcement_id IS NOT NULL AND revision IS NOT NULL AND source_id IS NULL AND source_event_id IS NULL)
+        OR (source_kind='operation' AND category='task' AND inbox_seq IS NOT NULL AND announcement_id IS NULL AND revision IS NULL AND source_id IS NOT NULL AND source_event_id IS NOT NULL)),
+    CHECK (inbox_seq IS NOT NULL OR (source_kind='announcement' AND read_at IS NULL)),
+    CHECK (cancelled_at IS NULL OR (source_kind='announcement' AND inbox_seq IS NULL))
+);
+CREATE INDEX notification_inbox_pending_idx ON identity.notification_inbox(account_id,occurred_at,id) WHERE inbox_seq IS NULL AND cancelled_at IS NULL;
+CREATE UNIQUE INDEX notification_inbox_source_event_idx ON identity.notification_inbox(account_id,source_event_id) WHERE source_event_id IS NOT NULL;
+CREATE INDEX notification_inbox_unread_idx ON identity.notification_inbox(account_id,inbox_seq DESC) WHERE read_at IS NULL;
+CREATE INDEX notification_inbox_category_idx ON identity.notification_inbox(account_id,category,inbox_seq DESC);
+CREATE TABLE identity.notification_display_receipt (
+    account_id uuid NOT NULL REFERENCES identity."user"(id),
+    announcement_id uuid NOT NULL,
+    revision bigint NOT NULL,
+    shown_at timestamptz,
+    dismissed_at timestamptz,
+    PRIMARY KEY (account_id,announcement_id,revision),
+    FOREIGN KEY (announcement_id,revision) REFERENCES identity.announcement_revision(announcement_id,revision)
+);
+CREATE TABLE identity.notification_command (
+    actor_id uuid NOT NULL REFERENCES identity."user"(id),
+    command_id uuid NOT NULL,
+    fingerprint text NOT NULL CHECK (length(fingerprint)=64),
+    response jsonb NOT NULL,
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY(actor_id,command_id)
+);
+CREATE TABLE identity.notification_audit (
+    id uuid PRIMARY KEY,
+    announcement_id uuid NOT NULL REFERENCES identity.announcement(id),
+    actor_id uuid NOT NULL REFERENCES identity."user"(id),
+    command_id uuid NOT NULL,
+    action text NOT NULL CHECK (action IN ('created','saved','published','enabled','disabled')),
+    version bigint NOT NULL CHECK (version>0),
+    created_at timestamptz NOT NULL,
+    UNIQUE(actor_id,command_id)
+);
+CREATE INDEX notification_audit_announcement_idx ON identity.notification_audit(announcement_id,created_at DESC,id DESC);
+REVOKE ALL ON identity.announcement,identity.announcement_revision,identity.notification_mailbox,identity.notification_inbox,identity.notification_display_receipt,identity.notification_command,identity.notification_audit FROM PUBLIC,glowloom_creation,glowloom_media,glowloom_execution;
+-- The existing combined runtime retains its explicit legacy authority. This is
+-- not a grant to another owner or a claim that the team audience is remote.
+GRANT SELECT,INSERT,UPDATE ON identity.announcement,identity.notification_mailbox,identity.notification_inbox,identity.notification_display_receipt TO glowloom_identity,glowloom_app;
+GRANT SELECT,INSERT ON identity.announcement_revision,identity.notification_command,identity.notification_audit TO glowloom_identity,glowloom_app;

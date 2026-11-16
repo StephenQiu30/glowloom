@@ -32,6 +32,7 @@ import {
 import { MoreHorizontal } from "lucide-react";
 import { CanvasNodeSummary } from "./canvas-node-summary";
 import type { CanvasNodeData } from "../types/canvas";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 export function CanvasTopBar({
   title,
@@ -129,6 +130,7 @@ export function CanvasTopBar({
   );
   const secondaryActions = (
     <>
+      <NotificationBell onLogin={onHome} />
       <div
         className={
           isMobile

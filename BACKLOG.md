@@ -1,5 +1,15 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+<a id="notifications-20261116"></a>
+
+## 通知中心与公告管理（2026-11-16）
+
+来源：[需求31](workspace/content/requirement/31-通知中心与公告管理需求.md) → [设计46](workspace/content/design/46-通知中心与公告管理设计.md) → [PRD32](workspace/content/prd/32-通知中心与公告管理.md) → [Plan41](workspace/content/plan/41-通知中心与公告管理执行计划.md)。Figma34区经用户确认后已落实通知中心、Header最近通知/一键已读、顶部公告、5秒弹窗、公告管理/筛选/编辑/发布/启停与审计；Go按现有规范实现，API通过Swagger生成。
+
+适用工程检查、真实隔离PostgreSQL/Kafka和桌面/390px手机浏览器验证已完成；生产standalone验证自动弹窗5秒关闭但未读不变、一键已读4→0、重载不重弹、关闭公告无空白。审查发现的冷邮箱死锁、预约公告离线历史缺失、弹窗停用重验、请求失败恢复、空间切换与缓存恢复均有回归；独立复核无未修复重要问题。准确命令、计数、截图和文件责任见Plan41。
+
+上述为提交前验证。SRC-NOT-02已授权本任务提交main并推送、检查CI，其他改动保留；未发布或改动存量业务库。CI补齐专用通知数据库与Kafka，新增infra Inbox适配器依赖经边界复核登记。全后端检查复现基线Workspace ProjectDetailResponse缺失，原main的CI43712248648亦同错，不混入无关修复。剩余边界：大受众同步投影未压测；团队受众仍依赖现有组合库授权，未证明独立Identity远程团队授权；协作/账户自动源不在本轮扩大；Kafka测试使用真实broker/PG及受控Redis sink，未运行全仓后端CI或生产常驻relay验收。上线前须按schema.sql离线受控比对存量结构；不运行启动DDL。
+
 <a id="document-reference-md-20261115"></a>
 
 ## 文档引用 503 与 Markdown 格式（2026-11-15）

@@ -13,6 +13,7 @@ import {
   Shield,
   Users,
   Coins,
+  Bell,
 } from "lucide-react";
 import { AccountAvatar } from "./account-avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -135,6 +136,12 @@ export function AccountMenu({
           </DropdownMenuItem>
           {isAdmin && (
             <>
+              <DropdownMenuItem asChild className={itemClassName}>
+                <Link href="/platform/notifications">
+                  <Bell />
+                  通知管理
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild className={itemClassName}>
                 <Link href="/health">
                   <Shield />

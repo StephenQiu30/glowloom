@@ -43,15 +43,22 @@ const Toaster = ({ ...props }: ToasterProps) => {
       position={mobile ? "top-center" : "top-right"}
       offset={
         mobile
-          ? { top: "max(76px, env(safe-area-inset-top))", left: 16, right: 16 }
-          : { top: 84, right: 24 }
+          ? {
+              top: "calc(max(76px, env(safe-area-inset-top)) + var(--global-announcement-height, 0px))",
+              left: 16,
+              right: 16,
+            }
+          : {
+              top: "calc(84px + var(--global-announcement-height, 0px))",
+              right: 24,
+            }
       }
       mobileOffset={{
-        top: "max(76px, env(safe-area-inset-top))",
+        top: "calc(max(76px, env(safe-area-inset-top)) + var(--global-announcement-height, 0px))",
         left: 16,
         right: 16,
       }}
-      duration={4000}
+      duration={5000}
       visibleToasts={3}
       closeButton
       containerAriaLabel="通知"

@@ -212,6 +212,37 @@ declare namespace API {
     truncated: boolean;
   };
 
+  type Announcement = {
+    created_at?: string;
+    draft?: AnnouncementContent;
+    enabled?: boolean;
+    id?: string;
+    published?: AnnouncementContent;
+    published_revision?: string;
+    status?: string;
+    updated_at?: string;
+    version?: string;
+  };
+
+  type AnnouncementContent = {
+    action_path?: string;
+    audience?: string;
+    body?: string;
+    duration_seconds?: number;
+    ends_at?: string;
+    inbox?: boolean;
+    placement?: string;
+    priority?: number;
+    starts_at?: string;
+    team_id?: string;
+    title?: string;
+  };
+
+  type AnnouncementPage = {
+    items?: Announcement[];
+    next_cursor?: string;
+  };
+
   type appendCanvasAssistantTurnParams = {
     /** 画布UUID */
     id: string;
@@ -1929,6 +1960,19 @@ declare namespace API {
     credential_id: string;
   };
 
+  type DisplayAnnouncement = {
+    action_path?: string;
+    body?: string;
+    duration_seconds?: number;
+    ends_at?: string;
+    id?: string;
+    notification_id?: string;
+    placement?: string;
+    revision?: string;
+    starts_at?: string;
+    title?: string;
+  };
+
   type Document = {
     content?: Paragraph[];
     type?: string;
@@ -2130,6 +2174,12 @@ declare namespace API {
     session_id: string;
     session_protocol: string;
     upgrade_available: boolean;
+  };
+
+  type EnableAnnouncementRequest = {
+    command_id?: string;
+    enabled?: boolean;
+    expected_version?: string;
   };
 
   type endProviderCheckTrackingParams = {
@@ -2613,6 +2663,11 @@ declare namespace API {
     to?: string;
   };
 
+  type getNotificationParams = {
+    /** Inbox notification UUID */
+    id: string;
+  };
+
   type getOperationBatchParams = {
     /** Batch UUID */
     id: string;
@@ -2625,6 +2680,16 @@ declare namespace API {
     id: string;
     /** 项目UUID */
     project_id: string;
+  };
+
+  type getPlatformNotificationAuditParams = {
+    /** Announcement UUID */
+    id: string;
+  };
+
+  type getPlatformNotificationParams = {
+    /** Announcement UUID */
+    id: string;
   };
 
   type getPlatformSecurityEventsParams = {
@@ -3080,6 +3145,22 @@ declare namespace API {
     | "failed"
     | "cancel_requested"
     | "cancelled";
+
+  type InboxNotification = {
+    action_path?: string;
+    announcement_id?: string;
+    body?: string;
+    category?: string;
+    id?: string;
+    inbox_seq?: string;
+    occurred_at?: string;
+    read?: boolean;
+    revision?: string;
+    source_id?: string;
+    source_kind?: string;
+    status?: string;
+    title?: string;
+  };
 
   type Inline = {
     attrs?: ReferenceAttrs;
@@ -3623,6 +3704,21 @@ declare namespace API {
     id: string;
   };
 
+  type listNotificationsParams = {
+    /** Default 20, maximum 100 */
+    limit?: number;
+    /** Condition-bound continuation */
+    cursor?: string;
+    /** system, task, collaboration, account */
+    category?: string;
+    /** Unread only */
+    unread_only?: boolean;
+    /** Inclusive RFC3339 time */
+    from?: string;
+    /** Exclusive RFC3339 time */
+    to?: string;
+  };
+
   type listPersonalOperationHistoryParams = {
     /** image/video/audio/document；按能力族分类，含处理中与失败 */
     kind?: string;
@@ -3650,6 +3746,25 @@ declare namespace API {
     limit?: number;
     /** 身份、空间与全部条件绑定的游标 */
     cursor?: string;
+  };
+
+  type listPlatformNotificationsParams = {
+    /** Default 20, maximum 100 */
+    limit?: number;
+    /** Condition-bound continuation */
+    cursor?: string;
+    /** Title keyword */
+    search?: string;
+    /** banner, modal, inbox */
+    placement?: string;
+    /** public, authenticated, team */
+    audience?: string;
+    /** draft, scheduled, active, expired, disabled */
+    status?: string;
+    /** Inclusive effective start time */
+    from?: string;
+    /** Exclusive effective start time */
+    to?: string;
   };
 
   type listPlatformTeamInvitationsParams = {
@@ -4304,6 +4419,49 @@ declare namespace API {
     x?: number;
     y?: number;
     z_index?: number;
+  };
+
+  type NotificationAudit = {
+    action?: string;
+    actor_id?: string;
+    created_at?: string;
+    id?: string;
+    version?: string;
+  };
+
+  type NotificationAuditPage = {
+    items?: NotificationAudit[];
+  };
+
+  type NotificationDisplayAck = {
+    announcement_id?: string;
+    kind?: string;
+    revision?: string;
+  };
+
+  type NotificationDisplayValidity = {
+    valid: boolean;
+  };
+
+  type NotificationDisplayView = {
+    banner?: DisplayAnnouncement;
+    popup?: DisplayAnnouncement;
+  };
+
+  type NotificationPage = {
+    data_epoch?: string;
+    items?: InboxNotification[];
+    mailbox_version?: string;
+    max_inbox_seq?: string;
+    next_cursor?: string;
+    unread_count?: number;
+  };
+
+  type NotificationSummary = {
+    data_epoch?: string;
+    mailbox_version?: string;
+    max_inbox_seq?: string;
+    unread_count?: number;
   };
 
   type ObservabilityCoverage = {
@@ -5398,6 +5556,11 @@ declare namespace API {
     id: string;
   };
 
+  type PublishAnnouncementRequest = {
+    command_id?: string;
+    expected_version?: string;
+  };
+
   type PublishedModelVersion = {
     create_time?: string;
     id?: string;
@@ -5423,6 +5586,11 @@ declare namespace API {
     media_url?: string;
     prompt?: string;
     title?: string;
+  };
+
+  type publishPlatformNotificationParams = {
+    /** Announcement UUID */
+    id: string;
   };
 
   type PublishPriceRequest = {
@@ -5591,6 +5759,12 @@ declare namespace API {
     id: string;
   };
 
+  type ReadAllNotificationsInput = {
+    command_id?: string;
+    data_epoch?: string;
+    through_seq?: string;
+  };
+
   type readCanvasAssistantSessionParams = {
     /** 画布UUID */
     id: string;
@@ -5608,6 +5782,15 @@ declare namespace API {
   type readMediaExportLaunchParams = {
     /** Opaque short-lived export capability */
     token: string;
+  };
+
+  type ReadNotificationInput = {
+    command_id?: string;
+  };
+
+  type readNotificationParams = {
+    /** Inbox notification UUID */
+    id: string;
   };
 
   type readPresetModelDirectoryParams = {
@@ -6089,6 +6272,12 @@ declare namespace API {
     name?: string;
   };
 
+  type SaveAnnouncementInput = {
+    command_id?: string;
+    content?: AnnouncementContent;
+    expected_version?: string;
+  };
+
   type SavedCredential = {
     create_time?: string;
     id?: string;
@@ -6133,6 +6322,11 @@ declare namespace API {
     references?: MediaSelection[];
     type?: "character" | "scene" | "prop" | "product" | "style" | "other";
     voice?: SubjectVoiceSelection;
+  };
+
+  type savePlatformNotificationParams = {
+    /** Announcement UUID */
+    id: string;
   };
 
   type SavePresetInput = {
@@ -6275,6 +6469,11 @@ declare namespace API {
   type SetModelStatusRequest = {
     expected_revision?: number;
     status?: ModelStatus;
+  };
+
+  type setPlatformNotificationEnabledParams = {
+    /** Announcement UUID */
+    id: string;
   };
 
   type setSubjectFavoriteParams = {
@@ -7653,6 +7852,13 @@ declare namespace API {
     action?: string;
     request_id?: string;
     target_id?: string;
+  };
+
+  type validateNotificationDisplayParams = {
+    /** Announcement UUID */
+    id: string;
+    /** Published revision, decimal string */
+    revision: string;
   };
 
   type validatePromptFragmentParams = {

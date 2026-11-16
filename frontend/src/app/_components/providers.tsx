@@ -9,6 +9,7 @@ import { SessionProvider } from "@/components/auth/session";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SpaceProvider } from "@/components/spaces/space-context";
 import { ProjectCreationProvider } from "@/components/projects/project-creation";
+import { NotificationProvider } from "@/components/notifications/notification-provider";
 
 export function Providers({
   children,
@@ -25,19 +26,21 @@ export function Providers({
       disableTransitionOnChange
     >
       <SessionProvider>
-        <SpaceProvider blockUntilReady={false}>
-          <ConversationProvider>
-            <ProjectCreationProvider>
-              <TooltipProvider>
-                <ApplicationLayout initialSidebarOpen={initialSidebarOpen}>
-                  {children}
-                </ApplicationLayout>
-              </TooltipProvider>
-            </ProjectCreationProvider>
-          </ConversationProvider>
-        </SpaceProvider>
+        <NotificationProvider>
+          <SpaceProvider blockUntilReady={false}>
+            <ConversationProvider>
+              <ProjectCreationProvider>
+                <TooltipProvider>
+                  <ApplicationLayout initialSidebarOpen={initialSidebarOpen}>
+                    {children}
+                  </ApplicationLayout>
+                </TooltipProvider>
+              </ProjectCreationProvider>
+            </ConversationProvider>
+          </SpaceProvider>
+          <Toaster />
+        </NotificationProvider>
       </SessionProvider>
-      <Toaster />
     </ThemeProvider>
   );
 }

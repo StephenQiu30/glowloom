@@ -13,6 +13,7 @@ export function AdminNavigation({ active }: { active: AdminSection }) {
     { id: "providers", href: "/providers", label: "AI 服务接入" },
     { id: "models", href: "/models", label: "模型管理" },
     { id: "settings", href: "/platform/settings", label: "平台设置" },
+    { id: "notifications", href: "/platform/notifications", label: "通知管理" },
   ];
   return (
     <nav aria-label="管理页面" className="admin-navigation">

@@ -18,6 +18,8 @@ import { ApplicationLayout } from "@/components/layout/application-layout";
 import { RouteLoading } from "@/components/layout/route-loading";
 import { PageLayout } from "@/components/layout/page-layout";
 import { request, RequestError } from "@/lib/request";
+import { NotificationProvider } from "@/components/notifications/notification-provider";
+import { SWRConfig } from "swr";
 
 it("restored identity leaves login and returns to the original canvas without submitting credentials", async () => {
   const destination =
@@ -454,6 +456,23 @@ it("游客仅从顶栏登录，手机抽屉只展示导航，关闭认证后恢�
 });
 
 it("手机顶栏使用共享账号组，主题归入账号菜单且不虚构会员促销", async () => {
+  const session = await request("/api/session");
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url === "/api/notifications/summary")
+      return {
+        data_epoch: "epoch",
+        mailbox_version: "1",
+        max_inbox_seq: "0",
+        unread_count: 0,
+      };
+    if (
+      url === "/api/notifications/display" ||
+      url === "/api/announcements/public"
+    )
+      return {};
+    if (url === "/api/notifications") return { items: [] };
+    return session;
+  });
   vi.stubGlobal(
     "matchMedia",
     vi.fn().mockImplementation(() => ({
@@ -463,13 +482,17 @@ it("手机顶栏使用共享账号组，主题归入账号菜单且不虚构会�
     })),
   );
   render(
-    <BasicLayout screen="subjects">
-      <h1>主体内容</h1>
-    </BasicLayout>,
+    <SWRConfig value={{ provider: () => new Map() }}>
+      <NotificationProvider>
+        <BasicLayout screen="subjects">
+          <h1>主体内容</h1>
+        </BasicLayout>
+      </NotificationProvider>
+    </SWRConfig>,
   );
   const header = await screen.findByRole("banner", { name: "页面顶栏" });
   expect(within(header).getByRole("button", { name: "搜索灵感" })).toBeTruthy();
-  expect(within(header).getByRole("button", { name: "消息中心" })).toBeTruthy();
+  expect(within(header).getByRole("button", { name: /消息中心/ })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "积分商城" })).toBeNull();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "切换主题" })).toBeNull();
@@ -478,11 +501,15 @@ it("手机顶栏使用共享账号组，主题归入账号菜单且不虚构会�
     within(header).getByRole("link", { name: "开会员" }).getAttribute("href"),
   ).toBe("/billing/membership");
   expect(within(header).getByRole("button", { name: "积分余额" })).toBeTruthy();
-  fireEvent.click(within(header).getByRole("button", { name: "消息中心" }));
-  expect(mocks.info).toHaveBeenCalledWith("消息中心暂未开放", {
-    id: "product-feature-unavailable",
-  });
-  expect(screen.queryByRole("dialog", { name: "消息中心暂未开放" })).toBeNull();
+  fireEvent.click(within(header).getByRole("button", { name: /消息中心/ }));
+  expect(await screen.findByRole("dialog", { name: "消息" })).toBeTruthy();
+  expect(mocks.info).not.toHaveBeenCalledWith(
+    "消息中心暂未开放",
+    expect.anything(),
+  );
+  expect(
+    screen.getByRole("link", { name: "查看全部" }).getAttribute("href"),
+  ).toBe("/notifications");
 });
 
 it("空间读取期间保留顶栏和侧栏，只阻止正文私有内容", async () => {

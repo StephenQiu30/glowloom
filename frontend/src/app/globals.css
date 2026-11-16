@@ -466,6 +466,60 @@ button:not(:disabled),
   min-height: 0;
   overflow: hidden;
 }
+.notification-application {
+  --global-announcement-height: 0px;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+}
+.notification-application[data-announcement] {
+  --global-announcement-height: 40px;
+}
+.notification-application .product-shell,
+.notification-application .product-content,
+.notification-application .canvas-workspace {
+  height: calc(100dvh - var(--global-announcement-height));
+  min-height: 0;
+}
+.notification-application [data-slot="sidebar-container"] {
+  top: var(--global-announcement-height);
+  height: calc(100dvh - var(--global-announcement-height));
+}
+.global-announcement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-shrink: 0;
+  height: var(--global-announcement-height);
+  padding: 0 24px;
+  border: 0;
+  border-radius: 0;
+  background: var(--muted);
+}
+@media (max-width: 767px) {
+  .notification-application[data-announcement] {
+    --global-announcement-height: 56px;
+  }
+  .global-announcement {
+    padding-inline: 16px;
+  }
+  .global-announcement button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .notification-surface
+    :is(
+      [data-slot="button"],
+      [data-slot="input"],
+      [data-slot="select-trigger"],
+      [data-slot="tabs-trigger"],
+      [data-slot="field"][data-orientation="horizontal"]
+    ) {
+    min-height: 44px;
+  }
+}
 .product-content {
   position: relative;
   isolation: isolate;

@@ -1,6 +1,7 @@
 package operation_test
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -103,6 +104,22 @@ func TestWorkflowFinalizationRollbackAndReplay(t *testing.T) {
 	if ledgerSettles != 1 || ledgerReleases != 1 {
 		t.Fatalf("replay wrote settle=%d release=%d", ledgerSettles, ledgerReleases)
 	}
+	var payload []byte
+	if err := database.Raw(`SELECT payload FROM infra.outbox WHERE topic='glowloom.operation.status_changed.v1' AND payload->'aggregate'->>'id'=? AND payload->'data'->>'status'='completed'`, operationID.String()).Row().Scan(&payload); err != nil {
+		t.Fatal("terminal source outbox", err)
+	}
+	var envelope struct {
+		RecipientID uuid.UUID `json:"recipient_id"`
+		Data        struct {
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil || envelope.RecipientID != actor.ID || envelope.Data.Status != "completed" {
+		t.Fatal("terminal outbox lost source-confirmed recipient", envelope, err)
+	}
+	t.Run("notification_projection_kafka", func(t *testing.T) {
+		assertOperationNotificationKafka(t, database, actor, projectID, operationID, payload)
+	})
 }
 
 func TestLoadWorkflowOperationUsesFrozenModelAndPrivateTaskID(t *testing.T) {

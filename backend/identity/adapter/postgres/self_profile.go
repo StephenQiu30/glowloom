@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -47,6 +46,12 @@ func (t *selfProfileTx) Account() domain.User { return t.user }
 // Sample the injected clock only after the locks: a waiting request may observe
 // activity committed by a later request, or expire while it waits.
 func lockSelfActor(tx *gorm.DB, actor application.Principal, clock func() time.Time) (domain.User, error) {
+	return lockSelfActorWithKeyCompatibility(tx, actor, clock, false)
+}
+
+// Notification reads do not change account keys. NO KEY UPDATE keeps current
+// authority fenced against revocation while allowing inbox FK KEY SHARE checks.
+func lockSelfActorWithKeyCompatibility(tx *gorm.DB, actor application.Principal, clock func() time.Time, keyCompatible bool) (domain.User, error) {
 	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1 {
 		return domain.User{}, application.ErrSessionInvalid
 	}
@@ -57,13 +62,19 @@ func lockSelfActor(tx *gorm.DB, actor application.Principal, clock func() time.T
 	if !settings {
 		return domain.User{}, application.ErrSessionInvalid
 	}
-	user, err := (&authTx{db: tx}).AccountByID(actor.ID)
-	if errors.Is(err, domain.ErrUserNotFound) {
+	query := `SELECT * FROM identity."user" WHERE NOT is_delete AND id=? FOR UPDATE`
+	if keyCompatible {
+		query = `SELECT * FROM identity."user" WHERE NOT is_delete AND id=? FOR NO KEY UPDATE`
+	}
+	var row userRow
+	account := tx.Raw(query, actor.ID).Scan(&row)
+	if account.Error != nil {
+		return domain.User{}, fmt.Errorf("lock self account: %w", account.Error)
+	}
+	if account.RowsAffected != 1 {
 		return domain.User{}, application.ErrSessionInvalid
 	}
-	if err != nil {
-		return domain.User{}, err
-	}
+	user := row.domainUser()
 	var session domain.AuthSession
 	r := tx.Raw(`SELECT id,account_id,credential_revision,created_at,last_active_at,absolute_expires_at,persistent,protocol_version,idle_timeout_seconds,refresh_generation,revoked_at,reauth_at,reauth_epoch FROM identity.user_session WHERE id=? AND account_id=? FOR UPDATE`, actor.SessionID, actor.ID).Scan(&session)
 	if r.Error != nil {

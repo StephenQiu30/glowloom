@@ -2,7 +2,7 @@
 
 import { toast as sonner, type ExternalToast } from "sonner";
 
-function options(data: ExternalToast | undefined, duration = 4000) {
+function options(data: ExternalToast | undefined, duration = 5000) {
   return {
     ...data,
     duration:
@@ -21,9 +21,9 @@ export const toast = Object.assign(
     info: (...[message, data]: Parameters<typeof sonner.info>) =>
       sonner.info(message, options(data)),
     warning: (...[message, data]: Parameters<typeof sonner.warning>) =>
-      sonner.warning(message, options(data, 6000)),
+      sonner.warning(message, options(data)),
     error: (...[message, data]: Parameters<typeof sonner.error>) =>
-      sonner.error(message, options(data, 6000)),
+      sonner.error(message, options(data)),
     message: (...[message, data]: Parameters<typeof sonner.message>) =>
       sonner.message(message, options(data)),
     loading: (...[message, data]: Parameters<typeof sonner.loading>) =>

@@ -50,6 +50,7 @@ const adminScreens = [
   "health",
   "platform/teams",
   "platform/settings",
+  "platform/notifications",
 ];
 const LoginContext = createContext<() => void>(() => {});
 export function useLoginDialog() {

@@ -6,13 +6,8 @@ import { ThemeToggle } from "@/components/controls/theme-controls";
 import { AccountMenu } from "@/components/account/account-menu";
 import { Button } from "@/components/ui/button";
 import { ToolbarGroup } from "@/components/ui/toolbar";
-import { Bell } from "lucide-react";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 export type ProductAccountActionsProps = {
   actor?: API.EmailSessionView["actor"];
@@ -26,23 +21,7 @@ export function ProductAccountActions({
   actor,
   onLogin,
   onLogout,
-  onFeature,
 }: ProductAccountActionsProps) {
-  const notification = (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="toolbar-icon"
-          aria-label="消息中心"
-          onClick={() => onFeature("消息中心")}
-        >
-          <Bell aria-hidden="true" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>消息中心</TooltipContent>
-    </Tooltip>
-  );
   const account = actor ? (
     <AccountMenu actor={actor} onLogout={onLogout} />
   ) : (
@@ -53,7 +32,7 @@ export function ProductAccountActions({
   return (
     <ToolbarGroup data-account-actions aria-label="通知与账号">
       {!actor ? <ThemeToggle toolbar /> : null}
-      {notification}
+      <NotificationBell onLogin={onLogin} />
       {actor ? (
         <>
           <Separator

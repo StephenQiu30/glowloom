@@ -147,9 +147,12 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return nil, fmt.Errorf("configure self account services: %w", err)
 	}
 	auth.Register(api)
+	notifications := identityhttp.NewNotificationHandler(identityapp.NewNotifications(pgidentity.NewNotificationStore(database), time.Now))
+	notifications.RegisterPublic(api)
 	identityhttp.NewAuthPolicyHandler(identityapp.NewAuthPolicyQuery(pgidentity.NewStore(database), identityhttp.AcceptedLegalVersion(cfg.IdentityTermsVersion), identityhttp.LegalPackageVersion(), cfg.SMTPEnabled && cfg.IdentityMailSourceHourlyLimit > 0 && cfg.IdentityMailGlobalHourlyLimit > 0)).Register(api)
 	protected.Use(auth.RequireSession())
 	registerSelf(protected)
+	notifications.Register(protected)
 	insightswire.Register(protected, database, diagnostics, time.Now)
 	platform := protected.Group("/platform")
 	creditLimiter := billingredis.NewCreditCommandLimiter(sessions.RedisClient, cfg.CreditCommandRequestsPerMinute, cfg.CreditCommandMaxAmountMicros, cfg.CreditCommandMaxDailyMicros)

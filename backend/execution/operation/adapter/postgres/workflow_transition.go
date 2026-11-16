@@ -272,6 +272,10 @@ func appendWorkflowSpecialEvent(tx *gorm.DB, row workflowTransitionRow, topic st
 
 func encodeWorkflowEvent(tx *gorm.DB, row workflowTransitionRow, eventID uuid.UUID, topic string, data any) ([]byte, error) {
 	var project struct{ OrgID uuid.UUID }
+	var recipient struct{ ConfirmedBy *uuid.UUID }
+	if err := tx.Raw(`SELECT confirmed_by FROM operation.operation WHERE id=?`, row.ID).Scan(&recipient).Error; err != nil {
+		return nil, fmt.Errorf("read operation notification recipient: %w", err)
+	}
 	var owner string
 	if err := tx.Raw(`SELECT infra.runtime_owner()`).Scan(&owner).Error; err != nil {
 		return nil, err
@@ -289,12 +293,13 @@ func encodeWorkflowEvent(tx *gorm.DB, row workflowTransitionRow, eventID uuid.UU
 		return nil, ErrNotFound
 	}
 	payload, err := json.Marshal(struct {
-		EventID    uuid.UUID `json:"event_id"`
-		EventType  string    `json:"event_type"`
-		OccurredAt time.Time `json:"occurred_at"`
-		OrgID      uuid.UUID `json:"org_id"`
-		ProjectID  uuid.UUID `json:"project_id"`
-		Actor      struct {
+		EventID     uuid.UUID  `json:"event_id"`
+		EventType   string     `json:"event_type"`
+		OccurredAt  time.Time  `json:"occurred_at"`
+		OrgID       uuid.UUID  `json:"org_id"`
+		ProjectID   uuid.UUID  `json:"project_id"`
+		RecipientID *uuid.UUID `json:"recipient_id,omitempty"`
+		Actor       struct {
 			Kind string     `json:"kind"`
 			ID   *uuid.UUID `json:"id"`
 		} `json:"actor"`
@@ -306,6 +311,7 @@ func encodeWorkflowEvent(tx *gorm.DB, row workflowTransitionRow, eventID uuid.UU
 	}{
 		EventID: eventID, EventType: topic, OccurredAt: time.Now().UTC(),
 		OrgID: project.OrgID, ProjectID: row.ProjectID,
+		RecipientID: recipient.ConfirmedBy,
 		Actor: struct {
 			Kind string     `json:"kind"`
 			ID   *uuid.UUID `json:"id"`

@@ -5,6 +5,7 @@
 import * as settings from "./settings";
 import * as media from "./media";
 import * as analytics from "./analytics";
+import * as notifications from "./notifications";
 import * as identity from "./identity";
 import * as operations from "./operations";
 import * as billing from "./billing";
@@ -30,6 +31,7 @@ export default {
   settings,
   media,
   analytics,
+  notifications,
   identity,
   operations,
   billing,

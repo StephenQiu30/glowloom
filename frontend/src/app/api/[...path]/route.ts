@@ -8,6 +8,63 @@ const identityRoutes: {
   methods: string[];
   query: string[];
 }[] = [
+  { pattern: "announcements/public", methods: ["GET"], query: [] },
+  {
+    pattern: "notifications",
+    methods: ["GET"],
+    query: ["limit", "cursor", "category", "unread_only", "from", "to"],
+  },
+  { pattern: "notifications/(summary|display)", methods: ["GET"], query: [] },
+  {
+    pattern: `notifications/display/${identityUUID}/[1-9][0-9]*`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: "notifications/(read-all|display/ack)",
+    methods: ["POST"],
+    query: [],
+  },
+  { pattern: `notifications/${identityUUID}`, methods: ["GET"], query: [] },
+  {
+    pattern: `notifications/${identityUUID}/read`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: "platform/notifications",
+    methods: ["GET", "POST"],
+    query: [
+      "limit",
+      "cursor",
+      "search",
+      "status",
+      "placement",
+      "audience",
+      "from",
+      "to",
+    ],
+  },
+  {
+    pattern: `platform/notifications/${identityUUID}`,
+    methods: ["GET", "PUT"],
+    query: [],
+  },
+  {
+    pattern: `platform/notifications/${identityUUID}/audit`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `platform/notifications/${identityUUID}/publish`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `platform/notifications/${identityUUID}/enabled`,
+    methods: ["PATCH"],
+    query: [],
+  },
   {
     pattern: `projects/${identityUUID}/voice-library`,
     methods: ["GET", "POST"],
