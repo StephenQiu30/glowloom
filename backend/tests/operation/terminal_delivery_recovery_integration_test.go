@@ -14,7 +14,9 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -223,7 +225,17 @@ func (f *originalImageGeneration) Submit(context.Context, application.Generation
 
 func TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived(t *testing.T) {
 	// Cross-owner coordination must commit its source state before writer calls.
-	db := operationStoreDB(t)
+	// Keep its temporary storage route out of the other operation fixtures.
+	dsn := os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN")
+	if dsn == "" {
+		t.Skip("set GLOWLOOM_TEST_OPERATION_STORE_DB_DSN to an isolated PostgreSQL database")
+	}
+	db := businessEmptyFixtureDB(t, dsn)
+	for _, name := range []string{"schema.sql", "data.sql"} {
+		schema, err := os.ReadFile(filepath.Join("..", "..", "db", name))
+		require.NoError(t, err)
+		require.NoError(t, db.Exec(string(schema)).Error)
+	}
 	f := seedManagedFixture(t, db)
 	i, store := f.identity, f.store
 	require.NoError(t, db.Exec(`UPDATE billing.budget SET limit_micros=100000 WHERE project_id=?`, i.ProjectID).Error)

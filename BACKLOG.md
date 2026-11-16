@@ -14,6 +14,8 @@ CI43814558081继续发现Workspace工作流仍准备旧Meilisearch密钥，但�
 
 CI43815126497的干净检出缺少Next.js路由辅助类型，本地已有.next缓存未能预先暴露；types:check显式先执行next typegen，再执行tsc。另建不含.next/.source的临时HEAD导出目录后，完整类型检查通过。CI43815126509的Agent恢复测试再次通过，前次单例deadline超时暂未复现；后端完整Race仍以最终远程终态为准。
 
+CI43815503371发现提交式多产物测试将临时存储路由留在共享夹具库，随后音频恢复及重启用例发生路由版本冲突；本地按同序列复现。该测试改用现有businessEmptyFixtureDB创建独立数据库，仅从规范性schema.sql/data.sql初始化，测试后清理，不改生产路由保护。三个相关用例及两个重启分支连续Race全部通过（267.083s）；全量lint、vet、build通过。本地operation整包Race达到默认10分钟总时限而中止，中止前无断言失败，不能记为整包通过；继续以远程完整CI验收。
+
 <a id="notifications-20261116"></a>
 
 ## 通知中心与公告管理（2026-11-16）
