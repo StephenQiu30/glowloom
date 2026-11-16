@@ -193,7 +193,7 @@ const localSource = (node: CanvasEditorState["nodes"][number]) =>
 
 /** One page-memory Y.Doc queue and one socket. Heartbeats resolve immutable originals. */
 export class CanvasYjsLiveSession {
-  clientID = crypto.randomUUID();
+  clientID: string = crypto.randomUUID();
   private journal: CanvasPendingJournal | null = null;
   private journalError: Error | null = null;
   private storedRecovery?: RecoveryRecord<ServiceGraph>;
