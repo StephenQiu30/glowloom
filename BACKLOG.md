@@ -10,6 +10,8 @@
 
 后续CI43814257078的Workspace安装失败于清单缺失packageManager；按仓库既有版本补充pnpm@12.4.2及其生成的工具链锁定记录。冻结锁文件安装和修改文件的Prettier检查通过，未改动Workspace业务实现；并行Canvas重构改动保持原样。
 
+CI43814558081继续发现Workspace工作流仍准备旧Meilisearch密钥，但现有官方脚手架已通过createFromSource提供内置搜索且不依赖Meilisearch。工作流仅移除该废弃服务/环境/密钥准备步骤，保留lint、类型、格式、生产构建和包含搜索接口的浏览器验收；本地四项静态/构建检查及Chromium生产页面浏览器验收通过。
+
 <a id="notifications-20261116"></a>
 
 ## 通知中心与公告管理（2026-11-16）

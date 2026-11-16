@@ -12,16 +12,6 @@ jobs:
   workspace:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    services:
-      meilisearch:
-        image: getmeili/meilisearch:v1.37
-        env:
-          MEILI_MASTER_KEY: workspace-ci-only-meilisearch-key
-          MEILI_NO_ANALYTICS: "true"
-        ports: [7700:7700]
-    env:
-      NEXT_PUBLIC_MEILISEARCH_HOST: http://127.0.0.1:7700
-      MEILISEARCH_ADMIN_KEY: workspace-ci-only-meilisearch-key
     defaults:
       run:
         working-directory: workspace
@@ -38,16 +28,6 @@ jobs:
           cache_dependency_path: workspace/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - name: Prepare isolated search-only key
-        run: |
-          curl --fail --silent --retry 20 --retry-connrefused --retry-delay 1 "$NEXT_PUBLIC_MEILISEARCH_HOST/health" > /dev/null
-          node --input-type=module <<'JS'
-          import {appendFileSync} from 'node:fs';
-          import {Meilisearch} from 'meilisearch';
-          const client = new Meilisearch({host: process.env.NEXT_PUBLIC_MEILISEARCH_HOST, apiKey: process.env.MEILISEARCH_ADMIN_KEY});
-          const key = await client.createKey({description: 'Workspace isolated CI search', actions: ['search'], indexes: ['docs'], expiresAt: null});
-          appendFileSync(process.env.GITHUB_ENV, `NEXT_PUBLIC_MEILISEARCH_SEARCH_KEY=${key.key}\n`);
-          JS
       - run: pnpm lint
       - run: pnpm types:check
       - run: pnpm format:check
