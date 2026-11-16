@@ -30,9 +30,9 @@ type Config struct {
 	TLS                 ServiceTLS                 `json:"tls"`
 	IdentityAuthority   Peer                       `json:"identity_authority"`
 	ExecutionBudget     Peer                       `json:"execution_budget"`
-	ExecutionWork Peer `json:"execution_work"`
-	MediaWork Peer `json:"media_work"`
-	MediaCover Peer `json:"media_cover"`
+	ExecutionWork       Peer                       `json:"execution_work"`
+	MediaWork           Peer                       `json:"media_work"`
+	MediaCover          Peer                       `json:"media_cover"`
 	IdentityWriterToken string                     `json:"identity_writer_token"`
 	RegistrationToken   string                     `json:"registration_token"`
 	PreparationToken    string                     `json:"preparation_token"`
@@ -112,7 +112,7 @@ func (c Config) Validate() error {
 			return errConfiguration
 		}
 	}
-	for _, peer := range []Peer{c.IdentityAuthority, c.ExecutionBudget,c.ExecutionWork,c.MediaWork,c.MediaCover} {
+	for _, peer := range []Peer{c.IdentityAuthority, c.ExecutionBudget, c.ExecutionWork, c.MediaWork, c.MediaCover} {
 		if !validAddress(peer.Address, false) || peer.ServerName == "" || !checkToken(peer.Token) {
 			return errConfiguration
 		}

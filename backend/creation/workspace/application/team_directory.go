@@ -10,8 +10,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
+
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )

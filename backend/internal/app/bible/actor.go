@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
+
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 

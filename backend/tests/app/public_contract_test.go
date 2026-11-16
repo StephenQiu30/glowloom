@@ -142,7 +142,8 @@ func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	identityRoutes := map[string]bool{
-		"GET /api/auth-policy": true, "POST /api/registrations": true,
+		"GET /api/announcements/public": true,
+		"GET /api/auth-policy":          true, "POST /api/registrations": true,
 		"POST /api/invitations/preview":      true,
 		"POST /api/registrations/:id/resend": true, "POST /api/registrations/:id/verify": true, "POST /api/registrations/:id/complete": true,
 		"POST /api/sessions": true, "GET /api/session": true, "POST /api/password-resets": true, "POST /api/password-resets/complete": true,

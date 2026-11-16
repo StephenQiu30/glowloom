@@ -5,10 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 

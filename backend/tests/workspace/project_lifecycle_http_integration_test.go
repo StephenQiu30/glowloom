@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+	projecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/httpprojects"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
@@ -37,7 +38,7 @@ func TestProjectLifecycleHTTPClosedReadPatchAndRecovery(t *testing.T) {
 	router := lifecycleHTTPRouter(db, actor)
 	path := "/api/projects/" + id.String()
 	read := projectHTTPRequest(ctx, router, http.MethodGet, path, "", nil)
-	var detail workspacehttp.ProjectDetailResponse
+	var detail projecthttp.ProjectDetailResponse
 	if read.Code != 200 || json.Unmarshal(read.Body.Bytes(), &detail) != nil || detail.DefaultModels == nil || strings.Contains(read.Body.String(), "org_id") {
 		t.Fatalf("detail status=%d body=%s", read.Code, read.Body.String())
 	}
@@ -146,7 +147,7 @@ func TestProjectNameHTTPUnicodeCodepointsAndGoWhitespace(t *testing.T) {
 				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 			}
 			if test.status == 200 {
-				var detail workspacehttp.ProjectDetailResponse
+				var detail projecthttp.ProjectDetailResponse
 				if json.Unmarshal(response.Body.Bytes(), &detail) != nil || detail.Name != test.want {
 					t.Fatalf("name changed: %q", detail.Name)
 				}

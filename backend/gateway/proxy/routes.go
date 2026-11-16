@@ -58,6 +58,22 @@ func routeOwner(routes []route, method, path string) string {
 }
 
 const identityRoutes = `
+GET /announcements/public
+GET /notifications
+GET /notifications/summary
+GET /notifications/display
+GET /notifications/display/:id/:revision
+POST /notifications/display/ack
+POST /notifications/read-all
+GET /notifications/:id
+POST /notifications/:id/read
+GET /platform/notifications
+POST /platform/notifications
+GET /platform/notifications/:id
+PUT /platform/notifications/:id
+POST /platform/notifications/:id/publish
+PATCH /platform/notifications/:id/enabled
+GET /platform/notifications/:id/audit
 GET /auth-policy
 POST /registrations
 POST /registrations/:id/resend

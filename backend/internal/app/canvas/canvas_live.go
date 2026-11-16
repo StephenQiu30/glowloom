@@ -8,9 +8,10 @@ import (
 
 	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
-	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 
 	canvaslive "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/websocket"
 

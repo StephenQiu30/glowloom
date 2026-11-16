@@ -336,11 +336,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		PublishPrice:      catalogapp.NewPublishPriceRuleCommand(catalogStore, priceValidator, time.Now),
 		SetModelStatus:    catalogapp.NewSetModelStatusCommand(catalogStore, time.Now),
 	}).Register(identityProtected)
-	operations := pgoperation.NewScopedStoreWithEditor(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
-		return operationwire.ProvidePromptCompiler(tx)
-	}, func(tx *gorm.DB) operationapp.EditorSnapshots {
-		return operationwire.ProvidePromptEditor(tx)
-	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(tx *gorm.DB) operationapp.ExecutionAvailability {
+	operations := pgoperation.NewScopedStoreWithEditor(database, operationwire.ProvidePromptCompiler, operationwire.ProvidePromptEditor, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(tx *gorm.DB) operationapp.ExecutionAvailability {
 		return pgcatalog.NewStore(tx)
 	}).WithCreditOperationSaga(cfg.CreditOperationSagaEnabled).WithSubjectMedia(func(tx *gorm.DB) operationapp.SubjectMediaAccess {
 		return subjectwire.NewGenerationAccess(tx, subjectObjects)

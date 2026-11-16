@@ -26,6 +26,7 @@ import (
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -58,7 +59,7 @@ func lifecycleActorProject(ctx context.Context, t *testing.T, db *gorm.DB) (iden
 	t.Helper()
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
 	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor, "16:9", "realistic", nil))
-	if err := db.Exec(`INSERT INTO billing.budget(id,project_id,limit_micros) VALUES(?,?,1000)`, uuid.New(), id).Error; err != nil {
+	if err := db.Exec(`INSERT INTO billing.budget(id,project_id,limit_micros) VALUES(?,?,?)`, uuid.New(), id, 1000*billingdomain.MicrosPerCredit).Error; err != nil {
 		t.Fatal(err)
 	}
 	return actor, id
@@ -353,6 +354,22 @@ func lifecycleQuote(t *testing.T, db *gorm.DB, actor identityapp.Principal, proj
 	lifecycleFixtureSQL(t, db, `INSERT INTO catalog.model_profile_version(id,model_profile_id,version_no,provider_model_id,modes,limits,param_schema,supports_query,supports_cancel,supports_callback,expected_max_ms) VALUES(?,?,1,'test',ARRAY['text_to_image'],'{"max_outputs":1}','[]',true,false,false,30000)`, version, model)
 	lifecycleFixtureSQL(t, db, `UPDATE catalog.model_profile SET current_version_id=? WHERE id=?`, version, model)
 	lifecycleFixtureSQL(t, db, `INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,effective_from) VALUES(?,?,1,'per_image','{"base_micros":1}',clock_timestamp()-interval '1 minute')`, price, model)
+	procurement, config, release := uuid.New(), uuid.New(), uuid.New()
+	lifecycleFixtureSQL(t, db, `INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,effective_from,source_url,reviewed_at)
+ VALUES(?,?,2,'per_image','{"base_micros":1}',now()-interval '1 hour','https://example.invalid/lifecycle-procurement',now())`, procurement, model)
+	lifecycleFixtureSQL(t, db, `UPDATE catalog.price_rule_version SET rule=jsonb_set(rule,'{procurement_price_version_id}',to_jsonb(?::text)),source_url='https://example.invalid/lifecycle-retail',reviewed_at=now() WHERE id=?`, procurement, price)
+	if err := db.Raw(`INSERT INTO catalog.provider_config_version(id,provider_id,preset_version_id,version_no,config,content_hash)
+ SELECT ?,?,id,1,payload->'config',content_hash FROM catalog.provider_preset_version WHERE id='6da07a11-0000-4000-8000-000000000002' RETURNING id`, config, provider).Row().Scan(&config); err != nil {
+		t.Fatal("seed lifecycle fixture config", err)
+	}
+	lifecycleFixtureSQL(t, db, `INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,upstream_cost,status) VALUES(?,?,?,?,?,'{}','active')`, release, model, version, price, config)
+	var scope, lot uuid.UUID
+	if err := db.Raw(`SELECT billing.bind_project_wallet(?)`, project).Row().Scan(&scope); err != nil {
+		t.Fatal("bind lifecycle fixture wallet", err)
+	}
+	if err := db.Raw(`SELECT billing.issue_promotional_credit(?,?,?,now()+interval '1 hour',?,?)`, scope, uuid.New(), 1000*billingdomain.MicrosPerCredit, modelKey, "isolated lifecycle admission").Row().Scan(&lot); err != nil {
+		t.Fatal("fund lifecycle fixture wallet", err)
+	}
 	quote, err := workspaceOperationStore(db).CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{ModelKey: modelKey, Capability: capability, Mode: "text_to_image", Prompt: "合成行锁报价", Params: json.RawMessage(`{}`), OutputCount: 1}})
 	if err != nil {
 		t.Fatal(err)

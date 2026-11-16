@@ -76,7 +76,7 @@ func (s *Store) BeginProjectClosureAbort(ctx context.Context, state source.Proje
 			if coordination.Control != opened {
 				return writefence.ErrConflict
 			}
-		case head.Epoch == opened.Epoch && head.CoordinationID == opened.CoordinationID && (!head.Complete || head.Blocked==opened.Blocked):
+		case head.Epoch == opened.Epoch && head.CoordinationID == opened.CoordinationID && (!head.Complete || head.Blocked == opened.Blocked):
 			coordination, err := pgfence.NewAuthorityStore(tx).LoadCoordination(ctx, opened.CoordinationID)
 			if err != nil {
 				return err
@@ -146,7 +146,7 @@ func (s *Store) CompleteProjectClosureAbort(ctx context.Context, state source.Pr
 			}
 		} else {
 			expected := current.Spec.ReopenControl()
-			if control != expected || head.Epoch != expected.Epoch || head.CoordinationID != expected.CoordinationID || head.Blocked!=expected.Blocked || !head.Complete {
+			if control != expected || head.Epoch != expected.Epoch || head.CoordinationID != expected.CoordinationID || head.Blocked != expected.Blocked || !head.Complete {
 				return writefence.ErrFenced
 			}
 		}

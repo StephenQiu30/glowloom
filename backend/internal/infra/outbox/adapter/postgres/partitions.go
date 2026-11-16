@@ -1,3 +1,4 @@
+// Package postgres persists Outbox events and partition metadata in PostgreSQL.
 package postgres
 
 import (

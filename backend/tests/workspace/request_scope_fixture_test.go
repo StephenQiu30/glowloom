@@ -22,6 +22,7 @@ import (
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
 
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
 
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
 
@@ -129,7 +130,25 @@ func workspaceOperationStore(db *gorm.DB) *pgoperation.Store {
 		return workspaceOperationAccess{tx: tx}
 	}, func(tx *gorm.DB) operationapp.ProjectAccess {
 		return workspaceOperationAccess{tx: tx, worker: true}
-	}, func(tx *gorm.DB) operationapp.PlatformAccess { return pgidentity.NewStore(tx) })
+	}, func(tx *gorm.DB) operationapp.PlatformAccess { return pgidentity.NewStore(tx) }).WithExecutionAvailability(func(tx *gorm.DB) operationapp.ExecutionAvailability {
+		return workspaceExecutionAvailability{tx: tx}
+	})
+}
+
+// Lifecycle fixtures exercise admission locks with an uninstalled synthetic
+// adapter; actual published models retain the production availability reader.
+type workspaceExecutionAvailability struct{ tx *gorm.DB }
+
+func (r workspaceExecutionAvailability) AvailableForNewExecution(ctx context.Context, version, release uuid.UUID, mode string) (bool, error) {
+	var synthetic bool
+	err := r.tx.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM catalog.model_profile_version v
+ JOIN catalog.model_profile m ON m.id=v.model_profile_id JOIN catalog.provider p ON p.id=m.provider_id
+ WHERE v.id=? AND ?=ANY(v.modes) AND NOT v.is_delete AND NOT m.is_delete AND m.status='active'
+ AND p.adapter_key='test' AND p.key LIKE 'lifecycle-%' AND p.status='active' AND NOT p.is_delete)`, version, mode).Row().Scan(&synthetic)
+	if err != nil || synthetic {
+		return synthetic, err
+	}
+	return pgcatalog.NewStore(r.tx).AvailableForNewExecution(ctx, version, release, mode)
 }
 
 func workspaceMediaDocumentStore(db *gorm.DB) *pgmedia.DocumentSourceStore {

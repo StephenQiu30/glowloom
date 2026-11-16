@@ -149,7 +149,9 @@ func lockClosureProject(ctx context.Context, tx *gorm.DB, spec source.ProjectClo
 	if (project.CoverAssetID == nil) != (spec.ExpectedCoverAssetID == nil) || (project.CoverAssetID != nil && *project.CoverAssetID != *spec.ExpectedCoverAssetID) {
 		return project, writefence.ErrConflict
 	}
-	if spec.ExpectedProjectStatus!=""&&project.Status!=spec.ExpectedProjectStatus{return project,domain.ErrProjectStateConflict}
+	if spec.ExpectedProjectStatus != "" && project.Status != spec.ExpectedProjectStatus {
+		return project, domain.ErrProjectStateConflict
+	}
 	if project.Revision != spec.ExpectedRevision {
 		return project, domain.ErrProjectRevisionConflict
 	}
@@ -259,7 +261,10 @@ func (s *Store) BeginProjectClosure(ctx context.Context, spec source.ProjectClos
 				return nil
 			}
 		}
-		project,err:=lockClosureProject(ctx,tx,spec);if err!=nil{return err}
+		project, err := lockClosureProject(ctx, tx, spec)
+		if err != nil {
+			return err
+		}
 		if err := exactCreationAdmission(tx, spec.Command, writefence.WriterCreation); err != nil {
 			return err
 		}
@@ -285,7 +290,7 @@ func (s *Store) BeginProjectClosure(ctx context.Context, spec source.ProjectClos
 		if read.Error != nil {
 			return read.Error
 		}
-		if read.RowsAffected != 1 || head.Epoch != spec.ProjectAuthority.Epoch || (head.Blocked&&!(spec.Action=="delete"&&project.Status==domain.ProjectStatusArchived)) || !head.Complete {
+		if read.RowsAffected != 1 || head.Epoch != spec.ProjectAuthority.Epoch || (head.Blocked && (spec.Action != "delete" || project.Status != domain.ProjectStatusArchived)) || !head.Complete {
 			return writefence.ErrFenced
 		}
 		ledger, err := closureLedgerSHA(tx, spec.ProjectID)
@@ -553,7 +558,9 @@ func (s *Store) CommitClosedProject(ctx context.Context, state source.ProjectClo
 		if err := tx.Exec(`UPDATE workspace.project_closure SET phase='closed',result=?::jsonb,completed_at=statement_timestamp() WHERE id=? AND cycle=? AND phase='closing'`, string(receipt), current.Spec.ID, current.Cycle).Error; err != nil {
 			return err
 		}
-		if err:=tx.Exec(`UPDATE workspace.project_admission_gate SET blocked=false,updated_at=statement_timestamp() WHERE project_id=? AND close_id=? AND cycle=?`,current.Spec.ProjectID,current.Spec.ID,current.Cycle).Error;err!=nil{return err}
+		if err := tx.Exec(`UPDATE workspace.project_admission_gate SET blocked=false,updated_at=statement_timestamp() WHERE project_id=? AND close_id=? AND cycle=?`, current.Spec.ProjectID, current.Spec.ID, current.Cycle).Error; err != nil {
+			return err
+		}
 		result = project
 		return nil
 	})

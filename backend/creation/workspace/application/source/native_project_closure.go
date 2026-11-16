@@ -106,14 +106,14 @@ func (s *NativeProjectClosure) Execute(ctx context.Context, credential Credentia
 		if !errors.Is(err, writefence.ErrNotFound) {
 			return domain.Project{}, err
 		}
-		if view.Project.IsDelete || view.Project.Status == domain.ProjectStatusCopying || (input.Action=="archive"&&view.Project.Status!=domain.ProjectStatusActive) {
+		if view.Project.IsDelete || view.Project.Status == domain.ProjectStatusCopying || (input.Action == "archive" && view.Project.Status != domain.ProjectStatusActive) {
 			return domain.Project{}, domain.ErrProjectStateConflict
 		}
 		if view.Project.Revision != input.ExpectedRevision {
 			return domain.Project{}, domain.ErrProjectRevisionConflict
 		}
 		spec = ProjectClosureSpec{ID: id, ActorID: session.Identity.AccountID, SessionID: session.Identity.SessionID, ScopeID: scopeID, OrganizationID: view.Scope.OrganizationID, ProjectID: input.ProjectID, RequestID: requestID, IdempotencyKey: input.IdempotencyKey, ExpectedRevision: input.ExpectedRevision, ProjectAuthority: view.Authority, CoordinationID: uuid.NewSHA1(id, []byte("creation.project.close.authority")), Action: input.Action}
-		spec.ExpectedProjectStatus=view.Project.Status
+		spec.ExpectedProjectStatus = view.Project.Status
 		if view.Project.CoverAssetID != nil {
 			cover := *view.Project.CoverAssetID
 			spec.ExpectedCoverAssetID = &cover

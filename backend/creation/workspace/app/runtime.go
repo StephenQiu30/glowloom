@@ -27,13 +27,13 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/executionbudget"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/executionwork"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/mediawork"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/mediacover"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/grpcaccountgovernance"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/grpcpreparation"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/grpcregistration"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/httpprojects"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/identitysource"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/mediacover"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/mediawork"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/pgsource"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	coordination "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/coordination"
@@ -195,11 +195,26 @@ func New(ctx context.Context, cfg Config, logger *zap.Logger) (runtime *Runtime,
 	if err != nil {
 		return nil, err
 	}
-	executionWork,err:=executionwork.New(cfg.ExecutionWork.Address,cfg.ExecutionWork.Token,credentials.NewTLS(clientTLS(cfg.ExecutionWork.ServerName)));if err!=nil{return nil,err}
-	mediaWork,err:=mediawork.New(cfg.MediaWork.Address,cfg.MediaWork.Token,credentials.NewTLS(clientTLS(cfg.MediaWork.ServerName)));if err!=nil{return nil,err}
-	coverReader,err:=mediacover.New(cfg.MediaCover.Address,cfg.MediaCover.Token,credentials.NewTLS(clientTLS(cfg.MediaCover.ServerName)));if err!=nil{return nil,err}
-	closures,err:=source.NewProjectClosures(store,map[writefence.Writer]source.ProjectWorkReader{writefence.WriterCreation:store,writefence.WriterExecution:executionWork,writefence.WriterMedia:mediaWork},coordinator,coverReader);if err!=nil{return nil,err}
-	closeProject,err:=source.NewNativeProjectClosure(identity,store,source.NewAdmission(identity,store),writer,closures,store);if err!=nil{return nil,err}
+	executionWork, err := executionwork.New(cfg.ExecutionWork.Address, cfg.ExecutionWork.Token, credentials.NewTLS(clientTLS(cfg.ExecutionWork.ServerName)))
+	if err != nil {
+		return nil, err
+	}
+	mediaWork, err := mediawork.New(cfg.MediaWork.Address, cfg.MediaWork.Token, credentials.NewTLS(clientTLS(cfg.MediaWork.ServerName)))
+	if err != nil {
+		return nil, err
+	}
+	coverReader, err := mediacover.New(cfg.MediaCover.Address, cfg.MediaCover.Token, credentials.NewTLS(clientTLS(cfg.MediaCover.ServerName)))
+	if err != nil {
+		return nil, err
+	}
+	closures, err := source.NewProjectClosures(store, map[writefence.Writer]source.ProjectWorkReader{writefence.WriterCreation: store, writefence.WriterExecution: executionWork, writefence.WriterMedia: mediaWork}, coordinator, coverReader)
+	if err != nil {
+		return nil, err
+	}
+	closeProject, err := source.NewNativeProjectClosure(identity, store, source.NewAdmission(identity, store), writer, closures, store)
+	if err != nil {
+		return nil, err
+	}
 	resolve := httpprojects.CookieResolver(strings.HasPrefix(cfg.PublicOrigin, "https://"))
 	handler, err := httpprojects.NewNativeProjectHandler(create, resolve)
 	if err != nil {
@@ -239,13 +254,17 @@ func New(ctx context.Context, cfg Config, logger *zap.Logger) (runtime *Runtime,
 		c.Next()
 	})
 	handler.Register(public)
-	closureHandler,err:=httpprojects.NewNativeClosureHandler(closeProject,resolve);if err!=nil{return nil,err};closureHandler.Register(public)
+	closureHandler, err := httpprojects.NewNativeClosureHandler(closeProject, resolve)
+	if err != nil {
+		return nil, err
+	}
+	closureHandler.Register(public)
 	r.http = &http.Server{Handler: engine, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 35 * time.Second, IdleTimeout: time.Minute}
 	r.httpListener, err = (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddress)
 	if err != nil {
 		return nil, errors.New("creation HTTP listener unavailable")
 	}
-	r.worker = &taskruntime.Worker{Store: taskruntime.NewStore(r.database.DB), Handlers: map[string]taskruntime.Handler{source.ProjectPreparationTask: projects.Handle,source.ProjectClosureTask:closures.Handle, source.AccountGovernanceRecoveryTask: func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
+	r.worker = &taskruntime.Worker{Store: taskruntime.NewStore(r.database.DB), Handlers: map[string]taskruntime.Handler{source.ProjectPreparationTask: projects.Handle, source.ProjectClosureTask: closures.Handle, source.AccountGovernanceRecoveryTask: func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
 		id, err := uuid.Parse(job.BusinessID)
 		if err != nil || id == uuid.Nil || id.String() != job.BusinessID {
 			return time.Time{}, writefence.ErrInvalid

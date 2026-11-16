@@ -265,10 +265,3 @@ func writeLifecycleError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 	}
 }
-
-func projectCanvasID(id uuid.UUID) *uuid.UUID {
-	if id == uuid.Nil {
-		return nil
-	}
-	return &id
-}

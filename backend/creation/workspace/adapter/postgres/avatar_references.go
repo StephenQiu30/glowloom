@@ -3,9 +3,10 @@ package postgres
 import (
 	"context"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 )
 
 // TeamAvatarReferences protects retained team bindings independently of the uploader.

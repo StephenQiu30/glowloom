@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )

@@ -4,11 +4,12 @@ package http
 import (
 	"errors"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
 	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 

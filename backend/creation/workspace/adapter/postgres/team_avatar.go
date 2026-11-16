@@ -1,9 +1,10 @@
 package postgres
 
 import (
+	"github.com/google/uuid"
+
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
-	"github.com/google/uuid"
 
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )

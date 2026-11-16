@@ -20,7 +20,7 @@ type ProjectCoverRequest struct {
 
 // Validate requires the exact resource and installed closing generation.
 func (r ProjectCoverRequest) Validate() error {
-	if r.CloseID == uuid.Nil || r.ProjectID == uuid.Nil || r.OrganizationID == uuid.Nil || r.ScopeID == uuid.Nil || r.AssetID == uuid.Nil || r.ProjectEpoch < 1 || r.CoordinationID != uuid.NewSHA1(r.CloseID,[]byte("creation.project.close.authority")) {
+	if r.CloseID == uuid.Nil || r.ProjectID == uuid.Nil || r.OrganizationID == uuid.Nil || r.ScopeID == uuid.Nil || r.AssetID == uuid.Nil || r.ProjectEpoch < 1 || r.CoordinationID != uuid.NewSHA1(r.CloseID, []byte("creation.project.close.authority")) {
 		return writefence.ErrInvalid
 	}
 	return nil
@@ -28,8 +28,8 @@ func (r ProjectCoverRequest) Validate() error {
 
 // ProjectCoverObservation is an immutable read fact, not a write authority.
 type ProjectCoverObservation struct {
-	Request   ProjectCoverRequest
-	Available bool
+	Request       ProjectCoverRequest
+	Available     bool
 	AssetRevision int64
 }
 
@@ -53,7 +53,9 @@ func (d ProjectCloseDetails) Validate() error {
 	if d.Project.Validate() != nil || d.DefaultModels == nil || d.LastModifiedAt == nil || d.LastModifiedAt.IsZero() || d.LastModifiedBasis == nil || *d.LastModifiedBasis == "" {
 		return writefence.ErrConflict
 	}
-	if d.Cover!=nil&&(d.Cover.AssetRevision<0||(d.Cover.Available&&d.Cover.AssetRevision<1)){return writefence.ErrConflict}
+	if d.Cover != nil && (d.Cover.AssetRevision < 0 || (d.Cover.Available && d.Cover.AssetRevision < 1)) {
+		return writefence.ErrConflict
+	}
 	if d.Project.CoverAssetID == nil {
 		if d.Cover != nil || d.CoverUnavailable {
 			return writefence.ErrConflict
@@ -65,6 +67,8 @@ func (d ProjectCloseDetails) Validate() error {
 	}
 	return nil
 }
+
+// CoverRequest binds the expected cover to this closure's project authority.
 func (s ProjectClosureSpec) CoverRequest() ProjectCoverRequest {
 	request := ProjectCoverRequest{CloseID: s.ID, ProjectID: s.ProjectID, OrganizationID: s.OrganizationID, ScopeID: s.ScopeID, ProjectEpoch: s.Control().Epoch, CoordinationID: s.CoordinationID}
 	if s.ExpectedCoverAssetID != nil {

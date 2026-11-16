@@ -1,11 +1,12 @@
 package outputpublication
 
 import (
-	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/mediapublication"
-	fencewire "github.com/StephenQiu30/glowloom-server/backend/internal/platform/writefence/grpctransport"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	pb "github.com/StephenQiu30/glowloom-server/backend/internal/contract/gen/mediapublication"
+	fencewire "github.com/StephenQiu30/glowloom-server/backend/internal/platform/writefence/grpctransport"
 )
 
 // Closed rejects unknown fields recursively, including nested streamed headers.

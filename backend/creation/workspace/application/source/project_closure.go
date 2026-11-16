@@ -23,21 +23,21 @@ const ProjectClosureTask = "creation.project.close"
 // authenticated account/session/scope. ProjectAuthority is separately bound:
 // closing that authority must not invalidate this control's own final Guard.
 type ProjectClosureSpec struct {
-	ID                   uuid.UUID            `json:"id"`
-	Command              writefence.Command   `json:"command"`
-	ActorID              uuid.UUID            `json:"actor_id"`
-	SessionID            uuid.UUID            `json:"session_id"`
-	ScopeID              uuid.UUID            `json:"scope_id"`
-	OrganizationID       uuid.UUID            `json:"organization_id"`
-	ProjectID            uuid.UUID            `json:"project_id"`
-	RequestID            uuid.UUID            `json:"request_id"`
-	IdempotencyKey       uuid.UUID            `json:"idempotency_key"`
-	ExpectedRevision     int64                `json:"expected_revision"`
-	ProjectAuthority     writefence.Authority `json:"project_authority"`
-	CoordinationID       uuid.UUID            `json:"coordination_id"`
-	Action               string               `json:"action"`
-	ExpectedCoverAssetID *uuid.UUID           `json:"expected_cover_asset_id,omitempty"`
-	ExpectedProjectStatus string `json:"expected_project_status,omitempty"`
+	ID                    uuid.UUID            `json:"id"`
+	Command               writefence.Command   `json:"command"`
+	ActorID               uuid.UUID            `json:"actor_id"`
+	SessionID             uuid.UUID            `json:"session_id"`
+	ScopeID               uuid.UUID            `json:"scope_id"`
+	OrganizationID        uuid.UUID            `json:"organization_id"`
+	ProjectID             uuid.UUID            `json:"project_id"`
+	RequestID             uuid.UUID            `json:"request_id"`
+	IdempotencyKey        uuid.UUID            `json:"idempotency_key"`
+	ExpectedRevision      int64                `json:"expected_revision"`
+	ProjectAuthority      writefence.Authority `json:"project_authority"`
+	CoordinationID        uuid.UUID            `json:"coordination_id"`
+	Action                string               `json:"action"`
+	ExpectedCoverAssetID  *uuid.UUID           `json:"expected_cover_asset_id,omitempty"`
+	ExpectedProjectStatus string               `json:"expected_project_status,omitempty"`
 }
 
 // CommandSHA256 binds the original resource, generation and administrative intent.
@@ -101,7 +101,7 @@ func (s ProjectClosureSpec) Control() writefence.Control {
 func (s ProjectClosureSpec) ReopenControl() writefence.Control {
 	a := s.ProjectAuthority
 	a.Epoch += 2
-	return writefence.Control{Authority: a, CoordinationID: uuid.NewSHA1(s.CoordinationID, []byte("creation.project.close.reopen")), Blocked: s.ExpectedProjectStatus==domain.ProjectStatusArchived}
+	return writefence.Control{Authority: a, CoordinationID: uuid.NewSHA1(s.CoordinationID, []byte("creation.project.close.reopen")), Blocked: s.ExpectedProjectStatus == domain.ProjectStatusArchived}
 }
 
 // ProjectClosureState is the durable source decision. A private gate does not

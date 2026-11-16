@@ -8,10 +8,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )

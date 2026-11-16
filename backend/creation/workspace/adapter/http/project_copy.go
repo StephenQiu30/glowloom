@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"

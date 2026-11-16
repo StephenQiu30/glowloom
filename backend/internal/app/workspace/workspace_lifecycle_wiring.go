@@ -12,9 +12,10 @@ import (
 
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 
-	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 
@@ -53,19 +54,19 @@ func (g projectWorkGuard) HasInflightWork(ctx context.Context, actor identityapp
 // ProvideWorkspaceLifecycleStore assembles workspace lifecycle storage.
 func ProvideWorkspaceLifecycleStore(database *gorm.DB) *pgworkspace.Store {
 	return pgworkspace.NewScopedStore(database, scopewire.ProvideRequestScopeAccess, ProvideProjectWorkGuard, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
-		return workspaceMediaQuery{query:mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))}
+		return workspaceMediaQuery{query: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess))}
 	})
 }
 
 // ProvideProjectWorkGuard assembles project lifecycle work guards.
 func ProvideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 	return projectWorkGuard{owners: []workspaceapp.ProjectWorkGuard{
-		operationwire.ProvideOperationStore(tx), mediaProjectWorkGuard{owner:pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)}, pgmediatool.NewStore(tx, nil, nil), mediawire.ProvideMediaTranscriptionStore(tx, false),
+		operationwire.ProvideOperationStore(tx), mediaProjectWorkGuard{owner: pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)}, pgmediatool.NewStore(tx, nil, nil), mediawire.ProvideMediaTranscriptionStore(tx, false),
 		pgworkspace.NewProjectCopyStore(tx, nil, nil),
 		mediawire.ProvideMediaDepthStore(tx, false),
 		scriptWorkGuard{store: scriptwire.ProvideScriptSourceStore(tx)},
-		mediaProjectWorkGuard{owner:mediawire.ProvideMediaTransferStore(tx)},
-		mediaProjectWorkGuard{owner:mediawire.ProvideMediaPurgeStore(tx)},
+		mediaProjectWorkGuard{owner: mediawire.ProvideMediaTransferStore(tx)},
+		mediaProjectWorkGuard{owner: mediawire.ProvideMediaPurgeStore(tx)},
 		mediawire.PackageWorkGuard(tx),
 	}}
 }

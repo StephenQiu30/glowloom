@@ -10,10 +10,11 @@ import (
 	"errors"
 	"strconv"
 
-	projecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/httpprojects"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	projecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/httpprojects"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 

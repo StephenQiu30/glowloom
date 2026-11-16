@@ -3,12 +3,13 @@ package http
 import (
 	"errors"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 // DraftHandler exposes atomic private draft persistence.

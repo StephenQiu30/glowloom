@@ -68,6 +68,7 @@ func (s *Governance) WithTeamGovernance(participant GovernanceTeamParticipant) e
 	s.source.teams = participant
 	return nil
 }
+
 // SelfDeletionMutationTx applies only a previously accepted, self-bound deletion.
 // It does not authorize a platform action or query retained Creation resources.
 type SelfDeletionMutationTx interface {

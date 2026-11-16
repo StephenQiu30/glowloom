@@ -83,7 +83,9 @@ func operationStoreWithCreditSaga(tx *gorm.DB, enabled bool) *pgoperation.Store 
 	return operationStore(tx).WithCreditOperationSaga(enabled)
 }
 func scriptService(tx *gorm.DB) *script.SourceService {
-	return script.NewSourceService(pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess { return scriptwire.ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(inner)) }), nil, time.Now)
+	return script.NewSourceService(pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess {
+		return scriptwire.ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(inner))
+	}), nil, time.Now)
 }
 
 type subjectScope struct{ tx *gorm.DB }

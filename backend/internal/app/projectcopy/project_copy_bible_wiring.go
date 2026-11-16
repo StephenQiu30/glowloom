@@ -7,9 +7,10 @@ import (
 
 	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 
-	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 
 	pgbible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
 

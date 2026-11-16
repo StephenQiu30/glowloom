@@ -1,5 +1,11 @@
 # 织光当前工作清单 (Glowloom Backlog)
 
+## 后端CI项目合同与质量门禁修复（2026-11-16）
+
+用户授权修复ProjectDetailResponse缺失、验证后提交main并推送、保留其他改动，并跟进CI直到全绿。根因是测试仍从旧HTTP包引用已经迁入httpprojects的响应类型；修复测试引用，不新增兼容别名或重复DTO。全量检查同时补齐通知Gateway的16条Identity路由、公开公告的匿名合同分类，以及项目生命周期合成模型夹具的执行依赖、商业报价记录和按MicrosPerCredit计量的预算/限定模型测试积分；不放宽生产授权、可执行性或资金门槛。
+
+完整golangci发现的格式/注释、未使用函数、冗余闭包和等价逻辑表达式均已修复；78个formatter目标中77个与官方formatter结果逐字节一致，另一文件同时修复门禁报告的等价逻辑表达式。全量lint、vet/build、相关六包Race与真实隔离PG18的五组生命周期HTTP/准入测试通过。首次无环境全仓Race中的agentboundary/canvas缺专用DSN，不能称为全量通过；最终接受以推送后完整CI终态为准。证据在/tmp/glowloom-project-ci-20261116；现有业务库未DDL，无付费调用。并行Workspace页面/配置改动和原有package.json保留，不混入本次提交。
+
 <a id="notifications-20261116"></a>
 
 ## 通知中心与公告管理（2026-11-16）

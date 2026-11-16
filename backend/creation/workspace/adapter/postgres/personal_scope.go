@@ -3,9 +3,10 @@ package postgres
 import (
 	"context"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
 )
 
 // PersonalScopeID reads a mapping, not authority. Callers must subsequently Resolve
