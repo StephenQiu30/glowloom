@@ -3536,6 +3536,15 @@ button:not(:disabled),
   background: color-mix(in srgb, var(--navigation-accent) 12%, transparent);
 }
 /* Shared creation controls, used by home, conversations and canvas composers. */
+.project-stage-tabs [data-slot="tabs-trigger"] {
+  height: auto;
+  min-height: 36px;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .project-stage-tabs [data-slot="tabs-trigger"] {
+    min-height: 44px;
+  }
+}
 .composer-toolbar {
   --toolbar-control-size: 28px;
   display: flex;

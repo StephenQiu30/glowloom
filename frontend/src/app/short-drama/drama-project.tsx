@@ -256,7 +256,7 @@ function ProjectWorkspace({
       >
         <TabsList
           aria-label="短剧项目阶段"
-          className="max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto [&>[data-slot=tabs-trigger]]:h-9 max-md:[&>[data-slot=tabs-trigger]]:h-11"
+          className="project-stage-tabs max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto"
         >
           <TabsTrigger value="script" disabled={locked}>
             剧本
