@@ -12,6 +12,8 @@
 
 CI43814558081继续发现Workspace工作流仍准备旧Meilisearch密钥，但现有官方脚手架已通过createFromSource提供内置搜索且不依赖Meilisearch。工作流仅移除该废弃服务/环境/密钥准备步骤，保留lint、类型、格式、生产构建和包含搜索接口的浏览器验收；本地四项静态/构建检查及Chromium生产页面浏览器验收通过。
 
+CI43815126497的干净检出缺少Next.js路由辅助类型，本地已有.next缓存未能预先暴露；types:check显式先执行next typegen，再执行tsc。另建不含.next/.source的临时HEAD导出目录后，完整类型检查通过。CI43815126509的Agent恢复测试再次通过，前次单例deadline超时暂未复现；后端完整Race仍以最终远程终态为准。
+
 <a id="notifications-20261116"></a>
 
 ## 通知中心与公告管理（2026-11-16）

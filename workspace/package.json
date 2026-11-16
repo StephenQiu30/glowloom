@@ -9,7 +9,7 @@
     "start": "next start --hostname 127.0.0.1 --port 1130",
     "lint": "eslint .",
     "format:check": "prettier --check .",
-    "types:check": "tsc --noEmit",
+    "types:check": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test"
   },
   "dependencies": {
