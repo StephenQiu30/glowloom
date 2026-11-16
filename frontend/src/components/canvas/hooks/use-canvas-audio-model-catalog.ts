@@ -11,7 +11,7 @@ import { readCanvasAudioModelCatalog } from "../lib/canvas-audio-model-catalog";
 import type {
   CanvasAudioCatalogIdentity,
   CanvasAudioModelCatalog,
-} from "../lib/canvas-audio-connection-capability";
+} from "@glowloom/canvas/editor/lib/canvas-audio-connection-capability.ts";
 
 const identityGeneration = () =>
   `${getSessionGeneration()}/${getScopeGeneration()}`;

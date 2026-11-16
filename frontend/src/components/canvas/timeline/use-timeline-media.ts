@@ -8,7 +8,7 @@ import {
   subscribeContextChange,
   RequestError,
 } from "@/lib/request";
-import type { TimelineMedia } from "./timeline-preview";
+import type { TimelineMedia } from "@glowloom/canvas/editor/timeline/timeline-preview.tsx";
 const contextIdentity = () =>
   `${getSessionGeneration()}/${getScopeGeneration()}`;
 

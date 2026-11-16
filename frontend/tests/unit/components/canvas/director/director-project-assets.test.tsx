@@ -7,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { DirectorProjectAssets } from "@/components/canvas/director/director-project-assets";
+import { DirectorProjectAssets } from "@glowloom/canvas/editor/director/director-project-assets.tsx";
 const mocks = vi.hoisted(() => ({ list: vi.fn(), preview: vi.fn(), scope: 0 }));
 vi.mock("@/api/media", () => ({
   listMediaLibrary: mocks.list,
@@ -18,7 +18,7 @@ vi.mock("@/lib/request", () => ({
   getSessionGeneration: () => 0,
   RequestError: class extends Error {},
 }));
-vi.mock("@/components/canvas/director/director-asset-preview", () => ({
+vi.mock("@glowloom/canvas/editor/director/director-asset-preview.tsx", () => ({
   DirectorProjectAssetPreview: () => <span>真实预览入口</span>,
 }));
 const projectID = "10000000-0000-4000-8000-000000000001";

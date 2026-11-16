@@ -1,11 +1,11 @@
 import { expect, it } from "vitest";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   connectCanvasTimelineSources,
   reconcileTimelineConnections,
-} from "@/components/canvas/lib/canvas-timeline-connections";
-import { removeCanvasReferences } from "@/components/canvas/lib/canvas-reference-state";
-import type { CanvasEditorState } from "@/components/canvas/lib/canvas-document-adapter";
+} from "@glowloom/canvas/editor/lib/canvas-timeline-connections.ts";
+import { removeCanvasReferences } from "@glowloom/canvas/editor/lib/canvas-reference-state.ts";
+import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
 import {
   serviceDocumentFromEditor,
   serviceGraph,

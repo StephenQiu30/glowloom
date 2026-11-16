@@ -6636,17 +6636,27 @@ GRANT DELETE ON workspace.prompt_draft TO glowloom_app;
 GRANT UPDATE ON workspace.prompt_draft_receipt TO glowloom_app;
 
 -- Durable Yjs collaboration and legacy-writer fence.
+-- Full binary checkpoints are shared by the head and immutable history.
+CREATE TABLE canvas.collab_checkpoint (
+ id uuid PRIMARY KEY,
+ document_id uuid NOT NULL REFERENCES canvas.document(id),
+ state bytea NOT NULL CHECK(octet_length(state)<=8388608),
+ UNIQUE(document_id,id)
+);
+GRANT SELECT,INSERT,DELETE ON canvas.collab_checkpoint TO glowloom_app;
+
 CREATE TABLE canvas.collab_document (
  document_id uuid PRIMARY KEY REFERENCES canvas.document(id),
  epoch uuid NOT NULL,
  writer_term bigint NOT NULL DEFAULT 1 CHECK(writer_term>0),
  commit_seq bigint NOT NULL DEFAULT 0 CHECK(commit_seq>=0),
  content_revision bigint NOT NULL CHECK(content_revision>0),
- state bytea NOT NULL CHECK(octet_length(state)<=8388608),
+ state_id uuid NOT NULL,
  graph_hash text NOT NULL CHECK(length(graph_hash)=64),
  model_version integer NOT NULL DEFAULT 1 CHECK(model_version=1),
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+ updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ FOREIGN KEY(document_id,state_id) REFERENCES canvas.collab_checkpoint(document_id,id)
 );
 CREATE TABLE canvas.collab_update (
  document_id uuid NOT NULL REFERENCES canvas.collab_document(document_id),
@@ -6698,10 +6708,12 @@ CREATE TRIGGER canvas_collab_edge_writer BEFORE INSERT OR UPDATE OR DELETE ON ca
 CREATE TABLE canvas.collab_version (
  id uuid PRIMARY KEY, document_id uuid NOT NULL REFERENCES canvas.document(id),
  epoch uuid NOT NULL, revision bigint NOT NULL, document_json jsonb NOT NULL,
- writer_term bigint NOT NULL, commit_seq bigint NOT NULL, state bytea NOT NULL CHECK(octet_length(state)<=8388608), graph_hash text NOT NULL,
+ writer_term bigint NOT NULL, commit_seq bigint NOT NULL, state_id uuid NOT NULL, graph_hash text NOT NULL,
  actor_id uuid NOT NULL, reason text NOT NULL, created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- UNIQUE(document_id,revision), CHECK(octet_length(document_json::text)<=16777216)
+ UNIQUE(document_id,revision), CHECK(octet_length(document_json::text)<=16777216),
+ FOREIGN KEY(document_id,state_id) REFERENCES canvas.collab_checkpoint(document_id,id)
 );
+CREATE INDEX collab_version_state_idx ON canvas.collab_version(document_id,state_id);
 CREATE TABLE canvas.collab_control_receipt (
  document_id uuid NOT NULL REFERENCES canvas.document(id), actor_id uuid NOT NULL,
  session_id uuid NOT NULL, command_id uuid NOT NULL, request_hash text NOT NULL,

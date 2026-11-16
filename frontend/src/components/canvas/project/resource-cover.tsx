@@ -5,7 +5,7 @@ import { useAccount } from "@/components/canvas/runtime/components/account/accou
 import { accountScope } from "@/components/canvas/runtime/store/account-slice";
 import { FixedThumbnail } from "@/components/canvas/runtime/components/media/fixed-thumbnail";
 import { Badge } from "@/components/ui/badge";
-import type { WorkspaceResource } from "../lib/workspace-resources";
+import type { WorkspaceResource } from "@glowloom/canvas/editor/lib/workspace-resources.ts";
 
 export type CoverReference = {
   coverFileId?: string;

@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { TimelineUploadDialog } from "@/components/canvas/timeline/timeline-upload-dialog";
+import { TimelineUploadDialog } from "@glowloom/canvas/editor/timeline/timeline-upload-dialog.tsx";
 const upload = vi.hoisted(() => vi.fn());
 vi.mock("@/api/media", () => ({ uploadMediaAsset: upload }));
 afterEach(() => {

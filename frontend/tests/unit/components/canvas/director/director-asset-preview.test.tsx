@@ -7,12 +7,15 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { DirectorProjectAssetPreview } from "@/components/canvas/director/director-asset-preview";
+import { DirectorProjectAssetPreview } from "@glowloom/canvas/editor/director/director-asset-preview.tsx";
 const mocks = vi.hoisted(() => ({ preview: vi.fn(), render: vi.fn() }));
 vi.mock("@/api/media", () => ({ getMediaPreview: mocks.preview }));
-vi.mock("@/components/canvas/director/director-asset-preview-renderer", () => ({
-  renderDirectorAssetThumbnail: mocks.render,
-}));
+vi.mock(
+  "@glowloom/canvas/editor/director/director-asset-preview-renderer.ts",
+  () => ({
+    renderDirectorAssetThumbnail: mocks.render,
+  }),
+);
 const asset = {
   id: "10000000-0000-4000-8000-000000000002",
   project_id: "10000000-0000-4000-8000-000000000001",

@@ -1,11 +1,11 @@
 import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { TimelinePreview } from "@/components/canvas/timeline/timeline-preview";
+import { TimelinePreview } from "@glowloom/canvas/editor/timeline/timeline-preview.tsx";
 import {
   emptyTimelineConfig,
   editTimeline,
-} from "@/components/canvas/timeline/timeline-model";
+} from "@glowloom/canvas/editor/timeline/timeline-model.ts";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

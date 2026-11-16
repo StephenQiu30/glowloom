@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { assertCanvasSubjectSourcePreview } from "@/components/canvas/lib/canvas-subject-connection-preview";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
-import { setSubjectConfig } from "@/components/canvas/subject/subject-node-state";
+import { assertCanvasSubjectSourcePreview } from "@glowloom/canvas/editor/lib/canvas-subject-connection-preview.ts";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
+import { setSubjectConfig } from "@glowloom/canvas/editor/subject/subject-node-state.ts";
 import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
 
 function sources(types: string[]) {

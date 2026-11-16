@@ -19,7 +19,7 @@ import type { ProjectCommandTarget } from "../hooks/use-projects";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { useAuthDialog } from "@/components/canvas/runtime/components/account/auth/auth-dialog-provider";
 import { WorkspaceResourceActionDialog } from "./workspace-resource-action-dialog";
-import type { WorkspaceResourceTarget } from "../lib/workspace-resources";
+import type { WorkspaceResourceTarget } from "@glowloom/canvas/editor/lib/workspace-resources.ts";
 import type { WorkspaceCommand } from "../lib/workspace-commands";
 
 type ProjectAction = { actor: string } & (

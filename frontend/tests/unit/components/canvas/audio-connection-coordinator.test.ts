@@ -7,12 +7,12 @@ import {
   createCanvasAudioConnectionDraft,
   canvasAudioComposerForPersistence,
   type CanvasAudioModelCatalog,
-} from "@/components/canvas/lib/canvas-audio-connection-capability";
-import { previewCanvasAudioConnection } from "@/components/canvas/lib/canvas-audio-connection-preview";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+} from "@glowloom/canvas/editor/lib/canvas-audio-connection-capability.ts";
+import { previewCanvasAudioConnection } from "@glowloom/canvas/editor/lib/canvas-audio-connection-preview.ts";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
-import type { CanvasEditorState } from "@/components/canvas/lib/canvas-document-adapter";
+import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
 vi.mock("@/api/subjects", () => ({ getSubjectVersion: vi.fn() }));
 afterEach(() => vi.clearAllMocks());
 function fixture() {

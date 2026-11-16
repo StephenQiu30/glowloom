@@ -2,7 +2,10 @@ import { assetReviewRead } from "@/components/canvas/runtime/api/asset-review-bf
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { startFileDownload } from "@/components/canvas/runtime/components/assets/lib/original-download";
 import { downloadFixedFile } from "@/components/canvas/runtime/components/assets/lib/original-download";
-import { CanvasNodeType, type CanvasNodeData } from "../types/canvas";
+import {
+  CanvasNodeType,
+  type CanvasNodeData,
+} from "@glowloom/canvas/editor/types/canvas.ts";
 
 export async function downloadCanvasOriginal(
   node: CanvasNodeData,

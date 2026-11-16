@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
-import { directorTransform } from "@/components/canvas/director/director-model";
+import { directorTransform } from "@glowloom/canvas/editor/director/director-model.ts";
 import {
   editDirectorChannel,
   directorOwnsChannel,
-} from "@/components/canvas/director/director-timeline";
+} from "@glowloom/canvas/editor/director/director-timeline.tsx";
 it("moves, removes and curves a single channel without disturbing sibling keys", () => {
   const id = crypto.randomUUID(),
     frames = [

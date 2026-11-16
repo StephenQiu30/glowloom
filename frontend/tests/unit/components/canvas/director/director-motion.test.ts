@@ -11,13 +11,13 @@ import {
 import {
   DirectorModelMotion,
   directorModelInfo,
-} from "@/components/canvas/director/director-motion";
+} from "@glowloom/canvas/editor/director/director-motion.ts";
 import {
   editDirector,
   emptyDirectorConfig,
   readDirector,
   type DirectorObject,
-} from "@/components/canvas/director/director-model";
+} from "@glowloom/canvas/editor/director/director-model.ts";
 function fixture() {
   const object = editDirector(emptyDirectorConfig(), {
     type: "add-object",
@@ -162,7 +162,7 @@ it("rejects invalid persisted motion and bone contracts before enqueuing", () =>
 
 it("freezes root and non-bone transforms while retaining the exact bone pose", async () => {
   const { freezeDirectorScene } =
-    await import("@/components/canvas/director/director-workspaces");
+    await import("@glowloom/canvas/editor/director/director-workspaces.ts");
   const { object, root, bone, clip } = fixture();
   clip.start = 0;
   const meshNode = new Group();

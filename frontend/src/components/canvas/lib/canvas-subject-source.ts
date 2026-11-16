@@ -102,7 +102,7 @@ export function localCanvasSubjectReference(
 }
 
 export function canvasSubjectSources(
-  nodes: import("../types/canvas").CanvasNodeData[],
+  nodes: import("@glowloom/canvas/editor/types/canvas.ts").CanvasNodeData[],
   canvasID: string,
 ): import("@/components/generation/reference-source").CanvasSubjectReferenceSource[] {
   return nodes.flatMap<

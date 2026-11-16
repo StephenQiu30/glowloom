@@ -3,19 +3,19 @@ import {
   connectCanvasSubjectSources,
   detachSubjectSources,
   reconcileSubjectSourceRelations,
-} from "@/components/canvas/lib/canvas-subject-connections";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+} from "@glowloom/canvas/editor/lib/canvas-subject-connections.ts";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   subjectConfig,
   setSubjectConfig,
   importCanvasSubjects,
-} from "@/components/canvas/subject/subject-node-state";
-import type { CanvasEditorState } from "@/components/canvas/lib/canvas-document-adapter";
+} from "@glowloom/canvas/editor/subject/subject-node-state.ts";
+import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
 import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
 import {
   captureCanvasSelection,
   instantiateCanvasClipboard,
-} from "@/components/canvas/lib/canvas-clipboard";
+} from "@glowloom/canvas/editor/lib/canvas-clipboard.ts";
 
 const projectID = "22222222-2222-4222-8222-222222222222";
 function fixture(kinds = ["image"]) {

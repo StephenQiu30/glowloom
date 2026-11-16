@@ -1,10 +1,10 @@
-import type { CanvasNodeData } from "./types/canvas";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 import {
   openCanvasPendingJournal,
   type CanvasPendingJournal,
   type CanvasPendingJournalFactory,
-} from "./lib/canvas-yjs-pending-journal";
-import { reconcileTimelineConnections } from "./lib/canvas-timeline-connections";
+} from "@glowloom/canvas/editor/lib/canvas-yjs-pending-journal.ts";
+import { reconcileTimelineConnections } from "@glowloom/canvas/editor/lib/canvas-timeline-connections.ts";
 import {
   CollaborationSession,
   type CommittedState,
@@ -35,12 +35,15 @@ import type { Transaction } from "@tiptap/pm/state";
 import { DOMParser as PromptDOMParser } from "@tiptap/pm/model";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import { RequestError } from "@/lib/request";
-import { canvasGraphFingerprint } from "./lib/canvas-json";
-import { directorFingerprint } from "./director/director-model";
-import { validateDirectorDocument } from "./director/director-workspaces";
-import { readTimeline, type Timeline } from "./timeline/timeline-model";
+import { canvasGraphFingerprint } from "@glowloom/canvas/editor/lib/canvas-json.ts";
+import { directorFingerprint } from "@glowloom/canvas/editor/director/director-model.ts";
+import { validateDirectorDocument } from "@glowloom/canvas/editor/director/director-workspaces.ts";
+import {
+  readTimeline,
+  type Timeline,
+} from "@glowloom/canvas/editor/timeline/timeline-model.ts";
 import { serviceDocumentFromEditor, serviceGraph } from "./service-graph";
-import type { CanvasEditorState } from "./lib/canvas-document-adapter";
+import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
 import { publishCanvasMedia, type CanvasMediaReceipt } from "./publish-media";
 import {
   validatePromptDraft,

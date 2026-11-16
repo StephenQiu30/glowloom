@@ -1,14 +1,14 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   connectCanvasDocument,
   supportsCanvasConnection,
-} from "@/components/canvas/lib/canvas-document-connections";
+} from "@glowloom/canvas/editor/lib/canvas-document-connections.ts";
 import {
   buildConnectedNodeMap,
   buildNodeMentionReferences,
-} from "@/components/canvas/lib/canvas-resource-references";
+} from "@glowloom/canvas/editor/lib/canvas-resource-references.ts";
 import {
   serviceGraph,
   serviceDocumentFromEditor,
@@ -16,9 +16,9 @@ import {
 import {
   CanvasSubjectConnectionBar,
   connectedCanvasSubjects,
-} from "@/components/canvas/subject/canvas-subject-connection-bar";
-import { removeCanvasReferences } from "@/components/canvas/lib/canvas-reference-state";
-import { setSubjectConfig } from "@/components/canvas/subject/subject-node-state";
+} from "@glowloom/canvas/editor/subject/canvas-subject-connection-bar.tsx";
+import { removeCanvasReferences } from "@glowloom/canvas/editor/lib/canvas-reference-state.ts";
+import { setSubjectConfig } from "@glowloom/canvas/editor/subject/subject-node-state.ts";
 
 afterEach(cleanup);
 const canvasID = "11111111-1111-4111-8111-111111111111";

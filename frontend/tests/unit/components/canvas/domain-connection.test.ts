@@ -1,13 +1,13 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { getSubjectVersion } from "@/api/subjects";
-import { setSubjectConfig } from "@/components/canvas/subject/subject-node-state";
+import { setSubjectConfig } from "@glowloom/canvas/editor/subject/subject-node-state.ts";
 import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
 import { getMediaPreview } from "@/api/media";
 import { createCanvasDomainConnector } from "@/components/canvas/lib/canvas-domain-connection";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
-import type { CanvasEditorState } from "@/components/canvas/lib/canvas-document-adapter";
+import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
 
 vi.mock("@/api/media", () => ({ getMediaPreview: vi.fn() }));
 vi.mock("@/api/subjects", () => ({ getSubjectVersion: vi.fn() }));

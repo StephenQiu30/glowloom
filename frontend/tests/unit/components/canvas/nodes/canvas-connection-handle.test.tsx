@@ -6,14 +6,14 @@ import {
   screen,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { CanvasConnectionHandle } from "@/components/canvas/nodes/canvas-connection-handle";
+import { CanvasConnectionHandle } from "@glowloom/canvas/editor/nodes/canvas-connection-handle.tsx";
 import {
   advanceConnectionHandle,
   connectionHandleCounterScale,
   connectionHandleRest,
   connectionHandleTarget,
   connectionHandleTransform,
-} from "@/components/canvas/nodes/canvas-connection-handle-geometry";
+} from "@glowloom/canvas/editor/nodes/canvas-connection-handle-geometry.ts";
 
 let frames: Map<number, FrameRequestCallback>;
 let nextFrame: number;

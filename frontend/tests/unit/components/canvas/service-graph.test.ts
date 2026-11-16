@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { emptyPromptDraft } from "@/components/generation/prompt-document";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   serviceGraph,
   serviceDocumentFromEditor,
   richTextConfig,
 } from "@/components/canvas/service-graph";
-import { textToDocument } from "@/components/canvas/runtime/components/editor/lib/rich-text-document";
+import { textToDocument } from "@glowloom/canvas/editor/runtime/components/editor/lib/rich-text-document.ts";
 const canvas = "11111111-1111-4111-8111-111111111111",
   project = "22222222-2222-4222-8222-222222222222",
   node = "33333333-3333-4333-8333-333333333333";

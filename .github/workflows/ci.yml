@@ -262,6 +262,10 @@ jobs:
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm build
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Check complete Canvas editor source
+        run: |
+          pnpm canvas:typecheck
+          pnpm canvas:lint
       - name: Run frontend business tests
         run: pnpm exec vitest run --maxWorkers=2
       - name: Build frontend and check TypeScript

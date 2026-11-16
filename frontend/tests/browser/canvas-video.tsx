@@ -1,8 +1,8 @@
 /** UI-only fixture. Generate the local clip as documented in Plan 13; no upload or API writes. */
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { CanvasVideoPlayer } from "../../src/components/canvas/nodes/canvas-video-player";
-import { CanvasNodeType } from "../../src/components/canvas/types/canvas";
+import { CanvasVideoPlayer } from "@glowloom/canvas/editor/nodes/canvas-video-player.tsx";
+import { CanvasNodeType } from "@glowloom/canvas/editor/types/canvas.ts";
 import { Button } from "../../src/components/ui/button";
 import "../../src/app/globals.css";
 function Fixture() {

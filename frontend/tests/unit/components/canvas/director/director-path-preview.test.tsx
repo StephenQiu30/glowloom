@@ -7,9 +7,9 @@ import {
 } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { CanvasDirectorWorkspace } from "@/components/canvas/director/canvas-director-workspace";
-import { emptyDirectorConfig } from "@/components/canvas/director/director-model";
-import type { DirectorViewport } from "@/components/canvas/director/director-viewport";
+import { CanvasDirectorWorkspace } from "@glowloom/canvas/editor/director/canvas-director-workspace.tsx";
+import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
+import type { DirectorViewport } from "@glowloom/canvas/editor/director/director-viewport.tsx";
 
 const captured = vi.hoisted(() => ({
   viewport: null as ComponentProps<typeof DirectorViewport> | null,
@@ -30,23 +30,26 @@ vi.mock("@/components/ui/dialog", () => ({
 vi.mock("@/api/canvases", () => ({
   readDirectorRecovery: vi.fn().mockResolvedValue({ draft: null }),
 }));
-vi.mock("@/components/canvas/director/director-project-assets", () => ({
+vi.mock("@glowloom/canvas/editor/director/director-project-assets.tsx", () => ({
   DirectorProjectAssets: () => null,
 }));
-vi.mock("@/components/canvas/director/director-viewport", () => ({
+vi.mock("@glowloom/canvas/editor/director/director-viewport.tsx", () => ({
   DirectorViewport: (props: ComponentProps<typeof DirectorViewport>) => {
     captured.viewport = props;
     return null;
   },
 }));
-vi.mock("@/components/canvas/director/director-capture", () => ({
+vi.mock("@glowloom/canvas/editor/director/director-capture.tsx", () => ({
   DirectorCapture: () => null,
   DirectorGallery: () => null,
 }));
-vi.mock("@/components/canvas/director/director-view-preferences", () => ({
-  directorHelpSeen: () => true,
-  markDirectorHelpSeen: () => {},
-}));
+vi.mock(
+  "@glowloom/canvas/editor/director/director-view-preferences.ts",
+  () => ({
+    directorHelpSeen: () => true,
+    markDirectorHelpSeen: () => {},
+  }),
+);
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

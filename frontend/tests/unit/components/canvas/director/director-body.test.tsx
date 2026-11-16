@@ -8,15 +8,15 @@ import {
   Skeleton,
   SkinnedMesh,
 } from "three";
-import { createDirectorActor } from "@/components/canvas/director/director-assets";
+import { createDirectorActor } from "@glowloom/canvas/editor/director/director-assets.ts";
 import {
   editDirector,
   emptyDirectorConfig,
   readDirector,
-} from "@/components/canvas/director/director-model";
-import { directorBodyProfile } from "@/components/canvas/director/director-body-profile";
-import { reshapeDirectorQuaterniusActor } from "@/components/canvas/director/director-actor-body";
-import { DirectorBodyEditor } from "@/components/canvas/director/director-body-editor";
+} from "@glowloom/canvas/editor/director/director-model.ts";
+import { directorBodyProfile } from "@glowloom/canvas/editor/director/director-body-profile.ts";
+import { reshapeDirectorQuaterniusActor } from "@glowloom/canvas/editor/director/director-actor-body.ts";
+import { DirectorBodyEditor } from "@glowloom/canvas/editor/director/director-body-editor.tsx";
 
 it("keeps preset values for omitted body parameters and deforms geometry and rest bones together", () => {
   expect(directorBodyProfile("male_athletic", { waist: 0.8 })).toMatchObject({

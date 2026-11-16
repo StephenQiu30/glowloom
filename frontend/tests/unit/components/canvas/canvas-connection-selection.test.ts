@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { snapshotCanvasConnectionSelection } from "@/components/canvas/lib/canvas-connection-selection";
+import { snapshotCanvasConnectionSelection } from "@glowloom/canvas/editor/lib/canvas-connection-selection.ts";
 
 describe("connection gesture selection snapshot", () => {
   it.each([

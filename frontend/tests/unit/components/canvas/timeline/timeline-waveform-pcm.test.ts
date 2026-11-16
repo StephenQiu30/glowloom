@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
-import { acquireTimelineWaveform } from "@/components/canvas/timeline/timeline-waveform";
+import { acquireTimelineWaveform } from "@glowloom/canvas/editor/timeline/timeline-waveform.ts";
 afterEach(() => vi.unstubAllGlobals());
 it("uses the installed demuxer and PCM decoder against an HTTP range WAV source", async () => {
   const sampleRate = 8000,

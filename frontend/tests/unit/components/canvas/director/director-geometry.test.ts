@@ -12,7 +12,7 @@ import {
   createDirectorPrimitive,
   disposeDirectorObject,
 } from "@/components/canvas/director/director-scene";
-import type { DirectorObject } from "@/components/canvas/director/director-model";
+import type { DirectorObject } from "@glowloom/canvas/editor/director/director-model.ts";
 function primitive(name: string) {
   return createDirectorPrimitive({
     primitive: name,

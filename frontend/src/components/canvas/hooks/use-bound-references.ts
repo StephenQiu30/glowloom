@@ -2,9 +2,9 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { getMediaPreview } from "@/api/media";
 import { requirePreview } from "@/components/media/library";
-import { CanvasMediaContext } from "../lib/canvas-media-context";
-import type { RichTextReference } from "../runtime/components/editor/types/rich-text";
-import type { CanvasNodeData } from "../types/canvas";
+import { CanvasMediaContext } from "@glowloom/canvas/editor/lib/canvas-media-context.ts";
+import type { RichTextReference } from "@glowloom/canvas/editor/runtime/components/editor/types/rich-text.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 export function useBoundReferences(node: CanvasNodeData): RichTextReference[] {
   const context = useContext(CanvasMediaContext);
   const composer = node.serviceData?.config?.composer;

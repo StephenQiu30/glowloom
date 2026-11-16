@@ -9,7 +9,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ConversationThread } from "@/components/conversations/conversation-thread";
 import type { ConversationController } from "@/components/conversations/use-conversation";
 vi.mock(
-  "@/components/canvas/runtime/components/editor/markdown-content",
+  "@glowloom/canvas/editor/runtime/components/editor/markdown-content.tsx",
   () => ({ MarkdownContent: ({ value }: { value: string }) => <p>{value}</p> }),
 );
 vi.mock("@/components/conversations/conversation-result", () => ({

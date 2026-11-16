@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
@@ -23,7 +24,15 @@ export default defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["src/components/**/*.{ts,tsx}"],
+    settings: {
+      react: {
+        version: createRequire(import.meta.url)("react/package.json").version,
+      },
+      next: { rootDir: import.meta.dirname },
+    },
+  },
+  {
+    files: ["src/components/**/*.{ts,tsx}", "canvas/editor/**/*.{ts,tsx}"],
     ignores: [
       "src/components/feedback/notification.ts",
       "src/components/ui/sonner.tsx",
@@ -69,14 +78,14 @@ export default defineConfig([
     },
   },
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}", "canvas/editor/**/*.{ts,tsx}"],
     ignores: ["src/app/api/**", "src/lib/request.ts"],
     rules: {
       "no-restricted-syntax": ["error", ...apiSyntaxRules],
     },
   },
   {
-    files: ["src/**/*.tsx"],
+    files: ["src/**/*.tsx", "canvas/editor/**/*.tsx"],
     ignores: ["src/app/api/**", "src/lib/request.ts", "src/components/ui/**"],
     rules: {
       "no-restricted-syntax": [

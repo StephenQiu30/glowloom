@@ -4,8 +4,11 @@ import {
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import type { AssetKind } from "../types/asset";
-import { defaultConfig, type AiConfig } from "../types/generation-config";
+import type { AssetKind } from "@glowloom/canvas/editor/runtime/types/asset.ts";
+import {
+  defaultConfig,
+  type AiConfig,
+} from "@glowloom/canvas/editor/runtime/types/generation-config.ts";
 import type { ThemeMode } from "../lib/theme-preference";
 import { DEFAULT_PAGE_SIZE } from "../lib/pagination";
 import { accountSlice, accountScope } from "./account-slice";

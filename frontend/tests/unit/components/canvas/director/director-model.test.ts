@@ -5,8 +5,8 @@ import {
   editDirector,
   readDirector,
   directorTransform,
-} from "@/components/canvas/director/director-model";
-import { sampleDirectorTransform } from "@/components/canvas/director/director-animation";
+} from "@glowloom/canvas/editor/director/director-model.ts";
+import { sampleDirectorTransform } from "@glowloom/canvas/editor/director/director-animation.ts";
 import {
   createDirectorPrimitive,
   disposeDirectorObject,

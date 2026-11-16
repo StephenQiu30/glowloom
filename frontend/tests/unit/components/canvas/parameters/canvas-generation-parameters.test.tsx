@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { CanvasGenerationParameters } from "@/components/canvas/parameters/canvas-generation-parameters";
+import { CanvasGenerationParameters } from "@glowloom/canvas/editor/parameters/canvas-generation-parameters.tsx";
 
 const state = vi.hoisted(() => ({
   catalogError: null as Error | null,

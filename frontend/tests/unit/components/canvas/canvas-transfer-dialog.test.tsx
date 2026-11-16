@@ -4,13 +4,13 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   CanvasTransferDialog,
   CanvasTransferReceiver,
-} from "@/components/canvas/editor/canvas-transfer-dialog";
+} from "@glowloom/canvas/editor/editor/canvas-transfer-dialog.tsx";
 import {
   beginCanvasTransfer,
   clearCanvasTransfer,
   pendingCanvasTransfer,
 } from "@/components/canvas/lib/canvas-transfer-state";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 const api = vi.hoisted(() => ({
   get: vi.fn(),

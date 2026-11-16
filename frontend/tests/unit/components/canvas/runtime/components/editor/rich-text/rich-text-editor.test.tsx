@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import type { Editor } from "@tiptap/core";
-import { RichTextEditor } from "@/components/canvas/runtime/components/editor/rich-text/rich-text-editor";
-import { documentText } from "@/components/canvas/runtime/components/editor/lib/rich-text-document";
+import { RichTextEditor } from "@glowloom/canvas/editor/runtime/components/editor/rich-text/rich-text-editor.tsx";
+import { documentText } from "@glowloom/canvas/editor/runtime/components/editor/lib/rich-text-document.ts";
 const state = vi.hoisted(() => ({ editor: null as Editor | null }));
 vi.mock("@tiptap/react", async (original) => {
   const tiptap = await original<typeof import("@tiptap/react")>();

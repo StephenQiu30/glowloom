@@ -17,13 +17,30 @@ import (
 )
 
 func recordYjsVersion(tx *gorm.DB, doc domain.Document, epoch, actor uuid.UUID, reason string) error {
+	// Existing versions retain their original binary/sequence, including when a
+	// later causal-only update has advanced the head without a content revision.
+	var exists bool
+	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM canvas.collab_version WHERE document_id=? AND revision=?)`, doc.ID, doc.Revision).Scan(&exists).Error; err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
 	body, err := json.Marshal(doc)
 	if err != nil {
 		return err
 	}
-	return tx.Exec(`INSERT INTO canvas.collab_version(id,document_id,epoch,revision,document_json,actor_id,reason,writer_term,commit_seq,state,graph_hash)
-SELECT ?,document_id,epoch,?,?::jsonb,?,?,writer_term,commit_seq,state,graph_hash FROM canvas.collab_document WHERE document_id=? AND epoch=? AND content_revision=?
+	return tx.Exec(`INSERT INTO canvas.collab_version(id,document_id,epoch,revision,document_json,actor_id,reason,writer_term,commit_seq,state_id,graph_hash)
+SELECT ?,document_id,epoch,?,?::jsonb,?,?,writer_term,commit_seq,state_id,graph_hash FROM canvas.collab_document WHERE document_id=? AND epoch=? AND content_revision=?
 ON CONFLICT(document_id,revision) DO NOTHING`, uuid.New(), doc.Revision, string(body), actor, reason, doc.ID, epoch, doc.Revision).Error
+}
+
+// pruneYjsCheckpoint removes only a superseded head with no historical owner.
+// The document lock serializes references; foreign keys also protect retention.
+func pruneYjsCheckpoint(tx *gorm.DB, document, state uuid.UUID) error {
+	return tx.Exec(`DELETE FROM canvas.collab_checkpoint c WHERE c.document_id=? AND c.id=?
+AND NOT EXISTS(SELECT 1 FROM canvas.collab_document d WHERE d.document_id=c.document_id AND d.state_id=c.id)
+AND NOT EXISTS(SELECT 1 FROM canvas.collab_version v WHERE v.document_id=c.document_id AND v.state_id=c.id)`, document, state).Error
 }
 
 // YjsVersions lists metadata without reading every historical body.
@@ -280,7 +297,11 @@ func (s *Store) CommitYjsRestore(ctx context.Context, a identity.Principal, base
 		if err = tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by,op_id,base_revision,operation_version,client_id) VALUES(?,?,?,?::jsonb,?,?,?,1,?)`, uuid.New(), id, target.Revision, string(body), a.ID, input.ID, current.Revision, input.SessionID).Error; err != nil {
 			return err
 		}
-		if err = tx.Exec(`UPDATE canvas.collab_document SET epoch=?,writer_term=?,commit_seq=0,content_revision=?,state=?,graph_hash=?,updated_at=clock_timestamp() WHERE document_id=?`, candidate.Epoch, candidate.WriterTerm, target.Revision, candidate.State, candidate.GraphHash, id).Error; err != nil {
+		if err = tx.Exec(`WITH checkpoint AS (INSERT INTO canvas.collab_checkpoint(id,document_id,state) VALUES(?,?,?) RETURNING id)
+UPDATE canvas.collab_document SET epoch=?,writer_term=?,commit_seq=0,content_revision=?,state_id=checkpoint.id,graph_hash=?,updated_at=clock_timestamp() FROM checkpoint WHERE document_id=?`, uuid.New(), id, candidate.State, candidate.Epoch, candidate.WriterTerm, target.Revision, candidate.GraphHash, id).Error; err != nil {
+			return err
+		}
+		if err = pruneYjsCheckpoint(tx, id, row.StateID); err != nil {
 			return err
 		}
 		if err = recordYjsVersion(tx, target, candidate.Epoch, a.ID, "history_restore"); err != nil {

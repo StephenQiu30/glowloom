@@ -4,9 +4,9 @@ import { afterEach, expect, it } from "vitest";
 import {
   fitCanvasMediaNode,
   useCanvasMediaSize,
-} from "@/components/canvas/hooks/use-canvas-media-size";
-import { replaceCanvasNodeAsset } from "@/components/canvas/lib/canvas-asset-replacement";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+} from "@glowloom/canvas/editor/hooks/use-canvas-media-size.ts";
+import { replaceCanvasNodeAsset } from "@glowloom/canvas/editor/lib/canvas-asset-replacement.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 
 afterEach(cleanup);
 function node(): CanvasNodeData {
@@ -112,7 +112,7 @@ it("迟到解码在手势结束后调整，重复解码不重复提交", () => {
 
 it("保存回执不能清空同版本文件的已加载预览", async () => {
   const { retainCanvasMediaPreviews } =
-    await import("@/components/canvas/lib/canvas-media-continuity");
+    await import("@glowloom/canvas/editor/lib/canvas-media-continuity.ts");
   const graph = {
     nodes: [node()],
     connections: [],
@@ -133,7 +133,7 @@ it("保存回执不能清空同版本文件的已加载预览", async () => {
 
 it("远端同文件更新保留预览但不覆盖几何、标题或配置", async () => {
   const { retainCanvasMediaPreviews } =
-    await import("@/components/canvas/lib/canvas-media-continuity");
+    await import("@glowloom/canvas/editor/lib/canvas-media-continuity.ts");
   const old = node();
   old.metadata!.naturalWidth = 640;
   old.metadata!.status = "success";
@@ -168,7 +168,7 @@ it.each([
   "publicRevision",
 ])("%s 变化不继承旧预览", async (field) => {
   const { retainCanvasMediaPreviews } =
-    await import("@/components/canvas/lib/canvas-media-continuity");
+    await import("@glowloom/canvas/editor/lib/canvas-media-continuity.ts");
   const incoming = node();
   incoming.metadata!.content = "";
   Object.assign(incoming.documentData!.fileReferences![0], {
@@ -180,7 +180,7 @@ it.each([
 });
 it("移除、删除、新节点及跨类型不会复活旧媒体，已给出新地址不覆盖", async () => {
   const { retainCanvasMediaPreviews } =
-    await import("@/components/canvas/lib/canvas-media-continuity");
+    await import("@glowloom/canvas/editor/lib/canvas-media-continuity.ts");
   const removed = node();
   removed.metadata!.content = "";
   removed.documentData!.fileReferences = [];
@@ -250,7 +250,7 @@ it("用户显式自由比例不被解码重置，替换素材则重新匹配比�
 
 it("已加载预览与纯服务端草稿之间替换素材，不把临时URL和解码尺寸当成并发业务冲突", async () => {
   const { retainCanvasMediaPreviews } =
-    await import("@/components/canvas/lib/canvas-media-continuity");
+    await import("@glowloom/canvas/editor/lib/canvas-media-continuity.ts");
   const graph = {
     nodes: [node()],
     connections: [],
@@ -280,7 +280,7 @@ it("已加载预览与纯服务端草稿之间替换素材，不把临时URL和�
 
 it("Yjs已确认另一素材身份时，不把旧预览覆盖回去", async () => {
   const { retainCanvasMediaPreviews } =
-    await import("@/components/canvas/lib/canvas-media-continuity");
+    await import("@glowloom/canvas/editor/lib/canvas-media-continuity.ts");
   const graph = {
     nodes: [node()],
     connections: [],

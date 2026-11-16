@@ -1,5 +1,5 @@
 import type { AiConfig } from "@/components/canvas/runtime/store/use-config-store";
-import type { ReferenceImage } from "@/components/canvas/runtime/types/image";
+import type { ReferenceImage } from "@glowloom/canvas/editor/runtime/types/image.ts";
 import { unavailableGeneration } from "./unavailable";
 
 export type AiTextMessage = {

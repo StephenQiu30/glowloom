@@ -1,12 +1,12 @@
 import { expect, it } from "vitest";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   containerKind,
   createContainer,
   releaseContainers,
   containerDescendantIDs,
   hiddenContainerMemberIDs,
-} from "@/components/canvas/lib/canvas-containers";
+} from "@glowloom/canvas/editor/lib/canvas-containers.ts";
 const node = (kind = "text", parent?: string) =>
   createCanvasNode(
     kind,
@@ -70,7 +70,7 @@ it("unstacking promotes direct children to its parent and preserves original coo
 
 it("copies a nested stack with distinct container identities and the same fixed content", async () => {
   const { captureCanvasSelection, instantiateCanvasClipboard } =
-    await import("@/components/canvas/lib/canvas-clipboard");
+    await import("@glowloom/canvas/editor/lib/canvas-clipboard.ts");
   const outer = node("group"),
     inner = node("group"),
     a = node(),
@@ -106,7 +106,7 @@ it("copies a nested stack with distinct container identities and the same fixed 
 
 it("never drops visible nodes into a hidden ordinary group inside a stack", async () => {
   const { findGroupDropTarget, findContainingGroupId } =
-    await import("@/components/canvas/lib/canvas-node-geometry");
+    await import("@glowloom/canvas/editor/lib/canvas-node-geometry.ts");
   const inner = node("group"),
     leaf = node("text", inner.id),
     sibling = node(),
@@ -126,7 +126,7 @@ it("never drops visible nodes into a hidden ordinary group inside a stack", asyn
 
 it("maps hidden selection to its visible stack after undo or a remote tree update", async () => {
   const { visibleContainerSelection } =
-    await import("@/components/canvas/lib/canvas-containers");
+    await import("@glowloom/canvas/editor/lib/canvas-containers.ts");
   const a = node(),
     b = node(),
     stack = node("group");

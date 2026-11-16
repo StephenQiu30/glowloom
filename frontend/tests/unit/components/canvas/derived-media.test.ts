@@ -4,7 +4,7 @@ import {
   type DerivedReceipt,
 } from "@/components/canvas/media-tools/publish-derived";
 import { uploadMediaAsset } from "@/api/media";
-import type { CanvasNodeData } from "@/components/canvas/types";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types.ts";
 vi.mock("@/api/media", () => ({ uploadMediaAsset: vi.fn() }));
 afterEach(() => vi.resetAllMocks());
 const pid = "766d1bcc-b2ef-4ab5-b449-dd02d72057e2";

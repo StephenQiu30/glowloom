@@ -7,7 +7,7 @@ import {
   timelineTime,
   timelineRulerTime,
   timelineMoveSnap,
-} from "@/components/canvas/timeline/timeline-model";
+} from "@glowloom/canvas/editor/timeline/timeline-model.ts";
 const asset = (kind = "video"): API.AssetSummary => ({
   id: crypto.randomUUID(),
   project_id: crypto.randomUUID(),

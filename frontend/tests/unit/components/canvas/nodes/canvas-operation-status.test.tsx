@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { createAgent } from "@ui-sdk/react/agent";
 import { SWRConfig } from "swr";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { CanvasOperationStatus } from "@/components/canvas/nodes/canvas-operation-status";
+import { CanvasOperationStatus } from "@glowloom/canvas/editor/nodes/canvas-operation-status.tsx";
 const api = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock("@/api/operations", () => ({ getOperation: api.get }));
 const props = {

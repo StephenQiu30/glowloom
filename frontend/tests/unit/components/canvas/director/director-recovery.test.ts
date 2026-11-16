@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyDirectorConfig } from "@/components/canvas/director/director-model";
+import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
 import { parseDirectorRecoveryFile } from "@/components/canvas/director/director-recovery";
 
 describe("director recovery files", () => {

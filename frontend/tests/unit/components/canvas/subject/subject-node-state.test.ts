@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { registerBuiltinNodes } from "@glowloom/canvas/editor/nodes/builtin-nodes.tsx";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   importCanvasSubjects,
   materializeSubject,
@@ -8,8 +8,8 @@ import {
   projectSubjectMedia,
   requireSubjectLocal,
   subjectConfig,
-} from "@/components/canvas/subject/subject-node-state";
-import type { CanvasEditorState } from "@/components/canvas/lib/canvas-document-adapter";
+} from "@glowloom/canvas/editor/subject/subject-node-state.ts";
+import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
 import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
 registerBuiltinNodes();
 function graph(): CanvasEditorState {

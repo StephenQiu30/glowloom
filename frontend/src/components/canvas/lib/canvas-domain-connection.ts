@@ -1,11 +1,11 @@
 import { getMediaPreview } from "@/api/media";
 import { getSubjectVersion } from "@/api/subjects";
 import { requireCanvasSubjectVersion } from "./canvas-subject-source";
-import { subjectConfig } from "../subject/subject-node-state";
+import { subjectConfig } from "@glowloom/canvas/editor/subject/subject-node-state.ts";
 import type { CanvasYjsLiveSession } from "../yjs-live-session";
-import type { CanvasNodeData } from "../types/canvas";
-import { canvasGraphFingerprint } from "./canvas-json";
-import { canvasConnectionMediaAssetId } from "./canvas-timeline-connections";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+import { canvasGraphFingerprint } from "@glowloom/canvas/editor/lib/canvas-json.ts";
+import { canvasConnectionMediaAssetId } from "@glowloom/canvas/editor/lib/canvas-timeline-connections.ts";
 
 export type CanvasDomainConnectionRequest = {
   sourceNodeIds: string[];
@@ -154,7 +154,7 @@ export function createCanvasDomainConnector(
         const resolved =
           target.type === "timeline"
             ? (
-                await import("./canvas-timeline-connections")
+                await import("@glowloom/canvas/editor/lib/canvas-timeline-connections.ts")
               ).connectCanvasTimelineSources(
                 graph,
                 request.sourceNodeIds,
@@ -162,7 +162,7 @@ export function createCanvasDomainConnector(
                 { projectID, assets },
               )
             : (
-                await import("./canvas-subject-connections")
+                await import("@glowloom/canvas/editor/lib/canvas-subject-connections.ts")
               ).connectCanvasSubjectSources(
                 graph,
                 request.sourceNodeIds,

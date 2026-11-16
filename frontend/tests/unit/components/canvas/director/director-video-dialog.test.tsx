@@ -1,8 +1,8 @@
 import { render, findFeedback } from "../../../../feedback";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { DirectorVideoDialog } from "@/components/canvas/director/director-video-dialog";
-import { emptyDirectorConfig } from "@/components/canvas/director/director-model";
+import { DirectorVideoDialog } from "@glowloom/canvas/editor/director/director-video-dialog.tsx";
+import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 
 afterEach(cleanup);

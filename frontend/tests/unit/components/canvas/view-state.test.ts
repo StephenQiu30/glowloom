@@ -5,7 +5,7 @@ import {
   writeCanvasView,
   resizeCanvasViewport,
   type CanvasViewRecord,
-} from "@/components/canvas/view-state";
+} from "@glowloom/canvas/editor/view-state.ts";
 
 const key = canvasViewKey("user", "space", "project", "canvas");
 const record: CanvasViewRecord = {

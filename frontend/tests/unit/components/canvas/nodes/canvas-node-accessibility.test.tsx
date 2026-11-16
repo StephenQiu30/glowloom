@@ -7,9 +7,9 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
-import { CanvasNode } from "@/components/canvas/nodes/canvas-node";
-import { canvasNodeAccessibility } from "@/components/canvas/lib/canvas-node-accessibility";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+import { CanvasNode } from "@glowloom/canvas/editor/nodes/canvas-node.tsx";
+import { canvasNodeAccessibility } from "@glowloom/canvas/editor/lib/canvas-node-accessibility.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 vi.mock("@/components/canvas/runtime/store/use-theme-store", () => ({
   useThemeStore: (select: (state: { theme: "dark" }) => unknown) =>
     select({ theme: "dark" }),

@@ -60,7 +60,7 @@ vi.mock("next/dynamic", () => ({
       );
     },
 }));
-import { CanvasAssistantPanel } from "@/components/canvas/assistant/canvas-assistant-panel";
+import { CanvasAssistantPanel } from "@glowloom/canvas/editor/assistant/canvas-assistant-panel.tsx";
 const canvas = "e4647966-7348-4a34-a677-bcb46cc23402",
   project = "e4647966-7348-4a34-a677-bcb46cc23403",
   draft = "e4647966-7348-4a34-a677-bcb46cc23404";

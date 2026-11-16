@@ -3,10 +3,10 @@ import { getMediaPreview } from "@/api/media";
 import { requireTask } from "@/components/generation/contracts";
 import { canonical } from "@/components/generation/draft-save";
 import type { CanvasYjsLiveSession } from "../yjs-live-session";
-import { createCanvasNode } from "../lib/canvas-node-factory";
-import { replaceCanvasNodeAsset } from "../lib/canvas-asset-replacement";
-import { textToDocument } from "../runtime/components/editor/lib/rich-text-document";
-import type { CanvasNodeData } from "../types/canvas";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
+import { replaceCanvasNodeAsset } from "@glowloom/canvas/editor/lib/canvas-asset-replacement.ts";
+import { textToDocument } from "@glowloom/canvas/editor/runtime/components/editor/lib/rich-text-document.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 
 type Attempt = {
   epoch: string;

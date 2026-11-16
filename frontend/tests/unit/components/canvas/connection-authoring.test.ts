@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { canvasPortsFor } from "@/components/canvas/constants/canvas-input-ports";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { canvasPortsFor } from "@glowloom/canvas/editor/constants/canvas-input-ports.ts";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   connectCanvasDocumentSources,
   supportsCanvasConnection,
-} from "@/components/canvas/lib/canvas-document-connections";
+} from "@glowloom/canvas/editor/lib/canvas-document-connections.ts";
 
 function graph(types: string[]) {
   return {

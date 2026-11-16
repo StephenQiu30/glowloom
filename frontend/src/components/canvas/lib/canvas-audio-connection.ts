@@ -3,20 +3,20 @@ import { getSessionGeneration, getScopeGeneration } from "@/lib/request";
 import type { PromptDraft } from "@/components/generation/prompt-document";
 import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
 import type { CanvasYjsLiveSession } from "../yjs-live-session";
-import type { CanvasNodeData } from "../types/canvas";
-import { subjectConfig } from "../subject/subject-node-state";
-import { canvasGraphFingerprint } from "./canvas-json";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+import { subjectConfig } from "@glowloom/canvas/editor/subject/subject-node-state.ts";
+import { canvasGraphFingerprint } from "@glowloom/canvas/editor/lib/canvas-json.ts";
 import { requireCanvasSubjectVersion } from "./canvas-subject-source";
-import { connectCanvasDocumentSources } from "./canvas-document-connections";
+import { connectCanvasDocumentSources } from "@glowloom/canvas/editor/lib/canvas-document-connections.ts";
 import { readCanvasAudioModelCatalog } from "./canvas-audio-model-catalog";
-import { canvasAudioSourceInputs } from "./canvas-audio-connection-preview";
+import { canvasAudioSourceInputs } from "@glowloom/canvas/editor/lib/canvas-audio-connection-preview.ts";
 import {
   assertCanvasAudioConnectionCapability,
   createCanvasAudioConnectionDraft,
   canvasAudioComposerForPersistence,
   type CanvasAudioCatalogIdentity,
   type CanvasAudioModelCatalog,
-} from "./canvas-audio-connection-capability";
+} from "@glowloom/canvas/editor/lib/canvas-audio-connection-capability.ts";
 
 export type CanvasAudioConnectionRequest = {
   sourceNodeIds: string[];

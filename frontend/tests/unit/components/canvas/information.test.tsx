@@ -6,13 +6,13 @@ import {
   fireEvent,
   waitFor,
 } from "@testing-library/react";
-import { CanvasNodeSummary } from "@/components/canvas/controls/canvas-node-summary";
-import { CanvasInformationDialog } from "@/components/canvas/information/canvas-information-dialog";
+import { CanvasNodeSummary } from "@glowloom/canvas/editor/controls/canvas-node-summary.tsx";
+import { CanvasInformationDialog } from "@glowloom/canvas/editor/information/canvas-information-dialog.tsx";
 import {
   canvasNodeStatistics,
   formatCanvasCharge,
-} from "@/components/canvas/information/node-statistics";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+} from "@glowloom/canvas/editor/information/node-statistics.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 const query = vi.hoisted(() => vi.fn());
 vi.mock("@/api/canvases", () => ({ getCanvasInformation: query }));
 vi.mock("next/dynamic", () => ({ default: () => () => null }));

@@ -8,7 +8,7 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@/components/ui/collapsible";
-import { MarkdownContent } from "@/components/canvas/runtime/components/editor/markdown-content";
+import { MarkdownContent } from "@glowloom/canvas/editor/runtime/components/editor/markdown-content.tsx";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { money } from "@/components/generation/contracts";
 import type { ConversationController } from "./use-conversation";

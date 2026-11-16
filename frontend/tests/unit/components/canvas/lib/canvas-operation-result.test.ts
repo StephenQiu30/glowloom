@@ -4,7 +4,7 @@ import {
   canvasOperationTarget,
 } from "@/components/canvas/lib/canvas-operation-result";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 import type { Task } from "@/components/generation/contracts";
 const preview = vi.hoisted(() => vi.fn());
 vi.mock("@/api/media", () => ({ getMediaPreview: preview }));

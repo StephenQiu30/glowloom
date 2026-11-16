@@ -8,9 +8,9 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { CanvasTimelineWorkspace } from "@/components/canvas/timeline/canvas-timeline-workspace";
-import { TimelinePreview } from "@/components/canvas/timeline/timeline-preview";
-import { TimelineUploadDialog } from "@/components/canvas/timeline/timeline-upload-dialog";
+import { CanvasTimelineWorkspace } from "@glowloom/canvas/editor/timeline/canvas-timeline-workspace.tsx";
+import { TimelinePreview } from "@glowloom/canvas/editor/timeline/timeline-preview.tsx";
+import { TimelineUploadDialog } from "@glowloom/canvas/editor/timeline/timeline-upload-dialog.tsx";
 import type {
   CanvasYjsLiveSession,
   YjsView,
@@ -19,11 +19,11 @@ import {
   editTimeline,
   emptyTimelineConfig,
   type Timeline,
-} from "@/components/canvas/timeline/timeline-model";
+} from "@glowloom/canvas/editor/timeline/timeline-model.ts";
 const mediaState = vi.hoisted(() => ({
   media: {} as Record<
     string,
-    import("@/components/canvas/timeline/timeline-preview").TimelineMedia
+    import("@glowloom/canvas/editor/timeline/timeline-preview.tsx").TimelineMedia
   >,
   errors: {} as Record<string, string>,
   retry: vi.fn(),
@@ -37,19 +37,19 @@ vi.mock("@/components/canvas/timeline/use-timeline-media", () => ({
     retry: mediaState.retry,
   }),
 }));
-vi.mock("@/components/canvas/timeline/timeline-preview", () => ({
+vi.mock("@glowloom/canvas/editor/timeline/timeline-preview.tsx", () => ({
   TimelinePreview: vi.fn(() => null),
 }));
-vi.mock("@/components/canvas/timeline/timeline-thumbnail", () => ({
+vi.mock("@glowloom/canvas/editor/timeline/timeline-thumbnail.tsx", () => ({
   TimelineThumbnail: () => null,
 }));
-vi.mock("@/components/canvas/timeline/timeline-export", () => ({
+vi.mock("@glowloom/canvas/editor/timeline/timeline-export.tsx", () => ({
   TimelineExport: () => null,
 }));
-vi.mock("@/components/canvas/timeline/timeline-aspect-select", () => ({
+vi.mock("@glowloom/canvas/editor/timeline/timeline-aspect-select.tsx", () => ({
   TimelineAspectSelect: () => null,
 }));
-vi.mock("@/components/canvas/timeline/timeline-upload-dialog", () => ({
+vi.mock("@glowloom/canvas/editor/timeline/timeline-upload-dialog.tsx", () => ({
   TimelineUploadDialog: vi.fn(() => <div data-testid="batch-upload" />),
 }));
 beforeEach(() => {

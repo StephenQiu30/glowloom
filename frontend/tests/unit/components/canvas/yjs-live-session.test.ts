@@ -2,26 +2,26 @@ import * as publishMedia from "@/components/canvas/publish-media";
 import {
   openCanvasPendingJournal,
   type CanvasPendingStore,
-} from "@/components/canvas/lib/canvas-yjs-pending-journal";
+} from "@glowloom/canvas/editor/lib/canvas-yjs-pending-journal.ts";
 import type { RecoveryRecord } from "@glowloom/canvas/session";
 import type { ServiceGraph } from "@glowloom/canvas/service-document";
-import { connectCanvasDocumentSources } from "@/components/canvas/lib/canvas-document-connections";
+import { connectCanvasDocumentSources } from "@glowloom/canvas/editor/lib/canvas-document-connections.ts";
 import { serviceDocumentFromEditor } from "@/components/canvas/service-graph";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   createContainer,
   containerDescendantIDs,
-} from "@/components/canvas/lib/canvas-containers";
+} from "@glowloom/canvas/editor/lib/canvas-containers.ts";
 import {
   emptyDirectorConfig,
   editDirector,
   readDirector,
-} from "@/components/canvas/director/director-model";
+} from "@glowloom/canvas/editor/director/director-model.ts";
 import {
   emptyTimelineConfig,
   editTimeline,
   readTimeline,
-} from "@/components/canvas/timeline/timeline-model";
+} from "@glowloom/canvas/editor/timeline/timeline-model.ts";
 import { afterEach, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import {
@@ -42,7 +42,7 @@ import { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 import { RequestError } from "@/lib/request";
 import { emptyPromptDraft } from "@/components/generation/prompt-document";
 import { webcrypto } from "node:crypto";
-import { changeCanvasColorTags } from "@/components/canvas/lib/canvas-color-tags";
+import { changeCanvasColorTags } from "@glowloom/canvas/editor/lib/canvas-color-tags.ts";
 class Socket {
   readyState = 1;
   sent: Record<string, unknown>[] = [];
@@ -566,7 +566,7 @@ it.each([false, true])(
   "submits the real add-reference editor path after rich-text promotion=%s",
   async (editText) => {
     const { connectCanvasDocument } =
-      await import("@/components/canvas/lib/canvas-document-connections");
+      await import("@glowloom/canvas/editor/lib/canvas-document-connections.ts");
     const { client, sockets, nodeID } = setup(true);
     await vi.waitFor(() =>
       expect(client.getSnapshot().document).not.toBeNull(),
@@ -1982,7 +1982,7 @@ it.each([false, true])(
       expect(f.client.getSnapshot().document).not.toBeNull(),
     );
     const { connectCanvasDocumentSources } =
-      await import("@/components/canvas/lib/canvas-document-connections");
+      await import("@glowloom/canvas/editor/lib/canvas-document-connections.ts");
     const original = f.client.getSnapshot().document!;
     const image = createCanvasNode("image", { x: 400, y: 0 });
     f.client.change(

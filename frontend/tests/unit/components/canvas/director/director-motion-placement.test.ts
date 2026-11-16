@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeDirectorMotionClip } from "@/components/canvas/director/director-motion-model";
+import { placeDirectorMotionClip } from "@glowloom/canvas/editor/director/director-motion-model.ts";
 const clip = (
   id: string,
   start: number,

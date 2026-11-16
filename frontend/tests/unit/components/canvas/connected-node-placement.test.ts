@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createCanvasNode,
   connectedNodeCenter,
-} from "@/components/canvas/lib/canvas-node-factory";
+} from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 
 describe("connected node placement", () => {
   const source = {

@@ -25,24 +25,27 @@ import {
   useCanvasIdentity,
 } from "../hooks/use-canvas-identity";
 import dynamic from "next/dynamic";
-import { CanvasTopBar } from "../controls/canvas-top-bar";
+import { CanvasTopBar } from "@glowloom/canvas/editor/controls/canvas-top-bar.tsx";
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
-import type { CanvasDocumentIntegration } from "../types/canvas-document-integration";
-const CanvasEditor = dynamic(() => import("./canvas-editor"), {
-  ssr: false,
-  loading: () => <PageLoading label="正在打开画布" />,
-});
+import type { CanvasDocumentIntegration } from "@glowloom/canvas/editor/types/canvas-document-integration.ts";
+const CanvasEditor = dynamic(
+  () => import("@glowloom/canvas/editor/editor/canvas-editor.tsx"),
+  {
+    ssr: false,
+    loading: () => <PageLoading label="正在打开画布" />,
+  },
+);
 import {
   fromCanvasGraph,
   toCanvasContentGraph,
-} from "../lib/canvas-document-adapter";
-import { CanvasMediaContext } from "../lib/canvas-media-context";
-import { canvasViewKey } from "../lib/canvas-view-state";
+} from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+import { CanvasMediaContext } from "@glowloom/canvas/editor/lib/canvas-media-context.ts";
+import { canvasViewKey } from "@glowloom/canvas/editor/lib/canvas-view-state.ts";
 import {
   useCanvasDocument,
   type CanvasScope,
@@ -50,11 +53,11 @@ import {
 import { useCanvasSave } from "../hooks/use-canvas-save";
 import { useCanvasGeneration } from "../hooks/use-canvas-generation";
 import { useCanvasWorkflow } from "../hooks/use-canvas-workflow";
-import { CanvasWorkflowControls } from "../controls/canvas-workflow-controls";
+import { CanvasWorkflowControls } from "@glowloom/canvas/editor/controls/canvas-workflow-controls.tsx";
 import { CreatePersonalProjectDialog } from "../project/personal-projects";
-import { CanvasRecoveryManager } from "./canvas-recovery-manager";
-import { CanvasFieldRecovery } from "./canvas-field-recovery";
-import { CanvasTextDraftRecovery } from "./canvas-text-draft-recovery";
+import { CanvasRecoveryManager } from "@glowloom/canvas/editor/editor/canvas-recovery-manager.tsx";
+import { CanvasFieldRecovery } from "@glowloom/canvas/editor/editor/canvas-field-recovery.tsx";
+import { CanvasTextDraftRecovery } from "@glowloom/canvas/editor/editor/canvas-text-draft-recovery.tsx";
 
 export function CanvasDocumentPage({
   scope,

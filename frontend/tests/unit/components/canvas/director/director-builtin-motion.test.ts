@@ -1,4 +1,4 @@
-import { DIRECTOR_BUILTIN_MOTION_PRESETS } from "@/components/canvas/director/director-motion-catalog";
+import { DIRECTOR_BUILTIN_MOTION_PRESETS } from "@glowloom/canvas/editor/director/director-motion-catalog.ts";
 import { readFileSync } from "node:fs";
 import {
   AnimationClip,
@@ -9,7 +9,7 @@ import {
   Vector3,
 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { reshapeDirectorQuaterniusActor } from "@/components/canvas/director/director-actor-body";
+import { reshapeDirectorQuaterniusActor } from "@glowloom/canvas/editor/director/director-actor-body.ts";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const sourceRest = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.4);

@@ -12,15 +12,15 @@ import dynamic from "next/dynamic";
 import { createCanvasAssistantAdoption } from "./assistant/canvas-assistant-adoption";
 import { createCanvasDomainConnector } from "./lib/canvas-domain-connection";
 import { createCanvasAudioConnector } from "./lib/canvas-audio-connection";
-import { previewCanvasAudioConnection } from "./lib/canvas-audio-connection-preview";
+import { previewCanvasAudioConnection } from "@glowloom/canvas/editor/lib/canvas-audio-connection-preview.ts";
 import { useCanvasAudioModelCatalog } from "./hooks/use-canvas-audio-model-catalog";
 import { useCanvasAudioSubjectCapabilities } from "./hooks/use-canvas-audio-subject-capabilities";
-import { canvasAudioCatalogAcceptsSubjects } from "./lib/canvas-audio-connection-capability";
-import type { CanvasNodeData } from "./types/canvas";
-import type { CanvasClipboard } from "./lib/canvas-clipboard";
+import { canvasAudioCatalogAcceptsSubjects } from "@glowloom/canvas/editor/lib/canvas-audio-connection-capability.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+import type { CanvasClipboard } from "@glowloom/canvas/editor/lib/canvas-clipboard.ts";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
-import { CanvasGenerationPanel } from "./nodes/canvas-generation-panel";
-import { CanvasOperationStatus } from "./nodes/canvas-operation-status";
+import { CanvasGenerationPanel } from "@glowloom/canvas/editor/nodes/canvas-generation-panel.tsx";
+import { CanvasOperationStatus } from "@glowloom/canvas/editor/nodes/canvas-operation-status.tsx";
 import { useCanvasOperationTasks } from "./hooks/use-canvas-operation-tasks";
 import {
   applyCanvasOperationResult,
@@ -29,23 +29,23 @@ import {
 import type { Task } from "@/components/generation/contracts";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CanvasParticipants } from "./canvas-participants";
+import { CanvasParticipants } from "@glowloom/canvas/editor/canvas-participants.tsx";
 import { SpaceSwitcher } from "@/components/spaces/space-context";
-import { YjsPresence } from "./yjs-presence";
+import { YjsPresence } from "@glowloom/canvas/editor/yjs-presence.tsx";
 import {
   CanvasConnectionState,
   canvasConnectionMessage,
-} from "./connection-state";
+} from "@glowloom/canvas/editor/connection-state.tsx";
 import { CanvasProviders } from "./editor";
-import CanvasPage from "./editor/canvas-editor";
-import { CanvasTopBar } from "./controls/canvas-top-bar";
-import { CanvasMediaContext } from "./lib/canvas-media-context";
-import { canvasViewKey } from "./view-state";
+import CanvasPage from "@glowloom/canvas/editor/editor/canvas-editor.tsx";
+import { CanvasTopBar } from "@glowloom/canvas/editor/controls/canvas-top-bar.tsx";
+import { CanvasMediaContext } from "@glowloom/canvas/editor/lib/canvas-media-context.ts";
+import { canvasViewKey } from "@glowloom/canvas/editor/view-state.ts";
 import { canvasSubjectSources } from "./lib/canvas-subject-source";
 import { getCSRFToken } from "@/lib/request";
 import { ensureSessionFresh } from "@/components/auth/session-renewal";
 import { Button } from "@/components/ui/button";
-import { CanvasLocalDrafts } from "./controls/canvas-local-drafts";
+import { CanvasLocalDrafts } from "@glowloom/canvas/editor/controls/canvas-local-drafts.tsx";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -61,17 +61,19 @@ import { requireProject, type Project } from "@/components/projects/project";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
 
 const CanvasTransferDialog = dynamic(() =>
-  import("./editor/canvas-transfer-dialog").then((m) => m.CanvasTransferDialog),
+  import("@glowloom/canvas/editor/editor/canvas-transfer-dialog.tsx").then(
+    (m) => m.CanvasTransferDialog,
+  ),
 );
 const CanvasTransferReceiver = dynamic(() =>
-  import("./editor/canvas-transfer-dialog").then(
+  import("@glowloom/canvas/editor/editor/canvas-transfer-dialog.tsx").then(
     (m) => m.CanvasTransferReceiver,
   ),
 );
 
 const CanvasTimelineWorkspace = dynamic(
   () =>
-    import("./timeline/canvas-timeline-workspace").then(
+    import("@glowloom/canvas/editor/timeline/canvas-timeline-workspace.tsx").then(
       (module) => module.CanvasTimelineWorkspace,
     ),
   {
@@ -82,7 +84,7 @@ const CanvasTimelineWorkspace = dynamic(
 );
 const CanvasSubjectNode = dynamic(
   () =>
-    import("./subject/canvas-subject-node").then(
+    import("@glowloom/canvas/editor/subject/canvas-subject-node.tsx").then(
       (module) => module.CanvasSubjectNode,
     ),
   {
@@ -94,7 +96,9 @@ const CanvasSubjectNode = dynamic(
 
 const CanvasCinemaKitNode = dynamic(
   () =>
-    import("./cinema-kit/canvas-cinema-kit").then((m) => m.CanvasCinemaKitNode),
+    import("@glowloom/canvas/editor/cinema-kit/canvas-cinema-kit.tsx").then(
+      (m) => m.CanvasCinemaKitNode,
+    ),
   {
     loading: () => (
       <Skeleton className="size-full" aria-label="正在打开导演工具箱" />
@@ -103,7 +107,7 @@ const CanvasCinemaKitNode = dynamic(
 );
 const CanvasDirectorWorkspace = dynamic(
   () =>
-    import("./director/canvas-director-workspace").then(
+    import("@glowloom/canvas/editor/director/canvas-director-workspace.tsx").then(
       (module) => module.CanvasDirectorWorkspace,
     ),
   {
@@ -114,7 +118,7 @@ const CanvasDirectorWorkspace = dynamic(
 );
 const CanvasAssistantPanel = dynamic(
   () =>
-    import("./assistant/canvas-assistant-panel").then(
+    import("@glowloom/canvas/editor/assistant/canvas-assistant-panel.tsx").then(
       (module) => module.CanvasAssistantPanel,
     ),
   {

@@ -13,7 +13,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   CanvasParticipants,
   participantUserIDs,
-} from "@/components/canvas/canvas-participants";
+} from "@glowloom/canvas/editor/canvas-participants.tsx";
 import type {
   CanvasYjsLiveSession,
   YjsPeer,

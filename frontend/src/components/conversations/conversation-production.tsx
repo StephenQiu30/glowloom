@@ -23,7 +23,7 @@ import {
   requireTimelinePreview,
   verifyTimelineDownload,
   verifyArtifactDownload,
-} from "@/components/canvas/timeline/export-contract";
+} from "@glowloom/canvas/editor/timeline/export-contract.ts";
 
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);

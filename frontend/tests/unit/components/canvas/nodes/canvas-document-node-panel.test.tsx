@@ -1,25 +1,31 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { CanvasDocumentNodePanel } from "@/components/canvas/nodes/canvas-document-node-panel";
-import type { CanvasDocumentIntegration } from "@/components/canvas/types/canvas-document-integration";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+import { CanvasDocumentNodePanel } from "@glowloom/canvas/editor/nodes/canvas-document-node-panel.tsx";
+import type { CanvasDocumentIntegration } from "@glowloom/canvas/editor/types/canvas-document-integration.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 vi.mock("@/components/canvas/runtime/hooks/use-copy-text", () => ({
   useCopyText: () => vi.fn(),
 }));
-vi.mock("@/components/canvas/parameters/canvas-model-select", () => ({
+vi.mock("@glowloom/canvas/editor/parameters/canvas-model-select.tsx", () => ({
   CanvasModelSelect: () => null,
 }));
-vi.mock("@/components/canvas/parameters/canvas-generation-parameters", () => ({
-  CanvasGenerationParameters: () => null,
-}));
-vi.mock("@/components/canvas/hooks/use-canvas-reference-previews", () => ({
-  useCanvasReferencePreviews: () => ({ references: [] }),
-}));
-vi.mock("@/components/canvas/nodes/canvas-node-reference-bar", () => ({
+vi.mock(
+  "@glowloom/canvas/editor/parameters/canvas-generation-parameters.tsx",
+  () => ({
+    CanvasGenerationParameters: () => null,
+  }),
+);
+vi.mock(
+  "@glowloom/canvas/editor/hooks/use-canvas-reference-previews.ts",
+  () => ({
+    useCanvasReferencePreviews: () => ({ references: [] }),
+  }),
+);
+vi.mock("@glowloom/canvas/editor/nodes/canvas-node-reference-bar.tsx", () => ({
   CanvasNodeReferenceBar: () => null,
 }));
 vi.mock(
-  "@/components/canvas/runtime/components/editor/rich-text/rich-text-input",
+  "@glowloom/canvas/editor/runtime/components/editor/rich-text/rich-text-input.tsx",
   () => ({ RichTextInput: () => <div>提示词编辑器</div> }),
 );
 afterEach(cleanup);

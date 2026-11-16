@@ -7,8 +7,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
-import { CanvasHistoryDialog } from "@/components/canvas/history/canvas-history-dialog";
-import { CanvasMediaContext } from "@/components/canvas/lib/canvas-media-context";
+import { CanvasHistoryDialog } from "@glowloom/canvas/editor/history/canvas-history-dialog.tsx";
+import { CanvasMediaContext } from "@glowloom/canvas/editor/lib/canvas-media-context.ts";
 import { listProjectOperations } from "@/api/operations";
 vi.mock("@/api/operations", () => ({ listProjectOperations: vi.fn() }));
 vi.mock("@/components/feedback/feedback-toast", () => ({

@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node --enable-source-maps dist/server.js",
     "test": "pnpm build && node --test --test-concurrency=1 tests/*.test.mjs",
-    "check": "prettier --check src types tests package.json tsconfig.json"
+    "check": "prettier --check src types tests package.json tsconfig.json",
+    "check:editor": "prettier --check editor tsconfig.editor.json"
   },
   "dependencies": {
     "@nestjs/common": "12.3.3",
@@ -64,10 +65,97 @@
     "./service-document": {
       "types": "./types/service-document.d.ts",
       "default": "./dist/document/projection.js"
-    }
+    },
+    "./editor": "./editor/editor/canvas-editor.tsx",
+    "./editor/*": "./editor/*"
   },
   "files": [
     "dist",
-    "types"
-  ]
+    "types",
+    "editor"
+  ],
+  "peerDependencies": {
+    "@tiptap/extension-placeholder": "3.32.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "next": "16.3.6",
+    "swr": "^2.5.1",
+    "lucide-react": "^1.48.0",
+    "three": "0.186.1",
+    "file-saver": "^2.0.5",
+    "mediabunny": "1.62.1",
+    "motion": "^13.4.5",
+    "zustand": "^5.0.15",
+    "cn": "^0.4.0",
+    "@tiptap/markdown": "3.32.0",
+    "@tiptap/react": "3.32.0",
+    "@tiptap/extension-collaboration": "3.32.0",
+    "@tiptap/suggestion": "3.32.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/three": "0.186.0",
+    "@types/file-saver": "^2.0.7"
+  },
+  "peerDependenciesMeta": {
+    "@tiptap/extension-placeholder": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "swr": {
+      "optional": true
+    },
+    "lucide-react": {
+      "optional": true
+    },
+    "three": {
+      "optional": true
+    },
+    "file-saver": {
+      "optional": true
+    },
+    "mediabunny": {
+      "optional": true
+    },
+    "motion": {
+      "optional": true
+    },
+    "zustand": {
+      "optional": true
+    },
+    "cn": {
+      "optional": true
+    },
+    "@tiptap/markdown": {
+      "optional": true
+    },
+    "@tiptap/react": {
+      "optional": true
+    },
+    "@tiptap/extension-collaboration": {
+      "optional": true
+    },
+    "@tiptap/suggestion": {
+      "optional": true
+    },
+    "@types/react": {
+      "optional": true
+    },
+    "@types/react-dom": {
+      "optional": true
+    },
+    "@types/three": {
+      "optional": true
+    },
+    "@types/file-saver": {
+      "optional": true
+    }
+  }
 }

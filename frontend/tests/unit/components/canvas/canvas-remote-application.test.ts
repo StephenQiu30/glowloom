@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
-import { classifyCanvasRemoteApplication } from "@/components/canvas/lib/canvas-remote-application";
-import { changeCanvasColorTags } from "@/components/canvas/lib/canvas-color-tags";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { classifyCanvasRemoteApplication } from "@glowloom/canvas/editor/lib/canvas-remote-application.ts";
+import { changeCanvasColorTags } from "@glowloom/canvas/editor/lib/canvas-color-tags.ts";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 
 it("does not keep swallowing color changes when a preview replaced the remote array before effects settle", () => {
   const previous = {

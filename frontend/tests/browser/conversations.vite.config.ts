@@ -1,3 +1,9 @@
+import {
+  canvasFixtureCache,
+  canvasFixtureAliases,
+  canvasHostPublicJson,
+  canvasFixtureOptimizeDeps,
+} from "./canvas-host";
 import path from "node:path";
 import { createReadStream, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -566,8 +572,11 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   return reply({ code: "fixture_route_not_allowed" }, 404);
 }
 const config = {
+  cacheDir: canvasFixtureCache("conversations"),
   root: path.resolve(import.meta.dirname, "../.."),
+  optimizeDeps: canvasFixtureOptimizeDeps,
   plugins: [
+    canvasHostPublicJson(),
     react(),
     {
       name: "conversation-fixture-only-api",
@@ -621,7 +630,8 @@ const config = {
   ],
   define: { "process.env": "{}" },
   resolve: {
-    alias: [
+    dedupe: ["react", "react-dom", "yjs"],
+    alias: canvasFixtureAliases([
       {
         find: "@/components/auth/session",
         replacement: path.resolve(import.meta.dirname, "ai-presets-session.ts"),
@@ -634,7 +644,7 @@ const config = {
         find: "@",
         replacement: path.resolve(import.meta.dirname, "../../src"),
       },
-    ],
+    ]),
   },
   server: { host: "127.0.0.1", port: 5198, strictPort: true },
 };

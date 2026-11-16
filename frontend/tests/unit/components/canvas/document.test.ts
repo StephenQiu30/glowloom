@@ -4,12 +4,12 @@ import {
   duplicateSelection,
   removeSelection,
   parseDocument,
-} from "@/components/canvas/document";
+} from "@glowloom/canvas/editor/document.ts";
 import {
   applyGroupSelection,
   applyUngroupSelection,
   getGroupWrapRect,
-} from "@/components/canvas/geometry";
+} from "@glowloom/canvas/editor/geometry.ts";
 
 describe("独立画布编辑", () => {
   it("分组、复制和删除保持成员与内部连线一致", () => {

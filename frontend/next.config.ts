@@ -1,3 +1,4 @@
+import { canvasHostAliases } from "./canvas-host";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { NextConfig } from "next";
@@ -10,6 +11,7 @@ const yjsBrowserEntry = join(
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  transpilePackages: ["@glowloom/canvas"],
   poweredByHeader: false,
   experimental: {
     ...(process.env.GLOWLOOM_CONTAINER_BUILD === "1"
@@ -25,9 +27,14 @@ const nextConfig: NextConfig = {
   },
   // Yjs constructor identity must match between Canvas and collaborative editors.
   turbopack: {
-    resolveAlias: { yjs: { browser: "./node_modules/yjs/dist/yjs.mjs" } },
+    resolveAlias: {
+      yjs: { browser: "./node_modules/yjs/dist/yjs.mjs" },
+      "@glowloom/canvas-host/*": "./src/*",
+      "@glowloom/canvas-host-public/*": "./public/*",
+    },
   },
   webpack(config, { isServer }) {
+    Object.assign(config.resolve.alias, canvasHostAliases);
     if (!isServer) config.resolve.alias["yjs$"] = yjsBrowserEntry;
     return config;
   },

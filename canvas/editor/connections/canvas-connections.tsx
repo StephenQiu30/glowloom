@@ -1,0 +1,204 @@
+import {
+  useState,
+  useRef,
+  useEffect,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+
+import { useConnectionFlow } from "./connection-flow-layer.tsx";
+import { CONNECTION_FLOW_BASE } from "./connection-flow-model.ts";
+
+import { canvasThemes } from "../runtime/lib/theme.ts";
+import { useThemeStore } from "@glowloom/canvas-host/components/canvas/runtime/store/use-theme-store";
+import { canvasConnectionGeometry } from "../lib/canvas-connection-geometry.ts";
+import type {
+  CanvasConnection,
+  CanvasNodeData,
+  ConnectionHandle,
+  Position,
+} from "../types/canvas.ts";
+
+function ConnectionStroke({
+  path,
+  highlighted,
+  muted = "var(--muted-foreground)",
+  fanout = false,
+  animate = highlighted,
+}: {
+  path: string;
+  highlighted: boolean;
+  muted?: string;
+  fanout?: boolean;
+  animate?: boolean;
+}) {
+  const pathRef = useRef<SVGPathElement>(null);
+  useConnectionFlow(path, animate, pathRef, fanout);
+  return (
+    <g aria-hidden="true" style={{ pointerEvents: "none" }}>
+      <path
+        ref={pathRef}
+        className="canvas-connection-line"
+        d={path}
+        stroke={highlighted ? CONNECTION_FLOW_BASE : muted}
+        strokeWidth={1}
+        strokeOpacity={highlighted ? 1 : 0.16}
+        style={{
+          strokeWidth: "var(--canvas-connection-stroke-world-width, 1px)",
+        }}
+        strokeLinecap="round"
+        fill="none"
+      />
+      {animate && <g className="canvas-connection-meteor" />}
+    </g>
+  );
+}
+
+export function ConnectionPath({
+  connection,
+  from,
+  to,
+  active,
+  generating = false,
+  selected = false,
+  onSelect,
+  onContextMenu,
+}: {
+  connection: CanvasConnection;
+  from: CanvasNodeData;
+  to: CanvasNodeData;
+  active: boolean;
+  generating?: boolean;
+  selected?: boolean;
+  onSelect: () => void;
+  onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
+}) {
+  const theme = canvasThemes[useThemeStore((state) => state.theme)];
+  const [hovered, setHovered] = useState(false);
+  const [hoverSweep, setHoverSweep] = useState(false);
+  useEffect(() => {
+    if (!hovered) return;
+    const timer = window.setTimeout(() => setHoverSweep(true), 200);
+    return () => window.clearTimeout(timer);
+  }, [hovered]);
+  const highlighted = active || selected || generating || hovered;
+  const startX = from.position.x + from.width;
+  const startY = from.position.y + from.height / 2;
+  const endX = to.position.x;
+  const endY = to.position.y + to.height / 2;
+  const { path: pathD } = canvasConnectionGeometry(
+    { x: startX, y: startY },
+    { x: endX, y: endY },
+  );
+
+  return (
+    <g
+      className="canvas-connection"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        setHoverSweep(false);
+      }}
+      data-canvas-edge-id={connection.id}
+      data-selected={selected || undefined}
+      data-related={active || undefined}
+    >
+      <path
+        data-connection-id={connection.id}
+        d={pathD}
+        stroke="transparent"
+        strokeWidth="16"
+        vectorEffect="non-scaling-stroke"
+        fill="none"
+        style={{ cursor: "pointer", pointerEvents: "stroke" }}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect();
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onContextMenu?.(event);
+        }}
+      />
+      <ConnectionStroke
+        path={pathD}
+        highlighted={highlighted}
+        muted={theme.node.text}
+        animate={active || selected || generating || (hovered && hoverSweep)}
+      />
+    </g>
+  );
+}
+
+export function ActiveConnectionPath({
+  node,
+  handle,
+  mouseWorld,
+  target,
+  targetAttraction = 1,
+  fanout = false,
+  anchorOffset = 0,
+}: {
+  node?: CanvasNodeData;
+  handle: ConnectionHandle;
+  mouseWorld: Position;
+  target?: CanvasNodeData;
+  targetAttraction?: number;
+  fanout?: boolean;
+  anchorOffset?: number;
+}) {
+  if (!node) return null;
+
+  const startX =
+    handle.handleType === "source"
+      ? node.position.x + node.width + anchorOffset
+      : mouseWorld.x;
+  const startY =
+    handle.handleType === "source"
+      ? node.position.y + node.height / 2
+      : mouseWorld.y;
+  const endX =
+    handle.handleType === "source"
+      ? mouseWorld.x
+      : node.position.x - anchorOffset;
+  const endY =
+    handle.handleType === "source"
+      ? mouseWorld.y
+      : node.position.y + node.height / 2;
+  const snappedStartX =
+    handle.handleType === "target" && target
+      ? startX +
+        (target.position.x +
+          target.width +
+          (targetAttraction === 1 ? anchorOffset : 0) -
+          startX) *
+          targetAttraction
+      : startX;
+  const snappedStartY =
+    handle.handleType === "target" && target
+      ? startY +
+        (target.position.y + target.height / 2 - startY) * targetAttraction
+      : startY;
+  const snappedEndX =
+    handle.handleType === "source" && target
+      ? endX +
+        (target.position.x -
+          (targetAttraction === 1 ? anchorOffset : 0) -
+          endX) *
+          targetAttraction
+      : endX;
+  const snappedEndY =
+    handle.handleType === "source" && target
+      ? endY + (target.position.y + target.height / 2 - endY) * targetAttraction
+      : endY;
+  const { path: pathD } = canvasConnectionGeometry(
+    { x: snappedStartX, y: snappedStartY },
+    { x: snappedEndX, y: snappedEndY },
+  );
+
+  return (
+    <g data-canvas-connection-preview>
+      <ConnectionStroke path={pathD} highlighted fanout={fanout} />
+    </g>
+  );
+}

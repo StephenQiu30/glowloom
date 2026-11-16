@@ -11,30 +11,30 @@ import {
   QuaternionKeyframeTrack,
   Vector3,
 } from "three";
-import { createDirectorActor } from "@/components/canvas/director/director-assets";
+import { createDirectorActor } from "@glowloom/canvas/editor/director/director-assets.ts";
 import {
   DirectorModelMotion,
   directorModelInfo,
-} from "@/components/canvas/director/director-motion";
+} from "@glowloom/canvas/editor/director/director-motion.ts";
 import {
   directorTransform,
   emptyDirectorConfig,
   readDirector,
-} from "@/components/canvas/director/director-model";
+} from "@glowloom/canvas/editor/director/director-model.ts";
 import {
   directorLibraryClips,
   directorPoseSource,
-} from "@/components/canvas/director/director-motion-library-runtime";
+} from "@glowloom/canvas/editor/director/director-motion-library-runtime.ts";
 import {
   addDirectorMotionSource,
   directorMotionSourceName,
   validateDirectorMotionLibrary,
   type DirectorMotionSource,
-} from "@/components/canvas/director/director-motion-library-model";
-import { placeDirectorMotionClip } from "@/components/canvas/director/director-motion-model";
-import { DirectorMotionLibrary } from "@/components/canvas/director/director-motion-library";
-import { DirectorPoseEditor } from "@/components/canvas/director/director-pose-editor";
-import { importDirectorMotion } from "@/components/canvas/director/director-motion-import";
+} from "@glowloom/canvas/editor/director/director-motion-library-model.ts";
+import { placeDirectorMotionClip } from "@glowloom/canvas/editor/director/director-motion-model.ts";
+import { DirectorMotionLibrary } from "@glowloom/canvas/editor/director/director-motion-library.tsx";
+import { DirectorPoseEditor } from "@glowloom/canvas/editor/director/director-pose-editor.tsx";
+import { importDirectorMotion } from "@glowloom/canvas/editor/director/director-motion-import.ts";
 afterEach(cleanup);
 function fixture() {
   const object = createDirectorActor("male_standard"),

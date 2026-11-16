@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { DirectorViewport } from "@/components/canvas/director/director-viewport";
-import { emptyDirectorConfig } from "@/components/canvas/director/director-model";
+import { DirectorViewport } from "@glowloom/canvas/editor/director/director-viewport.tsx";
+import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
 const state = vi.hoisted(() => ({
   engines: [] as Array<Record<string, ReturnType<typeof vi.fn>>>,
   callbacks: [] as Array<{ onContextState: (value: boolean) => void }>,

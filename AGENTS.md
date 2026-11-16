@@ -52,6 +52,8 @@
 
 独立 NestJS 服务遵循 [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)。进程入口负责配置、监听和关闭。Nest 装配及入站协议集中在 HTTP 边界，业务逻辑按职责组织并使用普通 TypeScript 模块。各服务的依赖边界与门禁分别见 [Agent 规范](agent/AGENTS.md)和 [Canvas 规范](canvas/AGENTS.md)。
 
+NestJS 服务的数据库增删改查统一使用 ORM，不手写 SQL。ORM 的自动建表、结构同步和运行时迁移必须关闭；结构仍仅由 `backend/db/schema.sql` 维护并按数据库规范离线初始化或变更。Canvas 候选运行时保持无数据库访问的职责边界。
+
 ## 验证与 Git
 
 1. 验证范围与风险匹配，记录真实命令和结果；中断、跳过或缺少外部条件的验证不得报告为通过。

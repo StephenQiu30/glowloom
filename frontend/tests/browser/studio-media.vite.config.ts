@@ -1,3 +1,9 @@
+import {
+  canvasFixtureCache,
+  canvasFixtureAliases,
+  canvasHostPublicJson,
+  canvasFixtureOptimizeDeps,
+} from "./canvas-host";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import react from "@vitejs/plugin-react";
@@ -547,8 +553,11 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 const clip =
   "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAQDEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggPt7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECfQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYjViWcxkOIhrJyBACK1nIN1bmSIgQCGhVZfVlA4g4EBI+ODhAX14QDgkLCBoLqBWpqBAlWwhFW5gQESVMNn/HNzoGPAgGfImkWjh0VOQ09ERVJEh41MYXZmNjIuMTIuMTAyc3PWY8CLY8WI1YlnMZDiIaxnyKFFo4dFTkNPREVSRIeUTGF2YzYyLjI4LjEwMiBsaWJ2cHhnyKFFo4hEVVJBVElPTkSHkzAwOjAwOjAyLjAwMDAwMDAwMAAfQ7Z1QkHngQCj0IEAAIDwBQCdASqgAFoAAEcIhYWIhYSIAgICdaoD+AIGmhak569GXiOevRl4jnr0ZeI569GXiOevRl4jlAD+/g0P/89M15g/yc/+Uq8Fjc3wo5iBAGQAEQIAARAQABgAGFgv9AAIgIEAAACjmIEAyAARAgABEBAAGAAYWC/0AAiAgQAAAKOYgQEsABECAAEQEAAYABhYL/QACICBAAAAo5iBAZAAEQIAARAQABgAGFgv9AAIgIEAAACjmIEB9AARAgABEBAAGAAYWC/0AAiAgQAAAKOYgQJYABECAAEQEAAYABhYL/QACICBAAAAo5eBArwA8QEAARAQFGAAYWC/0AAiAgQAAKOYgQMgABECAAEQEAAYABhYL/QACICBAAAAo5iBA4QAEQIAARAQABgAGFgv9AAIgIEAAACjmIED6AARAgABEBAAGAAYWC/0AAiAgQAAAKOYgQRMABECAAEQEAAYABhYL/QACICBAAAAo5iBBLAAEQIAARAQABgAGFgv9AAIgIEAAACjmIEFFAARAgABEBAAGAAYWC/0AAiAgQAAAKOYgQV4ABECAAEQEAAYABhYL/QACICBAAAAo5iBBdwAEQIAARAQABgAGFgv9AAIgIEAAACjmIEGQAARAgABEBAAGAAYWC/0AAiAgQAAAKOYgQakABECAAEQEAAYABhYL/QACICBAAAAo5eBBwgA8QEAARAQFGAAYWC/0AAiAgQAAKOYgQdsABECAAEQEAAYABhYL/QACICBAAAAHFO7a5G7j7OBALeK94EB8YIBpvCBAw==";
 const config = {
+  cacheDir: canvasFixtureCache("studio-media"),
   root: path.resolve(import.meta.dirname, "../.."),
+  optimizeDeps: canvasFixtureOptimizeDeps,
   plugins: [
+    canvasHostPublicJson(),
     react(),
     {
       name: "studio-media-fixture-only",
@@ -591,7 +600,8 @@ const config = {
   ],
   define: { "process.env": "{}" },
   resolve: {
-    alias: [
+    dedupe: ["react", "react-dom", "yjs"],
+    alias: canvasFixtureAliases([
       {
         find: "@/components/auth/session",
         replacement: path.resolve(import.meta.dirname, "ai-presets-session.ts"),
@@ -604,7 +614,7 @@ const config = {
         find: "@",
         replacement: path.resolve(import.meta.dirname, "../../src"),
       },
-    ],
+    ]),
   },
   server: { host: "127.0.0.1", port: 5204, strictPort: true },
 };

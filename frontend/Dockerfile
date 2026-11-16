@@ -6,7 +6,7 @@ WORKDIR /app
 
 FROM base AS collaboration
 WORKDIR /canvas
-COPY canvas/package.json canvas/pnpm-lock.yaml canvas/tsconfig.json ./
+COPY canvas/package.json canvas/pnpm-lock.yaml canvas/pnpm-workspace.yaml canvas/tsconfig.json ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY canvas/src ./src
 COPY canvas/types ./types
@@ -17,6 +17,7 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml 
 COPY canvas/package.json /canvas/package.json
 COPY --from=collaboration /canvas/dist /canvas/dist
 COPY --from=collaboration /canvas/types /canvas/types
+COPY canvas/editor /canvas/editor
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS dev

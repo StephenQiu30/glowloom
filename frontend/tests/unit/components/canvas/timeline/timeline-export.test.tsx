@@ -10,7 +10,7 @@ import {
   verifyTimelineDownload,
   verifyArtifactDownload,
   timelineJianyingLaunchURL,
-} from "@/components/canvas/timeline/timeline-export";
+} from "@glowloom/canvas/editor/timeline/timeline-export.tsx";
 import { RequestError } from "@/lib/request";
 import {
   Dialog,

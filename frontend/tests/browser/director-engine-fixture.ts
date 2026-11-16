@@ -3,15 +3,15 @@ import {
   DirectorScene,
   loadDirectorGLB,
 } from "../../src/components/canvas/director/director-scene";
-import { emptyDirectorConfig } from "../../src/components/canvas/director/director-model";
+import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
 import {
   createDirectorActor,
   DIRECTOR_ACTORS,
-} from "../../src/components/canvas/director/director-assets";
-import { reshapeDirectorQuaterniusActor } from "../../src/components/canvas/director/director-actor-body";
-import { actorPathFrames } from "../../src/components/canvas/director/director-paths";
-import { freezeDirectorScene } from "../../src/components/canvas/director/director-workspaces";
-import type { DirectorVideoOptions } from "../../src/components/canvas/director/director-video-output";
+} from "@glowloom/canvas/editor/director/director-assets.ts";
+import { reshapeDirectorQuaterniusActor } from "@glowloom/canvas/editor/director/director-actor-body.ts";
+import { actorPathFrames } from "@glowloom/canvas/editor/director/director-paths.ts";
+import { freezeDirectorScene } from "@glowloom/canvas/editor/director/director-workspaces.ts";
+import type { DirectorVideoOptions } from "@glowloom/canvas/editor/director/director-video-output.ts";
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0;background:#171717";
 document.body.append(host);

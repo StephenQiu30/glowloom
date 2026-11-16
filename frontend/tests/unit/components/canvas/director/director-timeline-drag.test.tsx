@@ -1,12 +1,12 @@
 import { render, findFeedback } from "../../../../feedback";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
-import { DirectorTimeline } from "@/components/canvas/director/director-timeline";
-import { createDirectorActor } from "@/components/canvas/director/director-assets";
+import { DirectorTimeline } from "@glowloom/canvas/editor/director/director-timeline.tsx";
+import { createDirectorActor } from "@glowloom/canvas/editor/director/director-assets.ts";
 import {
   directorTransform,
   emptyDirectorConfig,
-} from "@/components/canvas/director/director-model";
+} from "@glowloom/canvas/editor/director/director-model.ts";
 
 beforeEach(() => {
   vi.stubGlobal("PointerEvent", MouseEvent);

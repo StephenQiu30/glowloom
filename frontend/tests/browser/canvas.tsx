@@ -5,7 +5,7 @@ import { TooltipProvider } from "../../src/components/ui/tooltip";
 import { CanvasProviders } from "../../src/components/canvas/editor";
 import { serviceGraph } from "../../src/components/canvas/service-graph";
 import "../../src/app/globals.css";
-import CanvasPage from "../../src/components/canvas/editor/canvas-editor";
+import CanvasPage from "@glowloom/canvas/editor/editor/canvas-editor.tsx";
 const id = "11111111-1111-4111-8111-111111111111",
   project = "22222222-2222-4222-8222-222222222222";
 const document = serviceGraph(

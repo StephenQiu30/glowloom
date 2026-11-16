@@ -5,8 +5,8 @@ import {
   timelineAspectRatios,
   timelinePreviewAspectRatio,
   timelinePreviewDimensions,
-} from "@/components/canvas/timeline/timeline-aspect-ratio";
-import { TimelineAspectSelect } from "@/components/canvas/timeline/timeline-aspect-select";
+} from "@glowloom/canvas/editor/timeline/timeline-aspect-ratio.ts";
+import { TimelineAspectSelect } from "@glowloom/canvas/editor/timeline/timeline-aspect-select.tsx";
 
 afterEach(cleanup);
 

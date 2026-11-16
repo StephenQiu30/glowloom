@@ -119,10 +119,10 @@ func TestYjsBrowserFixture(t *testing.T) {
 		if err = json.Unmarshal(output, &legacy); err != nil {
 			t.Fatal(err)
 		}
-		if err = database.Exec(`UPDATE canvas.collab_document SET state=?,graph_hash=? WHERE document_id=?`, legacy.State, legacy.GraphHash, document.ID).Error; err != nil {
+		if err = database.Exec(`WITH checkpoint AS (UPDATE canvas.collab_checkpoint SET state=? WHERE id=(SELECT state_id FROM canvas.collab_document WHERE document_id=?) RETURNING id) UPDATE canvas.collab_document SET graph_hash=? FROM checkpoint WHERE state_id=checkpoint.id`, legacy.State, document.ID, legacy.GraphHash).Error; err != nil {
 			t.Fatal(err)
 		}
-		if err = database.Exec(`UPDATE canvas.collab_version SET state=?,graph_hash=? WHERE document_id=?`, legacy.State, legacy.GraphHash, document.ID).Error; err != nil {
+		if err = database.Exec(`UPDATE canvas.collab_version SET graph_hash=? WHERE document_id=?`, legacy.GraphHash, document.ID).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

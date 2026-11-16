@@ -267,6 +267,16 @@ func TestYjsReceiptFailureRollsBackProjectionBinaryLogAndOutbox(t *testing.T) {
 	if logs != 0 || events != 0 {
 		t.Fatal("partial publication survived", logs, events)
 	}
+	var checkpoints, versions int64
+	if err := database.Raw(`SELECT count(*) FROM canvas.collab_checkpoint WHERE document_id=?`, doc.ID).Scan(&checkpoints).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Raw(`SELECT count(*) FROM canvas.collab_version WHERE document_id=?`, doc.ID).Scan(&versions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if checkpoints != 1 || versions != 1 {
+		t.Fatal("failed acceptance retained checkpoint/history", checkpoints, versions)
+	}
 	cleanup()
 	receipt, err := service.Submit(t.Context(), actor, doc.ID, input)
 	if err != nil || receipt.Status != "accepted" || receipt.CommitSeq != 1 {
@@ -418,7 +428,7 @@ func TestYjsHistoryRestorationNewEpochReceiptAndOldUpdateFence(t *testing.T) {
 		CommitSeq int64
 		GraphHash string
 	}
-	if err = database.Raw(`SELECT state,commit_seq,graph_hash FROM canvas.collab_version WHERE id=?`, versions[0].ID).Scan(&checkpoint).Error; err != nil || !bytes.Equal(checkpoint.State, initial.State) || checkpoint.CommitSeq != int64(initial.CommitSeq) || checkpoint.GraphHash != initial.GraphHash {
+	if err = database.Raw(`SELECT c.state,v.commit_seq,v.graph_hash FROM canvas.collab_version v JOIN canvas.collab_checkpoint c ON c.document_id=v.document_id AND c.id=v.state_id WHERE v.id=?`, versions[0].ID).Scan(&checkpoint).Error; err != nil || !bytes.Equal(checkpoint.State, initial.State) || checkpoint.CommitSeq != int64(initial.CommitSeq) || checkpoint.GraphHash != initial.GraphHash {
 		t.Fatal("history lost binary checkpoint", err)
 	}
 	edit := yjsEdit(t, initial, node.ID, "saved", false)
@@ -674,10 +684,10 @@ func TestYjsExperimentalStateUpgradeAndConcurrentFirstParameters(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Only the isolated fixture installs an earlier persisted shape, without changing its projection.
-	if err = db.Exec(`UPDATE canvas.collab_document SET state=?,graph_hash=? WHERE document_id=?`, legacy.State, legacy.GraphHash, doc.ID).Error; err != nil {
+	if err = db.Exec(`WITH checkpoint AS (UPDATE canvas.collab_checkpoint SET state=? WHERE id=(SELECT state_id FROM canvas.collab_document WHERE document_id=?) RETURNING id) UPDATE canvas.collab_document SET graph_hash=? FROM checkpoint WHERE state_id=checkpoint.id`, legacy.State, doc.ID, legacy.GraphHash).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err = db.Exec(`UPDATE canvas.collab_version SET state=?,graph_hash=? WHERE document_id=?`, legacy.State, legacy.GraphHash, doc.ID).Error; err != nil {
+	if err = db.Exec(`UPDATE canvas.collab_version SET graph_hash=? WHERE document_id=?`, legacy.GraphHash, doc.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	old, err := service.Load(t.Context(), actor, doc.ID)

@@ -5,7 +5,7 @@ import {
   ConnectionFlowLayer,
   ConnectionFlowProvider,
   useConnectionFlow,
-} from "@/components/canvas/connections/connection-flow-layer";
+} from "@glowloom/canvas/editor/connections/connection-flow-layer.tsx";
 
 const surface = vi.hoisted(() => ({
   upload: vi.fn(),
@@ -13,9 +13,12 @@ const surface = vi.hoisted(() => ({
   clear: vi.fn(),
   dispose: vi.fn(),
 }));
-vi.mock("@/components/canvas/connections/connection-flow-surface", () => ({
-  createConnectionFlowSurface: () => surface,
-}));
+vi.mock(
+  "@glowloom/canvas/editor/connections/connection-flow-surface.ts",
+  () => ({
+    createConnectionFlowSurface: () => surface,
+  }),
+);
 function Entry({ path, fanout = false }: { path: string; fanout?: boolean }) {
   const ref = useRef<SVGPathElement>(null);
   useConnectionFlow(path, true, ref, fanout);

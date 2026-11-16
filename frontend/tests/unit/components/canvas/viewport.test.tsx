@@ -1,11 +1,11 @@
 import { createRef } from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
+import { InfiniteCanvas } from "@glowloom/canvas/editor/infinite-canvas.tsx";
 import {
   cropDataUrl,
   resolveUpscaleSize,
-} from "@/components/canvas/image-data";
+} from "@glowloom/canvas/editor/image-data.ts";
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();

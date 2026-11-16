@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { CanvasSelectionToolbar } from "@/components/canvas/controls/canvas-selection-toolbar";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+import { CanvasSelectionToolbar } from "@glowloom/canvas/editor/controls/canvas-selection-toolbar.tsx";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 vi.mock("@/components/canvas/runtime/store/use-theme-store", () => ({
   useThemeStore: (selector: (state: { theme: string }) => unknown) =>
     selector({ theme: "dark" }),

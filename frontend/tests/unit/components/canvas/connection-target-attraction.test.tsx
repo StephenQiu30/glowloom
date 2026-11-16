@@ -1,15 +1,15 @@
 import { cleanup, render } from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { ActiveConnectionPath } from "@/components/canvas/connections/canvas-connections";
+import { ActiveConnectionPath } from "@glowloom/canvas/editor/connections/canvas-connections.tsx";
 import {
   ConnectionFlowLayer,
   ConnectionFlowProvider,
-} from "@/components/canvas/connections/connection-flow-layer";
+} from "@glowloom/canvas/editor/connections/connection-flow-layer.tsx";
 import type {
   CanvasNodeData,
   ConnectionHandle,
-} from "@/components/canvas/types/canvas";
+} from "@glowloom/canvas/editor/types/canvas.ts";
 
 const surface = vi.hoisted(() => ({
   upload: vi.fn(),
@@ -17,9 +17,12 @@ const surface = vi.hoisted(() => ({
   clear: vi.fn(),
   dispose: vi.fn(),
 }));
-vi.mock("@/components/canvas/connections/connection-flow-surface", () => ({
-  createConnectionFlowSurface: () => surface,
-}));
+vi.mock(
+  "@glowloom/canvas/editor/connections/connection-flow-surface.ts",
+  () => ({
+    createConnectionFlowSurface: () => surface,
+  }),
+);
 const from: CanvasNodeData = {
   id: "from",
   type: "text",

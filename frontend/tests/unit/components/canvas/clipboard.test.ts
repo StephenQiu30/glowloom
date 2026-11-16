@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   captureCanvasSelection,
   instantiateCanvasClipboard,
-} from "@/components/canvas/lib/canvas-clipboard";
+} from "@glowloom/canvas/editor/lib/canvas-clipboard.ts";
 
 describe("canvas clipboard snapshots", () => {
   it("captures nested descendants and internal edges, then remaps every identity without changing the original", () => {

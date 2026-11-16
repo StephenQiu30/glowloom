@@ -7,11 +7,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { CanvasSubjectNode } from "@/components/canvas/subject/canvas-subject-node";
-import { CanvasMediaSelectionContext } from "@/components/canvas/lib/canvas-media-selection";
-import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
-import { subjectConfig } from "@/components/canvas/subject/subject-node-state";
+import { CanvasSubjectNode } from "@glowloom/canvas/editor/subject/canvas-subject-node.tsx";
+import { CanvasMediaSelectionContext } from "@glowloom/canvas/editor/lib/canvas-media-selection.ts";
+import { registerBuiltinNodes } from "@glowloom/canvas/editor/nodes/builtin-nodes.tsx";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
+import { subjectConfig } from "@glowloom/canvas/editor/subject/subject-node-state.ts";
 import type {
   CanvasYjsLiveSession,
   YjsView,

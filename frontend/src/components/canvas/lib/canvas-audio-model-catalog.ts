@@ -7,7 +7,7 @@ import {
 import type {
   CanvasAudioCatalogIdentity,
   CanvasAudioModelCatalog,
-} from "./canvas-audio-connection-capability";
+} from "@glowloom/canvas/editor/lib/canvas-audio-connection-capability.ts";
 
 /** Formal catalog only: no legacy runtime config-store or inferred supplier capabilities. */
 export async function readCanvasAudioModelCatalog(

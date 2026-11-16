@@ -1,11 +1,20 @@
+import {
+  canvasFixtureCache,
+  canvasFixtureAliases,
+  canvasHostPublicJson,
+  canvasFixtureOptimizeDeps,
+} from "./canvas-host";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import react from "@vitejs/plugin-react";
 
 /** Explicit test-only aliases: never import this config from Next.js. */
 const config = {
+  cacheDir: canvasFixtureCache("ai-presets"),
   root: path.resolve(import.meta.dirname, "../.."),
+  optimizeDeps: canvasFixtureOptimizeDeps,
   plugins: [
+    canvasHostPublicJson(),
     react(),
     {
       name: "ai-trial-artifact-fixture",
@@ -41,7 +50,8 @@ const config = {
   ],
   define: { "process.env": "{}" },
   resolve: {
-    alias: [
+    dedupe: ["react", "react-dom", "yjs"],
+    alias: canvasFixtureAliases([
       {
         find: "next/dynamic",
         replacement: path.resolve(
@@ -57,7 +67,7 @@ const config = {
         find: "@",
         replacement: path.resolve(import.meta.dirname, "../../src"),
       },
-    ],
+    ]),
   },
   server: { host: "127.0.0.1", port: 5197, strictPort: true },
 };

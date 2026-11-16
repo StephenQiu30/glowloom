@@ -2,11 +2,11 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   CanvasNodeDragSession,
   applyCanvasDragPositions,
-} from "@/components/canvas/node-drag";
-import { canvasConnectionGeometry } from "@/components/canvas/connection-geometry";
-import { canvasWheelViewport } from "@/components/canvas/wheel";
-import { canvasPoint } from "@/components/canvas/viewport";
-import type { CanvasNodeData } from "@/components/canvas/types";
+} from "@glowloom/canvas/editor/node-drag.ts";
+import { canvasConnectionGeometry } from "@glowloom/canvas/editor/connection-geometry.ts";
+import { canvasWheelViewport } from "@glowloom/canvas/editor/wheel.ts";
+import { canvasPoint } from "@glowloom/canvas/editor/viewport.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types.ts";
 
 afterEach(() => {
   vi.useRealTimers();

@@ -3,7 +3,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "../components/canvas/canvas.css";
+@import "@glowloom/canvas/editor/canvas.css";
+
+@source "../../node_modules/@glowloom/canvas/editor";
 
 @custom-variant dark (&:is(.dark *));
 

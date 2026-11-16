@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { timelineRulerIntervals } from "@/components/canvas/timeline/timeline-ruler";
+import { timelineRulerIntervals } from "@glowloom/canvas/editor/timeline/timeline-ruler.ts";
 it.each([
   [14, 5, 1],
   [21.4, 5, 1],

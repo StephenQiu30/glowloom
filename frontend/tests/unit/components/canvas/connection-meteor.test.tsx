@@ -3,8 +3,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   ActiveConnectionPath,
   ConnectionPath,
-} from "@/components/canvas/connections/canvas-connections";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+} from "@glowloom/canvas/editor/connections/canvas-connections.tsx";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 
 vi.mock("@/components/canvas/runtime/store/use-theme-store", () => ({
   useThemeStore: (select: (state: { theme: string }) => unknown) =>

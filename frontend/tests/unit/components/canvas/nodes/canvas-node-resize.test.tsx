@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
-import { CanvasNode } from "@/components/canvas/nodes/canvas-node";
-import { CanvasNodeType } from "@/components/canvas/types/canvas";
+import { CanvasNode } from "@glowloom/canvas/editor/nodes/canvas-node.tsx";
+import { CanvasNodeType } from "@glowloom/canvas/editor/types/canvas.ts";
 
 vi.mock("@/components/canvas/runtime/store/use-theme-store", () => ({
   useThemeStore: (select: (state: { theme: "dark" }) => unknown) =>

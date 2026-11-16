@@ -1,7 +1,7 @@
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-import { type CanvasTheme } from "@/components/canvas/runtime/lib/theme";
+import { type CanvasTheme } from "@glowloom/canvas/editor/runtime/lib/theme.ts";
 import type {
   AiConfig,
   ReasoningEffort,

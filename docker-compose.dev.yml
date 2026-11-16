@@ -28,11 +28,15 @@ services:
         - action: rebuild
           path: ./canvas/src
         - action: rebuild
+          path: ./canvas/editor
+        - action: rebuild
           path: ./canvas/types
         - action: rebuild
           path: ./canvas/package.json
         - action: rebuild
           path: ./canvas/pnpm-lock.yaml
+        - action: rebuild
+          path: ./canvas/pnpm-workspace.yaml
         - action: rebuild
           path: ./canvas/tsconfig.json
         - action: rebuild
@@ -139,6 +143,8 @@ services:
         - action: rebuild
           path: ./canvas
           ignore:
+            - editor/
+            - tsconfig.editor.json
             - node_modules/
             - dist/
             - coverage/

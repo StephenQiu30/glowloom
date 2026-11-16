@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { ConnectionCreateMenu } from "@/components/canvas/controls/canvas-create-menus";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+import { ConnectionCreateMenu } from "@glowloom/canvas/editor/controls/canvas-create-menus.tsx";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 
 afterEach(cleanup);
 const node = (id: string, type: string) =>

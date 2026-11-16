@@ -3,11 +3,11 @@ import {
   directorFitView,
   directorViewLayout,
   directorViewPoint,
-} from "@/components/canvas/director/director-view-layout";
+} from "@glowloom/canvas/editor/director/director-view-layout.ts";
 import {
   directorLightAngles,
   directorLightRotation,
-} from "@/components/canvas/director/director-light-angles";
+} from "@glowloom/canvas/editor/director/director-light-angles.ts";
 const options = {
   split: false,
   compact: false,

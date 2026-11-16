@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { CanvasModelSelect } from "@/components/canvas/parameters/canvas-model-select";
+import { CanvasModelSelect } from "@glowloom/canvas/editor/parameters/canvas-model-select.tsx";
 const state = vi.hoisted(() => ({ retry: vi.fn().mockResolvedValue([]) }));
 vi.mock("swr", () => ({ default: () => ({ data: [], mutate: state.retry }) }));
 vi.mock(

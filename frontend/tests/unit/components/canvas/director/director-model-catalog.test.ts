@@ -7,11 +7,11 @@ import {
   DIRECTOR_MODELS,
   DIRECTOR_MODEL_CATEGORIES,
   directorBuiltinModel,
-} from "@/components/canvas/director/director-model-catalog";
+} from "@glowloom/canvas/editor/director/director-model-catalog.ts";
 import {
   DIRECTOR_ACTORS,
   DIRECTOR_GEOMETRIES,
-} from "@/components/canvas/director/director-assets";
+} from "@glowloom/canvas/editor/director/director-assets.ts";
 const publicPath = (url: string) => path.resolve("public", url.slice(1));
 describe("bundled director asset evidence", () => {
   it("contains 32 actual CC0 models across eight populated categories", async () => {

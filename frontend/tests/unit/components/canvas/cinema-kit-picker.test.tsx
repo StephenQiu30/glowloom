@@ -2,11 +2,11 @@ import { within } from "@testing-library/react";
 import { render, findFeedback } from "../../../feedback";
 import { afterEach, it, expect, vi } from "vitest";
 import { cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
-import { CinemaKitPicker } from "@/components/canvas/cinema-kit/cinema-kit-picker";
-import { ConnectionCreateMenu } from "@/components/canvas/controls/canvas-create-menus";
-import { makeCinemaNode } from "@/components/canvas/cinema-kit/cinema-kit-graph";
-import { cameraDefault } from "@/components/canvas/cinema-kit/cinema-kit-model";
-import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
+import { CinemaKitPicker } from "@glowloom/canvas/editor/cinema-kit/cinema-kit-picker.tsx";
+import { ConnectionCreateMenu } from "@glowloom/canvas/editor/controls/canvas-create-menus.tsx";
+import { makeCinemaNode } from "@glowloom/canvas/editor/cinema-kit/cinema-kit-graph.ts";
+import { cameraDefault } from "@glowloom/canvas/editor/cinema-kit/cinema-kit-model.ts";
+import { registerBuiltinNodes } from "@glowloom/canvas/editor/nodes/builtin-nodes.tsx";
 registerBuiltinNodes();
 afterEach(cleanup);
 it("cycles four camera categories and only confirms the saved typed choice", async () => {

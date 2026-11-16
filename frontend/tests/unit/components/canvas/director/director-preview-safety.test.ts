@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { DirectorScene } from "@/components/canvas/director/director-scene";
-import type { DirectorVideoOptions } from "@/components/canvas/director/director-video-output";
+import type { DirectorVideoOptions } from "@glowloom/canvas/editor/director/director-video-output.ts";
 it("rejects still and video output while a temporary animation preview is active", async () => {
   const engine = Object.create(DirectorScene.prototype) as DirectorScene;
   engine.setPreviewObject("actor-being-previewed");

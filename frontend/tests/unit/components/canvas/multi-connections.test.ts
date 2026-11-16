@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
 import {
   connectCanvasDocument,
   connectCanvasDocumentSources,
-} from "@/components/canvas/lib/canvas-document-connections";
+} from "@glowloom/canvas/editor/lib/canvas-document-connections.ts";
 
 describe("multi-selection connections", () => {
   function fixture() {

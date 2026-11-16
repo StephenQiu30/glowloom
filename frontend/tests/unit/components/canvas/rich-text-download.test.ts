@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { documentMarkdown } from "@/components/canvas/runtime/components/editor/lib/rich-text-download";
+import { documentMarkdown } from "@glowloom/canvas/editor/runtime/components/editor/lib/rich-text-download.ts";
 
 it("exports headings, lists, marks and readable references without exposing private binding URLs", async () => {
   const markdown = await documentMarkdown(

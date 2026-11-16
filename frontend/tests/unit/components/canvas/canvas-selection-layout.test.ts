@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { layoutCanvasSelection } from "@/components/canvas/lib/canvas-selection-layout";
-import type { CanvasNodeData } from "@/components/canvas/types/canvas";
+import { layoutCanvasSelection } from "@glowloom/canvas/editor/lib/canvas-selection-layout.ts";
+import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
 const node = (id: string, width: number, height: number): CanvasNodeData => ({
   id,
   type: "image",

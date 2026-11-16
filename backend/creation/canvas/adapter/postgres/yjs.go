@@ -21,13 +21,14 @@ type yjsRow struct {
 	WriterTerm      int64
 	CommitSeq       int64
 	ContentRevision int64
+	StateID         uuid.UUID
 	State           []byte
 	GraphHash       string
 }
 
 func loadYjsRow(tx *gorm.DB, id uuid.UUID) (yjsRow, error) {
 	var row yjsRow
-	err := tx.Raw(`SELECT document_id,epoch,writer_term,commit_seq,content_revision,state,graph_hash FROM canvas.collab_document WHERE document_id=?`, id).Scan(&row).Error
+	err := tx.Raw(`SELECT d.document_id,d.epoch,d.writer_term,d.commit_seq,d.content_revision,d.state_id,c.state,d.graph_hash FROM canvas.collab_document d JOIN canvas.collab_checkpoint c ON c.document_id=d.document_id AND c.id=d.state_id WHERE d.document_id=?`, id).Scan(&row).Error
 	return row, err
 }
 func yjsHash(input application.YjsUpdate) string {
@@ -157,7 +158,8 @@ func (s *Store) InitializeYjs(ctx context.Context, a identity.Principal, base ap
 		if err != nil || len(ops) > 0 || candidate.Projection.Name != doc.Name {
 			return fmt.Errorf("initial collaboration projection differs from source")
 		}
-		if err := tx.Exec(`INSERT INTO canvas.collab_document(document_id,epoch,writer_term,commit_seq,content_revision,state,graph_hash) VALUES(?,?,?,0,?,?,?)`, id, base.Epoch, base.WriterTerm, doc.Revision, candidate.State, candidate.GraphHash).Error; err != nil {
+		if err := tx.Exec(`WITH checkpoint AS (INSERT INTO canvas.collab_checkpoint(id,document_id,state) VALUES(?,?,?) RETURNING id)
+INSERT INTO canvas.collab_document(document_id,epoch,writer_term,commit_seq,content_revision,state_id,graph_hash) SELECT ?,?,?,0,?,id,? FROM checkpoint`, uuid.New(), id, candidate.State, id, base.Epoch, base.WriterTerm, doc.Revision, candidate.GraphHash).Error; err != nil {
 			return err
 		}
 		if err := recordYjsVersion(tx, doc, base.Epoch, a.ID, "migration"); err != nil {
@@ -301,7 +303,11 @@ func (s *Store) CommitYjs(ctx context.Context, a identity.Principal, base applic
 		seq := row.CommitSeq
 		if candidate.Effect != "NO_CHANGE" {
 			seq++
-			if err := tx.Exec(`UPDATE canvas.collab_document SET commit_seq=?,content_revision=?,state=?,graph_hash=?,updated_at=clock_timestamp() WHERE document_id=?`, seq, revision, candidate.State, candidate.GraphHash, id).Error; err != nil {
+			if err := tx.Exec(`WITH checkpoint AS (INSERT INTO canvas.collab_checkpoint(id,document_id,state) VALUES(?,?,?) RETURNING id)
+UPDATE canvas.collab_document SET commit_seq=?,content_revision=?,state_id=checkpoint.id,graph_hash=?,updated_at=clock_timestamp() FROM checkpoint WHERE document_id=?`, uuid.New(), id, candidate.State, seq, revision, candidate.GraphHash, id).Error; err != nil {
+				return err
+			}
+			if err := pruneYjsCheckpoint(tx, id, row.StateID); err != nil {
 				return err
 			}
 			if err := tx.Exec(`INSERT INTO canvas.collab_update(document_id,epoch,commit_seq,content_revision,actor_id,session_id,update_id,payload_hash,update_bytes) VALUES(?,?,?,?,?,?,?,?,?)`, id, input.Epoch, seq, revision, a.ID, input.SessionID, input.UpdateID, input.PayloadHash, candidate.AppliedUpdate).Error; err != nil {

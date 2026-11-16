@@ -1,12 +1,12 @@
 import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { TimelineThumbnail } from "@/components/canvas/timeline/timeline-thumbnail";
+import { TimelineThumbnail } from "@glowloom/canvas/editor/timeline/timeline-thumbnail.tsx";
 const waveform = vi.hoisted(() => ({ acquire: vi.fn() }));
-vi.mock("@/components/canvas/timeline/timeline-waveform", () => ({
+vi.mock("@glowloom/canvas/editor/timeline/timeline-waveform.ts", () => ({
   acquireTimelineWaveform: waveform.acquire,
 }));
-import type { TimelineMedia } from "@/components/canvas/timeline/timeline-preview";
+import type { TimelineMedia } from "@glowloom/canvas/editor/timeline/timeline-preview.tsx";
 afterEach(() => {
   cleanup();
   waveform.acquire.mockReset();

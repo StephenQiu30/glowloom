@@ -16,7 +16,7 @@ Agent Harness 与多 Agent 的已确认目标（2026-11-04，SRC-AGH-12）：同
 
 `agent` 服务与根目录 `agent/`、包名 `agent`（private）、Compose/CI `agent`、镜像 `glowloom/agent` 统一命名。服务使用 Node 24、TypeScript ESM、NestJS 与官方 Fastify 适配器。Controller/DTO 注解生成 OpenAPI，TypeBox 仅用于 Pi 工具参数。Pi Durable、pg、Pino、Vitest 与 pnpm/tsc 延续现有基线。只发布单一 NestJS 实现，移除原生 Fastify 入口、TypeBox HTTP 合同及兼容分支。完整技术栈与版本见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，目标目录和生成链见[设计37](workspace/content/design/37-Agent服务目录与TypeScript规范设计.md)。
 
-`canvas` 服务对应 `canvas/`、Compose 内部地址 `canvas:4400`、镜像 `glowloom/canvas` 与私有包 `@glowloom/canvas`。服务使用 Node 24、NestJS/Fastify、TypeScript ESM 和 Yjs。Go 拥有鉴权、接受与持久化，Canvas 计算候选更新，浏览器只消费共享包的指定子路径。目录见[设计17](workspace/content/design/17-画布Yjs协作编辑设计.md)。
+`canvas` 服务对应 `canvas/`、Compose 内部地址 `canvas:4400`、镜像 `glowloom/canvas` 与私有包 `@glowloom/canvas`。服务使用 Node 24、NestJS/Fastify、TypeScript ESM 和 Yjs。Go 拥有鉴权、接受与持久化，Canvas 计算候选更新，浏览器只消费共享包的指定子路径。浏览器编辑器统一位于 `canvas/editor/`，通过 `@glowloom/canvas/editor` 及具体子路径由 frontend 编译；应用宿主接入集中于 `frontend/canvas-host.ts`，页面、身份、业务 API 与协作装配仍由 frontend 提供。Node 服务构建只包含 `canvas/src/`，不安装浏览器 peers。目录见[设计17](workspace/content/docs/design/17-画布Yjs协作编辑设计.md)与[编辑器边界](workspace/content/docs/design/10-画布交互设计.md#711-编辑器源码归属src-can-162026-11-16-已确认)。
 
 Harness 按[设计32 §7.6](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)直接组合官方 registry/tool/doc/owned conversation；四个同版 Pi 包中 coding-agent 仅提供受控资源 SDK，不运行 CLI 或第二个 AgentSession。运行固定 manifest、显式角色工具名单，模型/工具出口强制校验 Go 授权；第三方 Skill 脚本走 Go 隔离能力。审批/暂停收束后的 continuation 与崩溃恢复原未决任务分别处理，不自写循环或另造插件加载器。
 
@@ -60,7 +60,7 @@ Go 目录按[设计44 §7.5](workspace/content/design/44-Go微服务架构与技
 | Go 实现     | gofmt、goimports、go vet、golangci-lint、go test -race、govulncheck；相应契约生成一致性                                                                                                                 |
 | 前端实现    | 在 frontend 执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证                     |
 | Agent 服务  | 在 agent 独立执行 TypeScript strict、lint、单元/官方 Storage conformance、真实隔离 PostgreSQL 与跨服务测试及构建；Go Agent 边界保留 backend/tests；验证根 owner/grant、可靠控制投递、SSE 一致性与无兼容 |
-| Canvas 服务 | 在 `canvas/` 执行 `pnpm typecheck`、`pnpm check` 和 `pnpm test`，并验证 Go 内部 HTTP 和前端共享包导出。                                                                                                 |
+| Canvas 服务 | 在 `canvas/` 执行 `pnpm typecheck`、`pnpm check` 和 `pnpm test`，并验证 Go 内部 HTTP 和前端共享包导出。浏览器源码在 canvas 执行 `pnpm check:editor`，在 frontend 执行 `pnpm canvas:typecheck` 和 `pnpm canvas:lint`，包边界/全部浏览器夹具接线由 Vitest 验证。                                                                                                 |
 | 文档        | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                                      |
 
 默认 CI 并行运行 backend、agent、frontend 三个任务。Go 版本来自 `backend/go.mod`，Node.js 使用统一的 24 主版本，pnpm 版本来自各包清单，依赖使用冻结锁文件及缓存。

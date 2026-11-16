@@ -70,12 +70,16 @@
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "vite": "8.3.1"
   },
   "packageManager": "pnpm@12.4.2",
   "scripts": {
     "api:schema": "go -C ../backend run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g internal/app/public_api.go --parseInternal --parseDependency --tags '!business' -ot json -o ../frontend/node_modules/.cache/openapi",
     "api:generate": "pnpm run api:schema && openapi2ts && prettier --write src/api",
-    "api:check": "vitest run tests/unit/api-generation.test.ts"
+    "api:check": "vitest run tests/unit/api-generation.test.ts",
+    "canvas:typecheck": "tsc -p ../canvas/tsconfig.editor.json --noEmit",
+    "canvas:browser": "vite --config tests/browser/canvas.vite.config.ts",
+    "canvas:lint": "cd .. && eslint --config frontend/eslint.config.mjs canvas/editor"
   }
 }

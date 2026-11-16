@@ -12,7 +12,7 @@ import {
   normalizeAudioSpeedValue,
   normalizeAudioVoiceValue,
 } from "@/components/canvas/runtime/lib/generation/audio-options";
-import { type CanvasTheme } from "@/components/canvas/runtime/lib/theme";
+import { type CanvasTheme } from "@glowloom/canvas/editor/runtime/lib/theme.ts";
 import type { AiConfig } from "@/components/canvas/runtime/store/use-config-store";
 
 const speedOptions = ["0.75", "1", "1.25", "1.5"];

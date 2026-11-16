@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
-import { DirectorHistory } from "@/components/canvas/director/director-history";
-import { migrateDirectorDocument } from "@/components/canvas/director/director-workspaces";
-import { emptyDirectorConfig } from "@/components/canvas/director/director-model";
+import { DirectorHistory } from "@glowloom/canvas/editor/director/director-history.ts";
+import { migrateDirectorDocument } from "@glowloom/canvas/editor/director/director-workspaces.ts";
+import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
 it("undoes only the active workspace and rejects stale collaboration baselines", () => {
   const history = new DirectorHistory(),
     a = migrateDirectorDocument(emptyDirectorConfig()),

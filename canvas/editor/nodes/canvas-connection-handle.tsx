@@ -1,0 +1,245 @@
+"use client";
+
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
+import { Button } from "@glowloom/canvas-host/components/ui/button";
+import {
+  advanceConnectionHandle,
+  connectionHandleCounterScale,
+  connectionHandleRest,
+  connectionHandleTarget,
+  connectionHandleTransform,
+  type ConnectionHandleSide,
+  type HandlePoint,
+} from "./canvas-connection-handle-geometry.ts";
+
+type Props = {
+  scale: number;
+  variant?: "node" | "aggregate";
+  side: ConnectionHandleSide;
+  visible: boolean;
+  disabled?: boolean;
+  tap?: boolean;
+  onMouseDown: (event: MouseEvent) => void;
+};
+
+export function CanvasConnectionHandle({
+  scale,
+  variant = "node",
+  side,
+  visible,
+  disabled = false,
+  tap = false,
+  onMouseDown,
+}: Props) {
+  const field = useRef<HTMLDivElement>(null);
+  const glyph = useRef<HTMLElement | null>(null);
+  const frame = useRef<number | null>(null);
+  const lastFrame = useRef<number | null>(null);
+  const pointer = useRef<HandlePoint | null>(null);
+  const aggregate = variant === "aggregate";
+  const rest = useCallback(
+    () =>
+      aggregate
+        ? { x: 30, y: 60 }
+        : tap
+          ? { x: 30 + (side === "right" ? 22 : -22) / scale, y: 60 }
+          : connectionHandleRest(side, scale),
+    [aggregate, scale, side, tap],
+  );
+  const current = useRef(rest());
+  const reduced = useRef(false);
+  const [hovered, setHovered] = useState(false);
+  const counterScale = aggregate
+    ? 1
+    : tap
+      ? 1 / scale
+      : connectionHandleCounterScale(scale);
+  const shown = visible || (hovered && !disabled);
+
+  const write = useCallback(
+    (point: HandlePoint) => {
+      current.current = point;
+      if (glyph.current)
+        glyph.current.style.transform = connectionHandleTransform(
+          point,
+          counterScale,
+        );
+    },
+    [counterScale],
+  );
+
+  const stop = useCallback(() => {
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    lastFrame.current = null;
+  }, []);
+
+  const reset = useCallback(() => {
+    stop();
+    pointer.current = null;
+    field.current?.removeAttribute("data-canvas-connection-glyph-tracking");
+    write(rest());
+  }, [rest, stop, write]);
+
+  // Keep animation writes outside React rendering, including zoom/availability resets.
+  useLayoutEffect(() => {
+    reset();
+    return stop;
+  }, [disabled, reset, stop]);
+
+  const sampleTarget = useCallback(() => {
+    if (!pointer.current || !field.current) return null;
+    return connectionHandleTarget(
+      side,
+      pointer.current,
+      field.current.getBoundingClientRect(),
+    );
+  }, [side]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => {
+      reduced.current = media.matches;
+      if (media.matches) {
+        stop();
+        const target = sampleTarget();
+        if (target) write(target);
+      }
+    };
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, [sampleTarget, stop, write]);
+
+  const followPointer = (clientX: number, clientY: number) => {
+    if (disabled || tap) return;
+    pointer.current = { x: clientX, y: clientY };
+    field.current?.setAttribute(
+      "data-canvas-connection-glyph-tracking",
+      "true",
+    );
+    const tick = (timestamp: number) => {
+      frame.current = null;
+      const target = sampleTarget();
+      if (!target) return;
+      if (reduced.current) {
+        write(target);
+        lastFrame.current = null;
+        return;
+      }
+      const result = advanceConnectionHandle(
+        current.current,
+        target,
+        lastFrame.current === null ? null : timestamp - lastFrame.current,
+      );
+      write(result.point);
+      lastFrame.current = result.settled ? null : timestamp;
+      if (!result.settled) frame.current = requestAnimationFrame(tick);
+    };
+    if (frame.current === null) frame.current = requestAnimationFrame(tick);
+  };
+
+  return (
+    <div
+      ref={field}
+      data-canvas-no-pan
+      data-canvas-connection-handle
+      data-side={side}
+      data-variant={variant}
+      data-visible={shown}
+      data-disabled={disabled}
+      data-tap={tap || undefined}
+      className="canvas-connection-handle"
+      style={
+        {
+          width: 60,
+          height: 120,
+          [side]: -30,
+          "--canvas-handle-counter-scale": counterScale,
+        } as CSSProperties
+      }
+      onPointerEnter={(event) => {
+        if (disabled) return;
+        setHovered(true);
+        followPointer(event.clientX, event.clientY);
+      }}
+      onPointerMove={(event) => followPointer(event.clientX, event.clientY)}
+      onPointerLeave={() => {
+        setHovered(false);
+        reset();
+      }}
+      onPointerCancel={() => {
+        setHovered(false);
+        reset();
+      }}
+      onMouseDown={(event) => {
+        if (!tap && !disabled && event.button === 0) onMouseDown(event);
+      }}
+    >
+      {aggregate ? (
+        <>
+          <span
+            ref={(element) => {
+              glyph.current = element;
+            }}
+            aria-hidden="true"
+            data-canvas-connection-glyph
+            data-slot="button"
+            className="canvas-node-port"
+            style={{
+              width: 20,
+              height: 20,
+              transform: connectionHandleTransform(rest(), counterScale),
+            }}
+          >
+            <span className="canvas-node-port-plus" />
+          </span>
+          <Button
+            variant="ghost"
+            aria-label="为选中节点创建后接节点"
+            aria-haspopup="menu"
+            disabled={disabled}
+            tabIndex={shown && !disabled ? 0 : -1}
+            className="canvas-aggregate-connection-button"
+            style={{ width: 36, height: 36 }}
+            onClick={(event) => {
+              if (!disabled && event.detail === 0) onMouseDown(event);
+            }}
+          />
+        </>
+      ) : (
+        <Button
+          ref={(element) => {
+            glyph.current = element;
+          }}
+          variant="outline"
+          size="icon-xs"
+          aria-label={side === "left" ? "连接输入节点" : "连接输出节点"}
+          aria-haspopup={tap ? undefined : "menu"}
+          disabled={disabled}
+          tabIndex={shown && !disabled ? 0 : -1}
+          data-canvas-connection-glyph
+          className="canvas-node-port"
+          style={{
+            width: tap ? 44 : 20,
+            height: tap ? 44 : 20,
+            transform: connectionHandleTransform(rest(), counterScale),
+          }}
+          onClick={(event) => {
+            if (!disabled && (tap || event.detail === 0)) onMouseDown(event);
+          }}
+        >
+          <span aria-hidden="true" className="canvas-node-port-plus" />
+        </Button>
+      )}
+    </div>
+  );
+}

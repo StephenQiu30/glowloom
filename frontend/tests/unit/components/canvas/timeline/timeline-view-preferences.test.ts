@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   setSkipJianyingReminder,
   skipJianyingReminder,
-} from "@/components/canvas/timeline/timeline-view-preferences";
+} from "@glowloom/canvas/editor/timeline/timeline-view-preferences.ts";
 const key = "glowloom:timeline:jianying:skip-reminder";
 afterEach(() => {
   vi.restoreAllMocks();
