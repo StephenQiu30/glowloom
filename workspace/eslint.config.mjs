@@ -1,16 +1,12 @@
-import { defineConfig, globalIgnores } from 'eslint/config';
-import nextVitals from 'eslint-config-next/core-web-vitals';
+import nextConfig from 'eslint-config-next';
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  { rules: { curly: ['error', 'all'], 'one-var': ['error', 'never'] } },
-  globalIgnores([
-    '.next/**',
-    'out/**',
-    'build/**',
-    'next-env.d.ts',
-    '.source/**',
-  ]),
-]);
+const config = [
+  ...nextConfig,
+  {
+    rules: {
+      '@next/next/no-html-link-for-pages': 'off',
+    },
+  },
+];
 
-export default eslintConfig;
+export default config;

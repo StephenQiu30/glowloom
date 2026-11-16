@@ -1,16 +1,15 @@
 {
   "title": "织光知识库",
   "pages": [
-    "00-文档索引",
+    "index",
     "requirement",
     "design",
     "prd",
     "plan",
     "research",
     "operations",
-    "templates",
     "skills",
-    "workflows",
-    "..."
+    "templates",
+    "workflows"
   ]
 }

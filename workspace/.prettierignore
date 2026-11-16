@@ -1,8 +1,7 @@
-content/
-node_modules/
-.next/
-.source/
-.local/
-playwright-report/
-test-results/
+.next
+node_modules
+.source
+dist
+content/**
+content
 pnpm-lock.yaml

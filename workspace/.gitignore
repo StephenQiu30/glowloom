@@ -24,8 +24,3 @@ yarn-error.log*
 .env*.local
 .vercel
 next-env.d.ts
-# local data and browser evidence
-.local/
-test-results/
-playwright-report/
-.env

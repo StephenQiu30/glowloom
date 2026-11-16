@@ -57,7 +57,7 @@ jobs:
           pnpm start > "$RUNNER_TEMP/workspace-next.log" 2>&1 &
           reader_pid=$!
           trap 'kill "$reader_pid" 2>/dev/null || true' EXIT
-          curl --fail --silent --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:1130/read > /dev/null
+          curl --fail --silent --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:1130/docs > /dev/null
           pnpm test:e2e
       - uses: actions/upload-artifact@v7
         if: failure()

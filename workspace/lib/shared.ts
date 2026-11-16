@@ -1,8 +1,8 @@
 import { createGetUrl } from 'fumadocs-core/source';
 
-export const appName = '织光 Workspace';
-export const docsRoute = '/read';
-export const docsImageRoute = '/og/read';
+export const appName = '织光知识库';
+export const docsRoute = '/docs';
+export const docsImageRoute = '/og/docs';
 
 // fill this with your actual GitHub info, for example:
 export const gitConfig = {

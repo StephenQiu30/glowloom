@@ -1,20 +1,19 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: 'e2e',
-  workers: 1,
-  timeout: 45000,
-  reporter: 'line',
-  use: {
-    baseURL: process.env.WORKSPACE_TEST_URL ?? 'http://127.0.0.1:1130',
-    viewport: { width: 1440, height: 1000 },
-    screenshot: 'only-on-failure',
-    launchOptions:
-      process.platform === 'darwin'
-        ? {
-            executablePath:
-              '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-          }
-        : undefined,
+  testDir: './e2e',
+  timeout: 30000,
+  expect: {
+    timeout: 5000,
   },
+  use: {
+    baseURL: 'http://127.0.0.1:1130',
+    trace: 'on-first-retry',
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
 });

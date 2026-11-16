@@ -12,7 +12,7 @@ export function Mermaid({ chart }: { chart: string }) {
   );
 
   if (!isClient) {
-    return;
+    return null;
   }
   return <MermaidContent chart={chart} />;
 }
