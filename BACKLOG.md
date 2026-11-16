@@ -8,6 +8,8 @@
 
 首轮修复提交d7733083的远程全量Race进一步暴露三个旧测试合同/夹具问题：访问凭据过期应返回ErrAccessExpired，CSRF不匹配应返回PermissionDenied，多产物交付不能将跨服务协调包在外层事务中。三个失败均先本地复现，再仅修正测试，未放宽生产错误合同、授权或写入围栏。使用隔离PG18、受限owner测试角色和CI同款COS协议夹具后，identityauthority整包Race及两个终态交付集成测试全部通过；全量lint、vet、build亦通过。继续以最新提交的完整远程CI终态验收。
 
+后续CI43814257078的Workspace安装失败于清单缺失packageManager；按仓库既有版本补充pnpm@12.4.2及其生成的工具链锁定记录。冻结锁文件安装和修改文件的Prettier检查通过，未改动Workspace业务实现；并行Canvas重构改动保持原样。
+
 <a id="notifications-20261116"></a>
 
 ## 通知中心与公告管理（2026-11-16）
