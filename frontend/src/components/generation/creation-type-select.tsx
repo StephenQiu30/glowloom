@@ -48,21 +48,28 @@ export function CreationTypeSelect({
         aria-label="创作类型"
         variant="quiet"
         size="toolbar"
-        className="w-auto text-[var(--navigation-accent)] max-md:min-h-11 [&_svg]:text-[var(--navigation-accent)]"
+        className="w-auto shrink-0 text-[var(--navigation-accent)] max-md:min-h-11 [&_svg]:text-[var(--navigation-accent)]"
       >
         <Icon aria-hidden="true" />
         <SelectValue>
           {creationTypes.find((item) => item.id === value)?.label}
         </SelectValue>
       </ComposerSelectTrigger>
-      <SelectContent side="top" sideOffset={8}>
+      <SelectContent
+        side="top"
+        sideOffset={8}
+        collisionPadding={16}
+        className="w-48"
+      >
         <SelectGroup>
           {creationTypes.map((item) => {
             const ItemIcon = icons[item.id];
             return (
-              <SelectItem key={item.id} value={item.id}>
-                <ItemIcon aria-hidden="true" />
-                {item.label}
+              <SelectItem key={item.id} value={item.id} textValue={item.label}>
+                <span className="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                  <ItemIcon aria-hidden="true" />
+                  <span>{item.label}</span>
+                </span>
               </SelectItem>
             );
           })}
