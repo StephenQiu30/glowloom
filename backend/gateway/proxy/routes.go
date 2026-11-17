@@ -72,6 +72,7 @@ POST /platform/notifications
 GET /platform/notifications/:id
 PUT /platform/notifications/:id
 POST /platform/notifications/:id/publish
+POST /platform/notifications/:id/delete
 PATCH /platform/notifications/:id/enabled
 GET /platform/notifications/:id/audit
 GET /auth-policy
