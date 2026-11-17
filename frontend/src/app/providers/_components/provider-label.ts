@@ -13,7 +13,7 @@ const labels: Record<string, string> = {
 
 export function providerLabel(
   adapter?: string,
-  adapters?: API.AdapterMetadata[],
+  adapters?: { adapter_key?: string; display_name?: string }[],
 ) {
   const declared = adapters?.find(
     (item) => item.adapter_key === adapter,
@@ -22,40 +22,6 @@ export function providerLabel(
   return adapter && Object.hasOwn(labels, adapter)
     ? labels[adapter]
     : "其他服务";
-}
-
-const connectionAdapters = [
-  "openai",
-  "deepseek",
-  "volcengine_ark",
-  "volcengine_speech",
-  "volcengine_music",
-  "openrouter",
-  "vercel",
-];
-
-export function canConnectPreset(preset: API.Preset) {
-  return connectionAdapters.includes(
-    preset.document?.config?.adapter_key ?? "",
-  );
-}
-
-/** Restrict new choices while keeping a pending historical request recoverable. */
-export function connectionPresets(
-  presets: API.Preset[],
-  pendingPreset?: string,
-) {
-  return presets
-    .filter((preset) => canConnectPreset(preset) || preset.id === pendingPreset)
-    .toSorted((a, b) => {
-      const rank = (preset: API.Preset) => {
-        const index = connectionAdapters.indexOf(
-          preset.document?.config?.adapter_key ?? "",
-        );
-        return index < 0 ? connectionAdapters.length : index;
-      };
-      return rank(a) - rank(b);
-    });
 }
 
 /** Public console roots only; never append keys, prompts or task URLs. */

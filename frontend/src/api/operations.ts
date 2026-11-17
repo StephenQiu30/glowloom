@@ -149,6 +149,22 @@ export async function recoverOperation(
   });
 }
 
+/** 下载原任务完整文本 GET /api/operations/${param0}/text */
+export async function getOperationText(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getOperationTextParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<string>(`/api/operations/${param0}/text`, {
+    method: "GET",
+    params: {
+      ...queryParams,
+    },
+    ...(options || {}),
+  });
+}
+
 /** 本人发起的生成历史 GET /api/operations/history */
 export async function listPersonalOperationHistory(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -53,15 +52,16 @@ func (c Creation) BatchQuote(ctx context.Context, a identity.Principal, p uuid.U
 			return err
 		}
 		var prior struct {
-			InputHash string
-			Response  []byte
+			ActorID, ProjectID uuid.UUID
+			InputHash          string
+			Response           []byte
 		}
-		q := tx.Raw("SELECT input_hash,response FROM ai.batch WHERE scope_id=? AND command_key=?", a.ScopeID, key).Scan(&prior)
+		q := tx.Raw("SELECT actor_id,project_id,input_hash,response FROM ai.batch WHERE scope_id=? AND command_key=?", a.ScopeID, key).Scan(&prior)
 		if q.Error != nil {
 			return q.Error
 		}
 		if q.RowsAffected == 1 {
-			if prior.InputHash != hash {
+			if prior.InputHash != hash || prior.ActorID != a.ID || prior.ProjectID != p {
 				return domain.ErrConflict
 			}
 			return json.Unmarshal(prior.Response, &out)
@@ -194,60 +194,12 @@ func (c Creation) registerBatches(g *gin.RouterGroup) {
 			if !httpapi.Decode(ctx, &in) {
 				return
 			}
-			a := identityhttp.Principal(ctx)
-			ids, err := c.batchIDs(ctx.Request.Context(), c.Runtime.DB, a, in.ProjectID, id)
+			out, err := c.Control(ctx.Request.Context(), identityhttp.Principal(ctx), in.ProjectID, id, "batch", action, ctx.GetHeader("Idempotency-Key"))
 			if err != nil {
 				creationProblem(ctx, err)
 				return
 			}
-			if action == "resume" {
-				creationProblem(ctx, domain.ErrConflict)
-				return
-			}
-			err = c.Runtime.DB.WithContext(ctx.Request.Context()).Transaction(func(tx *gorm.DB) error {
-				if err := tx.Exec("SELECT id FROM ai.batch WHERE id=? FOR UPDATE", id).Error; err != nil {
-					return err
-				}
-				for _, oid := range ids {
-					if err := tx.Exec("SELECT id FROM ai.creation WHERE id=? FOR UPDATE", oid).Error; err != nil {
-						return err
-					}
-					row, err := c.row(tx, a, in.ProjectID, oid)
-					if err != nil {
-						return err
-					}
-					if row.State == "quoted" {
-						if err := tx.Exec("UPDATE ai.creation SET state='closed' WHERE id=?", oid).Error; err != nil {
-							return err
-						}
-						continue
-					}
-					if row.State == "closed" {
-						continue
-					}
-					store := c.store(tx, a)
-					record, err := store.Read(ctx.Request.Context(), a.ScopeID, oid)
-					if err != nil {
-						return err
-					}
-					if record.State == "settled" || record.State == "released" {
-						continue
-					}
-					call, err := store.LoadQuote(ctx.Request.Context(), a.ScopeID, oid)
-					if err != nil {
-						return err
-					}
-					if _, err = store.CancelQueued(ctx.Request.Context(), call); err != nil {
-						return err
-					}
-				}
-				return nil
-			})
-			if err != nil {
-				creationProblem(ctx, err)
-				return
-			}
-			ctx.JSON(202, gin.H{"target_id": id, "action": action, "status": "accepted", "at": time.Now()})
+			ctx.JSON(202, out)
 		})
 	}
 }

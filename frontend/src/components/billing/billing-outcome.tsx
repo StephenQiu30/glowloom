@@ -83,6 +83,10 @@ export function BillingOutcomeView({
 
 // Error explanations do not establish execution or refund evidence.
 export function billingFailureMessage(code?: string) {
+  if (code === "provider_output_refused")
+    return "供应商拒绝返回文本。原调用已按实际用量结算，没有可采用的正文。";
+  if (code === "provider_empty_text")
+    return "供应商已完成调用，但未返回可用正文。原账单保留，请核对费用。";
   const explanations: Record<string, string> = {
     provider_insufficient_balance:
       "上游账号额度不足，请联系模型连接管理员核查。",

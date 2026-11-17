@@ -253,3 +253,26 @@ it("批量图片按序一次写入，任一素材无权访问时不写入部分�
   ).toEqual(["/media/" + aid, "/media/" + second]);
   expect(change).toHaveBeenCalledOnce();
 });
+
+it("adopts explicitly unreviewed bounded text but rejects a truncated preview", async () => {
+  const { state, client, change } = setup();
+  state.document.nodes[0].type = "text";
+  const output = {
+    kind: "json",
+    moderation_status: "skipped",
+    output_policy: "unreviewed_text_v1",
+    text: "新网关正文",
+  };
+  await expect(
+    applyCanvasOperationResult(client, pid, cid, nid, {
+      ...task,
+      outputs: [{ ...output, text_truncated: true }],
+    }),
+  ).rejects.toThrow("生成结果尚不可用");
+  expect(change).not.toHaveBeenCalled();
+  await applyCanvasOperationResult(client, pid, cid, nid, {
+    ...task,
+    outputs: [output],
+  });
+  expect(state.document.nodes[0].metadata?.content).toBe("新网关正文");
+});

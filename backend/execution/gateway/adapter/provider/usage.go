@@ -62,11 +62,13 @@ func usageFields(protocol string, f map[string]json.RawMessage) (domain.Usage, e
 		if protocol == "responses" {
 			name = "input_tokens_details"
 		}
+		cachePresent := false
 		if raw, ok := f[name]; ok {
 			var details map[string]json.RawMessage
 			if json.Unmarshal(raw, &details) != nil {
 				return u, domain.ErrUnknown
 			}
+			_, cachePresent = details["cached_tokens"]
 			u.CacheRead, err = count(details, "cached_tokens", false)
 			if err != nil {
 				return u, err
@@ -74,7 +76,7 @@ func usageFields(protocol string, f map[string]json.RawMessage) (domain.Usage, e
 		}
 		if _, ok := f["prompt_cache_hit_tokens"]; ok {
 			hit, err := count(f, "prompt_cache_hit_tokens", false)
-			if err != nil || u.CacheRead != 0 && hit != u.CacheRead {
+			if err != nil || cachePresent && hit != u.CacheRead {
 				return u, domain.ErrUnknown
 			}
 			u.CacheRead = hit

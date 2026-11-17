@@ -78,7 +78,7 @@ func TestBusinessDatabaseRoleCanRunOneAuthorizedMoneyLifecycle(t *testing.T) {
 }
 
 func TestTeamLedgerHistoryRequiresCurrentTeamAdministration(t *testing.T) {
-	db, adminStore, m, a := fixture(t)
+	db, _, m, a := fixture(t)
 	_, _, _, member := fixture(t)
 	entrypointProject(t, db, a)
 	entrypointSession(t, db, a)
@@ -96,7 +96,7 @@ func TestTeamLedgerHistoryRequiresCurrentTeamAdministration(t *testing.T) {
 	a.ScopeID = sid
 	member.ScopeID = sid
 	member.OrgID = a.OrgID
-	adminStore = pg.New(db, a, aigateway.Authority)
+	adminStore := pg.New(db, a, aigateway.Authority)
 	require.NoError(t, adminStore.Grant(t.Context(), sid, "team-fund", 100))
 	memberStore := pg.New(db, member, aigateway.Authority)
 	provider := providerFunc(func(_ context.Context, d application.Dispatch, _ func(json.RawMessage) error) (domain.Receipt, error) {

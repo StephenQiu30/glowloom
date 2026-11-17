@@ -1,4 +1,4 @@
-type ProviderNameSource = Pick<API.CreatedProvider, "name">;
+type ProviderNameSource = { name?: string };
 
 /** Hide the generated short hexadecimal ID when appended to a connection name. */
 export function providerConnectionName(provider?: ProviderNameSource) {

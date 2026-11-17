@@ -2,8 +2,8 @@
 /* eslint-disable */
 // API 更新时间：
 // API 唯一标识：
-import * as settings from "./settings";
 import * as media from "./media";
+import * as aiGateway from "./aiGateway";
 import * as analytics from "./analytics";
 import * as notifications from "./notifications";
 import * as identity from "./identity";
@@ -21,6 +21,7 @@ import * as diagnostics from "./diagnostics";
 import * as projectCopies from "./projectCopies";
 import * as agent from "./agent";
 import * as bible from "./bible";
+import * as settings from "./settings";
 import * as promptEditor from "./promptEditor";
 import * as voiceLibrary from "./voiceLibrary";
 import * as styles from "./styles";
@@ -28,8 +29,8 @@ import * as subjects from "./subjects";
 import * as workspace from "./workspace";
 import * as works from "./works";
 export default {
-  settings,
   media,
+  aiGateway,
   analytics,
   notifications,
   identity,
@@ -47,6 +48,7 @@ export default {
   projectCopies,
   agent,
   bible,
+  settings,
   promptEditor,
   voiceLibrary,
   styles,

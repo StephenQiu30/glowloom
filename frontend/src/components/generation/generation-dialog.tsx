@@ -31,9 +31,11 @@ import { ProjectPicker } from "@/components/projects/project-picker";
 import { type Project } from "@/components/projects/project";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { readErrorMessage } from "@/lib/read-error";
+import { saveAs } from "file-saver";
 import { RequestError } from "@/lib/request";
 import {
   getOperation,
+  getOperationText,
   cancelOperation,
   recoverOperation,
   listProjectOperations,
@@ -42,6 +44,7 @@ import {
   activeTask,
   flowError,
   requireTask,
+  usableTextOutput,
   generationStatusLabel,
   type Task,
 } from "./contracts";
@@ -487,7 +490,8 @@ function ScopedTaskDetail({
               !!t.outputs?.some(
                 (output) =>
                   output.id === outputID &&
-                  output.moderation_status === "passed",
+                  (output.moderation_status === "passed" ||
+                    usableTextOutput(output)),
               ),
           );
         const recovering =
@@ -536,7 +540,7 @@ function ScopedTaskDetail({
         { headers: { "Idempotency-Key": cancelKey.current } },
       );
       if (
-        receipt.accepted !== true ||
+        typeof receipt.accepted !== "boolean" ||
         receipt.target_id !== id ||
         receipt.target_type !== "operation" ||
         receipt.action !== "cancel"
@@ -578,18 +582,42 @@ function ScopedTaskDetail({
           task.capability?.startsWith("document.")) &&
         task.outputs
           ?.filter(
-            (o) =>
-              (!outputID || o.id === outputID) &&
-              o.kind === "json" &&
-              o.moderation_status === "passed" &&
-              o.text,
+            (o) => (!outputID || o.id === outputID) && usableTextOutput(o),
           )
           .map((o) => (
             <div key={o.id} className="space-y-2">
+              {o.output_policy === "unreviewed_text_v1" && (
+                <p className="text-sm text-muted-foreground">
+                  此文本未经内容审核，请确认后采用。
+                </p>
+              )}
               <pre className="max-h-96 overflow-auto rounded-lg border p-4 text-sm break-words whitespace-pre-wrap">
                 {o.text}
               </pre>
-              {onAdoptText && (
+              {o.text_truncated && (
+                <p className="text-sm">
+                  仅显示最多 64 KiB 预览。请下载完整文本，预览不能直接采用。
+                </p>
+              )}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  void getOperationText(
+                    { id, project_id: projectID },
+                    { responseType: "text" },
+                  )
+                    .then((text) =>
+                      saveAs(
+                        new Blob([text], { type: "text/plain;charset=utf-8" }),
+                        "generated-text.txt",
+                      ),
+                    )
+                    .catch((e: unknown) => setError(flowError(e)))
+                }
+              >
+                下载完整文本
+              </Button>
+              {onAdoptText && !o.text_truncated && (
                 <Button
                   disabled={adopting}
                   onClick={() => void adoptText(o.id!)}
@@ -713,9 +741,9 @@ function ScopedTaskDetail({
             !task.outputs?.some(
               (output) =>
                 (!outputID || output.id === outputID) &&
-                output.moderation_status === "passed" &&
-                (output.media_asset_id ||
-                  (output.kind === "json" && output.text)),
+                ((output.moderation_status === "passed" &&
+                  output.media_asset_id) ||
+                  usableTextOutput(output)),
             ) && (
               <ContentState
                 title={
@@ -917,8 +945,8 @@ function ScopedTaskDetail({
           task?.billing_outcome?.delivery_state === "ready") &&
           !task.outputs?.some(
             (o) =>
-              o.moderation_status === "passed" &&
-              (o.media_asset_id || (o.kind === "json" && o.text)),
+              (o.moderation_status === "passed" && o.media_asset_id) ||
+              usableTextOutput(o),
           ) && (
             <p>
               任务已结束，当前没有通过审核的可用结果。费用与交付状态仍需分别核对。

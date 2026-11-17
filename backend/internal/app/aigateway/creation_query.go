@@ -186,20 +186,20 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 		if n == 0 {
 			return nil
 		}
-		record, err := c.store(tx, a).Read(ctx, a.ScopeID, id)
+		record, err := c.store(tx, a).ReadProjectResult(ctx, a.ScopeID, p, id)
 		if err != nil {
 			return err
 		}
 		reserved, charged, released := record.Held*100000, record.Charged*100000, record.Released*100000
 		out.BillingOutcome = operation.BillingOutcome{ReservedMicros: &reserved, ChargedMicros: &charged, ReleasedMicros: &released, ChargeState: "pending", ProviderSettlementState: "unknown", DeliveryState: "pending", Regenerate: "blocked", Reason: "charge_pending", ReconciliationRequired: true}
-		out.Status = "running"
+		out.Status = "submitted"
 		switch record.State {
 		case "unknown":
 			out.Status = "unknown"
 		case "received":
-			out.Status = "settling"
+			out.Status = "succeeded"
 		case "pending":
-			out.Status = "running"
+			out.Status = "submitted"
 		case "released":
 			out.Status = "cancelled"
 			out.BillingOutcome.ChargeState = "released"
@@ -227,6 +227,14 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 			if call.Model.Protocol == "media" {
 				out.Status = "ingesting"
 				out.BillingOutcome.DeliveryState = "pending"
+				var work struct{ Failed bool }
+				if err := tx.Raw("SELECT failed_at IS NOT NULL AS failed FROM infra.task_work WHERE kind='ai.deliver' AND business_id=?", id.String()).Scan(&work).Error; err != nil {
+					return err
+				}
+				if work.Failed {
+					out.BillingOutcome.DeliveryState = "recoverable"
+					out.Status = "failed"
+				}
 				var artifact struct {
 					State   string
 					Summary []byte
@@ -260,17 +268,17 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 				}
 				return nil
 			}
-			result, e := agentResult(record, call.Model.Name, call.Model.Protocol)
+			text, e := resultText(record, call.Model)
 			if e != nil {
-				return e
+				out.Status = "failed"
+				code := textUnavailableCode(record)
+				out.FailureCode = &code
+				out.BillingOutcome.Reason = code
+				out.BillingOutcome.DeliveryState = "unrecoverable"
+				return nil
 			}
-			var resultBody struct {
-				Output string `json:"output"`
-			}
-			if json.Unmarshal(result.Result, &resultBody) != nil {
-				return domain.ErrInvalid
-			}
-			out.Outputs = append(out.Outputs, operation.TaskOutput{ID: uuid.NewSHA1(id, []byte("output/0")), Sequence: 0, Kind: "text", Text: &resultBody.Output, ModerationStatus: "skipped", CreateTime: record.Created})
+			preview, truncated := textPreview(text)
+			out.Outputs = append(out.Outputs, operation.TaskOutput{ID: uuid.NewSHA1(id, []byte("output/0")), Sequence: 0, Kind: "json", Text: &preview, TextTruncated: truncated, OutputPolicy: "unreviewed_text_v1", ModerationStatus: "skipped", CreateTime: record.Created})
 		}
 		return nil
 	})

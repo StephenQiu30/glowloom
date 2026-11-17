@@ -102,7 +102,7 @@ func (r extractedResults) read(ctx context.Context, a identity.Principal, pid, o
 		return bibledomain.ResultSource{}, domain.ErrBlocked
 	}
 	for _, output := range task.Outputs {
-		if output.ID != outputID || output.Text == nil || output.ModerationStatus != "passed" && output.ModerationStatus != "skipped" {
+		if output.ID != outputID || output.Text == nil || output.TextTruncated || output.ModerationStatus != "passed" && (output.ModerationStatus != "skipped" || output.OutputPolicy != "unreviewed_text_v1") {
 			continue
 		}
 		if err = decode(json.RawMessage(*output.Text), out); err != nil {

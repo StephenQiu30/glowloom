@@ -150,7 +150,7 @@ func (h History) ListPersonalHistory(ctx context.Context, a identity.Principal, 
 				}
 			}
 			for _, output := range task.Outputs {
-				ready := task.Status == "completed" && (output.ModerationStatus == "passed" || output.Kind == "text")
+				ready := task.Status == "completed" && (output.ModerationStatus == "passed" || (output.Kind == "json" && output.ModerationStatus == "skipped" && output.OutputPolicy == "unreviewed_text_v1" && output.Text != nil))
 				item.Outputs = append(item.Outputs, op.PersonalHistoryOutput{TaskOutput: output, Favorite: meta.Favorite, MetadataRevision: meta.Revision, ProcessTypes: []string{}, CanDownload: ready, CanPublish: ready && (output.Kind == "image" || output.Kind == "video")})
 			}
 			out.Items = append(out.Items, item)

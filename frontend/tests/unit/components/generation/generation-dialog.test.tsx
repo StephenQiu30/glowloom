@@ -24,6 +24,8 @@ const api = vi.hoisted(() => ({
   estimate: vi.fn(),
   confirm: vi.fn(),
   get: vi.fn(),
+  text: vi.fn(),
+  download: vi.fn(),
   list: vi.fn(),
   cancel: vi.fn(),
   recover: vi.fn(),
@@ -41,6 +43,7 @@ const api = vi.hoisted(() => ({
   branchList: vi.fn(),
   branchWrite: vi.fn(),
 }));
+vi.mock("file-saver", () => ({ saveAs: api.download }));
 vi.mock("@/api/identity", () => ({
   getSession: api.identity,
   getMyPreferences: api.preferences,
@@ -51,6 +54,7 @@ vi.mock("@/api/operations", () => ({
   estimateGeneration: api.estimate,
   confirmOperationQuote: api.confirm,
   getOperation: api.get,
+  getOperationText: api.text,
   listProjectOperations: api.list,
   cancelOperation: api.cancel,
   recoverOperation: api.recover,
@@ -2094,3 +2098,78 @@ it("创作入口等待时只显示可访问动效，完成后直接展示结果"
   expect(screen.queryByRole("button", { name: "取消生成" })).toBeNull();
   expect(screen.queryByText("正在生成")).toBeNull();
 });
+
+it("shows explicit unreviewed text and downloads the whole original without adopting a truncated preview", async () => {
+  api.get.mockResolvedValue({
+    id,
+    project_id: project.id,
+    status: "completed",
+    capability: "text.generate",
+    outputs: [
+      {
+        id: version,
+        kind: "json",
+        text: "有界预览",
+        text_truncated: true,
+        moderation_status: "skipped",
+        output_policy: "unreviewed_text_v1",
+      },
+    ],
+    billing_outcome: {
+      charge_state: "settled",
+      delivery_state: "ready",
+      charged_micros: 100000,
+    },
+  });
+  api.text.mockResolvedValue("完整的原始生成文本");
+  const adopt = vi.fn();
+  const available = vi.fn();
+  render(
+    <TaskDetail
+      id={id}
+      projectID={project.id}
+      outputID={version}
+      presentation="asset"
+      onAvailabilityChange={available}
+      onAdoptText={adopt}
+    />,
+  );
+  await screen.findByText("有界预览");
+  expect(available).toHaveBeenLastCalledWith(true);
+  expect(screen.getByText(/此文本未经内容审核/)).toBeTruthy();
+  expect(screen.getByText(/预览不能直接采用/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "采用结果到画布" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "下载完整文本" }));
+  await waitFor(() =>
+    expect(api.text).toHaveBeenCalledWith(
+      { id, project_id: project.id },
+      { responseType: "text" },
+    ),
+  );
+  await waitFor(() => expect(api.download).toHaveBeenCalled());
+  expect(adopt).not.toHaveBeenCalled();
+});
+
+it.each(["provider_empty_text", "provider_output_refused"])(
+  "shows known no-text outcome %s with the settled bill",
+  async (failure_code) => {
+    api.get.mockResolvedValue({
+      id,
+      project_id: project.id,
+      status: "failed",
+      capability: "text.generate",
+      failure_code,
+      outputs: [],
+      billing_outcome: {
+        charge_state: "settled",
+        delivery_state: "unrecoverable",
+        charged_micros: 100000,
+      },
+    });
+    render(<TaskDetail id={id} projectID={project.id} />);
+    await screen.findByText(/原调用已按实际用量结算|原账单保留/);
+    fireEvent.click(screen.getByRole("button", { name: "费用记录" }));
+    expect(await screen.findByText(/已记录实扣/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "采用结果到画布" })).toBeNull();
+  },
+);

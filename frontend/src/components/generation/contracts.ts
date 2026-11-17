@@ -54,6 +54,19 @@ export type Task = API.TaskDetail & {
   project_id: string;
   status: string;
 };
+// This policy permits bounded plain text while explicitly declaring that no moderation ran.
+export function usableTextOutput(output: API.TaskOutput): boolean {
+  return (
+    output.kind === "json" &&
+    (output.moderation_status === "passed" ||
+      (output.moderation_status === "skipped" &&
+        output.output_policy === "unreviewed_text_v1")) &&
+    typeof output.text === "string" &&
+    !!output.text.trim() &&
+    output.text.length <= 65536 &&
+    new TextEncoder().encode(output.text).length <= 65536
+  );
+}
 export function requireTask(value: API.TaskDetail, project: string): Task {
   if (
     !value ||
@@ -70,8 +83,7 @@ export function requireTask(value: API.TaskDetail, project: string): Task {
               o.media_asset_id !== undefined &&
               o.media_asset_id !== null) ||
             (o.text !== undefined &&
-              (o.kind !== "json" ||
-                o.moderation_status !== "passed" ||
+              (!usableTextOutput(o) ||
                 (value.status !== "completed" &&
                   value.billing_outcome?.delivery_state !== "ready") ||
                 !(

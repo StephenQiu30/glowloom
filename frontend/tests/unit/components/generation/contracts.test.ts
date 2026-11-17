@@ -146,3 +146,64 @@ it.each(["text.structured", "document.generate"])(
     ).toThrow();
   },
 );
+
+it("keeps rebuilt queued, pending and received projections polling", async () => {
+  const { activeTask, usableTextOutput } =
+    await import("@/components/generation/contracts");
+  for (const status of ["submitted", "succeeded", "ingesting"] as const) {
+    const task = requireTask({ id, project_id: project, status }, project);
+    expect(activeTask(task.status)).toBe(true);
+  }
+  const output = {
+    id,
+    kind: "json",
+    text: "未经审核的生成文本",
+    moderation_status: "skipped",
+    output_policy: "unreviewed_text_v1",
+  };
+  expect(usableTextOutput(output)).toBe(true);
+  expect(
+    requireTask(
+      {
+        id,
+        project_id: project,
+        status: "completed",
+        capability: "text.generate",
+        outputs: [output],
+      },
+      project,
+    ).outputs?.[0],
+  ).toEqual(output);
+  for (const bad of [
+    { ...output, output_policy: undefined },
+    { ...output, text: "光".repeat(22000) },
+    { ...output, moderation_status: "pending" },
+  ]) {
+    expect(() =>
+      requireTask(
+        {
+          id,
+          project_id: project,
+          status: "completed",
+          capability: "text.generate",
+          outputs: [bad],
+        },
+        project,
+      ),
+    ).toThrow();
+  }
+});
+
+it("validates actual PostgreSQL Task projections when acceptance supplies them", async () => {
+  const file = process.env.GLOWLOOM_TEST_AI_TASK_FIXTURE;
+  if (!file) return;
+  const { readFileSync } = await import("node:fs");
+  const { activeTask, usableTextOutput } =
+    await import("@/components/generation/contracts");
+  const source = JSON.parse(readFileSync(file, "utf8"));
+  const queued = requireTask(source.queued, source.project);
+  const completed = requireTask(source.completed, source.project);
+  expect(activeTask(queued.status)).toBe(true);
+  expect(activeTask(completed.status)).toBe(false);
+  expect(usableTextOutput(completed.outputs![0])).toBe(true);
+});

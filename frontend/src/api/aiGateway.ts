@@ -1,0 +1,218 @@
+// @ts-ignore
+/* eslint-disable */
+import { request } from "@/lib/request";
+import type { RequestOptions } from "@/lib/request";
+
+/** 设置项目积分上限 PUT /api/ai/admin/budgets */
+export async function setAiProjectBudget(
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  return request<any>("/api/ai/admin/budgets", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 读取模型、路由与脱敏账号池 GET /api/ai/admin/configuration */
+export async function readAiConfiguration(options?: RequestOptions) {
+  return request<Record<string, any>>("/api/ai/admin/configuration", {
+    method: "GET",
+    ...(options || {}),
+  });
+}
+
+/** 调整账号可用状态 PUT /api/ai/admin/credentials/${param0} */
+export async function changeAiCredentialState(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.changeAiCredentialStateParams,
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/ai/admin/credentials/${param0}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 按业务凭证发放积分 POST /api/ai/admin/credits */
+export async function grantAiCredits(
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  return request<any>("/api/ai/admin/credits", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 发布模型销售合同新版本 POST /api/ai/admin/models */
+export async function publishAiModel(
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  return request<any>("/api/ai/admin/models", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 按原供应商证据处理未知调用 POST /api/ai/admin/reconciliations */
+export async function reconcileAiRequest(
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  return request<Record<string, any>>("/api/ai/admin/reconciliations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 发布独立采购路由新版本 POST /api/ai/admin/routes */
+export async function publishAiRoute(
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  return request<any>("/api/ai/admin/routes", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 读取统一模型账单 GET /api/ai/bills */
+export async function listAiBills(options?: RequestOptions) {
+  return request<Record<string, any>>("/api/ai/bills", {
+    method: "GET",
+    ...(options || {}),
+  });
+}
+
+/** 签发限定模型和预算的调用凭据 POST /api/ai/grants */
+export async function issueAiIntegrationGrant(
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  return request<any>("/api/ai/grants", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 撤销调用凭据 DELETE /api/ai/grants/${param0} */
+export async function revokeAiIntegrationGrant(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.revokeAiIntegrationGrantParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/ai/grants/${param0}`, {
+    method: "DELETE",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** 读取原调用和结算事实 GET /api/ai/requests/${param0} */
+export async function readAiRequest(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.readAiRequestParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<Record<string, any>>(`/api/ai/requests/${param0}`, {
+    method: "GET",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** OpenAI Chat 原生调用 POST /api/ai/v1/chat/completions */
+export async function createAiChatCompletion(
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  return request<Record<string, any>>("/api/ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** Anthropic Messages 原生调用 POST /api/ai/v1/messages */
+export async function createAiMessage(
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  return request<Record<string, any>>("/api/ai/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 列出调用凭据允许的原生协议模型 GET /api/ai/v1/models */
+export async function listAiIntegrationModels(options?: RequestOptions) {
+  return request<Record<string, any>>("/api/ai/v1/models", {
+    method: "GET",
+    ...(options || {}),
+  });
+}
+
+/** OpenAI Responses 原生调用 POST /api/ai/v1/responses */
+export async function createAiResponse(
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  return request<Record<string, any>>("/api/ai/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 读取统一积分余额 GET /api/ai/wallet */
+export async function readAiWallet(options?: RequestOptions) {
+  return request<Record<string, any>>("/api/ai/wallet", {
+    method: "GET",
+    ...(options || {}),
+  });
+}

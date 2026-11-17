@@ -179,7 +179,7 @@ func scope(c *gin.Context) (uuid.UUID, error) {
 
 // grant 签发限定模型和预算的调用凭据.
 // @Summary 签发限定模型和预算的调用凭据
-// @ID issueAIIntegrationGrant
+// @ID issueAiIntegrationGrant
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -216,7 +216,7 @@ func (h *Handler) grant(c *gin.Context) {
 
 // wallet 读取统一积分余额.
 // @Summary 读取统一积分余额
-// @ID readAIWallet
+// @ID readAiWallet
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -239,7 +239,7 @@ func (h *Handler) wallet(c *gin.Context) {
 
 // bills 读取统一模型账单.
 // @Summary 读取统一模型账单
-// @ID listAIBills
+// @ID listAiBills
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -265,7 +265,7 @@ func (h *Handler) bills(c *gin.Context) {
 
 // read 读取原调用和结算事实.
 // @Summary 读取原调用和结算事实
-// @ID readAIRequest
+// @ID readAiRequest
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -293,7 +293,7 @@ func (h *Handler) read(c *gin.Context) {
 
 // model 发布模型销售合同新版本.
 // @Summary 发布模型销售合同新版本
-// @ID publishAIModel
+// @ID publishAiModel
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -315,7 +315,7 @@ func (h *Handler) model(c *gin.Context) {
 
 // route 发布独立采购路由新版本.
 // @Summary 发布独立采购路由新版本
-// @ID publishAIRoute
+// @ID publishAiRoute
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -356,7 +356,7 @@ func (h *Handler) route(c *gin.Context) {
 
 // credits 按业务凭证发放积分.
 // @Summary 按业务凭证发放积分
-// @ID grantAICredits
+// @ID grantAiCredits
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -382,7 +382,7 @@ func (h *Handler) credits(c *gin.Context) {
 
 // credential 调整账号可用状态.
 // @Summary 调整账号可用状态
-// @ID changeAICredentialState
+// @ID changeAiCredentialState
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -429,7 +429,7 @@ func problem(c *gin.Context, err error) {
 
 // models 列出调用凭据允许的原生协议模型.
 // @Summary 列出调用凭据允许的原生协议模型
-// @ID listAIIntegrationModels
+// @ID listAiIntegrationModels
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -451,7 +451,7 @@ func (h *Handler) models(c *gin.Context) {
 
 // revokeGrant 撤销调用凭据.
 // @Summary 撤销调用凭据
-// @ID revokeAIIntegrationGrant
+// @ID revokeAiIntegrationGrant
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -475,7 +475,7 @@ func (h *Handler) revokeGrant(c *gin.Context) {
 
 // reconcile 按原供应商证据处理未知调用.
 // @Summary 按原供应商证据处理未知调用
-// @ID reconcileAIRequest
+// @ID reconcileAiRequest
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -499,7 +499,7 @@ func (h *Handler) reconcile(c *gin.Context) {
 
 // configuration 读取模型、路由与脱敏账号池.
 // @Summary 读取模型、路由与脱敏账号池
-// @ID readAIConfiguration
+// @ID readAiConfiguration
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -516,7 +516,7 @@ func (h *Handler) configuration(c *gin.Context) {
 
 // budget 设置项目积分上限.
 // @Summary 设置项目积分上限
-// @ID setAIProjectBudget
+// @ID setAiProjectBudget
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -543,7 +543,7 @@ func (h *Handler) budget(c *gin.Context) {
 // chat OpenAI Chat 原生调用.
 // @Summary OpenAI Chat 原生调用
 // @Param Idempotency-Key header string true "同一逻辑调用的稳定唯一键"
-// @ID createAIChatCompletion
+// @ID createAiChatCompletion
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -555,7 +555,7 @@ func (h *Handler) chat(c *gin.Context) { h.native("chat")(c) }
 // responses OpenAI Responses 原生调用.
 // @Summary OpenAI Responses 原生调用
 // @Param Idempotency-Key header string true "同一逻辑调用的稳定唯一键"
-// @ID createAIResponse
+// @ID createAiResponse
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
@@ -567,7 +567,7 @@ func (h *Handler) responses(c *gin.Context) { h.native("responses")(c) }
 // messages Anthropic Messages 原生调用.
 // @Summary Anthropic Messages 原生调用
 // @Param Idempotency-Key header string true "同一逻辑调用的稳定唯一键"
-// @ID createAIMessage
+// @ID createAiMessage
 // @Tags ai-gateway
 // @Accept json
 // @Produce json

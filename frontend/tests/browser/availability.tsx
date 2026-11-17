@@ -34,7 +34,7 @@ const version = {
   limits: { max_outputs: 1 },
   param_schema: [],
 };
-const models: API.CreatedModel[] = [
+const models = [
   {
     ...availability,
     id: "model",

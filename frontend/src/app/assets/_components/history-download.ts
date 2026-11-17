@@ -1,6 +1,10 @@
-import { getOperation } from "@/api/operations";
+import { getOperation, getOperationText } from "@/api/operations";
 import { downloadDocumentAsset, downloadMediaOriginal } from "@/api/media";
-import { requireTask, type Task } from "@/components/generation/contracts";
+import {
+  requireTask,
+  usableTextOutput,
+  type Task,
+} from "@/components/generation/contracts";
 import { RequestError } from "@/lib/request";
 import { readErrorMessage } from "@/lib/read-error";
 import type { HistoryCardTarget } from "./history-results";
@@ -78,7 +82,7 @@ export async function downloadHistoryCards(
         if (
           card.task.status !== "completed" ||
           output.can_download !== true ||
-          output.moderation_status !== "passed"
+          (output.moderation_status !== "passed" && !usableTextOutput(output))
         )
           throw new RequestError("forbidden", 403);
         if (output.kind === "document" && output.media_asset_id) {
@@ -112,10 +116,15 @@ export async function downloadHistoryCards(
           const detail = await task;
           if (detail.id !== card.task.id || detail.status !== "completed")
             throw new RequestError("invalid_receipt");
-          const text = detail.outputs?.find(
-            (item) =>
-              item.id === output.id && item.moderation_status === "passed",
-          )?.text;
+          const selected = detail.outputs?.find(
+            (item) => item.id === output.id && usableTextOutput(item),
+          );
+          const text = selected?.text_truncated
+            ? await getOperationText(
+                { id: card.task.id, project_id: card.task.project_id },
+                { signal, responseType: "text" },
+              )
+            : selected?.text;
           if (typeof text !== "string" || !text.trim())
             throw new RequestError("invalid_receipt");
           const blob =

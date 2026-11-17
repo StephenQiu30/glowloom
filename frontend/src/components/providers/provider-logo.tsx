@@ -28,7 +28,7 @@ function BuiltinProviderLogo({
   iconOnly = false,
 }: {
   adapterKey?: string;
-  metadata?: API.AdapterMetadata;
+  metadata?: { logo_key?: string; display_name?: string };
   className?: string;
   iconOnly?: boolean;
 }) {

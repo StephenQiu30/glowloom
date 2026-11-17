@@ -8,7 +8,11 @@ import { makeCinemaNode } from "@glowloom/canvas/editor/cinema-kit/cinema-kit-gr
 import { cameraDefault } from "@glowloom/canvas/editor/cinema-kit/cinema-kit-model.ts";
 import { registerBuiltinNodes } from "@glowloom/canvas/editor/nodes/builtin-nodes.tsx";
 registerBuiltinNodes();
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  // Radix restores focus in a queued task; finish it before jsdom switches realms.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
 it("cycles four camera categories and only confirms the saved typed choice", async () => {
   const confirm = vi.fn(),
     close = vi.fn();

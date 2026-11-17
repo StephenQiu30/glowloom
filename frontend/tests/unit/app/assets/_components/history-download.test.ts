@@ -6,12 +6,16 @@ const api = vi.hoisted(() => ({
   original: vi.fn(),
   document: vi.fn(),
   operation: vi.fn(),
+  text: vi.fn(),
 }));
 vi.mock("@/api/media", () => ({
   downloadMediaOriginal: api.original,
   downloadDocumentAsset: api.document,
 }));
-vi.mock("@/api/operations", () => ({ getOperation: api.operation }));
+vi.mock("@/api/operations", () => ({
+  getOperation: api.operation,
+  getOperationText: api.text,
+}));
 const id = "11111111-1111-4111-8111-111111111111",
   pid = "22222222-2222-4222-8222-222222222222";
 const ids = [
@@ -254,4 +258,31 @@ it("mixed document download exports body and original with per-output formats", 
   ]);
   expect(names[0]).toMatch(/\.md$/);
   expect(names[1]).toMatch(/\.docx$/);
+});
+
+it("downloads the complete declared unreviewed text, never the truncated preview", async () => {
+  const source = cards("document")[0];
+  const output = {
+    ...source.outputs[0],
+    moderation_status: "skipped",
+    output_policy: "unreviewed_text_v1",
+    text: "预览",
+    text_truncated: true,
+  };
+  const task = { ...source.task, outputs: [output] };
+  const selected = historyCardTargets([task], "document");
+  expect(selected[0].canDownload).toBe(true);
+  expect(selected[0].canPublish).toBe(false);
+  api.operation.mockResolvedValue(task);
+  const full = "完整正文".repeat(20000);
+  api.text.mockResolvedValue(full);
+  const result = await downloadHistoryCards(
+    selected,
+    "md",
+    new AbortController().signal,
+    () => {},
+  );
+  expect(result[0].ok).toBe(true);
+  expect(api.text).toHaveBeenCalledOnce();
+  expect(blobs[0].size).toBe(new TextEncoder().encode(full).length);
 });

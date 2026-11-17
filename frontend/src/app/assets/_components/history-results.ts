@@ -1,3 +1,4 @@
+import { usableTextOutput } from "@/components/generation/contracts";
 import type {
   AssetKind,
   HistoryOutput,
@@ -34,8 +35,12 @@ export function historyCardTargets(
         results.every((item) => item.moderation_status === "passed");
       const downloadable =
         task.status === "completed" &&
-        passed &&
-        results.every((item) => item.can_download === true);
+        results.length > 0 &&
+        results.every(
+          (item) =>
+            item.can_download === true &&
+            (item.moderation_status === "passed" || usableTextOutput(item)),
+        );
       const dubbing =
         task.capability === "video.dubbing" ||
         ["video_dubbing", "dubbing"].includes(task.mode ?? "");

@@ -83,8 +83,6 @@ func operationLegacyIngest(database *gorm.DB, registry *objectstorage.Registry, 
 	return operationwire.NewRoutedIngestActivities(database, registry, results, scopes, store)
 }
 
-func operationLegacyVideos() managed.VideoReader { return operationwire.NewGeneratedVideos() }
-
 func operationStore(database *gorm.DB) *pgoperation.Store {
 	return pgoperation.NewScopedStore(database, operationRequestAccess, operationWorkerAccess, operationPlatformAccess).WithExecutionAvailability(fixtureExecutionAvailability)
 }

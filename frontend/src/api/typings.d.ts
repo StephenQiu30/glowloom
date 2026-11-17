@@ -30,122 +30,6 @@ declare namespace API {
     status?: string;
   };
 
-  type activateModelReleaseParams = {
-    /** 发布ID */
-    id: string;
-  };
-
-  type ActivateOnboardingInput = {
-    check_id?: string;
-    expected_revision?: number;
-    release_ids?: string[];
-    request_id?: string;
-  };
-
-  type activateProviderOnboardingParams = {
-    /** 服务ID */
-    id: string;
-  };
-
-  type ActivateReleaseInput = {
-    credential_check_id?: string;
-    enable_provider?: boolean;
-    expected_active_release_id?: string;
-    expected_default_revision?: number;
-    expected_model_revision?: number;
-    expected_revision?: number;
-    request_id?: string;
-    set_default?: boolean;
-  };
-
-  type AdapterDeclaration = {
-    adapter_key?: string;
-    base_url?: string;
-    capabilities?: string[];
-    protocol_id?: string;
-    region?: Region;
-    schema_version?: number;
-  };
-
-  type AdapterMetadata = {
-    adapter_key?: string;
-    capabilities?: string[];
-    check_capabilities?: string[];
-    credential_fields?: CredentialField[];
-    display_name?: string;
-    logo_key?: string;
-    protocol_ids?: string[];
-  };
-
-  type AddPresetModelInput = {
-    candidate_key?: string;
-    capability?: string;
-    catalog_version?: string;
-    config_id?: string;
-    credential_id?: string;
-    custom_model_id?: string;
-    custom_model_name?: string;
-    directory_check_id?: string;
-    draft_only?: boolean;
-    request_id?: string;
-  };
-
-  type addProviderPresetModelParams = {
-    /** 连接ID */
-    id: string;
-  };
-
-  type AdminModelBilling = {
-    procurement_ready?: boolean;
-    sale_published?: boolean;
-    sale_ready?: boolean;
-    status?: string;
-    unit?: string;
-  };
-
-  type AdminModelDetail = {
-    candidate?: ModelCandidateSelection;
-    model?: CreatedModel;
-    price_candidates?: ModelPriceCandidate[];
-    price_preset?: ModelPricePreset;
-    prices?: AdminPrice[];
-    versions?: AdminModelVersion[];
-  };
-
-  type AdminModelPage = {
-    items?: CreatedModel[];
-    next_cursor?: string | null;
-  };
-
-  type AdminModelVersion = {
-    create_time?: string;
-    expected_max_ms?: number;
-    id?: string;
-    limits?: Record<string, any>;
-    moderation?: string;
-    modes?: string[];
-    param_schema?: Record<string, any>[];
-    provider_model_id?: string;
-    queue?: string;
-    supports_callback?: boolean;
-    supports_cancel?: boolean;
-    supports_query?: boolean;
-    version_no?: number;
-  };
-
-  type AdminPrice = {
-    create_time?: string;
-    currency?: string;
-    effective_from?: string;
-    fx_rate_to_cny?: string | null;
-    id?: string;
-    reviewed_at?: string | null;
-    rule?: Record<string, any>;
-    source_url?: string | null;
-    unit?: string;
-    version_no?: number;
-  };
-
   type adoptBibleResultParams = {
     /** Project UUID */
     pid: string;
@@ -259,18 +143,6 @@ declare namespace API {
     execution_revision?: number;
     receipt_id?: string;
     status?: string;
-  };
-
-  type ApplyConfigInput = {
-    preview_hash?: string;
-    request_id?: string;
-    resolution?: ProviderConfig;
-    upgrade?: ConfigUpgradeInput;
-  };
-
-  type applyProviderPresetParams = {
-    /** 连接ID */
-    id: string;
   };
 
   type archiveProjectParams = {
@@ -599,11 +471,6 @@ declare namespace API {
     status: string;
   };
 
-  type cancelAiTrialParams = {
-    /** Trial request ID */
-    id: string;
-  };
-
   type cancelEmailChangeParams = {
     /** Operation UUID */
     id: string;
@@ -741,20 +608,6 @@ declare namespace API {
     intelligent_voice?: SubjectCapability;
   };
 
-  type CapabilityDefault = {
-    capability?: string;
-    release_id?: string;
-    revision?: number;
-  };
-
-  type CapabilitySummary = {
-    id?: string;
-    input_roles?: string[];
-    key?: string;
-    modes?: string[];
-    output_type?: string;
-  };
-
   type CatalogVoice = {
     model_key?: string;
     model_version?: number;
@@ -764,11 +617,9 @@ declare namespace API {
     voice_key?: string;
   };
 
-  type ChangedModelStatus = {
-    id?: string;
-    revision?: number;
-    status?: ModelStatus;
-    update_time?: string;
+  type changeAiCredentialStateParams = {
+    /** 标识 */
+    id: string;
   };
 
   type changeTeamMemberRoleParams = {
@@ -806,11 +657,6 @@ declare namespace API {
     definition?: CharacterDefinition;
     description?: string;
     name?: string;
-  };
-
-  type checkModelConfigurationParams = {
-    /** 模型 ID */
-    id: string;
   };
 
   type CinemaCamera = {
@@ -876,33 +722,6 @@ declare namespace API {
   type completeRegistrationParams = {
     /** Operation UUID */
     id: string;
-  };
-
-  type ConfigReceipt = {
-    action?: string;
-    request_id?: string;
-    result?: Record<string, any>;
-    target_id?: string;
-  };
-
-  type ConfigUpgradeInput = {
-    expected_config_id?: string;
-    expected_revision?: number;
-    preset_version_id?: string;
-  };
-
-  type ConfigUpgradePreview = {
-    conflicts?: string[];
-    current?: ConnectionConfig;
-    hash?: string;
-    proposed?: ProviderConfig;
-    revision?: number;
-  };
-
-  type ConfiguredModel = {
-    capability?: string;
-    id?: string;
-    provider_model_id?: string;
   };
 
   type ConfirmationPage = {
@@ -973,34 +792,6 @@ declare namespace API {
     eid: string;
   };
 
-  type ConnectionConfig = {
-    config?: ProviderConfig;
-    configured_models?: ConfiguredModel[];
-    id?: string;
-    model_catalog?: ModelCandidateCatalog;
-    preset_version_id?: string;
-    provider_id?: string;
-    version?: number;
-  };
-
-  type ConnectPresetInput = {
-    candidate_keys?: string[];
-    catalog_version?: string;
-    custom_candidates?: ModelCandidatePreset[];
-    direct_use?: boolean;
-    key?: string;
-    logo_asset_id?: string;
-    name?: string;
-    request_id?: string;
-    selected_models_only?: boolean;
-    version_id?: string;
-  };
-
-  type connectProviderPresetParams = {
-    /** 预设ID */
-    id: string;
-  };
-
   type ContainerConfig = {
     background?: "none" | "cyan" | "blue" | "purple" | "orange" | "yellow";
     kind?: "group" | "stack";
@@ -1012,11 +803,6 @@ declare namespace API {
     expected_revision?: number;
     location?: LocationContent;
     prop?: PropContent;
-  };
-
-  type continueAiTrialParams = {
-    /** Trial request ID */
-    id: string;
   };
 
   type ControlInput = {
@@ -1110,32 +896,6 @@ declare namespace API {
     template_key?: string;
   };
 
-  type CreatedModel = {
-    availability_config_version_id?: string;
-    availability_credential_id?: string;
-    availability_model_version_id?: string;
-    availability_price_version_id?: string;
-    availability_release_id?: string;
-    available?: boolean;
-    billing?: AdminModelBilling;
-    capability?: string;
-    create_time?: string;
-    current_version_id?: string;
-    display_name?: string;
-    has_price?: boolean;
-    has_publication?: boolean;
-    id?: string;
-    mode_availability?: ModeAvailability[];
-    model_key?: string;
-    provider_adapter_key?: string;
-    provider_id?: string;
-    provider_logo_asset_id?: string;
-    revision?: number;
-    status?: ModelStatus;
-    unavailable_reasons?: string[];
-    update_time?: string;
-  };
-
   type CreatedProject = {
     allow_overseas_models?: boolean;
     aspect_ratio?: string;
@@ -1153,22 +913,6 @@ declare namespace API {
     style_preset_id?: string;
     style_subtype?: string;
     style_type?: string;
-    update_time?: string;
-  };
-
-  type CreatedProvider = {
-    adapter_key?: string;
-    concurrency_limit?: number;
-    create_time?: string;
-    id?: string;
-    key?: string;
-    logo_asset_id?: string;
-    name?: string;
-    quota_group?: string;
-    rate_limit_per_min?: number;
-    region?: Region;
-    revision?: number;
-    status?: ProviderStatus;
     update_time?: string;
   };
 
@@ -1197,18 +941,6 @@ declare namespace API {
     pid: string;
   };
 
-  type createModelReleaseParams = {
-    /** 模型ID */
-    id: string;
-  };
-
-  type CreateModelRequest = {
-    capability?: string;
-    display_name?: string;
-    model_key?: string;
-    provider_id?: string;
-  };
-
   type createPlatformTeamInvitationParams = {
     /** Team ID */
     id: string;
@@ -1234,31 +966,9 @@ declare namespace API {
     pid: string;
   };
 
-  type CreateProviderRequest = {
-    adapter_key?: string;
-    concurrency_limit?: number;
-    key?: string;
-    name?: string;
-    rate_limit_per_min?: number;
-    region?: Region;
-  };
-
-  type createProviderTrialQuoteParams = {
-    /** 发布ID */
-    id: string;
-  };
-
   type createReferenceVoiceParams = {
     /** 项目UUID */
     pid: string;
-  };
-
-  type CreateReleaseInput = {
-    config_version_id?: string;
-    model_version_id?: string;
-    price_version_id?: string;
-    request_id?: string;
-    upstream_cost?: UpstreamCost;
   };
 
   type CreateRequest = {
@@ -1321,51 +1031,6 @@ declare namespace API {
     unknown_operations: number;
   };
 
-  type CredentialField = {
-    name?: string;
-    required?: boolean;
-    type?: string;
-  };
-
-  type CredentialStatus = "active" | "draining" | "disabled";
-
-  type CredentialTestAccepted = {
-    accepted?: boolean;
-    check_id?: string;
-    credential_id?: string;
-    event_id?: string;
-    kind?: string;
-    model_id?: string;
-    provider_id?: string;
-    test_id?: string;
-  };
-
-  type CreditAction =
-    "grant" | "debit" | "freeze" | "commit" | "release" | "read";
-
-  type CreditCommandReceipt = {
-    action?: CreditAction;
-    amount_micros?: number;
-    command_id?: string;
-    created_at?: string;
-    reference_id?: string;
-    result?: Record<string, any>;
-    scope_id?: string;
-    source_id?: string;
-    status?: string;
-    updated_at?: string;
-  };
-
-  type creditCommandRequest = {
-    action: CreditAction;
-    amount_credits: number;
-    expires_at?: string;
-    model_key?: string;
-    reason: string;
-    reference_id?: string;
-    source_id?: string;
-  };
-
   type currentPromptSubmissionParams = {
     /** 项目 */
     pid: string;
@@ -1393,13 +1058,6 @@ declare namespace API {
     operation?: string;
     revision?: number;
     update_time?: string;
-  };
-
-  type CustomProviderInput = {
-    config?: ProviderConfig;
-    logo_asset_id?: string;
-    name?: string;
-    request_id?: string;
   };
 
   type Day = {
@@ -1440,10 +1098,6 @@ declare namespace API {
     id: string;
   };
 
-  type DefaultPage = {
-    items?: CapabilityDefault[];
-  };
-
   type Definition = {
     category?: string;
     content?: string;
@@ -1469,11 +1123,6 @@ declare namespace API {
     task_id: string;
     tool_budget?: number;
     tool_used?: number;
-  };
-
-  type deleteAdminProviderParams = {
-    /** 连接ID */
-    id: string;
   };
 
   type deleteBibleEntryParams = {
@@ -1512,10 +1161,6 @@ declare namespace API {
     nid: string;
   };
 
-  type DeletedProvider = {
-    id?: string;
-  };
-
   type DeleteDTO = {
     expected_revision?: string;
   };
@@ -1528,10 +1173,6 @@ declare namespace API {
   type deleteProjectParams = {
     /** 项目UUID */
     pid: string;
-  };
-
-  type DeleteProviderRequest = {
-    token: string;
   };
 
   type DeleteResultDTO = {
@@ -1961,13 +1602,6 @@ declare namespace API {
     status: string;
   };
 
-  type disableAdminCredentialParams = {
-    /** 渠道UUID */
-    id: string;
-    /** 凭据UUID */
-    credential_id: string;
-  };
-
   type DisplayAnnouncement = {
     action_path?: string;
     body?: string;
@@ -2193,16 +1827,6 @@ declare namespace API {
     expected_version?: string;
   };
 
-  type endProviderCheckTrackingParams = {
-    /** 检查ID */
-    id: string;
-  };
-
-  type EndTrackingInput = {
-    note?: string;
-    request_id?: string;
-  };
-
   type Episode = {
     confirmed_structure_id?: string;
     current_structure_id?: string;
@@ -2344,11 +1968,6 @@ declare namespace API {
     waveform?: ExportWaveformPreview;
   };
 
-  type exportProviderPresetParams = {
-    /** 预设ID */
-    id: string;
-  };
-
   type ExportSettings = {
     destination?: "canvas" | "local";
     file_name?: string;
@@ -2438,16 +2057,6 @@ declare namespace API {
     role?: string;
   };
 
-  type getAdminModelParams = {
-    /** 模型UUID */
-    id: string;
-  };
-
-  type getAdminProviderParams = {
-    /** 渠道UUID */
-    id: string;
-  };
-
   type getAgentControlStatusParams = {
     /** 项目UUID */
     pid: string;
@@ -2495,18 +2104,6 @@ declare namespace API {
     requestId: string;
   };
 
-  type getAiTrialArtifactParams = {
-    /** Trial request ID */
-    id: string;
-    /** Artifact sequence */
-    sequence: number;
-  };
-
-  type getAiTrialParams = {
-    /** Trial request ID */
-    id: string;
-  };
-
   type getBibleEntryParams = {
     /** Project UUID */
     pid: string;
@@ -2537,15 +2134,6 @@ declare namespace API {
   type getCanvasParams = {
     /** 画布UUID */
     id: string;
-  };
-
-  type getConfigReceiptParams = {
-    /** 请求ID */
-    id: string;
-    /** 动作 */
-    action: string;
-    /** 目标ID，创建为零UUID */
-    target_id: string;
   };
 
   type getCreationAnalyticsParams = {
@@ -2693,6 +2281,13 @@ declare namespace API {
     project_id: string;
   };
 
+  type getOperationTextParams = {
+    /** 原任务 ID */
+    id: string;
+    /** 项目 ID */
+    project_id: string;
+  };
+
   type getPlatformNotificationAuditParams = {
     /** Announcement UUID */
     id: string;
@@ -2776,48 +2371,14 @@ declare namespace API {
     pid: string;
   };
 
-  type getProviderCheckParams = {
-    /** 检查ID */
-    id: string;
-  };
-
-  type getProviderConfigParams = {
-    /** 连接ID */
-    id: string;
-  };
-
   type getProviderLogoParams = {
     /** Logo asset UUID */
-    id: string;
-  };
-
-  type getProviderOnboardingParams = {
-    /** 服务ID */
-    id: string;
-  };
-
-  type getProviderTrialRecoveryParams = {
-    /** 发布ID */
     id: string;
   };
 
   type getPublishedWorkParams = {
     /** 作品UUID */
     work_id: string;
-  };
-
-  type getScopeCreditCommandParams = {
-    /** 创作空间 ID */
-    scopeID: string;
-    /** 积分指令 ID */
-    commandID: string;
-  };
-
-  type getScopeCreditWalletParams = {
-    /** 创作空间 ID */
-    scopeID: string;
-    /** 上一页的游标 */
-    cursor?: string;
   };
 
   type getScriptEpisodeSourceTextParams = {
@@ -3424,38 +2985,6 @@ declare namespace API {
     project_id?: string | null;
   };
 
-  type listAdminModelsParams = {
-    /** 1..200 */
-    limit?: number;
-    /** 分页游标 */
-    cursor?: string;
-    /** 供应商连接 ID */
-    provider_id?: string;
-    /** 模型名称或标识关键词 */
-    name?: string;
-    /** 模型能力标识 */
-    capability?: string;
-    /** available 或 unavailable */
-    status?: string;
-    /** 仅查看已安装预设的计价审核 */
-    pricing_review?: boolean;
-    /** billable、price_pending、usage_pending 或 inactive */
-    billing_status?: string;
-  };
-
-  type listAdminProvidersParams = {
-    /** 1..200 */
-    limit?: number;
-    /** 绑定管理员与筛选条件的不透明游标 */
-    cursor?: string;
-    /** 连接名称关键词 */
-    name?: string;
-    /** 供应商标识 */
-    adapter_key?: string;
-    /** available 或 unavailable */
-    status?: string;
-  };
-
   type listAgentMessagesParams = {
     /** 项目UUID */
     pid: string;
@@ -3710,11 +3239,6 @@ declare namespace API {
     page_size?: number;
   };
 
-  type listModelReleasesParams = {
-    /** 模型ID */
-    id: string;
-  };
-
   type listNotificationsParams = {
     /** Default 20, maximum 100 */
     limit?: number;
@@ -3886,23 +3410,6 @@ declare namespace API {
     pid: string;
     /** 游标 */
     cursor?: string;
-  };
-
-  type listProviderChecksParams = {
-    /** 服务ID */
-    id: string;
-    /** 记录偏移 */
-    offset?: number;
-  };
-
-  type listProviderCredentialsParams = {
-    /** 连接ID */
-    id: string;
-  };
-
-  type listProviderTestModelsParams = {
-    /** 服务ID */
-    id: string;
   };
 
   type listReferenceVoicesParams = {
@@ -4220,55 +3727,6 @@ declare namespace API {
     unavailable_reasons?: string[];
   };
 
-  type ModelCandidate = {
-    capability?: string;
-    display_name?: string;
-    metadata?: Record<string, any>;
-    provider_model_id?: string;
-  };
-
-  type ModelCandidateCatalog = {
-    models?: ModelCandidatePreset[];
-    version?: string;
-  };
-
-  type ModelCandidateExecution = {
-    expected_max_ms?: number;
-    limits?: number[];
-    param_schema?: number[];
-    supports_query?: boolean;
-  };
-
-  type ModelCandidatePreset = {
-    adapter_key?: string;
-    capability?: string;
-    display_name?: string;
-    execution?: ModelCandidateExecution;
-    key?: string;
-    lifecycle?: string;
-    max_outputs?: number;
-    metering_strategy?: string;
-    modes?: string[];
-    provider_model_id?: string;
-    requires_model_selection?: boolean;
-    reviewed_at?: string;
-    source_url?: string;
-  };
-
-  type ModelCandidateSelection = {
-    catalog_version?: string;
-    model?: ModelCandidatePreset;
-  };
-
-  type ModelConfigurationCheck = {
-    config_version_id?: string;
-    credential_id?: string;
-    model_version_id?: string;
-    parameters_valid?: boolean;
-    provider_id?: string;
-    provider_model_id?: string;
-  };
-
   type ModelCount = {
     model_id: string | null;
     model_name: string | null;
@@ -4303,43 +3761,6 @@ declare namespace API {
     version_no?: number;
   };
 
-  type ModelPriceCandidate = {
-    currency?: string;
-    id?: string;
-    parser_version?: string;
-    provider_model_id?: string;
-    rule?: Record<string, any>;
-    source_fetched_at?: string;
-    source_hash?: string;
-    source_pricing?: Record<string, any>;
-    source_url?: string;
-    status?: string;
-    unit?: string;
-  };
-
-  type ModelPricePreset = {
-    currency?: string;
-    reference_lines?: string[];
-    rule?: Record<string, any>;
-    source_url?: string;
-    unit?: string;
-  };
-
-  type ModelRelease = {
-    config_version_id?: string;
-    created_at?: string;
-    id?: string;
-    model_id?: string;
-    model_version_id?: string;
-    onboarding_check_id?: string;
-    price_version_id?: string;
-    required_modes?: string[];
-    revision?: number;
-    status?: string;
-    upstream_cost?: UpstreamCost;
-    validated_modes?: string[];
-  };
-
   type ModelResponse = {
     availability_config_version_id?: string;
     availability_credential_id?: string;
@@ -4368,8 +3789,6 @@ declare namespace API {
     unavailable_reasons?: string[];
   };
 
-  type ModelStatus = "active" | "disabled" | "archived";
-
   type ModelVersion = {
     id?: string;
     limits?: Record<string, any>;
@@ -4377,8 +3796,6 @@ declare namespace API {
     param_schema?: Record<string, any>[];
     version_no?: number;
   };
-
-  type Moderation = "provider" | "platform" | "both";
 
   type moveProjectToFolderParams = {
     /** 项目UUID */
@@ -4501,33 +3918,6 @@ declare namespace API {
     items: DiagnosticRecord[];
     next_cursor: string | null;
     to: string;
-  };
-
-  type OnboardingModel = {
-    capability?: string;
-    display_name?: string;
-    id?: string;
-    provider_model_id?: string;
-    release_id?: string;
-    status?: string;
-    version_id?: string;
-  };
-
-  type OnboardingReleaseReview = {
-    batch_draft?: boolean;
-    config_version_id?: string;
-    created_at?: string;
-    display_name?: string;
-    id?: string;
-    model_id?: string;
-    model_version_id?: string;
-    onboarding_check_id?: string;
-    price_version_id?: string;
-    required_modes?: string[];
-    revision?: number;
-    status?: string;
-    upstream_cost?: UpstreamCost;
-    validated_modes?: string[];
   };
 
   type OperationStatus =
@@ -4701,11 +4091,14 @@ declare namespace API {
     media_asset_id?: string | null;
     metadata_revision?: number;
     moderation_status?: string;
+    /** OutputPolicy explicitly distinguishes usable unreviewed text from moderation approval. */
+    output_policy?: string;
     process_types?: string[];
     ratio?: string;
     resolution?: string;
     sequence?: number;
     text?: string;
+    text_truncated?: boolean;
     width?: number;
   };
 
@@ -4883,18 +4276,6 @@ declare namespace API {
     status: string;
   };
 
-  type PoolKeyUpdate = {
-    enabled?: boolean;
-    request_id?: string;
-  };
-
-  type PoolPublication = {
-    backups?: string[];
-    equivalent?: boolean;
-    expected_revision?: number;
-    request_id?: string;
-  };
-
   type Preference = {
     customization?: Customization;
     definition?: Definition;
@@ -4919,102 +4300,10 @@ declare namespace API {
     theme: string;
   };
 
-  type Preset = {
-    archived?: boolean;
-    document?: PresetDocument;
-    emergency_disabled?: boolean;
-    id?: string;
-    model_catalog?: ModelCandidateCatalog;
-    origin?: string;
-    parent_id?: string;
-    revision?: number;
-    slug?: string;
-    updated_at?: string;
-    version?: number;
-    version_id?: string;
-  };
-
-  type PresetConnection = {
-    config?: ConnectionConfig;
-    model_ids?: string[];
-    provider_id?: string;
-  };
-
-  type PresetDirectoryInput = {
-    api_key?: string;
-    version_id?: string;
-  };
-
-  type PresetDirectoryResult = {
-    model_ids?: string[];
-  };
-
-  type PresetDocument = {
-    adapter_declaration?: AdapterDeclaration;
-    config?: ProviderConfig;
-    model_templates?: PresetModelTemplate[];
-    name?: string;
-    schema_version?: number;
-  };
-
-  type PresetImportRequest = {
-    document_json?: string;
-  };
-
-  type PresetModelCost = {
-    currency?: string;
-    max_micros?: number;
-    reviewed_at?: string;
-    source?: string;
-  };
-
-  type PresetModelPrice = {
-    currency?: string;
-    fx_rate_to_cny?: string;
-    reviewed_at?: string;
-    rule?: Record<string, any>;
-    source_url?: string;
-    unit?: PriceUnit;
-  };
-
-  type PresetModelTemplate = {
-    capability?: string;
-    expected_max_ms?: number;
-    key?: string;
-    limits?: Record<string, any>;
-    modes?: string[];
-    name?: string;
-    param_schema?: Record<string, any>[];
-    price?: PresetModelPrice;
-    provider_model_id?: string;
-    upstream_cost?: PresetModelCost;
-  };
-
-  type PresetPage = {
-    items?: Preset[];
-  };
-
-  type PresetPreview = {
-    document?: PresetDocument;
-    hash?: string;
-  };
-
-  type PresetStateInput = {
-    archived?: boolean;
-    emergency_disabled?: boolean;
-    expected_revision?: number;
-    request_id?: string;
-  };
-
   type Preview = {
     asset?: AssetSummary;
     expires_at?: string;
     url?: string;
-  };
-
-  type previewAdminProviderDeletionParams = {
-    /** 连接ID */
-    id: string;
   };
 
   type previewLibraryMediaAssetParams = {
@@ -5040,22 +4329,10 @@ declare namespace API {
     project_id: string;
   };
 
-  type previewProviderUpgradeParams = {
-    /** 连接ID */
-    id: string;
-  };
-
   type previewSubjectSourceParams = {
     /** 资产条目UUID */
     item_id: string;
   };
-
-  type PriceUnit =
-    | "per_image"
-    | "per_second"
-    | "per_request"
-    | "per_1k_tokens"
-    | "per_1k_chars";
 
   type PricingPreview = {
     amount_kind?: string;
@@ -5391,157 +4668,6 @@ declare namespace API {
     id: string;
   };
 
-  type ProviderCheck = {
-    adapter_result?: string;
-    attempts?: number;
-    auth_result?: string;
-    candidates?: ModelCandidate[];
-    completed_at?: string;
-    config_version_id?: string;
-    created_at?: string;
-    credential_id?: string;
-    current?: boolean;
-    discovery_result?: string;
-    elapsed_ms?: number;
-    error_code?: string;
-    http_status?: number;
-    id?: string;
-    kind?: string;
-    model_id?: string;
-    model_result?: string;
-    model_version_id?: string;
-    network_result?: string;
-    parent_check_id?: string;
-    provider_id?: string;
-    request_id?: string;
-    status?: string;
-    task_id?: string;
-    tracking_ended_at?: string;
-    tracking_note?: string;
-  };
-
-  type ProviderCheckPage = {
-    current_checks?: ProviderCheck[];
-    has_more?: boolean;
-    items?: ProviderCheck[];
-  };
-
-  type ProviderConfig = {
-    adapter_key?: string;
-    base_url?: string;
-    capabilities?: string[];
-    concurrency_limit?: number;
-    rate_limit_per_min?: number;
-    region?: Region;
-    timeout_seconds?: number;
-  };
-
-  type ProviderCredentialSummary = {
-    create_time?: string;
-    id?: string;
-    label?: string;
-    last4?: string;
-    last_test_result?: TestResult;
-    last_tested_at?: string;
-    pool_enabled?: boolean;
-    provider_id?: string;
-    status?: CredentialStatus;
-    update_time?: string;
-  };
-
-  type ProviderDeletionDraft = {
-    id?: string;
-    name?: string;
-    revision?: number;
-  };
-
-  type ProviderDeletionPreview = {
-    blocked_reason?: string;
-    drafts?: ProviderDeletionDraft[];
-    revision?: number;
-    token?: string;
-  };
-
-  type ProviderDetail = {
-    credential?: ProviderCredentialSummary;
-    credential_schema?: CredentialField[];
-    provider?: CreatedProvider;
-  };
-
-  type ProviderListItem = {
-    available?: boolean;
-    available_model_count?: number;
-    credential?: ProviderCredentialSummary;
-    model_count?: number;
-    provider?: CreatedProvider;
-    unavailable_reasons?: string[];
-  };
-
-  type ProviderLogoInput = {
-    expected_revision?: number;
-    logo_asset_id?: string | null;
-    request_id?: string;
-  };
-
-  type ProviderOnboardingState = {
-    check?: ProviderCheck;
-    credential_id?: string;
-    models?: OnboardingModel[];
-    provider_id?: string;
-    release_reviews?: OnboardingReleaseReview[];
-    revision?: number;
-    status?: string;
-  };
-
-  type ProviderPage = {
-    items?: ProviderListItem[];
-    next_cursor?: string | null;
-  };
-
-  type ProviderReference = {
-    media_kind?: string;
-    role?: string;
-    url?: string;
-  };
-
-  type ProviderStatus = "active" | "disabled" | "archived";
-
-  type ProviderTestModel = {
-    capability?: string;
-    display_name?: string;
-    id?: string;
-    provider_model_id?: string;
-    release_id?: string;
-    requires_trial?: boolean;
-    status?: string;
-    version_id?: string;
-  };
-
-  type ProviderTrialQuote = {
-    max_charge_micros?: number;
-    media_inputs?: TrialMediaInput[];
-    mode?: string;
-    params?: Record<string, any>;
-    project_id?: string;
-    prompt?: string;
-    request_id?: string;
-    supplier_currency?: string;
-    supplier_max_micros?: number;
-    use_quoted_charge?: boolean;
-  };
-
-  type ProviderTrialRecovery = {
-    confirm_request_id?: string;
-    found?: boolean;
-    max_charge_micros?: number;
-    operation_id?: string;
-    project_id?: string;
-    request_id?: string;
-    status?: string;
-    supplier_currency?: string;
-    supplier_max_micros?: number;
-  };
-
   type PublicMessage = {
     content: string;
     conversation_id: number;
@@ -5552,40 +4678,9 @@ declare namespace API {
     sequence: string;
   };
 
-  type publishAdminModelPriceParams = {
-    /** 模型UUID */
-    id: string;
-  };
-
-  type publishAdminModelVersionParams = {
-    /** 模型UUID */
-    id: string;
-  };
-
-  type publishAdminRoutePoolParams = {
-    /** 主线路发布编号 */
-    id: string;
-  };
-
   type PublishAnnouncementRequest = {
     command_id?: string;
     expected_version?: string;
-  };
-
-  type PublishedModelVersion = {
-    create_time?: string;
-    id?: string;
-    model_id?: string;
-    revision?: number;
-    version_no?: number;
-  };
-
-  type PublishedPriceRule = {
-    create_time?: string;
-    id?: string;
-    model_id?: string;
-    revision?: number;
-    version_no?: number;
   };
 
   type PublishedWork = {
@@ -5602,42 +4697,6 @@ declare namespace API {
   type publishPlatformNotificationParams = {
     /** Announcement UUID */
     id: string;
-  };
-
-  type PublishPriceRequest = {
-    candidate_id?: string;
-    currency?: string;
-    discount_factor?: string;
-    effective_from?: string;
-    expected_revision?: number;
-    fx_rate_to_cny?: string;
-    markup_multiplier?: string;
-    reviewed_at?: string;
-    rule?: Record<string, any>;
-    source_url?: string;
-    unit?: PriceUnit;
-    use_official_rate?: boolean;
-    version_no?: number;
-  };
-
-  type publishProviderPresetVersionParams = {
-    /** 预设ID */
-    id: string;
-  };
-
-  type PublishVersionRequest = {
-    expected_max_ms?: number;
-    expected_revision?: number;
-    limits?: Record<string, any>;
-    moderation?: Moderation;
-    modes?: string[];
-    param_schema?: Record<string, any>[];
-    provider_model_id?: string;
-    queue?: string;
-    supports_callback?: boolean;
-    supports_cancel?: boolean;
-    supports_query?: boolean;
-    version_no?: number;
   };
 
   type PurgeControlRequest = {
@@ -5705,11 +4764,6 @@ declare namespace API {
     | "failed"
     | "cancelled";
 
-  type queryProviderModelCheckParams = {
-    /** 检查ID */
-    id: string;
-  };
-
   type QuotedMessage = {
     content_hash: string;
     message_id: string;
@@ -5765,8 +4819,8 @@ declare namespace API {
     items?: QuoteItemRequest[];
   };
 
-  type readAdminRoutePoolParams = {
-    /** 主线路发布编号 */
+  type readAiRequestParams = {
+    /** 标识 */
     id: string;
   };
 
@@ -5804,23 +4858,11 @@ declare namespace API {
     id: string;
   };
 
-  type readPresetModelDirectoryParams = {
-    /** 预设ID */
-    id: string;
-  };
-
   type readPromptDraftParams = {
     /** 项目 */
     pid: string;
     /** 草稿 */
     id: string;
-  };
-
-  type readSavedProviderModelDirectoryParams = {
-    /** 连接 ID */
-    id: string;
-    /** 凭据 ID */
-    credential_id: string;
   };
 
   type ReauthenticationRequest = {
@@ -5880,11 +4922,6 @@ declare namespace API {
     wid: string;
   };
 
-  type recoverAiTrialParams = {
-    /** Trial request ID */
-    id: string;
-  };
-
   type recoverOperationParams = {
     /** 原操作UUID */
     id: string;
@@ -5941,8 +4978,6 @@ declare namespace API {
     references?: ReferenceInput[];
   };
 
-  type Region = "domestic" | "overseas";
-
   type RegistrationCompleteRequest = {
     confirm_password: string;
     display_name: string;
@@ -5969,10 +5004,6 @@ declare namespace API {
   type RegistrationVerifyView = {
     outcome: string;
     registration_grant: string;
-  };
-
-  type ReleasePage = {
-    items?: ModelRelease[];
   };
 
   type removeTeamMemberParams = {
@@ -6161,6 +5192,11 @@ declare namespace API {
     id: string;
   };
 
+  type revokeAiIntegrationGrantParams = {
+    /** 标识 */
+    id: string;
+  };
+
   type revokePlatformTeamInvitationParams = {
     /** Team ID */
     id: string;
@@ -6195,28 +5231,6 @@ declare namespace API {
     type?: string;
   };
 
-  type RouteAttempt = {
-    attempt?: number;
-    key_suffix?: string;
-    operation_id?: string;
-    provider_name?: string;
-    reason?: string;
-  };
-
-  type RouteOption = {
-    display_name?: string;
-    provider_model_id?: string;
-    provider_name?: string;
-    release_id?: string;
-  };
-
-  type RoutePool = {
-    backups?: string[];
-    options?: RouteOption[];
-    recent?: RouteAttempt[];
-    revision?: number;
-  };
-
   type RunPage = {
     items: RunSummary[];
     next_cursor?: string;
@@ -6249,30 +5263,6 @@ declare namespace API {
     status: string;
   };
 
-  type SalePreview = {
-    procurement_micros?: number;
-    regular_credits?: number;
-    sale_credits?: number;
-    sale_micros?: number;
-  };
-
-  type SalePreviewRequest = {
-    characters?: number;
-    currency?: string;
-    discount_factor?: string;
-    duration_ms?: number;
-    fx_rate_to_cny?: string;
-    input_tokens?: number;
-    markup_multiplier?: string;
-    mode?: string;
-    output_count?: number;
-    output_tokens?: number;
-    reference_images?: number;
-    resolution?: string;
-    rule?: Record<string, any>;
-    unit?: PriceUnit;
-  };
-
   type SampleInput = {
     asset_id?: string;
     name?: string;
@@ -6287,28 +5277,6 @@ declare namespace API {
     command_id?: string;
     content?: AnnouncementContent;
     expected_version?: string;
-  };
-
-  type SavedCredential = {
-    create_time?: string;
-    id?: string;
-    label?: string;
-    last4?: string;
-    last_test_result?: TestResult;
-    provider_id?: string;
-    status?: CredentialStatus;
-    update_time?: string;
-  };
-
-  type savedDirectoryAccepted = {
-    accepted?: boolean;
-    check_id?: string;
-    credential_id?: string;
-    event_id?: string;
-    kind?: string;
-    model_id?: string;
-    provider_id?: string;
-    test_id?: string;
   };
 
   type SaveDirectorRecoveryInput = {
@@ -6338,15 +5306,6 @@ declare namespace API {
   type savePlatformNotificationParams = {
     /** Announcement UUID */
     id: string;
-  };
-
-  type SavePresetInput = {
-    document?: PresetDocument;
-    expected_revision?: number;
-    parent_id?: string;
-    preview_hash?: string;
-    request_id?: string;
-    slug?: string;
   };
 
   type saveProjectModelDefaultsParams = {
@@ -6442,16 +5401,6 @@ declare namespace API {
     title: string;
   };
 
-  type setAdminCredentialParams = {
-    /** 渠道UUID */
-    id: string;
-  };
-
-  type setAdminModelStatusParams = {
-    /** 模型UUID */
-    id: string;
-  };
-
   type setAgentSkillEnabledParams = {
     /** 项目UUID */
     pid: string;
@@ -6470,16 +5419,6 @@ declare namespace API {
     id: string;
     /** Appearance UUID */
     look: string;
-  };
-
-  type SetCredentialRequest = {
-    label?: string;
-    secret?: Record<string, any>;
-  };
-
-  type SetModelStatusRequest = {
-    expected_revision?: number;
-    status?: ModelStatus;
   };
 
   type setPlatformNotificationEnabledParams = {
@@ -7115,11 +6054,6 @@ declare namespace API {
     submission?: Submission;
   };
 
-  type submitScopeCreditCommandParams = {
-    /** 创作空间 ID */
-    scopeID: string;
-  };
-
   type subscribeAgentEventsParams = {
     /** 项目UUID */
     pid: string;
@@ -7242,8 +6176,11 @@ declare namespace API {
     kind?: string;
     media_asset_id?: string | null;
     moderation_status?: string;
+    /** OutputPolicy explicitly distinguishes usable unreviewed text from moderation approval. */
+    output_policy?: string;
     sequence?: number;
     text?: string;
+    text_truncated?: boolean;
   };
 
   type TaskPageResponse = {
@@ -7422,30 +6359,6 @@ declare namespace API {
       | "skill_draft";
     outline?: OutlineOptions;
   };
-
-  type testAdminCredentialParams = {
-    /** 渠道UUID */
-    id: string;
-    /** 凭据UUID */
-    credential_id: string;
-  };
-
-  type testProviderOnboardingModelParams = {
-    /** 服务ID */
-    id: string;
-    /** 凭据ID */
-    credential_id: string;
-    /** 模型ID */
-    model_id: string;
-  };
-
-  type testProviderReachabilityParams = {
-    /** 服务ID */
-    id: string;
-  };
-
-  type TestResult =
-    "ok" | "auth_failed" | "unreachable" | "timeout" | "unsupported";
 
   type TimelineClip = {
     asset_id?: string | null;
@@ -7653,61 +6566,6 @@ declare namespace API {
     | "failed"
     | "cancelled";
 
-  type TrialArtifact = {
-    mime?: string;
-    sequence?: number;
-    sha256?: string;
-    size?: number;
-  };
-
-  type TrialMediaInput = {
-    media_asset_id?: string;
-    role?: string;
-  };
-
-  type TrialMessage = {
-    prompt?: string;
-    request_id?: string;
-  };
-
-  type TrialRequest = {
-    kind?: string;
-    mode?: string;
-    model?: string;
-    params?: Record<string, any>;
-    prompt?: string;
-    provider_id?: string;
-    references?: ProviderReference[];
-    request_id?: string;
-    source?: string;
-  };
-
-  type TrialState = {
-    fingerprint?: string;
-    kind?: string;
-    model?: string;
-    provider_id?: string;
-    source?: string;
-    state?: string;
-    turns?: TrialTurn[];
-  };
-
-  type TrialTurn = {
-    artifacts?: TrialArtifact[];
-    authenticated?: boolean;
-    config_version_id?: string;
-    credential_id?: string;
-    error_code?: string;
-    image_generation?: boolean;
-    models?: string[];
-    prompt?: string;
-    request_id?: string;
-    state?: string;
-    task_id?: string;
-    text?: string;
-    thread_id?: string;
-  };
-
   type unarchiveProjectParams = {
     /** 项目UUID */
     pid: string;
@@ -7726,18 +6584,6 @@ declare namespace API {
     /** Identity kind */
     kind: "character" | "location" | "prop";
     /** Identity UUID */
-    id: string;
-  };
-
-  type updateAdminPoolKeyParams = {
-    /** 连接 */
-    id: string;
-    /** 凭据 */
-    credential_id: string;
-  };
-
-  type updateAdminProviderParams = {
-    /** 渠道UUID */
     id: string;
   };
 
@@ -7781,25 +6627,6 @@ declare namespace API {
   type updateProjectParams = {
     /** 项目UUID */
     pid: string;
-  };
-
-  type updateProviderLogoParams = {
-    /** 供应商ID */
-    id: string;
-  };
-
-  type updateProviderPresetStateParams = {
-    /** 预设ID */
-    id: string;
-  };
-
-  type UpdateProviderRequest = {
-    concurrency_limit?: number;
-    expected_revision?: number;
-    name?: string;
-    quota_group?: string;
-    rate_limit_per_min?: number;
-    status?: ProviderStatus;
   };
 
   type updateReferenceVoiceParams = {
@@ -7850,13 +6677,6 @@ declare namespace API {
   type UploadResult = {
     asset?: AssetSummary;
     duplicate_of?: string;
-  };
-
-  type UpstreamCost = {
-    currency?: string;
-    max_micros?: number;
-    reviewed_at?: string;
-    source?: string;
   };
 
   type UserCommandReceipt = {

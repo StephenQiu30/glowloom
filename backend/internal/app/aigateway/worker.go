@@ -18,6 +18,13 @@ import (
 
 // RegisterWorker reuses Go Execution leases for dispatch and evidence-only settlement.
 func (r *Runtime) RegisterWorker(handlers map[string]taskruntime.Handler) {
+	handlers["ai.recover"] = func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
+		id, err := uuid.Parse(job.BusinessID)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return pg.New(r.DB, identity.Principal{}, nil).RecoverStale(ctx, id)
+	}
 	handlers["ai.deliver"] = func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
 		id, err := uuid.Parse(job.BusinessID)
 		if err != nil {

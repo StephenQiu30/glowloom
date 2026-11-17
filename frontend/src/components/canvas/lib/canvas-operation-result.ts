@@ -1,5 +1,5 @@
 import { getMediaPreview } from "@/api/media";
-import type { Task } from "@/components/generation/contracts";
+import { usableTextOutput, type Task } from "@/components/generation/contracts";
 import { canonical } from "@/components/generation/draft-save";
 import type { CanvasYjsLiveSession } from "../yjs-live-session";
 import { textToDocument } from "@glowloom/canvas/editor/runtime/components/editor/lib/rich-text-document.ts";
@@ -79,13 +79,9 @@ export async function applyCanvasOperationResult(
     });
   };
   if (before.type === "text") {
-    const output = task.outputs?.find(
-      (item) =>
-        item.kind === "json" &&
-        item.moderation_status === "passed" &&
-        item.text,
-    );
-    if (!output?.text) throw new Error("生成结果尚不可用");
+    const output = task.outputs?.find(usableTextOutput);
+    if (!output?.text || output.text_truncated)
+      throw new Error("生成结果尚不可用");
     if (before.metadata?.content === output.text) {
       await client.waitForSaved(() => {
         if (target().metadata?.content !== output.text)

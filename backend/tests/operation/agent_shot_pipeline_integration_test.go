@@ -7,11 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,23 +17,26 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
+	"gorm.io/gorm"
+
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	pgai "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
+	aiapp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
+	aidomain "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
 	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
 	op "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
@@ -127,37 +128,32 @@ func TestAgentShotOriginalQuoteRecoveryVideoAndProjectDelivery(t *testing.T) {
 	cfg, err := json.Marshal(storagefixture.Configuration(t, "http://127.0.0.1:19000", "glowloom-shot-1250000000"))
 	require.NoError(t, err)
 	t.Setenv("GLOWLOOM_OBJECT_STORAGE_CONFIG", string(cfg))
-	database := businessEmptyFixtureDB(t, dsn)
-	for _, name := range []string{"schema.sql", "data.sql"} {
-		schema, err := os.ReadFile(filepath.Join("..", "..", "db", name))
-		require.NoError(t, err)
-		require.NoError(t, database.Exec(string(schema)).Error)
-	}
+	conn, err := db.Open(t.Context(), dsn, noop.NewTracerProvider())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, conn.Close()) })
+	database := conn.DB
 	objects := businessStorageRegistry(t)
 	require.NoError(t, objects.Ping(t.Context()))
 	f := seedManagedFixture(t, database)
-	// Real readiness and commercial ledgers, using explicitly synthetic catalog
-	// evidence and credentials; no live supplier or paid account is contacted.
-	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, f.identity.ModelProfileVersionID).Error)
-	require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],queue='provider',supports_query=false,supports_cancel=false,moderation='provider' WHERE id=?`, f.identity.ModelProfileVersionID).Error)
-	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":10}' WHERE id=?`, f.identity.PriceRuleVersionID).Error)
-	seedFixtureProcurement(t, database, f.identity.PriceRuleVersionID, f.identity.ModelProfileVersionID)
-	seedGatewayAvailability(t, database, f, json.RawMessage(`[]`))
-	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='video.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, f.identity.ModelProfileVersionID).Error)
-	require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text2video'],supports_query=true WHERE id=?`, f.identity.ModelProfileVersionID).Error)
-	require.NoError(t, database.Exec(`UPDATE catalog.model_validation SET mode='text2video' WHERE release_id=?`, f.release).Error)
-	require.NoError(t, database.Exec(`UPDATE operation.operation SET capability='video.generate',mode='text2video' WHERE id IN (SELECT operation_id FROM catalog.model_validation WHERE release_id=?)`, f.release).Error)
-	fundOperationProject(t, database, f.identity.ProjectID)
-	require.NoError(t, database.Exec(`UPDATE workspace.project SET allow_overseas_models=true WHERE id=?`, f.identity.ProjectID).Error)
-	require.NoError(t, database.Exec(`UPDATE billing.budget SET limit_micros=20000000 WHERE project_id=?`, f.identity.ProjectID).Error)
 	var actor identity.Principal
 	require.NoError(t, database.Raw(`SELECT u.id,u.org_id,u.role,p.owner_scope_id AS scope_id FROM operation.operation o JOIN identity."user" u ON u.id=o.confirmed_by JOIN workspace.project p ON p.id=o.project_id WHERE o.id=?`, f.identity.OperationID).Scan(&actor).Error)
 	require.NotEqual(t, uuid.Nil, actor.ID)
 	actor = identityfixture.Session(t, database, actor)
-	var model string
-	require.NoError(t, database.Raw(`SELECT m.model_key FROM catalog.model_profile m JOIN catalog.model_profile_version v ON v.model_profile_id=m.id WHERE v.id=?`, f.identity.ModelProfileVersionID).Scan(&model).Error)
 	businessStorageEnvironment(t, database)
-	b := agentwire.NewBoundary(database, nil).WithCanvasRuntime(canvasfixture.CommandRuntime(t))
+	publish := pgai.New(database, actor, func(context.Context, *gorm.DB, identity.Principal, uuid.UUID, uuid.UUID, bool) error { return nil })
+	price := aidomain.Price{Request: 100000, Currency: "CNY", FX: "1", Multiplier: "1", Discount: "1"}
+	m := aidomain.Model{ID: uuid.New(), Name: "pipeline-" + uuid.NewString(), Protocol: "media", Capability: "video.generate", Modes: []string{"text2video"}, Price: price, MaxInput: 8192, MaxOutput: 1, PurchaseCap: 100000, OutputPolicy: "provider_success_v1"}
+	require.NoError(t, publish.PublishModel(t.Context(), m))
+	require.NoError(t, publish.Grant(t.Context(), actor.ScopeID, "pipeline-funding", 100))
+	config := catalog.ProviderConfig{AdapterKey: "openrouter", BaseURL: "https://openrouter.ai/api/v1", Region: "overseas", Capabilities: []string{"video"}, TimeoutSeconds: 30, ConcurrencyLimit: 1, RateLimitPerMin: 60}
+	configRaw, _ := json.Marshal(config)
+	route := aidomain.Route{ID: uuid.New(), ModelID: m.ID, Supplier: uuid.New(), Credential: uuid.New(), Group: uuid.NewString(), Protocol: "media", BaseURL: config.BaseURL, UpstreamModel: "pipeline", Purchase: price, DriverConfig: configRaw}
+	require.NoError(t, publish.PublishRoute(t.Context(), route, []byte("synthetic"), "fixture", 10, 10000))
+	gateway := &aigateway.Runtime{DB: database, Objects: objects, Keys: pipelineKeys{}, Provider: rebuiltProvider(func(context.Context, aiapp.Dispatch, func(json.RawMessage) error) (aidomain.Receipt, error) {
+		return aidomain.Receipt{}, aidomain.ErrUnknown
+	})}
+	model := m.Name
+	b := agentwire.NewBoundary(database, nil).WithCanvasRuntime(canvasfixture.CommandRuntime(t)).WithGateway(gateway)
 	a := agent.Admission{RootRunID: uuid.New(), SessionID: uuid.New(), SubmissionID: uuid.New(), RequestID: uuid.New(), ContentHash: agent.Hash([]byte("original shot")), Scope: agent.Scope{ActorID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, ProjectID: f.identity.ProjectID}, BudgetMicros: 10_000_000}
 	require.NoError(t, b.Store.AdmitRun(t.Context(), a))
 	g, err := b.Store.RegisterGrant(t.Context(), agent.GrantRequest{RootRunID: a.RootRunID, SubmissionID: a.SubmissionID, OwnerEpoch: 1, AuthorizationRevision: 1, LeaseUntil: time.Now().Add(time.Minute)})
@@ -181,7 +177,7 @@ func TestAgentShotOriginalQuoteRecoveryVideoAndProjectDelivery(t *testing.T) {
 		OperationID uuid.UUID `json:"operation_id"`
 	}
 	require.NoError(t, json.Unmarshal(quoted.Result, &quote))
-	original, err := operationStore(database).FindOperation(t.Context(), actor, g.Scope.ProjectID, quote.OperationID)
+	original, err := (aigateway.Creation{Runtime: gateway}).Task(t.Context(), actor, g.Scope.ProjectID, quote.OperationID)
 	require.NoError(t, err)
 	require.Equal(t, &source, original.Source, "owning query must preserve immutable canvas provenance")
 	proposal := shotTool(t, b, router, g, "operation_propose", "generation-proposal", map[string]any{"operation_id": quote.OperationID, "expected_canvas_revision": source.Revision})
@@ -193,83 +189,22 @@ func TestAgentShotOriginalQuoteRecoveryVideoAndProjectDelivery(t *testing.T) {
 	video, err := os.ReadFile(file)
 	require.NoError(t, err)
 	var posts atomic.Int32
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "Bearer fixture-only-not-real", r.Header.Get("Authorization"))
-		switch {
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/videos"):
-			posts.Add(1)
-			var payload map[string]any
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-			require.Equal(t, text, payload["prompt"])
-			_, _ = io.WriteString(w, `{"id":"original-shot","status":"queued"}`)
-		case strings.HasSuffix(r.URL.Path, "/content"):
-			w.Header().Set("Content-Type", "video/mp4")
-			_, _ = w.Write(video)
-		default:
-			_, _ = io.WriteString(w, `{"id":"original-shot","status":"completed","unsigned_urls":["https://openrouter.ai/api/v1/videos/original-shot/content?index=0"],"usage":{"billable_requests":1,"output_count":1}}`)
-		}
-	}))
-	defer server.Close()
-	local, err := url.Parse(server.URL)
-	require.NoError(t, err)
-	originalTransport := http.DefaultTransport
-	http.DefaultTransport = editorWireTransport(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Hostname() != "openrouter.ai" {
-			return originalTransport.RoundTrip(r)
-		}
-		forward := r.Clone(r.Context())
-		target := *r.URL
-		target.Scheme = local.Scheme
-		target.Host = local.Host
-		forward.URL = &target
-		return server.Client().Transport.RoundTrip(forward)
+	gateway.ResultDownloads = pipelineDownloads{t: t, body: video}
+	gateway.Provider = rebuiltProvider(func(_ context.Context, d aiapp.Dispatch, _ func(json.RawMessage) error) (aidomain.Receipt, error) {
+		posts.Add(1)
+		raw, _ := json.Marshal(op.GenerationResult{Outcome: op.ProviderOutcomeCompleted, State: op.ProviderTaskSucceeded, TaskID: "original-shot", URLs: []string{"https://openrouter.ai/api/v1/videos/original-shot/content?index=0"}})
+		cost, e := d.Route.Purchase.Cost(aidomain.Usage{})
+		return aidomain.Receipt{Body: raw, PurchaseMicros: cost, UpstreamID: "original-shot"}, e
 	})
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	s := operationStore(database)
-	loaded, err := s.LoadWorkflowOperation(t.Context(), quote.OperationID)
-	require.NoError(t, err)
-	requestKey := loaded.ProviderRequestKey
-	require.NotEmpty(t, requestKey)
-	_, err = s.TransitionWorkflowOperation(t.Context(), op.TransitionInput{OperationID: quote.OperationID, From: []domain.Status{domain.StatusConfirmed}, To: domain.StatusSubmitting, ProviderRequestKey: &requestKey})
-	require.NoError(t, err)
-	require.NoError(t, s.BeginProviderCall(t.Context(), op.BeginProviderCallInput{OperationID: quote.OperationID, Action: "submit", Attempt: 1, DispatchRequired: true}))
-	var pinned int64
-	require.NoError(t, database.Raw(`SELECT count(*) FROM media.storage_work_intent WHERE kind='operation' AND owner_id=? AND work_id=?`, g.Scope.ProjectID, quote.OperationID).Scan(&pinned).Error)
-	require.EqualValues(t, 1, pinned, "formal Agent quote must atomically pin output storage before dispatch")
-	results := op.NewRoutedManagedResults(staging.NewRoutedFactory(objects, pgmedia.NewStorageRoutes(database)), s)
-	worker := managed.NewActivities(s, fixtureUnsealer{}, providerhttp.NewClient(&http.Client{}), results, operationLegacyVideos())
-	progress, err := worker.Step(t.Context(), op.ManagedStep{OperationID: quote.OperationID, Action: "submit"})
-	require.NoError(t, err)
-	require.EqualValues(t, "accepted", progress.State)
-	// Discard the caller's reply and reconstruct the worker from persisted facts.
-	worker = managed.NewActivities(s, fixtureUnsealer{}, providerhttp.NewClient(&http.Client{}), results, operationLegacyVideos())
-	replay, err := worker.Step(t.Context(), op.ManagedStep{OperationID: quote.OperationID, Action: "submit"})
-	require.NoError(t, err)
-	require.Equal(t, progress, replay)
+	for range 2 {
+		_, err = (aigateway.Creation{Runtime: gateway}).Execute(t.Context(), taskruntime.Job{BusinessID: quote.OperationID.String()})
+		require.NoError(t, err)
+	}
+	for range 2 {
+		require.NoError(t, gateway.Deliver(t.Context(), quote.OperationID))
+	}
 	require.EqualValues(t, 1, posts.Load())
-	taskID := "original-shot"
-	require.NoError(t, s.CompleteProviderCall(t.Context(), op.CompleteProviderCallInput{OperationID: quote.OperationID, Action: "submit", Attempt: 1, ProviderTaskID: &taskID, Outcome: "ok", State: "accepted"}))
-	_, err = s.TransitionWorkflowOperation(t.Context(), op.TransitionInput{OperationID: quote.OperationID, From: []domain.Status{domain.StatusSubmitting}, To: domain.StatusSubmitted, ProviderTaskID: &taskID})
-	require.NoError(t, err)
-	require.NoError(t, s.BeginProviderCall(t.Context(), op.BeginProviderCallInput{OperationID: quote.OperationID, Action: "query", Attempt: 1, ProviderTaskID: &taskID}))
-	progress, err = worker.Step(t.Context(), op.ManagedStep{OperationID: quote.OperationID, Action: "query"})
-	require.NoError(t, err)
-	require.EqualValues(t, "succeeded", progress.State)
-	require.NoError(t, s.CompleteProviderCall(t.Context(), op.CompleteProviderCallInput{OperationID: quote.OperationID, Action: "query", Attempt: 1, ProviderTaskID: &taskID, Outcome: "ok", State: "succeeded", Managed: true}))
-	_, err = s.TransitionWorkflowOperation(t.Context(), op.TransitionInput{OperationID: quote.OperationID, From: []domain.Status{domain.StatusSubmitted}, To: domain.StatusSucceeded})
-	require.NoError(t, err)
-	_, err = s.TransitionWorkflowOperation(t.Context(), op.TransitionInput{OperationID: quote.OperationID, From: []domain.Status{domain.StatusSucceeded}, To: domain.StatusIngesting})
-	require.NoError(t, err)
-	ingest := operationLegacyIngest(database, objects, results, app.NewMediaWorkerScopeAccess, s)
-	require.NoError(t, ingest.Ingest(t.Context(), quote.OperationID))
-	require.NoError(t, ingest.Ingest(t.Context(), quote.OperationID))
-	cost, err := s.LoadProviderCost(t.Context(), quote.OperationID)
-	require.NoError(t, err)
-	finalizer := app.NewOperationFinalizer(database, s, billingpg.NewStore(database))
-	finish := operationflow.SettlementInput{OperationID: quote.OperationID.String(), From: domain.StatusIngesting, To: domain.StatusCompleted, ActualCostMicros: cost.ActualCostMicros}
-	require.NoError(t, finalizer.FinalizeOperation(t.Context(), finish))
-	require.NoError(t, finalizer.FinalizeOperation(t.Context(), finish))
-	detail, err := op.NewPublicQuery(s).Task(t.Context(), actor, g.Scope.ProjectID, quote.OperationID)
+	detail, err := (aigateway.Creation{Runtime: gateway}).Task(t.Context(), actor, g.Scope.ProjectID, quote.OperationID)
 	require.NoError(t, err)
 	require.Len(t, detail.Outputs, 1)
 	input := agentwire.ShotDeliveryInput{CanvasID: doc.ID, NodeID: node.ID, OperationID: quote.OperationID, OutputID: detail.Outputs[0].ID, ExpectedRevision: source.Revision, DurationMS: 500, AspectRatio: "1:1", FPS: 25, ProjectFormat: tool.OutputFCPXML}
@@ -346,9 +281,36 @@ func TestAgentShotOriginalQuoteRecoveryVideoAndProjectDelivery(t *testing.T) {
 	require.Equal(t, agent.DeliveryIncomplete, completed.Status, "succeeded rows cannot stand in for unavailable actual artifacts")
 	shotTool(t, b, router, g, "shot_delivery_create", "delivery-retry", input)
 	var count int64
-	require.NoError(t, database.Raw(`SELECT count(*) FROM billing.ledger_entry WHERE operation_id=? AND entry_type='settle'`, quote.OperationID).Scan(&count).Error)
+	require.NoError(t, database.Raw(`SELECT count(*) FROM ai.money_event WHERE request_id=? AND kind='settle'`, quote.OperationID).Scan(&count).Error)
 	require.EqualValues(t, 1, count)
 	require.NoError(t, database.Raw(`SELECT count(*) FROM mediatool.export_job WHERE canvas_id=?`, doc.ID).Scan(&count).Error)
 	require.EqualValues(t, 2, count)
 	require.EqualValues(t, 1, posts.Load())
+}
+
+// The gateway checks frozen URL/credential authority before this read-only fixture.
+type pipelineKeys struct{}
+
+func (pipelineKeys) Open(string, uuid.UUID, uuid.UUID, []byte) ([]byte, error) {
+	return []byte(`{"api_key":"fixture-only-not-real"}`), nil
+}
+
+type pipelineDownloads struct {
+	t    *testing.T
+	body []byte
+}
+
+func (d pipelineDownloads) Download(_ context.Context, _ string) (*mediaapp.Downloaded, error) {
+	f, err := os.CreateTemp(d.t.TempDir(), "gateway-original-*")
+	if err != nil {
+		return nil, err
+	}
+	if _, err = f.Write(d.body); err != nil {
+		return nil, err
+	}
+	return &mediaapp.Downloaded{File: f, Size: int64(len(d.body)), MIMEType: "video/mp4", SHA256: aidomain.Digest(d.body)}, nil
+}
+func (d pipelineDownloads) DownloadAuthenticated(ctx context.Context, url, header string) (*mediaapp.Downloaded, error) {
+	require.Equal(d.t, "Bearer fixture-only-not-real", header)
+	return d.Download(ctx, url)
 }

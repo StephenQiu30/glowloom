@@ -66,6 +66,9 @@ type TaskInput struct {
 
 // TaskOutput describes a candidate; preview authorization remains with media.
 type TaskOutput struct {
+	TextTruncated bool `json:"text_truncated,omitempty"`
+	// OutputPolicy explicitly distinguishes usable unreviewed text from moderation approval.
+	OutputPolicy     string     `json:"output_policy,omitempty"`
 	Text             *string    `json:"text,omitempty"`
 	ID               uuid.UUID  `json:"id"`
 	Sequence         int32      `json:"sequence"`

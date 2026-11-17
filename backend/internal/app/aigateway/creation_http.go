@@ -16,6 +16,7 @@ import (
 
 // RegisterCreation replaces the workbench's old quote/confirmation/query boundary.
 func (c Creation) RegisterCreation(g *gin.RouterGroup) {
+	g.GET("/operations/:id/text", c.downloadText)
 	g.POST("/projects/:pid/free-operations", func(ctx *gin.Context) {
 		p, ok := httpapi.PathUUID(ctx, "pid")
 		if !ok {
@@ -117,27 +118,12 @@ func (c Creation) RegisterCreation(g *gin.RouterGroup) {
 			if !httpapi.Decode(ctx, &in) {
 				return
 			}
-			a := identityhttp.Principal(ctx)
-			if _, err := c.Task(ctx.Request.Context(), a, in.ProjectID, id); err != nil {
-				creationProblem(ctx, err)
-				return
-			}
-			store := c.store(c.Runtime.DB, a)
-			call, err := store.LoadQuote(ctx.Request.Context(), a.ScopeID, id)
+			out, err := c.Control(ctx.Request.Context(), identityhttp.Principal(ctx), in.ProjectID, id, "operation", action, ctx.GetHeader("Idempotency-Key"))
 			if err != nil {
 				creationProblem(ctx, err)
 				return
 			}
-			if action == "cancel" {
-				_, err = store.CancelQueued(ctx.Request.Context(), call)
-			} else {
-				_, err = store.Settle(ctx.Request.Context(), id)
-			}
-			if err != nil {
-				creationProblem(ctx, err)
-				return
-			}
-			ctx.JSON(202, gin.H{"target_id": id, "action": action, "status": "accepted"})
+			ctx.JSON(202, out)
 		})
 	}
 	c.registerBatches(g)

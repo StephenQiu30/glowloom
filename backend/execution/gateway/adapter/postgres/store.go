@@ -88,6 +88,19 @@ func (s *Store) Read(ctx context.Context, scope, id uuid.UUID) (domain.Record, e
 		if err := s.check(ctx, tx, scope, uuid.Nil, false); err != nil {
 			return err
 		}
+		var owner struct{ ActorID uuid.UUID }
+		if err := tx.Raw("SELECT actor_id FROM ai.request WHERE id=? AND scope_id=?", id, scope).Scan(&owner).Error; err != nil {
+			return err
+		}
+		if owner.ActorID != s.actor.ID {
+			allowed, err := CanReadLedger(tx, scope, s.actor.ID)
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				return domain.ErrForbidden
+			}
+		}
 		var err error
 		record, err = scanRecord(tx, id)
 		if err == nil && record.Scope != scope {
@@ -233,7 +246,8 @@ func (s *Store) Admit(ctx context.Context, call domain.Call) (application.Dispat
 			return err
 		}
 		result = application.Dispatch{Call: call, Attempt: attempt, Route: route, Send: true, Record: domain.Record{ID: call.ID, Scope: call.Scope, ModelID: call.Model.ID, State: "sending", Held: call.Limit}}
-		return nil
+		// Commit the recovery window with admission, including synchronous SDK/Agent calls.
+		return taskruntime.Enqueue(ctx, tx, "ai.recover", call.ID.String(), call.Deadline.Add(15*time.Second))
 	})
 	return result, err
 }
