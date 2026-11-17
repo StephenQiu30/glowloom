@@ -480,6 +480,7 @@ POST /projects/:pid/generation-estimate
 POST /projects/:pid/quotes
 GET /projects/:pid/operations
 GET /operations/:id
+GET /operations/:id/text
 POST /operations/:id/confirm
 POST /operations/:id/cancel
 POST /operations/:id/recover

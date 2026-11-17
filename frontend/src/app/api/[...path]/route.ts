@@ -754,6 +754,11 @@ async function proxy(
                           : undefined;
   const boundedRoute = [
     {
+      pattern: `operations/${identityUUID}/text`,
+      methods: ["GET"],
+      query: ["project_id"],
+    },
+    {
       pattern: "style-library",
       methods: ["GET", "POST"],
       query: ["q", "category", "mine", "limit", "cursor"],
