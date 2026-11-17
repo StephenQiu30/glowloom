@@ -1163,3 +1163,7 @@ SRC-AI-52后续确认已授权main提交/推送及代码实施。设计314839c30
 已按新合同实现独立 `execution/gateway` 与 `ai` 数据事实，替换工作台、Agent、主体语音、本地转写、SDK和后台模型管理入口。单次冻结/核销/释放、采购与销售独立版本、共享号池、原生Chat/Responses/Messages非流与SSE工具调用、未知结果证据对账、媒体真实文件交付均已有隔离PostgreSQL行为验证。旧AI派发、旧credit Kafka消费者和CLI付费旁路已停止生产装配；旧包仅保留历史测试与代码参照，不承担新请求或钱包兜底。
 
 MVP保留当前Go业务进程/Execution worker的共享业务事务装配；不扩大独立owner角色的跨库权限。独立owner部署、真实双供应商采购账单、管理员登录后的实站UI和生产发布未验收。当前专用隔离库为 `glowloom_ai_rebuild_20261117`，仅该库由schema.sql/data.sql离线初始化；业务库和线上服务未改动。最终质量门禁、整体复核和main推送回执见Plan29及本轮验收记录。
+
+main已推送433cdb22a。远程44046892809的Agent、Frontend及独立Workspace44046892787通过；Backend新核心无跳过门禁通过，但全仓Race暴露旧账本/媒体来源夹具、Node模拟成本与主体目录测试初始化回归，当前继续修复并以真实隔离数据库重跑。该远程失败尚未关闭，不能标记全仓交付完成；详见验收记录62§9。
+
+远程回归跟进源码19bfe8e22：两处Agent预算/终态证据防线、有效测试夹具迁移已完成，定向独立复核PASS/PASS且无finding。修正独立实例环境后的全仓Race为5900pass/877可选skip/0fail；新核心136、Node2、主体91及独立COS下AgentBusiness70均0skip，CI多媒体/风格库50和文档原件4也0skip。未运行真实付费供应商或部署，877skip不算验收通过。待本轮main推送后核对远程CI终态。
