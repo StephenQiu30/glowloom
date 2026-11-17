@@ -1,14 +1,10 @@
-import { ProvidersWorkspace } from "./_components/providers-workspace";
+import { PageLayout } from "@/components/layout/page-layout";
+import { GatewayAdmin } from "@/components/gateway/gateway-admin";
 export const metadata = { title: "AI 服务接入 · 织光" };
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    connection?: string | string[];
-  }>;
-}) {
-  const query = await searchParams;
-  const connection =
-    typeof query.connection === "string" ? query.connection : "";
-  return <ProvidersWorkspace initialConnection={connection} />;
+export default function Page() {
+  return (
+    <PageLayout screen="providers">
+      <GatewayAdmin />
+    </PageLayout>
+  );
 }
