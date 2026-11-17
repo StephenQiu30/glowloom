@@ -75,3 +75,31 @@ func (s *Store) AcceptGatewayOutput(ctx context.Context, actor application.Actor
 	}
 	return NewStorageRoutes(tx).AcceptStorageWork(ctx, intent.ID, ids)
 }
+
+// FindGatewayOriginal reads only a location owned by the original frozen work.
+// Reserved and unknown locations are candidates for byte verification, never
+// evidence that a complete object exists. This method does not change their state.
+func (s *Store) FindGatewayOriginal(ctx context.Context, intent application.StorageWorkIntent, key string) (domain.ObjectLocation, bool, error) {
+	if s == nil || s.db == nil {
+		return domain.ObjectLocation{}, false, application.ErrUnavailable
+	}
+	actual, err := NewStorageRoutes(s.db).ReadStorageWork(ctx, intent.Owner)
+	if err != nil {
+		return domain.ObjectLocation{}, false, err
+	}
+	if actual != intent || actual.State != application.StorageWorkOpen {
+		return domain.ObjectLocation{}, false, application.ErrStorageRouteConflict
+	}
+	var row objectLocationRow
+	q := s.db.WithContext(ctx).Where("owner_intent_id=? AND owner_session_id IS NULL AND profile_id=? AND bucket=? AND object_key=?", intent.ID, intent.ProfileID, intent.Bucket, key).Take(&row)
+	if errors.Is(q.Error, gorm.ErrRecordNotFound) {
+		return domain.ObjectLocation{}, false, nil
+	}
+	if q.Error != nil {
+		return domain.ObjectLocation{}, false, q.Error
+	}
+	if row.State != domain.ObjectLocationReserved && row.State != domain.ObjectLocationUnknown && row.State != domain.ObjectLocationPresent {
+		return domain.ObjectLocation{}, false, application.ErrStorageRouteConflict
+	}
+	return row.domain(), true, nil
+}

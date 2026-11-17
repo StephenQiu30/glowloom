@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/png"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -324,4 +327,160 @@ func TestGatewayMediaDeliveryRejectsChangedUnknownObjectAndPreservesDebt(t *test
 	require.NoError(t, err)
 	require.Equal(t, "settled", record.State)
 	require.EqualValues(t, 1, record.Charged)
+}
+
+func (o *durableBytes) Get(_ context.Context, ref objectstorage.Ref) (io.ReadCloser, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	b, ok := o.files[ref.Key]
+	if !ok {
+		return nil, mediaapp.ErrUnavailable
+	}
+	return io.NopCloser(bytes.NewReader(bytes.Clone(b))), nil
+}
+
+type localResultDownloads struct {
+	serverURL string
+	client    *http.Client
+}
+
+func (d localResultDownloads) Download(ctx context.Context, _ string) (*mediaapp.Downloaded, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, d.serverURL+"/original.png", nil)
+	if err != nil {
+		return nil, err
+	}
+	response, err := d.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, mediaflow.ErrResultExpired
+	}
+	return mediaapp.ReadUpload(ctx, io.LimitReader(response.Body, 512<<20), "original.png")
+}
+func (d localResultDownloads) DownloadAuthenticated(ctx context.Context, raw, _ string) (*mediaapp.Downloaded, error) {
+	return d.Download(ctx, raw)
+}
+
+func TestGatewayURLDeliveryRecoversOwnOriginalAfterSQLFailureAndUpstreamExpiry(t *testing.T) {
+	for _, storageCase := range []string{"present_complete", "unknown_complete", "unknown_truncated"} {
+		t.Run(storageCase, func(t *testing.T) {
+			db, store, _, a := fixture(t)
+			require.NoError(t, db.Exec(`UPDATE identity."user" SET email_key=?,email_verified_at=clock_timestamp() WHERE id=?`, a.ID.String()+"@example.invalid", a.ID).Error)
+			m := mediaModel(t, store, "image.generate", "provider_success_v1")
+			pid := uuid.New()
+			require.NoError(t, db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type) VALUES(?,?,?,?,'expired URL recovery','16:9','realistic')`, pid, a.OrgID, a.ID, a.ScopeID).Error)
+			body := pngBytes(t)
+			var expired atomic.Bool
+			var requests, sends atomic.Int64
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				if expired.Load() {
+					w.WriteHeader(http.StatusGone)
+					return
+				}
+				w.Header().Set("Content-Type", "image/png")
+				_, _ = w.Write(body)
+			}))
+			defer server.Close()
+			objects := &durableBytes{t: t, db: db, routes: pgmedia.NewStorageRoutes(db), files: map[string][]byte{}}
+			registry := fixtureMediaStorage(t, db)
+			runtime := &aigateway.Runtime{DB: db, Objects: registry, OutputReads: objects, ResultDownloads: localResultDownloads{serverURL: server.URL, client: server.Client()}, MediaArchive: mediaapp.NewGeneratedOutputArchiver(objects.routes, objects, mediaflow.FFProber{}, mediaflow.FFRenderer{}), Provider: providerFunc(func(context.Context, application.Dispatch, func(json.RawMessage) error) (domain.Receipt, error) {
+				sends.Add(1)
+				return domain.Receipt{}, domain.ErrInvalid
+			})}
+			raw, _ := json.Marshal(domain.MediaInput{Model: m.Name, Capability: m.Capability, Mode: "text2image", Prompt: "expired URL fixture", Params: map[string]any{}, OutputCount: 1})
+			call, err := application.Prepare(m, a.ID, a.ScopeID, pid, uuid.Nil, uuid.NewString(), "test", raw)
+			require.NoError(t, err)
+			_, err = store.Quote(t.Context(), call)
+			require.NoError(t, err)
+			require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return runtime.PinMediaOutput(t.Context(), tx, call) }))
+			dispatch, err := store.Admit(t.Context(), call)
+			require.NoError(t, err)
+			result := operation.GenerationResult{Outcome: operation.ProviderOutcomeCompleted, State: operation.ProviderTaskSucceeded, TaskID: "frozen-url-task", URLs: []string{"https://fixture.tos-cn-beijing.volces.com/signed-original.png?expires=short"}, Usage: json.RawMessage(`{"native_units":1}`)}
+			receiptBody, err := json.Marshal(result)
+			require.NoError(t, err)
+			cost, err := dispatch.Route.Purchase.Cost(domain.Usage{})
+			require.NoError(t, err)
+			require.NoError(t, store.SaveReceipt(t.Context(), call.ID, dispatch.Attempt, domain.Receipt{Body: receiptBody, UpstreamID: result.TaskID, PurchaseMicros: cost}))
+			_, err = store.Settle(t.Context(), call.ID)
+			require.NoError(t, err)
+			injected := errors.New("fixture final output SQL failed")
+			var fail atomic.Bool
+			fail.Store(true)
+			const callback = "fixture:ai-output-commit-failure"
+			require.NoError(t, db.Callback().Raw().Before("gorm:raw").Register(callback, func(tx *gorm.DB) {
+				if strings.HasPrefix(tx.Statement.SQL.String(), "UPDATE ai.output SET state=") && fail.CompareAndSwap(true, false) {
+					_ = tx.AddError(injected)
+				}
+			}))
+			t.Cleanup(func() { _ = db.Callback().Raw().Remove(callback) })
+			require.ErrorIs(t, runtime.Deliver(t.Context(), call.ID), injected)
+			require.EqualValues(t, 1, requests.Load())
+			require.Equal(t, 3, objects.writes)
+			var prior struct {
+				AssetID                       uuid.UUID
+				SHA256, ManifestSHA256, State string
+			}
+			require.NoError(t, db.Raw("SELECT asset_id,sha256,manifest_sha256,state FROM ai.output WHERE request_id=?", call.ID).Scan(&prior).Error)
+			require.Equal(t, "preparing", prior.State)
+			var n int64
+			require.NoError(t, db.Raw("SELECT count(*) FROM media.media_asset WHERE source_ai_request_id=?", call.ID).Scan(&n).Error)
+			require.Zero(t, n)
+			if storageCase != "present_complete" {
+				originalSuffix := "/" + prior.AssetID.String() + ".png"
+				var key string
+				require.NoError(t, db.Raw("SELECT object_key FROM media.object_location WHERE owner_intent_id=(SELECT id FROM media.storage_work_intent WHERE kind='operation' AND owner_id=? AND work_id=?) AND right(object_key,?)=?", pid, call.ID, len(originalSuffix), originalSuffix).Row().Scan(&key))
+				require.NoError(t, db.Exec("UPDATE media.object_location SET state='unknown',byte_size=NULL,sha256=NULL,mime_type=NULL WHERE object_key=? AND owner_intent_id=(SELECT id FROM media.storage_work_intent WHERE kind='operation' AND owner_id=? AND work_id=?)", key, pid, call.ID).Error)
+				if storageCase == "unknown_truncated" {
+					objects.mu.Lock()
+					objects.files[key] = bytes.Clone(body[:len(body)/2])
+					objects.mu.Unlock()
+				}
+			}
+			expired.Store(true)
+			// A restarted consumer has only the persisted manifest and original physical
+			// objects. Its upstream URL is gone; a second download must not be attempted.
+			restarted := *runtime
+			restarted.MediaArchive = mediaapp.NewGeneratedOutputArchiver(pgmedia.NewStorageRoutes(db), objects, mediaflow.FFProber{}, mediaflow.FFRenderer{})
+			if storageCase == "unknown_truncated" {
+				require.ErrorIs(t, restarted.Deliver(t.Context(), call.ID), mediaapp.ErrObjectMismatch)
+				require.EqualValues(t, 1, requests.Load())
+				require.Zero(t, sends.Load())
+				require.Equal(t, 3, objects.writes)
+				var state string
+				require.NoError(t, db.Raw("SELECT state FROM ai.output WHERE request_id=?", call.ID).Row().Scan(&state))
+				require.Equal(t, "preparing", state)
+				require.NoError(t, db.Raw("SELECT count(*) FROM media.media_asset WHERE source_ai_request_id=?", call.ID).Scan(&n).Error)
+				require.Zero(t, n)
+				require.NoError(t, db.Raw("SELECT count(*) FROM media.object_location WHERE owner_intent_id=(SELECT id FROM media.storage_work_intent WHERE kind='operation' AND owner_id=? AND work_id=?) AND state='unknown'", pid, call.ID).Scan(&n).Error)
+				require.EqualValues(t, 1, n)
+				return
+			}
+			require.NoError(t, restarted.Deliver(t.Context(), call.ID))
+			require.EqualValues(t, 1, requests.Load())
+			require.Zero(t, sends.Load())
+			require.Equal(t, 3, objects.writes)
+			var after struct {
+				AssetID                       uuid.UUID
+				SHA256, ManifestSHA256, State string
+			}
+			require.NoError(t, db.Raw("SELECT asset_id,sha256,manifest_sha256,state FROM ai.output WHERE request_id=?", call.ID).Scan(&after).Error)
+			require.Equal(t, prior.AssetID, after.AssetID)
+			require.Equal(t, prior.SHA256, after.SHA256)
+			require.Equal(t, prior.ManifestSHA256, after.ManifestSHA256)
+			require.Equal(t, "ready", after.State)
+			record, err := store.Read(t.Context(), a.ScopeID, call.ID)
+			require.NoError(t, err)
+			require.EqualValues(t, 1, record.Charged)
+			require.JSONEq(t, string(receiptBody), string(record.Receipt.Body))
+			require.NoError(t, db.Raw("SELECT count(*) FROM ai.money_event WHERE request_id=? AND kind='settle'", call.ID).Scan(&n).Error)
+			require.EqualValues(t, 1, n)
+			require.NoError(t, db.Raw("SELECT count(*) FROM ai.attempt WHERE request_id=?", call.ID).Scan(&n).Error)
+			require.EqualValues(t, 1, n)
+			require.NoError(t, db.Raw("SELECT count(*) FROM ai.hold WHERE request_id=?", call.ID).Scan(&n).Error)
+			require.EqualValues(t, 1, n)
+		})
+	}
 }

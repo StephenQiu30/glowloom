@@ -51,12 +51,14 @@ func projectScope(tx *gorm.DB, scope, project uuid.UUID) error {
 type Runtime struct {
 	Keys provider.Keys
 	// MediaArchive and VoiceMedia are optional byte-processing dependencies for isolated tests.
-	MediaArchive GatewayArchiver
-	VoiceMedia   VoiceMediaPreparer
-	Objects      *objectstorage.Registry
-	DB           *gorm.DB
-	Provider     application.Provider
-	Sealer       gatewayhttp.Sealer
+	MediaArchive    GatewayArchiver
+	VoiceMedia      VoiceMediaPreparer
+	OutputReads     GatewayObjectReads
+	ResultDownloads GatewayResultDownloads
+	Objects         *objectstorage.Registry
+	DB              *gorm.DB
+	Provider        application.Provider
+	Sealer          gatewayhttp.Sealer
 }
 
 // New composes the gateway transport and credential cryptography.

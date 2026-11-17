@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"strings"
 	"time"
 
@@ -23,6 +24,12 @@ import (
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
+
+// GatewayObjectReads opens only a previously admitted, exact physical object.
+// Recovery rehashes the actual bytes rather than trusting stored metadata.
+type GatewayObjectReads interface {
+	Get(context.Context, objectplatform.Ref) (io.ReadCloser, error)
+}
 
 // GatewayArchiver receives only saved bytes and source metadata, never paid send authority.
 type GatewayArchiver interface {
@@ -137,17 +144,12 @@ func (r *Runtime) Deliver(ctx context.Context, id uuid.UUID) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	file, err := r.deliveryBytes(ctx, source)
+	file, manifest, err := r.deliveryInput(ctx, source)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = file.Close() }()
-	kind := strings.TrimSuffix(source.Call.Model.Capability, ".generate")
-	aspect, err := r.deliveryAspect(ctx, id, source.Call.Project)
-	if err != nil {
-		return err
-	}
-	manifest := outputManifest{RequestID: id, AssetID: outputAssetID(id), ReceiptSHA: source.ReceiptSHA, SHA256: file.SHA256, MIMEType: file.MIMEType, ByteSize: file.Size, Kind: kind, Policy: source.Call.Model.OutputPolicy, AspectRatio: aspect}
+	kind := manifest.Kind
 	token, err := r.claimDelivery(ctx, manifest)
 	if err != nil {
 		return err

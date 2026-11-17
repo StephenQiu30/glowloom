@@ -13,6 +13,13 @@ import (
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
+// GatewayResultDownloads is a bounded read-only result transport. URL and original
+// credential checks remain in the gateway before this transport can be invoked.
+type GatewayResultDownloads interface {
+	Download(context.Context, string) (*media.Downloaded, error)
+	DownloadAuthenticated(context.Context, string, string) (*media.Downloaded, error)
+}
+
 // downloadResult uses only the original supplier's frozen allowlist. Authenticated
 // video content reads retain the original task and credential and refuse redirects.
 func (r *Runtime) downloadResult(ctx context.Context, s deliverySource, result operation.GenerationResult, raw string) (*media.Downloaded, error) {
@@ -32,9 +39,13 @@ func (r *Runtime) downloadResult(ctx context.Context, s deliverySource, result o
 	} else if !catalog.ValidCreationResultURL(config.AdapterKey, raw) && (config.AdapterKey != "volcengine_ark" || !strings.HasSuffix(u.Hostname(), ".tos-cn-beijing.volces.com")) {
 		return nil, workflow.ErrUnsafeResultURL
 	}
-	downloader, err := workflow.NewSecureDownloader(workflow.DownloadPolicy{AllowedOrigins: []string{"https://" + u.Host}, MaxBytes: 512 << 20})
-	if err != nil {
-		return nil, err
+	downloader := r.ResultDownloads
+	if downloader == nil {
+		configured, err := workflow.NewSecureDownloader(workflow.DownloadPolicy{AllowedOrigins: []string{"https://" + u.Host}, MaxBytes: 512 << 20})
+		if err != nil {
+			return nil, err
+		}
+		downloader = configured
 	}
 	if !authenticated {
 		return downloader.Download(ctx, raw)
