@@ -1,8 +1,8 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { toast } from "@/components/feedback/notification";
-import { FieldLabel } from "@/components/ui/field";
-import { useEffect, useRef, useState } from "react";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { useEffect, useId, useRef, useState } from "react";
 import { reauthenticate } from "@/api/identity";
 import { RequestError } from "@/lib/request";
 import { authErrorMessage } from "@/components/auth/contracts";
@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogFooter,
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -48,6 +50,7 @@ export function Confirmation({
   onClose: () => void;
   onDone: () => Promise<void> | void;
 }) {
+  const id = useId();
   const [password, setPassword] = useState("");
   const [reason, setReason] = useState("");
   const [pending, setPending] = useState(false);
@@ -139,43 +142,49 @@ export function Confirmation({
       }}
     >
       <DialogContent className="max-h-[85dvh] overflow-y-auto">
-        <DialogTitle>{action?.title}</DialogTitle>
-        <DialogDescription>{action?.effect}</DialogDescription>
+        <DialogHeader>
+          <DialogTitle>{action?.title}</DialogTitle>
+          <DialogDescription>{action?.effect}</DialogDescription>
+        </DialogHeader>
         <form
-          className="grid gap-4"
+          className="flex flex-col gap-5"
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
           }}
         >
-          {action?.reason ? (
-            <FieldLabel className="grid w-full gap-2">
-              操作原因
-              <Textarea
-                required
-                minLength={5}
-                maxLength={500}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                disabled={pending}
-              />
-            </FieldLabel>
-          ) : null}
-          {action?.password !== false ? (
-            <FieldLabel className="grid w-full gap-2">
-              当前密码
-              <Input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={pending}
-              />
-            </FieldLabel>
-          ) : null}
+          <FieldGroup>
+            {action?.reason ? (
+              <Field data-disabled={pending}>
+                <FieldLabel htmlFor={`${id}-reason`}>操作原因</FieldLabel>
+                <Textarea
+                  id={`${id}-reason`}
+                  required
+                  minLength={5}
+                  maxLength={500}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  disabled={pending}
+                />
+              </Field>
+            ) : null}
+            {action?.password !== false ? (
+              <Field data-disabled={pending}>
+                <FieldLabel htmlFor={`${id}-password`}>当前密码</FieldLabel>
+                <Input
+                  id={`${id}-password`}
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={pending}
+                />
+              </Field>
+            ) : null}
+          </FieldGroup>
           {error ? <FeedbackToast message={error} /> : null}
-          <div className="flex flex-wrap justify-end gap-2">
+          <DialogFooter>
             <Button
               type="button"
               variant="secondary"
@@ -195,7 +204,7 @@ export function Confirmation({
             >
               {pending ? "正在处理…" : (action?.confirmLabel ?? "确认操作")}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

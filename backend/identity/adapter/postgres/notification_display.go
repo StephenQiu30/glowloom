@@ -12,6 +12,22 @@ import (
 	app "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
+// Banners dismiss for the announcement lifetime. Popup buckets are derived only
+// from server time and the authenticated session; revisions never reset a bucket.
+func notificationDisplayScope(c app.AnnouncementContent, a app.Principal, now time.Time) string {
+	if c.Placement != "modal" {
+		return "once"
+	}
+	switch c.Frequency {
+	case "daily":
+		return "daily:" + now.In(time.FixedZone("Asia/Shanghai", 8*60*60)).Format("2006-01-02")
+	case "login":
+		return "login:" + a.SessionID.String()
+	default:
+		return "once"
+	}
+}
+
 func notificationEligible(c app.AnnouncementContent, tx *gorm.DB, a *app.Principal) (bool, error) {
 	if a == nil {
 		return c.Audience == "public", nil
@@ -47,7 +63,7 @@ func (s *NotificationStore) ValidateDisplay(ctx context.Context, a app.Principal
 			return err
 		}
 		now := clock()
-		if c.Placement == "inbox" || now.Before(c.StartsAt) || !now.Before(c.EndsAt) {
+		if c.Placement == "inbox" || now.Before(c.StartsAt) || (!c.Endless && !now.Before(c.EndsAt)) {
 			return nil
 		}
 		out.Valid, err = notificationEligible(c, tx, &a)
@@ -70,7 +86,7 @@ func (s *NotificationStore) Display(ctx context.Context, a *app.Principal, clock
 		}
 		now := clock()
 		var rows []announcementRow
-		if err := tx.Raw(announcementSelect+` WHERE a.enabled AND (r.content->>'starts_at')::timestamptz<=? AND (r.content->>'ends_at')::timestamptz>? AND r.content->>'placement' IN ('banner','modal') ORDER BY (r.content->>'priority')::int DESC,r.published_at DESC,a.id`, now, now).Scan(&rows).Error; err != nil {
+		if err := tx.Raw(announcementSelect+` WHERE a.enabled AND (r.content->>'starts_at')::timestamptz<=? AND (coalesce((r.content->>'endless')::boolean,false) OR (r.content->>'ends_at')::timestamptz>?) AND r.content->>'placement' IN ('banner','modal') ORDER BY (r.content->>'priority')::int DESC,r.published_at DESC,a.id`, now, now).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, r := range rows {
@@ -88,17 +104,18 @@ func (s *NotificationStore) Display(ctx context.Context, a *app.Principal, clock
 			if a == nil && c.Placement != "banner" {
 				continue
 			}
-			v := &app.DisplayAnnouncement{ID: r.ID, Revision: *r.PublishedRevision, Title: c.Title, Body: c.Body, Placement: c.Placement, ActionPath: c.ActionPath, DurationSeconds: c.DurationSeconds, StartsAt: c.StartsAt, EndsAt: c.EndsAt}
+			v := &app.DisplayAnnouncement{ID: r.ID, Revision: *r.PublishedRevision, Title: c.Title, Body: c.Body, Placement: c.Placement, ActionPath: c.ActionPath, DurationSeconds: c.DurationSeconds, StartsAt: c.StartsAt, EndsAt: c.EndsAt, Endless: c.Endless, ManualClose: c.ManualClose, Frequency: c.Frequency}
 			if a != nil {
+				scope := notificationDisplayScope(c, *a, now)
 				var receipt struct{ ShownAt, DismissedAt *time.Time }
-				if err := tx.Raw(`SELECT shown_at,dismissed_at FROM identity.notification_display_receipt WHERE account_id=? AND announcement_id=? AND revision=?`, a.ID, r.ID, *r.PublishedRevision).Scan(&receipt).Error; err != nil {
+				if err := tx.Raw(`SELECT shown_at,dismissed_at FROM identity.notification_display_receipt WHERE account_id=? AND announcement_id=? AND scope_key=?`, a.ID, r.ID, scope).Scan(&receipt).Error; err != nil {
 					return err
 				}
 				if receipt.DismissedAt != nil || (c.Placement == "modal" && receipt.ShownAt != nil) {
 					continue
 				}
 				var n struct{ ID uuid.UUID }
-				res := tx.Raw(`SELECT id FROM identity.notification_inbox WHERE account_id=? AND announcement_id=? AND revision=?`, a.ID, r.ID, *r.PublishedRevision).Scan(&n)
+				res := tx.Raw(`SELECT id FROM identity.notification_inbox WHERE account_id=? AND announcement_id=? AND inbox_seq IS NOT NULL ORDER BY inbox_seq LIMIT 1`, a.ID, r.ID).Scan(&n)
 				if res.Error != nil {
 					return res.Error
 				}
@@ -141,7 +158,7 @@ func (s *NotificationStore) AckDisplay(ctx context.Context, a app.Principal, in 
 			return err
 		}
 		now := clock()
-		if now.Before(c.StartsAt) || !now.Before(c.EndsAt) {
+		if now.Before(c.StartsAt) || (!c.Endless && !now.Before(c.EndsAt)) {
 			return app.ErrNotificationConflict
 		}
 		eligible, err := notificationEligible(c, tx, &a)
@@ -151,17 +168,24 @@ func (s *NotificationStore) AckDisplay(ctx context.Context, a app.Principal, in 
 		if !eligible {
 			return app.ErrForbidden
 		}
+		scope := notificationDisplayScope(c, a, now)
+		if c.Placement == "modal" && in.Kind == "dismissed" {
+			// A close acknowledges an existing popup claim; it must never claim a
+			// new bucket. A previous-day popup may close after Beijing midnight,
+			// when no current-day claim exists. That close is a harmless no-op.
+			return tx.Exec(`UPDATE identity.notification_display_receipt SET dismissed_at=coalesce(dismissed_at,?) WHERE account_id=? AND announcement_id=? AND scope_key=? AND shown_at IS NOT NULL`, now, a.ID, in.AnnouncementID, scope).Error
+		}
 		var shown, dismissed *time.Time
 		if in.Kind == "shown" {
 			shown = &now
 		} else {
 			dismissed = &now
 		}
-		q := `INSERT INTO identity.notification_display_receipt(account_id,announcement_id,revision,shown_at,dismissed_at) VALUES(?,?,?,?,?) ON CONFLICT(account_id,announcement_id,revision) DO UPDATE SET shown_at=coalesce(identity.notification_display_receipt.shown_at,EXCLUDED.shown_at),dismissed_at=coalesce(identity.notification_display_receipt.dismissed_at,EXCLUDED.dismissed_at)`
+		q := `INSERT INTO identity.notification_display_receipt(account_id,announcement_id,revision,scope_key,shown_at,dismissed_at) VALUES(?,?,?,?,?,?) ON CONFLICT(account_id,announcement_id,scope_key) DO UPDATE SET shown_at=coalesce(identity.notification_display_receipt.shown_at,EXCLUDED.shown_at),dismissed_at=coalesce(identity.notification_display_receipt.dismissed_at,EXCLUDED.dismissed_at)`
 		if in.Kind == "shown" {
 			q += ` WHERE identity.notification_display_receipt.shown_at IS NULL AND identity.notification_display_receipt.dismissed_at IS NULL`
 		}
-		result := tx.Exec(q, a.ID, in.AnnouncementID, in.Revision, shown, dismissed)
+		result := tx.Exec(q, a.ID, in.AnnouncementID, in.Revision, scope, shown, dismissed)
 		if result.Error != nil {
 			return result.Error
 		}

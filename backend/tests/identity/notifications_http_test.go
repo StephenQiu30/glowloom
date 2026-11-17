@@ -95,6 +95,21 @@ func TestNotificationsHTTPAuthorityOriginCSRFAndContract(t *testing.T) {
 	if w = call("POST", "/api/platform/notifications", unknown, true, origin, uuid.NewString(), login.CSRFToken); w.Code != 422 {
 		t.Fatal("unknown write field accepted", w.Code, w.Body.String())
 	}
+	deleteBody := `{"command_id":"` + uuid.NewString() + `","expected_version":"` + created.Version + `"}`
+	deletePath := "/api/platform/notifications/" + created.ID.String() + "/delete"
+	if w = call("POST", deletePath, deleteBody, true, origin, uuid.NewString(), login.CSRFToken); w.Code != 200 {
+		t.Fatal("draft delete route", w.Code, w.Body.String())
+	}
+	var deleted app.Announcement
+	if err = json.Unmarshal(w.Body.Bytes(), &deleted); err != nil || deleted.Status != "deleted" {
+		t.Fatal("delete response", deleted, err)
+	}
+	if w = call("POST", deletePath, deleteBody, true, origin, uuid.NewString(), login.CSRFToken); w.Code != 200 {
+		t.Fatal("delete command replay", w.Code, w.Body.String())
+	}
+	if w = call("GET", "/api/platform/notifications/"+created.ID.String(), "", true, "", "", ""); w.Code != 404 {
+		t.Fatal("deleted draft remains visible", w.Code, w.Body.String())
+	}
 	if err = tx.Exec(`UPDATE identity."user" SET platform_role='creator',platform_epoch=platform_epoch+1 WHERE id=?`, admin.ID).Error; err != nil {
 		t.Fatal(err)
 	}

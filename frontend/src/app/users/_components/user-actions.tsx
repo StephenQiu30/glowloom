@@ -1,8 +1,8 @@
 "use client";
 import { accountActionRestriction } from "@/components/governance/action-restrictions";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FieldLabel } from "@/components/ui/field";
-import { useState } from "react";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { useId, useState } from "react";
 import {
   platformDisable,
   platformDeleteUser,
@@ -34,6 +34,7 @@ export function UserActions({
   detail: API.PlatformUserDetailView;
   onAction: (a: ConfirmAction) => void;
 }) {
+  const id = useId();
   const [resetName, setResetName] = useState(true);
   const [resetAvatar, setResetAvatar] = useState(true);
   function choose(kind: string) {
@@ -108,22 +109,24 @@ export function UserActions({
     <section className="grid gap-3">
       <h3>可用管理操作</h3>
       {actions.includes("profile_reset") ? (
-        <div className="grid gap-2">
-          <FieldLabel className="flex gap-2">
+        <FieldGroup>
+          <Field orientation="horizontal">
             <Checkbox
+              id={`${id}-name`}
               checked={resetName}
               onCheckedChange={(value) => setResetName(value === true)}
             />
-            重置显示名
-          </FieldLabel>
-          <FieldLabel className="flex gap-2">
+            <FieldLabel htmlFor={`${id}-name`}>重置显示名</FieldLabel>
+          </Field>
+          <Field orientation="horizontal">
             <Checkbox
+              id={`${id}-avatar`}
               checked={resetAvatar}
               onCheckedChange={(value) => setResetAvatar(value === true)}
             />
-            重置头像
-          </FieldLabel>
-        </div>
+            <FieldLabel htmlFor={`${id}-avatar`}>重置头像</FieldLabel>
+          </Field>
+        </FieldGroup>
       ) : null}
       <div className="flex flex-wrap gap-2">
         {actions.map((a) => (

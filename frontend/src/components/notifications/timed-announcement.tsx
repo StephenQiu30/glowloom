@@ -27,14 +27,19 @@ export function TimedAnnouncementDialog({
   const [hovered, setHovered] = useState(false);
   const [interacting, setInteracting] = useState(false);
   const openingFocus = useRef(true);
+  const returnFocus = useRef<HTMLElement | null>(null);
   const title = useRef<HTMLHeadingElement>(null);
-  const seconds = useAnnouncementCountdown(
+  useAnnouncementCountdown(
     announcement.duration_seconds,
     hovered || interacting,
     onClose,
+    !announcement.manual_close,
   );
   const action = safeNotificationAction(announcement.action_path);
-  useAnnouncementExpiry(announcement.ends_at, onClose);
+  useAnnouncementExpiry(
+    announcement.endless ? "" : announcement.ends_at,
+    onClose,
+  );
   return (
     <Dialog
       open
@@ -53,9 +58,19 @@ export function TimedAnnouncementDialog({
           if (!openingFocus.current) setInteracting(true);
         }}
         onOpenAutoFocus={(event) => {
+          returnFocus.current =
+            document.activeElement instanceof HTMLElement
+              ? document.activeElement
+              : null;
           event.preventDefault();
           title.current?.focus();
           openingFocus.current = false;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (returnFocus.current?.isConnected) {
+            event.preventDefault();
+            returnFocus.current.focus();
+          }
         }}
       >
         <DialogHeader>
@@ -70,12 +85,14 @@ export function TimedAnnouncementDialog({
           {announcement.body}
         </p>
         <DialogFooter>
-          <Button
-            variant="ghost"
-            onClick={() => setInteracting((value) => !value)}
-          >
-            {interacting ? "继续自动关闭" : "暂停自动关闭"}
-          </Button>
+          {!announcement.manual_close ? (
+            <Button
+              variant="ghost"
+              onClick={() => setInteracting((value) => !value)}
+            >
+              {interacting ? "继续自动关闭" : "暂停自动关闭"}
+            </Button>
+          ) : null}
           <Button asChild>
             <Link
               href={
@@ -89,9 +106,6 @@ export function TimedAnnouncementDialog({
             </Link>
           </Button>
         </DialogFooter>
-        <p className="text-xs text-muted-foreground" aria-live="off">
-          {hovered || interacting ? "自动关闭已暂停" : `${seconds} 秒后关闭`}
-        </p>
       </DialogContent>
     </Dialog>
   );

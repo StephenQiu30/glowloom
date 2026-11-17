@@ -29,7 +29,12 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -633,9 +638,11 @@ function UserAdministration() {
       >
         <SheetContent
           aria-describedby={undefined}
-          className="overflow-y-auto p-6 data-[side=right]:w-full data-[side=right]:sm:max-w-[520px]"
+          className="admin-detail overflow-y-auto p-6 data-[side=right]:w-full data-[side=right]:sm:max-w-[560px]"
         >
-          <SheetTitle>账号详情</SheetTitle>
+          <SheetHeader className="p-0">
+            <SheetTitle>账号详情</SheetTitle>
+          </SheetHeader>
 
           {detail ? (
             <div className="flex flex-col gap-3">

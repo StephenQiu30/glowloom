@@ -82,7 +82,6 @@ function Shell({
   initialAuthMode?: AuthMode;
   search?: PageSearch;
 }) {
-  const adminSection = resolveAdminSection(screen);
   const [pageOptions, setPageOptions] = useState<PageOptions | null>(null);
   const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(
     null,
@@ -103,6 +102,10 @@ function Shell({
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [contentKey, screen]);
   const session = useOptionalSession();
+  const adminSection = resolveAdminSection(
+    screen,
+    session?.actor.platform_role === "platform_admin",
+  );
   const updateSession = useSessionUpdate();
   const router = useRouter();
   const { isMobile, openMobile, setOpenMobile } = useSidebar();

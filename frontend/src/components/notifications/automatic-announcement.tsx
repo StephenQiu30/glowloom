@@ -41,6 +41,7 @@ export function AutomaticAnnouncement({
     let opened = false;
     async function check() {
       if (
+        !announcement.endless &&
         announcement.ends_at &&
         new Date(announcement.ends_at).getTime() <= Date.now()
       ) {
@@ -82,7 +83,12 @@ export function AutomaticAnnouncement({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [announcement.id, announcement.revision, announcement.ends_at]);
+  }, [
+    announcement.id,
+    announcement.revision,
+    announcement.ends_at,
+    announcement.endless,
+  ]);
   return open ? (
     <TimedAnnouncementDialog announcement={announcement} onClose={onClose} />
   ) : null;

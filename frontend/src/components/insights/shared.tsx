@@ -1,9 +1,8 @@
 "use client";
 import { useEffect, useId, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { RefreshCw, SlidersHorizontal, Copy, Info } from "lucide-react";
 import { useSession } from "@/components/auth/session";
-import { PageToolbar } from "@/components/layout/page-toolbar";
+import { AdminHeading } from "@/components/governance/admin-layout";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,40 +35,7 @@ export function useInsightIdentity() {
   const s = useSession();
   return `${s.actor.id}:${s.session_id}:${s.actor.revision}:${s.actor.platform_role}`;
 }
-export function InsightsNav({
-  active,
-}: {
-  active: "health" | "audit" | "analytics";
-}) {
-  const admin = useSession().actor.platform_role === "platform_admin";
-  return (
-    <nav className="insights-nav" aria-label="日志与分析">
-      {(admin
-        ? ([
-            ["health", "运行诊断"],
-            ["audit", "审计日志"],
-            ["analytics", "数据分析"],
-          ] as const)
-        : ([["analytics", "我的分析"]] as const)
-      ).map(([id, label]) => (
-        <Button
-          key={id}
-          variant={id === active ? "secondary" : "ghost"}
-          asChild
-        >
-          <Link
-            href={`/${id}`}
-            aria-current={active === id ? "page" : undefined}
-          >
-            {label}
-          </Link>
-        </Button>
-      ))}
-    </nav>
-  );
-}
 export function InsightsHeading({
-  active,
   title,
   description,
   pending,
@@ -84,26 +50,13 @@ export function InsightsHeading({
   children?: ReactNode;
 }) {
   return (
-    <>
-      <PageToolbar inHeader>
-        <InsightsNav active={active} />
-      </PageToolbar>
-      <div className="insights-header">
-        <div>
-          <h1>{title}</h1>
-          {description ? (
-            <p className="insights-subtitle">{description}</p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {children}
-          <Button variant="ghost" onClick={refresh} disabled={pending}>
-            <RefreshCw data-icon="inline-start" />
-            刷新
-          </Button>
-        </div>
-      </div>
-    </>
+    <AdminHeading title={title} description={description}>
+      {children}
+      <Button variant="ghost" onClick={refresh} disabled={pending}>
+        <RefreshCw data-icon="inline-start" />
+        刷新
+      </Button>
+    </AdminHeading>
   );
 }
 export function Panel({
@@ -348,9 +301,11 @@ export function Filters({
       {appliedCount ? (
         <span className="insights-note">已应用 {appliedCount} 项条件</span>
       ) : null}
-      <Button variant="ghost" onClick={reset}>
-        重置
-      </Button>
+      {appliedCount ? (
+        <Button variant="ghost" onClick={reset}>
+          重置
+        </Button>
+      ) : null}
     </div>
   );
 }

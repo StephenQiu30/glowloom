@@ -53,7 +53,7 @@ func announcementView(r announcementRow, now time.Time) (app.Announcement, error
 		switch {
 		case !r.Enabled:
 			a.Status = "disabled"
-		case !now.Before(c.EndsAt):
+		case !c.Endless && !now.Before(c.EndsAt):
 			a.Status = "expired"
 		case now.Before(c.StartsAt):
 			a.Status = "scheduled"
@@ -106,7 +106,7 @@ func notificationAudit(tx *gorm.DB, a app.Principal, id, cmd uuid.UUID, action s
 }
 func loadAnnouncement(tx *gorm.DB, id uuid.UUID, lock bool) (announcementRow, error) {
 	var r announcementRow
-	q := announcementSelect + ` WHERE a.id=?`
+	q := announcementSelect + ` WHERE a.id=? AND a.deleted_at IS NULL`
 	if lock {
 		q += ` FOR UPDATE OF a`
 	}
@@ -187,7 +187,8 @@ func (s *NotificationStore) SaveAnnouncement(ctx context.Context, a app.Principa
 	return out, err
 }
 
-// CommandAnnouncement serializes publication or enable-state changes against the expected version.
+// CommandAnnouncement serializes publication, enable-state and draft deletion
+// against the expected version.
 func (s *NotificationStore) CommandAnnouncement(ctx context.Context, a app.Principal, id uuid.UUID, action string, in app.AnnouncementCommand, clock func() time.Time) (app.Announcement, error) {
 	var out app.Announcement
 	fingerprint := notificationHash([]any{action, id, in})
@@ -207,6 +208,25 @@ func (s *NotificationStore) CommandAnnouncement(ctx context.Context, a app.Princ
 		}
 		now := clock().UTC()
 		var content app.AnnouncementContent
+		if action == "delete" {
+			if r.PublishedRevision != nil {
+				return app.ErrInvalidNotification
+			}
+			if err = tx.Exec(`UPDATE identity.announcement SET version=version+1,deleted_at=?,updated_by=?,updated_at=? WHERE id=?`, now, a.ID, now, id).Error; err != nil {
+				return err
+			}
+			out, err = announcementView(r, now)
+			if err != nil {
+				return err
+			}
+			out.Version++
+			out.UpdatedAt = now
+			out.Status = "deleted"
+			if err = notificationAudit(tx, a, id, in.CommandID, "deleted", out.Version, now); err != nil {
+				return err
+			}
+			return notificationReceipt(tx, a.ID, in.CommandID, fingerprint, out, now)
+		}
 		if action == "publish" {
 			if r.PublishedRevision != nil && bytes.Equal(r.Draft, r.Published) {
 				return app.ErrNotificationConflict
@@ -214,7 +234,7 @@ func (s *NotificationStore) CommandAnnouncement(ctx context.Context, a app.Princ
 			if err = json.Unmarshal(r.Draft, &content); err != nil {
 				return err
 			}
-			if !content.EndsAt.After(now) {
+			if !content.Endless && !content.EndsAt.After(now) {
 				return app.ErrInvalidNotification
 			}
 			if err = validateAnnouncementTeam(tx, content); err != nil {
@@ -243,7 +263,7 @@ func (s *NotificationStore) CommandAnnouncement(ctx context.Context, a app.Princ
 			if err = json.Unmarshal(r.Published, &content); err != nil {
 				return err
 			}
-			if !content.EndsAt.After(now) {
+			if !content.Endless && !content.EndsAt.After(now) {
 				return app.ErrInvalidNotification
 			}
 			if err = validateAnnouncementTeam(tx, content); err != nil {
@@ -303,7 +323,7 @@ func projectAnnouncement(tx *gorm.DB, id uuid.UUID, rev int64, c app.Announcemen
 	}
 	lockArgs := append(append([]any{}, args...), id, rev)
 	var accounts []uuid.UUID
-	if err := tx.Raw(`SELECT m.account_id FROM identity.notification_mailbox m JOIN identity."user" u ON u.id=m.account_id WHERE `+eligible+` AND NOT EXISTS(SELECT 1 FROM identity.notification_inbox n WHERE n.account_id=m.account_id AND n.announcement_id=? AND n.revision=?) ORDER BY m.account_id FOR UPDATE OF m`, lockArgs...).Scan(&accounts).Error; err != nil {
+	if err := tx.Raw(`SELECT m.account_id FROM identity.notification_mailbox m JOIN identity."user" u ON u.id=m.account_id WHERE `+eligible+` AND NOT EXISTS(SELECT 1 FROM identity.notification_inbox n WHERE n.account_id=m.account_id AND n.announcement_id=? AND (n.inbox_seq IS NOT NULL OR n.cancelled_at IS NULL OR n.revision=?)) ORDER BY m.account_id FOR UPDATE OF m`, lockArgs...).Scan(&accounts).Error; err != nil {
 		return err
 	}
 	if len(accounts) == 0 {
@@ -316,7 +336,7 @@ func projectAnnouncement(tx *gorm.DB, id uuid.UUID, rev int64, c app.Announcemen
 	if now.Before(c.StartsAt) {
 		return tx.Exec(`INSERT INTO identity.notification_inbox(id,account_id,announcement_id,revision,category,content,occurred_at) SELECT gen_random_uuid(),account_id,?,?,'system',?::jsonb,? FROM identity.notification_mailbox WHERE account_id IN ? ON CONFLICT(account_id,announcement_id,revision) DO NOTHING`, id, rev, string(b), c.StartsAt, accounts).Error
 	}
-	return tx.Exec(`WITH advanced AS (UPDATE identity.notification_mailbox m SET last_seq=last_seq+1,version=version+1 WHERE account_id IN ? AND NOT EXISTS(SELECT 1 FROM identity.notification_inbox n WHERE n.account_id=m.account_id AND n.announcement_id=? AND n.revision=?) RETURNING account_id,last_seq) INSERT INTO identity.notification_inbox(id,account_id,inbox_seq,announcement_id,revision,category,content,occurred_at) SELECT gen_random_uuid(),account_id,last_seq,?,?,'system',?::jsonb,? FROM advanced`, accounts, id, rev, id, rev, string(b), now).Error
+	return tx.Exec(`WITH advanced AS (UPDATE identity.notification_mailbox m SET last_seq=last_seq+1,version=version+1 WHERE account_id IN ? AND NOT EXISTS(SELECT 1 FROM identity.notification_inbox n WHERE n.account_id=m.account_id AND n.announcement_id=? AND (n.inbox_seq IS NOT NULL OR n.cancelled_at IS NULL OR n.revision=?)) RETURNING account_id,last_seq) INSERT INTO identity.notification_inbox(id,account_id,inbox_seq,announcement_id,revision,category,content,occurred_at) SELECT gen_random_uuid(),account_id,last_seq,?,?,'system',?::jsonb,? FROM advanced`, accounts, id, rev, id, rev, string(b), now).Error
 }
 
 func cancelFutureAnnouncement(tx *gorm.DB, id uuid.UUID, revision int64, now time.Time) error {
@@ -370,7 +390,7 @@ func encodeNotificationCursor(p notificationCursor) *string {
 	return &v
 }
 
-const announcementStatus = `(CASE WHEN a.published_revision IS NULL THEN 'draft' WHEN NOT a.enabled THEN 'disabled' WHEN (r.content->>'ends_at')::timestamptz<=? THEN 'expired' WHEN (r.content->>'starts_at')::timestamptz>? THEN 'scheduled' ELSE 'active' END)`
+const announcementStatus = `(CASE WHEN a.published_revision IS NULL THEN 'draft' WHEN NOT a.enabled THEN 'disabled' WHEN NOT coalesce((r.content->>'endless')::boolean,false) AND (r.content->>'ends_at')::timestamptz<=? THEN 'expired' WHEN (r.content->>'starts_at')::timestamptz>? THEN 'scheduled' ELSE 'active' END)`
 
 // ListAnnouncements applies validated conditions before cursor pagination.
 func (s *NotificationStore) ListAnnouncements(ctx context.Context, a app.Principal, f app.NotificationFilter, clock func() time.Time) (app.AnnouncementPage, error) {
@@ -383,7 +403,7 @@ func (s *NotificationStore) ListAnnouncements(ctx context.Context, a app.Princip
 		if err != nil {
 			return err
 		}
-		q := tx.Table("identity.announcement a").Joins(`LEFT JOIN identity.announcement_revision r ON r.announcement_id=a.id AND r.revision=a.published_revision`).Select("a.id,a.version,a.draft,a.published_revision,r.content AS published,a.enabled,a.created_at,a.updated_at").Where("a.updated_at<=?", p.AsOf)
+		q := tx.Table("identity.announcement a").Joins(`LEFT JOIN identity.announcement_revision r ON r.announcement_id=a.id AND r.revision=a.published_revision`).Select("a.id,a.version,a.draft,a.published_revision,r.content AS published,a.enabled,a.created_at,a.updated_at").Where("a.deleted_at IS NULL AND a.updated_at<=?", p.AsOf)
 		if f.Search != "" {
 			q = q.Where(`a.draft->>'title' ILIKE ?`, "%"+f.Search+"%")
 		}
@@ -435,8 +455,12 @@ func (s *NotificationStore) AnnouncementAudit(ctx context.Context, a app.Princip
 		if err := notificationActor(tx, a, true, clock); err != nil {
 			return err
 		}
-		if _, err := loadAnnouncement(tx, id, false); err != nil {
+		var exists bool
+		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM identity.announcement WHERE id=?)`, id).Scan(&exists).Error; err != nil {
 			return err
+		}
+		if !exists {
+			return app.ErrNotificationNotFound
 		}
 		return tx.Raw(`SELECT id,actor_id,action,version,created_at FROM identity.notification_audit WHERE announcement_id=? ORDER BY created_at DESC,id DESC LIMIT 100`, id).Scan(&out.Items).Error
 	})

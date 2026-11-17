@@ -7,6 +7,7 @@ export function useAnnouncementCountdown(
   durationSeconds: number,
   paused: boolean,
   onElapsed: () => void,
+  enabled = true,
 ) {
   const remaining = useRef(durationSeconds * 1000);
   const finished = useRef(false);
@@ -14,7 +15,7 @@ export function useAnnouncementCountdown(
   const elapsed = useEffectEvent(onElapsed);
 
   useEffect(() => {
-    if (paused || finished.current) return;
+    if (!enabled || paused || finished.current) return;
     const started = Date.now();
     const before = remaining.current;
     const interval = setInterval(() => {
@@ -33,7 +34,7 @@ export function useAnnouncementCountdown(
       clearInterval(interval);
       remaining.current = Math.max(0, before - (Date.now() - started));
     };
-  }, [paused]);
+  }, [paused, enabled]);
 
   return seconds;
 }

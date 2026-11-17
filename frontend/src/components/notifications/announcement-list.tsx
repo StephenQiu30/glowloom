@@ -45,10 +45,10 @@ import { positionOptions, audienceOptions } from "./announcement-editor";
 export const announcementStates = [
   ["all", "全部状态"],
   ["draft", "草稿"],
-  ["scheduled", "待生效"],
-  ["active", "发布中"],
+  ["scheduled", "待开始"],
+  ["active", "展示中"],
   ["expired", "已结束"],
-  ["disabled", "已停用"],
+  ["disabled", "已下线"],
 ] as const;
 export const announcementStatus = (value: string) =>
   announcementStates.find(([key]) => key === value)?.[1] ?? value;
@@ -123,14 +123,17 @@ export function AnnouncementList() {
           </Button>
         </AdminHeading>
         <div className="flex flex-wrap items-center gap-3">
-          <p className="text-sm text-muted-foreground">
-            {keyword ? `标题包含“${keyword}”` : "全部通知"}
-          </p>
-          {filters.status !== "all" ? (
-            <Badge variant="secondary">
-              {announcementStatus(filters.status)}
-            </Badge>
-          ) : null}
+          <FieldGroup className="w-44">
+            <NotificationSelect
+              label="状态"
+              value={filters.status}
+              options={announcementStates}
+              onChange={(status) => {
+                setFilters((value) => ({ ...value, status }));
+                setCursors([undefined]);
+              }}
+            />
+          </FieldGroup>
           {keyword ||
           Object.entries(filters).some(
             ([key, value]) =>

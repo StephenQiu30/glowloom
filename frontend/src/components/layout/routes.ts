@@ -64,12 +64,16 @@ export function resolveScreen(pathname: string) {
 }
 
 /** These sibling management routes share navigation, never their business state. */
-export function resolveAdminSection(screen: Screen) {
+export function resolveAdminSection(screen: Screen, platformAdmin = false) {
   switch (screen) {
     case "users":
     case "providers":
     case "models":
+    case "health":
+    case "audit":
       return screen;
+    case "analytics":
+      return platformAdmin ? screen : undefined;
     case "platform/teams":
       return "teams";
     case "platform/settings":

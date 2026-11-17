@@ -24,6 +24,10 @@ export function ProductNavigation({
     typeof ProductSider
   >["onMobileCloseAutoFocus"];
 }) {
+  const adminSection = resolveAdminSection(
+    screen,
+    header.actor?.platform_role === "platform_admin",
+  );
   return (
     <>
       <ProductSider
@@ -39,9 +43,9 @@ export function ProductNavigation({
             showSearch={
               !hideSearch &&
               screen !== "home" &&
-              (!resolveAdminSection(screen) || Boolean(header.search))
+              (!adminSection || Boolean(header.search))
             }
-            showUtilities={!resolveAdminSection(screen)}
+            showUtilities={!adminSection}
           />
           {children}
         </div>

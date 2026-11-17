@@ -96,6 +96,7 @@ export const categoryLabel = (category: string) =>
   notificationCategories.find(([key]) => key === category)?.[1] ?? "系统";
 export const notificationDate = (value: string) =>
   new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",

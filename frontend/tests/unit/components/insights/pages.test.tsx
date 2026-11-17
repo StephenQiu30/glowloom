@@ -120,8 +120,9 @@ it("creator gets personal analysis with no management or business/export links a
   render(<Analytics />);
   await screen.findByText("已受理任务");
   expect(
-    screen.getByRole("link", { name: "我的分析" }).getAttribute("href"),
-  ).toBe("/analytics");
+    screen.getByRole("heading", { name: "创作分析", level: 1 }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("navigation", { name: "管理页面" })).toBeNull();
   expect(screen.queryByRole("link", { name: "运行诊断" })).toBeNull();
   expect(screen.queryByRole("tab", { name: "经营" })).toBeNull();
   expect(screen.queryByText("导出未开放")).toBeNull();

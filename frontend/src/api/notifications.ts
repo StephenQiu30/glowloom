@@ -202,6 +202,28 @@ export async function getPlatformNotificationAudit(
   );
 }
 
+/** 此处后端没有提供注释 POST /api/platform/notifications/${param0}/delete */
+export async function deletePlatformNotification(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.deletePlatformNotificationParams,
+  body: API.PublishAnnouncementRequest,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.Announcement>(
+    `/api/platform/notifications/${param0}/delete`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
 /** 此处后端没有提供注释 PATCH /api/platform/notifications/${param0}/enabled */
 export async function setPlatformNotificationEnabled(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

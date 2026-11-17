@@ -1,13 +1,13 @@
 import { Suspense } from "react";
 import { PageLayout } from "@/components/layout/page-layout";
-import { NotificationInbox } from "@/components/notifications/notification-inbox";
+import { NotificationInboxRoute } from "@/components/notifications/notification-inbox-route";
 
 export const metadata = { title: "通知中心" };
 export default function Page() {
   return (
     <PageLayout screen="notifications">
       <Suspense>
-        <NotificationInbox />
+        <NotificationInboxRoute />
       </Suspense>
     </PageLayout>
   );

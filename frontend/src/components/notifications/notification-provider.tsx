@@ -29,9 +29,12 @@ import {
 } from "./contracts";
 import { GlobalAnnouncement, AnnouncementDetail } from "./global-announcement";
 import { NotificationDetail } from "./notification-detail";
+import { NotificationPanel } from "./notification-panel";
 import { AutomaticAnnouncement } from "./automatic-announcement";
 
 type NotificationCenter = {
+  inboxOpen: boolean;
+  setInboxOpen: (open: boolean) => void;
   identity: string;
   signedIn: boolean;
   summary: NotificationSummary | undefined;
@@ -77,6 +80,8 @@ function NotificationSession({
   const [readError, setReadError] = useState(false);
   const [revision, setRevision] = useState(0);
   const [activePopup, setActivePopup] = useState<DisplayAnnouncement>();
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [popupClaimed, setPopupClaimed] = useState(false);
   const [detail, setDetail] = useState<DisplayAnnouncement>();
   const detailFocus = useRef<HTMLElement | null>(null);
   const shellFocus = useRef<HTMLDivElement>(null);
@@ -113,7 +118,9 @@ function NotificationSession({
   const candidate = display.data?.popup;
   const popup =
     activePopup ??
-    (candidate && !handled.has(`${candidate.id}:${candidate.revision}`)
+    (!popupClaimed &&
+    candidate &&
+    !handled.has(`${candidate.id}:${candidate.revision}`)
       ? requireDisplayAnnouncement(candidate)
       : undefined);
   const summary = summaryRead.data
@@ -123,7 +130,9 @@ function NotificationSession({
   const banner =
     rawBanner &&
     `${rawBanner.id}:${rawBanner.revision}` !== dismissedBanner &&
-    (!rawBanner.ends_at || new Date(rawBanner.ends_at).getTime() > observedAt)
+    (rawBanner.endless ||
+      !rawBanner.ends_at ||
+      new Date(rawBanner.ends_at).getTime() > observedAt)
       ? requireDisplayAnnouncement(rawBanner)
       : undefined;
 
@@ -224,6 +233,8 @@ function NotificationSession({
   return (
     <NotificationContext.Provider
       value={{
+        inboxOpen,
+        setInboxOpen,
         identity,
         signedIn,
         summary,
@@ -254,12 +265,15 @@ function NotificationSession({
           }}
         />
         {children}
+        <NotificationPanel open={inboxOpen} onOpenChange={setInboxOpen} />
         {popup ? (
           <AutomaticAnnouncement
             key={`${popup.id}:${popup.revision}`}
             announcement={popup}
             onClose={closePopup}
             onShown={async () => {
+              // Keep this candidate mounted while its receipt is in flight:
+              // revalidation may already exclude the server-side claimed row.
               setActivePopup(popup);
               try {
                 await ackNotificationDisplay({
@@ -267,6 +281,9 @@ function NotificationSession({
                   revision: popup.revision,
                   kind: "shown",
                 });
+                if (alive.current) {
+                  setPopupClaimed(true);
+                }
                 return alive.current;
               } catch (error) {
                 if (

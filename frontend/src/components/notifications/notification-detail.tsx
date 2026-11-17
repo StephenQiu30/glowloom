@@ -91,9 +91,14 @@ export function NotificationDetail({
       <DialogContent
         className="notification-surface sm:max-w-[560px] [&_[data-slot=dialog-close]]:size-11"
         onCloseAutoFocus={(event) => {
+          const replacement = Array.from(
+            fallbackFocus.current?.querySelectorAll<HTMLElement>(
+              "[data-notification-id]",
+            ) ?? [],
+          ).find((node) => node.dataset.notificationId === id);
           const target = returnFocus.current?.isConnected
             ? returnFocus.current
-            : fallbackFocus.current;
+            : (replacement ?? fallbackFocus.current);
           if (target) {
             event.preventDefault();
             target.focus();
@@ -129,8 +134,10 @@ export function NotificationDetail({
           />
         ) : (
           <>
-            {item.status === "disabled" ? (
-              <p className="text-sm text-muted-foreground">此通知已停用</p>
+            {item.status === "disabled" || item.status === "expired" ? (
+              <p className="text-sm text-muted-foreground">
+                {item.status === "expired" ? "此通知已结束" : "此通知已下线"}
+              </p>
             ) : null}
             <p className="break-words whitespace-pre-wrap">{item.body}</p>
             <DialogFooter>

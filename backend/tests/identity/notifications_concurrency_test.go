@@ -43,7 +43,7 @@ func TestNotificationsConcurrentCommittedWatermarkAndClaim(t *testing.T) {
 			t.Error("disable committed test announcements", err)
 		}
 	}()
-	_, user := verifiedTestActor(t, conn.DB, "notification-reader-"+suffix+"@example.invalid", now)
+	userAuth, user := verifiedTestActor(t, conn.DB, "notification-reader-"+suffix+"@example.invalid", now)
 	if err = conn.DB.Exec(`UPDATE identity."user" SET platform_role='platform_admin' WHERE id=?`, admin.ID).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +83,7 @@ func TestNotificationsConcurrentCommittedWatermarkAndClaim(t *testing.T) {
 	}
 	modal := notificationContent(now)
 	modal.Placement = "modal"
+	modal.Frequency = "daily"
 	a, err := svc.Save(ctx, admin, uuid.Nil, app.SaveAnnouncementInput{CommandID: uuid.New(), Content: modal})
 	if err != nil {
 		t.Fatal(err)
@@ -96,10 +97,16 @@ func TestNotificationsConcurrentCommittedWatermarkAndClaim(t *testing.T) {
 		t.Fatal("missing popup", err)
 	}
 	ack := app.NotificationDisplayAck{AnnouncementID: display.Popup.ID, Revision: display.Popup.Revision, Kind: "shown"}
+	secondLogin, err := userAuth.Login(ctx, "notification-reader-"+suffix+"@example.invalid", "long password for tests", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherSession := user
+	otherSession.SessionID = secondLogin.Session.ID
 	start := make(chan struct{})
 	results := make(chan error, 2)
-	for i := 0; i < 2; i++ {
-		go func() { <-start; results <- svc.Ack(ctx, user, ack) }()
+	for _, actor := range []app.Principal{user, otherSession} {
+		go func() { <-start; results <- svc.Ack(ctx, actor, ack) }()
 	}
 	close(start)
 	claimed, conflicted := 0, 0

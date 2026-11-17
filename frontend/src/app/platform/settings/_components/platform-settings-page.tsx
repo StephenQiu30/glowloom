@@ -2,7 +2,7 @@
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { useEffect, useState } from "react";
 import { platformSettings, updatePlatformSettings } from "@/api/identity";
 import {
@@ -71,7 +71,7 @@ function PlatformSettingsAdministration() {
       {settings && !error ? (
         <form
           aria-label="平台规则"
-          className="grid max-w-2xl gap-4"
+          className="flex max-w-2xl flex-col gap-5"
           onSubmit={(e) => {
             e.preventDefault();
             setAction({
@@ -92,21 +92,29 @@ function PlatformSettingsAdministration() {
             });
           }}
         >
-          <FieldLabel className="flex gap-2">
-            <Checkbox
-              checked={registration}
-              onCheckedChange={(value) => setRegistration(value === true)}
-            />
-            允许公开注册
-          </FieldLabel>
-          <FieldLabel className="flex gap-2">
-            <Checkbox
-              checked={creation}
-              onCheckedChange={(value) => setCreation(value === true)}
-            />
-            允许创建团队
-          </FieldLabel>
-          <Button className="justify-self-start">保存平台设置</Button>
+          <FieldGroup>
+            <Field orientation="horizontal">
+              <Checkbox
+                id="platform-registration"
+                checked={registration}
+                onCheckedChange={(value) => setRegistration(value === true)}
+              />
+              <FieldLabel htmlFor="platform-registration">
+                允许公开注册
+              </FieldLabel>
+            </Field>
+            <Field orientation="horizontal">
+              <Checkbox
+                id="platform-team-creation"
+                checked={creation}
+                onCheckedChange={(value) => setCreation(value === true)}
+              />
+              <FieldLabel htmlFor="platform-team-creation">
+                允许创建团队
+              </FieldLabel>
+            </Field>
+          </FieldGroup>
+          <Button className="self-start">保存平台设置</Button>
         </form>
       ) : !error ? (
         <ContentState state="loading" title="正在读取平台设置" />

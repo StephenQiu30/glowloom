@@ -285,7 +285,7 @@ it("从SWR缓存恢复的公告也会排队并重新验证，不依赖首次请�
   });
 });
 
-it("当前弹窗关闭后继续处理期间到达的下一条候选", async () => {
+it("当前弹窗关闭后不连续补弹期间到达的下一条候选", async () => {
   const popup = {
     id: "a",
     revision: "1",
@@ -310,6 +310,45 @@ it("当前弹窗关闭后继续处理期间到达的下一条候选", async () =
     expect(api.getNotificationDisplay).toHaveBeenCalledTimes(2),
   );
   fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
-  await screen.findByRole("dialog", { name: "公告B" });
-  expect(api.ackNotificationDisplay).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(screen.queryByRole("dialog", { name: "公告B" })).toBeNull();
+  expect(api.ackNotificationDisplay).toHaveBeenCalledTimes(1);
+});
+
+it("领取回执延迟期间刷新候选，仍展示原公告且不重复领取", async () => {
+  const popup = {
+    id: "a",
+    revision: "1",
+    title: "公告A",
+    body: "正文",
+    placement: "modal",
+    duration_seconds: 5,
+    starts_at: new Date(Date.now() - 1000).toISOString(),
+    ends_at: new Date(Date.now() + 60000).toISOString(),
+    action_path: "",
+    notification_id: "",
+  };
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.mocked(api.ackNotificationDisplay)
+    .mockImplementationOnce(() => pending)
+    .mockRejectedValueOnce(new RequestError("notification_conflict", 409));
+  vi.mocked(api.getNotificationDisplay).mockResolvedValue({ popup });
+  vi.mocked(api.validateNotificationDisplay).mockResolvedValue({ valid: true });
+  render(tree());
+  await waitFor(() =>
+    expect(api.ackNotificationDisplay).toHaveBeenCalledTimes(1),
+  );
+  vi.mocked(api.getNotificationDisplay).mockResolvedValue({
+    popup: { ...popup, id: "b", title: "公告B" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "刷新" }));
+  await waitFor(() =>
+    expect(api.getNotificationDisplay).toHaveBeenCalledTimes(2),
+  );
+  await act(async () => release());
+  await screen.findByRole("dialog", { name: "公告A" });
+  expect(api.ackNotificationDisplay).toHaveBeenCalledTimes(1);
 });

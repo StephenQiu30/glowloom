@@ -14,7 +14,7 @@ import (
 
 func syncNotificationMailbox(tx *gorm.DB, a uuid.UUID, now time.Time) error {
 	var rows []announcementRow
-	if err := tx.Raw(announcementSelect+` WHERE (a.enabled AND (r.content->>'starts_at')::timestamptz<=? AND (r.content->>'ends_at')::timestamptz>?) OR EXISTS(SELECT 1 FROM identity.notification_inbox n WHERE n.announcement_id=a.id AND n.account_id=? AND n.inbox_seq IS NULL AND n.cancelled_at IS NULL AND n.occurred_at<=?) ORDER BY a.id FOR SHARE OF a`, now, now, a, now).Scan(&rows).Error; err != nil {
+	if err := tx.Raw(announcementSelect+` WHERE (a.enabled AND (r.content->>'starts_at')::timestamptz<=? AND (coalesce((r.content->>'endless')::boolean,false) OR (r.content->>'ends_at')::timestamptz>?)) OR EXISTS(SELECT 1 FROM identity.notification_inbox n WHERE n.announcement_id=a.id AND n.account_id=? AND n.inbox_seq IS NULL AND n.cancelled_at IS NULL AND n.occurred_at<=?) ORDER BY a.id FOR SHARE OF a`, now, now, a, now).Scan(&rows).Error; err != nil {
 		return err
 	}
 	for _, r := range rows {
@@ -22,7 +22,7 @@ func syncNotificationMailbox(tx *gorm.DB, a uuid.UUID, now time.Time) error {
 		if err := json.Unmarshal(r.Published, &c); err != nil {
 			return err
 		}
-		if !r.Enabled || now.Before(c.StartsAt) || !now.Before(c.EndsAt) {
+		if !r.Enabled || now.Before(c.StartsAt) || (!c.Endless && !now.Before(c.EndsAt)) {
 			continue
 		}
 		if err := projectAnnouncement(tx, r.ID, *r.PublishedRevision, c, now, &a); err != nil {
@@ -128,7 +128,7 @@ func inboxView(r inboxRow, now time.Time) (app.InboxNotification, error) {
 		status = c.Status
 	case !r.Enabled:
 		status = "disabled"
-	case !now.Before(c.EndsAt):
+	case !c.Endless && !now.Before(c.EndsAt):
 		status = "expired"
 	}
 	return app.InboxNotification{ID: r.ID, InboxSeq: r.InboxSeq, AnnouncementID: r.AnnouncementID, Revision: r.Revision, SourceKind: r.SourceKind, SourceID: r.SourceID, Category: r.Category, Title: c.Title, Body: c.Body, ActionPath: c.ActionPath, Read: r.ReadAt != nil, OccurredAt: r.OccurredAt, Status: status}, err
@@ -149,7 +149,13 @@ func (s *NotificationStore) ListNotifications(ctx context.Context, a app.Princip
 			return err
 		}
 		q := tx.Table("identity.notification_inbox n").Joins("LEFT JOIN identity.announcement a ON a.id=n.announcement_id").Select("n.*,coalesce(a.enabled,false) AS enabled").Where("n.account_id=? AND n.inbox_seq IS NOT NULL AND n.occurred_at<=?", a.ID, p.AsOf)
-		if f.Category != "" {
+		switch f.Category {
+		case "interaction":
+			q = q.Where("n.category=?", "collaboration")
+		case "official":
+			q = q.Where("n.category IN ?", []string{"system", "task", "account"})
+		case "":
+		default:
 			q = q.Where("n.category=?", f.Category)
 		}
 		if f.UnreadOnly {

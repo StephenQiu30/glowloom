@@ -8,6 +8,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AnnouncementEditor } from "@/components/notifications/announcement-editor";
 import * as api from "@/api/notifications";
+import { requireAnnouncement } from "@/components/notifications/contracts";
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -24,12 +25,52 @@ const saved = {
   draft: { title: "维护通知", body: "今晚维护" },
 };
 beforeEach(() => {
+  vi.mocked(api.savePlatformNotification).mockResolvedValue(saved);
   vi.mocked(api.createPlatformNotification).mockResolvedValue(saved);
   vi.mocked(api.publishPlatformNotification).mockResolvedValue({
     ...saved,
     version: "2",
     status: "active",
   });
+});
+
+it("定时编辑使用北京时间，长期有效和手动关闭独立提交", async () => {
+  const announcement = requireAnnouncement({
+    ...saved,
+    draft: {
+      title: "维护通知",
+      body: "今晚维护",
+      placement: "modal",
+      audience: "authenticated",
+      starts_at: "2099-11-17T01:00:00Z",
+      ends_at: "0001-01-01T00:00:00Z",
+      endless: true,
+      manual_close: true,
+      frequency: "daily",
+      duration_seconds: 5,
+      inbox: true,
+    },
+  });
+  render(<AnnouncementEditor announcement={announcement} />);
+  expect(
+    (screen.getByLabelText("开始时间 · 北京时间") as HTMLInputElement).value,
+  ).toBe("2099-11-17T09:00");
+  expect(screen.queryByLabelText("截止时间 · 北京时间")).toBeNull();
+  expect(screen.queryByLabelText("停留时长（秒）")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await waitFor(() => expect(api.savePlatformNotification).toHaveBeenCalled());
+  expect(api.savePlatformNotification).toHaveBeenCalledWith(
+    { id: "notice-a" },
+    expect.objectContaining({
+      content: expect.objectContaining({
+        starts_at: "2099-11-17T01:00:00Z",
+        ends_at: undefined,
+        endless: true,
+        manual_close: true,
+        frequency: "daily",
+      }),
+    }),
+  );
 });
 afterEach(() => {
   cleanup();

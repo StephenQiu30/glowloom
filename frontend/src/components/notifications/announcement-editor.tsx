@@ -38,6 +38,7 @@ import {
 import { AnnouncementDetail, GlobalAnnouncement } from "./global-announcement";
 import { TimedAnnouncementDialog } from "./timed-announcement";
 import { useNotificationCenter } from "./notification-provider";
+import { beijingDateTime, beijingInstant } from "./notification-time";
 
 type Draft = Required<API.AnnouncementContent>;
 function initialDraft(): Draft {
@@ -46,7 +47,10 @@ function initialDraft(): Draft {
     title: "",
     body: "",
     placement: "banner",
-    audience: "public",
+    audience: "authenticated",
+    endless: false,
+    manual_close: false,
+    frequency: "once",
     team_id: "",
     starts_at: new Date(now).toISOString(),
     ends_at: new Date(now + 7 * 86400000).toISOString(),
@@ -56,21 +60,14 @@ function initialDraft(): Draft {
     inbox: true,
   };
 }
-function localDate(value: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
-}
 const positionOptions = [
   ["banner", "顶部公告"],
   ["modal", "消息弹窗"],
   ["inbox", "仅消息中心"],
 ] as const;
 const audienceOptions = [
-  ["public", "全部用户"],
-  ["authenticated", "登录用户"],
+  ["public", "公开用户（含游客）"],
+  ["authenticated", "全部登录用户"],
   ["team", "指定团队"],
 ] as const;
 export { positionOptions, audienceOptions };
@@ -87,6 +84,12 @@ export function AnnouncementEditor({
     ...announcement?.draft,
     team_id: announcement?.draft.team_id ?? "",
   }));
+  const [startMode, setStartMode] = useState(() =>
+    announcement?.draft.starts_at &&
+    Date.parse(announcement.draft.starts_at) > Date.now()
+      ? "scheduled"
+      : "immediate",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
@@ -123,10 +126,11 @@ export function AnnouncementEditor({
     if (locked.current || conflict) return;
     if (
       !draft.starts_at ||
-      !draft.ends_at ||
-      new Date(draft.ends_at) <= new Date(draft.starts_at)
+      (!draft.endless &&
+        (!draft.ends_at ||
+          new Date(draft.ends_at) <= new Date(draft.starts_at)))
     ) {
-      setError("失效时间必须晚于生效时间");
+      setError("结束展示时间必须晚于开始时间");
       return;
     }
     locked.current = true;
@@ -137,6 +141,7 @@ export function AnnouncementEditor({
       ...draft,
       title: draft.title.trim(),
       body: draft.body.trim(),
+      ends_at: draft.endless ? undefined : draft.ends_at,
       team_id: draft.audience === "team" ? draft.team_id : undefined,
     };
     const payload = JSON.stringify(content);
@@ -202,6 +207,9 @@ export function AnnouncementEditor({
     action_path: draft.action_path,
     starts_at: draft.starts_at,
     ends_at: draft.ends_at,
+    endless: draft.endless,
+    manual_close: draft.manual_close,
+    frequency: draft.frequency,
   };
   return (
     <div className="notification-surface flex min-w-0 flex-col gap-6">
@@ -334,40 +342,122 @@ export function AnnouncementEditor({
                   )}
                 </FieldGroup>
               ) : null}
-              <Field>
-                <FieldLabel htmlFor="announcement-start">生效时间</FieldLabel>
-                <Input
-                  id="announcement-start"
-                  type="datetime-local"
-                  required
-                  value={localDate(draft.starts_at)}
-                  onChange={(event) =>
-                    change(
-                      "starts_at",
-                      event.target.value
-                        ? new Date(event.target.value).toISOString()
-                        : "",
-                    )
-                  }
+              <FieldGroup className="grid gap-4 sm:grid-cols-2">
+                <NotificationSelect
+                  label="开始方式"
+                  value={startMode}
+                  options={[
+                    ["immediate", "立即发布"],
+                    ["scheduled", "定时发布"],
+                  ]}
+                  onChange={(mode) => {
+                    setStartMode(mode);
+                    if (mode === "immediate")
+                      change("starts_at", new Date().toISOString());
+                  }}
                 />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="announcement-end">失效时间</FieldLabel>
-                <Input
-                  id="announcement-end"
-                  type="datetime-local"
-                  required
-                  value={localDate(draft.ends_at)}
-                  onChange={(event) =>
-                    change(
-                      "ends_at",
-                      event.target.value
-                        ? new Date(event.target.value).toISOString()
-                        : "",
-                    )
-                  }
+                {startMode === "scheduled" ? (
+                  <Field>
+                    <FieldLabel htmlFor="announcement-start">
+                      开始时间 · 北京时间
+                    </FieldLabel>
+                    <Input
+                      id="announcement-start"
+                      type="datetime-local"
+                      required
+                      value={beijingDateTime(draft.starts_at)}
+                      onChange={(event) =>
+                        change("starts_at", beijingInstant(event.target.value))
+                      }
+                    />
+                  </Field>
+                ) : null}
+              </FieldGroup>
+              <FieldGroup className="grid gap-4 sm:grid-cols-2">
+                <NotificationSelect
+                  label="结束展示"
+                  value={draft.endless ? "endless" : "scheduled"}
+                  options={[
+                    ["scheduled", "指定时间"],
+                    ["endless", "长期有效"],
+                  ]}
+                  onChange={(mode) => change("endless", mode === "endless")}
                 />
-              </Field>
+                {!draft.endless ? (
+                  <Field
+                    data-invalid={error.includes("结束展示时间") || undefined}
+                  >
+                    <FieldLabel htmlFor="announcement-end">
+                      截止时间 · 北京时间
+                    </FieldLabel>
+                    <Input
+                      id="announcement-end"
+                      type="datetime-local"
+                      required
+                      aria-invalid={error.includes("结束展示时间") || undefined}
+                      value={beijingDateTime(draft.ends_at)}
+                      onChange={(event) =>
+                        change("ends_at", beijingInstant(event.target.value))
+                      }
+                    />
+                  </Field>
+                ) : null}
+              </FieldGroup>
+              {draft.placement === "modal" ? (
+                <FieldGroup>
+                  <FieldGroup className="grid gap-4 sm:grid-cols-2">
+                    <NotificationSelect
+                      label="弹窗关闭方式"
+                      value={draft.manual_close ? "manual" : "timed"}
+                      options={[
+                        ["timed", "定时关闭"],
+                        ["manual", "手动关闭"],
+                      ]}
+                      onChange={(value) =>
+                        change("manual_close", value === "manual")
+                      }
+                    />
+                    {!draft.manual_close ? (
+                      <Field>
+                        <FieldLabel htmlFor="announcement-duration">
+                          停留时长（秒）
+                        </FieldLabel>
+                        <Input
+                          id="announcement-duration"
+                          type="number"
+                          required
+                          min={5}
+                          max={60}
+                          value={draft.duration_seconds}
+                          onChange={(event) =>
+                            change(
+                              "duration_seconds",
+                              Number(event.target.value),
+                            )
+                          }
+                        />
+                      </Field>
+                    ) : null}
+                  </FieldGroup>
+                  <NotificationSelect
+                    label="重复频次"
+                    value={draft.frequency}
+                    options={[
+                      ["once", "每个账号一次"],
+                      ["daily", "每天一次"],
+                      ["login", "每次登录一次"],
+                    ]}
+                    onChange={(value) => {
+                      if (
+                        value === "once" ||
+                        value === "daily" ||
+                        value === "login"
+                      )
+                        change("frequency", value);
+                    }}
+                  />
+                </FieldGroup>
+              ) : null}
               <Field orientation="horizontal">
                 <FieldLabel htmlFor="announcement-inbox">
                   同时保存到消息中心
@@ -387,21 +477,6 @@ export function AnnouncementEditor({
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <FieldGroup className="pt-4">
-                    <Field>
-                      <FieldLabel htmlFor="announcement-duration">
-                        自动关闭时长（秒）
-                      </FieldLabel>
-                      <Input
-                        id="announcement-duration"
-                        type="number"
-                        min={5}
-                        max={60}
-                        value={draft.duration_seconds}
-                        onChange={(event) =>
-                          change("duration_seconds", Number(event.target.value))
-                        }
-                      />
-                    </Field>
                     <Field>
                       <FieldLabel htmlFor="announcement-priority">
                         展示优先级
@@ -469,7 +544,11 @@ export function AnnouncementEditor({
           <h2 className="text-base font-medium">预览</h2>
           <p className="text-xs text-muted-foreground">
             {positionOptions.find(([key]) => key === draft.placement)?.[1]} ·{" "}
-            {draft.duration_seconds} 秒
+            {draft.placement === "modal"
+              ? draft.manual_close
+                ? "手动关闭"
+                : `${draft.duration_seconds} 秒`
+              : "北京时间"}
           </p>
           {draft.placement === "banner" ? (
             <div className="overflow-hidden rounded-lg border [--global-announcement-height:40px] max-sm:[--global-announcement-height:56px]">

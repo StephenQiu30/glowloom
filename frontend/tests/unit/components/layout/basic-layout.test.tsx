@@ -140,6 +140,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   usePathname: () => mocks.pathname,
   useRouter: () => mocks,
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 vi.mock("@/components/feedback/notification", () => ({
   toast: Object.assign(vi.fn(), {
@@ -502,14 +503,21 @@ it("手机顶栏使用共享账号组，主题归入账号菜单且不虚构会�
   expect(within(header).queryByRole("link", { name: "开会员" })).toBeNull();
   expect(within(header).getByRole("button", { name: "积分余额" })).toBeTruthy();
   fireEvent.click(within(header).getByRole("button", { name: /消息中心/ }));
-  expect(await screen.findByRole("dialog", { name: "消息" })).toBeTruthy();
+  expect(await screen.findByRole("dialog", { name: "消息中心" })).toBeTruthy();
   expect(mocks.info).not.toHaveBeenCalledWith(
     "消息中心暂未开放",
     expect.anything(),
   );
-  expect(
-    screen.getByRole("link", { name: "查看全部" }).getAttribute("href"),
-  ).toBe("/notifications");
+  expect(screen.getByRole("tab", { name: "互动" })).toBeTruthy();
+  expect(screen.getByRole("tab", { name: "官方消息" })).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "查看全部" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+  const { waitFor } = await import("@testing-library/react");
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      within(header).getByRole("button", { name: /消息中心/ }),
+    ),
+  );
 });
 
 it("空间读取期间保留顶栏和侧栏，只阻止正文私有内容", async () => {

@@ -9328,11 +9328,13 @@ CREATE TABLE identity.announcement (
     draft jsonb NOT NULL CHECK (jsonb_typeof(draft) = 'object'),
     published_revision bigint,
     enabled boolean NOT NULL DEFAULT false,
+    deleted_at timestamptz,
     created_by uuid NOT NULL REFERENCES identity."user"(id),
     updated_by uuid NOT NULL REFERENCES identity."user"(id),
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
-    CHECK (published_revision IS NULL OR published_revision > 0)
+    CHECK (published_revision IS NULL OR published_revision > 0),
+    CHECK (deleted_at IS NULL OR (published_revision IS NULL AND NOT enabled))
 );
 CREATE TABLE identity.announcement_revision (
     announcement_id uuid NOT NULL REFERENCES identity.announcement(id),
@@ -9372,6 +9374,7 @@ CREATE TABLE identity.notification_inbox (
     CHECK (inbox_seq IS NOT NULL OR (source_kind='announcement' AND read_at IS NULL)),
     CHECK (cancelled_at IS NULL OR (source_kind='announcement' AND inbox_seq IS NULL))
 );
+CREATE UNIQUE INDEX notification_inbox_announcement_delivery_idx ON identity.notification_inbox(account_id,announcement_id) WHERE announcement_id IS NOT NULL AND inbox_seq IS NOT NULL;
 CREATE INDEX notification_inbox_pending_idx ON identity.notification_inbox(account_id,occurred_at,id) WHERE inbox_seq IS NULL AND cancelled_at IS NULL;
 CREATE UNIQUE INDEX notification_inbox_source_event_idx ON identity.notification_inbox(account_id,source_event_id) WHERE source_event_id IS NOT NULL;
 CREATE INDEX notification_inbox_unread_idx ON identity.notification_inbox(account_id,inbox_seq DESC) WHERE read_at IS NULL;
@@ -9380,9 +9383,10 @@ CREATE TABLE identity.notification_display_receipt (
     account_id uuid NOT NULL REFERENCES identity."user"(id),
     announcement_id uuid NOT NULL,
     revision bigint NOT NULL,
+    scope_key text NOT NULL CHECK (scope_key = 'once' OR scope_key ~ '^daily:[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR scope_key ~ '^login:[0-9a-f-]{36}$'),
     shown_at timestamptz,
     dismissed_at timestamptz,
-    PRIMARY KEY (account_id,announcement_id,revision),
+    PRIMARY KEY (account_id,announcement_id,scope_key),
     FOREIGN KEY (announcement_id,revision) REFERENCES identity.announcement_revision(announcement_id,revision)
 );
 CREATE TABLE identity.notification_command (
@@ -9398,7 +9402,7 @@ CREATE TABLE identity.notification_audit (
     announcement_id uuid NOT NULL REFERENCES identity.announcement(id),
     actor_id uuid NOT NULL REFERENCES identity."user"(id),
     command_id uuid NOT NULL,
-    action text NOT NULL CHECK (action IN ('created','saved','published','enabled','disabled')),
+    action text NOT NULL CHECK (action IN ('created','saved','published','enabled','disabled','deleted')),
     version bigint NOT NULL CHECK (version>0),
     created_at timestamptz NOT NULL,
     UNIQUE(actor_id,command_id)

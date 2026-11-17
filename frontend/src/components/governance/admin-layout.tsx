@@ -14,6 +14,8 @@ export function AdminNavigation({ active }: { active: AdminSection }) {
     { id: "models", href: "/models", label: "模型管理" },
     { id: "settings", href: "/platform/settings", label: "平台设置" },
     { id: "notifications", href: "/platform/notifications", label: "通知管理" },
+    { id: "health", href: "/health", label: "运行日志" },
+    { id: "audit", href: "/audit", label: "审计日志" },
   ];
   return (
     <nav aria-label="管理页面" className="admin-navigation">
@@ -55,13 +57,15 @@ export function AdminWorkspace({
 }
 export function AdminHeading({
   title,
+  description,
   children,
 }: {
   title: string;
+  description?: ReactNode;
   children?: ReactNode;
 }) {
   return (
-    <PageHeader title={title}>
+    <PageHeader title={title} description={description}>
       {children ? (
         <ToolbarGroup
           appearance="plain"

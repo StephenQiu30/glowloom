@@ -28,6 +28,9 @@ type AnnouncementContent struct {
 	TeamID          *uuid.UUID `json:"team_id"`
 	StartsAt        time.Time  `json:"starts_at"`
 	EndsAt          time.Time  `json:"ends_at"`
+	Endless         bool       `json:"endless"`
+	ManualClose     bool       `json:"manual_close"`
+	Frequency       string     `json:"frequency" enums:"once,daily,login" default:"once"`
 	Priority        int        `json:"priority"`
 	DurationSeconds int        `json:"duration_seconds"`
 	ActionPath      string     `json:"action_path"`
@@ -54,7 +57,7 @@ type SaveAnnouncementInput struct {
 	Content         AnnouncementContent `json:"content"`
 }
 
-// AnnouncementCommand identifies a publication or enable-state command.
+// AnnouncementCommand identifies a publication, enable-state or draft deletion command.
 type AnnouncementCommand struct {
 	CommandID       uuid.UUID `json:"command_id"`
 	ExpectedVersion int64     `json:"expected_version,string" swaggertype:"string"`
@@ -137,6 +140,9 @@ type DisplayAnnouncement struct {
 	DurationSeconds int        `json:"duration_seconds"`
 	StartsAt        time.Time  `json:"starts_at"`
 	EndsAt          time.Time  `json:"ends_at"`
+	Endless         bool       `json:"endless"`
+	ManualClose     bool       `json:"manual_close"`
+	Frequency       string     `json:"frequency" enums:"once,daily,login" default:"once"`
 }
 
 // NotificationDisplayView contains at most one banner and one popup candidate.
@@ -213,10 +219,19 @@ func NewNotifications(store NotificationStore, clock func() time.Time) *Notifica
 func validContent(c *AnnouncementContent) bool {
 	c.Title = strings.TrimSpace(c.Title)
 	c.Body = strings.TrimSpace(c.Body)
+	if c.Frequency == "" {
+		c.Frequency = "once"
+	}
+	if c.Endless {
+		c.EndsAt = time.Time{}
+	}
 	if c.DurationSeconds == 0 {
 		c.DurationSeconds = 5
 	}
-	if c.Title == "" || len([]rune(c.Title)) > 120 || c.Body == "" || len([]rune(c.Body)) > 10000 || c.StartsAt.IsZero() || !c.EndsAt.After(c.StartsAt) || c.Priority < 0 || c.Priority > 100 || c.DurationSeconds < 5 || c.DurationSeconds > 60 {
+	if c.Title == "" || len([]rune(c.Title)) > 120 || c.Body == "" || len([]rune(c.Body)) > 10000 || c.StartsAt.IsZero() || (!c.Endless && !c.EndsAt.After(c.StartsAt)) || c.Priority < 0 || c.Priority > 100 || c.DurationSeconds < 5 || c.DurationSeconds > 60 {
+		return false
+	}
+	if c.Frequency != "once" && c.Frequency != "daily" && c.Frequency != "login" {
 		return false
 	}
 	if c.Placement != "banner" && c.Placement != "modal" && c.Placement != "inbox" {
@@ -254,9 +269,9 @@ func (s *Notifications) Save(ctx context.Context, a Principal, id uuid.UUID, in 
 	return s.store.SaveAnnouncement(ctx, a, id, in, s.clock)
 }
 
-// Command validates publication and enable-state command identities.
+// Command validates publication, enable-state and draft deletion command identities.
 func (s *Notifications) Command(ctx context.Context, a Principal, id uuid.UUID, action string, in AnnouncementCommand) (Announcement, error) {
-	if id == uuid.Nil || in.CommandID == uuid.Nil || in.ExpectedVersion < 1 || (action != "publish" && action != "enabled") {
+	if id == uuid.Nil || in.CommandID == uuid.Nil || in.ExpectedVersion < 1 || (action != "publish" && action != "enabled" && action != "delete") {
 		return Announcement{}, ErrInvalidNotification
 	}
 	return s.store.CommandAnnouncement(ctx, a, id, action, in, s.clock)
@@ -283,7 +298,7 @@ func normalizeNotificationFilter(f *NotificationFilter, admin bool) error {
 		if f.Status != "" && f.Status != "draft" && f.Status != "scheduled" && f.Status != "active" && f.Status != "expired" && f.Status != "disabled" {
 			return ErrInvalidNotification
 		}
-	} else if f.Category != "" && f.Category != "system" && f.Category != "task" && f.Category != "collaboration" && f.Category != "account" {
+	} else if f.Category != "" && f.Category != "system" && f.Category != "task" && f.Category != "collaboration" && f.Category != "account" && f.Category != "interaction" && f.Category != "official" {
 		return ErrInvalidNotification
 	}
 	return nil

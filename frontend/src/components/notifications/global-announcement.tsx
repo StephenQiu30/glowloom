@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRef } from "react";
 import { useAnnouncementExpiry } from "./use-announcement-countdown";
 import { X } from "lucide-react";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -26,7 +27,10 @@ export function GlobalAnnouncement({
   onView: () => void;
   onExpire: () => void;
 }) {
-  useAnnouncementExpiry(announcement?.ends_at ?? "", onExpire);
+  useAnnouncementExpiry(
+    announcement?.endless ? "" : (announcement?.ends_at ?? ""),
+    onExpire,
+  );
   if (!announcement) return null;
   return (
     <Alert role="status" className="global-announcement" aria-label="全局公告">
@@ -55,6 +59,7 @@ export function AnnouncementDetail({
   announcement: DisplayAnnouncement;
   onClose: () => void;
 }) {
+  const returnFocus = useRef<HTMLElement | null>(null);
   const action = safeNotificationAction(announcement.action_path);
   return (
     <Dialog
@@ -63,7 +68,21 @@ export function AnnouncementDetail({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="notification-surface sm:max-w-[560px] [&_[data-slot=dialog-close]]:size-11">
+      <DialogContent
+        className="notification-surface sm:max-w-[560px] [&_[data-slot=dialog-close]]:size-11"
+        onOpenAutoFocus={() => {
+          returnFocus.current =
+            document.activeElement instanceof HTMLElement
+              ? document.activeElement
+              : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (returnFocus.current?.isConnected) {
+            event.preventDefault();
+            returnFocus.current.focus();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle size="lg" className="pr-10">
             {announcement.title}

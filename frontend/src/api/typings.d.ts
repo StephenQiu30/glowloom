@@ -229,8 +229,11 @@ declare namespace API {
     audience?: string;
     body?: string;
     duration_seconds?: number;
+    endless?: boolean;
     ends_at?: string;
+    frequency?: "once" | "daily" | "login";
     inbox?: boolean;
+    manual_close?: boolean;
     placement?: string;
     priority?: number;
     starts_at?: string;
@@ -1517,6 +1520,11 @@ declare namespace API {
     expected_revision?: string;
   };
 
+  type deletePlatformNotificationParams = {
+    /** Never-published announcement UUID */
+    id: string;
+  };
+
   type deleteProjectParams = {
     /** 项目UUID */
     pid: string;
@@ -1964,8 +1972,11 @@ declare namespace API {
     action_path?: string;
     body?: string;
     duration_seconds?: number;
+    endless?: boolean;
     ends_at?: string;
+    frequency?: "once" | "daily" | "login";
     id?: string;
+    manual_close?: boolean;
     notification_id?: string;
     placement?: string;
     revision?: string;
@@ -3709,7 +3720,7 @@ declare namespace API {
     limit?: number;
     /** Condition-bound continuation */
     cursor?: string;
-    /** system, task, collaboration, account */
+    /** interaction (collaboration), official (system/task/account), or a source category */
     category?: string;
     /** Unread only */
     unread_only?: boolean;

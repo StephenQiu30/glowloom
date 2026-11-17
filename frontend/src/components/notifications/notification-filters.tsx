@@ -68,7 +68,7 @@ export function NotificationDateField({
 }
 export function dateBoundary(value: string, end = false): string | undefined {
   if (!value) return undefined;
-  const date = new Date(`${value}T00:00:00`);
-  if (end) date.setDate(date.getDate() + 1);
+  const date = new Date(`${value}T00:00:00+08:00`);
+  if (end) date.setUTCDate(date.getUTCDate() + 1);
   return date.toISOString();
 }

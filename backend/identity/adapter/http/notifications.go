@@ -41,6 +41,7 @@ func (h *NotificationHandler) Register(group *gin.RouterGroup) {
 	group.GET("/platform/notifications/:id", h.get)
 	group.PUT("/platform/notifications/:id", h.save)
 	group.POST("/platform/notifications/:id/publish", h.publish)
+	group.POST("/platform/notifications/:id/delete", h.deleteDraft)
 	group.PATCH("/platform/notifications/:id/enabled", h.enabled)
 	group.GET("/platform/notifications/:id/audit", h.audit)
 }
@@ -123,7 +124,7 @@ func parseNotificationFilter(raw string, admin bool) (application.NotificationFi
 // @Produce json
 // @Param limit query int false "Default 20, maximum 100"
 // @Param cursor query string false "Condition-bound continuation"
-// @Param category query string false "system, task, collaboration, account"
+// @Param category query string false "interaction (collaboration), official (system/task/account), or a source category"
 // @Param unread_only query boolean false "Unread only"
 // @Param from query string false "Inclusive RFC3339 time"
 // @Param to query string false "Exclusive RFC3339 time"
@@ -433,6 +434,34 @@ func (h *NotificationHandler) publish(c *gin.Context) {
 		return
 	}
 	out, err := h.service.Command(c.Request.Context(), Principal(c), id, "publish", application.AnnouncementCommand{CommandID: in.CommandID, ExpectedVersion: in.ExpectedVersion})
+	if err != nil {
+		notificationProblem(c, err)
+		return
+	}
+	c.JSON(200, out)
+}
+
+// @Summary deletePlatformNotification
+// @ID deletePlatformNotification
+// @Tags notifications
+// @Accept json
+// @Produce json
+// @Param id path string true "Never-published announcement UUID"
+// @Param body body PublishAnnouncementRequest true "Stable delete command and expected version"
+// @Success 200 {object} application.Announcement
+// @Failure 409 {object} httpapi.Problem
+// @Failure 422 {object} httpapi.Problem
+// @Router /api/platform/notifications/{id}/delete [post]
+func (h *NotificationHandler) deleteDraft(c *gin.Context) {
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	var in PublishAnnouncementRequest
+	if !httpapi.Decode(c, &in) {
+		return
+	}
+	out, err := h.service.Command(c.Request.Context(), Principal(c), id, "delete", application.AnnouncementCommand{CommandID: in.CommandID, ExpectedVersion: in.ExpectedVersion})
 	if err != nil {
 		notificationProblem(c, err)
 		return

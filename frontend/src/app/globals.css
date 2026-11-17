@@ -517,6 +517,7 @@ button:not(:disabled),
       [data-slot="input"],
       [data-slot="select-trigger"],
       [data-slot="tabs-trigger"],
+      [data-slot="collapsible-trigger"],
       [data-slot="field"][data-orientation="horizontal"]
     ) {
     min-height: 44px;
@@ -1085,9 +1086,11 @@ button:not(:disabled),
 .workspace-page {
   padding: var(--layout-content-y) var(--layout-content-x);
 }
-.admin-workspace > .product-page {
+.admin-workspace > .product-page,
+.admin-workspace > .workspace-page {
   min-height: 0;
   flex: 1;
+  padding: 0;
 }
 /* UI-PC-DELETE-01: one compact confirmation for single and batch canvas commands. */
 .canvas-delete-overlay {
@@ -3867,5 +3870,83 @@ button:not(:disabled),
 @media (prefers-reduced-motion: reduce) {
   .canvas-generation-shimmer path {
     animation: none;
+  }
+}
+
+/* One root message surface for the bell and notification deep links. */
+.notification-panel[data-slot="sheet-content"][data-side="right"] {
+  top: 56px;
+  right: 8px;
+  bottom: 8px;
+  height: auto;
+  width: 360px;
+  max-width: calc(100vw - 16px);
+  gap: 0;
+  border: 0;
+  border-radius: 24px;
+}
+body:has(.notification-application[data-announcement]) .notification-panel {
+  top: 96px;
+}
+.notification-panel > [data-slot="sheet-header"] {
+  min-height: 76px;
+  justify-content: center;
+  padding-right: 64px;
+}
+.notification-panel [data-slot="sheet-close"] {
+  width: 44px;
+  height: 44px;
+}
+.notification-item [data-slot="item-media"] {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+@media (max-width: 767px) {
+  .notification-panel[data-slot="sheet-content"][data-side="right"] {
+    inset: 0;
+    height: 100dvh;
+    width: 100vw;
+    max-width: none;
+    border-radius: 0;
+  }
+  .notification-panel > [data-slot="sheet-header"] {
+    padding-top: max(16px, env(safe-area-inset-top));
+  }
+  .notification-inbox {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notification-panel[data-slot="sheet-content"] {
+    animation: none;
+    transition: none;
+  }
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  :is(.admin-workspace, .admin-detail, .admin-dialog, .notification-surface)
+    button:not([role="checkbox"]):not([data-slot="switch"]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  :is(.admin-workspace, .admin-detail, .admin-dialog)
+    input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+  }
+  :is(.admin-workspace, .admin-detail, .admin-dialog, .notification-surface)
+    [data-slot="switch"]::after {
+    content: "";
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: max(100%, 44px);
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+  .notification-inbox [data-slot="tabs-list"] {
+    height: 50px;
   }
 }

@@ -33,6 +33,7 @@ const tabsListVariants = cva(
         navigation: "gap-2 bg-transparent p-0",
         pill: "gap-2 bg-transparent p-0",
         workspace: "gap-2 bg-transparent p-0 group-data-horizontal/tabs:h-auto",
+        notification: "w-full bg-muted group-data-horizontal/tabs:h-11",
       },
     },
     defaultVariants: {
@@ -79,11 +80,14 @@ function TabsTrigger({
         "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all outline-none group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
         variant !== "workspace" &&
+          variant !== "notification" &&
           "dark:text-muted-foreground dark:hover:text-foreground data-active:bg-background data-active:text-foreground dark:data-active:border-transparent dark:data-active:bg-input/30 dark:data-active:text-foreground",
         "group-data-[variant=navigation]/tabs-list:px-4 group-data-[variant=navigation]/tabs-list:font-normal group-data-[variant=navigation]/tabs-list:data-active:border-transparent group-data-[variant=navigation]/tabs-list:data-active:bg-secondary",
         "group-data-[variant=pill]/tabs-list:rounded-full group-data-[variant=pill]/tabs-list:px-4 group-data-[variant=pill]/tabs-list:font-normal group-data-[variant=pill]/tabs-list:data-active:border-transparent group-data-[variant=pill]/tabs-list:data-active:bg-secondary",
         variant === "workspace" &&
           "h-9 flex-none rounded-full border-0 px-4 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium text-workspace-muted-foreground hover:text-workspace-foreground max-md:min-h-11 pointer-coarse:min-h-11 data-active:bg-secondary data-active:text-workspace-foreground",
+        variant === "notification" &&
+          "min-h-9 border-0 text-muted-foreground data-active:bg-accent data-active:text-accent-foreground",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
         className,
       )}
