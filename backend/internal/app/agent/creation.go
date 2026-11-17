@@ -15,14 +15,11 @@ import (
 	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
 	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
 	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	billing "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
@@ -97,8 +94,7 @@ func bibleService(tx *gorm.DB) *bible.Service {
 type extractedResults struct{ tx *gorm.DB }
 
 func (r extractedResults) read(ctx context.Context, a identity.Principal, pid, operationID, outputID uuid.UUID, out any) (bibledomain.ResultSource, error) {
-	store := operationStore(r.tx)
-	task, err := operation.NewPublicQuery(store).Task(ctx, a, pid, operationID)
+	task, err := gatewayTask(ctx, r.tx, a, pid, operationID)
 	if err != nil {
 		return bibledomain.ResultSource{}, err
 	}
@@ -106,17 +102,17 @@ func (r extractedResults) read(ctx context.Context, a identity.Principal, pid, o
 		return bibledomain.ResultSource{}, domain.ErrBlocked
 	}
 	for _, output := range task.Outputs {
-		if output.ID != outputID || output.Text == nil || output.ModerationStatus != "passed" {
+		if output.ID != outputID || output.Text == nil || output.ModerationStatus != "passed" && output.ModerationStatus != "skipped" {
 			continue
 		}
 		if err = decode(json.RawMessage(*output.Text), out); err != nil {
 			return bibledomain.ResultSource{}, err
 		}
-		op, err := store.FindOperation(ctx, a, pid, operationID)
-		if err != nil {
+		var hash string
+		if err := r.tx.Raw("SELECT input_hash FROM ai.quote WHERE id=?", operationID).Row().Scan(&hash); err != nil {
 			return bibledomain.ResultSource{}, err
 		}
-		return bibledomain.ResultSource{OperationID: operationID, OutputID: outputID, OutputSHA256: domain.RawHash([]byte(*output.Text)), InputSHA256: op.InputHash}, nil
+		return bibledomain.ResultSource{OperationID: operationID, OutputID: outputID, OutputSHA256: domain.RawHash([]byte(*output.Text)), InputSHA256: hash}, nil
 	}
 	return bibledomain.ResultSource{}, domain.ErrNotFound
 }
@@ -197,30 +193,16 @@ func creationTools() []toolBinding {
 			})
 			return script.NewEpisodeService(store, nil, time.Now).ConfirmSplit(ctx, scriptwire.Actor(app.Principal(s)), in)
 		}),
-		tool("operation_quote", "建立真实模型/价格冻结报价，不确认费用；随后必须提交提案并取得用户批准", "write", commandSchema(quoteInput{}), func(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, raw json.RawMessage) (any, error) {
-			var in quoteInput
-			if err := decode(raw, &in); err != nil {
-				return nil, err
-			}
-			if in.Source != nil && s.CanvasID != nil && in.Source.CanvasID != *s.CanvasID {
-				return nil, domain.ErrNotFound
-			}
-			result, err := operation.NewCreateFreeQuoteCommand(operationStore(tx)).Execute(ctx, app.Principal(s), operation.CreateFreeQuoteInput{ProjectID: s.ProjectID, RequestID: key.String(), FreeQuoteItemInput: operation.FreeQuoteItemInput{ModelKey: in.ModelKey, Capability: in.Capability, Mode: in.Mode, Prompt: in.Prompt, Params: in.Params, OutputCount: in.OutputCount, Source: in.Source, ForceRegenerate: true}})
-			if err != nil {
-				return nil, err
-			}
-			op, err := operationStore(tx).FindOperation(ctx, app.Principal(s), s.ProjectID, result.OperationID)
-			if err != nil {
-				return nil, err
-			}
-			return map[string]any{"operation_id": result.OperationID, "quote_micros": result.QuoteMicros, "quote_detail": result.QuoteDetail, "expires_at": result.ExpiresAt, "price_version": op.PriceRuleVersionID, "model_version": op.ModelProfileVersionID, "source": op.Source}, nil
-		}),
+		tool("operation_quote", "建立统一网关冻结报价，不确认费用；随后提交提案并取得用户批准", "write", commandSchema(quoteInput{}), nil),
 	}
 }
 
 // proposalValidator uses live owning application facts at approval and again
 // immediately before confirmation; no model-supplied price or revision is trusted.
-type proposalValidator struct{ tx *gorm.DB }
+type proposalValidator struct {
+	tx      *gorm.DB
+	gateway *aigateway.Runtime
+}
 
 func (v proposalValidator) ValidateProposal(ctx context.Context, s domain.Scope, p domain.ProposalInput) error {
 	var delivery shotDeliveryCandidate
@@ -243,47 +225,31 @@ func (v proposalValidator) ValidateProposal(ctx context.Context, s domain.Scope,
 	if json.Unmarshal(p.Candidate, &candidate) != nil || candidate.OperationID == uuid.Nil {
 		return domain.ErrInvalid
 	}
-	store := operationStore(v.tx)
-	quoted, err := store.FindOperation(ctx, app.Principal(s), s.ProjectID, candidate.OperationID)
+	if v.gateway == nil {
+		return domain.ErrUnavailable
+	}
+	quoted, version, err := newGatewayQuote(ctx, v.tx, s, candidate.OperationID)
 	if err != nil {
 		return err
 	}
-	if quoted.QuoteMicros == nil || quoted.PriceRuleVersionID == nil || *quoted.QuoteMicros > p.BudgetMicros || p.PriceVersion != quoted.PriceRuleVersionID.String() {
+	if quoted.QuoteMicros > p.BudgetMicros || p.PriceVersion != version.String() {
 		return domain.ErrConflict
 	}
-	revision, err := quoteCanvasRevision(ctx, v.tx, s, quoted)
+	revision, err := gatewayQuoteRevision(ctx, v.tx, s, candidate.OperationID)
 	if err != nil {
 		return err
 	}
 	if revision != p.CanvasRevision {
 		return domain.ErrConflict
 	}
-	model, price, err := store.ReadCurrentQuoteCatalog(ctx, app.Principal(s), quoted, time.Now())
-	if err != nil {
+	var available int64
+	if err := v.tx.Raw("SELECT COALESCE((SELECT available FROM ai.account WHERE scope_id=?),0)", s.ScopeID).Row().Scan(&available); err != nil {
 		return err
 	}
-	reuse, err := store.ReadReuseSourceAvailable(ctx, app.Principal(s), quoted)
-	if err != nil {
-		return err
-	}
-	reasons, err := operation.QuoteFreshnessReasons(quoted, operation.QuoteCurrentFacts{Now: time.Now(), ModelProfileVersionID: model, PriceRuleVersionID: price, ReuseSourceUnavailable: !reuse})
-	if err != nil {
-		return err
-	}
-	if len(reasons) > 0 {
-		return domain.ErrConflict
-	}
-	budget, err := billingpg.NewScopedStore(v.tx, func(tx *gorm.DB) billing.ProjectAccess { return billingAccess{tx} }).FindBudget(ctx, app.Principal(s), s.ProjectID)
-	if err != nil {
-		return err
-	}
-	available, err := budget.AvailableMicros()
-	if err != nil {
-		return err
-	}
-	if p.BudgetMicros > available {
+	if p.BudgetMicros/100000 > available {
 		return domain.ErrBudget
 	}
+
 	return nil
 }
 
@@ -297,13 +263,6 @@ func (s bibleScopes) ValidateScopes(ctx context.Context, actor bible.Actor, pid 
 		requested[i] = script.BibleLookScope{EpisodeID: v.EpisodeID, SceneKey: v.SceneKey}
 	}
 	return s.reader.ValidateLookScopes(ctx, scriptwire.Actor(biblewire.IdentityActor(actor)), pid, requested)
-}
-
-type billingAccess struct{ tx *gorm.DB }
-
-func (a billingAccess) AuthorizeBilling(ctx context.Context, actor identity.Principal, pid uuid.UUID, write bool) error {
-	_, err := scopewire.ProvideWorkerProjectContentAccess(a.tx).Authorize(ctx, actor, pid, write)
-	return err
 }
 
 func (b *Boundary) confirmOperation(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, in domain.CallInput) (domain.CallResult, error) {
@@ -323,25 +282,29 @@ func (b *Boundary) confirmOperation(ctx context.Context, tx *gorm.DB, s domain.S
 	if json.Unmarshal(proposal.Candidate, &candidate) != nil || candidate.OperationID != requested.OperationID {
 		return domain.CallResult{}, domain.ErrBlocked
 	}
-	if err = (proposalValidator{tx}).ValidateProposal(ctx, s, proposal); err != nil {
+	if err = (proposalValidator{tx: tx, gateway: b.gateway}).ValidateProposal(ctx, s, proposal); err != nil {
 		return domain.CallResult{}, err
 	}
-	quoted, err := operationStore(tx).FindOperation(ctx, app.Principal(s), s.ProjectID, requested.OperationID)
+	quoted, _, err := newGatewayQuote(ctx, tx, s, requested.OperationID)
 	if err != nil {
 		return domain.CallResult{}, err
 	}
-	if quoted.QuoteMicros == nil || *quoted.QuoteMicros > in.MaxMicros {
+	if quoted.QuoteMicros > in.MaxMicros {
 		return domain.CallResult{}, domain.ErrBudget
 	}
-	result, err := operation.NewConfirmSingleQuoteCommand(operationStoreWithCreditSaga(tx, b.creditOperationSagaEnabled)).Execute(ctx, app.Principal(s), operation.ConfirmSingleQuoteInput{ProjectID: s.ProjectID, OperationID: requested.OperationID, RequestID: key.String()})
+	creation, err := b.gatewayCreation(tx, in.Grant.RootRunID)
 	if err != nil {
 		return domain.CallResult{}, err
 	}
-	if err = agentpg.BindOperationCostInTransaction(tx, key, requested.OperationID); err != nil {
+	record, err := creation.Confirm(ctx, app.Principal(s), s.ProjectID, requested.OperationID, key.String())
+	if err != nil {
 		return domain.CallResult{}, err
 	}
-	body, err := json.Marshal(map[string]any{"operation_id": requested.OperationID, "reservation_id": result.ReservationID, "budget_revision": result.BudgetRevision, "available_micros": result.AvailableMicros})
-	return domain.CallResult{Status: "completed", Result: body}, err
+	if err = tx.Exec("INSERT INTO ai.agent_intent(receipt_id,request_id,root_run_id) VALUES(?,?,?)", key, record.ID, in.Grant.RootRunID).Error; err != nil {
+		return domain.CallResult{}, err
+	}
+	raw, err := json.Marshal(map[string]any{"operation_id": record.ID, "reservation_id": record.ID, "budget_revision": 1})
+	return domain.CallResult{Status: domain.CallStatusCompleted, Result: raw}, err
 }
 
 func (b *Boundary) proposeOperation(ctx context.Context, tx *gorm.DB, s domain.Scope, key uuid.UUID, in domain.CallInput) (domain.CallResult, error) {
@@ -352,54 +315,25 @@ func (b *Boundary) proposeOperation(ctx context.Context, tx *gorm.DB, s domain.S
 	if err := decode(in.Input, &requested); err != nil {
 		return domain.CallResult{}, err
 	}
-	quoted, err := operationStore(tx).FindOperation(ctx, app.Principal(s), s.ProjectID, requested.OperationID)
+	quoted, version, err := newGatewayQuote(ctx, tx, s, requested.OperationID)
 	if err != nil {
 		return domain.CallResult{}, err
 	}
-	if quoted.Status != "quoted" || quoted.QuoteMicros == nil || quoted.PriceRuleVersionID == nil || quoted.QuoteExpiresAt == nil || !quoted.QuoteExpiresAt.After(time.Now()) {
-		return domain.CallResult{}, domain.ErrConflict
-	}
-	revision, err := quoteCanvasRevision(ctx, tx, s, quoted)
+	revision, err := gatewayQuoteRevision(ctx, tx, s, requested.OperationID)
 	if err != nil {
 		return domain.CallResult{}, err
 	}
 	if requested.ExpectedCanvasRevision != nil && *requested.ExpectedCanvasRevision != revision {
 		return domain.CallResult{}, domain.ErrConflict
 	}
-	candidate, err := json.Marshal(map[string]any{"operation_id": quoted.ID, "quote_micros": *quoted.QuoteMicros, "quote_detail": quoted.QuoteDetail, "price_version": quoted.PriceRuleVersionID, "model_version": quoted.ModelProfileVersionID, "canvas_id": s.CanvasID, "canvas_revision": revision, "source": quoted.Source, "expires_at": quoted.QuoteExpiresAt})
+	candidate, err := json.Marshal(map[string]any{"operation_id": quoted.OperationID, "quote_micros": quoted.QuoteMicros, "quote_detail": quoted.QuoteDetail, "price_version": version, "model_version": version, "canvas_id": s.CanvasID, "canvas_revision": revision, "expires_at": quoted.ExpiresAt})
 	if err != nil {
 		return domain.CallResult{}, err
 	}
-	proposal, err := b.Store.ProposeInTransaction(tx, domain.ProposalInput{Grant: in.Grant, RequestID: uuid.NewSHA1(key, []byte("proposal")), CandidateHash: domain.Hash(candidate), CanvasRevision: revision, PriceVersion: quoted.PriceRuleVersionID.String(), BudgetMicros: *quoted.QuoteMicros, Candidate: candidate})
+	proposal, err := b.Store.ProposeInTransaction(tx, domain.ProposalInput{Grant: in.Grant, RequestID: uuid.NewSHA1(key, []byte("proposal")), CandidateHash: domain.Hash(candidate), CanvasRevision: revision, PriceVersion: version.String(), BudgetMicros: quoted.QuoteMicros, Candidate: candidate})
 	if err != nil {
 		return domain.CallResult{}, err
 	}
-	result, err := json.Marshal(map[string]any{"proposal_id": proposal.ProposalID, "root_run_id": proposal.RootRunID, "candidate_hash": proposal.CandidateHash, "authorization_revision": proposal.AuthorizationRevision, "candidate": proposal.Candidate, "canvas_revision": proposal.CanvasRevision, "price_version": proposal.PriceVersion, "quote_micros": *quoted.QuoteMicros, "budget_micros": proposal.BudgetMicros, "control": map[string]bool{"terminate": true}})
-	return domain.CallResult{Status: "completed", Result: result}, err
-}
-
-// quoteCanvasRevision resolves the operation's immutable source even for a
-// project-scoped conversation. Approval and confirmation use this same fence.
-func quoteCanvasRevision(ctx context.Context, tx *gorm.DB, s domain.Scope, quoted operationdomain.Operation) (int64, error) {
-	id := s.CanvasID
-	if quoted.Source != nil {
-		if id != nil && *id != quoted.Source.CanvasID {
-			return 0, domain.ErrNotFound
-		}
-		id = &quoted.Source.CanvasID
-	}
-	if id == nil {
-		return 0, nil
-	}
-	doc, err := canvasService(tx).Get(ctx, app.Principal(s), *id)
-	if err != nil {
-		return 0, err
-	}
-	if doc.ProjectID != s.ProjectID {
-		return 0, domain.ErrNotFound
-	}
-	if quoted.Source != nil && doc.Revision != quoted.Source.Revision {
-		return 0, domain.ErrConflict
-	}
-	return doc.Revision, nil
+	result, err := json.Marshal(map[string]any{"proposal_id": proposal.ProposalID, "root_run_id": proposal.RootRunID, "candidate_hash": proposal.CandidateHash, "authorization_revision": proposal.AuthorizationRevision, "candidate": proposal.Candidate, "canvas_revision": proposal.CanvasRevision, "price_version": proposal.PriceVersion, "quote_micros": quoted.QuoteMicros, "budget_micros": proposal.BudgetMicros, "control": map[string]bool{"terminate": true}})
+	return domain.CallResult{Status: domain.CallStatusCompleted, Result: result}, err
 }

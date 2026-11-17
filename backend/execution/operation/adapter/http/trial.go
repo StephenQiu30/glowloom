@@ -106,7 +106,7 @@ func publicTrialState(state application.TrialState) application.TrialState {
 // Start starts a local administrator trial without model publication or billing.
 // @ID startAiTrial
 // @Summary Start development AI trial
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param body body application.TrialRequest true "Explicit trial"
@@ -139,7 +139,7 @@ func (h *TrialHandler) Start(c *gin.Context) {
 // State returns durable progress and final responses, without upstream thread identities.
 // @ID getAiTrial
 // @Summary Read development AI trial
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "Trial request ID"
 // @Success 200 {object} application.TrialState
@@ -154,7 +154,7 @@ func (h *TrialHandler) State(c *gin.Context) {
 // Turn queues one idempotent chat turn on the original private session.
 // @ID continueAiTrial
 // @Summary Continue development Codex chat
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "Trial request ID"
@@ -203,7 +203,7 @@ func (h *TrialHandler) Turn(c *gin.Context) {
 // Cancel requests termination without claiming an upstream generation was cancelled.
 // @ID cancelAiTrial
 // @Summary Stop development AI trial
-// @Tags settings
+// @Tags business
 // @Param id path string true "Trial request ID"
 // @Success 204
 // @Router /api/admin/ai-trials/{id}/cancel [post]
@@ -223,7 +223,7 @@ func (h *TrialHandler) Cancel(c *gin.Context) {
 // Artifact serves only a completed object recorded in the owner's durable trial.
 // @ID getAiTrialArtifact
 // @Summary Read development AI artifact
-// @Tags settings
+// @Tags business
 // @Produce application/octet-stream
 // @Param id path string true "Trial request ID"
 // @Param sequence path int true "Artifact sequence"
@@ -257,7 +257,7 @@ func (h *TrialHandler) Artifact(c *gin.Context) {
 // Recover checks saved output or the original video task, never submits generation.
 // @ID recoverAiTrial
 // @Summary Recover development AI result
-// @Tags settings
+// @Tags business
 // @Param id path string true "Trial request ID"
 // @Success 202 {object} application.TrialState
 // @Router /api/admin/ai-trials/{id}/recover [post]

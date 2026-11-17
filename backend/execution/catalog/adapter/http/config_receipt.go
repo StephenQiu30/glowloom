@@ -25,7 +25,7 @@ func (h *ReceiptHandler) Register(group *gin.RouterGroup) {
 // Read resolves an ambiguous write without resending a secret.
 // @Summary 查询配置请求回执
 // @ID getConfigReceipt
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "请求ID"
 // @Param action query string true "动作"

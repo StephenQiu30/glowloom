@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+
 	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -21,6 +23,7 @@ import (
 
 // AgentBoundaryOptions contains only current process boundary configuration.
 type AgentBoundaryOptions struct {
+	Gateway                             *aigateway.Runtime
 	SourceObjects                       script.PrivateObjects
 	Origin, ServiceToken, BusinessToken string
 	Model                               agentapp.ModelCapability
@@ -39,6 +42,7 @@ func RegisterAgentBoundary(ctx context.Context, router *gin.Engine, protected *g
 		return fmt.Errorf("agent boundary requires origin and independent direction credentials")
 	}
 	boundary := agentwire.NewBoundary(database, options.Model)
+	boundary.WithGateway(options.Gateway)
 	boundary.WithCreditOperationSaga(options.CreditOperationSagaEnabled)
 	boundary.WithDocumentExtractor(options.DocumentExtractor)
 	boundary.Capabilities.ModelRecover = options.ModelRecover

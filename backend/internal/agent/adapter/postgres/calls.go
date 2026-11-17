@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 )
@@ -218,23 +217,21 @@ func (s *Store) ExecuteAtomicTool(ctx context.Context, name string, in domain.Ca
 		// identity from a tool name or JSON output.
 		commitment := out.CostMicros
 		var media struct {
-			ProjectID    uuid.UUID
-			AmountMicros int64
-			Status       billingdomain.ReservationStatus
+			ProjectID      uuid.UUID
+			ReservedMicros int64
+			State          string
 		}
-		linked := tx.Raw(`SELECT o.project_id,r.amount_micros,r.status FROM agent_business.operation_commitment link
-          JOIN operation.operation o ON o.id=link.operation_id AND NOT o.is_delete
-          JOIN billing.reservation r ON r.id=o.reservation_id AND r.operation_id=o.id AND r.project_id=o.project_id AND NOT r.is_delete
-          WHERE link.receipt_id=?`, id).Scan(&media)
+		linked := tx.Raw("SELECT project_id,reserved_micros,state FROM ai.call_cost WHERE receipt_id=? AND run_id=?", id, g.RootRunID).Scan(&media)
 		if linked.Error != nil {
 			return linked.Error
 		}
 		if linked.RowsAffected == 1 {
-			if media.ProjectID != g.Scope.ProjectID || media.Status != billingdomain.ReservationHeld || out.CostMicros != 0 {
+			if media.ProjectID != g.Scope.ProjectID || media.State != "sending" || out.CostMicros != 0 {
 				return domain.ErrInvalid
 			}
-			commitment = media.AmountMicros
+			commitment = media.ReservedMicros
 		}
+
 		if commitment > 0 && a.CostProjectionUnavailable {
 			return domain.ErrUnavailable
 		}
@@ -282,18 +279,12 @@ func CompleteCall(tx *gorm.DB, id uuid.UUID, out domain.CallResult) (domain.Call
 	if err := tx.Exec(`UPDATE agent_business.call_receipt SET status=?,result=?::jsonb,cost_micros=? WHERE receipt_id=?`, out.Status, string(out.Result), out.CostMicros, id).Error; err != nil {
 		return domain.CallReceipt{}, err
 	}
-	if out.Status == domain.CallStatusCompleted || out.Status == domain.CallStatusFailed {
-		reservation := row.MaxMicros
-		if row.Kind == domain.CallKindTool {
-			if out.CostMicros != 0 {
-				return domain.CallReceipt{}, domain.ErrInvalid
-			}
-			reservation = 0
-		}
-		if err := tx.Exec(`UPDATE agent_business.run_authorization SET reserved_micros=reserved_micros-?+? WHERE root_run_id=?`, reservation, out.CostMicros, row.RootRunID).Error; err != nil {
-			return domain.CallReceipt{}, err
-		}
+	// The new AI ledger already owns the reservation-to-charge transition.
+	// Refresh this caller projection after changing the receipt; do not apply it twice.
+	if _, err := load(tx, row.RootRunID); err != nil {
+		return domain.CallReceipt{}, err
 	}
+
 	row.Status = domain.CallStatus(out.Status)
 	row.Result = out.Result
 	row.CostMicros = out.CostMicros

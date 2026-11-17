@@ -17,17 +17,12 @@ import (
 	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	pgsubject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/postgres"
 	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
@@ -72,16 +67,6 @@ func canvasStore(tx *gorm.DB) *pgcanvas.Store {
 	}, newCanvasAccess)
 }
 func canvasService(tx *gorm.DB) *canvas.Service { return canvas.NewService(canvasStore(tx)) }
-func operationStore(tx *gorm.DB) *pgoperation.Store {
-	base := pgoperation.NewScopedStore(tx, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(inner *gorm.DB) operation.ExecutionAvailability { return pgcatalog.NewStore(inner) })
-	return pgoperation.NewStorageAwareStore(base, func(inner *gorm.DB) operation.OperationStorageAdmission {
-		return staging.NewAdmission(pgmedia.NewStorageRoutes(inner))
-	})
-}
-
-func operationStoreWithCreditSaga(tx *gorm.DB, enabled bool) *pgoperation.Store {
-	return operationStore(tx).WithCreditOperationSaga(enabled)
-}
 func scriptService(tx *gorm.DB) *script.SourceService {
 	return script.NewSourceService(pgscript.NewSourceStore(tx, func(inner *gorm.DB) script.ProjectAccess {
 		return scriptwire.ProjectAccess(scopewire.ProvideWorkerProjectContentAccess(inner))
@@ -101,15 +86,6 @@ func subjectStore(tx *gorm.DB) *pgsubject.Store {
 	return pgsubject.NewStore(tx, pgsubject.Factories{Scope: func(inner *gorm.DB) subject.ScopeAccess { return subjectScope{inner} }})
 }
 
-type catalogAccess struct{ tx *gorm.DB }
-
-func (c catalogAccess) AuthorizeCatalog(ctx context.Context, a identity.Principal, pid uuid.UUID) error {
-	_, err := scopewire.ProvideWorkerProjectContentAccess(c.tx).Authorize(ctx, a, pid, false)
-	return err
-}
-func catalogStore(tx *gorm.DB) *pgcatalog.Store {
-	return pgcatalog.NewScopedStore(tx, func(inner *gorm.DB) catalog.ActorAccess { return pgidentity.NewStore(inner) }, func(inner *gorm.DB) catalog.ProjectAccess { return catalogAccess{inner} })
-}
 func businessTools() []toolBinding {
 	return []toolBinding{
 		tool("canvas_list", "列出当前项目画布与真实版本", "read", `{"type":"object","properties":{},"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
@@ -218,7 +194,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return catalog.NewListModelsQuery(catalogStore(tx)).Execute(ctx, app.Principal(s), catalog.ListModelsInput{ProjectID: s.ProjectID, ModelKey: in.ModelKey, Capability: in.Capability, Mode: in.Mode, Limit: 50})
+			return catalog.NewListModelsQuery(aigateway.Catalog{DB: tx, Worker: true}).Execute(ctx, app.Principal(s), catalog.ListModelsInput{ProjectID: s.ProjectID, ModelKey: in.ModelKey, Capability: in.Capability, Mode: in.Mode, Limit: 50})
 		}),
 		tool("operation_task", "查询原正式生成任务与计费回执，不创建新请求", "read", `{"type":"object","properties":{"operation_id":{"type":"string","format":"uuid"}},"required":["operation_id"],"additionalProperties":false}`, func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 			var in struct {
@@ -227,7 +203,7 @@ func businessTools() []toolBinding {
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return operation.NewPublicQuery(operationStore(tx)).Task(ctx, app.Principal(s), s.ProjectID, in.OperationID)
+			return gatewayTask(ctx, tx, app.Principal(s), s.ProjectID, in.OperationID)
 		}),
 	}
 }

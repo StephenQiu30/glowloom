@@ -126,3 +126,8 @@ type TranscriptionDelivery struct {
 	ProjectID uuid.UUID `json:"project_id"`
 	Action    string    `json:"action"`
 }
+
+// WorkTranscriber binds inference to the admitted source job for unified AI accounting.
+type WorkTranscriber interface {
+	TranscribeWork(context.Context, TranscriptionWorkID, TranscriptionWork, *mediaapp.Downloaded, string, int64) (domain.Transcript, error)
+}

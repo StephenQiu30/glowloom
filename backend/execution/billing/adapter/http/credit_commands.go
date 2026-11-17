@@ -59,7 +59,7 @@ type creditCommandRequest struct {
 // Submit validates and durably accepts one idempotent credit command.
 // @Summary 提交空间积分指令
 // @ID submitScopeCreditCommand
-// @Tags billing
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param scopeID path string true "创作空间 ID"
@@ -135,7 +135,7 @@ func (h *CreditCommandHandler) Submit(c *gin.Context) {
 // Read returns the caller's receipt for one accepted command.
 // @Summary 查询空间积分指令回执
 // @ID getScopeCreditCommand
-// @Tags billing
+// @Tags business
 // @Produce json
 // @Param scopeID path string true "创作空间 ID"
 // @Param commandID path string true "积分指令 ID"
@@ -173,7 +173,7 @@ func (h *CreditCommandHandler) Read(c *gin.Context) {
 // ReadWallet returns the balance projection and ledger page for one authorized service scope.
 // @Summary 查询指定创作空间积分钱包
 // @ID getScopeCreditWallet
-// @Tags billing
+// @Tags business
 // @Produce json
 // @Param scopeID path string true "创作空间 ID"
 // @Param cursor query string false "上一页的游标"

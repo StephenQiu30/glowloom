@@ -120,7 +120,24 @@ func subjectCatalogue(tx *gorm.DB, actor, personal application.Actor, library uu
 	activePurgeStatuses := []domain.PurgeItemStatus{domain.PurgeItemStatusQueued, domain.PurgeItemStatusRunning, domain.PurgeItemStatusNeedsReconciliation, domain.PurgeItemStatusSucceeded}
 	purges := tx.Model(&purgeItemRow{}).Select("item_id").Where("item_id = asset.id AND status IN ?", activePurgeStatuses)
 	generatedOutputs = generatedOutputs.Where("NOT EXISTS (?)", purges)
-	return tx.Table("(?) AS catalogue", gorm.Expr("(?) UNION ALL (?)", personalEntries, generatedOutputs))
+	gatewayOutputs := tx.Table("ai.output AS output").
+		Select("output.asset_id AS id, ? AS source,p.id AS project_id,? AS revision,COALESCE(meta.favorite,false) AS favorite,false AS upscaled,LEFT(COALESCE(NULLIF(asset.file_name,''),asset.kind),240) AS title,asset.kind,output.created_at AS create_time,GREATEST(output.updated_at,asset.update_time) AS update_time,to_jsonb(asset) AS asset_facts,concat_ws(' ',asset.file_name,creation.presentation->>'final_prompt') AS search_text", application.SubjectSourceGeneratedOutput, application.SubjectSourceRevisionInitial).
+		Joins("JOIN ai.request request ON request.id=output.request_id AND request.state='settled'").
+		Joins("JOIN ai.creation creation ON creation.id=request.id AND creation.actor_id=?", actor.ID).
+		Joins("LEFT JOIN ai.history meta ON meta.request_id=request.id AND meta.actor_id=creation.actor_id").
+		Joins("JOIN workspace.project p ON p.id=request.project_id").
+		Joins("JOIN media.media_asset asset ON asset.id=output.asset_id AND asset.source_ai_request_id=request.id AND asset.project_id=p.id").
+		Joins("LEFT JOIN media.library project_library ON project_library.kind=? AND project_library.project_id=p.id AND project_library.org_id=p.org_id", domain.LibraryProject).
+		Joins("LEFT JOIN media.library_item catalog_item ON catalog_item.library_id=project_library.id AND catalog_item.asset_id=asset.id").
+		Where("request.scope_id=? AND request.actor_id=? AND p.org_id=? AND p.owner_scope_id=? AND NOT p.is_delete AND p.status IN ?", actor.ScopeID, actor.ID, actor.OrgID, actor.ScopeID, []string{workspacedomain.ProjectStatusActive, workspacedomain.ProjectStatusArchived}).
+		Where("meta.deleted_at IS NULL").
+		Where("output.state='ready' AND NOT asset.is_delete AND asset.status='ready' AND asset.moderation_status='passed' AND NOT asset.contains_real_person AND asset.consent_record_id IS NULL AND asset.personal_org_id IS NULL AND asset.personal_actor_id IS NULL").
+		Where("asset.sha256 ~ ? AND asset.kind IN ?", "^[a-f0-9]{64}$", []domain.Kind{domain.KindImage, domain.KindVideo, domain.KindAudio}).
+		Where("(asset.kind=? AND asset.byte_size BETWEEN ? AND ?) OR (asset.kind=? AND asset.byte_size BETWEEN ? AND ?) OR (asset.kind=? AND asset.byte_size BETWEEN ? AND ?)", domain.KindImage, 1, application.MaxUploadImageBytes, domain.KindVideo, 1, application.MaxUploadVideoBytes, domain.KindAudio, 1, application.MaxUploadAudioBytes).
+		Where("COALESCE(catalog_item.catalog_state,?)=? AND catalog_item.purged_at IS NULL", domain.LibraryItemStateActive, domain.LibraryItemStateActive).
+		Where("NOT EXISTS (?)", purges)
+
+	return tx.Table("(?) AS catalogue", gorm.Expr("(?) UNION ALL (?) UNION ALL (?)", personalEntries, generatedOutputs, gatewayOutputs))
 }
 
 func filterSubjectCatalogue(query *gorm.DB, input application.SubjectCatalogueQuery) *gorm.DB {

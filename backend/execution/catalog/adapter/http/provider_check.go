@@ -32,7 +32,7 @@ func (h *CheckHandler) Register(group *gin.RouterGroup) {
 // Read reports independent auth, adapter and discovery results.
 // @Summary 连接检查与候选模型
 // @ID getProviderCheck
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "检查ID"
 // @Success 200 {object} application.ProviderCheck
@@ -53,7 +53,7 @@ func (h *CheckHandler) Read(c *gin.Context) {
 // List returns a page of current and historical check evidence.
 // @Summary 服务测试记录
 // @ID listProviderChecks
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "服务ID"
 // @Param offset query int false "记录偏移"
@@ -81,7 +81,7 @@ func (h *CheckHandler) List(c *gin.Context) {
 // Network schedules an explicit no-key probe at the provider worker.
 // @Summary 检测服务地址连通
 // @ID testProviderReachability
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "服务ID"
 // @Param Idempotency-Key header string true "请求UUID"
@@ -104,7 +104,7 @@ func (h *CheckHandler) Network(c *gin.Context) {
 // Query schedules a read of the original upstream task, never another generation.
 // @Summary 查询原模型验证任务
 // @ID queryProviderModelCheck
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "检查ID"
 // @Param Idempotency-Key header string true "请求UUID"
@@ -133,7 +133,7 @@ type EndTrackingInput struct {
 // EndTracking preserves unknown evidence and all original accounting state.
 // @Summary 结束追踪并保留未知
 // @ID endProviderCheckTracking
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "检查ID"
@@ -161,7 +161,7 @@ func (h *CheckHandler) EndTracking(c *gin.Context) {
 // Models returns the saved validation targets of one connection.
 // @Summary 服务可测试模型
 // @ID listProviderTestModels
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "服务ID"
 // @Success 200 {array} application.ProviderTestModel

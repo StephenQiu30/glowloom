@@ -14,13 +14,20 @@ import (
 )
 
 var (
-	ErrInvalid     = errors.New("invalid AI contract")
-	ErrConflict    = errors.New("AI idempotency conflict")
-	ErrFunds       = errors.New("insufficient AI credits")
-	ErrBudget      = errors.New("AI budget exceeded")
+	// ErrInvalid rejects a contract outside the supported native subset.
+	ErrInvalid = errors.New("invalid AI contract")
+	// ErrConflict rejects reusing an immutable command for different input.
+	ErrConflict = errors.New("AI idempotency conflict")
+	// ErrFunds indicates that the account cannot cover the reservation.
+	ErrFunds = errors.New("insufficient AI credits")
+	// ErrBudget indicates that the approved spending limit is exhausted.
+	ErrBudget = errors.New("AI budget exceeded")
+	// ErrUnavailable indicates no eligible configured execution route.
 	ErrUnavailable = errors.New("AI supply unavailable")
-	ErrForbidden   = errors.New("AI scope forbidden")
-	ErrUnknown     = errors.New("AI result requires reconciliation")
+	// ErrForbidden rejects missing or revoked caller authority.
+	ErrForbidden = errors.New("AI scope forbidden")
+	// ErrUnknown preserves funds until original evidence resolves the result.
+	ErrUnknown = errors.New("AI result requires reconciliation")
 )
 
 // Price holds immutable micro-currency rates per million tokens and per request.
@@ -46,6 +53,7 @@ type Usage struct {
 	Output     int64 `json:"output"`
 }
 
+// Validate checks exact rates, currency and commercial multipliers.
 func (p Price) Validate() error {
 	if (!p.ExplicitFree && p.Input == 0 && p.CacheRead == 0 && p.CacheWrite == 0 && p.Output == 0 && p.Request == 0) || p.Currency == "" || p.Input < 0 || p.CacheRead < 0 || p.CacheWrite < 0 || p.Output < 0 || p.Request < 0 {
 		return ErrInvalid
@@ -62,6 +70,8 @@ func (p Price) Validate() error {
 	}
 	return nil
 }
+
+// Validate enforces disjoint cache buckets within total input usage.
 func (u Usage) Validate() error {
 	if u.Input < 0 || u.Output < 0 || u.CacheRead < 0 || u.CacheWrite < 0 || u.Input > 1<<40 || u.Output > 1<<40 || u.CacheRead > u.Input || u.CacheWrite > u.Input-u.CacheRead {
 		return ErrInvalid
@@ -97,12 +107,20 @@ func ceil(r *big.Rat) (int64, error) {
 	}
 	return q.Int64(), nil
 }
+
+// Credits rounds CNY micro-units up to whole platform credits.
 func Credits(cnyMicros int64) (int64, error) {
 	if cnyMicros < 0 {
 		return 0, ErrInvalid
 	}
-	return ceil(big.NewRat(cnyMicros, 100000))
+	credits, err := ceil(big.NewRat(cnyMicros, 100000))
+	if err != nil || credits > 92233720368547 {
+		return 0, ErrInvalid
+	}
+	return credits, nil
 }
+
+// Digest computes an immutable SHA-256 evidence digest.
 func Digest(raw []byte) string { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }
 
 // Model is a published immutable product contract, independent of old catalogs.
@@ -123,6 +141,7 @@ type Model struct {
 	Stream       bool                 `json:"stream"`
 }
 
+// Validate checks the declared native protocol and bounded product contract.
 func (m Model) Validate() error {
 	if m.ID == uuid.Nil || m.Name == "" || !Protocol(m.Protocol) || m.Price.Validate() != nil || m.MaxInput < 1 || m.MaxInput > 1<<20 || m.MaxOutput < 1 || m.MaxOutput > 1<<20 || m.PurchaseCap < 0 {
 		return ErrInvalid
@@ -148,6 +167,8 @@ func (m Model) Validate() error {
 	}
 	return nil
 }
+
+// Protocol reports whether the native text protocol is supported.
 func Protocol(s string) bool {
 	return s == "chat" || s == "responses" || s == "messages" || s == "media" || s == "local"
 }

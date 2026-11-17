@@ -28,7 +28,7 @@ func (h *ConfigHandler) Register(group *gin.RouterGroup) {
 // Read returns the current editing snapshot.
 // @Summary 读取连接配置快照
 // @ID getProviderConfig
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "连接ID"
 // @Success 200 {object} application.ConnectionConfig
@@ -49,7 +49,7 @@ func (h *ConfigHandler) Read(c *gin.Context) {
 // Preview returns conflicts and a revision-bound content digest.
 // @Summary 预览连接预设升级
 // @ID previewProviderUpgrade
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "连接ID"
@@ -76,7 +76,7 @@ func (h *ConfigHandler) Preview(c *gin.Context) {
 // Apply saves a new candidate snapshot while active releases stay pinned.
 // @Summary 应用已审阅的连接配置
 // @ID applyProviderPreset
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "连接ID"
@@ -103,7 +103,7 @@ func (h *ConfigHandler) Apply(c *gin.Context) {
 // AddModel uses the reviewed model preset from the connection snapshot.
 // @Summary 从连接预设添加模型
 // @ID addProviderPresetModel
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "连接ID"
@@ -130,7 +130,7 @@ func (h *ConfigHandler) AddModel(c *gin.Context) {
 // CheckModel validates the stored parameters without pricing or dispatch.
 // @Summary 验证模型草稿配置
 // @ID checkModelConfiguration
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "模型 ID"
 // @Success 200 {object} application.ModelConfigurationCheck

@@ -1710,6 +1710,7 @@ CREATE TABLE media.media_asset (
     audio_channels integer,
     codec text,
     source_operation_id uuid,
+    source_ai_request_id uuid,
     provider_key text,
     model_key text,
     region text,
@@ -1733,8 +1734,11 @@ CREATE TABLE media.media_asset (
     CONSTRAINT media_asset_kind_check CHECK ((kind = ANY (ARRAY['image'::text, 'video'::text, 'audio'::text, 'document'::text, 'model'::text]))),
     CONSTRAINT media_asset_model_facts_check CHECK (((kind <> 'model'::text) OR ((origin = 'upload'::text) AND (((mime_type = 'model/gltf-binary'::text) AND (codec = 'glb2'::text)) OR ((mime_type = 'model/gltf+json'::text) AND (codec = 'gltf2'::text))) AND ((byte_size >= 1) AND (byte_size <= 67108864)) AND (codec IS NOT NULL) AND (width IS NULL) AND (height IS NULL) AND (duration_ms IS NULL) AND (fps IS NULL) AND (audio_channels IS NULL)))),
     CONSTRAINT media_asset_moderation_status_check CHECK ((moderation_status = ANY (ARRAY['pending'::text, 'passed'::text, 'rejected'::text, 'skipped'::text]))),
+    CONSTRAINT media_asset_generated_source_check CHECK (
+ (origin='generated' AND num_nonnulls(source_operation_id,source_ai_request_id)=1 AND provider_key IS NOT NULL AND model_key IS NOT NULL AND region IS NOT NULL)
+ OR (origin<>'generated' AND source_operation_id IS NULL AND source_ai_request_id IS NULL)),
     CONSTRAINT media_asset_origin_check CHECK ((origin = ANY (ARRAY['upload'::text, 'generated'::text, 'system'::text]))),
-    CONSTRAINT media_asset_ownership_check CHECK ((((project_id IS NOT NULL) AND (project_id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (personal_org_id IS NULL) AND (personal_actor_id IS NULL)) OR ((project_id IS NULL) AND (personal_org_id IS NOT NULL) AND (personal_actor_id IS NOT NULL) AND (personal_org_id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (personal_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (origin = ANY (ARRAY['upload'::text, 'system'::text])) AND (source_operation_id IS NULL) AND (provider_key IS NULL) AND (model_key IS NULL) AND (region IS NULL)))),
+    CONSTRAINT media_asset_ownership_check CHECK ((((project_id IS NOT NULL) AND (project_id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (personal_org_id IS NULL) AND (personal_actor_id IS NULL)) OR ((project_id IS NULL) AND (personal_org_id IS NOT NULL) AND (personal_actor_id IS NOT NULL) AND (personal_org_id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (personal_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (origin = ANY (ARRAY['upload'::text, 'system'::text])) AND (source_operation_id IS NULL) AND (source_ai_request_id IS NULL) AND (provider_key IS NULL) AND (model_key IS NULL) AND (region IS NULL)))),
     CONSTRAINT media_asset_region_check CHECK ((region = ANY (ARRAY['domestic'::text, 'overseas'::text]))),
     CONSTRAINT media_asset_revision_check CHECK ((revision > 0)),
     CONSTRAINT media_asset_status_check CHECK ((status = ANY (ARRAY['uploading'::text, 'processing'::text, 'ready'::text, 'rejected'::text, 'failed'::text])))
@@ -9413,3 +9417,287 @@ REVOKE ALL ON identity.announcement,identity.announcement_revision,identity.noti
 -- not a grant to another owner or a claim that the team audience is remote.
 GRANT SELECT,INSERT,UPDATE ON identity.announcement,identity.notification_mailbox,identity.notification_inbox,identity.notification_display_receipt TO glowloom_identity,glowloom_app;
 GRANT SELECT,INSERT ON identity.announcement_revision,identity.notification_command,identity.notification_audit TO glowloom_identity,glowloom_app;
+
+-- Rebuilt AI business boundary. These facts do not depend on operation/billing.
+CREATE SCHEMA ai;
+REVOKE ALL ON SCHEMA ai FROM PUBLIC;
+CREATE TABLE ai.account (
+ scope_id uuid PRIMARY KEY REFERENCES workspace.creation_scope(id),
+ available bigint NOT NULL DEFAULT 0 CHECK(available>=0),
+ held bigint NOT NULL DEFAULT 0 CHECK(held>=0),
+ version bigint NOT NULL DEFAULT 1 CHECK(version>0)
+);
+CREATE TABLE ai.model (
+ id uuid PRIMARY KEY,name text NOT NULL CHECK(length(name) BETWEEN 1 AND 160),
+ document jsonb NOT NULL CHECK(jsonb_typeof(document)='object'),
+ enabled boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE UNIQUE INDEX ai_model_published_name ON ai.model(name,(document->>'protocol')) WHERE enabled;
+CREATE TABLE ai.quota (
+ name text PRIMARY KEY CHECK(length(name) BETWEEN 1 AND 160),
+ concurrency integer NOT NULL CHECK(concurrency BETWEEN 1 AND 1000),
+ requests_per_minute integer NOT NULL CHECK(requests_per_minute>0),
+ cooldown_until timestamptz
+);
+CREATE TABLE ai.credential (
+ id uuid PRIMARY KEY,supplier_id uuid NOT NULL,key_id text NOT NULL,
+ ciphertext bytea NOT NULL CHECK(octet_length(ciphertext) BETWEEN 1 AND 16384),
+ state text NOT NULL DEFAULT 'disabled' CHECK(state IN ('active','draining','disabled','revoked'))
+);
+CREATE TABLE ai.route (
+ id uuid PRIMARY KEY,model_id uuid NOT NULL REFERENCES ai.model(id),
+ credential_id uuid NOT NULL REFERENCES ai.credential(id),
+ quota_group text NOT NULL REFERENCES ai.quota(name),priority integer NOT NULL CHECK(priority>=0),
+ document jsonb NOT NULL CHECK(jsonb_typeof(document)='object'),enabled boolean NOT NULL DEFAULT false
+);
+CREATE INDEX ai_route_model ON ai.route(model_id,priority);
+CREATE TABLE ai.request (
+ id uuid PRIMARY KEY,scope_id uuid NOT NULL REFERENCES ai.account(scope_id),actor_id uuid NOT NULL,
+ project_id uuid,run_id uuid,origin text NOT NULL,
+ idempotency_key text NOT NULL CHECK(length(idempotency_key) BETWEEN 1 AND 160),
+ input_hash text NOT NULL CHECK(length(input_hash)=64),model_id uuid NOT NULL REFERENCES ai.model(id),
+ contract jsonb NOT NULL,stream boolean NOT NULL,deadline timestamptz NOT NULL,
+ state text NOT NULL CHECK(state IN ('sending','pending','unknown','received','settled','released')),
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(scope_id,idempotency_key),UNIQUE(project_id,id)
+);
+CREATE TABLE ai.hold (
+ request_id uuid PRIMARY KEY REFERENCES ai.request(id),amount bigint NOT NULL CHECK(amount>=0),
+ charged bigint NOT NULL DEFAULT 0 CHECK(charged>=0),released bigint NOT NULL DEFAULT 0 CHECK(released>=0),
+ closed boolean NOT NULL DEFAULT false,
+ CHECK(charged+released<=amount),CHECK(NOT closed OR charged+released=amount)
+);
+CREATE TABLE ai.attempt (
+ id uuid PRIMARY KEY,request_id uuid NOT NULL REFERENCES ai.request(id),number integer NOT NULL CHECK(number BETWEEN 1 AND 2),
+ route_id uuid NOT NULL REFERENCES ai.route(id),credential_id uuid NOT NULL REFERENCES ai.credential(id),
+ quota_group text NOT NULL REFERENCES ai.quota(name),contract jsonb NOT NULL,
+ state text NOT NULL CHECK(state IN ('ready','sending','pending','unknown','not_sent','received','reconciled')),
+ receipt jsonb,digest text,started_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(request_id,number),CHECK((receipt IS NULL)=(digest IS NULL))
+);
+CREATE INDEX ai_attempt_capacity ON ai.attempt(quota_group,state,started_at);
+CREATE TABLE ai.money_event (
+ id uuid PRIMARY KEY,scope_id uuid NOT NULL REFERENCES ai.account(scope_id),
+ actor_id uuid NOT NULL, source_reference text NOT NULL DEFAULT '',
+ request_id uuid REFERENCES ai.request(id),event_key text NOT NULL,kind text NOT NULL CHECK(kind IN ('grant','freeze','settle','release')),
+ available_delta bigint NOT NULL,held_delta bigint NOT NULL,spent_delta bigint NOT NULL CHECK(spent_delta>=0),
+ source_hash text NOT NULL CHECK(length(source_hash)=64),created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(scope_id,event_key),CHECK(request_id IS NOT NULL OR kind='grant')
+);
+CREATE INDEX ai_money_request ON ai.money_event(request_id);
+CREATE FUNCTION ai.immutable_fact() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION 'AI immutable fact cannot be rewritten'; END $$;
+CREATE TRIGGER ai_money_immutable BEFORE UPDATE OR DELETE ON ai.money_event FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+CREATE FUNCTION ai.immutable_document() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.document IS DISTINCT FROM NEW.document THEN RAISE EXCEPTION 'AI published document is immutable'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER ai_model_document BEFORE UPDATE ON ai.model FOR EACH ROW EXECUTE FUNCTION ai.immutable_document();
+CREATE TRIGGER ai_route_document BEFORE UPDATE ON ai.route FOR EACH ROW EXECUTE FUNCTION ai.immutable_document();
+GRANT USAGE ON SCHEMA ai TO glowloom_app,glowloom_execution;
+GRANT SELECT,INSERT,UPDATE ON ai.account,ai.model,ai.quota,ai.credential,ai.route,ai.request,ai.hold,ai.attempt TO glowloom_app,glowloom_execution;
+GRANT SELECT,INSERT ON ai.money_event TO glowloom_app,glowloom_execution;
+CREATE TABLE ai.budget (
+ scope_id uuid NOT NULL REFERENCES ai.account(scope_id),id uuid NOT NULL,
+ limit_credits bigint NOT NULL CHECK(limit_credits>=0),held bigint NOT NULL DEFAULT 0 CHECK(held>=0),
+ spent bigint NOT NULL DEFAULT 0 CHECK(spent>=0),PRIMARY KEY(scope_id,id),CHECK(held+spent<=limit_credits)
+);
+GRANT SELECT,INSERT,UPDATE ON ai.budget TO glowloom_app,glowloom_execution;
+CREATE TABLE ai.integration_grant (
+ id uuid PRIMARY KEY,token_hash text NOT NULL UNIQUE CHECK(length(token_hash)=64),
+ scope_id uuid NOT NULL REFERENCES ai.account(scope_id),actor jsonb NOT NULL,
+ model_ids jsonb NOT NULL CHECK(jsonb_typeof(model_ids)='array'),
+ expires_at timestamptz NOT NULL,revoked boolean NOT NULL DEFAULT false,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+GRANT SELECT,INSERT,UPDATE ON ai.integration_grant TO glowloom_app,glowloom_execution;
+CREATE FUNCTION ai.request_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (OLD.scope_id,OLD.actor_id,OLD.project_id,OLD.run_id,OLD.origin,OLD.idempotency_key,OLD.input_hash,OLD.model_id,OLD.contract,OLD.stream,OLD.deadline)
+ IS DISTINCT FROM (NEW.scope_id,NEW.actor_id,NEW.project_id,NEW.run_id,NEW.origin,NEW.idempotency_key,NEW.input_hash,NEW.model_id,NEW.contract,NEW.stream,NEW.deadline)
+ OR (OLD.state IN ('settled','released') AND NEW.state<>OLD.state)
+ THEN RAISE EXCEPTION 'AI request identity is immutable'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER ai_request_identity BEFORE UPDATE ON ai.request FOR EACH ROW EXECUTE FUNCTION ai.request_identity();
+CREATE FUNCTION ai.attempt_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (OLD.request_id,OLD.number,OLD.route_id,OLD.credential_id,OLD.quota_group,OLD.contract,OLD.started_at)
+ IS DISTINCT FROM (NEW.request_id,NEW.number,NEW.route_id,NEW.credential_id,NEW.quota_group,NEW.contract,NEW.started_at)
+ OR (OLD.receipt IS NOT NULL AND (OLD.receipt,OLD.digest) IS DISTINCT FROM (NEW.receipt,NEW.digest))
+ THEN RAISE EXCEPTION 'AI attempt evidence is immutable'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER ai_attempt_identity BEFORE UPDATE ON ai.attempt FOR EACH ROW EXECUTE FUNCTION ai.attempt_identity();
+CREATE FUNCTION ai.hold_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.amount<>NEW.amount OR (OLD.closed AND (OLD.charged,OLD.released,OLD.closed) IS DISTINCT FROM (NEW.charged,NEW.released,NEW.closed))
+ THEN RAISE EXCEPTION 'AI closed hold is immutable'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER ai_hold_identity BEFORE UPDATE ON ai.hold FOR EACH ROW EXECUTE FUNCTION ai.hold_identity();
+CREATE TABLE ai.quote (
+ id uuid PRIMARY KEY,scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),actor_id uuid NOT NULL,
+ idempotency_key text NOT NULL,input_hash text NOT NULL CHECK(length(input_hash)=64),
+ contract jsonb NOT NULL,expires_at timestamptz NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(scope_id,idempotency_key)
+);
+CREATE TRIGGER ai_quote_immutable BEFORE UPDATE OR DELETE ON ai.quote FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+GRANT SELECT,INSERT ON ai.quote TO glowloom_app,glowloom_execution;
+
+-- Private workbench intent. No legacy operation, catalog or wallet authority.
+CREATE TABLE ai.creation_slot (
+ actor_id uuid NOT NULL, project_id uuid NOT NULL REFERENCES workspace.project(id), owner_key text NOT NULL,
+ epoch bigint NOT NULL DEFAULT 0 CHECK(epoch>=0), creation_id uuid,
+ PRIMARY KEY(actor_id,project_id,owner_key)
+);
+CREATE TABLE ai.creation (
+ id uuid PRIMARY KEY REFERENCES ai.quote(id), scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
+ actor_id uuid NOT NULL, project_id uuid NOT NULL REFERENCES workspace.project(id),
+ owner_key text, epoch bigint NOT NULL DEFAULT 0,
+ source jsonb, draft jsonb, presentation jsonb NOT NULL,
+ input_hash text NOT NULL, actor jsonb NOT NULL,
+ state text NOT NULL DEFAULT 'quoted' CHECK(state IN ('quoted','accepted','closed')),
+ confirm_key uuid NOT NULL UNIQUE, created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+GRANT SELECT,INSERT,UPDATE ON ai.creation,ai.creation_slot TO glowloom_app,glowloom_execution;
+
+CREATE TABLE ai.reconciliation (
+ request_id uuid PRIMARY KEY REFERENCES ai.request(id),attempt_id uuid NOT NULL REFERENCES ai.attempt(id),
+ actor_id uuid NOT NULL,digest text NOT NULL CHECK(length(digest)=64),evidence jsonb NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE TRIGGER ai_reconciliation_immutable BEFORE UPDATE OR DELETE ON ai.reconciliation FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+GRANT SELECT,INSERT ON ai.reconciliation TO glowloom_app,glowloom_execution;
+
+CREATE TABLE ai.pending (
+ request_id uuid PRIMARY KEY REFERENCES ai.request(id),attempt_id uuid NOT NULL UNIQUE REFERENCES ai.attempt(id),
+ task_id text NOT NULL CHECK(length(task_id) BETWEEN 1 AND 256), receipt jsonb NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE TRIGGER ai_pending_immutable BEFORE UPDATE OR DELETE ON ai.pending FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+GRANT SELECT,INSERT ON ai.pending TO glowloom_app,glowloom_execution;
+
+CREATE TABLE ai.job (
+ request_id uuid PRIMARY KEY REFERENCES ai.request(id), actor jsonb NOT NULL,worker_proof jsonb NOT NULL DEFAULT '{}'::jsonb,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE TRIGGER ai_job_immutable BEFORE UPDATE OR DELETE ON ai.job FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+GRANT SELECT,INSERT ON ai.job TO glowloom_app,glowloom_execution;
+CREATE TABLE ai.project_command (
+ actor_id uuid NOT NULL,command_key uuid NOT NULL,input_hash text NOT NULL CHECK(length(input_hash)=64),
+ response jsonb NOT NULL,PRIMARY KEY(actor_id,command_key)
+);
+CREATE TRIGGER ai_project_command_immutable BEFORE UPDATE OR DELETE ON ai.project_command FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+GRANT SELECT,INSERT ON ai.project_command TO glowloom_app,glowloom_execution;
+CREATE TABLE ai.batch (
+ id uuid PRIMARY KEY,scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),actor_id uuid NOT NULL,
+ project_id uuid NOT NULL REFERENCES workspace.project(id),command_key text NOT NULL,input_hash text NOT NULL,
+ quotes jsonb NOT NULL,response jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(scope_id,command_key)
+);
+CREATE TRIGGER ai_batch_immutable BEFORE UPDATE OR DELETE ON ai.batch FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+GRANT SELECT,INSERT ON ai.batch TO glowloom_app,glowloom_execution;
+
+ALTER TABLE media.media_asset ADD CONSTRAINT fk_media_source_ai_request_project
+ FOREIGN KEY(project_id,source_ai_request_id) REFERENCES ai.request(project_id,id);
+
+CREATE TABLE ai.output (
+ request_id uuid PRIMARY KEY REFERENCES ai.request(id),
+ asset_id uuid NOT NULL UNIQUE,
+ receipt_sha256 text NOT NULL CHECK(receipt_sha256 ~ '^[a-f0-9]{64}$'),
+ sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),
+ manifest_sha256 text NOT NULL CHECK(manifest_sha256 ~ '^[a-f0-9]{64}$'),
+ manifest jsonb NOT NULL,
+ kind text NOT NULL CHECK(kind IN ('image','video','audio')),
+ state text NOT NULL DEFAULT 'preparing' CHECK(state IN ('preparing','pending','ready')),
+ lease_id uuid,lease_until timestamptz,
+ summary jsonb,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ CHECK((lease_id IS NULL)=(lease_until IS NULL)),
+ CHECK((state='preparing')=(summary IS NULL))
+);
+CREATE TABLE ai.voice_intent (
+ request_id uuid PRIMARY KEY REFERENCES ai.quote(id),
+ scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ command_key uuid NOT NULL,
+ draft_intent_id uuid NOT NULL,
+ input_hash text NOT NULL CHECK(input_hash ~ '^[a-f0-9]{64}$'),
+ input jsonb NOT NULL,
+ owner jsonb NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(scope_id,actor_id,command_key)
+);
+GRANT SELECT,INSERT,UPDATE ON ai.output TO glowloom_app,glowloom_execution;
+GRANT SELECT,INSERT ON ai.voice_intent TO glowloom_app,glowloom_execution;
+CREATE TABLE ai.agent_intent (
+ receipt_id uuid PRIMARY KEY REFERENCES agent_business.call_receipt(receipt_id) DEFERRABLE INITIALLY DEFERRED,
+ request_id uuid NOT NULL UNIQUE REFERENCES ai.request(id),root_run_id uuid NOT NULL
+);
+GRANT SELECT,INSERT ON ai.agent_intent TO glowloom_app,glowloom_execution;
+CREATE VIEW ai.call_cost WITH (security_barrier=true) AS
+ SELECT r.id AS request_id,r.scope_id,r.actor_id,r.project_id,r.run_id,r.origin,r.state,
+ h.amount*100000 AS reserved_micros,h.charged*100000 AS charged_micros,h.released*100000 AS released_micros,
+ (h.amount-h.charged-h.released)*100000 AS held_micros,
+ l.receipt_id,
+ (SELECT e.id FROM ai.money_event e WHERE e.request_id=r.id AND e.kind='settle') AS settlement_id
+ FROM ai.request r JOIN ai.hold h ON h.request_id=r.id LEFT JOIN ai.agent_intent l ON l.request_id=r.id;
+GRANT USAGE ON SCHEMA ai TO glowloom_creation;
+GRANT SELECT ON ai.call_cost TO glowloom_app,glowloom_execution,glowloom_creation;
+
+-- Immutable operational identities; only explicitly mutable lifecycle fields can change.
+CREATE FUNCTION ai.credential_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (OLD.id,OLD.supplier_id,OLD.key_id,OLD.ciphertext) IS DISTINCT FROM (NEW.id,NEW.supplier_id,NEW.key_id,NEW.ciphertext)
+ OR (OLD.state='revoked' AND NEW.state<>'revoked') THEN RAISE EXCEPTION 'AI credential identity is immutable'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER ai_credential_identity BEFORE UPDATE ON ai.credential FOR EACH ROW EXECUTE FUNCTION ai.credential_identity();
+CREATE FUNCTION ai.creation_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (OLD.id,OLD.scope_id,OLD.actor_id,OLD.project_id,OLD.owner_key,OLD.epoch,OLD.source,OLD.draft,OLD.presentation,OLD.input_hash,OLD.actor,OLD.confirm_key,OLD.created_at)
+ IS DISTINCT FROM (NEW.id,NEW.scope_id,NEW.actor_id,NEW.project_id,NEW.owner_key,NEW.epoch,NEW.source,NEW.draft,NEW.presentation,NEW.input_hash,NEW.actor,NEW.confirm_key,NEW.created_at)
+ THEN RAISE EXCEPTION 'AI creation source is immutable'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER ai_creation_identity BEFORE UPDATE ON ai.creation FOR EACH ROW EXECUTE FUNCTION ai.creation_identity();
+CREATE FUNCTION ai.output_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (OLD.request_id,OLD.asset_id,OLD.receipt_sha256,OLD.sha256,OLD.manifest_sha256,OLD.manifest,OLD.kind,OLD.created_at)
+ IS DISTINCT FROM (NEW.request_id,NEW.asset_id,NEW.receipt_sha256,NEW.sha256,NEW.manifest_sha256,NEW.manifest,NEW.kind,NEW.created_at)
+ OR (OLD.summary IS NOT NULL AND (OLD.summary,OLD.state) IS DISTINCT FROM (NEW.summary,NEW.state))
+ THEN RAISE EXCEPTION 'AI archived output identity is immutable'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER ai_output_identity BEFORE UPDATE ON ai.output FOR EACH ROW EXECUTE FUNCTION ai.output_identity();
+ALTER TABLE ai.money_event ADD CONSTRAINT ai_money_kind_conservation CHECK(
+ (kind='grant' AND request_id IS NULL AND available_delta>0 AND held_delta=0 AND spent_delta=0)
+ OR (kind='freeze' AND request_id IS NOT NULL AND available_delta<=0 AND held_delta=-available_delta AND spent_delta=0)
+ OR (kind='settle' AND request_id IS NOT NULL AND available_delta=0 AND held_delta=-spent_delta)
+ OR (kind='release' AND request_id IS NOT NULL AND available_delta>=0 AND held_delta=-available_delta AND spent_delta=0)
+);
+ALTER TABLE ai.account ADD CONSTRAINT ai_account_micros_bound CHECK(available<=92233720368547-held);
+CREATE TRIGGER ai_agent_intent_immutable BEFORE UPDATE OR DELETE ON ai.agent_intent FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+CREATE TABLE ai.batch_decision (
+ batch_id uuid PRIMARY KEY REFERENCES ai.batch(id),actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ command_key text NOT NULL,input_hash text NOT NULL,response jsonb NOT NULL
+);
+CREATE TRIGGER ai_batch_decision_immutable BEFORE UPDATE OR DELETE ON ai.batch_decision FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+GRANT SELECT,INSERT ON ai.batch_decision TO glowloom_app,glowloom_execution;
+CREATE TABLE ai.history (
+ request_id uuid NOT NULL REFERENCES ai.quote(id),actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ revision bigint NOT NULL DEFAULT 0 CHECK(revision>=0),favorite boolean NOT NULL DEFAULT false,deleted_at timestamptz,
+ PRIMARY KEY(request_id,actor_id)
+);
+GRANT SELECT,INSERT,UPDATE ON ai.history TO glowloom_app,glowloom_execution,glowloom_media;
+CREATE TABLE ai.work (
+ id uuid PRIMARY KEY,actor_id uuid NOT NULL,scope_id uuid NOT NULL,project_id uuid NOT NULL,
+ request_id uuid NOT NULL REFERENCES ai.request(id),asset_id uuid NOT NULL REFERENCES media.media_asset(id),
+ title text NOT NULL,description text NOT NULL,prompt text,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(actor_id,request_id)
+);
+CREATE TRIGGER ai_work_immutable BEFORE UPDATE OR DELETE ON ai.work FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+GRANT SELECT,INSERT ON ai.work TO glowloom_app,glowloom_execution;

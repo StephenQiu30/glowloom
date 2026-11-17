@@ -30,7 +30,7 @@ func (h *PresetDirectoryHandler) Register(group *gin.RouterGroup) {
 // Read reads model IDs using a temporary credential without saving it.
 // @Summary 读取新连接的模型目录
 // @ID readPresetModelDirectory
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "预设ID"

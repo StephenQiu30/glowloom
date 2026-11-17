@@ -18,11 +18,13 @@ import (
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 )
 
 // Boundary owns the business services and formal command adapters.
 type Boundary struct {
+	gateway                    *aigateway.Runtime
 	Store                      *pg.Store
 	Capabilities               app.Capabilities
 	bindings                   []toolBinding
@@ -55,7 +57,7 @@ func (b *Boundary) WithCreditOperationSaga(enabled bool) *Boundary {
 // NewBoundary injects the owning business adapters for the Agent boundary.
 func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 	b := &Boundary{Store: pg.NewStore(database, ProvideControlAccess, time.Now), db: database, bindings: append(append(businessTools(), creationTools()...), exportTools()...)}
-	b.Store.WithProposalValidator(func(tx *gorm.DB) app.DecisionValidator { return proposalValidator{tx} })
+	b.Store.WithProposalValidator(func(tx *gorm.DB) app.DecisionValidator { return proposalValidator{tx: tx, gateway: b.gateway} })
 	b.Capabilities.Model = model
 	for _, binding := range b.bindings {
 		b.Capabilities.Tools = append(b.Capabilities.Tools, app.Tool{Descriptor: binding.descriptor})
@@ -140,6 +142,9 @@ func (b *Boundary) AtomicTool(c *gin.Context, name string, in domain.CallInput) 
 		return b.Store.ExecuteAtomicTool(c.Request.Context(), name, in, func(tx *gorm.DB, s domain.Scope, key uuid.UUID) (domain.CallResult, error) {
 			if name == shotDeliveryProposeTool {
 				return b.proposeShotDelivery(c.Request.Context(), tx, s, key, in)
+			}
+			if name == "operation_quote" {
+				return b.gatewayQuote(c.Request.Context(), tx, s, key, in)
 			}
 			if name == "operation_propose" {
 				return b.proposeOperation(c.Request.Context(), tx, s, key, in)

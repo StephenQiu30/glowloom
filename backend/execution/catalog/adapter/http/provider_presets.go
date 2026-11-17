@@ -78,7 +78,7 @@ func presetError(c *gin.Context, err error) {
 // List returns builtin and custom preset versions.
 // @Summary 平台预设列表
 // @ID listProviderPresets
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Success 200 {object} PresetPage
 // @Router /api/admin/provider-presets [get]
@@ -94,7 +94,7 @@ func (h *PresetHandler) List(c *gin.Context) {
 // Preview rejects keys and ambiguous fields before accepting an import.
 // @Summary 预览预设导入
 // @ID previewProviderPreset
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param body body PresetImportRequest true "无凭据的预设文档"
@@ -125,7 +125,7 @@ func (h *PresetHandler) Preview(c *gin.Context) {
 // Create saves the exact preview as a custom preset.
 // @Summary 保存自定义预设
 // @ID createProviderPreset
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param body body application.SavePresetInput true "预设与预览摘要"
@@ -136,7 +136,7 @@ func (h *PresetHandler) Create(c *gin.Context) { h.save(c, uuid.Nil) }
 // Version appends a revision without editing existing connections.
 // @Summary 创建预设版本
 // @ID publishProviderPresetVersion
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "预设ID"
@@ -168,7 +168,7 @@ func (h *PresetHandler) save(c *gin.Context, id uuid.UUID) {
 // State archives or emergency-stops independently.
 // @Summary 更新预设生命周期
 // @ID updateProviderPresetState
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "预设ID"
@@ -195,7 +195,7 @@ func (h *PresetHandler) State(c *gin.Context) {
 // Export excludes account-specific and credential data by construction.
 // @Summary 导出无凭据预设
 // @ID exportProviderPreset
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "预设ID"
 // @Success 200 {object} domain.PresetDocument
@@ -223,7 +223,7 @@ func (h *PresetHandler) Export(c *gin.Context) {
 // Connect returns the original connection on a retried request.
 // @Summary 从预设创建禁用连接
 // @ID connectProviderPreset
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "预设ID"

@@ -25,7 +25,10 @@ import (
 // Authority rechecks the live session and Creation scope in the consumer transaction.
 func Authority(ctx context.Context, tx *gorm.DB, actor identity.Principal, scope, project uuid.UUID, admin bool) error {
 	if admin {
-		return identitypg.NewStore(tx).CheckPlatformSession(ctx, actor, time.Now)
+		if err := identitypg.NewStore(tx).CheckPlatformSession(ctx, actor, time.Now); err != nil {
+			return domain.ErrForbidden
+		}
+		return nil
 	}
 	if _, err := scopewire.ProvideRequestScopeAccess(tx).Resolve(ctx, actor, scope, true); err != nil {
 		return domain.ErrForbidden
@@ -36,12 +39,12 @@ func projectScope(tx *gorm.DB, scope, project uuid.UUID) error {
 	if project == uuid.Nil {
 		return nil
 	}
-	var n int64
-	r := tx.Raw("SELECT count(*) FROM workspace.project WHERE id=? AND owner_scope_id=? AND NOT is_delete", project, scope).Scan(&n)
+	var row struct{ ID uuid.UUID }
+	r := tx.Raw("SELECT id FROM workspace.project WHERE id=? AND owner_scope_id=? AND NOT is_delete AND status='active' FOR SHARE", project, scope).Scan(&row)
 	if r.Error != nil {
 		return r.Error
 	}
-	if n != 1 {
+	if r.RowsAffected != 1 {
 		return domain.ErrForbidden
 	}
 	return nil

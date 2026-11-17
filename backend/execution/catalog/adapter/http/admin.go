@@ -164,7 +164,7 @@ func adminError(c *gin.Context, err error) {
 // ListProviders lists safe channel and credential metadata.
 // @Summary 管理员渠道列表
 // @ID listAdminProviders
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param limit query integer false "1..200"
 // @Param cursor query string false "绑定管理员与筛选条件的不透明游标"
@@ -213,7 +213,7 @@ type CreateProviderRequest struct {
 // CreateProvider registers an audited channel.
 // @Summary 创建渠道
 // @ID createAdminProvider
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param Idempotency-Key header string true "请求UUID"
@@ -239,7 +239,7 @@ func (h *AdminHandler) CreateProvider(c *gin.Context) {
 // Provider reads saved safe summaries and declared credential fields.
 // @Summary 渠道详情与凭据字段
 // @ID getAdminProvider
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "渠道UUID"
 // @Success 200 {object} application.ProviderDetail
@@ -272,7 +272,7 @@ type UpdateProviderRequest struct {
 // UpdateProvider commits settings with optimistic revision and safe audit.
 // @Summary 更新或禁用渠道
 // @ID updateAdminProvider
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "渠道UUID"
@@ -308,7 +308,7 @@ type SetCredentialRequest struct {
 // SetCredential seals the submitted fields before persistence.
 // @Summary 替换渠道凭据
 // @ID setAdminCredential
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "渠道UUID"
@@ -344,7 +344,7 @@ func (h *AdminHandler) SetCredential(c *gin.Context) {
 // DisableCredential revokes one still-current credential with an audit event.
 // @Summary 禁用渠道当前凭据
 // @ID disableAdminCredential
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "渠道UUID"
 // @Param credential_id path string true "凭据UUID"
@@ -373,7 +373,7 @@ func (h *AdminHandler) DisableCredential(c *gin.Context) {
 // TestCredential records a request consumed by the existing test workflow.
 // @Summary 请求测试渠道凭据
 // @ID testAdminCredential
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "渠道UUID"
 // @Param credential_id path string true "凭据UUID"
@@ -403,7 +403,7 @@ func (h *AdminHandler) TestCredential(c *gin.Context) {
 // Capabilities returns real capability declarations for model creation.
 // @Summary 模型能力声明目录
 // @ID listAdminCapabilities
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Success 200 {array} application.CapabilitySummary
 // @Failure 403 {object} httpapi.Problem
@@ -420,7 +420,7 @@ func (h *AdminHandler) Capabilities(c *gin.Context) {
 // ListModels returns all configured model identities for settings.
 // @Summary 管理员模型目录
 // @ID listAdminModels
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param limit query integer false "1..200"
 // @Param cursor query string false "分页游标"
@@ -484,7 +484,7 @@ type CreateModelRequest struct {
 // CreateModel registers a model with the current audit and administrator contract.
 // @Summary 创建模型
 // @ID createAdminModel
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param Idempotency-Key header string true "请求UUID"
@@ -509,7 +509,7 @@ func (h *AdminHandler) CreateModel(c *gin.Context) {
 // Model returns the full immutable version and price history needed by the editor.
 // @Summary 模型配置与价格版本详情
 // @ID getAdminModel
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "模型UUID"
 // @Success 200 {object} application.AdminModelDetail
@@ -548,7 +548,7 @@ type PublishVersionRequest struct {
 // PublishVersion validates the real parameter schema and publishes the next version.
 // @Summary 发布模型配置版本
 // @ID publishAdminModelVersion
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "模型UUID"
@@ -596,7 +596,7 @@ type PublishPriceRequest struct {
 // PublishPrice appends a validated price and preserves existing operation snapshots.
 // @Summary 发布模型价格版本
 // @ID publishAdminModelPrice
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "模型UUID"
@@ -633,7 +633,7 @@ type SetModelStatusRequest struct {
 // SetModelStatus enables or disables a configured model using existing preconditions.
 // @Summary 启用或禁用模型
 // @ID setAdminModelStatus
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "模型UUID"
@@ -663,7 +663,7 @@ func (h *AdminHandler) SetModelStatus(c *gin.Context) {
 // Adapters returns safe installed protocol and credential input descriptors.
 // @Summary 已安装供应商安全元数据
 // @ID listAdminProviderAdapters
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Success 200 {array} application.AdapterMetadata
 // @Failure 403 {object} httpapi.Problem

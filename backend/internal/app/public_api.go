@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"net/url"
@@ -10,12 +9,14 @@ import (
 
 	"github.com/google/uuid"
 
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+
 	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/yjsruntime"
 
-	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
-	catalogwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/catalog"
 	insightswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/insights"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
@@ -49,22 +50,10 @@ import (
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
 	billinghttp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/http"
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
 	billingredis "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/redis"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialschema"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialseal"
 	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/paramvalidation"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricevalidation"
-	catalogredis "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/redis"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
-	operationstaging "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
@@ -154,36 +143,21 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	registerSelf(protected)
 	notifications.Register(protected)
 	insightswire.Register(protected, database, diagnostics, time.Now)
-	platform := protected.Group("/platform")
 	creditLimiter := billingredis.NewCreditCommandLimiter(sessions.RedisClient, cfg.CreditCommandRequestsPerMinute, cfg.CreditCommandMaxAmountMicros, cfg.CreditCommandMaxDailyMicros)
-	creditCommands := billingapp.NewCreditCommands(
-		pgbilling.NewStore(database),
-		creditLimiter,
-		time.Now,
-	)
-	creditCommandHandler := billinghttp.NewCreditCommandHandler(creditCommands, creditServiceWalletReader(database, sessions.RedisClient), creditLimiter)
-	creditCommandHandler.Register(platform)
-	if len(cfg.CreditServiceCallers) > 0 {
-		callers, err := creditServiceCallers(cfg.CreditServiceCallers)
-		if err != nil {
-			return nil, err
-		}
-		auth, err := billinghttp.NewCreditServiceAuthenticator(callers, billingredis.NewWalletBalanceCache(sessions.RedisClient), time.Now)
-		if err != nil {
-			return nil, fmt.Errorf("configure credit service caller authentication: %w", err)
-		}
-		internal := api.Group("/internal", auth)
-		creditCommandHandler.Register(internal)
-	}
 	identityProtected := protected.Group("")
+	gatewayRuntime, err := registerAIGateway(api, identityProtected, database, cfg)
+	if err != nil {
+		return nil, err
+	}
+	gatewayRuntime.Objects = subjectObjects.Registry()
 	workspaceStore := workspacewire.ProvideWorkspaceLifecycleStore(database)
 	protected.Use(workspacehttp.RequireCreationScope(scopewire.ProvideRequestScopeAccess(database)))
 	protected.Use(workspacehttp.RequireProjectAccess(workspaceStore))
-	billinghttp.NewWalletHandler(walletReader(database, sessions.RedisClient), creditLimiter).Register(protected)
+	billinghttp.NewWalletHandler(gatewayRuntime.Wallet, creditLimiter).Register(protected)
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewStyleLibraryHandler(workspaceapp.NewStyleLibrary(workspacewire.ProvideStyleLibraryStore(database))).Register(protected)
 	workspacehttp.RegisterIndependentCreation(protected, workspaceStore.EnsureIndependentCreation)
-	workspacehttp.NewProjectBudgetHandler(workspaceapp.NewProjectBudgetQuery(workspaceStore)).Register(protected)
+	workspacehttp.NewProjectBudgetHandler(workspaceapp.NewProjectBudgetQuery(aigateway.Defaults{Runtime: gatewayRuntime})).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
 	workspacehttp.NewProjectCreationRecoveryHandler(workspaceapp.NewProjectCreationRecoveryQuery(workspaceStore)).Register(protected)
 	copies := copywire.ProvideProjectCopyStoreWithObjects(database, mediawire.NewMediaScopeAccess)
@@ -267,22 +241,6 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	depths := mediawire.ProvideRoutedMediaDepthStore(database, cfg.VideoDepthPythonPath != "", mediawire.NewMediaScopeAccess)
 	depthQuery := toolapp.NewRoutedDepthQuery(depths, subjectObjects.Routed, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
 	toolhttp.NewDepthHandler(depths, depthQuery).Register(protected)
-	if err := trialwire.RegisterAPI(socketLifetime, identityProtected, database, subjectObjects.Registry(), cfg); err != nil {
-		return nil, err
-	}
-	catalogStore := operationwire.NewCatalogStore(database).WithPriceRuleCache(catalogredis.NewPriceRuleCache(sessions.RedisClient))
-	presets := catalogapp.NewDeclaredProviderPresets(catalogStore, catalogwire.InstalledProtocol)
-	cataloghttp.NewPresetHandler(presets).Register(identityProtected)
-	cataloghttp.NewPresetDirectoryHandler(presets, providerhttp.NewClient(nil).ReadModelIDs).Register(identityProtected)
-	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(identityProtected)
-	cataloghttp.NewCustomProviderHandler(catalogapp.NewCustomProviders(catalogStore)).Register(identityProtected)
-	cataloghttp.RoutePoolHandler{Store: catalogStore}.Register(identityProtected)
-	cataloghttp.NewReleaseHandler(catalogapp.NewModelReleases(catalogStore)).Register(identityProtected)
-	cataloghttp.NewCheckHandler(catalogapp.NewProviderChecks(catalogStore)).Register(identityProtected)
-	cataloghttp.NewOnboardingHandler(catalogapp.NewProviderOnboarding(catalogStore)).Register(identityProtected)
-	cataloghttp.NewCredentialHistoryHandler(catalogapp.NewCredentialHistory(catalogStore)).Register(identityProtected)
-	cataloghttp.NewReceiptHandler(catalogapp.NewConfigReceipts(catalogStore)).Register(identityProtected)
-	credentialSchema := credentialschema.NewRegistry()
 	parameterValidator, err := paramvalidation.NewValidator()
 	if err != nil {
 		return nil, fmt.Errorf("configure model parameter validation: %w", err)
@@ -291,61 +249,13 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	mediahttp.NewAssetDownloadHandler(mediawire.ProvideAssetDownloads(database, subjectObjects.Routed), resolveLegacyMediaActor).Register(protected)
 	subjectStore := subjectwire.NewStore(database, subjectObjects)
 	subjecthttp.NewHandler(subjectapp.NewService(subjectStore, time.Now), subjectStore).Register(protected)
-	subjecthttp.NewVoiceHandler(subjectwire.NewVoiceJobs(database)).Register(protected)
+	subjecthttp.NewVoiceHandler(aigateway.NewVoiceJobs(gatewayRuntime)).Register(protected)
 	subjecthttp.NewFileHandler(subjectwire.NewFiles(database, subjectObjects)).Register(protected)
 	subjecthttp.NewSourceHandler(subjectwire.NewSourceLibrary(database, subjectObjects, cfg.ObjectStorage.Access.PreviewTTL), uploadHandler).Register(protected)
-	priceValidator, err := pricevalidation.NewValidator()
-	if err != nil {
-		return nil, fmt.Errorf("configure model price validation: %w", err)
-	}
-	var setCredential *catalogapp.SetCredentialCommand
-	if cfg.CredentialPublicKeyFile != "" || cfg.CredentialPublicKeyPEM != "" || cfg.CredentialKeyID != "" {
-		data, err := cfg.CredentialPublicBytes()
-		if err != nil {
-			return nil, fmt.Errorf("configure credential public key: %w", err)
-		}
-		defer clear(data)
-		sealer, err := credentialseal.NewSealer(cfg.CredentialKeyID, data)
-		if err != nil {
-			return nil, fmt.Errorf("configure credential public key: %w", err)
-		}
-		macKey, err := hex.DecodeString(cfg.CredentialRequestMACKey)
-		if err != nil || len(macKey) != 32 {
-			return nil, fmt.Errorf("credential writes require a 32-byte hexadecimal request MAC key")
-		}
-		setCredential = catalogapp.NewSetCredentialCommand(catalogStore, credentialSchema, sealer, time.Now, macKey)
-		clear(macKey)
-	}
-	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(catalogStore)).Register(protected)
-	workspacehttp.NewModelDefaultsHandler(workspaceapp.NewModelDefaultsService(workspaceStore, time.Now)).Register(protected)
+	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(aigateway.Catalog{DB: database})).Register(protected)
+	workspacehttp.NewModelDefaultsHandler(workspaceapp.NewModelDefaultsService(aigateway.Defaults{Runtime: gatewayRuntime}, time.Now)).Register(protected)
 	prompthttp.NewHandler(promptapp.NewPreferences(operationwire.ProvidePromptPreferenceStore(database), time.Now), resolveLegacyPromptActor).Register(identityProtected)
 	prompthttp.NewDraftHandler(pgprompt.NewDraftStore(database, promptwire.DraftAccess).WithSubjectSources(subjectwire.NewPromptSources), resolveLegacyPromptActor).Register(protected)
-	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{
-		Adapters:          catalogwire.NewAdapterMetadata(catalogStore),
-		Providers:         catalogapp.NewListProvidersQuery(catalogStore),
-		Provider:          catalogapp.NewProviderDetailQuery(catalogStore, credentialSchema),
-		CreateProvider:    catalogapp.NewCreateProviderCommand(catalogStore, credentialSchema, time.Now),
-		UpdateProvider:    catalogapp.NewUpdateProviderCommand(catalogStore, time.Now),
-		ProviderDeletion:  catalogapp.NewProviderDeletion(catalogStore),
-		SetCredential:     setCredential,
-		DisableCredential: catalogapp.NewDisableCredentialCommand(catalogStore, time.Now),
-		CredentialTest:    catalogapp.NewRequestCredentialTestCommand(catalogStore),
-		Models:            catalogapp.NewAdminModelsQuery(catalogStore),
-		CreateModel:       catalogapp.NewCreateModelCommand(catalogStore, time.Now),
-		PublishVersion:    catalogapp.NewPublishModelVersionCommand(catalogStore, parameterValidator, time.Now),
-		PublishPrice:      catalogapp.NewPublishPriceRuleCommand(catalogStore, priceValidator, time.Now),
-		SetModelStatus:    catalogapp.NewSetModelStatusCommand(catalogStore, time.Now),
-	}).Register(identityProtected)
-	operations := pgoperation.NewScopedStoreWithEditor(database, operationwire.ProvidePromptCompiler, operationwire.ProvidePromptEditor, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess).WithExecutionAvailability(func(tx *gorm.DB) operationapp.ExecutionAvailability {
-		return pgcatalog.NewStore(tx)
-	}).WithCreditOperationSaga(cfg.CreditOperationSagaEnabled).WithSubjectMedia(func(tx *gorm.DB) operationapp.SubjectMediaAccess {
-		return subjectwire.NewGenerationAccess(tx, subjectObjects)
-	})
-	if registry := subjectObjects.Registry(); registry != nil {
-		operations = pgoperation.NewStorageAwareStore(operations, func(tx *gorm.DB) operationapp.OperationStorageAdmission {
-			return operationstaging.NewRoutedFactory(registry, pgmedia.NewStorageRoutes(tx))
-		})
-	}
 	agentModel, agentRecover, err := ConfigureAgentBoundaryModel(database, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("configure agent model gateway: %w", err)
@@ -354,23 +264,14 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure Creation extraction: %w", err)
 	}
-	if err := RegisterAgentBoundary(socketLifetime, router, protected, database, AgentBoundaryOptions{DocumentExtractor: documentExtractor, Origin: cfg.AgentOrigin, ServiceToken: cfg.AgentServiceToken, BusinessToken: cfg.AgentBusinessToken, Model: agentModel, ModelRecover: agentRecover, MediaObjects: subjectObjects.Routed, SourceObjects: scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)), CanvasRuntime: yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken), CreditOperationSagaEnabled: cfg.CreditOperationSagaEnabled}, logger); err != nil {
+	if err := RegisterAgentBoundary(socketLifetime, router, protected, database, AgentBoundaryOptions{Gateway: gatewayRuntime, DocumentExtractor: documentExtractor, Origin: cfg.AgentOrigin, ServiceToken: cfg.AgentServiceToken, BusinessToken: cfg.AgentBusinessToken, Model: agentModel, ModelRecover: agentRecover, MediaObjects: subjectObjects.Routed, SourceObjects: scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)), CanvasRuntime: yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken), CreditOperationSagaEnabled: cfg.CreditOperationSagaEnabled}, logger); err != nil {
 		return nil, fmt.Errorf("configure agent boundary: %w", err)
 	}
-	operationhttp.NewSubmissionHandler(operations).Register(protected)
-	operationhttp.NewPersonalHistoryHandler(operationapp.NewPersonalHistoryQuery(operations)).Register(protected)
-	operationhttp.NewPersonalHistoryCommandHandler(operationapp.NewPersonalHistoryCommander(operations)).Register(protected)
-	operationhttp.NewHistoryPublicationHandler(operationapp.NewHistoryPublisher(operations), operationapp.NewPublishedWorkQuery(operations, operationwire.PublicationMedia(subjectObjects.Routed))).Register(protected, api)
-	operationhttp.NewProviderTrialHandler(operations).Register(protected)
-	operationhttp.NewHandler(operationhttp.Dependencies{
-		FreeQuote:    operationapp.NewCreateFreeQuoteCommand(operations),
-		Estimate:     operations,
-		BatchQuote:   operationapp.NewCreateBatchFreeQuoteCommand(operations),
-		Confirm:      operationapp.NewConfirmSingleQuoteCommand(operations),
-		ConfirmBatch: operationapp.NewConfirmBatchQuoteCommand(operations),
-		Query:        operationapp.NewPublicQuery(operations),
-		Control:      operationapp.NewWorkflowControlCommand(operations),
-	}).Register(protected)
+	(aigateway.Creation{Runtime: gatewayRuntime}).RegisterCreation(protected)
+	rebuiltHistory := aigateway.History{Creation: aigateway.Creation{Runtime: gatewayRuntime}}
+	operationhttp.NewPersonalHistoryHandler(operationapp.NewPersonalHistoryQuery(rebuiltHistory)).Register(protected)
+	operationhttp.NewPersonalHistoryCommandHandler(operationapp.NewPersonalHistoryCommander(rebuiltHistory)).Register(protected)
+	operationhttp.NewHistoryPublicationHandler(operationapp.NewHistoryPublisher(rebuiltHistory), operationapp.NewPublishedWorkQuery(rebuiltHistory, operationwire.PublicationMedia(subjectObjects.Routed))).Register(protected, api)
 	if len(lifetime) > 0 {
 		stopLaunchCleanup := mediawire.StartExportLaunchCleanup(socketLifetime, exports, logger)
 		context.AfterFunc(socketLifetime, stopLaunchCleanup)
@@ -424,26 +325,4 @@ func resolveLegacyBibleActor(c *gin.Context) (bibleapp.Actor, error) {
 		return bibleapp.Actor{}, bibleapp.ErrSessionInvalid
 	}
 	return biblewire.Actor(actor), nil
-}
-
-func creditServiceCallers(configured []config.CreditServiceCaller) ([]billinghttp.CreditServiceCaller, error) {
-	callers := make([]billinghttp.CreditServiceCaller, 0, len(configured))
-	for _, caller := range configured {
-		entry := billinghttp.CreditServiceCaller{ID: caller.ID}
-		for _, rawScope := range caller.Scopes {
-			scopeID, err := uuid.Parse(rawScope)
-			if err != nil {
-				return nil, fmt.Errorf("configure credit service scope mapping: %w", err)
-			}
-			entry.Scopes = append(entry.Scopes, scopeID)
-		}
-		for _, rawAction := range caller.Actions {
-			entry.Actions = append(entry.Actions, billingapp.CreditAction(rawAction))
-		}
-		for _, key := range caller.Keys {
-			entry.Keys = append(entry.Keys, billinghttp.CreditServiceKey{ID: key.ID, Secret: key.Secret})
-		}
-		callers = append(callers, entry)
-	}
-	return callers, nil
 }

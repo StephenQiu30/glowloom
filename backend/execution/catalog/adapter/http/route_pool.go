@@ -22,7 +22,7 @@ func (h RoutePoolHandler) Register(group *gin.RouterGroup) {
 // Read lists the ordered backups for an active release.
 // @Summary 查看模型备用线路
 // @ID readAdminRoutePool
-// @Tags settings
+// @Tags business
 // @Param id path string true "主线路发布编号"
 // @Success 200 {object} application.RoutePool
 // @Router /api/admin/model-releases/{id}/route-pool [get]
@@ -43,7 +43,7 @@ func (h RoutePoolHandler) Read(c *gin.Context) {
 // Publish writes a new version, preserving quotes already issued.
 // @Summary 发布模型备用线路
 // @ID publishAdminRoutePool
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Param id path string true "主线路发布编号"
 // @Param body body application.PoolPublication true "备用线路"
@@ -76,7 +76,7 @@ type PoolKeyUpdate struct {
 // Key changes admission on one previously rotated credential.
 // @Summary 调整已验证 Key 的号池准入
 // @ID updateAdminPoolKey
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Param id path string true "连接"
 // @Param credential_id path string true "凭据"

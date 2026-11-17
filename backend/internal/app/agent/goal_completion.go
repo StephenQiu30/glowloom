@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
@@ -91,16 +90,15 @@ func goalCompletion(goal domain.GoalContract, deliveries []map[string]any) (doma
 // model text and unbound project tasks cannot enter the durable wait set.
 func productionOperationsSnapshot(ctx context.Context, tx *gorm.DB, g domain.Grant) ([]map[string]any, error) {
 	var ids []uuid.UUID
-	if err := tx.Table("agent_business.operation_commitment AS binding").Select("binding.operation_id").Joins("JOIN agent_business.call_receipt c ON c.receipt_id=binding.receipt_id").Where("c.root_run_id=? AND c.kind=?", g.RootRunID, domain.CallKindTool).Order("binding.operation_id").Limit(domain.MaxProductionOperations + 1).Scan(&ids).Error; err != nil {
+	if err := tx.Table("ai.agent_intent AS binding").Select("binding.request_id").Joins("JOIN agent_business.call_receipt c ON c.receipt_id=binding.receipt_id").Where("c.root_run_id=? AND c.kind=?", g.RootRunID, domain.CallKindTool).Order("binding.request_id").Limit(domain.MaxProductionOperations + 1).Scan(&ids).Error; err != nil {
 		return nil, err
 	}
 	if len(ids) > domain.MaxProductionOperations {
 		return nil, domain.ErrBudget
 	}
 	result := []map[string]any{}
-	query := operationapp.NewPublicQuery(operationStore(tx))
 	for _, id := range ids {
-		task, err := query.Task(ctx, agentapp.Principal(g.Scope), g.Scope.ProjectID, id)
+		task, err := gatewayTask(ctx, tx, agentapp.Principal(g.Scope), g.Scope.ProjectID, id)
 		if err != nil {
 			return nil, businessError(err)
 		}

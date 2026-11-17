@@ -25,7 +25,7 @@ func (h *ProviderTrialHandler) Register(group *gin.RouterGroup) {
 // Quote prepares a candidate quote without making a paid provider request.
 // @Summary 准备模型试运行报价（不调用供应商）
 // @ID createProviderTrialQuote
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "发布ID"
@@ -55,7 +55,7 @@ func (h *ProviderTrialHandler) Quote(c *gin.Context) {
 // Recovery restores a trial without creating a quote or confirming a charge.
 // @Summary 恢复原模型试运行
 // @ID getProviderTrialRecovery
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "发布ID"
 // @Success 200 {object} application.ProviderTrialRecovery

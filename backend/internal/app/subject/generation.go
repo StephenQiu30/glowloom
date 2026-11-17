@@ -175,3 +175,8 @@ func fillSubjectSource(out *promptdomain.ReferenceSource, content subjectdomain.
 		out.Media = append(out.Media, sourceMedia(content.Voice.Binding))
 	}
 }
+
+// GatewayBinding reuses Subject's owning reference checks without an old operation identity.
+func GatewayBinding(ctx context.Context, tx *gorm.DB, objects Objects, actor identity.Principal, project, binding uuid.UUID) (subject.BoundMedia, error) {
+	return (generationAccess{tx: tx, objects: objects}).binding(ctx, actor, project, binding)
+}

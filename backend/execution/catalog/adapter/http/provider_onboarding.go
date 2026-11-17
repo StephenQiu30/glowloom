@@ -27,7 +27,7 @@ func (h *OnboardingHandler) Register(group *gin.RouterGroup) {
 // Read returns the nonsecret saved onboarding state.
 // @Summary 读取模型预设接入进度
 // @ID getProviderOnboarding
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "服务ID"
 // @Success 200 {object} application.ProviderOnboardingState
@@ -49,7 +49,7 @@ func (h *OnboardingHandler) Read(c *gin.Context) {
 // Activate requires each release to have evidence for all of its required modes.
 // @Summary 验证后启用所选模型
 // @ID activateProviderOnboarding
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "服务ID"
@@ -77,7 +77,7 @@ func (h *OnboardingHandler) Activate(c *gin.Context) {
 // TestModel creates a charged model-access check with a stable request identity.
 // @Summary 验证一个所选模型
 // @ID testProviderOnboardingModel
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "服务ID"
 // @Param credential_id path string true "凭据ID"

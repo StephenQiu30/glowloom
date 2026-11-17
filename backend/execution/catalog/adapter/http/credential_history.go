@@ -26,7 +26,7 @@ func (h *CredentialHistoryHandler) Register(g *gin.RouterGroup) {
 // List returns active, draining and disabled metadata.
 // @Summary 平台 Key 轮换记录
 // @ID listProviderCredentials
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "连接ID"
 // @Success 200 {array} application.ProviderCredentialSummary

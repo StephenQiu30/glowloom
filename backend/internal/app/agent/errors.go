@@ -10,6 +10,7 @@ import (
 	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	gateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
@@ -20,6 +21,21 @@ import (
 func businessError(err error) error {
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, gateway.ErrFunds) || errors.Is(err, gateway.ErrBudget) {
+		return errors.Join(domain.ErrBudget, err)
+	}
+	if errors.Is(err, gateway.ErrForbidden) {
+		return errors.Join(domain.ErrNotFound, err)
+	}
+	if errors.Is(err, gateway.ErrConflict) {
+		return errors.Join(domain.ErrConflict, err)
+	}
+	if errors.Is(err, gateway.ErrInvalid) {
+		return errors.Join(domain.ErrInvalid, err)
+	}
+	if errors.Is(err, gateway.ErrUnknown) {
+		return errors.Join(domain.ErrBlocked, err)
 	}
 	var revision *canvas.RevisionConflict
 	if errors.Is(err, mediatool.ErrConflict) {

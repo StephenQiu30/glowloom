@@ -398,6 +398,22 @@ POST /media-transcriptions/:job_id/retry
 `
 
 const executionRoutes = `
+GET /ai/v1/models
+POST /ai/v1/chat/completions
+POST /ai/v1/responses
+POST /ai/v1/messages
+POST /ai/grants
+DELETE /ai/grants/:id
+GET /ai/wallet
+GET /ai/bills
+GET /ai/requests/:id
+GET /ai/admin/configuration
+PUT /ai/admin/budgets
+POST /ai/admin/reconciliations
+POST /ai/admin/models
+POST /ai/admin/routes
+POST /ai/admin/credits
+PUT /ai/admin/credentials/:id
 POST /platform/billing/scopes/:scopeID/credit-commands
 GET /platform/billing/scopes/:scopeID/credit-commands/:commandID
 GET /platform/billing/scopes/:scopeID/wallet

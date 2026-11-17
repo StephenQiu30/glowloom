@@ -18,7 +18,7 @@ type savedDirectoryAccepted = application.CredentialTestAccepted
 // ReadSavedModelDirectory queues a read-only directory request for the key owner.
 // @Summary 使用已保存凭据读取模型目录
 // @ID readSavedProviderModelDirectory
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "连接 ID"
 // @Param credential_id path string true "凭据 ID"

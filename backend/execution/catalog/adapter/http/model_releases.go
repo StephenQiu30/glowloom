@@ -37,7 +37,7 @@ type DefaultPage struct {
 // List returns version bindings and validation coverage.
 // @Summary 模型发布历史
 // @ID listModelReleases
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "模型ID"
 // @Success 200 {object} ReleasePage
@@ -58,7 +58,7 @@ func (h *ReleaseHandler) List(c *gin.Context) {
 // Create freezes model, supplier configuration, price and cost ceiling.
 // @Summary 创建待验证模型发布
 // @ID createModelRelease
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "模型ID"
@@ -85,7 +85,7 @@ func (h *ReleaseHandler) Create(c *gin.Context) {
 // Activate checks real evidence before switching visible model/default bindings.
 // @Summary 激活已验证模型发布
 // @ID activateModelRelease
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "发布ID"
@@ -112,7 +112,7 @@ func (h *ReleaseHandler) Activate(c *gin.Context) {
 // Defaults returns platform defaults pinned to published releases.
 // @Summary 平台能力默认模型
 // @ID listCapabilityDefaults
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Success 200 {object} DefaultPage
 // @Router /api/admin/capability-defaults [get]

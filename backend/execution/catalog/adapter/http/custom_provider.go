@@ -25,7 +25,7 @@ func (h *CustomProviderHandler) Register(group *gin.RouterGroup) {
 // Create saves a disabled custom connection and its recoverable receipt.
 // @Summary 创建自定义供应商连接
 // @ID createCustomProviderConnection
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param body body application.CustomProviderInput true "供应商基本配置"
@@ -47,7 +47,7 @@ func (h *CustomProviderHandler) Create(c *gin.Context) {
 // SetLogo changes display metadata without altering execution or releases.
 // @Summary 更新供应商 Logo
 // @ID updateProviderLogo
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "供应商ID"

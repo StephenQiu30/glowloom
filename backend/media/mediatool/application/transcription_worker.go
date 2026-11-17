@@ -119,7 +119,12 @@ func (w *TranscriptionWorker) Execute(ctx context.Context, id TranscriptionWorkI
 	// this owned activity until a terminal native response confirms it stopped;
 	// caller cancellation remains durable cancel_requested and discards results.
 	inferenceCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), inferenceBudget)
-	draft, inferenceErr := w.transcriber.Transcribe(inferenceCtx, pcm.File, work.Frozen.Language, pcm.DurationMS)
+	var inferenceErr error
+	if scoped, ok := w.transcriber.(WorkTranscriber); ok {
+		draft, inferenceErr = scoped.TranscribeWork(inferenceCtx, id, work, pcm.File, work.Frozen.Language, pcm.DurationMS)
+	} else {
+		draft, inferenceErr = w.transcriber.Transcribe(inferenceCtx, pcm.File, work.Frozen.Language, pcm.DurationMS)
+	}
 	cancel()
 	if errors.Is(inferenceErr, ErrInferenceUncertain) {
 		return domain.TranscriptionJob{}, inferenceErr

@@ -11,10 +11,12 @@ import (
 
 	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	gatewaydomain "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -108,7 +110,7 @@ func loadShotCandidate(ctx context.Context, tx *gorm.DB, s domain.Scope, in Shot
 	if s.CanvasID != nil && *s.CanvasID != in.CanvasID {
 		return operation.TaskDetail{}, mediadomain.MediaAsset{}, domain.ErrNotFound
 	}
-	task, err := operation.NewPublicQuery(operationStore(tx)).Task(ctx, agentapp.Principal(s), s.ProjectID, in.OperationID)
+	task, err := gatewayTask(ctx, tx, agentapp.Principal(s), s.ProjectID, in.OperationID)
 	if err != nil {
 		return task, mediadomain.MediaAsset{}, businessError(err)
 	}
@@ -132,7 +134,7 @@ func loadShotCandidate(ctx context.Context, tx *gorm.DB, s domain.Scope, in Shot
 	if err != nil {
 		return task, asset, businessError(err)
 	}
-	if asset.Kind != mediadomain.KindVideo || asset.SourceOperationID == nil || *asset.SourceOperationID != in.OperationID || asset.DurationMS == nil || asset.SHA256 == nil || in.SourceStartMS > int64(*asset.DurationMS) || in.DurationMS > int64(*asset.DurationMS)-in.SourceStartMS {
+	if asset.Kind != mediadomain.KindVideo || asset.SourceAIRequestID == nil || *asset.SourceAIRequestID != in.OperationID || asset.DurationMS == nil || asset.SHA256 == nil || in.SourceStartMS > int64(*asset.DurationMS) || in.DurationMS > int64(*asset.DurationMS)-in.SourceStartMS {
 		return task, asset, domain.ErrConflict
 	}
 	if asset.FPS == nil || int64(*asset.DurationMS) > canvasdomain.MaxTimelineDurationMS {
@@ -185,15 +187,16 @@ func checkShotSource(tx *gorm.DB, node canvasdomain.Node, task operation.TaskDet
 	if node.NodeType != canvasdomain.NodeTypeGeneration || gen == nil || gen.ModelProfileID == nil || strings.TrimSpace(gen.Prompt) != prompt || gen.Capability != task.Capability || gen.Mode != task.Mode || gen.OutputCount != int(task.OutputCount) || domain.ContentHash(gen.Inputs) != domain.ContentHash(references) {
 		return domain.ErrConflict
 	}
-	var model struct {
-		ID     uuid.UUID
-		Schema []byte
-	}
-	if err := tx.Raw(`SELECT model_profile_id AS id,param_schema AS schema FROM catalog.model_profile_version WHERE id=(SELECT model_profile_version_id FROM operation.operation WHERE id=?)`, task.ID).Scan(&model).Error; err != nil {
+	var row struct{ Contract []byte }
+	if err := tx.Raw("SELECT contract FROM ai.quote WHERE id=?", task.ID).Scan(&row).Error; err != nil {
 		return err
 	}
-	params, err := operation.NormalizeQuoteParams(gen.Params, model.Schema, task.Mode)
-	if err != nil || model.ID != *gen.ModelProfileID || domain.ContentHash(params) != domain.Hash(task.Params) {
+	var frozen gatewaydomain.Call
+	if json.Unmarshal(row.Contract, &frozen) != nil || frozen.Model.ID != *gen.ModelProfileID {
+		return domain.ErrConflict
+	}
+	params, err := aigateway.NormalizeGenerationParams(frozen.Model, task.Mode, gen.Params)
+	if err != nil || domain.ContentHash(params) != domain.ContentHash(task.Params) {
 		return domain.ErrConflict
 	}
 	return nil

@@ -17,7 +17,7 @@ type DeleteProviderRequest struct {
 // PreviewProviderDeletion lists affected drafts or explains why deletion is blocked.
 // @Summary 预览连接删除
 // @ID previewAdminProviderDeletion
-// @Tags settings
+// @Tags business
 // @Produce json
 // @Param id path string true "连接ID"
 // @Success 200 {object} application.ProviderDeletionPreview
@@ -40,7 +40,7 @@ func (h *AdminHandler) PreviewProviderDeletion(c *gin.Context) {
 // DeleteProvider removes an unused connection after rechecking the preview.
 // @Summary 删除未使用的连接
 // @ID deleteAdminProvider
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param id path string true "连接ID"

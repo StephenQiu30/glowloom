@@ -45,7 +45,7 @@ type SalePreview struct {
 // PreviewSalePrice previews a draft without publishing or reserving funds.
 // @Summary 预览模型销售价格
 // @ID previewAdminSalePrice
-// @Tags settings
+// @Tags business
 // @Accept json
 // @Produce json
 // @Param body body SalePreviewRequest true "采购价格与示例用量"
