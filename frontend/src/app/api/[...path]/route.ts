@@ -61,6 +61,11 @@ const identityRoutes: {
     query: [],
   },
   {
+    pattern: `platform/notifications/${identityUUID}/delete`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
     pattern: `platform/notifications/${identityUUID}/enabled`,
     methods: ["PATCH"],
     query: [],
