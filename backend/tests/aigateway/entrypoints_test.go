@@ -91,11 +91,9 @@ func TestEntrypointMediaWorkbenchQueueExecuteDeliverActualPNG(t *testing.T) {
 	require.Equal(t, "ingesting", string(before.Status))
 	handlers := map[string]taskruntime.Handler{}
 	r.RegisterWorker(handlers)
-	for range 2 {
-		next, err := handlers["ai.deliver"](t.Context(), taskruntime.Job{Kind: "ai.deliver", BusinessID: q.OperationID.String()})
-		require.NoError(t, err)
-		require.True(t, next.IsZero())
-	}
+	next, err := handlers["ai.deliver"](t.Context(), taskruntime.Job{Kind: "ai.deliver", BusinessID: q.OperationID.String()})
+	require.NoError(t, err)
+	require.True(t, next.IsZero())
 	task, err := c.Task(t.Context(), a, p, q.OperationID)
 	require.NoError(t, err)
 	require.Equal(t, "completed", string(task.Status))
@@ -103,17 +101,41 @@ func TestEntrypointMediaWorkbenchQueueExecuteDeliverActualPNG(t *testing.T) {
 	require.Len(t, task.Outputs, 1)
 	require.NotNil(t, task.Outputs[0].MediaAssetID)
 	assetID := *task.Outputs[0].MediaAssetID
-	var asset struct {
-		SourceAIRequestID uuid.UUID
-		SourceOperationID *uuid.UUID
-		Status, ObjectKey string
+	type assetSnapshot struct {
+		ID, SourceAIRequestID     uuid.UUID
+		SourceOperationID         *uuid.UUID
+		Status, ObjectKey, SHA256 string
 	}
-	require.NoError(t, db.Raw("SELECT source_ai_request_id,source_operation_id,status,object_key FROM media.media_asset WHERE id=?", assetID).Scan(&asset).Error)
+	var asset assetSnapshot
+	require.NoError(t, db.Raw("SELECT id,source_ai_request_id,source_operation_id,status,object_key,sha256 FROM media.media_asset WHERE id=?", assetID).Scan(&asset).Error)
+	require.Equal(t, assetID, asset.ID)
 	require.Equal(t, q.OperationID, asset.SourceAIRequestID)
 	require.Nil(t, asset.SourceOperationID)
 	require.Equal(t, "ready", asset.Status)
 	require.Equal(t, body, objects.files[asset.ObjectKey])
+	require.Equal(t, domain.Digest(body), asset.SHA256)
 	require.Equal(t, 3, objects.writes)
+	writesAfterFirstDelivery := objects.writes
+	var settlementsAfterFirstDelivery int64
+	require.NoError(t, db.Raw("SELECT count(*) FROM ai.money_event WHERE request_id=? AND kind='settle'", q.OperationID).Scan(&settlementsAfterFirstDelivery).Error)
+	require.EqualValues(t, 1, settlementsAfterFirstDelivery)
+
+	// Snapshot the first successful delivery before replaying its durable handler.
+	// A second read without an intervening replay would miss replaced asset identity.
+	next, err = handlers["ai.deliver"](t.Context(), taskruntime.Job{Kind: "ai.deliver", BusinessID: q.OperationID.String()})
+	require.NoError(t, err)
+	require.True(t, next.IsZero())
+	again, err := c.Task(t.Context(), a, p, q.OperationID)
+	require.NoError(t, err)
+	require.Equal(t, task.Outputs, again.Outputs)
+	require.Equal(t, assetID, *again.Outputs[0].MediaAssetID)
+	var replayedAsset assetSnapshot
+	require.NoError(t, db.Raw("SELECT id,source_ai_request_id,source_operation_id,status,object_key,sha256 FROM media.media_asset WHERE id=?", *again.Outputs[0].MediaAssetID).Scan(&replayedAsset).Error)
+	require.Equal(t, asset, replayedAsset)
+	require.Equal(t, asset.SHA256, domain.Digest(objects.files[replayedAsset.ObjectKey]))
+	require.Equal(t, writesAfterFirstDelivery, objects.writes)
+	require.NoError(t, db.Raw("SELECT count(*) FROM ai.money_event WHERE request_id=? AND kind='settle'", q.OperationID).Scan(&count).Error)
+	require.Equal(t, settlementsAfterFirstDelivery, count)
 	require.EqualValues(t, 1, sends.Load())
 	for _, query := range []string{
 		"SELECT count(*) FROM ai.hold WHERE request_id=? AND closed AND charged=1",
@@ -132,10 +154,6 @@ func TestEntrypointMediaWorkbenchQueueExecuteDeliverActualPNG(t *testing.T) {
 		require.NoError(t, db.Raw(query, q.OperationID).Scan(&count).Error)
 		require.Zero(t, count, query)
 	}
-	again, err := c.Task(t.Context(), a, p, q.OperationID)
-	require.NoError(t, err)
-	require.Equal(t, task.Outputs, again.Outputs)
-	require.Equal(t, assetID, *again.Outputs[0].MediaAssetID)
 }
 
 func TestEntrypointAgentReadyGrantRevocationReleasesWithoutSend(t *testing.T) {
