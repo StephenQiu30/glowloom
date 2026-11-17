@@ -81,7 +81,7 @@ func realCanvasBoundary(t *testing.T, runtimes ...canvas.YjsCommandRuntime) (*go
 		t.Fatal("restricted Go business role required", role, err)
 	}
 	b := agentwire.NewBoundary(runtimeDB, nil).WithCanvasRuntime(runtime)
-	admission := domain.Admission{RootRunID: uuid.New(), SessionID: uuid.New(), SubmissionID: uuid.New(), RequestID: uuid.New(), ContentHash: domain.Hash([]byte(`{"goal":"actual canvas"}`)), Scope: domain.Scope{ActorID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, ProjectID: project}, BudgetMicros: 100}
+	admission := domain.Admission{RootRunID: uuid.New(), SessionID: uuid.New(), SubmissionID: uuid.New(), RequestID: uuid.New(), ContentHash: domain.Hash([]byte(`{"goal":"actual canvas"}`)), Scope: domain.Scope{ActorID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, ProjectID: project}, BudgetMicros: 100 * creditMicros}
 	if err = b.Store.AdmitRun(t.Context(), admission); err != nil {
 		t.Fatal(err)
 	}

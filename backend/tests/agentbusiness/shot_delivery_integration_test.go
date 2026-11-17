@@ -4,8 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	gateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -25,18 +31,18 @@ import (
 // Metadata fixtures isolate adoption, atomic Yjs/export admission and replay.
 // They do not prove supplier execution or real video encoding; those require the
 // separate original-generation/FFmpeg acceptance test.
-func shotCandidate(t *testing.T, db *gorm.DB, g domain.Grant, canvasID, nodeID uuid.UUID, revision int64, asset uuid.UUID) (uuid.UUID, uuid.UUID) {
+func shotCandidate(t *testing.T, db *gorm.DB, actor identity.Principal, g domain.Grant, canvasID, nodeID uuid.UUID, revision int64, asset uuid.UUID, refs ...operationhttp.QuoteMediaInput) (uuid.UUID, uuid.UUID) {
 	t.Helper()
-	provider, model, version, op, output := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO catalog.provider(id,key,name,adapter_key,region) VALUES(?,?,'shot fixture','mock','domestic')`, provider, "shot-"+provider.String()).Error)
-	require.NoError(t, db.Exec(`INSERT INTO catalog.model_profile(id,model_key,provider_id,capability,display_name) VALUES(?,?,?,'video.generate','shot fixture')`, model, "shot-"+model.String(), provider).Error)
-	require.NoError(t, db.Exec(`INSERT INTO catalog.model_profile_version(id,model_profile_id,version_no,provider_model_id,modes,limits,param_schema,supports_query,supports_cancel,supports_callback,expected_max_ms) VALUES(?,?,1,'shot',ARRAY['text2video'],'{}','[]',true,false,false,1000)`, version, model).Error)
-	source, _ := json.Marshal(map[string]any{"canvas_id": canvasID, "node_id": nodeID, "revision": revision})
-	require.NoError(t, db.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,model_profile_version_id,params,input_hash,origin,status,region,source_context,settled_micros) VALUES(?,?,'free','video.generate','text2video',?,'{}',?,'canvas','completed','domestic',?::jsonb,0)`, op, g.Scope.ProjectID, version, domain.Hash([]byte("shot")), string(source)).Error)
-	require.NoError(t, db.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,media_asset_id,moderation_status) VALUES(?,?,?,1,'media',?,'passed')`, output, g.Scope.ProjectID, op, asset).Error)
-	require.NoError(t, db.Exec(`UPDATE media.media_asset SET origin='generated',source_operation_id=?,provider_key='fixture',model_key='fixture',region='domestic' WHERE id=?`, op, asset).Error)
-	require.NoError(t, db.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','one shot source')`, uuid.New(), op).Error)
-	return op, output
+	ledger, d := gatewayCreation(t, db, actor, g, operationhttp.QuoteItemRequest{Capability: "video.generate", Mode: "text2video", Prompt: "one shot source", Params: json.RawMessage(`{}`), OutputCount: 1, Source: &operationdomain.CanvasSource{CanvasID: canvasID, NodeID: nodeID, Revision: revision}, MediaInputs: refs})
+	result := ledger.settle(t, d, 0)
+	op := d.Call.ID
+	require.NoError(t, db.Exec(`UPDATE media.media_asset SET origin='generated',source_ai_request_id=?,provider_key='fixture',model_key='fixture',region='domestic' WHERE id=?`, op, asset).Error)
+	summary, err := json.Marshal(aigateway.OutputSummary{RequestID: op, AssetID: asset, Kind: "video", Status: "ready", SHA256: strings.Repeat("a", 64)})
+	require.NoError(t, err)
+	receipt, err := json.Marshal(result.Receipt)
+	require.NoError(t, err)
+	require.NoError(t, db.Exec(`INSERT INTO ai.output(request_id,asset_id,receipt_sha256,sha256,manifest_sha256,manifest,kind,state,summary) VALUES(?,?,?,repeat('a',64),repeat('b',64),'{}','video','ready',?::jsonb)`, op, asset, gateway.Digest(receipt), string(summary)).Error)
+	return op, uuid.NewSHA1(op, []byte("output/0"))
 }
 
 func TestShotDeliveryAtomicAdoptionTimelineExportsAndReplay(t *testing.T) {
@@ -75,7 +81,7 @@ func testShotDeliveryGoalLifecycle(t *testing.T, planned bool) {
 	require.NoError(t, db.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type)VALUES(?,'test-main','shot-delivery-1250000000',?,'accepted',16,repeat('a',64),'video/mp4')`, loc, key).Error)
 	require.NoError(t, db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,moderation_status)VALUES(?,?,'video','upload','ready',?,?,'shot.mp4','video/mp4',16,repeat('a',64),'passed')`, asset, g.Scope.ProjectID, key, loc).Error)
 	require.NoError(t, db.Exec(`UPDATE media.media_asset SET duration_ms=1000,width=64,height=64,fps=25 WHERE id=?`, asset).Error)
-	op, output := shotCandidate(t, db, g, doc.ID, node.ID, int64(changed.Revision), asset)
+	op, output := shotCandidate(t, db, actor, g, doc.ID, node.ID, int64(changed.Revision), asset)
 	cfg := storagefixture.Configuration(t, "http://127.0.0.1:19000", "shot-delivery-1250000000")
 	environment, err := storageoperator.Configuration(cfg)
 	require.NoError(t, err)
@@ -143,11 +149,22 @@ func testShotDeliveryGoalLifecycle(t *testing.T, planned bool) {
 	}
 	status, _, msg = businessToolRequest(t, router, g, "shot_delivery_create", "unapproved-delivery", input)
 	require.Equal(t, 409, status, msg)
-	extra := uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,media_asset_id) VALUES(?,?,1,'reference_image','media_asset',?)`, extra, op, asset).Error)
-	status, _, msg = businessToolRequest(t, router, g, "shot_delivery_propose", "different-original-references", input)
+	// Original references are immutable. A distinct frozen candidate carrying
+	// an extra reference cannot be adopted as the text-only source's output.
+	extra, extraLoc := uuid.New(), uuid.New()
+	extraKey := "projects/" + g.Scope.ProjectID.String() + "/video/2026/11/" + extra.String() + ".mp4"
+	require.NoError(t, db.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type) SELECT ?::uuid,profile_id,bucket,?,'accepted',byte_size,sha256,mime_type FROM media.object_location WHERE id=?`, extraLoc, extraKey, loc).Error)
+	require.NoError(t, db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,moderation_status,duration_ms,width,height,fps) SELECT ?::uuid,project_id,kind,'upload',status,?,?::uuid,file_name,mime_type,byte_size,sha256,moderation_status,duration_ms,width,height,fps FROM media.media_asset WHERE id=?`, extra, extraKey, extraLoc, asset).Error)
+	extraOp, extraOutput := shotCandidate(t, db, actor, g, doc.ID, node.ID, int64(changed.Revision), extra, operationhttp.QuoteMediaInput{Role: "reference_video", MediaAssetID: asset})
+	different := make(map[string]any, len(input))
+	for key, value := range input {
+		different[key] = value
+	}
+	different["operation_id"] = extraOp
+	different["output_id"] = extraOutput
+	status, _, msg = businessToolRequest(t, router, g, "shot_delivery_propose", "different-original-references", different)
 	require.Equal(t, 409, status, msg)
-	require.NoError(t, db.Exec(`DELETE FROM operation.operation_input WHERE id=?`, extra).Error)
+	require.Error(t, db.Exec(`UPDATE ai.quote SET contract=jsonb_set(contract,'{Raw,references}','[]') WHERE id=?`, extraOp).Error, "original references cannot be rewritten")
 	require.NoError(t, db.Exec(`UPDATE media.media_asset SET fps=NULL WHERE id=?`, asset).Error)
 	status, _, msg = businessToolRequest(t, router, g, "shot_delivery_propose", "missing-source-frame-rate", input)
 	require.Equal(t, 409, status, msg)

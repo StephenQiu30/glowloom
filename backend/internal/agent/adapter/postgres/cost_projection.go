@@ -68,6 +68,12 @@ func rootCostProjection(tx *gorm.DB, a domain.Authority) (domain.RootCostSnapsho
 			if row.ProjectID == nil || *row.ProjectID != a.Scope.ProjectID || row.ScopeID == nil || *row.ScopeID != a.Scope.ScopeID || row.ActorID == nil || *row.ActorID != a.Scope.ActorID || row.RunID == nil || *row.RunID != a.RootRunID || row.AIState == nil || row.HeldMicros == nil || row.ChargedMicros == nil || row.ReservedMicros == nil || *row.ReservedMicros > row.MaxMicros {
 				return out, domain.ErrUnavailable
 			}
+			// Lifecycle alone cannot release capacity. Terminal requests must
+			// agree with their original monetary closure, including zero cost.
+			terminal := *row.AIState == "settled" || *row.AIState == "released"
+			if terminal && *row.HeldMicros != 0 || *row.AIState == "settled" && row.SettlementID == nil || *row.AIState == "released" && *row.ChargedMicros != 0 || !terminal && (*row.ChargedMicros != 0 || row.SettlementID != nil) {
+				return out, domain.ErrUnavailable
+			}
 			e.OperationID = row.RequestID
 			e.ReservationID = row.RequestID
 			e.SettlementID = row.SettlementID

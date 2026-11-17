@@ -197,7 +197,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 				case <-ctx.Done():
 					return domain.CallResult{}, ctx.Err()
 				}
-				return completed(`{"output":"","tool_calls":[{"id":"boundary-snapshot-1","name":"project_snapshot","arguments":{}}],"usage":{"input_tokens":5,"output_tokens":2},"stop_reason":"tool_use","model_key":"boundary-fixture"}`, 1), nil
+				return completed(`{"output":"","tool_calls":[{"id":"boundary-snapshot-1","name":"project_snapshot","arguments":{}}],"usage":{"input_tokens":5,"output_tokens":2},"stop_reason":"tool_use","model_key":"boundary-fixture"}`, 0), nil
 			}
 			if n != 2 || tools.Load() != 1 {
 				return domain.CallResult{}, fmt.Errorf("expected exactly one tool before final: model=%d tools=%d", n, tools.Load())
@@ -214,7 +214,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 			if !found {
 				return domain.CallResult{}, fmt.Errorf("successful formal tool result missing from model transcript")
 			}
-			return completed(`{"output":"Boundary fixture completed after the committed project snapshot.","usage":{"input_tokens":7,"output_tokens":3},"stop_reason":"stop","model_key":"boundary-fixture"}`, 1), nil
+			return completed(`{"output":"Boundary fixture completed after the committed project snapshot.","usage":{"input_tokens":7,"output_tokens":3},"stop_reason":"stop","model_key":"boundary-fixture"}`, 0), nil
 		},
 		Tools: []app.Tool{{Descriptor: app.ToolDescriptor{Name: "project_snapshot", Roles: []string{"producer"}, Description: "Read this isolated project's admitted run from PostgreSQL", Parameters: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`), Effect: "read", ContractVersion: "v1", Replay: "safe"}, Execute: func(ctx context.Context, got domain.Scope, _ uuid.UUID, raw json.RawMessage) (domain.CallResult, error) {
 			if got != scope || domain.Hash(raw) != domain.Hash([]byte(`{}`)) {
@@ -228,7 +228,8 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 				return domain.CallResult{}, fmt.Errorf("expected one admitted run, got %d", count)
 			}
 			tools.Add(1)
-			// Formal read tools are free; only the model fixture consumes budget.
+			// Transport fixtures are free; paid accounting is exercised by the real
+			// gateway ledger and approved Agent HTTP boundary regressions.
 			return completed(snapshotResult, 0), nil
 		}}},
 	}
@@ -374,7 +375,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	var recordCount, eventCount int64
 	if err := db.Raw(`SELECT count(*) total,
 		count(*) FILTER (WHERE status='completed') completed,
-		count(*) FILTER (WHERE kind='model' AND name='chat' AND status='completed' AND cost_micros=1) models,
+		count(*) FILTER (WHERE kind='model' AND name='chat' AND status='completed' AND cost_micros=0) models,
 		count(*) FILTER (WHERE kind='tool' AND name='project_snapshot' AND status='completed' AND cost_micros=0) tools,
 		count(*) FILTER (WHERE status<>'completed') invalid,
 		coalesce(sum(cost_micros),0) cost_micros
@@ -388,7 +389,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	authority, err = store.CurrentAuthority(t.Context(), rid)
-	if err != nil || ledger.Total != 3 || ledger.Completed != 3 || ledger.Models != 2 || ledger.Tools != 1 || ledger.Invalid != 0 || ledger.CostMicros != 2 || recordCount == 0 || eventCount == 0 || authority.ReservedMicros != ledger.CostMicros {
+	if err != nil || ledger.Total != 3 || ledger.Completed != 3 || ledger.Models != 2 || ledger.Tools != 1 || ledger.Invalid != 0 || ledger.CostMicros != 0 || recordCount == 0 || eventCount == 0 || authority.ReservedMicros != ledger.CostMicros {
 		var receipts []struct {
 			Kind, Name, Status string
 			CostMicros         int64
@@ -406,6 +407,10 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	if len(originalCalls) != 3 {
 		t.Fatalf("expected two model and one tool HTTP request, got %d", len(originalCalls))
 	}
+	var paidRequests int64
+	if err := db.Raw(`SELECT count(*) FROM ai.call_cost WHERE run_id=?`, rid).Scan(&paidRequests).Error; err != nil || paidRequests != 0 {
+		t.Fatalf("free transport fixture created AI funding: count=%d error=%v", paidRequests, err)
+	}
 	for _, original := range originalCalls {
 		in := original.input
 		query := url.Values{"submission_id": {in.Grant.SubmissionID.String()}, "task_id": {in.Call.TaskID}, "checkpoint_id": {in.Call.CheckpointID}, "attempt": {fmt.Sprint(in.Call.Attempt)}, "contract_version": {in.Call.ContractVersion}, "input_hash": {in.Call.InputHash}}
@@ -414,9 +419,6 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 		decode(t, requestJSON(t, client, "GET", path, nil, serviceHeaders, 200), &saved)
 		decode(t, requestJSON(t, client, "POST", businessServer.URL+original.path, in, serviceHeaders, 200), &replay)
 		wantCost := int64(0)
-		if saved.Kind == "model" {
-			wantCost = 1
-		}
 		if saved.ReceiptID != replay.ReceiptID || saved.Call != in.Call || saved.Status != "completed" || replay.Status != "completed" || saved.CostMicros != wantCost || replay.CostMicros != wantCost || domain.Hash(saved.Result) != domain.Hash(replay.Result) {
 			t.Fatal("original Go receipt changed on HTTP replay")
 		}

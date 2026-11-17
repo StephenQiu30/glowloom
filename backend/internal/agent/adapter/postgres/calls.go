@@ -86,7 +86,7 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 		if kind == domain.CallKindTool {
 			reservation = 0
 		}
-		if reservation > spendableMicros(a) || kind == domain.CallKindModel && a.ReservedMicros > a.BudgetMicros {
+		if reservation > spendableMicros(a) || kind == domain.CallKindModel && spendableMicros(a) == 0 {
 			return domain.ErrBudget
 		}
 		// A run never starts a new paid request while an earlier model outcome is unknown.

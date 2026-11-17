@@ -319,9 +319,15 @@ func TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived(t 
 	require.Equal(t, "ready", detail.BillingOutcome.DeliveryState)
 	require.Equal(t, "confirm", detail.BillingOutcome.Regenerate)
 	require.Len(t, detail.Outputs, 2)
+	// Generated provenance cannot be stripped even before a read is attempted.
+	var missingSource *pgconn.PgError
+	err = db.Exec(`UPDATE media.media_asset SET source_operation_id=NULL WHERE id=?`, second).Error
+	require.ErrorAs(t, err, &missingSource)
+	require.Equal(t, "23514", missingSource.Code)
+	require.Equal(t, "media_asset_generated_source_check", missingSource.ConstraintName)
 	// A previously archived asset cannot prove ready after its current media
 	// authority changes, even though the original manifest remains successful.
-	for _, change := range []string{"is_delete=true", "moderation_status='rejected'", "status='processing'", "source_operation_id=NULL", "mime_type='image/jpeg'", "byte_size=byte_size+1", "sha256='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'"} {
+	for _, change := range []string{"is_delete=true", "moderation_status='rejected'", "status='processing'", "mime_type='image/jpeg'", "byte_size=byte_size+1", "sha256='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'"} {
 		require.NoError(t, db.Exec(`UPDATE media.media_asset SET `+change+` WHERE id=?`, second).Error)
 		changed, err := store.ReadPublicTask(t.Context(), actor, i.ProjectID, i.OperationID)
 		require.NoError(t, err)

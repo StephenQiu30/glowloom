@@ -62,6 +62,12 @@ func sourceCataloguePostgres(t *testing.T) *gorm.DB {
 		t.Fatal("create owned source catalogue database", err)
 	}
 	t.Log("owned source catalogue fixture database", fixtureName)
+	admin := db
+	t.Cleanup(func() {
+		if err := admin.Exec(`DROP DATABASE ` + fixtureName + ` WITH (FORCE)`).Error; err != nil {
+			t.Error("drop owned source catalogue database", fixtureName, err)
+		}
+	})
 	u.Path = "/" + fixtureName
 	db, err = gorm.Open(gormpostgres.Open(u.String()), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
@@ -72,11 +78,13 @@ func sourceCataloguePostgres(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = fixtureSQL.Close() })
-	const ddl = `CREATE SCHEMA workspace;CREATE SCHEMA media;CREATE SCHEMA operation;
+	const ddl = `CREATE SCHEMA workspace;CREATE SCHEMA media;CREATE SCHEMA operation;CREATE SCHEMA ai;CREATE SCHEMA identity;
+ CREATE TABLE identity."user"(id uuid PRIMARY KEY);
+ CREATE TABLE workspace.creation_scope(id uuid PRIMARY KEY);
  CREATE TABLE workspace.project(id uuid PRIMARY KEY,org_id uuid,owner_scope_id uuid,status text DEFAULT 'active',is_delete boolean DEFAULT false);
  CREATE TABLE media.library(id uuid PRIMARY KEY,kind text,org_id uuid,project_id uuid,personal_actor_id uuid,revision bigint DEFAULT 0);
  CREATE TABLE media.library_item(id uuid PRIMARY KEY,library_id uuid,asset_id uuid,plain_text text,folder_id uuid,title text,category text DEFAULT 'material',tags jsonb DEFAULT '[]',source_label text DEFAULT '',note text DEFAULT '',favorite boolean DEFAULT false,catalog_state text DEFAULT 'active',trashed_at timestamptz,position bigint DEFAULT 0,revision bigint DEFAULT 1,create_time timestamptz DEFAULT now(),update_time timestamptz DEFAULT now(),purged_at timestamptz);
- CREATE TABLE media.media_asset(id uuid PRIMARY KEY,project_id uuid,personal_org_id uuid,personal_actor_id uuid,kind text,origin text,status text,object_key text,object_location_id uuid NOT NULL,file_name text,mime_type text,byte_size bigint,sha256 text,width int,height int,duration_ms int,source_operation_id uuid,provider_key text,model_key text,region text,moderation_status text,aigc_marked boolean DEFAULT false,contains_real_person boolean DEFAULT false,consent_record_id uuid,revision int DEFAULT 1,create_time timestamptz DEFAULT now(),update_time timestamptz DEFAULT now(),is_delete boolean DEFAULT false);
+ CREATE TABLE media.media_asset(id uuid PRIMARY KEY,project_id uuid,personal_org_id uuid,personal_actor_id uuid,kind text,origin text,status text,object_key text,object_location_id uuid NOT NULL,file_name text,mime_type text,byte_size bigint,sha256 text,width int,height int,duration_ms int,source_operation_id uuid,source_ai_request_id uuid,provider_key text,model_key text,region text,moderation_status text,aigc_marked boolean DEFAULT false,contains_real_person boolean DEFAULT false,consent_record_id uuid,revision int DEFAULT 1,create_time timestamptz DEFAULT now(),update_time timestamptz DEFAULT now(),is_delete boolean DEFAULT false);
  CREATE TABLE media.purge_item(item_id uuid,status text);
  CREATE TABLE operation.operation(id uuid PRIMARY KEY,project_id uuid,capability text,mode text,status text,origin text DEFAULT 'canvas',confirmed_by uuid,is_delete boolean DEFAULT false);
  CREATE TABLE operation.operation_output(id uuid PRIMARY KEY,project_id uuid,operation_id uuid,media_asset_id uuid,kind text DEFAULT 'media',moderation_status text DEFAULT 'passed',create_time timestamptz DEFAULT now(),update_time timestamptz DEFAULT now(),is_delete boolean DEFAULT false);
@@ -101,6 +109,17 @@ func sourceCataloguePostgres(t *testing.T) *gorm.DB {
 			t.Fatal(err)
 		}
 		if err := db.Exec(`ALTER TABLE media.` + table + ` ADD PRIMARY KEY(id)`).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Include the new read-side dependencies from the canonical schema. The
+	// legacy-shaped media tables above remain intentional metadata fixtures.
+	for _, table := range []string{"account", "model", "request", "quote", "creation", "output", "history"} {
+		definition := regexp.MustCompile(`(?s)CREATE TABLE ai\.` + table + ` \(.*?\n\);`).Find(schema)
+		if len(definition) == 0 {
+			t.Fatal("canonical AI fixture definition missing", table)
+		}
+		if err := db.Exec(string(definition)).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

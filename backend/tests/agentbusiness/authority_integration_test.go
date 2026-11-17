@@ -31,7 +31,7 @@ func (access) AuthorizeRequest(context.Context, identity.Principal, uuid.UUID, b
 	return nil
 }
 func (access) AuthorizeWorker(context.Context, identity.Principal, uuid.UUID) error { return nil }
-func fixture(t *testing.T) (*pg.Store, domain.Admission, domain.Grant) {
+func fixture(t *testing.T, budgets ...int64) (*pg.Store, domain.Admission, domain.Grant) {
 	t.Helper()
 	dsn := os.Getenv("GLOWLOOM_TEST_AGENT_BUSINESS_DB_DSN")
 	if dsn == "" {
@@ -57,7 +57,15 @@ func fixture(t *testing.T) (*pg.Store, domain.Admission, domain.Grant) {
 	})
 	s := pg.NewStore(db, func(*gorm.DB) app.ControlAccess { return access{} }, time.Now)
 	a := domain.Admission{RootRunID: uuid.New(), SessionID: uuid.New(), SubmissionID: uuid.New(), RequestID: uuid.New(), ContentHash: domain.Hash([]byte(`{"goal":"test"}`)), Scope: domain.Scope{ActorID: uuid.New(), OrgID: uuid.New(), ScopeID: uuid.New(), ProjectID: uuid.New()}, BudgetMicros: 100}
+	if len(budgets) > 0 {
+		a.BudgetMicros = budgets[0]
+	}
 	t.Cleanup(func() {
+		// Paid fixtures retain immutable ledger bindings until the owned database
+		// reset; deleting only their Agent receipts would break original evidence.
+		if len(budgets) > 0 {
+			return
+		}
 		for _, table := range []string{"quiesced_receipt", "call_receipt", "proposal", "control_decision", "execution_grant", "run_authorization"} {
 			if err := db.Exec("DELETE FROM agent_business."+table+" WHERE root_run_id=?", a.RootRunID).Error; err != nil {
 				t.Error(err)
@@ -421,16 +429,17 @@ func TestFreeAtomicToolAcceptsCallerUpperBoundWithoutReservingIt(t *testing.T) {
 }
 
 func TestValidateGrantReturnsFreshRemainingBudgetForSuccessiveModelCalls(t *testing.T) {
-	s, a, g := fixture(t)
-	if g.AvailableMicros != 100 {
+	_, s, a, g, ledger := fundedCostFixture(t)
+	if g.AvailableMicros != 100*creditMicros {
 		t.Fatal("initial available budget", g.AvailableMicros)
 	}
 	raw := json.RawMessage(`{"messages":[]}`)
-	call := domain.CallInput{Grant: g, Call: domain.CallIdentity{TaskID: "budget-model", CallID: "first", CheckpointID: "model", Attempt: 1, ContractVersion: "v1", InputHash: domain.Hash(raw)}, Input: raw, MaxMicros: 100}
+	call := domain.CallInput{Grant: g, Call: domain.CallIdentity{TaskID: "budget-model", CallID: "first", CheckpointID: "model", Attempt: 1, ContractVersion: "v1", InputHash: domain.Hash(raw)}, Input: raw, MaxMicros: 100 * creditMicros}
 	executes := 0
-	model := func(context.Context, domain.Scope, uuid.UUID) (domain.CallResult, error) {
+	model := func(_ context.Context, _ domain.Scope, id uuid.UUID) (domain.CallResult, error) {
 		executes++
-		return domain.CallResult{Status: "completed", Result: json.RawMessage(`{"output":"fixture"}`), CostMicros: 1}, nil
+		result := ledger.settle(t, ledger.admit(t, id, 1), 1)
+		return domain.CallResult{Status: "completed", Result: json.RawMessage(`{"output":"fixture"}`), CostMicros: result.Charged * creditMicros}, nil
 	}
 	if _, err := s.ExecuteCall(t.Context(), "model", "text", call, model); err != nil {
 		t.Fatal(err)
@@ -439,7 +448,7 @@ func TestValidateGrantReturnsFreshRemainingBudgetForSuccessiveModelCalls(t *test
 	// the current Go ledger balance and ExecuteCall must still recheck atomically.
 	call.Grant.AvailableMicros = 1000000
 	fresh, err := s.ValidateGrant(t.Context(), call.Grant)
-	if err != nil || fresh.AvailableMicros != 99 {
+	if err != nil || fresh.AvailableMicros != 99*creditMicros {
 		t.Fatal("fresh balance", fresh.AvailableMicros, err)
 	}
 	call.Grant = fresh
@@ -449,16 +458,16 @@ func TestValidateGrantReturnsFreshRemainingBudgetForSuccessiveModelCalls(t *test
 		t.Fatal("second model rejected within total budget", err)
 	}
 	fresh, err = s.ValidateGrant(t.Context(), g)
-	if err != nil || fresh.AvailableMicros != 98 || executes != 2 {
+	if err != nil || fresh.AvailableMicros != 98*creditMicros || executes != 2 {
 		t.Fatal("settled balance", fresh.AvailableMicros, executes, err)
 	}
 	call.Call.CallID = "overrun"
-	call.MaxMicros = 99
+	call.MaxMicros = 99 * creditMicros
 	if _, err = s.ExecuteCall(t.Context(), "model", "text", call, model); !errors.Is(err, domain.ErrBudget) || executes != 2 {
 		t.Fatal("stale balance bypassed Go fence", err)
 	}
 	authority, err := s.CurrentAuthority(t.Context(), a.RootRunID)
-	if err != nil || authority.ReservedMicros != 2 {
+	if err != nil || authority.ReservedMicros != 2*creditMicros {
 		t.Fatal("total accounting", authority, err)
 	}
 }

@@ -13,6 +13,8 @@ import (
 
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	gateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
@@ -62,7 +64,7 @@ func TestGoalCompletionEmptyChatAndUnplannedProduction(t *testing.T) {
 	cost, ok := view.(map[string]any)["cost"].(domain.RootCostSnapshot)
 	require.True(t, ok, "run snapshot carries the existing Go-owned cost contract")
 	require.Equal(t, g.RootRunID, cost.RootRunID)
-	require.EqualValues(t, 100, cost.AuthorizedLimit)
+	require.EqualValues(t, 100*creditMicros, cost.AuthorizedLimit)
 	forged := g
 	forged.GrantID = uuid.New()
 	_, err = b.Capabilities.RunSnapshot(t.Context(), forged)
@@ -97,30 +99,35 @@ func TestGoalCompletionEmptyChatAndUnplannedProduction(t *testing.T) {
 }
 
 func TestProductionOperationSnapshotReadsOnlyBoundOriginals(t *testing.T) {
-	db, b, _, _, g := realCanvasBoundary(t)
+	db, b, _, actor, g := realCanvasBoundary(t)
 	view, err := b.Capabilities.RunSnapshot(t.Context(), g)
 	require.NoError(t, err)
 	require.Equal(t, []map[string]any{}, view.(map[string]any)["production_operations"])
-	op, unbound, res := uuid.New(), uuid.New(), uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,quote_micros) VALUES(?,?,'free','video.generate','text2video','goal-operation','upload','confirmed',10),(?,?,'free','video.generate','text2video','goal-unbound','upload','completed',0)`, op, g.Scope.ProjectID, unbound, g.Scope.ProjectID).Error)
-	require.NoError(t, db.Exec(`INSERT INTO billing.budget(id,project_id,limit_micros,reserved_micros) VALUES(?,?,100,10)`, uuid.New(), g.Scope.ProjectID).Error)
-	require.NoError(t, db.Exec(`INSERT INTO billing.reservation(id,project_id,operation_id,amount_micros,status) VALUES(?,?,?,10,'held')`, res, g.Scope.ProjectID, op).Error)
-	require.NoError(t, db.Exec(`UPDATE operation.operation SET reservation_id=? WHERE id=?`, res, op).Error)
-	require.NoError(t, db.Exec(`INSERT INTO billing.ledger_entry(id,project_id,operation_id,entry_type,amount_micros) VALUES(?,?,?,'reserve',10)`, uuid.New(), g.Scope.ProjectID, op).Error)
-	input := costCall(g, 10)
+	ledger, dispatch := gatewayCreation(t, db, actor, g, operationhttp.QuoteItemRequest{Capability: "text.generate", Mode: "text_to_text", Prompt: "original goal", Params: json.RawMessage(`{"max_tokens":1}`), OutputCount: 1})
+	_, unrelated := gatewayCreation(t, db, actor, g, operationhttp.QuoteItemRequest{Capability: "text.generate", Mode: "text_to_text", Prompt: "unbound", Params: json.RawMessage(`{"max_tokens":1}`), OutputCount: 1})
+	op, unbound := dispatch.Call.ID, unrelated.Call.ID
+	input := costCall(g, creditMicros)
 	_, err = b.Store.ExecuteAtomicTool(t.Context(), "original-confirm", input, func(tx *gorm.DB, _ domain.Scope, id uuid.UUID) (domain.CallResult, error) {
 		err := agentpg.BindOperationCostInTransaction(tx, id, op)
 		return domain.CallResult{Status: "completed", Result: json.RawMessage(`{}`)}, err
 	})
 	require.NoError(t, err)
-	model := costCall(g, 10)
+	model := costCall(g, creditMicros)
 	model.Call.CallID = "model-is-not-a-production-operation"
 	_, err = b.Store.ExecuteCall(t.Context(), "model", "model", model, func(context.Context, domain.Scope, uuid.UUID) (domain.CallResult, error) {
 		return domain.CallResult{Status: "completed", Result: json.RawMessage(`{"operation_id":"` + unbound.String() + `"}`)}, nil
 	})
 	require.NoError(t, err)
-	for _, state := range []string{"confirmed", "unknown", "reconciling", "manual", "completed"} {
-		require.NoError(t, db.Exec(`UPDATE operation.operation SET status=? WHERE id=?`, state, op).Error)
+	for _, state := range []struct{ ai, task string }{{"sending", "submitted"}, {"pending", "submitted"}, {"unknown", "unknown"}, {"received", "succeeded"}, {"settled", "completed"}} {
+		switch state.ai {
+		case "received":
+			require.NoError(t, ledger.store.SaveReceipt(t.Context(), op, dispatch.Attempt, gateway.Receipt{Body: json.RawMessage(`{"choices":[{"message":{"content":"original"}}]}`), Usage: gateway.Usage{Output: 1}, PurchaseMicros: 1}))
+		case "settled":
+			_, err := ledger.store.Settle(t.Context(), op)
+			require.NoError(t, err)
+		default:
+			require.NoError(t, db.Exec(`UPDATE ai.request SET state=? WHERE id=?`, state.ai, op).Error)
+		}
 		view, err = b.Capabilities.RunSnapshot(t.Context(), g)
 		require.NoError(t, err)
 		raw, err := json.Marshal(view.(map[string]any)["production_operations"])
@@ -132,7 +139,7 @@ func TestProductionOperationSnapshotReadsOnlyBoundOriginals(t *testing.T) {
 		require.NoError(t, json.Unmarshal(raw, &facts))
 		require.Len(t, facts, 1, "unbound operations and model result JSON cannot enter the production wait set")
 		require.Equal(t, op, facts[0].OperationID)
-		require.Equal(t, state, facts[0].Status)
+		require.Equal(t, state.task, facts[0].Status)
 	}
 }
 

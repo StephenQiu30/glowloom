@@ -32,7 +32,7 @@ func completedReuseDelivery(t *testing.T, db *gorm.DB, moderation string, unattr
 	require.NoError(t, db.Raw(`SELECT media_asset_id FROM operation.operation_output WHERE operation_id=? AND seq_no=0`, source).Scan(&assetText).Error)
 	asset := uuid.MustParse(assetText)
 	if unattributed {
-		require.NoError(t, db.Exec(`UPDATE media.media_asset SET source_operation_id=NULL WHERE id=?`, asset).Error)
+		require.NoError(t, db.Exec(`UPDATE media.media_asset SET origin='system',source_operation_id=NULL,provider_key=NULL,model_key=NULL,region=NULL WHERE id=?`, asset).Error)
 	}
 	zero := int64(0)
 	quoted.InputHash, quoted.ReusedFromID, quoted.QuoteMicros, quoted.OutputCount = hash, &source, &zero, 2
@@ -140,7 +140,7 @@ func TestPaidLegacyZeroBasedDeliveryRetainsReadyAndAdmission(t *testing.T) {
 		return tx.Exec(`UPDATE operation.operation SET status='completed',settled_micros=10 WHERE id=?`, id).Error
 	}))
 	asset := uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,source_operation_id,moderation_status,object_location_id) VALUES(?,?,'image','generated','ready',?,'image/png',1,?,'passed',?)`, asset, pid, "legacy-fixture/"+asset.String(), id, businessFixtureLocation(t, db, "legacy-fixture/"+asset.String())).Error)
+	require.NoError(t, db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,source_operation_id,moderation_status,object_location_id,provider_key,model_key,region) VALUES(?,?,'image','generated','ready',?,'image/png',1,?,'passed',?,'fixture','fixture','domestic')`, asset, pid, "legacy-fixture/"+asset.String(), id, businessFixtureLocation(t, db, "legacy-fixture/"+asset.String())).Error)
 	require.NoError(t, db.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,media_asset_id,moderation_status) VALUES(?,?,?,0,'media',?,'passed')`, uuid.New(), pid, id, asset).Error)
 	require.NoError(t, db.Exec(`INSERT INTO operation.operation_output(id,project_id,operation_id,seq_no,kind,json_payload,moderation_status) VALUES(?,?,?,1,'json','{"result":"legacy"}','passed')`, uuid.New(), pid, id).Error)
 	source := domain.CanvasSource{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}
@@ -182,9 +182,9 @@ func TestPaidLegacyZeroBasedDeliveryRetainsReadyAndAdmission(t *testing.T) {
 			require.ErrorIs(t, err, rollback)
 		})
 	}
-	// The accepted legacy contract also permits skipped review and absent historical
-	// source_operation_id; project-owned output relationships remain authoritative.
-	require.NoError(t, db.Exec(`UPDATE media.media_asset SET source_operation_id=NULL,moderation_status='skipped' WHERE id=?`, asset).Error)
+	// Historical imported originals may have skipped review and no generation
+	// provenance; keep them explicitly system-origin, never unattributed generated.
+	require.NoError(t, db.Exec(`UPDATE media.media_asset SET origin='system',source_operation_id=NULL,provider_key=NULL,model_key=NULL,region=NULL,moderation_status='skipped' WHERE id=?`, asset).Error)
 	require.NoError(t, db.Exec(`UPDATE operation.operation_output SET moderation_status='skipped' WHERE operation_id=?`, id).Error)
 	detail, err = store.ReadPublicTask(t.Context(), actor, pid, id)
 	require.NoError(t, err)
