@@ -153,6 +153,13 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "Anthropic", LogoKey: "anthropic", ProtocolIDs: []string{"anthropic_messages"}, CheckCapabilities: []string{"credential", "model_discovery", "model_test"},
+		AdapterKey: "anthropic", AllowedBaseURL: "https://api.anthropic.com/v1", AllowedRegion: RegionOverseas,
+		Capabilities: []string{"text"}, IsManagedCloud: true,
+		ParameterFields: map[string][]string{"text.generate": {"max_tokens", "temperature", "top_p"}},
+	})
+
+	RegisterAdapterSpec(AdapterSpecification{
 		DisplayName: "Vercel", LogoKey: "vercel", ProtocolIDs: []string{"vercel"}, CheckCapabilities: []string{"credential", "model_discovery", "model_test"},
 		AdapterKey: "vercel", AllowedBaseURL: "https://ai-gateway.vercel.sh/v1", AllowedRegion: RegionOverseas,
 		Capabilities: []string{"text", "image"}, IsManagedCloud: true,

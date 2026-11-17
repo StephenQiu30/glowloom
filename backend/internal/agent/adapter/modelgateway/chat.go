@@ -13,6 +13,7 @@ import (
 	"time"
 
 	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 )
 
@@ -235,25 +236,8 @@ func (c *ChatClient) complete(ctx context.Context, config catalog.ProviderConfig
 	watchdog := time.AfterFunc(c.idleTimeout, cancelIdle)
 	defer watchdog.Stop()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(config.BaseURL, "/")+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return Result{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+key)
-	res, err := c.client.Do(req)
-	if err != nil {
-		return Result{}, errResponse
-	}
-	// Closing the read-only response cannot change the received result.
-	defer func() { _ = res.Body.Close() }()
-	watchdog.Reset(c.idleTimeout)
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return Result{}, errResponse
-	}
-	const limit = 4 << 20
-	data, err := io.ReadAll(io.LimitReader(progressReader{reader: res.Body, progress: func() { watchdog.Reset(c.idleTimeout) }}, limit+1))
-	if err != nil || len(data) > limit {
+	data, status, _, err := providerhttp.NewClient(&c.client).TextRequest(ctx, config, key, "/chat/completions", json.RawMessage(body), 4<<20, func() { watchdog.Reset(c.idleTimeout) })
+	if err != nil || status < 200 || status >= 300 {
 		return Result{}, errResponse
 	}
 	var response struct {
@@ -282,7 +266,7 @@ func (c *ChatClient) complete(ctx context.Context, config catalog.ProviderConfig
 	if u.Hit != nil {
 		out.Usage.CacheReadTokens = u.Hit
 	}
-	if *u.Input < 0 || *u.Output < 0 || out.Usage.CacheReadTokens != nil && (*out.Usage.CacheReadTokens < 0 || *out.Usage.CacheReadTokens > *u.Input) || out.Usage.CacheWriteTokens != nil && *out.Usage.CacheWriteTokens < 0 {
+	if *u.Input < 0 || *u.Output < 0 || out.Usage.CacheReadTokens != nil && (*out.Usage.CacheReadTokens < 0 || *out.Usage.CacheReadTokens > *u.Input) || out.Usage.CacheWriteTokens != nil && *out.Usage.CacheWriteTokens != 0 {
 		return Result{}, errResponse
 	}
 	choice := response.Choices[0]
@@ -315,18 +299,4 @@ func (c *ChatClient) complete(ctx context.Context, config catalog.ProviderConfig
 		return Result{}, errResponse
 	}
 	return out, nil
-}
-
-// progressReader renews the idle window only after actual provider bytes.
-type progressReader struct {
-	reader   io.Reader
-	progress func()
-}
-
-func (r progressReader) Read(p []byte) (int, error) {
-	n, err := r.reader.Read(p)
-	if n > 0 {
-		r.progress()
-	}
-	return n, err
 }

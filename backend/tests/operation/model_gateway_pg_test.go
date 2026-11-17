@@ -29,7 +29,7 @@ import (
 )
 
 func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
-	for _, scenario := range []string{"complete", "procurement_unknown", "thinking_explicit", "thinking_default", "thinking_enabled", "thinking_auto", "max_tokens_bound", "max_tokens_exceeded", "runtime_role", "unverified_mode", "credential_rotated", "credential_invalid", "config_changed", "price_revoked", "procurement_revoked", "availability_dependency_missing", "token_pricing", "response_lost", "response_lost_credential_changed", "settlement_interrupted", "budget_rejected", "grant_revoked", "wrong_release", "params_tampered", "model_tampered", "tokens_tampered", "identity_revoked_after_send", "skill_disabled_before_dispatch", "skill_enabled_before_dispatch"} {
+	for _, scenario := range []string{"pool_primary", "pool_backup", "pool_pinned", "complete", "procurement_unknown", "thinking_explicit", "thinking_default", "thinking_enabled", "thinking_auto", "max_tokens_bound", "max_tokens_exceeded", "runtime_role", "unverified_mode", "credential_rotated", "credential_invalid", "config_changed", "price_revoked", "procurement_revoked", "availability_dependency_missing", "token_pricing", "response_lost", "response_lost_credential_changed", "settlement_interrupted", "budget_rejected", "grant_revoked", "wrong_release", "params_tampered", "model_tampered", "tokens_tampered", "identity_revoked_after_send", "skill_disabled_before_dispatch", "skill_enabled_before_dispatch"} {
 		t.Run(scenario, func(t *testing.T) {
 			dsn := os.Getenv("GLOWLOOM_TEST_MODEL_GATEWAY_DB_DSN")
 			if dsn == "" {
@@ -85,7 +85,19 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 			case "thinking_auto":
 				requestedParams["thinking"] = "auto"
 			}
+			if strings.HasPrefix(scenario, "pool_") {
+				seedAgentRoutePool(t, database, f, schema, actor.ID)
+				if scenario != "pool_primary" {
+					require.NoError(t, database.Exec("UPDATE catalog.provider_credential SET status='disabled' WHERE id=?", f.credential).Error)
+				}
+			}
 			input, _ := json.Marshal(map[string]any{"model_key": model, "release_id": f.release.String(), "max_tokens": tokens, "params": requestedParams, "messages": []map[string]any{{"role": "user", "content": "read the scene"}}, "tools": []map[string]any{{"name": "read_context", "description": "read project", "parameters": map[string]any{"type": "object"}}}})
+			if scenario == "pool_primary" || scenario == "pool_backup" {
+				var value map[string]any
+				require.NoError(t, json.Unmarshal(input, &value))
+				delete(value, "release_id")
+				input, _ = json.Marshal(value)
+			}
 			if scenario == "wrong_release" || scenario == "params_tampered" || scenario == "model_tampered" || scenario == "tokens_tampered" {
 				var value map[string]any
 				require.NoError(t, json.Unmarshal(input, &value))
@@ -118,6 +130,9 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 				pins, _ := json.Marshal([]agent.SkillPin{pin})
 				require.NoError(t, database.Exec(`UPDATE agent_business.run_authorization SET skill_pins=?::jsonb WHERE root_run_id=?`, string(pins), rid).Error)
 			}
+			if scenario == "pool_primary" || scenario == "pool_backup" {
+				require.NoError(t, database.Exec("UPDATE agent_business.run_authorization SET model_selection=model_selection-'release_id' WHERE root_run_id=?", rid).Error)
+			}
 			if scenario == "grant_revoked" {
 				require.NoError(t, database.Exec(`UPDATE agent_business.run_authorization SET barrier=true WHERE root_run_id=?`, rid).Error)
 			}
@@ -145,6 +160,11 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 			sends := 0
 			client := &http.Client{Transport: adapterTransport(func(r *http.Request) (*http.Response, error) {
 				sends++
+				if scenario == "pool_backup" {
+					var body map[string]any
+					require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+					require.Equal(t, "backup-upstream", body["model"])
+				}
 				if strings.HasPrefix(scenario, "thinking_") || strings.HasPrefix(scenario, "max_tokens_") {
 					var body map[string]json.RawMessage
 					require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
@@ -192,7 +212,7 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 			bills := billingpg.NewScopedStore(gatewayDB, func(tx *gorm.DB) billing.ProjectAccess { return operationWorkerAccess(tx).(billing.ProjectAccess) })
 			gateway := modelgateway.New(gatewayDB, operations, bills, fixtureUnsealer{}, client)
 			result, err := gateway.Model(t.Context(), scope, id, input, maximum)
-			if scenario == "thinking_enabled" || scenario == "thinking_auto" || scenario == "max_tokens_exceeded" || scenario == "unverified_mode" || scenario == "credential_rotated" || scenario == "credential_invalid" || scenario == "config_changed" || scenario == "price_revoked" || scenario == "procurement_revoked" || scenario == "availability_dependency_missing" || scenario == "budget_rejected" || scenario == "grant_revoked" || scenario == "wrong_release" || scenario == "params_tampered" || scenario == "model_tampered" || scenario == "tokens_tampered" || scenario == "skill_disabled_before_dispatch" {
+			if scenario == "pool_pinned" || scenario == "thinking_enabled" || scenario == "thinking_auto" || scenario == "max_tokens_exceeded" || scenario == "unverified_mode" || scenario == "credential_rotated" || scenario == "credential_invalid" || scenario == "config_changed" || scenario == "price_revoked" || scenario == "procurement_revoked" || scenario == "availability_dependency_missing" || scenario == "budget_rejected" || scenario == "grant_revoked" || scenario == "wrong_release" || scenario == "params_tampered" || scenario == "model_tampered" || scenario == "tokens_tampered" || scenario == "skill_disabled_before_dispatch" {
 				require.NoError(t, err)
 				require.Equal(t, "failed", result.Status)
 				require.Zero(t, sends)
@@ -202,6 +222,22 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 				require.NoError(t, database.Raw(`SELECT count(*) FROM operation.operation WHERE id=?`, id).Scan(&n).Error)
 				require.Zero(t, n)
 				return
+			}
+			if scenario == "pool_primary" || scenario == "pool_backup" {
+				require.Equal(t, agent.CallStatusCompleted, result.Status)
+				var actual struct {
+					Price       uuid.UUID
+					Procurement int64
+					Sales       int64
+				}
+				require.NoError(t, database.Raw(`SELECT o.price_rule_version_id AS price,c.procurement_cost_micros AS procurement,c.cost_micros AS sales FROM operation.operation o JOIN operation.provider_call c ON c.operation_id=o.id WHERE o.id=?`, id).Scan(&actual).Error)
+				require.Equal(t, f.identity.PriceRuleVersionID, actual.Price)
+				if scenario == "pool_backup" {
+					require.EqualValues(t, 20, actual.Procurement)
+				} else {
+					require.EqualValues(t, 10, actual.Procurement)
+				}
+				require.EqualValues(t, 10, actual.Sales)
 			}
 			if scenario == "thinking_explicit" || scenario == "thinking_default" || scenario == "max_tokens_bound" {
 				var frozen struct {
@@ -390,4 +426,19 @@ func assertGatewayCostSnapshot(t *testing.T, database *gorm.DB, root, receipt uu
 		require.Empty(t, e.Procurement, "unknown procurement cannot become known zero")
 	}
 	require.Equal(t, snapshot.AuthorizedLimit-snapshot.PendingCommitment-charge, snapshot.Remaining)
+}
+
+func seedAgentRoutePool(t *testing.T, database *gorm.DB, primary managedFixture, schema json.RawMessage, actor uuid.UUID) {
+	t.Helper()
+	backup := seedManagedFixture(t, database)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, backup.identity.ModelProfileVersionID).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET provider_model_id='backup-upstream',modes=ARRAY['text_to_text'],queue='provider',supports_cancel=false,supports_query=false,moderation='provider' WHERE id=?`, backup.identity.ModelProfileVersionID).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":20}' WHERE id=?`, backup.identity.PriceRuleVersionID).Error)
+	seedFixtureProcurement(t, database, backup.identity.PriceRuleVersionID, backup.identity.ModelProfileVersionID)
+	seedGatewayAvailability(t, database, backup, schema)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET limits=limits||'{"provider_endpoint":"reviewed-backup"}'::jsonb WHERE id=?`, backup.identity.ModelProfileVersionID).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_release SET upstream_cost='{"currency":"CNY","max_micros":1000}' WHERE id IN ?`, []uuid.UUID{primary.release, backup.release}).Error)
+	version := uuid.New()
+	require.NoError(t, database.Exec(`INSERT INTO catalog.route_pool_version(id,primary_release_id,revision,created_by) VALUES(?,?,1,?)`, version, primary.release, actor).Error)
+	require.NoError(t, database.Exec(`INSERT INTO catalog.route_pool_member(version_id,release_id,priority) VALUES(?,?,0),(?,?,1)`, version, primary.release, version, backup.release).Error)
 }

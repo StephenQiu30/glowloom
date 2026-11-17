@@ -66,6 +66,9 @@ func (c *Client) request(ctx context.Context, config catalogdomain.ProviderConfi
 }
 
 func (c *Client) requestWithID(ctx context.Context, config catalogdomain.ProviderConfig, key, method, path string, payload any, limit int64) ([]byte, int, string, error) {
+	if method == http.MethodPost && (path == "/chat/completions" || path == "/responses" || path == "/messages") {
+		return c.TextRequest(ctx, config, key, path, payload, limit, nil)
+	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, 0, "", err
@@ -82,6 +85,12 @@ func (c *Client) requestWithID(ctx context.Context, config catalogdomain.Provide
 	}
 	request.Header.Set("Authorization", "Bearer "+key)
 	request.Header.Set("Content-Type", "application/json")
+	if config.AdapterKey == "anthropic" {
+		request.Header.Del("Authorization")
+		request.Header.Set("X-Api-Key", key)
+		request.Header.Set("Anthropic-Version", "2023-06-01")
+	}
+
 	if config.AdapterKey == "openrouter" {
 		request.Header.Set("HTTP-Referer", "https://glowloom.com")
 		request.Header.Set("X-Title", "Glowloom")

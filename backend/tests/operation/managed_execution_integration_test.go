@@ -3,6 +3,7 @@ package operation_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
@@ -51,7 +53,13 @@ func TestManagedTextDispatchRecoveryAndSettlement(t *testing.T) {
 	seedDispatchModeEvidence(t, database, fixture)
 	require.NoError(t, database.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','fixture prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, store)
-	network := &fixtureGeneration{}
+	sends := 0
+	network := providerhttp.NewClient(&http.Client{Transport: adapterTransport(func(r *http.Request) (*http.Response, error) {
+		sends++
+		require.Equal(t, "/api/v1/chat/completions", r.URL.Path)
+		require.Equal(t, "Bearer fixture-only-not-real", r.Header.Get("Authorization"))
+		return adapterResponse(200, `{"choices":[{"message":{"content":"fixture generated content"},"finish_reason":"stop"}],"usage":{"prompt_tokens":4,"completion_tokens":8}}`), nil
+	})})
 	worker := managed.NewActivities(store, fixtureUnsealer{}, network, results, nil)
 	progress, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
@@ -60,7 +68,7 @@ func TestManagedTextDispatchRecoveryAndSettlement(t *testing.T) {
 	replay, err := worker.Step(t.Context(), application.ManagedStep{OperationID: i.OperationID, Action: "submit"})
 	require.NoError(t, err)
 	require.Equal(t, progress, replay)
-	require.Equal(t, 1, network.calls)
+	require.Equal(t, 1, sends)
 	require.NoError(t, store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{OperationID: i.OperationID, Action: "submit", Attempt: 1, Outcome: "ok", State: "completed", Managed: true}))
 	_, err = store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{OperationID: i.OperationID, From: []domain.Status{domain.StatusSubmitting}, To: domain.StatusSucceeded})
 	require.NoError(t, err)
