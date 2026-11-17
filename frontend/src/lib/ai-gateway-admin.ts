@@ -352,19 +352,42 @@ export async function publishRoute(
         !Array.isArray(value.driver_config),
       "驱动配置仅支持媒体协议的 JSON 对象",
     );
-    const check = (object: unknown): void => {
-      if (!object || typeof object !== "object") return;
-      for (const [name, child] of Object.entries(object)) {
-        requireValue(
-          !/(^|_)(key|token|secret|authorization|password|ciphertext)(_|$)/i.test(
-            name,
-          ),
-          "驱动配置不得包含密钥；请使用供应商密钥专用输入框",
-        );
-        check(child);
-      }
-    };
-    check(value.driver_config);
+    // ProviderConfig contains only these seven nonsecret fields. adapter_key
+    // identifies a driver; reject unknown fields rather than guessing by suffix.
+    const config = value.driver_config;
+    const fields = [
+      "adapter_key",
+      "base_url",
+      "region",
+      "capabilities",
+      "timeout_seconds",
+      "concurrency_limit",
+      "rate_limit_per_min",
+    ];
+    requireValue(
+      Object.keys(config).every((field) => fields.includes(field)),
+      "驱动配置不得包含密钥或额外字段；请使用供应商密钥专用输入框",
+    );
+    requireValue(
+      typeof config.adapter_key === "string" &&
+        /^[a-z][a-z0-9_]*$/.test(config.adapter_key) &&
+        config.base_url === value.base_url &&
+        (config.region === "domestic" || config.region === "overseas") &&
+        Array.isArray(config.capabilities) &&
+        config.capabilities.length > 0 &&
+        config.capabilities.every(
+          (capability) =>
+            typeof capability === "string" && Boolean(capability.trim()),
+        ) &&
+        new Set(config.capabilities).size === config.capabilities.length &&
+        typeof config.timeout_seconds === "number" &&
+        integer(config.timeout_seconds, 5, 300) &&
+        typeof config.concurrency_limit === "number" &&
+        integer(config.concurrency_limit, 1, 1000) &&
+        typeof config.rate_limit_per_min === "number" &&
+        integer(config.rate_limit_per_min, 1, 100000),
+      "媒体驱动配置字段类型或范围无效；地址须与路由一致",
+    );
   }
   const {
     model_id,

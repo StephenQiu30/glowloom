@@ -48,6 +48,27 @@ const model = {
   tools: false,
   stream: false,
 };
+const mediaDriver = {
+  adapter_key: "openai",
+  base_url: "https://api.openai.com/v1",
+  region: "overseas",
+  capabilities: ["image"],
+  timeout_seconds: 60,
+  concurrency_limit: 1,
+  rate_limit_per_min: 60,
+};
+const mediaRoute = {
+  model_id: modelID,
+  supplier,
+  credential,
+  group: "image-account",
+  base_url: mediaDriver.base_url,
+  upstream_model: "gpt-image-1",
+  protocol: "media",
+  purchase: { ...price, input: 0, output: 0, request: 1000 },
+  priority: 0,
+  driver_config: mediaDriver,
+};
 beforeEach(() => {
   vi.clearAllMocks();
   actor.role = "platform_admin";
@@ -247,4 +268,109 @@ it("rejects contradictory supplier evidence and publishes media only with fixed 
       parameters: {},
     }),
   ).rejects.toThrow();
+});
+
+it("publishes a complete supported media driver from the admin form, keeping adapter_key and dedicated secret separate", async () => {
+  send.mockResolvedValueOnce({
+    models: [
+      {
+        model: {
+          ...model,
+          name: "image/default",
+          protocol: "media",
+          price: mediaRoute.purchase,
+          capability: "image.generate",
+          modes: ["text2image"],
+          parameters: {},
+        },
+        enabled: true,
+      },
+    ],
+    routes: [],
+    credentials: [],
+    quotas: [],
+    unknown: [],
+  });
+  render(<GatewayAdmin />);
+  await screen.findByText("image/default");
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商路由" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  for (const [label, value] of [
+    ["供应商 ID", supplier],
+    ["凭据 ID", credential],
+    ["共享配额组", mediaRoute.group],
+    ["供应商地址", mediaDriver.base_url],
+    ["供应商模型号", mediaRoute.upstream_model],
+    ["供应商密钥", "synthetic-dedicated-secret"],
+    ["采购按次价", "1000"],
+  ]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  fireEvent.click(screen.getByRole("button", { name: "媒体驱动高级配置" }));
+  fireEvent.change(screen.getByLabelText("媒体驱动配置 JSON"), {
+    target: { value: JSON.stringify(mediaDriver) },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "发布供应商路由" }));
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      "/api/ai/admin/routes",
+      expect.objectContaining({
+        method: "POST",
+        data: expect.objectContaining({
+          key: "synthetic-dedicated-secret",
+          route: expect.objectContaining({
+            protocol: "media",
+            driver_config: mediaDriver,
+          }),
+        }),
+      }),
+    ),
+  );
+  expect(screen.getByLabelText<HTMLInputElement>("供应商密钥").value).toBe("");
+});
+
+it.each([
+  "apiKey",
+  "api_key",
+  "key",
+  "secret",
+  "authorization",
+  "password",
+  "ciphertext",
+])(
+  "rejects secret-bearing media configuration field %s before sending",
+  async (field) => {
+    await expect(
+      publishRoute(
+        {
+          ...mediaRoute,
+          driver_config: { ...mediaDriver, [field]: "synthetic-secret" },
+        },
+        "",
+        1,
+        60,
+      ),
+    ).rejects.toThrow();
+    expect(send).not.toHaveBeenCalled();
+  },
+);
+
+it("rejects a secret nested inside a nominally supported driver field", async () => {
+  await expect(
+    publishRoute(
+      {
+        ...mediaRoute,
+        driver_config: {
+          ...mediaDriver,
+          capabilities: [{ apiKey: "synthetic-secret" }],
+        },
+      },
+      "",
+      1,
+      60,
+    ),
+  ).rejects.toThrow();
+  expect(send).not.toHaveBeenCalled();
 });
