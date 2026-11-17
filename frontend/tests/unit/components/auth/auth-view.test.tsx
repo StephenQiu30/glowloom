@@ -63,7 +63,12 @@ function mockRegistration(
   );
 }
 async function requestCode() {
-  await screen.findByText("协议版本 2026-10-15.1");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "发送验证码" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
   fireEvent.change(screen.getByLabelText("邮箱"), {
     target: { value: "alice@example.com" },
   });
@@ -76,16 +81,16 @@ async function verifyCode() {
     target: { value: "123456" },
   });
   fireEvent.click(screen.getByRole("button", { name: "验证邮箱" }));
-  await screen.findByLabelText("显示名");
+  await screen.findByLabelText(/^显示名/);
 }
 function fillAccount(name = "Alice") {
-  fireEvent.change(screen.getByLabelText("显示名"), {
+  fireEvent.change(screen.getByLabelText(/^显示名/), {
     target: { value: name },
   });
-  fireEvent.change(screen.getByLabelText("新密码", { exact: true }), {
+  fireEvent.change(screen.getByLabelText(/^(新)?密码$/), {
     target: { value: "abC789xy" },
   });
-  fireEvent.change(screen.getByLabelText("确认新密码"), {
+  fireEvent.change(screen.getByLabelText(/^确认(新)?密码$/), {
     target: { value: "abC789xy" },
   });
   fireEvent.click(screen.getByRole("checkbox"));
@@ -164,6 +169,7 @@ it("弹窗注册成功明确转登录，保留邮箱并清空密码，不自动�
   );
   await verifyCode();
   fillAccount();
+  expect(screen.queryByLabelText("邮箱")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
   expect(await screen.findByText("账号已创建")).toBeTruthy();
   expect(authenticated).not.toHaveBeenCalled();
@@ -188,19 +194,18 @@ it("弹窗切换仅保留邮箱，关闭重开清空表单", async () => {
   fireEvent.change(screen.getByLabelText("密码", { exact: true }), {
     target: { value: "private-password" },
   });
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "注册" }), {
-    button: 0,
-    ctrlKey: false,
-  });
-  await screen.findByText("协议版本 2026-10-15.1");
+  fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "发送验证码" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
   expect(screen.getByLabelText("邮箱")).toHaveProperty(
     "value",
     "alice@example.com",
   );
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "登录" }), {
-    button: 0,
-    ctrlKey: false,
-  });
+  fireEvent.click(screen.getByRole("button", { name: "登录" }));
   expect(screen.getByLabelText("密码", { exact: true })).toHaveProperty(
     "value",
     "",
@@ -322,7 +327,12 @@ it("registration verifies email then requires explicit agreement and server vers
           : { account_id: session.actor.id, next: "login" },
   );
   render(<AuthView mode="register" />);
-  await screen.findByText("协议版本 2026-10-15.1");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "发送验证码" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
   fireEvent.change(screen.getByLabelText("邮箱"), {
     target: { value: "alice@example.com" },
   });
@@ -557,7 +567,12 @@ it("failed registration policy ends loading and offers retry", async () => {
   await findFeedback();
   expect(screen.queryByText("正在读取注册策略…")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "重新读取注册策略" }));
-  expect(await screen.findByText("协议版本 2026-10-15.1")).toBeTruthy();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "发送验证码" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
 });
 it("malformed accepted mail receipt never shows queued success", async () => {
   vi.mocked(request).mockResolvedValue({

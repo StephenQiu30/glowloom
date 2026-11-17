@@ -56,16 +56,16 @@ it("展示当前账号摘要和真实入口，普通创作者不见管理入口"
   expect(screen.getByText(actor.email)).toBeTruthy();
   for (const [name, href] of [
     ["个人空间", "/account"],
-    ["我的资产", "/assets"],
-    ["我的画布", "/projects"],
-    ["我的团队", "/teams"],
-    ["邀请与授权", "/invitations"],
-    ["修改密码", "/reset-password"],
+    ["积分与账单", "/billing"],
+    ["我的分析", "/analytics"],
   ]) {
     expect(screen.getByRole("menuitem", { name }).getAttribute("href")).toBe(
       href,
     );
   }
+  expect(screen.queryByRole("menuitem", { name: "我的资产" })).toBeNull();
+  expect(screen.queryByRole("menuitem", { name: "我的画布" })).toBeNull();
+  expect(screen.queryByRole("menuitem", { name: "平台管理" })).toBeNull();
   expect(screen.queryByRole("menuitem", { name: "用户管理" })).toBeNull();
   expect(screen.queryByRole("menuitem", { name: "AI 服务接入" })).toBeNull();
   expect(screen.queryByRole("menuitem", { name: "模型管理" })).toBeNull();
@@ -78,6 +78,11 @@ it("展示当前账号摘要和真实入口，普通创作者不见管理入口"
 
 it("仅向平台管理员提供管理入口", async () => {
   await openMenu({ ...actor, platform_role: "platform_admin" });
+  expect(screen.queryByRole("menuitem", { name: "用户管理" })).toBeNull();
+  fireEvent.keyDown(screen.getByRole("menuitem", { name: "平台管理" }), {
+    key: "ArrowRight",
+  });
+  await screen.findByRole("menuitem", { name: "用户管理" });
   expect(
     screen.getByRole("menuitem", { name: "用户管理" }).getAttribute("href"),
   ).toBe("/users");
@@ -92,6 +97,11 @@ it("仅向平台管理员提供管理入口", async () => {
 });
 it("平台管理员可以从账号菜单进入AI接入和模型管理", async () => {
   await openMenu({ ...actor, platform_role: "platform_admin" });
+  expect(screen.queryByRole("menuitem", { name: "用户管理" })).toBeNull();
+  fireEvent.keyDown(screen.getByRole("menuitem", { name: "平台管理" }), {
+    key: "ArrowRight",
+  });
+  await screen.findByRole("menuitem", { name: "用户管理" });
   expect(
     screen.getByRole("menuitem", { name: "AI 服务接入" }).getAttribute("href"),
   ).toBe("/providers");
@@ -117,14 +127,60 @@ it("键盘进入外观子菜单，主题选择写入现有偏好", async () => {
   expect(document.documentElement.classList.contains("dark")).toBe(true);
 });
 
-it("手机直接展示主题选项，保留全部账号操作", async () => {
+it("账号设置通过键盘进入二级，保留团队、邀请和密码真实路由", async () => {
+  await openMenu();
+  fireEvent.keyDown(screen.getByRole("menuitem", { name: "账号设置" }), {
+    key: "ArrowRight",
+  });
+  await screen.findByRole("menuitem", { name: "我的团队" });
+  for (const [name, href] of [
+    ["我的团队", "/teams"],
+    ["邀请与授权", "/invitations"],
+    ["修改密码", "/reset-password"],
+  ]) {
+    expect(screen.getByRole("menuitem", { name }).getAttribute("href")).toBe(
+      href,
+    );
+  }
+});
+
+it("手机在同一面板进入外观、返回并重置，所有主题都可选择", async () => {
   mobile = true;
   await openMenu();
-  expect(screen.queryByRole("menuitem", { name: "外观" })).toBeNull();
+  expect(screen.queryByRole("menuitemradio", { name: "深色" })).toBeNull();
+  fireEvent.click(screen.getByRole("menuitem", { name: "外观" }));
   for (const name of ["浅色", "深色", "跟随系统"]) {
-    expect(screen.getByRole("menuitemradio", { name })).toBeTruthy();
+    expect(await screen.findByRole("menuitemradio", { name })).toBeTruthy();
   }
-  expect(screen.getByRole("menuitem", { name: "退出登录" })).toBeTruthy();
+  expect(screen.getAllByRole("menu")).toHaveLength(1);
+  fireEvent.click(screen.getByRole("menuitem", { name: "返回" }));
+  expect(await screen.findByRole("menuitem", { name: "外观" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("menuitem", { name: "账号设置" }));
+  expect(
+    await screen.findByRole("menuitem", { name: "修改密码" }),
+  ).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "ArrowLeft" });
+  expect(
+    await screen.findByRole("menuitem", { name: "退出登录" }),
+  ).toBeTruthy();
+});
+
+it("手机管理员二级菜单可返回，关闭后恢复一级", async () => {
+  mobile = true;
+  await openMenu({ ...actor, platform_role: "platform_admin" });
+  fireEvent.click(screen.getByRole("menuitem", { name: "平台管理" }));
+  expect(
+    await screen.findByRole("menuitem", { name: "通知管理" }),
+  ).toBeTruthy();
+  expect(screen.getAllByRole("menu")).toHaveLength(1);
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+  fireEvent.keyDown(screen.getByRole("button", { name: "账号菜单" }), {
+    key: "ArrowDown",
+  });
+  expect(
+    await screen.findByRole("menuitem", { name: "平台管理" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("menuitem", { name: "通知管理" })).toBeNull();
 });
 
 it("优先显示真实邮箱，缺失账号标识时仍能使用菜单", async () => {

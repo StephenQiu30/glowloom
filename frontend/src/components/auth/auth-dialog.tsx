@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type RefObject } from "react";
-import { X } from "lucide-react";
+import Image from "next/image";
 import { BrandMark } from "@/components/brand/brand";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AuthView } from "./auth-view";
 
 export type AuthMode = "login" | "register";
@@ -39,13 +38,20 @@ function OpenAuthDialog({
   const [pending, setPending] = useState(false);
   const content = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
+  function changeMode(next: AuthMode, nextEmail = email) {
+    if (pending) return;
+    setEmail(nextEmail);
+    setMode(next);
+    requestAnimationFrame(() => {
+      content.current?.querySelector<HTMLInputElement>("input")?.focus();
+    });
+  }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         aria-describedby={undefined}
         ref={content}
         className="auth-dialog"
-        showCloseButton={false}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           returnFocus.current =
@@ -66,56 +72,51 @@ function OpenAuthDialog({
           }
         }}
       >
-        <div className="auth-brand-row">
-          <BrandMark />
-          <span>织光</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="关闭登录注册弹窗"
-            onClick={() => onOpenChange(false)}
-          >
-            <X data-icon="inline-start" />
-          </Button>
+        <div className="auth-dialog-visual" aria-hidden="true">
+          <Image
+            src="/design/reference/alpine-road.png"
+            alt=""
+            fill
+            sizes="(min-width: 960px) 1210px, 0px"
+          />
         </div>
-        <DialogHeader>
-          <DialogTitle>
-            {mode === "login" ? "登录织光" : "创建织光账号"}
-          </DialogTitle>
-        </DialogHeader>
-        <Tabs
-          value={mode}
-          onValueChange={(value) => {
-            if (!pending && (value === "login" || value === "register"))
-              setMode(value);
-          }}
-          className="auth-tabs"
-        >
-          <TabsList className="w-full" aria-label="登录或注册">
-            <TabsTrigger value="login" disabled={pending}>
-              登录
-            </TabsTrigger>
-            <TabsTrigger value="register" disabled={pending}>
-              注册
-            </TabsTrigger>
-          </TabsList>
-          {(["login", "register"] as const).map((value) => (
-            <TabsContent key={value} value={value}>
-              <AuthView
-                embedded
-                mode={value}
-                initialEmail={email}
-                onEmailChange={setEmail}
-                onLoginRequested={(value) => {
-                  setEmail(value);
-                  setMode("login");
-                }}
-                onPendingChange={setPending}
-                onAuthenticated={onAuthenticated}
-              />
-            </TabsContent>
-          ))}
-        </Tabs>
+        <div className="auth-dialog-panel">
+          <div className="auth-dialog-brand" aria-hidden="true">
+            <BrandMark />
+            <span>织光</span>
+          </div>
+          <DialogHeader>
+            <DialogTitle size="auth">
+              {mode === "login" ? "欢迎登录织光" : "创建织光账号"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="auth-dialog-body">
+            <AuthView
+              key={mode}
+              embedded
+              mode={mode}
+              initialEmail={email}
+              onEmailChange={setEmail}
+              onLoginRequested={(value) => changeMode("login", value)}
+              onPendingChange={setPending}
+              onAuthenticated={onAuthenticated}
+            />
+          </div>
+          <div className="auth-dialog-switch">
+            <span>{mode === "login" ? "还没有账号？" : "已有账号？"}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pending}
+              onClick={() =>
+                changeMode(mode === "login" ? "register" : "login")
+              }
+            >
+              {mode === "login" ? "创建账号" : "登录"}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

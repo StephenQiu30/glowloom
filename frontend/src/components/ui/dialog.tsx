@@ -133,7 +133,7 @@ function DialogTitle({
   size = "default",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title> & {
-  size?: "default" | "lg";
+  size?: "default" | "lg" | "auth";
 }) {
   return (
     <DialogPrimitive.Title
@@ -141,6 +141,7 @@ function DialogTitle({
       className={cn(
         "font-heading text-base leading-none font-medium",
         size === "lg" && "text-lg leading-7",
+        size === "auth" && "text-2xl leading-8",
         className,
       )}
       {...props}

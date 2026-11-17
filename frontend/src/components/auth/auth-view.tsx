@@ -2,7 +2,6 @@
 import { ProductFooter } from "@/components/layout/product-footer";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { pendingInvitation } from "./invitation-continuity";
-import Image from "next/image";
 import Link from "next/link";
 import { cn } from "cn";
 import { useEffect, useRef, useState, useId } from "react";
@@ -112,46 +111,6 @@ function PasswordInput({
         </InputGroupButton>
       </InputGroupAddon>
     </InputGroup>
-  );
-}
-
-function AuthArtwork() {
-  return (
-    <aside className="auth-art">
-      <Brand wordmark />
-      <div className="auth-art-content">
-        <p>一份灵感，多种可能</p>
-        <div className="auth-previews">
-          <div className="auth-preview">
-            <div>
-              <Image
-                src="/design/perfume-77c55e0b.png"
-                alt="暖金色的海边香氛创作"
-                fill
-                sizes="280px"
-                preload
-              />
-            </div>
-            <p>图片 · 暖金时刻</p>
-          </div>
-          <div className="auth-preview">
-            <div>
-              <Image
-                src="/design/butterfly-a86a055c.jpeg"
-                alt="蓝色蝴蝶翅膀的微观光影"
-                fill
-                sizes="248px"
-              />
-            </div>
-            <p>参考 · 微观光影</p>
-          </div>
-        </div>
-        <h2>让灵感，成为作品。</h2>
-        <p className="auth-caption">
-          从图片、声音到短片，在一张画布里继续创作。
-        </p>
-      </div>
-    </aside>
   );
 }
 
@@ -629,11 +588,13 @@ export function AuthView({
       role="status"
       aria-live="polite"
     >
-      <Alert>
+      <Alert className={embedded ? "auth-success" : undefined}>
         <AlertTitle>账号已创建</AlertTitle>
-        <AlertDescription>
-          使用 {email} 和刚设置的密码登录，继续你的创作。
-        </AlertDescription>
+        {!embedded ? (
+          <AlertDescription>
+            使用 {email} 和刚设置的密码登录，继续你的创作。
+          </AlertDescription>
+        ) : null}
       </Alert>
       {onLoginRequested ? (
         <Button ref={loginButton} onClick={() => onLoginRequested(email)}>
@@ -653,7 +614,7 @@ export function AuthView({
       aria-busy={pending}
       className={cn(
         "flex w-full min-w-0 flex-col gap-5",
-        !securityPage && "my-auto max-w-[400px]",
+        !securityPage && !embedded && "my-auto max-w-[400px]",
       )}
       onSubmit={(event) => {
         event.preventDefault();
@@ -670,7 +631,7 @@ export function AuthView({
         {register ? (
           <ol
             aria-label="注册步骤"
-            className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+            className="auth-registration-steps flex items-center justify-between gap-2 text-xs text-muted-foreground"
             aria-live="polite"
           >
             {["填写邮箱", "验证邮箱", "设置账号"].map((label, index) => (
@@ -686,7 +647,8 @@ export function AuthView({
             ))}
           </ol>
         ) : null}
-        {register ? (
+        {register &&
+        (policyStatus !== "ready" || !registrationAllowed || invited) ? (
           <p className="text-sm text-muted-foreground">
             {policyStatus === "loading"
               ? "正在读取注册策略…"
@@ -695,7 +657,7 @@ export function AuthView({
                 : invited && registrationAllowed
                   ? "受邀注册：请验证受邀邮箱，并阅读服务条款与隐私政策。"
                   : policy?.registration_enabled
-                    ? `协议版本 ${policy.terms_version}`
+                    ? null
                     : policy?.closed_reason === "mail_unavailable"
                       ? "验证邮件服务暂不可用，请稍后再试。已有账号仍可登录。"
                       : "注册暂未开放。请稍后再试，您仍可查阅服务条款与隐私政策。"}
@@ -715,13 +677,25 @@ export function AuthView({
             }}
           />
         ) : null}
-        {!change && !recoveryToken ? (
+        {!change && !recoveryToken && !(embedded && register && grant) ? (
           <Field
+            className={
+              embedded && register && operation
+                ? "auth-verified-email"
+                : undefined
+            }
             data-invalid={
               Boolean(error && invalidField === "email") || undefined
             }
           >
-            <FieldLabel htmlFor="email">邮箱</FieldLabel>
+            <FieldLabel
+              htmlFor="email"
+              className={
+                embedded && register && operation ? "sr-only" : undefined
+              }
+            >
+              邮箱
+            </FieldLabel>
             <Input
               ref={emailInput}
               id="email"
@@ -736,6 +710,7 @@ export function AuthView({
               spellCheck={false}
               autoCapitalize="none"
               value={email}
+              placeholder={embedded ? "输入邮箱地址" : undefined}
               maxLength={254}
               disabled={pending}
               readOnly={Boolean(operation)}
@@ -759,12 +734,12 @@ export function AuthView({
             ) : null}
           </Field>
         ) : null}
-        {register ? (
+        {register && !registrationAllowed ? (
           <p className="text-sm">
             <Link href={policy?.terms_url ?? "/terms"} target="_blank">
               服务条款
-            </Link>{" "}
-            ·{" "}
+            </Link>
+            {" · "}
             <Link href={policy?.privacy_url ?? "/privacy"} target="_blank">
               隐私政策
             </Link>
@@ -787,6 +762,7 @@ export function AuthView({
               }
               maxLength={6}
               value={code}
+              placeholder={embedded ? "输入 6 位邮箱验证码" : undefined}
               onChange={(e) => {
                 setCode(e.target.value);
                 clearFieldError("verification-code");
@@ -798,7 +774,8 @@ export function AuthView({
             ) : null}
             <Button
               type="button"
-              variant="outline"
+              variant={embedded ? "ghost" : "outline"}
+              className={embedded ? "auth-resend" : undefined}
               disabled={pending || remaining > 0}
               onClick={() => void perform("resend")}
             >
@@ -808,25 +785,34 @@ export function AuthView({
         ) : null}
         {register && grant ? (
           <Field data-invalid={invalidField === "display-name" || undefined}>
-            <FieldLabel htmlFor="display-name">显示名</FieldLabel>
+            <FieldLabel htmlFor="display-name">
+              {embedded ? "显示名称" : "显示名"}
+            </FieldLabel>
             <Input
               id="display-name"
               name="display-name"
               autoComplete="nickname"
               aria-invalid={invalidField === "display-name"}
               aria-describedby={
-                invalidField === "display-name" ? errorID : "display-name-help"
+                invalidField === "display-name"
+                  ? errorID
+                  : embedded
+                    ? undefined
+                    : "display-name-help"
               }
               value={displayName}
+              placeholder={embedded ? "你的名字" : undefined}
               onChange={(e) => {
                 setDisplayName(e.target.value);
                 clearFieldError("display-name");
               }}
               disabled={pending}
             />
-            <FieldDescription id="display-name-help">
-              1～32 个字符，可稍后在账号设置中修改。
-            </FieldDescription>
+            {!embedded ? (
+              <FieldDescription id="display-name-help">
+                1～32 个字符，可稍后在账号设置中修改。
+              </FieldDescription>
+            ) : null}
             {invalidField === "display-name" ? (
               <FieldError>{error}</FieldError>
             ) : null}
@@ -866,7 +852,7 @@ export function AuthView({
               }
             >
               <FieldLabel htmlFor="password">
-                {mode === "login" ? "密码" : "新密码"}
+                {mode === "login" || (embedded && register) ? "密码" : "新密码"}
               </FieldLabel>
               <PasswordInput
                 id="password"
@@ -874,7 +860,7 @@ export function AuthView({
                 describedBy={
                   error && invalidField === "password"
                     ? errorID
-                    : mode !== "login"
+                    : mode !== "login" && !(embedded && register)
                       ? "password-help"
                       : undefined
                 }
@@ -890,10 +876,12 @@ export function AuthView({
                 placeholder={
                   mode === "login"
                     ? "输入密码"
-                    : `设置至少 ${MIN_PASSWORD_LENGTH} 个字符的新密码`
+                    : embedded && register
+                      ? `${MIN_PASSWORD_LENGTH}–${MAX_PASSWORD_LENGTH} 位密码`
+                      : `设置至少 ${MIN_PASSWORD_LENGTH} 个字符的新密码`
                 }
               />
-              {mode !== "login" ? (
+              {mode !== "login" && !(embedded && register) ? (
                 <FieldDescription id="password-help">
                   使用 {PASSWORD_LENGTH_HINT}，支持空格和中文。
                 </FieldDescription>
@@ -907,7 +895,9 @@ export function AuthView({
                     undefined
                   }
                 >
-                  <FieldLabel htmlFor="confirm-password">确认新密码</FieldLabel>
+                  <FieldLabel htmlFor="confirm-password">
+                    {embedded && register ? "确认密码" : "确认新密码"}
+                  </FieldLabel>
                   <PasswordInput
                     id="confirm-password"
                     invalid={Boolean(
@@ -924,12 +914,17 @@ export function AuthView({
                       clearFieldError("confirm-password");
                     }}
                     disabled={pending}
-                    placeholder="再次输入新密码"
+                    placeholder={
+                      embedded && register ? "再次输入密码" : "再次输入新密码"
+                    }
                   />
                 </Field>
               </>
             ) : (
-              <Field orientation="horizontal">
+              <Field
+                orientation="horizontal"
+                className={embedded ? "auth-login-options" : "max-md:min-h-11"}
+              >
                 <Checkbox
                   id="remember-session"
                   checked={remember}
@@ -937,8 +932,13 @@ export function AuthView({
                   onCheckedChange={(value) => setRemember(value === true)}
                 />
                 <FieldLabel htmlFor="remember-session">
-                  在此设备保持登录
+                  {embedded ? "保持登录" : "在此设备保持登录"}
                 </FieldLabel>
+                {embedded ? (
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href="/recover">忘记密码</Link>
+                  </Button>
+                ) : null}
               </Field>
             )}
           </>
@@ -963,7 +963,7 @@ export function AuthView({
             />
             <FieldLabel htmlFor="accept-terms">
               <span>
-                阅读并同意{" "}
+                {embedded ? "我已阅读并同意" : "阅读并同意"}{" "}
                 <Link href="/terms" target="_blank">
                   服务条款
                 </Link>{" "}
@@ -971,7 +971,7 @@ export function AuthView({
                 <Link href="/privacy" target="_blank">
                   隐私政策
                 </Link>
-                （版本 {policy?.terms_version}）
+                {!embedded ? <>（版本 {policy?.terms_version}）</> : null}
               </span>
             </FieldLabel>
           </Field>
@@ -1032,19 +1032,21 @@ export function AuthView({
             使用其他账号登录
           </Button>
         ) : null}
-        <Button
-          asChild
-          variant={embedded ? "ghost" : "link"}
-          className={securityPage ? "h-10 max-md:h-11" : undefined}
-        >
-          {mode === "login" ? (
-            <Link href="/recover">忘记密码</Link>
-          ) : (
-            <Link href={change && session ? "/account" : "/login"}>
-              {change && session ? "返回账号设置" : "返回登录"}
-            </Link>
-          )}
-        </Button>
+        {!embedded ? (
+          <Button
+            asChild
+            variant={embedded ? "ghost" : "link"}
+            className={cn("max-md:min-h-11", securityPage && "h-10")}
+          >
+            {mode === "login" ? (
+              <Link href="/recover">忘记密码</Link>
+            ) : (
+              <Link href={change && session ? "/account" : "/login"}>
+                {change && session ? "返回账号设置" : "返回登录"}
+              </Link>
+            )}
+          </Button>
+        ) : null}
       </Field>
     </form>
   );
@@ -1080,8 +1082,17 @@ export function AuthView({
       </main>
     );
   return (
-    <main className={embedded ? "auth-embedded" : "auth-shell"}>
-      {!embedded ? <AuthArtwork /> : null}
+    <main
+      className={embedded ? "auth-embedded" : "auth-shell"}
+      data-registration-stage={
+        register
+          ? registrationComplete
+            ? "complete"
+            : registrationStep + 1
+          : undefined
+      }
+    >
+      {!embedded ? <Brand wordmark /> : null}
       <div className="auth-form-panel">{formContent}</div>
     </main>
   );

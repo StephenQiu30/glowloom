@@ -40,7 +40,7 @@ it("restored identity leaves login and returns to the original canvas without su
     await waitFor(() =>
       expect(mocks.replace).toHaveBeenCalledWith(destination),
     );
-    expect(screen.queryByRole("dialog", { name: "登录织光" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "欢迎登录织光" })).toBeNull();
     expect(
       vi.mocked(request).mock.calls.some(([url]) => url === "/api/sessions"),
     ).toBe(false);
@@ -71,7 +71,7 @@ it.each([
       );
       const { waitFor } = await import("@testing-library/react");
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/"));
-      expect(screen.queryByRole("dialog", { name: "登录织光" })).toBeNull();
+      expect(screen.queryByRole("dialog", { name: "欢迎登录织光" })).toBeNull();
     } finally {
       window.history.replaceState(null, "", "/");
     }
@@ -99,13 +99,13 @@ it("login dialog closes when a foreground session check restores the existing ac
         <p>Public login entry</p>
       </ApplicationLayout>,
     );
-    await screen.findByRole("dialog", { name: "登录织光" });
+    await screen.findByRole("dialog", { name: "欢迎登录织光" });
     await act(async () => window.dispatchEvent(new Event("focus")));
     const { waitFor } = await import("@testing-library/react");
     await waitFor(() =>
       expect(mocks.replace).toHaveBeenCalledWith(destination),
     );
-    expect(screen.queryByRole("dialog", { name: "登录织光" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "欢迎登录织光" })).toBeNull();
     expect(
       vi.mocked(request).mock.calls.some(([url]) => url === "/api/sessions"),
     ).toBe(false);
@@ -448,9 +448,11 @@ it("游客仅从顶栏登录，手机抽屉只展示导航，关闭认证后恢�
   expect(screen.getAllByRole("button", { name: "登录" })).toHaveLength(1);
   login.focus();
   fireEvent.click(login);
-  expect(await screen.findByRole("dialog", { name: "登录织光" })).toBeTruthy();
+  expect(
+    await screen.findByRole("dialog", { name: "欢迎登录织光" }),
+  ).toBeTruthy();
   expect(screen.queryByRole("dialog", { name: "导航" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "关闭登录注册弹窗" }));
+  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
   const { waitFor } = await import("@testing-library/react");
   await waitFor(() => expect(document.activeElement).toBe(login));
 });
@@ -497,9 +499,7 @@ it("手机顶栏使用共享账号组，主题归入账号菜单且不虚构会�
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "切换主题" })).toBeNull();
   expect(within(header).queryByRole("button", { name: "更多操作" })).toBeNull();
-  expect(
-    within(header).getByRole("link", { name: "开会员" }).getAttribute("href"),
-  ).toBe("/billing/membership");
+  expect(within(header).queryByRole("link", { name: "开会员" })).toBeNull();
   expect(within(header).getByRole("button", { name: "积分余额" })).toBeTruthy();
   fireEvent.click(within(header).getByRole("button", { name: /消息中心/ }));
   expect(await screen.findByRole("dialog", { name: "消息" })).toBeTruthy();
@@ -806,9 +806,7 @@ it("普通页面与资产复用同一账号组，切换路由保留积分弹层�
   );
   const account = await screen.findByRole("button", { name: "账号菜单" });
   const group = screen.getByRole("group", { name: "通知与账号" });
-  expect(
-    within(group).getByRole("link", { name: "开会员" }).getAttribute("href"),
-  ).toBe("/billing/membership");
+  expect(within(group).queryByRole("link", { name: "开会员" })).toBeNull();
   const utilities = screen.getByRole("navigation", { name: "快捷导航" });
   for (const [name, href] of [
     ["历史画布", "/assets?view=canvas&collection=legacy"],

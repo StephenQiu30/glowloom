@@ -21,25 +21,20 @@ vi.mock("@/components/auth/auth-view", () => ({
 }));
 afterEach(cleanup);
 
-it("弹窗有可访问标题和关联面板，默认聚焦邮箱，提交期间锁定切换但允许关闭", () => {
+it("弹窗用底部入口切换邮箱认证，默认聚焦邮箱，提交期间锁定切换但允许关闭", () => {
   const close = vi.fn();
   render(<AuthDialog open onOpenChange={close} onAuthenticated={vi.fn()} />);
-  expect(screen.getByRole("dialog", { name: "登录织光" })).toBeTruthy();
+  expect(screen.getByRole("dialog", { name: "欢迎登录织光" })).toBeTruthy();
   expect(document.activeElement).toBe(screen.getByLabelText("邮箱"));
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "注册" }), {
-    button: 0,
-    ctrlKey: false,
-  });
+  expect(screen.queryByRole("tablist")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
   expect(screen.getByRole("dialog", { name: "创建织光账号" })).toBeTruthy();
-  expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(
-    screen.getByRole("tab", { name: "注册" }).id,
-  );
   fireEvent.click(screen.getByRole("button", { name: "提交register" }));
-  expect(screen.getByRole("tab", { name: "登录" })).toHaveProperty(
+  expect(screen.getByRole("button", { name: "登录" })).toHaveProperty(
     "disabled",
     true,
   );
-  fireEvent.click(screen.getByRole("button", { name: "关闭登录注册弹窗" }));
+  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
   expect(close).toHaveBeenCalledWith(false);
 });
 

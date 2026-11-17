@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { CreditPopover } from "@/components/billing/credit-popover";
 import { ThemeToggle } from "@/components/controls/theme-controls";
 import { AccountMenu } from "@/components/account/account-menu";
@@ -40,14 +39,6 @@ export function ProductAccountActions({
             className="product-account-divider"
           />
           <CreditPopover navigation />
-          <Button
-            asChild
-            variant="ghost"
-            size="toolbar"
-            className="product-membership-action"
-          >
-            <Link href="/billing/membership">开会员</Link>
-          </Button>
         </>
       ) : null}
       {account}
