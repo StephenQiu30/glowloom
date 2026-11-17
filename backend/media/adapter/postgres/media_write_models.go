@@ -29,6 +29,7 @@ type mediaAssetRecord struct {
 	AudioChannels      *int32
 	Codec              *string
 	SourceOperationID  *uuid.UUID
+	SourceAIRequestID  *uuid.UUID
 	ProviderKey        *string
 	ModelKey           *string
 	Region             *string
@@ -69,7 +70,7 @@ func mediaAssetRecordFromDomain(asset domain.MediaAsset) mediaAssetRecord {
 		ObjectKey: asset.ObjectKey, ObjectLocationID: locationID(asset.ObjectLocation), FileName: asset.FileName,
 		MimeType: asset.MimeType, ByteSize: asset.ByteSize, SHA256: asset.SHA256, Width: asset.Width,
 		Height: asset.Height, DurationMS: asset.DurationMS, FPS: asset.FPS, AudioChannels: asset.AudioChannels,
-		Codec: asset.Codec, SourceOperationID: asset.SourceOperationID, ProviderKey: asset.ProviderKey,
+		Codec: asset.Codec, SourceOperationID: asset.SourceOperationID, SourceAIRequestID: asset.SourceAIRequestID, ProviderKey: asset.ProviderKey,
 		ModelKey: asset.ModelKey, Region: asset.Region, ModerationStatus: string(asset.ModerationStatus),
 		ModerationDetail: jsonDocument(asset.ModerationDetail), AIGCMarked: asset.AIGCMarked,
 		ContainsRealPerson: asset.ContainsRealPerson, ConsentRecordID: asset.ConsentRecordID,

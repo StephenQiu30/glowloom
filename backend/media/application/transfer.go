@@ -130,7 +130,7 @@ func PrepareTransferItem(job, org, actor uuid.UUID, target domain.LibraryScope, 
 	} else {
 		a.Personal = &domain.PersonalOwnership{OrgID: org, ActorID: actor}
 	}
-	a.SourceOperationID, a.UploadID, a.ProviderKey, a.ModelKey, a.Region = nil, nil, nil, nil, nil
+	a.SourceOperationID, a.SourceAIRequestID, a.UploadID, a.ProviderKey, a.ModelKey, a.Region = nil, nil, nil, nil, nil, nil
 	if a.Origin == domain.OriginGenerated {
 		a.Origin = domain.OriginSystem
 	}

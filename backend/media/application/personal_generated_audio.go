@@ -24,6 +24,8 @@ var ErrInvalidGeneratedAudio = errors.New("invalid personal generated audio")
 // PersonalGeneratedAudioProvenance is the fixed terminal receipt accepted by the
 // subject owner. It is technical provider evidence, never a local upload review.
 type PersonalGeneratedAudioProvenance struct {
+	GatewayRequestID  uuid.UUID `json:"gateway_request_id,omitempty"`
+	OutputPolicy      string    `json:"output_policy,omitempty"`
 	SchemaVersion     int       `json:"schema_version"`
 	ReceiptSHA256     string    `json:"receipt_sha256"`
 	ReleaseID         uuid.UUID `json:"release_id"`
@@ -55,8 +57,7 @@ func (r PersonalGeneratedAudioRequest) Validate() error {
 		r.AssetID == uuid.Nil || r.OwnerScopeID == uuid.Nil || r.SourceJobID == uuid.Nil ||
 		r.Personal.OrgID == uuid.Nil || r.Personal.ActorID == uuid.Nil || r.CreatedAt.IsZero() ||
 		!uploadFactHash(r.SHA256) || r.ByteSize < 1 || r.ByteSize > MaxUploadAudioBytes || r.MIMEType != "audio/mpeg" ||
-		p.SchemaVersion != 1 || !uploadFactHash(p.ReceiptSHA256) || p.ReleaseID == uuid.Nil || p.ModelVersionID == uuid.Nil ||
-		p.ProviderRequestID != r.SourceJobID || p.TerminalCode != 20000000 ||
+		!validGeneratedAudioProvenance(p, r.SourceJobID) ||
 		len(p.ProviderLogID) > 256 || !utf8.ValidString(p.ProviderLogID) || strings.TrimSpace(p.ProviderLogID) != p.ProviderLogID ||
 		r.Intent.ID == uuid.Nil || r.Intent.Owner.Validate() != nil || r.Intent.Owner.Kind != StorageWorkKindSubjectVoice ||
 		r.Intent.Owner.OwnerID != r.OwnerScopeID || r.Intent.Owner.WorkID != r.SourceJobID ||
@@ -112,7 +113,11 @@ type generatedAudioProof struct {
 }
 
 func generatedAudioEvidence(r PersonalGeneratedAudioRequest) generatedAudioProof {
-	return generatedAudioProof{Method: "subject_voice_provider_receipt", PersonalGeneratedAudioProvenance: r.Provenance,
+	method := "subject_voice_provider_receipt"
+	if r.Provenance.GatewayRequestID != uuid.Nil {
+		method = "ai_gateway_provider_receipt"
+	}
+	return generatedAudioProof{Method: method, PersonalGeneratedAudioProvenance: r.Provenance,
 		SourceJobID: r.SourceJobID, OwnerScopeID: r.OwnerScopeID, ActorID: r.Personal.ActorID, PersonalOrg: r.Personal.OrgID,
 		AssetID: r.AssetID, SHA256: r.SHA256, ByteSize: r.ByteSize, MIMEType: r.MIMEType}
 }
@@ -279,4 +284,15 @@ func (s *PersonalGeneratedAudioService) writePreparedAudio(ctx context.Context, 
 		return PreparedPersonalGeneratedAudio{}, err
 	}
 	return prepared, nil
+}
+
+// validGeneratedAudioProvenance keeps gateway evidence separate from the legacy speech terminal contract.
+func validGeneratedAudioProvenance(p PersonalGeneratedAudioProvenance, job uuid.UUID) bool {
+	if !uploadFactHash(p.ReceiptSHA256) || p.ProviderRequestID != job {
+		return false
+	}
+	if p.GatewayRequestID != uuid.Nil {
+		return p.SchemaVersion == 2 && p.GatewayRequestID == job && p.OutputPolicy == "provider_success_v1" && p.ReleaseID == p.ModelVersionID && p.ReleaseID != uuid.Nil && p.TerminalCode == 0
+	}
+	return p.SchemaVersion == 1 && p.OutputPolicy == "" && p.ReleaseID != uuid.Nil && p.ModelVersionID != uuid.Nil && p.TerminalCode == 20000000
 }

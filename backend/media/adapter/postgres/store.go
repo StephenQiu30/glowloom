@@ -245,6 +245,7 @@ type assetRow struct {
 	AudioChannels      *int32     `json:"audio_channels"`
 	Codec              *string    `json:"codec"`
 	SourceOperationID  *uuid.UUID `json:"source_operation_id"`
+	SourceAIRequestID  *uuid.UUID `json:"source_ai_request_id"`
 	ProviderKey        *string    `json:"provider_key"`
 	ModelKey           *string    `json:"model_key"`
 	Region             *string    `json:"region"`
@@ -282,7 +283,7 @@ func (r assetRow) domain() domain.MediaAsset {
 		ObjectKey: r.ObjectKey, ObjectLocation: rowLocation(r.ObjectLocationID, r.location), FileName: r.FileName, MimeType: r.MimeType,
 		ByteSize: r.ByteSize, SHA256: r.SHA256, Width: r.Width, Height: r.Height,
 		DurationMS: r.DurationMS, FPS: r.FPS, AudioChannels: r.AudioChannels,
-		Codec: r.Codec, SourceOperationID: r.SourceOperationID,
+		Codec: r.Codec, SourceOperationID: r.SourceOperationID, SourceAIRequestID: r.SourceAIRequestID,
 		ProviderKey: r.ProviderKey, ModelKey: r.ModelKey, Region: r.Region,
 		ModerationStatus: domain.ModerationStatus(r.ModerationStatus),
 		ModerationDetail: json.RawMessage(r.ModerationDetail),

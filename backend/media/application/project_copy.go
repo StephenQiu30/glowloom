@@ -196,7 +196,7 @@ func PrepareProjectMediaCopy(binding ProjectCopyBinding, sources []ProjectCopySo
 		a.ObjectLocation = nil
 		a.IsDelete, a.DeleteTime, a.PurgeAfter = false, nil, nil
 		a.ObjectKey = fmt.Sprintf("projects/%s/%s/%04d/%02d/%s%s", binding.TargetProjectID, a.Kind, now.Year(), now.Month(), a.ID, path.Ext(original.ObjectKey))
-		a.SourceOperationID, a.ProviderKey, a.ModelKey, a.Region, a.UploadID = nil, nil, nil, nil, nil
+		a.SourceOperationID, a.SourceAIRequestID, a.ProviderKey, a.ModelKey, a.Region, a.UploadID = nil, nil, nil, nil, nil, nil
 		if a.Origin == domain.OriginGenerated {
 			a.Origin = domain.OriginSystem
 		}

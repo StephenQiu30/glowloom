@@ -120,6 +120,7 @@ type MediaAsset struct {
 	AudioChannels      *int32
 	Codec              *string
 	SourceOperationID  *uuid.UUID
+	SourceAIRequestID  *uuid.UUID `json:",omitempty"`
 	ProviderKey        *string
 	ModelKey           *string
 	Region             *string
@@ -154,7 +155,7 @@ func (a MediaAsset) Validate() error {
 		a.CreateTime.IsZero() || a.UpdateTime.IsZero() || a.UpdateTime.Before(a.CreateTime) ||
 		!validOptionalText(a.SHA256) || !validOptionalText(a.Codec) ||
 		!validOptionalText(a.ProviderKey) || !validOptionalText(a.ModelKey) ||
-		!validOptionalText(a.UploadID) || !validOptionalUUID(a.SourceOperationID) ||
+		!validOptionalText(a.UploadID) || !validOptionalUUID(a.SourceOperationID) || !validOptionalUUID(a.SourceAIRequestID) ||
 		!validOptionalUUID(a.ConsentRecordID) || !validPositive(a.Width) ||
 		!validPositive(a.Height) || !validPositive(a.DurationMS) ||
 		!validPositive(a.AudioChannels) ||
@@ -164,11 +165,11 @@ func (a MediaAsset) Validate() error {
 		return ErrInvalidMediaAsset
 	}
 	if a.Origin == OriginGenerated {
-		if a.SourceOperationID == nil || a.ProviderKey == nil || a.ModelKey == nil || a.Region == nil ||
+		if (a.SourceOperationID == nil) == (a.SourceAIRequestID == nil) || a.ProviderKey == nil || a.ModelKey == nil || a.Region == nil ||
 			a.Status == StatusUploading || a.UploadID != nil {
 			return ErrInvalidMediaAsset
 		}
-	} else if a.SourceOperationID != nil || a.ProviderKey != nil || a.ModelKey != nil || a.Region != nil ||
+	} else if a.SourceOperationID != nil || a.SourceAIRequestID != nil || a.ProviderKey != nil || a.ModelKey != nil || a.Region != nil ||
 		(a.Origin != OriginUpload && (a.Status == StatusUploading || a.UploadID != nil)) {
 		return ErrInvalidMediaAsset
 	}
@@ -464,5 +465,5 @@ func (a MediaAsset) validOwnership() bool {
 		return a.ProjectID != uuid.Nil
 	}
 	return a.ProjectID == uuid.Nil && a.Personal.OrgID != uuid.Nil && a.Personal.ActorID != uuid.Nil &&
-		a.Origin != OriginGenerated && a.SourceOperationID == nil && a.ProviderKey == nil && a.ModelKey == nil && a.Region == nil
+		a.Origin != OriginGenerated && a.SourceOperationID == nil && a.SourceAIRequestID == nil && a.ProviderKey == nil && a.ModelKey == nil && a.Region == nil
 }

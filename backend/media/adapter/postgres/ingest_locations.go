@@ -31,10 +31,14 @@ func acceptIngestLocations(tx *gorm.DB, asset domain.MediaAsset, rends []domain.
 		}
 		return nil
 	}
-	if asset.SourceOperationID == nil {
+	if asset.SourceOperationID == nil && asset.SourceAIRequestID == nil {
 		return application.ErrStorageIdentityConflict
 	}
-	owner := application.StorageWorkOwner{Kind: application.StorageWorkKindOperation, OwnerID: asset.ProjectID, WorkID: *asset.SourceOperationID}
+	source := asset.SourceOperationID
+	if asset.SourceAIRequestID != nil {
+		source = asset.SourceAIRequestID
+	}
+	owner := application.StorageWorkOwner{Kind: application.StorageWorkKindOperation, OwnerID: asset.ProjectID, WorkID: *source}
 	intent, found, err := readStorageWork(tx, owner)
 	if err != nil {
 		return err

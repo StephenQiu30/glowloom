@@ -36,7 +36,25 @@ func (a *GeneratedOutputArchiver) ArchiveOutput(ctx context.Context, work Operat
 		return asset, nil, ErrUnavailable
 	}
 	output := work.Request.Output
-	owner := StorageWorkOwner{Kind: StorageWorkKindOperation, OwnerID: output.ProjectID, WorkID: output.OperationID}
+	if file.Size != output.ByteSize || file.SHA256 != output.SHA256 || file.MIMEType != output.MIMEType {
+		return asset, nil, ErrObjectMismatch
+	}
+	source := SourceOperation{ID: output.OperationID, ProjectID: output.ProjectID, ProviderKey: output.ProviderKey, ModelKey: output.ModelKey, Region: output.Region, AspectRatio: output.AspectRatio, OutputKind: domain.Kind(output.Kind), CreateTime: work.PreparedAt}
+	return a.archiveSource(ctx, source, work.AssetID, file, false)
+}
+
+// ArchiveGatewaySource archives saved AI receipt bytes without creating an old operation or write-fence command.
+// SourceOperation is used only as immutable source metadata; its ID is the new AI request.
+func (a *GeneratedOutputArchiver) ArchiveGatewaySource(ctx context.Context, source SourceOperation, assetID uuid.UUID, file *Downloaded) (domain.MediaAsset, []domain.Rendition, error) {
+	if a == nil || a.routes == nil || a.objects == nil || a.prober == nil || a.renderer == nil || source.ID == uuid.Nil || source.ProjectID == uuid.Nil || source.CreateTime.IsZero() || source.ProviderKey == "" || source.ModelKey == "" || (source.Region != "domestic" && source.Region != "overseas") || assetID == uuid.Nil || file == nil || file.File == nil {
+		return domain.MediaAsset{}, nil, ErrInvalidIngest
+	}
+	return a.archiveSource(ctx, source, assetID, file, true)
+}
+
+func (a *GeneratedOutputArchiver) archiveSource(ctx context.Context, source SourceOperation, assetID uuid.UUID, file *Downloaded, gateway bool) (domain.MediaAsset, []domain.Rendition, error) {
+	var asset domain.MediaAsset
+	owner := StorageWorkOwner{Kind: StorageWorkKindOperation, OwnerID: source.ProjectID, WorkID: source.ID}
 	intent, err := a.routes.ReadStorageWork(ctx, owner)
 	if err != nil {
 		return asset, nil, err
@@ -51,10 +69,10 @@ func (a *GeneratedOutputArchiver) ArchiveOutput(ctx context.Context, work Operat
 	if err != nil {
 		return asset, nil, err
 	}
-	if string(probe.Kind) != output.Kind || probe.Extension == "" || strings.ContainsAny(probe.Extension, "./\\") || file.Size != output.ByteSize || file.SHA256 != output.SHA256 || file.MIMEType != output.MIMEType {
+	if probe.Kind != source.OutputKind || probe.Extension == "" || strings.ContainsAny(probe.Extension, "./\\") {
 		return asset, nil, ErrObjectMismatch
 	}
-	rendered, err := a.renderer.Render(ctx, file, probe, output.AspectRatio)
+	rendered, err := a.renderer.Render(ctx, file, probe, source.AspectRatio)
 	if err != nil {
 		return asset, nil, err
 	}
@@ -68,7 +86,7 @@ func (a *GeneratedOutputArchiver) ArchiveOutput(ctx context.Context, work Operat
 	if !completeRendered(probe.Kind, rendered) {
 		return asset, nil, ErrInvalidIngest
 	}
-	key := path.Join("projects", output.ProjectID.String(), string(probe.Kind), work.PreparedAt.UTC().Format("2006"), work.PreparedAt.UTC().Format("01"), work.AssetID.String()+"."+probe.Extension)
+	key := path.Join("projects", source.ProjectID.String(), string(probe.Kind), source.CreateTime.UTC().Format("2006"), source.CreateTime.UTC().Format("01"), assetID.String()+"."+probe.Extension)
 	if _, err := file.File.Seek(0, io.SeekStart); err != nil {
 		return asset, nil, err
 	}
@@ -80,9 +98,14 @@ func (a *GeneratedOutputArchiver) ArchiveOutput(ctx context.Context, work Operat
 		return asset, nil, ErrObjectMismatch
 	}
 	now := time.Now().UTC()
-	sha := output.SHA256
-	provider, model, region := output.ProviderKey, output.ModelKey, output.Region
-	asset = domain.MediaAsset{ID: work.AssetID, ProjectID: output.ProjectID, Kind: probe.Kind, Origin: domain.OriginGenerated, Status: domain.StatusProcessing, ObjectKey: key, ObjectLocation: &original, MimeType: file.MIMEType, ByteSize: file.Size, SHA256: &sha, Width: probe.Width, Height: probe.Height, DurationMS: probe.DurationMS, FPS: probe.FPS, AudioChannels: probe.AudioChannels, Codec: probe.Codec, SourceOperationID: &output.OperationID, ProviderKey: &provider, ModelKey: &model, Region: &region, ModerationStatus: domain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
+	sha := file.SHA256
+	provider, model, region := source.ProviderKey, source.ModelKey, source.Region
+	asset = domain.MediaAsset{ID: assetID, ProjectID: source.ProjectID, Kind: probe.Kind, Origin: domain.OriginGenerated, Status: domain.StatusProcessing, ObjectKey: key, ObjectLocation: &original, MimeType: file.MIMEType, ByteSize: file.Size, SHA256: &sha, Width: probe.Width, Height: probe.Height, DurationMS: probe.DurationMS, FPS: probe.FPS, AudioChannels: probe.AudioChannels, Codec: probe.Codec, SourceOperationID: &source.ID, ProviderKey: &provider, ModelKey: &model, Region: &region, ModerationStatus: domain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
+	if gateway {
+		asset.SourceOperationID = nil
+		asset.SourceAIRequestID = &source.ID
+		asset.AIGCMarked = true
+	}
 	if err := asset.Validate(); err != nil {
 		return asset, nil, err
 	}
