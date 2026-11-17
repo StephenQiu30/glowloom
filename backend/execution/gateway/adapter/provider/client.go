@@ -137,6 +137,15 @@ func (f fenced) Do(r *http.Request) (*http.Response, error) {
 		if bounded.TLSClientConfig == nil {
 			bounded.TLSClientConfig = &tls.Config{}
 		}
+		if f.mediaAdapter != "" {
+			// HTTP/2 may replay REFUSED_STREAM/GOAWAY inside one RoundTrip.
+			// Fresh HTTP/1 connections keep both submissions and queries single-send.
+			bounded.Protocols = &http.Protocols{}
+			bounded.Protocols.SetHTTP1(true)
+			bounded.ForceAttemptHTTP2 = false
+			bounded.TLSNextProto = nil
+			bounded.TLSClientConfig.NextProtos = []string{"http/1.1"}
+		}
 		bounded.TLSClientConfig.ServerName = base.Hostname()
 		c.Transport = bounded
 		defer bounded.CloseIdleConnections()

@@ -109,6 +109,15 @@ func (c *Client) mediaRequest(ctx context.Context, d application.Dispatch, confi
 	if decoder.Decode(&in) != nil || decoder.Decode(new(any)) != io.EOF || in.Model != d.Call.Model.Name || in.Capability != d.Call.Model.Capability || !slices.Contains(d.Call.Model.Modes, in.Mode) || in.OutputCount != 1 || len(in.References) > 16 {
 		return operation.GenerationRequest{}, application.ErrNotSent
 	}
+	// The installed Ark driver forces adaptive for this native model/mode.
+	// Refuse a conflicting confirmed ratio before resolving or sending inputs.
+	if config.AdapterKey == "volcengine_ark" && strings.HasPrefix(d.Route.UpstreamModel, "doubao-seedance-2-5-") && in.Capability == "video.generate" && in.Mode == "image2video" {
+		for _, name := range []string{"ratio", "aspect_ratio"} {
+			if value, present := in.Params[name]; present && value != "adaptive" {
+				return operation.GenerationRequest{}, application.ErrNotSent
+			}
+		}
+	}
 	input := operation.GenerationRequest{Config: config, ModelID: d.Route.UpstreamModel, Capability: in.Capability, Mode: in.Mode, Prompt: in.Prompt, Params: in.Params, OutputCount: 1, ProviderRequestID: d.Call.ID.String(), StrictSpeechTerminal: true}
 	if len(in.References) > 0 {
 		if c.mediaReferences == nil {
