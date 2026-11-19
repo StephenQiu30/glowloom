@@ -65,7 +65,6 @@ export type GatewayConfiguration = {
   credentials: { id: string; supplier_id: string; state: CredentialState }[];
   quotas: { name: string; concurrency: number; rpm: number }[];
   media_drivers: MediaDriverOption[];
-  default_scope_id?: string;
   unknown: {
     request_id: string;
     attempt_id: string;
@@ -354,11 +353,6 @@ export async function loadGatewayConfiguration(
     routes: result.routes ?? [],
     quotas: result.quotas ?? [],
     media_drivers: result.media_drivers ?? [],
-    default_scope_id:
-      typeof result.default_scope_id === "string" &&
-      uuid.test(result.default_scope_id)
-        ? result.default_scope_id
-        : undefined,
     onboarding: result.onboarding ?? [],
     unknown: result.unknown ?? [],
     credentials: (result.credentials ?? []).map(

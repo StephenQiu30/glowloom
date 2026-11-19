@@ -286,12 +286,14 @@ export function RouteForm({
   busy,
   onPrepared,
   initialModelID,
+  defaultScope,
 }: {
   configuration: GatewayConfiguration;
   run: RunMutation;
   busy: boolean;
   onPrepared: (review: OnboardingReview) => void;
   initialModelID?: string;
+  defaultScope?: string;
 }) {
   const models = configuration.models.filter(
     ({ model, enabled, draft }) =>
@@ -318,6 +320,7 @@ export function RouteForm({
       run={run}
       busy={busy}
       onPrepared={onPrepared}
+      defaultScope={defaultScope}
     />
   );
 }
@@ -330,6 +333,7 @@ function PreparedRouteForm({
   run,
   busy,
   onPrepared,
+  defaultScope,
 }: {
   model: GatewayModel;
   models: GatewayConfiguration["models"];
@@ -338,6 +342,7 @@ function PreparedRouteForm({
   run: RunMutation;
   busy: boolean;
   onPrepared: (review: OnboardingReview) => void;
+  defaultScope?: string;
 }) {
   const attempt = useRef<{ payload: string; id: string } | null>(null);
   const newSupplier = useRef<string>(undefined);
@@ -518,7 +523,7 @@ function PreparedRouteForm({
             label="验证付款空间 ID"
             name="scope_id"
             pattern={uuidPattern}
-            value={configuration.default_scope_id}
+            value={defaultScope}
             description="验证积分从这个空间扣除。"
           />
         </FieldGroup>

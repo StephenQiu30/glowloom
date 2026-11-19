@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Layers, Plus, RefreshCw } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { ContentState } from "@/components/layout/content-state";
+import { useSpace } from "@/components/spaces/space-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -101,6 +102,8 @@ function GatewayConfigurationPage({
   entry: Entry;
   entityID?: string;
 }) {
+  const { selected: space } = useSpace();
+  const defaultScope = space?.writable ? space.id : undefined;
   const [configuration, setConfiguration] =
     useState<GatewayConfiguration | null>(null);
   const [revision, setRevision] = useState(0);
@@ -402,6 +405,7 @@ function GatewayConfigurationPage({
                           busy={busy}
                           run={run}
                           initialModelID={selectedModel}
+                          defaultScope={defaultScope}
                           onPrepared={(review) => {
                             setPrepared(review);
                             openCandidate(review.id);
@@ -531,7 +535,7 @@ function GatewayConfigurationPage({
                     <CreditsForm
                       run={run}
                       busy={busy}
-                      defaultScope={configuration.default_scope_id}
+                      defaultScope={defaultScope}
                     />
                   </CardContent>
                 </Card>

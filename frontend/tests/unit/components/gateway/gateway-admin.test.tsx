@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GatewayAdmin } from "@/components/gateway/gateway-admin";
+import { SpaceContext } from "@/components/spaces/space-context";
 import {
   prepareModel,
   prepareRoute,
@@ -118,12 +119,36 @@ it("does not request gateway configuration for a non-admin account", () => {
 });
 
 it("starts the provider entry on procurement and asks before discarding an edited form", async () => {
-  render(<GatewayAdmin entry="providers" />);
+  const space = {
+    id: supplier,
+    name: "验收空间",
+    kind: "personal",
+    role: "owner",
+    team_id: "",
+    writable: true,
+  };
+  render(
+    <SpaceContext.Provider
+      value={{
+        selected: space,
+        spaces: [space],
+        pending: false,
+        error: "",
+        refresh: async () => {},
+        select: async () => {},
+      }}
+    >
+      <GatewayAdmin entry="providers" />
+    </SpaceContext.Provider>,
+  );
   const procurement = await screen.findByRole("tab", {
     name: "供应商与采购价",
   });
   expect(procurement.getAttribute("aria-selected")).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "准备采购路由" }));
+  expect(screen.getByLabelText<HTMLInputElement>("验证付款空间 ID").value).toBe(
+    space.id,
+  );
   fireEvent.change(screen.getByLabelText("供应商模型号"), {
     target: { value: "edited-model" },
   });
