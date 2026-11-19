@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Frame } from "lucide-react";
-import { SidebarEmpty } from "./sidebar-empty";
+import { SidebarEmpty, SidebarHistoryLoading } from "./sidebar-empty";
 import { SidebarNavLink } from "./sidebar-nav-link";
 import { listProjects } from "@/api/projects";
 import {
@@ -104,13 +104,18 @@ export function RecentCanvases({
             }
           />
         ) : projects === null ? (
-          [0, 1, 2].map((key) => (
-            <Skeleton
-              key={key}
-              className="home-canvas-skeleton"
-              aria-label="正在读取画布"
-            />
-          ))
+          <>
+            <span role="status" className="sr-only">
+              正在读取画布…
+            </span>
+            {[0, 1, 2].map((key) => (
+              <Skeleton
+                key={key}
+                className="home-canvas-skeleton"
+                aria-hidden="true"
+              />
+            ))}
+          </>
         ) : projects.length === 0 ? (
           <CanvasListEmptyState
             className="home-canvas-state"
@@ -144,9 +149,7 @@ export function RecentCanvases({
           </Button>
         </li>
       ) : projects === null ? (
-        <li className="sidebar-history-note" role="status">
-          正在读取…
-        </li>
+        <SidebarHistoryLoading message="正在读取画布…" />
       ) : projects.length === 0 ? (
         <li>
           <SidebarEmpty>{canvasListEmptyCopy.active.title}</SidebarEmpty>

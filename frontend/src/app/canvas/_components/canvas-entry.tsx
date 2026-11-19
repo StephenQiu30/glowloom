@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ContentState } from "@/components/layout/content-state";
+import { CanvasLoading } from "@/components/layout/loading-state";
 
 const Editor = dynamic(
   () =>
@@ -10,9 +10,7 @@ const Editor = dynamic(
     ),
   {
     ssr: false,
-    loading: () => (
-      <ContentState className="h-dvh" state="loading" title="正在打开画布" />
-    ),
+    loading: () => <CanvasLoading />,
   },
 );
 

@@ -54,7 +54,13 @@ export function DramaProject(props: {
       />
     );
   if (space.pending || !space.selected)
-    return <ContentState state="loading" title="正在核对项目空间" />;
+    return (
+      <ContentState
+        state="loading"
+        loadingLayout="conversation"
+        title="正在核对项目空间"
+      />
+    );
   const owner = `${session.actor.id}/${space.selected.id}`;
   return (
     <ProjectWorkspace
@@ -193,7 +199,13 @@ function ProjectWorkspace({
       />
     );
   if (!project.data || !script.data)
-    return <ContentState state="loading" title="正在读取短剧项目" />;
+    return (
+      <ContentState
+        state="loading"
+        loadingLayout="conversation"
+        title="正在读取短剧项目"
+      />
+    );
   if (
     !referenceCopy.assets &&
     (!writable || project.data.status === "archived")

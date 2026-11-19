@@ -603,7 +603,11 @@ export function PersonalHistoryList({
         />
       )}
       {pending && !page && (
-        <ContentState state="loading" title="正在读取生成历史" />
+        <ContentState
+          state="loading"
+          loadingLayout="grid"
+          title="正在读取生成历史"
+        />
       )}
       {!pending && !error && !cards.length && (
         <ContentState

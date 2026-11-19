@@ -441,7 +441,11 @@ function TeamAdministration() {
         />
       ) : null}
       {loading && !page ? (
-        <ContentState state="loading" title="正在读取团队…" />
+        <ContentState
+          state="loading"
+          loadingLayout="table"
+          title="正在读取团队…"
+        />
       ) : null}
       {page ? (
         <>

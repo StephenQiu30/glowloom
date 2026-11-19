@@ -117,7 +117,11 @@ function PlatformSettingsAdministration() {
           <Button className="self-start">保存平台设置</Button>
         </form>
       ) : !error ? (
-        <ContentState state="loading" title="正在读取平台设置" />
+        <ContentState
+          state="loading"
+          loadingLayout="form"
+          title="正在读取平台设置"
+        />
       ) : null}
       <Confirmation
         key={action?.title ?? "closed"}

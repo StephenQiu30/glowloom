@@ -44,7 +44,9 @@ it("explains incompatible versions without exposing the transport code", () => {
 });
 it("shows pending without an actionable second retry", () => {
   render(<CanvasConnectionState message="" onRetry={vi.fn()} />);
-  expect(screen.getByRole("status").getAttribute("aria-busy")).toBe("true");
+  const status = screen.getByRole("status");
+  expect(status.textContent).toBe("正在连接画布…");
+  expect(status.closest('[data-loading-layout="canvas"]')).toBeTruthy();
   expect(screen.queryByRole("button", { name: "重新连接" })).toBeNull();
 });
 it("keeps recovery guidance and does not promise that unknown writes were saved", () => {

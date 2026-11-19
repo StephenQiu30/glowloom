@@ -12,8 +12,8 @@ function Skeleton({
       data-slot="skeleton"
       data-variant={variant}
       className={cn(
-        "animate-pulse rounded-md",
-        variant === "canvas-generation" ? "bg-card" : "bg-muted",
+        "animate-[workspace-skeleton-pulse_1.6s_ease-in-out_infinite] rounded-md motion-reduce:animate-none",
+        variant === "canvas-generation" ? "bg-card" : "bg-accent",
         className,
       )}
       {...props}

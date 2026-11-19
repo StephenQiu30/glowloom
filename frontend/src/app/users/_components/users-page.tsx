@@ -7,7 +7,7 @@ import {
   Confirmation,
   type ConfirmAction,
 } from "@/components/governance/confirmation";
-import { LoadingState } from "@/components/layout/loading-state";
+import { PageLoading } from "@/components/layout/loading-state";
 import {
   DataTable,
   type DataTableColumn,
@@ -521,7 +521,9 @@ function UserAdministration() {
           }
         />
       ) : null}
-      {pending && !page ? <LoadingState>正在读取用户…</LoadingState> : null}
+      {pending && !page ? (
+        <PageLoading message="正在读取用户…" layout="table" />
+      ) : null}
       {toolsOpen && !forbidden ? (
         <DirectoryTools
           key={`${session.actor.id}:${JSON.stringify(filters)}`}

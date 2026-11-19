@@ -9,7 +9,7 @@ import {
   EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty";
-import { Spinner } from "@/components/ui/spinner";
+import { PageLoading, type LoadingLayout } from "./loading-state";
 
 /** Shared Empty composition for a whole content region, not inline form errors. */
 export function ContentState({
@@ -20,6 +20,7 @@ export function ContentState({
   variant = "default",
   actions,
   className,
+  loadingLayout,
 }: {
   title: string;
   description?: ReactNode;
@@ -28,24 +29,25 @@ export function ContentState({
   variant?: "default" | "workspace";
   actions?: ReactNode;
   className?: string;
+  loadingLayout?: LoadingLayout;
 }) {
+  if (state === "loading")
+    return (
+      <PageLoading
+        message={title}
+        layout={loadingLayout}
+        className={className}
+      />
+    );
+
   return (
     <Empty
       className={cn("workspace-content-state min-h-64", className)}
-      role={
-        state === "error" ? "alert" : state === "loading" ? "status" : undefined
-      }
-      aria-busy={state === "loading" || undefined}
+      role={state === "error" ? "alert" : undefined}
     >
       <EmptyHeader>
         <EmptyMedia variant="icon" aria-hidden="true">
-          {state === "loading" ? (
-            <Spinner role="presentation" />
-          ) : state === "error" ? (
-            <CircleAlert />
-          ) : (
-            <Icon />
-          )}
+          {state === "error" ? <CircleAlert /> : <Icon />}
         </EmptyMedia>
         <EmptyTitle variant={state === "empty" ? variant : "default"}>
           <h2>{title}</h2>

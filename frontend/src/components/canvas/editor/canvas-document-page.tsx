@@ -16,10 +16,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  PageError,
-  PageLoading,
-} from "@/components/canvas/runtime/components/feedback/page-state";
+import { PageError } from "@/components/canvas/runtime/components/feedback/page-state";
+import { CanvasLoading } from "@/components/layout/loading-state";
 import {
   CanvasIdentityLock,
   useCanvasIdentity,
@@ -37,7 +35,7 @@ const CanvasEditor = dynamic(
   () => import("@glowloom/canvas/editor/editor/canvas-editor.tsx"),
   {
     ssr: false,
-    loading: () => <PageLoading label="正在打开画布" />,
+    loading: () => <CanvasLoading />,
   },
 );
 import {
@@ -127,7 +125,7 @@ function DocumentLoader({
         reset={() => void query.mutate()}
       />
     );
-  if (!loaded) return <PageLoading />;
+  if (!loaded) return <CanvasLoading />;
   try {
     fromCanvasGraph(loaded.document.graph);
   } catch (error) {

@@ -10,7 +10,7 @@ import { cn } from "cn";
 import { ConversationThread } from "./conversation-thread";
 import { useConversation, type ConversationOptions } from "./use-conversation";
 import { FeedbackNotice } from "@/components/feedback/feedback-notice";
-import { Spinner } from "@/components/ui/spinner";
+import { ConversationMessageSkeleton } from "@/components/layout/loading-state";
 export function ConversationWorkspace({
   onChooseProject,
   headerActions,
@@ -52,13 +52,9 @@ export function ConversationWorkspace({
       )}
     >
       {c.loading && !welcome ? (
-        <div
-          role="status"
-          className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground"
-        >
-          <Spinner aria-hidden="true" />
+        <span role="status" className="sr-only">
           正在读取对话…
-        </div>
+        </span>
       ) : null}
       {hasMessages ? (
         <ConversationThread
@@ -115,6 +111,8 @@ export function ConversationWorkspace({
             composer.current?.focusPrompt();
           }}
         />
+      ) : c.loading ? (
+        <ConversationMessageSkeleton className="mx-auto w-full max-w-[800px] flex-1 px-4 py-6" />
       ) : !embedded ? (
         <div className="flex-1" />
       ) : null}

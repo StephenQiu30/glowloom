@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSpace } from "@/components/spaces/space-context";
 import { ContentState } from "@/components/layout/content-state";
+import { CanvasLoading } from "@/components/layout/loading-state";
 import { Button } from "@/components/ui/button";
 import { isProjectID } from "@/components/projects/project";
 import { locateCanvas } from "@/api/canvases";
@@ -158,8 +159,6 @@ export function CanvasLocationGate({
       />
     );
   if (!target || space.pending || space.selected?.id !== target.scope_id)
-    return (
-      <ContentState className="h-dvh" state="loading" title="正在打开画布" />
-    );
+    return <CanvasLoading />;
   return children(target);
 }

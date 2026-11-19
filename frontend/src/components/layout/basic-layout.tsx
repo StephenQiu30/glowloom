@@ -42,6 +42,9 @@ import {
   type PageActionsRegistration,
 } from "./page-toolbar";
 import type { PageSearch } from "./product-search";
+import { ApplicationLoading } from "./application-state";
+import { loadingLayoutForScreen } from "./loading-state";
+import { ScreenLoading } from "./route-loading";
 const adminScreens = [
   "users",
   "models",
@@ -105,6 +108,13 @@ function Shell({
   const adminSection = resolveAdminSection(
     screen,
     session?.actor.platform_role === "platform_admin",
+  );
+  const page = (
+    <SpaceGate
+      loading={<ScreenLoading screen={screen} message="正在确认创作归属…" />}
+    >
+      {children}
+    </SpaceGate>
   );
   const updateSession = useSessionUpdate();
   const router = useRouter();
@@ -181,15 +191,11 @@ function Shell({
           <PageOptionsContext.Provider value={setPageOptions}>
             <PageToolbarContext.Provider value={toolbarTarget}>
               <PageActionsContext.Provider value={actionsContext}>
-                <SpaceGate>
-                  {adminSection ? (
-                    <AdminWorkspace active={adminSection}>
-                      {children}
-                    </AdminWorkspace>
-                  ) : (
-                    children
-                  )}
-                </SpaceGate>
+                {adminSection ? (
+                  <AdminWorkspace active={adminSection}>{page}</AdminWorkspace>
+                ) : (
+                  page
+                )}
               </PageActionsContext.Provider>
             </PageToolbarContext.Provider>
           </PageOptionsContext.Provider>
@@ -264,6 +270,13 @@ export function BasicLayout({
   return (
     <SessionGate
       admin={adminScreens.includes(screen)}
+      loading={
+        <ApplicationLoading
+          message="正在验证登录状态…"
+          layout={loadingLayoutForScreen(screen)}
+          sidebarOpen={sidebarOpen}
+        />
+      }
       allowGuest={
         allowGuest &&
         (screen === "home" ||

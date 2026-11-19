@@ -444,7 +444,11 @@ export function AssetCanvasList({
         />
       )}
       {pending && !page && (
-        <ContentState state="loading" title="正在读取画布" />
+        <ContentState
+          state="loading"
+          loadingLayout="grid"
+          title="正在读取画布"
+        />
       )}
       {!pending &&
         !error &&

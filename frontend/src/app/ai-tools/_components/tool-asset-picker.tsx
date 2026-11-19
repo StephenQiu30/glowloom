@@ -201,7 +201,11 @@ export function ToolAssetPicker({
         </DropdownMenu>
       </div>
       {loading ? (
-        <ContentState state="loading" title="正在读取素材" />
+        <ContentState
+          state="loading"
+          loadingLayout="grid"
+          title="正在读取素材"
+        />
       ) : error ? (
         <ContentState
           state="error"

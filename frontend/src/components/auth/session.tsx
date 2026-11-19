@@ -423,10 +423,12 @@ export function SessionGate({
   children,
   admin = false,
   allowGuest = false,
+  loading,
 }: {
   children: ReactNode;
   admin?: boolean;
   allowGuest?: boolean;
+  loading?: ReactNode;
 }) {
   const session = useOptionalSession();
   const status = useContext(SessionStatusContext);
@@ -461,7 +463,7 @@ export function SessionGate({
       </ApplicationState>
     );
   if (!session && (!allowGuest || (!guest && !publicUnavailable)))
-    return <ApplicationLoading message="正在验证登录状态…" />;
+    return loading ?? <ApplicationLoading message="正在验证登录状态…" />;
   if (admin && session?.actor.platform_role !== "platform_admin")
     return (
       <ApplicationState title="无权访问" description="此页面仅向管理员开放。">

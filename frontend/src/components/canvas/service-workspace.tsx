@@ -6,6 +6,7 @@ import { useSpace, SpaceGate } from "@/components/spaces/space-context";
 import { Button } from "@/components/ui/button";
 import { isProjectID } from "@/components/projects/project";
 import { ContentState } from "@/components/layout/content-state";
+import { CanvasLoading } from "@/components/layout/loading-state";
 import { CanvasLocationGate } from "./canvas-location-gate";
 import { YjsCanvasWorkspace } from "./yjs-workspace";
 
@@ -47,8 +48,8 @@ function Entry() {
 }
 export function ServiceCanvasWorkspace() {
   return (
-    <SessionGate>
-      <SpaceGate>
+    <SessionGate loading={<CanvasLoading />}>
+      <SpaceGate loading={<CanvasLoading />}>
         <Entry />
       </SpaceGate>
     </SessionGate>

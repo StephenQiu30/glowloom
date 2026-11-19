@@ -16,30 +16,16 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Spinner } from "@/components/ui/spinner";
-import { BrandMark } from "@/components/canvas/runtime/components/layout/shell/brand-mark";
-import { productBrand } from "@/components/canvas/runtime/lib/brand";
+import { PageLoading as ContentLoading } from "@/components/layout/loading-state";
 
 export function PageLoading({ label = "正在加载" }: { label?: string }) {
   return (
-    <section
-      className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center p-6 text-muted-foreground"
-      aria-busy="true"
-    >
-      <div className="flex max-w-full flex-col items-center gap-3">
-        <div className="flex items-center gap-2 text-foreground">
-          <BrandMark className="size-6" />
-          <span className="font-medium">{productBrand.name}</span>
-        </div>
-        <p className="flex items-center justify-center gap-2 text-sm">
-          <Spinner
-            aria-label={label}
-            className="shrink-0 motion-reduce:animate-none"
-          />
-          <span aria-hidden="true">{label}</span>
-        </p>
-      </div>
-    </section>
+    <ContentLoading
+      message={label}
+      layout="grid"
+      heading
+      className="workspace-page"
+    />
   );
 }
 

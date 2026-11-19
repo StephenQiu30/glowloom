@@ -65,7 +65,13 @@ import {
 const ReferenceAssetsPage = dynamic(
   () => import("./assets-page").then((m) => m.ReferenceAssetsPage),
   {
-    loading: () => <ContentState state="loading" title="正在读取参考素材" />,
+    loading: () => (
+      <ContentState
+        state="loading"
+        loadingLayout="grid"
+        title="正在读取参考素材"
+      />
+    ),
   },
 );
 const UnifiedSubjectLibrary = dynamic(
@@ -73,7 +79,11 @@ const UnifiedSubjectLibrary = dynamic(
     import("@/components/subjects/unified-library").then(
       (m) => m.UnifiedSubjectLibrary,
     ),
-  { loading: () => <ContentState state="loading" title="正在读取主体" /> },
+  {
+    loading: () => (
+      <ContentState state="loading" loadingLayout="grid" title="正在读取主体" />
+    ),
+  },
 );
 const sources = [
   { id: "history", label: "生成历史" },

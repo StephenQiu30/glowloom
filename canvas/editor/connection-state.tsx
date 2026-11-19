@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { FeedbackToast } from "@glowloom/canvas-host/components/feedback/feedback-toast";
-import { Skeleton } from "@glowloom/canvas-host/components/ui/skeleton";
+import { CanvasLoading } from "@glowloom/canvas-host/components/layout/loading-state";
 import { Button } from "@glowloom/canvas-host/components/ui/button";
 
 /** Presentation only: never converts an unconfirmed write into a success. */
@@ -37,13 +37,8 @@ export function CanvasConnectionState({
   scopeControl?: ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-dvh items-end justify-center p-6">
-      <Skeleton
-        className="absolute inset-0 rounded-none"
-        role="status"
-        aria-label="正在连接画布"
-        aria-busy={!message}
-      />
+    <div className="relative min-h-dvh bg-background">
+      {!message && <CanvasLoading message="正在连接画布…" />}
       <FeedbackToast
         message={message ? canvasConnectionMessage(message) : ""}
         action={
@@ -52,7 +47,7 @@ export function CanvasConnectionState({
             : undefined
         }
       />
-      <div className="relative flex items-center gap-2">
+      <div className="absolute inset-x-0 bottom-6 flex justify-center gap-2">
         {scopeControl &&
           /forbidden|not_found|权限|无权|空间/.test(message) &&
           scopeControl}

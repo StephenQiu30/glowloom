@@ -185,7 +185,13 @@ export function SpaceProvider({
   );
 }
 
-export function SpaceGate({ children }: { children: ReactNode }) {
+export function SpaceGate({
+  children,
+  loading,
+}: {
+  children: ReactNode;
+  loading?: ReactNode;
+}) {
   const session = useOptionalSession(),
     space = useSpace();
   if (!session || space.selected) return children;
@@ -198,7 +204,7 @@ export function SpaceGate({ children }: { children: ReactNode }) {
         actions={<Button onClick={() => void space.refresh()}>重试</Button>}
       />
     );
-  return <PageLoading message="正在确认创作归属…" />;
+  return loading ?? <PageLoading message="正在确认创作归属…" />;
 }
 export function SpaceSwitcher({ compact = false }: { compact?: boolean }) {
   const { spaces, selected, pending, select } = useSpace();

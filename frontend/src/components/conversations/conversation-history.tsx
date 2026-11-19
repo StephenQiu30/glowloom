@@ -6,7 +6,10 @@ import { listAgentSessions } from "@/api/agent";
 import { useOptionalSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
 import { SidebarMenu } from "@/components/ui/sidebar";
-import { SidebarEmpty } from "@/components/layout/sidebar-empty";
+import {
+  SidebarEmpty,
+  SidebarHistoryLoading,
+} from "@/components/layout/sidebar-empty";
 import { useSpace } from "@/components/spaces/space-context";
 import { ConversationHistoryItem } from "./conversation-history-actions";
 import { readErrorMessage } from "@/lib/read-error";
@@ -145,11 +148,16 @@ export function ConversationHistory({
             }}
           />
         ))}
+        {current.loading && !current.items.length ? (
+          <SidebarHistoryLoading message="正在读取对话…" />
+        ) : null}
       </SidebarMenu>
       {current.loading ? (
-        <p role="status" className="px-2 py-3 text-xs text-muted-foreground">
-          正在读取对话…
-        </p>
+        current.items.length ? (
+          <span role="status" className="sr-only">
+            正在读取对话…
+          </span>
+        ) : null
       ) : current.error ? (
         <div className="px-2 py-2 text-xs">
           <p>{current.error}</p>

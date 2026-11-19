@@ -164,7 +164,11 @@ export function AnnouncementList() {
             }
           />
         ) : page.isLoading ? (
-          <ContentState state="loading" title="正在读取通知" />
+          <ContentState
+            state="loading"
+            loadingLayout="table"
+            title="正在读取通知"
+          />
         ) : !items.length ? (
           <ContentState title="没有符合条件的通知" />
         ) : (

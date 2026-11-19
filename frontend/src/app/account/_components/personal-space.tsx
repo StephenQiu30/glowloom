@@ -99,14 +99,26 @@ export function PersonalSpace() {
           </TabsContent>
           <TabsContent value="favorites">
             <Suspense
-              fallback={<ContentState state="loading" title="正在读取收藏" />}
+              fallback={
+                <ContentState
+                  state="loading"
+                  loadingLayout="grid"
+                  title="正在读取收藏"
+                />
+              }
             >
               <FavoriteAssets key={actor.id} />
             </Suspense>
           </TabsContent>
           <TabsContent value="canvases">
             <Suspense
-              fallback={<ContentState state="loading" title="正在读取画布" />}
+              fallback={
+                <ContentState
+                  state="loading"
+                  loadingLayout="grid"
+                  title="正在读取画布"
+                />
+              }
             >
               <ProjectList
                 key={`${filter}/${sort}`}
