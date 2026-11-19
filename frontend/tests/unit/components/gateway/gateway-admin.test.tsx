@@ -186,6 +186,53 @@ it("publishes immutable sale versions only through the new gateway, preserving d
   ).rejects.toThrow();
 });
 
+it.each([
+  { concurrency: 1, rpm: 60 },
+  { concurrency: 2, rpm: 1 },
+])(
+  "explains when a serving quota group cannot admit a verification (%j)",
+  async (limits) => {
+    const group = "serving-account";
+    send.mockResolvedValueOnce({
+      models: [{ model, enabled: true }],
+      routes: [
+        {
+          enabled: true,
+          route: {
+            id: verificationID,
+            model_id: modelID,
+            supplier,
+            credential,
+            group,
+            base_url: "https://api.example.com/v1",
+            upstream_model: "supplier-sku",
+            protocol: "chat",
+            purchase: price,
+            priority: 0,
+          },
+        },
+      ],
+      credentials: [{ id: credential, supplier_id: supplier, state: "active" }],
+      quotas: [{ name: group, ...limits }],
+    });
+    render(<GatewayAdmin entry="providers" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "准备采购路由" }),
+    );
+    const account = screen.getByRole("combobox", { name: "供应商账号" });
+    const save = screen.getByRole<HTMLButtonElement>("button", {
+      name: "保存并查看验证预算",
+    });
+    fireEvent.change(account, { target: { value: supplier } });
+    expect(screen.getByText("共享配额暂时无法验证")).toBeTruthy();
+    expect(save.disabled).toBe(true);
+
+    fireEvent.change(account, { target: { value: "" } });
+    expect(screen.queryByText("共享配额暂时无法验证")).toBeNull();
+    expect(save.disabled).toBe(false);
+  },
+);
+
 it("keeps supplier procurement independent from sale and refuses invalid amounts/endpoints", async () => {
   const route = {
     model_id: modelID,

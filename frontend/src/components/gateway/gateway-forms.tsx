@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ArrowRight } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   FieldDescription,
   FieldGroup,
@@ -354,9 +355,26 @@ function PreparedRouteForm({
   );
   const [driverKey, setDriverKey] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [groupOverride, setGroupOverride] = useState<string>();
   const draftRoute = configuration.routes.find(
     ({ route }) => route.supplier === supplier,
   )?.route;
+  const group = (groupOverride ?? draftRoute?.group ?? "").trim();
+  const quota = configuration.quotas.find((item) => item.name === group);
+  const noVerificationSlot =
+    quota !== undefined &&
+    (quota.concurrency <= 1 || quota.rpm <= 1) &&
+    configuration.routes.some(
+      ({ route, enabled }) =>
+        enabled &&
+        route.group === group &&
+        configuration.models.some(
+          ({ model, enabled }) => enabled && model.id === route.model_id,
+        ) &&
+        configuration.credentials.some(
+          ({ id, state }) => id === route.credential && state === "active",
+        ),
+    );
   const driver = drivers.find((option) => option.key === driverKey);
   const replacements = configuration.routes.filter(
     ({ route, enabled }) => enabled && route.model_id === model.id,
@@ -371,6 +389,7 @@ function PreparedRouteForm({
       aria-label="准备供应商路由与采购价"
       onSubmit={(event) => {
         event.preventDefault();
+        if (noVerificationSlot) return;
         const data = new FormData(event.currentTarget);
         void run(async () => {
           if (media && !driver) throw new Error("请选择已安装的媒体驱动。");
@@ -436,7 +455,10 @@ function PreparedRouteForm({
           <SelectField
             label="供应商账号"
             value={supplier}
-            onChange={(event) => setSupplier(event.currentTarget.value)}
+            onChange={(event) => {
+              setSupplier(event.currentTarget.value);
+              setGroupOverride(undefined);
+            }}
             options={[
               ["", "新建供应商账号"],
               ...[...supplierRoutes].map(
@@ -516,6 +538,7 @@ function PreparedRouteForm({
             label="共享配额组"
             name="group"
             value={draftRoute?.group}
+            onChange={(event) => setGroupOverride(event.currentTarget.value)}
             placeholder="例如 ark-team"
             maxLength={160}
           />
@@ -527,19 +550,26 @@ function PreparedRouteForm({
             description="验证积分从这个空间扣除。"
           />
         </FieldGroup>
+        {noVerificationSlot && (
+          <Alert variant="destructive">
+            <AlertTitle>共享配额暂时无法验证</AlertTitle>
+            <AlertDescription>
+              线上路由需要保留一个并发名额和每分钟一个请求额度。请选择有验证余量的供应商账号。
+            </AlertDescription>
+          </Alert>
+        )}
         <FormDetails label="共享配额与超时">
-          <FieldGroup key={supplier} className="grid sm:grid-cols-2">
+          <FieldGroup
+            key={quota?.name ?? supplier}
+            className="grid sm:grid-cols-2"
+          >
             <InputField
               label="共享并发"
               name="concurrency"
               type="number"
               min={1}
               max={1000}
-              value={
-                configuration.quotas.find(
-                  (item) => item.name === draftRoute?.group,
-                )?.concurrency ?? 1
-              }
+              value={quota?.concurrency ?? 1}
             />
             <InputField
               label="每分钟请求上限"
@@ -547,11 +577,7 @@ function PreparedRouteForm({
               type="number"
               min={1}
               max={media ? 100000 : Number.MAX_SAFE_INTEGER}
-              value={
-                configuration.quotas.find(
-                  (item) => item.name === draftRoute?.group,
-                )?.rpm ?? 60
-              }
+              value={quota?.rpm ?? 60}
             />
             <InputField
               label="路由优先级"
@@ -582,7 +608,10 @@ function PreparedRouteForm({
           </>
         )}
         <div>
-          <SubmitButton busy={busy} disabled={media && !driver}>
+          <SubmitButton
+            busy={busy}
+            disabled={noVerificationSlot || (media && !driver)}
+          >
             保存并查看验证预算
             <ArrowRight data-icon="inline-end" aria-hidden="true" />
           </SubmitButton>
