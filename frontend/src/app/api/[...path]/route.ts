@@ -1036,6 +1036,36 @@ async function proxy(
     },
     ...identityRoutes,
     ...editorCatalogRoutes,
+    {
+      pattern: "ai/admin/configuration",
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: "ai/admin/(models|routes|credits|reconciliations)",
+      methods: ["POST"],
+      query: [],
+    },
+    {
+      pattern: `ai/admin/onboarding/${identityUUID}`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: `ai/admin/onboarding/${identityUUID}/(verify|rollback)`,
+      methods: ["POST"],
+      query: [],
+    },
+    {
+      pattern: `ai/admin/(budgets|credentials/${identityUUID})`,
+      methods: ["PUT"],
+      query: [],
+    },
+    {
+      pattern: `ai/(bills|wallet|requests/${identityUUID})`,
+      methods: ["GET"],
+      query: [],
+    },
   ].find((rule) => new RegExp(`^${rule.pattern}$`, "i").test(resource));
   const methods =
     boundedRoute?.methods ??
