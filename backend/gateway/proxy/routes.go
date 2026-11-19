@@ -412,6 +412,9 @@ PUT /ai/admin/budgets
 POST /ai/admin/reconciliations
 POST /ai/admin/models
 POST /ai/admin/routes
+GET /ai/admin/onboarding/:id
+POST /ai/admin/onboarding/:id/verify
+POST /ai/admin/onboarding/:id/rollback
 POST /ai/admin/credits
 PUT /ai/admin/credentials/:id
 POST /platform/billing/scopes/:scopeID/credit-commands

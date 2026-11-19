@@ -60,8 +60,8 @@ export async function grantAiCredits(
   });
 }
 
-/** 发布模型销售合同新版本 POST /api/ai/admin/models */
-export async function publishAiModel(
+/** 保存未启用的模型预设与销售价 POST /api/ai/admin/models */
+export async function prepareAiModel(
   body: Record<string, any>,
   options?: RequestOptions,
 ) {
@@ -70,6 +70,53 @@ export async function publishAiModel(
     headers: {
       "Content-Type": "application/json",
     },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 读取候选的验证计划或回执 GET /api/ai/admin/onboarding/${param0} */
+export async function getAiOnboarding(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getAiOnboardingParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.OnboardingReview>(`/api/ai/admin/onboarding/${param0}`, {
+    method: "GET",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** 回退已启用候选 POST /api/ai/admin/onboarding/${param0}/rollback */
+export async function rollbackAiOnboarding(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.rollbackAiOnboardingParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/ai/admin/onboarding/${param0}/rollback`, {
+    method: "POST",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** 确认预算并提交密钥验证 POST /api/ai/admin/onboarding/${param0}/verify */
+export async function verifyAiOnboarding(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.verifyAiOnboardingParams,
+  body: Record<string, any>,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/ai/admin/onboarding/${param0}/verify`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
     data: body,
     ...(options || {}),
   });
@@ -90,12 +137,12 @@ export async function reconcileAiRequest(
   });
 }
 
-/** 发布独立采购路由新版本 POST /api/ai/admin/routes */
-export async function publishAiRoute(
+/** 保存采购路由与验证计划 POST /api/ai/admin/routes */
+export async function prepareAiRoute(
   body: Record<string, any>,
   options?: RequestOptions,
 ) {
-  return request<any>("/api/ai/admin/routes", {
+  return request<API.OnboardingReview>("/api/ai/admin/routes", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

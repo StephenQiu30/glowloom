@@ -21,12 +21,14 @@ type Authority func(context.Context, *gorm.DB, identity.Principal, uuid.UUID, uu
 
 // Store never delegates model consumption to legacy operation or billing tables.
 type Store struct {
-	workerPermit WorkerPermit
-	runLimit     RunLimit
-	grant        uuid.UUID
-	db           *gorm.DB
-	actor        identity.Principal
-	authorize    Authority
+	onboarding        uuid.UUID
+	prepareOnboarding onboardingAdmission
+	workerPermit      WorkerPermit
+	runLimit          RunLimit
+	grant             uuid.UUID
+	db                *gorm.DB
+	actor             identity.Principal
+	authorize         Authority
 }
 
 // New binds each business transaction to the initiating actor and authority.
@@ -202,8 +204,17 @@ func (s *Store) Admit(ctx context.Context, call domain.Call) (application.Dispat
 			result.Call.ID = prior.ID
 			return err
 		}
+		verification := call.Origin == application.OnboardingOrigin || s.onboarding != uuid.Nil
+		if verification {
+			if err := s.checkOnboardingCall(ctx, tx, call); err != nil {
+				return err
+			}
+		}
 		var current struct{ Document []byte }
-		r = tx.Raw("SELECT document FROM ai.model m WHERE id=? AND (enabled OR EXISTS(SELECT 1 FROM ai.quote q WHERE q.id=? AND q.scope_id=? AND q.input_hash=? AND q.contract->'Model'=m.document AND q.expires_at>clock_timestamp())) FOR SHARE", call.Model.ID, call.ID, call.Scope, call.Hash).Scan(&current)
+		r = tx.Raw(`SELECT document FROM ai.model m WHERE id=? AND (? OR enabled OR EXISTS(
+ SELECT 1 FROM ai.quote q WHERE q.id=? AND q.scope_id=? AND q.input_hash=?
+ AND q.contract->'Model'=m.document AND q.contract->>'Origin' IS DISTINCT FROM ?
+ AND q.expires_at>clock_timestamp())) FOR SHARE`, call.Model.ID, verification, call.ID, call.Scope, call.Hash, application.OnboardingOrigin).Scan(&current)
 		if r.Error != nil {
 			return r.Error
 		}
@@ -241,7 +252,12 @@ func (s *Store) Admit(ctx context.Context, call domain.Call) (application.Dispat
 		if err := money(tx, call, "freeze", -call.Limit, call.Limit, 0); err != nil {
 			return err
 		}
-		attempt, route, err := selectRoute(tx, call, uuid.Nil, 1)
+		if verification && s.prepareOnboarding != nil {
+			if err := s.prepareOnboarding(ctx, tx, call); err != nil {
+				return err
+			}
+		}
+		attempt, route, err := selectRoute(tx, call, uuid.Nil, s.onboarding, 1)
 		if err != nil {
 			return err
 		}
@@ -300,7 +316,7 @@ func budgetChange(tx *gorm.DB, call domain.Call, hold, spent int64) error {
 	}
 	return nil
 }
-func selectRoute(tx *gorm.DB, call domain.Call, excluded uuid.UUID, number int) (uuid.UUID, domain.Route, error) {
+func selectRoute(tx *gorm.DB, call domain.Call, excluded, verification uuid.UUID, number int) (uuid.UUID, domain.Route, error) {
 	var rows []struct {
 		ID, CredentialID uuid.UUID
 		QuotaGroup       string
@@ -314,10 +330,17 @@ func selectRoute(tx *gorm.DB, call domain.Call, excluded uuid.UUID, number int) 
 	}
 	err := tx.Raw(`SELECT r.id,r.credential_id,r.quota_group,r.document,c.key_id,c.supplier_id,c.ciphertext FROM ai.route r
  JOIN ai.credential c ON c.id=r.credential_id AND c.state='active' JOIN ai.quota q ON q.name=r.quota_group
- WHERE r.model_id=? AND r.enabled AND r.id<>? AND (q.cooldown_until IS NULL OR q.cooldown_until<clock_timestamp())
- AND (SELECT count(*) FROM ai.attempt a WHERE a.quota_group=q.name AND a.state IN ('ready','sending','pending','unknown'))<q.concurrency
- AND (SELECT count(*) FROM ai.attempt a WHERE a.quota_group=q.name AND a.started_at>clock_timestamp()-interval '1 minute')<q.requests_per_minute
- ORDER BY r.priority,r.id FOR SHARE OF r,c`, call.Model.ID, excluded).Scan(&rows).Error
+ CROSS JOIN LATERAL (
+   SELECT CASE WHEN ?::uuid IS NOT NULL AND EXISTS(
+     SELECT 1 FROM ai.route serving JOIN ai.model m ON m.id=serving.model_id AND m.enabled
+     JOIN ai.credential k ON k.id=serving.credential_id AND k.state='active'
+     WHERE serving.quota_group=q.name AND serving.enabled
+   ) THEN 1 ELSE 0 END AS serving_reserve
+ ) capacity
+ WHERE r.model_id=? AND ((?::uuid IS NULL AND r.enabled) OR (r.id=? AND NOT r.enabled)) AND r.id<>? AND (q.cooldown_until IS NULL OR q.cooldown_until<clock_timestamp())
+ AND (SELECT count(*) FROM ai.attempt a WHERE a.quota_group=q.name AND a.state IN ('ready','sending','pending','unknown'))<q.concurrency-capacity.serving_reserve
+ AND (SELECT count(*) FROM ai.attempt a WHERE a.quota_group=q.name AND a.started_at>clock_timestamp()-interval '1 minute')<q.requests_per_minute-capacity.serving_reserve
+ ORDER BY r.priority,r.id FOR SHARE OF r,c`, nullable(verification), call.Model.ID, nullable(verification), verification, excluded).Scan(&rows).Error
 	if err != nil {
 		return uuid.Nil, domain.Route{}, err
 	}
@@ -327,16 +350,7 @@ func selectRoute(tx *gorm.DB, call domain.Call, excluded uuid.UUID, number int) 
 			continue
 		}
 		// Reject a route before freezing dispatch if its published worst case exceeds procurement policy.
-		highest := route.Purchase.Input
-		if route.Purchase.CacheRead > highest {
-			highest = route.Purchase.CacheRead
-		}
-		if route.Purchase.CacheWrite > highest {
-			highest = route.Purchase.CacheWrite
-		}
-		bound := route.Purchase
-		bound.Input = highest
-		cost, err := bound.Cost(domain.Usage{Input: call.Model.MaxInput, Output: call.Model.MaxOutput})
+		cost, err := application.PurchaseBound(call.Model, route.Purchase)
 		if err != nil || cost > call.Model.PurchaseCap {
 			continue
 		}
@@ -522,6 +536,9 @@ func (s *Store) Settle(ctx context.Context, id uuid.UUID) (domain.Record, error)
 func (s *Store) Backup(ctx context.Context, failed application.Dispatch) (application.Dispatch, error) {
 	next := failed
 	next.Send = false
+	if failed.Call.Origin == application.OnboardingOrigin {
+		return next, domain.ErrUnavailable
+	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := verifyCallIdentity(tx, failed.Call); err != nil {
 			return err
@@ -544,7 +561,7 @@ func (s *Store) Backup(ctx context.Context, failed application.Dispatch) (applic
 		if err := s.check(ctx, tx, failed.Call.Scope, failed.Call.Project, false); err != nil {
 			return err
 		}
-		id, route, err := selectRoute(tx, failed.Call, failed.Route.ID, 2)
+		id, route, err := selectRoute(tx, failed.Call, failed.Route.ID, uuid.Nil, 2)
 		if err != nil {
 			return err
 		}

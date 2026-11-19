@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useOptionalSession } from "@/components/auth/session";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ import {
   setCredentialState,
   type CredentialState,
   type GatewayConfiguration,
+  type OnboardingReview,
 } from "@/lib/ai-gateway-admin";
 import {
   CreditsForm,
@@ -45,6 +46,8 @@ import {
   RouteForm,
   type RunMutation,
 } from "./gateway-forms";
+
+import { OnboardingPanel, onboardingState } from "./gateway-onboarding";
 
 export function GatewayAdmin() {
   const session = useOptionalSession();
@@ -63,6 +66,10 @@ function GatewayConfigurationPage() {
   const [configuration, setConfiguration] =
     useState<GatewayConfiguration | null>(null);
   const [revision, setRevision] = useState(0);
+  const [tab, setTab] = useState("models");
+  const [candidate, setCandidate] = useState<string>();
+  const [prepared, setPrepared] = useState<OnboardingReview>();
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -142,18 +149,19 @@ function GatewayConfigurationPage() {
       ) : null}
       {loading ? <Skeleton className="h-32 w-full" /> : null}
       {configuration ? (
-        <Tabs defaultValue="models" className="min-w-0 gap-5">
+        <Tabs value={tab} onValueChange={setTab} className="min-w-0 gap-5">
           <TabsList aria-label="网关管理" className="h-auto flex-wrap">
             <TabsTrigger value="models">销售模型</TabsTrigger>
-            <TabsTrigger value="routes">供应商路由</TabsTrigger>
+            <TabsTrigger value="routes">采购路由</TabsTrigger>
+            <TabsTrigger value="onboarding">验证与启用</TabsTrigger>
             <TabsTrigger value="credits">积分与对账</TabsTrigger>
           </TabsList>
           <TabsContent value="models" className="flex flex-col gap-5">
             <Card>
               <CardHeader>
-                <CardTitle>已发布销售模型</CardTitle>
+                <CardTitle>销售模型版本</CardTitle>
                 <CardDescription>
-                  创作者按销售合同计费；相同名称与协议发布后采用新版本，历史请求保留原合同。
+                  创作者按已启用的销售合同计费。
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -167,7 +175,7 @@ function GatewayConfigurationPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {configuration.models.map(({ model, enabled }) => (
+                      {configuration.models.map(({ model, enabled, draft }) => (
                         <TableRow key={model.id}>
                           <TableCell>
                             <p>{model.name}</p>
@@ -178,7 +186,11 @@ function GatewayConfigurationPage() {
                           <TableCell>
                             {model.protocol}{" "}
                             <Badge variant="secondary">
-                              {enabled ? "已发布" : "历史版本"}
+                              {enabled
+                                ? "已启用"
+                                : draft
+                                  ? "待验证"
+                                  : "历史版本"}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -191,13 +203,13 @@ function GatewayConfigurationPage() {
                     </TableBody>
                   </Table>
                 ) : (
-                  <p>尚未发布销售模型，请先填写销售价格和调用上限。</p>
+                  <p>请先准备模型预设和销售价。</p>
                 )}
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>发布销售模型</CardTitle>
+                <CardTitle>准备模型与销售价</CardTitle>
                 <CardDescription>
                   文本模型填写名称、协议和价格即可。媒体模型在高级配置中声明能力与参数。
                 </CardDescription>
@@ -212,7 +224,7 @@ function GatewayConfigurationPage() {
               <CardHeader>
                 <CardTitle>供应商路由</CardTitle>
                 <CardDescription>
-                  采购价与销售价独立。相同模型和凭据发布后替换运行版本，历史尝试保留快照。
+                  采购价与销售价独立，验证通过后路由生效。
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -231,7 +243,7 @@ function GatewayConfigurationPage() {
                           <TableCell>
                             {route.upstream_model}
                             <p className="text-xs text-muted-foreground">
-                              {route.group} · {enabled ? "已启用" : "历史版本"}
+                              {route.group} · {enabled ? "已启用" : "未启用"}
                             </p>
                           </TableCell>
                           <TableCell className="break-all">
@@ -262,10 +274,9 @@ function GatewayConfigurationPage() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>发布供应商路由</CardTitle>
+                <CardTitle>准备供应商路由与采购价</CardTitle>
                 <CardDescription>
-                  沿用所选销售模型协议。新建供应商 / 凭据时填写各自
-                  UUID，已有凭据可按下方 ID 复用。
+                  选择已配置的模型版本，核定采购价和测试付款空间。
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -273,6 +284,11 @@ function GatewayConfigurationPage() {
                   configuration={configuration}
                   run={run}
                   busy={busy}
+                  onPrepared={(review) => {
+                    setCandidate(review.id);
+                    setPrepared(review);
+                    setTab("onboarding");
+                  }}
                 />
               </CardContent>
             </Card>
@@ -291,6 +307,42 @@ function GatewayConfigurationPage() {
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="onboarding" className="flex flex-col gap-5">
+            <Card>
+              <CardHeader>
+                <CardTitle>接入候选</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {configuration.onboarding.length === 0 && !prepared && (
+                  <p>请先保存采购价与验证计划。</p>
+                )}
+                {configuration.onboarding.map((item) => (
+                  <Button
+                    key={item.id}
+                    type="button"
+                    variant={candidate === item.id ? "default" : "outline"}
+                    onClick={() => setCandidate(item.id)}
+                    className="h-auto max-w-full break-all whitespace-normal"
+                  >
+                    {configuration.models.find(
+                      ({ model }) => model.id === item.model_id,
+                    )?.model.name ?? item.upstream_model}{" "}
+                    · {onboardingState[item.state]}
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
+            {candidate && (
+              <OnboardingPanel
+                key={candidate}
+                id={candidate}
+                initial={prepared?.id === candidate ? prepared : undefined}
+                run={run}
+                busy={busy}
+                refreshConfiguration={refresh}
+              />
+            )}
           </TabsContent>
           <TabsContent value="credits" className="flex flex-col gap-5">
             <Card>

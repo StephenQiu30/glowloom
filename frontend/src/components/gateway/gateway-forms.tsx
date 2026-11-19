@@ -4,11 +4,6 @@ import { useId, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
-import {
   Field,
   FieldDescription,
   FieldGroup,
@@ -21,8 +16,9 @@ import {
   NativeSelectOption,
 } from "@/components/ui/native-select";
 import {
-  publishModel,
-  publishRoute,
+  prepareModel,
+  prepareRoute,
+  type OnboardingReview,
   fundCredits,
   reconcileGateway,
   type GatewayConfiguration,
@@ -58,7 +54,7 @@ export function InputField({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      {name === "supplier" || name === "credential" ? (
+      {name === "supplier" ? (
         <Button
           type="button"
           size="sm"
@@ -95,11 +91,13 @@ function SelectField({
   name,
   value,
   children,
+  required = true,
 }: {
   label: string;
   name: string;
   value?: string;
   children: ReactNode;
+  required?: boolean;
 }) {
   const id = useId();
   return (
@@ -109,7 +107,7 @@ function SelectField({
         id={id}
         name={name}
         defaultValue={value}
-        required
+        required={required}
         className="w-full"
       >
         {children}
@@ -207,9 +205,10 @@ function price(form: FormData): GatewayPrice {
 export function ModelForm({ run, busy }: { run: RunMutation; busy: boolean }) {
   const [protocol, setProtocol] = useState("chat");
   const protocolId = useId();
+  const attempt = useRef<{ payload: string; id: string } | null>(null);
   return (
     <form
-      aria-label="发布销售模型"
+      aria-label="准备模型与销售价"
       onSubmit={(event) => {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
@@ -218,7 +217,7 @@ export function ModelForm({ run, busy }: { run: RunMutation; busy: boolean }) {
             protocol === "media" ? JSON.parse(text(form, "media")) : {};
           if (media.output_policy && form.get("reviewed") !== "on")
             throw new Error("请确认已审核供应商成功输出策略");
-          await publishModel({
+          const model = {
             ...media,
             name: text(form, "name"),
             protocol,
@@ -228,8 +227,13 @@ export function ModelForm({ run, busy }: { run: RunMutation; busy: boolean }) {
             purchase_cap: num(form, "purchase_cap"),
             tools: form.get("tools") === "on",
             stream: form.get("stream") === "on",
-          });
-        }, "销售模型已发布。相同名称和协议采用新版本。");
+          };
+          const payload = JSON.stringify(model);
+          if (attempt.current?.payload !== payload)
+            attempt.current = { payload, id: crypto.randomUUID() };
+          await prepareModel(model, attempt.current.id);
+          attempt.current = null;
+        }, "模型预设与销售价已保存为草稿。");
       }}
     >
       <FieldGroup>
@@ -237,7 +241,7 @@ export function ModelForm({ run, busy }: { run: RunMutation; busy: boolean }) {
           label="销售模型名称"
           name="name"
           placeholder="text/default"
-          description="创作者选用的稳定名称；每次发布创建独立版本。"
+          description="同名同协议的新版本通过验证后才切换。"
         />
         <Field>
           <FieldLabel htmlFor={protocolId}>模型协议</FieldLabel>
@@ -318,7 +322,7 @@ export function ModelForm({ run, busy }: { run: RunMutation; busy: boolean }) {
           </FieldGroup>
         )}
         <Button type="submit" disabled={busy}>
-          发布销售模型
+          保存模型预设和销售价
         </Button>
       </FieldGroup>
     </form>
@@ -329,97 +333,100 @@ export function RouteForm({
   configuration,
   run,
   busy,
+  onPrepared,
 }: {
   configuration: GatewayConfiguration;
   run: RunMutation;
   busy: boolean;
+  onPrepared: (review: OnboardingReview) => void;
 }) {
-  const formRef = useRef<HTMLFormElement>(null);
   const models = configuration.models.filter(
-    ({ enabled, model }) => enabled && model.protocol !== "local",
+    ({ model, enabled, draft }) =>
+      (enabled || draft) && model.protocol !== "local",
   );
+  const [selected, setSelected] = useState("");
+  const modelId = useId();
+  const model =
+    models.find(({ model }) => model.id === selected)?.model ??
+    models[0]?.model;
+  const attempt = useRef<{ payload: string; id: string } | null>(null);
+  const replacements = configuration.routes.filter(
+    ({ route, enabled }) => enabled && route.model_id === model?.id,
+  );
+
   return (
     <form
-      ref={formRef}
-      aria-label="发布供应商路由"
+      aria-label="准备供应商路由与采购价"
       onSubmit={(event) => {
         event.preventDefault();
+        if (!model) return;
         const data = new FormData(event.currentTarget);
-        const key = String(data.get("key") ?? "");
-        const secret = event.currentTarget.elements.namedItem("key");
-        if (secret instanceof HTMLInputElement) secret.value = "";
-        data.delete("key");
         void run(async () => {
-          const model = models.find(
-            ({ model }) => model.id === text(data, "model_id"),
-          )?.model;
-          if (!model) throw new Error("请先发布并选择销售模型");
-          const credential = text(data, "credential");
-          const known = configuration.credentials.find(
-            (item) => item.id === credential,
-          );
-          if (!key && !known) throw new Error("新增凭据必须填写供应商密钥");
-          if (
-            known &&
-            (known.supplier_id !== text(data, "supplier") ||
-              known.state !== "active")
-          )
-            throw new Error("复用凭据必须属于所填供应商且处于可用状态");
-          if (
-            configuration.routes.some(
-              ({ route }) =>
-                route.credential === credential &&
-                route.group !== text(data, "group"),
-            )
-          )
-            throw new Error("相同凭据必须使用同一个共享配额组");
           const driver = text(data, "driver_config");
-          await publishRoute(
-            {
-              model_id: model.id,
-              supplier: text(data, "supplier"),
-              credential,
-              group: text(data, "group"),
-              base_url: text(data, "base_url"),
-              upstream_model: text(data, "upstream_model"),
-              protocol: model.protocol,
-              purchase: price(data),
-              priority: num(data, "priority"),
-              ...(driver ? { driver_config: JSON.parse(driver) } : {}),
-            },
-            key,
-            num(data, "concurrency"),
-            num(data, "rpm"),
+          const media = text(data, "media_tests");
+          const route = {
+            model_id: model.id,
+            supplier: text(data, "supplier"),
+            group: text(data, "group"),
+            base_url: text(data, "base_url"),
+            upstream_model: text(data, "upstream_model"),
+            protocol: model.protocol,
+            purchase: price(data),
+            priority: num(data, "priority"),
+            ...(driver ? { driver_config: JSON.parse(driver) } : {}),
+          };
+          const options = {
+            scope: text(data, "scope_id"),
+            project: text(data, "project_id"),
+            replacement: text(data, "replacement"),
+            mediaTests: media ? JSON.parse(media) : undefined,
+            concurrency: num(data, "concurrency"),
+            rpm: num(data, "rpm"),
+          };
+          const payload = JSON.stringify({ route, options });
+          if (attempt.current?.payload !== payload)
+            attempt.current = { payload, id: crypto.randomUUID() };
+          const review = await prepareRoute(
+            { ...route, id: attempt.current.id },
+            options,
           );
-        }, "供应商路由已发布，销售合同保持独立。");
+          attempt.current = null;
+          onPrepared(review);
+        }, "采购路由与验证计划已保存。");
       }}
     >
       <FieldGroup>
-        <SelectField
-          label="销售模型版本"
-          name="model_id"
-          value={models[0]?.model.id ?? ""}
-        >
-          <NativeSelectOption value="" disabled>
-            请选择销售模型
-          </NativeSelectOption>
-          {models.map(({ model }) => (
-            <NativeSelectOption key={model.id} value={model.id}>
-              {model.name} · {model.protocol} · {model.id}
+        <Field>
+          <FieldLabel htmlFor={modelId}>销售模型版本</FieldLabel>
+          <NativeSelect
+            id={modelId}
+            value={model?.id ?? ""}
+            onChange={(event) => setSelected(event.currentTarget.value)}
+            className="w-full"
+            required
+          >
+            <NativeSelectOption value="" disabled>
+              请先准备模型与销售价
             </NativeSelectOption>
-          ))}
-        </SelectField>
+            {models.map(({ model, draft }) => (
+              <NativeSelectOption key={model.id} value={model.id}>
+                {model.name} · {model.protocol} · {draft ? "草稿" : "已启用"} ·{" "}
+                {model.id}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Field>
         <FieldGroup className="grid sm:grid-cols-2">
           <InputField label="供应商 ID" name="supplier" placeholder="UUID" />
           <InputField
-            label="凭据 ID"
-            name="credential"
-            placeholder="新建 UUID 或复用下方凭据 ID"
+            label="验证付款空间 ID"
+            name="scope_id"
+            placeholder="已授权并有余额的测试空间 UUID"
           />
           <InputField
             label="共享配额组"
             name="group"
-            description="同一供应商账号 / 凭据共享并发和 RPM。"
+            description="同一供应商账号共享并发和 RPM。"
           />
           <InputField
             label="供应商地址"
@@ -430,19 +437,28 @@ export function RouteForm({
           <InputField
             label="供应商模型号"
             name="upstream_model"
-            placeholder="供应商实际返回的精确 SKU"
-          />
-          <InputField
-            label="供应商密钥"
-            name="key"
-            type="password"
-            required={false}
-            description="仅写入，不回显；提交时即清空。仅复用已有凭据可留空。"
+            placeholder="供应商实际返回的精确型号"
           />
         </FieldGroup>
+        {replacements.length > 0 && (
+          <SelectField
+            key={model?.id}
+            label="替换现有路由"
+            name="replacement"
+            value=""
+            required={false}
+          >
+            <NativeSelectOption value="">增加路由</NativeSelectOption>
+            {replacements.map(({ route }) => (
+              <NativeSelectOption key={route.id} value={route.id}>
+                {route.upstream_model} · {route.group} · {route.id}
+              </NativeSelectOption>
+            ))}
+          </SelectField>
+        )}
         <PriceFields kind="采购" />
         <FieldDescription>
-          采购价是供应商实际收费，独立于销售价；单位同上。更换供应商不修改销售模型价格。
+          采购价按实际供应商合同填写。销售价沿模型版本。
         </FieldDescription>
         <FieldGroup className="grid sm:grid-cols-3">
           <InputField
@@ -468,23 +484,40 @@ export function RouteForm({
             value={60}
           />
         </FieldGroup>
-        <Collapsible>
-          <CollapsibleTrigger asChild>
-            <Button type="button" variant="outline">
-              媒体驱动高级配置
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
+        {model?.protocol === "media" && (
+          <FieldGroup key={model.id}>
+            <InputField
+              label="验证项目 ID"
+              name="project_id"
+              placeholder="测试空间内的项目 UUID"
+            />
             <JSONField
               label="媒体驱动配置 JSON"
               name="driver_config"
               value=""
-              description="仅媒体供应商适配器需要；使用已支持的 ProviderConfig，不在此填写密钥。"
+              description="填写已支持的 ProviderConfig，地址须与路由相同。"
             />
-          </CollapsibleContent>
-        </Collapsible>
-        <Button type="submit" disabled={busy || !models.length}>
-          发布供应商路由
+            <JSONField
+              label="媒体验证输入 JSON"
+              name="media_tests"
+              value={JSON.stringify(
+                model.modes?.map((mode) => ({
+                  model: model.name,
+                  capability: model.capability,
+                  mode,
+                  prompt: "Glowloom 模型接入验证",
+                  params: {},
+                  output_count: 1,
+                })) ?? [],
+                null,
+                2,
+              )}
+              description="每个模式填写一条测试。引用须来自测试项目，并包含资产 ID、角色和版本。"
+            />
+          </FieldGroup>
+        )}
+        <Button type="submit" disabled={busy || !model}>
+          保存采购价与验证计划
         </Button>
       </FieldGroup>
     </form>

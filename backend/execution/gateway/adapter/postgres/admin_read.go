@@ -20,8 +20,9 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 		var models []struct {
 			Document []byte
 			Enabled  bool
+			Draft    bool
 		}
-		if err := tx.Raw("SELECT document,enabled FROM ai.model ORDER BY name,id LIMIT 500").Scan(&models).Error; err != nil {
+		if err := tx.Raw("SELECT document,enabled,draft FROM ai.model ORDER BY name,id LIMIT 500").Scan(&models).Error; err != nil {
 			return err
 		}
 		products := []map[string]any{}
@@ -30,9 +31,14 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			if json.Unmarshal(row.Document, &model) != nil {
 				return domain.ErrInvalid
 			}
-			products = append(products, map[string]any{"model": model, "enabled": row.Enabled})
+			products = append(products, map[string]any{"model": model, "enabled": row.Enabled, "draft": row.Draft})
 		}
 		out["models"] = products
+		candidates := []OnboardingSummary{}
+		if err := tx.Raw(`SELECT id,model_id,state,document->'route'->>'upstream_model' AS upstream FROM ai.onboarding ORDER BY created_at DESC,id LIMIT 100`).Scan(&candidates).Error; err != nil {
+			return err
+		}
+		out["onboarding"] = candidates
 		var routes []struct {
 			Document []byte
 			Enabled  bool

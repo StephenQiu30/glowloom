@@ -51,16 +51,11 @@ func (s *Store) PublishModel(ctx context.Context, m domain.Model) error {
 	})
 }
 
-// PublishRoute accepts already sealed credentials. The API never stores plaintext.
+// PublishRoute imports an already accepted route. Administrator onboarding uses the staged path.
 func (s *Store) PublishRoute(ctx context.Context, route domain.Route, ciphertext []byte, keyID string, concurrency, rpm int) error {
-	u, err := url.Parse(route.BaseURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(route.BaseURL, "\r\n\\") || route.ID == uuid.Nil || route.ModelID == uuid.Nil || route.Supplier == uuid.Nil || route.Credential == uuid.Nil || route.Group == "" || len(route.Group) > 160 || route.UpstreamModel == "" || !domain.Protocol(route.Protocol) || route.Purchase.Validate() != nil || keyID == "" || concurrency < 1 || concurrency > 1000 || rpm < 1 {
+	if keyID == "" {
 		return domain.ErrInvalid
 	}
-	if route.Protocol != "local" && route.Purchase.ExplicitFree {
-		return domain.ErrInvalid
-	}
-	raw, _ := json.Marshal(route)
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.check(ctx, tx, s.actor.ScopeID, uuid.Nil, true); err != nil {
 			return err
@@ -71,102 +66,131 @@ func (s *Store) PublishRoute(ctx context.Context, route domain.Route, ciphertext
 			return r.Error
 		}
 		var model domain.Model
-		if r.RowsAffected != 1 || json.Unmarshal(m.Document, &model) != nil || model.Protocol != route.Protocol {
+		if r.RowsAffected != 1 || json.Unmarshal(m.Document, &model) != nil {
 			return domain.ErrInvalid
 		}
-		if route.Protocol == "media" {
-			var config catalog.ProviderConfig
-			if json.Unmarshal(route.DriverConfig, &config) != nil || config.Validate() != nil || config.BaseURL != route.BaseURL || !slices.Contains(config.Capabilities, strings.TrimSuffix(model.Capability, ".generate")) || route.Purchase.Request <= 0 || route.Purchase.Input != 0 || route.Purchase.CacheRead != 0 || route.Purchase.CacheWrite != 0 || route.Purchase.Output != 0 {
-				return domain.ErrInvalid
-			}
-			if config.AdapterKey == "volcengine_ark" && strings.HasPrefix(route.UpstreamModel, "doubao-seedance-2-5-") && slices.Contains(model.Modes, "image2video") {
-				for _, name := range []string{"ratio", "aspect_ratio"} {
-					if parameter, ok := model.Parameters[name]; ok {
-						if len(parameter.Enum) == 0 {
+		if err := validateRoute(model, route, concurrency, rpm); err != nil {
+			return err
+		}
+		return insertRoute(tx, route, ciphertext, keyID, concurrency, rpm, true)
+	})
+}
+
+func validateRoute(model domain.Model, route domain.Route, concurrency, rpm int) error {
+	if model.Protocol != route.Protocol || route.KeyID != "" || (route.Protocol != "media" && len(route.DriverConfig) != 0) {
+		return domain.ErrInvalid
+	}
+	u, err := url.Parse(route.BaseURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(route.BaseURL, "\r\n\\") || route.ID == uuid.Nil || route.ModelID == uuid.Nil || route.Supplier == uuid.Nil || route.Credential == uuid.Nil || route.Group == "" || len(route.Group) > 160 || route.UpstreamModel == "" || !domain.Protocol(route.Protocol) || route.Purchase.Validate() != nil || route.Priority < 0 || concurrency < 1 || concurrency > 1000 || rpm < 1 {
+		return domain.ErrInvalid
+	}
+	if route.Protocol != "local" && route.Purchase.ExplicitFree {
+		return domain.ErrInvalid
+	}
+	if route.Protocol == "media" {
+		var config catalog.ProviderConfig
+		if decodeRouteDriver(route.DriverConfig, &config) != nil || config.Validate() != nil || config.BaseURL != route.BaseURL || !slices.Contains(config.Capabilities, strings.TrimSuffix(model.Capability, ".generate")) || route.Purchase.Request <= 0 || route.Purchase.Input != 0 || route.Purchase.CacheRead != 0 || route.Purchase.CacheWrite != 0 || route.Purchase.Output != 0 {
+			return domain.ErrInvalid
+		}
+		if config.AdapterKey == "volcengine_ark" && strings.HasPrefix(route.UpstreamModel, "doubao-seedance-2-5-") && slices.Contains(model.Modes, "image2video") {
+			for _, name := range []string{"ratio", "aspect_ratio"} {
+				if parameter, ok := model.Parameters[name]; ok {
+					if len(parameter.Enum) == 0 {
+						return domain.ErrInvalid
+					}
+					for _, value := range parameter.Enum {
+						var ratio string
+						if json.Unmarshal(value, &ratio) != nil || ratio != "adaptive" {
 							return domain.ErrInvalid
 						}
-						for _, value := range parameter.Enum {
-							var ratio string
-							if json.Unmarshal(value, &ratio) != nil || ratio != "adaptive" {
-								return domain.ErrInvalid
-							}
-						}
-						if len(parameter.Default) > 0 {
-							var ratio string
-							if json.Unmarshal(parameter.Default, &ratio) != nil || ratio != "adaptive" {
-								return domain.ErrInvalid
-							}
+					}
+					if len(parameter.Default) > 0 {
+						var ratio string
+						if json.Unmarshal(parameter.Default, &ratio) != nil || ratio != "adaptive" {
+							return domain.ErrInvalid
 						}
 					}
 				}
 			}
-			for name := range model.Parameters {
-				if !slices.Contains(config.ParameterFields(model.Capability), name) {
-					return domain.ErrInvalid
-				}
-			}
 		}
-		if err := tx.Exec("INSERT INTO ai.quota(name,concurrency,requests_per_minute) VALUES(?,?,?) ON CONFLICT DO NOTHING", route.Group, concurrency, rpm).Error; err != nil {
-			return err
-		}
-		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", "ai-credential/"+route.Credential.String()).Error; err != nil {
-			return err
-		}
-		var other int64
-		if err := tx.Raw("SELECT count(*) FROM ai.route WHERE credential_id=? AND quota_group<>?", route.Credential, route.Group).Scan(&other).Error; err != nil {
-			return err
-		}
-		if other > 0 {
-			return domain.ErrConflict
-		}
-		var count int
-		r = tx.Raw("SELECT 1 FROM ai.quota WHERE name=? AND concurrency=? AND requests_per_minute=? FOR UPDATE", route.Group, concurrency, rpm).Scan(&count)
-		if r.Error != nil {
-			return r.Error
-		}
-		if r.RowsAffected != 1 {
-			return domain.ErrConflict
-		}
-		if len(ciphertext) == 0 {
-			var prior struct {
-				Ciphertext []byte
-				KeyID      string
-			}
-			if err := tx.Raw("SELECT ciphertext,key_id FROM ai.credential WHERE id=? AND supplier_id=?", route.Credential, route.Supplier).Scan(&prior).Error; err != nil {
-				return err
-			}
-			ciphertext = prior.Ciphertext
-			keyID = prior.KeyID
-			if len(ciphertext) == 0 {
+		for name := range model.Parameters {
+			if !slices.Contains(config.ParameterFields(model.Capability), name) {
 				return domain.ErrInvalid
 			}
 		}
-		if err := tx.Exec("INSERT INTO ai.credential(id,supplier_id,key_id,ciphertext,state) VALUES(?,?,?,?,'active') ON CONFLICT DO NOTHING", route.Credential, route.Supplier, keyID, ciphertext).Error; err != nil {
-			return err
-		}
-		var existing struct {
-			SupplierID uuid.UUID
-			KeyID      string
+	}
+	return nil
+}
+
+func decodeRouteDriver(raw json.RawMessage, out *catalog.ProviderConfig) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(out)
+}
+
+func insertRoute(tx *gorm.DB, route domain.Route, ciphertext []byte, keyID string, concurrency, rpm int, enabled bool) error {
+	if err := tx.Exec("INSERT INTO ai.quota(name,concurrency,requests_per_minute) VALUES(?,?,?) ON CONFLICT DO NOTHING", route.Group, concurrency, rpm).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", "ai-credential/"+route.Credential.String()).Error; err != nil {
+		return err
+	}
+	var other int64
+	if err := tx.Raw("SELECT count(*) FROM ai.route WHERE credential_id=? AND quota_group<>?", route.Credential, route.Group).Scan(&other).Error; err != nil {
+		return err
+	}
+	if other > 0 {
+		return domain.ErrConflict
+	}
+	var count int
+	r := tx.Raw("SELECT 1 FROM ai.quota WHERE name=? AND concurrency=? AND requests_per_minute=? FOR UPDATE", route.Group, concurrency, rpm).Scan(&count)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected != 1 {
+		return domain.ErrConflict
+	}
+	if len(ciphertext) == 0 {
+		var prior struct {
 			Ciphertext []byte
+			KeyID      string
 		}
-		if err := tx.Raw("SELECT supplier_id,key_id,ciphertext FROM ai.credential WHERE id=? FOR SHARE", route.Credential).Scan(&existing).Error; err != nil {
+		if err := tx.Raw("SELECT ciphertext,key_id FROM ai.credential WHERE id=? AND supplier_id=?", route.Credential, route.Supplier).Scan(&prior).Error; err != nil {
 			return err
 		}
-		if existing.SupplierID != route.Supplier || existing.KeyID != keyID || !bytes.Equal(existing.Ciphertext, ciphertext) {
-			return domain.ErrConflict
+		ciphertext = prior.Ciphertext
+		keyID = prior.KeyID
+		if len(ciphertext) == 0 {
+			return domain.ErrInvalid
 		}
+	}
+	if err := tx.Exec("INSERT INTO ai.credential(id,supplier_id,key_id,ciphertext,state) VALUES(?,?,?,?,'active') ON CONFLICT DO NOTHING", route.Credential, route.Supplier, keyID, ciphertext).Error; err != nil {
+		return err
+	}
+	var existing struct {
+		SupplierID uuid.UUID
+		KeyID      string
+		Ciphertext []byte
+	}
+	if err := tx.Raw("SELECT supplier_id,key_id,ciphertext FROM ai.credential WHERE id=? FOR SHARE", route.Credential).Scan(&existing).Error; err != nil {
+		return err
+	}
+	if existing.SupplierID != route.Supplier || existing.KeyID != keyID || !bytes.Equal(existing.Ciphertext, ciphertext) {
+		return domain.ErrConflict
+	}
+	if enabled {
 		if err := tx.Exec("UPDATE ai.route SET enabled=false WHERE model_id=? AND credential_id=? AND enabled", route.ModelID, route.Credential).Error; err != nil {
 			return err
 		}
-		r = tx.Exec("INSERT INTO ai.route(id,model_id,credential_id,quota_group,priority,document,enabled) VALUES(?,?,?,?,?,?::jsonb,true) ON CONFLICT DO NOTHING", route.ID, route.ModelID, route.Credential, route.Group, route.Priority, string(raw))
-		if r.Error != nil {
-			return r.Error
-		}
-		if r.RowsAffected != 1 {
-			return domain.ErrConflict
-		}
-		return nil
-	})
+	}
+	r = tx.Exec("INSERT INTO ai.route(id,model_id,credential_id,quota_group,priority,document,enabled) VALUES(?,?,?,?,?,?::jsonb,?) ON CONFLICT DO NOTHING", route.ID, route.ModelID, route.Credential, route.Group, route.Priority, string(mustJSON(route)), enabled)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected != 1 {
+		return domain.ErrConflict
+	}
+	return nil
 }
 
 // CredentialState stops new dispatches immediately and preserves original identity.

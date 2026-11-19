@@ -8,8 +8,8 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GatewayAdmin } from "@/components/gateway/gateway-admin";
 import {
-  publishModel,
-  publishRoute,
+  prepareModel,
+  prepareRoute,
   fundCredits,
   loadGatewayConfiguration,
   reconcileGateway,
@@ -26,6 +26,21 @@ vi.mock("@/components/auth/session", () => ({
 const supplier = "11111111-1111-4111-8111-111111111111";
 const credential = "22222222-2222-4222-8222-222222222222";
 const modelID = "33333333-3333-4333-8333-333333333333";
+const verificationID = "44444444-4444-4444-8444-444444444444";
+const review = {
+  id: verificationID,
+  model_id: modelID,
+  state: "prepared",
+  upstream_model: "supplier-sku",
+  scope_id: supplier,
+  project_id: credential,
+  plan: {
+    credits: 2,
+    purchase_micros: 500,
+    probes: [{ name: "非流式", input: { model: "text/default" } }],
+  },
+  progress: [],
+};
 const price = {
   input: 1000000,
   cache_read: 0,
@@ -88,7 +103,9 @@ beforeEach(() => {
           quotas: [],
           unknown: [],
         }
-      : undefined,
+      : path.endsWith("/routes") || path.endsWith(verificationID)
+        ? review
+        : undefined,
   );
 });
 afterEach(cleanup);
@@ -101,8 +118,8 @@ it("does not request gateway configuration for a non-admin account", () => {
 });
 
 it("publishes immutable sale versions only through the new gateway, preserving decimal strings", async () => {
-  await publishModel(model);
-  await publishModel(model);
+  await prepareModel(model);
+  await prepareModel(model);
   const first = send.mock.calls[0];
   const second = send.mock.calls[1];
   expect(first[0]).toBe("/api/ai/admin/models");
@@ -110,13 +127,13 @@ it("publishes immutable sale versions only through the new gateway, preserving d
   expect(first[1].data.id).not.toBe(modelID);
   expect(second[1].data.id).not.toBe(first[1].data.id);
   await expect(
-    publishModel({ ...model, max_output: 1048577 }),
+    prepareModel({ ...model, max_output: 1048577 }),
   ).rejects.toThrow();
   await expect(
-    publishModel({ ...model, price: { ...price, discount: "1.1" } }),
+    prepareModel({ ...model, price: { ...price, discount: "1.1" } }),
   ).rejects.toThrow();
   await expect(
-    publishModel({ ...model, price: { ...price, input: 0, output: 0 } }),
+    prepareModel({ ...model, price: { ...price, input: 0, output: 0 } }),
   ).rejects.toThrow();
 });
 
@@ -132,13 +149,16 @@ it("keeps supplier procurement independent from sale and refuses invalid amounts
     purchase: { ...price, input: 200000, output: 500000 },
     priority: 0,
   };
-  await publishRoute(route, "secret-once", 3, 60);
+  await prepareRoute(route, { scope: supplier, concurrency: 3, rpm: 60 });
   expect(send.mock.calls[0][0]).toBe("/api/ai/admin/routes");
   expect(send.mock.calls[0][1].data.route.purchase.input).toBe(200000);
   expect(send.mock.calls[0][1].data.route).not.toHaveProperty("price");
-  expect(send.mock.calls[0][1].data.key).toBe("secret-once");
+  expect(send.mock.calls[0][1].data).not.toHaveProperty("key");
   await expect(
-    publishRoute({ ...route, base_url: "http://localhost:1122" }, "x", 1, 1),
+    prepareRoute(
+      { ...route, base_url: "http://localhost:1122" },
+      { scope: supplier, concurrency: 1, rpm: 1 },
+    ),
   ).rejects.toThrow();
   await expect(
     fundCredits(supplier, "invoice-1", 1000000001),
@@ -147,38 +167,52 @@ it("keeps supplier procurement independent from sale and refuses invalid amounts
   expect(send.mock.lastCall?.[0]).toBe("/api/ai/admin/credits");
 });
 
-it("loads new configuration, keeps prices separate, and clears write-only secret even on failure", async () => {
+it("saves the keyless procurement plan before showing API Key and budget confirmation", async () => {
   render(<GatewayAdmin />);
   await screen.findByText("text/default");
   expect(send.mock.calls[0][0]).toBe("/api/ai/admin/configuration");
   expect(screen.queryByText("must-not-render")).toBeNull();
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商路由" }), {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "采购路由" }), {
     button: 0,
     ctrlKey: false,
   });
-  fireEvent.change(screen.getByLabelText("供应商 ID"), {
-    target: { value: supplier },
-  });
-  fireEvent.change(screen.getByLabelText("凭据 ID"), {
-    target: { value: credential },
-  });
-  fireEvent.change(screen.getByLabelText("共享配额组"), {
-    target: { value: "account-a" },
-  });
-  fireEvent.change(screen.getByLabelText("供应商地址"), {
-    target: { value: "https://api.example.com/v1" },
-  });
-  fireEvent.change(screen.getByLabelText("供应商模型号"), {
-    target: { value: "supplier-sku" },
-  });
-  const secret = screen.getByLabelText<HTMLInputElement>("供应商密钥");
+  expect(screen.queryByLabelText("API Key")).toBeNull();
+  for (const [label, value] of [
+    ["供应商 ID", supplier],
+    ["验证付款空间 ID", supplier],
+    ["共享配额组", "account-a"],
+    ["供应商地址", "https://api.example.com/v1"],
+    ["供应商模型号", "supplier-sku"],
+    ["采购输入价", "200000"],
+  ])
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  fireEvent.click(screen.getByRole("button", { name: "保存采购价与验证计划" }));
+  const secret = await screen.findByLabelText<HTMLInputElement>("API Key");
+  expect(screen.getByText("2 积分 · 采购 500 微人民币")).toBeTruthy();
+  expect(
+    send.mock.calls.find(([path]) => path.endsWith("/routes"))?.[1].data,
+  ).not.toHaveProperty("key");
   fireEvent.change(secret, { target: { value: "secret-once" } });
-  fireEvent.change(screen.getByLabelText("采购输入价"), {
-    target: { value: "200000" },
+  const verify = screen.getByRole("button", { name: "确认预算并验证" });
+  fireEvent.click(verify);
+  expect(send.mock.calls.some(([path]) => path.endsWith("/verify"))).toBe(
+    false,
+  );
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "确认以上测试和费用上限" }),
+  );
+  send.mockImplementation(async (path: string) => {
+    if (path.endsWith("/verify")) throw new Error("cannot-save");
+    return review;
   });
-  send.mockRejectedValueOnce(new Error("cannot-save"));
-  fireEvent.click(screen.getByRole("button", { name: "发布供应商路由" }));
+  fireEvent.click(verify);
   await waitFor(() => expect(secret.value).toBe(""));
+  expect(send).toHaveBeenCalledWith(
+    `/api/ai/admin/onboarding/${verificationID}/verify`,
+    expect.objectContaining({
+      data: { key: "secret-once", credits: 2, purchase_micros: 500 },
+    }),
+  );
   expect(localStorage.length).toBe(0);
   expect(sessionStorage.length).toBe(0);
   expect(screen.queryByText("secret-once")).toBeNull();
@@ -195,6 +229,7 @@ it("normalizes empty configuration and discards any credential read-back fields"
   expect(await loadGatewayConfiguration()).toEqual({
     models: [],
     routes: [],
+    onboarding: [],
     credentials: [],
     quotas: [],
     unknown: [],
@@ -250,7 +285,7 @@ it("rejects contradictory supplier evidence and publishes media only with fixed 
     }),
   ).rejects.toThrow();
   await expect(
-    publishModel({
+    prepareModel({
       ...model,
       protocol: "media",
       capability: "image.generate",
@@ -260,7 +295,7 @@ it("rejects contradictory supplier evidence and publishes media only with fixed 
     }),
   ).resolves.toBeUndefined();
   await expect(
-    publishModel({
+    prepareModel({
       ...model,
       protocol: "media",
       capability: "image.generate",
@@ -270,7 +305,7 @@ it("rejects contradictory supplier evidence and publishes media only with fixed 
   ).rejects.toThrow();
 });
 
-it("publishes a complete supported media driver from the admin form, keeping adapter_key and dedicated secret separate", async () => {
+it("prepares a supported media driver with an explicit probe and no key", async () => {
   send.mockResolvedValueOnce({
     models: [
       {
@@ -293,33 +328,33 @@ it("publishes a complete supported media driver from the admin form, keeping ada
   });
   render(<GatewayAdmin />);
   await screen.findByText("image/default");
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商路由" }), {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "采购路由" }), {
     button: 0,
     ctrlKey: false,
   });
   for (const [label, value] of [
     ["供应商 ID", supplier],
-    ["凭据 ID", credential],
+    ["验证付款空间 ID", supplier],
+    ["验证项目 ID", credential],
     ["共享配额组", mediaRoute.group],
     ["供应商地址", mediaDriver.base_url],
     ["供应商模型号", mediaRoute.upstream_model],
-    ["供应商密钥", "synthetic-dedicated-secret"],
     ["采购按次价", "1000"],
   ]) {
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
-  fireEvent.click(screen.getByRole("button", { name: "媒体驱动高级配置" }));
   fireEvent.change(screen.getByLabelText("媒体驱动配置 JSON"), {
     target: { value: JSON.stringify(mediaDriver) },
   });
-  fireEvent.click(screen.getByRole("button", { name: "发布供应商路由" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存采购价与验证计划" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "/api/ai/admin/routes",
       expect.objectContaining({
         method: "POST",
         data: expect.objectContaining({
-          key: "synthetic-dedicated-secret",
+          project_id: credential,
+          media_tests: [expect.objectContaining({ mode: "text2image" })],
           route: expect.objectContaining({
             protocol: "media",
             driver_config: mediaDriver,
@@ -328,7 +363,9 @@ it("publishes a complete supported media driver from the admin form, keeping ada
       }),
     ),
   );
-  expect(screen.getByLabelText<HTMLInputElement>("供应商密钥").value).toBe("");
+  expect(
+    send.mock.calls.find(([path]) => path.endsWith("/routes"))?.[1].data,
+  ).not.toHaveProperty("key");
 });
 
 it.each([
@@ -343,14 +380,12 @@ it.each([
   "rejects secret-bearing media configuration field %s before sending",
   async (field) => {
     await expect(
-      publishRoute(
+      prepareRoute(
         {
           ...mediaRoute,
           driver_config: { ...mediaDriver, [field]: "synthetic-secret" },
         },
-        "",
-        1,
-        60,
+        { scope: supplier, concurrency: 1, rpm: 60 },
       ),
     ).rejects.toThrow();
     expect(send).not.toHaveBeenCalled();
@@ -359,7 +394,7 @@ it.each([
 
 it("rejects a secret nested inside a nominally supported driver field", async () => {
   await expect(
-    publishRoute(
+    prepareRoute(
       {
         ...mediaRoute,
         driver_config: {
@@ -367,9 +402,7 @@ it("rejects a secret nested inside a nominally supported driver field", async ()
           capabilities: [{ apiKey: "synthetic-secret" }],
         },
       },
-      "",
-      1,
-      60,
+      { scope: supplier, concurrency: 1, rpm: 60 },
     ),
   ).rejects.toThrow();
   expect(send).not.toHaveBeenCalled();

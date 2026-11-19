@@ -57,6 +57,9 @@ func (h *Handler) Register(api, session *gin.RouterGroup) {
 	session.PUT("/ai/admin/budgets", h.budget)
 	session.POST("/ai/admin/models", h.model)
 	session.POST("/ai/admin/routes", h.route)
+	session.GET("/ai/admin/onboarding/:id", h.onboarding)
+	session.POST("/ai/admin/onboarding/:id/verify", h.verifyOnboarding)
+	session.POST("/ai/admin/onboarding/:id/rollback", h.rollbackOnboarding)
 	session.POST("/ai/admin/credits", h.credits)
 	session.POST("/ai/admin/reconciliations", h.reconcile)
 	session.PUT("/ai/admin/credentials/:id", h.credential)
@@ -289,69 +292,6 @@ func (h *Handler) read(c *gin.Context) {
 		out.Receipt.PurchaseMicros = 0
 	}
 	c.JSON(200, out)
-}
-
-// model 发布模型销售合同新版本.
-// @Summary 发布模型销售合同新版本
-// @ID publishAiModel
-// @Tags ai-gateway
-// @Accept json
-// @Produce json
-// @Param input body object true "合同或协议原始 JSON；仅支持明确公布的字段"
-// @Success 201
-// @Router /api/ai/admin/models [post]
-func (h *Handler) model(c *gin.Context) {
-	var in domain.Model
-	if c.ShouldBindJSON(&in) != nil {
-		problem(c, domain.ErrInvalid)
-		return
-	}
-	if err := h.store(identityhttp.Principal(c)).PublishModel(c.Request.Context(), in); err != nil {
-		problem(c, err)
-		return
-	}
-	c.Status(201)
-}
-
-// route 发布独立采购路由新版本.
-// @Summary 发布独立采购路由新版本
-// @ID publishAiRoute
-// @Tags ai-gateway
-// @Accept json
-// @Produce json
-// @Param input body object true "合同或协议原始 JSON；仅支持明确公布的字段"
-// @Success 201
-// @Router /api/ai/admin/routes [post]
-func (h *Handler) route(c *gin.Context) {
-	var in struct {
-		Route       domain.Route `json:"route"`
-		Key         string       `json:"key"`
-		Concurrency int          `json:"concurrency"`
-		RPM         int          `json:"rpm"`
-	}
-	if c.ShouldBindJSON(&in) != nil || h.sealer == nil {
-		problem(c, domain.ErrInvalid)
-		return
-	}
-	if strings.ContainsAny(in.Key, "\r\n") {
-		problem(c, domain.ErrInvalid)
-		return
-	}
-	secret, _ := json.Marshal(map[string]string{"api_key": in.Key})
-	var sealed []byte
-	var err error
-	if in.Key != "" {
-		sealed, err = h.sealer.Seal(in.Route.Supplier, in.Route.Credential, secret)
-	}
-	clear(secret)
-	if err == nil {
-		err = h.store(identityhttp.Principal(c)).PublishRoute(c.Request.Context(), in.Route, sealed, h.sealer.KeyID(), in.Concurrency, in.RPM)
-	}
-	if err != nil {
-		problem(c, err)
-		return
-	}
-	c.Status(201)
 }
 
 // credits 按业务凭证发放积分.

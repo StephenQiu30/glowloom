@@ -9430,7 +9430,8 @@ CREATE TABLE ai.account (
 CREATE TABLE ai.model (
  id uuid PRIMARY KEY,name text NOT NULL CHECK(length(name) BETWEEN 1 AND 160),
  document jsonb NOT NULL CHECK(jsonb_typeof(document)='object'),
- enabled boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+ enabled boolean NOT NULL DEFAULT false,draft boolean NOT NULL DEFAULT false,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),CHECK(NOT (enabled AND draft))
 );
 CREATE UNIQUE INDEX ai_model_published_name ON ai.model(name,(document->>'protocol')) WHERE enabled;
 CREATE TABLE ai.quota (
@@ -9504,6 +9505,23 @@ CREATE TABLE ai.budget (
  spent bigint NOT NULL DEFAULT 0 CHECK(spent>=0),PRIMARY KEY(scope_id,id),CHECK(held+spent<=limit_credits)
 );
 GRANT SELECT,INSERT,UPDATE ON ai.budget TO glowloom_app,glowloom_execution;
+-- A reviewed model and route may be prepared without credentials or live publication.
+CREATE TABLE ai.onboarding (
+ id uuid PRIMARY KEY,
+ model_id uuid NOT NULL REFERENCES ai.model(id),
+ previous_model_id uuid REFERENCES ai.model(id),
+ replaces_route_id uuid REFERENCES ai.route(id),
+ document jsonb NOT NULL CHECK(jsonb_typeof(document)='object'),
+ state text NOT NULL DEFAULT 'prepared' CHECK(state IN ('prepared','verifying','active','failed','stale','rolled_back')),
+ actor jsonb CHECK(jsonb_typeof(actor)='object'),
+ confirmed_at timestamptz,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ CHECK((actor IS NULL)=(confirmed_at IS NULL))
+);
+CREATE INDEX ai_onboarding_model ON ai.onboarding(model_id,created_at);
+CREATE TRIGGER ai_onboarding_document BEFORE UPDATE ON ai.onboarding FOR EACH ROW EXECUTE FUNCTION ai.immutable_document();
+GRANT SELECT,INSERT,UPDATE ON ai.onboarding TO glowloom_app,glowloom_execution;
+
 CREATE TABLE ai.integration_grant (
  id uuid PRIMARY KEY,token_hash text NOT NULL UNIQUE CHECK(length(token_hash)=64),
  scope_id uuid NOT NULL REFERENCES ai.account(scope_id),actor jsonb NOT NULL,

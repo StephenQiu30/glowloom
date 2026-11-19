@@ -42,7 +42,8 @@ export type GatewayRoute = {
 };
 export type CredentialState = "active" | "draining" | "revoked";
 export type GatewayConfiguration = {
-  models: { model: GatewayModel; enabled: boolean }[];
+  models: { model: GatewayModel; enabled: boolean; draft?: boolean }[];
+  onboarding: OnboardingSummary[];
   routes: { route: GatewayRoute; enabled: boolean }[];
   credentials: { id: string; supplier_id: string; state: CredentialState }[];
   quotas: { name: string; concurrency: number; rpm: number }[];
@@ -53,6 +54,25 @@ export type GatewayConfiguration = {
     state: string;
   }[];
 };
+export type OnboardingSummary = {
+  id: string;
+  model_id: string;
+  state:
+    "prepared" | "verifying" | "active" | "failed" | "stale" | "rolled_back";
+  upstream_model: string;
+};
+
+export type OnboardingReview = OnboardingSummary & {
+  scope_id: string;
+  project_id: string;
+  plan: {
+    credits: number;
+    purchase_micros: number;
+    probes: { name: string; input: unknown }[];
+  };
+  progress: { request_id: string; state: string }[];
+};
+
 const prefix = "/api/ai/admin";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function requireValue(ok: boolean, message: string): asserts ok {
@@ -214,6 +234,7 @@ export async function loadGatewayConfiguration(
   for (const key of [
     "models",
     "routes",
+    "onboarding",
     "credentials",
     "quotas",
     "unknown",
@@ -292,30 +313,40 @@ export async function loadGatewayConfiguration(
     models: result.models ?? [],
     routes: result.routes ?? [],
     quotas: result.quotas ?? [],
+    onboarding: result.onboarding ?? [],
     unknown: result.unknown ?? [],
     credentials: (result.credentials ?? []).map(
       ({ id, supplier_id, state }) => ({ id, supplier_id, state }),
     ),
   };
 }
-export async function publishModel(
+export async function prepareModel(
   value: Omit<GatewayModel, "id"> | GatewayModel,
+  modelID = crypto.randomUUID(),
 ) {
   const model = validateModel(value);
   return request<void>(`${prefix}/models`, {
     method: "POST",
-    data: { ...model, id: crypto.randomUUID() },
+    data: { ...model, id: modelID },
   });
 }
-export async function publishRoute(
-  value: GatewayRoute,
-  key: string,
-  concurrency: number,
-  rpm: number,
+export async function prepareRoute(
+  value: Omit<GatewayRoute, "credential">,
+  options: {
+    scope: string;
+    project?: string;
+    replacement?: string;
+    mediaTests?: unknown[];
+    concurrency: number;
+    rpm: number;
+  },
 ) {
+  const { scope, project, replacement, mediaTests, concurrency, rpm } = options;
   id(value.model_id);
   id(value.supplier);
-  id(value.credential);
+  id(scope);
+  if (project) id(project);
+  if (replacement) id(replacement);
   let endpoint: URL;
   try {
     endpoint = new URL(value.base_url);
@@ -392,7 +423,6 @@ export async function publishRoute(
   const {
     model_id,
     supplier,
-    credential,
     group,
     base_url,
     upstream_model,
@@ -401,10 +431,9 @@ export async function publishRoute(
     driver_config,
   } = value;
   const route = {
-    id: crypto.randomUUID(),
+    id: value.id ?? crypto.randomUUID(),
     model_id,
     supplier,
-    credential,
     group: group.trim(),
     base_url,
     upstream_model: upstream_model.trim(),
@@ -413,9 +442,43 @@ export async function publishRoute(
     priority,
     ...(driver_config ? { driver_config } : {}),
   };
-  return request<void>(`${prefix}/routes`, {
+  return request<OnboardingReview>(`${prefix}/routes`, {
     method: "POST",
-    data: { route, ...(key ? { key } : {}), concurrency, rpm },
+    data: {
+      route,
+      scope_id: scope,
+      ...(project ? { project_id: project } : {}),
+      ...(replacement ? { replaces_route_id: replacement } : {}),
+      ...(mediaTests ? { media_tests: mediaTests } : {}),
+      concurrency,
+      rpm,
+    },
+  });
+}
+
+export function loadOnboarding(candidate: string, signal?: AbortSignal) {
+  id(candidate);
+  return request<OnboardingReview>(`${prefix}/onboarding/${candidate}`, {
+    signal,
+  });
+}
+
+export function verifyOnboarding(review: OnboardingReview, key: string) {
+  id(review.id);
+  return request<OnboardingReview>(`${prefix}/onboarding/${review.id}/verify`, {
+    method: "POST",
+    data: {
+      key,
+      credits: review.plan.credits,
+      purchase_micros: review.plan.purchase_micros,
+    },
+  });
+}
+
+export function rollbackOnboarding(candidate: string) {
+  id(candidate);
+  return request<void>(`${prefix}/onboarding/${candidate}/rollback`, {
+    method: "POST",
   });
 }
 export async function setCredentialState(

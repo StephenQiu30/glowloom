@@ -2104,6 +2104,11 @@ declare namespace API {
     requestId: string;
   };
 
+  type getAiOnboardingParams = {
+    /** 候选 ID */
+    id: string;
+  };
+
   type getBibleEntryParams = {
     /** Project UUID */
     pid: string;
@@ -3920,6 +3925,28 @@ declare namespace API {
     to: string;
   };
 
+  type OnboardingPlan = {
+    credits?: number;
+    probes?: Probe[];
+    purchase_micros?: number;
+  };
+
+  type OnboardingProgress = {
+    request_id?: string;
+    state?: string;
+  };
+
+  type OnboardingReview = {
+    id?: string;
+    model_id?: string;
+    plan?: OnboardingPlan;
+    progress?: OnboardingProgress[];
+    project_id?: string;
+    scope_id?: string;
+    state?: string;
+    upstream_model?: string;
+  };
+
   type OperationStatus =
     | "draft"
     | "quoted"
@@ -4341,6 +4368,12 @@ declare namespace API {
     currency?: string;
     price_version_id?: string | null;
     unit?: string;
+  };
+
+  type Probe = {
+    input?: Record<string, any>;
+    name?: string;
+    tool?: boolean;
   };
 
   type Problem = {
@@ -5229,6 +5262,11 @@ declare namespace API {
   type RichMark = {
     attrs?: MarkAttrs;
     type?: string;
+  };
+
+  type rollbackAiOnboardingParams = {
+    /** 候选 ID */
+    id: string;
   };
 
   type RunPage = {
@@ -6700,6 +6738,11 @@ declare namespace API {
   type Variable = {
     label?: string;
     placeholder?: string;
+  };
+
+  type verifyAiOnboardingParams = {
+    /** 候选 ID */
+    id: string;
   };
 
   type verifyEmailChangeParams = {
