@@ -12,6 +12,7 @@ import {
 /** Figma ProductHeader 620:24416; shared by ordinary product pages. */
 export function ProductHeader({
   floating = false,
+  adminLayout = false,
   assetLayout = false,
   toolbarRef,
   pageActionsRef,
@@ -29,6 +30,7 @@ export function ProductHeader({
   onFeature,
 }: {
   floating?: boolean;
+  adminLayout?: boolean;
   assetLayout?: boolean;
   toolbarRef?: Ref<HTMLDivElement>;
   pageActionsRef?: Ref<HTMLDivElement>;
@@ -65,6 +67,7 @@ export function ProductHeader({
   return (
     <div
       data-asset-layout={assetLayout || undefined}
+      data-admin-layout={adminLayout || undefined}
       data-replace-base={replaceBase || undefined}
       className={floating ? "product-global-actions" : "product-header"}
       role={floating ? "group" : "banner"}
@@ -88,7 +91,7 @@ export function ProductHeader({
           </>
         ) : null}
       </div>
-      {isMobile
+      {isMobile && !adminLayout
         ? [common, navigation, assetLayout ? null : pageActions]
         : [navigation, assetLayout ? null : pageActions, common]}
     </div>

@@ -15,7 +15,7 @@ export function ProductNavigation({
   ...header
 }: Omit<
   ComponentProps<typeof ProductHeader>,
-  "assetLayout" | "showSearch" | "showUtilities"
+  "adminLayout" | "assetLayout" | "showSearch" | "showUtilities"
 > & {
   screen: Screen;
   hideSearch?: boolean;
@@ -39,6 +39,7 @@ export function ProductNavigation({
           <ProductHeader
             {...header}
             floating={screen === "home" && !header.isMobile}
+            adminLayout={Boolean(adminSection)}
             assetLayout={screen === "assets"}
             showSearch={
               !hideSearch &&

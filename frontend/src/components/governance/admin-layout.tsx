@@ -1,12 +1,36 @@
 "use client";
 import Link from "next/link";
 import type { AdminSection } from "@/components/layout/routes";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
+
+function revealNavigationLink(navigation: HTMLElement, link: Element) {
+  const viewport = navigation.getBoundingClientRect();
+  const item = link.getBoundingClientRect();
+  const offset =
+    Math.min(item.left - viewport.left, 0) ||
+    Math.max(item.right - viewport.right, 0);
+  if (offset) navigation.scrollLeft += offset;
+}
+
 export function AdminNavigation({ active }: { active: AdminSection }) {
+  const navigationRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const navigation = navigationRef.current;
+    const current = navigation?.querySelector('[aria-current="page"]');
+    if (!navigation || !current) return;
+
+    const revealCurrent = () => revealNavigationLink(navigation, current);
+    revealCurrent();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(revealCurrent);
+    observer.observe(navigation);
+    return () => observer.disconnect();
+  }, [active]);
+
   const links = [
     { id: "users", href: "/users", label: "用户管理" },
     { id: "teams", href: "/platform/teams", label: "团队管理" },
@@ -18,14 +42,21 @@ export function AdminNavigation({ active }: { active: AdminSection }) {
     { id: "audit", href: "/audit", label: "审计日志" },
   ];
   return (
-    <nav aria-label="管理页面" className="admin-navigation">
+    <nav
+      ref={navigationRef}
+      aria-label="管理页面"
+      className="admin-navigation"
+      onFocusCapture={(event) =>
+        revealNavigationLink(event.currentTarget, event.target)
+      }
+    >
       {links.map((link) => (
         <Button
           key={link.id}
           variant={active === link.id ? "secondary" : "ghost"}
           asChild
           size="toolbar"
-          className="admin-navigation-link"
+          className="admin-navigation-link focus-visible:ring-inset"
         >
           <Link
             href={link.href}

@@ -669,28 +669,28 @@ button:not(:disabled),
 }
 @media (min-width: 768px) {
   @container product-content (width < 1120px) {
-    .product-header:has(.product-header-toolbar:not(:empty)) {
+    .product-header:not(:where([data-admin-layout])):has(
+        .product-header-toolbar:not(:empty)
+      ) {
       grid-template-columns: minmax(0, 1fr) auto;
       row-gap: 12px;
-    }
-    .product-header:has(.product-header-toolbar:not(:empty))
+
       .product-header-actions {
-      grid-column: 1 / -1;
-      grid-row: 1;
-      justify-self: end;
-    }
-    .product-header:has(.product-header-toolbar:not(:empty))
+        grid-column: 1 / -1;
+        grid-row: 1;
+        justify-self: end;
+      }
       .product-header-toolbar {
-      grid-column: 1;
-      grid-row: 2;
-    }
-    .product-header:has(.product-header-toolbar:not(:empty))
+        grid-column: 1;
+        grid-row: 2;
+      }
       .product-header-page-actions {
-      grid-column: 2;
-      grid-row: 2;
-    }
-    .product-header:has(.product-header-toolbar:not(:empty)) ~ .product-main {
-      --product-header-space: 128px;
+        grid-column: 2;
+        grid-row: 2;
+      }
+      & ~ .product-main {
+        --product-header-space: 128px;
+      }
     }
   }
 }
@@ -3631,10 +3631,34 @@ button:not(:disabled),
   min-width: 0;
   width: 100%;
   min-height: var(--toolbar-group-height);
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  padding-block: calc(var(--toolbar-group-padding) + 1px);
+  overflow: auto hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+@media (width < 768px) {
+  .product-header[data-admin-layout] {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .product-header[data-admin-layout] .product-header-location {
+    min-height: var(--toolbar-group-height);
+  }
+  .product-header[data-admin-layout] .product-header-location .product-brand {
+    display: none;
+  }
+  .product-header[data-admin-layout] .product-header-toolbar {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .product-header[data-admin-layout] .product-header-actions {
+    display: flex;
+  }
+  .product-header[data-admin-layout] [data-account-actions] {
+    margin-top: 0;
+  }
 }
 .admin-navigation-link[data-slot="button"] {
   height: var(--toolbar-control-size);
