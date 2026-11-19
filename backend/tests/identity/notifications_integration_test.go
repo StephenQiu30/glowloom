@@ -102,6 +102,60 @@ func TestNotificationValidation(t *testing.T) {
 	}
 }
 
+func TestNotificationsSidebarPublication(t *testing.T) {
+	tx, _, admin, now := governanceFixture(t)
+	_, member := verifiedTestActor(t, tx, "sidebar-reader@example.invalid", now)
+	svc := app.NewNotifications(pg.NewNotificationStore(tx), func() time.Time { return now })
+	publish := func(content app.AnnouncementContent) app.Announcement {
+		t.Helper()
+		a, err := svc.Save(t.Context(), admin, uuid.Nil, app.SaveAnnouncementInput{CommandID: uuid.New(), Content: content})
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, err = svc.Command(t.Context(), admin, a.ID, "publish", app.AnnouncementCommand{CommandID: uuid.New(), ExpectedVersion: a.Version})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+
+	promotion := notificationContent(now)
+	promotion.Placement, promotion.Audience, promotion.ActionPath = "sidebar", "public", "/ai-tools"
+	promotion.Body, promotion.Inbox = "", false
+	public := publish(promotion)
+
+	badge := promotion
+	badge.Title, badge.Placement, badge.Audience, badge.ActionPath = "New", "sidebar_badge", "authenticated", "/short-drama"
+	badge.Priority = 1
+	private := publish(badge)
+
+	for _, tc := range []struct {
+		actor *app.Principal
+		want  uuid.UUID
+	}{{nil, public.ID}, {&member, private.ID}} {
+		view, err := svc.Display(t.Context(), tc.actor)
+		if err != nil || view.Sidebar == nil || view.Sidebar.ID != tc.want || view.Banner != nil || view.Popup != nil {
+			t.Fatalf("sidebar display: %+v, %v", view, err)
+		}
+	}
+	inbox, err := svc.Inbox(t.Context(), member, app.NotificationFilter{})
+	if err != nil || len(inbox.Items) != 0 {
+		t.Fatalf("sidebar content entered inbox: %+v, %v", inbox, err)
+	}
+	if _, err := svc.Command(t.Context(), admin, private.ID, "enabled", app.AnnouncementCommand{CommandID: uuid.New(), ExpectedVersion: private.Version, Enabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := svc.Display(t.Context(), &member)
+	if err != nil || view.Sidebar == nil || view.Sidebar.ID != public.ID {
+		t.Fatalf("stopped badge did not reveal eligible promotion: %+v, %v", view, err)
+	}
+	now = promotion.EndsAt
+	view, err = svc.Display(t.Context(), nil)
+	if err != nil || view.Sidebar != nil {
+		t.Fatalf("expired sidebar promotion: %+v, %v", view, err)
+	}
+}
+
 func TestNotificationsRevisionAudienceScheduleAndFilters(t *testing.T) {
 	tx, _, admin, now := governanceFixture(t)
 	_, user := verifiedTestActor(t, tx, "notification-target@example.invalid", now)

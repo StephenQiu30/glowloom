@@ -20,10 +20,9 @@ function Entry() {
       <ContentState
         className="h-dvh"
         title="请选择一张画布"
-        description="从画布列表打开已有创作，或新建画布。"
         actions={
           <Button asChild>
-            <Link href="/projects">我的画布</Link>
+            <Link href="/assets?view=canvas">我的画布</Link>
           </Button>
         }
       />

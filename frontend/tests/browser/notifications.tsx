@@ -102,6 +102,17 @@ const displayAnnouncement = {
   duration_seconds: 5,
   action_path: "",
 };
+const sidebarDisplay = params.get("sidebar");
+const sidebarAnnouncement =
+  sidebarDisplay === "badge" || sidebarDisplay === "promotion"
+    ? {
+        ...displayAnnouncement,
+        title: sidebarDisplay === "badge" ? "New" : "探索创作工具",
+        body: "",
+        placement: sidebarDisplay === "badge" ? "sidebar_badge" : "sidebar",
+        action_path: sidebarDisplay === "badge" ? "/short-drama" : "/ai-tools",
+      }
+    : undefined;
 const saved = sessionStorage.getItem("notification-fixture-announcement");
 let announcement: API.Announcement = saved
   ? JSON.parse(saved)
@@ -158,15 +169,18 @@ installDevelopmentTransport({
         ],
       };
     if (url === "/api/projects") return { items: [], next_cursor: null };
-    if (url === "/api/announcements/public") return {};
+    if (url === "/api/announcements/public")
+      return { sidebar: sidebarAnnouncement };
     if (url === "/api/notifications/display") {
       if (params.has("displayDelay"))
         await new Promise((resolve) => setTimeout(resolve, 1500));
-      return params.get("display") === "popup"
-        ? { popup: displayAnnouncement }
-        : params.get("display") === "banner"
-          ? { banner: displayAnnouncement }
-          : {};
+      return {
+        popup:
+          params.get("display") === "popup" ? displayAnnouncement : undefined,
+        banner:
+          params.get("display") === "banner" ? displayAnnouncement : undefined,
+        sidebar: sidebarAnnouncement,
+      };
     }
     if (url === "/api/notifications/display/ack") return {};
     if (url === `/api/notifications/display/${uuid(700)}/1`)

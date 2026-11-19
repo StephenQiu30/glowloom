@@ -1,92 +1,83 @@
 .studio-workspace {
   display: flex;
+  width: 100%;
+  max-width: 1120px;
   min-width: 0;
+  margin-inline: auto;
   flex-direction: column;
-  gap: 24px;
-  padding-top: 8px;
+  gap: clamp(20px, 3cqi, 36px);
 }
+
 .studio-composer {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 16px;
-  padding: 16px;
+  padding: clamp(12px, 2cqi, 24px);
+  border: 1px solid var(--creation-border);
   border-radius: 24px;
-  background: var(--muted);
+  background:
+    radial-gradient(
+      ellipse at 100% 0%,
+      color-mix(in srgb, var(--studio-ambient) 17%, transparent),
+      transparent 72%
+    ),
+    var(--card);
 }
-.studio-composer-input {
+
+.studio-composer-input,
+.studio-references,
+.studio-parameters,
+.studio-submit {
   display: flex;
   min-width: 0;
-  gap: 16px;
-  align-items: flex-start;
+  gap: 8px;
 }
-.studio-references {
-  display: contents;
+
+.studio-parameters,
+.studio-submit {
+  align-items: center;
 }
-.studio-reference {
-  height: 96px;
-  width: 96px;
+
+.studio-parameters {
+  flex-wrap: wrap;
+  border-top: 1px solid var(--creation-border);
+  padding-top: 12px;
+}
+
+.studio-submit {
+  margin-inline-start: auto;
+}
+
+.studio-reference[data-slot="button"] {
+  min-height: 64px;
+  width: clamp(68px, 8cqi, 94px);
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   white-space: normal;
   overflow: hidden;
   overflow-wrap: anywhere;
-  background: var(--accent);
 }
-.studio-prompt {
-  min-width: 0;
-  min-height: 96px;
-  height: 96px;
+
+.studio-prompt-field {
   flex: 1;
+}
+
+textarea.studio-prompt {
+  min-height: 105px;
   resize: vertical;
-  border: 0;
-  border-radius: 12px;
-  padding: 14px;
-  background: var(--background);
+  border-color: transparent;
+  background: transparent;
   box-shadow: none;
 }
-.studio-generate {
-  width: 96px;
-  height: 96px;
-  flex-shrink: 0;
-  border-radius: 12px;
-}
-.studio-parameters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-}
-.studio-marketing-hero {
-  display: flex;
-  height: 248px;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-.studio-marketing-hero > div {
-  position: relative;
-  flex-shrink: 0;
-  overflow: hidden;
-  border-radius: 24px;
-}
-.studio-hero-side {
-  width: 29.15%;
-  height: 220px;
-}
-.studio-hero-center {
-  width: 32.86%;
-  height: 248px;
-  margin-inline: -16px;
-  z-index: 1;
-}
+
 .studio-template-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
-.studio-template-card,
-.studio-tool-card {
+
+.studio-template-card {
   height: auto;
   padding: 0;
   align-items: stretch;
@@ -100,10 +91,12 @@
   border-radius: var(--radius-panel);
   cursor: pointer;
 }
+
 .studio-template-card[aria-pressed="true"] .studio-template-cover {
   outline: 1px solid var(--ring);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }
+
 .studio-template-cover {
   position: relative;
   width: 100%;
@@ -112,68 +105,29 @@
   border-radius: var(--radius-panel);
   background: var(--muted);
 }
-.studio-tool-viewport {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-}
-.studio-tool-card {
-  width: 166px;
-  flex-shrink: 0;
-}
-.studio-tool-cover {
-  position: relative;
-  display: block;
-  width: 166px;
-  height: 124px;
-  overflow: hidden;
-  border-radius: var(--radius-panel);
-}
+
 .studio-template-categories {
   max-width: 100%;
   justify-content: flex-start;
   overflow-x: auto;
 }
+
 @media (max-width: 767px) {
   .studio-composer-input {
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-direction: column;
   }
-  .studio-references {
-    display: flex;
-    flex-basis: 100%;
-    gap: 8px;
-  }
-  .studio-reference {
-    width: 72px;
-    height: 72px;
-    padding: 4px;
-  }
-  .studio-prompt {
-    order: 1;
-    flex-basis: calc(100% - 80px);
-  }
-  .studio-generate {
-    order: 2;
-    width: 72px;
-    height: 96px;
-  }
-  .studio-parameters {
-    gap: 4px;
-  }
-  .studio-marketing-hero {
-    height: 180px;
-  }
-  .studio-hero-center {
-    width: 54%;
-    height: 180px;
-  }
-  .studio-hero-side {
-    width: 38%;
-    height: 150px;
-  }
+
   .studio-template-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .studio-submit {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .studio-parameters :is([data-slot="button"], [data-slot="select-trigger"]) {
+    min-height: 44px;
   }
 }

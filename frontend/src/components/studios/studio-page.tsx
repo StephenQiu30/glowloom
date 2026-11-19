@@ -3,11 +3,13 @@
 import { useId, useState } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { AtSign, CircleHelp, Plus, Upload, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, AtSign, Plus, Upload, X } from "lucide-react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { ContentState } from "@/components/layout/content-state";
 import {
   Select,
   SelectContent,
@@ -23,11 +25,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
@@ -40,44 +37,36 @@ const SourcePicker = dynamic(() =>
   ),
 );
 const motionStyles = [
-  { title: "卡片动效产品秀", image: "motion-card" },
-  { title: "纸上关键词", image: "motion-paper" },
-  { title: "五色孔版印刷", image: "motion-print" },
+  { title: "产品定格", image: "cobalt-headphones" },
+  { title: "幻境光效", image: "moonlight-whale" },
+  { title: "山野漫游", image: "alpine-road" },
 ];
 const marketingTemplates = [
-  { title: "娃娃机好物秀", image: "marketing-left", category: "商品展示" },
-  { title: "香水特写广告", image: "marketing-center", category: "创意广告" },
-  { title: "鲜果环绕大片", image: "marketing-right", category: "社媒营销" },
+  { title: "耳机产品展示", image: "cobalt-headphones", category: "商品展示" },
+  { title: "香氛广告", image: "amber-perfume", category: "创意广告" },
+  { title: "柑橘静物", image: "citrus-still-life", category: "社媒营销" },
 ];
 const marketingTools = [
-  ["视频复刻", "创意复刻，广告出彩"],
-  ["商品替换", "焕新商品形象"],
-  ["商品摄影", "无需棚拍，商品出片"],
-  ["商品广告", "商品卖点，多样呈现"],
-  ["图片多尺寸", "一张好图，多处出彩"],
-  ["视频改画幅", "重构画面，智能补全"],
-  ["图片翻译", "一图触达多语市场"],
-  ["广告海报复刻", "复用版式，快速出新"],
-  ["妆造焕新", "百变妆造，随心焕新"],
-  ["图片复刻", "心仪创意，为你所用"],
+  "视频复刻",
+  "商品替换",
+  "商品摄影",
+  "商品广告",
+  "图片多尺寸",
+  "视频改画幅",
+  "图片翻译",
+  "广告海报复刻",
+  "妆造焕新",
+  "图片复刻",
 ];
-function Cover({
-  image,
-  className = "",
-  priority = false,
-}: {
-  image: string;
-  className?: string;
-  priority?: boolean;
-}) {
+function Cover({ image }: { image: string }) {
   return (
     <Image
-      src={`/design/reference/studios/${image}.png`}
+      src={`/design/reference/${image}.png`}
       alt=""
       fill
-      sizes="(max-width: 767px) 90vw, 370px"
-      className={`object-cover ${className}`}
-      priority={priority}
+      loading="eager"
+      sizes="(max-width: 767px) 46vw, 370px"
+      className="object-cover"
     />
   );
 }
@@ -166,34 +155,21 @@ function StudioWorkspace({
       hideSearch
     >
       <div className="studio-workspace">
-        {marketing && (
-          <div
-            className="studio-marketing-hero"
-            role="group"
-            aria-label="营销创意示例"
-          >
-            {marketingTemplates.map((item, index) => (
-              <div
-                key={item.image}
-                className={
-                  index === 1 ? "studio-hero-center" : "studio-hero-side"
-                }
-              >
-                <Cover image={item.image} priority />
-              </div>
-            ))}
+        <header className="workspace-page-header studio-heading">
+          <div className="workspace-page-heading">
+            <h1>{marketing ? "营销工作室" : "动效工作室"}</h1>
           </div>
-        )}
-        <h1 className="workspace-hero-title">
-          {marketing
-            ? "在 营销工作室 轻松做爆款"
-            : "用 Motion Studio 让创意动起来"}
-        </h1>
-        {!marketing && (
-          <p className="workspace-supporting-text text-center text-muted-foreground">
-            选个风格，给点想法，让视频有声有色
-          </p>
-        )}
+          <Button variant="secondary" asChild>
+            <Link
+              href={
+                marketing ? "/assets?view=marketing" : "/assets?view=motion"
+              }
+            >
+              查看资产
+              <ArrowUpRight aria-hidden="true" data-icon="inline-end" />
+            </Link>
+          </Button>
+        </header>
         <form
           className="studio-composer"
           onSubmit={(event) => event.preventDefault()}
@@ -222,28 +198,20 @@ function StudioWorkspace({
                   </Button>
                 ))}
             </div>
-            <Label htmlFor={promptID} className="sr-only">
-              提示词
-            </Label>
-            <Textarea
-              id={promptID}
-              className="studio-prompt"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder={
-                marketing
-                  ? "请描述你想创作的营销视频"
-                  : "想讲知识、秀商品、玩创意？选个风格，给点想法或素材，让视频有声有色～"
-              }
-            />
-            <Button
-              type="submit"
-              className="studio-generate"
-              disabled
-              aria-describedby={`${promptID}-availability`}
-            >
-              生成
-            </Button>
+            <Field className="studio-prompt-field">
+              <FieldLabel htmlFor={promptID} className="sr-only">
+                提示词
+              </FieldLabel>
+              <Textarea
+                id={promptID}
+                className="studio-prompt"
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder={
+                  marketing ? "描述想创作的营销视频" : "描述你想制作的动效"
+                }
+              />
+            </Field>
           </div>
           <div className="studio-parameters">
             {marketing ? (
@@ -256,9 +224,6 @@ function StudioWorkspace({
                 >
                   <Plus />
                   参考内容
-                </Button>
-                <Button type="button" variant="ghost" disabled>
-                  暂无可用模型
                 </Button>
               </>
             ) : (
@@ -297,22 +262,23 @@ function StudioWorkspace({
                 >
                   <AtSign />
                 </Button>
-                <span className="ml-auto text-sm">标准</span>
               </>
             )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="生成能力说明"
-                >
-                  <CircleHelp />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>工作室生成暂未开放。</TooltipContent>
-            </Tooltip>
+            <div className="studio-submit">
+              <span
+                id={`${promptID}-availability`}
+                className="text-sm text-muted-foreground"
+              >
+                生成暂未开放
+              </span>
+              <Button
+                type="submit"
+                disabled
+                aria-describedby={`${promptID}-availability`}
+              >
+                生成
+              </Button>
+            </div>
           </div>
           {Object.entries(references).length > 0 && (
             <div
@@ -345,37 +311,17 @@ function StudioWorkspace({
               ))}
             </div>
           )}
-          <p id={`${promptID}-availability`} className="sr-only" role="status">
-            {marketing ? "营销" : "动效"}
-            生成暂未开放。
-          </p>
         </form>
-        {marketing ? (
-          <>
-            <div
-              className="studio-tool-viewport"
-              role="group"
-              aria-label="营销工具"
-            >
-              {marketingTools.map(([title, description], index) => (
-                <Button
-                  variant="asset-card"
-                  size="asset-card"
-                  key={title}
-                  type="button"
-                  className="studio-tool-card"
-                  onClick={() => setTool(title)}
-                >
-                  <span className="studio-tool-cover">
-                    <Cover image={marketingTemplates[index % 3].image} />
-                  </span>
-                  <span className="resource-card-title">{title}</span>
-                  <span className="resource-card-caption text-muted-foreground">
-                    {description}
-                  </span>
-                </Button>
-              ))}
-            </div>
+        <section
+          aria-labelledby={`${promptID}-templates`}
+          className="flex min-w-0 flex-col gap-3"
+        >
+          <div className="workspace-section-heading">
+            <h2 id={`${promptID}-templates`}>
+              {marketing ? "创作模板" : "参考风格"}
+            </h2>
+          </div>
+          {marketing && (
             <ToggleGroup
               variant="workspace"
               size="toolbar"
@@ -396,42 +342,57 @@ function StudioWorkspace({
                 ),
               )}
             </ToggleGroup>
-          </>
-        ) : (
-          <h2 className="text-base font-medium">选择一个风格开始创作</h2>
-        )}
-        <div className="studio-template-grid">
-          {styles
-            .filter(
-              (item) =>
-                !marketing ||
-                category === "全部" ||
-                ("category" in item && item.category === category),
-            )
-            .map((item) => (
-              <Button
-                variant="asset-card"
-                size="asset-card"
-                key={item.title}
-                type="button"
-                className="studio-template-card"
-                onClick={() => {
-                  setStyle(item.title);
-                  document.getElementById(promptID)?.focus();
-                }}
-                aria-pressed={style === item.title}
-              >
-                <span className="studio-template-cover">
-                  <Cover image={item.image} />
-                </span>
-                <span className="resource-card-title">{item.title}</span>
-              </Button>
-            ))}
-        </div>
-        {marketing && category === "营销海报" && (
-          <p className="py-12 text-center text-sm text-muted-foreground">
-            暂无相关模板
-          </p>
+          )}
+          <div className="studio-template-grid">
+            {styles
+              .filter(
+                (item) =>
+                  !marketing ||
+                  category === "全部" ||
+                  ("category" in item && item.category === category),
+              )
+              .map((item) => (
+                <Button
+                  variant="asset-card"
+                  size="asset-card"
+                  key={item.title}
+                  type="button"
+                  className="studio-template-card"
+                  onClick={() => {
+                    setStyle(item.title);
+                    document.getElementById(promptID)?.focus();
+                  }}
+                  aria-pressed={style === item.title}
+                >
+                  <span className="studio-template-cover">
+                    <Cover image={item.image} />
+                  </span>
+                  <span className="resource-card-title">{item.title}</span>
+                </Button>
+              ))}
+          </div>
+          {marketing && category === "营销海报" && (
+            <ContentState title="暂无营销海报模板" className="min-h-36" />
+          )}
+        </section>
+        {marketing && (
+          <section aria-labelledby={`${promptID}-tools`}>
+            <div className="workspace-section-heading">
+              <h2 id={`${promptID}-tools`}>营销工具</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {marketingTools.map((title) => (
+                <Button
+                  key={title}
+                  type="button"
+                  variant="outline"
+                  onClick={() => setTool(title)}
+                >
+                  {title}
+                </Button>
+              ))}
+            </div>
+          </section>
         )}
       </div>
       <Dialog open={styleOpen} onOpenChange={setStyleOpen}>

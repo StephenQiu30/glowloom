@@ -11,7 +11,7 @@ import {
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronDown, ListChecks, PanelsTopLeft } from "lucide-react";
+import { ChevronDown, PanelsTopLeft } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
@@ -243,8 +243,12 @@ function WorkspaceScope({
     }));
   };
   return (
-    <PageLayout screen="assets" search={pageSearch}>
-      <h1 className="sr-only">资产和主体</h1>
+    <PageLayout screen="assets" search={pageSearch} hideSearch={!authenticated}>
+      <header className="workspace-page-header mb-5">
+        <div className="workspace-page-heading">
+          <h1>资产和主体</h1>
+        </div>
+      </header>
       <Tabs
         value={view}
         onValueChange={(value) => changeView(value as AssetSource)}
@@ -274,34 +278,18 @@ function WorkspaceScope({
             </TabsList>
           </div>
         </PageToolbar>
-        {view !== "subjects" && (
+        {view !== "subjects" && view !== "motion" && view !== "marketing" && (
           <PageToolbar inHeader slot="actions">
             <div
               className="flex min-w-0 flex-wrap items-center gap-1"
               data-asset-page-actions
             >
-              {(view === "motion" || view === "marketing") && (
-                <Button
-                  variant="ghost"
-                  size="toolbar-icon"
-                  aria-label="批量操作"
-                  disabled
-                  title="暂无可操作资产"
-                >
-                  <ListChecks />
-                </Button>
-              )}
-              {view !== "motion" && view !== "marketing" && (
-                <div ref={setToolbarTarget} className="min-w-0" />
-              )}
+              <div ref={setToolbarTarget} className="min-w-0" />
             </div>
           </PageToolbar>
         )}
-        {view !== "subjects" && (
-          <div
-            aria-label="资产筛选"
-            className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
-          >
+        {authenticated && view !== "subjects" && (
+          <div aria-label="资产筛选" className="asset-filter-bar">
             {(view === "history" ||
               view === "motion" ||
               view === "marketing") && (

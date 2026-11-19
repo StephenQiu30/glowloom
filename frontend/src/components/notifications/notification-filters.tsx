@@ -17,11 +17,13 @@ export function NotificationSelect({
   value,
   onChange,
   options,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: readonly (readonly [string, string])[];
+  placeholder?: string;
 }) {
   const id = useId();
   return (
@@ -29,7 +31,7 @@ export function NotificationSelect({
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger id={id} className="w-full">
-          <SelectValue />
+          <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent className="max-md:[&_[data-slot=select-item]]:min-h-11">
           <SelectGroup>

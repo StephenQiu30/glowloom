@@ -76,10 +76,12 @@ export function ToolsDirectory() {
 
   return (
     <PageLayout screen="ai-tools" hideSearch fullBleed>
-      <div className="mx-auto flex w-full max-w-[86rem] flex-col gap-7 px-4 py-8 md:px-9 md:py-10">
-        <h1 className="text-2xl font-semibold tracking-tight md:text-center md:text-4xl">
-          创作所需 一应俱全
-        </h1>
+      <div className="tool-directory">
+        <header className="workspace-page-header">
+          <div className="workspace-page-heading">
+            <h1>AI 工具</h1>
+          </div>
+        </header>
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -88,8 +90,8 @@ export function ToolsDirectory() {
         <Tabs value={active} onValueChange={setActive} className="gap-6">
           <TabsList
             aria-label="分类"
-            variant="pill"
-            className="max-w-full flex-wrap gap-0 md:gap-2"
+            variant="workspace"
+            className="max-w-full flex-wrap justify-start"
           >
             {["全部", ...categories.map(({ name }) => name)].map((name) => (
               <TabsTrigger key={name} value={name} className="px-3 md:px-4">
@@ -106,30 +108,30 @@ export function ToolsDirectory() {
                     aria-label={name}
                     className="flex flex-col gap-3"
                   >
-                    <h2 className="font-medium">{name}</h2>
-                    <ul className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+                    <h2 className="text-base font-semibold">{name}</h2>
+                    <ul className="tool-directory-grid">
                       {tools.map((tool, i) => {
                         const Icon = categoryIcons[groupIndex][i];
                         const titleID = `ai-tool-${tool.id}`;
                         return (
                           <li key={tool.id} className="min-w-0">
                             <Card
-                              variant="feature"
+                              variant="flat"
                               size="sm"
-                              className="isolate"
+                              className="tool-directory-card"
                             >
                               <CardContent
                                 className={cn(
-                                  "grid aspect-video min-h-20 place-items-center p-0 text-[var(--navigation-accent)]",
+                                  "tool-directory-icon",
                                   coverSurfaces[i % coverSurfaces.length],
                                 )}
                               >
                                 <Icon
                                   aria-hidden="true"
-                                  className="size-9 stroke-[1.35] md:size-12"
+                                  className="size-5 stroke-[1.65]"
                                 />
                               </CardContent>
-                              <CardHeader className="grow py-3">
+                              <CardHeader className="min-w-0 grow p-0">
                                 <CardTitle id={titleID}>{tool.name}</CardTitle>
                                 <CardDescription className="text-xs">
                                   {tool.summary}
@@ -161,9 +163,6 @@ export function ToolsDirectory() {
                     </ul>
                   </section>
                 ) : null,
-              )}
-              {tab === "全部" && (
-                <p className="text-xs text-muted-foreground">没有更多了</p>
               )}
             </TabsContent>
           ))}

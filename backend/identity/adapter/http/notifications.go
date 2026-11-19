@@ -315,7 +315,7 @@ func (h *NotificationHandler) ack(c *gin.Context) {
 // @Param limit query int false "Default 20, maximum 100"
 // @Param cursor query string false "Condition-bound continuation"
 // @Param search query string false "Title keyword"
-// @Param placement query string false "banner, modal, inbox"
+// @Param placement query string false "banner, modal, inbox, sidebar, sidebar_badge"
 // @Param audience query string false "public, authenticated, team"
 // @Param status query string false "draft, scheduled, active, expired, disabled"
 // @Param from query string false "Inclusive effective start time"

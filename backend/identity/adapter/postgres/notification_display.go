@@ -63,7 +63,7 @@ func (s *NotificationStore) ValidateDisplay(ctx context.Context, a app.Principal
 			return err
 		}
 		now := clock()
-		if c.Placement == "inbox" || now.Before(c.StartsAt) || (!c.Endless && !now.Before(c.EndsAt)) {
+		if c.Placement == "inbox" || app.IsSidebarPlacement(c.Placement) || now.Before(c.StartsAt) || (!c.Endless && !now.Before(c.EndsAt)) {
 			return nil
 		}
 		out.Valid, err = notificationEligible(c, tx, &a)
@@ -86,13 +86,18 @@ func (s *NotificationStore) Display(ctx context.Context, a *app.Principal, clock
 		}
 		now := clock()
 		var rows []announcementRow
-		if err := tx.Raw(announcementSelect+` WHERE a.enabled AND (r.content->>'starts_at')::timestamptz<=? AND (coalesce((r.content->>'endless')::boolean,false) OR (r.content->>'ends_at')::timestamptz>?) AND r.content->>'placement' IN ('banner','modal') ORDER BY (r.content->>'priority')::int DESC,r.published_at DESC,a.id`, now, now).Scan(&rows).Error; err != nil {
+		if err := tx.Raw(announcementSelect+` WHERE a.enabled AND (r.content->>'starts_at')::timestamptz<=? AND (coalesce((r.content->>'endless')::boolean,false) OR (r.content->>'ends_at')::timestamptz>?) AND r.content->>'placement' IN ('banner','modal','sidebar','sidebar_badge') ORDER BY (r.content->>'priority')::int DESC,r.published_at DESC,a.id`, now, now).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, r := range rows {
 			var c app.AnnouncementContent
 			if err := json.Unmarshal(r.Published, &c); err != nil {
 				return err
+			}
+			if (c.Placement == "banner" && out.Banner != nil) ||
+				(c.Placement == "modal" && (out.Popup != nil || a == nil)) ||
+				(app.IsSidebarPlacement(c.Placement) && out.Sidebar != nil) {
+				continue
 			}
 			ok, err := notificationEligible(c, tx, a)
 			if err != nil {
@@ -101,10 +106,13 @@ func (s *NotificationStore) Display(ctx context.Context, a *app.Principal, clock
 			if !ok {
 				continue
 			}
-			if a == nil && c.Placement != "banner" {
+			v := &app.DisplayAnnouncement{ID: r.ID, Revision: *r.PublishedRevision, Title: c.Title, Body: c.Body, Placement: c.Placement, ActionPath: c.ActionPath, DurationSeconds: c.DurationSeconds, StartsAt: c.StartsAt, EndsAt: c.EndsAt, Endless: c.Endless, ManualClose: c.ManualClose, Frequency: c.Frequency}
+			if app.IsSidebarPlacement(c.Placement) {
+				if out.Sidebar == nil {
+					out.Sidebar = v
+				}
 				continue
 			}
-			v := &app.DisplayAnnouncement{ID: r.ID, Revision: *r.PublishedRevision, Title: c.Title, Body: c.Body, Placement: c.Placement, ActionPath: c.ActionPath, DurationSeconds: c.DurationSeconds, StartsAt: c.StartsAt, EndsAt: c.EndsAt, Endless: c.Endless, ManualClose: c.ManualClose, Frequency: c.Frequency}
 			if a != nil {
 				scope := notificationDisplayScope(c, *a, now)
 				var receipt struct{ ShownAt, DismissedAt *time.Time }
@@ -128,9 +136,6 @@ func (s *NotificationStore) Display(ctx context.Context, a *app.Principal, clock
 			}
 			if c.Placement == "modal" && out.Popup == nil {
 				out.Popup = v
-			}
-			if out.Banner != nil && out.Popup != nil {
-				break
 			}
 		}
 		return nil
@@ -158,7 +163,7 @@ func (s *NotificationStore) AckDisplay(ctx context.Context, a app.Principal, in 
 			return err
 		}
 		now := clock()
-		if now.Before(c.StartsAt) || (!c.Endless && !now.Before(c.EndsAt)) {
+		if app.IsSidebarPlacement(c.Placement) || now.Before(c.StartsAt) || (!c.Endless && !now.Before(c.EndsAt)) {
 			return app.ErrNotificationConflict
 		}
 		eligible, err := notificationEligible(c, tx, &a)

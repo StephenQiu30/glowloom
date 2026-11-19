@@ -734,9 +734,9 @@ it("asset header options stay stable under the shared login context", async () =
   expect(screen.queryByRole("contentinfo")).toBeNull();
   expect(within(header).queryByLabelText("资产筛选")).toBeNull();
   expect(screen.getByLabelText("资产筛选").closest("main")).toBeTruthy();
-  expect(
-    screen.getByRole("heading", { name: /^资产和主体$/ }).className,
-  ).toContain("sr-only");
+  const heading = screen.getByRole("heading", { name: /^资产和主体$/ });
+  expect(heading.closest("main")).toBeTruthy();
+  expect(heading.classList.contains("sr-only")).toBe(false);
   expect(
     errors.mock.calls.some((args) =>
       args.some((value) => String(value).includes("Maximum update depth")),

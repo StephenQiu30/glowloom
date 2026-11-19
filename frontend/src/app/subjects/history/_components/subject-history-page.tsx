@@ -26,9 +26,6 @@ function ProjectHistory() {
   const [kind, setKind] = useState<API.Kind>("character");
   return (
     <>
-      <p className="text-sm text-muted-foreground">
-        历史内容保留在原项目中，沿用原有详情、版本和删除恢复方式。当前空间主体可直接新建和跨项目使用。
-      </p>
       <ProjectPicker value={project} onChange={setProject} />
       <Tabs
         value={kind}

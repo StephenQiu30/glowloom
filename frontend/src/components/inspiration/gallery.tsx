@@ -3,13 +3,7 @@ import Image from "next/image";
 import { useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   InputGroup,
   InputGroupInput,
@@ -23,10 +17,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  DataPagination,
-  type PageSize,
-} from "@/components/media/data-pagination";
 const homeCategories = [
   "精选",
   "广告营销",
@@ -123,9 +113,6 @@ export function InspirationGallery({ searchQuery }: { searchQuery?: string }) {
   const [category, setCategory] = useState("精选");
   const [localQuery, setQuery] = useState("");
   const query = searchQuery ?? localQuery;
-  const [pageSize, setPageSize] = useState<PageSize>(12);
-  const [pagination, setPagination] = useState({ filter: "", page: 1 });
-  const filterKey = JSON.stringify([category, query]);
   const matches = homeWorks.filter(
     (w) =>
       (category === "精选" ||
@@ -134,15 +121,12 @@ export function InspirationGallery({ searchQuery }: { searchQuery?: string }) {
         )) &&
       w.title.includes(query.trim()),
   );
-  const pages = Math.max(1, Math.ceil(matches.length / pageSize));
-  const page = Math.min(
-    pages,
-    pagination.filter === filterKey ? pagination.page : 1,
-  );
-  const visible = matches.slice((page - 1) * pageSize, page * pageSize);
   return (
-    <section className="inspiration">
-      <h2>创作精选</h2>
+    <section className="inspiration" aria-labelledby="gallery-title">
+      <div className="workspace-section-heading">
+        <h2 id="gallery-title">创作精选</h2>
+        <span className="text-xs text-muted-foreground">AI 生成示例</span>
+      </div>
       <Tabs value={category} onValueChange={setCategory} className="gap-0">
         <div className="gallery-toolbar">
           <div className="gallery-categories">
@@ -161,7 +145,7 @@ export function InspirationGallery({ searchQuery }: { searchQuery?: string }) {
               </InputGroupAddon>
               <InputGroupInput
                 aria-label="搜索灵感"
-                placeholder="搜索灵感、作品或创作者"
+                placeholder="搜索灵感"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -169,28 +153,13 @@ export function InspirationGallery({ searchQuery }: { searchQuery?: string }) {
           )}
         </div>
         <TabsContent value={category}>
-          <h2 className="gallery-heading">
-            {category === "精选" ? "广告与视觉创意" : category}
-          </h2>
-          <ReferenceGrid items={visible} />
+          <ReferenceGrid items={matches} />
           {!matches.length && (
             <ContentState
               title="没有匹配的灵感"
               description="试试其他分类或关键词。"
             />
           )}
-          <p className="source-caption">AI 生成的创作参考</p>
-          <DataPagination
-            label="灵感分页"
-            page={page}
-            pageSize={pageSize}
-            total={matches.length}
-            onPageChange={(page) => setPagination({ filter: filterKey, page })}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setPagination({ filter: filterKey, page: 1 });
-            }}
-          />
         </TabsContent>
       </Tabs>
     </section>
@@ -211,15 +180,15 @@ function ReferenceGrid({ items }: { items: Preview[] }) {
                 <div className="work-cover">
                   <Image
                     src={`/design/reference/${w.src}`}
-                    alt={w.title}
+                    alt=""
                     fill
-                    sizes={"(max-width: 767px) 45vw, 33vw"}
+                    loading="eager"
+                    sizes="(max-width: 767px) 45vw, (max-width: 1199px) 30vw, 22vw"
                   />
                 </div>
               </CardContent>
               <CardHeader>
                 <CardTitle>{w.title}</CardTitle>
-                <CardDescription>AI 生成示例</CardDescription>
               </CardHeader>
             </Card>
           </Button>
@@ -233,16 +202,17 @@ export function ExploreReferenceExamples({
   scene,
   query,
 }: {
-  scene: string;
+  scene?: string;
   query: string;
 }) {
-  const matches = works.filter(
-    (item) => item.scene === scene && item.title.includes(query.trim()),
+  const matches = (scene ? works : homeWorks).filter(
+    (item) =>
+      (!scene || item.scene === scene) && item.title.includes(query.trim()),
   );
   return (
     <section
       className="inspiration explore-gallery"
-      aria-label="广告营销示例作品"
+      aria-label={scene ? "广告营销示例作品" : "AI 生成示例"}
     >
       <ReferenceGrid items={matches} />
       {!matches.length && (
@@ -251,7 +221,7 @@ export function ExploreReferenceExamples({
           description="试试其他关键词或场景。"
         />
       )}
-      <p className="source-caption">AI 生成的静态示例，仅供创作参考。</p>
+      <p className="source-caption">AI 生成示例</p>
     </section>
   );
 }

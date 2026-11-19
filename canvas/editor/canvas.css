@@ -235,6 +235,7 @@ html:has(.canvas-controls-layout) {
     border: 1px solid var(--border);
     border-radius: 1rem;
     background: var(--canvas-toolbar);
+    box-shadow: var(--canvas-shadow-soft);
   }
   .canvas-dock-surface > * {
     flex-shrink: 0;
@@ -249,8 +250,7 @@ html:has(.canvas-controls-layout) {
   @container canvas (min-width: 768px) {
     .canvas-controls-layout {
       padding: 10px 12px 12px;
-      font-family:
-        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      font-family: var(--font-sans), "PingFang SC", sans-serif;
     }
     .canvas-controls-layout :is(button, a[data-size]) {
       min-height: 0;
@@ -308,9 +308,9 @@ html:has(.canvas-controls-layout) {
     }
     .canvas-dock-surface {
       width: max-content;
-      gap: 2px;
-      padding: 4px 4px 8px;
-      border: 0;
+      gap: 4px;
+      padding: 4px;
+      border-color: var(--creation-border, var(--border));
     }
     .canvas-dock-surface [data-size] svg:not([class*="size-"]) {
       width: 20px;

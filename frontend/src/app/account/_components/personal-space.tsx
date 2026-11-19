@@ -65,7 +65,7 @@ export function PersonalSpace() {
             <div className="personal-profile-copy">
               <h2>{actor.display_name}</h2>
               <p>{actor.email}</p>
-              <p className="whitespace-pre-wrap">{actor.bio || "还没有简介"}</p>
+              {actor.bio && <p className="whitespace-pre-wrap">{actor.bio}</p>}
             </div>
           </div>
           <Button

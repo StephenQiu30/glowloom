@@ -63,11 +63,6 @@ export function ExploreSearchResults({
                   ? `${item.label}搜索尚未开放`
                   : "输入关键词开始搜索"
               }
-              description={
-                query.trim()
-                  ? `“${query}”的公开${item.label}搜索服务尚未接入。`
-                  : "搜索灵感、技能或短片。"
-              }
             />
           </TabsContent>
         ))}

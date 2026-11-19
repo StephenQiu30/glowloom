@@ -24,6 +24,7 @@ import {
   mergeNotificationSummary,
   requireNotificationSummary,
   requireDisplayAnnouncement,
+  isSidebarPlacement,
   type NotificationSummary,
   type DisplayAnnouncement,
 } from "./contracts";
@@ -46,6 +47,7 @@ type NotificationCenter = {
   readAll: () => Promise<void>;
   refresh: () => Promise<void>;
   view: (announcement: DisplayAnnouncement) => void;
+  sidebar?: API.DisplayAnnouncement;
 };
 const NotificationContext = createContext<NotificationCenter | null>(null);
 export const useNotificationCenter = () => useContext(NotificationContext);
@@ -135,6 +137,25 @@ function NotificationSession({
       new Date(rawBanner.ends_at).getTime() > observedAt)
       ? requireDisplayAnnouncement(rawBanner)
       : undefined;
+  const rawSidebar = display.data?.sidebar;
+  const sidebarEnd = rawSidebar?.endless
+    ? Infinity
+    : Date.parse(rawSidebar?.ends_at ?? "");
+  const sidebar =
+    !display.error &&
+    rawSidebar?.title &&
+    isSidebarPlacement(rawSidebar.placement ?? "") &&
+    sidebarEnd > observedAt
+      ? rawSidebar
+      : undefined;
+  useEffect(() => {
+    if (!Number.isFinite(sidebarEnd) || sidebarEnd <= observedAt) return;
+    const timer = setTimeout(
+      () => setObservedAt(Date.now()),
+      Math.min(2147483647, Math.max(0, sidebarEnd - Date.now())),
+    );
+    return () => clearTimeout(timer);
+  }, [sidebarEnd, observedAt]);
 
   function synchronize(value: API.NotificationSummary) {
     setWritten((current) => mergeNotificationSummary(current, value));
@@ -246,6 +267,7 @@ function NotificationSession({
         readAll,
         refresh,
         view,
+        sidebar,
       }}
     >
       <div

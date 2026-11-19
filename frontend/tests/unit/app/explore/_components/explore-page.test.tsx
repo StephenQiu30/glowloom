@@ -13,7 +13,7 @@ function selectCategory(name: string) {
   });
 }
 
-it("places all categories in the shared header slot and defaults to short drama", () => {
+it("places all categories in the shared header slot and starts with featured work", () => {
   const header = document.createElement("header");
   document.body.append(header);
   const view = render(
@@ -26,6 +26,7 @@ it("places all categories in the shared header slot and defaults to short drama"
       (tab) => tab.textContent,
     ),
   ).toEqual([
+    "精选",
     "短剧漫剧",
     "影视作品",
     "动画动漫",
@@ -37,14 +38,12 @@ it("places all categories in the shared header slot and defaults to short drama"
     "活动",
   ]);
   expect(
-    screen.getByRole("tab", { name: "短剧漫剧" }).getAttribute("aria-selected"),
+    screen.getByRole("tab", { name: "精选" }).getAttribute("aria-selected"),
   ).toBe("true");
+  expect(screen.queryByRole("radiogroup")).toBeNull();
   expect(
-    screen
-      .getByRole("radio", { name: "短剧作品" })
-      .getAttribute("aria-checked"),
-  ).toBe("true");
-  expect(screen.getByText("作品尚未开放")).toBeTruthy();
+    screen.getByRole("button", { name: "声色之间的产品灵感" }),
+  ).toBeTruthy();
   view.unmount();
   expect(header.childElementCount).toBe(0);
   header.remove();
@@ -93,12 +92,12 @@ it("separates skill categories and removes work controls from activities", () =>
 it("filters labeled examples by the exact advertising scene", () => {
   render(<ExplorePage />);
   selectCategory("广告营销");
-  expect(screen.getAllByText("AI 生成示例")).toHaveLength(4);
+  expect(screen.getAllByText("AI 生成示例")).toHaveLength(1);
   expect(
     screen.queryByRole("button", { name: /声色之间 · 耳机广告/ }),
   ).toBeNull();
   fireEvent.click(screen.getByRole("radio", { name: "社媒营销" }));
-  expect(screen.getAllByText("AI 生成示例")).toHaveLength(4);
+  expect(screen.getAllByText("AI 生成示例")).toHaveLength(1);
   expect(
     screen.getByRole("button", { name: /声色之间 · 耳机广告/ }),
   ).toBeTruthy();

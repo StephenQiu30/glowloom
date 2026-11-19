@@ -145,10 +145,16 @@ type DisplayAnnouncement struct {
 	Frequency       string     `json:"frequency" enums:"once,daily,login" default:"once"`
 }
 
-// NotificationDisplayView contains at most one banner and one popup candidate.
+// NotificationDisplayView contains at most one candidate for each display surface.
 type NotificationDisplayView struct {
-	Banner *DisplayAnnouncement `json:"banner"`
-	Popup  *DisplayAnnouncement `json:"popup"`
+	Banner  *DisplayAnnouncement `json:"banner"`
+	Popup   *DisplayAnnouncement `json:"popup"`
+	Sidebar *DisplayAnnouncement `json:"sidebar"`
+}
+
+// IsSidebarPlacement reports whether the placement uses the shared sidebar slot.
+func IsSidebarPlacement(placement string) bool {
+	return placement == "sidebar" || placement == "sidebar_badge"
 }
 
 // NotificationDisplayValidity rechecks current publication independently of read
@@ -228,13 +234,13 @@ func validContent(c *AnnouncementContent) bool {
 	if c.DurationSeconds == 0 {
 		c.DurationSeconds = 5
 	}
-	if c.Title == "" || len([]rune(c.Title)) > 120 || c.Body == "" || len([]rune(c.Body)) > 10000 || c.StartsAt.IsZero() || (!c.Endless && !c.EndsAt.After(c.StartsAt)) || c.Priority < 0 || c.Priority > 100 || c.DurationSeconds < 5 || c.DurationSeconds > 60 {
+	if c.Title == "" || len([]rune(c.Title)) > 120 || len([]rune(c.Body)) > 10000 || c.StartsAt.IsZero() || (!c.Endless && !c.EndsAt.After(c.StartsAt)) || c.Priority < 0 || c.Priority > 100 || c.DurationSeconds < 5 || c.DurationSeconds > 60 {
 		return false
 	}
 	if c.Frequency != "once" && c.Frequency != "daily" && c.Frequency != "login" {
 		return false
 	}
-	if c.Placement != "banner" && c.Placement != "modal" && c.Placement != "inbox" {
+	if c.Placement != "banner" && c.Placement != "modal" && c.Placement != "inbox" && !IsSidebarPlacement(c.Placement) {
 		return false
 	}
 	if c.Audience != "public" && c.Audience != "authenticated" && c.Audience != "team" {
@@ -244,6 +250,22 @@ func validContent(c *AnnouncementContent) bool {
 		return false
 	}
 	if c.Audience == "public" && c.Placement == "modal" {
+		return false
+	}
+	if IsSidebarPlacement(c.Placement) {
+		if c.Inbox || c.Body != "" || len([]rune(c.Title)) > 24 {
+			return false
+		}
+		switch c.ActionPath {
+		case "/marketing-studio", "/short-drama", "/motion-studio":
+			return c.Placement == "sidebar" || c.Title == "New"
+		case "/explore", "/ai-tools", "/assets":
+			return c.Placement == "sidebar"
+		default:
+			return false
+		}
+	}
+	if c.Body == "" {
 		return false
 	}
 	if c.ActionPath == "" {
@@ -289,7 +311,7 @@ func normalizeNotificationFilter(f *NotificationFilter, admin bool) error {
 		return ErrInvalidNotification
 	}
 	if admin {
-		if f.Placement != "" && f.Placement != "banner" && f.Placement != "modal" && f.Placement != "inbox" {
+		if f.Placement != "" && f.Placement != "banner" && f.Placement != "modal" && f.Placement != "inbox" && !IsSidebarPlacement(f.Placement) {
 			return ErrInvalidNotification
 		}
 		if f.Audience != "" && f.Audience != "public" && f.Audience != "authenticated" && f.Audience != "team" {

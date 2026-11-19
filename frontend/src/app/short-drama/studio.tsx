@@ -16,12 +16,6 @@ import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
 import { useSpace } from "@/components/spaces/space-context";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { StudioComposer } from "./studio-composer";
@@ -33,17 +27,6 @@ const modes = [
   { id: "create", label: "剧本创作", icon: Sparkles },
   { id: "redraw", label: "转绘", icon: Video },
 ] as const;
-
-const features = [
-  { label: "剧本创作", description: "从灵感到故事" },
-  { label: "短剧画布", description: "在无限画布自由编排" },
-  { label: "短剧导演台", description: "排演布景、动作与机位" },
-  { label: "智能预演", description: "串联关键镜头" },
-  { label: "片段重拍", description: "局部修改视频" },
-  { label: "重制转绘", description: "从源片制作新版本" },
-  { label: "超分工作流", description: "提升成片画质" },
-  { label: "视频拉片", description: "拆解画面与镜头语言" },
-];
 
 const projectTabs = {
   upload: "script",
@@ -89,7 +72,7 @@ function StudioWorkspace() {
           id="short-drama-title"
           className="text-center text-2xl font-semibold md:text-3xl"
         >
-          和短剧 Agent 聊聊创作想法
+          短剧工作室
         </h1>
         <Tabs value={mode} onValueChange={setMode} className="min-w-0 gap-0">
           <div className="flex min-w-0 items-center justify-between gap-1 rounded-t-2xl border bg-muted px-1.5 py-1 md:px-3">
@@ -136,29 +119,6 @@ function StudioWorkspace() {
             </TabsContent>
           ))}
         </Tabs>
-      </section>
-
-      <section
-        aria-labelledby="short-drama-features"
-        className="flex flex-col gap-3"
-      >
-        <h2 id="short-drama-features" className="text-base font-semibold">
-          亮点功能
-        </h2>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          {features.map(({ label, description }) => (
-            <Card
-              key={label}
-              size="sm"
-              className="rounded-xl bg-muted/50 ring-0"
-            >
-              <CardHeader>
-                <CardTitle>{label}</CardTitle>
-                <CardDescription>{description}</CardDescription>
-              </CardHeader>
-            </Card>
-          ))}
-        </div>
       </section>
 
       <section

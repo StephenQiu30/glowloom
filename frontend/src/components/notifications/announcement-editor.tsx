@@ -11,6 +11,7 @@ import {
 import { platformTeams } from "@/api/identity";
 import { RequestError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel, FieldSet } from "@/components/ui/field";
@@ -32,6 +33,9 @@ import { toast } from "@/components/feedback/notification";
 import { NotificationSelect } from "./notification-filters";
 import {
   requireAnnouncement,
+  isSidebarPlacement,
+  sidebarPromotionTargets,
+  sidebarStudioTargets,
   type Announcement,
   type DisplayAnnouncement,
 } from "./contracts";
@@ -64,6 +68,8 @@ const positionOptions = [
   ["banner", "顶部公告"],
   ["modal", "消息弹窗"],
   ["inbox", "仅消息中心"],
+  ["sidebar_badge", "侧栏 New 标记"],
+  ["sidebar", "侧栏推广"],
 ] as const;
 const audienceOptions = [
   ["public", "公开用户（含游客）"],
@@ -91,6 +97,9 @@ export function AnnouncementEditor({
       : "immediate",
   );
   const [busy, setBusy] = useState(false);
+  const sidebar = isSidebarPlacement(draft.placement);
+  const sidebarBadge = draft.placement === "sidebar_badge";
+  const targets = sidebarBadge ? sidebarStudioTargets : sidebarPromotionTargets;
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
   const [uncertain, setUncertain] = useState(false);
@@ -124,6 +133,10 @@ export function AnnouncementEditor({
   }
   async function submit(publish: boolean) {
     if (locked.current || conflict) return;
+    if (sidebar && !targets.some(([path]) => path === draft.action_path)) {
+      setError(sidebarBadge ? "请选择工作室" : "请选择落地页面");
+      return;
+    }
     if (
       !draft.starts_at ||
       (!draft.endless &&
@@ -139,8 +152,9 @@ export function AnnouncementEditor({
     originalIntent.current = publish;
     const content: API.AnnouncementContent = {
       ...draft,
-      title: draft.title.trim(),
-      body: draft.body.trim(),
+      title: sidebarBadge ? "New" : draft.title.trim(),
+      body: sidebar ? "" : draft.body.trim(),
+      inbox: sidebar ? false : draft.inbox,
       ends_at: draft.endless ? undefined : draft.ends_at,
       team_id: draft.audience === "team" ? draft.team_id : undefined,
     };
@@ -245,27 +259,6 @@ export function AnnouncementEditor({
         >
           <FieldGroup>
             <FieldSet className="contents" disabled={busy || uncertain}>
-              <Field>
-                <FieldLabel htmlFor="announcement-title">标题</FieldLabel>
-                <Input
-                  id="announcement-title"
-                  required
-                  maxLength={120}
-                  value={draft.title}
-                  onChange={(event) => change("title", event.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="announcement-body">正文</FieldLabel>
-                <Textarea
-                  id="announcement-body"
-                  required
-                  maxLength={10000}
-                  rows={5}
-                  value={draft.body}
-                  onChange={(event) => change("body", event.target.value)}
-                />
-              </Field>
               <FieldGroup className="grid gap-4 sm:grid-cols-2">
                 <NotificationSelect
                   label="展示位置"
@@ -274,6 +267,15 @@ export function AnnouncementEditor({
                     setDraft((current) => ({
                       ...current,
                       placement: value,
+                      action_path:
+                        isSidebarPlacement(value) !==
+                          isSidebarPlacement(current.placement) ||
+                        (value === "sidebar_badge" &&
+                          !sidebarStudioTargets.some(
+                            ([path]) => path === current.action_path,
+                          ))
+                          ? ""
+                          : current.action_path,
                       audience:
                         value === "modal" && current.audience === "public"
                           ? "authenticated"
@@ -293,6 +295,39 @@ export function AnnouncementEditor({
                   }
                 />
               </FieldGroup>
+              {!sidebarBadge ? (
+                <Field>
+                  <FieldLabel htmlFor="announcement-title">标题</FieldLabel>
+                  <Input
+                    id="announcement-title"
+                    required
+                    maxLength={sidebar ? 24 : 120}
+                    value={draft.title}
+                    onChange={(event) => change("title", event.target.value)}
+                  />
+                </Field>
+              ) : null}
+              {!sidebar ? (
+                <Field>
+                  <FieldLabel htmlFor="announcement-body">正文</FieldLabel>
+                  <Textarea
+                    id="announcement-body"
+                    required
+                    maxLength={10000}
+                    rows={5}
+                    value={draft.body}
+                    onChange={(event) => change("body", event.target.value)}
+                  />
+                </Field>
+              ) : (
+                <NotificationSelect
+                  label={sidebarBadge ? "工作室" : "落地页面"}
+                  placeholder="请选择"
+                  value={draft.action_path}
+                  onChange={(value) => change("action_path", value)}
+                  options={targets}
+                />
+              )}
               {draft.audience === "team" ? (
                 <FieldGroup>
                   <Field>
@@ -458,17 +493,19 @@ export function AnnouncementEditor({
                   />
                 </FieldGroup>
               ) : null}
-              <Field orientation="horizontal">
-                <FieldLabel htmlFor="announcement-inbox">
-                  同时保存到消息中心
-                </FieldLabel>
-                <Switch
-                  id="announcement-inbox"
-                  checked={draft.inbox || draft.placement === "inbox"}
-                  disabled={draft.placement === "inbox"}
-                  onCheckedChange={(value) => change("inbox", value)}
-                />
-              </Field>
+              {!sidebar ? (
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="announcement-inbox">
+                    同时保存到消息中心
+                  </FieldLabel>
+                  <Switch
+                    id="announcement-inbox"
+                    checked={draft.inbox || draft.placement === "inbox"}
+                    disabled={draft.placement === "inbox"}
+                    onCheckedChange={(value) => change("inbox", value)}
+                  />
+                </Field>
+              ) : null}
               <Collapsible>
                 <CollapsibleTrigger asChild>
                   <Button type="button" variant="ghost">
@@ -492,19 +529,21 @@ export function AnnouncementEditor({
                         }
                       />
                     </Field>
-                    <Field>
-                      <FieldLabel htmlFor="announcement-action">
-                        站内跳转地址
-                      </FieldLabel>
-                      <Input
-                        id="announcement-action"
-                        value={draft.action_path}
-                        placeholder="/assets"
-                        onChange={(event) =>
-                          change("action_path", event.target.value)
-                        }
-                      />
-                    </Field>
+                    {!sidebar ? (
+                      <Field>
+                        <FieldLabel htmlFor="announcement-action">
+                          站内跳转地址
+                        </FieldLabel>
+                        <Input
+                          id="announcement-action"
+                          value={draft.action_path}
+                          placeholder="/assets"
+                          onChange={(event) =>
+                            change("action_path", event.target.value)
+                          }
+                        />
+                      </Field>
+                    ) : null}
                   </FieldGroup>
                 </CollapsibleContent>
               </Collapsible>
@@ -542,38 +581,56 @@ export function AnnouncementEditor({
         </form>
         <aside className="flex min-w-0 flex-col gap-4" aria-label="通知预览">
           <h2 className="text-base font-medium">预览</h2>
-          <p className="text-xs text-muted-foreground">
-            {positionOptions.find(([key]) => key === draft.placement)?.[1]} ·{" "}
-            {draft.placement === "modal"
-              ? draft.manual_close
-                ? "手动关闭"
-                : `${draft.duration_seconds} 秒`
-              : "北京时间"}
-          </p>
-          {draft.placement === "banner" ? (
-            <div className="overflow-hidden rounded-lg border [--global-announcement-height:40px] max-sm:[--global-announcement-height:56px]">
-              <GlobalAnnouncement
-                announcement={sample}
-                onDismiss={() => {}}
-                onExpire={() => {}}
-                onView={() => setPreview(true)}
-              />
-            </div>
-          ) : (
+          {sidebar ? (
             <Item variant="muted">
               <ItemContent>
-                <ItemTitle>{sample.title}</ItemTitle>
-                <ItemDescription>{sample.body}</ItemDescription>
+                <ItemTitle>
+                  {sidebarBadge
+                    ? (targets.find(
+                        ([path]) => path === draft.action_path,
+                      )?.[1] ?? "工作室")
+                    : draft.title || "推广标题"}
+                </ItemTitle>
               </ItemContent>
+              {sidebarBadge ? <Badge variant="secondary">New</Badge> : null}
             </Item>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {positionOptions.find(([key]) => key === draft.placement)?.[1]}{" "}
+                ·{" "}
+                {draft.placement === "modal"
+                  ? draft.manual_close
+                    ? "手动关闭"
+                    : `${draft.duration_seconds} 秒`
+                  : "北京时间"}
+              </p>
+              {draft.placement === "banner" ? (
+                <div className="overflow-hidden rounded-lg border [--global-announcement-height:40px] max-sm:[--global-announcement-height:56px]">
+                  <GlobalAnnouncement
+                    announcement={sample}
+                    onDismiss={() => {}}
+                    onExpire={() => {}}
+                    onView={() => setPreview(true)}
+                  />
+                </div>
+              ) : (
+                <Item variant="muted">
+                  <ItemContent>
+                    <ItemTitle>{sample.title}</ItemTitle>
+                    <ItemDescription>{sample.body}</ItemDescription>
+                  </ItemContent>
+                </Item>
+              )}
+              <Button
+                className="self-start"
+                variant="outline"
+                onClick={() => setPreview(true)}
+              >
+                预览消息
+              </Button>
+            </>
           )}
-          <Button
-            className="self-start"
-            variant="outline"
-            onClick={() => setPreview(true)}
-          >
-            预览消息
-          </Button>
         </aside>
       </div>
       {preview && draft.placement === "modal" ? (

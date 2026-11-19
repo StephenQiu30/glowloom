@@ -10,6 +10,7 @@ function scenes(namespace: string, values: [string, string][]) {
 }
 
 export const exploreCategories: ExploreCategory[] = [
+  { id: "featured", label: "精选", kind: "work", scenes: [] },
   {
     id: "work.drama",
     label: "短剧漫剧",

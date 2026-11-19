@@ -2,36 +2,30 @@ import Link from "next/link";
 import { PageLayout } from "@/components/layout/page-layout";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const sections = {
   overview: {
     title: "积分总览",
     href: "/billing",
-    description: "查看余额、会员状态与最近消费。",
   },
   membership: {
     title: "会员中心",
     href: "/billing/membership",
-    description: "管理你的会员状态。",
   },
   transactions: {
     title: "积分明细",
     href: "/billing/transactions",
-    description: "预占、结算与返还分别记录。",
   },
   recharge: {
     title: "充值积分",
     href: "/billing/recharge",
-    description: "查看可购买的积分套餐。",
   },
 } as const;
 type Section = keyof typeof sections;
@@ -105,20 +99,28 @@ export function BillingView({
       <section className="billing-page">
         <Tabs value={section} activationMode="manual" className="gap-6">
           <div className="overflow-x-auto">
-            <TabsList variant="navigation" aria-label="账务导航">
-              {(["overview", "membership", "transactions"] as const).map(
-                (key) => (
-                  <TabsTrigger key={key} value={key} asChild>
-                    <Link href={sections[key].href}>{sections[key].title}</Link>
-                  </TabsTrigger>
-                ),
-              )}
+            <TabsList variant="workspace" aria-label="账务导航">
+              {(
+                ["overview", "transactions", "recharge", "membership"] as const
+              ).map((key) => (
+                <TabsTrigger key={key} value={key} asChild>
+                  <Link href={sections[key].href}>{sections[key].title}</Link>
+                </TabsTrigger>
+              ))}
             </TabsList>
           </div>
           <TabsContent value={section} className="flex flex-col gap-6">
             <div className="billing-heading">
               <h1>{current.title}</h1>
-              <p>{current.description}</p>
+              {section === "overview" && (
+                <p role="status">
+                  {wallet?.enabled
+                    ? wallet.payer === "team"
+                      ? "团队付款账户"
+                      : "个人付款账户"
+                    : balanceState}
+                </p>
+              )}
             </div>
             {section === "overview" ? (
               <>
@@ -127,13 +129,6 @@ export function BillingView({
                     <Card key={label}>
                       <CardHeader>
                         <CardTitle>{label}</CardTitle>
-                        <CardDescription>
-                          {wallet?.enabled
-                            ? wallet.payer === "team"
-                              ? "团队付款账户"
-                              : "个人付款账户"
-                            : balanceState}
-                        </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <p
@@ -164,33 +159,17 @@ export function BillingView({
                     <Link href="/billing/transactions">查看明细</Link>
                   </Button>
                 </div>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>会员计划正在准备中</CardTitle>
-                    <CardDescription>
-                      价格和权益将在开放时公布。
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p>暂未开放</p>
-                  </CardContent>
-                  <CardFooter>
-                    <Button asChild variant="outline">
-                      <Link href="/billing/membership">查看会员中心</Link>
-                    </Button>
-                  </CardFooter>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>积分如何计算</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3">
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost">积分如何计算</Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="flex flex-col gap-2 px-2 pt-2">
                     <p>每次报价按当时发布并冻结的规则提供积分预估。</p>
                     <p className="text-sm text-muted-foreground">
                       积分展示与人民币微元账本分别核对。预留释放不等于已扣款退款；未知费用需要继续核查。
                     </p>
-                  </CardContent>
-                </Card>
+                  </CollapsibleContent>
+                </Collapsible>
               </>
             ) : section === "transactions" ? (
               wallet?.enabled && wallet.history_available ? (

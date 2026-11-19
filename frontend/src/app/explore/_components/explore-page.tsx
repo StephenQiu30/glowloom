@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { ContentState } from "@/components/layout/content-state";
+import { Button } from "@/components/ui/button";
 import { ExploreReferenceExamples } from "@/components/inspiration/gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
@@ -16,9 +17,10 @@ import styles from "./explore.module.css";
 export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
   const [search, setSearch] = useState(initialQuery);
   const router = useRouter();
+  const featuredTab = useRef<HTMLButtonElement>(null);
   const [selection, setSelection] = useState({
     category: exploreCategories[0].id,
-    scene: exploreCategories[0].scenes[0].id,
+    scene: exploreCategories[0].scenes[0]?.id ?? "",
   });
   const category = exploreCategories.find(
     (item) => item.id === selection.category,
@@ -40,7 +42,11 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
         placeholder: "搜索",
       }}
     >
-      <h1 className="sr-only">探索</h1>
+      <div className="workspace-page-header mb-6">
+        <div className="workspace-page-heading">
+          <h1>探索</h1>
+        </div>
+      </div>
       <Tabs
         value={category.id}
         onValueChange={(id) => {
@@ -67,7 +73,12 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
                       className="mx-1 h-3.5 shrink-0"
                     />
                   )}
-                  <TabsTrigger value={item.id}>{item.label}</TabsTrigger>
+                  <TabsTrigger
+                    value={item.id}
+                    ref={item.id === "featured" ? featuredTab : undefined}
+                  >
+                    {item.label}
+                  </TabsTrigger>
                 </Fragment>
               ))}
             </TabsList>
@@ -101,15 +112,23 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
               </OverflowNavigation>
             </div>
           )}
-          {category.id === "work.advertising" && scene ? (
+          {category.id === "featured" ? (
+            <ExploreReferenceExamples query="" />
+          ) : category.id === "work.advertising" && scene ? (
             <ExploreReferenceExamples scene={scene.label} query="" />
           ) : (
             <ContentState
               title={`${category.kind === "skill" ? "技能" : category.kind === "activity" ? "活动" : "作品"}尚未开放`}
-              description={
-                category.kind === "work"
-                  ? "该场景的公开作品尚未开放。可前往广告营销查看示例作品。"
-                  : `公开${category.label}尚未开放。`
+              actions={
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSelection({ category: "featured", scene: "" });
+                    featuredTab.current?.focus();
+                  }}
+                >
+                  浏览精选
+                </Button>
               }
             />
           )}

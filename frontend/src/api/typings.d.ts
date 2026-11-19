@@ -3295,7 +3295,7 @@ declare namespace API {
     cursor?: string;
     /** Title keyword */
     search?: string;
-    /** banner, modal, inbox */
+    /** banner, modal, inbox, sidebar, sidebar_badge */
     placement?: string;
     /** public, authenticated, team */
     audience?: string;
@@ -3879,6 +3879,7 @@ declare namespace API {
   type NotificationDisplayView = {
     banner?: DisplayAnnouncement;
     popup?: DisplayAnnouncement;
+    sidebar?: DisplayAnnouncement;
   };
 
   type NotificationPage = {

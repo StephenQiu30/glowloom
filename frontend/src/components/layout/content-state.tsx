@@ -31,7 +31,7 @@ export function ContentState({
 }) {
   return (
     <Empty
-      className={cn("min-h-72", className)}
+      className={cn("workspace-content-state min-h-64", className)}
       role={
         state === "error" ? "alert" : state === "loading" ? "status" : undefined
       }

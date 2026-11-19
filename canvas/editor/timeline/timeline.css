@@ -49,6 +49,7 @@
   align-items: center;
   gap: 8px;
   min-height: 36px;
+  font-variant-numeric: tabular-nums;
 }
 .timeline-upper {
   display: flex;
@@ -65,6 +66,7 @@
   position: relative;
   min-width: 0;
   min-height: 0;
+  box-shadow: inset 0 0 0 1px var(--canvas-tool-border);
 }
 .timeline-assets {
   flex-shrink: 0;

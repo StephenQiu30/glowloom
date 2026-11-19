@@ -9,6 +9,8 @@ import {
 import { RecentCanvases } from "./recent-canvases";
 import { SidebarNavLink } from "./sidebar-nav-link";
 import type { Screen } from "./routes";
+import { useNotificationCenter } from "@/components/notifications/notification-provider";
+import { sidebarPromotionTargets } from "@/components/notifications/contracts";
 
 import Link from "next/link";
 import { useId, useState, type ComponentProps, type ReactNode } from "react";
@@ -20,6 +22,7 @@ import {
   Paintbrush,
   ShoppingCart,
   FolderClosed,
+  ArrowUpRight,
   Grid2x2Plus,
   Plus,
   Sparkles,
@@ -41,6 +44,7 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -139,6 +143,13 @@ export function ProductSider({
   const session = useOptionalSession();
   const { selected: space, pending: scopePending } = useSpace();
   const compact = !open && !isMobile;
+  const sidebarNotice = useNotificationCenter()?.sidebar;
+  const promotion =
+    !compact && sidebarNotice?.placement === "sidebar"
+      ? sidebarPromotionTargets.find(
+          ([path]) => path === sidebarNotice.action_path,
+        )
+      : undefined;
   const toggleLabel = isMobile ? "关闭导航" : open ? "收起导航" : "展开导航";
   const closeMobile = () => setOpenMobile(false);
   return (
@@ -210,21 +221,18 @@ export function ProductSider({
                 href: "/marketing-studio",
                 label: "营销工作室",
                 icon: ShoppingCart,
-                badge: "New",
                 id: "marketing-studio",
               },
               {
                 href: "/short-drama",
                 label: "短剧工作室",
                 icon: Clapperboard,
-                badge: "New",
                 id: "short-drama",
               },
               {
                 href: "/motion-studio",
                 label: "动效工作室",
                 icon: Paintbrush,
-                badge: "Beta",
                 id: "motion-studio",
               },
             ].map((studio) => (
@@ -233,7 +241,13 @@ export function ProductSider({
                 href={studio.href}
                 label={studio.label}
                 icon={studio.icon}
-                badge={studio.badge}
+                badge={
+                  !compact &&
+                  sidebarNotice?.placement === "sidebar_badge" &&
+                  sidebarNotice.action_path === studio.href
+                    ? "New"
+                    : undefined
+                }
                 active={screen === studio.id}
                 variant="workspace"
                 size="workspace"
@@ -326,6 +340,20 @@ export function ProductSider({
           </>
         )}
       </SidebarContent>
+      {promotion && sidebarNotice?.title ? (
+        <SidebarFooter>
+          <SidebarMenu role="list" aria-label="侧栏推广">
+            <SidebarNavLink
+              href={promotion[0]}
+              label={sidebarNotice.title}
+              icon={ArrowUpRight}
+              size="workspace"
+              variant="workspace"
+              onNavigate={closeMobile}
+            />
+          </SidebarMenu>
+        </SidebarFooter>
+      ) : null}
     </Sidebar>
   );
 }

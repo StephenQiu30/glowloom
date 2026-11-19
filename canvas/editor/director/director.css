@@ -52,6 +52,7 @@
   padding: 8px 16px;
   min-height: 52px;
   border-bottom: 1px solid var(--canvas-director-divider);
+  background: var(--canvas-reference-text-start);
 }
 .director-main {
   position: relative;
@@ -101,11 +102,11 @@
   left: 12px;
   z-index: 2;
   display: flex;
-  gap: 2px;
-  padding: 3px;
+  gap: 4px;
+  padding: 4px;
   background: var(--canvas-director-overlay);
   border: 1px solid var(--canvas-tool-input);
-  border-radius: 8px;
+  border-radius: 12px;
 }
 .director-preview-label {
   position: absolute;

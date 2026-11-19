@@ -5,6 +5,23 @@ export type InboxNotification = Required<API.InboxNotification>;
 export type DisplayAnnouncement = Required<API.DisplayAnnouncement>;
 export type Announcement = Required<API.Announcement>;
 
+export function isSidebarPlacement(placement: string): boolean {
+  return placement === "sidebar" || placement === "sidebar_badge";
+}
+
+export const sidebarStudioTargets = [
+  ["/marketing-studio", "营销工作室"],
+  ["/short-drama", "短剧工作室"],
+  ["/motion-studio", "动效工作室"],
+] as const;
+
+export const sidebarPromotionTargets = [
+  ["/explore", "探索"],
+  ["/ai-tools", "AI工具"],
+  ["/assets", "资产和主体"],
+  ...sidebarStudioTargets,
+] as const;
+
 const sequence = /^(0|[1-9]\d*)$/;
 
 export function requireNotificationSummary(
