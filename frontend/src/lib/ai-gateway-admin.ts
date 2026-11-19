@@ -12,6 +12,23 @@ export type GatewayPrice = {
   multiplier: string;
   discount: string;
 };
+export type ParameterType = "string" | "integer" | "number" | "boolean";
+export type ParameterValue = string | number | boolean;
+export type GatewayParameter = {
+  type: ParameterType;
+  min?: number;
+  max?: number;
+  enum?: ParameterValue[];
+  default?: ParameterValue;
+};
+export type MediaDriverOption = {
+  key: string;
+  name: string;
+  base_url: string;
+  region: "domestic" | "overseas";
+  parameters: Record<string, string[]>;
+  custom_url: boolean;
+};
 export type GatewayModel = {
   id: string;
   name: string;
@@ -24,7 +41,7 @@ export type GatewayModel = {
   stream: boolean;
   capability?: string;
   modes?: string[];
-  parameters?: Record<string, unknown>;
+  parameters?: Record<string, GatewayParameter>;
   output_policy?: string;
 };
 export type GatewayRoute = {
@@ -47,6 +64,8 @@ export type GatewayConfiguration = {
   routes: { route: GatewayRoute; enabled: boolean }[];
   credentials: { id: string; supplier_id: string; state: CredentialState }[];
   quotas: { name: string; concurrency: number; rpm: number }[];
+  media_drivers: MediaDriverOption[];
+  default_scope_id?: string;
   unknown: {
     request_id: string;
     attempt_id: string;
@@ -191,7 +210,7 @@ export function validateModel(
       value.parameters !== null &&
         typeof value.parameters === "object" &&
         !Array.isArray(value.parameters),
-      "媒体参数须为 JSON 对象",
+      "媒体模型缺少参数配置",
     );
     for (const parameter of Object.values(value.parameters ?? {})) {
       requireValue(
@@ -237,6 +256,7 @@ export async function loadGatewayConfiguration(
     "onboarding",
     "credentials",
     "quotas",
+    "media_drivers",
     "unknown",
   ] as const) {
     requireValue(
@@ -300,6 +320,26 @@ export async function loadGatewayConfiguration(
     "共享配额配置无效",
   );
   requireValue(
+    (result.media_drivers ?? []).every(
+      (driver) =>
+        driver != null &&
+        typeof driver.key === "string" &&
+        typeof driver.name === "string" &&
+        typeof driver.base_url === "string" &&
+        (driver.region === "domestic" || driver.region === "overseas") &&
+        typeof driver.custom_url === "boolean" &&
+        driver.parameters != null &&
+        typeof driver.parameters === "object" &&
+        !Array.isArray(driver.parameters) &&
+        Object.values(driver.parameters).every(
+          (fields) =>
+            Array.isArray(fields) &&
+            fields.every((field) => typeof field === "string"),
+        ),
+    ),
+    "媒体驱动列表无效",
+  );
+  requireValue(
     (result.unknown ?? []).every(
       (row) =>
         row &&
@@ -313,6 +353,12 @@ export async function loadGatewayConfiguration(
     models: result.models ?? [],
     routes: result.routes ?? [],
     quotas: result.quotas ?? [],
+    media_drivers: result.media_drivers ?? [],
+    default_scope_id:
+      typeof result.default_scope_id === "string" &&
+      uuid.test(result.default_scope_id)
+        ? result.default_scope_id
+        : undefined,
     onboarding: result.onboarding ?? [],
     unknown: result.unknown ?? [],
     credentials: (result.credentials ?? []).map(

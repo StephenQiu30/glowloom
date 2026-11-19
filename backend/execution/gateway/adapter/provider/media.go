@@ -25,6 +25,40 @@ import (
 // The credential-owning worker injects ownership and version validation here.
 type MediaReferences func(context.Context, application.Dispatch, []domain.Reference) ([]operation.ProviderReference, error)
 
+// MediaDriverOption describes non-secret settings for an installed media driver.
+type MediaDriverOption struct {
+	Key        string              `json:"key"`
+	Name       string              `json:"name"`
+	BaseURL    string              `json:"base_url"`
+	Region     catalog.Region      `json:"region"`
+	Parameters map[string][]string `json:"parameters"`
+	CustomURL  bool                `json:"custom_url"`
+}
+
+// MediaDriverOptions projects the catalog used by media dispatch into the admin form.
+func MediaDriverOptions() []MediaDriverOption {
+	options := []MediaDriverOption{}
+	for _, spec := range catalog.AdapterSpecifications() {
+		if _, ok := providerhttp.GetDriver(spec.AdapterKey); !ok || spec.AllowedBaseURL == "" {
+			continue
+		}
+		parameters := make(map[string][]string)
+		for _, capability := range []string{"image", "video", "audio"} {
+			if slices.Contains(spec.Capabilities, capability) {
+				key := capability + ".generate"
+				parameters[key] = append([]string{}, spec.ParameterFields[key]...)
+			}
+		}
+		if len(parameters) > 0 {
+			options = append(options, MediaDriverOption{
+				Key: spec.AdapterKey, Name: spec.DisplayName, BaseURL: spec.AllowedBaseURL,
+				Region: spec.AllowedRegion, Parameters: parameters, CustomURL: spec.AdapterKey == "openai",
+			})
+		}
+	}
+	return options
+}
+
 // WithMediaReferences returns a copy with the trusted reference resolver installed.
 func (c *Client) WithMediaReferences(resolve MediaReferences) *Client {
 	configured := *c

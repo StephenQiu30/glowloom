@@ -451,6 +451,8 @@ func (h *Handler) configuration(c *gin.Context) {
 		problem(c, err)
 		return
 	}
+	out["media_drivers"] = provider.MediaDriverOptions()
+	out["default_scope_id"] = identityhttp.Principal(c).ScopeID
 	c.JSON(200, out)
 }
 

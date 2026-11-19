@@ -4,7 +4,7 @@ export const metadata = { title: "AI 服务接入 · 织光" };
 export default function Page() {
   return (
     <PageLayout screen="providers">
-      <GatewayAdmin />
+      <GatewayAdmin entry="providers" />
     </PageLayout>
   );
 }

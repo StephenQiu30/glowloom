@@ -117,6 +117,30 @@ it("does not request gateway configuration for a non-admin account", () => {
   expect(send).not.toHaveBeenCalled();
 });
 
+it("starts the provider entry on procurement and asks before discarding an edited form", async () => {
+  render(<GatewayAdmin entry="providers" />);
+  const procurement = await screen.findByRole("tab", {
+    name: "供应商与采购价",
+  });
+  expect(procurement.getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "准备采购路由" }));
+  fireEvent.change(screen.getByLabelText("供应商模型号"), {
+    target: { value: "edited-model" },
+  });
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "模型与销售价" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  expect(screen.getByRole("alertdialog")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "继续填写" }));
+  expect(screen.getByLabelText<HTMLInputElement>("供应商模型号").value).toBe(
+    "edited-model",
+  );
+  expect(send.mock.calls.some(([path]) => path.endsWith("/routes"))).toBe(
+    false,
+  );
+});
+
 it("publishes immutable sale versions only through the new gateway, preserving decimal strings", async () => {
   await prepareModel(model);
   await prepareModel(model);
@@ -172,23 +196,24 @@ it("saves the keyless procurement plan before showing API Key and budget confirm
   await screen.findByText("text/default");
   expect(send.mock.calls[0][0]).toBe("/api/ai/admin/configuration");
   expect(screen.queryByText("must-not-render")).toBeNull();
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "采购路由" }), {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商与采购价" }), {
     button: 0,
     ctrlKey: false,
   });
+  fireEvent.click(screen.getByRole("button", { name: "准备采购路由" }));
   expect(screen.queryByLabelText("API Key")).toBeNull();
   for (const [label, value] of [
-    ["供应商 ID", supplier],
     ["验证付款空间 ID", supplier],
     ["共享配额组", "account-a"],
     ["供应商地址", "https://api.example.com/v1"],
     ["供应商模型号", "supplier-sku"],
-    ["采购输入价", "200000"],
+    ["采购输入价", "0.20"],
   ])
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
-  fireEvent.click(screen.getByRole("button", { name: "保存采购价与验证计划" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存并查看验证预算" }));
   const secret = await screen.findByLabelText<HTMLInputElement>("API Key");
-  expect(screen.getByText("2 积分 · 采购 500 微人民币")).toBeTruthy();
+  expect(screen.getByText("¥0.0005")).toBeTruthy();
+  expect(screen.getByText("2 积分")).toBeTruthy();
   expect(
     send.mock.calls.find(([path]) => path.endsWith("/routes"))?.[1].data,
   ).not.toHaveProperty("key");
@@ -233,6 +258,7 @@ it("normalizes empty configuration and discards any credential read-back fields"
     credentials: [],
     quotas: [],
     unknown: [],
+    media_drivers: [],
   });
   const configuration = await loadGatewayConfiguration();
   expect(configuration.credentials[0]).toEqual({
@@ -325,28 +351,43 @@ it("prepares a supported media driver with an explicit probe and no key", async 
     credentials: [],
     quotas: [],
     unknown: [],
+    media_drivers: [
+      {
+        key: "openai",
+        name: "OpenAI",
+        base_url: mediaDriver.base_url,
+        region: "overseas",
+        parameters: { "image.generate": ["size"] },
+        custom_url: true,
+      },
+    ],
   });
   render(<GatewayAdmin />);
   await screen.findByText("image/default");
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "采购路由" }), {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商与采购价" }), {
     button: 0,
     ctrlKey: false,
   });
+  fireEvent.click(screen.getByRole("button", { name: "准备采购路由" }));
+  fireEvent.change(screen.getByLabelText("媒体驱动"), {
+    target: { value: "openai" },
+  });
   for (const [label, value] of [
-    ["供应商 ID", supplier],
     ["验证付款空间 ID", supplier],
     ["验证项目 ID", credential],
     ["共享配额组", mediaRoute.group],
     ["供应商地址", mediaDriver.base_url],
     ["供应商模型号", mediaRoute.upstream_model],
-    ["采购按次价", "1000"],
+    ["采购按次价", "0.001"],
   ]) {
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
-  fireEvent.change(screen.getByLabelText("媒体驱动配置 JSON"), {
-    target: { value: JSON.stringify(mediaDriver) },
+  expect(screen.queryByLabelText(/配置 JSON/)).toBeNull();
+  expect(screen.queryByLabelText(/API Key/)).toBeNull();
+  fireEvent.change(screen.getByLabelText("验证提示词"), {
+    target: { value: "一张白底图" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "保存采购价与验证计划" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存并查看验证预算" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "/api/ai/admin/routes",
@@ -354,7 +395,12 @@ it("prepares a supported media driver with an explicit probe and no key", async 
         method: "POST",
         data: expect.objectContaining({
           project_id: credential,
-          media_tests: [expect.objectContaining({ mode: "text2image" })],
+          media_tests: [
+            expect.objectContaining({
+              mode: "text2image",
+              prompt: "一张白底图",
+            }),
+          ],
           route: expect.objectContaining({
             protocol: "media",
             driver_config: mediaDriver,
@@ -366,6 +412,57 @@ it("prepares a supported media driver with an explicit probe and no key", async 
   expect(
     send.mock.calls.find(([path]) => path.endsWith("/routes"))?.[1].data,
   ).not.toHaveProperty("key");
+});
+
+it("saves a media model with typed modes, parameters and exact prices after collapsing advanced fields", async () => {
+  render(<GatewayAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: "新建模型预设" }));
+  fireEvent.change(screen.getByLabelText("销售模型名称"), {
+    target: { value: "image/preset" },
+  });
+  fireEvent.change(screen.getByLabelText("模型协议"), {
+    target: { value: "media" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "添加模式" }));
+  fireEvent.change(screen.getByLabelText("生成模式 2", { exact: true }), {
+    target: { value: "image2image" },
+  });
+  const advanced = screen.getByRole("button", { name: "生成参数与默认值" });
+  fireEvent.click(advanced);
+  fireEvent.click(screen.getByRole("button", { name: "添加参数" }));
+  fireEvent.change(screen.getByLabelText("参数名称"), {
+    target: { value: "watermark" },
+  });
+  fireEvent.change(screen.getByLabelText("参数类型"), {
+    target: { value: "boolean" },
+  });
+  fireEvent.change(screen.getByLabelText("默认值", { exact: true }), {
+    target: { value: "false" },
+  });
+  fireEvent.click(advanced);
+  fireEvent.change(screen.getByLabelText("销售按次价"), {
+    target: { value: "0.001895" },
+  });
+  expect(screen.queryByLabelText("API Key")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "保存并继续采购配置" }));
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      "/api/ai/admin/models",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          protocol: "media",
+          capability: "image.generate",
+          modes: ["text2image", "image2image"],
+          parameters: { watermark: { type: "boolean", default: false } },
+          price: expect.objectContaining({
+            request: 1895,
+            input: 0,
+            output: 0,
+          }),
+        }),
+      }),
+    ),
+  );
 });
 
 it.each([
